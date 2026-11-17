@@ -12,6 +12,8 @@ export type KuaicaiwuDocumentActionKey =
   | 'purchase_invoice.pull_from_payable'
   | 'payment.pull_from_payable'
   | 'payment.pull_from_payment_application'
+  | 'payment.pull_from_purchase_order'
+  | 'other_expense.pull_from_application'
   | 'receipt_refund.pull_from_receipt'
   | 'payment_refund.pull_from_payment';
 

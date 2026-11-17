@@ -4,7 +4,7 @@
 提供仓库数据的业务逻辑处理（仓库、库区、库位），支持多组织隔离。
 """
 
-from typing import List, Optional, TYPE_CHECKING
+from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 from tortoise.exceptions import IntegrityError
 from tortoise.models import Q
 
@@ -27,8 +27,161 @@ if TYPE_CHECKING:
         StorageLocationTreeResponse
     )
 
+# 仓库未划分库位时写入的整仓库位名称（编码为「{仓库编码}-整仓」）
+WHOLE_WAREHOUSE_LOCATION_NAME = "整仓"
+# 金蝶苍穹启用仓位管理时，默认仓位名称/源编码多为「无货架」
+KINGDEE_DEFAULT_STORAGE_LOCATION_LABEL = "无货架"
+
+
 class WarehouseService:
     """仓库数据服务"""
+
+    @staticmethod
+    async def resolve_kingdee_default_storage_location(
+        tenant_id: int,
+        warehouse_id: int,
+    ) -> Tuple[Optional[int], Optional[str]]:
+        """金蝶默认仓位（无货架）：与 warelocareference 本地 ``{仓库}_无货架`` 对齐。"""
+        wid = int(warehouse_id)
+        loc = (
+            await StorageLocation.filter(
+                tenant_id=tenant_id,
+                warehouse_id=wid,
+                deleted_at__isnull=True,
+                is_active=True,
+            )
+            .filter(
+                Q(name=KINGDEE_DEFAULT_STORAGE_LOCATION_LABEL)
+                | Q(code__iendswith="_无货架")
+                | Q(source_location_code=KINGDEE_DEFAULT_STORAGE_LOCATION_LABEL)
+            )
+            .order_by("id")
+            .first()
+        )
+        if loc:
+            code = str(loc.code or "").strip()
+            if code:
+                return int(loc.id), code
+        return None, None
+
+    @staticmethod
+    async def find_first_storage_location_for_warehouse(
+        tenant_id: int,
+        warehouse_id: int,
+    ) -> Tuple[Optional[int], Optional[str]]:
+        """取仓库下第一个可用库位：先库区下库位，再直挂本仓；不含金蝶独立仓位。"""
+        wid = int(warehouse_id)
+        areas = await StorageArea.filter(
+            tenant_id=tenant_id,
+            warehouse_id=wid,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).order_by("id")
+        for area in areas:
+            loc = await StorageLocation.filter(
+                tenant_id=tenant_id,
+                storage_area_id=area.id,
+                deleted_at__isnull=True,
+                is_active=True,
+            ).order_by("id").first()
+            if loc:
+                return int(loc.id), str(loc.code or "").strip() or None
+        loc = await StorageLocation.filter(
+            tenant_id=tenant_id,
+            warehouse_id=wid,
+            storage_area_id__isnull=True,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).order_by("id").first()
+        if loc:
+            return int(loc.id), str(loc.code or "").strip() or None
+        return None, None
+
+    @staticmethod
+    async def ensure_whole_warehouse_location(
+        tenant_id: int,
+        warehouse_id: int,
+        *,
+        current_user: Optional[User] = None,
+    ) -> Tuple[int, str]:
+        """仓库无可用库位时，写入直挂本仓的「整仓」库位并返回。
+
+        已有库位时优先金蝶默认「无货架」，否则取首个可用库位（非「整仓」编码）。
+        """
+        default_id, default_code = await WarehouseService.resolve_kingdee_default_storage_location(
+            tenant_id, warehouse_id
+        )
+        if default_id is not None and default_code:
+            return int(default_id), str(default_code)
+        found_id, found_code = await WarehouseService.find_first_storage_location_for_warehouse(
+            tenant_id, warehouse_id
+        )
+        if found_id is not None and found_code:
+            return int(found_id), str(found_code)
+
+        wh = await Warehouse.get_or_none(
+            id=int(warehouse_id),
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not wh:
+            raise ValidationError("仓库不存在，无法创建整仓库位")
+
+        wh_code = str(wh.code or "").strip() or f"WH{wh.id}"
+        base_code = f"{wh_code}-{WHOLE_WAREHOUSE_LOCATION_NAME}"
+        if len(base_code) > 50:
+            base_code = f"WH{wh.id}-{WHOLE_WAREHOUSE_LOCATION_NAME}"[:50]
+
+        async def _reuse_or_create(code: str) -> Tuple[int, str]:
+            existing = await StorageLocation.filter(
+                tenant_id=tenant_id,
+                code=code,
+                deleted_at__isnull=True,
+            ).first()
+            if existing:
+                if existing.warehouse_id == int(wh.id) and existing.storage_area_id is None:
+                    if not existing.is_active:
+                        existing.is_active = True
+                        apply_update_audit(existing, current_user)
+                        await existing.save()
+                    return int(existing.id), str(existing.code)
+                raise ValidationError(f"库位编码 {code} 已被占用，无法创建整仓库位")
+
+            soft = await StorageLocation.filter(
+                tenant_id=tenant_id,
+                code=code,
+                deleted_at__isnull=False,
+            ).first()
+            if soft:
+                soft.deleted_at = None
+                soft.name = WHOLE_WAREHOUSE_LOCATION_NAME
+                soft.storage_area_id = None
+                soft.warehouse_id = int(wh.id)
+                soft.is_active = True
+                soft.description = "仓库未划分库位时系统自动建立"
+                apply_restore_audit(soft, current_user)
+                await soft.save()
+                return int(soft.id), str(soft.code)
+
+            create_data: Dict[str, object] = {
+                "code": code,
+                "name": WHOLE_WAREHOUSE_LOCATION_NAME,
+                "description": "仓库未划分库位时系统自动建立",
+                "storage_area_id": None,
+                "warehouse_id": int(wh.id),
+                "is_active": True,
+            }
+            apply_create_audit(create_data, current_user)
+            loc = await StorageLocation.create(tenant_id=tenant_id, **create_data)
+            return int(loc.id), str(loc.code)
+
+        try:
+            return await _reuse_or_create(base_code)
+        except ValidationError:
+            alt = f"WH{wh.id}-{WHOLE_WAREHOUSE_LOCATION_NAME}"[:50]
+            if alt == base_code:
+                raise
+            return await _reuse_or_create(alt)
 
     @staticmethod
     async def _resolve_line_side_names(

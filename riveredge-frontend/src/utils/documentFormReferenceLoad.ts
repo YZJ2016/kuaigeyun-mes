@@ -110,7 +110,7 @@ export function referenceDisplayItemsToCustomers(items: ReferenceDisplayItem[]):
 }
 
 export async function loadUserFormReferenceOptions(
-  hostResource: string,
+  hostResource?: string,
 ): Promise<DocumentFormSelectOption[]> {
   try {
     const items = await searchReferenceDisplayAll(

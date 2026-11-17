@@ -140,7 +140,9 @@ class OutsourceSettlementCreditService:
 
         unit_price = await cls._find_last_settled_unit_price(tenant_id, receipt_id)
         credit_qty = -creditable
-        amount = (credit_qty * unit_price).quantize(Decimal("0.01"))
+        from apps.kuaizhizao.utils.document_amount_write import line_total_qty_unit_price
+
+        amount = line_total_qty_unit_price(credit_qty, unit_price)
 
         async with in_transaction():
             header_payload = {

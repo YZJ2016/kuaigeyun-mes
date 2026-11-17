@@ -149,7 +149,7 @@ export interface ApprovalStatusResponse {
     field: string;
     label: string;
     kind?: 'branch_index' | 'boolean';
-    branches?: Array<{ index: number; label: string }>;
+    branches?: Array<{ index: number; label: string; isDefault?: boolean; targetLabel?: string }>;
     trueBranchLabel?: string;
     falseBranchLabel?: string;
     requireExplicit?: boolean;
@@ -183,9 +183,17 @@ export interface ApprovalStatusResponse {
 export async function getApprovalStatus(
   entityType: string,
   entityId: number,
+  options?: { nodeKey?: string | null; businessType?: string | null },
 ): Promise<ApprovalStatusResponse> {
+  const nodeKey = String(options?.nodeKey || '').trim();
+  const businessType = String(options?.businessType || '').trim();
   return apiRequest<ApprovalStatusResponse>('/core/approval-instances/status', {
-    params: { entity_type: entityType, entity_id: entityId },
+    params: {
+      entity_type: entityType,
+      entity_id: entityId,
+      ...(nodeKey ? { node_key: nodeKey } : {}),
+      ...(businessType ? { business_type: businessType } : {}),
+    },
   });
 }
 

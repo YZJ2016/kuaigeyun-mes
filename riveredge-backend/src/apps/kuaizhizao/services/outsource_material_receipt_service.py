@@ -50,9 +50,11 @@ def resolve_outsource_material_receipt_amount(
     quantity: Decimal,
 ) -> tuple[Decimal, Decimal]:
     """委外收货金额真源：合格数量优先，否则收货数量 × 委外工单单价。"""
+    from apps.kuaizhizao.utils.document_amount_write import line_total_qty_unit_price
+
     unit_price_dec = Decimal(str(unit_price or 0))
     receipt_qty = qualified_quantity if qualified_quantity > 0 else quantity
-    total_amount = (receipt_qty * unit_price_dec).quantize(Decimal("0.01"))
+    total_amount = line_total_qty_unit_price(receipt_qty, unit_price_dec)
     return unit_price_dec, total_amount
 
 

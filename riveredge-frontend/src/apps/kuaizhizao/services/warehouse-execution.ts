@@ -28,6 +28,8 @@ export type PurchaseReceiptReturnPullLine = {
   warehouse_name?: string | null;
   requires_batch_number?: boolean;
   suggested_batch_number?: string | null;
+  location_id?: number | null;
+  suggested_location_code?: string | null;
 };
 
 export type PurchaseReturnPullLine = {
@@ -56,6 +58,8 @@ export type PurchaseReturnPullLine = {
     batch_number: string;
     purchase_receipt_item_id?: number;
     receipt_quantity?: number;
+    location_id?: number | null;
+    location_code?: string | null;
   }>;
 };
 
@@ -135,6 +139,10 @@ export type SalesDeliveryOrderPullLine = {
   suggested_quantity?: number;
   pushed_quantity?: number;
   remaining_quantity?: number;
+  unit_price?: number;
+  tax_rate?: number;
+  price_type?: string;
+  line_amount?: number;
   required_date?: string | null;
 };
 
@@ -438,6 +446,48 @@ export const warehouseApi = {
     /** 软删且曾为已入库、库存未冲回时，按明细扣减即时库存（幂等，成功后状态变为已取消） */
     repairInventoryAfterDelete: async (id: string) =>
       apiRequest(`/apps/kuaizhizao/other-inbounds/${id}/repair-inventory`, { method: 'POST' }),
+    getPushBinding: async () =>
+      apiRequest<{
+        targets?: Array<{
+          target_profile: string;
+          connection_code?: string;
+          save_api_uuid?: string;
+          push_mode?: 'auto' | 'manual';
+          trigger_actions?: string[];
+          destination_kind?: 'api' | 'data_source';
+          data_source_uuid?: string;
+          dataset_uuid?: string;
+          user_saved?: boolean;
+        }>;
+        trigger_actions?: string[];
+        connection_code?: string;
+        save_api_uuid?: string;
+        sync_mode?: string;
+        schedule_interval_minutes?: number;
+        targets_configured?: boolean;
+      }>('/apps/kuaizhizao/other-inbounds/push-binding'),
+    savePushBinding: async (payload: {
+      targets: Array<{
+        target_profile: string;
+        connection_code?: string;
+        save_api_uuid?: string;
+        push_mode?: 'auto' | 'manual';
+        trigger_actions?: string[];
+        destination_kind?: 'api' | 'data_source';
+        data_source_uuid?: string;
+        dataset_uuid?: string;
+        user_saved?: boolean;
+      }>;
+      trigger_actions?: string[];
+      connection_code?: string;
+      save_api_uuid?: string;
+      sync_mode?: string;
+      schedule_interval_minutes?: number;
+    }) =>
+      apiRequest('/apps/kuaizhizao/other-inbounds/push-binding', {
+        method: 'PUT',
+        data: payload,
+      }),
   },
   otherOutbound: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/other-outbounds', { method: 'GET', params }),
@@ -453,6 +503,48 @@ export const warehouseApi = {
       apiRequest(`/apps/kuaizhizao/other-outbounds/${id}/print`, {
         method: 'GET',
         params: templateUuid ? { template_uuid: templateUuid } : undefined,
+      }),
+    getPushBinding: async () =>
+      apiRequest<{
+        targets?: Array<{
+          target_profile: string;
+          connection_code?: string;
+          save_api_uuid?: string;
+          push_mode?: 'auto' | 'manual';
+          trigger_actions?: string[];
+          destination_kind?: 'api' | 'data_source';
+          data_source_uuid?: string;
+          dataset_uuid?: string;
+          user_saved?: boolean;
+        }>;
+        trigger_actions?: string[];
+        connection_code?: string;
+        save_api_uuid?: string;
+        sync_mode?: string;
+        schedule_interval_minutes?: number;
+        targets_configured?: boolean;
+      }>('/apps/kuaizhizao/other-outbounds/push-binding'),
+    savePushBinding: async (payload: {
+      targets: Array<{
+        target_profile: string;
+        connection_code?: string;
+        save_api_uuid?: string;
+        push_mode?: 'auto' | 'manual';
+        trigger_actions?: string[];
+        destination_kind?: 'api' | 'data_source';
+        data_source_uuid?: string;
+        dataset_uuid?: string;
+        user_saved?: boolean;
+      }>;
+      trigger_actions?: string[];
+      connection_code?: string;
+      save_api_uuid?: string;
+      sync_mode?: string;
+      schedule_interval_minutes?: number;
+    }) =>
+      apiRequest('/apps/kuaizhizao/other-outbounds/push-binding', {
+        method: 'PUT',
+        data: payload,
       }),
   },
   materialBorrow: {
@@ -543,6 +635,8 @@ export const warehouseApi = {
       apiRequest('/apps/kuaizhizao/semi-finished-goods-receipts', { method: 'GET', params }),
     create: async (data: any) =>
       apiRequest('/apps/kuaizhizao/semi-finished-goods-receipts', { method: 'POST', data }),
+    update: async (id: string, data: any) =>
+      apiRequest(`/apps/kuaizhizao/semi-finished-goods-receipts/${id}`, { method: 'PUT', data }),
     delete: async (id: string) =>
       apiRequest(`/apps/kuaizhizao/semi-finished-goods-receipts/${id}/delete`, { method: 'POST' }),
     get: async (id: string) =>
@@ -799,6 +893,7 @@ export const warehouseApi = {
       options?: {
         lineBatches?: Record<number, string>;
         lineWarehouses?: Record<number, number>;
+        lineLocationCodes?: Record<number, string>;
       },
     ): Promise<{
       success: boolean;
@@ -816,6 +911,53 @@ export const warehouseApi = {
             : {}),
           ...(options?.lineWarehouses && Object.keys(options.lineWarehouses).length > 0
             ? { line_warehouses: options.lineWarehouses }
+            : {}),
+          ...(options?.lineLocationCodes && Object.keys(options.lineLocationCodes).length > 0
+            ? { line_location_codes: options.lineLocationCodes }
+            : {}),
+        },
+      }),
+    listPurchaseReceiptPullLines: async (params: {
+      skip?: number;
+      limit?: number;
+      keyword?: string;
+      purchase_receipt_id?: number;
+      pullable_only?: boolean;
+    }): Promise<{ data: PurchaseReceiptReturnPullLine[]; total: number }> =>
+      apiRequest('/apps/kuaizhizao/purchase-returns/purchase-receipt-pull-lines', {
+        method: 'GET',
+        params,
+      }),
+    pullFromPurchaseReceiptItems: async (
+      selectedItemIds: number[],
+      options?: {
+        lineBatches?: Record<number, string>;
+        lineWarehouses?: Record<number, number>;
+        lineQuantities?: Record<number, number>;
+        lineLocationCodes?: Record<number, string>;
+      },
+    ): Promise<{
+      success: boolean;
+      message: string;
+      return_id?: number;
+      return_code?: string;
+      returns?: Array<{ return_id: number; return_code: string }>;
+    }> =>
+      apiRequest('/apps/kuaizhizao/purchase-returns/pull-from-purchase-receipt-items', {
+        method: 'POST',
+        data: {
+          selected_item_ids: selectedItemIds,
+          ...(options?.lineBatches && Object.keys(options.lineBatches).length
+            ? { line_batches: options.lineBatches }
+            : {}),
+          ...(options?.lineWarehouses && Object.keys(options.lineWarehouses).length > 0
+            ? { line_warehouses: options.lineWarehouses }
+            : {}),
+          ...(options?.lineQuantities && Object.keys(options.lineQuantities).length > 0
+            ? { line_quantities: options.lineQuantities }
+            : {}),
+          ...(options?.lineLocationCodes && Object.keys(options.lineLocationCodes).length > 0
+            ? { line_location_codes: options.lineLocationCodes }
             : {}),
         },
       }),

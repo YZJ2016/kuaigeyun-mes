@@ -10,6 +10,7 @@ import {
 export type InventoryPickOption = {
   value: string;
   label: string;
+  primary_quantity?: number;
   quantity?: number;
   warehouseName?: string;
   /** MaterialBatch.id（主仓）；用于 FIFO 建档序 */
@@ -72,7 +73,7 @@ function isOutboundDeductibleInventoryRow(
   row: Record<string, unknown>,
   opts?: { includeLineSide?: boolean },
 ): boolean {
-  const qty = Number(row.quantity ?? 0);
+  const qty = Number(row.primary_quantity ?? row.quantity ?? 0);
   if (!(qty > 0)) return false;
   const status = String(row.status ?? '').trim();
   // 与 InventoryService 默认扣减口径一致：仅自购(company_owned)+在库；客供不计入可出库库存
@@ -100,7 +101,7 @@ function rowsToBatchOptionMap(
     if (!isOutboundDeductibleInventoryRow(row, opts)) continue;
     const mid = row.material_id as number;
     if (!mid) continue;
-    const qty = Number(row.quantity ?? 0);
+    const qty = Number(row.primary_quantity ?? row.quantity ?? 0);
     const bn = normalizeOutboundBatchNo(row.batch_no);
     if (!map[mid]) map[mid] = [];
     const existing = map[mid].find((o) => o.value === bn);
@@ -150,7 +151,7 @@ function sumDeductibleQtyByMaterialId(
     if (!isOutboundDeductibleInventoryRow(row, opts)) continue;
     const mid = Number(row.material_id);
     if (!Number.isFinite(mid) || mid <= 0) continue;
-    out[mid] = (out[mid] ?? 0) + (Number(row.quantity) || 0);
+    out[mid] = (out[mid] ?? 0) + (Number(row.primary_quantity ?? row.quantity) || 0);
   }
   return out;
 }
@@ -259,9 +260,91 @@ export async function loadAvailableQtyByMaterialWarehouse(
     if (!Number.isFinite(mid) || mid <= 0) continue;
     if (!Number.isFinite(wid) || wid <= 0) continue;
     if (!out[mid]) out[mid] = {};
-    out[mid][wid] = (out[mid][wid] ?? 0) + (Number(row.quantity) || 0);
+    out[mid][wid] = (out[mid][wid] ?? 0) + (Number(row.primary_quantity ?? row.quantity) || 0);
   }
   return out;
+}
+
+export type LocationStockMaps = {
+  /** location_id → qty */
+  byId: Record<number, number>;
+  /** location_code → qty（无 id 或对码回退） */
+  byCode: Record<string, number>;
+};
+
+/** 主数据「整仓」库位（ensure_whole_warehouse_location 写入的名称/编码后缀） */
+export function isWholeWarehouseLocationOption(label: string, code: string): boolean {
+  const n = String(label || '').trim();
+  const c = String(code || '').trim();
+  if (n === '整仓' || c === '整仓') return true;
+  if (c.endsWith('-整仓') || n.endsWith('整仓')) return true;
+  return false;
+}
+
+/**
+ * 库位下拉展示用库存：先按 id/编码命中；
+ * 无库位维度的在库量（byCode['']）归到「整仓」或仓下唯一库位，避免仓列有库存、整仓却显示无库存。
+ */
+export function resolveLocationOptionStockQty(
+  maps: LocationStockMaps,
+  loc: { value: number; code: string; label: string },
+  allOptionsCount: number,
+): number {
+  const qtyFromId = Number(maps.byId[loc.value] ?? 0);
+  const code = String(loc.code || '').trim();
+  const label = String(loc.label || '').trim();
+  const qtyFromCode = Number(maps.byCode[code] ?? 0);
+  let qty = qtyFromId > 0 ? qtyFromId : qtyFromCode;
+  if (qty > 0) return qty;
+
+  if (isWholeWarehouseLocationOption(label, code)) {
+    const byShortName = Number(maps.byCode['整仓'] ?? 0);
+    if (byShortName > 0) return byShortName;
+  }
+
+  const unlocated = Number(maps.byCode[''] ?? 0);
+  if (!(unlocated > 0)) return 0;
+  if (isWholeWarehouseLocationOption(label, code) || allOptionsCount === 1) {
+    return unlocated;
+  }
+  return 0;
+}
+
+/**
+ * 按物料 × 仓库 × 库位汇总可出库库存（自购在库）。
+ * 用于库位下拉展示「库位（库存 n）」；无库位维度的行计入空码键 ''。
+ */
+export async function loadAvailableQtyByMaterialLocation(
+  materialId: number,
+  warehouseId: number,
+): Promise<LocationStockMaps> {
+  const mid = Number(materialId);
+  const wid = Number(warehouseId);
+  const empty: LocationStockMaps = { byId: {}, byCode: {} };
+  if (!(mid > 0) || !(wid > 0)) return empty;
+
+  const rows = await fetchBatchQueryRows([mid], wid, { companyOwnedOnly: true });
+  const byId: Record<number, number> = {};
+  const byCode: Record<string, number> = {};
+  for (const row of rows) {
+    if (!isOutboundDeductibleInventoryRow(row, { includeLineSide: true })) continue;
+    if (Number(row.material_id) !== mid) continue;
+    const rowWh = Number(row.warehouse_id);
+    if (Number.isFinite(rowWh) && rowWh > 0 && rowWh !== wid) continue;
+    const qty = Number(row.primary_quantity ?? row.quantity) || 0;
+    if (!(qty > 0)) continue;
+    const lid = Number(row.location_id ?? 0);
+    const code = String(row.location_code ?? '').trim();
+    if (lid > 0) {
+      byId[lid] = (byId[lid] ?? 0) + qty;
+    }
+    if (code) {
+      byCode[code] = (byCode[code] ?? 0) + qty;
+    } else if (!(lid > 0)) {
+      byCode[''] = (byCode[''] ?? 0) + qty;
+    }
+  }
+  return { byId, byCode };
 }
 
 /** 拉取物料全部在库序列号（分页合并，供出库确认多选） */

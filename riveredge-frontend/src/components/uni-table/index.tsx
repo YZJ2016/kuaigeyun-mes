@@ -26,6 +26,7 @@ import React, {
   ReactNode,
   useState,
   useEffect,
+  useLayoutEffect,
   useCallback,
   useMemo,
   Suspense,
@@ -47,6 +48,7 @@ import {
 } from '@ant-design/pro-components'
 import type { ColumnsState } from '@ant-design/pro-table'
 import { Button, Space, theme, Empty, ConfigProvider, Grid, Descriptions, Card, Tag, Tooltip, Checkbox } from 'antd'
+import { notifyDataRefreshed } from '../../utils/notifyDataRefreshed'
 import {
   PlusOutlined,
   EditOutlined,
@@ -67,6 +69,7 @@ import {
   shouldInjectLinkedDocumentRender,
 } from '../../apps/kuaizhizao/utils/linkedDocumentAutoLink'
 import { LinkedDocumentAutoCell } from '../linked-document-code/LinkedDocumentAutoCell'
+import { INLINE_MARKER_TAG_GROUP_CLASS } from '../inline-marker-tag-preview'
 import UniSearch from '../uni-search'
 import UniView from '../uni-view'
 import { UniBatchDeleteButton } from '../uni-batch'
@@ -145,7 +148,6 @@ import {
   ROW_ACTIONS_STRIP_CLASS,
 } from '../uni-action'
 import { UNI_TABLE_STACKED_IDENTITY_CLASS } from './stackedPrimaryColumn'
-import { INLINE_MARKER_TAG_GROUP_CLASS } from '../inline-marker-tag-preview'
 import { LIST_PAGE_TABLE_SCROLL, getViewportHeightExpr } from '../layout-templates/constants'
 import { shouldEnableUniTableBodyScrollY } from './uniTableScrollPolicy'
 import { useUniTableLayoutEffects } from './useUniTableLayoutEffects'
@@ -646,11 +648,11 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   toolBarActionsAfterCreate?: ReactNode[]
   /**
-   * **3.1 左侧**追加的功能节点（与新建、`toolBarRender` 注入、批量删除、编辑等同一 `Space`）。
+   * **3.1 左侧**追加的功能节点（与新建、`toolBarRender` 注入、删除、编辑等同一 `Space`）。
    */
   toolBarActions?: ReactNode[]
   /**
-   * **3.1 左侧**，紧接在批量删除（uni-batch 删除预设）之后的节点（如下推后的说明、与删除无关的按钮）。
+   * **3.1 左侧**，紧接在删除（uni-batch 删除预设）之后的节点（如下推后的说明、与删除无关的按钮）。
    */
   toolBarActionsAfterDelete?: ReactNode[]
   /**
@@ -826,7 +828,7 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   showPrintButton?: boolean
   /**
-   * 打印按钮点击回调（报表打印当前页；其他列表按单行选中触发）。
+   * 打印按钮点击回调（默认按选中行触发；未选中或多选时按钮禁用）。
    */
   onPrint?: (selectedRowKeys: React.Key[], currentPageData?: T[]) => void
   /**
@@ -886,19 +888,19 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   onDelete?: (selectedRowKeys: React.Key[]) => void
   /**
-   * 删除按钮文案（默认：'删除'，可设为 '批量删除' 等）
+   * 删除按钮文案（默认「删除」；与操作列一致，禁止「批量删除」）
    */
   deleteButtonText?: string
   /**
-   * 批量删除二次确认标题（与仓库管理页 Popconfirm 模式对齐，不传则用 common.confirmBatchDelete）
+   * 删除二次确认标题（与仓库管理页 Popconfirm 模式对齐，不传则用 common.confirmBatchDelete）
    */
   deleteConfirmTitle?: string | ((count: number) => string)
   /**
-   * 批量删除二次确认描述（不传则用 common.confirmBatchDeleteContent）
+   * 删除二次确认描述（不传则用 common.confirmBatchDeleteContent）
    */
   deleteConfirmDescription?: string | ((count: number) => string)
   /**
-   * 批量删除按钮禁用（如选中行均不可删）；无选中时仍由组件内部 disableWhenEmpty 处理
+   * 删除按钮禁用（如选中行均不可删）；无选中时仍由组件内部 disableWhenEmpty 处理
    */
   deleteButtonDisabled?: boolean
   /**
@@ -1377,6 +1379,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const [requestInFlight, setRequestInFlight] = useState(true)
   const [containerLayoutWidth, setContainerLayoutWidth] = useState(0)
   const [fillViewportMeasuredScrollY, setFillViewportMeasuredScrollY] = useState<number | undefined>()
+  const [listFixedSummaryChromePx, setListFixedSummaryChromePx] = useState(0)
   const [reportMeasuredScrollY, setReportMeasuredScrollY] = useState<number | undefined>()
   const reportMeasuredScrollYRef = React.useRef<number | undefined>(undefined)
   const tableSummaryProp = (restProps as { summary?: unknown }).summary
@@ -1391,12 +1394,23 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     useProTableSearch()
   const searchParamsRef = (externalSearchParamsRef ||
     hookSearchParamsRef) as React.MutableRefObject<Record<string, any> | undefined>
-  // 模糊搜索关键词状态
-  const [fuzzySearchKeyword, setFuzzySearchKeyword] = useState<string>('')
+  // 模糊搜索关键词状态（深链 ?keyword= 首帧即显示，避免闪空）
+  const [fuzzySearchKeyword, setFuzzySearchKeyword] = useState<string>(() =>
+    (new URLSearchParams(location.search || '').get('keyword') || '').trim(),
+  )
   /** 递增以使 QuerySearchButton 重算钉住条件激活态（searchParamsRef 变更不触发渲染） */
   const [pinnedSearchUiEpoch, setPinnedSearchUiEpoch] = useState(0)
   // 防抖定时器引用
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
+  /** UniPush「转到」等深链：已应用的 pathname+keyword，避免重置搜索后被 URL 反复灌入 */
+  const urlKeywordBootstrapKeyRef = useRef('')
+  // 首帧同步灌入 keyword，避免 layout 前偶发读到空 searchParamsRef
+  if (urlKeywordBootstrapKeyRef.current === '') {
+    const seedKw = (new URLSearchParams(location.search || '').get('keyword') || '').trim()
+    if (seedKw) {
+      searchParamsRef.current = { ...(searchParamsRef.current || {}), keyword: seedKw }
+    }
+  }
 
   const internalActionRef = useRef<ActionType>()
   const internalFormRef = useRef<ProFormInstance>()
@@ -1500,6 +1514,27 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     dropUniTableTanstackCache()
     return (nativeTableActionRef.current?.reloadAndRest as any)?.(...args)
   }, [dropUniTableTanstackCache])
+
+  /**
+   * 深链筛选：URL ?keyword= 写入模糊搜索（UniPush「转到」等）。
+   * useLayoutEffect 赶在 ProTable 首次 request（子树 useEffect）之前灌入 searchParamsRef。
+   */
+  useLayoutEffect(() => {
+    const keyword = (new URLSearchParams(location.search || '').get('keyword') || '').trim()
+    if (!keyword) return
+    const bootstrapKey = `${location.pathname}?${keyword}`
+    if (urlKeywordBootstrapKeyRef.current === bootstrapKey) return
+    const hadPrior = urlKeywordBootstrapKeyRef.current !== ''
+    urlKeywordBootstrapKeyRef.current = bootstrapKey
+    setFuzzySearchKeyword(keyword)
+    const next: Record<string, any> = { ...(searchParamsRef.current || {}) }
+    next.keyword = keyword
+    searchParamsRef.current = next
+    setPinnedSearchUiEpoch((e) => e + 1)
+    if (hadPrior) {
+      reloadAndRestWithTanstackCacheBust()
+    }
+  }, [location.pathname, location.search, reloadAndRestWithTanstackCacheBust, searchParamsRef])
 
   useRouteSoftRefresh(() => {
     void reloadWithTanstackCacheBust()
@@ -2591,18 +2626,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         }
       }
 
-      // 竞态：仅最新 seq 可写 state / 交给 ProTable。
-      // 旧请求的 HTTP 响应已按发起时的筛选条件固定，绝不能再回传给 ProTable，
-      // 否则会出现「分段筛选要点第二次才对」（旧范围结果盖住新范围）。
-      // 无已提交结果时再回退本次 result，避免首屏空窗。
+      // 竞态：仅最新 seq 可写 state；旧请求不得把「空表」成功结果交给 ProTable。
+      // 有已提交结果则回声，避免闪空；否则回退本次 result（与注释一致），禁止伪造 total=0。
       if (requestSeqRef.current !== seq) {
-        return (
-          lastCommittedRequestResultRef.current ?? {
-            data: [],
-            success: true,
-            total: 0,
-          }
-        )
+        return lastCommittedRequestResultRef.current ?? result
       }
 
       // 仅在数据引用变化时 setState（forceFresh 或 TanStack 结构共享豁免）
@@ -2619,13 +2646,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       return result
     } catch (error) {
       if (isRequestCancellation(error)) {
-        return (
-          lastCommittedRequestResultRef.current ?? {
-            data: [],
-            success: true,
-            total: 0,
-          }
-        )
+        // 取消时禁止伪造空表；无已提交结果则继续抛出，让 ProTable 丢弃本代请求。
+        if (lastCommittedRequestResultRef.current) {
+          return lastCommittedRequestResultRef.current
+        }
+        throw error
       }
       throw error
     } finally {
@@ -2719,7 +2744,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       actions.push(...withToolbarItemKeys(toolBarActions, 'uni-tb-actions'))
     }
 
-    // 批量删除（uni-batch 删除预设）
+    // 删除（uni-batch；工具栏文案统一「删除」，禁止「批量删除」）
     if (gatedShowDeleteButton && onDelete) {
       actions.push(
         <UniBatchDeleteButton
@@ -2727,7 +2752,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           selectedRowKeys={selectedRowKeys}
           onConfirm={handleBatchDeleteConfirm}
           toolBarButtonSize={toolBarButtonSize}
-          buttonText={deleteButtonText}
+          buttonText={deleteButtonText ?? t('common.delete')}
           confirmTitle={deleteConfirmTitle}
           confirmDescription={deleteConfirmDescription}
           disabled={deleteButtonDisabled}
@@ -2797,7 +2822,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         <Button
           size={toolBarButtonSize}
           icon={<PrinterOutlined />}
-          disabled={printButtonDisabled || (reportLayout ? tableData.length === 0 : selectedRowKeys.length !== 1)}
+          disabled={selectedRowKeys.length !== 1 || printButtonDisabled}
           onClick={() => onPrint(selectedRowKeys, tableData)}
           aria-label={printLabel}
         >
@@ -2979,6 +3004,16 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     [onRowSelectionChange],
   )
 
+  const handleToolbarReload = useCallback(() => {
+    const customReload = mergedToolbarOptions.reload
+    if (typeof customReload === 'function') {
+      customReload()
+    }
+    void reloadWithTanstackCacheBust()
+    // 与平台看板刷新一致：点击即给出成功反馈（不等待请求完成）
+    notifyDataRefreshed()
+  }, [mergedToolbarOptions.reload, reloadWithTanstackCacheBust])
+
   const memoizedOptions = React.useMemo(() => ({
     setting: {
       listsHeight: 360,
@@ -2994,11 +3029,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     ...mergedToolbarOptions,
     /** 密度固定为紧凑（small），不展示工具栏密度切换；置后以免被传入 options 覆盖 */
     density: false,
-    reload: () => {
-      mergedToolbarOptions.reload?.()
-      void reloadWithTanstackCacheBust()
-    },
-  }), [mergedToolbarOptions, handleColumnReset, reloadWithTanstackCacheBust, zebraStripeEnabled, handleZebraStripeChange])
+    reload: handleToolbarReload,
+  }), [mergedToolbarOptions, handleColumnReset, handleToolbarReload, zebraStripeEnabled, handleZebraStripeChange])
 
   const memoizedRightActions = !isMobile ? buildRightActions(dataActionIconOnly) : undefined
 
@@ -3339,11 +3371,15 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     if (fillViewportBody && fillViewportMeasuredScrollY != null) {
       return fillViewportMeasuredScrollY
     }
+    const summaryExtraPx =
+      tableSummaryProp != null && !reportLayout ? listFixedSummaryChromePx : 0
+    const summaryScrollDeduction =
+      summaryExtraPx > 0 ? ` - ${summaryExtraPx}px` : ''
     const offsetPx = statCardsCtx?.tableScrollOffsetPx
     if (offsetPx != null) {
-      return getViewportHeightExpr(offsetPx, { compensateHeaderInFullscreen: true })
+      return getViewportHeightExpr(offsetPx + summaryExtraPx, { compensateHeaderInFullscreen: true })
     }
-    return `calc(100vh - var(--uni-table-scroll-offset, ${LIST_PAGE_TABLE_SCROLL.DEFAULT_FALLBACK_OFFSET_PX}px) + (${LIST_PAGE_TABLE_SCROLL.HEADER_HEIGHT_PX}px - var(--header-height, ${LIST_PAGE_TABLE_SCROLL.HEADER_HEIGHT_PX}px)))`
+    return `calc(100vh - var(--uni-table-scroll-offset, ${LIST_PAGE_TABLE_SCROLL.DEFAULT_FALLBACK_OFFSET_PX}px)${summaryScrollDeduction} + (${LIST_PAGE_TABLE_SCROLL.HEADER_HEIGHT_PX}px - var(--header-height, ${LIST_PAGE_TABLE_SCROLL.HEADER_HEIGHT_PX}px)))`
   }, [
     proTableBodyScrollYEnabled,
     reportLayout,
@@ -3351,6 +3387,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     fillViewportBody,
     fillViewportMeasuredScrollY,
     statCardsCtx?.tableScrollOffsetPx,
+    tableSummaryProp,
+    listFixedSummaryChromePx,
   ])
 
   useUniTableLayoutEffects({
@@ -3359,6 +3397,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     fillViewportBody,
     proTableBodyScrollYEnabled,
     setFillViewportMeasuredScrollY,
+    setListFixedSummaryChromePx,
     reportLayout,
     reportHasFixedSummary,
     reportMeasuredScrollYRef,

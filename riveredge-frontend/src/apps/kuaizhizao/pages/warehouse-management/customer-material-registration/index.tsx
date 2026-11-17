@@ -21,7 +21,7 @@ import {
 } from '@ant-design/pro-components';
 import { App, Button, Space, Popconfirm, Row, Col, Typography, Segmented, Input, InputNumber, Form as AntForm, Table, Descriptions, Tag } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, CloseCircleOutlined, ScanOutlined, RollbackOutlined, ThunderboltOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate,   useDetailDrawerDescriptionItems, detailDrawerBasicColumn, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { customerMaterialRegistrationApi } from '../../../services/customer-material-registration';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
@@ -41,7 +41,15 @@ import { CustomerSelectDropdown } from '../../../../master-data/components/Custo
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import dayjs from 'dayjs';
 import { coerceFormDate, formDateRangeFormItemProps } from '../../../../../utils/formDate';
-import {formatDateTime, formatQuantity} from '../../../../../utils/format';
+import { formatDateTime, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import {
+  enrichStandaloneDocsWithDetail,
+  exportWarehouseDocLinesXlsx,
+  filterWarehouseFlatRowsByExportKeys,
+  flattenStandaloneWarehouseDocsForExport,
+  resolveWarehouseListExportHeaders,
+} from '../shared/warehouseDocListExport';
 import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import {
   DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
@@ -64,6 +72,15 @@ import {
   useWarehouseTrackingFlags,
 } from '../shared/warehouseTrackingFlags';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
+
+const CUSTOMER_MATERIAL_REGISTRATION_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_customer_material_registrations';
 
 interface RegistrationItem {
   material_id?: number;
@@ -158,6 +175,31 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
   const resourcePerms = useResourcePermissions('kuaizhizao:warehouse-management-customer-material-registration');
   const canStartProduction =
     !resourcePerms.enabled || (resourcePerms.canAction?.('execute') ?? false);
+
+  const {
+    customFields: customerMaterialFormCustomFields,
+    customFieldValues: customerMaterialFormCustomFieldValues,
+    extractFormValues: extractCustomerMaterialFormValues,
+    saveCustomFieldValues: saveCustomerMaterialCustomFieldValues,
+    resetFieldValues: resetCustomerMaterialFormFieldValues,
+  } = useCustomFields({
+    tableName: CUSTOMER_MATERIAL_REGISTRATION_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open: createModalVisible,
+  });
+
+  const {
+    customFields: customerMaterialListCustomFields,
+    generateCustomFieldColumns: generateCustomerMaterialCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichCustomerMaterialRecordsWithCustomFields,
+    customFieldValues: customerMaterialDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadCustomerMaterialFieldValuesForDetail,
+    resetDetailFieldValues: resetCustomerMaterialDetailFieldValues,
+  } = useCustomFieldsForList<CustomerMaterialRegistration>({
+    tableName: CUSTOMER_MATERIAL_REGISTRATION_CUSTOM_FIELD_TABLE,
+  });
+
+  const customerMaterialCustomFieldColumns = generateCustomerMaterialCustomFieldColumns();
 
   const appendItemsFromMaterials = useCallback(
     async (selected: Material[]) => {
@@ -400,6 +442,34 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         messageApi.error(t('app.kuaizhizao.customerMaterialRegistration.minOneValidItem'));
         throw new Error('no items');
       }
+      for (const it of validItems) {
+        const material = it.material_code || it.material_name || '-';
+        if (it.batch_managed && !String(it.batch_number ?? '').trim()) {
+          messageApi.error(
+            t('app.kuaizhizao.warehouseOutbound.confirm.batchRequired', {
+              material,
+              batches: '—',
+            }),
+          );
+          throw new Error('batch required');
+        }
+        if (it.serial_managed) {
+          const qty = Math.floor(Number(it.quantity) || 0);
+          const serials = (Array.isArray(it.serial_numbers) ? it.serial_numbers : [])
+            .map((s) => String(s ?? '').trim())
+            .filter(Boolean);
+          if (serials.length !== qty) {
+            messageApi.error(
+              t('app.kuaizhizao.warehouseOutbound.entry.serialCountMismatch', {
+                material,
+                required: qty,
+                actual: serials.length,
+              }),
+            );
+            throw new Error('serial mismatch');
+          }
+        }
+      }
       payload.items = validItems.map((it: RegistrationItem) => ({
         material_id: it.material_id,
         material_code: it.material_code || '',
@@ -416,6 +486,29 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         messageApi.error(t('app.kuaizhizao.customerMaterialRegistration.selectMaterialOrCreate'));
         throw new Error('no material');
       }
+      const material = values.material_code || values.material_name || '-';
+      if (scanBatchManaged && !String(values.batch_number ?? '').trim()) {
+        messageApi.error(
+          t('app.kuaizhizao.warehouseOutbound.confirm.batchRequired', { material, batches: '—' }),
+        );
+        throw new Error('batch required');
+      }
+      if (scanSerialManaged) {
+        const qty = Math.floor(Number(values.quantity) || 0);
+        const serials = (Array.isArray(values.serial_numbers) ? values.serial_numbers : [])
+          .map((s: unknown) => String(s ?? '').trim())
+          .filter(Boolean);
+        if (serials.length !== qty) {
+          messageApi.error(
+            t('app.kuaizhizao.warehouseOutbound.entry.serialCountMismatch', {
+              material,
+              required: qty,
+              actual: serials.length,
+            }),
+          );
+          throw new Error('serial mismatch');
+        }
+      }
       payload.barcode = values.barcode;
       payload.barcode_type = values.barcode_type || '1d';
       payload.quantity = values.quantity;
@@ -429,6 +522,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
   };
 
   const handleCreate = async () => {
+    resetCustomerMaterialFormFieldValues();
     setCreateModalVisible(true);
     setEntryMode('document');
     setScanMaterialUuid(undefined);
@@ -479,18 +573,27 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
   const handleCreateSubmit = async (values: any) => {
     try {
       setSubmitLoading(true);
-      const payload = buildCreatePayload(values);
+      const { standardValues, customData } = extractCustomerMaterialFormValues(values);
+      const payload = buildCreatePayload(standardValues);
       const created = await customerMaterialRegistrationApi.create(payload);
       if (!created?.id) {
         throw new Error(t('app.kuaizhizao.customerMaterialRegistration.createFailed'));
       }
+      await saveCustomerMaterialCustomFieldValues(created.id, customData);
       messageApi.success(t('app.kuaizhizao.customerMaterialRegistration.draftSaved'));
+      resetCustomerMaterialFormFieldValues();
       setCreateModalVisible(false);
       formRef.current?.resetFields();
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
     } catch (error: any) {
-      if (error?.message !== 'no items' && error?.message !== 'no material' && error?.message !== 'no customer') {
+      if (
+        error?.message !== 'no items' &&
+        error?.message !== 'no material' &&
+        error?.message !== 'no customer' &&
+        error?.message !== 'batch required' &&
+        error?.message !== 'serial mismatch'
+      ) {
         messageApi.error(error.message || t('app.kuaizhizao.customerMaterialRegistration.inboundFailed'));
       }
       throw error;
@@ -503,8 +606,13 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
     try {
       setStartProductionLoading(true);
       const values = await formRef.current?.validateFields();
-      const payload = buildCreatePayload(values);
+      const { standardValues, customData } = extractCustomerMaterialFormValues(values);
+      const payload = buildCreatePayload(standardValues);
       const result = await customerMaterialRegistrationApi.createAndStartProduction(payload);
+      const createdId = Number(result.registration?.id ?? 0);
+      if (createdId > 0) {
+        await saveCustomerMaterialCustomFieldValues(createdId, customData);
+      }
       const woLabel = result.work_order_group_code
         ? t('app.kuaizhizao.customerMaterialRegistration.workOrderGroup', { code: result.work_order_group_code })
         : (result.work_order_codes || []).join('、') || t('app.kuaizhizao.warehouseCommon.notApplicable');
@@ -521,6 +629,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       if (result.warnings?.length) {
         messageApi.warning(result.warnings.join('；'));
       }
+      resetCustomerMaterialFormFieldValues();
       setCreateModalVisible(false);
       formRef.current?.resetFields();
       invalidateMenuBadgeCounts();
@@ -539,9 +648,11 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
     setDetailDrawerVisible(true);
     setDetailLoading(true);
     setCurrentRegistration(null);
+    resetCustomerMaterialDetailFieldValues();
     try {
       const detail = await customerMaterialRegistrationApi.get(record.id.toString());
       setCurrentRegistration(detail);
+      await loadCustomerMaterialFieldValuesForDetail(record.id);
     } catch (error: unknown) {
       messageApi.error((error as Error)?.message || t('common.loadFailed'));
       setDetailDrawerVisible(false);
@@ -573,17 +684,6 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
     messageApi.success(t('app.kuaizhizao.customerMaterialRegistration.cancelSuccess'));
     invalidateMenuBadgeCounts();
     actionRef.current?.reload();
-  };
-
-  const handleDelete = async (record: CustomerMaterialRegistration) => {
-    try {
-      await customerMaterialRegistrationApi.delete(record.id!.toString());
-      messageApi.success(t('common.deleteSuccess'));
-      invalidateMenuBadgeCounts();
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error?.message || t('common.operationFailed'));
-    }
   };
 
   const listRowsRef = useRef<Map<string, CustomerMaterialRegistration>>(new Map());
@@ -720,6 +820,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       render: (_, r) => (r.registration_date ? formatDateTime(r.registration_date) : '-'),
     },
     ...buildDocumentAuditColumns<CustomerMaterialRegistration>(t),
+    ...customerMaterialCustomFieldColumns,
     {
       title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
       dataIndex: 'lifecycle_stage',
@@ -769,15 +870,10 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
               </Button>
             </Popconfirm>
           )}
-          {record.capabilities?.delete?.allowed && resourcePerms.canDelete && (
-            <Popconfirm title={t('app.kuaizhizao.customerMaterialRegistration.deleteConfirmOne')} onConfirm={() => handleDelete(record)}>
-              <Button {...rowActionKind('delete')} />
-            </Popconfirm>
-          )}
         </Space>
       ),
     },
-  ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, resourcePerms, registrationStatusValueEnum]);
+  ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, resourcePerms, registrationStatusValueEnum, customerMaterialCustomFieldColumns]);
 
   const detailBasicColumns = useMemo(() => alignDescriptionColumns([
     { title: t('app.kuaizhizao.warehouseCommon.colCode'), dataIndex: 'registration_code' },
@@ -1037,7 +1133,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.customer-material-registration-width-v3"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.customer-material-registration-width-v4"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.customerMaterialRegistration')}
         showAdvancedSearch
@@ -1055,6 +1151,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         }}
         enableRowSelection={resourcePerms.canDelete}
         showDeleteButton={resourcePerms.canDelete}
+        deleteButtonText={t('common.delete')}
         rowSelectionGetCheckboxProps={(record) => ({
           disabled: !isCustomerMaterialDeletable(record),
         })}
@@ -1065,7 +1162,56 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
             noun: t('app.kuaizhizao.customerMaterialRegistration.headerTitle'),
           })
         }
-        request={async (params, sort, _filter, searchFormValues) => {
+        showExportButton
+        onExport={async (type, keys, pageData) => {
+          try {
+            const loadAll = async () => {
+              const listParams = resolveCustomerMaterialRegistrationListParams({}, undefined);
+              const rows = await fetchAllListItems((p) =>
+                customerMaterialRegistrationApi.list({ ...listParams, ...p }),
+              );
+              return enrichCustomerMaterialRecordsWithCustomFields(rows);
+            };
+            const headers = await resolveWarehouseListExportHeaders(
+              type,
+              keys,
+              pageData as CustomerMaterialRegistration[] | undefined,
+              listRowsRef.current,
+              loadAll,
+            );
+            if (headers.length === 0) {
+              messageApi.warning(t('common.exportNoData'));
+              return;
+            }
+            const enriched = await enrichStandaloneDocsWithDetail(headers, (id) =>
+              customerMaterialRegistrationApi.get(String(id)),
+            );
+            let flatRows = flattenStandaloneWarehouseDocsForExport(enriched, {
+              docCodeField: 'registration_code',
+              docTypeLabel: t('app.kuaizhizao.warehouseInbound.receiptType.customer_material'),
+              partnerField: 'customer_name',
+              dateFields: ['registration_date', 'processed_at'],
+              operatorFields: ['registered_by_name', 'processed_by_name'],
+            });
+            if (type === 'selected' && keys?.length) {
+              flatRows = filterWarehouseFlatRowsByExportKeys(flatRows, keys);
+            }
+            await exportWarehouseDocLinesXlsx(
+              flatRows,
+              `customer-material-lines-${todaySiteDateString()}.xlsx`,
+              {
+                t,
+                sheetName: t('app.kuaizhizao.customerMaterialRegistration.headerTitle'),
+                includeDocTypeColumn: false,
+                direction: 'standalone',
+              },
+            );
+            messageApi.success(t('common.exportSuccess', { count: flatRows.length }));
+          } catch (error: unknown) {
+            messageApi.error((error as { message?: string })?.message || t('common.exportFailed'));
+          }
+        }}
+        request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           const pageSize = params.pageSize || 20;
           const skip = ((params.current ?? 1) - 1) * pageSize;
           const listParams = resolveCustomerMaterialRegistrationListParams(searchFormValues, sort);
@@ -1074,7 +1220,10 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
             limit: pageSize,
             ...listParams,
           });
-          const { data, total } = normalizeWarehouseListResponse(result);
+          const { data: raw, total } = normalizeWarehouseListResponse(result);
+          const data = meta?.purpose === 'prefetch'
+            ? raw
+            : await enrichCustomerMaterialRecordsWithCustomFields(raw);
           return { data, success: true, total };
         }}
       />
@@ -1084,6 +1233,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         open={createModalVisible}
         onClose={() => {
           setCreateModalVisible(false);
+          resetCustomerMaterialFormFieldValues();
           formRef.current?.resetFields();
         }}
         onFinish={handleCreateSubmit}
@@ -1253,6 +1403,11 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
             columns={formItemColumns}
           />
         )}
+        <CustomFieldsFormSection
+          customFields={customerMaterialFormCustomFields}
+          customFieldValues={customerMaterialFormCustomFieldValues}
+          gridColumns={2}
+        />
         <DocumentAttachmentsField category="customer_material_registration_attachments" />
         <ProFormTextArea name="remarks" label={t('common.remark')} fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
@@ -1271,6 +1426,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentRegistration(null);
+          resetCustomerMaterialDetailFieldValues();
         }}
         size={DRAWER_CONFIG.HALF_WIDTH}
         basic={
@@ -1283,6 +1439,15 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
           ) : undefined
         }
         collaboration={detailCollaboration}
+        supplementary={
+          currentRegistration &&
+          hasCustomFieldsDetailContent(customerMaterialListCustomFields, customerMaterialDetailCustomFieldValues) ? (
+            <CustomFieldsDetailSection
+              customFields={customerMaterialListCustomFields}
+              customFieldValues={customerMaterialDetailCustomFieldValues}
+            />
+          ) : undefined
+        }
         linesTitle={t('app.kuaizhizao.customerMaterialRegistration.itemsTitle')}
         lines={
           currentRegistration?.items && currentRegistration.items.length > 0 ? (

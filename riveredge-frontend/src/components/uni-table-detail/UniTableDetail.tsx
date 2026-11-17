@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
-import { Table, Form as AntForm, Button, Space } from 'antd';
+import { Table, Form as AntForm, Button, Space, Tooltip } from 'antd';
 import type { TableProps, ColumnsType } from 'antd/es/table';
 import { PlusOutlined, ImportOutlined, DeleteOutlined, AppstoreAddOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -134,30 +134,74 @@ export const UniTableDetailHeader: React.FC<UniTableDetailHeaderProps> = ({
   importText,
 }) => {
   const { t } = useTranslation();
+  const headerRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLDivElement>(null);
+  const actionsRef = useRef<HTMLDivElement>(null);
+  const [compactHeaderActions, setCompactHeaderActions] = useState(false);
+
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    const actions = actionsRef.current;
+    if (!header || !actions) return;
+
+    const sync = () => {
+      const titleOccupied = titleRef.current?.offsetWidth ?? 0;
+      const available = header.clientWidth - titleOccupied - 12;
+      const need = actions.scrollWidth;
+      setCompactHeaderActions(available > 0 && need > available);
+    };
+
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(header);
+    ro.observe(actions);
+    if (titleRef.current) ro.observe(titleRef.current);
+    return () => ro.disconnect();
+  }, [title, leftExtra, headerExtra, onImport, actions?.length, importText]);
 
   if (!title && !leftExtra && !actions?.length && !headerExtra && !onImport) return null;
 
+  const importLabel = importText ?? t('common.importDetail');
+  const importAria =
+    typeof importLabel === 'string' || typeof importLabel === 'number' ? String(importLabel) : t('common.importDetail');
+
   return (
-    <div className="uni-table-detail-header">
-      <Space align="center" size={12}>
-        <span className="detail-title">
-          {required && <span className="required-mark">*</span>}
-          {title}
-        </span>
-        {leftExtra}
-      </Space>
-      <div className="uni-table-detail-header-actions">
-        {onImport && (
-          <Button
-            className="uni-detail-action-import"
-            color="primary"
-            variant="outlined"
-            icon={<ImportOutlined />}
-            onClick={onImport}
-          >
-            {importText ?? t('common.importDetail')}
-          </Button>
-        )}
+    <div ref={headerRef} className="uni-table-detail-header">
+      <div ref={titleRef}>
+        <Space align="center" size={12}>
+          <span className="detail-title">
+            {required && <span className="required-mark">*</span>}
+            {title}
+          </span>
+          {leftExtra}
+        </Space>
+      </div>
+      <div ref={actionsRef} className="uni-table-detail-header-actions">
+        {onImport ? (
+          compactHeaderActions ? (
+            <Tooltip title={importLabel}>
+              <Button
+                className="uni-detail-action-import"
+                color="primary"
+                variant="outlined"
+                icon={<ImportOutlined />}
+                onClick={onImport}
+                aria-label={importAria}
+              />
+            </Tooltip>
+          ) : (
+            <Button
+              className="uni-detail-action-import"
+              color="primary"
+              variant="outlined"
+              icon={<ImportOutlined />}
+              onClick={onImport}
+              aria-label={importAria}
+            >
+              {importLabel}
+            </Button>
+          )
+        ) : null}
         {headerExtra}
         {(actions || []).map((action) => (
           <Button

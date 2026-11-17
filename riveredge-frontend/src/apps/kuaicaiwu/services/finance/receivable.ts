@@ -11,6 +11,7 @@ export type ReceivablePullPreview = DocumentPushPreview & {
   customer_name?: string;
   sales_order_id?: number | null;
   sales_order_code?: string | null;
+  max_push_total?: number;
 };
 
 export type ReceivablePullCandidate = {

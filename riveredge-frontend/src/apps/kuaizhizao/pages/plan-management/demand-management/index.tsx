@@ -28,7 +28,6 @@ import {
   pushDemandToComputation,
   previewPushDemandToComputation,
   withdrawDemandFromComputation,
-  type DemandPushPreviewResponse,
   getDemandStatistics,
   Demand,
   DemandStatus,
@@ -238,13 +237,11 @@ const DemandManagementPage: React.FC = () => {
   // 需求计划页仅管理手工需求计划（demand_plan）
   const demandType = 'demand_plan' as const;
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [pushPreviewOpen, setPushPreviewOpen] = useState(false);
-  const [pushPreviewLoading, setPushPreviewLoading] = useState(false);
-  const [pushPreviewConfirming, setPushPreviewConfirming] = useState(false);
-  const [pushPreviewData, setPushPreviewData] = useState<DemandPushPreviewResponse | null>(null);
-  const [pushPreviewDemandId, setPushPreviewDemandId] = useState<number | null>(null);
-  const [pushSelectedItemIds, setPushSelectedItemIds] = useState<number[]>([]);
-  useNewShortcut(() => setCreatePlanModalVisible(true));
+  const [createPlanSeed, setCreatePlanSeed] = useState<Record<string, unknown> | undefined>(undefined);
+  useNewShortcut(() => {
+    setCreatePlanSeed(undefined);
+    setCreatePlanModalVisible(true);
+  });
 
   const selectedDemandsForBatch = useMemo(
     () =>
@@ -406,7 +403,8 @@ const DemandManagementPage: React.FC = () => {
       messageApi.success(t('app.kuaizhizao.demandManagement.deleteSuccess', { count: successCount }));
       invalidateStatistics();
       actionRef.current?.reload();
-      setSelectedRowKeys((prev) => prev.filter((pk) => !allowedKeys.includes(pk)));
+      const deletedIdSet = new Set(deletable.map((row) => Number(row.id)));
+      setSelectedRowKeys((prev) => prev.filter((pk) => !deletedIdSet.has(Number(pk))));
     }
     if (errors.length > 0) {
       messageApi.error(
@@ -415,13 +413,6 @@ const DemandManagementPage: React.FC = () => {
       );
     }
   };
-
-  const resetPushPreviewModal = useCallback(() => {
-    setPushPreviewOpen(false);
-    setPushPreviewData(null);
-    setPushPreviewDemandId(null);
-    setPushSelectedItemIds([]);
-  }, []);
 
   const refreshDemandAfterPush = useCallback(
     (id: number) => {
@@ -437,66 +428,35 @@ const DemandManagementPage: React.FC = () => {
     [currentDemand?.id],
   );
 
-  const showDemandPushPreview = useCallback(
-    (id: number) => {
-      setPushPreviewOpen(true);
-      setPushPreviewLoading(true);
-      setPushPreviewConfirming(false);
-      setPushPreviewData(null);
-      setPushPreviewDemandId(id);
-      setPushSelectedItemIds([]);
-      previewPushDemandToComputation(id)
-        .then((res) => {
-          setPushPreviewData(res);
-          const ids = (res.items || [])
-            .filter((row) => Number(row.max_push_quantity ?? 0) > 0)
-            .map((row) => Number(row.item_id));
-          setPushSelectedItemIds(ids);
-        })
-        .catch((error: any) => {
-          messageApi.error(error?.message || error?.detail || t('app.kuaizhizao.demandManagement.pushPreviewFailed'));
-          resetPushPreviewModal();
-        })
-        .finally(() => setPushPreviewLoading(false));
-    },
-    [messageApi, resetPushPreviewModal, t],
-  );
-
-  const handlePushPreviewConfirm = useCallback(async () => {
-    if (!pushPreviewDemandId || !pushPreviewData) return;
-    if (pushPreviewData.has_blocking_issues) return;
-    const pushableIds = (pushPreviewData.items || [])
-      .filter((row) => Number(row.max_push_quantity ?? 0) > 0)
-      .map((row) => Number(row.item_id));
-    if (!pushableIds.length) {
-      messageApi.warning(t('app.kuaizhizao.demandManagement.pushPreviewNoLines'));
-      return;
-    }
-    setPushPreviewConfirming(true);
-    try {
-      const result = await pushDemandToComputation(pushPreviewDemandId);
-      messageApi.success(result.message || t('app.kuaizhizao.demandManagement.pushSuccess'));
-      refreshDemandAfterPush(pushPreviewDemandId);
-      resetPushPreviewModal();
-    } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.pushFailed'));
-    } finally {
-      setPushPreviewConfirming(false);
-    }
-  }, [
-    messageApi,
-    pushPreviewData,
-    pushPreviewDemandId,
-    refreshDemandAfterPush,
-    resetPushPreviewModal,
-    t,
-  ]);
-
   const handlePushToComputation = useCallback(
-    (id: number) => {
-      showDemandPushPreview(id);
+    async (id: number) => {
+      const hideLoading = messageApi.loading(t('app.kuaizhizao.demandManagement.pushPreviewLoading'), 0);
+      try {
+        const res = await previewPushDemandToComputation(id);
+        if (res.has_blocking_issues) {
+          messageApi.warning(
+            demandPushCapabilityReasonMessage(res.blocking_reason, t)
+              || t('app.kuaizhizao.demandManagement.pushPreviewBlocked'),
+          );
+          return;
+        }
+        const pushableIds = (res.items || [])
+          .filter((row) => Number(row.max_push_quantity ?? 0) > 0)
+          .map((row) => Number(row.item_id));
+        if (!pushableIds.length) {
+          messageApi.warning(t('app.kuaizhizao.demandManagement.pushPreviewNoLines'));
+          return;
+        }
+        const result = await pushDemandToComputation(id);
+        messageApi.success(result.message || t('app.kuaizhizao.demandManagement.pushSuccess'));
+        refreshDemandAfterPush(id);
+      } catch (error: any) {
+        messageApi.error(error?.message || error?.detail || t('app.kuaizhizao.demandManagement.pushPreviewFailed'));
+      } finally {
+        hideLoading();
+      }
     },
-    [showDemandPushPreview],
+    [messageApi, refreshDemandAfterPush, t],
   );
 
   const executeWithdrawFromComputation = async (id: number) => {
@@ -1512,68 +1472,6 @@ const DemandManagementPage: React.FC = () => {
         }}
       />
 
-      <Modal
-        title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}
-        open={pushPreviewOpen}
-        width={1100}
-        onCancel={resetPushPreviewModal}
-        okText={t('app.kuaizhizao.salesOrder.confirmPush')}
-        cancelText={t('common.cancel')}
-        confirmLoading={pushPreviewConfirming}
-        onOk={handlePushPreviewConfirm}
-        okButtonProps={{ disabled: pushPreviewLoading || !pushPreviewData || !!pushPreviewData?.has_blocking_issues }}
-      >
-        {pushPreviewLoading ? (
-          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-            <Spin />
-            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
-          </div>
-        ) : pushPreviewData ? (
-          <div>
-            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pushPreviewData.summary}</p>
-            {pushPreviewData.has_blocking_issues ? (
-              <Alert
-                type="warning"
-                showIcon
-                style={{ marginBottom: 12 }}
-                title={
-                  demandPushCapabilityReasonMessage(pushPreviewData.blocking_reason, t) ||
-                  t('app.kuaizhizao.demandManagement.pushBlockedStatus')
-                }
-              />
-            ) : null}
-            {pushPreviewData.items?.length > 0 ? (
-              <Table
-                size="small"
-                dataSource={pushPreviewData.items}
-                rowKey={(row) => String(row.item_id)}
-                pagination={false}
-                scroll={{ x: 960 }}
-                columns={[
-                  { title: t('app.kuaizhizao.quotation.colMaterialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
-                  { title: t('app.kuaizhizao.quotation.colMaterialName'), dataIndex: 'material_name', width: 140, ellipsis: true },
-                  { title: t('app.kuaizhizao.demandComputation.colRequiredQty'), dataIndex: 'quantity', width: 88, align: 'right' , render: formatQuantity },
-                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 88, align: 'right' , render: formatQuantity },
-                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 88, align: 'right' , render: formatQuantity },
-                  {
-                    title: t('app.kuaizhizao.quotation.colDeliveryDate'),
-                    dataIndex: 'delivery_date',
-                    width: 112,
-                    render: (v: string) => (v ? v.slice(0, 10) : '-'),
-                  },
-                ]}
-              />
-            ) : (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.demandManagement.pushPreviewNoLines')} />
-            )}
-            {pushPreviewData.tip ? (
-              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
-                {pushPreviewData.tip}
-              </Typography.Paragraph>
-            ) : null}
-          </div>
-        ) : null}
-      </Modal>
     </>
   );
 };

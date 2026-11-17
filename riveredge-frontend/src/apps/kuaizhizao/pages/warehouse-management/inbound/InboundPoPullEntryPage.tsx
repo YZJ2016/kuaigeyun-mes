@@ -59,7 +59,6 @@ import {
   useInboundReceiverSelect,
 } from './inboundEntryShared';
 import { inboundReceiptTypeLabel } from './inboundHubTypes';
-import { INBOUND_LIST_PATH, inboundPoEntryPath } from './inboundPaths';
 import {
   INBOUND_LIST_PATH,
   PURCHASE_INBOUND_LIST_PATH,

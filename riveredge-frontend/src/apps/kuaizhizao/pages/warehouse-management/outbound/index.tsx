@@ -68,7 +68,21 @@ import OutboundQuickPullModals, {
 } from './OutboundQuickPullModals';
 import OutboundConfirmPreviewModal from './OutboundConfirmPreviewModal';
 import OutboundHubEditModal from './OutboundHubEditModal';
-import { formatBusinessDateOnly, formatQuantity } from '../../../../../utils/format';
+import { runOutboundHubConfirmFromRecord, formatOutboundConfirmError } from './outboundHubRunConfirm';
+import { buildOutboundHubDetailLineColumns } from '../shared/warehouseLineDetailColumns';
+import { useWarehouseTrackingFlags } from '../shared/warehouseTrackingFlags';
+import SalesDeliveryCreateModal from './SalesDeliveryCreateModal';
+import ProductionPickingCreateModal from './ProductionPickingCreateModal';
+import { formatBusinessDateOnly, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
+import {
+  enrichOutboundHubOrdersForExport,
+  exportWarehouseDocLinesXlsx,
+  fetchAllPaged,
+  filterWarehouseFlatRowsByExportKeys,
+  flattenOutboundHubForExport,
+  isWarehouseFlatExportRow,
+  resolveWarehouseListExportHeaders,
+} from '../shared/warehouseDocListExport';
 import { renderWarehouseHeaderQuantity } from '../shared/warehouseListQuantity';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
@@ -339,6 +353,18 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
   const handleEdit = useCallback((record: OutboundOrder) => {
     setEditModalRecord(record);
   }, []);
+
+  const handleOutboundEdit = useCallback(
+    (record: OutboundOrder) => {
+      if (record.outbound_type === 'purchase_return') {
+        if (!(record.id != null && record.id > 0)) return;
+        navigate(`/apps/kuaizhizao/purchase-management/purchase-returns/${record.id}/edit`);
+        return;
+      }
+      handleEdit(record);
+    },
+    [handleEdit, navigate],
+  );
 
   const handleProductionPickingAuditSuccess = useCallback(async () => {
     invalidateMenuBadgeCounts();
@@ -1561,6 +1587,75 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
             noun: t('app.kuaizhizao.warehouseOutbound.title'),
           })
         }
+        showExportButton
+        onExport={async (type, keys, pageData) => {
+          try {
+            const loadAll = async () => {
+              const typeFilter = outboundTypeFilterRef.current;
+              const searchFormValues = searchFormRef.current?.getFieldsValue?.() ?? {};
+              const listParams = resolveOutboundHubListParams(
+                {
+                  ...(searchFormValues as Record<string, unknown>),
+                  outbound_type: typeFilter === 'all' ? undefined : typeFilter,
+                  hub_scoped_outbound_types: hubScopedOutboundTypes?.length
+                    ? [...hubScopedOutboundTypes]
+                    : undefined,
+                },
+                undefined,
+              );
+              return fetchAllPaged(async (current, pageSize) => {
+                const result = await fetchOutboundHubList(
+                  { current, pageSize, ...listParams },
+                  {
+                    enrichProductionPickingRecordsWithCustomFields,
+                    enrichSalesDeliveryRecordsWithCustomFields,
+                  },
+                  currentUser,
+                );
+                const filtered = filterOutboundHubRowsByDeepLink(result.data, outboundDeepLinkRef.current);
+                return {
+                  data: filtered,
+                  total: outboundDeepLinkRef.current ? filtered.length : result.total,
+                };
+              });
+            };
+            const headers = await resolveWarehouseListExportHeaders(
+              type,
+              keys,
+              pageData as OutboundOrder[] | undefined,
+              listRowsRef.current,
+              loadAll,
+            );
+            if (headers.length === 0) {
+              messageApi.warning(t('common.exportNoData'));
+              return;
+            }
+            const enriched = await enrichOutboundHubOrdersForExport(headers);
+            let flatRows = flattenOutboundHubForExport(enriched);
+            if (type === 'currentPage' && pageData?.length) {
+              const first = pageData[0] as Record<string, unknown>;
+              if (isWarehouseFlatExportRow(first)) {
+                flatRows = pageData as Array<Record<string, unknown>>;
+              }
+            }
+            if (type === 'selected' && keys?.length) {
+              flatRows = filterWarehouseFlatRowsByExportKeys(flatRows, keys);
+            }
+            await exportWarehouseDocLinesXlsx(
+              flatRows,
+              `outbound-doc-lines-${todaySiteDateString()}.xlsx`,
+              {
+                t,
+                sheetName: t('app.kuaizhizao.warehouseOutbound.title'),
+                includeDocTypeColumn: true,
+                direction: 'outbound',
+              },
+            );
+            messageApi.success(t('common.exportSuccess', { count: flatRows.length }));
+          } catch (error: unknown) {
+            messageApi.error((error as { message?: string })?.message || t('common.exportFailed'));
+          }
+        }}
         request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           try {
             const typeFilter = outboundTypeFilterRef.current;

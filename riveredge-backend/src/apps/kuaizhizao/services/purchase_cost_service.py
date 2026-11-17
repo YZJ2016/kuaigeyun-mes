@@ -84,10 +84,12 @@ class PurchaseCostService:
                 for item in items:
                     weights[item.id] = Decimal(1)
             
-            # 3. 执行比例分摊并持久化
-            for item in items:
-                ratio = weights[item.id] / total_base
-                item_fee = (total_fee * ratio).quantize(Decimal("0.01"))
+            from apps.kuaizhizao.utils.document_amount_write import allocate_amount_by_weights
+
+            fee_parts = allocate_amount_by_weights(
+                total_fee, [weights[item.id] for item in items]
+            )
+            for item, item_fee in zip(items, fee_parts):
                 item.landing_cost = item_fee
                 item.additional_fees_details = fee_items
                 await item.save()
@@ -432,8 +434,9 @@ class PurchaseCostService:
 
         unit_price = await InventoryCostService().require_material_unit_cost(tenant_id, material.id)
         
-        # 计算采购价格
-        purchase_price = quantity * unit_price
+        from apps.kuaizhizao.utils.document_amount_write import line_total_qty_unit_price
+
+        purchase_price = line_total_qty_unit_price(quantity, unit_price)
         
         price_breakdown = [{
             "material_id": material.id,

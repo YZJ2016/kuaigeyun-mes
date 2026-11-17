@@ -20,6 +20,7 @@ from apps.kuaicaiwu.services.finance_integration_hooks import (
 from apps.kuaicaiwu.services.finance_service import PayableService
 from apps.kuaizhizao.models.outsource_settlement import OutsourceSettlement
 from apps.kuaizhizao.utils.outsource_settlement_helpers import SETTLEMENT_KIND_CREDIT
+from core.utils.amount_precision import quantize_business_amount
 from infra.exceptions.exceptions import BusinessLogicError, ValidationError
 
 
@@ -39,7 +40,10 @@ class OutsourceSettlementFinanceBridge:
             deleted_at__isnull=True,
             is_active=True,
         ).all()
-        return sum((Decimal(str(r.total_amount or 0)) for r in rows), Decimal("0")).quantize(Decimal("0.01"))
+        return quantize_business_amount(
+            sum((Decimal(str(r.total_amount or 0)) for r in rows), Decimal("0")),
+            2,
+        )
 
     @classmethod
     async def create_settlement_payable_delta(
@@ -52,7 +56,7 @@ class OutsourceSettlementFinanceBridge:
     ) -> Optional[int]:
         settlement_total = Decimal(str(settlement.total_amount or 0))
         provisional = await cls.sum_provisional_payables(tenant_id, receipt_ids)
-        diff = (settlement_total - provisional).quantize(Decimal("0.01"))
+        diff = quantize_business_amount(settlement_total - provisional, 2)
         if diff == 0:
             return None
 

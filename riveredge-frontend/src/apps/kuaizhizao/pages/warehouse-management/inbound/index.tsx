@@ -75,7 +75,16 @@ import {
 } from '../shared/warehouseTrackingFlags';
 import { buildKuaizhizaoPullCreateMenuItems } from '../../../constants/documentActionRegistry';
 import { customerMaterialRegistrationApi } from '../../../services/customer-material-registration';
-import { formatBusinessDateOnly, formatQuantity } from '../../../../../utils/format';
+import { formatBusinessDateOnly, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
+import {
+  enrichInboundHubOrdersForExport,
+  exportWarehouseDocLinesXlsx,
+  fetchAllPaged,
+  filterWarehouseFlatRowsByExportKeys,
+  flattenInboundHubForExport,
+  isWarehouseFlatExportRow,
+  resolveWarehouseListExportHeaders,
+} from '../shared/warehouseDocListExport';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { renderWarehouseLineQuantity, renderWarehouseHeaderQuantity } from '../shared/warehouseListQuantity';
 import { formatApiErrorDetail } from '../../../../../services/api';
@@ -121,7 +130,10 @@ import {
 import { fetchPurchaseReceiptIqcEnsure } from './inboundPurchaseIqcGate';
 import { pullPaymentApplicationFromPurchaseReceipt } from '../../../services/payment-application';
 import { PurchaseReceiptIqcReviewModal } from './PurchaseReceiptIqcReviewModal';
+import FinishedGoodsReceiptCreateModal from './FinishedGoodsReceiptCreateModal';
+import PurchaseReceiptCreateModal from './PurchaseReceiptCreateModal';
 import OtherInboundEditModal from './OtherInboundEditModal';
+import { runInboundHubConfirmFromRecord } from './inboundHubRunConfirm';
 import { fetchCustomerMaterialIqcEnsure } from './inboundCustomerMaterialIqcGate';
 import { CustomerMaterialIqcReviewModal } from './CustomerMaterialIqcReviewModal';
 import {
@@ -150,6 +162,7 @@ import {
   resolveInboundHubDateRaw,
   filterInboundPullCreateMenuSpecs,
   resolveDefaultInboundQuickPullKey,
+  isProductionInboundHubScope,
 } from './inboundHubTypes';
 import { toApiBusinessDocumentDateTime } from '../../../../../utils/formDate';
 import { inboundReceiptTypeMarkerValueEnum, renderInboundReceiptTypeMarkerTag } from '../shared/warehouseMarkerTags';
@@ -456,6 +469,7 @@ function renderInboundDetailSerialCell(t: (key: string, options?: { count?: numb
 const PURCHASE_RECEIPT_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_purchase_receipts';
 const PRODUCTION_RETURN_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_production_returns';
 const FINISHED_GOODS_RECEIPT_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_finished_goods_receipts';
+const SEMI_FINISHED_GOODS_RECEIPT_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_semi_finished_goods_receipts';
 
 /** 列表行状态（兼容大小写/空格） */
 function inboundRowStatus(record: InboundOrder): string {
@@ -606,11 +620,6 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
       ),
     [hubScopedReceiptTypes],
   );
-  const handleCreate = useCallback(() => {
-    quickPullRef.current?.open(defaultInboundQuickPullKey);
-  }, [defaultInboundQuickPullKey]);
-  useNewShortcut(handleCreate);
-
   const handleReceiptTypeFilterChange = useCallback((value: string) => {
     const next = value || 'all';
     // 同步写入 ref，避免 setState 后立刻 reload 仍读到旧筛选值
@@ -744,6 +753,14 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
     resetDetailFieldValues: resetFinishedGoodsReceiptDetailFieldValues,
   } = useCustomFieldsForList<InboundOrder>({ tableName: FINISHED_GOODS_RECEIPT_CUSTOM_FIELD_TABLE });
 
+  const {
+    customFields: semiFinishedGoodsReceiptListCustomFields,
+    enrichRecordsWithCustomFields: enrichSemiFinishedGoodsReceiptRecordsWithCustomFields,
+    customFieldValues: semiFinishedGoodsReceiptDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadSemiFinishedGoodsReceiptFieldValuesForDetail,
+    resetDetailFieldValues: resetSemiFinishedGoodsReceiptDetailFieldValues,
+  } = useCustomFieldsForList<InboundOrder>({ tableName: SEMI_FINISHED_GOODS_RECEIPT_CUSTOM_FIELD_TABLE });
+
   const inboundHubCustomFieldColumns = useMemo(
     () =>
       buildHubMergedCustomFieldColumns<InboundOrder>(
@@ -751,6 +768,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
           { docTypes: ['purchase'], customFields: purchaseReceiptListCustomFields },
           { docTypes: ['production_return'], customFields: productionReturnListCustomFields },
           { docTypes: ['finished_goods'], customFields: finishedGoodsReceiptListCustomFields },
+          { docTypes: ['semi_finished_goods'], customFields: semiFinishedGoodsReceiptListCustomFields },
         ],
         'receipt_type',
         [t('app.kuaizhizao.warehouseInbound.field.documentDate')],
@@ -759,6 +777,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
       purchaseReceiptListCustomFields,
       productionReturnListCustomFields,
       finishedGoodsReceiptListCustomFields,
+      semiFinishedGoodsReceiptListCustomFields,
       t,
     ],
   );
@@ -889,6 +908,8 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
           await loadProductionReturnFieldValuesForDetail(record.id);
         } else if (record.receipt_type === 'finished_goods' && record.id != null) {
           await loadFinishedGoodsReceiptFieldValuesForDetail(record.id);
+        } else if (record.receipt_type === 'semi_finished_goods' && record.id != null) {
+          await loadSemiFinishedGoodsReceiptFieldValuesForDetail(record.id);
         }
       }
     } catch (error: any) {
@@ -1126,6 +1147,51 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
       setPurchaseConfirmPreviewLoading(false);
     }
   };
+
+  const executeStoredInboundConfirm = useCallback(
+    async (record: InboundOrder) => {
+      try {
+        const confirmResult = await runInboundHubConfirmFromRecord({
+          t,
+          record,
+          trackingFlags,
+          onSaveProductionReturnCustomFields: saveProductionReturnCustomFieldValues,
+        });
+        messageApi.success(
+          record.receipt_type === 'production_return'
+            ? t('app.kuaizhizao.warehouseInbound.msg.returnConfirmSuccess')
+            : t('app.kuaizhizao.warehouseInbound.msg.inboundConfirmSuccess'),
+        );
+        if (confirmResult.externalPushMessage) {
+          messageApi.warning(confirmResult.externalPushMessage);
+        }
+        invalidateMenuBadgeCounts();
+        await actionRef.current?.reload?.();
+        if (currentOrder?.id === record.id && currentOrder?.receipt_type === record.receipt_type) {
+          void handleDetail(record);
+        }
+        setInboundTrackingRefreshKey((k) => k + 1);
+      } catch (error: unknown) {
+        const err = error as { message?: string; response?: { data?: { detail?: unknown } } };
+        messageApi.error(
+          formatApiErrorDetail(err?.response?.data?.detail) ||
+            err?.message ||
+            t('app.kuaizhizao.warehouseInbound.msg.confirmFailed'),
+        );
+        throw error;
+      }
+    },
+    [
+      currentOrder?.id,
+      currentOrder?.receipt_type,
+      handleDetail,
+      invalidateMenuBadgeCounts,
+      messageApi,
+      saveProductionReturnCustomFieldValues,
+      t,
+      trackingFlags,
+    ],
+  );
 
   const openConfirmPreview = async (
     record: InboundOrder,
@@ -2305,6 +2371,21 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
         />,
       );
     }
+    if (
+      currentOrder.receipt_type === 'semi_finished_goods' &&
+      hasCustomFieldsDetailContent(
+        semiFinishedGoodsReceiptListCustomFields,
+        semiFinishedGoodsReceiptDetailCustomFieldValues,
+      )
+    ) {
+      nodes.push(
+        <CustomFieldsDetailSection
+          key="semi-finished-goods-custom-fields"
+          customFields={semiFinishedGoodsReceiptListCustomFields}
+          customFieldValues={semiFinishedGoodsReceiptDetailCustomFieldValues}
+        />,
+      );
+    }
     if (currentOrder.receipt_type === 'purchase' && currentOrder.id) {
       nodes.push(
         <div key="iqc" style={{ marginTop: nodes.length > 0 ? 16 : undefined }}>
@@ -2371,6 +2452,8 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
     productionReturnListCustomFields,
     purchaseReceiptDetailCustomFieldValues,
     purchaseReceiptListCustomFields,
+    semiFinishedGoodsReceiptDetailCustomFieldValues,
+    semiFinishedGoodsReceiptListCustomFields,
     t,
   ]);
 
@@ -2558,6 +2641,78 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
             noun: t('app.kuaizhizao.warehouseInbound.title'),
           })
         }
+        showExportButton
+        onExport={async (type, keys, pageData) => {
+          try {
+            const loadAll = async () => {
+              const typeFilter = receiptTypeFilterRef.current;
+              const searchFormValues = searchFormRef.current?.getFieldsValue?.() ?? {};
+              const listParams = resolveInboundHubListParams(
+                {
+                  ...(searchFormValues as Record<string, unknown>),
+                  receipt_type: typeFilter === 'all' ? undefined : typeFilter,
+                  hub_scoped_receipt_types: hubScopedReceiptTypes?.length
+                    ? [...hubScopedReceiptTypes]
+                    : undefined,
+                },
+                undefined,
+              );
+              return fetchAllPaged(async (current, pageSize) => {
+                const result = await fetchInboundHubList(
+                  { current, pageSize, ...listParams },
+                  {
+                    enrichPurchaseReceiptRecordsWithCustomFields,
+                    enrichFinishedGoodsReceiptRecordsWithCustomFields,
+                    enrichSemiFinishedGoodsReceiptRecordsWithCustomFields,
+                    enrichProductionReturnRecordsWithCustomFields,
+                  },
+                  currentUser,
+                );
+                const filtered = filterInboundHubRowsByDeepLink(result.data, inboundDeepLinkRef.current);
+                return {
+                  data: filtered,
+                  total: inboundDeepLinkRef.current ? filtered.length : result.total,
+                };
+              });
+            };
+            const headers = await resolveWarehouseListExportHeaders(
+              type,
+              keys,
+              pageData as InboundOrder[] | undefined,
+              listRowsRef.current,
+              loadAll,
+            );
+            if (headers.length === 0) {
+              messageApi.warning(t('common.exportNoData'));
+              return;
+            }
+            const enriched = await enrichInboundHubOrdersForExport(headers);
+            let flatRows = flattenInboundHubForExport(enriched);
+            if (type === 'currentPage' && pageData?.length) {
+              const first = pageData[0] as Record<string, unknown>;
+              if (isWarehouseFlatExportRow(first)) {
+                flatRows = pageData as Array<Record<string, unknown>>;
+              }
+            }
+            if (type === 'selected' && keys?.length) {
+              flatRows = filterWarehouseFlatRowsByExportKeys(flatRows, keys);
+            }
+            const exportCtx = {
+              t,
+              sheetName: t('app.kuaizhizao.warehouseInbound.title'),
+              includeDocTypeColumn: true,
+              direction: 'inbound' as const,
+            };
+            await exportWarehouseDocLinesXlsx(
+              flatRows,
+              `inbound-doc-lines-${todaySiteDateString()}.xlsx`,
+              exportCtx,
+            );
+            messageApi.success(t('common.exportSuccess', { count: flatRows.length }));
+          } catch (error: unknown) {
+            messageApi.error((error as { message?: string })?.message || t('common.exportFailed'));
+          }
+        }}
         request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           try {
             const typeFilter = receiptTypeFilterRef.current;
@@ -3053,6 +3208,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
           resetPurchaseReceiptDetailFieldValues();
           resetProductionReturnDetailFieldValues();
           resetFinishedGoodsReceiptDetailFieldValues();
+          resetSemiFinishedGoodsReceiptDetailFieldValues();
         }}
         extra={
           currentOrder ? (

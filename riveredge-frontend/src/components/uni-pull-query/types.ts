@@ -14,6 +14,10 @@ export interface UniPullQueryLoadParams {
   pageSize: number;
   /** 分段范围，如 pullable / all */
   scope?: string;
+  /** 来源单据日期起（站点日历 YYYY-MM-DD） */
+  dateFrom?: string;
+  /** 来源单据日期止（站点日历 YYYY-MM-DD） */
+  dateTo?: string;
 }
 
 export interface UniPullQueryLoadResult<T> {
@@ -48,6 +52,15 @@ export interface UniPullQueryModalProps<T extends object> {
   onSearchClear: () => void;
   /** 已生效的搜索关键词，用于空态文案 */
   appliedKeyword: string;
+  /** 日期筛选草稿（未点确定） */
+  dateDraftFrom?: string;
+  dateDraftTo?: string;
+  onDateDraftChange?: (from?: string, to?: string) => void;
+  onDateApply?: (from?: string, to?: string) => void;
+  onDateClear?: () => void;
+  /** 已生效的日期筛选，用于空态与请求 */
+  appliedDateFrom?: string;
+  appliedDateTo?: string;
   searchPlaceholder?: ReactNode;
 
   emptyText?: ReactNode;
@@ -77,6 +90,8 @@ export interface UniPullQueryModalProps<T extends object> {
   okText?: ReactNode;
   cancelText?: ReactNode;
   okButtonProps?: ButtonProps;
+  /** 自定义底部；传入后覆盖默认取消/确认（可用于「保存为草稿」「提交审核」双按钮） */
+  footer?: ReactNode;
   width?: number;
   zIndex?: number;
   destroyOnHidden?: boolean;
@@ -98,6 +113,11 @@ export interface UniPullQueryModalProps<T extends object> {
   selectedRows?: T[];
   /** 已选预览展示文案；不传则按常见单号字段推断 */
   getRowLabel?: (record: T) => string;
+
+  /**
+   * 传入 useUniPullQuery 返回值时可自动绑定搜索/日期/范围/分页筛选 props（显式传入的同名 prop 优先）。
+   */
+  pullQuery?: import('./resolvePullQueryModalFilterProps').UniPullQueryFilterController;
 }
 
 export interface UseUniPullQueryOptions<T extends object> {
@@ -112,4 +132,6 @@ export interface UseUniPullQueryOptions<T extends object> {
   defaultScope?: string;
   onOpen?: () => void;
   onClose?: () => void;
+  /** 默认 true：筛选栏展示来源单据日期范围 */
+  enableDateFilter?: boolean;
 }

@@ -20,6 +20,8 @@ import {
 } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import { handoffSalesReviewToSalesOrderCreate } from '../../../utils/documentFlowHandoff';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
@@ -76,7 +78,6 @@ import {
   salesReviewApi,
   type SalesReview,
   type SalesReviewListItem,
-  type SalesReviewPushPreview,
 } from '../../../services/sales-review';
 import {
   listQuotations,
@@ -141,6 +142,7 @@ function canDeleteStatus(status?: string): boolean {
 
 const SalesReviewsPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { message } = App.useApp();
   const pullFromQuotationAction = resolveKuaizhizaoDocumentAction(t, 'sales_review.pull_from_quotation');
   const pushToSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'sales_order.pull_from_sales_review');
@@ -164,9 +166,6 @@ const SalesReviewsPage: React.FC = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [opinionForms, setOpinionForms] = useState<Record<string, { result: 'pass' | 'fail'; opinion: string }>>({});
-  const [pushPreview, setPushPreview] = useState<SalesReviewPushPreview | null>(null);
-  const [pushPreviewOpen, setPushPreviewOpen] = useState(false);
-  const [pushTargetId, setPushTargetId] = useState<number | null>(null);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [reviewModalId, setReviewModalId] = useState<number | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -483,44 +482,25 @@ const SalesReviewsPage: React.FC = () => {
   const openPushPreview = async (id?: number) => {
     const targetId = id ?? detail?.id ?? null;
     if (targetId == null) return;
-    setPushTargetId(targetId);
     setActionLoading(true);
+    const hideLoading = message.loading(t('app.kuaizhizao.salesOrder.loadingPreview'), 0);
     try {
       const preview = await salesReviewApi.previewPushToSalesOrder(targetId);
-      setPushPreview(preview);
-      setPushPreviewOpen(true);
-    } catch (err) {
-      message.error(getApiErrorMessage(err, t('common.operationFailed')));
-      setPushTargetId(null);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const confirmPush = async () => {
-    if (pushTargetId == null) return;
-    setActionLoading(true);
-    try {
-      const result = await salesReviewApi.pushToSalesOrder(pushTargetId);
-      if (!result.success) {
-        message.error(result.message || t('common.operationFailed'));
+      if (!preview.can_push) {
+        message.warning(preview.blocking_reason || t('common.operationFailed'));
         return;
       }
+      await handoffSalesReviewToSalesOrderCreate(navigate, targetId);
       message.success(
-        result.sales_order_code
-          ? t('app.kuaizhizao.salesReview.pushSuccessWithCode', { code: result.sales_order_code })
-          : result.message || t('app.kuaizhizao.salesReview.pushSuccess'),
+        t('app.kuaizhizao.documentFlow.openedDownstreamCreate', {
+          target: pushToSalesOrderAction.targetLabel,
+        }),
       );
-      setPushPreviewOpen(false);
-      setPushTargetId(null);
-      if (detailOpen && detailIdRef.current === pushTargetId) {
-        await refreshDetail();
-      }
       clearTableSelection();
-      reloadTable();
     } catch (err) {
       message.error(getApiErrorMessage(err, t('common.operationFailed')));
     } finally {
+      hideLoading();
       setActionLoading(false);
     }
   };
@@ -1301,46 +1281,6 @@ const SalesReviewsPage: React.FC = () => {
           }
         }}
       />
-
-      <Modal
-        title={t('app.kuaizhizao.salesReview.pushPreviewTitle')}
-        open={pushPreviewOpen}
-        onCancel={() => {
-          setPushPreviewOpen(false);
-          setPushTargetId(null);
-        }}
-        destroyOnHidden
-        confirmLoading={actionLoading}
-        onOk={() => void confirmPush()}
-        okButtonProps={{ disabled: pushPreview != null && !pushPreview.can_push }}
-        okText={t('app.kuaizhizao.salesReview.actionPush')}
-      >
-        {pushPreview ? (
-          <Space orientation="vertical" style={{ width: '100%' }}>
-            {!pushPreview.can_push ? (
-              <Alert type="warning" showIcon title={pushPreview.blocking_reason || t('common.operationFailed')} />
-            ) : (
-              <Alert type="info" showIcon title={t('app.kuaizhizao.salesReview.pushPreviewHint')} />
-            )}
-            <Descriptions size="small" column={1}>
-              <Descriptions.Item label={t('app.kuaizhizao.salesReview.colReviewCode')}>
-                {pushPreview.review_code}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.salesReview.colCustomer')}>
-                {pushPreview.customer_name}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.salesReview.colItemCount')}>
-                {pushPreview.item_count}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.salesReview.colTotalAmount')}>
-                {formatAmount(pushPreview.total_amount)}
-              </Descriptions.Item>
-            </Descriptions>
-          </Space>
-        ) : (
-          <Spin />
-        )}
-      </Modal>
 
       <UniPullQueryModal<PullQuotationCandidate>
         title={pullFromQuotationAction.label}

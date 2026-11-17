@@ -19,6 +19,9 @@ from apps.kuaizhizao.services.document_action_policy.types import (
     InboundHubCapabilities,
     OutboundHubCapabilities,
 )
+from apps.kuaizhizao.schemas.document_line_dual_quantity import (
+    DocumentLineDualQuantitySchemaMixin,
+)
 
 
 class DocumentLineMaterialPreview(BaseSchema):
@@ -350,6 +353,8 @@ class InboundCreatePreviewLine(BaseSchema):
     """入库/退货创建 — 预览明细行"""
     sales_order_item_id: Optional[int] = Field(None, description="销售订单明细ID")
     sales_delivery_item_id: Optional[int] = Field(None, description="销售出库明细ID")
+    purchase_order_item_id: Optional[int] = Field(None, description="采购订单明细ID")
+    purchase_receipt_item_id: Optional[int] = Field(None, description="采购入库明细ID")
     picking_item_id: Optional[int] = Field(None, description="领料单明细ID")
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")
@@ -364,6 +369,8 @@ class InboundCreatePreviewLine(BaseSchema):
     unit_price: Optional[float] = Field(None, description="单价")
     batch_number: Optional[str] = Field(None, description="原出库/建议退货批号")
     outbound_batch_options: List[str] = Field(default_factory=list, description="可选出库批号")
+    warehouse_id: Optional[int] = Field(None, description="建议仓库ID（如领料行原仓，退料默认可退回该仓）")
+    warehouse_name: Optional[str] = Field(None, max_length=100, description="建议仓库名称")
 
 
 class WorkOrderInboundPreviewResponse(BaseSchema):
@@ -395,6 +402,22 @@ class SalesOrderReturnPreviewResponse(BaseSchema):
     """销售退货 — 订单预览"""
     sales_order_id: int = Field(..., description="销售订单ID")
     sales_order_code: str = Field(..., description="销售订单编码")
+    lines: List[InboundCreatePreviewLine] = Field(default_factory=list, description="预览明细")
+    message: Optional[str] = Field(None, description="提示信息")
+
+
+class PurchaseReceiptReturnPreviewResponse(BaseSchema):
+    """采购退货 — 入库单预览"""
+    purchase_receipt_id: int = Field(..., description="采购入库单ID")
+    purchase_receipt_code: str = Field(..., description="采购入库单编码")
+    supplier_id: Optional[int] = Field(None, description="供应商ID")
+    supplier_name: Optional[str] = Field(None, description="供应商名称")
+    department_id: Optional[int] = Field(None, description="部门ID")
+    department_name: Optional[str] = Field(None, max_length=100, description="部门名称")
+    warehouse_id: Optional[int] = Field(None, description="入库仓库ID")
+    warehouse_name: Optional[str] = Field(None, description="入库仓库名称")
+    purchase_order_id: Optional[int] = Field(None, description="采购订单ID")
+    purchase_order_code: Optional[str] = Field(None, description="采购订单编码")
     lines: List[InboundCreatePreviewLine] = Field(default_factory=list, description="预览明细")
     message: Optional[str] = Field(None, description="提示信息")
 
@@ -1519,9 +1542,25 @@ class OtherOutboundCreate(OtherOutboundBase):
     items: Optional[List["OtherOutboundItemCreate"]] = Field(None, description="出库明细列表")
 
 
+class OtherOutboundItemEditLine(DocumentLineDualQuantitySchemaMixin, BaseSchema):
+    """其他出库单明细编辑行（确认出库前）"""
+    id: int = Field(..., description="明细ID")
+    outbound_quantity: Optional[float] = Field(None, gt=0, description="出库数量")
+    unit_price: Optional[float] = Field(None, ge=0, description="单价（选填，不自动带价）")
+    location_id: Optional[int] = Field(None, description="库位ID")
+    location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
+    batch_number: Optional[str] = Field(None, max_length=50, description="批次号（单批时使用；多批请用 batch_allocations）")
+    batch_allocations: Optional[List[OutboundConfirmationBatchAllocation]] = Field(
+        None,
+        description="多批号分摊；保存时按批拆明细",
+    )
+    notes: Optional[str] = Field(None, description="明细备注")
+
+
 class OtherOutboundUpdate(OtherOutboundBase):
     """其他出库单更新schema"""
     outbound_code: Optional[str] = Field(None, max_length=50, description="出库单编码")
+    items: Optional[List[OtherOutboundItemEditLine]] = Field(None, description="明细编辑行")
 
 
 class OtherOutboundResponse(OtherOutboundBase):

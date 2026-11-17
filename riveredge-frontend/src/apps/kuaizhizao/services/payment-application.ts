@@ -1,5 +1,27 @@
 import { apiRequest } from '../../../services/api';
 
+export interface PaymentApplicationPurchaseOrderLine {
+  id: number;
+  materialCode: string;
+  materialName: string;
+  materialSpec?: string;
+  quantity: string;
+  unit: string;
+  unitPrice: string;
+  totalPrice: string;
+  notes?: string;
+}
+
+export interface PaymentApplicationPurchaseOrderSource {
+  id: number;
+  orderCode: string;
+  orderDate?: string;
+  orderType?: string;
+  buyerName?: string;
+  totalAmount: string;
+  items: PaymentApplicationPurchaseOrderLine[];
+}
+
 export interface PaymentApplicationLine {
   id?: number;
   lineNo?: number;
@@ -12,6 +34,11 @@ export interface PaymentApplicationLine {
   requestAmount: number;
   paidAmount?: number;
   maxRequestAmount?: number;
+  materialName?: string;
+  materialSpec?: string;
+  quantity?: number;
+  materialUnit?: string;
+  sourceLineId?: number;
   notes?: string;
 }
 
@@ -39,6 +66,8 @@ export interface PaymentApplication {
   supplierBankAccount?: string;
   paymentReason?: string;
   paymentMethod?: string;
+  advancePayeeId?: number;
+  advancePayeeName?: string;
   invoiceStatus?: string;
   paymentTerms?: string;
   notes?: string;
@@ -47,6 +76,7 @@ export interface PaymentApplication {
   attachments?: Array<Record<string, unknown>>;
   items: PaymentApplicationLine[];
   linkedPayments?: Array<{ id: number; code: string }>;
+  purchaseOrderSources?: PaymentApplicationPurchaseOrderSource[];
   capabilities?: Record<string, { allowed: boolean; reason?: string }>;
   audit?: {
     phase?: string;
@@ -54,6 +84,12 @@ export interface PaymentApplication {
     mode?: string;
     allowed_actions?: string[];
     entity_type?: string;
+    viewer_actions?: {
+      has_my_pending_task?: boolean;
+      approve?: boolean;
+      my_acted?: boolean;
+      block_reason?: string | null;
+    } | null;
   };
   createdAt?: string;
   updatedAt?: string;
@@ -86,6 +122,24 @@ export async function deletePaymentApplication(id: number) {
 
 export async function submitPaymentApplication(id: number) {
   return apiRequest<PaymentApplication>(`${BASE}/${id}/submit`, { method: 'POST' });
+}
+
+export async function submitPaymentApplicationForReview(id: number) {
+  return apiRequest<PaymentApplication>(`/core/uni-audit/payment_application/${id}/submit_review`, {
+    method: 'POST',
+  });
+}
+
+export async function withdrawPaymentApplication(id: number) {
+  return apiRequest<PaymentApplication>(`/core/uni-audit/payment_application/${id}/withdraw`, {
+    method: 'POST',
+  });
+}
+
+export async function revokePaymentApplication(id: number) {
+  return apiRequest<PaymentApplication>(`/core/uni-audit/payment_application/${id}/revoke`, {
+    method: 'POST',
+  });
 }
 
 export async function approvePaymentApplication(
@@ -168,6 +222,9 @@ export async function previewPullPaymentApplicationFromPurchaseOrder(
 ) {
   return apiRequest<Record<string, unknown>>(`${BASE}/pull-from-purchase-order/preview`, {
     method: 'GET',
-    params: { purchase_order_id: purchaseOrderId },
+    params: {
+      purchase_order_id: purchaseOrderId,
+      ...(amount != null && amount > 0 ? { amount } : {}),
+    },
   });
 }

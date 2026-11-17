@@ -2,12 +2,13 @@
  * 销售发票列表页
  *
  * 管理向客户开具的销项发票，支持关联销售订单和应收单。
+ * amount_contract: none — 取单行只读出库/订单 settlement 快照，本页不跑 DocumentAmountSummary。
  */
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind, rowActionFillInvoiceNumber } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { ActionType, ProColumns, type ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Space, Dropdown, Alert, Spin, Table, Empty, Form } from 'antd';
+import { App, Button, Modal, Space, Dropdown, Form, theme, Typography } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ModalForm,
@@ -36,7 +37,12 @@ import {
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { ListPageTemplate, MODAL_CONFIG, FormModalGridBlock } from '../../../../../components/layout-templates';
+import {
+  ListPageTemplate,
+  MODAL_CONFIG,
+  MODAL_NESTED_ABOVE_PARENT_OFFSET,
+  FormModalGridBlock,
+} from '../../../../../components/layout-templates';
 import { financeColFull, financeColHalf, financeFormGridProps } from '../../../utils/financeFormLayout';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -149,8 +155,13 @@ const SalesInvoicesPage: React.FC = () => {
   const pullAmountModeRef = useRef<InvoiceAmountInputMode>('tax_exclusive');
   const pullTaxRateRef = useRef<number>(13);
   const pullFromSalesOrderCloseRef = useRef<(() => void) | null>(null);
+  const pullFromSalesOrderOpenRef = useRef<(() => void) | null>(null);
   const pullFromSalesDeliveryCloseRef = useRef<(() => void) | null>(null);
+  const pullFromSalesDeliveryOpenRef = useRef<(() => void) | null>(null);
   const pullFromReceivableCloseRef = useRef<(() => void) | null>(null);
+  const pullFromReceivableOpenRef = useRef<(() => void) | null>(null);
+  const { token } = theme.useToken();
+  const pullPreviewZIndex = token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET * 2;
   const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const { message: messageApi } = App.useApp();
@@ -221,12 +232,18 @@ const SalesInvoicesPage: React.FC = () => {
     pullForm.resetFields();
   };
 
-  const openPullPreview = async (kind: PullPreviewKind, sourceId: number) => {
+  const openPullPreview = async (
+    kind: PullPreviewKind,
+    sourceId: number,
+    options?: { closeSourceModal?: () => void; reopenSourceModal?: () => void },
+  ) => {
+    options?.closeSourceModal?.();
     setPullPreviewKind(kind);
-    setPullPreviewOpen(true);
+    setPullPreviewOpen(false);
     setPullPreviewLoading(true);
     setPullPreviewData(null);
     setPullPreviewSourceId(sourceId);
+    const hideLoading = messageApi.loading(t(`${P}.pullPreviewLoading`), 0);
     try {
       const data =
         kind === 'sales_order'
@@ -234,11 +251,37 @@ const SalesInvoicesPage: React.FC = () => {
           : kind === 'sales_delivery'
             ? await salesInvoiceService.previewPullFromSalesDelivery(sourceId)
             : await salesInvoiceService.previewPullFromReceivable(sourceId);
+      if (data.has_blocking_issues) {
+        messageApi.warning(
+          salesInvoiceCapabilityReasonMessage(data.blocking_reason, t)
+            || t(`${P}.pullPreviewBlocked`),
+        );
+        resetPullPreview();
+        options?.reopenSourceModal?.();
+        return;
+      }
+      const maxPush =
+        Number(
+          data.max_push_total
+            ?? (data.items || []).reduce(
+              (sum, row) => sum + Number(row.max_push_quantity ?? 0),
+              0,
+            ),
+        ) || 0;
+      if (maxPush <= 0) {
+        messageApi.warning(t(`${P}.pullNoInvoiceableAmount`));
+        resetPullPreview();
+        options?.reopenSourceModal?.();
+        return;
+      }
       setPullPreviewData(data);
+      setPullPreviewOpen(true);
     } catch (e: unknown) {
       messageApi.error(resolveApiErrorMessage(e, t(`${P}.loadSourceFailed`)));
       resetPullPreview();
+      options?.reopenSourceModal?.();
     } finally {
+      hideLoading();
       setPullPreviewLoading(false);
     }
   };
@@ -283,11 +326,14 @@ const SalesInvoicesPage: React.FC = () => {
         messageApi.warning(t(`${P}.selectSource`, { label: pullFromSalesOrderAction.sourceLabel }));
         return;
       }
-      pullFromSalesOrderCloseRef.current?.();
-      await openPullPreview('sales_order', selected.id);
+      await openPullPreview('sales_order', selected.id, {
+        closeSourceModal: () => pullFromSalesOrderCloseRef.current?.(),
+        reopenSourceModal: () => pullFromSalesOrderOpenRef.current?.(),
+      });
     },
   });
   pullFromSalesOrderCloseRef.current = pullFromSalesOrderQuery.closeModal;
+  pullFromSalesOrderOpenRef.current = pullFromSalesOrderQuery.openModal;
 
   const pullFromSalesDeliveryQuery = useUniPullQuery<SalesInvoicePullCandidate>({
     rowKey: 'id',
@@ -316,11 +362,14 @@ const SalesInvoicesPage: React.FC = () => {
         messageApi.warning(t(`${P}.selectSource`, { label: pullFromSalesDeliveryAction.sourceLabel }));
         return;
       }
-      pullFromSalesDeliveryCloseRef.current?.();
-      await openPullPreview('sales_delivery', selected.id);
+      await openPullPreview('sales_delivery', selected.id, {
+        closeSourceModal: () => pullFromSalesDeliveryCloseRef.current?.(),
+        reopenSourceModal: () => pullFromSalesDeliveryOpenRef.current?.(),
+      });
     },
   });
   pullFromSalesDeliveryCloseRef.current = pullFromSalesDeliveryQuery.closeModal;
+  pullFromSalesDeliveryOpenRef.current = pullFromSalesDeliveryQuery.openModal;
 
   const pullFromReceivableQuery = useUniPullQuery<SalesInvoicePullCandidate>({
     rowKey: 'id',
@@ -349,11 +398,14 @@ const SalesInvoicesPage: React.FC = () => {
         messageApi.warning(t(`${P}.selectSource`, { label: pullFromReceivableAction.sourceLabel }));
         return;
       }
-      pullFromReceivableCloseRef.current?.();
-      await openPullPreview('receivable', selected.id);
+      await openPullPreview('receivable', selected.id, {
+        closeSourceModal: () => pullFromReceivableCloseRef.current?.(),
+        reopenSourceModal: () => pullFromReceivableOpenRef.current?.(),
+      });
     },
   });
   pullFromReceivableCloseRef.current = pullFromReceivableQuery.closeModal;
+  pullFromReceivableOpenRef.current = pullFromReceivableQuery.openModal;
 
   const handlePullCreateSubmit = async (values: any) => {
     if (!pullPreviewData || !pullPreviewSourceId || !pullPreviewKind) {
@@ -830,9 +882,14 @@ const SalesInvoicesPage: React.FC = () => {
     [t],
   );
 
-  const pullPreviewMaxPush = Number(pullPreviewData?.items?.[0]?.max_push_quantity ?? 0);
-  const formatPullMoney = (v: number) =>
-    formatCurrencyAmount(v || 0);
+  const pullPreviewMaxPush =
+    Number(
+      pullPreviewData?.max_push_total
+        ?? (pullPreviewData?.items || []).reduce(
+          (sum, row) => sum + Number(row.max_push_quantity ?? 0),
+          0,
+        ),
+    ) || 0;
   const pullPreviewTargetLabel =
     pullPreviewKind === 'sales_delivery'
       ? pullFromSalesDeliveryAction.targetLabel
@@ -1054,7 +1111,7 @@ const SalesInvoicesPage: React.FC = () => {
         scopeOptions={pullFromSalesOrderQuery.scopeOptions}
         scope={pullFromSalesOrderQuery.scope}
         onScopeChange={pullFromSalesOrderQuery.handleScopeChange}
-        okText={t('common.next')}
+        okText={pullFromSalesOrderAction.targetLabel}
       />
 
       <UniPullQueryModal<SalesInvoicePullCandidate>
@@ -1087,7 +1144,7 @@ const SalesInvoicesPage: React.FC = () => {
         scopeOptions={pullFromSalesDeliveryQuery.scopeOptions}
         scope={pullFromSalesDeliveryQuery.scope}
         onScopeChange={pullFromSalesDeliveryQuery.handleScopeChange}
-        okText={t('common.next')}
+        okText={pullFromSalesDeliveryAction.targetLabel}
       />
 
       <UniPullQueryModal<SalesInvoicePullCandidate>
@@ -1120,20 +1177,15 @@ const SalesInvoicesPage: React.FC = () => {
         scopeOptions={pullFromReceivableQuery.scopeOptions}
         scope={pullFromReceivableQuery.scope}
         onScopeChange={pullFromReceivableQuery.handleScopeChange}
-        okText={t('common.next')}
+        okText={pullFromReceivableAction.targetLabel}
       />
 
       <Modal
-        title={
-          pullPreviewKind === 'sales_delivery'
-            ? pullFromSalesDeliveryAction.label
-            : pullPreviewKind === 'receivable'
-              ? pullFromReceivableAction.label
-              : pullFromSalesOrderAction.label
-        }
+        title={t(`${P}.pullFormTitle`)}
         open={pullPreviewOpen}
         destroyOnHidden
-        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        zIndex={pullPreviewZIndex}
         onCancel={resetPullPreview}
         okText={pullPreviewTargetLabel}
         cancelText={t('common.cancel')}
@@ -1142,74 +1194,10 @@ const SalesInvoicesPage: React.FC = () => {
           void handlePullPreviewOk();
         }}
         okButtonProps={{
-          disabled:
-            pullPreviewLoading ||
-            !pullPreviewData ||
-            !!pullPreviewData?.has_blocking_issues ||
-            pullPreviewMaxPush <= 0,
+          disabled: !pullPreviewData || pullPreviewMaxPush <= 0,
         }}
       >
-        {pullPreviewLoading ? (
-          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-            <Spin />
-            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
-          </div>
-        ) : pullPreviewData ? (
-          <div>
-            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPreviewData.summary}</p>
-            {pullPreviewData.has_blocking_issues && pullPreviewData.blocking_reason ? (
-              <Alert
-                type="warning"
-                showIcon
-                style={{ marginBottom: 12 }}
-                title={
-                  salesInvoiceCapabilityReasonMessage(pullPreviewData.blocking_reason, t)
-                  || t(`${P}.pullPreviewBlocked`)
-                }
-              />
-            ) : null}
-            {pullPreviewData.items?.length > 0 ? (
-              <Table
-                size="small"
-                dataSource={pullPreviewData.items}
-                rowKey={(row) => String(row.item_id)}
-                pagination={false}
-                scroll={{ x: 720 }}
-                columns={[
-                  { title: t(`${P}.pull.col.sourceCode`), dataIndex: 'source_code', width: 140, ellipsis: true },
-                  { title: t('app.kuaicaiwu.common.customer'), dataIndex: 'customer_name', width: 160, ellipsis: true },
-                  {
-                    title: t(`${P}.pull.col.docAmount`),
-                    dataIndex: 'quantity',
-                    width: 120,
-                    align: 'right',
-                    render: (v: number) => formatPullMoney(v),
-                  },
-                  {
-                    title: t(`${P}.pull.col.invoicedAmount`),
-                    dataIndex: 'pushed_quantity',
-                    width: 120,
-                    align: 'right',
-                    render: (v: number) => formatPullMoney(v),
-                  },
-                  {
-                    title: t(`${P}.pull.col.invoiceableAmount`),
-                    dataIndex: 'max_push_quantity',
-                    width: 120,
-                    align: 'right',
-                    render: (v: number) => formatPullMoney(v),
-                  },
-                ]}
-              />
-            ) : (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseReturn.pull.previewNoLines')} />
-            )}
-            {pullPreviewData.tip ? (
-              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 16 }}>
-                {pullPreviewData.tip}
-              </Typography.Paragraph>
-            ) : null}
-            {!pullPreviewData.has_blocking_issues && pullPreviewMaxPush > 0 ? (
+        {pullPreviewData ? (
               <ProForm
                 key={`pull-sales-invoice-${pullPreviewKind}-${pullPreviewSourceId}`}
                 form={pullForm}
@@ -1356,8 +1344,6 @@ const SalesInvoicesPage: React.FC = () => {
                 ) : null}
                 <DocumentAttachmentsField category="sales_invoice_attachments" />
               </ProForm>
-            ) : null}
-          </div>
         ) : null}
       </Modal>
 

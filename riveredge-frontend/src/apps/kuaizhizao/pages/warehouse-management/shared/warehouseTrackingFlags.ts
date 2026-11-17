@@ -55,6 +55,20 @@ export function isMaterialBatchEntryEnabled(
   return flags.batchManagement && !!materialBatchManaged;
 }
 
+/**
+ * 出库确认预览：是否展示批号分摊列。
+ * 销售出库在仓库确认前补录批号（与发货通知策略一致）；其余类型仍须物料启用批号管理。
+ */
+export function isOutboundConfirmBatchLineEnabled(
+  outboundType: string | undefined,
+  flags: WarehouseTrackingFlags,
+  materialBatchManaged?: boolean | null,
+): boolean {
+  if (!flags.batchManagement) return false;
+  if (materialBatchManaged) return true;
+  return outboundType === 'sales_delivery';
+}
+
 /** 租户总闸 ∧ 物料标记：是否需要录入序列号 */
 export function isMaterialSerialEntryEnabled(
   flags: WarehouseTrackingFlags,
@@ -69,6 +83,9 @@ const BATCH_COLUMN_IDS = new Set([
   'batch_number',
   'batchNo',
   'batchNumber',
+  // 销售出库等制单：分摊列 dataIndex，总闸关闭时须一并隐藏（否则单元格恒为「—」）
+  'batch_allocations',
+  'batchAllocations',
 ]);
 
 const SERIAL_COLUMN_IDS = new Set([

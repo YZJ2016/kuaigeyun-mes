@@ -5,8 +5,10 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 from typing import List, Optional, Dict, Any
+
+from core.utils.amount_precision import quantize_business_amount
 
 from loguru import logger
 from tortoise.expressions import Q
@@ -165,7 +167,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         if contract_qty <= 0 or release_qty <= 0:
             return Decimal("0")
         total_amt = Decimal(str(item.total_amount or 0))
-        return (total_amt * release_qty / contract_qty).quantize(Decimal("0.01"))
+        return quantize_business_amount(total_amt * release_qty / contract_qty, 2)
 
     @staticmethod
     def _contract_goods_total(items: List[SalesContractItem]) -> Decimal:
@@ -184,9 +186,7 @@ class SalesContractService(AppBaseService[SalesContract]):
             return Decimal("0")
         if gross_release_amt >= full_goods - Decimal("0.005"):
             return contract_discount
-        return (contract_discount * gross_release_amt / full_goods).quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP
-        )
+        return quantize_business_amount(contract_discount * gross_release_amt / full_goods, 2)
 
     @staticmethod
     def _release_net_amount(
@@ -197,7 +197,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         discount = SalesContractService._allocate_release_discount(
             contract, all_items, gross_release_amt
         )
-        return (gross_release_amt - discount).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        return quantize_business_amount(gross_release_amt - discount, 2)
 
     @staticmethod
     def _contract_capability_context(
@@ -427,7 +427,7 @@ class SalesContractService(AppBaseService[SalesContract]):
             raise ValidationError("整单优惠不能为负数")
         if discount > goods_incl:
             raise ValidationError("整单优惠不能大于价税合计")
-        net = (goods_incl - discount).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        net = quantize_business_amount(goods_incl - discount, 2)
         return discount, net
 
     async def _refresh_contract_totals(

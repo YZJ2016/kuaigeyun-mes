@@ -14,6 +14,10 @@ from decimal import Decimal
 from collections import defaultdict
 
 from tortoise.queryset import Q
+from apps.kuaizhizao.utils.document_amount_write import (
+    line_total_qty_unit_price,
+    resolve_simple_line_total,
+)
 from tortoise.transactions import in_transaction
 
 from apps.kuaizhizao.utils.stock_posting import serialize_stock_create
@@ -232,9 +236,11 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
             user_info = await self.get_user_info(created_by)
 
             # 计算总金额
-            total_amount = outsource_order_data.total_amount
-            if outsource_order_data.unit_price and not total_amount:
-                total_amount = outsource_order_data.unit_price * outsource_order_data.outsource_quantity
+            total_amount = resolve_simple_line_total(
+                outsource_order_data.outsource_quantity,
+                outsource_order_data.unit_price or 0,
+                outsource_order_data.total_amount,
+            )
 
             # 创建委外单
             outsource_order = await OutsourceOrder.create(
@@ -649,7 +655,9 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
                 unit_price = update_dict.get('unit_price', outsource_order.unit_price)
                 outsource_quantity = update_dict.get('outsource_quantity', outsource_order.outsource_quantity)
                 if unit_price:
-                    update_dict['total_amount'] = unit_price * outsource_quantity
+                    update_dict['total_amount'] = line_total_qty_unit_price(
+                        outsource_quantity, unit_price
+                    )
 
             # 如果更新了供应商信息，需要验证供应商是否存在
             if 'supplier_id' in update_dict:

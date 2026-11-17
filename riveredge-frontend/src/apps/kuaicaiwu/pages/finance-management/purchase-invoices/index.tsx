@@ -285,7 +285,7 @@ const PurchaseInvoiceList: React.FC = () => {
 
   const openPullPreview = async (kind: PullPreviewKind, sourceId: number) => {
     setPullPreviewKind(kind);
-    setPullPreviewOpen(true);
+    setPullPreviewOpen(false);
     setPullPreviewLoading(true);
     setPullPreviewData(null);
     setPullPreviewSourceId(sourceId);
@@ -1007,7 +1007,7 @@ const PurchaseInvoiceList: React.FC = () => {
         scopeOptions={pullFromPurchaseOrderQuery.scopeOptions}
         scope={pullFromPurchaseOrderQuery.scope}
         onScopeChange={pullFromPurchaseOrderQuery.handleScopeChange}
-        okText={t('common.next')}
+        okText={pullFromPurchaseOrderAction.targetLabel}
       />
 
       <UniPullQueryModal<PurchaseInvoicePullCandidate>
@@ -1040,7 +1040,7 @@ const PurchaseInvoiceList: React.FC = () => {
         scopeOptions={pullFromPurchaseReceiptQuery.scopeOptions}
         scope={pullFromPurchaseReceiptQuery.scope}
         onScopeChange={pullFromPurchaseReceiptQuery.handleScopeChange}
-        okText={t('common.next')}
+        okText={pullFromPurchaseReceiptAction.targetLabel}
       />
 
       <UniPullQueryModal<PurchaseInvoicePullCandidate>
@@ -1073,17 +1073,11 @@ const PurchaseInvoiceList: React.FC = () => {
         scopeOptions={pullFromPayableQuery.scopeOptions}
         scope={pullFromPayableQuery.scope}
         onScopeChange={pullFromPayableQuery.handleScopeChange}
-        okText={t('common.next')}
+        okText={pullFromPayableAction.targetLabel}
       />
 
       <Modal
-        title={
-          pullPreviewKind === 'purchase_receipt'
-            ? pullFromPurchaseReceiptAction.label
-            : pullPreviewKind === 'payable'
-              ? pullFromPayableAction.label
-              : pullFromPurchaseOrderAction.label
-        }
+        title={t(`${P}.pullFormTitle`)}
         open={pullPreviewOpen}
         destroyOnHidden
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
@@ -1095,30 +1089,17 @@ const PurchaseInvoiceList: React.FC = () => {
           void handlePullPreviewOk();
         }}
         okButtonProps={{
-          disabled:
-            pullPreviewLoading ||
-            !pullPreviewData ||
-            !!pullPreviewData?.has_blocking_issues ||
-            pullPreviewMaxPush <= 0,
+          disabled: !pullPreviewData || pullPreviewMaxPush <= 0,
         }}
       >
-        {pullPreviewLoading ? (
-          <div
-            style={{
-              minHeight: 120,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 12,
-            }}
-          >
+        {!pullPreviewData ? (
+          <div>
             <Spin />
             <div style={{ color: 'var(--ant-color-primary)' }}>
               {t('app.kuaizhizao.salesOrder.loadingPreview')}
             </div>
           </div>
-        ) : pullPreviewData ? (
+        ) : (
           <div>
             <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPreviewData.summary}</p>
             {pullPreviewData.has_blocking_issues && pullPreviewData.blocking_reason ? (
@@ -1288,7 +1269,7 @@ const PurchaseInvoiceList: React.FC = () => {
                     onChange: (nextRate: number) => {
                       const prevRate = pullTaxRateRef.current;
                       const mode = (pullForm.getFieldValue('amount_input_mode')
-                        || 'tax_exclusive') as InvoiceAmountInputMode;
+                        || 'tax_inclusive') as InvoiceAmountInputMode;
                       const current = Number(pullForm.getFieldValue('invoice_amount')) || 0;
                       const next = Number(nextRate) || 0;
                       if (current > 0) {
@@ -1390,11 +1371,11 @@ const PurchaseInvoiceList: React.FC = () => {
                     ) : null}
                   </>
                 ) : null}
-                <DocumentAttachmentsField category="purchase_invoice_attachments" />
-              </ProForm>
+            <DocumentAttachmentsField category="purchase_invoice_attachments" />
+          </ProForm>
             ) : null}
           </div>
-        ) : null}
+        )}
       </Modal>
 
       <ModalForm

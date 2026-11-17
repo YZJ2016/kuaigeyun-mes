@@ -6,7 +6,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 import {
   ModalForm,
+  ProForm,
   ProFormDatePicker,
+  ProFormDependency,
+  ProFormDigit,
+  ProFormItem,
   ProFormSelect,
   ProFormSwitch,
   ProFormText,
@@ -24,28 +28,56 @@ import {
   Row,
   Select,
   Space,
+  Spin,
   Table,
+  Typography,
 } from 'antd';
-import { PlusOutlined, PrinterOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, PlusOutlined, PrinterOutlined } from '@ant-design/icons';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type { TFunction } from 'i18next';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
-import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
+import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { useLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
+import {
+  type DocumentLineMaterialPreviewItem,
+  renderDocumentLineMaterialsPreview,
+} from '../../../../../components/document-line-materials-preview';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { usePaymentApplicationPullMenus } from './usePaymentApplicationPullMenus';
+import {
+  itemsCompatibleWithApplicationKind,
+  usePaymentApplicationFormLinePull,
+} from './usePaymentApplicationFormLinePull';
+import { PaymentApplicationSupplierPayeeSection } from './PaymentApplicationSupplierPayeeSection';
 import type { FormListFieldData } from 'antd/es/form/FormList';
 import dayjs from '../../../../../config/dayjs';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   ListPageTemplate,
   DetailDrawerTemplate,
-  FormModalTemplate,
+  DetailDrawerLinesScroll,
   DRAWER_CONFIG,
   MODAL_CONFIG,
+  DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
+  DocumentFormPageHeaderActions,
+  DocumentFormPageLayout,
 } from '../../../../../components/layout-templates';
-import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
+import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
+import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
+import {
+  UniBatchMenuButton,
+  UniCapabilityBatchButton,
+  defaultAuditBatchAllowed,
+  pickCapability,
+  runCapabilityBatchLoop,
+  useAuditBatchRunner,
+  withDocumentSubmitCombinedItem,
+  type AuditBatchAction,
+  type UniBatchMenuItem,
+} from '../../../../../components/uni-batch';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
@@ -58,7 +90,10 @@ import {
   openDocumentAttachment,
 } from '../../../utils/documentAttachments';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
+import { MarkerTag } from '../../../../../constants/statusBadges';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { financeDocCodePartnerSearchColumns } from '../../../../kuaicaiwu/utils/financeListCore';
 import {
@@ -66,8 +101,19 @@ import {
   BANK_TRANSFER_PAYMENT_METHOD,
   formatPaymentMethod,
   getPaymentMethodOptions,
+  EMPLOYEE_ADVANCE_PAYMENT_METHOD,
+  hidesSupplierPayeeAccount,
+  isEmployeeAdvancePaymentMethod,
 } from '../../../../kuaicaiwu/utils/financeSharedOptions';
+import {
+  PaymentAdvancePayeeField,
+  resolveAdvancePayeeName,
+} from '../../../../kuaicaiwu/pages/finance-management/shared/PaymentAdvancePayeeField';
+import { ThemedSegmented } from '../../../../../components/themed-segmented';
+import { loadUserFormReferenceOptions } from '../../../../../utils/documentFormReferenceLoad';
+import { useQuery } from '@tanstack/react-query';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { getStatusLabel, isPendingReviewStatus } from '../../../constants/documentStatus';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import {
@@ -97,14 +143,97 @@ import {
   updatePaymentApplication,
   deletePaymentApplication,
   submitPaymentApplication,
+  submitPaymentApplicationForReview,
+  withdrawPaymentApplication,
+  revokePaymentApplication,
   approvePaymentApplication,
   pushPaymentApplicationToPayment,
   listPayablesForPaymentApplication,
+  previewPullPaymentApplicationFromPurchaseOrder,
   type PaymentApplication,
   type PaymentApplicationLine,
+  type PaymentApplicationPurchaseOrderSource,
 } from '../../../services/payment-application';
+import { getPurchaseOrder, type PurchaseOrderItem } from '../../../services/purchase';
 
 const RESOURCE = 'kuaizhizao:payment-application';
+const PAYMENT_APPLICATION_LIST_PATH = '/apps/kuaizhizao/purchase-management/payment-applications';
+const PAYMENT_APPLICATION_CREATE_PATH = `${PAYMENT_APPLICATION_LIST_PATH}/new`;
+const paymentApplicationEditPath = (id: number) => `${PAYMENT_APPLICATION_LIST_PATH}/${id}/edit`;
+
+/** 详情明细列宽：来源类型最长「其他费用支出」，来源单号按采购单号整段展示 */
+const PAYMENT_APPLICATION_DETAIL_LINE_WIDTH = {
+  sourceType: 128,
+  sourceCode: 200,
+  lineMaterials: 280,
+  quantity: 120,
+  payableCode: 188,
+  requestAmount: 128,
+  paidAmount: 128,
+} as const;
+
+function isPurchaseOrderSourceType(sourceType: unknown): boolean {
+  const raw = String(sourceType ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, '_');
+  return raw === 'purchase_order' || raw === 'purchaseorder';
+}
+
+function mapPurchaseOrderItemsToPreview(
+  items: PurchaseOrderItem[] | PaymentApplicationPurchaseOrderSource['items'] | undefined,
+): DocumentLineMaterialPreviewItem[] {
+  if (!items?.length) return [];
+  const out: DocumentLineMaterialPreviewItem[] = [];
+  for (const it of items) {
+    const row = it as Record<string, unknown>;
+    const materialName = String(row.materialName ?? row.material_name ?? '').trim();
+    const materialCode = String(row.materialCode ?? row.material_code ?? '').trim();
+    const materialSpec = String(row.materialSpec ?? row.material_spec ?? '').trim();
+    if (!materialName && !materialCode) continue;
+    out.push({
+      material_name: materialName || materialCode,
+      material_code: materialCode || undefined,
+      material_spec: materialSpec || undefined,
+    });
+  }
+  return out;
+}
+
+function resolvePaymentApplicationLineMaterialPreview(
+  row: PaymentApplicationLine,
+  purchaseOrderSources: PaymentApplicationPurchaseOrderSource[] | undefined,
+  poPreviewByOrderId: Record<number, DocumentLineMaterialPreviewItem[]>,
+): DocumentLineMaterialPreviewItem[] {
+  const name = String(row.materialName ?? '').trim();
+  if (name) {
+    return [
+      {
+        material_name: name,
+        material_spec: row.materialSpec ?? undefined,
+      },
+    ];
+  }
+  if (!isPurchaseOrderSourceType(row.sourceType)) {
+    return [];
+  }
+  const sid = row.sourceId != null ? Number(row.sourceId) : 0;
+  const code = String(row.sourceCode ?? '').trim();
+  const po =
+    (sid > 0 ? purchaseOrderSources?.find((p) => Number(p.id) === sid) : undefined) ??
+    (code ? purchaseOrderSources?.find((p) => String(p.orderCode).trim() === code) : undefined);
+  if (po?.items?.length) {
+    return mapPurchaseOrderItemsToPreview(po.items);
+  }
+  if (sid > 0 && poPreviewByOrderId[sid]?.length) {
+    return poPreviewByOrderId[sid];
+  }
+  return [];
+}
+
+const PAYMENT_APPLICATION_DETAIL_LINES_MIN_WIDTH = Object.values(
+  PAYMENT_APPLICATION_DETAIL_LINE_WIDTH,
+).reduce((sum, width) => sum + width, 0);
 
 const PAYMENT_APP_SOURCE_TYPE_KEYS = [
   'payable',
@@ -123,6 +252,180 @@ function paymentApplicationSourceTypeLabel(t: TFunction, sourceType: string | un
   return st;
 }
 
+/** 采购订单预付等明细尚无应付单，后端不要求 payable_id */
+function paymentApplicationLineNeedsPayable(
+  lineKind: string | undefined,
+  sourceType: string | undefined,
+): boolean {
+  if (String(lineKind || '').trim() === 'prepayment') return false;
+  if (String(sourceType || '').trim() === 'purchase_order') return false;
+  return true;
+}
+
+/** 表单结算类型仅暴露普通付款/预付款；其余头类型按普通付款编辑 */
+function formApplicationKind(kind: unknown): 'goods' | 'prepayment' {
+  return String(kind || '').trim() === 'prepayment' ? 'prepayment' : 'goods';
+}
+
+function lineKindFromApplicationKind(kind: unknown): 'goods' | 'prepayment' {
+  return formApplicationKind(kind);
+}
+
+function sumPaymentApplicationFormLineAmounts(items: unknown): number {
+  const rows = normalizeFormListItems<Record<string, unknown>>(items);
+  return rows.reduce((acc, row) => {
+    const amount = Number(row.requestAmount);
+    return acc + (Number.isFinite(amount) ? amount : 0);
+  }, 0);
+}
+
+function sumPaymentApplicationFormLineOrderDisplayAmounts(
+  items: unknown,
+  applicationKind: unknown,
+): number {
+  const kind = formApplicationKind(applicationKind);
+  const rows = normalizeFormListItems<Record<string, unknown>>(items);
+  return rows.reduce((acc, row) => {
+    if (isPrepaymentPurchaseOrderFormLine(row, kind)) {
+      const orderAmount = Number(row.sourceOrderAmount ?? row.maxRequestAmount ?? row.requestAmount ?? 0);
+      return acc + (Number.isFinite(orderAmount) ? orderAmount : 0);
+    }
+    const amount = Number(row.requestAmount);
+    return acc + (Number.isFinite(amount) ? amount : 0);
+  }, 0);
+}
+
+function isPrepaymentPurchaseOrderFormLine(
+  row: Record<string, unknown>,
+  applicationKind: unknown,
+): boolean {
+  return (
+    formApplicationKind(applicationKind) === 'prepayment'
+    && String(row.sourceType || '').trim() === 'purchase_order'
+  );
+}
+
+async function buildPaymentApplicationEditFormItems(
+  applicationKind: string,
+  lines: PaymentApplicationLine[],
+): Promise<Record<string, unknown>[]> {
+  const kind = formApplicationKind(applicationKind);
+  const baseRows = (lines ?? []).map((line) => ({
+    lineKind: line.lineKind ?? 'goods',
+    sourceType: line.sourceType || 'payable',
+    sourceId: line.sourceId,
+    sourceCode: line.sourceCode,
+    payableId: line.payableId ?? (line.sourceType === 'payable' ? line.sourceId : undefined),
+    payableCode: line.payableCode,
+    maxRequestAmount: line.maxRequestAmount,
+    requestAmount: line.requestAmount,
+    materialName: line.materialName,
+    materialSpec: line.materialSpec,
+    quantity: line.quantity,
+    materialUnit: line.materialUnit,
+    sourceLineId: line.sourceLineId,
+  }));
+  if (kind !== 'prepayment') {
+    return baseRows;
+  }
+  return Promise.all(
+    baseRows.map(async (row) => {
+      if (String(row.sourceType || '').trim() !== 'purchase_order' || !row.sourceId) {
+        return row;
+      }
+      try {
+        const preview = await previewPullPaymentApplicationFromPurchaseOrder(Number(row.sourceId));
+        const sourceOrderAmount = Number(preview.source_order_amount ?? preview.sourceOrderAmount ?? 0);
+        const maxRemaining = Number(preview.max_push_quantity ?? 0);
+        return {
+          ...row,
+          sourceOrderAmount: sourceOrderAmount > 0 ? sourceOrderAmount : undefined,
+          maxRequestAmount:
+            maxRemaining > 0
+              ? maxRemaining
+              : row.maxRequestAmount,
+        };
+      } catch {
+        return row;
+      }
+    }),
+  );
+}
+
+function applyHeaderAmountToPrepaymentLines(
+  headerAmount: number,
+  rows: Record<string, unknown>[],
+): Record<string, unknown>[] {
+  if (!rows.length) {
+    return rows;
+  }
+  if (rows.length === 1) {
+    return [{ ...rows[0], requestAmount: headerAmount }];
+  }
+  const weights = rows.map((row) => {
+    const w = Number(row.sourceOrderAmount ?? row.maxRequestAmount ?? 0);
+    return w > 0 ? w : 1;
+  });
+  const weightSum = weights.reduce((acc, w) => acc + w, 0);
+  let allocated = 0;
+  return rows.map((row, index) => {
+    const cap = Number(row.maxRequestAmount ?? 0);
+    let part: number;
+    if (index === rows.length - 1) {
+      part = headerAmount - allocated;
+    } else {
+      part = Number(((headerAmount * weights[index]) / weightSum).toFixed(2));
+      allocated += part;
+    }
+    if (cap > 0 && part > cap) {
+      part = cap;
+    }
+    return { ...row, requestAmount: part };
+  });
+}
+
+/** 明细表 6 列业务字段 + 订单/申请金额列 + 操作列 */
+const PAYMENT_APPLICATION_LINE_SUMMARY_LABEL_COL_SPAN = 6;
+const PAYMENT_APPLICATION_LINE_AMOUNT_COL_INDEX = 6;
+const PAYMENT_APPLICATION_LINE_OP_COL_INDEX = 7;
+
+function PaymentApplicationLinesSummaryRow() {
+  const { t } = useTranslation();
+  const form = Form.useFormInstance();
+  const items = Form.useWatch('items', form);
+  const applicationKind = Form.useWatch('applicationKind', form);
+  const rows = normalizeFormListItems<Record<string, unknown>>(items);
+  if (!rows.length) {
+    return null;
+  }
+  const total = sumPaymentApplicationFormLineOrderDisplayAmounts(items, applicationKind);
+  return (
+    <Table.Summary fixed>
+      <Table.Summary.Row>
+        <Table.Summary.Cell
+          index={0}
+          colSpan={PAYMENT_APPLICATION_LINE_SUMMARY_LABEL_COL_SPAN}
+          align="left"
+        >
+          <span style={{ fontWeight: 600 }}>
+            {t('app.kuaizhizao.paymentApplication.linesGrandTotal')}
+          </span>
+        </Table.Summary.Cell>
+        <Table.Summary.Cell
+          index={PAYMENT_APPLICATION_LINE_AMOUNT_COL_INDEX}
+          align="right"
+          className="uni-detail-fixed-amount-summary"
+        >
+          <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+            {formatCurrencyAmount(total)}
+          </span>
+        </Table.Summary.Cell>
+        <Table.Summary.Cell index={PAYMENT_APPLICATION_LINE_OP_COL_INDEX} className="uni-detail-fixed-op-summary" />
+      </Table.Summary.Row>
+    </Table.Summary>
+  );
+}
+
 function resolvePaymentApplicationLinkedDocType(sourceType: string): string {
   const st = normalizeLinkedDocumentType(sourceType);
   if (st === 'purchase_order' || st === 'purchase_receipt') return st;
@@ -131,6 +434,16 @@ function resolvePaymentApplicationLinkedDocType(sourceType: string): string {
 
 const PaymentApplicationsPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isCreatePage = location.pathname.endsWith('/payment-applications/new');
+  const editRouteMatch = location.pathname.match(/\/payment-applications\/(\d+)\/edit$/);
+  const editRouteId = editRouteMatch ? Number(editRouteMatch[1]) : null;
+  const isEditPage = editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0;
+  const isFormPage = isCreatePage || isEditPage;
+  const leavePaymentApplicationFormPage = useLeaveFormTab(PAYMENT_APPLICATION_LIST_PATH);
+  const formPageInitKeyRef = useRef<string | null>(null);
+  const [formPageLoading, setFormPageLoading] = useState(false);
   const { message: messageApi } = App.useApp();
   const linkedDetail = useLinkedDocumentDetail();
   const [pullPayableOpen, setPullPayableOpen] = useState(false);
@@ -150,6 +463,10 @@ const PaymentApplicationsPage: React.FC = () => {
   const perms = useResourcePermissions(RESOURCE);
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const auditEnabled = useAuditRequired('payment_application', true);
+  const paymentApplicationAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<PaymentApplication>({ t, auditEnabled }),
+    [t, auditEnabled],
+  );
   const paymentApplicationWorkflowStatuses = useMemo(
     () => ({
       draftStatuses: ['草稿', 'draft', 'DRAFT'],
@@ -160,6 +477,11 @@ const PaymentApplicationsPage: React.FC = () => {
     [],
   );
   const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
+  const { data: advancePayeeUserOptions = [] } = useQuery({
+    queryKey: ['payment-advance-payee-users'],
+    queryFn: () => loadUserFormReferenceOptions(),
+    staleTime: 60_000,
+  });
   const invoiceStatusOptions = useMemo(
     () => [
       {
@@ -187,10 +509,17 @@ const PaymentApplicationsPage: React.FC = () => {
     [selectedRowKeys],
   );
 
+  const selectedApplicationForToolbar = useMemo(() => {
+    if (selectedApplicationsForBatch.length !== 1) return null;
+    return selectedApplicationsForBatch[0] ?? null;
+  }, [selectedApplicationsForBatch]);
+
   const paymentApplicationAuditBatchHandlers = useMemo(
     () => ({
       submit: (id: number) => submitPaymentApplication(id),
       approve: (id: number) => approvePaymentApplication(id, { approved: true }),
+      withdraw: (id: number) => withdrawPaymentApplication(id),
+      revoke: (id: number) => revokePaymentApplication(id),
     }),
     [],
   );
@@ -200,16 +529,130 @@ const PaymentApplicationsPage: React.FC = () => {
     actionRef.current?.reload();
   }, []);
 
+  const {
+    runAction: runPaymentApplicationAuditBatch,
+    auditModal: paymentApplicationAuditModal,
+  } = useAuditBatchRunner<PaymentApplication>({
+    permGates: perms,
+    handlers: paymentApplicationAuditBatchHandlers,
+    onBatchComplete: handlePaymentApplicationAuditBatchSuccess,
+    auditEntity: {
+      entityType: 'payment_application',
+      entityName: t('app.kuaizhizao.paymentApplication.entityName'),
+    },
+  });
+
+  const paymentApplicationToolbarAuditMenus = useMemo(() => {
+    const canPerm = (action: AuditBatchAction) => {
+      const perm = action === 'approve' ? 'audit' : action === 'submit' ? 'submit' : 'revoke';
+      return perms.canAction?.(perm) ?? false;
+    };
+    const item = (
+      key: string,
+      action: AuditBatchAction,
+      label: string,
+      capKey: string,
+      rows: PaymentApplication[],
+    ): UniBatchMenuItem => ({
+      key,
+      label,
+      disabled:
+        selectedApplicationsForBatch.length > 0
+        && !defaultAuditBatchAllowed(rows, canPerm(action), capKey, (row) => row),
+      onClick: (keys) => {
+        const idSet = new Set(rows.map((row) => String(row.id)));
+        return runPaymentApplicationAuditBatch(
+          action,
+          keys.filter((rowKey) => idSet.has(String(rowKey))),
+          rows,
+          auditEnabled,
+        );
+      },
+    });
+    const capOn = (row: PaymentApplication, capKey: string) => pickCapability(row, capKey)?.allowed === true;
+    const submittedRows = selectedApplicationsForBatch.filter(
+      (row) => String(row.status || '').trim() === 'SUBMITTED' && capOn(row, 'withdraw_submit'),
+    );
+    const pendingRows = selectedApplicationsForBatch.filter((row) => {
+      const status = String(row.status || '').trim();
+      return status !== 'SUBMITTED' && isPendingReviewStatus(status) && capOn(row, 'withdraw_submit');
+    });
+    const submitReviewRows = selectedApplicationsForBatch.filter((row) =>
+      (row.audit?.allowed_actions ?? []).includes('submit_review'),
+    );
+    const canSubmitReview = perms.canAction?.('submit') ?? false;
+    const submitRows = selectedApplicationsForBatch.filter((row) => capOn(row, 'submit'));
+    const submitMenuItem = item('submit', 'submit', t('common.submit'), 'submit', submitRows);
+    const submitDisabled = Boolean(submitMenuItem.disabled);
+    return {
+      submit: withDocumentSubmitCombinedItem(
+        [
+          submitMenuItem,
+          item('withdraw-submit', 'withdraw', t('app.kuaizhizao.paymentApplication.toolbar.withdrawSubmit'), 'withdraw_submit', submittedRows),
+          {
+            key: 'submit-review',
+            label: t('app.kuaizhizao.paymentApplication.toolbar.submitReview'),
+            disabled: selectedApplicationsForBatch.length > 0 && !(canSubmitReview && submitReviewRows.length > 0),
+            onClick: (keys: React.Key[]) => runCapabilityBatchLoop({
+              keys,
+              records: submitReviewRows,
+              capabilityKey: 'submit_review',
+              permAllowed: canSubmitReview,
+              notAllowedMessage: t('app.kuaizhizao.paymentApplication.toolbar.submitReviewNotAllowed'),
+              onRun: (id) => submitPaymentApplicationForReview(id),
+              message: messageApi,
+              t,
+              onSuccess: handlePaymentApplicationAuditBatchSuccess,
+            }),
+          },
+        ],
+        {
+          t,
+          message: messageApi,
+          disabled: submitDisabled,
+          commitRecords: submitRows,
+          permAllowed: canSubmitReview,
+          commit: (id) => submitPaymentApplication(id),
+          submitReview: (id) => submitPaymentApplicationForReview(id),
+          onSuccess: handlePaymentApplicationAuditBatchSuccess,
+        },
+      ),
+      audit: [
+        item('approve', 'approve', t('components.uniAction.audit'), 'approve', selectedApplicationsForBatch.filter((row) => capOn(row, 'approve'))),
+        item('withdraw-review', 'withdraw', t('app.kuaizhizao.paymentApplication.toolbar.withdrawReview'), 'withdraw_submit', pendingRows),
+        item('revoke', 'revoke', t('app.kuaizhizao.paymentApplication.toolbar.revoke'), 'revoke_approval', selectedApplicationsForBatch.filter((row) => capOn(row, 'revoke_approval'))),
+      ] satisfies UniBatchMenuItem[],
+    };
+  }, [
+    auditEnabled,
+    handlePaymentApplicationAuditBatchSuccess,
+    messageApi,
+    perms,
+    runPaymentApplicationAuditBatch,
+    selectedApplicationsForBatch,
+    t,
+  ]);
+
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<PaymentApplication | null>(null);
-  const [editOpen, setEditOpen] = useState(false);
+  const [poLinePreviewByOrderId, setPoLinePreviewByOrderId] = useState<
+    Record<number, DocumentLineMaterialPreviewItem[]>
+  >({});
   const [editId, setEditId] = useState<number | null>(null);
+  const [editingStatus, setEditingStatus] = useState<string | null>(null);
+  const commitAfterSaveRef = useRef(false);
+  const [paymentFormBusy, setPaymentFormBusy] = useState(false);
   const [pushPaymentOpen, setPushPaymentOpen] = useState(false);
   const [pushPaymentSubmitting, setPushPaymentSubmitting] = useState(false);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const formRef = useRef<ProFormInstance>();
   const pushPaymentFormRef = useRef<ProFormInstance>();
-  /** 编辑打开前缓存初值，等 Modal 挂载后再写入（禁止在 setEditOpen 前 setFieldsValue） */
+  const getApplicationKind = useCallback(
+    () => formApplicationKind(formRef.current?.getFieldValue('applicationKind')),
+    [],
+  );
+  const formLinePull = usePaymentApplicationFormLinePull({ formRef, getApplicationKind });
+  /** 复制新建：在 Tab 表单页挂载前缓存初值，由 initPaymentApplicationCreateForm 写入 */
   const pendingEditValuesRef = useRef<Record<string, unknown> | null>(null);
   const [supplierOptions, setSupplierOptions] = useState<Array<{ id: number; name: string }>>([]);
   const [payableOptions, setPayableOptions] = useState<
@@ -268,46 +711,177 @@ const PaymentApplicationsPage: React.FC = () => {
     setDetailOpen(true);
   }, []);
 
+  useEffect(() => {
+    if (!detailOpen || !detail?.items?.length) {
+      setPoLinePreviewByOrderId({});
+      return;
+    }
+    const sources = detail.purchaseOrderSources ?? [];
+    const seeded: Record<number, DocumentLineMaterialPreviewItem[]> = {};
+    for (const po of sources) {
+      const mapped = mapPurchaseOrderItemsToPreview(po.items);
+      if (mapped.length) {
+        seeded[Number(po.id)] = mapped;
+      }
+    }
+    setPoLinePreviewByOrderId(seeded);
+
+    const needFetch = new Set<number>();
+    for (const row of detail.items) {
+      if (String(row.materialName ?? '').trim()) continue;
+      if (!isPurchaseOrderSourceType(row.sourceType)) continue;
+      const sid = row.sourceId != null ? Number(row.sourceId) : 0;
+      if (sid <= 0 || seeded[sid]?.length) continue;
+      needFetch.add(sid);
+    }
+    if (!needFetch.size) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const fetched: Record<number, DocumentLineMaterialPreviewItem[]> = {};
+      await Promise.all(
+        [...needFetch].map(async (id) => {
+          try {
+            const po = await getPurchaseOrder(id);
+            const mapped = mapPurchaseOrderItemsToPreview(po.items);
+            if (mapped.length) {
+              fetched[id] = mapped;
+            }
+          } catch {
+            /* 无读权限或单据已删：保持占位 */
+          }
+        }),
+      );
+      if (cancelled) return;
+      setPoLinePreviewByOrderId((prev) => ({ ...prev, ...fetched }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [detailOpen, detail?.id, detail?.items, detail?.purchaseOrderSources]);
+
+  const loadPaymentApplicationEditForm = useCallback(
+    async (id: number) => {
+      setFormPageLoading(true);
+      try {
+        const full = await getPaymentApplication(id);
+        const suppliers = await loadSupplierFormReferenceList(KUAIZHIZAO_DOC_HOST.paymentApplication);
+        setSupplierOptions(suppliers.map((s) => ({ id: s.id, name: s.name })));
+        setEditId(full.id);
+        setEditingStatus(full.status ?? null);
+        const formItems = await buildPaymentApplicationEditFormItems(
+          full.applicationKind,
+          full.items ?? [],
+        );
+        formRef.current?.resetFields();
+        formRef.current?.setFieldsValue({
+          supplierId: full.supplierId,
+          applicationDate: coerceFormDate(full.applicationDate) ?? dayjs(),
+          expectedPaymentDate: coerceFormDate(full.expectedPaymentDate),
+          paymentMethod: full.paymentMethod || BANK_TRANSFER_PAYMENT_METHOD,
+          advancePayeeId: full.advancePayeeId,
+          applicationKind: formApplicationKind(full.applicationKind),
+          invoiceStatus: full.invoiceStatus,
+          supplierAccountName: full.supplierAccountName,
+          supplierBankName: full.supplierBankName,
+          supplierBankAccount: full.supplierBankAccount,
+          notes: full.notes,
+          requirePaymentVoucher: Boolean(full.requirePaymentVoucher),
+          attachments: mapAttachmentsToUploadList(
+            full.attachments as Parameters<typeof mapAttachmentsToUploadList>[0],
+          ),
+          headerRequestAmount: full.totalRequestAmount,
+          items: formItems,
+        });
+        await onSupplierChange(Number(full.supplierId), { silentEmpty: true });
+      } catch (error: unknown) {
+        messageApi.error(getApiErrorMessage(error, t('common.loadFailed')));
+        leavePaymentApplicationFormPage();
+      } finally {
+        setFormPageLoading(false);
+      }
+    },
+    [leavePaymentApplicationFormPage, messageApi, onSupplierChange, t],
+  );
+
   const openEdit = useCallback(
-    async (record: PaymentApplication) => {
+    (record: PaymentApplication) => {
       if (record.capabilities?.update?.allowed === false) {
         messageApi.warning(t('common.updateFailed'));
         return;
       }
-      const full = await getPaymentApplication(record.id);
-      const suppliers = await loadSupplierFormReferenceList(KUAIZHIZAO_DOC_HOST.paymentApplication);
-      setSupplierOptions(suppliers.map((s) => ({ id: s.id, name: s.name })));
-      setEditId(full.id);
-      pendingEditValuesRef.current = {
-        supplierId: full.supplierId,
-        applicationDate: coerceFormDate(full.applicationDate) ?? dayjs(),
-        expectedPaymentDate: coerceFormDate(full.expectedPaymentDate),
-        paymentReason: full.paymentReason,
-        paymentMethod: full.paymentMethod || BANK_TRANSFER_PAYMENT_METHOD,
-        invoiceStatus: full.invoiceStatus,
-        paymentTerms: full.paymentTerms,
-        supplierAccountName: full.supplierAccountName,
-        supplierBankName: full.supplierBankName,
-        supplierBankAccount: full.supplierBankAccount,
-        notes: full.notes,
-        requirePaymentVoucher: Boolean(full.requirePaymentVoucher),
-        attachments: mapAttachmentsToUploadList(
-          full.attachments as Parameters<typeof mapAttachmentsToUploadList>[0],
-        ),
-        items: (full.items ?? []).map((line) => ({
-          lineKind: line.lineKind ?? 'goods',
-          sourceType: line.sourceType || 'payable',
-          sourceId: line.sourceId,
-          sourceCode: line.sourceCode,
-          payableId: line.payableId ?? (line.sourceType === 'payable' ? line.sourceId : undefined),
-          payableCode: line.payableCode,
-          requestAmount: line.requestAmount,
-        })),
-      };
-      setEditOpen(true);
-      await onSupplierChange(Number(full.supplierId), { silentEmpty: true });
+      navigate(paymentApplicationEditPath(record.id));
     },
-    [messageApi, onSupplierChange, t],
+    [messageApi, navigate, t],
+  );
+
+  const initPaymentApplicationCreateForm = useCallback(async () => {
+    setEditId(null);
+    setEditingStatus(null);
+    const suppliers = await loadSupplierFormReferenceList(KUAIZHIZAO_DOC_HOST.paymentApplication);
+    setSupplierOptions(suppliers.map((s) => ({ id: s.id, name: s.name })));
+    setPayableOptions([]);
+    setPayableSupplierId(null);
+    formRef.current?.resetFields();
+    const pending = pendingEditValuesRef.current;
+    if (pending) {
+      pendingEditValuesRef.current = null;
+      formRef.current?.setFieldsValue(pending);
+      const supplierId = pending.supplierId;
+      if (supplierId != null && Number(supplierId) > 0) {
+        await onSupplierChange(Number(supplierId), { silentEmpty: true });
+      }
+      return;
+    }
+    formRef.current?.setFieldsValue({
+      applicationDate: dayjs(),
+      paymentMethod: BANK_TRANSFER_PAYMENT_METHOD,
+      applicationKind: 'goods',
+      requirePaymentVoucher: false,
+      attachments: [],
+      items: [],
+    });
+  }, [onSupplierChange]);
+
+  useEffect(() => {
+    if (!isFormPage) {
+      formPageInitKeyRef.current = null;
+      return;
+    }
+    const initKey = isCreatePage ? 'create' : `edit-${editRouteId}`;
+    if (formPageInitKeyRef.current === initKey) return;
+    formPageInitKeyRef.current = initKey;
+    if (isCreatePage) {
+      void initPaymentApplicationCreateForm();
+    } else if (editRouteId != null) {
+      void loadPaymentApplicationEditForm(editRouteId);
+    }
+  }, [
+    editRouteId,
+    initPaymentApplicationCreateForm,
+    isCreatePage,
+    isFormPage,
+    loadPaymentApplicationEditForm,
+  ]);
+
+  const executeDeleteOne = useCallback(
+    async (row: PaymentApplication) => {
+      try {
+        await deletePaymentApplication(row.id);
+        messageApi.success(t('app.kuaizhizao.paymentApplication.deleteSuccess'));
+        if (detail?.id === row.id) {
+          setDetail(null);
+          setDetailOpen(false);
+        }
+        actionRef.current?.reload();
+      } catch (error: unknown) {
+        messageApi.error(
+          getApiErrorMessage(error) || t('app.kuaizhizao.paymentApplication.deleteFailed'),
+        );
+      }
+    },
+    [detail?.id, messageApi, t],
   );
 
   const columns: ProColumns<PaymentApplication>[] = useMemo(
@@ -365,6 +939,23 @@ const PaymentApplicationsPage: React.FC = () => {
             hideInTable: true,
           },
           {
+            title: t('app.kuaizhizao.paymentApplication.applicationKind'),
+            key: 'finance_payment_settlement_type',
+            dataIndex: 'applicationKind',
+            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+            hideInSearch: true,
+            render: (_, r) => {
+              const kind = formApplicationKind(r.applicationKind);
+              return (
+                <MarkerTag color={kind === 'prepayment' ? 'blue' : 'default'}>
+                  {kind === 'prepayment'
+                    ? t('app.kuaizhizao.paymentApplication.applicationKind.prepayment')
+                    : t('app.kuaizhizao.paymentApplication.applicationKind.goods')}
+                </MarkerTag>
+              );
+            },
+          },
+          {
             title: t('app.kuaizhizao.paymentApplication.totalRequestAmount'),
             key: 'total_amount',
             dataIndex: 'totalRequestAmount',
@@ -412,13 +1003,17 @@ const PaymentApplicationsPage: React.FC = () => {
             render: (_, r) => r.notes?.trim() || '—',
           },
           ...buildDocumentAuditColumns<PaymentApplication>(t),
+          ...(paymentApplicationAuditColumn ? [paymentApplicationAuditColumn] : []),
           {
             title: t('app.kuaizhizao.paymentApplication.status'),
             key: 'lifecycle',
             dataIndex: 'status',
             fixed: 'right',
             hideInSearch: true,
-            render: (_, r) => renderDocumentStatusTag(String(r.status ?? ''), String(r.status ?? '')),
+            render: (_, r) => {
+              const raw = String(r.status ?? '');
+              return renderDocumentStatusTag(getStatusLabel(raw), raw);
+            },
           },
           {
             title: t('common.actions'),
@@ -437,41 +1032,6 @@ const PaymentApplicationsPage: React.FC = () => {
                   <Button key="edit" {...rowActionKind('update')} onClick={() => void openEdit(row)} />,
                 );
               }
-              if (perms.canDelete && row.capabilities?.delete?.allowed === true) {
-                nodes.push(
-                  <ActionConfirmPopconfirm
-                    key="del"
-                    {...rowActionKind('delete')}
-                    title={t('app.kuaizhizao.paymentApplication.deleteTitle')}
-                    description={t('app.kuaizhizao.paymentApplication.deleteContent', {
-                      code: row.applicationCode,
-                    })}
-                    okType="danger"
-                    onConfirm={() => executeDeleteOne(row)}
-                  >
-                    <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
-                  </ActionConfirmPopconfirm>,
-                );
-              }
-              nodes.push(
-                <span {...rowActionKind('skip')} key="wf">
-                  <UniWorkflowActions
-                    {...rowActionKind('skip')}
-                    record={row}
-                    entityType="payment_application"
-                    entityName={t('app.kuaizhizao.paymentApplication.entityName')}
-                    statusField="status"
-                    reviewStatusField="reviewStatus"
-                    {...paymentApplicationWorkflowStatuses}
-                    onSuccess={() => {
-                      actionRef.current?.reload();
-                      if (detailOpen && detail?.id === row.id) {
-                        void getPaymentApplication(row.id).then(setDetail).catch(() => {});
-                      }
-                    }}
-                  />
-                </span>,
-              );
               return nodes;
             },
           },
@@ -479,26 +1039,18 @@ const PaymentApplicationsPage: React.FC = () => {
         SALES_DOC_LIST_FIELD_RANK,
       ),
     [
-      detail?.id,
-      detailOpen,
-      executeDeleteOne,
       openDetail,
       openEdit,
-      paymentApplicationWorkflowStatuses,
-      perms.canDelete,
+      paymentApplicationAuditColumn,
       perms.canRead,
       perms.canUpdate,
       t,
     ],
   );
 
-  const openCreate = async () => {
-    const suppliers = await loadSupplierFormReferenceList(KUAIZHIZAO_DOC_HOST.paymentApplication);
-    setSupplierOptions(suppliers.map((s) => ({ id: s.id, name: s.name })));
-    setEditId(null);
-    setPayableOptions([]);
-    setPayableSupplierId(null);
-    setEditOpen(true);
+  const openCreate = () => {
+    pendingEditValuesRef.current = null;
+    navigate(PAYMENT_APPLICATION_CREATE_PATH);
   };
 
   const handleBatchDelete = async (keys: React.Key[]) => {
@@ -526,26 +1078,10 @@ const PaymentApplicationsPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
-  const executeDeleteOne = useCallback(
-    async (row: PaymentApplication) => {
-      try {
-        await deletePaymentApplication(row.id);
-        messageApi.success(t('app.kuaizhizao.paymentApplication.deleteSuccess'));
-        if (detail?.id === row.id) {
-          setDetail(null);
-          setDetailOpen(false);
-        }
-        actionRef.current?.reload();
-      } catch (error: unknown) {
-        messageApi.error(
-          getApiErrorMessage(error) || t('app.kuaizhizao.paymentApplication.deleteFailed'),
-        );
-      }
-    },
-    [detail?.id, messageApi, t],
-  );
-
   const handleSave = async (values: Record<string, unknown>) => {
+    const shouldCommit = commitAfterSaveRef.current;
+    commitAfterSaveRef.current = false;
+    const wasEdit = editId != null;
     const supplier = supplierOptions.find((s) => s.id === values.supplierId);
     const items: PaymentApplicationLine[] = normalizeFormListItems<Record<string, unknown>>(
       values.items,
@@ -569,84 +1105,737 @@ const PaymentApplicationsPage: React.FC = () => {
         payableCode: opt?.payableCode || (row.payableCode as string | undefined),
         lineKind: String(row.lineKind || 'goods'),
         requestAmount: Number(row.requestAmount),
+        materialName: (row.materialName as string | undefined) || undefined,
+        materialSpec: (row.materialSpec as string | undefined) || undefined,
+        quantity: row.quantity != null && row.quantity !== '' ? Number(row.quantity) : undefined,
+        materialUnit: (row.materialUnit as string | undefined) || undefined,
+        sourceLineId: row.sourceLineId != null ? Number(row.sourceLineId) : undefined,
         lineNo: index + 1,
       };
     });
+    const employeeAdvance = isEmployeeAdvancePaymentMethod(values.paymentMethod);
+    const hidePayeeAccount = hidesSupplierPayeeAccount(values.paymentMethod);
+    const applicationKind = formApplicationKind(values.applicationKind);
     const payload = {
       supplierId: values.supplierId,
       supplierName: supplier?.name ?? values.supplierName,
+      applicationKind,
       applicationDate: toApiDateString(values.applicationDate),
       expectedPaymentDate: toApiDateString(values.expectedPaymentDate),
-      paymentReason: values.paymentReason,
       paymentMethod: values.paymentMethod,
+      advancePayeeId: employeeAdvance ? values.advancePayeeId : undefined,
+      advancePayeeName: employeeAdvance
+        ? resolveAdvancePayeeName(values.advancePayeeId, advancePayeeUserOptions)
+        : undefined,
       invoiceStatus: values.invoiceStatus,
-      paymentTerms: values.paymentTerms,
-      supplierAccountName: values.supplierAccountName,
-      supplierBankName: values.supplierBankName,
-      supplierBankAccount: values.supplierBankAccount,
+      supplierAccountName: hidePayeeAccount ? undefined : values.supplierAccountName,
+      supplierBankName: hidePayeeAccount ? undefined : values.supplierBankName,
+      supplierBankAccount: hidePayeeAccount ? undefined : values.supplierBankAccount,
       notes: values.notes,
       requirePaymentVoucher: Boolean(values.requirePaymentVoucher),
       attachments: normalizeDocumentAttachments(values.attachments),
-      items,
+      items: items.map((line) => ({
+        ...line,
+        lineKind:
+          applicationKind === 'prepayment'
+            ? 'prepayment'
+            : String(line.lineKind || '').trim() === 'prepayment'
+              ? 'goods'
+              : line.lineKind || 'goods',
+      })),
     };
-    if (editId) {
-      await updatePaymentApplication(editId, payload);
-      messageApi.success(t('common.updateSuccess'));
-    } else {
-      await createPaymentApplication(payload);
-      messageApi.success(t('common.createSuccess'));
+    setPaymentFormBusy(true);
+    let savedId = editId;
+    try {
+      if (editId) {
+        await updatePaymentApplication(editId, payload);
+      } else {
+        const created = await createPaymentApplication(payload);
+        savedId = created.id;
+        setEditId(created.id);
+      }
+      if (shouldCommit && savedId != null) {
+        try {
+          await submitPaymentApplication(savedId);
+        } catch (error) {
+          setEditId(savedId);
+          messageApi.error(getApiErrorMessage(error, t('common.saveFailed')));
+          actionRef.current?.reload();
+          return;
+        }
+        messageApi.success(t('app.kuaizhizao.paymentApplication.committed'));
+      } else if (wasEdit) {
+        messageApi.success(t('common.updateSuccess'));
+      } else {
+        messageApi.success(t('common.createSuccess'));
+      }
+      leavePaymentApplicationFormPage();
+      setEditId(null);
+      setEditingStatus(null);
+      actionRef.current?.reload();
+    } finally {
+      setPaymentFormBusy(false);
     }
-    setEditOpen(false);
-    actionRef.current?.reload();
   };
+
+  const paymentApplicationCanCommit =
+    isCreatePage
+    || editId == null
+    || ['', '草稿', 'draft', 'DRAFT', '已驳回', 'REJECTED', 'rejected'].includes(
+      String(editingStatus || '').trim(),
+    );
+
+  const toolbarPushMenuItems = useMemo(
+    () => buildUniPushMenuItems([
+      {
+        key: 'push-payment',
+        label: t('app.kuaizhizao.paymentApplication.pushPayment'),
+        targetDocumentType: 'payment',
+        disabledReason:
+          selectedApplicationForToolbar
+          && (
+            perms.canAction?.('push') !== true
+            || selectedApplicationForToolbar.capabilities?.push_payment?.allowed !== true
+          )
+            ? t('app.kuaizhizao.paymentApplication.toolbar.pushNotAllowed')
+            : undefined,
+        onClick: () => {
+          const row = selectedApplicationForToolbar;
+          if (!row?.id) return;
+          void getPaymentApplication(row.id).then((full) => {
+            setDetail(full);
+            setPushPaymentOpen(true);
+          }).catch((error: unknown) => {
+            messageApi.error(getApiErrorMessage(error, t('common.loadFailed')));
+          });
+        },
+      },
+    ]),
+    [messageApi, perms, selectedApplicationForToolbar, t],
+  );
+
+  const toolbarPushDisabledReason = buildUniPushToolbarDisabledReason(t, {
+    selectedCount: selectedRowKeys.length,
+    hasSelectedRecord: Boolean(selectedApplicationForToolbar),
+  });
+
+  async function handleCopySelectedPaymentApplication() {
+    const row = selectedApplicationForToolbar;
+    if (!row?.id) {
+      messageApi.warning(t('app.kuaizhizao.paymentApplication.selectToCopy'));
+      return;
+    }
+    try {
+      const full = await getPaymentApplication(row.id);
+      const formItems = (await buildPaymentApplicationEditFormItems(
+        full.applicationKind,
+        full.items ?? [],
+      )).map((line) => ({
+        lineKind: line.lineKind,
+        requestAmount: line.requestAmount,
+        materialName: line.materialName,
+        materialSpec: line.materialSpec,
+        quantity: line.quantity,
+        materialUnit: line.materialUnit,
+      }));
+      pendingEditValuesRef.current = {
+        supplierId: full.supplierId,
+        applicationDate: dayjs(),
+        expectedPaymentDate: coerceFormDate(full.expectedPaymentDate),
+        paymentMethod: full.paymentMethod || BANK_TRANSFER_PAYMENT_METHOD,
+        advancePayeeId: full.advancePayeeId,
+        applicationKind: formApplicationKind(full.applicationKind),
+        invoiceStatus: full.invoiceStatus,
+        supplierAccountName: full.supplierAccountName,
+        supplierBankName: full.supplierBankName,
+        supplierBankAccount: full.supplierBankAccount,
+        notes: full.notes,
+        requirePaymentVoucher: Boolean(full.requirePaymentVoucher),
+        attachments: mapAttachmentsToUploadList(
+          full.attachments as Parameters<typeof mapAttachmentsToUploadList>[0],
+        ),
+        headerRequestAmount: full.totalRequestAmount,
+        items: formItems,
+      };
+      formPageInitKeyRef.current = null;
+      navigate(PAYMENT_APPLICATION_CREATE_PATH);
+    } catch (error) {
+      messageApi.error(getApiErrorMessage(error, t('common.loadFailed')));
+    }
+  }
+
+  const handlePaymentFormValuesChange = useCallback(
+    (changedValues: Record<string, unknown>, allValues: Record<string, unknown>) => {
+      if (Object.prototype.hasOwnProperty.call(changedValues, 'items')) {
+        const sum = sumPaymentApplicationFormLineAmounts(allValues.items);
+        const rows = normalizeFormListItems<Record<string, unknown>>(allValues.items);
+        if (rows.length > 0) {
+          formRef.current?.setFieldsValue({
+            headerRequestAmount: sum > 0 ? sum : undefined,
+          });
+        }
+        return;
+      }
+      if (!Object.prototype.hasOwnProperty.call(changedValues, 'headerRequestAmount')) {
+        return;
+      }
+      const rows = normalizeFormListItems<Record<string, unknown>>(allValues.items);
+      if (!rows.length) {
+        return;
+      }
+      const kind = formApplicationKind(allValues.applicationKind);
+      const nextAmount = Number(changedValues.headerRequestAmount);
+      if (!Number.isFinite(nextAmount)) {
+        return;
+      }
+      if (
+        kind === 'prepayment'
+        && rows.every((row) => isPrepaymentPurchaseOrderFormLine(row, kind))
+      ) {
+        formRef.current?.setFieldsValue({
+          items: applyHeaderAmountToPrepaymentLines(nextAmount, rows),
+        });
+        return;
+      }
+      if (rows.length !== 1) {
+        return;
+      }
+      formRef.current?.setFieldsValue({
+        items: [{ ...rows[0], requestAmount: nextAmount }],
+      });
+    },
+    [formRef],
+  );
+
+  const triggerPaymentApplicationCommit = useCallback(() => {
+    commitAfterSaveRef.current = true;
+    void formRef.current
+      ?.validateFields()
+      .then((values) => handleSave(values as Record<string, unknown>))
+      .catch((error: unknown) => {
+        commitAfterSaveRef.current = false;
+        if (error && typeof error === 'object' && 'errorFields' in (error as object)) return;
+        messageApi.error(getApiErrorMessage(error, t('common.saveFailed')));
+      });
+  }, [formRef, handleSave, messageApi, t]);
+
+  useSubmitShortcut(() => {
+    void formRef.current
+      ?.validateFields()
+      .then((values) => handleSave(values as Record<string, unknown>))
+      .catch(() => {});
+  }, isFormPage);
+
+  if (isFormPage) {
+    return (
+      <>
+        <DocumentFormPageLayout
+          header={
+            <>
+              <Space align="center" size={8}>
+                <Button
+                  type="text"
+                  icon={<ArrowLeftOutlined />}
+                  aria-label={t('common.back')}
+                  onClick={leavePaymentApplicationFormPage}
+                />
+                <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
+                  {isCreatePage
+                    ? t('app.kuaizhizao.paymentApplication.create')
+                    : t('app.kuaizhizao.paymentApplication.editTitle')}
+                </Typography.Title>
+              </Space>
+              <DocumentFormPageHeaderActions
+                onCancel={leavePaymentApplicationFormPage}
+                onSaveDraft={() => {
+                  void formRef.current
+                    ?.validateFields()
+                    .then((values) => handleSave(values as Record<string, unknown>))
+                    .catch((error: unknown) => {
+                      if (error && typeof error === 'object' && 'errorFields' in (error as object)) return;
+                      messageApi.error(getApiErrorMessage(error, t('common.saveFailed')));
+                    });
+                }}
+                onPrimarySubmit={() => {
+                  void formRef.current
+                    ?.validateFields()
+                    .then((values) => handleSave(values as Record<string, unknown>))
+                    .catch((error: unknown) => {
+                      if (error && typeof error === 'object' && 'errorFields' in (error as object)) return;
+                      messageApi.error(getApiErrorMessage(error, t('common.saveFailed')));
+                    });
+                }}
+                isCreatePage={isCreatePage}
+                showSaveDraft={false}
+                canSubmitAfterSave={false}
+                showCommitSubmit={paymentApplicationCanCommit}
+                saveDraftLoading={paymentFormBusy}
+                commitSubmitLoading={paymentFormBusy}
+                onCommitSubmit={triggerPaymentApplicationCommit}
+              />
+            </>
+          }
+        >
+          <Spin spinning={formPageLoading || paymentFormBusy}>
+            <div className="form-modal-content-inner">
+              <ProForm
+                formRef={formRef}
+                layout="vertical"
+                submitter={false}
+                onFinish={async (values) => {
+                  try {
+                    await handleSave(values as Record<string, unknown>);
+                  } catch (error) {
+                    messageApi.error(getApiErrorMessage(error, t('common.saveFailed')));
+                  }
+                }}
+                onValuesChange={handlePaymentFormValuesChange}
+              >
+        <Row gutter={16}>
+          <Col span={8}>
+            <ProFormSelect
+              name="supplierId"
+              label={t('app.kuaizhizao.paymentApplication.supplierName')}
+              rules={[{ required: true }]}
+              options={supplierOptions.map((s) => ({ value: s.id, label: s.name }))}
+              fieldProps={{
+                showSearch: true,
+                optionFilterProp: 'label',
+                onChange: (v) => {
+                  void onSupplierChange(Number(v));
+                  formRef.current?.setFieldsValue({ items: [] });
+                },
+              }}
+            />
+          </Col>
+          <Col span={8}>
+            <ProFormDatePicker
+              name="applicationDate"
+              label={t('app.kuaizhizao.paymentApplication.applicationDate')}
+              rules={[{ required: true }]}
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={8}>
+            <ProFormDatePicker
+              name="expectedPaymentDate"
+              label={t('app.kuaizhizao.paymentApplication.expectedPaymentDate')}
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={8}>
+            <ProFormSelect
+              name="paymentMethod"
+              label={t('app.kuaizhizao.paymentApplication.paymentMethod')}
+              rules={[{ required: true }]}
+              options={paymentMethodOptions}
+            />
+          </Col>
+          <Col span={8}>
+            <ProFormSelect
+              name="invoiceStatus"
+              label={t('app.kuaizhizao.paymentApplication.invoiceStatus')}
+              rules={[{ required: true, message: t('common.required') }]}
+              options={invoiceStatusOptions}
+            />
+          </Col>
+          <Col span={8}>
+            <ProFormDigit
+              name="headerRequestAmount"
+              label={t('app.kuaizhizao.paymentApplication.totalRequestAmount')}
+              min={0.01}
+              fieldProps={{ precision: 2, style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={8}>
+            <ProFormItem
+              name="applicationKind"
+              label={t('app.kuaizhizao.paymentApplication.applicationKind')}
+              initialValue="goods"
+              rules={[{ required: true }]}
+            >
+              <ThemedSegmented
+                className="form-field-segmented"
+                style={{ width: 'fit-content', maxWidth: '100%' }}
+                options={[
+                  {
+                    label: t('app.kuaizhizao.paymentApplication.applicationKind.goods'),
+                    value: 'goods',
+                  },
+                  {
+                    label: t('app.kuaizhizao.paymentApplication.applicationKind.prepayment'),
+                    value: 'prepayment',
+                  },
+                ]}
+                onChange={(next) => {
+                  const lineKind = lineKindFromApplicationKind(next);
+                  const items = normalizeFormListItems<Record<string, unknown>>(
+                    formRef.current?.getFieldValue('items'),
+                  );
+                  if (!itemsCompatibleWithApplicationKind(items, lineKind)) {
+                    formRef.current?.setFieldsValue({
+                      applicationKind: lineKind,
+                      items: [],
+                    });
+                    messageApi.info(t('app.kuaizhizao.paymentApplication.settlementTypeClearedLines'));
+                    return;
+                  }
+                  formRef.current?.setFieldsValue({
+                    applicationKind: lineKind,
+                    items: items.map((row) => ({ ...row, lineKind })),
+                  });
+                }}
+              />
+            </ProFormItem>
+          </Col>
+          <ProFormDependency name={['paymentMethod']}>
+            {({ paymentMethod: method }) =>
+              method === EMPLOYEE_ADVANCE_PAYMENT_METHOD ? (
+                <Col span={8}>
+                  <PaymentAdvancePayeeField
+                    methodField="paymentMethod"
+                    payeeIdField="advancePayeeId"
+                    colProps={false}
+                  />
+                </Col>
+              ) : null
+            }
+          </ProFormDependency>
+        </Row>
+        <UniTableDetail
+          name="items"
+          title={t('app.kuaizhizao.paymentApplication.lines')}
+          required
+          disabledAdd
+          onBatchSelect={formLinePull.openAddDetailPull}
+          batchSelectText={t('common.addDetail')}
+          summary={() => <PaymentApplicationLinesSummaryRow />}
+          columns={[
+            {
+              title: t('app.kuaizhizao.paymentApplication.sourceType'),
+              dataIndex: 'sourceType',
+              width: 120,
+              render: (_: unknown, field: FormListFieldData) => (
+                <>
+                  <Form.Item name={[field.name, 'sourceType']} hidden>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name={[field.name, 'sourceId']} hidden>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name={[field.name, 'sourceCode']} hidden>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name={[field.name, 'payableCode']} hidden>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name={[field.name, 'lineKind']} hidden>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item shouldUpdate style={{ margin: 0 }}>
+                    {() => {
+                      const st = formRef.current?.getFieldValue(['items', field.name, 'sourceType']);
+                      return paymentApplicationSourceTypeLabel(t, st);
+                    }}
+                  </Form.Item>
+                </>
+              ),
+            },
+            {
+              title: t('app.kuaizhizao.paymentApplication.sourceCode'),
+              dataIndex: 'sourceCode',
+              width: 160,
+              render: (_: unknown, field: FormListFieldData) => (
+                <Form.Item shouldUpdate style={{ margin: 0 }}>
+                  {() => {
+                    const code = formRef.current?.getFieldValue(['items', field.name, 'sourceCode']);
+                    const payableCode = formRef.current?.getFieldValue([
+                      'items',
+                      field.name,
+                      'payableCode',
+                    ]);
+                    return String(code || payableCode || '—');
+                  }}
+                </Form.Item>
+              ),
+            },
+            {
+              title: t('app.kuaizhizao.paymentApplication.materialName'),
+              dataIndex: 'materialName',
+              width: 140,
+              render: (_: unknown, field: FormListFieldData) => (
+                <>
+                  <Form.Item name={[field.name, 'materialName']} hidden>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name={[field.name, 'materialSpec']} hidden>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name={[field.name, 'quantity']} hidden>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name={[field.name, 'materialUnit']} hidden>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name={[field.name, 'sourceLineId']} hidden>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item shouldUpdate style={{ margin: 0 }}>
+                    {() => {
+                      const name = formRef.current?.getFieldValue([
+                        'items',
+                        field.name,
+                        'materialName',
+                      ]);
+                      return String(name || '—');
+                    }}
+                  </Form.Item>
+                </>
+              ),
+            },
+            {
+              title: t('app.kuaizhizao.paymentApplication.materialSpec'),
+              dataIndex: 'materialSpec',
+              width: 120,
+              render: (_: unknown, field: FormListFieldData) => (
+                <Form.Item shouldUpdate style={{ margin: 0 }}>
+                  {() => {
+                    const spec = formRef.current?.getFieldValue([
+                      'items',
+                      field.name,
+                      'materialSpec',
+                    ]);
+                    return String(spec || '—');
+                  }}
+                </Form.Item>
+              ),
+            },
+            {
+              title: t('app.kuaizhizao.paymentApplication.quantity'),
+              dataIndex: 'quantity',
+              width: 100,
+              render: (_: unknown, field: FormListFieldData) => (
+                <Form.Item shouldUpdate style={{ margin: 0 }}>
+                  {() => {
+                    const qty = formRef.current?.getFieldValue(['items', field.name, 'quantity']);
+                    const unit = formRef.current?.getFieldValue([
+                      'items',
+                      field.name,
+                      'materialUnit',
+                    ]);
+                    if (qty == null || qty === '') return '—';
+                    const unitText = unit ? ` ${unit}` : '';
+                    return `${qty}${unitText}`;
+                  }}
+                </Form.Item>
+              ),
+            },
+            {
+              title: t('app.kuaizhizao.paymentApplication.payableCode'),
+              dataIndex: 'payableId',
+              width: 200,
+              render: (_: unknown, field: FormListFieldData) => (
+                <>
+                  <Form.Item name={[field.name, 'payableId']} hidden>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item
+                    noStyle
+                    dependencies={[
+                      ['items', field.name, 'lineKind'],
+                      ['items', field.name, 'sourceType'],
+                      ['items', field.name, 'payableCode'],
+                    ]}
+                  >
+                    {() => {
+                      const lineKind = formRef.current?.getFieldValue(['items', field.name, 'lineKind']);
+                      const sourceType = formRef.current?.getFieldValue([
+                        'items',
+                        field.name,
+                        'sourceType',
+                      ]);
+                      const needsPayable = paymentApplicationLineNeedsPayable(lineKind, sourceType);
+                      if (!needsPayable) {
+                        return (
+                          <span style={{ color: 'var(--ant-color-text-secondary)' }}>
+                            {t('app.kuaizhizao.paymentApplication.payableOptionalPrepayment')}
+                          </span>
+                        );
+                      }
+                      const payableCode = formRef.current?.getFieldValue([
+                        'items',
+                        field.name,
+                        'payableCode',
+                      ]);
+                      return String(payableCode || '—');
+                    }}
+                  </Form.Item>
+                </>
+              ),
+            },
+            {
+              title: (
+                <Form.Item noStyle shouldUpdate>
+                  {() => {
+                    const kind = formApplicationKind(formRef.current?.getFieldValue('applicationKind'));
+                    return kind === 'prepayment'
+                      ? t('app.kuaizhizao.paymentApplication.orderOriginalAmount')
+                      : t('app.kuaizhizao.paymentApplication.requestAmount');
+                  }}
+                </Form.Item>
+              ),
+              dataIndex: 'requestAmount',
+              width: 140,
+              align: 'right',
+              fixed: 'right',
+              onHeaderCell: () => ({ className: 'uni-detail-fixed-amount-header' }),
+              render: (_: unknown, field: FormListFieldData) => (
+                <Form.Item
+                  noStyle
+                  shouldUpdate={(prev, cur) =>
+                    prev.applicationKind !== cur.applicationKind || prev.items !== cur.items
+                  }
+                >
+                  {() => {
+                    const kind = formApplicationKind(formRef.current?.getFieldValue('applicationKind'));
+                    const row = normalizeFormListItems<Record<string, unknown>>(
+                      formRef.current?.getFieldValue('items'),
+                    )[field.name];
+                    const prepayPo =
+                      row != null && isPrepaymentPurchaseOrderFormLine(row, kind);
+                    if (prepayPo) {
+                      const displayAmount = Number(
+                        row.sourceOrderAmount ?? row.maxRequestAmount ?? row.requestAmount ?? 0,
+                      );
+                      return (
+                        <>
+                          <Form.Item name={[field.name, 'sourceOrderAmount']} hidden>
+                            <Input />
+                          </Form.Item>
+                          <Form.Item name={[field.name, 'maxRequestAmount']} hidden>
+                            <Input />
+                          </Form.Item>
+                          <Form.Item name={[field.name, 'requestAmount']} hidden rules={[{ required: true }]}>
+                            <InputNumber min={0.01} precision={2} />
+                          </Form.Item>
+                          {displayAmount > 0 ? formatCurrencyAmount(displayAmount) : '—'}
+                        </>
+                      );
+                    }
+                    return (
+                      <Form.Item
+                        name={[field.name, 'requestAmount']}
+                        style={{ margin: 0 }}
+                        rules={[{ required: true }]}
+                      >
+                        <InputNumber size="small" min={0.01} precision={2} style={{ width: '100%' }} />
+                      </Form.Item>
+                    );
+                  }}
+                </Form.Item>
+              ),
+            },
+          ]}
+        />
+        <PaymentApplicationSupplierPayeeSection />
+        <Row gutter={16}>
+          <Col span={24}>
+            <ProFormTextArea
+              name="notes"
+              label={t('app.kuaizhizao.paymentApplication.notes')}
+              fieldProps={{ rows: 2 }}
+            />
+          </Col>
+          <Col span={24}>
+            <DocumentAttachmentsField
+              category="payment_application_attachments"
+              label={t('app.kuaizhizao.paymentApplication.attachments')}
+            />
+          </Col>
+          <Col span={24}>
+            <ProFormSwitch
+              name="requirePaymentVoucher"
+              label={t('app.kuaizhizao.paymentApplication.requirePaymentVoucher')}
+              extra={t('app.kuaizhizao.paymentApplication.requirePaymentVoucherHint')}
+            />
+          </Col>
+        </Row>
+              </ProForm>
+            </div>
+          </Spin>
+        </DocumentFormPageLayout>
+        {formLinePull.renderPullModals()}
+      </>
+    );
+  }
 
   return (
     <>
+      {paymentApplicationAuditModal}
       <ListPageTemplate>
         <UniTable<PaymentApplication>
           actionRef={actionRef}
           permissionResource={RESOURCE}
-          columnPersistenceId="apps.kuaizhizao.pages.purchase-management.payment-applications-width-v5"
+          columnPersistenceId="apps.kuaizhizao.pages.purchase-management.payment-applications-width-v7"
           headerTitle={t('app.kuaizhizao.menu.purchase-management.payment-applications')}
           rowKey="id"
           columns={columns}
           showCreateButton={false}
-          headerActions={
-            perms.canCreate ? (
+          toolBarRender={() => [
+            ...(perms.canCreate ? [
               <UniPullCreateToolbar
+                key="create-payment-application-with-pull"
                 compactKey="create-payment-application-with-pull"
                 createIcon={<PlusOutlined />}
                 createLabel={t('app.kuaizhizao.paymentApplication.create')}
                 onCreate={() => void openCreate()}
-                menuItems={pullCreateMenuItems}
-              />
-            ) : undefined
-          }
-          enableRowSelection={
-            perms.canDelete ||
-            Boolean(perms.canAction?.('submit')) ||
-            Boolean(perms.canAction?.('audit')) ||
-            perms.canPrint
-          }
+                menuItems={[
+                  ...pullCreateMenuItems,
+                  { type: 'divider', key: 'copy-selected-divider' },
+                  {
+                    key: 'copy-selected',
+                    label: t('app.kuaizhizao.paymentApplication.copySelectedCreate'),
+                    disabled: !selectedApplicationForToolbar,
+                    onClick: () => void handleCopySelectedPaymentApplication(),
+                  },
+                ]}
+              />,
+            ] : []),
+            <UniPushToolbarButton
+              key={`payment-application-push-${selectedApplicationForToolbar?.id ?? 'none'}`}
+              menuItems={toolbarPushMenuItems}
+              disabled={selectedRowKeys.length !== 1 || !selectedApplicationForToolbar}
+              disabledReason={toolbarPushDisabledReason}
+              sourceDocument={
+                selectedApplicationForToolbar?.id
+                  ? { type: 'payment_application', id: Number(selectedApplicationForToolbar.id) }
+                  : null
+              }
+              pushTargets={{ 'push-payment': 'payment' }}
+            />,
+            <UniBatchMenuButton
+              key="payment-application-submit"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={paymentApplicationToolbarAuditMenus.submit}
+              buttonText={t('common.submit')}
+            />,
+            <UniBatchMenuButton
+              key="payment-application-audit"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={paymentApplicationToolbarAuditMenus.audit}
+              buttonText={t('components.uniAction.audit')}
+            />,
+          ]}
+          enableRowSelection
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton={perms.canDelete}
+          deleteButtonText={t('common.delete')}
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) =>
             t('app.kuaizhizao.paymentApplication.confirmBatchDelete', { count })
           }
-          toolBarActionsAfterDelete={[
-            <UniAuditBatchMenuButton
-              key="payment-application-batch-menu"
-              selectedRowKeys={selectedRowKeys}
-              selectedRecords={selectedApplicationsForBatch}
-              auditEnabled={auditEnabled}
-              permGates={perms}
-              handlers={paymentApplicationAuditBatchHandlers}
-              onSuccess={handlePaymentApplicationAuditBatchSuccess}
-              toolBarButtonSize="middle"
-            />,
-          ]}
+          toolBarActionsAfterDelete={[]}
           rightToolBarActionsBeforeExport={[
             <UniCapabilityBatchButton
               key="payment-application-print"
@@ -763,7 +1952,16 @@ const PaymentApplicationsPage: React.FC = () => {
                 {detail.supplierName}
               </Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.status')}>
-                {renderDocumentStatusTag(detail.status, detail.status)}
+                {renderDocumentStatusTag(getStatusLabel(detail.status), detail.status)}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.invoiceStatus')}>
+                {detail.invoiceStatus || '—'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.applicantName')}>
+                {detail.applicantName || '—'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.reviewerName')}>
+                {detail.reviewerName || '—'}
               </Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.applicationDate')}>
                 {detail.applicationDate ? formatDateBySiteSetting(detail.applicationDate) : '—'}
@@ -782,24 +1980,29 @@ const PaymentApplicationsPage: React.FC = () => {
               <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.paymentMethod')}>
                 {formatPaymentMethod(detail.paymentMethod, t)}
               </Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.invoiceStatus')}>
-                {detail.invoiceStatus || '—'}
+              <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.applicationKind')}>
+                {formApplicationKind(detail.applicationKind) === 'prepayment'
+                  ? t('app.kuaizhizao.paymentApplication.applicationKind.prepayment')
+                  : t('app.kuaizhizao.paymentApplication.applicationKind.goods')}
               </Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.paymentTerms')}>
-                {detail.paymentTerms || '—'}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.supplierAccountName')}>
-                {detail.supplierAccountName || '—'}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.supplierBankName')}>
-                {detail.supplierBankName || '—'}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.supplierBankAccount')}>
-                {detail.supplierBankAccount || '—'}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.paymentReason')} span={2}>
-                {detail.paymentReason?.trim() || '—'}
-              </Descriptions.Item>
+              {isEmployeeAdvancePaymentMethod(detail.paymentMethod) ? (
+                <Descriptions.Item label={t('app.kuaicaiwu.payment.advancePayee')}>
+                  {detail.advancePayeeName || '—'}
+                </Descriptions.Item>
+              ) : null}
+              {!hidesSupplierPayeeAccount(detail.paymentMethod) ? (
+                <>
+                  <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.supplierAccountName')}>
+                    {detail.supplierAccountName || '—'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.supplierBankName')}>
+                    {detail.supplierBankName || '—'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.supplierBankAccount')}>
+                    {detail.supplierBankAccount || '—'}
+                  </Descriptions.Item>
+                </>
+              ) : null}
               <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.notes')} span={2}>
                 {detail.notes?.trim() || '—'}
               </Descriptions.Item>
@@ -869,320 +2072,195 @@ const PaymentApplicationsPage: React.FC = () => {
                 </Descriptions.Item>
               </Descriptions>
             ) : null}
-            <Table
-              size="small"
-              pagination={false}
-              rowKey="id"
-              style={{ marginTop: 16 }}
-              dataSource={detail.items}
-              columns={[
-                {
-                  title: t('app.kuaizhizao.paymentApplication.sourceType'),
-                  key: 'sourceType',
-                  width: 120,
-                  render: (_, row) => paymentApplicationSourceTypeLabel(t, row.sourceType),
-                },
-                {
-                  title: t('app.kuaizhizao.paymentApplication.sourceCode'),
-                  key: 'source',
-                  render: (_, row) => {
-                    const st = String(row.sourceType ?? '').trim();
-                    const sid = row.sourceId;
-                    const code = row.sourceCode || row.payableCode;
-                    if (!code && sid == null) return '—';
-                    const docType = resolvePaymentApplicationLinkedDocType(st);
-                    if (sid != null && canOpenLinkedDocumentDetail(docType)) {
-                      return (
-                        <Button
-                          type="link"
-                          size="small"
-                          style={{ padding: 0, height: 'auto' }}
-                          onClick={() =>
-                            linkedDetail?.openLinkedDocumentDetail(docType, Number(sid))
-                          }
-                        >
-                          {code || sid}
-                        </Button>
-                      );
-                    }
-                    return code || String(sid ?? '—');
+            {detail.purchaseOrderSources && detail.purchaseOrderSources.length > 0 ? (
+              <div style={{ marginTop: 16 }}>
+                <Typography.Text strong>
+                  {t('app.kuaizhizao.paymentApplication.sourcePurchaseOrders')}
+                </Typography.Text>
+                {detail.purchaseOrderSources.map((po) => (
+                  <div key={po.id} style={{ marginTop: 12 }}>
+                    <Descriptions size="small" column={3} bordered>
+                      <Descriptions.Item label={t('app.kuaizhizao.purchaseOrder.col.code')}>
+                        {canOpenLinkedDocumentDetail('purchase_order') ? (
+                          <Button
+                            type="link"
+                            size="small"
+                            style={{ padding: 0, height: 'auto' }}
+                            onClick={() =>
+                              linkedDetail?.openLinkedDocumentDetail('purchase_order', po.id)
+                            }
+                          >
+                            {po.orderCode}
+                          </Button>
+                        ) : (
+                          po.orderCode
+                        )}
+                      </Descriptions.Item>
+                      <Descriptions.Item label={t('app.kuaizhizao.purchaseOrder.form.orderDate')}>
+                        {po.orderDate ? formatDateBySiteSetting(po.orderDate) : '—'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label={t('app.kuaizhizao.purchaseOrder.form.orderType')}>
+                        {po.orderType || '—'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label={t('app.kuaizhizao.purchaseOrder.form.buyer')}>
+                        {po.buyerName || '—'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label={t('app.kuaizhizao.salesOrder.totalAmountLabel')}>
+                        {formatCurrencyAmount(po.totalAmount)}
+                      </Descriptions.Item>
+                    </Descriptions>
+                    <Table
+                      style={{ marginTop: 8 }}
+                      size="small"
+                      pagination={false}
+                      rowKey="id"
+                      dataSource={po.items}
+                      columns={[
+                        {
+                          title: t('app.kuaizhizao.purchaseOrder.col.materialCode'),
+                          dataIndex: 'materialCode',
+                          width: 110,
+                          ellipsis: true,
+                        },
+                        {
+                          title: t('app.kuaizhizao.purchaseOrder.col.materialName'),
+                          dataIndex: 'materialName',
+                          width: 140,
+                          ellipsis: true,
+                        },
+                        {
+                          title: t('app.kuaizhizao.purchaseOrder.col.spec'),
+                          dataIndex: 'materialSpec',
+                          width: 100,
+                          ellipsis: true,
+                        },
+                        {
+                          title: t('common.quantity'),
+                          key: 'qty',
+                          width: 100,
+                          align: 'right',
+                          render: (_, row) =>
+                            row.quantity ? `${row.quantity}${row.unit ? ` ${row.unit}` : ''}` : '—',
+                        },
+                        {
+                          title: t('app.kuaizhizao.purchaseOrder.col.unitPrice'),
+                          key: 'unitPrice',
+                          width: 100,
+                          align: 'right',
+                          render: (_, row) => formatCurrencyAmount(row.unitPrice),
+                        },
+                        {
+                          title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
+                          dataIndex: 'totalPrice',
+                          width: 110,
+                          align: 'right',
+                          render: (v) => formatCurrencyAmount(v),
+                        },
+                        {
+                          title: t('common.remark'),
+                          dataIndex: 'notes',
+                          ellipsis: true,
+                        },
+                      ]}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            <DetailDrawerLinesScroll style={{ marginTop: 16 }}>
+              <Table
+                size="small"
+                pagination={false}
+                rowKey="id"
+                tableLayout="fixed"
+                style={{ minWidth: PAYMENT_APPLICATION_DETAIL_LINES_MIN_WIDTH }}
+                dataSource={detail.items}
+                columns={[
+                  {
+                    title: t('app.kuaizhizao.paymentApplication.sourceType'),
+                    key: 'sourceType',
+                    width: PAYMENT_APPLICATION_DETAIL_LINE_WIDTH.sourceType,
+                    render: (_, row) => paymentApplicationSourceTypeLabel(t, row.sourceType),
                   },
-                },
-                { title: t('app.kuaizhizao.paymentApplication.payableCode'), dataIndex: 'payableCode' },
-                {
-                  title: t('app.kuaizhizao.paymentApplication.requestAmount'),
-                  dataIndex: 'requestAmount',
-                  render: (v) => formatCurrencyAmount(v),
-                },
-                {
-                  title: t('app.kuaizhizao.paymentApplication.paidAmount'),
-                  dataIndex: 'paidAmount',
-                  render: (v) => formatCurrencyAmount(v),
-                },
-              ]}
-            />
+                  {
+                    title: t('app.kuaizhizao.paymentApplication.sourceCode'),
+                    key: 'source',
+                    width: PAYMENT_APPLICATION_DETAIL_LINE_WIDTH.sourceCode,
+                    render: (_, row) => {
+                      const st = String(row.sourceType ?? '').trim();
+                      const sid = row.sourceId;
+                      const code = row.sourceCode || row.payableCode;
+                      if (!code && sid == null) return '—';
+                      const docType = resolvePaymentApplicationLinkedDocType(st);
+                      if (sid != null && canOpenLinkedDocumentDetail(docType)) {
+                        return (
+                          <Button
+                            type="link"
+                            size="small"
+                            style={{ padding: 0, height: 'auto', whiteSpace: 'nowrap' }}
+                            onClick={() =>
+                              linkedDetail?.openLinkedDocumentDetail(docType, Number(sid))
+                            }
+                          >
+                            {code || sid}
+                          </Button>
+                        );
+                      }
+                      return code || String(sid ?? '—');
+                    },
+                  },
+                  {
+                    title: t('app.kuaizhizao.common.colLineMaterials'),
+                    key: 'lineMaterials',
+                    width: PAYMENT_APPLICATION_DETAIL_LINE_WIDTH.lineMaterials,
+                    ellipsis: false,
+                    render: (_, row) => {
+                      const preview = resolvePaymentApplicationLineMaterialPreview(
+                        row,
+                        detail.purchaseOrderSources,
+                        poLinePreviewByOrderId,
+                      );
+                      const node = renderDocumentLineMaterialsPreview(preview, t);
+                      return preview.length > 0 ? node : '—';
+                    },
+                  },
+                  {
+                    title: t('app.kuaizhizao.paymentApplication.quantity'),
+                    key: 'quantity',
+                    width: PAYMENT_APPLICATION_DETAIL_LINE_WIDTH.quantity,
+                    align: 'right',
+                    render: (_, row) => {
+                      if (row.quantity == null) return '—';
+                      const unit = row.materialUnit ? ` ${row.materialUnit}` : '';
+                      return `${row.quantity}${unit}`;
+                    },
+                  },
+                  {
+                    title: t('app.kuaizhizao.paymentApplication.payableCode'),
+                    dataIndex: 'payableCode',
+                    width: PAYMENT_APPLICATION_DETAIL_LINE_WIDTH.payableCode,
+                    ellipsis: true,
+                  },
+                  {
+                    title: t('app.kuaizhizao.paymentApplication.requestAmount'),
+                    dataIndex: 'requestAmount',
+                    width: PAYMENT_APPLICATION_DETAIL_LINE_WIDTH.requestAmount,
+                    align: 'right',
+                    render: (v) => formatCurrencyAmount(v),
+                  },
+                  {
+                    title: t('app.kuaizhizao.paymentApplication.paidAmount'),
+                    dataIndex: 'paidAmount',
+                    width: PAYMENT_APPLICATION_DETAIL_LINE_WIDTH.paidAmount,
+                    align: 'right',
+                    render: (v) => formatCurrencyAmount(v),
+                  },
+                ]}
+              />
+            </DetailDrawerLinesScroll>
           </>
         ) : null}
       </DetailDrawerTemplate>
-
-      <FormModalTemplate
-        open={editOpen}
-        onClose={() => setEditOpen(false)}
-        title={
-          editId
-            ? t('app.kuaizhizao.paymentApplication.editTitle')
-            : t('app.kuaizhizao.paymentApplication.create')
-        }
-        isEdit={editId != null}
-        formRef={formRef}
-        afterOpenChange={(open) => {
-          if (!open) {
-            formRef.current?.resetFields();
-            pendingEditValuesRef.current = null;
-            setPayableSupplierId(null);
-            setPayableOptions([]);
-            return;
-          }
-          if (pendingEditValuesRef.current) {
-            formRef.current?.setFieldsValue(pendingEditValuesRef.current);
-            pendingEditValuesRef.current = null;
-            return;
-          }
-          if (editId == null) {
-            formRef.current?.setFieldsValue({
-              applicationDate: dayjs(),
-              paymentMethod: BANK_TRANSFER_PAYMENT_METHOD,
-              requirePaymentVoucher: false,
-              attachments: [],
-              items: [{ lineKind: 'goods', sourceType: 'payable' }],
-            });
-          }
-        }}
-        onFinish={async (values) => {
-          try {
-            await handleSave(values as Record<string, unknown>);
-          } catch (error) {
-            messageApi.error(getApiErrorMessage(error, t('common.saveFailed')));
-          }
-        }}
-        width={MODAL_CONFIG.LARGE_WIDTH}
-        grid={false}
-      >
-        <Row gutter={16}>
-          <Col span={12}>
-            <ProFormSelect
-              name="supplierId"
-              label={t('app.kuaizhizao.paymentApplication.supplierName')}
-              rules={[{ required: true }]}
-              options={supplierOptions.map((s) => ({ value: s.id, label: s.name }))}
-              fieldProps={{
-                showSearch: true,
-                optionFilterProp: 'label',
-                onChange: (v) => {
-                  void onSupplierChange(Number(v));
-                  formRef.current?.setFieldsValue({
-                    items: [{ lineKind: 'goods', sourceType: 'payable', requestAmount: undefined }],
-                  });
-                },
-              }}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormDatePicker
-              name="applicationDate"
-              label={t('app.kuaizhizao.paymentApplication.applicationDate')}
-              rules={[{ required: true }]}
-              fieldProps={{ style: { width: '100%' } }}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormDatePicker
-              name="expectedPaymentDate"
-              label={t('app.kuaizhizao.paymentApplication.expectedPaymentDate')}
-              fieldProps={{ style: { width: '100%' } }}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormSelect
-              name="paymentMethod"
-              label={t('app.kuaizhizao.paymentApplication.paymentMethod')}
-              rules={[{ required: true }]}
-              options={paymentMethodOptions}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormSelect
-              name="invoiceStatus"
-              label={t('app.kuaizhizao.paymentApplication.invoiceStatus')}
-              options={invoiceStatusOptions}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormText
-              name="paymentTerms"
-              label={t('app.kuaizhizao.paymentApplication.paymentTerms')}
-            />
-          </Col>
-          <Col span={24}>
-            <ProFormTextArea
-              name="paymentReason"
-              label={t('app.kuaizhizao.paymentApplication.paymentReason')}
-              rules={[{ required: true }]}
-              fieldProps={{ rows: 2 }}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormText
-              name="supplierAccountName"
-              label={t('app.kuaizhizao.paymentApplication.supplierAccountName')}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormText
-              name="supplierBankName"
-              label={t('app.kuaizhizao.paymentApplication.supplierBankName')}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormText
-              name="supplierBankAccount"
-              label={t('app.kuaizhizao.paymentApplication.supplierBankAccount')}
-            />
-          </Col>
-        </Row>
-        <UniTableDetail
-          name="items"
-          title={t('app.kuaizhizao.paymentApplication.lines')}
-          required
-          initialValue={{ lineKind: 'goods', sourceType: 'payable' }}
-          columns={[
-            {
-              title: t('app.kuaizhizao.paymentApplication.sourceType'),
-              dataIndex: 'sourceType',
-              width: 120,
-              render: (_: unknown, field: FormListFieldData) => (
-                <>
-                  <Form.Item name={[field.name, 'sourceType']} hidden>
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name={[field.name, 'sourceId']} hidden>
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name={[field.name, 'sourceCode']} hidden>
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name={[field.name, 'payableCode']} hidden>
-                    <Input />
-                  </Form.Item>
-                  <Form.Item shouldUpdate style={{ margin: 0 }}>
-                    {() => {
-                      const st = formRef.current?.getFieldValue(['items', field.name, 'sourceType']);
-                      return paymentApplicationSourceTypeLabel(t, st);
-                    }}
-                  </Form.Item>
-                </>
-              ),
-            },
-            {
-              title: t('app.kuaizhizao.paymentApplication.sourceCode'),
-              dataIndex: 'sourceCode',
-              width: 160,
-              render: (_: unknown, field: FormListFieldData) => (
-                <Form.Item shouldUpdate style={{ margin: 0 }}>
-                  {() => {
-                    const code = formRef.current?.getFieldValue(['items', field.name, 'sourceCode']);
-                    const payableCode = formRef.current?.getFieldValue([
-                      'items',
-                      field.name,
-                      'payableCode',
-                    ]);
-                    return String(code || payableCode || '—');
-                  }}
-                </Form.Item>
-              ),
-            },
-            {
-              title: t('app.kuaizhizao.paymentApplication.payableCode'),
-              dataIndex: 'payableId',
-              width: 200,
-              render: (_: unknown, field: FormListFieldData) => (
-                <Form.Item
-                  name={[field.name, 'payableId']}
-                  style={{ margin: 0 }}
-                  rules={[{ required: true }]}
-                >
-                  <Select
-                    size="small"
-                    showSearch
-                    optionFilterProp="label"
-                    loading={payablesLoading}
-                    disabled={!payableSupplierId}
-                    placeholder={
-                      payableSupplierId
-                        ? t('app.kuaizhizao.paymentApplication.selectPayable')
-                        : t('app.kuaizhizao.paymentApplication.selectSupplierFirst')
-                    }
-                    options={payableOptions.map((p) => ({
-                      value: p.payableId,
-                      label: `${p.payableCode} (${formatCurrencyAmount(p.maxRequestAmount)})`,
-                    }))}
-                    onChange={(payableId: number) => {
-                      const opt = payableOptions.find((p) => p.payableId === payableId);
-                      const cur = formRef.current?.getFieldValue(['items', field.name]) || {};
-                      const keepSource = Boolean(cur.sourceType && cur.sourceType !== 'payable');
-                      formRef.current?.setFieldValue(['items', field.name], {
-                        ...cur,
-                        payableId,
-                        payableCode: opt?.payableCode,
-                        sourceType: keepSource ? cur.sourceType : 'payable',
-                        sourceId: keepSource ? cur.sourceId : payableId,
-                        sourceCode: keepSource ? cur.sourceCode : opt?.payableCode,
-                        requestAmount: cur.requestAmount ?? opt?.maxRequestAmount,
-                      });
-                    }}
-                  />
-                </Form.Item>
-              ),
-            },
-            {
-              title: t('app.kuaizhizao.paymentApplication.requestAmount'),
-              dataIndex: 'requestAmount',
-              width: 140,
-              render: (_: unknown, field: FormListFieldData) => (
-                <Form.Item
-                  name={[field.name, 'requestAmount']}
-                  style={{ margin: 0 }}
-                  rules={[{ required: true }]}
-                >
-                  <InputNumber size="small" min={0.01} precision={2} style={{ width: '100%' }} />
-                </Form.Item>
-              ),
-            },
-          ]}
-        />
-        <Row gutter={16}>
-          <Col span={24}>
-            <ProFormTextArea
-              name="notes"
-              label={t('app.kuaizhizao.paymentApplication.notes')}
-              fieldProps={{ rows: 2 }}
-            />
-          </Col>
-          <Col span={24}>
-            <DocumentAttachmentsField
-              category="payment_application_attachments"
-              label={t('app.kuaizhizao.paymentApplication.attachments')}
-            />
-          </Col>
-          <Col span={24}>
-            <ProFormSwitch
-              name="requirePaymentVoucher"
-              label={t('app.kuaizhizao.paymentApplication.requirePaymentVoucher')}
-              extra={t('app.kuaizhizao.paymentApplication.requirePaymentVoucherHint')}
-            />
-          </Col>
-        </Row>
-      </FormModalTemplate>
 
       <Modal
         open={pullPayableOpen}

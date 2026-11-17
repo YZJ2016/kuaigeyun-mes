@@ -10,3 +10,11 @@ export type {
   UniWhWarehouseChangePayload,
   UniWhLocationChangePayload,
 } from './types';
+export {
+  probeWarehouseHasLocations,
+  readWarehouseHasLocationsCache,
+  lineLocationSelectionRequired,
+  resolveFirstStorageLocationForWarehouse,
+  invalidateWarehouseHasLocationsCache,
+} from './warehouseLocationProbe';
+export { useWarehouseHasLocations } from './useWarehouseHasLocations';

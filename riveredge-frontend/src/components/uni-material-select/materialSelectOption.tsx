@@ -4,6 +4,8 @@
 import React from 'react';
 import { theme } from 'antd';
 import { useTranslation } from 'react-i18next';
+import i18n from '../../config/i18n';
+import { EMPTY_VALUE_PLACEHOLDER } from '../../utils/format';
 import { SecureImage } from '../secure-image';
 
 export const MATERIAL_SELECT_OPTION_ITEM_HEIGHT = 56;
@@ -32,19 +34,28 @@ export function resolveMaterialSelectImageFileUuid(raw: unknown): string | null 
   return null;
 }
 
-/** 选中标签 / 搜索用纯文本：编号 - 名称（规格 / 型号） */
+/** 下拉展开时的主行：编码：xxx - 品名：xxx */
+export function formatMaterialSelectDropdownTitle(m: Record<string, unknown> | null | undefined): string {
+  if (!m) return '';
+  const mainCode = pickField(m, 'mainCode') || pickField(m, 'code');
+  const nameVal = pickField(m, 'name');
+  if (mainCode && nameVal) {
+    return i18n.t('app.master-data.materials.selectCodeName', { code: mainCode, name: nameVal });
+  }
+  if (mainCode) return i18n.t('app.master-data.materials.selectCodeOnly', { code: mainCode });
+  if (nameVal) return i18n.t('app.master-data.materials.selectNameOnly', { name: nameVal });
+  return String(m.id ?? m.uuid ?? '');
+}
+
+/** 选中后输入框：品名 - 编码，不带字段前缀 */
 export function formatMaterialSelectLabel(m: Record<string, unknown> | null | undefined): string {
   if (!m) return '';
   const mainCode = pickField(m, 'mainCode') || pickField(m, 'code');
   const nameVal = pickField(m, 'name');
-  const specification = pickField(m, 'specification');
-  const model = pickField(m, 'model');
-  const primary = `${mainCode} - ${nameVal}`.trim().replace(/^-\s*|-\s*$/g, '').trim();
-  const extras = [specification, model].filter(Boolean).join(' / ');
-  if (primary && extras) return `${primary}（${extras}）`;
-  if (primary) return primary;
-  if (extras) return extras;
-  return String(m.id ?? m.uuid ?? '');
+  if (nameVal && mainCode) {
+    return i18n.t('app.master-data.materials.selectChosen', { name: nameVal, code: mainCode });
+  }
+  return nameVal || mainCode || String(m.id ?? m.uuid ?? '');
 }
 
 export type MaterialSelectOptionContentProps = {
@@ -61,7 +72,7 @@ export const MaterialSelectOptionContent: React.FC<MaterialSelectOptionContentPr
   const { token } = theme.useToken();
 
   if (!material) {
-    return <span>{fallbackLabel ?? '-'}</span>;
+    return <span>{fallbackLabel ?? EMPTY_VALUE_PLACEHOLDER}</span>;
   }
 
   const mainCode = pickField(material, 'mainCode') || pickField(material, 'code');
@@ -120,14 +131,14 @@ export const MaterialSelectOptionContent: React.FC<MaterialSelectOptionContentPr
       </div>
       <div style={{ flex: 1, minWidth: 0, lineHeight: 1.3 }}>
         <div
+          title={formatMaterialSelectDropdownTitle(material)}
           style={{
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
+            whiteSpace: 'normal',
+            wordBreak: 'break-word',
             fontWeight: 500,
           }}
         >
-          {mainCode ? `${mainCode} - ${nameVal}` : nameVal || fallbackLabel || '-'}
+          {mainCode || nameVal ? formatMaterialSelectDropdownTitle(material) : fallbackLabel || EMPTY_VALUE_PLACEHOLDER}
         </div>
         {metaParts.length > 0 ? (
           <div

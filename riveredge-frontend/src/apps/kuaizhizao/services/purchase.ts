@@ -190,6 +190,7 @@ export interface PurchaseOrderItem {
   material_code?: string;
   material_name?: string;
   material_spec?: string;
+  material_unit?: string;
   ordered_quantity?: number;
   unit?: string;
   unit_price?: number;
@@ -207,6 +208,10 @@ export interface PurchaseOrderItem {
   actual_delivery_date?: string;
   source_id?: number;
   notes?: string;
+  /** 副数量（与主数量双计量） */
+  aux_quantity?: number;
+  aux_unit?: string;
+  unit_conversion_rate?: number;
   /** 分摊落地成本 (V2) */
   landing_cost?: number;
   /** 杂费明细 (V2) */

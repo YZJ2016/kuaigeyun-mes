@@ -214,6 +214,7 @@ export function isQuotationRowSelectable(
 export const SALES_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'sales_order.update.not_allowed': '只能更新草稿或待审核的销售订单',
   'sales_order.update.locked': '销售订单已生效或执行中，禁止直接修改，请通过销售变更单变更',
+  'sales_order.update_attachments.cancelled': '已取消的销售订单不可补充附件',
   'sales_order.delete.not_allowed': '只能删除草稿或待审核状态的订单',
   'sales_order.delete.has_downstream':
     '该销售订单已有下游单据，请先反审核并删除下游后再删除',
@@ -836,6 +837,8 @@ export const PURCHASE_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> =
   'purchase_order.push_prepayment.not_audited': '只有已审核或已确认的采购单才能下推预付付款单',
   'purchase_order.push_prepayment.no_amount': '采购单未填写预付款金额，无法下推预付付款单',
   'purchase_order.push_prepayment.already_exists': '该采购订单已关联预付付款单',
+  'purchase_order.push_prepayment.application_exists':
+    '该采购订单已有预付类付款申请，请从付款申请加载预付款',
   'purchase_order.push_prepayment.require_application': '组织已启用预付款须走付款申请',
   'purchase_order.push_payment_application.not_audited': '只有已审核或已确认的采购单才能下推付款申请',
   'purchase_order.push_payment_application.no_amount': '采购单未填写预付款金额或预付请款额度已用尽',
@@ -977,6 +980,12 @@ export const RECEIPT_NOTICE_CAPABILITY_REASON_MESSAGES: Record<string, string> =
   'receipt_notice.notify.no_items': '收货通知单无明细，无法通知仓库',
   'receipt_notice.notify.no_warehouse': '收货通知单缺少仓库，无法通知仓库',
   'receipt_notice.notify.overdelivery': '通知数量超过采购订单未入库数量',
+  'receipt_notice.notify.not_audited': '收货通知单须审核通过后才能通知仓库',
+  'receipt_notice.submit.not_draft': '只有草稿或已驳回的收货通知单才能提交',
+  'receipt_notice.submit.no_items': '收货通知单无明细，无法提交',
+  'receipt_notice.update.submitted': '已提交的收货通知单不可编辑，请先撤销提交',
+  'receipt_notice.update.not_draft': '当前审核状态不可编辑',
+  'receipt_notice.delete.submitted': '已提交的收货通知单不可删除，请先撤销提交',
   'receipt_notice.withdraw.not_notified': '只有已通知状态的收货通知单才能撤回',
   'receipt_notice.withdraw.receipt_processing': '关联的采购入库单已在处理中，无法撤回',
 };
@@ -1196,12 +1205,28 @@ export function packingBindingBatchPrintAllowed(
 export const INBOUND_HUB_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'inbound_hub.confirm.not_pending': '当前状态不可确认入库',
   'inbound_hub.confirm.use_single_preview': '委外退料/退货请使用单行确认预览',
+  'inbound_hub.confirm.outsource_already_posted':
+    '委外退料/退货已在取单建单时过账，无需在入库 Hub 再次确认',
+  'inbound_hub.confirm.outsource_use_pull_entry':
+    '委外退料/退货请在委外取单页保存并确认，Hub 不支持二次确认',
   'inbound_hub.update.not_allowed': '当前状态不可编辑',
   'inbound_hub.update.posted': '已入库单据不可编辑，请先撤回',
   'inbound_hub.update.unsupported_type': '当前入库类型不支持编辑',
   'inbound_hub.withdraw.not_posted': '当前状态不可撤回入库',
   'inbound_hub.withdraw.unsupported_type': '当前入库类型不支持撤回',
   'customer_material.confirm.not_pending': '只有待入库状态的代工来料单才能确认入库',
+  'purchase_receipt.confirm.not_audited': '采购入库单须审核通过后才能确认入库',
+  'purchase_receipt.submit.not_draft': '仅草稿或已驳回可提交',
+  'purchase_receipt.submit.no_items': '采购入库单无明细，无法提交',
+  'purchase_receipt.submit_review.not_allowed': '请先提交采购入库单，再提交审核',
+  'purchase_receipt.update.submitted': '已提交的采购入库单不可编辑，请先撤销提交',
+  'purchase_receipt.update.not_draft': '当前审核状态不可编辑',
+  'purchase_receipt.delete.submitted': '已提交的采购入库单不可删除，请先撤销提交',
+  'purchase_receipt.push_payment_application.not_posted': '仅已过账的采购入库可下推付款申请',
+  'purchase_receipt.push_payment_application.no_open_amount': '该入库应付无可请款余额',
+  'purchase_receipt.push_purchase_return.not_posted': '仅已入库的采购入库单可下推采购退货',
+  'purchase_receipt.push_purchase_return.no_lines': '采购入库单无可退货明细',
+  'purchase_receipt.push_purchase_return.no_returnable': '采购入库单可退数量已全部占用',
 };
 
 export function inboundHubCapabilityReasonMessage(
@@ -1223,6 +1248,15 @@ export const OUTBOUND_HUB_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'outbound_hub.confirm.not_pending': '当前状态不可确认出库',
   'outbound_hub.confirm.pending_audit': '单据待审核，通过后方可确认出库',
   'outbound_hub.confirm.outsource_issue': '委外发料不支持在此确认',
+  'sales_delivery.confirm.not_audited':
+    '销售出库单须先提交并审核通过后才能确认出库（执行状态「待出库」不等于已审核）',
+  'sales_delivery.delete.submitted': '已提交的销售出库单不可删除，请先撤销提交',
+  'sales_delivery.update.submitted': '已提交的销售出库单不可编辑，请先撤销提交',
+  'sales_delivery.submit.no_items': '请先维护出库明细后再提交',
+  'sales_delivery.submit.not_draft': '当前审核状态不可提交',
+  'sales_delivery.submit_review.not_allowed': '请先提交单据后再提交审核',
+  'sales_delivery.withdraw_submit.not_pending': '当前状态不可撤销提交或撤回审核',
+  'sales_delivery.approve.not_pending': '仅待审核单据可审核',
   'outbound_hub.withdraw.not_posted': '当前状态不可撤回出库',
   'outbound_hub.withdraw.outsource_issue': '委外发料不支持撤回',
   'outbound_hub.withdraw.has_delivery_notice':
@@ -1429,9 +1463,6 @@ export const QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES: Record<string, strin
   'incoming_inspection.pull_from_customer_material_registration.not_allowed': '当前状态的代工来料单不可加载来料检验',
   'incoming_inspection.pull_from_customer_material_registration.no_lines': '代工来料单无需要来料检验的明细',
   'incoming_inspection.pull_from_customer_material_registration.already_pulled': '相关物料均已存在来料检验单，删除后可再次加载',
-  'incoming_inspection.pull_from_outsource_material_receipt.not_allowed': '当前状态的委外收货单不可加载来料检验',
-  'incoming_inspection.pull_from_outsource_material_receipt.no_lines': '委外收货单没有可检验物料',
-  'incoming_inspection.pull_from_outsource_material_receipt.already_pulled': '该委外收货已有来料检验单，删除后可再次加载',
   'finished_goods_inspection.push_rework.not_allowed': '只有不合格的成品检验单才能下推返工单',
   'finished_goods_inspection.push_rework.already_pushed': '不合格数量已全部下推返工单，删除未完成返工单后可再次下推',
   'finished_goods_inspection.push_rework.no_unqualified': '不合格数量为 0，无需下推返工单',
@@ -1452,12 +1483,17 @@ export const QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES: Record<string, strin
   'finished_goods_inspection.pull_from_work_order.no_product': '工单未关联产品物料，无法加载成品检验',
   'finished_goods_inspection.pull_from_work_order.no_inspection_required': '成品物料未配置成品检验，无需加载',
   'finished_goods_inspection.pull_from_work_order.already_pulled':
-    '该工单已有成品检验单（含自动生成），无需重复下推',
+    '工单计划量对应的成品检验已全部加载，无可加载余量',
+  'finished_goods_inspection.pull_from_work_order.no_remaining':
+    '工单计划量对应的成品检验已全部加载，无可加载余量',
+  'finished_goods_inspection.pull_from_work_order.quantity_invalid': '本次加载检验数量须大于 0',
+  'finished_goods_inspection.pull_from_work_order.quantity_exceeded': '本次加载检验数量超过工单剩余可加载数量',
   'process_inspection.pull_from_work_order.not_allowed': '当前状态的工单不可加载过程检验',
   'process_inspection.pull_from_work_order.no_product': '工单未关联产品物料，无法加载过程检验',
   'process_inspection.pull_from_work_order.no_inspection_required': '工单工序均未配置过程检验，无需加载',
   'process_inspection.pull_from_work_order.no_lines': '工单无工序明细，无法加载过程检验',
-  'process_inspection.pull_from_work_order.already_pulled': '相关工序均已存在待检验的过程检验单，删除后可再次加载',
+  'process_inspection.pull_from_work_order.already_pulled':
+    '该工序已有过程检验单（待检验或已检验），请在列表按工单号查找；仅待检验单删除后方可再次下推',
   'quality_inspection.update.not_pending': '只能更新待检验状态的检验单',
   'quality_inspection.delete.not_pending': '只能删除待检验状态的检验单',
 };
@@ -1488,6 +1524,8 @@ export const EIGHT_D_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'eight_d_report.transition.closed': '已关闭的 8D 报告不可推进阶段',
   'eight_d_report.transition.no_next': '当前阶段不可推进',
   'eight_d_report.transition.stage_incomplete': '推进前需先完善当前阶段内容',
+  'eight_d_report.transition.stage_not_approved': '协同模式需牵头人确认当前阶段，或保存内容后由具备更新权限的质量管理员推进',
+  'eight_d_report.transition.actions_not_verified': '请先验证本阶段全部行动项后再推进',
   'eight_d_report.close.already_closed': '8D 报告已关闭',
   'eight_d_report.close.not_at_final_stage': '仅 D8 总结阶段可关闭报告',
   'eight_d_report.close.stage_incomplete': '关闭前需先完善 D8 总结内容',

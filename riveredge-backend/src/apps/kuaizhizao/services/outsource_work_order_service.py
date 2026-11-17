@@ -277,10 +277,13 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
                 outsource_operation,
             )
 
-            # 计算总金额
-            total_amount = Decimal("0")
-            if unit_price:
-                total_amount = Decimal(str(work_order_data.quantity)) * Decimal(str(unit_price))
+            from apps.kuaizhizao.utils.document_amount_write import resolve_simple_line_total
+
+            total_amount = resolve_simple_line_total(
+                work_order_data.quantity,
+                unit_price or 0,
+                getattr(work_order_data, "total_amount", None),
+            )
 
             # 创建委外工单
             outsource_work_order = await OutsourceWorkOrder.create(
@@ -357,8 +360,10 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
             if "quantity" in update_data or "unit_price" in update_data:
                 quantity = Decimal(str(update_data.get("quantity", outsource_work_order.quantity)))
                 unit_price = update_data.get("unit_price", outsource_work_order.unit_price)
+                from apps.kuaizhizao.utils.document_amount_write import line_total_qty_unit_price
+
                 if unit_price:
-                    update_data["total_amount"] = quantity * Decimal(str(unit_price))
+                    update_data["total_amount"] = line_total_qty_unit_price(quantity, unit_price)
                 else:
                     update_data["total_amount"] = Decimal("0")
 

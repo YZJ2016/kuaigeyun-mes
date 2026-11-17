@@ -133,3 +133,47 @@ async def returned_qty_by_purchase_order_item_ids(
         confirmed_only=False,
     )
     return {item_id: float(qty) for item_id, qty in qty_map.items()}
+
+
+async def returned_qty_by_purchase_receipt_item_ids(
+    tenant_id: int,
+    purchase_receipt_item_ids: List[int],
+) -> Dict[int, float]:
+    """按采购入库明细统计已退货数量（含待退货，占用可退余量；作废退货单不计）。"""
+    from apps.kuaizhizao.models.purchase_return import PurchaseReturn
+    from apps.kuaizhizao.models.purchase_return_item import PurchaseReturnItem
+
+    ids = [int(i) for i in purchase_receipt_item_ids if int(i) > 0]
+    if not ids:
+        return {}
+
+    return_items = await PurchaseReturnItem.filter(
+        tenant_id=tenant_id,
+        purchase_receipt_item_id__in=ids,
+    ).all()
+    if not return_items:
+        return {i: 0.0 for i in ids}
+
+    return_ids = list({int(ri.return_id) for ri in return_items if ri.return_id})
+    eligible_return_ids: set[int] = set()
+    if return_ids:
+        headers = await PurchaseReturn.filter(
+            tenant_id=tenant_id,
+            id__in=return_ids,
+            deleted_at__isnull=True,
+        ).all()
+        for header in headers:
+            status = str(header.status or "").strip()
+            if status in _PURCHASE_RETURN_VOID_STATUSES:
+                continue
+            eligible_return_ids.add(int(header.id))
+
+    totals: Dict[int, float] = {i: 0.0 for i in ids}
+    for ri in return_items:
+        if int(ri.return_id) not in eligible_return_ids:
+            continue
+        item_id = int(ri.purchase_receipt_item_id or 0)
+        if item_id not in totals:
+            continue
+        totals[item_id] = totals.get(item_id, 0.0) + float(ri.return_quantity or 0)
+    return totals

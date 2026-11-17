@@ -56,6 +56,34 @@ export type DocumentDualQuantityValue = {
   unit_conversion_rate?: number | null;
 };
 
+/**
+ * 单据行主数量只接受有限数字。
+ * 选料回写若把 `{ quantity }` 整包写进行字段，输入框会显示 [object Object]。
+ */
+export function coerceDocumentLineQuantity(raw: unknown): number | undefined {
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : undefined;
+  if (typeof raw === 'string') {
+    const text = raw.trim();
+    if (!text) return undefined;
+    const n = Number(text);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  if (raw && typeof raw === 'object') {
+    const stamp = (raw as { $d?: unknown }).$d;
+    if (stamp instanceof Date && !Number.isNaN(stamp.getTime())) {
+      return stamp.getTime();
+    }
+    const marker = (raw as { __draftDayjs?: unknown }).__draftDayjs;
+    if (typeof marker === 'string') {
+      const parsed = Date.parse(marker);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    }
+    const inner = (raw as { quantity?: unknown }).quantity;
+    if (inner !== undefined && inner !== raw) return coerceDocumentLineQuantity(inner);
+  }
+  return undefined;
+}
+
 export function resolveAuxUnitForScenario(
   material: MaterialLike | null | undefined,
   scenario: MaterialScenario,

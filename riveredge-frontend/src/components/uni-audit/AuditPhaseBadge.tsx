@@ -34,6 +34,7 @@ export interface AuditPhaseRecord {
 
 const PHASE_I18N: Record<string, string> = {
   draft: 'components.uniAudit.phaseDraft',
+  submitted: 'components.uniAudit.phaseSubmitted',
   pending: 'components.uniAudit.phasePending',
   approved: 'components.uniAudit.phaseApproved',
   rejected: 'components.uniAudit.phaseRejected',
@@ -42,6 +43,7 @@ const PHASE_I18N: Record<string, string> = {
 
 const PHASE_FALLBACK: Record<string, string> = {
   draft: '草稿',
+  submitted: '已提交',
   pending: '待审核',
   approved: '已通过',
   rejected: '已驳回',

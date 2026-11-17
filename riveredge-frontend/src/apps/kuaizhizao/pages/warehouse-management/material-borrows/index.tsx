@@ -31,6 +31,13 @@ import { getMaterialBorrowLifecycle } from '../../../utils/materialBorrowLifecyc
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
@@ -59,7 +66,13 @@ import {
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
-import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
+import {
+  enrichStandaloneDocsWithDetail,
+  exportWarehouseDocLinesXlsx,
+  filterWarehouseFlatRowsByExportKeys,
+  flattenStandaloneWarehouseDocsForExport,
+  resolveWarehouseListExportHeaders,
+} from '../shared/warehouseDocListExport';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 interface MaterialBorrow {
   id?: number;
@@ -99,6 +112,8 @@ interface MaterialBorrowItem {
   status?: string;
 }
 
+const MATERIAL_BORROW_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_material_borrows';
+
 const MATERIAL_BORROW_STATUS_I18N: Record<string, string> = {
   '待借出': 'app.kuaizhizao.materialBorrow.status.pending',
   '已借出': 'app.kuaizhizao.materialBorrow.status.borrowed',
@@ -133,6 +148,29 @@ const MaterialBorrowsPage: React.FC = () => {
   const [syncModalVisible, setSyncModalVisible] = useState(false);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const formRef = useRef<any>(null);
+
+  const {
+    customFields: materialBorrowFormCustomFields,
+    customFieldValues: materialBorrowFormCustomFieldValues,
+    extractFormValues: extractMaterialBorrowFormValues,
+    saveCustomFieldValues: saveMaterialBorrowCustomFieldValues,
+    resetFieldValues: resetMaterialBorrowFormFieldValues,
+  } = useCustomFields({
+    tableName: MATERIAL_BORROW_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open: createModalVisible,
+  });
+
+  const {
+    customFields: materialBorrowListCustomFields,
+    generateCustomFieldColumns: generateMaterialBorrowCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichMaterialBorrowRecordsWithCustomFields,
+    customFieldValues: materialBorrowDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadMaterialBorrowFieldValuesForDetail,
+    resetDetailFieldValues: resetMaterialBorrowDetailFieldValues,
+  } = useCustomFieldsForList<MaterialBorrow>({ tableName: MATERIAL_BORROW_CUSTOM_FIELD_TABLE });
+
+  const materialBorrowCustomFieldColumns = generateMaterialBorrowCustomFieldColumns();
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<Array<{ label: string; value: string }>>([]);
   const {
@@ -315,6 +353,7 @@ const MaterialBorrowsPage: React.FC = () => {
       render: (_, r) => (r.borrow_time ? formatDateTime(r.borrow_time) : '-'),
     },
     ...buildDocumentAuditColumns<Record<string, unknown>>(t),
+    ...materialBorrowCustomFieldColumns,
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.lifecycle'),
       dataIndex: 'lifecycle_stage',
@@ -371,23 +410,25 @@ const MaterialBorrowsPage: React.FC = () => {
         );
       },
     },
-  ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, materialBorrowStatusValueEnum]);
+  ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, materialBorrowStatusValueEnum, materialBorrowCustomFieldColumns]);
 
   const handleDetail = useCallback(async (record: MaterialBorrow) => {
     if (record.id == null) return;
     setDetailDrawerVisible(true);
     setDetailLoading(true);
     setBorrowDetail(null);
+    resetMaterialBorrowDetailFieldValues();
     try {
       const detail = await warehouseApi.materialBorrow.get(record.id.toString());
       setBorrowDetail(detail as MaterialBorrowDetail);
+      await loadMaterialBorrowFieldValuesForDetail(record.id);
     } catch {
       messageApi.error(t('app.kuaizhizao.materialBorrow.msg.loadDetailFailed'));
       setDetailDrawerVisible(false);
     } finally {
       setDetailLoading(false);
     }
-  }, [messageApi, t]);
+  }, [loadMaterialBorrowFieldValuesForDetail, messageApi, resetMaterialBorrowDetailFieldValues, t]);
 
   useEffect(() => {
     const idRaw = searchParams.get('id')?.trim();
@@ -546,6 +587,7 @@ const MaterialBorrowsPage: React.FC = () => {
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
     resetSelectedWarehouseId();
+    resetMaterialBorrowFormFieldValues();
     setCreateModalVisible(true);
     // FormModalTemplate 设置了 destroyOnHidden，ProForm 每次打开都是全新挂载，无需 setTimeout + resetFields
   };
@@ -557,23 +599,24 @@ const MaterialBorrowsPage: React.FC = () => {
 
   const handleCreateSubmit = async (values: any) => {
     try {
-      const validItems = (values.items ?? []).filter((it: any) => it.material_id && (Number(it.borrow_quantity) || 0) > 0);
+      const { standardValues, customData } = extractMaterialBorrowFormValues(values);
+      const validItems = (standardValues.items ?? []).filter((it: any) => it.material_id && (Number(it.borrow_quantity) || 0) > 0);
       if (!validItems.length) {
         messageApi.error(t('app.kuaizhizao.materialBorrow.msg.needValidLines'));
         throw new Error(t('app.kuaizhizao.materialBorrow.msg.needValidLinesRule'));
       }
-      const wh = warehouseList.find((w: any) => (w.id ?? w.warehouse_id) === values.warehouse_id);
-      const warehouseName = values.warehouse_name ?? wh?.name ?? wh?.warehouse_name ?? '';
-      await warehouseApi.materialBorrow.create({
-        borrow_code: values.borrow_code,
-        warehouse_id: values.warehouse_id,
+      const wh = warehouseList.find((w: any) => (w.id ?? w.warehouse_id) === standardValues.warehouse_id);
+      const warehouseName = standardValues.warehouse_name ?? wh?.name ?? wh?.warehouse_name ?? '';
+      const created = await warehouseApi.materialBorrow.create({
+        borrow_code: standardValues.borrow_code,
+        warehouse_id: standardValues.warehouse_id,
         warehouse_name: warehouseName,
-        borrower_id: values.borrower_id != null ? Number(values.borrower_id) : undefined,
-        borrower_name: values.borrower_name,
-        department: values.department,
-        expected_return_date: values.expected_return_date ? formatDateTime(values.expected_return_date, 'YYYY-MM-DD') : undefined,
-        notes: values.notes,
-        attachments: normalizeDocumentAttachments(values.attachments),
+        borrower_id: standardValues.borrower_id != null ? Number(standardValues.borrower_id) : undefined,
+        borrower_name: standardValues.borrower_name,
+        department: standardValues.department,
+        expected_return_date: standardValues.expected_return_date ? formatDateTime(standardValues.expected_return_date, 'YYYY-MM-DD') : undefined,
+        notes: standardValues.notes,
+        attachments: normalizeDocumentAttachments(standardValues.attachments),
         items: validItems.map((it: any) => ({
           material_id: it.material_id,
           material_code: it.material_code || '',
@@ -581,12 +624,17 @@ const MaterialBorrowsPage: React.FC = () => {
           material_unit: it.material_unit || '',
           location_code: it.location_code || undefined,
           borrow_quantity: Number(it.borrow_quantity) || 0,
-          warehouse_id: values.warehouse_id,
+          warehouse_id: standardValues.warehouse_id,
           warehouse_name: warehouseName,
         })),
       });
+      const recordId = Number((created as { id?: number })?.id ?? 0);
+      if (recordId > 0) {
+        await saveMaterialBorrowCustomFieldValues(recordId, customData);
+      }
       messageApi.success(t('common.createSuccess'));
       resetSelectedWarehouseId();
+      resetMaterialBorrowFormFieldValues();
       setCreateModalVisible(false);
       invalidateMenuBadgeCounts();
 
@@ -647,7 +695,7 @@ const MaterialBorrowsPage: React.FC = () => {
           headerTitle={t('app.kuaizhizao.materialBorrow.title')}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.materialBorrow)}
-          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.material-borrows-width-v3"
+          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.material-borrows-width-v4"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -668,6 +716,7 @@ const MaterialBorrowsPage: React.FC = () => {
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
+          deleteButtonText={t('common.delete')}
           rowSelectionGetCheckboxProps={(record) => ({
             disabled: !isMaterialBorrowDeletable(record) && !isMaterialBorrowPrintable(record),
           })}
@@ -682,28 +731,57 @@ const MaterialBorrowsPage: React.FC = () => {
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
-              let items = (type === 'currentPage' ? (pageData ?? []) : await fetchAllListItems((p) => warehouseApi.materialBorrow.list(p)));
-              if (type === 'currentPage' && pageData?.length) {
-                items = pageData;
-              } else if (type === 'selected' && keys?.length) {
-                items = rawData.filter((d: MaterialBorrow) => d.id != null && keys.map(String).includes(String(d.id)));
-              }
-              if (items.length === 0) {
+              const loadAll = async () => {
+                const listParams = resolveWarehouseDocListParams({}, undefined, {
+                  docDateParamPrefix: 'borrow',
+                });
+                const rows = await fetchAllListItems((p) =>
+                  warehouseApi.materialBorrow.list({ ...listParams, ...p }),
+                );
+                return enrichMaterialBorrowRecordsWithCustomFields(rows);
+              };
+              const headers = await resolveWarehouseListExportHeaders(
+                type,
+                keys,
+                pageData as MaterialBorrow[] | undefined,
+                listRowsRef.current,
+                loadAll,
+              );
+              if (headers.length === 0) {
                 messageApi.warning(t('common.exportNoData'));
                 return;
               }
-              await downloadRecordsAsXlsx(
-                items as Array<Record<string, unknown>>,
-                `material-borrows-${todaySiteDateString()}.xlsx`,
+              const enriched = await enrichStandaloneDocsWithDetail(headers, (id) =>
+                warehouseApi.materialBorrow.get(String(id)),
               );
-              messageApi.success(t('app.kuaizhizao.materialBorrow.msg.exportSuccess', { count: items.length }));
-            } catch (error: any) {
-              messageApi.error(error?.message || t('common.exportFailed'));
+              let flatRows = flattenStandaloneWarehouseDocsForExport(enriched, {
+                docCodeField: 'borrow_code',
+                docTypeLabel: t('app.kuaizhizao.warehouseOutbound.type.materialBorrow'),
+                partnerField: 'borrower_name',
+                dateFields: ['borrow_time'],
+                operatorFields: ['borrower_name'],
+              });
+              if (type === 'selected' && keys?.length) {
+                flatRows = filterWarehouseFlatRowsByExportKeys(flatRows, keys);
+              }
+              await exportWarehouseDocLinesXlsx(
+                flatRows,
+                `material-borrow-lines-${todaySiteDateString()}.xlsx`,
+                {
+                  t,
+                  sheetName: t('app.kuaizhizao.materialBorrow.title'),
+                  includeDocTypeColumn: false,
+                  direction: 'standalone',
+                },
+              );
+              messageApi.success(t('common.exportSuccess', { count: flatRows.length }));
+            } catch (error: unknown) {
+              messageApi.error((error as { message?: string })?.message || t('common.exportFailed'));
             }
           }}
           showSyncButton
           onSync={() => setSyncModalVisible(true)}
-          request={async (params, sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues, meta) => {
             try {
               const listParams = resolveWarehouseDocListParams(searchFormValues, sort, {
                 docDateParamPrefix: 'borrow',
@@ -713,7 +791,10 @@ const MaterialBorrowsPage: React.FC = () => {
                 limit: params.pageSize || 20,
                 ...listParams,
               });
-              const { data, total } = normalizeWarehouseListResponse(response);
+              const { data: raw, total } = normalizeWarehouseListResponse(response);
+              const data = meta?.purpose === 'prefetch'
+                ? raw
+                : await enrichMaterialBorrowRecordsWithCustomFields(raw);
               return { data, success: true, total };
             } catch {
               messageApi.error(t('app.kuaizhizao.materialBorrow.msg.loadListFailed'));
@@ -734,7 +815,11 @@ const MaterialBorrowsPage: React.FC = () => {
         title={`${t('app.kuaizhizao.materialBorrow.detailTitle')}${borrowDetail?.borrow_code ? ` - ${borrowDetail.borrow_code}` : ''}`}
         open={detailDrawerVisible}
         loading={detailLoading}
-        onClose={() => { setDetailDrawerVisible(false); setBorrowDetail(null); }}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setBorrowDetail(null);
+          resetMaterialBorrowDetailFieldValues();
+        }}
         size={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           borrowDetail ? (
@@ -742,6 +827,15 @@ const MaterialBorrowsPage: React.FC = () => {
           ) : undefined
         }
         collaboration={detailCollaboration}
+        supplementary={
+          borrowDetail &&
+          hasCustomFieldsDetailContent(materialBorrowListCustomFields, materialBorrowDetailCustomFieldValues) ? (
+            <CustomFieldsDetailSection
+              customFields={materialBorrowListCustomFields}
+              customFieldValues={materialBorrowDetailCustomFieldValues}
+            />
+          ) : undefined
+        }
         linesTitle={t('app.kuaizhizao.warehouseOutbound.section.lines')}
         lines={
           borrowDetail?.items && borrowDetail.items.length > 0 ? (
@@ -773,6 +867,7 @@ const MaterialBorrowsPage: React.FC = () => {
         open={createModalVisible}
         onClose={() => {
           resetSelectedWarehouseId();
+          resetMaterialBorrowFormFieldValues();
           setCreateModalVisible(false);
         }}
         formRef={formRef}
@@ -1023,6 +1118,11 @@ const MaterialBorrowsPage: React.FC = () => {
             </AntForm.List>
           </AntForm.Item>
         </div>
+        <CustomFieldsFormSection
+          customFields={materialBorrowFormCustomFields}
+          customFieldValues={materialBorrowFormCustomFieldValues}
+          gridColumns={2}
+        />
         <DocumentAttachmentsField category="material_borrow_attachments" />
         <ProFormTextArea name="notes" label={t('common.remark')} placeholder={t('app.kuaizhizao.warehouseOutbound.field.optional')} fieldProps={{ rows: 2 }} />
       </FormModalTemplate>

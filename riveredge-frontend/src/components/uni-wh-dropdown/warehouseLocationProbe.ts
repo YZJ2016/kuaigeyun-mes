@@ -47,3 +47,20 @@ export async function lineLocationSelectionRequired(
   if (Number.isFinite(lid) && lid > 0) return false;
   return !String(locationCode || '').trim();
 }
+
+/** 与主数据 `find_first_storage_location_for_warehouse` 一致：取仓下最小 id 的可用库位。 */
+export async function resolveFirstStorageLocationForWarehouse(
+  warehouseId: number,
+): Promise<{ id: number; code: string } | null> {
+  const wid = Number(warehouseId);
+  if (!(wid > 0)) return null;
+  const opts = await fetchStorageLocationsForWarehouse(wid);
+  if (!opts.length) return null;
+  let best = opts[0];
+  for (const o of opts) {
+    if (o.value < best.value) best = o;
+  }
+  const code = String(best.code || '').trim();
+  if (!code) return null;
+  return { id: best.value, code };
+}

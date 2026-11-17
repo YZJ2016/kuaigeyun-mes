@@ -2,6 +2,7 @@
  * 销售/采购退货列表批量导入：表头 + 明细行合并。
  */
 import type { TFunction } from 'i18next';
+import { computeSimpleDocumentLineTotal } from '../../utils/documentLineAmounts';
 
 import type { Material } from '../../../master-data/types/material';
 import { findMaterialByImportCode } from '../../../master-data/utils/materialImportResolve';
@@ -378,7 +379,7 @@ export function parseDocumentReturnListImport(
       (mat as any).base_unit ||
       defaultUnit;
     const unitPrice = idx.price >= 0 ? Number(row[idx.price]) || 0 : 0;
-    const total = Number((qty * unitPrice).toFixed(2));
+    const total = computeSimpleDocumentLineTotal(qty, unitPrice);
     g.items.push({
       material_id: Number(mat.id),
       material_code: (mat as any).mainCode || (mat as any).code || materialCode,

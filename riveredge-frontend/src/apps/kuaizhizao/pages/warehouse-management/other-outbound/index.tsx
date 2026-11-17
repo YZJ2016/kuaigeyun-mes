@@ -10,6 +10,10 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useToolbarSyncPushFlags } from '../../../../../hooks/useToolbarSyncPushFlags';
+import { SyncPushHubButton } from '../../../../../components/sync-push-hub';
+import OtherOutboundDocumentPushPanel from './OtherOutboundDocumentPushPanel';
+import { readExternalWithdrawMessage } from '../shared/externalWithdrawMessage';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
@@ -18,32 +22,80 @@ import {
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import { useNavigate } from 'react-router-dom';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, Row, Col, Select, Typography, Descriptions } from 'antd';
-import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ShoppingOutlined } from '@ant-design/icons';
+import {
+  ActionType,
+  ProColumns,
+  ProDescriptionsItemProps,
+  ProFormDatePicker,
+  ProFormItem,
+  ProFormTextArea,
+  type ProFormInstance,
+} from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Table, Form as AntForm, Input, Row, Col, Select, Typography, Descriptions } from 'antd';
+import { UniInputNumber } from '../../../../../components/uni-input-number/UniInputNumber';
+import { CheckCircleOutlined, PlusOutlined, RollbackOutlined, ShoppingOutlined } from '@ant-design/icons';
+import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
+import { runOutboundHubConfirmFromRecord, formatOutboundConfirmError } from '../outbound/outboundHubRunConfirm';
+import { isOutboundEditable } from '../outbound/outboundHubTypes';
+import {
+  isMaterialBatchEntryEnabled,
+  useWarehouseTrackingFlags,
+} from '../shared/warehouseTrackingFlags';
+import { materialApi } from '../../../../master-data/services/material';
+import {
+  loadBatchOptionsByMaterialId,
+  type InventoryPickOption,
+} from '../outbound/outboundConfirmInventoryOptions';
+import OutboundBatchAllocationField from '../outbound/OutboundBatchAllocationField';
+import {
+  isValidOutboundBatchAllocations,
+  lineBatchAllocationsFromRow,
+  syncFormLineBatchFields,
+} from '../outbound/outboundBatchAllocation';
+import { getPopupContainerInModal } from '../../../../../utils/modalEventIsolation';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
-import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
-import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
+import { fetchBatchMaterialInventory } from '../../../../../components/uni-material-batch-picker/utils';
+import { buildDocumentLineDualQuantityPairColumns } from '../../../../../components/quantity-with-unit';
+import {
+  pickDocumentLineDualQuantityFields,
+  validateDualQuantityBeforeSave,
+} from '../../../../../utils/materialDualQuantity';
 import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import type { Material } from '../../../../master-data/types/material';
-import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
-import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
+import {
+  UniWhDropdown,
+  UniWhLocationDropdown,
+  useWarehouseHasLocations,
+  lineLocationSelectionRequired,
+} from '../../../../../components/uni-wh-dropdown';
+import { UniTableDetail } from '../../../../../components/uni-table-detail';
+import {
+  DocumentDetailTableStyles,
+  DOCUMENT_DETAIL_COL_WIDTH,
+  DOCUMENT_DETAIL_CONTROL_SIZE,
+  DOCUMENT_DETAIL_NUM_COL,
+  DOCUMENT_DETAIL_TABLE_PROPS,
+  DOCUMENT_DETAIL_TEXT_COL,
+} from '../../../components/document-detail-table/documentDetailTable';
 import CodeField from '../../../../../components/code-field';
 import { MaterialUnitLabel } from '../../../../../components/material-unit-label';
 import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import {   useDetailDrawerDescriptionItems, detailDrawerBasicColumn, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getOtherOutboundLifecycle } from '../../../utils/otherOutboundLifecycle';
+import { computeSimpleDocumentLineTotal } from '../../../utils/documentLineAmounts';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import dayjs from 'dayjs';
-import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import { useTranslation } from 'react-i18next';
 import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
-import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import {
+  buildDocumentDetailSpecModelFormColumns,
+  withMaterialLineFillMapping,
+} from '../../sales-management/shared/materialLineFormDetail';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
@@ -51,11 +103,20 @@ import { renderWarehouseReasonTypeMarkerTag } from '../shared/warehouseMarkerTag
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
-import { formatDateTime, formatQuantity } from '../../../../../utils/format';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formatBusinessDateOnly, formatDateTime, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import {
+  enrichStandaloneDocsWithDetail,
+  exportWarehouseDocLinesXlsx,
+  filterWarehouseFlatRowsByExportKeys,
+  flattenStandaloneWarehouseDocsForExport,
+  resolveWarehouseListExportHeaders,
+} from '../shared/warehouseDocListExport';
+import { formDateRangeFormItemProps, toApiDateString } from '../../../../../utils/formDate';
 import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import {
   DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
@@ -69,18 +130,183 @@ import {
 } from '../../../utils/warehouseListCore';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { loadAvailableQtyByMaterialId } from '../outbound/outboundConfirmInventoryOptions';
+import {
+  mapOtherOutboundReasonTypeOptions,
+  translateOtherOutboundReasonTypeLabel,
+} from './otherOutboundReasonTypeLabels';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
+import { searchUserDisplay } from '../../../../../services/user';
+import type { User } from '../../../../../services/user';
+import {
+  displayItemsToUsers,
+  formatUserDisplayLabel,
+  normalizeUserDisplayName,
+} from '../../../../../utils/userDisplay';
+import {
+  getDepartmentTree,
+  type DepartmentTreeItem,
+} from '../../../../../services/department';
+import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
+import type { Customer } from '../../../../master-data/types/supply-chain';
 
-/** 明细物料 ID 指纹：仅物料变化时触发库存重拉，忽略数量改动 */
-function otherOutboundMaterialIdsKey(items: unknown): string {
+const OTHER_OUTBOUND_HOST_RESOURCE = 'kuaizhizao:other-outbound';
+
+/** 明细物料+仓库指纹：触发按行仓库存重拉 */
+function otherOutboundStockFingerprint(items: unknown): string {
   if (!Array.isArray(items)) return '';
-  const ids = [
+  return [
     ...new Set(
       items
-        .map((it) => Number((it as { material_id?: unknown })?.material_id))
-        .filter((id) => Number.isFinite(id) && id > 0),
+        .map((raw) => {
+          const it = raw as { material_id?: unknown; warehouse_id?: unknown };
+          const mid = Number(it?.material_id);
+          const wh = Number(it?.warehouse_id);
+          if (!(mid > 0)) return '';
+          return wh > 0 ? `${mid}:${wh}` : `${mid}:`;
+        })
+        .filter(Boolean),
     ),
-  ].sort((a, b) => a - b);
-  return ids.join(',');
+  ]
+    .sort()
+    .join(',');
+}
+
+function resolvePrimaryDefaultWarehouse(material: Material): { id: number; name: string } | null {
+  const wh = material.defaultWarehouse ?? (material as { default_warehouse?: { id?: number; name?: string } }).default_warehouse;
+  if (wh && typeof wh === 'object' && 'id' in wh && wh.id) {
+    return { id: Number(wh.id), name: String((wh as { name?: string }).name ?? '') };
+  }
+  return null;
+}
+
+function OtherOutboundCreateWarehouseCell({
+  index,
+  clearLineWarehouseDependents,
+  ensureBatchOptions,
+  formRef,
+  t,
+}: {
+  index: number;
+  clearLineWarehouseDependents: (index: number) => void;
+  ensureBatchOptions: (materialId: number, warehouseId: number) => Promise<void>;
+  formRef: React.MutableRefObject<ProFormInstance | undefined>;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+}) {
+  const materialId = Number(AntForm.useWatch(['items', index, 'material_id']) || 0);
+  return (
+    <div>
+      <AntForm.Item name={[index, 'warehouse_name']} hidden>
+        <Input />
+      </AntForm.Item>
+      <AntForm.Item
+        name={[index, 'warehouse_id']}
+        rules={[
+          {
+            required: true,
+            message: t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse'),
+          },
+        ]}
+        noStyle
+      >
+        <UniWhDropdown
+          size={DOCUMENT_DETAIL_CONTROL_SIZE}
+          hostResource={OTHER_OUTBOUND_HOST_RESOURCE}
+          materialId={materialId > 0 ? materialId : undefined}
+          showStock={materialId > 0}
+          sortByStock={materialId > 0}
+          placeholder={t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse')}
+          getPopupContainer={getPopupContainerInModal}
+          onChange={(_id, wh) => {
+            clearLineWarehouseDependents(index);
+            const whId = Number(wh?.id ?? _id ?? 0);
+            formRef.current?.setFieldValue(['items', index, 'warehouse_name'], wh?.name ?? '');
+            if (whId > 0) {
+              const mid = Number(
+                formRef.current?.getFieldValue(['items', index, 'material_id']) || 0,
+              );
+              const batchManaged = !!formRef.current?.getFieldValue([
+                'items',
+                index,
+                'batch_managed',
+              ]);
+              if (mid > 0 && batchManaged) {
+                void ensureBatchOptions(mid, whId);
+              }
+            }
+          }}
+        />
+      </AntForm.Item>
+    </div>
+  );
+}
+
+function OtherOutboundCreateLocationCell({
+  index,
+  formRef,
+  t,
+}: {
+  index: number;
+  formRef: React.MutableRefObject<ProFormInstance | undefined>;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+}) {
+  const materialId = Number(AntForm.useWatch(['items', index, 'material_id']) || 0);
+  const warehouseId = Number(AntForm.useWatch(['items', index, 'warehouse_id']) || 0);
+  const hasLocations = useWarehouseHasLocations(warehouseId > 0 ? warehouseId : undefined);
+
+  return (
+    <>
+      <AntForm.Item name={[index, 'location_code']} hidden>
+        <Input />
+      </AntForm.Item>
+      {hasLocations === false ? (
+        <>
+          <AntForm.Item name={[index, 'location_id']} hidden>
+            <Input />
+          </AntForm.Item>
+          <span className="uni-wh-whole-location-auto">
+            {t('app.kuaizhizao.warehouseOutbound.pull.wholeLocationAuto')}
+          </span>
+        </>
+      ) : (
+        <AntForm.Item
+          name={[index, 'location_id']}
+          rules={[
+            {
+              validator: async (_, value) => {
+                if (!(warehouseId > 0)) return;
+                const code = formRef.current?.getFieldValue(['items', index, 'location_code']);
+                const need = await lineLocationSelectionRequired(warehouseId, value, code);
+                if (need) {
+                  throw new Error(t('app.kuaizhizao.warehouseOutbound.msg.selectLocation'));
+                }
+              },
+            },
+          ]}
+          noStyle
+        >
+          <UniWhLocationDropdown
+            warehouseId={warehouseId > 0 ? warehouseId : undefined}
+            materialId={materialId > 0 ? materialId : undefined}
+            hostResource={OTHER_OUTBOUND_HOST_RESOURCE}
+            showStock={materialId > 0}
+            sortByStock={materialId > 0}
+            allowClear={false}
+            size={DOCUMENT_DETAIL_CONTROL_SIZE}
+            getPopupContainer={getPopupContainerInModal}
+            disabled={!(warehouseId > 0) || hasLocations === undefined}
+            placeholder={
+              warehouseId > 0
+                ? t('app.kuaizhizao.warehouseOutbound.col.location')
+                : t('app.kuaizhizao.warehouseOutbound.field.selectWarehouseFirst')
+            }
+            onChange={(_value, loc) => {
+              formRef.current?.setFieldValue(['items', index, 'location_code'], loc?.code ?? '');
+            }}
+          />
+        </AntForm.Item>
+      )}
+    </>
+  );
 }
 
 const REASON_TYPES_FALLBACK = [
@@ -89,29 +315,6 @@ const REASON_TYPES_FALLBACK = [
   { value: '报废', label: '报废' },
   { value: '其他', label: '其他' },
 ];
-
-const REASON_TYPE_I18N: Record<string, string> = {
-  '盘亏': 'app.kuaizhizao.otherOutbound.reason.loss',
-  '样品': 'app.kuaizhizao.otherOutbound.reason.sample',
-  '报废': 'app.kuaizhizao.otherOutbound.reason.scrap',
-  '其他': 'app.kuaizhizao.otherOutbound.reason.other',
-};
-
-function translateReasonTypeLabel(t: (key: string) => string, value: string | undefined): string {
-  if (!value) return '-';
-  const key = REASON_TYPE_I18N[value];
-  return key ? t(key) : value;
-}
-
-function mapReasonTypeOptions(
-  items: Array<{ label: string; value: string }>,
-  t: (key: string) => string,
-): Array<{ label: string; value: string }> {
-  return items.map(({ value, label }) => ({
-    value,
-    label: REASON_TYPE_I18N[value] ? t(REASON_TYPE_I18N[value]) : label,
-  }));
-}
 
 interface OtherOutbound {
   id?: number;
@@ -147,6 +350,9 @@ interface OtherOutboundItem {
   material_name?: string;
   material_spec?: string;
   material_unit?: string;
+  warehouse_id?: number;
+  warehouse_name?: string;
+  location_id?: number;
   location_code?: string;
   outbound_quantity?: number;
   unit_price?: number;
@@ -157,8 +363,117 @@ interface OtherOutboundItem {
 
 const OTHER_OUTBOUND_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_other_outbounds';
 
+function flattenDepartmentTree(items: DepartmentTreeItem[]): DepartmentTreeItem[] {
+  const out: DepartmentTreeItem[] = [];
+  const walk = (nodes: DepartmentTreeItem[]) => {
+    for (const node of nodes) {
+      out.push(node);
+      if (node.children?.length) walk(node.children);
+    }
+  };
+  walk(items);
+  return out;
+}
+
+function OtherOutboundUserPickField({
+  name,
+  nameField,
+  label,
+  placeholder,
+  required,
+  userList,
+  loading,
+  operatorNumberField,
+  departmentOptions,
+}: {
+  name: string;
+  nameField: string;
+  label: string;
+  placeholder: string;
+  required?: boolean;
+  userList: User[];
+  loading: boolean;
+  operatorNumberField?: string;
+  departmentOptions?: Array<{ value: number; label: string; code?: string }>;
+}) {
+  const form = AntForm.useFormInstance();
+  const pickedId = AntForm.useWatch(name, form);
+  const pickedName = AntForm.useWatch(nameField, form);
+  const options = useMemo(() => {
+    const base = userList.map((u) => ({
+      value: Number(u.id),
+      label: formatUserDisplayLabel(u),
+    }));
+    const bid =
+      pickedId != null && pickedId !== '' && Number.isFinite(Number(pickedId))
+        ? Number(pickedId)
+        : NaN;
+    if (Number.isFinite(bid) && !base.some((o) => o.value === bid)) {
+      const labelText = normalizeUserDisplayName(pickedName) || String(bid);
+      return [{ value: bid, label: labelText }, ...base];
+    }
+    return base;
+  }, [pickedId, pickedName, userList]);
+
+  return (
+    <>
+      <ProFormItem
+        name={name}
+        label={label}
+        rules={required ? [{ required: true, message: placeholder }] : undefined}
+        normalize={(v) =>
+          v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : undefined
+        }
+      >
+        <UniDropdown
+          placeholder={placeholder}
+          showSearch
+          allowClear={!required}
+          loading={loading}
+          style={{ width: '100%' }}
+          options={options}
+          onChange={(val, opt: { label?: React.ReactNode } | undefined) => {
+            const patch: Record<string, unknown> = {
+              [nameField]: typeof opt?.label === 'string' ? opt.label : undefined,
+            };
+            const uid =
+              val != null && val !== '' && Number.isFinite(Number(val)) ? Number(val) : NaN;
+            const picked = Number.isFinite(uid) ? userList.find((u) => Number(u.id) === uid) : undefined;
+            if (operatorNumberField) {
+              const emp = picked?.employee_number?.trim();
+              patch[operatorNumberField] = emp || undefined;
+            }
+            if (departmentOptions?.length && picked?.department?.code) {
+              const hasDept = form.getFieldValue('pick_department_id');
+              if (hasDept == null || hasDept === '') {
+                const row = departmentOptions.find((d) => d.code === picked.department?.code);
+                if (row) {
+                  patch.pick_department_id = row.value;
+                  patch.pick_department_code = row.code;
+                  patch.pick_department_name = row.label.includes(' - ')
+                    ? row.label.split(' - ').slice(1).join(' - ').trim()
+                    : row.label;
+                }
+              }
+            }
+            form.setFieldsValue(patch);
+          }}
+        />
+      </ProFormItem>
+      <AntForm.Item name={nameField} hidden>
+        <Input />
+      </AntForm.Item>
+    </>
+  );
+}
+
 const OtherOutboundPage: React.FC = () => {
   const { t } = useTranslation();
+  const otherOutboundAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<Record<string, unknown>>({ t }),
+    [t],
+  );
+  const currentUser = useCurrentUser();
   const { quantity: quantityDecimals, price: priceDecimals } = useNumericPrecision();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const navigate = useNavigate();
@@ -167,9 +482,13 @@ const OtherOutboundPage: React.FC = () => {
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const outboundPerms = useResourcePermissions('kuaizhizao:other-outbound');
+  const toolbarSyncPush = useToolbarSyncPushFlags('kuaizhizao:other-outbound');
   const canConfirmOutbound = outboundPerms.canAction?.('execute') ?? false;
   const canRevokeOutbound = outboundPerms.canAction?.('revoke') ?? false;
   const canDeleteOutbound = outboundPerms.canDelete ?? false;
+  const canUpdateOutbound = outboundPerms.canUpdate ?? false;
+  const [editingOutboundId, setEditingOutboundId] = useState<number | null>(null);
+  const [editingOutboundCode, setEditingOutboundCode] = useState<string>('');
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [outboundDetail, setOutboundDetail] = useState<OtherOutboundDetail | null>(null);
@@ -177,6 +496,8 @@ const OtherOutboundPage: React.FC = () => {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const formRef = useRef<any>(null);
+  /** 编辑灌数时的行 id 快照；Form.List 未注册字段会在改库位等操作后从 onFinish values 丢失 */
+  const editLineIdsRef = useRef<number[]>([]);
 
   const {
     customFields: otherOutboundFormCustomFields,
@@ -184,6 +505,7 @@ const OtherOutboundPage: React.FC = () => {
     extractFormValues: extractOtherOutboundFormValues,
     saveCustomFieldValues: saveOtherOutboundCustomFieldValues,
     resetFieldValues: resetOtherOutboundFormFieldValues,
+    loadFieldValues: loadOtherOutboundFormFieldValues,
   } = useCustomFields({
     tableName: OTHER_OUTBOUND_CUSTOM_FIELD_TABLE,
     loadWhenOpen: true,
@@ -198,82 +520,252 @@ const OtherOutboundPage: React.FC = () => {
     loadFieldValuesForDetail: loadOtherOutboundFieldValuesForDetail,
     resetDetailFieldValues: resetOtherOutboundDetailFieldValues,
   } = useCustomFieldsForList<OtherOutbound>({ tableName: OTHER_OUTBOUND_CUSTOM_FIELD_TABLE });
-  const [warehouseList, setWarehouseList] = useState<any[]>([]);
-  const {
-    selectedWarehouseId,
-    locationOptions,
-    updateSelectedWarehouseId,
-    resetSelectedWarehouseId,
-  } = useWarehouseLocationOptions();
   const [reasonTypeOptions, setReasonTypeOptions] = useState<Array<{ label: string; value: string }>>([]);
-  /** 表头仓库下明细物料可出库库存（自购在库，与确认出库扣减口径一致） */
-  const [stockByMaterialId, setStockByMaterialId] = useState<Record<number, number>>({});
+  /** 按「物料:仓库」键的可出库库存（自购在库，与确认出库扣减口径一致） */
+  const [stockByKey, setStockByKey] = useState<Record<string, number>>({});
   const [stockLoading, setStockLoading] = useState(false);
-  const [lineMaterialKey, setLineMaterialKey] = useState('');
+  const [lineStockKey, setLineStockKey] = useState('');
+  const trackingFlags = useWarehouseTrackingFlags();
+  const [batchOptionsByKey, setBatchOptionsByKey] = useState<Record<string, InventoryPickOption[]>>({});
+  const [batchOptionsLoadingKey, setBatchOptionsLoadingKey] = useState<string | null>(null);
+  const [departmentOptions, setDepartmentOptions] = useState<Array<{ value: number; label: string; code?: string }>>(
+    [],
+  );
+  const [departmentsLoading, setDepartmentsLoading] = useState(false);
+  const [pickerUsers, setPickerUsers] = useState<User[]>([]);
+  const [pickerUsersLoading, setPickerUsersLoading] = useState(false);
+
+  useEffect(() => {
+    if (!createModalVisible) return;
+    let cancelled = false;
+    (async () => {
+      setDepartmentsLoading(true);
+      setPickerUsersLoading(true);
+      try {
+        const [deptRes, userRes] = await Promise.all([
+          getDepartmentTree({ is_active: true }),
+          searchUserDisplay({ page_size: 100, is_active: true }),
+        ]);
+        if (!cancelled) {
+          setDepartmentOptions(
+            flattenDepartmentTree(deptRes.items || []).map((d) => ({
+              value: d.id,
+              label: d.code ? `${d.code} - ${d.name}` : d.name,
+              code: d.code,
+            })),
+          );
+          setPickerUsers(displayItemsToUsers(userRes.items || []));
+        }
+      } catch {
+        if (!cancelled) {
+          setDepartmentOptions([]);
+          setPickerUsers([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setDepartmentsLoading(false);
+          setPickerUsersLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [createModalVisible]);
+
+  useEffect(() => {
+    if (!createModalVisible || !currentUser || editingOutboundId != null) return;
+    const id =
+      currentUser.id != null && Number(currentUser.id) > 0 ? Number(currentUser.id) : undefined;
+    const name = String(currentUser.full_name || currentUser.username || '').trim();
+    const emp = String(currentUser.employee_number ?? '').trim();
+    formRef.current?.setFieldsValue({
+      picker_id: id,
+      picker_name: name,
+      ...(emp ? { picker_operator_number: emp } : {}),
+    });
+  }, [createModalVisible, currentUser, editingOutboundId]);
 
   const defaultOutboundItem = {
     material_id: undefined,
+    material_uuid: undefined as string | undefined,
     material_code: '',
     material_name: '',
+    material_spec: '',
+    material_model: '',
     material_unit: '',
-    location_code: undefined,
+    aux_quantity: undefined as number | undefined,
+    aux_unit: undefined as string | undefined,
+    unit_conversion_rate: undefined as number | undefined,
+    warehouse_id: undefined as number | undefined,
+    warehouse_name: undefined as string | undefined,
+    location_id: undefined as number | undefined,
+    location_code: undefined as string | undefined,
+    batch_number: undefined as string | undefined,
+    batch_allocations: [] as { batchNo: string; quantity: number }[],
+    batch_managed: false,
+    batch_rule_id: undefined as string | undefined,
+    default_batch_rule_id: undefined as string | undefined,
     outbound_quantity: 1,
-    unit_price: 0,
+    // 单价选填，不自动带物料采购价/成本
+    unit_price: undefined as number | undefined,
   };
   const [reasonTypeLoading, setReasonTypeLoading] = useState(false);
 
-  const syncLineMaterialKeyFromForm = useCallback(() => {
-    setLineMaterialKey(otherOutboundMaterialIdsKey(formRef.current?.getFieldValue('items')));
+  const syncLineStockKeyFromForm = useCallback(() => {
+    setLineStockKey(otherOutboundStockFingerprint(formRef.current?.getFieldValue('items')));
   }, []);
+
+  const clearLineWarehouseDependents = useCallback((index: number) => {
+    formRef.current?.setFieldValue(['items', index, 'location_id'], undefined);
+    formRef.current?.setFieldValue(['items', index, 'location_code'], undefined);
+    formRef.current?.setFieldValue(['items', index, 'batch_number'], undefined);
+    formRef.current?.setFieldValue(['items', index, 'batch_allocations'], []);
+    syncLineStockKeyFromForm();
+  }, [syncLineStockKeyFromForm]);
+
+  const applyMaterialBatchFlags = useCallback(
+    async (idx: number, material: Material | undefined) => {
+      if (!material) return;
+      const uuid = material.uuid;
+      let batchManaged = material.batchManaged ?? false;
+      let defaultBatchRuleId = material.defaultBatchRuleId;
+      if (uuid) {
+        try {
+          const full = await materialApi.get(uuid);
+          batchManaged = full.batchManaged ?? false;
+          defaultBatchRuleId = full.defaultBatchRuleId;
+        } catch {
+          // 使用列表返回的字段
+        }
+      }
+      formRef.current?.setFieldValue(['items', idx, 'material_uuid'], uuid);
+      formRef.current?.setFieldValue(
+        ['items', idx, 'batch_managed'],
+        isMaterialBatchEntryEnabled(trackingFlags, batchManaged),
+      );
+      formRef.current?.setFieldValue(['items', idx, 'default_batch_rule_id'], defaultBatchRuleId);
+    },
+    [trackingFlags],
+  );
+
+  const executeConfirmOutbound = useCallback(
+    async (record: OtherOutbound) => {
+      if (record.id == null) return;
+      try {
+        const confirmed = await runOutboundHubConfirmFromRecord({
+          t,
+          record: { id: record.id, outbound_type: 'other_outbound' },
+          trackingFlags,
+        });
+        messageApi.success(t('app.kuaizhizao.warehouseOutbound.confirm.success'));
+        if (confirmed.externalPushMessage) {
+          messageApi.warning(confirmed.externalPushMessage);
+        }
+        invalidateMenuBadgeCounts();
+        actionRef.current?.reload();
+      } catch (error: unknown) {
+        messageApi.error(formatOutboundConfirmError(error, t));
+        throw error;
+      }
+    },
+    [invalidateMenuBadgeCounts, messageApi, t, trackingFlags],
+  );
+
+  const batchOptionLabel = useCallback(
+    (batch: string, qty: number, warehouseName?: string) =>
+      warehouseName
+        ? t('app.kuaizhizao.warehouseOutbound.confirm.batchAvailableWithWh', {
+            batch,
+            qty,
+            warehouse: warehouseName,
+          })
+        : t('app.kuaizhizao.warehouseOutbound.confirm.batchAvailable', { batch, qty }),
+    [t],
+  );
+
+  const ensureBatchOptions = useCallback(
+    async (materialId: number, warehouseId: number) => {
+      const mid = Number(materialId);
+      const whId = Number(warehouseId);
+      if (!(mid > 0) || !(whId > 0)) return;
+      const key = `${mid}:${whId}`;
+      setBatchOptionsLoadingKey(key);
+      try {
+        const map = await loadBatchOptionsByMaterialId([mid], whId, batchOptionLabel);
+        setBatchOptionsByKey((prev) => ({ ...prev, [key]: map[mid] ?? [] }));
+      } finally {
+        setBatchOptionsLoadingKey((cur) => (cur === key ? null : cur));
+      }
+    },
+    [batchOptionLabel],
+  );
 
   useEffect(() => {
     if (!createModalVisible) {
-      setStockByMaterialId({});
+      setStockByKey({});
       setStockLoading(false);
-      setLineMaterialKey('');
+      setLineStockKey('');
+      setBatchOptionsByKey({});
+      setBatchOptionsLoadingKey(null);
       return;
     }
-    const mids = lineMaterialKey
+    const pairs = lineStockKey
       .split(',')
-      .map((s) => Number(s))
-      .filter((id) => Number.isFinite(id) && id > 0);
-    const wid = Number(selectedWarehouseId) || 0;
-    if (!mids.length || wid <= 0) {
-      setStockByMaterialId({});
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((s) => {
+        const [midRaw, whRaw] = s.split(':');
+        return { mid: Number(midRaw), wh: Number(whRaw) };
+      })
+      .filter((p) => Number.isFinite(p.mid) && p.mid > 0);
+    if (!pairs.length) {
+      setStockByKey({});
       setStockLoading(false);
       return;
     }
     let cancelled = false;
     setStockLoading(true);
-    void loadAvailableQtyByMaterialId(mids, wid)
-      .then((map) => {
-        if (!cancelled) setStockByMaterialId(map);
-      })
-      .catch(() => {
-        if (!cancelled) setStockByMaterialId({});
-      })
-      .finally(() => {
+    void (async () => {
+      const next: Record<string, number> = {};
+      const withWh = new Map<number, number[]>();
+      const noWh: number[] = [];
+      for (const p of pairs) {
+        if (p.wh > 0) {
+          const list = withWh.get(p.wh) ?? [];
+          list.push(p.mid);
+          withWh.set(p.wh, list);
+        } else {
+          noWh.push(p.mid);
+        }
+      }
+      try {
+        for (const [whId, mids] of withWh) {
+          const map = await loadAvailableQtyByMaterialId([...new Set(mids)], whId);
+          for (const mid of mids) {
+            next[`${mid}:${whId}`] = map[mid] ?? 0;
+          }
+        }
+        if (noWh.length) {
+          const map = await fetchBatchMaterialInventory([...new Set(noWh)]);
+          for (const mid of noWh) {
+            next[`${mid}:`] = map[mid] ?? 0;
+          }
+        }
+        if (!cancelled) setStockByKey(next);
+      } catch {
+        if (!cancelled) setStockByKey({});
+      } finally {
         if (!cancelled) setStockLoading(false);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
-  }, [createModalVisible, selectedWarehouseId, lineMaterialKey]);
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const wh = await masterDataWarehouseApi.list({ limit: 1000, is_active: true });
-        setWarehouseList(Array.isArray(wh) ? wh : (wh as any)?.items || []);
-      } catch (e) {
-        console.error('加载仓库失败', e);
-      }
-    };
-    load();
-  }, []);
+  }, [createModalVisible, lineStockKey]);
 
   const fallbackReasonTypeOptions = useMemo(
-    () => mapReasonTypeOptions(REASON_TYPES_FALLBACK, t),
+    () => mapOtherOutboundReasonTypeOptions(REASON_TYPES_FALLBACK, t),
     [t],
   );
 
@@ -297,7 +789,7 @@ const OtherOutboundPage: React.FC = () => {
         }
         const items = await getDictionaryItemList(dict.uuid, true);
         const sorted = items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value }));
-        setReasonTypeOptions(mapReasonTypeOptions(sorted, t));
+        setReasonTypeOptions(mapOtherOutboundReasonTypeOptions(sorted, t));
       } catch {
         setReasonTypeOptions(fallbackReasonTypeOptions);
       } finally {
@@ -309,6 +801,42 @@ const OtherOutboundPage: React.FC = () => {
 
   const otherOutboundCustomFieldColumns = generateOtherOutboundCustomFieldColumns();
   const otherOutboundStatusValueEnum = useMemo(() => buildOtherOutboundStatusValueEnum(t), [t]);
+
+  const handleDetail = useCallback(
+    async (record: OtherOutbound) => {
+      setDetailDrawerVisible(true);
+      setDetailLoading(true);
+      setOutboundDetail(null);
+      resetOtherOutboundDetailFieldValues();
+      try {
+        const detail = await warehouseApi.otherOutbound.get(record.id!.toString());
+        setOutboundDetail(detail as OtherOutboundDetail);
+        if (record.id != null) {
+          await loadOtherOutboundFieldValuesForDetail(record.id);
+        }
+      } catch {
+        messageApi.error(t('app.kuaizhizao.otherOutbound.msg.loadDetailFailed'));
+        setDetailDrawerVisible(false);
+      } finally {
+        setDetailLoading(false);
+      }
+    },
+    [
+      loadOtherOutboundFieldValuesForDetail,
+      messageApi,
+      resetOtherOutboundDetailFieldValues,
+      t,
+    ],
+  );
+
+  const handleEdit = useCallback((record: OtherOutbound) => {
+    if (record.id == null || !isOutboundEditable({ ...record, outbound_type: 'other_outbound' })) {
+      return;
+    }
+    setEditingOutboundId(record.id);
+    setEditingOutboundCode(String(record.outbound_code ?? '').trim());
+    setCreateModalVisible(true);
+  }, []);
 
   const columns: ProColumns<OtherOutbound>[] = useMemo(() => alignProColumns<OtherOutbound>([
     {
@@ -381,7 +909,7 @@ const OtherOutboundPage: React.FC = () => {
       hideInSearch: true,
       render: (v) =>
         renderWarehouseReasonTypeMarkerTag(
-          translateReasonTypeLabel(t, v as string | undefined),
+          translateOtherOutboundReasonTypeLabel(t, v as string | undefined, reasonTypeOptions),
           v as string | undefined,
         ),
     },
@@ -400,6 +928,17 @@ const OtherOutboundPage: React.FC = () => {
       sorter: true,
       hideInSearch: true,
       render: (_, r) => formatQuantity(r.total_quantity),
+    },
+    {
+      title: t('app.kuaizhizao.otherOutbound.field.pickDate'),
+      dataIndex: 'pick_date',
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      sorter: true,
+      hideInSearch: true,
+      render: (_, r) => formatBusinessDateOnly(r.pick_date) || '—',
     },
     {
       title: t('app.kuaizhizao.otherOutbound.col.deliverer'),
@@ -426,6 +965,7 @@ const OtherOutboundPage: React.FC = () => {
       render: (_, r) => (r.delivery_time ? formatDateTime(r.delivery_time) : '-'),
     },
     ...buildDocumentAuditColumns<Record<string, unknown>>(t),
+    otherOutboundAuditColumn,
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.lifecycle'),
       dataIndex: 'lifecycle_stage',
@@ -456,74 +996,41 @@ const OtherOutboundPage: React.FC = () => {
         const actions: React.ReactNode[] = [
           <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)} />,
         ];
-        if (record.status === '待出库' && canConfirmOutbound) {
+        if (canUpdateOutbound && isOutboundEditable({ ...record, outbound_type: 'other_outbound' })) {
           actions.push(
-            <ActionConfirmPopconfirm title={t('app.kuaizhizao.otherOutbound.msg.confirmTitle')} description={t('app.kuaizhizao.otherOutbound.msg.confirmContent', { code: record.outbound_code })} onConfirm={() => executeConfirm(record)}>
-              <Button
-              key="confirm"
-              {...rowActionKind('execute')}
-              {...rowActionLabelKeep()}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {t('app.kuaizhizao.warehouseOutbound.action.confirmOutbound')}
-            </Button>
-            </ActionConfirmPopconfirm>,
-          );
-        }
-        if (record.status === '待出库' && canDeleteOutbound) {
-          actions.push(
-            <ActionConfirmPopconfirm title={t('app.kuaizhizao.otherOutbound.msg.deleteTitle')} description={t('app.kuaizhizao.otherOutbound.msg.deleteContent', { code: record.outbound_code })} onConfirm={() => executeDelete(record)}>
-              <Button key="delete" {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
-            </ActionConfirmPopconfirm>,
-          );
-        }
-        if (record.status === '已出库' && canRevokeOutbound) {
-          actions.push(
-            <ActionConfirmPopconfirm title={t('app.kuaizhizao.otherOutbound.msg.withdrawTitle')} description={t('app.kuaizhizao.otherOutbound.msg.withdrawContent', { code: record.outbound_code })} onConfirm={() => executeWithdraw(record)}>
-              <Button key="withdraw" {...rowActionKind('revoke')} {...rowActionLabelKeep()} onClick={(e) => e.stopPropagation()}>
-              {t('app.kuaizhizao.warehouseOutbound.action.withdraw')}
-            </Button>
-            </ActionConfirmPopconfirm>,
+            <Button
+              key="edit"
+              {...rowActionKind('update')}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleEdit(record);
+              }}
+            />,
           );
         }
         return <Space>{actions}</Space>;
       },
     },
-  ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, otherOutboundCustomFieldColumns, otherOutboundStatusValueEnum, reasonTypeOptions, reasonTypeLoading]);
-
-  const handleDetail = async (record: OtherOutbound) => {
-    setDetailDrawerVisible(true);
-    setDetailLoading(true);
-    setOutboundDetail(null);
-    resetOtherOutboundDetailFieldValues();
-    try {
-      const detail = await warehouseApi.otherOutbound.get(record.id!.toString());
-      setOutboundDetail(detail as OtherOutboundDetail);
-      if (record.id != null) {
-        await loadOtherOutboundFieldValuesForDetail(record.id);
-      }
-    } catch {
-      messageApi.error(t('app.kuaizhizao.otherOutbound.msg.loadDetailFailed'));
-      setDetailDrawerVisible(false);
-    } finally {
-      setDetailLoading(false);
-    }
-  };
-
-  const executeConfirm = async (record: OtherOutbound) => {
-    try {
-      await warehouseApi.otherOutbound.confirm(record.id!.toString());
-      messageApi.success(t('app.kuaizhizao.otherOutbound.msg.confirmSuccess'));
-      invalidateMenuBadgeCounts();
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.otherOutbound.msg.confirmFailed'));
-    }
-  };
+  ], WAREHOUSE_DOC_LIST_FIELD_RANK), [
+    t,
+    otherOutboundAuditColumn,
+    otherOutboundCustomFieldColumns,
+    otherOutboundStatusValueEnum,
+    reasonTypeOptions,
+    reasonTypeLoading,
+    canUpdateOutbound,
+    handleDetail,
+    handleEdit,
+  ]);
 
   const executeWithdraw = async (record: OtherOutbound) => {
     try {
-      await warehouseApi.otherOutbound.withdraw(record.id!.toString());
+      const kingdeeWarn = readExternalWithdrawMessage(
+        await warehouseApi.otherOutbound.withdraw(record.id!.toString()),
+      );
+      if (kingdeeWarn) {
+        messageApi.warning(kingdeeWarn);
+      }
       messageApi.success(t('app.kuaizhizao.otherOutbound.msg.withdrawSuccess'));
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
@@ -562,6 +1069,32 @@ const OtherOutboundPage: React.FC = () => {
     [selectedRowKeys],
   );
 
+  const selectedOtherOutboundCapabilityRows = useMemo(
+    () =>
+      selectedOtherOutboundForBatch.map((row) => ({
+        ...row,
+        capabilities: {
+          confirm: { allowed: row.status === '待出库' },
+          withdraw: { allowed: row.status === '已出库' },
+        },
+      })),
+    [selectedOtherOutboundForBatch],
+  );
+
+  const reloadOtherOutboundAfterCapability = useCallback(() => {
+    setSelectedRowKeys([]);
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+  }, [invalidateMenuBadgeCounts]);
+
+  const selectedOtherOutboundIdsForDocumentPush = useMemo(
+    () =>
+      selectedOtherOutboundForBatch
+        .filter((row) => Number(row.id) > 0)
+        .map((row) => Number(row.id)),
+    [selectedOtherOutboundForBatch],
+  );
+
   const canToolbarPrint =
     selectedRowKeys.length === 1 &&
     !!selectedOtherOutboundForBatch[0] &&
@@ -590,66 +1123,582 @@ const OtherOutboundPage: React.FC = () => {
   const appendOtherOutboundItemsFromMaterials = useCallback(
     (selected: Material[]) => {
       const current = formRef.current?.getFieldValue('items') ?? [];
-      const newRows = selected.map((m) => ({
-        ...defaultOutboundItem,
-        material_id: m.id,
-        material_code: m.mainCode ?? m.code ?? '',
-        material_name: m.name ?? '',
-        material_unit: m.baseUnit ?? '',
-      }));
+      const newRows = selected.map((m) => {
+        const primaryWh = resolvePrimaryDefaultWarehouse(m);
+        return {
+          ...defaultOutboundItem,
+          material_id: m.id,
+          material_code: m.mainCode ?? m.code ?? '',
+          material_name: m.name ?? '',
+          material_spec: m.specification ?? '',
+          material_model: m.model ?? '',
+          material_unit: resolveMaterialScenarioUnit(m, 'inventory'),
+          warehouse_id: primaryWh?.id,
+          warehouse_name: primaryWh?.name,
+          batch_managed: isMaterialBatchEntryEnabled(trackingFlags, !!m.batchManaged),
+        };
+      });
       const nextItems = [...current, ...newRows];
       formRef.current?.setFieldsValue({ items: nextItems });
-      // setFieldsValue 不触发 onValuesChange，需显式同步库存查询指纹
-      setLineMaterialKey(otherOutboundMaterialIdsKey(nextItems));
+      setLineStockKey(otherOutboundStockFingerprint(nextItems));
       messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
     },
-    [messageApi, t]
+    [messageApi, t, trackingFlags],
+  );
+
+  const formItemColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.field.material'),
+        dataIndex: 'material_id',
+        width: DOCUMENT_DETAIL_COL_WIDTH.material,
+        ...DOCUMENT_DETAIL_TEXT_COL,
+        render: (_: unknown, __: unknown, index: number) => (
+          <div className="uni-detail-material-cell">
+            <AntForm.Item name={[index, 'id']} hidden preserve>
+              <Input />
+            </AntForm.Item>
+            <AntForm.Item name={[index, 'material_code']} hidden>
+              <Input />
+            </AntForm.Item>
+            <AntForm.Item name={[index, 'material_name']} hidden>
+              <Input />
+            </AntForm.Item>
+            <AntForm.Item name={[index, 'batch_managed']} hidden>
+              <Input />
+            </AntForm.Item>
+            <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
+              {({ getFieldValue }: any) => {
+                const row = getFieldValue('items')?.[index];
+                const mid = row?.material_id ? Number(row.material_id) : null;
+                const fallback =
+                  mid && (row?.material_code || row?.material_name)
+                    ? {
+                        value: mid,
+                        label:
+                          `${row.material_code || ''} - ${row.material_name || ''}`.trim() ||
+                          String(mid),
+                      }
+                    : undefined;
+                return (
+                  <UniMaterialSelect
+                    name={[index, 'material_id']}
+                    label=""
+                    placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectMaterial')}
+                    required
+                    size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                    listFieldKey={index}
+                    listFieldName="items"
+                    warehouseId={
+                      Number(row?.warehouse_id) > 0 ? Number(row.warehouse_id) : undefined
+                    }
+                    fillMapping={withMaterialLineFillMapping({ material_unit: 'inventoryUnit' })}
+                    onChange={async (_val, material) => {
+                      clearLineWarehouseDependents(index);
+                      formRef.current?.setFieldValue(['items', index, 'warehouse_id'], undefined);
+                      formRef.current?.setFieldValue(['items', index, 'warehouse_name'], undefined);
+                      if (material) {
+                        formRef.current?.setFieldValue(
+                          ['items', index, 'material_unit'],
+                          resolveMaterialScenarioUnit(material, 'inventory'),
+                        );
+                        await applyMaterialBatchFlags(index, material);
+                        const primaryWh = resolvePrimaryDefaultWarehouse(material);
+                        if (primaryWh) {
+                          formRef.current?.setFieldValue(
+                            ['items', index, 'warehouse_id'],
+                            primaryWh.id,
+                          );
+                          formRef.current?.setFieldValue(
+                            ['items', index, 'warehouse_name'],
+                            primaryWh.name,
+                          );
+                        }
+                        const midNum = Number(_val ?? material.id ?? 0);
+                        const whId = Number(
+                          formRef.current?.getFieldValue(['items', index, 'warehouse_id']) || 0,
+                        );
+                        if (midNum > 0 && whId > 0) {
+                          void ensureBatchOptions(midNum, whId);
+                        }
+                      }
+                      syncLineStockKeyFromForm();
+                    }}
+                    fallbackOption={fallback}
+                    formItemProps={{ style: { margin: 0 } }}
+                    showQuickCreate
+                    showAdvancedSearch
+                  />
+                );
+              }}
+            </AntForm.Item>
+          </div>
+        ),
+      },
+      ...buildDocumentDetailSpecModelFormColumns(t),
+      ...buildDocumentLineDualQuantityPairColumns({
+        t,
+        getForm: () => formRef.current,
+        quantityField: 'outbound_quantity',
+        unitField: 'material_unit',
+        scenario: 'inventory',
+        quantityPrecision: quantityDecimals,
+        columnSpread: DOCUMENT_DETAIL_NUM_COL,
+        inlineUnitWithQuantity: true,
+      }),
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.field.warehouse'),
+        dataIndex: 'warehouse_id',
+        width: 220,
+        ...DOCUMENT_DETAIL_TEXT_COL,
+        render: (_: unknown, __: unknown, index: number) => (
+          <OtherOutboundCreateWarehouseCell
+            index={index}
+            clearLineWarehouseDependents={clearLineWarehouseDependents}
+            ensureBatchOptions={ensureBatchOptions}
+            formRef={formRef}
+            t={t}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.pull.colCurrentStock'),
+        key: 'current_stock',
+        width: 100,
+        ...DOCUMENT_DETAIL_NUM_COL,
+        render: (_: unknown, __: unknown, index: number) => (
+          <AntForm.Item
+            noStyle
+            shouldUpdate={(prev, curr) =>
+              prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id ||
+              prev?.items?.[index]?.warehouse_id !== curr?.items?.[index]?.warehouse_id ||
+              prev?.items?.[index]?.outbound_quantity !== curr?.items?.[index]?.outbound_quantity
+            }
+          >
+            {({ getFieldValue }) => {
+              const mid = Number(getFieldValue(['items', index, 'material_id']) || 0);
+              const whId = Number(getFieldValue(['items', index, 'warehouse_id']) || 0);
+              if (!(mid > 0)) return '—';
+              if (stockLoading) return '…';
+              const key = whId > 0 ? `${mid}:${whId}` : `${mid}:`;
+              const stock = stockByKey[key];
+              if (stock == null) return '—';
+              const qty = Number(getFieldValue(['items', index, 'outbound_quantity']) || 0);
+              const insufficient = qty > 0 && stock < qty;
+              return (
+                <Typography.Text type={insufficient ? 'danger' : undefined}>
+                  {formatQuantity(stock)}
+                </Typography.Text>
+              );
+            }}
+          </AntForm.Item>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.col.location'),
+        dataIndex: 'location_id',
+        width: 180,
+        ...DOCUMENT_DETAIL_TEXT_COL,
+        render: (_: unknown, __: unknown, index: number) => (
+          <OtherOutboundCreateLocationCell index={index} formRef={formRef} t={t} />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.col.batchNo'),
+        dataIndex: 'batch_allocations',
+        width: 260,
+        ...DOCUMENT_DETAIL_TEXT_COL,
+        render: (_: unknown, __: unknown, index: number) => (
+          <AntForm.Item
+            noStyle
+            shouldUpdate={(prev, curr) =>
+              prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id ||
+              prev?.items?.[index]?.warehouse_id !== curr?.items?.[index]?.warehouse_id ||
+              prev?.items?.[index]?.batch_managed !== curr?.items?.[index]?.batch_managed ||
+              prev?.items?.[index]?.outbound_quantity !==
+                curr?.items?.[index]?.outbound_quantity ||
+              prev?.items?.[index]?.batch_allocations !==
+                curr?.items?.[index]?.batch_allocations ||
+              prev?.items?.[index]?.batch_number !== curr?.items?.[index]?.batch_number
+            }
+          >
+            {({ getFieldValue }) => {
+              const row = getFieldValue('items')?.[index] as Record<string, unknown> | undefined;
+              if (!row?.batch_managed) return '—';
+              const materialId = Number(row?.material_id ?? 0);
+              const whId = Number(row?.warehouse_id ?? 0);
+              const key = materialId > 0 && whId > 0 ? `${materialId}:${whId}` : '';
+              const opts = key ? batchOptionsByKey[key] ?? [] : [];
+              const loading = !!key && batchOptionsLoadingKey === key;
+              const qty = Number(row?.outbound_quantity ?? 0);
+              const allocs = lineBatchAllocationsFromRow(row, qty);
+              const materialLabel = [row?.material_code, row?.material_name]
+                .filter(Boolean)
+                .join(' - ');
+              const disabled = !(whId > 0) || !(materialId > 0);
+              return (
+                <span
+                  onClick={() => {
+                    if (!disabled && materialId > 0 && whId > 0 && !batchOptionsByKey[key]?.length) {
+                      void ensureBatchOptions(materialId, whId);
+                    }
+                  }}
+                >
+                  <AntForm.Item name={[index, 'batch_allocations']} hidden>
+                    <Input />
+                  </AntForm.Item>
+                  <AntForm.Item name={[index, 'batch_number']} hidden>
+                    <Input />
+                  </AntForm.Item>
+                  <OutboundBatchAllocationField
+                    value={allocs}
+                    onChange={(next) =>
+                      syncFormLineBatchFields(
+                        (name, value) => formRef.current?.setFieldValue(name, value),
+                        index,
+                        next,
+                      )
+                    }
+                    options={opts}
+                    totalQuantity={qty}
+                    loading={loading}
+                    disabled={disabled}
+                    materialLabel={String(materialLabel)}
+                  />
+                </span>
+              );
+            }}
+          </AntForm.Item>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.field.unitPrice'),
+        dataIndex: 'unit_price',
+        width: DOCUMENT_DETAIL_COL_WIDTH.unitPrice,
+        ...DOCUMENT_DETAIL_NUM_COL,
+        render: (_: unknown, __: unknown, index: number) => (
+          <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
+            <UniInputNumber
+              placeholder="0"
+              min={0}
+              precision={priceDecimals}
+              style={{ width: '100%' }}
+              size={DOCUMENT_DETAIL_CONTROL_SIZE}
+            />
+          </AntForm.Item>
+        ),
+      },
+    ],
+    [
+      applyMaterialBatchFlags,
+      batchOptionsByKey,
+      batchOptionsLoadingKey,
+      clearLineWarehouseDependents,
+      ensureBatchOptions,
+      priceDecimals,
+      quantityDecimals,
+      stockByKey,
+      stockLoading,
+      syncLineStockKeyFromForm,
+      t,
+    ],
   );
 
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
-    resetSelectedWarehouseId();
+    setEditingOutboundId(null);
+    setEditingOutboundCode('');
+    editLineIdsRef.current = [];
     setCreateModalVisible(true);
     // FormModalTemplate 设置了 destroyOnHidden，ProForm 每次打开都是全新挂载，无需 setTimeout + resetFields
   };
+
+  useEffect(() => {
+    if (!createModalVisible || editingOutboundId == null) {
+      return undefined;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const detail = (await warehouseApi.otherOutbound.get(String(editingOutboundId))) as OtherOutboundDetail;
+        if (cancelled) return;
+        const custom = await loadOtherOutboundFormFieldValues(editingOutboundId);
+        const items = (detail.items ?? []).map((it) => ({
+          id: it.id,
+          material_id: it.material_id,
+          material_code: it.material_code,
+          material_name: it.material_name,
+          material_spec: it.material_spec,
+          material_unit: it.material_unit,
+          outbound_quantity: it.outbound_quantity,
+          aux_quantity: (it as { aux_quantity?: number }).aux_quantity,
+          aux_unit: (it as { aux_unit?: string }).aux_unit,
+          unit_conversion_rate: (it as { unit_conversion_rate?: number }).unit_conversion_rate,
+          unit_price: it.unit_price,
+          warehouse_id: it.warehouse_id,
+          warehouse_name: it.warehouse_name,
+          location_id: it.location_id,
+          location_code: it.location_code,
+          batch_number: it.batch_number,
+          notes: it.notes,
+        }));
+        formRef.current?.setFieldsValue({
+          outbound_code: detail.outbound_code,
+          reason_type: detail.reason_type,
+          pick_date: detail.pick_date ? dayjs(String(detail.pick_date)) : dayjs(todaySiteDateString()),
+          picker_id: detail.picker_id,
+          picker_name: detail.picker_name,
+          picker_operator_number: detail.picker_operator_number,
+          pick_department_id: detail.pick_department_id,
+          pick_department_code: detail.pick_department_code,
+          pick_department_name: detail.pick_department_name,
+          customer_id: detail.customer_id,
+          customer_name: detail.customer_name,
+          customer_number: detail.customer_number,
+          notes: detail.notes,
+          attachments: detail.attachments,
+          items: items.length ? items : [{ ...defaultOutboundItem }],
+          ...custom,
+        });
+        editLineIdsRef.current = items.map((row) => Number(row.id) || 0);
+        setEditingOutboundCode(String(detail.outbound_code ?? '').trim());
+        setLineStockKey(otherOutboundStockFingerprint(items));
+        await Promise.all(
+          items
+            .filter((it) => Number(it.material_id) > 0 && Number(it.warehouse_id) > 0)
+            .map((it) => ensureBatchOptions(Number(it.material_id), Number(it.warehouse_id))),
+        );
+      } catch {
+        if (!cancelled) {
+          messageApi.error(t('app.kuaizhizao.otherOutbound.msg.loadDetailFailed'));
+          setCreateModalVisible(false);
+          setEditingOutboundId(null);
+          setEditingOutboundCode('');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    createModalVisible,
+    editingOutboundId,
+    ensureBatchOptions,
+    loadOtherOutboundFormFieldValues,
+    messageApi,
+    t,
+  ]);
   useNewShortcut(handleCreate);
   const createButtonLabel = useMemo(
     () => withSingleNewShortcutHint(t('app.kuaizhizao.otherOutbound.create')),
     [t],
   );
 
+  const otherOutboundFormTitle = useMemo(() => {
+    if (editingOutboundId != null) {
+      const code = editingOutboundCode.trim();
+      return code
+        ? `${t('app.kuaizhizao.otherOutbound.editModal')} - ${code}`
+        : t('app.kuaizhizao.otherOutbound.editModal');
+    }
+    return t('app.kuaizhizao.otherOutbound.createModal');
+  }, [editingOutboundCode, editingOutboundId, t]);
+
+  const resolveEditLineId = (row: Record<string, unknown>, lineIndex: number): number => {
+    const fromRow = Number(row.id);
+    if (fromRow > 0) return fromRow;
+    const fromForm = Number(formRef.current?.getFieldValue(['items', lineIndex, 'id']));
+    if (fromForm > 0) return fromForm;
+    const fromSnapshot = editLineIdsRef.current[lineIndex];
+    return fromSnapshot > 0 ? fromSnapshot : 0;
+  };
+
   const handleCreateSubmit = async (values: any) => {
     const needValidLinesMsg = t('app.kuaizhizao.otherOutbound.msg.needValidLines');
     try {
-      const validItems = (values.items ?? []).filter((it: any) => it.material_id && (Number(it.outbound_quantity) || 0) > 0);
+      const rawItems = (values.items ?? []) as Record<string, unknown>[];
+      const validItems = rawItems
+        .map((it, index) => {
+          if (!(it.material_id && (Number(it.outbound_quantity) || 0) > 0)) return null;
+          if (editingOutboundId == null) return it;
+          const lineId = resolveEditLineId(it, index);
+          return lineId > 0 ? { ...it, id: lineId } : it;
+        })
+        .filter(Boolean) as Record<string, unknown>[];
       if (!validItems.length) {
         messageApi.error(needValidLinesMsg);
         throw new Error(needValidLinesMsg);
       }
-      const wh = warehouseList.find((w: any) => (w.id ?? w.warehouse_id) === values.warehouse_id);
-      const warehouseName = values.warehouse_name ?? wh?.name ?? wh?.warehouse_name ?? '';
+      for (const it of validItems) {
+        const material = it.material_code || it.material_name || '-';
+        if (!(Number(it.warehouse_id) > 0)) {
+          const msg = t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse');
+          messageApi.error(msg);
+          throw new Error(msg);
+        }
+        if (!String(it.location_code || '').trim()) {
+          const msg = t('app.kuaizhizao.warehouseOutbound.msg.selectLocationForMaterial', {
+            material,
+          });
+          messageApi.error(msg);
+          throw new Error(msg);
+        }
+        if (it.batch_managed) {
+          const qty = Number(it.outbound_quantity) || 0;
+          const materialId = Number(it.material_id) || 0;
+          const whId = Number(it.warehouse_id) || 0;
+          const key = materialId > 0 && whId > 0 ? `${materialId}:${whId}` : '';
+          const opts = key ? batchOptionsByKey[key] ?? [] : [];
+          const allocs = lineBatchAllocationsFromRow(it as Record<string, unknown>, qty);
+          if (!isValidOutboundBatchAllocations(allocs, opts, qty)) {
+            const msg = t('app.kuaizhizao.warehouseOutbound.confirm.batchAllocationRequired', {
+              material,
+              qty,
+              batches: opts.map((o) => o.value).join('、') || '—',
+            });
+            messageApi.error(msg);
+            throw new Error(msg);
+          }
+        }
+        const dualErr = validateDualQuantityBeforeSave({
+          material: (it as { material?: Material }).material ?? null,
+          value: {
+            quantity: Number(it.outbound_quantity),
+            material_unit: String(it.material_unit ?? ''),
+            aux_quantity: it.aux_quantity != null ? Number(it.aux_quantity) : undefined,
+            aux_unit: it.aux_unit != null ? String(it.aux_unit) : undefined,
+            unit_conversion_rate:
+              it.unit_conversion_rate != null ? Number(it.unit_conversion_rate) : undefined,
+          },
+        });
+        if (dualErr) {
+          messageApi.error(dualErr);
+          throw new Error(dualErr);
+        }
+      }
+      const headerWhId = Number(validItems[0]?.warehouse_id) || 0;
+      const headerWhName = String(validItems[0]?.warehouse_name ?? '').trim();
       const { standardValues, customData } = extractOtherOutboundFormValues(values);
+
+      if (editingOutboundId != null) {
+        const withoutId = validItems.filter((it: { id?: number }) => !(Number(it.id) > 0));
+        if (withoutId.length > 0) {
+          const msg = t('app.kuaizhizao.otherOutbound.msg.editKeepExistingLinesOnly');
+          messageApi.error(msg);
+          throw new Error(msg);
+        }
+        const updateItems = validItems.map((it: Record<string, unknown>) => {
+          const rid = Number(it.id);
+          const qty = Number(it.outbound_quantity) || 0;
+          const allocs = lineBatchAllocationsFromRow(it, qty);
+          const payload: Record<string, unknown> = {
+            id: rid,
+            outbound_quantity: qty,
+            unit_price: Number(it.unit_price) || 0,
+            location_id:
+              it.location_id != null && Number(it.location_id) > 0 ? Number(it.location_id) : undefined,
+            location_code: String(it.location_code ?? '').trim() || undefined,
+            ...pickDocumentLineDualQuantityFields(it),
+          };
+          if (allocs.length > 1) {
+            payload.batch_allocations = allocs.map((a) => ({
+              batch_number: a.batchNo,
+              quantity: a.quantity,
+            }));
+            payload.batch_number = allocs[0]?.batchNo;
+          } else if (allocs.length === 1) {
+            payload.batch_number = allocs[0].batchNo;
+          } else {
+            payload.batch_number = String(it.batch_number ?? '').trim() || undefined;
+          }
+          return payload;
+        });
+        await warehouseApi.otherOutbound.update(String(editingOutboundId), {
+          reason_type: standardValues.reason_type,
+          warehouse_id: headerWhId,
+          warehouse_name: headerWhName,
+          pick_department_id: values.pick_department_id ?? undefined,
+          pick_department_code: values.pick_department_code || undefined,
+          pick_department_name: values.pick_department_name || undefined,
+          picker_id: values.picker_id ?? undefined,
+          picker_name: values.picker_name || undefined,
+          pick_date: toApiDateString(values.pick_date),
+          picker_operator_number: String(values.picker_operator_number ?? '').trim() || undefined,
+          customer_id: values.customer_id ?? undefined,
+          customer_name: values.customer_name || undefined,
+          customer_number: values.customer_number || undefined,
+          notes: standardValues.notes,
+          attachments: normalizeDocumentAttachments(standardValues.attachments),
+          items: updateItems,
+        });
+        if (Object.keys(customData).length > 0) {
+          await saveOtherOutboundCustomFieldValues(editingOutboundId, customData);
+        }
+        messageApi.success(t('common.updateSuccess'));
+        resetOtherOutboundFormFieldValues();
+        setCreateModalVisible(false);
+        setEditingOutboundId(null);
+        setEditingOutboundCode('');
+        invalidateMenuBadgeCounts();
+        actionRef.current?.reload();
+        return;
+      }
+
       const created = await warehouseApi.otherOutbound.create({
         outbound_code: standardValues.outbound_code,
         reason_type: standardValues.reason_type,
-        reason_desc: standardValues.reason_desc,
-        warehouse_id: standardValues.warehouse_id,
-        warehouse_name: warehouseName,
+        // 表头仓仅列表汇总：取首行；真源在明细行
+        warehouse_id: headerWhId,
+        warehouse_name: headerWhName,
+        pick_department_id: values.pick_department_id ?? undefined,
+        pick_department_code: values.pick_department_code || undefined,
+        pick_department_name: values.pick_department_name || undefined,
+        picker_id: values.picker_id ?? undefined,
+        picker_name: values.picker_name || undefined,
+        pick_date: toApiDateString(values.pick_date),
+        picker_operator_number: String(values.picker_operator_number ?? '').trim() || undefined,
+        customer_id: values.customer_id ?? undefined,
+        customer_name: values.customer_name || undefined,
+        customer_number: values.customer_number || undefined,
         notes: standardValues.notes,
         attachments: normalizeDocumentAttachments(standardValues.attachments),
-        items: validItems.map((it: any) => {
+        items: validItems.flatMap((it: any) => {
           const outboundQty = Number(it.outbound_quantity) || 0;
           const unitPrice = Number(it.unit_price) || 0;
-          return {
+          const lineWhId = Number(it.warehouse_id) || 0;
+          const allocs = lineBatchAllocationsFromRow(it as Record<string, unknown>, outboundQty);
+          const base = {
             material_id: it.material_id,
             material_code: it.material_code || undefined,
             material_name: it.material_name || undefined,
+            material_spec: it.material_spec != null ? String(it.material_spec).trim() || undefined : undefined,
             material_unit: it.material_unit || '',
+            ...pickDocumentLineDualQuantityFields(it as Record<string, unknown>),
+            warehouse_id: lineWhId,
+            warehouse_name: String(it.warehouse_name ?? '').trim() || undefined,
+            location_id:
+              it.location_id != null && Number(it.location_id) > 0
+                ? Number(it.location_id)
+                : undefined,
             location_code: it.location_code || undefined,
-            outbound_quantity: outboundQty,
             unit_price: unitPrice,
-            total_amount: outboundQty * unitPrice,
           };
+          if (allocs.length > 1) {
+            return allocs.map((a) => ({
+              ...base,
+              outbound_quantity: a.quantity,
+              total_amount: computeSimpleDocumentLineTotal(a.quantity, unitPrice),
+              batch_number: a.batchNo,
+            }));
+          }
+          return [
+            {
+              ...base,
+              outbound_quantity: outboundQty,
+              total_amount: computeSimpleDocumentLineTotal(outboundQty, unitPrice),
+              batch_number: allocs[0]?.batchNo || it.batch_number || undefined,
+            },
+          ];
         }),
       });
       const recordId = Number((created as { id?: number })?.id ?? 0);
@@ -658,7 +1707,6 @@ const OtherOutboundPage: React.FC = () => {
       }
       messageApi.success(t('common.createSuccess'));
       resetOtherOutboundFormFieldValues();
-      resetSelectedWarehouseId();
       setCreateModalVisible(false);
       invalidateMenuBadgeCounts();
 
@@ -675,9 +1723,26 @@ const OtherOutboundPage: React.FC = () => {
       title: t('app.kuaizhizao.otherOutbound.col.reasonType'),
       dataIndex: 'reason_type',
       render: (_, record) =>
-        renderWarehouseReasonTypeMarkerTag(translateReasonTypeLabel(t, record.reason_type), record.reason_type),
+        renderWarehouseReasonTypeMarkerTag(
+          translateOtherOutboundReasonTypeLabel(t, record.reason_type, reasonTypeOptions),
+          record.reason_type,
+        ),
     },
-    { title: t('app.kuaizhizao.otherOutbound.field.reasonDesc'), dataIndex: 'reason_desc', span: 3 },
+    { title: t('app.kuaizhizao.otherOutbound.field.picker'), dataIndex: 'picker_name' },
+    {
+      title: t('app.kuaizhizao.otherOutbound.field.pickDate'),
+      dataIndex: 'pick_date',
+      render: (_, r) => formatBusinessDateOnly(r.pick_date) || '—',
+    },
+    {
+      title: t('app.kuaizhizao.otherOutbound.field.pickDepartment'),
+      dataIndex: 'pick_department_name',
+      render: (_, r) =>
+        r.pick_department_code
+          ? `${r.pick_department_code} ${r.pick_department_name || ''}`.trim()
+          : r.pick_department_name || '-',
+    },
+    { title: t('app.kuaizhizao.otherOutbound.field.customer'), dataIndex: 'customer_name' },
     { title: t('app.kuaizhizao.warehouseReports.colWarehouse'), dataIndex: 'warehouse_name' },
     {
       title: t('common.status'),
@@ -694,7 +1759,7 @@ const OtherOutboundPage: React.FC = () => {
     },
     { title: t('app.kuaizhizao.otherOutbound.col.deliverer'), dataIndex: 'deliverer_name' },
     { title: t('app.kuaizhizao.otherOutbound.col.deliveryTime'), dataIndex: 'delivery_time', valueType: 'dateTime' },
-  ]), [t]);
+  ]), [t, reasonTypeOptions]);
 
   const detailNotesColumn: ProDescriptionsItemProps<OtherOutboundDetail> = useMemo(() => ({
     title: t('common.remark'),
@@ -762,7 +1827,7 @@ const OtherOutboundPage: React.FC = () => {
           headerTitle={t('app.kuaizhizao.otherOutbound.title')}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.otherOutbound)}
-          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.other-outbound-width-v3"
+          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.other-outbound-width-v5"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -782,7 +1847,87 @@ const OtherOutboundPage: React.FC = () => {
           }}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
+          showSyncButton={toolbarSyncPush.hubVisible && toolbarSyncPush.pushEnabled}
+          onSync={() => undefined}
+          syncToolbarExtra={
+            toolbarSyncPush.hubVisible && toolbarSyncPush.pushEnabled
+              ? () => (
+                  <SyncPushHubButton
+                    syncEnabled={false}
+                    pushEnabled={toolbarSyncPush.pushEnabled}
+                    historySourceType="other_outbound"
+                    historyTargetProfiles={['kingdee_im_otheroutbill']}
+                    size="middle"
+                    renderPushPanel={({ active, close }) => (
+                      <OtherOutboundDocumentPushPanel
+                        embedded
+                        open={active}
+                        onClose={close}
+                        outboundIds={selectedOtherOutboundIdsForDocumentPush}
+                        onComplete={() => {
+                          actionRef.current?.reload?.();
+                          close();
+                        }}
+                      />
+                    )}
+                  />
+                )
+              : undefined
+          }
           showDeleteButton
+          deleteButtonText={t('common.delete')}
+          toolBarActionsAfterBatch={[
+            <UniCapabilityBatchButton
+              key="other-outbound-confirm"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedOtherOutboundCapabilityRows}
+              capabilityKey="confirm"
+              permAllowed={canConfirmOutbound}
+              onRun={async (id) => {
+                const row = selectedOtherOutboundForBatch.find((r) => Number(r.id) === id);
+                if (!row) {
+                  throw new Error(t('app.kuaizhizao.warehouseOutbound.msg.noneConfirmable'));
+                }
+                await runOutboundHubConfirmFromRecord({
+                  t,
+                  record: { id: row.id, outbound_type: 'other_outbound' },
+                  trackingFlags,
+                });
+              }}
+              onSuccess={reloadOtherOutboundAfterCapability}
+              requireConfirm
+              labels={{
+                single: t('app.kuaizhizao.warehouseOutbound.action.confirmOutbound'),
+                batch: t('app.kuaizhizao.warehouseOutbound.action.confirmOutbound'),
+                singleConfirmTitle: t('app.kuaizhizao.warehouseOutbound.action.confirmOutbound'),
+              }}
+              icon={<CheckCircleOutlined />}
+              size="medium"
+              color="green"
+              variant="solid"
+            />,
+            <UniCapabilityBatchButton
+              key="other-outbound-withdraw"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedOtherOutboundCapabilityRows}
+              capabilityKey="withdraw"
+              permAllowed={canRevokeOutbound}
+              onRun={async (id) => {
+                await warehouseApi.otherOutbound.withdraw(String(id));
+              }}
+              onSuccess={reloadOtherOutboundAfterCapability}
+              requireConfirm
+              labels={{
+                single: t('app.kuaizhizao.warehouseOutbound.action.withdrawOutbound'),
+                batch: t('app.kuaizhizao.warehouseOutbound.action.withdrawOutbound'),
+                singleConfirmTitle: t('app.kuaizhizao.otherOutbound.msg.withdrawTitle'),
+              }}
+              icon={<RollbackOutlined />}
+              size="medium"
+              color="orange"
+              variant="solid"
+            />,
+          ]}
           rowSelectionGetCheckboxProps={(record) => ({
             disabled: !isOtherOutboundDeletable(record) && !isOtherOutboundPrintable(record),
           })}
@@ -793,6 +1938,56 @@ const OtherOutboundPage: React.FC = () => {
               noun: t('app.kuaizhizao.otherOutbound.title'),
             })
           }
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            try {
+              const loadAll = async () => {
+                const listParams = resolveWarehouseDocListParams({}, undefined, {
+                  docDateParamPrefix: 'delivery',
+                });
+                const rows = await fetchAllListItems((p) =>
+                  warehouseApi.otherOutbound.list({ ...listParams, ...p }),
+                );
+                return enrichOtherOutboundRecordsWithCustomFields(rows);
+              };
+              const headers = await resolveWarehouseListExportHeaders(
+                type,
+                keys,
+                pageData as OtherOutbound[] | undefined,
+                listRowsRef.current,
+                loadAll,
+              );
+              if (headers.length === 0) {
+                messageApi.warning(t('common.exportNoData'));
+                return;
+              }
+              const enriched = await enrichStandaloneDocsWithDetail(headers, (id) =>
+                warehouseApi.otherOutbound.get(String(id)),
+              );
+              let flatRows = flattenStandaloneWarehouseDocsForExport(enriched, {
+                docCodeField: 'outbound_code',
+                docTypeLabel: t('app.kuaizhizao.warehouseOutbound.type.otherOutbound'),
+                dateFields: ['delivery_time', 'pick_date'],
+                operatorFields: ['deliverer_name', 'picker_name'],
+              });
+              if (type === 'selected' && keys?.length) {
+                flatRows = filterWarehouseFlatRowsByExportKeys(flatRows, keys);
+              }
+              await exportWarehouseDocLinesXlsx(
+                flatRows,
+                `other-outbound-lines-${todaySiteDateString()}.xlsx`,
+                {
+                  t,
+                  sheetName: t('app.kuaizhizao.otherOutbound.title'),
+                  includeDocTypeColumn: false,
+                  direction: 'standalone',
+                },
+              );
+              messageApi.success(t('common.exportSuccess', { count: flatRows.length }));
+            } catch (error: unknown) {
+              messageApi.error((error as { message?: string })?.message || t('common.exportFailed'));
+            }
+          }}
           request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             try {
               const listParams = resolveWarehouseDocListParams(searchFormValues, sort, {
@@ -853,14 +2048,26 @@ const OtherOutboundPage: React.FC = () => {
                   { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
                   { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 150 },
                   {
+                    title: t('app.kuaizhizao.warehouseInbound.col.spec'),
+                    dataIndex: 'material_spec',
+                    width: 120,
+                    ellipsis: true,
+                    render: (v: unknown) => (v != null && String(v).trim() ? String(v) : '—'),
+                  },
+                  {
                     title: t('common.unit'),
                     dataIndex: 'material_unit',
                     width: 60,
                     render: (val) => <MaterialUnitLabel value={val} />,
                   },
+                  {
+                    title: t('app.kuaizhizao.warehouseReports.colWarehouse'),
+                    dataIndex: 'warehouse_name',
+                    width: 120,
+                    ellipsis: true,
+                  },
+                  { title: t('app.kuaizhizao.warehouseOutbound.col.location'), dataIndex: 'location_code', width: 100 },
                   { title: t('app.kuaizhizao.warehouseOutbound.col.deliveryQty'), dataIndex: 'outbound_quantity', width: 100, align: 'right' },
-                  { title: t('app.kuaizhizao.warehouseOutbound.field.unitPrice'), dataIndex: 'unit_price', width: 100, align: 'right' },
-                  { title: t('app.kuaizhizao.warehouseOutbound.field.amount'), dataIndex: 'total_amount', width: 100, align: 'right' },
                   { title: t('app.kuaizhizao.warehouseOutbound.col.batchNo'), dataIndex: 'batch_number', width: 100 },
                   { title: t('common.remark'), dataIndex: 'notes' },
                 ]}
@@ -873,21 +2080,27 @@ const OtherOutboundPage: React.FC = () => {
       />
 
       <FormModalTemplate
-        title={t('app.kuaizhizao.otherOutbound.createModal')}
+        title={otherOutboundFormTitle}
         open={createModalVisible}
+        isEdit={editingOutboundId != null}
         onClose={() => {
-          resetSelectedWarehouseId();
           setCreateModalVisible(false);
+          setEditingOutboundId(null);
+          setEditingOutboundCode('');
           resetOtherOutboundFormFieldValues();
         }}
         formRef={formRef}
         onFinish={handleCreateSubmit}
-        width={MODAL_CONFIG.LARGE_WIDTH}
-        initialValues={{ reason_type: '其他' }}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        initialValues={{
+          reason_type: '其他',
+          pick_date: dayjs(todaySiteDateString()),
+          items: [{ ...defaultOutboundItem }],
+        }}
         grid={false}
         onValuesChange={(changed, all) => {
-          if (changed.items !== undefined || changed.warehouse_id !== undefined) {
-            setLineMaterialKey(otherOutboundMaterialIdsKey(all?.items));
+          if (changed.items !== undefined) {
+            setLineStockKey(otherOutboundStockFingerprint(all?.items));
           }
         }}
       >
@@ -897,26 +2110,11 @@ const OtherOutboundPage: React.FC = () => {
               pageCode="kuaizhizao-warehouse-other-outbound"
               name="outbound_code"
               label={t('app.kuaizhizao.otherOutbound.col.outboundCode')}
-              autoGenerateOnCreate={true}
+              autoGenerateOnCreate={editingOutboundId == null}
               showGenerateButton={false}
               context={{}}
             />
           </Col>
-          <Col span={12}>
-            <UniWarehouseSelect
-              name="warehouse_id"
-              label={t('app.kuaizhizao.warehouseReports.colWarehouse')}
-              placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectWarehouse')}
-              required
-              onChange={(val, wh) => {
-                updateSelectedWarehouseId(val);
-                formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' });
-              }}
-            />
-          </Col>
-        </Row>
-        <AntForm.Item name="warehouse_name" hidden />
-        <Row gutter={16}>
           <Col span={12}>
             <ProFormItem name="reason_type" label={t('app.kuaizhizao.otherOutbound.field.reasonType')} rules={[{ required: true }]}>
               <UniDropdown
@@ -933,10 +2131,111 @@ const OtherOutboundPage: React.FC = () => {
               />
             </ProFormItem>
           </Col>
+        </Row>
+        <Row gutter={16}>
           <Col span={12}>
-            <ProFormItem name="reason_desc" label={t('app.kuaizhizao.otherOutbound.field.reasonDesc')}>
-              <Input.TextArea rows={2} placeholder={t('app.kuaizhizao.warehouseOutbound.field.optional')} />
+            <ProFormDatePicker
+              name="pick_date"
+              label={t('app.kuaizhizao.otherOutbound.field.pickDate')}
+              rules={[
+                {
+                  required: true,
+                  message: t('app.kuaizhizao.otherOutbound.field.pickDateRequired'),
+                },
+              ]}
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={12}>
+            <OtherOutboundUserPickField
+              name="picker_id"
+              nameField="picker_name"
+              label={t('app.kuaizhizao.otherOutbound.field.picker')}
+              placeholder={t('app.kuaizhizao.otherOutbound.field.pickerPlaceholder')}
+              required
+              userList={pickerUsers}
+              loading={pickerUsersLoading}
+              operatorNumberField="picker_operator_number"
+              departmentOptions={departmentOptions}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormItem
+              name="pick_department_id"
+              label={t('app.kuaizhizao.otherOutbound.field.pickDepartment')}
+              rules={[
+                {
+                  validator: async (_, val) => {
+                    const customerId = formRef.current?.getFieldValue('customer_id');
+                    if (val != null && val !== '') return;
+                    if (customerId != null && customerId !== '') return;
+                    throw new Error(t('app.kuaizhizao.otherOutbound.msg.pickDeptOrCustomerRequired'));
+                  },
+                },
+              ]}
+            >
+              <UniDropdown
+                placeholder={t('app.kuaizhizao.otherOutbound.field.pickDepartmentPlaceholder')}
+                showSearch
+                allowClear
+                loading={departmentsLoading}
+                style={{ width: '100%' }}
+                options={departmentOptions}
+                onChange={(val, opt) => {
+                  const row = departmentOptions.find((d) => d.value === val);
+                  const label =
+                    typeof opt === 'object' && opt && 'label' in opt && typeof opt.label === 'string'
+                      ? opt.label
+                      : row?.label;
+                  formRef.current?.setFieldsValue({
+                    pick_department_code: row?.code ?? undefined,
+                    pick_department_name: label?.includes(' - ')
+                      ? label.split(' - ').slice(1).join(' - ').trim()
+                      : label,
+                  });
+                }}
+              />
             </ProFormItem>
+            <AntForm.Item name="pick_department_code" hidden>
+              <Input />
+            </AntForm.Item>
+            <AntForm.Item name="pick_department_name" hidden>
+              <Input />
+            </AntForm.Item>
+            <AntForm.Item name="picker_operator_number" hidden>
+              <Input />
+            </AntForm.Item>
+          </Col>
+          <Col span={12}>
+            <ProFormItem name="customer_id" label={t('app.kuaizhizao.otherOutbound.field.customer')}>
+              <CustomerSelectDropdown
+                allowClear
+                placeholder={t('app.kuaizhizao.otherOutbound.field.customerPlaceholder')}
+                hostResource="kuaizhizao:other-outbound"
+                onCustomerPick={(customer: Customer | null) => {
+                  if (!customer) {
+                    formRef.current?.setFieldsValue({
+                      customer_name: undefined,
+                      customer_number: undefined,
+                    });
+                    return;
+                  }
+                  const row = customer as Record<string, unknown>;
+                  const code = String(row.code ?? row.customer_code ?? '').trim();
+                  const name = String(row.name ?? row.customer_name ?? '').trim();
+                  formRef.current?.setFieldsValue({
+                    customer_name: name || undefined,
+                    customer_number: code || undefined,
+                  });
+                }}
+              />
+            </ProFormItem>
+            <AntForm.Item name="customer_name" hidden>
+              <Input />
+            </AntForm.Item>
+            <AntForm.Item name="customer_number" hidden>
+              <Input />
+            </AntForm.Item>
           </Col>
           <CustomFieldsFormSection
             customFields={otherOutboundFormCustomFields}
@@ -945,207 +2244,44 @@ const OtherOutboundPage: React.FC = () => {
             embedInParentRow
           />
         </Row>
-        <div className="uni-table-detail" style={{ width: '100%' }}>
-          <UniTableDetailHeader title={t('app.kuaizhizao.warehouseOutbound.section.lines')} required />
-          <AntForm.List name="items">
-              {(fields, { add, remove }) => {
-                const cols = [
-                  {
-                    title: t('app.kuaizhizao.warehouseOutbound.field.material'),
-                    dataIndex: 'material_id',
-                    width: 260,
-                    render: (_: any, __: any, index: number) => (
-                      <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
-                        {({ getFieldValue }: any) => {
-                          const row = getFieldValue('items')?.[index];
-                          const mid = row?.material_id ? Number(row.material_id) : null;
-                          const fallback = mid && (row?.material_code || row?.material_name)
-                            ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
-                            : undefined;
-                          return (
-                            <div className="warehouse-detail-material-cell">
-                              <AntForm.Item name={[index, 'material_code']} hidden>
-                                <input type="hidden" />
-                              </AntForm.Item>
-                              <AntForm.Item name={[index, 'material_name']} hidden>
-                                <input type="hidden" />
-                              </AntForm.Item>
-                              <UniMaterialSelect
-                                name={[index, 'material_id']}
-                                label=""
-                                placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectMaterial')}
-                                required
-                                size="small"
-                                listFieldKey={index}
-                                listFieldName="items"
-                                fillMapping={{
-                                  material_code: 'mainCode',
-                                  material_name: 'name',
-                                }}
-                                onChange={(_val, material) => {
-                                  if (material) {
-                                    formRef.current?.setFieldValue(
-                                      ['items', index, 'material_unit'],
-                                      resolveMaterialScenarioUnit(material, 'sale'),
-                                    );
-                                  }
-                                  // 物料切换后立刻同步指纹（部分选材路径不走 onValuesChange）
-                                  syncLineMaterialKeyFromForm();
-                                }}
-                                fallbackOption={fallback}
-                                formItemProps={{ style: { margin: 0 } }}
-                                showQuickCreate
-                                showAdvancedSearch
-                              />
-                            </div>
-                          );
-                        }}
-                      </AntForm.Item>
-                    ),
-                  },
-                  {
-                    title: t('common.unit'),
-                    dataIndex: 'material_unit',
-                    width: 100,
-                    render: (_: any, __: any, index: number) => (
-                      <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
-                        {({ getFieldValue }) => {
-                          const materialId = getFieldValue(['items', index, 'material_id']);
-                          if (!formRef.current) return null;
-                          return (
-                            <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                              <DocumentLineUnitSelect
-                                form={formRef.current}
-                                listName="items"
-                                rowIndex={index}
-                                fields={{ quantity: 'outbound_quantity', unit: 'material_unit' }}
-                                materialId={materialId}
-                                size="small"
-                                noStyle
-                              />
-                            </AntForm.Item>
-                          );
-                        }}
-                      </AntForm.Item>
-                    ),
-                  },
-                  {
-                    title: t('app.kuaizhizao.warehouseOutbound.pull.colCurrentStock'),
-                    key: 'current_stock',
-                    width: 100,
-                    align: 'right' as const,
-                    render: (_: any, __: any, index: number) => (
-                      <AntForm.Item
-                        noStyle
-                        shouldUpdate={(prev, curr) =>
-                          prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id ||
-                          prev?.items?.[index]?.outbound_quantity !== curr?.items?.[index]?.outbound_quantity ||
-                          prev?.warehouse_id !== curr?.warehouse_id
-                        }
-                      >
-                        {({ getFieldValue }) => {
-                          const mid = Number(getFieldValue(['items', index, 'material_id']) || 0);
-                          const wid = Number(getFieldValue('warehouse_id') || selectedWarehouseId || 0);
-                          if (!(mid > 0) || !(wid > 0)) return '—';
-                          if (stockLoading) return '…';
-                          const stock = stockByMaterialId[mid];
-                          if (stock == null) return '—';
-                          const qty = Number(getFieldValue(['items', index, 'outbound_quantity']) || 0);
-                          const insufficient = qty > 0 && stock < qty;
-                          return (
-                            <Typography.Text type={insufficient ? 'danger' : undefined}>
-                              {formatQuantity(stock)}
-                            </Typography.Text>
-                          );
-                        }}
-                      </AntForm.Item>
-                    ),
-                  },
-                  {
-                    title: t('common.quantity'),
-                    dataIndex: 'outbound_quantity',
-                    width: 100,
-                    align: 'right' as const,
-                    render: (_: any, __: any, index: number) => (
-                      <AntForm.Item name={[index, 'outbound_quantity']} rules={[{ required: true, message: t('app.kuaizhizao.warehouseOutbound.field.required') }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
-                        <InputNumber placeholder={t('common.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size="small" />
-                      </AntForm.Item>
-                    ),
-                  },
-                  {
-                    title: t('app.kuaizhizao.warehouseOutbound.col.location'),
-                    dataIndex: 'location_code',
-                    width: 180,
-                    render: (_: any, __: any, index: number) => (
-                      <AntForm.Item name={[index, 'location_code']} style={{ margin: 0 }}>
-                        <Select
-                          options={locationOptions}
-                          placeholder={selectedWarehouseId ? t('app.kuaizhizao.warehouseOutbound.field.selectLocation') : t('app.kuaizhizao.warehouseOutbound.field.selectWarehouseFirst')}
-                          style={{ width: '100%' }}
-                          size="small"
-                          showSearch
-                          optionFilterProp="label"
-                          allowClear
-                          disabled={!selectedWarehouseId}
-                        />
-                      </AntForm.Item>
-                    ),
-                  },
-                  {
-                    title: t('app.kuaizhizao.warehouseOutbound.field.unitPrice'),
-                    dataIndex: 'unit_price',
-                    width: 100,
-                    align: 'right' as const,
-                    render: (_: any, __: any, index: number) => (
-                      <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
-                        <InputNumber placeholder="0" min={0} precision={priceDecimals} style={{ width: '100%' }} size="small" />
-                      </AntForm.Item>
-                    ),
-                  },
-                  {
-                    title: t('common.actions'),
-                    width: 60,
-                    render: (_: any, __: any, index: number) => (
-                      <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
-                    ),
-                  },
-                ];
-                const totalWidth = cols.reduce((s, c) => s + (c.width as number || 0), 0);
-                return (
-                  <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
-                    <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
-                    <div style={{ width: '100%', overflowX: 'auto' }}>
-                      <Table
-                        className="warehouse-detail-table"
-                        size="small"
-                        dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
-                        rowKey="key"
-                        pagination={false}
-                        columns={cols}
-                        scroll={fields.length > 0 ? { x: totalWidth } : undefined}
-                        style={{ width: '100%', margin: 0 }}
-                        footer={() => (
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
-                            <Button type="dashed" icon={<PlusOutlined />} style={{ flex: 1, minWidth: 120 }} onClick={() => add(defaultOutboundItem)}>
-                              {t('app.kuaizhizao.warehouseOutbound.action.addLine')}
-                            </Button>
-                            <Button
-                              type="default"
-                              icon={<ShoppingOutlined />}
-                              style={{ flex: 1, minWidth: 120 }}
-                              onClick={() => setMaterialPickerOpen(true)}
-                            >
-                              {t('app.kuaizhizao.common.materialBatchSelect')}
-                            </Button>
-                          </div>
-                        )}
-                      />
-                    </div>
-                  </div>
-                );
-              }}
-            </AntForm.List>
-        </div>
+        <DocumentDetailTableStyles />
+        <UniTableDetail
+          name="items"
+          title={t('app.kuaizhizao.warehouseOutbound.createLinesTitle')}
+          required
+          requiredMessage={t('app.kuaizhizao.otherOutbound.msg.needValidLines')}
+          headerExtra={
+            editingOutboundId == null ? (
+              <Space size={8}>
+                <Button
+                  type="default"
+                  icon={<PlusOutlined />}
+                  onClick={() => {
+                    const next = [
+                      ...(formRef.current?.getFieldValue('items') ?? []),
+                      { ...defaultOutboundItem },
+                    ];
+                    formRef.current?.setFieldsValue({ items: next });
+                  }}
+                >
+                  {t('common.addDetail')}
+                </Button>
+                <Button
+                  type="default"
+                  icon={<ShoppingOutlined />}
+                  onClick={() => setMaterialPickerOpen(true)}
+                >
+                  {t('app.kuaizhizao.common.materialBatchSelect')}
+                </Button>
+              </Space>
+            ) : undefined
+          }
+          columns={formItemColumns}
+          disabledAdd
+          initialValue={{ ...defaultOutboundItem }}
+          tableProps={DOCUMENT_DETAIL_TABLE_PROPS}
+        />
+
         <DocumentAttachmentsField category="other_outbound_attachments" />
         <ProFormTextArea name="notes" label={t('common.remark')} placeholder={t('app.kuaizhizao.warehouseOutbound.field.optional')} fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
@@ -1155,6 +2291,7 @@ const OtherOutboundPage: React.FC = () => {
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendOtherOutboundItemsFromMaterials}
       />
+
       {PrintModal}
     </>
   );

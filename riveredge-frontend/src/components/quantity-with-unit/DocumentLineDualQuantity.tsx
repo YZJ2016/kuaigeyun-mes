@@ -1,17 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import { InputNumber, Space } from 'antd';
-import { MaterialUnitRoleBadge } from './MaterialUnitRoleBadge';
+import { UniInputNumber } from '../uni-input-number/UniInputNumber';
 import type { Material } from '../../apps/master-data/types/material';
 import { isFloatingMaterialUnit } from '../../apps/master-data/utils/materialConversionType';
 import {
   findMaterialAuxUnitRow,
   resolveAuxUnitForScenario,
   shouldShowDualQuantityEntry,
+  coerceDocumentLineQuantity,
   syncDualQuantitiesFixed,
   syncDualQuantitiesFloating,
   type DocumentDualQuantityValue,
 } from '../../utils/materialDualQuantity';
-import type { MaterialScenario } from '../../utils/materialScenarioUnit';
+import { resolveMaterialScenarioUnit, type MaterialScenario } from '../../utils/materialScenarioUnit';
+import { EMPTY_VALUE_PLACEHOLDER } from '../../utils/format';
 import { QuantityWithUnit } from './index';
 
 export type DocumentLineDualQuantityProps = {
@@ -23,10 +24,15 @@ export type DocumentLineDualQuantityProps = {
   unitField?: keyof DocumentDualQuantityValue;
   disabled?: boolean;
   quantityPrecision?: number;
+  /** 为 false 时仅数量框（明细表已有独立单位列时使用） */
+  inlineUnitWithQuantity?: boolean;
+  /** 主数量列 / 副数量列；缺省时两栏横排 */
+  part?: 'primary' | 'aux';
 };
 
 /**
- * 单据行数量：有副单位时展示主数量 + 副数量；固定换算联动，无固定换算双录。
+ * 单据行数量：主数量与副数量分两栏。无副单位时副数量栏仍展示且不可录入。
+ * 固定换算联动，无固定换算双录。
  */
 export const DocumentLineDualQuantity: React.FC<DocumentLineDualQuantityProps> = ({
   material,
@@ -37,6 +43,8 @@ export const DocumentLineDualQuantity: React.FC<DocumentLineDualQuantityProps> =
   unitField = 'material_unit',
   disabled = false,
   quantityPrecision = 4,
+  inlineUnitWithQuantity = true,
+  part,
 }) => {
   const baseUnit = String(material?.baseUnit ?? material?.base_unit ?? '').trim();
   const auxUnit = useMemo(
@@ -47,19 +55,19 @@ export const DocumentLineDualQuantity: React.FC<DocumentLineDualQuantityProps> =
   const floating = isFloatingMaterialUnit(auxRow);
   const showDual = shouldShowDualQuantityEntry(material, scenario);
 
-  const lineQty =
-    (value?.quantity as number | null | undefined) ??
-    (value?.[quantityField] as number | null | undefined);
+  const lineQty = coerceDocumentLineQuantity(value?.quantity ?? value?.[quantityField]);
   const lineUnit = String(
     value?.material_unit ?? value?.[unitField] ?? auxUnit,
   ).trim();
 
   const emit = useCallback(
     (next: DocumentDualQuantityValue) => {
+      const qty = coerceDocumentLineQuantity(next.quantity);
       onChange?.({
         ...value,
         ...next,
-        [quantityField]: next.quantity,
+        quantity: qty,
+        [quantityField]: qty,
         [unitField]: next.material_unit,
       });
     },
@@ -70,7 +78,7 @@ export const DocumentLineDualQuantity: React.FC<DocumentLineDualQuantityProps> =
     (next: { quantity?: number | null; unit?: string }) => {
       let merged: DocumentDualQuantityValue = {
         ...value,
-        quantity: next.quantity ?? undefined,
+        quantity: coerceDocumentLineQuantity(next.quantity),
         material_unit: next.unit ?? lineUnit,
         aux_unit: value?.aux_unit ?? auxUnit,
       };
@@ -91,7 +99,7 @@ export const DocumentLineDualQuantity: React.FC<DocumentLineDualQuantityProps> =
     (auxQty: number | null) => {
       let merged: DocumentDualQuantityValue = {
         ...value,
-        quantity: lineQty as number | undefined,
+        quantity: lineQty,
         material_unit: lineUnit || baseUnit,
         aux_quantity: auxQty ?? undefined,
         aux_unit: auxUnit,
@@ -191,8 +199,28 @@ export const DocumentLineDualQuantity: React.FC<DocumentLineDualQuantityProps> =
     value,
   ]);
 
-  if (!showDual || !baseUnit || !auxUnit) {
-    return (
+  const auxEnabled = showDual && Boolean(baseUnit) && Boolean(auxUnit);
+  const primaryBaseQty = lineQty;
+  const scenarioUnit = String(resolveMaterialScenarioUnit(material, scenario) || '').trim();
+  const primaryUnitLabel = lineUnit || scenarioUnit;
+
+  const primaryControl = !auxEnabled ? (
+    inlineUnitWithQuantity ? (
+      <UniInputNumber
+        value={lineQty as number | null | undefined}
+        onChange={(qty) =>
+          handlePrimaryLineChange({
+            quantity: qty,
+            unit: primaryUnitLabel || undefined,
+          })
+        }
+        min={0}
+        precision={quantityPrecision}
+        disabled={disabled}
+        addonAfter={primaryUnitLabel || undefined}
+        style={{ width: '100%' }}
+      />
+    ) : (
       <QuantityWithUnit
         material={material ?? undefined}
         scenario={scenario}
@@ -203,38 +231,41 @@ export const DocumentLineDualQuantity: React.FC<DocumentLineDualQuantityProps> =
         onChange={handlePrimaryLineChange}
         disabled={disabled}
         quantityPrecision={quantityPrecision}
+        layout="quantity-only"
       />
-    );
-  }
+    )
+  ) : (
+    <UniInputNumber
+      value={primaryBaseQty != null && Number.isFinite(primaryBaseQty) ? primaryBaseQty : undefined}
+      onChange={handleBaseQtyChange}
+      min={0}
+      precision={quantityPrecision}
+      disabled={disabled}
+      addonAfter={baseUnit}
+      style={{ width: '100%' }}
+    />
+  );
 
-  const primaryBaseQty = Number(value?.quantity ?? lineQty);
+  const auxControl = (
+    <UniInputNumber
+      value={auxEnabled ? (value?.aux_quantity ?? undefined) : undefined}
+      onChange={auxEnabled ? handleAuxQtyChange : undefined}
+      min={0}
+      precision={quantityPrecision}
+      disabled={disabled || !auxEnabled}
+      placeholder={auxEnabled ? undefined : EMPTY_VALUE_PLACEHOLDER}
+      addonAfter={auxEnabled ? auxUnit : undefined}
+      style={{ width: '100%' }}
+    />
+  );
+
+  if (part === 'aux') return auxControl;
+  if (part === 'primary') return primaryControl;
 
   return (
-    <Space orientation="vertical" size={4} style={{ width: '100%' }}>
-      <Space size={8} style={{ width: '100%', alignItems: 'center' }}>
-        <MaterialUnitRoleBadge role="primary" style={{ flexShrink: 0 }} />
-        <InputNumber
-          value={Number.isFinite(primaryBaseQty) ? primaryBaseQty : undefined}
-          onChange={handleBaseQtyChange}
-          min={0}
-          precision={quantityPrecision}
-          disabled={disabled}
-          addonAfter={baseUnit}
-          style={{ flex: 1, minWidth: 80 }}
-        />
-      </Space>
-      <Space size={8} style={{ width: '100%', alignItems: 'center' }}>
-        <MaterialUnitRoleBadge role="aux" style={{ flexShrink: 0 }} />
-        <InputNumber
-          value={value?.aux_quantity ?? undefined}
-          onChange={handleAuxQtyChange}
-          min={0}
-          precision={quantityPrecision}
-          disabled={disabled}
-          addonAfter={auxUnit}
-          style={{ flex: 1, minWidth: 80 }}
-        />
-      </Space>
-    </Space>
+    <div style={{ display: 'flex', gap: 8, width: '100%', alignItems: 'center' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>{primaryControl}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>{auxControl}</div>
+    </div>
   );
 };

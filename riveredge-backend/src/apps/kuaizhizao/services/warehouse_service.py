@@ -39,6 +39,19 @@ from apps.kuaizhizao.constants.work_order_inbound_status import (
     WORK_ORDER_INBOUND_ALLOWED_STATUSES,
 )
 from apps.kuaizhizao.utils.material_unit_utils import convert_to_base_quantity
+from apps.kuaizhizao.utils.material_dual_quantity_utils import (
+    document_line_dual_quantity_for_push,
+)
+
+
+def _document_line_dual_quantity_update_fields(line: Any) -> Dict[str, Any]:
+    """编辑明细：仅当请求体显式带了副数量字段时写入（尊重 exclude_unset）。"""
+    fields_set = getattr(line, "model_fields_set", set()) or set()
+    out: Dict[str, Any] = {}
+    for key in ("aux_quantity", "aux_unit", "unit_conversion_rate"):
+        if key in fields_set:
+            out[key] = getattr(line, key, None)
+    return out
 
 
 def _agent_debug_ndjson(location: str, message: str, data: dict, hypothesis_id: str, run_id: str = "pre-fix") -> None:
@@ -759,6 +772,7 @@ def _optional_positive_int(value: Any) -> Optional[int]:
 from apps.kuaizhizao.utils.purchase_return_qty import (
     confirmed_returned_qty_by_purchase_order_item_ids,
     returned_qty_by_purchase_order_item_ids,
+    returned_qty_by_purchase_receipt_item_ids,
 )
 
 
@@ -1296,6 +1310,123 @@ async def _default_location_if_required(
     if loc_id is None:
         raise ValidationError(f"物料 {material_label} 的默认仓库未维护可用库位")
     return int(loc_id), loc_code
+
+
+async def _require_line_location(
+    tenant_id: int,
+    warehouse_id: int,
+    location_id: Optional[int],
+    *,
+    material_label: str,
+    direction_label: str = "出库",
+) -> tuple[int, str]:
+    """解析行库位（出入库共用）。
+
+    已选手选则校验归属；未选时默认仓库首个可用库位，仓下无库位则自动建立「整仓」。
+    对齐金蝶常见「库位非必填」：不合格品自动入库、下推建单等不因未选手选库位被拦。
+    """
+    from apps.master_data.models.warehouse import StorageArea, StorageLocation
+    from apps.master_data.services.warehouse_service import WarehouseService
+
+    if location_id is None or int(location_id) <= 0:
+        try:
+            return await WarehouseService.ensure_whole_warehouse_location(
+                tenant_id, int(warehouse_id)
+            )
+        except ValidationError as err:
+            raise ValidationError(
+                f"物料 {material_label} 的{direction_label}仓库无法确定库位：{err}"
+            ) from err
+
+    loc = await StorageLocation.get_or_none(
+        id=int(location_id),
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+    )
+    if not loc or not loc.is_active:
+        raise ValidationError(f"物料 {material_label} 的{direction_label}库位不存在或已停用")
+    if loc.storage_area_id:
+        area = await StorageArea.get_or_none(
+            id=loc.storage_area_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not area or int(area.warehouse_id) != int(warehouse_id):
+            raise ValidationError(f"物料 {material_label} 所选库位不属于所选{direction_label}仓库")
+    elif loc.warehouse_id is not None and int(loc.warehouse_id) != int(warehouse_id):
+        raise ValidationError(f"物料 {material_label} 所选库位不属于所选{direction_label}仓库")
+    code = str(loc.code or "").strip()
+    if not code:
+        raise ValidationError(f"物料 {material_label} 的{direction_label}库位缺少编码")
+    return int(loc.id), code
+
+
+async def _resolve_line_location_into_mapping(
+    tenant_id: int,
+    *,
+    warehouse_id: Optional[int],
+    location_id: Optional[int],
+    location_code: Optional[str] = None,
+    material_label: str,
+    direction_label: str,
+    target: dict,
+) -> None:
+    """写路径：缺库位且仓下无库位时 ensure 整仓，结果写入 target（location_id/location_code）。"""
+    wh_id = int(warehouse_id or 0)
+    if wh_id <= 0:
+        return
+    has_id = location_id is not None and int(location_id) > 0
+    has_code = bool(str(location_code or target.get("location_code") or "").strip())
+    if has_id:
+        lid = int(location_id)
+    elif has_code:
+        return
+    else:
+        lid = None
+    resolved_id, resolved_code = await _require_line_location(
+        tenant_id,
+        wh_id,
+        lid,
+        material_label=material_label,
+        direction_label=direction_label,
+    )
+    target["location_id"] = resolved_id
+    target["location_code"] = resolved_code
+
+
+async def _resolve_line_location_pair(
+    tenant_id: int,
+    *,
+    warehouse_id: Optional[int],
+    location_id: Optional[int],
+    location_code: Optional[str],
+    material_label: str,
+    direction_label: str,
+) -> tuple[Optional[int], Optional[str]]:
+    patch: dict = {}
+    await _resolve_line_location_into_mapping(
+        tenant_id,
+        warehouse_id=warehouse_id,
+        location_id=location_id,
+        location_code=location_code,
+        material_label=material_label,
+        direction_label=direction_label,
+        target=patch,
+    )
+    if patch:
+        return patch.get("location_id"), patch.get("location_code")
+    lid = int(location_id) if location_id is not None and int(location_id) > 0 else None
+    code = str(location_code or "").strip() or None
+    if lid is not None:
+        resolved_id, resolved_code = await _require_line_location(
+            tenant_id,
+            int(warehouse_id or 0),
+            lid,
+            material_label=material_label,
+            direction_label=direction_label,
+        )
+        return resolved_id, resolved_code
+    return lid, code
 
 
 _RECEIPT_NOTICE_VOID_STATUSES = frozenset({"已取消", "cancelled", "CANCELLED"})
@@ -8350,6 +8481,26 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         items = await ShipmentNoticeItem.filter(tenant_id=tenant_id, id__in=selected_ids).all()
         if not items:
             raise BusinessLogicError("没有可出库的发货通知行")
+        from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+
+        so_line_ids = [
+            int(i.sales_order_item_id)
+            for i in items
+            if getattr(i, "sales_order_item_id", None)
+        ]
+        so_line_by_id = {}
+        order_by_id: Dict[int, Any] = {}
+        if so_line_ids:
+            so_lines = await SalesOrderItem.filter(tenant_id=tenant_id, id__in=so_line_ids).all()
+            so_line_by_id = {int(line.id): line for line in so_lines}
+            order_ids = sorted({int(line.sales_order_id) for line in so_lines})
+            if order_ids:
+                from apps.kuaizhizao.models.sales_order import SalesOrder
+
+                orders = await SalesOrder.filter(
+                    tenant_id=tenant_id, id__in=order_ids, deleted_at__isnull=True
+                ).all()
+                order_by_id = {int(o.id): o for o in orders}
         notice_ids = sorted({int(i.notice_id) for i in items})
         notices = await ShipmentNotice.filter(
             tenant_id=tenant_id, id__in=notice_ids, deleted_at__isnull=True
@@ -8417,8 +8568,27 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     header_wh_id,
                     material_label=str(item.material_code or item.material_name or item.id),
                 )
-                item_total = qty * Decimal(str(item.unit_price or 0))
                 so_item_id = getattr(item, "sales_order_item_id", None)
+                src_so_line = so_line_by_id.get(int(so_item_id)) if so_item_id else None
+                line_tax = getattr(src_so_line, "tax_rate", 0) or 0 if src_so_line else 0
+                from apps.kuaizhizao.constants.price_type import (
+                    DEFAULT_SALES_PRICE_TYPE,
+                    normalize_price_type,
+                )
+                from apps.kuaizhizao.utils.sales_price_amount import stored_sales_line_amount
+
+                price_type = DEFAULT_SALES_PRICE_TYPE
+                if src_so_line is not None:
+                    order = order_by_id.get(int(src_so_line.sales_order_id))
+                    if order is not None:
+                        price_type = normalize_price_type(getattr(order, "price_type", None))
+                item_total = stored_sales_line_amount(
+                    qty,
+                    Decimal(str(item.unit_price or 0)),
+                    line_tax,
+                    price_type,
+                    is_gift=bool(getattr(item, "is_gift", False)),
+                )
                 delivery_items.append(
                     SalesDeliveryItemCreate(
                         sales_order_item_id=int(so_item_id) if so_item_id else None,
@@ -8633,7 +8803,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             unit_price = Decimal("0")  # 默认价格为0
             
             # 计算金额
-            item_total_amount = delivery_qty * unit_price
+            item_total_amount = WarehouseService._qty_price_line_total(delivery_qty, unit_price)
             
             delivery_items.append(
                 SalesDeliveryItemCreate(
@@ -9600,18 +9770,30 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     failure_count += 1
                     continue
                 
-                # 构建出库单明细
+                from apps.kuaizhizao.constants.price_type import normalize_price_type
+                from apps.kuaizhizao.utils.sales_price_amount import stored_sales_line_amount
+
+                price_type = normalize_price_type(getattr(sales_order, "price_type", None))
                 delivery_items = []
                 for item in order_items:
                     if item.remaining_quantity > 0:
+                        remain_qty = item.remaining_quantity
+                        line_tax = getattr(item, "tax_rate", 0) or 0
                         delivery_items.append(SalesDeliveryItemCreate(
                             material_id=item.material_id,
                             material_code=item.material_code,
                             material_name=item.material_name,
                             material_unit=item.material_unit,
-                            delivery_quantity=item.remaining_quantity,
+                            delivery_quantity=remain_qty,
                             unit_price=item.unit_price,
-                            total_amount=item.remaining_quantity * item.unit_price
+                            tax_rate=line_tax if float(line_tax or 0) > 0 else None,
+                            total_amount=stored_sales_line_amount(
+                                remain_qty,
+                                item.unit_price,
+                                line_tax,
+                                price_type,
+                                is_gift=bool(getattr(item, "is_gift", False)),
+                            ),
                         ))
                 
                 if not delivery_items:
@@ -10091,6 +10273,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
         from apps.kuaizhizao.services.purchase_service import PurchaseService
         from apps.kuaizhizao.utils.warehouse_resolver import resolve_inbound_warehouse_for_purchase_push
+        from apps.kuaicaiwu.services.purchase_settlement import normalize_po_tax_rate_to_percent
 
         selected_ids = [int(v) for v in item_ids if v is not None]
         line_wh_map: Dict[int, int] = {}
@@ -10186,6 +10369,16 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     header_wh_id = line_wh_id
                     header_wh_name = line_wh_name
                 snapshot = await purchase_service._resolve_po_item_receipt_snapshot(tenant_id, item)
+                line_tax_pct = float(
+                    normalize_po_tax_rate_to_percent(
+                        getattr(item, "tax_rate", None) or getattr(primary, "tax_rate", None)
+                    )
+                )
+                dual_for_push = document_line_dual_quantity_for_push(
+                    item,
+                    source_primary_qty=getattr(item, "ordered_quantity", None),
+                    push_primary_qty=qty,
+                )
                 receipt_items.append(
                     PurchaseReceiptItemCreate(
                         purchase_order_item_id=int(item.id),
@@ -10195,13 +10388,15 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         material_unit=snapshot["material_unit"],
                         receipt_quantity=qty,
                         unit_price=unit_price,
-                        total_amount=qty * unit_price,
+                        total_amount=WarehouseService._qty_price_line_total(qty, unit_price),
+                        tax_rate=line_tax_pct if line_tax_pct > 0 else None,
                         qualified_quantity=qty,
                         unqualified_quantity=0,
                         warehouse_id=line_wh_id,
                         warehouse_name=line_wh_name,
                         location_id=loc_id,
                         location_code=loc_code,
+                        **dual_for_push,
                     )
                 )
             if not receipt_items or header_wh_id is None:
@@ -10469,7 +10664,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         material_unit=item.material_unit or "件",
                         receipt_quantity=qty,
                         unit_price=unit_price,
-                        total_amount=qty * unit_price,
+                        total_amount=WarehouseService._qty_price_line_total(qty, unit_price),
                         qualified_quantity=qty,
                         unqualified_quantity=0,
                         warehouse_id=line_wh_id,
@@ -10866,6 +11061,9 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         push_pa_open = await PaymentApplicationPullService().push_payment_application_open_by_receipt_ids(
             tenant_id, receipt_ids
         )
+        push_pr_open = await PurchaseReturnService().push_purchase_return_open_by_receipt_ids(
+            tenant_id, receipt_ids
+        )
         enriched = enrich_inbound_hub_list_capabilities(
             receipts,
             out,
@@ -10874,6 +11072,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             item_previews=item_previews,
             quantity_units=quantity_units,
             push_payment_application_open=push_pa_open,
+            push_purchase_return_open=push_pr_open,
         )
         return enriched, total
 
@@ -10956,15 +11155,18 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         due_date = await resolve_partner_due_date(
                             tenant_id, "supplier", int(receipt_for_payable.supplier_id), biz_date
                         )
+                        from core.utils.amount_precision import quantize_business_amount
+
+                        money_total = quantize_business_amount(Decimal(str(total_amount)), 2)
                         payable_data = PayableCreate(
                             source_type="采购入库",
                             source_id=receipt_id,
                             source_code=receipt_for_payable.receipt_code,
                             supplier_id=receipt_for_payable.supplier_id,
                             supplier_name=receipt_for_payable.supplier_name,
-                            total_amount=float(total_amount),
+                            total_amount=money_total,
                             paid_amount=0.0,
-                            remaining_amount=float(total_amount),
+                            remaining_amount=money_total,
                             due_date=due_date,
                             business_date=biz_date,
                             status="未付款",
@@ -11134,9 +11336,13 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                             if existing is not None:
                                 unit_price = getattr(existing, "unit_price", None)
                                 if unit_price is not None:
-                                    item_update["total_amount"] = (
-                                        qty * Decimal(str(unit_price))
-                                    ).quantize(Decimal("0.01"))
+                                    item_update["total_amount"] = WarehouseService._qty_price_line_total(
+                                        qty, unit_price
+                                    )
+                        if getattr(item_data, "secondary_quantity", None) is not None:
+                            item_update["aux_quantity"] = Decimal(
+                                str(item_data.secondary_quantity)
+                            )
 
                         if item_update:
                             await PurchaseReceiptItem.filter(
@@ -11386,6 +11592,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 tenant_id=tenant_id,
                 receipt_id=receipt_id,
                 receipt_code=getattr(receipt, "receipt_code", None),
+                acting_user_id=updated_by,
             )
 
             try:
@@ -11502,6 +11709,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 tenant_id=tenant_id,
                 receipt_id=receipt_id,
                 receipt_code=getattr(receipt, "receipt_code", None),
+                acting_user_id=0,
             )
 
             from apps.kuaizhizao.models.document_relation import DocumentRelation
@@ -11692,7 +11900,9 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                             material_unit=item.unit,
                             receipt_quantity=item.outstanding_quantity,
                             unit_price=item.unit_price,
-                            total_amount=item.outstanding_quantity * item.unit_price
+                            total_amount=WarehouseService._qty_price_line_total(
+                                item.outstanding_quantity, item.unit_price
+                            )
                         ))
                 
                 if not receipt_items:
@@ -11846,21 +12056,20 @@ class SalesReturnService(AppBaseService[SalesReturn]):
         return {int(r["return_id"]): int(r["cnt"] or 0) for r in rows}
 
     @staticmethod
+    def _qty_price_line_total(qty: Any, unit_price: Any) -> Decimal:
+        from apps.kuaizhizao.utils.document_amount_write import line_total_qty_unit_price
+
+        return line_total_qty_unit_price(qty, unit_price)
+
+    @staticmethod
     def _sales_return_line_amount(
         qty: Any,
         unit_price: Any,
         total_amount: Any = None,
     ) -> Decimal:
-        """行金额真源：数量 × 单价；仅当显式总金额与之一致或单价为 0 时保留传入值。"""
-        q = Decimal(str(qty or 0))
-        p = Decimal(str(unit_price or 0))
-        computed = (q * p).quantize(Decimal("0.01"))
-        if total_amount is None:
-            return computed
-        given = Decimal(str(total_amount or 0)).quantize(Decimal("0.01"))
-        if given == 0 and computed != 0:
-            return computed
-        return given
+        from apps.kuaizhizao.utils.document_amount_write import resolve_simple_line_total
+
+        return resolve_simple_line_total(qty, unit_price, total_amount)
 
     async def _backfill_sales_return_item_unit_price(
         self,
@@ -11900,6 +12109,8 @@ class SalesReturnService(AppBaseService[SalesReturn]):
         persist: bool = True,
     ) -> tuple[Decimal, Decimal]:
         """用明细重算头表总数量/总金额；可选写回库（对齐采购退货确认写路径）。"""
+        from core.utils.amount_precision import quantize_business_amount
+
         items = await SalesReturnItem.filter(tenant_id=tenant_id, return_id=return_id).all()
         total_quantity = Decimal("0")
         total_amount = Decimal("0")
@@ -11908,12 +12119,10 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             unit_price = await self._backfill_sales_return_item_unit_price(tenant_id, item)
             line_amt = self._sales_return_line_amount(qty, unit_price, item.total_amount)
             dirty = False
-            if Decimal(str(item.unit_price or 0)).quantize(Decimal("0.01")) != unit_price.quantize(
-                Decimal("0.01")
-            ):
+            if quantize_business_amount(item.unit_price or 0, 2) != quantize_business_amount(unit_price, 2):
                 item.unit_price = unit_price
                 dirty = True
-            if Decimal(str(item.total_amount or 0)).quantize(Decimal("0.01")) != line_amt:
+            if quantize_business_amount(item.total_amount or 0, 2) != quantize_business_amount(line_amt, 2):
                 item.total_amount = line_amt
                 dirty = True
             if dirty and persist:
@@ -12371,7 +12580,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             if item_delivery_id:
                 header_delivery_ids.add(item_delivery_id)
             unit_price = Decimal(str(item.unit_price or 0))
-            total_amount = selected_qty * unit_price
+            total_amount = WarehouseService._sales_return_line_amount(selected_qty, unit_price)
             return_items.append(
                 SalesReturnItemCreate(
                     material_id=item.material_id,
@@ -12574,7 +12783,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             line = line_by_item_id[item_id]
             batch_number = str(line.batch_number or "").strip() or None
             unit_price = Decimal(str(line.unit_price or 0))
-            total_amount = selected_qty * unit_price
+            total_amount = WarehouseService._sales_return_line_amount(selected_qty, unit_price)
             delivery_item = await SalesDeliveryItem.get_or_none(
                 tenant_id=tenant_id,
                 id=item_id,
@@ -12856,7 +13065,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                         material_unit=item.material_unit or "个",
                         return_quantity=qty,
                         unit_price=unit_price,
-                        total_amount=qty * unit_price,
+                        total_amount=WarehouseService._qty_price_line_total(qty, unit_price),
                         batch_number=batch_number,
                         status="待退货",
                     )
@@ -13119,7 +13328,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                         material_unit=item.material_unit or "个",
                         return_quantity=qty,
                         unit_price=unit_price,
-                        total_amount=qty * unit_price,
+                        total_amount=WarehouseService._qty_price_line_total(qty, unit_price),
                         batch_number=str(getattr(item, "batch_number", None) or "").strip() or None,
                         status="待退货",
                     )
@@ -14248,16 +14457,9 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
         unit_price: Any,
         total_amount: Any = None,
     ) -> Decimal:
-        """行金额真源：数量 × 单价；仅当显式总金额与之一致或单价为 0 时保留传入值。"""
-        q = Decimal(str(qty or 0))
-        p = Decimal(str(unit_price or 0))
-        computed = (q * p).quantize(Decimal("0.01"))
-        if total_amount is None:
-            return computed
-        given = Decimal(str(total_amount or 0)).quantize(Decimal("0.01"))
-        if given == 0 and computed != 0:
-            return computed
-        return given
+        from apps.kuaizhizao.utils.document_amount_write import resolve_simple_line_total
+
+        return resolve_simple_line_total(qty, unit_price, total_amount)
 
     async def _purchase_return_totals_by_id(
         self,
@@ -14291,6 +14493,8 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
         persist: bool = True,
     ) -> tuple[Decimal, Decimal]:
         """用明细重算头表总数量/总金额；可选写回库（修复历史头表明细不同步）。"""
+        from core.utils.amount_precision import quantize_business_amount
+
         items = await PurchaseReturnItem.filter(tenant_id=tenant_id, return_id=return_id).all()
         total_quantity = Decimal("0")
         total_amount = Decimal("0")
@@ -14299,7 +14503,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             line_amt = self._purchase_return_line_amount(
                 qty, item.unit_price, item.total_amount
             )
-            if Decimal(str(item.total_amount or 0)).quantize(Decimal("0.01")) != line_amt:
+            if quantize_business_amount(item.total_amount or 0, 2) != quantize_business_amount(line_amt, 2):
                 item.total_amount = line_amt
                 if persist:
                     await item.save(update_fields=["total_amount"])
@@ -14383,7 +14587,14 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             enriched.finance_outcome = updates["finance_outcome"]
         return enriched
 
-    async def create_purchase_return(self, tenant_id: int, return_data: PurchaseReturnCreate, created_by: int) -> PurchaseReturnResponse:
+    async def create_purchase_return(
+        self,
+        tenant_id: int,
+        return_data: PurchaseReturnCreate,
+        created_by: int,
+        *,
+        skip_manual_create_auto_submit: bool = False,
+    ) -> PurchaseReturnResponse:
         """创建采购退货单"""
         user_info = await self.get_user_info(created_by)
         # 编码在短事务内 FOR UPDATE；勿嵌套在创建单据长事务里
@@ -14638,7 +14849,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                     f"物料 {item.material_code or item.material_name} 的退货数量不能超过可退数量 {max_return_qty}"
                 )
             unit_price = Decimal(str(item.unit_price or 0))
-            total_amount = selected_qty * unit_price
+            total_amount = WarehouseService._purchase_return_line_amount(selected_qty, unit_price)
             material = material_by_id.get(int(item.material_id or 0))
             requires_batch = bool(
                 batch_mgmt_enabled and material and getattr(material, "batch_managed", False)
@@ -14715,6 +14926,580 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             logger.warning("建立采购订单→采购退货关联失败: %s", rel_err)
 
         return created
+
+    async def get_purchase_receipt_return_preview(
+        self,
+        tenant_id: int,
+        purchase_receipt_id: int,
+    ):
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+        from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+        from apps.kuaizhizao.schemas.warehouse import (
+            InboundCreatePreviewLine,
+            PurchaseReceiptReturnPreviewResponse,
+        )
+
+        receipt = await PurchaseReceipt.get_or_none(
+            tenant_id=tenant_id,
+            id=purchase_receipt_id,
+            deleted_at__isnull=True,
+        )
+        if not receipt:
+            raise NotFoundError(f"采购入库单不存在: {purchase_receipt_id}")
+        status = str(receipt.status or "").strip()
+        if status in _PURCHASE_RECEIPT_VOID_STATUSES:
+            raise BusinessLogicError("已作废的采购入库单不可创建采购退货单")
+        if status not in _PURCHASE_RECEIPT_CONFIRMED_STATUSES:
+            raise BusinessLogicError("仅已入库的采购入库单可创建采购退货单")
+
+        receipt_items = await PurchaseReceiptItem.filter(
+            tenant_id=tenant_id,
+            receipt_id=purchase_receipt_id,
+        ).order_by("id")
+        if not receipt_items:
+            raise BusinessLogicError("采购入库单没有明细，无法预览退货明细")
+
+        await _hydrate_item_material_snapshot(tenant_id, receipt_items)
+        returned_by_item = await returned_qty_by_purchase_receipt_item_ids(
+            tenant_id, [int(i.id) for i in receipt_items]
+        )
+
+        lines: List[InboundCreatePreviewLine] = []
+        for item in receipt_items:
+            received = float(item.receipt_quantity or 0)
+            if received <= 0:
+                continue
+            returned = float(returned_by_item.get(int(item.id), 0.0))
+            pending = max(0.0, received - returned)
+            if pending <= 0:
+                continue
+            batch = str(getattr(item, "batch_number", None) or "").strip() or None
+            lines.append(
+                InboundCreatePreviewLine(
+                    purchase_receipt_item_id=int(item.id),
+                    purchase_order_item_id=_optional_positive_int(item.purchase_order_item_id),
+                    material_id=int(item.material_id),
+                    material_code=item.material_code or "",
+                    material_name=item.material_name or "",
+                    material_spec=item.material_spec,
+                    material_unit=item.material_unit or "个",
+                    source_doc_quantity=received,
+                    source_received_quantity=returned,
+                    source_pending_quantity=pending,
+                    return_quantity=pending,
+                    unit_price=float(item.unit_price or 0),
+                    batch_number=batch,
+                    outbound_batch_options=[batch] if batch else [],
+                )
+            )
+
+        message = None
+        if not lines:
+            message = "该采购入库单没有可退货的明细（需有入库数量且未全部退完）"
+
+        return PurchaseReceiptReturnPreviewResponse(
+            purchase_receipt_id=purchase_receipt_id,
+            purchase_receipt_code=receipt.receipt_code or str(purchase_receipt_id),
+            supplier_id=receipt.supplier_id,
+            supplier_name=receipt.supplier_name,
+            department_id=getattr(receipt, "department_id", None),
+            department_name=getattr(receipt, "department_name", None),
+            warehouse_id=receipt.warehouse_id,
+            warehouse_name=receipt.warehouse_name,
+            purchase_order_id=receipt.purchase_order_id,
+            purchase_order_code=receipt.purchase_order_code,
+            lines=lines,
+            message=message,
+        )
+
+    async def pull_from_purchase_receipt(
+        self,
+        tenant_id: int,
+        purchase_receipt_id: int,
+        created_by: int,
+        warehouse_id: int,
+        warehouse_name: Optional[str] = None,
+        return_quantities: Optional[Dict[int, float]] = None,
+    ) -> PurchaseReturnResponse:
+        """从采购入库单下推生成采购退货单。"""
+        from apps.kuaizhizao.schemas.warehouse import PurchaseReturnItemCreate
+
+        preview = await self.get_purchase_receipt_return_preview(
+            tenant_id=tenant_id,
+            purchase_receipt_id=purchase_receipt_id,
+        )
+        returnable_by_item_id = {
+            int(line.purchase_receipt_item_id): Decimal(str(line.source_pending_quantity or 0))
+            for line in preview.lines
+            if line.purchase_receipt_item_id is not None
+        }
+        line_by_item_id = {
+            int(line.purchase_receipt_item_id): line
+            for line in preview.lines
+            if line.purchase_receipt_item_id is not None
+        }
+
+        return_quantities = _coerce_id_float_map(return_quantities)
+        qty_keys = set(return_quantities.keys()) if return_quantities else None
+        return_items: List[PurchaseReturnItemCreate] = []
+        for item_id, returnable_qty in returnable_by_item_id.items():
+            if qty_keys is not None and item_id not in qty_keys:
+                continue
+            if returnable_qty <= 0:
+                continue
+            if return_quantities and item_id in return_quantities:
+                selected_qty = Decimal(str(return_quantities[item_id]))
+            else:
+                selected_qty = returnable_qty
+            if selected_qty <= 0:
+                continue
+            if selected_qty > returnable_qty:
+                line = line_by_item_id.get(item_id)
+                label = (line.material_code or line.material_name) if line else str(item_id)
+                raise BusinessLogicError(
+                    f"物料 {label} 的退货数量不能超过可退数量 {returnable_qty}"
+                )
+            line = line_by_item_id[item_id]
+            batch_number = str(line.batch_number or "").strip() or None
+            unit_price = Decimal(str(line.unit_price or 0))
+            total_amount = WarehouseService._purchase_return_line_amount(selected_qty, unit_price)
+            return_items.append(
+                PurchaseReturnItemCreate(
+                    purchase_receipt_item_id=item_id,
+                    purchase_order_item_id=_optional_positive_int(line.purchase_order_item_id),
+                    material_id=line.material_id,
+                    material_code=line.material_code,
+                    material_name=line.material_name,
+                    material_spec=line.material_spec,
+                    material_unit=line.material_unit,
+                    return_quantity=float(selected_qty),
+                    unit_price=float(unit_price),
+                    total_amount=float(total_amount),
+                    batch_number=batch_number,
+                    status="待退货",
+                )
+            )
+
+        if not return_items:
+            raise BusinessLogicError("没有可退货的明细")
+
+        return_data = PurchaseReturnCreate(
+            purchase_receipt_id=preview.purchase_receipt_id,
+            purchase_receipt_code=preview.purchase_receipt_code,
+            purchase_order_id=preview.purchase_order_id,
+            purchase_order_code=preview.purchase_order_code,
+            supplier_id=preview.supplier_id or 0,
+            supplier_name=preview.supplier_name or "",
+            department_id=getattr(preview, "department_id", None),
+            department_name=getattr(preview, "department_name", None),
+            warehouse_id=warehouse_id,
+            warehouse_name=await _resolve_warehouse_name_by_id(tenant_id, warehouse_id, warehouse_name),
+            status="待退货",
+            return_reason="入库退货",
+            notes=f"从采购入库单 {preview.purchase_receipt_code} 下推生成",
+            items=return_items,
+        )
+        return await self.create_purchase_return(
+            tenant_id=tenant_id,
+            return_data=return_data,
+            created_by=created_by,
+            skip_manual_create_auto_submit=True,
+        )
+
+    async def push_purchase_return_open_by_receipt_ids(
+        self,
+        tenant_id: int,
+        receipt_ids: List[int],
+    ) -> Dict[int, bool]:
+        """采购入库单是否存在可下推采购退货的明细。"""
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+        from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+
+        ids = [int(i) for i in receipt_ids if int(i) > 0]
+        result: Dict[int, bool] = {i: False for i in ids}
+        if not ids:
+            return result
+
+        receipts = await PurchaseReceipt.filter(
+            tenant_id=tenant_id,
+            id__in=ids,
+            deleted_at__isnull=True,
+        ).only("id", "status")
+        posted_ids = [
+            int(r.id)
+            for r in receipts
+            if str(r.status or "").strip() in _PURCHASE_RECEIPT_CONFIRMED_STATUSES
+        ]
+        if not posted_ids:
+            return result
+
+        items = await PurchaseReceiptItem.filter(
+            tenant_id=tenant_id,
+            receipt_id__in=posted_ids,
+        ).only("id", "receipt_id", "receipt_quantity")
+        if not items:
+            return result
+
+        returned_by_item = await returned_qty_by_purchase_receipt_item_ids(
+            tenant_id, [int(i.id) for i in items]
+        )
+        for item in items:
+            rid = int(item.receipt_id)
+            if rid not in result:
+                continue
+            received = float(item.receipt_quantity or 0)
+            if received <= 0:
+                continue
+            returned = float(returned_by_item.get(int(item.id), 0.0))
+            if received - returned > 0:
+                result[rid] = True
+        return result
+
+    async def list_purchase_receipt_pull_lines(
+        self,
+        tenant_id: int,
+        *,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        purchase_receipt_id: Optional[int] = None,
+        pullable_only: bool = True,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> Dict[str, Any]:
+        """开口采购入库行：已入库且未退完的明细。"""
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+        from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+        from apps.kuaizhizao.utils.pull_query_date_filter import apply_pull_query_document_date_filter
+
+        receipt_query = PurchaseReceipt.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if purchase_receipt_id is not None:
+            receipt_query = receipt_query.filter(id=int(purchase_receipt_id))
+        receipt_query = apply_pull_query_document_date_filter(
+            receipt_query,
+            field="receipt_time",
+            kind="datetime",
+            date_from=date_from,
+            date_to=date_to,
+        )
+        receipts = await receipt_query.only(
+            "id",
+            "receipt_code",
+            "status",
+            "supplier_id",
+            "supplier_name",
+            "warehouse_id",
+            "warehouse_name",
+            "purchase_order_id",
+            "purchase_order_code",
+            "receipt_time",
+        )
+        receipt_by_id = {int(row.id): row for row in receipts}
+        if not receipt_by_id:
+            return {"data": [], "total": 0}
+
+        items = await PurchaseReceiptItem.filter(
+            tenant_id=tenant_id,
+            receipt_id__in=list(receipt_by_id.keys()),
+        ).all()
+        await _hydrate_item_material_snapshot(tenant_id, items)
+        returned_by_item = await returned_qty_by_purchase_receipt_item_ids(
+            tenant_id, [int(item.id) for item in items]
+        )
+        batch_mgmt_enabled = await _warehouse_batch_management_enabled(tenant_id)
+        from apps.master_data.models.material import Material
+
+        material_ids = {
+            int(i.material_id) for i in items if i.material_id is not None and int(i.material_id) > 0
+        }
+        materials = await Material.filter(
+            tenant_id=tenant_id,
+            id__in=list(material_ids),
+            deleted_at__isnull=True,
+        ).all() if material_ids else []
+        material_by_id = {int(m.id): m for m in materials}
+
+        kw = (keyword or "").strip().lower()
+        lines: List[Dict[str, Any]] = []
+        for item in items:
+            receipt = receipt_by_id.get(int(item.receipt_id))
+            if not receipt:
+                continue
+            received = float(item.receipt_quantity or 0)
+            if received <= 0:
+                continue
+            pushed = returned_by_item.get(int(item.id), 0.0)
+            remaining = max(0.0, received - pushed)
+            status = str(receipt.status or "").strip()
+            selectable = (
+                status not in _PURCHASE_RECEIPT_VOID_STATUSES
+                and status in _PURCHASE_RECEIPT_CONFIRMED_STATUSES
+                and bool(receipt.supplier_id)
+                and remaining > 0
+            )
+            if pullable_only and not selectable:
+                continue
+            material_code = str(item.material_code or "").strip()
+            material_name = str(item.material_name or "").strip()
+            material_spec = str(item.material_spec or "").strip()
+            if kw:
+                haystack = " ".join([material_code, material_name, material_spec]).lower()
+                if kw not in haystack:
+                    continue
+            material = material_by_id.get(int(item.material_id or 0))
+            requires_batch = bool(
+                batch_mgmt_enabled and material and getattr(material, "batch_managed", False)
+            )
+            batch = str(getattr(item, "batch_number", None) or "").strip() or None
+            document_date = (
+                str(receipt.receipt_time or "")[:10] if receipt.receipt_time else None
+            )
+            lines.append(
+                {
+                    "id": int(item.id),
+                    "purchase_receipt_id": int(item.receipt_id),
+                    "receipt_code": receipt.receipt_code,
+                    "purchase_order_id": receipt.purchase_order_id,
+                    "purchase_order_code": receipt.purchase_order_code,
+                    "supplier_id": receipt.supplier_id,
+                    "supplier_name": receipt.supplier_name,
+                    "warehouse_id": receipt.warehouse_id,
+                    "warehouse_name": receipt.warehouse_name,
+                    "material_id": item.material_id,
+                    "material_code": material_code,
+                    "material_name": material_name,
+                    "material_spec": material_spec or None,
+                    "unit": item.material_unit or "个",
+                    "suggested_quantity": received,
+                    "pushed_quantity": pushed,
+                    "remaining_quantity": remaining,
+                    "suggested_batch_number": batch,
+                    "requires_batch_number": requires_batch,
+                    "required_date": document_date,
+                    "document_date": document_date,
+                    "location_id": int(item.location_id)
+                    if getattr(item, "location_id", None) is not None and int(item.location_id) > 0
+                    else None,
+                    "suggested_location_code": str(getattr(item, "location_code", None) or "").strip()
+                    or None,
+                }
+            )
+        lines.sort(
+            key=lambda r: (
+                str(r.get("receipt_code") or ""),
+                str(r.get("material_code") or ""),
+                int(r.get("id") or 0),
+            )
+        )
+        lines.sort(key=lambda r: str(r.get("document_date") or ""), reverse=True)
+        return {"data": lines[skip : skip + limit], "total": len(lines)}
+
+    async def create_purchase_returns_from_purchase_receipt_items(
+        self,
+        tenant_id: int,
+        item_ids: List[int],
+        created_by: int,
+        *,
+        line_batches: Optional[Dict[int, str]] = None,
+        line_warehouses: Optional[Dict[int, int]] = None,
+        line_quantities: Optional[Dict[int, float]] = None,
+        line_location_codes: Optional[Dict[int, str]] = None,
+    ) -> Dict[str, Any]:
+        """按采购入库行 id 建采购退货单；同一入库单合并一张。"""
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+        from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        from apps.kuaizhizao.schemas.warehouse import PurchaseReturnItemCreate
+        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+        from apps.kuaizhizao.utils.warehouse_resolver import resolve_inbound_warehouse_for_purchase_push
+
+        selected_ids = [int(v) for v in item_ids if v is not None]
+        if not selected_ids:
+            raise BusinessLogicError("请至少选择一条可退货采购入库明细")
+
+        items = await PurchaseReceiptItem.filter(
+            tenant_id=tenant_id,
+            id__in=selected_ids,
+        ).all()
+        if len(items) != len(set(selected_ids)):
+            raise NotFoundError("部分采购入库明细不存在")
+
+        receipt_ids = sorted({int(i.receipt_id) for i in items})
+        receipts = await PurchaseReceipt.filter(
+            tenant_id=tenant_id,
+            id__in=receipt_ids,
+            deleted_at__isnull=True,
+        ).all()
+        receipt_by_id = {int(r.id): r for r in receipts}
+        if len(receipt_by_id) != len(receipt_ids):
+            raise NotFoundError("部分采购入库单不存在")
+
+        returned_by_item = await returned_qty_by_purchase_receipt_item_ids(
+            tenant_id, selected_ids
+        )
+        batch_mgmt_enabled = await _warehouse_batch_management_enabled(tenant_id)
+        from apps.master_data.models.material import Material
+
+        material_ids = {int(i.material_id) for i in items if i.material_id}
+        materials = await Material.filter(
+            tenant_id=tenant_id,
+            id__in=list(material_ids),
+            deleted_at__isnull=True,
+        ).all() if material_ids else []
+        material_by_id = {int(m.id): m for m in materials}
+
+        line_batch_map = line_batches or {}
+        line_wh_map = line_warehouses or {}
+        line_qty_map = _coerce_id_float_map(line_quantities) or {}
+        line_loc_code_map = _coerce_id_str_map(line_location_codes) or {}
+
+        groups: Dict[int, List[PurchaseReceiptItem]] = {}
+        for item in items:
+            groups.setdefault(int(item.receipt_id), []).append(item)
+
+        returns_out: List[Dict[str, Any]] = []
+        for receipt_id, group_items in groups.items():
+            receipt = receipt_by_id[int(receipt_id)]
+            status = str(receipt.status or "").strip()
+            if status in _PURCHASE_RECEIPT_VOID_STATUSES:
+                raise BusinessLogicError(f"采购入库单 {receipt.receipt_code} 已作废，无法退货")
+            if status not in _PURCHASE_RECEIPT_CONFIRMED_STATUSES:
+                raise BusinessLogicError(f"采购入库单 {receipt.receipt_code} 尚未入库，无法退货")
+
+            header_wh_id: Optional[int] = None
+            header_wh_name: Optional[str] = None
+            return_items: List[PurchaseReturnItemCreate] = []
+            for item in group_items:
+                received = float(item.receipt_quantity or 0)
+                returned = float(returned_by_item.get(int(item.id), 0.0))
+                max_qty = max(0.0, received - returned)
+                if max_qty <= 0:
+                    continue
+                item_id = int(item.id)
+                if line_qty_map and item_id in line_qty_map:
+                    qty = float(line_qty_map[item_id])
+                else:
+                    qty = max_qty
+                if qty <= 0:
+                    continue
+                if qty > max_qty:
+                    material_label = str(item.material_code or item.material_name or item.id)
+                    raise BusinessLogicError(
+                        f"物料 {material_label} 的退货数量不能超过可退数量 {max_qty}"
+                    )
+                material_label = str(item.material_code or item.material_name or item.id)
+                explicit_wh = line_wh_map.get(int(item.id))
+                try:
+                    line_wh_id, line_wh_name = await resolve_inbound_warehouse_for_purchase_push(
+                        tenant_id,
+                        material_id=int(item.material_id),
+                        explicit_warehouse_id=explicit_wh or receipt.warehouse_id,
+                    )
+                except ValidationError as err:
+                    if explicit_wh is None and receipt.warehouse_id is None:
+                        raise ValidationError(
+                            f"请为物料 {material_label} 选择退货仓库"
+                        ) from err
+                    raise
+                if not line_wh_name:
+                    line_wh_name = await _resolve_warehouse_name_by_id(tenant_id, line_wh_id)
+                if header_wh_id is None:
+                    header_wh_id = int(line_wh_id)
+                    header_wh_name = line_wh_name
+
+                material = material_by_id.get(int(item.material_id))
+                requires_batch = bool(
+                    batch_mgmt_enabled and material and getattr(material, "batch_managed", False)
+                )
+                batch = str(line_batch_map.get(int(item.id), "") or "").strip() or None
+                if not batch:
+                    batch = str(getattr(item, "batch_number", None) or "").strip() or None
+                if requires_batch and not batch:
+                    raise ValidationError(
+                        f"采购退货失败：物料 {material_label} 启用了批号管理，请选择原入库批号"
+                    )
+
+                unit_price = float(item.unit_price or 0)
+                loc_id = getattr(item, "location_id", None)
+                loc_code = str(getattr(item, "location_code", None) or "").strip() or None
+                override_code = line_loc_code_map.get(item_id)
+                if override_code:
+                    loc_code = str(override_code or "").strip() or None
+                    loc_id = None
+                resolved_loc_id, resolved_loc_code = await _resolve_line_location_pair(
+                    tenant_id,
+                    warehouse_id=int(line_wh_id),
+                    location_id=loc_id,
+                    location_code=loc_code,
+                    material_label=material_label,
+                    direction_label="退货",
+                )
+                return_items.append(
+                    PurchaseReturnItemCreate(
+                        purchase_receipt_item_id=int(item.id),
+                        purchase_order_item_id=_optional_positive_int(item.purchase_order_item_id),
+                        material_id=item.material_id,
+                        material_code=item.material_code,
+                        material_name=item.material_name,
+                        material_spec=item.material_spec,
+                        material_unit=item.material_unit or "个",
+                        return_quantity=qty,
+                        unit_price=unit_price,
+                        total_amount=WarehouseService._qty_price_line_total(qty, unit_price),
+                        batch_number=batch,
+                        location_id=resolved_loc_id,
+                        location_code=resolved_loc_code,
+                        status="待退货",
+                    )
+                )
+
+            if not return_items or header_wh_id is None:
+                continue
+
+            created = await self.create_purchase_return(
+                tenant_id=tenant_id,
+                return_data=PurchaseReturnCreate(
+                    purchase_receipt_id=receipt.id,
+                    purchase_receipt_code=receipt.receipt_code,
+                    purchase_order_id=receipt.purchase_order_id,
+                    purchase_order_code=receipt.purchase_order_code,
+                    supplier_id=receipt.supplier_id,
+                    supplier_name=receipt.supplier_name,
+                    department_id=getattr(receipt, "department_id", None),
+                    department_name=getattr(receipt, "department_name", None),
+                    warehouse_id=header_wh_id,
+                    warehouse_name=header_wh_name
+                    or await _resolve_warehouse_name_by_id(tenant_id, header_wh_id),
+                    status="待退货",
+                    return_reason="入库退货",
+                    notes=f"从采购入库单 {receipt.receipt_code} 下推生成",
+                    items=return_items,
+                ),
+                created_by=created_by,
+                skip_manual_create_auto_submit=True,
+            )
+            returns_out.append(
+                {
+                    "return_id": created.id,
+                    "return_code": created.return_code,
+                }
+            )
+
+        if not returns_out:
+            raise BusinessLogicError("所选明细无法生成采购退货单")
+        first = returns_out[0]
+        msg = (
+            f"转单成功，共生成 {len(returns_out)} 张采购退货单"
+            if len(returns_out) > 1
+            else "采购退货单创建成功"
+        )
+        return {
+            "success": True,
+            "message": msg,
+            "return_id": first["return_id"],
+            "return_code": first["return_code"],
+            "returns": returns_out,
+        }
 
     async def list_purchase_return_pull_lines(
         self,
@@ -15035,7 +15820,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                         material_unit=item.unit or "件",
                         return_quantity=qty,
                         unit_price=unit_price,
-                        total_amount=qty * unit_price,
+                        total_amount=WarehouseService._qty_price_line_total(qty, unit_price),
                         batch_number=requested_batch,
                         status="待退货",
                     )
@@ -16092,8 +16877,8 @@ class OtherInboundService(AppBaseService[OtherInbound]):
             from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item
             for item_data in items:
                 qty = Decimal(str(item_data.inbound_quantity))
-                price = Decimal(str(item_data.unit_price))
-                amt = qty * price
+                price = Decimal(str(item_data.unit_price or 0))
+                amt = WarehouseService._qty_price_line_total(qty, price)
                 item_dict = item_data.model_dump(exclude_unset=True, exclude={"inbound_quantity", "unit_price", "total_amount"})
                 material = await Material.get_or_none(
                     tenant_id=tenant_id,
@@ -16273,7 +17058,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                             f"物料 {item_data.material_code or item_data.material_id} 的入库数量必须大于 0"
                         )
                     price = Decimal(str(item_data.unit_price or 0))
-                    amt = qty * price
+                    amt = WarehouseService._qty_price_line_total(qty, price)
                     item_dict = item_data.model_dump(
                         exclude_unset=True,
                         exclude={"inbound_quantity", "unit_price", "total_amount"},
@@ -16770,8 +17555,8 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                     scene="其他出库",
                     material_label=material_label,
                 )
-                price = Decimal(str(item_data.unit_price))
-                amt = qty * price
+                price = Decimal(str(item_data.unit_price or 0))
+                amt = WarehouseService._qty_price_line_total(qty, price)
                 await OtherOutboundItem.create(
                     tenant_id=tenant_id,
                     outbound_id=outbound.id,
@@ -16907,10 +17692,11 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
         outbound_data: OtherOutboundUpdate,
         updated_by: int
     ) -> OtherOutboundResponse:
-        """更新其他出库单"""
+        """更新其他出库单（确认出库前：表头/明细数量与库位/批号）"""
         from apps.kuaizhizao.services.document_action_policy.warehouse_outbound_hub import (
             assert_outbound_hub_capability,
         )
+        from apps.master_data.models.material import Material
 
         async with in_transaction():
             outbound = await OtherOutbound.get_or_none(
@@ -16919,14 +17705,146 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
             if not outbound:
                 raise NotFoundError(f"其他出库单不存在: {outbound_id}")
             assert_outbound_hub_capability(outbound, "update", outbound_type="other_outbound")
-            dump = outbound_data.model_dump(exclude_unset=True, exclude={"outbound_code"})
             user_info = await self.get_user_info(updated_by)
-            dump["updated_by"] = updated_by
-            dump["updated_by_name"] = user_info["name"]
-            await OtherOutbound.filter(tenant_id=tenant_id, id=outbound_id).update(**dump)
-            return OtherOutboundResponse.model_validate(
+            header_dump = outbound_data.model_dump(
+                exclude_unset=True, exclude={"items", "outbound_code"}
+            )
+            if header_dump:
+                header_dump["updated_by"] = updated_by
+                header_dump["updated_by_name"] = user_info["name"]
+                await OtherOutbound.filter(tenant_id=tenant_id, id=outbound_id).update(**header_dump)
+                outbound = await OtherOutbound.get(tenant_id=tenant_id, id=outbound_id)
+
+            if outbound_data.items is not None:
+                existing = {
+                    int(i.id): i
+                    for i in await OtherOutboundItem.filter(
+                        tenant_id=tenant_id,
+                        outbound_id=outbound_id,
+                    ).all()
+                }
+                if not outbound_data.items:
+                    raise ValidationError("出库明细不能为空")
+                material_ids = list(
+                    {int(existing[int(line.id)].material_id) for line in outbound_data.items if int(line.id) in existing}
+                )
+                materials = (
+                    await Material.filter(
+                        tenant_id=tenant_id,
+                        id__in=material_ids,
+                        deleted_at__isnull=True,
+                    ).all()
+                    if material_ids
+                    else []
+                )
+                material_by_id = {m.id: m for m in materials}
+
+                for line in outbound_data.items:
+                    item = existing.get(int(line.id))
+                    if not item:
+                        raise ValidationError(f"出库明细不存在或不属于本单: {line.id}")
+                    item_updates: dict = {}
+                    qty = Decimal(str(item.outbound_quantity or 0))
+                    if line.outbound_quantity is not None:
+                        qty = Decimal(str(line.outbound_quantity))
+                        if qty <= 0:
+                            raise ValidationError(f"物料 {item.material_code} 出库数量须大于 0")
+                        item_updates["outbound_quantity"] = qty
+
+                    line_fields = getattr(line, "model_fields_set", set()) or set()
+                    if "unit_price" in line_fields and line.unit_price is not None:
+                        unit_price = Decimal(str(line.unit_price))
+                        if unit_price < 0:
+                            raise ValidationError(f"物料 {item.material_code} 单价不能为负")
+                        item_updates["unit_price"] = unit_price
+                    else:
+                        unit_price = Decimal(str(item_updates.get("unit_price", item.unit_price or 0)))
+                    effective_qty = Decimal(str(item_updates.get("outbound_quantity", qty)))
+                    item_updates["total_amount"] = WarehouseService._qty_price_line_total(
+                        effective_qty, unit_price
+                    )
+
+                    if "location_id" in line_fields:
+                        if line.location_id is None or int(line.location_id) <= 0:
+                            item_updates["location_id"] = None
+                            item_updates["location_code"] = None
+                        else:
+                            item_updates["location_id"] = int(line.location_id)
+                            item_updates["location_code"] = (
+                                str(line.location_code or "").strip() or f"库位{line.location_id}"
+                            )
+                    elif "location_code" in line_fields:
+                        code = str(line.location_code or "").strip()
+                        item_updates["location_code"] = code or None
+                        if not code:
+                            item_updates["location_id"] = None
+                    if line.notes is not None:
+                        item_updates["notes"] = line.notes
+                    item_updates.update(_document_line_dual_quantity_update_fields(line))
+
+                    cleaned_allocs = _clean_outbound_batch_allocations(line.batch_allocations)
+
+                    if len(cleaned_allocs) > 1:
+                        if qty <= 0:
+                            raise ValidationError(f"物料 {item.material_code} 出库数量须大于 0")
+                        await self._split_other_outbound_item_for_batch_allocations(
+                            tenant_id=tenant_id,
+                            outbound_id=outbound_id,
+                            item=item,
+                            cleaned_allocs=cleaned_allocs,
+                            target_qty=qty,
+                            item_update=item_updates,
+                        )
+                        continue
+
+                    if cleaned_allocs:
+                        item_updates["batch_number"] = cleaned_allocs[0][0]
+                    elif line.batch_number is not None:
+                        item_updates["batch_number"] = str(line.batch_number).strip() or None
+
+                    mat = material_by_id.get(item.material_id)
+                    effective_batch = (
+                        item_updates.get("batch_number")
+                        if "batch_number" in item_updates
+                        else getattr(item, "batch_number", None)
+                    )
+                    if mat:
+                        await _validate_batch_serial_policy(
+                            tenant_id=tenant_id,
+                            material=mat,
+                            batch_number=effective_batch,
+                            serial_numbers=None,
+                            quantity=qty,
+                            scene="其他出库编辑",
+                        )
+                    if item_updates:
+                        await OtherOutboundItem.filter(tenant_id=tenant_id, id=item.id).update(
+                            **item_updates
+                        )
+
+                all_items = await OtherOutboundItem.filter(
+                    tenant_id=tenant_id,
+                    outbound_id=outbound_id,
+                ).all()
+                total_quantity = sum(
+                    (Decimal(str(it.outbound_quantity or 0)) for it in all_items),
+                    Decimal("0"),
+                )
+                total_amount = sum(
+                    (Decimal(str(it.total_amount or 0)) for it in all_items),
+                    Decimal("0"),
+                )
+                await OtherOutbound.filter(tenant_id=tenant_id, id=outbound_id).update(
+                    total_quantity=total_quantity,
+                    total_amount=total_amount,
+                    updated_by=updated_by,
+                    updated_by_name=user_info["name"],
+                )
+
+            result = OtherOutboundResponse.model_validate(
                 await OtherOutbound.get(tenant_id=tenant_id, id=outbound_id)
             )
+            return result
 
     async def delete_other_outbound(self, tenant_id: int, outbound_id: int) -> bool:
         """删除其他出库单（未审核/待出库未过审/已取消可删；审核通过后须先撤销审核）。"""
@@ -16965,7 +17883,7 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
         unit_price = Decimal(str(item.unit_price or 0))
         item_update["batch_number"] = first_batch
         item_update["outbound_quantity"] = first_qty
-        item_update["total_amount"] = first_qty * unit_price
+        item_update["total_amount"] = WarehouseService._qty_price_line_total(first_qty, unit_price)
         await OtherOutboundItem.filter(
             tenant_id=tenant_id, id=item.id, outbound_id=outbound_id
         ).update(**item_update)
@@ -16981,7 +17899,9 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                 material_unit=item.material_unit,
                 outbound_quantity=qty,
                 unit_price=item.unit_price,
-                total_amount=qty * unit_price,
+                total_amount=WarehouseService._qty_price_line_total(qty, unit_price),
+                warehouse_id=getattr(item, "warehouse_id", None),
+                warehouse_name=getattr(item, "warehouse_name", None),
                 location_id=item.location_id,
                 location_code=item.location_code,
                 batch_number=batch_no,

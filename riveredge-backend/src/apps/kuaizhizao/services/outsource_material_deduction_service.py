@@ -16,6 +16,7 @@ from apps.kuaizhizao.utils.bom_helper import (
     get_bom_items_by_material_id,
 )
 from apps.master_data.models.material import Material
+from apps.kuaizhizao.utils.document_amount_write import line_total_qty_unit_price
 from infra.exceptions.exceptions import ValidationError
 
 
@@ -167,7 +168,7 @@ class OutsourceMaterialDeductionService:
             material = await Material.filter(tenant_id=tenant_id, id=mid, deleted_at__isnull=True).first()
             if not material:
                 continue
-            amount = (overrun * unit_price).quantize(Decimal("0.01"))
+            amount = line_total_qty_unit_price(overrun, unit_price)
             lines.append(
                 OutsourceMaterialDeductionPreviewLine(
                     outsource_work_order_id=int(owo.id),

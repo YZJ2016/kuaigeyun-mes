@@ -12,6 +12,8 @@ POST {门户}/kapi/sys/{业务对象标识}/query
 
 from __future__ import annotations
 
+import copy
+import re
 from typing import Any, Dict, List, Optional, TypedDict
 
 # 增强型 Token（固定路径，用于联调对照；日常同步由连接器自动带 token）
@@ -26,6 +28,9 @@ BIZ_BD_MULTIMEASUREUNIT = "bd_multimeasureunit"
 BIZ_BD_SUPPLIER = "bd_supplier"
 BIZ_BD_CUSTOMER = "bd_customer"
 BIZ_BD_WAREHOUSE = "bd_warehouse"
+BIZ_BD_LOCATION = "bd_location"
+# 仓库仓位关系（开放平台「仓库仓位关系详情查询」）
+BIZ_BD_WARELOCAREFERENCE = "bd_warelocareference"
 BIZ_PM_PURORDERBILL = "pm_purorderbill"
 # 库存管理：采购入库单新增（出站）
 BIZ_IM_PURINBILL = "im_purinbill"

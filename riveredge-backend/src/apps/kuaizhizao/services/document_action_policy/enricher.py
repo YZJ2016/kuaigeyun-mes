@@ -305,15 +305,18 @@ def enrich_inbound_hub_list_capabilities(
     item_previews: Optional[Dict[int, List[Dict[str, Any]]]] = None,
     quantity_units: Optional[Dict[int, Optional[str]]] = None,
     push_payment_application_open: Optional[Dict[int, bool]] = None,
+    push_purchase_return_open: Optional[Dict[int, bool]] = None,
 ) -> List[T]:
     out: List[T] = []
     for record, resp in zip(records, responses):
         rid = int(getattr(record, "id", 0) or 0)
         payable_open = bool((push_payment_application_open or {}).get(rid))
+        return_open = bool((push_purchase_return_open or {}).get(rid))
         caps = derive_inbound_hub_capabilities(
             record,
             receipt_type=receipt_type,
             payable_request_open=payable_open,
+            purchase_return_open=return_open,
         )
         update: Dict[str, Any] = {"capabilities": caps}
         if item_counts is not None:

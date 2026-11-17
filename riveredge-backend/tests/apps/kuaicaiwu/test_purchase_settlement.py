@@ -129,6 +129,28 @@ def test_purchase_receipt_settlement_gross_prefers_net_amount():
     assert purchase_receipt_settlement_gross(receipt) == Decimal("1130.00")
 
 
+def test_purchase_receipt_standalone_tax_inclusive_display_unit_price():
+    from apps.kuaicaiwu.services.purchase_settlement import (
+        compute_purchase_receipt_line_settlement_amounts,
+    )
+
+    receipt = SimpleNamespace(tax_rate=Decimal("0.13"))
+    line = SimpleNamespace(
+        receipt_quantity=Decimal("1"),
+        unit_price=Decimal("53.098"),
+        display_unit_price=Decimal("60"),
+        tax_rate=Decimal("13"),
+        purchase_order_item_id=None,
+        total_amount=Decimal("53.10"),
+    )
+    excl, tax, gross = compute_purchase_receipt_line_settlement_amounts(
+        receipt, line, {},
+    )
+    assert gross == Decimal("60.00")
+    assert excl == Decimal("53.10")
+    assert tax == Decimal("6.90")
+
+
 def test_purchase_receipt_settlement_gross_from_po_line_avoids_qty_unit_tail():
     """PO 行未税 8849.56、入库 qty×单价 得 8849.60 时，比例分摊 rollup 应为 10000.00 而非 10000.05。"""
     receipt = SimpleNamespace(tax_rate=Decimal("13"))

@@ -28,6 +28,16 @@ export interface RunCapabilityBatchOptions<T extends { id?: number }> {
   i18nPrefix?: string;
 }
 
+/** 工具栏「审核」禁止走 capability 直调 API，须经 useAuditBatchRunner / UniAuditBatchMenuButton 开 UniAuditModal */
+const AUDIT_MODAL_ONLY_CAPABILITY_KEYS = new Set(['approve']);
+
+function readExternalPushMessage(result: unknown): string | undefined {
+  if (!result || typeof result !== 'object') return undefined;
+  const msg = (result as { externalPushMessage?: unknown }).externalPushMessage;
+  const text = typeof msg === 'string' ? msg.trim() : '';
+  return text || undefined;
+}
+
 export async function runCapabilityBatchLoop(
   options: RunCapabilityBatchOptions<unknown> & {
     onRun: (id: number) => Promise<unknown>;
@@ -48,6 +58,11 @@ export async function runCapabilityBatchLoop(
     t,
     i18nPrefix = 'components.uniBatch.capability',
   } = options;
+
+  if (AUDIT_MODAL_ONLY_CAPABILITY_KEYS.has(capabilityKey)) {
+    message.error(t('components.uniBatch.audit.approveMustUseModal'));
+    return;
+  }
 
   const eligibleIds: number[] = [];
   const seen = new Set<number>();
@@ -72,10 +87,13 @@ export async function runCapabilityBatchLoop(
   let success = 0;
   let failed = 0;
   let lastError: unknown = null;
+  const pushWarnings: string[] = [];
   for (const id of eligibleIds) {
     try {
-      await onRun(id);
+      const result = await onRun(id);
       success += 1;
+      const pushMessage = readExternalPushMessage(result);
+      if (pushMessage) pushWarnings.push(pushMessage);
     } catch (error) {
       failed += 1;
       lastError = error;
@@ -84,6 +102,9 @@ export async function runCapabilityBatchLoop(
 
   if (success > 0) {
     message.success(t(`${i18nPrefix}.success`, { count: success }));
+  }
+  if (pushWarnings.length > 0) {
+    message.warning(pushWarnings.slice(0, 3).join('；'));
   }
   if (failed > 0) {
     const reason = getApiErrorMessage(lastError, '');
@@ -116,6 +137,11 @@ export async function runCapabilityBatchBulk(
     t,
     i18nPrefix = 'components.uniBatch.capability',
   } = options;
+
+  if (AUDIT_MODAL_ONLY_CAPABILITY_KEYS.has(capabilityKey)) {
+    message.error(t('components.uniBatch.audit.approveMustUseModal'));
+    return;
+  }
 
   const eligibleIds: number[] = [];
   const seen = new Set<number>();
@@ -177,6 +203,11 @@ export type UniCapabilityBatchButtonProps<T extends { id?: number }> = Omit<
   labels: CapabilityBatchLabels;
   onRun?: (id: number) => Promise<unknown>;
   onRunBulk?: (ids: number[]) => Promise<BulkCapabilityResult>;
+  /**
+   * 对全部可执行 id 一次回调（如批量打印预览）；不弹「操作成功 N 条」。
+   * 与 onRun / onRunBulk 三选一，优先本回调。
+   */
+  onRunSelected?: (ids: number[]) => Promise<void> | void;
   batchAllowed?: (records: T[], permAllowed: boolean) => boolean;
   notAllowedMessage?: string;
   onSuccess?: () => void;
@@ -186,6 +217,8 @@ export type UniCapabilityBatchButtonProps<T extends { id?: number }> = Omit<
   i18nPrefix?: string;
   /** 仅图标；未传时跟随 UniTable 右侧数据能力簇的宽窄切换 */
   iconOnly?: boolean;
+  /** 禁用态悬停说明（如 capability 原因：须先审核） */
+  disabledTitle?: React.ReactNode;
 };
 
 export function UniCapabilityBatchButton<T extends { id?: number }>({
@@ -196,6 +229,7 @@ export function UniCapabilityBatchButton<T extends { id?: number }>({
   labels,
   onRun,
   onRunBulk,
+  onRunSelected,
   batchAllowed,
   notAllowedMessage,
   onSuccess,
@@ -205,6 +239,7 @@ export function UniCapabilityBatchButton<T extends { id?: number }>({
   requireConfirm = false,
   disabled: disabledProp,
   iconOnly: iconOnlyProp,
+  disabledTitle,
   ...buttonProps
 }: UniCapabilityBatchButtonProps<T>) {
   const { message } = App.useApp();
@@ -212,6 +247,7 @@ export function UniCapabilityBatchButton<T extends { id?: number }>({
   const count = selectedRowKeys.length;
   const toolbarIconOnly = useUniTableDataActionIconOnly();
   const iconOnly = iconOnlyProp ?? toolbarIconOnly;
+  const capabilityI18nPrefix = i18nPrefix ?? 'components.uniBatch.capability';
 
   const toolbarEnabled = useMemo(() => {
     if (singleOnly && count !== 1) return false;
@@ -224,8 +260,39 @@ export function UniCapabilityBatchButton<T extends { id?: number }>({
 
   const disabled = disabledProp ?? !toolbarEnabled;
 
+  const collectEligibleIds = useCallback(
+    (keys: React.Key[]) => {
+      const eligibleIds: number[] = [];
+      const seen = new Set<number>();
+      for (const key of keys) {
+        const resolved = resolveId
+          ? resolveId(key, selectedRecords.find((r) => String(r.id) === String(key)))
+          : Number(key);
+        const id = resolved == null ? NaN : Number(resolved);
+        if (!Number.isFinite(id) || id <= 0 || seen.has(id)) continue;
+        const record = selectedRecords.find((r) => Number(r.id) === id);
+        if (!record || !permAllowed) continue;
+        if (pickCapability(record, capabilityKey)?.allowed !== true) continue;
+        seen.add(id);
+        eligibleIds.push(id);
+      }
+      return eligibleIds;
+    },
+    [capabilityKey, permAllowed, resolveId, selectedRecords],
+  );
+
   const handleAction = useCallback(
     async (keys: React.Key[]) => {
+      if (onRunSelected) {
+        const eligibleIds = collectEligibleIds(keys);
+        if (eligibleIds.length === 0) {
+          message.warning(notAllowedMessage ?? t(`${capabilityI18nPrefix}.notAllowed`));
+          return;
+        }
+        await onRunSelected(eligibleIds);
+        onSuccess?.();
+        return;
+      }
       const base = {
         keys,
         records: selectedRecords,
@@ -245,12 +312,15 @@ export function UniCapabilityBatchButton<T extends { id?: number }>({
       }
     },
     [
+      capabilityI18nPrefix,
       capabilityKey,
+      collectEligibleIds,
       i18nPrefix,
       message,
       notAllowedMessage,
       onRun,
       onRunBulk,
+      onRunSelected,
       onSuccess,
       permAllowed,
       resolveId,
@@ -293,8 +363,10 @@ export function UniCapabilityBatchButton<T extends { id?: number }>({
     </UniBatchButton>
   );
 
-  if (iconOnly && ariaLabel) {
-    return <Tooltip title={ariaLabel}>{button}</Tooltip>;
+  const tip =
+    (disabled && disabledTitle) || (iconOnly && ariaLabel) || undefined;
+  if (tip) {
+    return <Tooltip title={tip}>{button}</Tooltip>;
   }
   return button;
 }

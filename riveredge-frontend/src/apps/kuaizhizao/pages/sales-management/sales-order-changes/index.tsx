@@ -5,15 +5,27 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
-import { useSearchParams } from 'react-router-dom';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Descriptions, Form, Space } from 'antd';
-import { CheckOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, PrinterOutlined, RollbackOutlined, SendOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Descriptions, Form, Space, Spin, Typography } from 'antd';
+import { ArrowLeftOutlined, CheckOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, PrinterOutlined, RollbackOutlined, SendOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
-import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
+import {
+  UniBatchMenuButton,
+  UniCapabilityBatchButton,
+  defaultAuditBatchAllowed,
+  pickCapability,
+  runCapabilityBatchLoop,
+  useAuditBatchRunner,
+  withDocumentSubmitCombinedItem,
+  type AuditBatchAction,
+  type UniBatchMenuItem,
+} from '../../../../../components/uni-batch';
+import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { isPendingReviewStatus } from '../../../constants/documentStatus';
 import {
   UniPullQueryModal,
   UNI_PULL_QUERY_MAX_FETCH_LIMIT,
@@ -26,7 +38,17 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { MarkerTag } from '../../../../../constants/statusBadges';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
+import {
+  ListPageTemplate,
+  DetailDrawerTemplate,
+  DRAWER_CONFIG,
+  DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
+  DocumentFormPageHeaderActions,
+  DocumentFormPageLayout,
+  useDetailDrawerDescriptionItems,
+} from '../../../../../components/layout-templates';
+import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
+import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
@@ -37,7 +59,6 @@ import {
   useSalesOrderChangeCapabilities,
 } from '../../../../../hooks/useDocumentCapabilities';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
-import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import {
   approveSalesOrderChange,
   createSalesOrderChangeFromOrder,
@@ -45,7 +66,9 @@ import {
   getSalesOrderChange,
   listSalesOrderChanges,
   previewSalesOrderChangeImpact,
+  revokeSalesOrderChange,
   submitSalesOrderChange,
+  submitSalesOrderChangeForReview,
   updateSalesOrderChange,
   withdrawSalesOrderChange,
   type SalesOrderChange,
@@ -92,8 +115,19 @@ import { formatAmount, formatDateTime, formatNumber } from '../../../../../utils
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 
 const SALES_ORDER_CHANGE_RESOURCE = 'kuaizhizao:sales-order-change';
+const SALES_ORDER_CHANGE_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_sales_order_change_orders';
+const SALES_ORDER_CHANGE_LIST_PATH = '/apps/kuaizhizao/sales-management/sales-order-changes';
+const SALES_ORDER_CHANGE_CREATE_PATH = `${SALES_ORDER_CHANGE_LIST_PATH}/new`;
+const salesOrderChangeEditPath = (id: number) => `${SALES_ORDER_CHANGE_LIST_PATH}/${id}/edit`;
 type PullSalesOrderCandidate = {
   id: number;
   order_code: string;
@@ -109,20 +143,19 @@ type PullSalesOrderCandidate = {
 const isPullSalesOrderSelectable = (record: PullSalesOrderCandidate): boolean =>
   isSourceOrderEligibleForChange(record.status, record.review_status);
 
-const isDraftChangeStatus = (status?: string): boolean => {
-  const normalized = String(status ?? '').trim();
-  return normalized === 'DRAFT' || normalized === '草稿';
-};
-
-const isAppliedChangeStatus = (status?: string): boolean => {
-  const normalized = String(status ?? '').trim();
-  return normalized === 'APPLIED' || normalized === '已生效';
-};
-
-
 const SalesOrderChangesPage: React.FC = () => {
   const { t } = useTranslation();
   const { message } = App.useApp();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isCreatePage = location.pathname.endsWith('/sales-order-changes/new');
+  const editRouteMatch = location.pathname.match(/\/sales-order-changes\/(\d+)\/edit$/);
+  const editRouteId = editRouteMatch ? Number(editRouteMatch[1]) : null;
+  const isEditPage = editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0;
+  const isFormPage = isCreatePage || isEditPage;
+  const leaveSalesOrderChangeFormPage = useLeaveFormTab(SALES_ORDER_CHANGE_LIST_PATH);
+  const formPageInitKeyRef = useRef<string | null>(null);
+  const [formPageLoading, setFormPageLoading] = useState(false);
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const pullFromSalesOrderAction = resolveKuaizhizaoDocumentAction(
     t,
@@ -135,19 +168,20 @@ const SalesOrderChangesPage: React.FC = () => {
     invalidateMenuBadge();
     actionRef.current?.reload();
   }, [invalidateMenuBadge]);
-  const auditEnabled = useAuditRequired('kuaizhizao', 'sales-order-change');
+  const auditEnabled = useAuditRequired('sales_order_change', false);
   const changePerms = useResourcePermissions(SALES_ORDER_CHANGE_RESOURCE);
   const permDeniedTitle = t('common.noPermission');
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<SalesOrderChange | null>(null);
   const detailCapabilityGates = useSalesOrderChangeCapabilities(detail, changePerms, t, permDeniedTitle);
-  const [editOpen, setEditOpen] = useState(false);
   const [editForm] = Form.useForm();
-  const [pendingEditFormValues, setPendingEditFormValues] = useState<Record<string, any> | null>(null);
+  const [formSaving, setFormSaving] = useState(false);
   const [editItems, setEditItems] = useState<SalesOrderChange['items']>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingStatus, setEditingStatus] = useState<string | null>(null);
   const [creatingSourceOrderId, setCreatingSourceOrderId] = useState<number | null>(null);
+  const commitAfterSaveRef = useRef(false);
   const [changePricing, setChangePricing] = useState<OrderChangeItemsTablePricing | undefined>();
   const [impactOpen, setImpactOpen] = useState(false);
   const [impactLoading, setImpactLoading] = useState(false);
@@ -156,6 +190,29 @@ const SalesOrderChangesPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const tableRowsRef = useRef<SalesOrderChange[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+
+  const {
+    customFields: changeFormCustomFields,
+    customFieldValues: changeFormCustomFieldValues,
+    loadFieldValues: loadChangeFormFieldValues,
+    extractFormValues: extractChangeFormValues,
+    saveCustomFieldValues: saveChangeCustomFieldValues,
+    resetFieldValues: resetChangeFormFieldValues,
+  } = useCustomFields({
+    tableName: SALES_ORDER_CHANGE_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open: isFormPage,
+  });
+  const {
+    customFields: changeListCustomFields,
+    generateCustomFieldColumns: generateChangeCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichChangeRecordsWithCustomFields,
+    customFieldValues: changeDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadChangeFieldValuesForDetail,
+    resetDetailFieldValues: resetChangeDetailFieldValues,
+  } = useCustomFieldsForList<SalesOrderChange>({
+    tableName: SALES_ORDER_CHANGE_CUSTOM_FIELD_TABLE,
+  });
 
   useEffect(() => {
     void loadCustomerFormReferenceList(KUAIZHIZAO_DOC_HOST.salesOrderChange).then(setCustomers);
@@ -190,46 +247,65 @@ const SalesOrderChangesPage: React.FC = () => {
     const full = await getSalesOrderChange(record.id!);
     setDetail(full);
     setDetailOpen(true);
+    if (full.id != null) {
+      await loadChangeFieldValuesForDetail(full.id);
+    }
   };
 
-  const openEdit = async (record: SalesOrderChange) => {
-    const full = await getSalesOrderChange(record.id!);
-    setEditingId(full.id!);
-    setCreatingSourceOrderId(null);
-    let pricingAsOf = full.created_at ? dayjs(full.created_at) : dayjs();
-    if (full.source_order_id != null && Number(full.source_order_id) > 0) {
-      try {
-        const sourceOrder = await getSalesOrder(full.source_order_id, true, false, { view: 'options' });
-        if (sourceOrder.order_date) {
-          pricingAsOf = dayjs(sourceOrder.order_date);
+  const hydrateSalesOrderChangeEditForm = useCallback(
+    async (full: SalesOrderChange) => {
+      setEditingId(full.id!);
+      setEditingStatus(full.status ?? null);
+      setCreatingSourceOrderId(null);
+      let pricingAsOf = full.created_at ? dayjs(full.created_at) : dayjs();
+      if (full.source_order_id != null && Number(full.source_order_id) > 0) {
+        try {
+          const sourceOrder = await getSalesOrder(full.source_order_id, true, false, { view: 'options' });
+          if (sourceOrder.order_date) {
+            pricingAsOf = dayjs(sourceOrder.order_date);
+          }
+        } catch {
+          /* 保留变更单创建时间 */
         }
-      } catch {
-        /* 保留变更单创建时间 */
       }
-    }
-    setChangePricing({
-      side: 'sales',
-      partnerId:
-        full.customer_id != null && Number.isFinite(Number(full.customer_id))
-          ? Number(full.customer_id)
-          : undefined,
-      asOf: pricingAsOf,
-    });
-    setEditItems(full.items ?? []);
-    setPendingEditFormValues({
-      change_reason: full.change_reason,
-      notes: full.notes,
-      attachments: mapAttachmentsToUploadList(full.attachments),
-    });
-    setEditOpen(true);
+      setChangePricing({
+        side: 'sales',
+        partnerId:
+          full.customer_id != null && Number.isFinite(Number(full.customer_id))
+            ? Number(full.customer_id)
+            : undefined,
+        asOf: pricingAsOf,
+      });
+      setEditItems(full.items ?? []);
+      editForm.setFieldsValue({
+        change_reason: full.change_reason,
+        notes: full.notes,
+        attachments: mapAttachmentsToUploadList(full.attachments),
+      });
+      const fieldFormValues = await loadChangeFormFieldValues(full.id!);
+      editForm.setFieldsValue(fieldFormValues);
+    },
+    [editForm, loadChangeFormFieldValues],
+  );
+
+  const openEdit = (record: SalesOrderChange) => {
+    if (record.id) navigate(salesOrderChangeEditPath(record.id));
   };
 
   const handleSaveEdit = async () => {
-    const values = await editForm.validateFields();
+    setFormSaving(true);
+    let values: Record<string, unknown>;
+    try {
+      values = await editForm.validateFields();
+    } catch {
+      setFormSaving(false);
+      return;
+    }
+    const { customData, standardValues } = extractChangeFormValues(values, editForm);
     const payload = {
-      change_reason: values.change_reason,
-      notes: values.notes,
-      attachments: normalizeDocumentAttachments(values.attachments),
+      change_reason: standardValues.change_reason,
+      notes: standardValues.notes,
+      attachments: normalizeDocumentAttachments(standardValues.attachments),
       items: (editItems ?? []).map((item, idx) => ({
         id: item.id,
         line_no: item.line_no ?? idx + 1,
@@ -249,6 +325,8 @@ const SalesOrderChangesPage: React.FC = () => {
         notes: item.notes,
       })),
     };
+    const shouldCommit = commitAfterSaveRef.current;
+    commitAfterSaveRef.current = false;
     let changeId: number;
     let updateRes: SalesOrderChange;
     if (editingId) {
@@ -257,45 +335,48 @@ const SalesOrderChangesPage: React.FC = () => {
     } else {
       if (!creatingSourceOrderId) {
         message.error(t('app.kuaizhizao.salesOrderChange.selectSalesOrder'));
+        setFormSaving(false);
         return;
       }
       const created = await createSalesOrderChangeFromOrder(
         creatingSourceOrderId,
-        values.change_reason || t('app.kuaizhizao.salesOrderChange.defaultReason'),
+        standardValues.change_reason || t('app.kuaizhizao.salesOrderChange.defaultReason'),
       );
       updateRes = await updateSalesOrderChange(created.id!, payload);
       changeId = created.id!;
+      setEditingId(changeId);
+      setEditingStatus(updateRes.status ?? 'DRAFT');
     }
 
-    if (isDraftChangeStatus(updateRes.status)) {
-      try {
-        const submitRes = await submitSalesOrderChange(changeId);
-        if (isAppliedChangeStatus(submitRes.status)) {
-          message.success(t('app.kuaizhizao.salesOrderChange.savedAndApplied'));
-        } else {
-          message.success(t('app.kuaizhizao.salesOrderChange.submitSuccess'));
-        }
-      } catch (submitError: any) {
-        message.error(
-          t('app.kuaizhizao.salesOrder.saveSuccessSubmitFailed', {
-            message: submitError?.message ?? t('app.kuaizhizao.salesOrder.unknownError'),
-          }),
-        );
-      }
-    } else if (editingId) {
+    try {
+      await saveChangeCustomFieldValues(changeId, customData);
+    } catch {
+      message.error(t('app.kuaizhizao.quality.common.messages.inspectCustomFieldsSaveFailed'));
+    }
+
+    reloadTable();
+    if (shouldCommit) {
+      setCreatingSourceOrderId(null);
+      resetChangeFormFieldValues();
+      setFormSaving(false);
+      await runSubmitWithPreview(changeId);
+      return;
+    }
+    if (editingId) {
       message.success(t('common.updateSuccess'));
     } else {
       message.success(t('app.kuaizhizao.salesOrderChange.created', { code: updateRes.change_code }));
     }
-    setEditOpen(false);
-    setPendingEditFormValues(null);
     setCreatingSourceOrderId(null);
-    reloadTable();
+    resetChangeFormFieldValues();
+    setFormSaving(false);
+    leaveSalesOrderChangeFormPage();
   };
 
-  const openCreateFromOrder = async (orderId: number, reason: string) => {
+  const initCreateFromSourceOrder = useCallback(async (orderId: number, reason: string) => {
     const order = await getSalesOrder(orderId, true, false, { view: 'options' });
     setEditingId(null);
+    setEditingStatus('DRAFT');
     setCreatingSourceOrderId(orderId);
     setChangePricing({
       side: 'sales',
@@ -324,13 +405,13 @@ const SalesOrderChangesPage: React.FC = () => {
         notes: item.notes,
       })),
     );
-    setPendingEditFormValues({
+    editForm.setFieldsValue({
       change_reason: reason || t('app.kuaizhizao.salesOrderChange.defaultReason'),
       notes: '',
       attachments: [],
     });
-    setEditOpen(true);
-  };
+    resetChangeFormFieldValues();
+  }, [editForm, resetChangeFormFieldValues, t]);
 
   const mapPullSalesOrderRows = useCallback((rows: SalesOrder[]): PullSalesOrderCandidate[] => {
     return rows
@@ -389,8 +470,8 @@ const SalesOrderChangesPage: React.FC = () => {
         message.warning(t('app.kuaizhizao.salesOrderChange.selectSalesOrder'));
         return;
       }
-      await openCreateFromOrder(selectedId, t('app.kuaizhizao.salesOrderChange.defaultReason'));
       pullFromSalesOrderQuery.closeModal();
+      navigate(`${SALES_ORDER_CHANGE_CREATE_PATH}?source_order_id=${selectedId}`);
     },
   });
 
@@ -442,15 +523,61 @@ const SalesOrderChangesPage: React.FC = () => {
   useNewShortcut(openCreate);
 
   useEffect(() => {
-    const sourceId = searchParams.get('source_order_id');
-    if (sourceId) {
-      openCreateFromOrder(Number(sourceId), t('app.kuaizhizao.salesOrderChange.defaultReason')).finally(() => {
-        searchParams.delete('source_order_id');
-        setSearchParams(searchParams, { replace: true });
-      });
+    if (!isFormPage) {
+      formPageInitKeyRef.current = null;
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    const initKey = isCreatePage
+      ? `create:${location.search}`
+      : `edit:${editRouteId}`;
+    if (formPageInitKeyRef.current === initKey) return;
+    formPageInitKeyRef.current = initKey;
+
+    if (isCreatePage) {
+      const sourceId = searchParams.get('source_order_id');
+      if (!sourceId) {
+        leaveSalesOrderChangeFormPage();
+        return;
+      }
+      setFormPageLoading(true);
+      void initCreateFromSourceOrder(
+        Number(sourceId),
+        t('app.kuaizhizao.salesOrderChange.defaultReason'),
+      )
+        .catch((error: unknown) => {
+          message.error(error instanceof Error ? error.message : t('common.loadFailed'));
+          leaveSalesOrderChangeFormPage();
+        })
+        .finally(() => {
+          searchParams.delete('source_order_id');
+          setSearchParams(searchParams, { replace: true });
+          setFormPageLoading(false);
+        });
+      return;
+    }
+
+    if (!editRouteId) return;
+    setFormPageLoading(true);
+    void getSalesOrderChange(editRouteId)
+      .then((full) => hydrateSalesOrderChangeEditForm(full))
+      .catch((error: unknown) => {
+        message.error(error instanceof Error ? error.message : t('common.loadFailed'));
+        leaveSalesOrderChangeFormPage();
+      })
+      .finally(() => setFormPageLoading(false));
+  }, [
+    editRouteId,
+    hydrateSalesOrderChangeEditForm,
+    initCreateFromSourceOrder,
+    isCreatePage,
+    isFormPage,
+    leaveSalesOrderChangeFormPage,
+    location.search,
+    message,
+    searchParams,
+    setSearchParams,
+    t,
+  ]);
 
   const runSubmitWithPreview = async (id: number) => {
     setPendingSubmitId(id);
@@ -468,16 +595,205 @@ const SalesOrderChangesPage: React.FC = () => {
   };
 
   const confirmSubmit = async () => {
-    if (!pendingSubmitId) return;
-    await submitSalesOrderChange(pendingSubmitId);
-    message.success(t('app.kuaizhizao.salesOrderChange.submitSuccess'));
+    const id = pendingSubmitId;
+    if (!id) return;
+    await submitSalesOrderChange(id);
+    message.success(t('app.kuaizhizao.salesOrderChange.committed'));
     setImpactOpen(false);
     setPendingSubmitId(null);
     reloadTable();
-    if (detail?.id === pendingSubmitId) {
-      setDetail(await getSalesOrderChange(pendingSubmitId));
+    if (detail?.id === id) {
+      setDetail(await getSalesOrderChange(id));
     }
   };
+
+  const changeAuditBatchHandlers = useMemo(
+    () => ({
+      submit: submitSalesOrderChange,
+      withdraw: withdrawSalesOrderChange,
+      approve: (id: number) => approveSalesOrderChange(id, true),
+      revoke: (id: number) => revokeSalesOrderChange(id),
+    }),
+    [],
+  );
+
+  const handleChangeAuditBatchSuccess = useCallback(() => {
+    setSelectedRowKeys([]);
+    reloadTable();
+  }, [reloadTable]);
+
+  const {
+    runAction: runSalesOrderChangeAuditBatch,
+    auditModal: salesOrderChangeAuditModal,
+  } = useAuditBatchRunner<SalesOrderChange>({
+    permGates: changePerms,
+    handlers: changeAuditBatchHandlers,
+    onBatchComplete: handleChangeAuditBatchSuccess,
+    auditEntity: {
+      entityType: 'sales_order_change',
+      entityName: t('app.kuaizhizao.salesOrderChange.entityName'),
+    },
+  });
+
+  const selectedChangeForToolbar = useMemo(() => {
+    if (selectedRowKeys.length !== 1) return null;
+    return selectedChangesForBatch[0] ?? null;
+  }, [selectedChangesForBatch, selectedRowKeys.length]);
+
+  const salesOrderChangeToolbarAuditMenus = useMemo(() => {
+    const canPerm = (action: AuditBatchAction) => {
+      const perm = action === 'approve' ? 'audit' : action === 'submit' ? 'submit' : 'revoke';
+      return changePerms.canAction?.(perm) ?? false;
+    };
+    const item = (
+      key: string,
+      action: AuditBatchAction,
+      label: string,
+      capKey: string,
+      rows: SalesOrderChange[],
+    ): UniBatchMenuItem => ({
+      key,
+      label,
+      disabled:
+        selectedChangesForBatch.length > 0
+        && !defaultAuditBatchAllowed(rows, canPerm(action), capKey, (row) => row),
+      onClick: (keys) => {
+        const idSet = new Set(rows.map((row) => String(row.id)));
+        return runSalesOrderChangeAuditBatch(
+          action,
+          keys.filter((rowKey) => idSet.has(String(rowKey))),
+          rows,
+          auditEnabled,
+        );
+      },
+    });
+    const capOn = (row: SalesOrderChange, capKey: string) => pickCapability(row, capKey)?.allowed === true;
+    const submittedRows = selectedChangesForBatch.filter(
+      (row) => String(row.status || '').trim() === 'SUBMITTED' && capOn(row, 'withdraw_submit'),
+    );
+    const pendingRows = selectedChangesForBatch.filter((row) => {
+      const status = String(row.status || '').trim();
+      return status !== 'SUBMITTED' && isPendingReviewStatus(status) && capOn(row, 'withdraw_submit');
+    });
+    const submitReviewRows = selectedChangesForBatch.filter((row) =>
+      (row.audit?.allowed_actions ?? []).includes('submit_review'),
+    );
+    const canSubmitReview = changePerms.canAction?.('submit') ?? false;
+    const submitRows = selectedChangesForBatch.filter((row) => capOn(row, 'submit'));
+    const submitDisabled =
+      selectedChangesForBatch.length > 0 && (!canPerm('submit') || submitRows.length === 0);
+    return {
+      submit: withDocumentSubmitCombinedItem(
+        [
+          {
+            key: 'submit',
+            label: t('common.submit'),
+            disabled: submitDisabled,
+            onClick: (keys: React.Key[]) => {
+              if (keys.length === 1) {
+                void runSubmitWithPreview(Number(keys[0]));
+                return Promise.resolve();
+              }
+              return runSalesOrderChangeAuditBatch('submit', keys, submitRows, auditEnabled);
+            },
+          },
+          item('withdraw-submit', 'withdraw', t('app.kuaizhizao.salesOrderChange.toolbar.withdrawSubmit'), 'withdraw_submit', submittedRows),
+          {
+            key: 'submit-review',
+            label: t('app.kuaizhizao.salesOrderChange.toolbar.submitReview'),
+            disabled: selectedChangesForBatch.length > 0 && !(canSubmitReview && submitReviewRows.length > 0),
+            onClick: (keys: React.Key[]) => runCapabilityBatchLoop({
+              keys,
+              records: submitReviewRows,
+              capabilityKey: 'submit_review',
+              permAllowed: canSubmitReview,
+              notAllowedMessage: t('app.kuaizhizao.salesOrderChange.toolbar.submitReviewNotAllowed'),
+              onRun: (id) => submitSalesOrderChangeForReview(id),
+              message,
+              t,
+              onSuccess: handleChangeAuditBatchSuccess,
+            }),
+          },
+        ],
+        {
+          t,
+          message,
+          disabled: submitDisabled,
+          commitRecords: submitRows,
+          permAllowed: canSubmitReview,
+          commit: (id) => submitSalesOrderChange(id),
+          submitReview: (id) => submitSalesOrderChangeForReview(id),
+          onSuccess: handleChangeAuditBatchSuccess,
+        },
+      ),
+      audit: [
+        item('approve', 'approve', t('components.uniAction.audit'), 'approve', selectedChangesForBatch.filter((row) => capOn(row, 'approve'))),
+        item('withdraw-review', 'withdraw', t('app.kuaizhizao.salesOrderChange.toolbar.withdrawReview'), 'withdraw_submit', pendingRows),
+        item('revoke', 'revoke', t('app.kuaizhizao.salesOrderChange.toolbar.revoke'), 'revoke_approval', selectedChangesForBatch.filter((row) => capOn(row, 'revoke_approval'))),
+      ] satisfies UniBatchMenuItem[],
+    };
+  }, [
+    auditEnabled,
+    changePerms,
+    handleChangeAuditBatchSuccess,
+    message,
+    runSalesOrderChangeAuditBatch,
+    selectedChangesForBatch,
+    t,
+  ]);
+
+  async function handleCopySelectedSalesOrderChange() {
+    const row = selectedChangeForToolbar;
+    if (!row?.id) {
+      message.warning(t('app.kuaizhizao.salesOrderChange.selectToCopy'));
+      return;
+    }
+    try {
+      const full = await getSalesOrderChange(row.id);
+      if (!full.source_order_id) {
+        message.warning(t('app.kuaizhizao.salesOrderChange.selectToCopy'));
+        return;
+      }
+      const created = await createSalesOrderChangeFromOrder(
+        full.source_order_id,
+        full.change_reason || t('app.kuaizhizao.salesOrderChange.defaultReason'),
+      );
+      await updateSalesOrderChange(created.id!, {
+        change_reason: full.change_reason,
+        notes: full.notes,
+        attachments: full.attachments,
+        items: (full.items ?? []).map((item, idx) => ({
+          line_no: item.line_no ?? idx + 1,
+          source_item_id: item.source_item_id,
+          change_type: item.change_type ?? 'QUANTITY',
+          material_id: item.material_id,
+          material_code: item.material_code,
+          material_name: item.material_name,
+          material_spec: item.material_spec,
+          material_unit: item.material_unit,
+          before_quantity: item.before_quantity,
+          after_quantity: item.after_quantity,
+          before_unit_price: item.before_unit_price,
+          after_unit_price: item.after_unit_price,
+          before_delivery_date: item.before_delivery_date,
+          after_delivery_date: item.after_delivery_date,
+          notes: item.notes,
+        })),
+      });
+      navigate(salesOrderChangeEditPath(created.id!));
+      reloadTable();
+    } catch (error: unknown) {
+      message.error(
+        error instanceof Error
+          ? error.message
+          : t('app.kuaizhizao.salesOrderChange.copyFailed'),
+      );
+    }
+  }
+
+  const salesOrderChangeCanCommit = ['', 'DRAFT', '草稿', 'draft', 'REJECTED', '已驳回', 'rejected'].includes(
+    String(editingStatus ?? '').trim(),
+  );
 
   const orderChangeLifecycleValueEnum = useMemo(
     () => buildOrderChangeLifecycleValueEnum(t),
@@ -686,6 +1002,7 @@ const SalesOrderChangesPage: React.FC = () => {
       render: (_, r) => (r.applied_at ? formatDateTime(r.applied_at, 'YYYY-MM-DD HH:mm') : '-'),
     },
     ...(orderChangeAuditColumn ? [orderChangeAuditColumn] : []),
+    ...generateChangeCustomFieldColumns(),
     {
       title: t('app.kuaizhizao.salesOrderChange.colLifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
@@ -706,10 +1023,6 @@ const SalesOrderChangesPage: React.FC = () => {
       hideInSearch: true,
       render: (_, record) => {
         const canEdit = record.capabilities?.update?.allowed === true && changePerms.canUpdate;
-        const canDelete = record.capabilities?.delete?.allowed === true && changePerms.canDelete;
-        const canSubmit = record.capabilities?.submit?.allowed === true && (changePerms.canAction?.('submit') ?? false);
-        const canRevoke =
-          record.capabilities?.withdraw_submit?.allowed === true && (changePerms.canAction?.('revoke') ?? false);
         return [
           <Button {...rowActionKind('read')} key="view" onClick={() => openDetail(record)}>
             {t('common.detail')}
@@ -719,41 +1032,6 @@ const SalesOrderChangesPage: React.FC = () => {
               {t('common.edit')}
             </Button>
           ) : null,
-          canSubmit ? (
-            <Button {...rowActionKind('submit')} key="submit" onClick={() => runSubmitWithPreview(record.id!)}>
-              {t('components.uniAction.submit')}
-            </Button>
-          ) : null,
-          canRevoke ? (
-            <ActionConfirmPopconfirm
-              key="revoke"
-              title={t('components.uniAction.revoke')}
-              onConfirm={async () => {
-                await withdrawSalesOrderChange(record.id!);
-                message.success(t('common.updateSuccess'));
-                reloadTable();
-              }}
-            >
-              <Button {...rowActionKind('revoke')} onClick={(e) => e.stopPropagation()}>
-                {t('components.uniAction.revoke')}
-              </Button>
-            </ActionConfirmPopconfirm>
-          ) : null,
-          canDelete ? (
-            <ActionConfirmPopconfirm
-              key="del"
-              title={t('app.kuaizhizao.salesOrderChange.confirmDelete')}
-              onConfirm={async () => {
-                await deleteSalesOrderChange(record.id!);
-                message.success(t('app.kuaizhizao.salesOrderChange.deleted'));
-                reloadTable();
-              }}
-            >
-              <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()}>
-                {t('common.delete')}
-              </Button>
-            </ActionConfirmPopconfirm>
-          ) : null,
         ];
       },
     },
@@ -762,10 +1040,7 @@ const SalesOrderChangesPage: React.FC = () => {
       t,
       changeCategoryValueEnum,
       changeCustomerSearchOptions,
-      changePerms.canDelete,
       changePerms.canUpdate,
-      changePerms.canAction,
-      message,
       orderChangeAuditColumn,
       orderChangeLifecycleValueEnum,
       renderDeltaAmount,
@@ -783,9 +1058,10 @@ const SalesOrderChangesPage: React.FC = () => {
         partyIdField: 'customer_id',
       }) as SalesOrderChangeListParams;
       const res = await listSalesOrderChanges(apiParams);
-      return { data: res.items ?? [], success: true, total: res.total ?? 0 };
+      const items = await enrichChangeRecordsWithCustomFields(res.items ?? []);
+      return { data: items, success: true, total: res.total ?? 0 };
     },
-    [],
+    [enrichChangeRecordsWithCustomFields],
   );
 
   const handleBatchDelete = useCallback(async (keys: React.Key[]) => {
@@ -814,20 +1090,6 @@ const SalesOrderChangesPage: React.FC = () => {
     reloadTable();
   }, [message, t]);
 
-  const changeAuditBatchHandlers = useMemo(
-    () => ({
-      submit: submitSalesOrderChange,
-      withdraw: withdrawSalesOrderChange,
-      approve: (id: number) => approveSalesOrderChange(id, true),
-    }),
-    [],
-  );
-
-  const handleChangeAuditBatchSuccess = useCallback(() => {
-    setSelectedRowKeys([]);
-    reloadTable();
-  }, [reloadTable]);
-
   const timeconfigBasicItems = useDetailDrawerDescriptionItems(
     detailBasicColumns.filter((col) => {
                   if (col.dataIndex !== 'notes') return true;
@@ -841,7 +1103,95 @@ const SalesOrderChangesPage: React.FC = () => {
   const showSalesOrderChangeAttachments =
     Boolean(detail) && hasDocumentAttachments(salesOrderChangeAttachments);
 
+  const triggerCommitAfterSave = useCallback(() => {
+    commitAfterSaveRef.current = true;
+    void editForm
+      .validateFields()
+      .then(() => handleSaveEdit())
+      .catch(() => {
+        commitAfterSaveRef.current = false;
+        setFormSaving(false);
+      });
+  }, [editForm, handleSaveEdit]);
+
+  useSubmitShortcut(() => void handleSaveEdit(), isFormPage);
+
+  if (isFormPage) {
+    return (
+      <>
+        <DocumentFormPageLayout
+          header={
+            <>
+              <Space align="center" size={8}>
+                <Button
+                  type="text"
+                  icon={<ArrowLeftOutlined />}
+                  aria-label={t('common.back')}
+                  onClick={leaveSalesOrderChangeFormPage}
+                />
+                <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
+                  {isCreatePage
+                    ? t('app.kuaizhizao.salesOrderChange.createTitle', {
+                        defaultValue: t('app.kuaizhizao.salesOrderChange.editTitle'),
+                      })
+                    : t('app.kuaizhizao.salesOrderChange.editTitle')}
+                </Typography.Title>
+              </Space>
+              <DocumentFormPageHeaderActions
+                onCancel={leaveSalesOrderChangeFormPage}
+                onSaveDraft={() => void handleSaveEdit()}
+                onPrimarySubmit={() => void handleSaveEdit()}
+                isCreatePage={isCreatePage}
+                showSaveDraft={false}
+                canSubmitAfterSave={false}
+                showCommitSubmit={salesOrderChangeCanCommit}
+                saveDraftLoading={formSaving}
+                commitSubmitLoading={formSaving}
+                onCommitSubmit={triggerCommitAfterSave}
+              />
+            </>
+          }
+        >
+          <Spin spinning={formPageLoading}>
+            <ProForm form={editForm} layout="vertical" submitter={false} onFinish={() => void handleSaveEdit()}>
+              <OrderChangeItemsTable
+                items={editItems ?? []}
+                editable
+                onChange={setEditItems}
+                pricing={changePricing}
+              />
+              <ProFormTextArea
+                name="change_reason"
+                label={t('app.kuaizhizao.salesOrderChange.colChangeReason')}
+                rules={[{ required: true }]}
+              />
+              <ProFormTextArea name="notes" label={t('common.remark')} />
+              <CustomFieldsFormSection
+                customFields={changeFormCustomFields}
+                customFieldValues={changeFormCustomFieldValues}
+                gridColumns={2}
+              />
+              <DocumentAttachmentsField category="sales_order_change_attachments" />
+            </ProForm>
+          </Spin>
+        </DocumentFormPageLayout>
+        <OrderChangeImpactModal
+          open={impactOpen}
+          loading={impactLoading}
+          impact={impactData}
+          onClose={() => {
+            setImpactOpen(false);
+            setPendingSubmitId(null);
+          }}
+          onConfirm={confirmSubmit}
+        />
+      </>
+    );
+  }
+
   return (
+    <>
+      {salesOrderChangeAuditModal}
     <ListPageTemplate>
       <UniTable<SalesOrderChange>
         actionRef={actionRef}
@@ -862,30 +1212,45 @@ const SalesOrderChangesPage: React.FC = () => {
         pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
         pinnedTabsValueEnum={orderChangeLifecycleValueEnum}
         toolBarRender={() => [
-          <Button
-            {...rowActionKind('create')}
+          <UniPullCreateToolbar
             key="create-sales-order-change-with-pull"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={openCreate}
-          >
-            {pullFromSalesOrderAction.label + NEW_SHORTCUT_HINT}
-          </Button>,
-        ]}
-        showDeleteButton
-        onDelete={handleBatchDelete}
-        deleteConfirmTitle={(count) => t('app.kuaizhizao.salesOrderChange.confirmBatchDelete', { count })}
-        toolBarActionsAfterDelete={[
-          <UniAuditBatchMenuButton
-            key="sales-order-change-batch-menu"
+            compactKey="create-sales-order-change-with-pull"
+            createIcon={<PlusOutlined />}
+            createLabel={t('app.kuaizhizao.salesOrderChange.create')}
+            onCreate={openCreate}
+            menuItems={[
+              {
+                key: 'pull-from-sales-order',
+                label: pullFromSalesOrderAction.label,
+                onClick: openCreate,
+              },
+              { type: 'divider', key: 'copy-selected-divider' },
+              {
+                key: 'copy-selected',
+                label: t('app.kuaizhizao.salesOrderChange.copySelectedCreate'),
+                disabled: !selectedChangeForToolbar,
+                onClick: () => void handleCopySelectedSalesOrderChange(),
+              },
+            ]}
+          />,
+          <UniBatchMenuButton
+            key="sales-order-change-submit"
             selectedRowKeys={selectedRowKeys}
-            selectedRecords={selectedChangesForBatch}
-            auditEnabled={auditEnabled}
-            permGates={changePerms}
-            handlers={changeAuditBatchHandlers}
-            onSuccess={handleChangeAuditBatchSuccess}
+            menuItems={salesOrderChangeToolbarAuditMenus.submit}
+            buttonText={t('common.submit')}
+          />,
+          <UniBatchMenuButton
+            key="sales-order-change-audit"
+            selectedRowKeys={selectedRowKeys}
+            menuItems={salesOrderChangeToolbarAuditMenus.audit}
+            buttonText={t('components.uniAction.audit')}
           />,
         ]}
+        showDeleteButton
+        deleteButtonText={t('common.delete')}
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={(count) => t('app.kuaizhizao.salesOrderChange.confirmBatchDelete', { count })}
+        toolBarActionsAfterDelete={[]}
         rightToolBarActionsBeforeExport={[
           <UniCapabilityBatchButton
             key="sales-order-change-print"
@@ -956,42 +1321,13 @@ const SalesOrderChangesPage: React.FC = () => {
         }}
       />
 
-      <FormModalTemplate
-        title={t('app.kuaizhizao.salesOrderChange.editTitle')}
-        open={editOpen}
-        onClose={() => {
-          setEditOpen(false);
-          setCreatingSourceOrderId(null);
-        }}
-        afterOpenChange={(open) => {
-          if (open) {
-            if (pendingEditFormValues) {
-              editForm.setFieldsValue(pendingEditFormValues);
-            }
-            return;
-          }
-          editForm.resetFields();
-          setPendingEditFormValues(null);
-        }}
-        onFinish={handleSaveEdit}
-        form={editForm}
-        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
-      >
-        <OrderChangeItemsTable
-          items={editItems ?? []}
-          editable
-          onChange={setEditItems}
-          pricing={changePricing}
-        />
-        <ProFormTextArea name="change_reason" label={t('app.kuaizhizao.salesOrderChange.colChangeReason')} rules={[{ required: true }]} />
-        <ProFormTextArea name="notes" label={t('common.remark')} />
-        <DocumentAttachmentsField category="sales_order_change_attachments" />
-      </FormModalTemplate>
-
       <DetailDrawerTemplate
         title={t('app.kuaizhizao.salesOrderChange.detailTitle', { code: detail?.change_code ?? '' })}
         open={detailOpen}
-        onClose={() => setDetailOpen(false)}
+        onClose={() => {
+          setDetailOpen(false);
+          resetChangeDetailFieldValues();
+        }}
         size={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           detail ? (
@@ -1007,7 +1343,7 @@ const SalesOrderChangesPage: React.FC = () => {
                 entityName={t('app.kuaizhizao.salesOrderChange.entityName')}
                 statusField="status"
                 reviewStatusField="review_status"
-                draftStatuses={['DRAFT', '草稿']}
+                draftStatuses={['DRAFT', '草稿', 'SUBMITTED']}
                 pendingStatuses={['PENDING_REVIEW', '待审核']}
                 approvedStatuses={['AUDITED', '已审核', 'APPLIED', '已生效']}
                 rejectedStatuses={['REJECTED', '已驳回']}
@@ -1029,11 +1365,24 @@ const SalesOrderChangesPage: React.FC = () => {
         }
         basic={
           detail ? (
-            <Descriptions
-              column={3}
-              size="small"
-              items={timeconfigBasicItems}
-            />
+            <>
+              <Descriptions
+                column={3}
+                size="small"
+                items={timeconfigBasicItems}
+              />
+              {hasCustomFieldsDetailContent(
+                changeListCustomFields,
+                changeDetailCustomFieldValues,
+              ) ? (
+                <div style={{ marginTop: 16 }}>
+                  <CustomFieldsDetailSection
+                    customFields={changeListCustomFields}
+                    customFieldValues={changeDetailCustomFieldValues}
+                  />
+                </div>
+              ) : null}
+            </>
           ) : undefined
         }
         collaboration={detailCollaboration}
@@ -1059,6 +1408,7 @@ const SalesOrderChangesPage: React.FC = () => {
       />
       {PrintModal}
     </ListPageTemplate>
+    </>
   );
 };
 

@@ -42,6 +42,34 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
         super().__init__(DeliveryNotice)
         self.business_config_service = BusinessConfigService()
 
+    @staticmethod
+    def _delivery_notice_line_amount(
+        qty: Decimal,
+        unit_price: Any,
+        *,
+        explicit_total: Any = None,
+        sales_delivery_item: Any = None,
+        price_type: Optional[str] = None,
+    ) -> Decimal:
+        if explicit_total is not None:
+            from apps.kuaizhizao.utils.document_amount_write import resolve_simple_line_total
+
+            return resolve_simple_line_total(qty, unit_price, explicit_total)
+        if sales_delivery_item is not None and price_type is not None:
+            from apps.kuaizhizao.constants.price_type import normalize_price_type
+            from apps.kuaizhizao.utils.sales_price_amount import stored_sales_line_amount
+
+            return stored_sales_line_amount(
+                qty,
+                unit_price,
+                getattr(sales_delivery_item, "tax_rate", 0) or 0,
+                normalize_price_type(price_type),
+                is_gift=bool(getattr(sales_delivery_item, "is_gift", False)),
+            )
+        from apps.kuaizhizao.utils.document_amount_write import line_total_qty_unit_price
+
+        return line_total_qty_unit_price(qty, unit_price)
+
     async def batch_sales_deliveries_have_notice(
         self,
         tenant_id: int,
@@ -488,6 +516,7 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
         is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "delivery_notice")
         if not is_enabled:
             raise BusinessLogicError("送货单节点未启用，无法创建送货单")
+        source_delivery = None
         if notice_data.sales_delivery_id:
             source_delivery = await SalesDelivery.get_or_none(
                 tenant_id=tenant_id,
@@ -542,9 +571,31 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
             items = getattr(notice_data, "items", None) or []
             total_quantity = Decimal(0)
             total_amount = Decimal(0)
+            price_type = None
+            delivery_line_by_id: Dict[int, SalesDeliveryItem] = {}
+            if source_delivery is not None:
+                from apps.kuaizhizao.constants.price_type import normalize_price_type
+
+                price_type = normalize_price_type(getattr(source_delivery, "price_type", None))
+            di_ids = {
+                int(getattr(it, "delivery_item_id", 0) or 0)
+                for it in items
+                if int(getattr(it, "delivery_item_id", 0) or 0) > 0
+            }
+            if di_ids:
+                for row in await SalesDeliveryItem.filter(tenant_id=tenant_id, id__in=list(di_ids)):
+                    delivery_line_by_id[int(row.id)] = row
             for item_data in items:
                 qty = Decimal(str(item_data.notice_quantity))
-                amt = item_data.total_amount if item_data.total_amount is not None else qty * Decimal(str(item_data.unit_price or 0))
+                di_id = int(getattr(item_data, "delivery_item_id", 0) or 0)
+                delivery_line = delivery_line_by_id.get(di_id) if di_id > 0 else None
+                amt = self._delivery_notice_line_amount(
+                    qty,
+                    item_data.unit_price,
+                    explicit_total=item_data.total_amount,
+                    sales_delivery_item=delivery_line,
+                    price_type=price_type,
+                )
                 await DeliveryNoticeItem.create(
                     tenant_id=tenant_id,
                     notice_id=notice.id,

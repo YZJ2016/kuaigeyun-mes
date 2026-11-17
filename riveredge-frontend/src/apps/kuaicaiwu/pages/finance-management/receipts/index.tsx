@@ -7,7 +7,7 @@ import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react'
 import { rowActionKind, rowActionSettleVoucher, rowActionCreateRefund, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Spin, Alert, Table, Empty, Form } from 'antd';
+import { App, Button, Modal, Form, theme } from 'antd';
 import { ModalForm, ProForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { PlusOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
@@ -16,7 +16,12 @@ import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { DetailDrawerActions, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import {
+  DetailDrawerActions,
+  ListPageTemplate,
+  MODAL_CONFIG,
+  MODAL_NESTED_ABOVE_PARENT_OFFSET,
+} from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { FinanceVoucherDetailDrawer } from '../shared/FinanceVoucherDetailDrawer';
@@ -103,6 +108,9 @@ const ReceiptsPage: React.FC = () => {
   const [pullPreviewSourceId, setPullPreviewSourceId] = useState<number | null>(null);
   const [pullForm] = Form.useForm();
   const pullFromReceivableCloseRef = useRef<(() => void) | null>(null);
+  const pullFromReceivableOpenRef = useRef<(() => void) | null>(null);
+  const { token } = theme.useToken();
+  const pullPreviewZIndex = token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET * 2;
   const [pullSubmitting, setPullSubmitting] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
@@ -251,11 +259,16 @@ const ReceiptsPage: React.FC = () => {
     pullForm.resetFields();
   };
 
-  const openPullPreview = async (receivableId: number) => {
+  const openPullPreview = async (
+    receivableId: number,
+    options?: { closeSourceModal?: () => void; reopenSourceModal?: () => void },
+  ) => {
+    options?.closeSourceModal?.();
     setPullPreviewOpen(true);
     setPullPreviewLoading(true);
     setPullPreviewData(null);
     setPullPreviewSourceId(receivableId);
+    const hideLoading = messageApi.loading(t(`${R}.pullPreviewLoading`), 0);
     try {
       const data = await receiptService.previewPullFromReceivable(receivableId);
       setPullPreviewData(data);
@@ -273,12 +286,15 @@ const ReceiptsPage: React.FC = () => {
           code: data.source_code,
         }),
       });
+      setPullPreviewOpen(true);
     } catch (e: any) {
       messageApi.error(
         e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${R}.loadSourceFailed`),
       );
       resetPullPreview();
+      options?.reopenSourceModal?.();
     } finally {
+      hideLoading();
       setPullPreviewLoading(false);
     }
   };
@@ -325,11 +341,14 @@ const ReceiptsPage: React.FC = () => {
         messageApi.warning(t(`${R}.selectSource`, { label: pullFromReceivableAction.sourceLabel }));
         return;
       }
-      pullFromReceivableCloseRef.current?.();
-      await openPullPreview(selected.id);
+      await openPullPreview(selected.id, {
+        closeSourceModal: () => pullFromReceivableCloseRef.current?.(),
+        reopenSourceModal: () => pullFromReceivableOpenRef.current?.(),
+      });
     },
   });
   pullFromReceivableCloseRef.current = pullFromReceivableQuery.closeModal;
+  pullFromReceivableOpenRef.current = pullFromReceivableQuery.openModal;
 
   useEffect(() => {
     const pullReceivableId = (location.state as { pullReceivableId?: number } | null)?.pullReceivableId;
@@ -601,7 +620,14 @@ const ReceiptsPage: React.FC = () => {
     [t],
   );
 
-  const pullPreviewMaxPush = Number(pullPreviewData?.items?.[0]?.max_push_quantity ?? 0);
+  const pullPreviewMaxPush =
+    Number(
+      pullPreviewData?.max_push_total
+        ?? (pullPreviewData?.items || []).reduce(
+          (sum, row) => sum + Number(row.max_push_quantity ?? 0),
+          0,
+        ),
+    ) || 0;
   const formatPullMoney = (v: number) =>
     formatCurrencyAmount(v || 0);
 
@@ -1056,99 +1082,25 @@ const ReceiptsPage: React.FC = () => {
         scopeOptions={pullFromReceivableQuery.scopeOptions}
         scope={pullFromReceivableQuery.scope}
         onScopeChange={pullFromReceivableQuery.handleScopeChange}
-        okText={t('common.next')}
+        okText={pullFromReceivableAction.targetLabel}
       />
 
       <Modal
-        title={pullFromReceivableAction.label}
+        title={t(`${R}.pullFormTitle`)}
         open={pullPreviewOpen}
         destroyOnHidden
-        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        zIndex={pullPreviewZIndex}
         onCancel={resetPullPreview}
         okText={pullFromReceivableAction.targetLabel}
         cancelText={t('common.cancel')}
         confirmLoading={pullSubmitting}
         onOk={() => void pullForm.submit()}
         okButtonProps={{
-          disabled:
-            pullPreviewLoading ||
-            !pullPreviewData ||
-            !!pullPreviewData?.has_blocking_issues ||
-            pullPreviewMaxPush <= 0,
+          disabled: !pullPreviewData || pullPreviewMaxPush <= 0,
         }}
       >
-        {pullPreviewLoading ? (
-          <div
-            style={{
-              minHeight: 120,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 12,
-            }}
-          >
-            <Spin />
-            <div style={{ color: 'var(--ant-color-primary)' }}>
-              {t('app.kuaizhizao.salesOrder.loadingPreview')}
-            </div>
-          </div>
-        ) : pullPreviewData ? (
-          <div>
-            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPreviewData.summary}</p>
-            {pullPreviewData.has_blocking_issues && pullPreviewData.blocking_reason ? (
-              <Alert
-                type="warning"
-                showIcon
-                style={{ marginBottom: 12 }}
-                title={receiptCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
-              />
-            ) : null}
-            {pullPreviewData.items?.length > 0 ? (
-              <Table
-                size="small"
-                dataSource={pullPreviewData.items}
-                rowKey={(row) => String(row.item_id)}
-                pagination={false}
-                scroll={{ x: 720 }}
-                columns={[
-                  { title: t(`${R}.pullCol.receivableCode`), dataIndex: 'source_code', width: 140, ellipsis: true },
-                  { title: t('app.kuaicaiwu.common.customer'), dataIndex: 'customer_name', width: 160, ellipsis: true },
-                  {
-                    title: t(`${R}.pull.col.docAmount`),
-                    dataIndex: 'quantity',
-                    width: 120,
-                    align: 'right',
-                    render: (v: number) => formatPullMoney(v),
-                  },
-                  {
-                    title: t(`${R}.pull.col.receivedAmount`),
-                    dataIndex: 'pushed_quantity',
-                    width: 120,
-                    align: 'right',
-                    render: (v: number) => formatPullMoney(v),
-                  },
-                  {
-                    title: t(`${R}.pull.col.receivableAmount`),
-                    dataIndex: 'max_push_quantity',
-                    width: 120,
-                    align: 'right',
-                    render: (v: number) => formatPullMoney(v),
-                  },
-                ]}
-              />
-            ) : (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={t('app.kuaizhizao.purchaseReturn.pull.previewNoLines')}
-              />
-            )}
-            {pullPreviewData.tip ? (
-              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 16 }}>
-                {pullPreviewData.tip}
-              </Typography.Paragraph>
-            ) : null}
-            {!pullPreviewData.has_blocking_issues && pullPreviewMaxPush > 0 ? (
+        {pullPreviewData ? (
               <ProForm
                 key={`pull-receipt-${pullPreviewSourceId}`}
                 form={pullForm}
@@ -1199,8 +1151,6 @@ const ReceiptsPage: React.FC = () => {
                 <ProFormTextArea name="notes" label={t('common.remark')} fieldProps={{ rows: 3 }} colProps={financeColFull} />
                 <DocumentAttachmentsField category="receipt_attachments" />
               </ProForm>
-            ) : null}
-          </div>
         ) : null}
       </Modal>
 

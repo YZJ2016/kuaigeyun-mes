@@ -30,6 +30,8 @@ import {
   DOCUMENT_DETAIL_TABLE_PROPS,
   DOCUMENT_DETAIL_TEXT_COL,
   DocumentDetailTableStyles,
+  TaxRateBatchColumnTitle,
+  TaxRateDetailCell,
 } from '../../../components/document-detail-table/documentDetailTable';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import {
@@ -48,10 +50,14 @@ import {
 } from '../../sales-management/shared/materialLineFormDetail';
 import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import { calcDocumentLineAmounts } from '../../../utils/documentLineAmounts';
+import { DocumentAmountSummary } from '../../../components/document-amount-summary/DocumentAmountSummary';
 import {
+  computePurchaseReceiptFormGoodsTotals,
+  computePurchaseReceiptFormLineAmounts,
   purchaseOrderFormLineToStored,
   purchaseOrderTaxRateToPercent,
   readPurchaseOrderEnteredUnitPrice,
+  type PurchaseReceiptPoSettlementCtx,
 } from '../../purchase-management/shared/purchaseOrderAmounts';
 import { readPurchaseReceiptFormUnitPrice } from '../shared/purchaseReceiptWarehouseAmounts';
 import { getPurchaseOrder } from '../../../services/purchase';
@@ -77,6 +83,7 @@ import {
   applyPurchaseDocumentLineMaterialPricing,
   repriceUnlockedPurchaseDocumentLineIfNeeded,
 } from '../../../../master-data/utils/resolve-partner-material-price';
+import { partnerPaymentMethodSelectOptions } from '../../../../master-data/utils/partner-static-labels';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import {
   applyMaterialTrackingToFormRow,
@@ -109,6 +116,14 @@ import {
   isMaterialBatchEntryEnabled,
   useWarehouseTrackingFlags,
 } from '../shared/warehouseTrackingFlags';
+import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
+import {
+  deferConvertLineItemsByPriceType,
+} from '../../../../../utils/priceTypeSwitch';
+import {
+  DEFAULT_PURCHASE_PRICE_TYPE,
+  purchaseFormPriceType,
+} from '../../purchase-management/shared/purchasePriceType';
 
 const INBOUND_HOST_RESOURCE = 'kuaizhizao:inbound';
 
@@ -257,10 +272,15 @@ function PurchaseReceiptCreateWarehouseCell({
   );
 }
 
-const PAY_MODE_OPTIONS = [
-  { value: 'CREDIT', labelKey: 'app.kuaizhizao.warehouseInbound.payMode.credit' },
-  { value: 'CASH', labelKey: 'app.kuaizhizao.warehouseInbound.payMode.cash' },
-] as const;
+/** 历史金蝶 CREDIT/CASH → 表单码；客商码原样 */
+function normalizeReceiptPayModeForForm(raw: unknown): string | undefined {
+  const s = String(raw ?? '').trim();
+  if (!s) return undefined;
+  const upper = s.toUpperCase();
+  if (upper === 'CASH') return 'cash';
+  if (upper === 'CREDIT') return 'CREDIT';
+  return s;
+}
 
 export type PurchaseReceiptCreateModalProps = {
   open: boolean;
@@ -390,7 +410,17 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const editingId = open && receiptId != null && Number(receiptId) > 0 ? Number(receiptId) : null;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const formRef = useRef<ProFormInstance>();
+  const [formLoading, setFormLoading] = useState(false);
+  const sourceLinkRef = useRef<{ purchase_order_id: number | null; purchase_order_code: string }>({
+    purchase_order_id: null,
+    purchase_order_code: '',
+  });
+  /** 仅编辑历史「赊购 CREDIT」时追加选项，新建不再提供赊购 */
+  const [includeLegacyCreditOption, setIncludeLegacyCreditOption] = useState(false);
   const currentUser = useCurrentUser();
   const {
     options: departmentOptions,
@@ -399,10 +429,15 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
   } = usePurchaseDepartmentOptions();
   const quantityDecimals = useNumericPrecisionPlaces('quantity');
   const priceDecimals = useNumericPrecisionPlaces('price');
+  const amountDecimals = useNumericPrecisionPlaces('amount');
   const trackingFlags = useWarehouseTrackingFlags();
   const [generatingBatchIdx, setGeneratingBatchIdx] = useState<number | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [linkedPoId, setLinkedPoId] = useState<number | null>(null);
+  const [poSettlementCtx, setPoSettlementCtx] = useState<PurchaseReceiptPoSettlementCtx | null>(
+    null,
+  );
   const { data: businessConfig } = useQuery({
     queryKey: ['businessConfigFinanceRecognition'],
     queryFn: getBusinessConfig,
@@ -416,10 +451,18 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
     () => resolveOrgPayableDefaultFromBusinessConfig(businessConfig),
     [businessConfig],
   );
-  const payModeOptions = useMemo(
-    () => PAY_MODE_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) })),
-    [t],
-  );
+  const payModeOptions = useMemo(() => {
+    const base = partnerPaymentMethodSelectOptions(t);
+    if (!includeLegacyCreditOption) return base;
+    if (base.some((o) => o.value === 'CREDIT')) return base;
+    return [
+      ...base,
+      {
+        value: 'CREDIT',
+        label: t('app.kuaizhizao.warehouseInbound.payMode.credit'),
+      },
+    ];
+  }, [t, includeLegacyCreditOption]);
 
   const defaultPerson = useMemo(() => {
     if (!currentUser) return { id: undefined as number | undefined, name: '' };
@@ -433,7 +476,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
     formRef.current?.setFieldsValue({
       items: [{ ...defaultLineItem }],
       receipt_time: dayjs(),
-      pay_mode: 'CREDIT',
+      pay_mode: undefined,
       tax_rate: 13,
       currency: 'CNY',
       buyer_id: defaultPerson.id,
@@ -565,6 +608,16 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
           };
           setLinkedPoId(poCompose.purchaseOrderId);
           const headerTaxPct = purchaseOrderTaxRateToPercent(orderWithMaterials.tax_rate ?? 13);
+          const poPriceType = (() => {
+            const raw = String(
+              (orderWithMaterials as { price_type?: string; priceType?: string }).price_type ??
+                (orderWithMaterials as { priceType?: string }).priceType ??
+                '',
+            ).trim();
+            return raw === 'tax_inclusive' || raw === 'tax_exclusive'
+              ? raw
+              : purchaseReceiptFormPriceType(headerTaxPct);
+          })();
           const formItems = outstanding
             .filter((it) => it.id != null && (poCompose.quantities[it.id] ?? 0) > 0)
             .map((it) => {
@@ -577,16 +630,6 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
                 return fromLine > 0 ? fromLine : headerTaxPct;
               })();
               const pushQty = Number(poCompose.quantities[lineId]) || 0;
-              const poPriceType = (() => {
-                const raw = String(
-                  (orderWithMaterials as { price_type?: string; priceType?: string }).price_type ??
-                    (orderWithMaterials as { priceType?: string }).priceType ??
-                    '',
-                ).trim();
-                return raw === 'tax_inclusive' || raw === 'tax_exclusive'
-                  ? raw
-                  : purchaseReceiptFormPriceType(headerTaxPct);
-              })();
               const dual = documentLineDualQuantityForPush(it as unknown as Record<string, unknown>, {
                 sourcePrimaryQty: Number(it.ordered_quantity) || 0,
                 pushPrimaryQty: pushQty,
@@ -642,6 +685,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
             receipt_time: poCompose.receiptTimeIso ? dayjs(poCompose.receiptTimeIso) : dayjs(),
             delivery_note: poCompose.deliveryNote ?? '',
             pay_mode: poPayMode,
+            price_type: poPriceType,
             tax_rate: taxPct,
             currency: String(orderWithMaterials.currency ?? 'CNY').trim() || 'CNY',
             notes: notesText,
@@ -750,6 +794,9 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
           receipt_time: receiptTimeRaw ? dayjs(String(receiptTimeRaw)) : dayjs(),
           delivery_note: String(detail.delivery_note ?? ''),
           pay_mode: formPayMode,
+          price_type: purchaseReceiptFormPriceType(
+            purchaseOrderTaxRateToPercent(detail.tax_rate ?? 13),
+          ),
           billtype_number: String(detail.billtype_number ?? 'im_PurInBill_STD_BT_S'),
           tax_rate: detail.tax_rate != null ? Number(detail.tax_rate) : 13,
           currency: String(detail.currency ?? 'CNY'),
@@ -780,8 +827,8 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
     };
   }, [editingId, messageApi, open, orgPayableDefault, poCompose, resetForm, syncLineMaterialTracking, t]);
 
-  const formItemColumns = useMemo(
-    () => [
+  const buildFormItemColumns = useCallback(
+    (showTaxColumns: boolean) => [
       {
         title: t('app.kuaizhizao.shipmentNotice.import.materialName'),
         dataIndex: 'material_id',
@@ -946,7 +993,9 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
         ),
       },
       {
-        title: t('app.kuaizhizao.purchaseReturn.unitPrice'),
+        title: showTaxColumns
+          ? t('app.kuaizhizao.purchaseOrder.col.taxUnitPrice')
+          : t('app.kuaizhizao.purchaseOrder.col.unitPrice'),
         dataIndex: 'unit_price',
         width: DOCUMENT_DETAIL_COL_WIDTH.unitPrice,
         ...DOCUMENT_DETAIL_NUM_COL,
@@ -961,20 +1010,162 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
           </AntForm.Item>
         ),
       },
+      ...(showTaxColumns
+        ? [
+            {
+              title: (
+                <TaxRateBatchColumnTitle
+                  onBatch={(num) => {
+                    const items = normalizeFormListItems<Record<string, unknown>>(
+                      formRef.current?.getFieldValue('items'),
+                    );
+                    if (items.length === 0) return;
+                    formRef.current?.setFieldsValue({
+                      items: items.map((it) => ({ ...it, tax_rate: num })),
+                    });
+                  }}
+                />
+              ),
+              dataIndex: 'tax_rate',
+              width: DOCUMENT_DETAIL_COL_WIDTH.taxRate,
+              ...DOCUMENT_DETAIL_NUM_COL,
+              onCell: () => ({ className: 'quotation-tax-rate-col' }),
+              render: (_: unknown, __: unknown, index: number) => (
+                <TaxRateDetailCell index={index} />
+              ),
+            },
+            {
+              title: t('app.kuaizhizao.purchaseOrder.col.exclAmount'),
+              width: DOCUMENT_DETAIL_COL_WIDTH.exclAmount,
+              ...DOCUMENT_DETAIL_NUM_COL,
+              render: (_: unknown, __: unknown, index: number) => (
+                <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items !== curr?.items}>
+                  {({ getFieldValue }) => {
+                    const row = normalizeFormListItems<Record<string, unknown>>(
+                      getFieldValue('items'),
+                    )[index];
+                    const taxPct = purchaseOrderTaxRateToPercent(row?.tax_rate ?? 13);
+                    const priceType = purchaseFormPriceType(
+                      poSettlementCtx?.priceType ?? getFieldValue('price_type'),
+                    );
+                    const line = computePurchaseReceiptFormLineAmounts(
+                      row as Parameters<typeof computePurchaseReceiptFormLineAmounts>[0],
+                      getFieldValue('tax_rate') ?? taxPct,
+                      priceType,
+                      poSettlementCtx,
+                    );
+                    return <span>¥{line.excl.toFixed(amountDecimals)}</span>;
+                  }}
+                </AntForm.Item>
+              ),
+            },
+            {
+              title: t('app.kuaizhizao.purchaseOrder.col.taxAmount'),
+              width: DOCUMENT_DETAIL_COL_WIDTH.taxAmount,
+              ...DOCUMENT_DETAIL_NUM_COL,
+              render: (_: unknown, __: unknown, index: number) => (
+                <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items !== curr?.items}>
+                  {({ getFieldValue }) => {
+                    const row = normalizeFormListItems<Record<string, unknown>>(
+                      getFieldValue('items'),
+                    )[index];
+                    const taxPct = purchaseOrderTaxRateToPercent(row?.tax_rate ?? 13);
+                    const priceType = purchaseFormPriceType(
+                      poSettlementCtx?.priceType ?? getFieldValue('price_type'),
+                    );
+                    const line = computePurchaseReceiptFormLineAmounts(
+                      row as Parameters<typeof computePurchaseReceiptFormLineAmounts>[0],
+                      getFieldValue('tax_rate') ?? taxPct,
+                      priceType,
+                      poSettlementCtx,
+                    );
+                    return <span>¥{line.tax.toFixed(amountDecimals)}</span>;
+                  }}
+                </AntForm.Item>
+              ),
+            },
+            {
+              title: t('app.kuaizhizao.purchaseOrder.col.inclTotal'),
+              width: DOCUMENT_DETAIL_COL_WIDTH.lineAmount,
+              ...DOCUMENT_DETAIL_NUM_COL,
+              render: (_: unknown, __: unknown, index: number) => (
+                <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items !== curr?.items}>
+                  {({ getFieldValue }) => {
+                    const row = normalizeFormListItems<Record<string, unknown>>(
+                      getFieldValue('items'),
+                    )[index];
+                    const taxPct = purchaseOrderTaxRateToPercent(row?.tax_rate ?? 13);
+                    const priceType = purchaseFormPriceType(
+                      poSettlementCtx?.priceType ?? getFieldValue('price_type'),
+                    );
+                    const line = computePurchaseReceiptFormLineAmounts(
+                      row as Parameters<typeof computePurchaseReceiptFormLineAmounts>[0],
+                      getFieldValue('tax_rate') ?? taxPct,
+                      priceType,
+                      poSettlementCtx,
+                    );
+                    return <span>¥{line.incl.toFixed(amountDecimals)}</span>;
+                  }}
+                </AntForm.Item>
+              ),
+            },
+          ]
+        : [
+            {
+              title: t('app.kuaizhizao.purchaseOrder.col.totalPrice'),
+              width: DOCUMENT_DETAIL_COL_WIDTH.lineAmount,
+              ...DOCUMENT_DETAIL_NUM_COL,
+              render: (_: unknown, __: unknown, index: number) => (
+                <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items !== curr?.items}>
+                  {({ getFieldValue }) => {
+                    const row = normalizeFormListItems<Record<string, unknown>>(
+                      getFieldValue('items'),
+                    )[index];
+                    const taxPct = purchaseOrderTaxRateToPercent(row?.tax_rate ?? 13);
+                    const priceType = purchaseFormPriceType(
+                      poSettlementCtx?.priceType ?? getFieldValue('price_type'),
+                    );
+                    const line = computePurchaseReceiptFormLineAmounts(
+                      row as Parameters<typeof computePurchaseReceiptFormLineAmounts>[0],
+                      getFieldValue('tax_rate') ?? taxPct,
+                      priceType,
+                      poSettlementCtx,
+                    );
+                    return <span>¥{line.excl.toFixed(amountDecimals)}</span>;
+                  }}
+                </AntForm.Item>
+              ),
+            },
+          ]),
       buildDocumentLineAttachmentsFormColumn(
         t,
         DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY.purchaseReceipt,
       ),
     ],
     [
+      amountDecimals,
       clearLineWarehouseDependents,
       generatingBatchIdx,
       handleGenerateBatch,
+      poSettlementCtx,
       quantityDecimals,
       syncLineMaterialTracking,
       t,
       trackingFlags,
     ],
+  );
+
+  const handlePurchaseReceiptPriceTypeChange = useCallback(
+    (nextChecked: boolean) => {
+      if (poSettlementCtx?.priceType) return;
+      const nextType: PriceTypeValue = nextChecked ? 'tax_inclusive' : 'tax_exclusive';
+      const fromType = purchaseFormPriceType(formRef.current?.getFieldValue('price_type'));
+      deferConvertLineItemsByPriceType(formRef.current, fromType, nextType, {
+        quantityField: 'receipt_quantity',
+        priceDecimals,
+      });
+    },
+    [poSettlementCtx?.priceType, priceDecimals],
   );
 
   const handleFinish = async (values: Record<string, unknown>) => {
@@ -1040,7 +1231,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
     const headerWhName = String(validItems[0]?.warehouse_name ?? '').trim();
 
     const fromPoCompose = !editingId && poCompose?.purchaseOrderId;
-    const linkedPoId = fromPoCompose
+    const submitLinkedPoId = fromPoCompose
       ? poCompose.purchaseOrderId
       : editingId
         ? sourceLinkRef.current.purchase_order_id
@@ -1052,7 +1243,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
         : '';
 
     const payload = {
-        purchase_order_id: linkedPoId,
+        purchase_order_id: submitLinkedPoId,
         purchase_order_code: linkedPoCode,
         order_type: String(values.order_type ?? '标准采购').trim() || '标准采购',
         supplier_id: supplierId,
@@ -1065,7 +1256,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
           resolveDepartmentName,
           values.department_name,
         ),
-        pay_mode: String(values.pay_mode ?? 'CREDIT').trim() || 'CREDIT',
+        pay_mode: String(values.pay_mode ?? '').trim() || undefined,
         tax_rate: values.tax_rate != null ? Number(values.tax_rate) : 13,
         currency: String(values.currency ?? 'CNY').trim() || 'CNY',
         receiver_id: values.receiver_id != null ? Number(values.receiver_id) : undefined,
@@ -1083,11 +1274,26 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
           const qty = Number(it.receipt_quantity) || 0;
           const price = Number(it.unit_price) || 0;
           const taxPct = purchaseOrderTaxRateToPercent(it.tax_rate ?? 13);
+          const priceType = purchaseFormPriceType(
+            poSettlementCtx?.priceType ?? values.price_type,
+          );
+          const poiId = positiveId(it.purchase_order_item_id);
+          const receiptAmounts = computePurchaseReceiptFormLineAmounts(
+            {
+              receipt_quantity: qty,
+              unit_price: price,
+              tax_rate: taxPct,
+              purchase_order_item_id: poiId ?? undefined,
+            },
+            values.tax_rate,
+            priceType,
+            poSettlementCtx,
+          );
           const storedLine = purchaseOrderFormLineToStored(
             price,
             qty,
             taxPct,
-            purchaseReceiptFormPriceType(taxPct),
+            priceType,
             priceDecimals,
           );
           const lineWhId = Number(it.warehouse_id) || 0;
@@ -1170,11 +1376,12 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
       initialValues={{
         receipt_time: dayjs(),
         items: [{ ...defaultLineItem }],
-        pay_mode: 'CREDIT',
+        price_type: DEFAULT_PURCHASE_PRICE_TYPE,
         tax_rate: 13,
         currency: 'CNY',
       }}
     >
+      <ProFormText name="price_type" hidden />
       <Row gutter={16}>
         <Col span={6}>
           <ProFormItem
@@ -1294,8 +1501,6 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
           <ProFormItem
             name="pay_mode"
             label={t('app.kuaizhizao.warehouseInbound.field.payMode')}
-            initialValue="CREDIT"
-            rules={[{ required: true, message: t('app.kuaizhizao.warehouseInbound.field.payModeRequired') }]}
           >
             <UniDropdown options={payModeOptions} style={{ width: '100%' }} />
           </ProFormItem>
@@ -1320,30 +1525,82 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
       </Row>
 
       <DocumentDetailTableStyles />
-      <UniTableDetail
-        name="items"
-        title={t('app.kuaizhizao.warehouseInbound.createLinesTitle')}
-        required
-        requiredMessage={t('app.kuaizhizao.warehouseInbound.msg.needValidPurchaseLine')}
-        headerExtra={(
-          <Space size={8}>
-            <Button
-              type="default"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                const next = [...(formRef.current?.getFieldValue('items') ?? []), { ...defaultLineItem }];
-                formRef.current?.setFieldsValue({ items: next });
-              }}
-            >
-              {t('common.addDetail')}
-            </Button>
-          </Space>
+      <AntForm.Item
+        noStyle
+        shouldUpdate={(prev, curr) => prev?.price_type !== curr?.price_type}
+      >
+        {({ getFieldValue }) => {
+          const priceType = purchaseFormPriceType(
+            poSettlementCtx?.priceType ?? getFieldValue('price_type'),
+          );
+          const showTaxColumns = priceType === 'tax_inclusive';
+          return (
+            <UniTableDetail
+              name="items"
+              title={t('app.kuaizhizao.warehouseInbound.createLinesTitle')}
+              required
+              requiredMessage={t('app.kuaizhizao.warehouseInbound.msg.needValidPurchaseLine')}
+              leftExtra={(
+                <PriceTypeSwitch
+                  disabled={!!poSettlementCtx?.priceType}
+                  checked={priceType === 'tax_inclusive'}
+                  checkedChildren={t('app.kuaizhizao.purchaseOrder.form.taxIncl')}
+                  unCheckedChildren={t('app.kuaizhizao.purchaseOrder.form.taxExcl')}
+                  onChange={handlePurchaseReceiptPriceTypeChange}
+                />
+              )}
+              headerExtra={(
+                <Space size={8}>
+                  <Button
+                    type="default"
+                    icon={<PlusOutlined />}
+                    onClick={() => {
+                      const next = [
+                        ...(formRef.current?.getFieldValue('items') ?? []),
+                        { ...defaultLineItem },
+                      ];
+                      formRef.current?.setFieldsValue({ items: next });
+                    }}
+                  >
+                    {t('common.addDetail')}
+                  </Button>
+                </Space>
+              )}
+              columns={buildFormItemColumns(showTaxColumns)}
+              disabledAdd
+              initialValue={{ ...defaultLineItem }}
+              tableProps={DOCUMENT_DETAIL_TABLE_PROPS}
+            />
+          );
+        }}
+      </AntForm.Item>
+
+      <AntForm.Item
+        noStyle
+        shouldUpdate={(prev, curr) => prev?.items !== curr?.items}
+      >
+        {({ getFieldValue }) => (
+          <DocumentAmountSummary
+            variant="purchase"
+            getFieldValue={getFieldValue}
+            quantityField="receipt_quantity"
+            priceType={
+              poSettlementCtx?.priceType ??
+              String(getFieldValue('price_type') ?? 'tax_inclusive')
+            }
+            goodsTotalsFn={(formItems) =>
+              computePurchaseReceiptFormGoodsTotals(
+                formItems,
+                getFieldValue('tax_rate'),
+                poSettlementCtx?.priceType ??
+                  String(getFieldValue('price_type') ?? 'tax_inclusive'),
+                poSettlementCtx,
+              )
+            }
+            style={{ marginBottom: 16 }}
+          />
         )}
-        columns={formItemColumns}
-        disabledAdd
-        initialValue={{ ...defaultLineItem }}
-        tableProps={DOCUMENT_DETAIL_TABLE_PROPS}
-      />
+      </AntForm.Item>
 
       <Row gutter={16}>
         <Col span={24}>

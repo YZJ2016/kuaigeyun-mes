@@ -153,6 +153,11 @@ export interface SalesContract {
 
   capabilities?: SalesContractCapabilities;
 
+  audit?: { phase?: string; allowed_actions?: string[] };
+
+  /** 单据头附件（上传字段 attachments） */
+  attachments?: import('../utils/documentAttachments').DocumentAttachmentFile[];
+
   created_by?: number;
 
   created_by_name?: string;

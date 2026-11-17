@@ -146,23 +146,24 @@ class StorageArea(BaseModel):
 class StorageLocation(BaseModel):
     """
     库位模型
-    
-    库区的子单位，属于某个库区，用于管理库位的层级结构。
-    
+
+    可挂库区，或直接挂仓库；二者皆空时为金蝶式独立仓位（可与任意仓库联用）。
+
     Attributes:
         id: 主键ID（自增ID，内部使用）
         uuid: 业务ID（UUID，对外暴露，安全且唯一，继承自BaseModel）
         tenant_id: 组织ID（用于多组织数据隔离，继承自BaseModel）
         code: 库位编码（组织内唯一）
         name: 库位名称
-        storage_area_id: 所属库区ID（外键）
+        storage_area_id: 所属库区ID（可选外键）
+        warehouse_id: 所属仓库ID（可选；挂库区时与库区仓库一致，未挂库区时可直挂仓库）
         description: 描述
         is_active: 是否启用
         created_at: 创建时间（继承自BaseModel）
         updated_at: 更新时间（继承自BaseModel）
         deleted_at: 删除时间（软删除）
     """
-    
+
     class Meta:
         """
         模型元数据
@@ -174,6 +175,7 @@ class StorageLocation(BaseModel):
             ("code",),
             ("uuid",),
             ("storage_area_id",),
+            ("warehouse_id",),
         ]
         # 注意：唯一约束已通过数据库部分唯一索引实现（WHERE deleted_at IS NULL）
         # 支持软删除后重用编码，详见迁移文件：63_20260122182517_add_partial_unique_indexes_for_soft_delete.py
@@ -184,16 +186,28 @@ class StorageLocation(BaseModel):
     
     # 基本信息
     code = fields.CharField(max_length=50, description="库位编码（组织内唯一）")
+    source_location_code = fields.CharField(
+        max_length=50,
+        null=True,
+        description="苍穹仓位号 location_number（回写金蝶；可与本地 code 不同）",
+    )
     name = fields.CharField(max_length=200, description="库位名称")
     description = fields.TextField(null=True, description="描述")
-    
-    # 关联关系（ForeignKeyField 会自动创建 storage_area_id 字段）
+
+    # 关联关系（ForeignKeyField 会自动创建 storage_area_id 字段）；可空=独立仓位
     storage_area = fields.ForeignKeyField(
         "models.StorageArea",
         related_name="storage_locations",
-        description="所属库区"
+        null=True,
+        description="所属库区（可选）",
     )
-    
+    warehouse = fields.ForeignKeyField(
+        "models.Warehouse",
+        related_name="direct_storage_locations",
+        null=True,
+        description="所属仓库（可选；未挂库区时可直挂）",
+    )
+
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")
     

@@ -60,7 +60,8 @@ import {
   withMaterialLineFillMapping,
 } from '../../sales-management/shared/materialLineFormDetail';
 import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select';
-import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
+import {
+  DocumentLineDualQuantityFormCell, DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
 import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import {
@@ -126,7 +127,7 @@ import { renderDemandBusinessModeMarkerTag } from '../../../utils/businessMode';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { alignProColumns, GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS, DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS, ratioToPushProgressPercent } from '../../sales-management/shared/DocumentPushProgressBar';
 import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -167,6 +168,7 @@ import {
 } from '../../../components/documentLineAttachmentsColumns';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { formatBusinessDateOnly, formatDateTime, formatNumber, formatQuantity, todaySiteDateString, formatCurrencyAmount, formatCurrencyPrice } from '../../../../../utils/format';
+import { computeSimpleDocumentLineTotal } from '../../../utils/documentLineAmounts';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
@@ -205,15 +207,26 @@ const INITIAL_CREATE_ITEMS = [{ ...INITIAL_PR_FORM_ITEM_ROW }];
 
 type PurchaseRequisitionItemRow = PurchaseRequisitionItem & {
   _rowKey: string;
+  _headerId?: number | string;
   requisition_id: number;
   requisition_code?: string;
   requisition_name?: string;
   source_type?: string;
   source_code?: string;
+  applicant_id?: number | null;
+  applicant_name?: string | null;
+  department_id?: number | null;
+  department_name?: string | null;
   status?: string;
   review_status?: string;
   downstream_push_progress?: number;
   lifecycle?: Record<string, unknown>;
+  capabilities?: PurchaseRequisition['capabilities'];
+  audit?: PurchaseRequisition['audit'];
+  created_at?: string;
+  updated_at?: string;
+  created_by_name?: string;
+  updated_by_name?: string;
 };
 
 const PURCHASE_REQUISITION_LIST_PERSISTENCE_ID =
@@ -1885,120 +1898,232 @@ const PurchaseRequisitionsPage: React.FC = () => {
   ], SALES_DOC_LIST_FIELD_RANK), [t, purchaseRequestAuditEnabled, purchaseRequisitionAuditColumn, lifecycleValueEnum, handleDetail, handleEdit, handleDeleteOne, resolveRequisitionPushPercent, detailVisible, currentReq?.id, invalidateMenuBadgeCounts, purchaseRequisitionPerms.canDelete]);
 
   const detailTableColumns: ProColumns<PurchaseRequisitionItemRow>[] = useMemo(
-    () => [
-      {
-        title: t('app.kuaizhizao.purchaseRequisition.col.nameAndCode'),
-        key: 'requisition_code',
-        dataIndex: 'requisition_code',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-        fixed: 'left',
-        hideInSearch: false,
-        fieldProps: { placeholder: t('app.kuaizhizao.purchaseRequisition.col.code') },
-        render: (_, record) => (
-          <UniTableStackedPrimaryCell
-            primary={String(record.requisition_name ?? '')}
-            secondary={String(record.requisition_code ?? '')}
-          />
-        ),
-      },
-      {
-        title: t('app.kuaizhizao.purchaseRequisition.col.code'),
-        dataIndex: 'requisition_code',
-        hideInTable: true,
-      },
-      {
-        title: t('app.kuaizhizao.purchaseRequisition.col.name'),
-        dataIndex: 'requisition_name',
-        hideInTable: true,
-      },
-      {
-        title: t('app.kuaizhizao.purchaseRequisition.col.materialName'),
-        key: 'material_display',
-        dataIndex: 'material_name',
-        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-        render: (_, record) => (
-          <MaterialStackedCell
-            material_name={record.material_name}
-            material_code={record.material_code}
-            material_spec={record.material_spec}
-          />
-        ),
-      },
-      {
-        title: t('app.kuaizhizao.purchaseRequisition.col.materialCode'),
-        dataIndex: 'material_code',
-        hideInTable: true,
-      },
-      {
-        title: t('common.quantity'),
-        dataIndex: 'quantity',
-        width: 120,
-        align: 'right',
-        render: (val: unknown, record) => (
-          <QuantityWithUnitDisplay quantity={val} unit={record.unit} />
-        ),
-      },
-      {
-        title: t('app.kuaizhizao.purchaseRequisition.col.suggestedPrice'),
-        dataIndex: 'suggested_unit_price',
-        width: 100,
-        align: 'right',
-        render: (text: unknown) =>
-          text != null ? formatCurrencyPrice(text) : '-',
-      },
-      {
-        title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
-        key: 'line_amount',
-        width: 110,
-        align: 'right',
-        render: (_: unknown, record) => {
-          const qty = Number(record.quantity ?? 0);
-          const price = Number(record.suggested_unit_price ?? 0);
-          return formatCurrencyAmount(qty * price);
-        },
-      },
-      {
-        title: t('app.kuaizhizao.purchaseRequisition.col.requiredDate'),
-        dataIndex: 'required_date',
-        width: 132,
-        uniTableKeepWidth: true,
-        hideInSearch: true,
-        render: (_: unknown, row) =>
-          row.required_date ? formatDateTime(row.required_date, 'YYYY-MM-DD') : '-',
-      },
-      {
-        title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
-        key: 'line_push_progress',
-        ...DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS,
-        render: (_: unknown, record) => {
-          const ordered = Number(record.quantity ?? 0);
-          const pushed =
-            Number(record.converted_quantity_confirmed ?? 0) +
-            Number(record.converted_quantity_draft ?? 0);
-          const percent = ratioToPushProgressPercent(pushed, ordered);
-          return (
-            <DocumentPushProgressBar
-              percent={percent}
-              tooltip={t('app.kuaizhizao.salesManagement.pushProgress.percentOnly', { percent })}
-            />
-          );
-        },
-      },
-      {
-        title: t('app.kuaizhizao.purchaseRequisition.col.lifecycle'),
-        dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
-        fixed: 'right',
-        hideInSearch: false,
-        valueEnum: lifecycleValueEnum,
-        render: (_: unknown, record) => (
-          <ListUniLifecycleCell
-            lifecycle={getPurchaseRequisitionLifecycle(record as PurchaseRequisition, purchaseRequestAuditEnabled)}
-            withSubStages
-          />
-        ),
-      },
+    () =>
+      alignProColumns<PurchaseRequisitionItemRow>(
+        [
+          {
+            title: t('app.kuaizhizao.purchaseRequisition.col.nameAndCode'),
+            key: 'requisition_code',
+            dataIndex: 'requisition_code',
+            width: 240,
+            minWidth: 240,
+            uniTableKeepWidth: true,
+            uniTablePrimaryFlex: false,
+            resizable: false,
+            fixed: 'left',
+            hideInSearch: false,
+            fieldProps: { placeholder: t('app.kuaizhizao.purchaseRequisition.col.code') },
+            render: (_, record) => (
+              <UniTableStackedPrimaryCell
+                primary={String(record.requisition_name ?? '')}
+                secondary={String(record.requisition_code ?? '')}
+              />
+            ),
+          },
+          {
+            title: t('app.kuaizhizao.purchaseRequisition.col.code'),
+            dataIndex: 'requisition_code',
+            hideInTable: true,
+          },
+          {
+            title: t('app.kuaizhizao.purchaseRequisition.col.name'),
+            dataIndex: 'requisition_name',
+            hideInTable: true,
+          },
+          {
+            title: t('app.kuaizhizao.purchaseRequisition.col.materialName'),
+            key: 'material_display',
+            dataIndex: 'material_name',
+            // 明细视图：物料叠列为 RemainderFlex（无头表明细预览列）
+            minWidth: 160,
+            uniTablePrimaryFlex: true,
+            uniTableRemainderFlex: true,
+            resizable: false,
+            ellipsis: false,
+            render: (_, record) => (
+              <MaterialStackedCell
+                material_name={record.material_name}
+                material_code={record.material_code}
+                material_spec={record.material_spec}
+              />
+            ),
+          },
+          {
+            title: t('app.kuaizhizao.purchaseRequisition.col.materialCode'),
+            dataIndex: 'material_code',
+            hideInTable: true,
+          },
+          {
+            title: t('app.kuaizhizao.purchaseRequisition.col.applicant'),
+            dataIndex: 'applicant_name',
+            key: 'applicant_name',
+            width: 96,
+            minWidth: 96,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            render: (_, record) => String(record.applicant_name ?? '').trim() || '-',
+          },
+          {
+            title: t('app.kuaizhizao.purchaseRequisition.col.department'),
+            dataIndex: 'department_name',
+            key: 'department_name',
+            width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            render: (_, record) => String(record.department_name ?? '').trim() || '-',
+          },
+          {
+            title: t('common.quantity'),
+            dataIndex: 'quantity',
+            width: 100,
+            minWidth: 100,
+            uniTableKeepWidth: true,
+            resizable: false,
+            align: 'right',
+            render: (val: unknown, record) => (
+              <QuantityWithUnitDisplay quantity={val} unit={record.unit} />
+            ),
+          },
+          {
+            title: t('app.kuaizhizao.purchaseRequisition.col.suggestedPrice'),
+            dataIndex: 'suggested_unit_price',
+            width: 100,
+            minWidth: 100,
+            uniTableKeepWidth: true,
+            resizable: false,
+            align: 'right',
+            render: (text: unknown) =>
+              text != null ? formatCurrencyPrice(text) : '-',
+          },
+          {
+            title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
+            key: 'line_amount',
+            dataIndex: 'total_amount',
+            width: 110,
+            minWidth: 110,
+            uniTableKeepWidth: true,
+            resizable: false,
+            align: 'right',
+            render: (_: unknown, record) => {
+              const qty = Number(record.quantity ?? 0);
+              const price = Number(record.suggested_unit_price ?? 0);
+              return formatCurrencyAmount(computeSimpleDocumentLineTotal(qty, price));
+            },
+          },
+          {
+            title: t('app.kuaizhizao.purchaseRequisition.col.requiredDate'),
+            dataIndex: 'required_date',
+            width: 132,
+            minWidth: 132,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            render: (_: unknown, row) =>
+              row.required_date ? formatDateTime(row.required_date, 'YYYY-MM-DD') : '-',
+          },
+          {
+            title: t('app.kuaizhizao.purchaseRequisition.form.lineNotes'),
+            dataIndex: 'notes',
+            width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+            render: (_: unknown, row) => {
+              const text = String(row.notes ?? '').trim();
+              return text || '-';
+            },
+          },
+          {
+            title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
+            key: 'line_push_progress',
+            // 与表格视图同一套进度列（勿用 DETAIL 右固定，否则会落到更新时间右侧）
+            ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
+            render: (_: unknown, record) => {
+              const ordered = Number(record.quantity ?? 0);
+              const pushed =
+                Number(record.converted_quantity_confirmed ?? 0) +
+                Number(record.converted_quantity_draft ?? 0);
+              const percent = ratioToPushProgressPercent(pushed, ordered);
+              return (
+                <DocumentPushProgressBar
+                  percent={percent}
+                  tooltip={t('app.kuaizhizao.salesManagement.pushProgress.percentOnly', { percent })}
+                />
+              );
+            },
+          },
+          ...buildDocumentAuditColumns<PurchaseRequisitionItemRow>(t),
+          ...(purchaseRequisitionAuditColumn
+            ? [purchaseRequisitionAuditColumn as ProColumns<PurchaseRequisitionItemRow>]
+            : []),
+          {
+            title: t('app.kuaizhizao.purchaseRequisition.col.lifecycle'),
+            key: 'lifecycle',
+            dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+            fixed: 'right',
+            hideInSearch: false,
+            valueEnum: lifecycleValueEnum,
+            render: (_: unknown, record) => (
+              <ListUniLifecycleCell
+                lifecycle={getPurchaseRequisitionLifecycle(
+                  record as unknown as PurchaseRequisition,
+                  purchaseRequestAuditEnabled,
+                )}
+                withSubStages
+              />
+            ),
+          },
+          {
+            title: t('common.actions'),
+            key: 'option',
+            valueType: 'option',
+            fixed: 'right',
+            hideInSearch: true,
+            render: (_, record) => {
+              const headerId = Number(record.requisition_id ?? record._headerId);
+              const header =
+                (tableRowsRef.current as PurchaseRequisition[]).find((row) => Number(row.id) === headerId) ??
+                ({ id: headerId, ...record } as unknown as PurchaseRequisition);
+              const parts: React.ReactNode[] = [
+                <Button
+                  {...rowActionKind('read')}
+                  key="d"
+                  onClick={() => handleDetail(header)}
+                >
+                  {t('common.detail')}
+                </Button>,
+              ];
+              if (header.capabilities?.update?.allowed === true && purchaseRequisitionPerms.canUpdate) {
+                parts.push(
+                  <Button
+                    {...rowActionKind('update')}
+                    key="e"
+                    onClick={() => handleEdit(header)}
+                  >
+                    {t('common.edit')}
+                  </Button>,
+                );
+              }
+              return parts;
+            },
+          },
+        ],
+        GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK,
+      ),
+    [
+      t,
+      lifecycleValueEnum,
+      purchaseRequestAuditEnabled,
+      purchaseRequisitionAuditColumn,
+      purchaseRequisitionPerms.canUpdate,
+      handleDetail,
+      handleEdit,
     ],
-    [t, lifecycleValueEnum, purchaseRequestAuditEnabled],
   );
 
   const renderPurchaseRequisitionForm = () => (
@@ -2604,15 +2729,29 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 requisition_name: h.requisition_name,
                 source_type: h.source_type,
                 source_code: h.source_code,
+                applicant_id: h.applicant_id,
+                applicant_name: h.applicant_name,
+                department_id: h.department_id,
+                department_name: h.department_name,
                 status: h.status,
                 review_status: h.review_status,
                 downstream_push_progress: h.downstream_push_progress,
                 lifecycle: h.lifecycle,
+                capabilities: h.capabilities,
+                audit: h.audit,
+                created_at: h.created_at,
+                updated_at: h.updated_at,
+                created_by_name: h.created_by_name,
+                updated_by_name: h.updated_by_name,
               }),
               mapEmptyHeaderRow: (h) => ({
                 requisition_id: h.id ?? 0,
                 requisition_code: h.requisition_code,
                 requisition_name: h.requisition_name,
+                applicant_id: h.applicant_id,
+                applicant_name: h.applicant_name,
+                department_id: h.department_id,
+                department_name: h.department_name,
                 material_id: 0,
                 material_code: '-',
                 material_name: '-',
@@ -3192,7 +3331,7 @@ const ConvertForm: React.FC<{
   const formatLineAmount = (itemId: number) => {
     const qty = quantities[itemId] ?? 0;
     const price = unitPrices[itemId] ?? 0;
-    return (qty * price).toLocaleString('zh-CN', {
+    return computeSimpleDocumentLineTotal(qty, price).toLocaleString('zh-CN', {
       minimumFractionDigits: amountDecimals,
       maximumFractionDigits: amountDecimals,
     });

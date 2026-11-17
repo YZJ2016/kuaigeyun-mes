@@ -56,7 +56,25 @@ export interface PaymentVoucher {
     repair_bank_flow?: { allowed?: boolean; reason?: string };
     print?: { allowed?: boolean; reason?: string };
   };
+  pull_lines?: Array<{
+    line_no: number;
+    source_type: string;
+    source_id: number;
+    source_code?: string;
+    amount: number;
+    max_amount?: number;
+  }>;
+  offset_prepayment_lines?: Array<{
+    line_no: number;
+    prepayment_payment_id: number;
+    source_code?: string;
+    amount: number;
+    purchase_order_id?: number;
+    purchase_order_code?: string;
+    unsettled_amount?: number;
+  }>;
 }
+
 
 export type PaymentPullPreview = DocumentPushPreview & {
   source_code?: string;
@@ -66,12 +84,21 @@ export type PaymentPullPreview = DocumentPushPreview & {
   payable_id?: number | null;
   payable_code?: string | null;
   require_payment_voucher?: boolean;
+  max_push_total?: number;
+  counterparty_account_name?: string | null;
+  counterparty_bank_name?: string | null;
+  counterparty_bank_account?: string | null;
+  payment_method?: string | null;
+  advance_payee_id?: number | null;
+  advance_payee_name?: string | null;
 };
 
 export type PaymentPullCandidate = {
   id: number;
   code: string;
   payable_code?: string;
+  application_kind?: 'prepayment' | 'goods' | 'mixed' | 'invoice' | string;
+  supplier_id?: number;
   supplier_name?: string;
   source_status?: string;
   review_status?: string;
@@ -89,6 +116,11 @@ export type PaymentCreateData = {
   payment_method: string;
   bank_account?: string;
   bank_account_id?: number;
+  counterparty_account_name?: string;
+  counterparty_bank_name?: string;
+  counterparty_bank_account?: string;
+  advance_payee_id?: number;
+  advance_payee_name?: string;
   settlement_type?: string;
   notes?: string;
   require_payment_voucher?: boolean;
@@ -172,7 +204,7 @@ export const paymentService = {
     limit?: number;
     keyword?: string;
     supplier_id?: number;
-    application_kind?: 'prepayment' | 'goods';
+    application_kind?: 'prepayment' | 'goods' | 'mixed' | 'invoice' | string;
   }) =>
     apiRequest<{ data: PaymentPullCandidate[]; total: number; success: boolean }>(
       `${PAYMENT_API}/pull-candidates/payment-applications`,

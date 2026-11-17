@@ -390,6 +390,8 @@ export const LIST_PAGE_TABLE_SCROLL = {
   GAP_COUNT_BASE: 8,
   /** UniTable 固定占位聚合（搜索行/标题行/分页行等，px） */
   TABLE_CHROME_PX: 82,
+  /** 列表表尾固定合计行（双行本页/全部合计）未实测前的回退占位 */
+  TABLE_FIXED_SUMMARY_EXTRA_PX: 56,
   /** 不同分辨率下的 1px 冗余，避免表体刚好顶死 */
   RESOLUTION_SLACK_PX: 1,
   /** 顶栏 + 标签 + 间距(7*16) + 表格固定位 + 分辨率冗余 */

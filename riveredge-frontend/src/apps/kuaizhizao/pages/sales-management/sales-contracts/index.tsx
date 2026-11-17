@@ -1,7 +1,6 @@
 /**
-
  * 销售合同管理
-
+ * 明细价税合计：contract-line-items-shared 内 DocumentAmountSummaryWatch。
  */
 
 

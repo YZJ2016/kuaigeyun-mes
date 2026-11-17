@@ -98,6 +98,41 @@ def convert_document_line_quantity_to_base(
     return qty * factor
 
 
+def document_line_dual_quantity_for_push(
+    source: Any,
+    *,
+    source_primary_qty: Any,
+    push_primary_qty: Any,
+) -> dict[str, Any]:
+    """
+    上游单据行 → 下游 create 载荷的副数量三字段。
+
+    部分下推时按主数量比例缩放副数量；行换算率原样带出（不随比例改写）。
+    """
+    aux_unit_raw = getattr(source, "aux_unit", None)
+    aux_unit = str(aux_unit_raw).strip() if aux_unit_raw is not None else None
+    rate = getattr(source, "unit_conversion_rate", None)
+    aux_raw = getattr(source, "aux_quantity", None)
+    if aux_raw is None:
+        return {
+            "aux_quantity": None,
+            "aux_unit": aux_unit or None,
+            "unit_conversion_rate": rate,
+        }
+    full = _decimal(source_primary_qty)
+    push = _decimal(push_primary_qty)
+    aux = _decimal(aux_raw)
+    if push <= 0:
+        aux = Decimal("0")
+    elif full > 0 and push < full and aux > 0:
+        aux = aux * push / full
+    return {
+        "aux_quantity": aux,
+        "aux_unit": aux_unit or None,
+        "unit_conversion_rate": rate,
+    }
+
+
 def validate_floating_line_dual_quantities(
     *,
     material: Any,

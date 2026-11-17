@@ -435,6 +435,8 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             tenant_id=tenant_id,
             requisition_id__in=requisition_ids,
         ).values("requisition_id", "quantity", "suggested_unit_price")
+        from apps.kuaizhizao.utils.document_amount_write import line_total_qty_unit_price
+
         totals: Dict[int, Dict[str, Decimal]] = {}
         for row in rows:
             req_id = int(row["requisition_id"])
@@ -445,7 +447,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 {"total_quantity": Decimal("0"), "total_amount": Decimal("0")},
             )
             bucket["total_quantity"] += quantity
-            bucket["total_amount"] += quantity * unit_price
+            bucket["total_amount"] += line_total_qty_unit_price(quantity, unit_price)
         return totals
 
     async def _filter_requisitions_by_lifecycle_stage(

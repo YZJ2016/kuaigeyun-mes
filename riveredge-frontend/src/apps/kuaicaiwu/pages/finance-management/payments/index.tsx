@@ -7,7 +7,7 @@ import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react'
 import { rowActionKind, rowActionSettleVoucher, rowActionCreateRefund, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Spin, Alert, Table, Empty, Form } from 'antd';
+import { App, Button, Modal, Form, theme } from 'antd';
 import { ModalForm, ProForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { PlusOutlined, PrinterOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
@@ -16,7 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { DetailDrawerActions, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { DetailDrawerActions, ListPageTemplate, MODAL_CONFIG, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { FinanceVoucherDetailDrawer } from '../shared/FinanceVoucherDetailDrawer';
 import {
@@ -114,6 +114,10 @@ const PaymentsPage: React.FC = () => {
   const [pullPreviewSourceId, setPullPreviewSourceId] = useState<number | null>(null);
   const [pullForm] = Form.useForm();
   const pullFromPayableCloseRef = useRef<(() => void) | null>(null);
+  const pullFromPayableOpenRef = useRef<(() => void) | null>(null);
+  const pullFromPaymentApplicationOpenRef = useRef<(() => void) | null>(null);
+  const { token } = theme.useToken();
+  const pullPreviewZIndex = token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET * 2;
   const [pullSubmitting, setPullSubmitting] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
@@ -283,14 +287,16 @@ const PaymentsPage: React.FC = () => {
   const openPullPreview = async (
     sourceId: number,
     kind: 'payable' | 'payment_application' = 'payable',
+    options?: { closeSourceModal?: () => void; reopenSourceModal?: () => void },
   ) => {
     setPullSourceKind(kind);
-    setPullPreviewOpen(true);
+    setPullPreviewOpen(false);
     setPullPreviewLoading(true);
     setPullPreviewData(null);
     setPullPreviewSourceId(sourceId);
     const sourceAction =
       kind === 'payment_application' ? pullFromPaymentApplicationAction : pullFromPayableAction;
+    const hideLoading = messageApi.loading(t(`${P}.pullPreviewLoading`), 0);
     try {
       const data =
         kind === 'payment_application'
@@ -311,12 +317,15 @@ const PaymentsPage: React.FC = () => {
           code: data.source_code,
         }),
       });
+      setPullPreviewOpen(true);
     } catch (e: any) {
       messageApi.error(
         e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
       );
       resetPullPreview();
+      options?.reopenSourceModal?.();
     } finally {
+      hideLoading();
       setPullPreviewLoading(false);
     }
   };
@@ -368,6 +377,7 @@ const PaymentsPage: React.FC = () => {
     },
   });
   pullFromPayableCloseRef.current = pullFromPayableQuery.closeModal;
+  pullFromPayableOpenRef.current = pullFromPayableQuery.openModal;
 
   const pullFromPaymentApplicationQuery = useUniPullQuery<PaymentPullCandidate>({
     rowKey: 'id',
@@ -402,12 +412,15 @@ const PaymentsPage: React.FC = () => {
         );
         return;
       }
-      pullFromPaymentApplicationCloseRef.current?.();
-      await openPullPreview(selected.id, 'payment_application');
+      await openPullPreview(selected.id, 'payment_application', {
+        closeSourceModal: () => pullFromPaymentApplicationCloseRef.current?.(),
+        reopenSourceModal: () => pullFromPaymentApplicationOpenRef.current?.(),
+      });
     },
   });
   const pullFromPaymentApplicationCloseRef = useRef<(() => void) | null>(null);
   pullFromPaymentApplicationCloseRef.current = pullFromPaymentApplicationQuery.closeModal;
+  pullFromPaymentApplicationOpenRef.current = pullFromPaymentApplicationQuery.openModal;
 
   useEffect(() => {
     const pullPayableId = (location.state as { pullPayableId?: number } | null)?.pullPayableId;
@@ -1232,7 +1245,7 @@ const PaymentsPage: React.FC = () => {
         scopeOptions={pullFromPayableQuery.scopeOptions}
         scope={pullFromPayableQuery.scope}
         onScopeChange={pullFromPayableQuery.handleScopeChange}
-        okText={t('common.next')}
+        okText={pullFromPayableAction.targetLabel}
       />
 
       <UniPullQueryModal<PaymentPullCandidate>
@@ -1265,18 +1278,15 @@ const PaymentsPage: React.FC = () => {
         scopeOptions={pullFromPaymentApplicationQuery.scopeOptions}
         scope={pullFromPaymentApplicationQuery.scope}
         onScopeChange={pullFromPaymentApplicationQuery.handleScopeChange}
-        okText={t('common.next')}
+        okText={pullFromPaymentApplicationAction.targetLabel}
       />
 
       <Modal
-        title={
-          pullSourceKind === 'payment_application'
-            ? pullFromPaymentApplicationAction.label
-            : pullFromPayableAction.label
-        }
+        title={t(`${P}.pullFormTitle`)}
         open={pullPreviewOpen}
         destroyOnHidden
-        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+        zIndex={pullPreviewZIndex}
         onCancel={resetPullPreview}
         okText={
           pullSourceKind === 'payment_application'
@@ -1287,85 +1297,10 @@ const PaymentsPage: React.FC = () => {
         confirmLoading={pullSubmitting}
         onOk={() => void pullForm.submit()}
         okButtonProps={{
-          disabled:
-            pullPreviewLoading ||
-            !pullPreviewData ||
-            !!pullPreviewData?.has_blocking_issues ||
-            pullPreviewMaxPush <= 0,
+          disabled: !pullPreviewData || pullPreviewMaxPush <= 0,
         }}
       >
-        {pullPreviewLoading ? (
-          <div
-            style={{
-              minHeight: 120,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 12,
-            }}
-          >
-            <Spin />
-            <div style={{ color: 'var(--ant-color-primary)' }}>
-              {t('app.kuaizhizao.salesOrder.loadingPreview')}
-            </div>
-          </div>
-        ) : pullPreviewData ? (
-          <div>
-            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPreviewData.summary}</p>
-            {pullPreviewData.has_blocking_issues && pullPreviewData.blocking_reason ? (
-              <Alert
-                type="warning"
-                showIcon
-                style={{ marginBottom: 12 }}
-                title={paymentCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
-              />
-            ) : null}
-            {pullPreviewData.items?.length > 0 ? (
-              <Table
-                size="small"
-                dataSource={pullPreviewData.items}
-                rowKey={(row) => String(row.item_id)}
-                pagination={false}
-                scroll={{ x: 720 }}
-                columns={[
-                  { title: t(`${P}.pullCol.payableCode`), dataIndex: 'source_code', width: 140, ellipsis: true },
-                  { title: t('app.kuaicaiwu.common.supplier'), dataIndex: 'supplier_name', width: 160, ellipsis: true },
-                  {
-                    title: t(`${P}.pull.col.docAmount`),
-                    dataIndex: 'quantity',
-                    width: 120,
-                    align: 'right',
-                    render: (v: number) => formatPullMoney(v),
-                  },
-                  {
-                    title: t(`${P}.pull.col.paidAmount`),
-                    dataIndex: 'pushed_quantity',
-                    width: 120,
-                    align: 'right',
-                    render: (v: number) => formatPullMoney(v),
-                  },
-                  {
-                    title: t(`${P}.pull.col.payableAmount`),
-                    dataIndex: 'max_push_quantity',
-                    width: 120,
-                    align: 'right',
-                    render: (v: number) => formatPullMoney(v),
-                  },
-                ]}
-              />
-            ) : (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={t('app.kuaizhizao.purchaseReturn.pull.previewNoLines')}
-              />
-            )}
-            {pullPreviewData.tip ? (
-              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 16 }}>
-                {pullPreviewData.tip}
-              </Typography.Paragraph>
-            ) : null}
-            {!pullPreviewData.has_blocking_issues && pullPreviewMaxPush > 0 ? (
+        {pullPreviewData ? (
               <ProForm
                 key={`pull-payment-${pullPreviewSourceId}`}
                 form={pullForm}
@@ -1420,8 +1355,6 @@ const PaymentsPage: React.FC = () => {
                   requiredMessage={t(`${P}.requirePaymentVoucherMissing`)}
                 />
               </ProForm>
-            ) : null}
-          </div>
         ) : null}
       </Modal>
 

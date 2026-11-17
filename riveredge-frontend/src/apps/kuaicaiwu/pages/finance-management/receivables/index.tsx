@@ -5,7 +5,7 @@ import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react'
 import { rowActionKind, rowActionCollectReceipt, rowActionIssueInvoice } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Typography, Modal, Spin, Alert, Table, Empty, Form } from 'antd';
+import { Alert, App, Button, Modal, Form, theme } from 'antd';
 import { ModalForm, ProForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import type { ProFormInstance } from '@ant-design/pro-components';
 import { PlusOutlined } from '@ant-design/icons';
@@ -29,7 +29,11 @@ import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../.
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import {
+    ListPageTemplate,
+    MODAL_CONFIG,
+    MODAL_NESTED_ABOVE_PARENT_OFFSET,
+} from '../../../../../components/layout-templates';
 import { financeColFull, financeColHalf, financeFormGridProps } from '../../../utils/financeFormLayout';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
@@ -92,9 +96,6 @@ const SALES_INVOICE_RESOURCE = 'kuaicaiwu:sales-invoice';
 
 type PullPreviewKind = 'sales_order' | 'sales_delivery';
 
-const formatPullMoney = (value: number) =>
-  formatCurrencyAmount(value || 0);
-
 const ReceivableList: React.FC = () => {
     const actionRef = useRef<ActionType>();
     const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
@@ -109,7 +110,11 @@ const ReceivableList: React.FC = () => {
     const [pullPreviewSourceId, setPullPreviewSourceId] = useState<number | null>(null);
     const [pullPreviewKind, setPullPreviewKind] = useState<PullPreviewKind | null>(null);
     const pullFromSalesOrderCloseRef = useRef<(() => void) | null>(null);
+    const pullFromSalesOrderOpenRef = useRef<(() => void) | null>(null);
     const pullFromSalesDeliveryCloseRef = useRef<(() => void) | null>(null);
+    const pullFromSalesDeliveryOpenRef = useRef<(() => void) | null>(null);
+    const { token } = theme.useToken();
+    const pullPreviewZIndex = token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET * 2;
     const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
     const [tableRows, setTableRows] = useState<Receivable[]>([]);
     const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
@@ -329,24 +334,33 @@ const ReceivableList: React.FC = () => {
         pullForm.resetFields();
     };
 
-    const openPullPreview = async (kind: PullPreviewKind, sourceId: number) => {
+    const openPullPreview = async (
+        kind: PullPreviewKind,
+        sourceId: number,
+        options?: { closeSourceModal?: () => void; reopenSourceModal?: () => void },
+    ) => {
+        options?.closeSourceModal?.();
         setPullPreviewKind(kind);
-        setPullPreviewOpen(true);
+        setPullPreviewOpen(false);
         setPullPreviewLoading(true);
         setPullPreviewData(null);
         setPullPreviewSourceId(sourceId);
+        const hideLoading = messageApi.loading(t(`${P}.pullPreviewLoading`), 0);
         try {
             const data =
                 kind === 'sales_order'
                     ? await receivableService.previewPullFromSalesOrder(sourceId)
                     : await receivableService.previewPullFromSalesDelivery(sourceId);
             setPullPreviewData(data);
+            setPullPreviewOpen(true);
         } catch (e: any) {
             messageApi.error(
                 e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
             );
             resetPullPreview();
+            options?.reopenSourceModal?.();
         } finally {
+            hideLoading();
             setPullPreviewLoading(false);
         }
     };
@@ -393,11 +407,14 @@ const ReceivableList: React.FC = () => {
                 messageApi.warning(t(`${P}.selectSource`, { label: pullFromSalesOrderAction.sourceLabel }));
                 return;
             }
-            pullFromSalesOrderCloseRef.current?.();
-            await openPullPreview('sales_order', selected.id);
+            await openPullPreview('sales_order', selected.id, {
+                closeSourceModal: () => pullFromSalesOrderCloseRef.current?.(),
+                reopenSourceModal: () => pullFromSalesOrderOpenRef.current?.(),
+            });
         },
     });
     pullFromSalesOrderCloseRef.current = pullFromSalesOrderQuery.closeModal;
+    pullFromSalesOrderOpenRef.current = pullFromSalesOrderQuery.openModal;
 
     const pullFromSalesDeliveryQuery = useUniPullQuery<ReceivablePullCandidate>({
         rowKey: 'id',
@@ -433,6 +450,7 @@ const ReceivableList: React.FC = () => {
         },
     });
     pullFromSalesDeliveryCloseRef.current = pullFromSalesDeliveryQuery.closeModal;
+    pullFromSalesDeliveryOpenRef.current = pullFromSalesDeliveryQuery.openModal;
 
     const handlePullCreateSubmit = async (values: any) => {
         if (!pullPreviewData || !pullPreviewSourceId || !pullPreviewKind) {
@@ -1217,7 +1235,7 @@ const ReceivableList: React.FC = () => {
                 scopeOptions={pullFromSalesOrderQuery.scopeOptions}
                 scope={pullFromSalesOrderQuery.scope}
                 onScopeChange={pullFromSalesOrderQuery.handleScopeChange}
-                okText={t('common.next')}
+                okText={pullFromSalesOrderAction.targetLabel}
             />
 
             <UniPullQueryModal<ReceivablePullCandidate>
@@ -1250,18 +1268,15 @@ const ReceivableList: React.FC = () => {
                 scopeOptions={pullFromSalesDeliveryQuery.scopeOptions}
                 scope={pullFromSalesDeliveryQuery.scope}
                 onScopeChange={pullFromSalesDeliveryQuery.handleScopeChange}
-                okText={t('common.next')}
+                okText={pullFromSalesDeliveryAction.targetLabel}
             />
 
             <Modal
-                title={
-                    pullPreviewKind === 'sales_delivery'
-                        ? pullFromSalesDeliveryAction.label
-                        : pullFromSalesOrderAction.label
-                }
+                title={t(`${P}.pullFormTitle`)}
                 open={pullPreviewOpen}
                 destroyOnHidden
-                width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+                width={MODAL_CONFIG.STANDARD_WIDTH}
+                zIndex={pullPreviewZIndex}
                 onCancel={resetPullPreview}
                 okText={pullPreviewTargetLabel}
                 cancelText={t('common.cancel')}
@@ -1270,78 +1285,10 @@ const ReceivableList: React.FC = () => {
                     void handlePullPreviewOk();
                 }}
                 okButtonProps={{
-                    disabled:
-                        pullPreviewLoading ||
-                        !pullPreviewData ||
-                        !!pullPreviewData?.has_blocking_issues ||
-                        pullPreviewMaxPush <= 0,
+                    disabled: !pullPreviewData || pullPreviewMaxPush <= 0,
                 }}
             >
-                {pullPreviewLoading ? (
-                    <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-                        <Spin />
-                        <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
-                    </div>
-                ) : pullPreviewData ? (
-                    <div>
-                        <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPreviewData.summary}</p>
-                        {pullPreviewData.has_blocking_issues && pullPreviewData.blocking_reason ? (
-                            <Alert
-                                type="warning"
-                                showIcon
-                                style={{ marginBottom: 12 }}
-                                title={receivableCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
-                            />
-                        ) : null}
-                        {pullPreviewData.items?.length > 0 ? (
-                            <Table
-                                size="small"
-                                dataSource={pullPreviewData.items}
-                                rowKey={(row) => String(row.item_id)}
-                                pagination={false}
-                                scroll={{ x: 840 }}
-                                columns={[
-                                    { title: t(`${P}.pull.col.sourceCode`), dataIndex: 'source_code', width: 140, ellipsis: true },
-                                    { title: t('app.kuaicaiwu.common.customer'), dataIndex: 'customer_name', width: 140, ellipsis: true },
-                                    {
-                                        title: t(`${P}.pull.col.docAmount`),
-                                        dataIndex: 'quantity',
-                                        width: 110,
-                                        align: 'right',
-                                        render: (v: number) => formatPullMoney(v),
-                                    },
-                                    {
-                                        title: t(`${P}.pull.col.receivableAmount`),
-                                        dataIndex: 'pushed_quantity',
-                                        width: 110,
-                                        align: 'right',
-                                        render: (v: number) => formatPullMoney(v),
-                                    },
-                                    {
-                                        title: t(`${P}.pull.col.prepaidOffset`),
-                                        dataIndex: 'prepaid_offset',
-                                        width: 110,
-                                        align: 'right',
-                                        render: (v: number) => formatPullMoney(v),
-                                    },
-                                    {
-                                        title: t(`${P}.pull.col.receivableableAmount`),
-                                        dataIndex: 'max_push_quantity',
-                                        width: 110,
-                                        align: 'right',
-                                        render: (v: number) => formatPullMoney(v),
-                                    },
-                                ]}
-                            />
-                        ) : (
-                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseReturn.pull.previewNoLines')} />
-                        )}
-                        {pullPreviewData.tip ? (
-                            <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 16 }}>
-                                {pullPreviewData.tip}
-                            </Typography.Paragraph>
-                        ) : null}
-                        {!pullPreviewData.has_blocking_issues && pullPreviewMaxPush > 0 ? (
+                {pullPreviewData ? (
                             <ProForm
                                 key={`pull-receivable-${pullPreviewKind}-${pullPreviewSourceId}`}
                                 form={pullForm}
@@ -1382,8 +1329,6 @@ const ReceivableList: React.FC = () => {
                                 <ProFormTextArea name="notes" label={t('common.remark')} colProps={financeColFull} />
                                 <DocumentAttachmentsField category="receivable_attachments" />
                             </ProForm>
-                        ) : null}
-                    </div>
                 ) : null}
             </Modal>
 

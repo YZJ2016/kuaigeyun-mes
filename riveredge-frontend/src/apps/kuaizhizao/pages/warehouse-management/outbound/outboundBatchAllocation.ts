@@ -72,6 +72,32 @@ export function allocateBatchQuantitiesFifo(
   return result;
 }
 
+/**
+ * 按选项序（FIFO）自动勾选足够批号，并按可用量分摊 totalQty。
+ * 「按可用量分摊」按钮真源：不依赖用户先勾选。
+ */
+export function pickAndAllocateBatchesFifo(
+  totalQty: number,
+  options: InventoryPickOption[],
+): OutboundBatchAllocation[] {
+  const target = Number.isFinite(totalQty) && totalQty > 0 ? totalQty : 0;
+  if (!(target > QTY_EPS) || !options.length) return [];
+
+  const nos: string[] = [];
+  let remaining = target;
+  for (const o of options) {
+    const bn = String(o.value ?? '').trim();
+    if (!bn) continue;
+    const avail = Number(o.quantity) || 0;
+    if (!(avail > QTY_EPS)) continue;
+    nos.push(bn);
+    remaining -= Math.min(avail, remaining);
+    if (remaining <= QTY_EPS) break;
+  }
+  if (!nos.length) return [];
+  return allocateBatchQuantitiesFifo(target, nos, options, []);
+}
+
 export function isValidOutboundBatchAllocations(
   allocs: OutboundBatchAllocation[] | undefined,
   options: InventoryPickOption[],
@@ -126,4 +152,47 @@ export function coerceBatchAllocationsDraft(
     return [{ batchNo, quantity: qty > 0 ? qty : 0 }];
   }
   return undefined;
+}
+
+/** 行上 batch_allocations / batch_number → 有效分摊列表 */
+export function lineBatchAllocationsFromRow(
+  row: Record<string, unknown> | null | undefined,
+  qty: number,
+): OutboundBatchAllocation[] {
+  if (!row) return [];
+  return (
+    coerceBatchAllocationsDraft(row.batch_allocations, qty) ??
+    coerceBatchAllocationsDraft(row.batch_number, qty) ??
+    []
+  ).filter((a) => String(a.batchNo).trim() && Number(a.quantity) > QTY_EPS);
+}
+
+/** 同步表单行：分摊数组 + 单批时写回 batch_number */
+export function syncFormLineBatchFields(
+  setFieldValue: (name: (string | number)[], value: unknown) => void,
+  index: number,
+  allocs: OutboundBatchAllocation[],
+  listName = 'items',
+) {
+  setFieldValue([listName, index, 'batch_allocations'], allocs);
+  setFieldValue(
+    [listName, index, 'batch_number'],
+    allocs.length === 1 ? allocs[0].batchNo : undefined,
+  );
+}
+
+/** 提交 API：分摊 → batch_allocations + 单批 batch_number */
+export function batchAllocationsToApiPayload(allocs: OutboundBatchAllocation[]): {
+  batch_number?: string;
+  batch_allocations?: { batch_number: string; quantity: number }[];
+} {
+  const list = allocs.filter((a) => String(a.batchNo).trim() && Number(a.quantity) > QTY_EPS);
+  if (!list.length) return {};
+  return {
+    batch_allocations: list.map((a) => ({
+      batch_number: a.batchNo,
+      quantity: a.quantity,
+    })),
+    ...(list.length === 1 ? { batch_number: list[0].batchNo } : {}),
+  };
 }

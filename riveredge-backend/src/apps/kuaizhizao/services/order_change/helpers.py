@@ -50,9 +50,9 @@ def infer_change_category(line_types: List[str]) -> str:
 
 
 def line_amount(qty: Optional[Decimal], price: Optional[Decimal]) -> Decimal:
-    q = Decimal(str(qty or 0))
-    p = Decimal(str(price or 0))
-    return (q * p).quantize(Decimal("0.01"))
+    from apps.kuaizhizao.utils.document_amount_write import line_total_qty_unit_price
+
+    return line_total_qty_unit_price(qty or 0, price or 0)
 
 
 def norm_change_date(value: Any) -> Optional[str]:

@@ -7,6 +7,11 @@ export type PullQueryPartnerRow = {
   customer_id?: number;
   partnerName?: string;
   partner_name?: string;
+  /** 轻财务候选常见字段；与 partnerName 等价作名称锚点 */
+  supplier_name?: string;
+  supplierName?: string;
+  customer_name?: string;
+  customerName?: string;
 };
 
 export function resolvePullQueryPartnerKey(row: PullQueryPartnerRow): string {
@@ -14,7 +19,15 @@ export function resolvePullQueryPartnerKey(row: PullQueryPartnerRow): string {
     row.supplierId ?? row.supplier_id ?? row.customerId ?? row.customer_id ?? 0,
   );
   if (sid > 0) return `id:${sid}`;
-  const name = String(row.partnerName ?? row.partner_name ?? '').trim();
+  const name = String(
+    row.partnerName
+      ?? row.partner_name
+      ?? row.supplierName
+      ?? row.supplier_name
+      ?? row.customerName
+      ?? row.customer_name
+      ?? '',
+  ).trim();
   return name ? `name:${name}` : '';
 }
 

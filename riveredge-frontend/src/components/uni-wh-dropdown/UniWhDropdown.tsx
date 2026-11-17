@@ -136,10 +136,12 @@ export const UniWhDropdown: React.FC<UniWhDropdownProps> = ({
       const qty = Number(stockByWh[row.id] ?? 0);
       const base = warehouseBaseLabel(row);
       const labelText = showQty
-        ? t('components.uniWhDropdown.warehouseWithStock', {
-            warehouse: base,
-            qty: formatQuantity(qty),
-          })
+        ? qty > 0
+          ? t('components.uniWhDropdown.warehouseWithStock', {
+              warehouse: base,
+              qty: formatQuantity(qty),
+            })
+          : t('components.uniWhDropdown.warehouseWithStockEmpty', { warehouse: base })
         : base;
       return {
         value: row.id,

@@ -371,6 +371,34 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
                     f"物料 {label} 通知数量 {required_qty} 超过库存可用量 {effective_qty}（已扣减预占）"
                 )
 
+    @staticmethod
+    def _shipment_notice_line_amount(
+        qty: Decimal,
+        unit_price: Any,
+        *,
+        explicit_total: Any = None,
+        sales_order_item: Any = None,
+        price_type: Optional[str] = None,
+    ) -> Decimal:
+        if explicit_total is not None:
+            from apps.kuaizhizao.utils.document_amount_write import resolve_simple_line_total
+
+            return resolve_simple_line_total(qty, unit_price, explicit_total)
+        if sales_order_item is not None and price_type is not None:
+            from apps.kuaizhizao.constants.price_type import normalize_price_type
+            from apps.kuaizhizao.utils.sales_price_amount import stored_sales_line_amount
+
+            return stored_sales_line_amount(
+                qty,
+                unit_price,
+                getattr(sales_order_item, "tax_rate", 0) or 0,
+                normalize_price_type(price_type),
+                is_gift=bool(getattr(sales_order_item, "is_gift", False)),
+            )
+        from apps.kuaizhizao.utils.document_amount_write import line_total_qty_unit_price
+
+        return line_total_qty_unit_price(qty, unit_price)
+
     async def create_shipment_notice(
         self,
         tenant_id: int,
@@ -452,9 +480,34 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
                 partner_id=int(getattr(notice, "customer_id", 0) or 0) or None,
                 lines=item_rows,
             )
+            price_type = None
+            so_item_by_id: Dict[int, SalesOrderItem] = {}
+            so_id = int(getattr(notice_data, "sales_order_id", 0) or getattr(notice, "sales_order_id", 0) or 0)
+            if so_id > 0:
+                sales_order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=so_id)
+                if sales_order is not None:
+                    from apps.kuaizhizao.constants.price_type import normalize_price_type
+
+                    price_type = normalize_price_type(getattr(sales_order, "price_type", None))
+                so_ids = {
+                    int(getattr(it, "sales_order_item_id", 0) or 0)
+                    for it in items
+                    if int(getattr(it, "sales_order_item_id", 0) or 0) > 0
+                }
+                if so_ids:
+                    for soi in await SalesOrderItem.filter(tenant_id=tenant_id, id__in=list(so_ids)):
+                        so_item_by_id[int(soi.id)] = soi
             for item_data, row in zip(items, item_rows):
                 qty = Decimal(str(item_data.notice_quantity))
-                amt = item_data.total_amount if item_data.total_amount is not None else qty * Decimal(str(item_data.unit_price or 0))
+                so_line_id = int(getattr(item_data, "sales_order_item_id", 0) or 0)
+                so_item = so_item_by_id.get(so_line_id) if so_line_id > 0 else None
+                amt = self._shipment_notice_line_amount(
+                    qty,
+                    item_data.unit_price,
+                    explicit_total=item_data.total_amount,
+                    sales_order_item=so_item,
+                    price_type=price_type,
+                )
                 dump = item_data.model_dump(
                     exclude_unset=True,
                     exclude={"notice_quantity", "unit_price", "total_amount"},
@@ -1199,6 +1252,23 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             occupied_sales_delivery_qty_by_notice_item_ids,
         )
 
+        price_type = None
+        so_item_by_id: Dict[int, SalesOrderItem] = {}
+        if notice.sales_order_id:
+            sales_order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=int(notice.sales_order_id))
+            if sales_order is not None:
+                from apps.kuaizhizao.constants.price_type import normalize_price_type
+
+                price_type = normalize_price_type(getattr(sales_order, "price_type", None))
+            so_ids = {
+                int(getattr(item, "sales_order_item_id", 0) or 0)
+                for item in notice_items
+                if int(getattr(item, "sales_order_item_id", 0) or 0) > 0
+            }
+            if so_ids:
+                for soi in await SalesOrderItem.filter(tenant_id=tenant_id, id__in=list(so_ids)):
+                    so_item_by_id[int(soi.id)] = soi
+
         occupied_by_notice_item = await occupied_sales_delivery_qty_by_notice_item_ids(
             tenant_id, [int(item.id) for item in notice_items]
         )
@@ -1232,8 +1302,16 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             delivery_items = []
             for item, qty in group_items:
                 unit_price = getattr(item, "unit_price", None)
-                total_amount = qty * Decimal(str(unit_price or 0))
                 so_item_id = getattr(item, "sales_order_item_id", None)
+                so_line_id = int(so_item_id) if so_item_id else 0
+                so_item = so_item_by_id.get(so_line_id) if so_line_id > 0 else None
+                line_tax = getattr(so_item, "tax_rate", 0) or 0 if so_item else 0
+                total_amount = self._shipment_notice_line_amount(
+                    qty,
+                    unit_price,
+                    sales_order_item=so_item,
+                    price_type=price_type,
+                )
                 delivery_items.append(
                     SalesDeliveryItemCreate(
                         sales_order_item_id=int(so_item_id) if so_item_id else None,
@@ -1245,6 +1323,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
                         material_unit=item.material_unit,
                         delivery_quantity=float(qty),
                         unit_price=float(unit_price) if unit_price is not None else 0.0,
+                        tax_rate=float(line_tax) if float(line_tax or 0) > 0 else None,
                         total_amount=float(total_amount) if total_amount is not None else 0.0,
                         is_gift=bool(getattr(item, "is_gift", False)),
                         gift_ref_unit_price=(
@@ -1273,6 +1352,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
                 notes=getattr(notice, "notes", None),
                 currency_code=getattr(notice, "currency_code", None) or "CNY",
                 exchange_rate=getattr(notice, "exchange_rate", None) or Decimal("1"),
+                price_type=price_type,
                 items=delivery_items,
                 status="待出库",
                 review_status="已通过",

@@ -23,7 +23,13 @@ import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 const RESOURCE = 'kuaizhizao:purchase-demand-party';
 const NS = 'app.kuaizhizao.purchaseDemandParty';
 
-const PurchaseDemandPartiesPage: React.FC = () => {
+export function PurchaseDemandPartiesPanel({
+  embedded = false,
+  onChanged,
+}: {
+  embedded?: boolean;
+  onChanged?: () => void;
+}) {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>();
@@ -45,6 +51,7 @@ const PurchaseDemandPartiesPage: React.FC = () => {
     messageApi.success(t(`${NS}.batchDeleted`, { count: keys.length }));
     setSelectedRowKeys([]);
     actionRef.current?.reload();
+    onChanged?.();
   };
 
   const columns: ProColumns<PurchaseDemandParty>[] = useMemo(
@@ -143,7 +150,7 @@ const PurchaseDemandPartiesPage: React.FC = () => {
         },
       },
     ],
-    [messageApi, perms.canDelete, perms.canUpdate, t],
+    [messageApi, onChanged, perms.canDelete, perms.canUpdate, t],
   );
 
   const modalInitialValues = useMemo(() => {
@@ -164,10 +171,11 @@ const PurchaseDemandPartiesPage: React.FC = () => {
   }, [editing]);
 
   return (
-    <ListPageTemplate>
+    <>
       <UniTable<PurchaseDemandParty>
         actionRef={actionRef}
         rowKey="id"
+        embedded={embedded}
         permissionResource={RESOURCE}
         columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-demand-parties.list-v1"
         columns={columns}
@@ -183,6 +191,7 @@ const PurchaseDemandPartiesPage: React.FC = () => {
         createButtonText={t(`${NS}.createButton`)}
         onCreate={openCreate}
         showDeleteButton={perms.canDelete}
+        deleteButtonText={t('common.delete')}
         onDelete={handleBatchDelete}
         deleteConfirmTitle={t('common.confirmBatchDelete')}
         deleteConfirmDescription={(count) => t(`${NS}.batchDeleteConfirm`, { count })}
@@ -213,6 +222,7 @@ const PurchaseDemandPartiesPage: React.FC = () => {
             }
             setModalOpen(false);
             actionRef.current?.reload();
+            onChanged?.();
             return true;
           } catch (e) {
             messageApi.error(getApiErrorMessage(e, t('common.saveFailed')));
@@ -237,8 +247,14 @@ const PurchaseDemandPartiesPage: React.FC = () => {
         <ProFormTextArea name="notes" label={t('common.remark')} fieldProps={{ rows: 2 }} />
         <ProFormSwitch name="is_active" label={t(`${NS}.col.active`)} />
       </FormModalTemplate>
-    </ListPageTemplate>
+    </>
   );
-};
+}
+
+const PurchaseDemandPartiesPage: React.FC = () => (
+  <ListPageTemplate>
+    <PurchaseDemandPartiesPanel />
+  </ListPageTemplate>
+);
 
 export default PurchaseDemandPartiesPage;

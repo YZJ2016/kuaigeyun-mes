@@ -46,6 +46,10 @@ export interface PurchaseOrderChange {
   header_changes?: Record<string, unknown>;
   notes?: string;
   capabilities?: PurchaseOrderChangeCapabilities;
+  audit?: {
+    phase?: string;
+    allowed_actions?: string[];
+  };
 }
 
 export interface PurchaseOrderChangeListParams {

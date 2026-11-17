@@ -4,11 +4,11 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { rowActionKind } from '../../../../../components/uni-action';
-import { useSearchParams } from 'react-router-dom';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Alert, Button, Descriptions, Form, Space, Typography } from 'antd';
-import { DeleteOutlined, EditOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Alert, Button, Descriptions, Form, Space, Spin, Typography } from 'antd';
+import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
@@ -30,7 +30,18 @@ import {
 } from '../../sales-management/shared/documentLineMaterialsPreview';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, FormModalGridBlock, DRAWER_CONFIG, MODAL_CONFIG,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
+import {
+  ListPageTemplate,
+  DetailDrawerTemplate,
+  FormModalGridBlock,
+  DRAWER_CONFIG,
+  DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
+  DocumentFormPageHeaderActions,
+  DocumentFormPageLayout,
+  useDetailDrawerDescriptionItems,
+} from '../../../../../components/layout-templates';
+import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
+import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -88,6 +99,8 @@ import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const PURCHASE_ORDER_CHANGE_RESOURCE = 'kuaizhizao:purchase-order-change';
+const PURCHASE_ORDER_CHANGE_LIST_PATH = '/apps/kuaizhizao/purchase-management/purchase-order-changes';
+const purchaseOrderChangeEditPath = (id: number) => `${PURCHASE_ORDER_CHANGE_LIST_PATH}/${id}/edit`;
 
 type PullPurchaseOrderCandidate = PurchaseOrder & {
   id: number;
@@ -120,6 +133,15 @@ function orderChangeItemsHaveContent(items: OrderChangeLineItem[] | undefined): 
 const PurchaseOrderChangesPage: React.FC = () => {
   const { t } = useTranslation();
   const { message } = App.useApp();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const editRouteMatch = location.pathname.match(/\/purchase-order-changes\/(\d+)\/edit$/);
+  const editRouteId = editRouteMatch ? Number(editRouteMatch[1]) : null;
+  const isEditPage = editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0;
+  const isFormPage = isEditPage;
+  const leavePurchaseOrderChangeFormPage = useLeaveFormTab(PURCHASE_ORDER_CHANGE_LIST_PATH);
+  const formPageInitKeyRef = useRef<string | null>(null);
+  const [formPageLoading, setFormPageLoading] = useState(false);
   const pullFromPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'purchase_order_change.pull_from_purchase_order');
   const [searchParams, setSearchParams] = useSearchParams();
   const actionRef = useRef<ActionType>();
@@ -130,17 +152,18 @@ const PurchaseOrderChangesPage: React.FC = () => {
   }, [invalidateMenuBadge]);
   const tableRowsRef = useRef<PurchaseOrderChange[]>([]);
   const pullQueryCloseRef = useRef<(() => void) | null>(null);
-  const auditEnabled = useAuditRequired('kuaizhizao', 'purchase-order-change');
+  const commitAfterSaveRef = useRef(false);
+  const auditEnabled = useAuditRequired('purchase_order_change', false);
   const purchaseOrderChangePerms = useResourcePermissions(PURCHASE_ORDER_CHANGE_RESOURCE);
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<PurchaseOrderChange | null>(null);
   const [changeTrackingRefreshKey, setChangeTrackingRefreshKey] = useState(0);
-  const [editOpen, setEditOpen] = useState(false);
   const [editForm] = Form.useForm();
-  const [pendingEditFormValues, setPendingEditFormValues] = useState<Record<string, any> | null>(null);
+  const [formSaving, setFormSaving] = useState(false);
   const [editItems, setEditItems] = useState<PurchaseOrderChange['items']>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingStatus, setEditingStatus] = useState<string | null>(null);
   const [changePricing, setChangePricing] = useState<OrderChangeItemsTablePricing | undefined>();
   const [impactOpen, setImpactOpen] = useState(false);
   const [impactLoading, setImpactLoading] = useState(false);
@@ -181,8 +204,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
     setDetailOpen(true);
   };
 
-  const openEdit = async (record: PurchaseOrderChange) => {
-    const full = await getPurchaseOrderChange(record.id!);
+  const hydratePurchaseOrderChangeEditForm = useCallback(async (full: PurchaseOrderChange) => {
     setEditingId(full.id!);
     let pricingAsOf = full.created_at ? dayjs(full.created_at) : dayjs();
     if (full.source_order_id != null && Number(full.source_order_id) > 0) {
@@ -204,16 +226,26 @@ const PurchaseOrderChangesPage: React.FC = () => {
       asOf: pricingAsOf,
     });
     setEditItems(full.items ?? []);
-    setPendingEditFormValues({
+    editForm.setFieldsValue({
       change_reason: full.change_reason,
       notes: full.notes,
       attachments: mapAttachmentsToUploadList(full.attachments),
     });
-    setEditOpen(true);
+  }, [editForm]);
+
+  const openEdit = (record: PurchaseOrderChange) => {
+    if (record.id) navigate(purchaseOrderChangeEditPath(record.id));
   };
 
   const handleSaveEdit = async () => {
-    const values = await editForm.validateFields();
+    setFormSaving(true);
+    let values: Record<string, unknown>;
+    try {
+      values = await editForm.validateFields();
+    } catch {
+      setFormSaving(false);
+      return;
+    }
     const payload = {
       change_reason: values.change_reason,
       notes: values.notes,
@@ -239,13 +271,21 @@ const PurchaseOrderChangesPage: React.FC = () => {
     };
     if (!editingId) {
       message.error(t('app.kuaizhizao.purchaseOrderChange.selectPurchaseOrder'));
+      setFormSaving(false);
       return;
     }
+    const shouldCommit = commitAfterSaveRef.current;
+    commitAfterSaveRef.current = false;
     await updatePurchaseOrderChange(editingId, payload);
-    message.success(t('common.updateSuccess'));
-    setEditOpen(false);
-    setPendingEditFormValues(null);
     reloadTable();
+    if (shouldCommit) {
+      setFormSaving(false);
+      await runSubmitWithPreview(editingId);
+      return;
+    }
+    message.success(t('common.updateSuccess'));
+    setFormSaving(false);
+    leavePurchaseOrderChangeFormPage();
   };
 
   const createChangeFromPurchaseOrder = useCallback(
@@ -256,13 +296,13 @@ const PurchaseOrderChangesPage: React.FC = () => {
           t('app.kuaizhizao.purchaseOrderChange.defaultReason'),
         );
         message.success(t('app.kuaizhizao.purchaseOrderChange.created', { code: created.change_code }));
-        await openEdit(created);
         reloadTable();
+        navigate(purchaseOrderChangeEditPath(created.id!));
       } catch (error: unknown) {
         message.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseOrderChange.pull.createFailed')));
       }
     },
-    [message, openEdit, reloadTable, t],
+    [message, navigate, reloadTable, t],
   );
 
   const isPullChangeOrderSourceSelectable = useCallback(
@@ -365,6 +405,35 @@ const PurchaseOrderChangesPage: React.FC = () => {
   useNewShortcut(openCreate);
 
   useEffect(() => {
+    if (!isFormPage || !editRouteId) {
+      formPageInitKeyRef.current = null;
+      return;
+    }
+    const initKey = `edit:${editRouteId}`;
+    if (formPageInitKeyRef.current === initKey) return;
+    formPageInitKeyRef.current = initKey;
+    setFormPageLoading(true);
+    void getPurchaseOrderChange(editRouteId)
+      .then((full) => {
+        setEditingStatus(full.status ?? null);
+        hydratePurchaseOrderChangeEditForm(full);
+      })
+      .catch((error: unknown) => {
+        message.error(getApiErrorMessage(error, t('common.loadFailed')));
+        leavePurchaseOrderChangeFormPage();
+      })
+      .finally(() => setFormPageLoading(false));
+  }, [
+    editRouteId,
+    hydratePurchaseOrderChangeEditForm,
+    isFormPage,
+    leavePurchaseOrderChangeFormPage,
+    message,
+    t,
+  ]);
+
+  useEffect(() => {
+    if (isFormPage) return;
     const sourceId = searchParams.get('source_order_id');
     if (sourceId) {
       void createChangeFromPurchaseOrder(Number(sourceId));
@@ -811,6 +880,92 @@ const PurchaseOrderChangesPage: React.FC = () => {
   const showPurchaseOrderChangeAttachments =
     Boolean(detail) && hasDocumentAttachments(purchaseOrderChangeAttachments);
 
+  const purchaseOrderChangeCanCommit = ['', 'DRAFT', '草稿', 'draft', 'REJECTED', '已驳回', 'rejected'].includes(
+    String(editingStatus || '').trim(),
+  );
+
+  const triggerCommitAfterSave = useCallback(() => {
+    commitAfterSaveRef.current = true;
+    void editForm
+      .validateFields()
+      .then(() => handleSaveEdit())
+      .catch(() => {
+        commitAfterSaveRef.current = false;
+        setFormSaving(false);
+      });
+  }, [editForm, handleSaveEdit]);
+
+  useSubmitShortcut(() => void handleSaveEdit(), isFormPage);
+
+  if (isFormPage) {
+    return (
+      <>
+        <DocumentFormPageLayout
+          header={
+            <>
+              <Space align="center" size={8}>
+                <Button
+                  type="text"
+                  icon={<ArrowLeftOutlined />}
+                  aria-label={t('common.back')}
+                  onClick={leavePurchaseOrderChangeFormPage}
+                />
+                <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
+                  {t('app.kuaizhizao.purchaseOrderChange.editTitle')}
+                </Typography.Title>
+              </Space>
+              <DocumentFormPageHeaderActions
+                onCancel={leavePurchaseOrderChangeFormPage}
+                onSaveDraft={() => void handleSaveEdit()}
+                onPrimarySubmit={() => void handleSaveEdit()}
+                isCreatePage={false}
+                showSaveDraft={false}
+                canSubmitAfterSave={false}
+                showCommitSubmit={purchaseOrderChangeCanCommit}
+                saveDraftLoading={formSaving}
+                commitSubmitLoading={formSaving}
+                onCommitSubmit={triggerCommitAfterSave}
+              />
+            </>
+          }
+        >
+          <Spin spinning={formPageLoading}>
+            <ProForm form={editForm} layout="vertical" submitter={false} onFinish={() => void handleSaveEdit()}>
+              {!editItemsHaveChangeContent ? (
+                <FormModalGridBlock>
+                  <Alert type="info" title={t('app.kuaizhizao.purchaseOrderChange.submitNoChangesHint')} />
+                </FormModalGridBlock>
+              ) : null}
+              <OrderChangeItemsTable
+                items={editItems ?? []}
+                editable
+                onChange={setEditItems}
+                pricing={changePricing}
+              />
+              <ProFormTextArea
+                name="change_reason"
+                label={t('app.kuaizhizao.purchaseOrderChange.colChangeReason')}
+                rules={[{ required: true }]}
+              />
+              <ProFormTextArea name="notes" label={t('common.remark')} />
+              <DocumentAttachmentsField category="purchase_order_change_attachments" />
+            </ProForm>
+          </Spin>
+        </DocumentFormPageLayout>
+        <OrderChangeImpactModal
+          open={impactOpen}
+          loading={impactLoading}
+          impact={impactData}
+          onClose={() => {
+            setImpactOpen(false);
+            setPendingSubmitId(null);
+          }}
+          onConfirm={confirmSubmit}
+        />
+      </>
+    );
+  }
+
   return (
     <ListPageTemplate>
       <UniTable<PurchaseOrderChange>
@@ -904,43 +1059,6 @@ const PurchaseOrderChangesPage: React.FC = () => {
         }}
       />
 
-      <FormModalTemplate
-        title={t('app.kuaizhizao.purchaseOrderChange.editTitle')}
-        open={editOpen}
-        onClose={() => setEditOpen(false)}
-        afterOpenChange={(open) => {
-          if (open) {
-            if (pendingEditFormValues) {
-              editForm.setFieldsValue(pendingEditFormValues);
-            }
-            return;
-          }
-          editForm.resetFields();
-          setPendingEditFormValues(null);
-        }}
-        onFinish={handleSaveEdit}
-        form={editForm}
-        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
-      >
-        {!editItemsHaveChangeContent ? (
-          <FormModalGridBlock>
-            <Alert
-              type="info"
-              title={t('app.kuaizhizao.purchaseOrderChange.submitNoChangesHint')}
-            />
-          </FormModalGridBlock>
-        ) : null}
-        <OrderChangeItemsTable
-          items={editItems ?? []}
-          editable
-          onChange={setEditItems}
-          pricing={changePricing}
-        />
-        <ProFormTextArea name="change_reason" label={t('app.kuaizhizao.purchaseOrderChange.colChangeReason')} rules={[{ required: true }]} />
-        <ProFormTextArea name="notes" label={t('common.remark')} />
-        <DocumentAttachmentsField category="purchase_order_change_attachments" />
-      </FormModalTemplate>
-
       <DetailDrawerTemplate
         title={t('app.kuaizhizao.purchaseOrderChange.detailTitle', { code: detail?.change_code ?? '' })}
         open={detailOpen}
@@ -968,12 +1086,12 @@ const PurchaseOrderChangesPage: React.FC = () => {
                   onClick={async () => {
                     try {
                       await applyPurchaseOrderChange(detail.id!);
-                      messageApi.success(t('app.kuaizhizao.purchaseOrderChange.applySuccess'));
+                      message.success(t('app.kuaizhizao.purchaseOrderChange.applySuccess'));
                       reloadTable();
                       setChangeTrackingRefreshKey((k) => k + 1);
                       setDetail(await getPurchaseOrderChange(detail.id!));
                     } catch (e: any) {
-                      messageApi.error(e?.message || t('common.operationFailed'));
+                      message.error(e?.message || t('common.operationFailed'));
                     }
                   }}
                 >

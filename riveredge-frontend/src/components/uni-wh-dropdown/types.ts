@@ -73,11 +73,14 @@ export type UniWhLocationDropdownProps = UniWhDropdownBaseProps & {
   ) => void;
   /** 未选仓库时禁用并提示先选仓 */
   warehouseId?: number | null;
-  /** 传入后按物料+仓库加载各库位可出库库存 */
+  /** 传入后按物料+仓库加载各库位可出库库存（文案「库位（库存 n）」/「无库存」） */
   materialId?: number | null;
-  /** 默认：有 materialId 且已选仓库时开启 */
+  /**
+   * 默认：有 materialId 时开启（与仓库 UniWhDropdown 一致）。
+   * 出库选位有物料时勿传 false，否则下拉只显示库位名不带库存。
+   */
   showStock?: boolean;
-  /** 默认与 showStock 一致：有货库位优先 */
+  /** 默认与 showStock 一致：有货库位优先、按库存降序 */
   sortByStock?: boolean;
   allowClear?: boolean;
 };

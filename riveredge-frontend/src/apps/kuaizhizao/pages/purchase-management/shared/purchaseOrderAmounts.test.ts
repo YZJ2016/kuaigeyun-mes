@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  computePurchaseReceiptFormLineAmounts,
   computePurchaseOrderHeaderAmountsForSave,
   purchaseOrderFormLineToStored,
   readPurchaseOrderEnteredUnitPrice,
@@ -37,5 +38,45 @@ describe('purchaseOrderAmounts unified with documentLineAmounts', () => {
     expect(
       readPurchaseOrderEnteredUnitPrice({ unit_price: 530.9735 }, 'tax_inclusive'),
     ).toBeNull();
+  });
+
+  it('purchase receipt standalone line tax_inclusive matches purchase order logic', () => {
+    const line = computePurchaseReceiptFormLineAmounts(
+      { receipt_quantity: 1, unit_price: 60, tax_rate: 13 },
+      13,
+      'tax_inclusive',
+      null,
+    );
+    expect(line.incl).toBe(60);
+    expect(line.excl).toBeCloseTo(53.1, 2);
+    expect(line.tax).toBeCloseTo(6.9, 2);
+  });
+
+  it('purchase receipt PO line uses proportional gross not qty×rate tail', () => {
+    const poCtx = {
+      priceType: 'tax_exclusive' as const,
+      headerTaxRate: 0.13,
+      poiById: {
+        101: {
+          ordered_quantity: 1000,
+          total_price: 8849.56,
+          unit_price: 8.84956,
+          tax_rate: 13,
+        },
+      },
+    };
+    const line = computePurchaseReceiptFormLineAmounts(
+      {
+        receipt_quantity: 1000,
+        unit_price: 8.8496,
+        tax_rate: 13,
+        purchase_order_item_id: 101,
+      },
+      0.13,
+      'tax_exclusive',
+      poCtx,
+    );
+    expect(line.excl).toBe(8849.56);
+    expect(line.incl).toBe(10000);
   });
 });

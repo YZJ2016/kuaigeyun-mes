@@ -13,6 +13,7 @@ export interface PurchaseRequisitionCapabilities {
   update?: ActionCapability;
   delete?: ActionCapability;
   submit?: ActionCapability;
+  withdraw_submit?: ActionCapability;
   approve?: ActionCapability;
   revoke_approval?: ActionCapability;
   push_purchase_order?: ActionCapability;
@@ -38,6 +39,9 @@ export interface PurchaseRequisitionItem {
   material_spec?: string;
   unit?: string;
   quantity?: number;
+  aux_quantity?: number | null;
+  aux_unit?: string | null;
+  unit_conversion_rate?: number | null;
   suggested_unit_price?: number;
   required_date?: string;
   supplier_id?: number;
@@ -47,15 +51,19 @@ export interface PurchaseRequisitionItem {
   converted_quantity_draft?: number;
   converted_quantity_confirmed?: number;
   notes?: string;
+  attachments?: unknown;
 }
 
 export interface PurchaseRequisition {
   id?: number;
   requisition_code?: string;
+  order_type?: string;
   requisition_name?: string;
   status?: string;
   applicant_id?: number;
   applicant_name?: string;
+  department_id?: number | null;
+  department_name?: string | null;
   requisition_date?: string;
   required_date?: string;
   source_type?: string;
@@ -63,6 +71,7 @@ export interface PurchaseRequisition {
   source_code?: string;
   review_status?: string;
   notes?: string;
+  attachments?: unknown;
   items_count?: number;
   total_quantity?: number;
   total_amount?: number;
@@ -71,6 +80,7 @@ export interface PurchaseRequisition {
   updated_at?: string;
   lifecycle?: PurchaseRequisitionLifecycle;
   capabilities?: PurchaseRequisitionCapabilities;
+  audit?: { phase?: string; allowed_actions?: string[] };
 }
 
 export async function listPurchaseRequisitions(params: {
@@ -162,6 +172,10 @@ export type PurchaseRequisitionPullLine = {
   id: number;
   requisition_id: number;
   requisition_code?: string;
+  /** 来源申请主状态（「全部」分段展示） */
+  requisition_status?: string | null;
+  /** 是否允许下推采购订单/询价（与 capabilities 一致） */
+  can_push?: boolean;
   /** 单据日期（申请日期）YYYY-MM-DD */
   document_date?: string | null;
   /** 申请日期 YYYY-MM-DD */
@@ -276,6 +290,12 @@ export async function uniAuditPurchaseRequisition(
 
 export async function submitPurchaseRequisition(id: number): Promise<PurchaseRequisition> {
   return uniAuditPurchaseRequisition(id, 'submit') as Promise<PurchaseRequisition>;
+}
+
+export async function submitPurchaseRequisitionForReview(id: number): Promise<PurchaseRequisition> {
+  return apiRequest(`/core/uni-audit/${PURCHASE_REQUEST_AUDIT_ENTITY}/${id}/submit_review`, {
+    method: 'POST',
+  });
 }
 
 export async function approvePurchaseRequisition(

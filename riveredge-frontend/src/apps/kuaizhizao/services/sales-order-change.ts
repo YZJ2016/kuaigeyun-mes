@@ -47,6 +47,9 @@ export interface SalesOrderChange {
   header_changes?: Record<string, unknown>;
   notes?: string;
   capabilities?: SalesOrderChangeCapabilities;
+  audit?: { phase?: string; allowed_actions?: string[] };
+  /** 单据头附件（上传字段 attachments） */
+  attachments?: import('../utils/documentAttachments').DocumentAttachmentFile[];
 }
 
 export interface ActionCapability {
@@ -132,6 +135,14 @@ export async function deleteSalesOrderChange(id: number): Promise<void> {
 
 export async function submitSalesOrderChange(id: number): Promise<SalesOrderChange> {
   return apiRequest(`/apps/kuaizhizao/sales-order-change-orders/${id}/submit`, { method: 'POST' });
+}
+
+export async function submitSalesOrderChangeForReview(id: number): Promise<SalesOrderChange> {
+  return apiRequest(`/core/uni-audit/sales_order_change/${id}/submit_review`, { method: 'POST' });
+}
+
+export async function revokeSalesOrderChange(id: number): Promise<SalesOrderChange> {
+  return apiRequest(`/core/uni-audit/sales_order_change/${id}/revoke`, { method: 'POST' });
 }
 
 export async function approveSalesOrderChange(id: number, approved: boolean, reviewRemarks?: string): Promise<SalesOrderChange> {

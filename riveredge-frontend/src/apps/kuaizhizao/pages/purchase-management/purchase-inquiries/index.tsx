@@ -5,25 +5,35 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
-import { useSearchParams } from 'react-router-dom';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Checkbox, Col, DatePicker, Descriptions, Empty, Form, Input, InputNumber, Modal, Row, Select, Space, Spin, Switch, Table, Tag, Typography, Alert } from 'antd';
-import { CheckOutlined, EditOutlined, FormOutlined, PlusOutlined } from '@ant-design/icons';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Checkbox, Col, DatePicker, Descriptions, Empty, Form, Input, InputNumber, Modal, Row, Select, Space, Spin, Switch, Table, Tag, Tooltip, Typography, Alert } from 'antd';
+import { ArrowLeftOutlined, CheckOutlined, EditOutlined, FormOutlined, PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import {
   getChineseInvoiceTypeOptions,
   getPaymentMethodOptions,
-} from '../../../utils/financeSharedOptions';
+} from '../../../../kuaicaiwu/utils/financeSharedOptions';
 import { searchUserDisplay, type User } from '../../../../../services/user';
 import { displayItemsToUsers, normalizeUserDisplayName } from '../../../../../utils/userDisplay';
 import {
   listPurchaseDemandParties,
   type PurchaseDemandParty,
 } from '../../../services/purchase-demand-party';
+import { PurchaseDemandPartiesPanel } from '../purchase-demand-parties';
 import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table';
-import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
+import {
+  UniBatchMenuButton,
+  defaultAuditBatchAllowed,
+  pickCapability,
+  runCapabilityBatchLoop,
+  useAuditBatchRunner,
+  withDocumentSubmitCombinedItem,
+  type AuditBatchAction,
+  type UniBatchMenuItem,
+} from '../../../../../components/uni-batch';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -33,7 +43,20 @@ import {
   DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
   renderDocumentLineMaterialsPreview,
 } from '../../sales-management/shared/documentLineMaterialsPreview';
-import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, FormModalTemplate, DRAWER_CONFIG, FORM_LAYOUT, MODAL_CONFIG,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
+import {
+  ListPageTemplate,
+  DetailDrawerTemplate,
+  DetailDrawerSection,
+  DRAWER_CONFIG,
+  FORM_LAYOUT,
+  MODAL_CONFIG,
+  DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
+  DocumentFormPageHeaderActions,
+  DocumentFormPageLayout,
+  useDetailDrawerDescriptionItems,
+} from '../../../../../components/layout-templates';
+import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
+import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { SourceDocumentCode } from '../../../../../components/linked-document-code/SourceDocumentCode';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -41,11 +64,27 @@ import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import {
   UniPullQueryModal,
+  isPullOpenLineSelectable,
+  isPullRequisitionOpenLineSelectable,
   isPullableScope,
   renderPullCapabilityTag,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import {
+  PurchaseDepartmentFormField,
+  resolvePurchaseDepartmentPayload,
+  usePurchaseDepartmentOptions,
+} from '../shared/PurchaseDepartmentFormField';
+import {
+  handoffInquiryToPurchaseOrderCreate,
+  handoffRequisitionToPurchaseInquiryCreate,
+} from '../../../utils/documentFlowHandoff';
+import {
+  buildDocumentCreateDraftKey,
+  clearDocumentFormDraft,
+  getDocumentFormDraft,
+} from '../../../../../utils/documentFormDraftCache';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -64,15 +103,14 @@ import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
 import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { isPendingReviewStatus } from '../../../constants/documentStatus';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import {
   approvePurchaseInquiry,
   awardInquiryQuotes,
   closeInquiryQuoting,
-  convertInquiryToPurchaseOrder,
   createPurchaseInquiry,
-  pullPurchaseInquiryFromRequisitionItems,
   deletePurchaseInquiry,
   getInquiryComparison,
   getPurchaseInquiry,
@@ -80,6 +118,7 @@ import {
   previewPushInquiryToPurchaseOrder,
   publishPurchaseInquiry,
   submitPurchaseInquiry,
+  submitPurchaseInquiryForReview,
   updatePurchaseInquiry,
   upsertSupplierQuote,
   withdrawPurchaseInquirySubmit,
@@ -149,13 +188,41 @@ type PurchaseInquiryItemRow = PurchaseInquiryItem & {
 
 const PURCHASE_INQUIRY_LIST_PERSISTENCE_ID =
   'apps.kuaizhizao.pages.purchase-management.purchase-inquiries-width-v1';
+const PURCHASE_INQUIRY_LIST_PATH = '/apps/kuaizhizao/purchase-management/purchase-inquiries';
+const PURCHASE_INQUIRY_CREATE_PATH = `${PURCHASE_INQUIRY_LIST_PATH}/new`;
+const purchaseInquiryEditPath = (id: number) => `${PURCHASE_INQUIRY_LIST_PATH}/${id}/edit`;
 
 const PurchaseInquiriesPage: React.FC = () => {
   const { t } = useTranslation();
   const { quantity: quantityDecimals, price: priceDecimals } = useNumericPrecision();
   const { message, modal } = App.useApp();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isCreatePage = location.pathname.endsWith('/purchase-inquiries/new');
+  const editRouteMatch = location.pathname.match(/\/purchase-inquiries\/(\d+)\/edit$/);
+  const editRouteId = editRouteMatch ? Number(editRouteMatch[1]) : null;
+  const isEditPage = editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0;
+  const isFormPage = isCreatePage || isEditPage;
+  const leavePurchaseInquiryFormPage = useLeaveFormTab(PURCHASE_INQUIRY_LIST_PATH);
+  const formPageInitKeyRef = useRef<string | null>(null);
+  const [formPageLoading, setFormPageLoading] = useState(false);
+  const pendingEditFormValuesRef = useRef<Record<string, unknown> | null>(null);
+  const inquiryFormDraftKey = useMemo(
+    () =>
+      isFormPage
+        ? buildDocumentCreateDraftKey('kuaizhizao:purchase-inquiry', location.pathname, location.search)
+        : null,
+    [isFormPage, location.pathname, location.search],
+  );
   const [searchParams, setSearchParams] = useSearchParams();
+  const {
+    options: departmentOptions,
+    loading: departmentOptionsLoading,
+    resolveName: resolveDepartmentName,
+  } = usePurchaseDepartmentOptions();
   const actionRef = useRef<ActionType>();
+  const documentFlowSubmitExtrasRef = useRef<Record<string, unknown> | null>(null);
+  const handoffFlowConsumedRef = useRef<string | null>(null);
   const tableRowsRef = useRef<PurchaseInquiry[]>([]);
   const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>(() =>
     readPersistedUniTableViewType(PURCHASE_INQUIRY_LIST_PERSISTENCE_ID, 'table', [
@@ -169,20 +236,22 @@ const PurchaseInquiriesPage: React.FC = () => {
   useEffect(() => {
     dataViewModeRef.current = dataViewMode;
   }, [dataViewMode]);
-  const auditEnabled = useAuditRequired('kuaizhizao', 'purchase-inquiry');
+  const auditEnabled = useAuditRequired('purchase_inquiry', false);
   const purchaseInquiryPerms = useResourcePermissions(PURCHASE_INQUIRY_RESOURCE);
+  const demandPartyPerms = useResourcePermissions('kuaizhizao:purchase-demand-party');
   const pullFromRequisitionAction = resolveKuaizhizaoDocumentAction(t, 'purchase_inquiry.pull_from_requisition');
   const pushToPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'purchase_order.pull_from_inquiry');
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<PurchaseInquiry | null>(null);
   const [inquiryTrackingRefreshKey, setInquiryTrackingRefreshKey] = useState(0);
-  const [editOpen, setEditOpen] = useState(false);
   const [editForm] = Form.useForm();
-  const [pendingEditFormValues, setPendingEditFormValues] = useState<Record<string, any> | null>(null);
   const [editItems, setEditItems] = useState<PurchaseInquiryItem[]>([]);
   const [editVendors, setEditVendors] = useState<PurchaseInquiryVendor[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingReviewStatus, setEditingReviewStatus] = useState<string | null>(null);
+  const commitAfterSaveRef = useRef(false);
+  const [inquiryFormBusy, setInquiryFormBusy] = useState(false);
   const [quoteOpen, setQuoteOpen] = useState(false);
   const [quoteForm] = Form.useForm();
   const [pendingQuoteFormValues, setPendingQuoteFormValues] = useState<Record<string, unknown> | null>(null);
@@ -193,6 +262,7 @@ const PurchaseInquiriesPage: React.FC = () => {
   const [awardSelection, setAwardSelection] = useState<Record<number, number>>({});
   const [supplierOptions, setSupplierOptions] = useState<Array<{ id: number; name: string; code?: string }>>([]);
   const [demandPartyOptions, setDemandPartyOptions] = useState<PurchaseDemandParty[]>([]);
+  const [demandPartyOpen, setDemandPartyOpen] = useState(false);
   const [userList, setUserList] = useState<User[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -239,6 +309,110 @@ const PurchaseInquiriesPage: React.FC = () => {
     actionRef.current?.reload();
   }, []);
 
+  const {
+    runAction: runPurchaseInquiryAuditBatch,
+    auditModal: purchaseInquiryAuditModal,
+  } = useAuditBatchRunner<PurchaseInquiry>({
+    permGates: purchaseInquiryPerms,
+    handlers: purchaseInquiryAuditBatchHandlers,
+    onBatchComplete: handlePurchaseInquiryAuditBatchSuccess,
+    auditEntity: {
+      entityType: 'purchase_inquiry',
+      entityName: t('app.kuaizhizao.purchaseInquiry.entityName'),
+    },
+  });
+
+  const purchaseInquiryToolbarAuditMenus = useMemo(() => {
+    const canPerm = (action: AuditBatchAction) => {
+      const perm = action === 'approve' ? 'audit' : action === 'submit' ? 'submit' : 'revoke';
+      return purchaseInquiryPerms.canAction?.(perm) ?? false;
+    };
+    const item = (
+      key: string,
+      action: AuditBatchAction,
+      label: string,
+      capKey: string,
+      rows: PurchaseInquiry[],
+    ): UniBatchMenuItem => ({
+      key,
+      label,
+      disabled:
+        selectedInquiriesForBatch.length > 0
+        && !defaultAuditBatchAllowed(rows, canPerm(action), capKey, (row) => row),
+      onClick: (keys) => {
+        const idSet = new Set(rows.map((row) => String(row.id)));
+        return runPurchaseInquiryAuditBatch(
+          action,
+          keys.filter((rowKey) => idSet.has(String(rowKey))),
+          rows,
+          auditEnabled,
+        );
+      },
+    });
+    const capOn = (row: PurchaseInquiry, capKey: string) => pickCapability(row, capKey)?.allowed === true;
+    const submittedRows = selectedInquiriesForBatch.filter(
+      (row) => String(row.review_status || '').trim() === 'SUBMITTED' && capOn(row, 'withdraw_submit'),
+    );
+    const pendingRows = selectedInquiriesForBatch.filter((row) => {
+      const review = String(row.review_status || '').trim();
+      return review !== 'SUBMITTED' && isPendingReviewStatus(review) && capOn(row, 'withdraw_submit');
+    });
+    const submitReviewRows = selectedInquiriesForBatch.filter((row) =>
+      (row.audit?.allowed_actions ?? []).includes('submit_review'),
+    );
+    const canSubmitReview = purchaseInquiryPerms.canAction?.('submit') ?? false;
+    const submitRows = selectedInquiriesForBatch.filter((row) => capOn(row, 'submit'));
+    const submitMenuItem = item('submit', 'submit', t('common.submit'), 'submit', submitRows);
+    const submitDisabled = Boolean(submitMenuItem.disabled);
+    return {
+      submit: withDocumentSubmitCombinedItem(
+        [
+          submitMenuItem,
+          item('withdraw-submit', 'withdraw', t('app.kuaizhizao.purchaseInquiry.toolbar.withdrawSubmit'), 'withdraw_submit', submittedRows),
+          {
+            key: 'submit-review',
+            label: t('app.kuaizhizao.purchaseInquiry.toolbar.submitReview'),
+            disabled: selectedInquiriesForBatch.length > 0 && !(canSubmitReview && submitReviewRows.length > 0),
+            onClick: (keys: React.Key[]) => runCapabilityBatchLoop({
+              keys,
+              records: submitReviewRows,
+              capabilityKey: 'submit_review',
+              permAllowed: canSubmitReview,
+              notAllowedMessage: t('app.kuaizhizao.purchaseInquiry.toolbar.submitReviewNotAllowed'),
+              onRun: (id) => submitPurchaseInquiryForReview(id),
+              message,
+              t,
+              onSuccess: handlePurchaseInquiryAuditBatchSuccess,
+            }),
+          },
+        ],
+        {
+          t,
+          message,
+          disabled: submitDisabled,
+          commitRecords: submitRows,
+          permAllowed: canSubmitReview,
+          commit: (id) => submitPurchaseInquiry(id),
+          submitReview: (id) => submitPurchaseInquiryForReview(id),
+          onSuccess: handlePurchaseInquiryAuditBatchSuccess,
+        },
+      ),
+      audit: [
+        item('approve', 'approve', t('components.uniAction.audit'), 'approve', selectedInquiriesForBatch.filter((row) => capOn(row, 'approve'))),
+        item('withdraw-review', 'withdraw', t('app.kuaizhizao.purchaseInquiry.toolbar.withdrawReview'), 'withdraw_submit', pendingRows),
+        item('revoke', 'revoke', t('app.kuaizhizao.purchaseInquiry.toolbar.revoke'), 'revoke_approval', selectedInquiriesForBatch.filter((row) => capOn(row, 'revoke_approval'))),
+      ] satisfies UniBatchMenuItem[],
+    };
+  }, [
+    auditEnabled,
+    handlePurchaseInquiryAuditBatchSuccess,
+    message,
+    purchaseInquiryPerms,
+    runPurchaseInquiryAuditBatch,
+    selectedInquiriesForBatch,
+    t,
+  ]);
+
   const [addVendorModalOpen, setAddVendorModalOpen] = useState(false);
   const [selectedSupplierIdsForAdd, setSelectedSupplierIdsForAdd] = useState<number[]>([]);
 
@@ -274,40 +448,73 @@ const PurchaseInquiriesPage: React.FC = () => {
     setDetailOpen(true);
   };
 
-  const openEdit = async (record: PurchaseInquiry) => {
-    const full = await getPurchaseInquiry(record.id!);
-    setEditingId(full.id!);
-    setEditItems(full.items ?? []);
-    setEditVendors(full.vendors ?? []);
-    const taxRatePercent =
-      full.tax_rate != null && full.tax_rate !== undefined
-        ? Number(full.tax_rate) * 100
-        : undefined;
-    setPendingEditFormValues({
-      inquiry_name: full.inquiry_name,
-      inquiry_date: full.inquiry_date ? dayjs(full.inquiry_date) : undefined,
-      quote_deadline: full.quote_deadline ? dayjs(full.quote_deadline) : undefined,
-      demand_party_id: full.demand_party_id,
-      demand_party_name: full.demand_party_name,
-      buyer_id: full.buyer_id,
-      buyer_name: full.buyer_name,
-      buyer_phone: full.buyer_phone,
-      currency: full.currency || 'CNY',
-      exchange_rate: full.exchange_rate ?? 1,
-      invoice_type: full.invoice_type,
-      tax_rate_percent: taxRatePercent,
-      payment_method: full.payment_method,
-      payment_terms: full.payment_terms,
-      trade_mode: full.trade_mode,
-      notes: full.notes,
-      attachments: mapAttachmentsToUploadList(full.attachments),
-      __inquiry_edit_item: (full.items ?? []).map((item) => ({ material_id: item.material_id })),
-    });
-    setEditOpen(true);
+  const hydratePurchaseInquiryEditForm = useCallback(
+    (full: PurchaseInquiry) => {
+      setEditingId(full.id!);
+      setEditingReviewStatus(full.review_status ?? null);
+      setEditItems(full.items ?? []);
+      setEditVendors(full.vendors ?? []);
+      const taxRatePercent =
+        full.tax_rate != null && full.tax_rate !== undefined
+          ? Number(full.tax_rate) * 100
+          : undefined;
+      editForm.setFieldsValue({
+        inquiry_name: full.inquiry_name,
+        inquiry_date: full.inquiry_date ? dayjs(full.inquiry_date) : undefined,
+        quote_deadline: full.quote_deadline ? dayjs(full.quote_deadline) : undefined,
+        demand_party_id: full.demand_party_id,
+        demand_party_name: full.demand_party_name,
+        buyer_id: full.buyer_id,
+        buyer_name: full.buyer_name,
+        buyer_phone: full.buyer_phone,
+        department_id: full.department_id ?? undefined,
+        department_name: full.department_name ?? undefined,
+        currency: full.currency || 'CNY',
+        exchange_rate: full.exchange_rate ?? 1,
+        invoice_type: full.invoice_type,
+        tax_rate_percent: taxRatePercent,
+        payment_method: full.payment_method,
+        payment_terms: full.payment_terms,
+        trade_mode: full.trade_mode,
+        notes: full.notes,
+        attachments: mapAttachmentsToUploadList(full.attachments),
+        __inquiry_edit_item: (full.items ?? []).map((item) => ({ material_id: item.material_id })),
+      });
+    },
+    [editForm],
+  );
+
+  const loadPurchaseInquiryEditForm = useCallback(
+    async (id: number) => {
+      setFormPageLoading(true);
+      try {
+        const full = await getPurchaseInquiry(id);
+        hydratePurchaseInquiryEditForm(full);
+      } catch (error: unknown) {
+        message.error(getApiErrorMessage(error, t('common.loadFailed')));
+        leavePurchaseInquiryFormPage();
+      } finally {
+        setFormPageLoading(false);
+      }
+    },
+    [hydratePurchaseInquiryEditForm, leavePurchaseInquiryFormPage, message, t],
+  );
+
+  const openEdit = (record: PurchaseInquiry) => {
+    if (record.id) navigate(purchaseInquiryEditPath(record.id));
   };
 
   const handleSaveEdit = async () => {
-    const values = await editForm.validateFields();
+    const shouldCommit = commitAfterSaveRef.current;
+    commitAfterSaveRef.current = false;
+    let values: Awaited<ReturnType<typeof editForm.validateFields>>;
+    try {
+      values = await editForm.validateFields();
+    } catch {
+      return;
+    }
+    setInquiryFormBusy(true);
+    try {
     const taxRatePercent = Number(values.tax_rate_percent);
     const payload = {
       inquiry_name: values.inquiry_name,
@@ -318,6 +525,11 @@ const PurchaseInquiriesPage: React.FC = () => {
       buyer_id: values.buyer_id,
       buyer_name: values.buyer_name,
       buyer_phone: values.buyer_phone,
+      ...resolvePurchaseDepartmentPayload(
+        values.department_id,
+        resolveDepartmentName,
+        values.department_name,
+      ),
       currency: values.currency || 'CNY',
       exchange_rate: values.exchange_rate ?? 1,
       invoice_type: values.invoice_type,
@@ -348,23 +560,111 @@ const PurchaseInquiriesPage: React.FC = () => {
         notes: v.notes,
       })),
     };
+    let savedId = editingId ?? undefined;
     if (editingId) {
       await updatePurchaseInquiry(editingId, payload);
-      message.success(t('common.updateSuccess'));
+      if (!shouldCommit) {
+        message.success(t('common.updateSuccess'));
+      }
     } else {
-      const doc = await createPurchaseInquiry(payload);
-      message.success(t('app.kuaizhizao.purchaseInquiry.created', { code: doc.inquiry_code }));
+      const flowExtras = documentFlowSubmitExtrasRef.current;
+      const createPayload = flowExtras ? { ...payload, ...flowExtras } : payload;
+      const doc = await createPurchaseInquiry(createPayload);
+      savedId = doc.id;
+      if (flowExtras) {
+        documentFlowSubmitExtrasRef.current = null;
+      }
+      if (!shouldCommit) {
+        message.success(t('app.kuaizhizao.purchaseInquiry.created', { code: doc.inquiry_code }));
+      }
     }
-    setEditOpen(false);
-    setPendingEditFormValues(null);
+    if (shouldCommit && savedId) {
+      try {
+        await submitPurchaseInquiry(savedId);
+        message.success(t('app.kuaizhizao.purchaseInquiry.committed'));
+      } catch (submitError: unknown) {
+        setEditingId(savedId);
+        message.error(getApiErrorMessage(submitError, t('common.operationFailed')));
+        actionRef.current?.reload();
+        return;
+      }
+    }
+    leavePurchaseInquiryFormPage();
+    pendingEditFormValuesRef.current = null;
     actionRef.current?.reload();
+    } catch (error: unknown) {
+      message.error(getApiErrorMessage(error, t('common.saveFailed')));
+    } finally {
+      setInquiryFormBusy(false);
+    }
   };
 
   const handleCreate = () => {
+    pendingEditFormValuesRef.current = null;
+    documentFlowSubmitExtrasRef.current = null;
+    navigate(PURCHASE_INQUIRY_CREATE_PATH);
+  };
+
+  const initPurchaseInquiryCreateForm = useCallback(() => {
     setEditingId(null);
+    setEditingReviewStatus(null);
+    editForm.resetFields();
+    const sp = new URLSearchParams(location.search || '');
+    if (sp.get('flow') === 'purchase_requisition' && inquiryFormDraftKey) {
+      const flowKey = `${location.pathname}?flow=purchase_requisition`;
+      if (handoffFlowConsumedRef.current !== flowKey) {
+        const handoffDraft = getDocumentFormDraft<Record<string, unknown>>(inquiryFormDraftKey);
+        if (handoffDraft) {
+          handoffFlowConsumedRef.current = flowKey;
+          const {
+            _documentFlowMeta: _meta,
+            documentFlowSourceType,
+            documentFlowRequisitionItemIds,
+            items: draftItems,
+            vendors: draftVendors,
+            inquiry_name: draftInquiryName,
+            inquiry_date: draftInquiryDate,
+            quote_deadline: draftQuoteDeadline,
+            notes: draftNotes,
+            ...rest
+          } = handoffDraft;
+          void rest;
+          documentFlowSubmitExtrasRef.current = {
+            documentFlowSourceType,
+            documentFlowRequisitionItemIds,
+          };
+          const items = Array.isArray(draftItems) ? (draftItems as PurchaseInquiryItem[]) : [];
+          const vendors = Array.isArray(draftVendors) ? (draftVendors as PurchaseInquiryVendor[]) : [];
+          setEditItems(items);
+          setEditVendors(vendors);
+          editForm.setFieldsValue({
+            inquiry_name: draftInquiryName,
+            inquiry_date: draftInquiryDate ? dayjs(draftInquiryDate as string) : dayjs(),
+            quote_deadline: draftQuoteDeadline ? dayjs(draftQuoteDeadline as string) : undefined,
+            notes: draftNotes,
+            attachments: [],
+            __inquiry_edit_item: items.map((item) => ({ material_id: item.material_id })),
+          });
+          clearDocumentFormDraft(inquiryFormDraftKey);
+          navigate(location.pathname, { replace: true });
+          return;
+        }
+      }
+    }
+    const pending = pendingEditFormValuesRef.current;
+    if (pending) {
+      setEditItems((pending.__editItems as PurchaseInquiryItem[]) ?? []);
+      setEditVendors((pending.__editVendors as PurchaseInquiryVendor[]) ?? []);
+      const { __editItems: _i, __editVendors: _v, ...formValues } = pending;
+      void _i;
+      void _v;
+      editForm.setFieldsValue(formValues);
+      pendingEditFormValuesRef.current = null;
+      return;
+    }
     setEditItems([]);
     setEditVendors([]);
-    setPendingEditFormValues({
+    editForm.setFieldsValue({
       inquiry_date: dayjs(),
       currency: 'CNY',
       exchange_rate: 1,
@@ -373,8 +673,29 @@ const PurchaseInquiriesPage: React.FC = () => {
       attachments: [],
       __inquiry_edit_item: [],
     });
-    setEditOpen(true);
-  };
+  }, [editForm, inquiryFormDraftKey, location.pathname, location.search, navigate]);
+
+  useEffect(() => {
+    if (!isFormPage) {
+      formPageInitKeyRef.current = null;
+      return;
+    }
+    const initKey = isCreatePage ? `create-${location.search}` : `edit-${editRouteId}`;
+    if (formPageInitKeyRef.current === initKey) return;
+    formPageInitKeyRef.current = initKey;
+    if (isCreatePage) {
+      initPurchaseInquiryCreateForm();
+    } else if (editRouteId != null) {
+      void loadPurchaseInquiryEditForm(editRouteId);
+    }
+  }, [
+    editRouteId,
+    initPurchaseInquiryCreateForm,
+    isCreatePage,
+    isFormPage,
+    loadPurchaseInquiryEditForm,
+    location.search,
+  ]);
 
   const openQuoteEntry = (inquiry: PurchaseInquiry, supplierId: number) => {
     setQuoteSupplierId(supplierId);
@@ -488,11 +809,6 @@ const PurchaseInquiriesPage: React.FC = () => {
     }
   };
 
-  const isPullLineSelectable = useCallback(
-    (record: { remaining_quantity?: number }) => Number(record.remaining_quantity ?? 0) > 0,
-    [],
-  );
-
   const pullDocumentScopeOptions = useMemo(
     () => [
       { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
@@ -513,7 +829,12 @@ const PurchaseInquiriesPage: React.FC = () => {
         .then((res) => {
           setPullSourceRequisitionOptions(
             (res?.data ?? [])
-              .filter((row) => row.id != null && row.requisition_code)
+              .filter(
+                (row) =>
+                  row.id != null &&
+                  row.requisition_code &&
+                  row.capabilities?.push_inquiry?.allowed === true,
+              )
               .map((row) => ({ value: row.id!, label: String(row.requisition_code) })),
           );
         })
@@ -537,10 +858,10 @@ const PurchaseInquiriesPage: React.FC = () => {
         return { data: [], total: 0 };
       }
     },
-    isRowDisabled: (record) => !isPullLineSelectable(record),
+    isRowDisabled: (record) => !isPullRequisitionOpenLineSelectable(record),
     onConfirm: async (_keys, rows) => {
       const selectedIds = rows
-        .filter((row) => isPullLineSelectable(row))
+        .filter((row) => isPullRequisitionOpenLineSelectable(row))
         .map((row) => Number(row.id))
         .filter((id) => id > 0);
       if (!selectedIds.length) {
@@ -548,20 +869,13 @@ const PurchaseInquiriesPage: React.FC = () => {
         return;
       }
       try {
-        const doc = await pullPurchaseInquiryFromRequisitionItems(selectedIds);
+        await handoffRequisitionToPurchaseInquiryCreate(navigate, { selected_item_ids: selectedIds });
         message.success(
-          doc.inquiry_code
-            ? t('app.kuaizhizao.purchaseInquiry.createdFromPullWithCodes', {
-                target: pullFromRequisitionAction.targetLabel,
-                codes: doc.inquiry_code,
-              })
-            : t('app.kuaizhizao.purchaseInquiry.createdFromPull', {
-                source: pullFromRequisitionAction.sourceLabel,
-                target: pullFromRequisitionAction.targetLabel,
-              }),
+          t('app.kuaizhizao.documentFlow.openedDownstreamCreate', {
+            target: pullFromRequisitionAction.targetLabel,
+          }),
         );
         pullFromRequisitionQuery.closeModal();
-    actionRef.current?.reload();
       } catch (error: unknown) {
         message.error(
           getApiErrorMessage(
@@ -624,30 +938,19 @@ const PurchaseInquiriesPage: React.FC = () => {
     }
     setPushPoPreviewConfirming(true);
     try {
-      const res = await convertInquiryToPurchaseOrder(pushPoTarget.id, { item_ids: selectedIds });
+      await handoffInquiryToPurchaseOrderCreate(navigate, { item_ids: selectedIds });
       message.success(
-        t('app.kuaizhizao.purchaseInquiry.purchaseOrdersGenerated', { count: res.purchase_orders?.length ?? 0 }),
+        t('app.kuaizhizao.documentFlow.openedDownstreamCreate', {
+          target: t('app.kuaizhizao.menu.purchase-management.purchase-orders'),
+        }),
       );
-      if (detail?.id === pushPoTarget.id) {
-        setDetail(await getPurchaseInquiry(pushPoTarget.id));
-      }
-      actionRef.current?.reload();
       resetPushPoPreviewModal();
-      setSelectedRowKeys([]);
     } catch (error: unknown) {
       message.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseInquiry.push.failed')));
     } finally {
       setPushPoPreviewConfirming(false);
     }
-  }, [
-    detail?.id,
-    message,
-    pushPoPreviewData,
-    pushPoSelectedItemIds,
-    pushPoTarget,
-    resetPushPoPreviewModal,
-    t,
-  ]);
+  }, [message, navigate, pushPoPreviewData, pushPoSelectedItemIds, pushPoTarget, resetPushPoPreviewModal, t]);
 
   const selectedInquiryForToolbar = useMemo(() => {
     if (selectedRowKeys.length !== 1) return null;
@@ -655,6 +958,72 @@ const PurchaseInquiriesPage: React.FC = () => {
     if (!Number.isFinite(id) || id <= 0) return null;
     return tableRowsRef.current.find((row) => row.id === id) ?? null;
   }, [selectedRowKeys]);
+
+  async function handleCopySelectedPurchaseInquiry() {
+    const record = selectedInquiryForToolbar;
+    if (!record?.id) {
+      message.warning(t('app.kuaizhizao.purchaseInquiry.selectToCopy'));
+      return;
+    }
+    try {
+      const data = await getPurchaseInquiry(record.id);
+      const items = (data.items ?? []).map((item) => {
+        const {
+          id: _id,
+          inquiry_id: _inquiryId,
+          awarded_supplier_id: _awardedSupplierId,
+          awarded_quote_item_id: _awardedQuoteItemId,
+          purchase_order_id: _purchaseOrderId,
+          ...rest
+        } = item;
+        return rest;
+      });
+      const vendors = (data.vendors ?? []).map((vendor) => {
+        const {
+          id: _id,
+          inquiry_id: _inquiryId,
+          status: _status,
+          quoted_at: _quotedAt,
+          ...rest
+        } = vendor;
+        return rest;
+      });
+      const taxRatePercent =
+        data.tax_rate != null && data.tax_rate !== undefined ? Number(data.tax_rate) * 100 : 13;
+      documentFlowSubmitExtrasRef.current = null;
+      setEditingId(null);
+      setEditingReviewStatus(null);
+      setEditItems(items);
+      setEditVendors(vendors);
+      pendingEditFormValuesRef.current = {
+        inquiry_name: data.inquiry_name,
+        inquiry_date: dayjs(),
+        quote_deadline: data.quote_deadline ? dayjs(data.quote_deadline) : undefined,
+        demand_party_id: data.demand_party_id,
+        demand_party_name: data.demand_party_name,
+        buyer_id: data.buyer_id,
+        buyer_name: data.buyer_name,
+        buyer_phone: data.buyer_phone,
+        department_id: data.department_id ?? undefined,
+        department_name: data.department_name ?? undefined,
+        currency: data.currency || 'CNY',
+        exchange_rate: data.exchange_rate ?? 1,
+        invoice_type: data.invoice_type,
+        tax_rate_percent: taxRatePercent,
+        payment_method: data.payment_method,
+        payment_terms: data.payment_terms,
+        trade_mode: data.trade_mode,
+        notes: data.notes,
+        attachments: mapAttachmentsToUploadList(data.attachments),
+        __inquiry_edit_item: items.map((item) => ({ material_id: item.material_id })),
+        __editItems: items,
+        __editVendors: vendors,
+      };
+      navigate(PURCHASE_INQUIRY_CREATE_PATH);
+    } catch (error: unknown) {
+      message.error(getApiErrorMessage(error, t('common.loadFailed')));
+    }
+  }
 
   const handleBatchDelete = async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) return;
@@ -723,11 +1092,11 @@ const PurchaseInquiriesPage: React.FC = () => {
 
   useEffect(() => {
     const id = searchParams.get('inquiryId');
-    if (id) {
-      getPurchaseInquiry(Number(id)).then((doc) => openEdit(doc)).finally(() => {
-        searchParams.delete('inquiryId');
-        setSearchParams(searchParams, { replace: true });
-      });
+    const numId = id ? Number(id) : NaN;
+    if (Number.isFinite(numId) && numId > 0) {
+      navigate(purchaseInquiryEditPath(numId), { replace: true });
+      searchParams.delete('inquiryId');
+      setSearchParams(searchParams, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -907,7 +1276,7 @@ const PurchaseInquiriesPage: React.FC = () => {
                   onOk: async () => {
                     await deletePurchaseInquiry(record.id!);
                     message.success(t('app.kuaizhizao.purchaseInquiry.deleted'));
-    actionRef.current?.reload();
+                    actionRef.current?.reload();
                   },
                 });
               }}
@@ -971,7 +1340,7 @@ const PurchaseInquiriesPage: React.FC = () => {
             approvedStatuses={['APPROVED', '已通过', '审核通过']}
             rejectedStatuses={['REJECTED', '已驳回']}
             onSuccess={() => {
-    actionRef.current?.reload();
+              actionRef.current?.reload();
               if (detailOpen && detail?.id === record.id && record.id != null) {
                 void getPurchaseInquiry(record.id)
                   .then(setDetail)
@@ -985,7 +1354,7 @@ const PurchaseInquiriesPage: React.FC = () => {
       },
     },
   ], SALES_DOC_LIST_FIELD_RANK),
-    [auditEnabled, detail, detailOpen, message, modal, openCompare, purchaseInquiryAuditColumn, purchaseInquiryLifecycleValueEnum, purchaseInquiryPerms.canDelete, purchaseInquiryPerms.canUpdate, resolveInquiryPushPercent, t],
+    [detail, detailOpen, message, modal, openCompare, purchaseInquiryAuditColumn, purchaseInquiryLifecycleValueEnum, purchaseInquiryPerms.canDelete, purchaseInquiryPerms.canUpdate, resolveInquiryPushPercent, t],
   );
 
   const detailTableColumns: ProColumns<PurchaseInquiryItemRow>[] = useMemo(
@@ -1255,7 +1624,11 @@ const PurchaseInquiriesPage: React.FC = () => {
         ),
       },
       {
-        title: t('app.kuaizhizao.purchaseInquiry.emailNotify'),
+        title: (
+          <Tooltip title={t('app.kuaizhizao.purchaseInquiry.emailNotifyHint')}>
+            <span>{t('app.kuaizhizao.purchaseInquiry.emailNotify')}</span>
+          </Tooltip>
+        ),
         width: 100,
         align: 'center' as const,
         render: (_: unknown, r: PurchaseInquiryVendor) => (
@@ -1734,7 +2107,7 @@ const PurchaseInquiriesPage: React.FC = () => {
         align: 'center' as const,
         render: (_: unknown, record: PullPurchaseRequisitionCandidate) =>
           renderPullCapabilityTag(
-            Number(record.remaining_quantity ?? 0) > 0,
+            isPullRequisitionOpenLineSelectable(record),
             t('app.kuaizhizao.purchaseRequisition.pull.canCreate'),
             t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate'),
           ),
@@ -1755,7 +2128,349 @@ const PurchaseInquiriesPage: React.FC = () => {
   const purchaseInquiryAttachments = documentAttachmentsFromRecord(detail);
   const purchaseInquiryAttLabel = t('app.uniDetail.sectionAttachments');
 
+  const purchaseInquiryCanCommit =
+    isCreatePage
+    || editingId == null
+    || ['', 'DRAFT', '草稿', 'REJECTED', '已驳回', 'rejected'].includes(String(editingReviewStatus ?? '').trim());
+
+  const triggerInquiryCommitAfterSave = useCallback(() => {
+    commitAfterSaveRef.current = true;
+    void editForm
+      .validateFields()
+      .then(() => handleSaveEdit())
+      .catch(() => {
+        commitAfterSaveRef.current = false;
+      });
+  }, [editForm, handleSaveEdit]);
+
+  const renderPurchaseInquiryFormBody = () => (
+    <>
+      <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
+        <Col span={8}>
+          <ProFormText name="inquiry_name" label={t('app.kuaizhizao.purchaseInquiry.inquiryName')} rules={[{ required: true }]} />
+        </Col>
+        <Col span={8}>
+          <ProFormDatePicker
+            name="inquiry_date"
+            label={t('app.kuaizhizao.purchaseInquiry.inquiryDate')}
+            fieldProps={{ style: { width: '100%' } }}
+          />
+        </Col>
+        <Col span={8}>
+          <ProFormSelect
+            name="demand_party_id"
+            label={t('app.kuaizhizao.purchaseInquiry.demandPartyName')}
+            rules={[{ required: true, message: t('app.kuaizhizao.purchaseInquiry.demandPartyRequired') }]}
+            options={demandPartyOptions.map((p) => ({
+              value: p.id,
+              label: p.code ? `${p.code} - ${p.name}` : p.name,
+            }))}
+            fieldProps={{
+              showSearch: true,
+              optionFilterProp: 'label',
+              onChange: (id: number) => {
+                const party = demandPartyOptions.find((p) => p.id === id);
+                editForm.setFieldsValue({
+                  demand_party_id: id,
+                  demand_party_name: party?.name,
+                });
+              },
+            }}
+          />
+          <Form.Item name="demand_party_name" hidden>
+            <Input />
+          </Form.Item>
+        </Col>
+      </Row>
+      <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
+        <Col span={8}>
+          <Form.Item name="buyer_id" label={t('app.kuaizhizao.purchaseInquiry.buyer')}>
+            <UniDropdown
+              showSearch
+              allowClear
+              loading={usersLoading}
+              style={{ width: '100%' }}
+              placeholder={t('app.kuaizhizao.purchaseInquiry.buyerPlaceholder')}
+              options={userList.map((u) => ({
+                value: Number(u.id),
+                label: normalizeUserDisplayName(u.full_name || u.username),
+              }))}
+              onChange={(val, opt: { label?: string }) => {
+                const uid = val != null && Number.isFinite(Number(val)) ? Number(val) : undefined;
+                const user = userList.find((u) => Number(u.id) === uid);
+                editForm.setFieldsValue({
+                  buyer_id: uid,
+                  buyer_name: opt?.label,
+                  buyer_phone: user?.phone || undefined,
+                });
+              }}
+            />
+          </Form.Item>
+          <Form.Item name="buyer_name" hidden>
+            <Input />
+          </Form.Item>
+        </Col>
+        <Col span={8}>
+          <ProFormText name="buyer_phone" label={t('app.kuaizhizao.purchaseInquiry.buyerPhone')} />
+        </Col>
+        <Col span={8}>
+          <ProFormDatePicker
+            name="quote_deadline"
+            label={t('app.kuaizhizao.purchaseInquiry.quoteDeadline')}
+            fieldProps={buildFutureDateShortcutFieldProps({
+              getForm: () => editForm,
+              fieldName: 'quote_deadline',
+              baseFieldName: 'inquiry_date',
+              t,
+            })}
+          />
+        </Col>
+      </Row>
+      <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
+        <Col span={8}>
+          <PurchaseDepartmentFormField
+            options={departmentOptions}
+            loading={departmentOptionsLoading}
+          />
+        </Col>
+      </Row>
+
+      <div className="uni-table-detail" style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <span style={{ fontWeight: 500 }}>{t('app.kuaizhizao.purchaseInquiry.invitedVendors')}</span>
+          {editVendors.length > 0 && (
+            <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={openAddVendorModal}>
+              {t('app.kuaizhizao.purchaseInquiry.addVendor')}
+            </Button>
+          )}
+        </div>
+        {editVendors.length > 0 ? (
+          <Table
+            size="small"
+            pagination={false}
+            scroll={{ x: 900 }}
+            rowKey={(r) => r.supplier_id!}
+            dataSource={editVendors}
+            columns={editVendorColumns}
+          />
+        ) : (
+          <div
+            style={{
+              padding: '12px 16px',
+              background: '#fafafa',
+              borderRadius: 4,
+              border: '1px dashed var(--river-border-color)',
+              textAlign: 'center',
+              color: '#999',
+            }}
+          >
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={t('app.kuaizhizao.purchaseInquiry.emptyInvitedVendors')}
+            />
+            <Button type="primary" ghost icon={<PlusOutlined />} onClick={openAddVendorModal} style={{ marginTop: 8 }}>
+              {t('app.kuaizhizao.purchaseInquiry.addVendor')}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
+        <Col span={8}>
+          <ProFormSelect
+            name="payment_method"
+            label={t('app.kuaizhizao.purchaseInquiry.paymentMethod')}
+            options={paymentMethodOptions}
+            fieldProps={{ allowClear: true }}
+          />
+        </Col>
+        <Col span={8}>
+          <DictionarySelect
+            dictionaryCode="PAYMENT_TERMS"
+            name="payment_terms"
+            label={t('app.kuaizhizao.purchaseInquiry.paymentTerms')}
+            formRef={editFormRef}
+            hostResource={PURCHASE_INQUIRY_RESOURCE}
+          />
+        </Col>
+        <Col span={8}>
+          <DictionarySelect
+            dictionaryCode="TRADE_MODE"
+            name="trade_mode"
+            label={t('app.kuaizhizao.purchaseInquiry.tradeMode')}
+            formRef={editFormRef}
+            hostResource={PURCHASE_INQUIRY_RESOURCE}
+          />
+        </Col>
+      </Row>
+      <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
+        <Col span={6}>
+          <DictionarySelect
+            dictionaryCode="CURRENCY"
+            name="currency"
+            label={t('app.kuaizhizao.purchaseInquiry.currency')}
+            formRef={editFormRef}
+            valueEqualsLabel={false}
+            hostResource={PURCHASE_INQUIRY_RESOURCE}
+            rules={[{ required: true }]}
+          />
+        </Col>
+        <Col span={6}>
+          <ProFormDigit
+            name="exchange_rate"
+            label={t('app.kuaizhizao.purchaseInquiry.exchangeRate')}
+            min={0}
+            fieldProps={{ precision: 6, style: { width: '100%' } }}
+          />
+        </Col>
+        <Col span={6}>
+          <ProFormSelect
+            name="invoice_type"
+            label={t('app.kuaizhizao.purchaseInquiry.invoiceType')}
+            options={invoiceTypeOptions}
+            rules={[{ required: true }]}
+          />
+        </Col>
+        <Col span={6}>
+          <ProFormSelect
+            name="tax_rate_percent"
+            label={t('app.kuaizhizao.purchaseInquiry.taxRate')}
+            options={taxRatePercentOptions}
+          />
+        </Col>
+      </Row>
+
+      <div className="uni-table-detail" style={{ marginBottom: 24 }}>
+        <Space style={{ marginBottom: 8 }}>
+          <span style={{ fontWeight: 500 }}>{t('app.kuaizhizao.purchaseInquiry.inquiryItems')}</span>
+          <Button size="small" onClick={addEditItem}>{t('app.kuaizhizao.purchaseInquiry.addLine')}</Button>
+        </Space>
+        <Table
+          size="small"
+          pagination={false}
+          style={{ width: '100%' }}
+          scroll={{ x: 720 }}
+          rowKey={(_, idx) => String(idx)}
+          dataSource={editItems}
+          columns={editItemColumns}
+        />
+      </div>
+
+      <DetailDrawerSection titleAccent title={t('common.remark')}>
+        <ProFormTextArea name="notes" label={false} fieldProps={{ rows: 2 }} />
+      </DetailDrawerSection>
+      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionAttachments')} marginBottom={0}>
+        <DocumentAttachmentsField category="purchase_inquiry_attachments" label={false} />
+      </DetailDrawerSection>
+    </>
+  );
+
+  useSubmitShortcut(() => void handleSaveEdit(), isFormPage);
+
+  if (isFormPage) {
+    return (
+      <>
+        <DocumentFormPageLayout
+          header={
+            <>
+              <Space align="center" size={8}>
+                <Button
+                  type="text"
+                  icon={<ArrowLeftOutlined />}
+                  aria-label={t('common.back')}
+                  onClick={leavePurchaseInquiryFormPage}
+                />
+                <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
+                  {isCreatePage
+                    ? t('app.kuaizhizao.purchaseInquiry.createModalTitle')
+                    : t('app.kuaizhizao.purchaseInquiry.editTitle')}
+                </Typography.Title>
+              </Space>
+              <DocumentFormPageHeaderActions
+                onCancel={leavePurchaseInquiryFormPage}
+                onSaveDraft={() => void handleSaveEdit()}
+                onPrimarySubmit={() => void handleSaveEdit()}
+                isCreatePage={isCreatePage}
+                showSaveDraft={false}
+                canSubmitAfterSave={false}
+                showCommitSubmit={purchaseInquiryCanCommit}
+                saveDraftLoading={inquiryFormBusy}
+                commitSubmitLoading={inquiryFormBusy}
+                onCommitSubmit={triggerInquiryCommitAfterSave}
+              />
+            </>
+          }
+        >
+          <Spin spinning={formPageLoading}>
+            <ProForm form={editForm} layout="vertical" submitter={false} onFinish={() => void handleSaveEdit()}>
+              {renderPurchaseInquiryFormBody()}
+            </ProForm>
+          </Spin>
+        </DocumentFormPageLayout>
+        <Modal
+          title={t('app.kuaizhizao.purchaseInquiry.selectVendorTitle')}
+          open={addVendorModalOpen}
+          onOk={handleConfirmAddVendors}
+          onCancel={() => {
+            setAddVendorModalOpen(false);
+            setSelectedSupplierIdsForAdd([]);
+          }}
+          okText={t('common.confirm')}
+          cancelText={t('common.cancel')}
+          okButtonProps={{ disabled: selectedSupplierIdsForAdd.length === 0 }}
+          destroyOnHidden
+        >
+          <Select
+            mode="multiple"
+            placeholder={t('app.kuaizhizao.purchaseInquiry.searchVendorPlaceholder')}
+            options={availableSuppliersForAdd.map((s) => ({
+              label: formatSupplierLabel(s),
+              value: s.id,
+            }))}
+            value={selectedSupplierIdsForAdd}
+            onChange={setSelectedSupplierIdsForAdd}
+            style={{ width: '100%' }}
+            showSearch
+            allowClear
+            maxTagCount="responsive"
+            filterOption={(input, option) => (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())}
+            notFoundContent={availableSuppliersForAdd.length === 0 ? t('app.kuaizhizao.purchaseInquiry.noAvailableVendors') : undefined}
+          />
+          {availableSuppliersForAdd.length === 0 && (
+            <Typography.Text type="secondary" style={{ display: 'block', marginTop: 12, fontSize: 12 }}>
+              {t('app.kuaizhizao.purchaseInquiry.noSuppliersHint')}
+            </Typography.Text>
+          )}
+        </Modal>
+        <Modal
+          title={t('app.kuaizhizao.menu.purchase-management.purchase-demand-parties')}
+          open={demandPartyOpen}
+          onCancel={() => {
+            setDemandPartyOpen(false);
+            void listPurchaseDemandParties({ is_active: true, limit: 500 })
+              .then((res) => setDemandPartyOptions(res.data ?? []))
+              .catch(() => setDemandPartyOptions([]));
+          }}
+          footer={null}
+          width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+          destroyOnHidden
+        >
+          <PurchaseDemandPartiesPanel
+            embedded
+            onChanged={() => {
+              void listPurchaseDemandParties({ is_active: true, limit: 500 })
+                .then((res) => setDemandPartyOptions(res.data ?? []))
+                .catch(() => setDemandPartyOptions([]));
+            }}
+          />
+        </Modal>
+      </>
+    );
+  }
+
   return (
+    <>
+      {purchaseInquiryAuditModal}
     <ListPageTemplate>
       <UniTable<PurchaseInquiry>
         actionRef={actionRef}
@@ -1784,21 +2499,19 @@ const PurchaseInquiriesPage: React.FC = () => {
         enableRowSelection={viewTypeState !== 'detailTable'}
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
-        showDeleteButton
+        showDeleteButton={viewTypeState !== 'detailTable'}
         onDelete={handleBatchDelete}
+        deleteButtonText={t('common.delete')}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.purchaseInquiry.confirmBatchDelete', { count })}
-        toolBarActionsAfterDelete={[
-          <UniAuditBatchMenuButton
-            key="purchase-inquiry-batch-menu"
-            selectedRowKeys={selectedRowKeys}
-            selectedRecords={selectedInquiriesForBatch}
-            auditEnabled={auditEnabled}
-            permGates={purchaseInquiryPerms}
-            handlers={purchaseInquiryAuditBatchHandlers}
-            onSuccess={handlePurchaseInquiryAuditBatchSuccess}
-            toolBarButtonSize="middle"
-          />,
-        ]}
+        toolBarActionsAfterDelete={
+          demandPartyPerms.canRead
+            ? [
+                <Button key="purchase-demand-parties" onClick={() => setDemandPartyOpen(true)}>
+                  {t('app.kuaizhizao.menu.purchase-management.purchase-demand-parties')}
+                </Button>,
+              ]
+            : []
+        }
         toolBarRender={() => [
           <UniPullCreateToolbar
             key="create-purchase-inquiry-with-pull"
@@ -1806,293 +2519,69 @@ const PurchaseInquiriesPage: React.FC = () => {
             createIcon={<PlusOutlined />}
             createLabel={t('app.kuaizhizao.purchaseInquiry.createInquiry')}
             onCreate={handleCreate}
-            menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
+            menuItems={[
+              ...buildKuaizhizaoPullCreateMenuItems(t, [
+                {
+                  key: 'pull-from-requisition',
+                  actionKey: 'purchase_inquiry.pull_from_requisition',
+                  onClick: pullFromRequisitionQuery.openModal,
+                },
+              ]),
+              { type: 'divider', key: 'copy-selected-divider' },
               {
-                key: 'pull-from-requisition',
-                actionKey: 'purchase_inquiry.pull_from_requisition',
-                onClick: pullFromRequisitionQuery.openModal,
+                key: 'copy-selected',
+                label: t('app.kuaizhizao.purchaseInquiry.copySelectedCreate'),
+                disabled: !selectedInquiryForToolbar,
+                onClick: () => void handleCopySelectedPurchaseInquiry(),
               },
-            ])}
+            ]}
           />,
-          <UniPushToolbarButton
-            key={`purchase-inquiry-push-${selectedInquiryForToolbar?.id ?? 'none'}`}
-            menuItems={toolbarPushMenuItems}
-            disabled={selectedRowKeys.length !== 1 || !selectedInquiryForToolbar}
-            disabledReason={toolbarPushDisabledReason}
-            sourceDocument={
-              selectedInquiryForToolbar?.id
-                ? { type: 'purchase_inquiry', id: Number(selectedInquiryForToolbar.id) }
-                : null
-            }
-            pushTargets={{ 'push-purchase-order': 'purchase_order' }}
-          />,
+          ...(viewTypeState === 'detailTable' ? [] : [
+            <UniPushToolbarButton
+              key={`purchase-inquiry-push-${selectedInquiryForToolbar?.id ?? 'none'}`}
+              menuItems={toolbarPushMenuItems}
+              disabled={selectedRowKeys.length !== 1 || !selectedInquiryForToolbar}
+              disabledReason={toolbarPushDisabledReason}
+              sourceDocument={
+                selectedInquiryForToolbar?.id
+                  ? { type: 'purchase_inquiry', id: Number(selectedInquiryForToolbar.id) }
+                  : null
+              }
+              pushTargets={{ 'push-purchase-order': 'purchase_order' }}
+            />,
+            <UniBatchMenuButton
+              key="purchase-inquiry-submit"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={purchaseInquiryToolbarAuditMenus.submit}
+              buttonText={t('common.submit')}
+            />,
+            <UniBatchMenuButton
+              key="purchase-inquiry-audit"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={purchaseInquiryToolbarAuditMenus.audit}
+              buttonText={t('components.uniAction.audit')}
+            />,
+          ]),
         ]}
       />
-
-      <FormModalTemplate
-        title={editingId ? t('app.kuaizhizao.purchaseInquiry.editTitle') : t('app.kuaizhizao.purchaseInquiry.createModalTitle')}
-        open={editOpen}
-        onClose={() => setEditOpen(false)}
-        afterOpenChange={(open) => {
-          if (open) {
-            if (pendingEditFormValues) {
-              editForm.setFieldsValue(pendingEditFormValues);
-            }
-            return;
-          }
-          editForm.resetFields();
-          setPendingEditFormValues(null);
-        }}
-        onFinish={handleSaveEdit}
-        form={editForm}
-        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
-        grid={false}
-      >
-        <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
-          <Col span={8}>
-            <ProFormText name="inquiry_name" label={t('app.kuaizhizao.purchaseInquiry.inquiryName')} rules={[{ required: true }]} />
-          </Col>
-          <Col span={8}>
-            <ProFormDatePicker
-              name="inquiry_date"
-              label={t('app.kuaizhizao.purchaseInquiry.inquiryDate')}
-              fieldProps={{ style: { width: '100%' } }}
-            />
-          </Col>
-          <Col span={8}>
-            <ProFormSelect
-              name="demand_party_id"
-              label={t('app.kuaizhizao.purchaseInquiry.demandPartyName')}
-              rules={[{ required: true, message: t('app.kuaizhizao.purchaseInquiry.demandPartyRequired') }]}
-              options={demandPartyOptions.map((p) => ({
-                value: p.id,
-                label: p.code ? `${p.code} - ${p.name}` : p.name,
-              }))}
-              fieldProps={{
-                showSearch: true,
-                optionFilterProp: 'label',
-                onChange: (id: number) => {
-                  const party = demandPartyOptions.find((p) => p.id === id);
-                  editForm.setFieldsValue({
-                    demand_party_id: id,
-                    demand_party_name: party?.name,
-                  });
-                },
-              }}
-            />
-            <Form.Item name="demand_party_name" hidden>
-              <Input />
-            </Form.Item>
-          </Col>
-        </Row>
-        <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
-          <Col span={8}>
-            <Form.Item name="buyer_id" label={t('app.kuaizhizao.purchaseInquiry.buyer')}>
-              <UniDropdown
-                showSearch
-                allowClear
-                loading={usersLoading}
-                style={{ width: '100%' }}
-                placeholder={t('app.kuaizhizao.purchaseInquiry.buyerPlaceholder')}
-                options={userList.map((u) => ({
-                  value: Number(u.id),
-                  label: normalizeUserDisplayName(u.full_name || u.username),
-                }))}
-                onChange={(val, opt: any) => {
-                  const uid = val != null && Number.isFinite(Number(val)) ? Number(val) : undefined;
-                  const user = userList.find((u) => Number(u.id) === uid);
-                  editForm.setFieldsValue({
-                    buyer_id: uid,
-                    buyer_name: opt?.label,
-                    buyer_phone: user?.phone || undefined,
-                  });
-                }}
-              />
-            </Form.Item>
-            <Form.Item name="buyer_name" hidden>
-              <Input />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <ProFormText name="buyer_phone" label={t('app.kuaizhizao.purchaseInquiry.buyerPhone')} />
-          </Col>
-          <Col span={8}>
-            <ProFormDatePicker
-              name="quote_deadline"
-              label={t('app.kuaizhizao.purchaseInquiry.quoteDeadline')}
-              fieldProps={buildFutureDateShortcutFieldProps({
-                getForm: () => editForm,
-                fieldName: 'quote_deadline',
-                baseFieldName: 'inquiry_date',
-                t,
-              })}
-            />
-          </Col>
-        </Row>
-
-        <div className="uni-table-detail" style={{ marginBottom: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <span style={{ fontWeight: 500 }}>{t('app.kuaizhizao.purchaseInquiry.invitedVendors')}</span>
-            {editVendors.length > 0 && (
-              <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={openAddVendorModal}>
-                {t('app.kuaizhizao.purchaseInquiry.addVendor')}
-              </Button>
-            )}
-          </div>
-          {editVendors.length > 0 ? (
-            <Table
-              size="small"
-              pagination={false}
-              scroll={{ x: 900 }}
-              rowKey={(r) => r.supplier_id!}
-              dataSource={editVendors}
-              columns={editVendorColumns}
-            />
-          ) : (
-            <div
-              style={{
-                padding: '12px 16px',
-                background: '#fafafa',
-                borderRadius: 4,
-                border: '1px dashed var(--river-border-color)',
-                textAlign: 'center',
-                color: '#999',
-              }}
-            >
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={t('app.kuaizhizao.purchaseInquiry.emptyInvitedVendors')}
-              />
-              <Button type="primary" ghost icon={<PlusOutlined />} onClick={openAddVendorModal} style={{ marginTop: 8 }}>
-                {t('app.kuaizhizao.purchaseInquiry.addVendor')}
-              </Button>
-            </div>
-          )}
-        </div>
-
-        <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
-          <Col span={8}>
-            <ProFormSelect
-              name="payment_method"
-              label={t('app.kuaizhizao.purchaseInquiry.paymentMethod')}
-              options={paymentMethodOptions}
-              fieldProps={{ allowClear: true }}
-            />
-          </Col>
-          <Col span={8}>
-            <DictionarySelect
-              dictionaryCode="PAYMENT_TERMS"
-              name="payment_terms"
-              label={t('app.kuaizhizao.purchaseInquiry.paymentTerms')}
-              formRef={editFormRef}
-              hostResource={PURCHASE_INQUIRY_RESOURCE}
-            />
-          </Col>
-          <Col span={8}>
-            <DictionarySelect
-              dictionaryCode="TRADE_MODE"
-              name="trade_mode"
-              label={t('app.kuaizhizao.purchaseInquiry.tradeMode')}
-              formRef={editFormRef}
-              hostResource={PURCHASE_INQUIRY_RESOURCE}
-            />
-          </Col>
-        </Row>
-        <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
-          <Col span={6}>
-            <DictionarySelect
-              dictionaryCode="CURRENCY"
-              name="currency"
-              label={t('app.kuaizhizao.purchaseInquiry.currency')}
-              formRef={editFormRef}
-              valueEqualsLabel={false}
-              hostResource={PURCHASE_INQUIRY_RESOURCE}
-              rules={[{ required: true }]}
-            />
-          </Col>
-          <Col span={6}>
-            <ProFormDigit
-              name="exchange_rate"
-              label={t('app.kuaizhizao.purchaseInquiry.exchangeRate')}
-              min={0}
-              fieldProps={{ precision: 6, style: { width: '100%' } }}
-            />
-          </Col>
-          <Col span={6}>
-            <ProFormSelect
-              name="invoice_type"
-              label={t('app.kuaizhizao.purchaseInquiry.invoiceType')}
-              options={invoiceTypeOptions}
-              rules={[{ required: true }]}
-            />
-          </Col>
-          <Col span={6}>
-            <ProFormSelect
-              name="tax_rate_percent"
-              label={t('app.kuaizhizao.purchaseInquiry.taxRate')}
-              options={taxRatePercentOptions}
-            />
-          </Col>
-        </Row>
-
-        <div className="uni-table-detail" style={{ marginBottom: 24 }}>
-          <Space style={{ marginBottom: 8 }}>
-            <span style={{ fontWeight: 500 }}>{t('app.kuaizhizao.purchaseInquiry.inquiryItems')}</span>
-            <Button size="small" onClick={addEditItem}>{t('app.kuaizhizao.purchaseInquiry.addLine')}</Button>
-          </Space>
-          <Table
-            size="small"
-            pagination={false}
-            style={{ width: '100%' }}
-            scroll={{ x: 720 }}
-            rowKey={(_, idx) => String(idx)}
-            dataSource={editItems}
-            columns={editItemColumns}
-          />
-        </div>
-
-        <DetailDrawerSection titleAccent title={t('common.remark')}>
-          <ProFormTextArea name="notes" label={false} fieldProps={{ rows: 2 }} />
-        </DetailDrawerSection>
-        <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionAttachments')} marginBottom={0}>
-          <DocumentAttachmentsField category="purchase_inquiry_attachments" label={false} />
-        </DetailDrawerSection>
-      </FormModalTemplate>
-
       <Modal
-        title={t('app.kuaizhizao.purchaseInquiry.selectVendorTitle')}
-        open={addVendorModalOpen}
-        onOk={handleConfirmAddVendors}
+        title={t('app.kuaizhizao.menu.purchase-management.purchase-demand-parties')}
+        open={demandPartyOpen}
         onCancel={() => {
-          setAddVendorModalOpen(false);
-          setSelectedSupplierIdsForAdd([]);
+          setDemandPartyOpen(false);
+          void listPurchaseDemandParties({ is_active: true, limit: 500 })
+            .then((res) => setDemandPartyOptions(res.data ?? []))
+            .catch(() => setDemandPartyOptions([]));
         }}
-        okText={t('common.confirm')}
-        cancelText={t('common.cancel')}
-        okButtonProps={{ disabled: selectedSupplierIdsForAdd.length === 0 }}
+        footer={null}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         destroyOnHidden
       >
-        <Select
-          mode="multiple"
-          placeholder={t('app.kuaizhizao.purchaseInquiry.searchVendorPlaceholder')}
-          options={availableSuppliersForAdd.map((s) => ({
-            label: formatSupplierLabel(s),
-            value: s.id,
-          }))}
-          value={selectedSupplierIdsForAdd}
-          onChange={setSelectedSupplierIdsForAdd}
-          style={{ width: '100%' }}
-          showSearch
-          allowClear
-          maxTagCount="responsive"
-          filterOption={(input, option) => (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())}
-          notFoundContent={availableSuppliersForAdd.length === 0 ? t('app.kuaizhizao.purchaseInquiry.noAvailableVendors') : undefined}
-        />
-        {availableSuppliersForAdd.length === 0 && (
-          <Typography.Text type="secondary" style={{ display: 'block', marginTop: 12, fontSize: 12 }}>
-            {t('app.kuaizhizao.purchaseInquiry.noSuppliersHint')}
-          </Typography.Text>
-        )}
+        <PurchaseDemandPartiesPanel embedded onChanged={() => {
+          void listPurchaseDemandParties({ is_active: true, limit: 500 })
+            .then((res) => setDemandPartyOptions(res.data ?? []))
+            .catch(() => setDemandPartyOptions([]));
+        }} />
       </Modal>
 
       <DetailDrawerTemplate
@@ -2123,7 +2612,15 @@ const PurchaseInquiriesPage: React.FC = () => {
                 <Button onClick={() => void openCompare(detail)}>{t('app.kuaizhizao.purchaseInquiry.compareAward')}</Button>
               )}
               {isInquiryDraft(detail) && (
-                <Button icon={<EditOutlined />} onClick={() => { setDetailOpen(false); void openEdit(detail); }}>{t('common.edit')}</Button>
+                <Button
+                  icon={<EditOutlined />}
+                  onClick={() => {
+                    setDetailOpen(false);
+                    if (detail?.id) navigate(purchaseInquiryEditPath(detail.id));
+                  }}
+                >
+                  {t('common.edit')}
+                </Button>
               )}
               <UniWorkflowActions {...rowActionKind('skip')}
                 record={detail}
@@ -2491,6 +2988,7 @@ const PurchaseInquiriesPage: React.FC = () => {
         ) : null}
       </Modal>
     </ListPageTemplate>
+    </>
   );
 };
 

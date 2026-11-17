@@ -49,6 +49,19 @@ export {
   recalculateQuantityOnUnitChange,
   type DocumentLineUnitFields,
 } from './formHelpers';
+export {
+  buildDocumentLineDualQuantityFormColumns,
+  buildDocumentLineDualQuantityPairColumns,
+} from './buildDocumentLineDualQuantityFormColumns';
+export type {
+  DocumentLineDualQuantityFormColumnOptions,
+  DocumentLineDualQuantityPairColumnOptions,
+} from './buildDocumentLineDualQuantityFormColumns';
+export { DocumentLineDualQuantityFormCell } from './documentLineDualQuantityColumn';
+export { DocumentLineDualQuantity } from './DocumentLineDualQuantity';
+export type { DocumentLineDualQuantityProps } from './DocumentLineDualQuantity';
+export { MaterialUnitRoleBadge } from './MaterialUnitRoleBadge';
+export type { MaterialUnitRoleBadgeProps, MaterialUnitRole } from './MaterialUnitRoleBadge';
 
 export const QuantityWithUnit: React.FC<QuantityWithUnitProps> = ({
   materialId,

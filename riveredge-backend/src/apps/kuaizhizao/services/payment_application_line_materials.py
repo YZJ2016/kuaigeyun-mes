@@ -8,32 +8,12 @@ from typing import List, Optional
 from apps.kuaicaiwu.models.payable import Payable
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder
 from apps.kuaizhizao.schemas.payment_application import PaymentApplicationLineCreate
+from apps.kuaizhizao.utils.document_amount_write import allocate_amount_by_weights
 
 
 def allocate_by_weights(total: Decimal, weights: List[Decimal]) -> List[Decimal]:
     """按权重分摊金额；末行吃尾差，保证合计等于 total。"""
-    if not weights:
-        return []
-    safe_weights = [max(Decimal("0"), Decimal(str(w or 0))) for w in weights]
-    weight_sum = sum(safe_weights)
-    if weight_sum <= 0:
-        n = len(safe_weights)
-        if n == 1:
-            return [total]
-        each = (total / n).quantize(Decimal("0.01"))
-        parts = [each] * (n - 1)
-        parts.append(total - sum(parts))
-        return parts
-    parts: List[Decimal] = []
-    allocated = Decimal("0")
-    for i, w in enumerate(safe_weights):
-        if i == len(safe_weights) - 1:
-            parts.append(total - allocated)
-        else:
-            part = (total * w / weight_sum).quantize(Decimal("0.01"))
-            parts.append(part)
-            allocated += part
-    return parts
+    return allocate_amount_by_weights(total, weights)
 
 
 async def lines_from_purchase_receipt_items(

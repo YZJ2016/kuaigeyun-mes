@@ -27,6 +27,7 @@ export type KuaizhizaoDocumentActionKey =
   | 'purchase_invoice.pull_from_purchase_order'
   | 'payment.pull_from_purchase_order'
   | 'purchase_return.pull_from_purchase_order'
+  | 'purchase_return.pull_from_purchase_receipt'
   | 'receipt.pull_from_sales_order'
   | 'purchase_receipt.pull_from_receipt_notice'
   | 'purchase_return.pull_from_incoming_inspection'
@@ -320,6 +321,14 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     labelKey: documentActionI18n('purchase_return.pull_from_purchase_order', 'label'),
     sourceLabelKey: documentActionI18n('purchase_return.pull_from_purchase_order', 'source'),
     targetLabelKey: documentActionI18n('purchase_return.pull_from_purchase_order', 'target'),
+  },
+  'purchase_return.pull_from_purchase_receipt': {
+    key: 'purchase_return.pull_from_purchase_receipt',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('purchase_return.pull_from_purchase_receipt', 'label'),
+    sourceLabelKey: documentActionI18n('purchase_return.pull_from_purchase_receipt', 'source'),
+    targetLabelKey: documentActionI18n('purchase_return.pull_from_purchase_receipt', 'target'),
   },
   'purchase_receipt.pull_from_receipt_notice': {
     key: 'purchase_receipt.pull_from_receipt_notice',

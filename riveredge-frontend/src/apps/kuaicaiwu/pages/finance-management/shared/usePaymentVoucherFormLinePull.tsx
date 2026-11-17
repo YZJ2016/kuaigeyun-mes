@@ -21,6 +21,7 @@ import { getKuaicaiwuDocumentAction } from '../../../constants/documentActionReg
 import { paymentService, type PaymentPullCandidate } from '../../../services/finance/payment';
 import { loadFinancePullCandidatePage } from './loadFinancePullCandidatePage';
 import { financeAmountDigitFieldProps } from '../../../utils/financeFormLayout';
+import { allocateAmountByWeights, roundBusinessAmount } from '../../../../kuaizhizao/utils/documentLineAmounts';
 import { buildPaymentPayablePullQueryColumns } from './paymentPayablePullQueryColumns';
 import { purchaseOrderCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
 import { isPrepaymentOffsetPaymentMethod } from '../../../utils/financeSharedOptions';
@@ -61,6 +62,151 @@ export function syncPaymentTotalFromPullLines(formRef: React.RefObject<ProFormIn
   if (sum > 0) {
     formRef.current?.setFieldsValue({ total_amount: sum });
   }
+}
+
+/** 预付抵扣：表头「本次抵扣金额」与预付款明细抵扣合计对齐。 */
+export function syncPaymentHeaderFromOffsetPrepaymentLines(
+  formRef: React.RefObject<ProFormInstance | undefined>,
+) {
+  const offsetRows = normalizeFormListItems<Record<string, unknown>>(
+    formRef.current?.getFieldValue('offset_prepayment_lines'),
+  );
+  if (!offsetRows.length) {
+    return;
+  }
+  const sum = offsetRows.reduce((acc, row) => acc + Number(row.offsetAmount ?? 0), 0);
+  if (sum > 0) {
+    formRef.current?.setFieldsValue({ total_amount: roundBusinessAmount(sum) });
+  }
+}
+
+/** 手工改表头后：预付款行「本次抵扣金额」按表头分摊（受未核销余额上限约束）。 */
+export function syncOffsetPrepaymentLinesToHeaderTotal(
+  formRef: React.RefObject<ProFormInstance | undefined>,
+) {
+  const total = Number(formRef.current?.getFieldValue('total_amount') ?? 0);
+  if (!(total > 0)) {
+    return;
+  }
+  const offsetRows = normalizeFormListItems<Record<string, unknown>>(
+    formRef.current?.getFieldValue('offset_prepayment_lines'),
+  );
+  if (!offsetRows.length) {
+    return;
+  }
+  let budget = total;
+  const nextRows = offsetRows.map((row, index) => {
+    const cap = Number(row.maxUnsettled ?? row.offsetAmount ?? 0);
+    const isLast = index === offsetRows.length - 1;
+    let part: number;
+    if (isLast) {
+      part = budget;
+    } else if (cap > 0) {
+      part = Math.min(budget, cap);
+    } else {
+      part = 0;
+    }
+    if (cap > 0 && part > cap) {
+      part = cap;
+    }
+    if (part < 0) {
+      part = 0;
+    }
+    budget -= part;
+    return { ...row, offsetAmount: roundBusinessAmount(part) };
+  });
+  formRef.current?.setFieldsValue({ offset_prepayment_lines: nextRows });
+}
+
+export function applyPaymentHeaderAmountToPullLines(
+  headerAmount: number,
+  rows: Record<string, unknown>[],
+): Record<string, unknown>[] {
+  if (!rows.length) {
+    return rows;
+  }
+  if (rows.length === 1) {
+    return [{ ...rows[0], paymentAmount: headerAmount }];
+  }
+  const weights = rows.map((row) => {
+    const w = Number(row.maxAmount ?? row.paymentAmount ?? 0);
+    return w > 0 ? w : 1;
+  });
+  const parts = allocateAmountByWeights(headerAmount, weights);
+  return rows.map((row, index) => {
+    const cap = Number(row.maxAmount ?? 0);
+    let part = parts[index] ?? 0;
+    if (cap > 0 && part > cap) {
+      part = cap;
+    }
+    return { ...row, paymentAmount: part };
+  });
+}
+
+export function handlePaymentVoucherFormValuesChange(
+  formRef: React.RefObject<ProFormInstance | undefined>,
+  changedValues: Record<string, unknown>,
+  allValues: Record<string, unknown>,
+) {
+  const offsetMode = isPrepaymentOffsetPaymentMethod(String(allValues.payment_method || ''));
+  if (Object.prototype.hasOwnProperty.call(changedValues, 'pull_lines')) {
+    syncPaymentTotalFromPullLines(formRef);
+    if (offsetMode) {
+      syncOffsetPrepaymentLinesToHeaderTotal(formRef);
+    }
+    return;
+  }
+  if (Object.prototype.hasOwnProperty.call(changedValues, 'offset_prepayment_lines')) {
+    if (offsetMode) {
+      syncPaymentHeaderFromOffsetPrepaymentLines(formRef);
+    }
+    return;
+  }
+  if (!Object.prototype.hasOwnProperty.call(changedValues, 'total_amount')) {
+    return;
+  }
+  if (offsetMode) {
+    const nextAmount = Number(changedValues.total_amount);
+    if (!Number.isFinite(nextAmount)) {
+      return;
+    }
+    const pullRows = normalizeFormListItems<Record<string, unknown>>(allValues.pull_lines);
+    if (pullRows.length) {
+      formRef.current?.setFieldsValue({
+        pull_lines: applyPaymentHeaderAmountToPullLines(nextAmount, pullRows),
+      });
+    }
+    syncOffsetPrepaymentLinesToHeaderTotal(formRef);
+    return;
+  }
+  const rows = normalizeFormListItems<Record<string, unknown>>(allValues.pull_lines);
+  if (!rows.length) {
+    return;
+  }
+  const nextAmount = Number(changedValues.total_amount);
+  if (!Number.isFinite(nextAmount)) {
+    return;
+  }
+  formRef.current?.setFieldsValue({
+    pull_lines: applyPaymentHeaderAmountToPullLines(nextAmount, rows),
+  });
+}
+
+export function readPaymentPullLineFormFields(row: Record<string, unknown>) {
+  const paymentAmount = Number(row.paymentAmount ?? row.amount ?? 0);
+  return {
+    sourceType: String(row.sourceType ?? row.source_type ?? '').trim(),
+    sourceId: Number(row.sourceId ?? row.source_id ?? 0),
+    sourceCode: String(row.sourceCode ?? row.source_code ?? '').trim(),
+    paymentAmount: Number.isFinite(paymentAmount) ? paymentAmount : 0,
+  };
+}
+
+export function filterValidPaymentPullFormLines(items: unknown): Record<string, unknown>[] {
+  return normalizeFormListItems<Record<string, unknown>>(items).filter((row) => {
+    const f = readPaymentPullLineFormFields(row);
+    return f.sourceType.length > 0 && f.sourceId > 0 && f.paymentAmount > 0;
+  });
 }
 
 export function mapFormPullLinesToApi(items: unknown):

@@ -16,6 +16,7 @@ from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_warehouse_execution_access
+from apps.kuaizhizao.api.pull_query_params import PullQueryDateFrom, PullQueryDateTo
 from core.api.deps.access import require_permission_codes, require_read_or_display
 from core.services.authorization.data_scope_service import DataScopeService
 from infra.models.user import User
@@ -106,6 +107,7 @@ from apps.kuaizhizao.schemas.warehouse import (
     PurchaseReturnUpdate,
     PurchaseReturnResponse,
     PurchaseReturnListPaginatedResponse,
+    PurchaseReceiptReturnPreviewResponse,
     OtherInboundCreate,
     OtherInboundUpdate,
     OtherInboundResponse,
@@ -5443,6 +5445,201 @@ async def list_purchase_returns(
         **{k: v for k, v in filters.items() if v is not None},
     )
     return PurchaseReturnListPaginatedResponse(**result)
+
+
+@router.get(
+    "/purchase-returns/purchase-receipt-return-preview",
+    response_model=PurchaseReceiptReturnPreviewResponse,
+    summary="Preview purchase return from purchase receipt",
+    dependencies=[Depends(require_read_or_display("kuaizhizao:purchase-receipt"))],
+)
+async def get_purchase_receipt_return_preview(
+    purchase_receipt_id: int = Query(..., description="采购入库单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    await _assert_purchase_receipt_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        receipt_id=purchase_receipt_id,
+    )
+    try:
+        return await PurchaseReturnService().get_purchase_receipt_return_preview(
+            tenant_id=tenant_id,
+            purchase_receipt_id=purchase_receipt_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/purchase-returns/purchase-receipt-pull-lines",
+    summary="Open purchase receipt lines for purchase return pull",
+    dependencies=[Depends(require_read_or_display("kuaizhizao:purchase-receipt"))],
+)
+async def list_purchase_return_purchase_receipt_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    purchase_receipt_id: Optional[int] = Query(None, description="来源采购入库单"),
+    pullable_only: bool = Query(True, description="仅剩余可退量大于 0"),
+    date_from: PullQueryDateFrom = None,
+    date_to: PullQueryDateTo = None,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    if purchase_receipt_id is not None:
+        await _assert_purchase_receipt_visible(
+            tenant_id=tenant_id,
+            current_user=current_user,
+            receipt_id=int(purchase_receipt_id),
+        )
+    try:
+        return await PurchaseReturnService().list_purchase_receipt_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            purchase_receipt_id=purchase_receipt_id,
+            pullable_only=pullable_only,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/purchase-returns/pull-from-purchase-receipt",
+    response_model=PurchaseReturnResponse,
+    summary="Push purchase return from purchase receipt",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-return:create"))],
+)
+async def pull_purchase_return_from_purchase_receipt(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    purchase_receipt_id = request.get("purchase_receipt_id")
+    warehouse_id = request.get("warehouse_id")
+    warehouse_name = request.get("warehouse_name")
+    return_quantities_raw = request.get("return_quantities")
+    return_quantities = None
+    if isinstance(return_quantities_raw, dict):
+        return_quantities = {}
+        for k, v in return_quantities_raw.items():
+            try:
+                return_quantities[int(k)] = float(v)
+            except (TypeError, ValueError):
+                continue
+
+    if not purchase_receipt_id:
+        raise ValidationError("必须提供采购入库单ID")
+    if not warehouse_id:
+        raise ValidationError("必须提供退货仓库ID")
+    await _assert_purchase_receipt_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        receipt_id=int(purchase_receipt_id),
+    )
+    return await PurchaseReturnService().pull_from_purchase_receipt(
+        tenant_id=tenant_id,
+        purchase_receipt_id=int(purchase_receipt_id),
+        created_by=current_user.id,
+        warehouse_id=int(warehouse_id),
+        warehouse_name=warehouse_name,
+        return_quantities=return_quantities,
+    )
+
+
+@router.post(
+    "/purchase-returns/pull-from-purchase-receipt-items",
+    summary="Create purchase returns from purchase receipt lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-return:create"))],
+)
+async def pull_purchase_returns_from_purchase_receipt_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    raw_ids = request.get("selected_item_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="请至少选择一条可退货采购入库明细")
+    try:
+        selected_ids = [int(v) for v in raw_ids]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="明细ID格式无效")
+    line_batches: Dict[int, str] = {}
+    raw_line_batches = request.get("line_batches")
+    if isinstance(raw_line_batches, dict):
+        for k, v in raw_line_batches.items():
+            try:
+                item_key = int(k)
+            except (TypeError, ValueError):
+                continue
+            batch_val = str(v or "").strip()
+            if item_key > 0 and batch_val:
+                line_batches[item_key] = batch_val
+    line_warehouses: Dict[int, int] = {}
+    raw_line_wh = request.get("line_warehouses")
+    if isinstance(raw_line_wh, dict):
+        for k, v in raw_line_wh.items():
+            try:
+                item_key = int(k)
+                wh_val = int(v)
+            except (TypeError, ValueError):
+                continue
+            if item_key > 0 and wh_val > 0:
+                line_warehouses[item_key] = wh_val
+    line_quantities: Dict[int, float] = {}
+    raw_line_qty = request.get("line_quantities")
+    if isinstance(raw_line_qty, dict):
+        for k, v in raw_line_qty.items():
+            try:
+                item_key = int(k)
+                qty_val = float(v)
+            except (TypeError, ValueError):
+                continue
+            if item_key > 0 and qty_val > 0:
+                line_quantities[item_key] = qty_val
+    line_location_codes: Dict[int, str] = {}
+    raw_line_loc = request.get("line_location_codes")
+    if isinstance(raw_line_loc, dict):
+        for k, v in raw_line_loc.items():
+            try:
+                item_key = int(k)
+            except (TypeError, ValueError):
+                continue
+            loc_val = str(v or "").strip()
+            if item_key > 0 and loc_val:
+                line_location_codes[item_key] = loc_val
+    from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+
+    source_items = await PurchaseReceiptItem.filter(tenant_id=tenant_id, id__in=selected_ids).only(
+        "receipt_id"
+    )
+    for rid in {int(i.receipt_id) for i in source_items}:
+        await _assert_purchase_receipt_visible(
+            tenant_id=tenant_id,
+            current_user=current_user,
+            receipt_id=rid,
+        )
+    try:
+        return await PurchaseReturnService().create_purchase_returns_from_purchase_receipt_items(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+            line_batches=line_batches or None,
+            line_warehouses=line_warehouses or None,
+            line_quantities=line_quantities or None,
+            line_location_codes=line_location_codes or None,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get(

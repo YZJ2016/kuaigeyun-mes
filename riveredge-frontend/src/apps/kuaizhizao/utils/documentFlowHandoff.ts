@@ -58,6 +58,7 @@ const WORK_ORDERS_LIST = '/apps/kuaizhizao/production-execution/work-orders';
 const PURCHASE_ORDER_LIST = '/apps/kuaizhizao/purchase-management/purchase-orders';
 const PURCHASE_ORDER_CREATE = `${PURCHASE_ORDER_LIST}/new`;
 const PURCHASE_INQUIRY_LIST = '/apps/kuaizhizao/purchase-management/purchase-inquiries';
+const PURCHASE_INQUIRY_CREATE = `${PURCHASE_INQUIRY_LIST}/new`;
 const PURCHASE_REQUISITION_LIST = '/apps/kuaizhizao/purchase-management/purchase-requisitions';
 const PURCHASE_REQUISITION_CREATE = `${PURCHASE_REQUISITION_LIST}/new`;
 
@@ -119,9 +120,9 @@ export const DOCUMENT_FLOW_HANDOFF_REGISTRY: Partial<
   },
   'purchase_inquiry.pull_from_requisition': {
     actionKey: 'purchase_inquiry.pull_from_requisition',
-    shell: 'formModal',
+    shell: 'uniTabEntry',
     targetListPath: PURCHASE_INQUIRY_LIST,
-    createPath: PURCHASE_INQUIRY_LIST,
+    createPath: PURCHASE_INQUIRY_CREATE,
     draftResourceKey: 'kuaizhizao:purchase-inquiry',
   },
   'purchase_order.pull_from_inquiry': {

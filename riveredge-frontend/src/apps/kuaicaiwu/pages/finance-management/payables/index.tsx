@@ -5,7 +5,7 @@ import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react'
 import { rowActionKind, rowActionMakePayment, rowActionIssueInvoice } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Typography, Modal, Spin, Alert, Table, Empty, Form } from 'antd';
+import { App, Button, Typography, Modal, Alert, Table, Empty, Form, theme } from 'antd';
 import { ModalForm, ProForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import type { ProFormInstance } from '@ant-design/pro-components';
 import { PlusOutlined } from '@ant-design/icons';
@@ -29,7 +29,11 @@ import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../.
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import {
+    ListPageTemplate,
+    MODAL_CONFIG,
+    MODAL_NESTED_ABOVE_PARENT_OFFSET,
+} from '../../../../../components/layout-templates';
 import { financeColFull, financeColHalf, financeFormGridProps } from '../../../utils/financeFormLayout';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
@@ -114,7 +118,11 @@ const PayableList: React.FC = () => {
     const [pullPreviewSourceId, setPullPreviewSourceId] = useState<number | null>(null);
     const [pullPreviewKind, setPullPreviewKind] = useState<PullPreviewKind | null>(null);
     const pullFromPurchaseOrderCloseRef = useRef<(() => void) | null>(null);
+    const pullFromPurchaseOrderOpenRef = useRef<(() => void) | null>(null);
     const pullFromPurchaseReceiptCloseRef = useRef<(() => void) | null>(null);
+    const pullFromPurchaseReceiptOpenRef = useRef<(() => void) | null>(null);
+    const { token } = theme.useToken();
+    const pullPreviewZIndex = token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET * 2;
     const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
     const [tableRows, setTableRows] = useState<Payable[]>([]);
     const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
@@ -336,24 +344,33 @@ const PayableList: React.FC = () => {
         pullForm.resetFields();
     };
 
-    const openPullPreview = async (kind: PullPreviewKind, sourceId: number) => {
+    const openPullPreview = async (
+        kind: PullPreviewKind,
+        sourceId: number,
+        options?: { closeSourceModal?: () => void; reopenSourceModal?: () => void },
+    ) => {
+        options?.closeSourceModal?.();
         setPullPreviewKind(kind);
-        setPullPreviewOpen(true);
+        setPullPreviewOpen(false);
         setPullPreviewLoading(true);
         setPullPreviewData(null);
         setPullPreviewSourceId(sourceId);
+        const hideLoading = messageApi.loading(t(`${P}.pullPreviewLoading`), 0);
         try {
             const data =
                 kind === 'purchase_order'
                     ? await payableService.previewPullFromPurchaseOrder(sourceId)
                     : await payableService.previewPullFromPurchaseReceipt(sourceId);
             setPullPreviewData(data);
+            setPullPreviewOpen(true);
         } catch (e: any) {
             messageApi.error(
                 e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
             );
             resetPullPreview();
+            options?.reopenSourceModal?.();
         } finally {
+            hideLoading();
             setPullPreviewLoading(false);
         }
     };
@@ -400,11 +417,14 @@ const PayableList: React.FC = () => {
                 messageApi.warning(t(`${P}.selectSource`, { label: pullFromPurchaseOrderAction.sourceLabel }));
                 return;
             }
-            pullFromPurchaseOrderCloseRef.current?.();
-            await openPullPreview('purchase_order', selected.id);
+            await openPullPreview('purchase_order', selected.id, {
+                closeSourceModal: () => pullFromPurchaseOrderCloseRef.current?.(),
+                reopenSourceModal: () => pullFromPurchaseOrderOpenRef.current?.(),
+            });
         },
     });
     pullFromPurchaseOrderCloseRef.current = pullFromPurchaseOrderQuery.closeModal;
+    pullFromPurchaseOrderOpenRef.current = pullFromPurchaseOrderQuery.openModal;
 
     const pullFromPurchaseReceiptQuery = useUniPullQuery<PayablePullCandidate>({
         rowKey: 'id',
@@ -440,6 +460,7 @@ const PayableList: React.FC = () => {
         },
     });
     pullFromPurchaseReceiptCloseRef.current = pullFromPurchaseReceiptQuery.closeModal;
+    pullFromPurchaseReceiptOpenRef.current = pullFromPurchaseReceiptQuery.openModal;
 
     const handlePullCreateSubmit = async (values: any) => {
         if (!pullPreviewData || !pullPreviewSourceId || !pullPreviewKind) {
@@ -1232,7 +1253,7 @@ const PayableList: React.FC = () => {
                 scopeOptions={pullFromPurchaseOrderQuery.scopeOptions}
                 scope={pullFromPurchaseOrderQuery.scope}
                 onScopeChange={pullFromPurchaseOrderQuery.handleScopeChange}
-                okText={t('common.next')}
+                okText={pullFromPurchaseOrderAction.targetLabel}
             />
 
             <UniPullQueryModal<PayablePullCandidate>
@@ -1265,18 +1286,19 @@ const PayableList: React.FC = () => {
                 scopeOptions={pullFromPurchaseReceiptQuery.scopeOptions}
                 scope={pullFromPurchaseReceiptQuery.scope}
                 onScopeChange={pullFromPurchaseReceiptQuery.handleScopeChange}
-                okText={t('common.next')}
+                okText={pullFromPurchaseReceiptAction.targetLabel}
             />
 
             <Modal
-                title={
-                    pullPreviewKind === 'purchase_receipt'
-                        ? pullFromPurchaseReceiptAction.label
-                        : pullFromPurchaseOrderAction.label
-                }
+                title={t(`${P}.pullFormTitle`)}
                 open={pullPreviewOpen}
                 destroyOnHidden
-                width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+                width={
+                    pullPreviewKind === 'purchase_receipt' && (pullPreviewData?.detail_lines?.length ?? 0) > 0
+                    ? MODAL_CONFIG.EXTRA_LARGE_WIDTH
+                    : MODAL_CONFIG.STANDARD_WIDTH
+                }
+                zIndex={pullPreviewZIndex}
                 onCancel={resetPullPreview}
                 okText={pullPreviewTargetLabel}
                 cancelText={t('common.cancel')}
@@ -1285,19 +1307,10 @@ const PayableList: React.FC = () => {
                     void handlePullPreviewOk();
                 }}
                 okButtonProps={{
-                    disabled:
-                        pullPreviewLoading ||
-                        !pullPreviewData ||
-                        !!pullPreviewData?.has_blocking_issues ||
-                        pullPreviewMaxPush <= 0,
+                    disabled: !pullPreviewData || pullPreviewMaxPush <= 0,
                 }}
             >
-                {pullPreviewLoading ? (
-                    <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-                        <Spin />
-                        <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
-                    </div>
-                ) : pullPreviewData ? (
+                {pullPreviewData ? (
                     <div>
                         <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPreviewData.summary}</p>
                         {pullPreviewData.has_blocking_issues && pullPreviewData.blocking_reason ? (

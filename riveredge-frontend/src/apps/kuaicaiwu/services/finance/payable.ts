@@ -4,13 +4,31 @@ import { Payable, PayableCreateData, PayableListParams, PaymentRecordCreate } fr
 
 const PAYABLE_API = '/apps/kuaicaiwu/payables';
 
+export type PayablePullReceiptDetailLine = {
+  line_no: number;
+  purchase_receipt_item_id: number;
+  material_code: string;
+  material_name: string;
+  material_spec?: string | null;
+  unit: string;
+  quantity: number;
+  unit_price: number;
+  amount: number;
+  occupied_amount: number;
+  max_push_amount: number;
+  max_push_quantity: number;
+};
+
 export type PayablePullPreview = DocumentPushPreview & {
   source_code?: string;
   source_type?: 'purchase_order' | 'purchase_receipt';
+  source_ids?: number[];
   supplier_id?: number;
   supplier_name?: string;
   purchase_order_id?: number | null;
   purchase_order_code?: string | null;
+  max_push_total?: number;
+  detail_lines?: PayablePullReceiptDetailLine[];
 };
 
 export type PayablePullCandidate = {

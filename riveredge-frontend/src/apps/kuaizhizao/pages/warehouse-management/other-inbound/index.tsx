@@ -1,7 +1,7 @@
 /**
  * 其他入库单管理页面
  *
- * 提供其他入库单的创建、查看、确认和管理功能（盘盈/调拨/样品/报废/其他）
+ * 提供其他入库单的创建、查看、确认和管理功能（原因类型见数据字典 INBOUND_REASON_TYPE）
  * 支持批号规则选择与自动生成批号
  *
  * @author RiverEdge Team
@@ -10,6 +10,10 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import OtherInboundEditModal from '../inbound/OtherInboundEditModal';
+import { isInboundEditable, type InboundHubOrder } from '../inbound/inboundHubTypes';
+import { readExternalWithdrawMessage } from '../shared/externalWithdrawMessage';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
@@ -20,12 +24,14 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, Row, Col, Select, Typography, Descriptions } from 'antd';
-import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ThunderboltOutlined, ShoppingOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ThunderboltOutlined, ShoppingOutlined, RollbackOutlined } from '@ant-design/icons';
+import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
-import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
+import { buildDocumentLineDualQuantityPairColumns } from '../../../../../components/quantity-with-unit';
+import { pickDocumentLineDualQuantityFields } from '../../../../../utils/materialDualQuantity';
 import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import { MaterialUnitLabel } from '../../../../../components/material-unit-label';
 import type { Material } from '../../../../master-data/types/material';
@@ -33,7 +39,7 @@ import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-sele
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import CodeField from '../../../../../components/code-field';
-import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
+import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import {   useDetailDrawerDescriptionItems, detailDrawerBasicColumn, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getOtherInboundLifecycle } from '../../../utils/otherInboundLifecycle';
@@ -59,11 +65,20 @@ import { renderWarehouseReasonTypeMarkerTag } from '../shared/warehouseMarkerTag
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
-import { formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import {
+  enrichStandaloneDocsWithDetail,
+  exportWarehouseDocLinesXlsx,
+  filterWarehouseFlatRowsByExportKeys,
+  flattenStandaloneWarehouseDocsForExport,
+  resolveWarehouseListExportHeaders,
+} from '../shared/warehouseDocListExport';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import {
   DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
@@ -76,12 +91,18 @@ import {
   resolveWarehouseDocListParams,
 } from '../../../utils/warehouseListCore';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { SyncPushHubButton } from '../../../../../components/sync-push-hub';
+import { useToolbarSyncPushFlags } from '../../../../../hooks/useToolbarSyncPushFlags';
+import OtherInboundDocumentPushPanel from './OtherInboundDocumentPushPanel';
+import { runInboundHubConfirmFromRecord } from '../inbound/inboundHubRunConfirm';
+import { formatApiErrorDetail } from '../../../../../services/api';
 
 const REASON_TYPES_FALLBACK = [
   { value: '盘盈', label: '盘盈' },
   { value: '调拨', label: '调拨' },
   { value: '样品', label: '样品' },
   { value: '报废', label: '报废' },
+  { value: '生产完工入库', label: '生产完工入库' },
   { value: '降级回用', label: '降级回用' },
   { value: '其他', label: '其他' },
 ];
@@ -92,6 +113,7 @@ const REASON_TYPE_I18N: Record<string, string> = {
   '调拨入库': 'app.kuaizhizao.warehouseOtherInbound.reason.transfer',
   '样品': 'app.kuaizhizao.warehouseOtherInbound.reason.sample',
   '报废': 'app.kuaizhizao.warehouseOtherInbound.reason.scrap',
+  '生产完工入库': 'app.kuaizhizao.warehouseOtherInbound.reason.productionFinished',
   '降级回用': 'app.kuaizhizao.warehouseOtherInbound.reason.downgrade',
   '其他': 'app.kuaizhizao.warehouseOtherInbound.reason.other',
 };
@@ -157,7 +179,8 @@ const defaultInboundItem = {
   material_name: '',
   material_unit: '',
   inbound_quantity: 1,
-  unit_price: 0,
+  // 单价选填，不自动带物料采购价/成本
+  unit_price: undefined as number | undefined,
   material_uuid: undefined,
   batch_managed: false,
   serial_managed: false,
@@ -174,6 +197,10 @@ const OTHER_INBOUND_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_other_inbounds';
 
 const OtherInboundPage: React.FC = () => {
   const { t } = useTranslation();
+  const otherInboundAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<Record<string, unknown>>({ t }),
+    [t],
+  );
   const trackingFlags = useWarehouseTrackingFlags();
   const { quantity: quantityDecimals, price: priceDecimals } = useNumericPrecision();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
@@ -182,6 +209,10 @@ const OtherInboundPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
+  const toolbarSyncPush = useToolbarSyncPushFlags('kuaizhizao:other-inbound');
+  const inboundPerms = useResourcePermissions('kuaizhizao:other-inbound');
+  const canUpdateInbound = inboundPerms.canUpdate ?? false;
+  const [editModalRecord, setEditModalRecord] = useState<InboundHubOrder | null>(null);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [inboundDetail, setInboundDetail] = useState<OtherInboundDetail | null>(null);
@@ -247,13 +278,8 @@ const OtherInboundPage: React.FC = () => {
     const loadReasonType = async () => {
       setReasonTypeLoading(true);
       try {
-        const dictList = await getDataDictionaryList({
-          code: 'INBOUND_REASON_TYPE',
-          page: 1,
-          page_size: 1,
-        });
-        const dict = dictList.items?.[0];
-        if (!dict) {
+        const dict = await getDataDictionaryByCode('INBOUND_REASON_TYPE');
+        if (!dict?.uuid) {
           setReasonTypeOptions(fallbackReasonTypeOptions);
           return;
         }
@@ -284,6 +310,34 @@ const OtherInboundPage: React.FC = () => {
 
   const otherInboundCustomFieldColumns = generateOtherInboundCustomFieldColumns();
   const otherInboundStatusValueEnum = useMemo(() => buildOtherInboundStatusValueEnum(t), [t]);
+
+  const executeConfirmInbound = useCallback(
+    async (record: OtherInbound) => {
+      if (record.id == null) return;
+      try {
+        const confirmResult = await runInboundHubConfirmFromRecord({
+          t,
+          record: { id: record.id, receipt_type: 'other_inbound' },
+          trackingFlags,
+        });
+        messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.otherInboundConfirmed'));
+        if (confirmResult.externalPushMessage) {
+          messageApi.warning(confirmResult.externalPushMessage);
+        }
+        invalidateMenuBadgeCounts();
+        actionRef.current?.reload();
+      } catch (error: unknown) {
+        const err = error as { message?: string; response?: { data?: { detail?: unknown } } };
+        messageApi.error(
+          formatApiErrorDetail(err?.response?.data?.detail) ||
+            err?.message ||
+            t('app.kuaizhizao.warehouseInbound.msg.confirmFailed'),
+        );
+        throw error;
+      }
+    },
+    [invalidateMenuBadgeCounts, messageApi, t, trackingFlags],
+  );
 
   const columns: ProColumns<OtherInbound>[] = useMemo(
     () => alignProColumns<OtherInbound>([
@@ -399,6 +453,7 @@ const OtherInboundPage: React.FC = () => {
         render: (_, r) => (r.receipt_time ? formatDateTime(r.receipt_time) : '-'),
       },
       ...buildDocumentAuditColumns<Record<string, unknown>>(t),
+      otherInboundAuditColumn,
       {
         title: t('app.kuaizhizao.warehouseOtherInbound.col.lifecycle'),
         dataIndex: 'lifecycle_stage',
@@ -426,47 +481,35 @@ const OtherInboundPage: React.FC = () => {
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => {
+          const hubRecord: InboundHubOrder = { ...record, receipt_type: 'other_inbound' };
           const actions: React.ReactNode[] = [
             <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)} />,
           ];
-          if (record.status === '待入库') {
+          if (canUpdateInbound && isInboundEditable(hubRecord)) {
             actions.push(
-              <ActionConfirmPopconfirm title={t('app.kuaizhizao.warehouseOtherInbound.confirm.title')} description={t('app.kuaizhizao.warehouseOtherInbound.confirm.content', { code: record.inbound_code })} onConfirm={() => executeConfirm(record)}>
               <Button
-                key="confirm"
-                {...rowActionKind('execute')}
-                {...rowActionLabelKeep()}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {t('app.kuaizhizao.warehouseOtherInbound.action.confirmInbound')}
-              </Button>
-            </ActionConfirmPopconfirm>,
-            );
-            actions.push(
-              <ActionConfirmPopconfirm title={t('app.kuaizhizao.warehouseOtherInbound.confirm.deleteTitle')} description={t('app.kuaizhizao.warehouseOtherInbound.confirm.deleteContent', { code: record.inbound_code })} onConfirm={() => executeDelete(record)}>
-              <Button key="delete" {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
-            </ActionConfirmPopconfirm>,
-            );
-          }
-          if (record.status === '已入库') {
-            actions.push(
-              <ActionConfirmPopconfirm title={t('app.kuaizhizao.warehouseOtherInbound.confirm.withdrawTitle')} description={t('app.kuaizhizao.warehouseOtherInbound.confirm.withdrawContent', { code: record.inbound_code })} onConfirm={() => executeWithdraw(record)}>
-              <Button
-                key="withdraw"
-                {...rowActionKind('revoke')}
-                {...rowActionLabelKeep()}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {t('app.kuaizhizao.warehouseOtherInbound.action.withdraw')}
-              </Button>
-            </ActionConfirmPopconfirm>,
+                key="edit"
+                {...rowActionKind('update')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditModalRecord(hubRecord);
+                }}
+              />,
             );
           }
           return <Space>{actions}</Space>;
         },
       },
     ], WAREHOUSE_DOC_LIST_FIELD_RANK),
-    [t, otherInboundCustomFieldColumns, otherInboundStatusValueEnum, reasonTypeOptions, reasonTypeLoading],
+    [
+      t,
+      otherInboundAuditColumn,
+      otherInboundCustomFieldColumns,
+      otherInboundStatusValueEnum,
+      reasonTypeOptions,
+      reasonTypeLoading,
+      canUpdateInbound,
+    ],
   );
 
   const handleDetail = async (record: OtherInbound) => {
@@ -485,17 +528,6 @@ const OtherInboundPage: React.FC = () => {
       setDetailDrawerVisible(false);
     } finally {
       setDetailLoading(false);
-    }
-  };
-
-  const executeConfirm = async (record: OtherInbound) => {
-    try {
-      await warehouseApi.otherInbound.confirm(record.id!.toString());
-      messageApi.success(t('app.kuaizhizao.warehouseOtherInbound.msg.confirmSuccess'));
-      invalidateMenuBadgeCounts();
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.warehouseOtherInbound.msg.confirmFailed'));
     }
   };
 
@@ -528,6 +560,32 @@ const OtherInboundPage: React.FC = () => {
     [selectedRowKeys],
   );
 
+  const selectedOtherInboundCapabilityRows = useMemo(
+    () =>
+      selectedOtherInboundForBatch.map((row) => ({
+        ...row,
+        capabilities: {
+          confirm: { allowed: row.status === '待入库' },
+          withdraw: { allowed: row.status === '已入库' },
+        },
+      })),
+    [selectedOtherInboundForBatch],
+  );
+
+  const reloadOtherInboundAfterCapability = useCallback(() => {
+    setSelectedRowKeys([]);
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+  }, [invalidateMenuBadgeCounts]);
+
+  const selectedOtherInboundIdsForDocumentPush = useMemo(
+    () =>
+      selectedOtherInboundForBatch
+        .filter((row) => Number(row.id) > 0)
+        .map((row) => Number(row.id)),
+    [selectedOtherInboundForBatch],
+  );
+
   const canToolbarPrint =
     selectedRowKeys.length === 1 &&
     !!selectedOtherInboundForBatch[0] &&
@@ -555,7 +613,12 @@ const OtherInboundPage: React.FC = () => {
 
   const executeWithdraw = async (record: OtherInbound) => {
     try {
-      await warehouseApi.otherInbound.withdraw(record.id!.toString());
+      const kingdeeWarn = readExternalWithdrawMessage(
+        await warehouseApi.otherInbound.withdraw(record.id!.toString()),
+      );
+      if (kingdeeWarn) {
+        messageApi.warning(kingdeeWarn);
+      }
       messageApi.success(t('app.kuaizhizao.warehouseOtherInbound.msg.withdrawSuccess'));
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
@@ -574,7 +637,7 @@ const OtherInboundPage: React.FC = () => {
             material_id: m.id,
             material_code: m.mainCode ?? m.code ?? '',
             material_name: m.name ?? '',
-            material_unit: m.baseUnit ?? '',
+            material_unit: m.inventoryUnit ?? m.baseUnit ?? '',
             material_uuid: m.uuid,
             batch_managed: isMaterialBatchEntryEnabled(trackingFlags, m.batchManaged ?? false),
             serial_managed: isMaterialSerialEntryEnabled(trackingFlags, m.serialManaged ?? false),
@@ -626,6 +689,40 @@ const OtherInboundPage: React.FC = () => {
         messageApi.error(t('app.kuaizhizao.warehouseOtherInbound.msg.needValidLine'));
         throw new Error(t('app.kuaizhizao.warehouseOtherInbound.msg.needValidLine'));
       }
+      for (const it of validItems) {
+        const material = it.material_code || it.material_name || '-';
+        if (!String(it.location_code || '').trim()) {
+          messageApi.error(
+            t('app.kuaizhizao.warehouseInbound.msg.selectLocationForMaterial', { material }),
+          );
+          throw new Error(
+            t('app.kuaizhizao.warehouseInbound.msg.selectLocationForMaterial', { material }),
+          );
+        }
+        if (it.batch_managed && !String(it.batch_number ?? '').trim()) {
+          const msg = t('app.kuaizhizao.warehouseOutbound.confirm.batchRequired', {
+            material,
+            batches: '—',
+          });
+          messageApi.error(msg);
+          throw new Error(msg);
+        }
+        if (it.serial_managed) {
+          const qty = Math.floor(Number(it.inbound_quantity) || 0);
+          const serials = (Array.isArray(it.serial_numbers) ? it.serial_numbers : [])
+            .map((s: unknown) => String(s ?? '').trim())
+            .filter(Boolean);
+          if (serials.length !== qty) {
+            const msg = t('app.kuaizhizao.warehouseOutbound.entry.serialCountMismatch', {
+              material,
+              required: qty,
+              actual: serials.length,
+            });
+            messageApi.error(msg);
+            throw new Error(msg);
+          }
+        }
+      }
       const wh = warehouseList.find((w: any) => (w.id ?? w.warehouse_id) === values.warehouse_id);
       const warehouseName = values.warehouse_name ?? wh?.name ?? wh?.warehouse_name ?? '';
       const { standardValues, customData } = extractOtherInboundFormValues(values);
@@ -644,6 +741,7 @@ const OtherInboundPage: React.FC = () => {
           material_name: it.material_name || '',
           material_unit: it.material_unit || '',
           location_code: it.location_code || undefined,
+          ...pickDocumentLineDualQuantityFields(it as Record<string, unknown>),
           inbound_quantity: Number(it.inbound_quantity) || 0,
           unit_price: Number(it.unit_price) || 0,
           batch_number: it.batch_number || undefined,
@@ -807,8 +905,16 @@ const OtherInboundPage: React.FC = () => {
       },
       { title: t('app.kuaizhizao.warehouseOtherInbound.col.location'), dataIndex: 'location_code', width: 100, ellipsis: true },
       { title: t('app.kuaizhizao.warehouseOtherInbound.col.inboundQty'), dataIndex: 'inbound_quantity', width: 100, align: 'right' as const },
-      { title: t('app.kuaizhizao.warehouseOtherInbound.col.unitPrice'), dataIndex: 'unit_price', width: 100, align: 'right' as const },
-      { title: t('app.kuaizhizao.warehouseOtherInbound.col.amount'), dataIndex: 'total_amount', width: 100, align: 'right' as const },
+      {
+        title: t('app.kuaizhizao.warehouseOtherInbound.col.unitPrice'),
+        dataIndex: 'unit_price',
+        width: 100,
+        align: 'right' as const,
+        render: (v: unknown) => {
+          const n = Number(v);
+          return Number.isFinite(n) && n > 0 ? String(v) : '—';
+        },
+      },
       { title: t('app.kuaizhizao.warehouseOtherInbound.col.batchNo'), dataIndex: 'batch_number', width: 120, ellipsis: true },
       {
         title: t('app.kuaizhizao.warehouseOtherInbound.col.serialNo'),
@@ -885,7 +991,7 @@ const OtherInboundPage: React.FC = () => {
           headerTitle={t('app.kuaizhizao.warehouseOtherInbound.title')}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.otherInbound)}
-          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.other-inbound-width-v3"
+          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.other-inbound-width-v4"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -905,7 +1011,87 @@ const OtherInboundPage: React.FC = () => {
           }}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
+          showSyncButton={toolbarSyncPush.hubVisible && toolbarSyncPush.pushEnabled}
+          onSync={() => undefined}
+          syncToolbarExtra={
+            toolbarSyncPush.hubVisible && toolbarSyncPush.pushEnabled
+              ? () => (
+                  <SyncPushHubButton
+                    syncEnabled={false}
+                    pushEnabled={toolbarSyncPush.pushEnabled}
+                    historySourceType="other_inbound"
+                    historyTargetProfiles={['kingdee_im_otherinbill']}
+                    size="middle"
+                    renderPushPanel={({ active, close }) => (
+                      <OtherInboundDocumentPushPanel
+                        embedded
+                        open={active}
+                        onClose={close}
+                        inboundIds={selectedOtherInboundIdsForDocumentPush}
+                        onComplete={() => {
+                          actionRef.current?.reload?.();
+                          close();
+                        }}
+                      />
+                    )}
+                  />
+                )
+              : undefined
+          }
           showDeleteButton
+          deleteButtonText={t('common.delete')}
+          toolBarActionsAfterBatch={[
+            <UniCapabilityBatchButton
+              key="other-inbound-confirm"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedOtherInboundCapabilityRows}
+              capabilityKey="confirm"
+              permAllowed={inboundPerms.canAction?.('execute') ?? false}
+              onRun={async (id) => {
+                const row = selectedOtherInboundForBatch.find((r) => Number(r.id) === id);
+                if (!row) {
+                  throw new Error(t('app.kuaizhizao.warehouseInbound.msg.notConfirmable'));
+                }
+                await runInboundHubConfirmFromRecord({
+                  t,
+                  record: { id: row.id, receipt_type: 'other_inbound' },
+                  trackingFlags,
+                });
+              }}
+              onSuccess={reloadOtherInboundAfterCapability}
+              requireConfirm
+              labels={{
+                single: t('app.kuaizhizao.warehouseInbound.action.confirmInbound'),
+                batch: t('app.kuaizhizao.warehouseInbound.action.confirmInbound'),
+                singleConfirmTitle: t('app.kuaizhizao.warehouseInbound.action.confirmInbound'),
+              }}
+              icon={<CheckCircleOutlined />}
+              size="medium"
+              color="green"
+              variant="solid"
+            />,
+            <UniCapabilityBatchButton
+              key="other-inbound-withdraw"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedOtherInboundCapabilityRows}
+              capabilityKey="withdraw"
+              permAllowed={inboundPerms.canAction?.('revoke') ?? false}
+              onRun={async (id) => {
+                await warehouseApi.otherInbound.withdraw(String(id));
+              }}
+              onSuccess={reloadOtherInboundAfterCapability}
+              requireConfirm
+              labels={{
+                single: t('app.kuaizhizao.warehouseOtherInbound.action.withdrawInbound'),
+                batch: t('app.kuaizhizao.warehouseOtherInbound.action.withdrawInbound'),
+                singleConfirmTitle: t('app.kuaizhizao.warehouseOtherInbound.confirm.withdrawTitle'),
+              }}
+              icon={<RollbackOutlined />}
+              size="medium"
+              color="orange"
+              variant="solid"
+            />,
+          ]}
           rowSelectionGetCheckboxProps={(record) => ({
             disabled: !isOtherInboundDeletable(record) && !isOtherInboundPrintable(record),
           })}
@@ -916,6 +1102,57 @@ const OtherInboundPage: React.FC = () => {
               noun: t('app.kuaizhizao.warehouseOtherInbound.title'),
             })
           }
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            try {
+              const loadAll = async () => {
+                const searchFormValues: Record<string, unknown> = {};
+                const listParams = resolveWarehouseDocListParams(searchFormValues, undefined, {
+                  docDateParamPrefix: 'receipt',
+                });
+                const rows = await fetchAllListItems((p) =>
+                  warehouseApi.otherInbound.list({ ...listParams, ...p }),
+                );
+                return enrichOtherInboundRecordsWithCustomFields(rows);
+              };
+              const headers = await resolveWarehouseListExportHeaders(
+                type,
+                keys,
+                pageData as OtherInbound[] | undefined,
+                listRowsRef.current,
+                loadAll,
+              );
+              if (headers.length === 0) {
+                messageApi.warning(t('common.exportNoData'));
+                return;
+              }
+              const enriched = await enrichStandaloneDocsWithDetail(headers, (id) =>
+                warehouseApi.otherInbound.get(String(id)),
+              );
+              let flatRows = flattenStandaloneWarehouseDocsForExport(enriched, {
+                docCodeField: 'inbound_code',
+                docTypeLabel: t('app.kuaizhizao.warehouseInbound.receiptType.other_inbound'),
+                dateFields: ['receipt_time'],
+                operatorFields: ['receiver_name'],
+              });
+              if (type === 'selected' && keys?.length) {
+                flatRows = filterWarehouseFlatRowsByExportKeys(flatRows, keys);
+              }
+              await exportWarehouseDocLinesXlsx(
+                flatRows,
+                `other-inbound-lines-${todaySiteDateString()}.xlsx`,
+                {
+                  t,
+                  sheetName: t('app.kuaizhizao.warehouseOtherInbound.title'),
+                  includeDocTypeColumn: false,
+                  direction: 'standalone',
+                },
+              );
+              messageApi.success(t('common.exportSuccess', { count: flatRows.length }));
+            } catch (error: unknown) {
+              messageApi.error((error as { message?: string })?.message || t('common.exportFailed'));
+            }
+          }}
           request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             try {
               const listParams = resolveWarehouseDocListParams(searchFormValues, sort, {
@@ -1103,49 +1340,31 @@ const OtherInboundPage: React.FC = () => {
                       </AntForm.Item>
                     ),
                   },
-                  {
-                    title: t('common.unit'),
-                    dataIndex: 'material_unit',
-                    width: 100,
-                    render: (_: any, __: any, index: number) => (
-                      <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
-                        {({ getFieldValue }) => {
-                          const materialId = getFieldValue(['items', index, 'material_id']);
-                          if (!formRef.current) return null;
-                          return (
-                            <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                              <DocumentLineUnitSelect
-                                form={formRef.current}
-                                listName="items"
-                                rowIndex={index}
-                                fields={{ quantity: 'inbound_quantity', unit: 'material_unit' }}
-                                materialId={materialId}
-                                size="small"
-                                noStyle
-                              />
-                            </AntForm.Item>
-                          );
-                        }}
-                      </AntForm.Item>
-                    ),
-                  },
-                  {
-                    title: t('common.quantity'),
-                    dataIndex: 'inbound_quantity',
-                    width: 100,
-                    align: 'right' as const,
-                    render: (_: any, __: any, index: number) => (
-                      <AntForm.Item name={[index, 'inbound_quantity']} rules={[{ required: true, message: t('app.kuaizhizao.warehouseOtherInbound.field.required') }, { type: 'number', min: 0.01, message: t('app.kuaizhizao.warehouseOtherInbound.field.quantityMin') }]} style={{ margin: 0 }}>
-                        <InputNumber placeholder={t('common.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size="small" />
-                      </AntForm.Item>
-                    ),
-                  },
+                  ...buildDocumentLineDualQuantityPairColumns({
+                    t,
+                    getForm: () => formRef.current,
+                    quantityField: 'inbound_quantity',
+                    unitField: 'material_unit',
+                    scenario: 'inventory',
+                    quantityPrecision: quantityDecimals,
+                    width: 168,
+                    columnSpread: { align: 'right' as const },
+                  }),
                   {
                     title: t('app.kuaizhizao.warehouseOtherInbound.col.location'),
                     dataIndex: 'location_code',
                     width: 150,
                     render: (_: any, __: any, index: number) => (
-                      <AntForm.Item name={[index, 'location_code']} style={{ margin: 0 }}>
+                      <AntForm.Item
+                        name={[index, 'location_code']}
+                        style={{ margin: 0 }}
+                        rules={[
+                          {
+                            required: true,
+                            message: t('app.kuaizhizao.warehouseOtherInbound.field.selectLocation'),
+                          },
+                        ]}
+                      >
                         <Select
                           options={locationOptions}
                           placeholder={selectedWarehouseId ? t('app.kuaizhizao.warehouseOtherInbound.field.selectLocation') : t('app.kuaizhizao.warehouseOtherInbound.field.selectWarehouseFirst')}
@@ -1153,7 +1372,6 @@ const OtherInboundPage: React.FC = () => {
                           size="small"
                           showSearch
                           optionFilterProp="label"
-                          allowClear
                           disabled={!selectedWarehouseId}
                         />
                       </AntForm.Item>
@@ -1286,6 +1504,17 @@ const OtherInboundPage: React.FC = () => {
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendOtherInboundItemsFromMaterials}
       />
+      <OtherInboundEditModal
+        open={editModalRecord != null}
+        record={editModalRecord}
+        onClose={() => setEditModalRecord(null)}
+        onSuccess={() => {
+          invalidateMenuBadgeCounts();
+          actionRef.current?.reload();
+          setEditModalRecord(null);
+        }}
+      />
+
       {PrintModal}
     </>
   );

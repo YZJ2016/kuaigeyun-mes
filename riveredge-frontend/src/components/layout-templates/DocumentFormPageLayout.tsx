@@ -19,6 +19,7 @@ export interface DocumentFormPageLayoutProps {
 
 /**
  * 独立新建/编辑页布局：顶栏固定，表单内容区单独滚动。
+ * 内容区统一包一层白底 Card，与各列表页卡片视觉一致。
  */
 export function DocumentFormPageLayout({
   header,

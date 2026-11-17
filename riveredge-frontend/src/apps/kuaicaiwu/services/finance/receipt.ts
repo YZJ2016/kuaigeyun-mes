@@ -56,6 +56,7 @@ export type ReceiptPullPreview = DocumentPushPreview & {
   customer_name?: string;
   receivable_id?: number | null;
   receivable_code?: string | null;
+  max_push_total?: number;
 };
 
 export type ReceiptPullCandidate = {

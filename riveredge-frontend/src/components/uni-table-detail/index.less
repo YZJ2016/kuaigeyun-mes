@@ -71,6 +71,7 @@
 
     /* antd v6 固定右列类名为 fix-end；同时保留旧版 fix-right 以兼容 */
     .ant-table-thead > tr > th.uni-detail-fixed-op-header,
+    .ant-table-thead > tr > th.uni-detail-fixed-amount-header,
     .ant-table-thead > tr > th.ant-table-cell-fix-end,
     .ant-table-thead > tr > th.ant-table-cell-fix-right,
     .ant-table-thead > tr > th.ant-table-cell-fix-right-first {
@@ -81,6 +82,11 @@
     .ant-table-tbody > tr > td.ant-table-cell-fix-end,
     .ant-table-tbody > tr > td.ant-table-cell-fix-right,
     .ant-table-tbody > tr > td.ant-table-cell-fix-right-first {
+      background: var(--ant-color-bg-container, #ffffff) !important;
+    }
+
+    .ant-table-summary > tr > td.uni-detail-fixed-amount-summary,
+    .ant-table-summary > tr > td.uni-detail-fixed-op-summary {
       background: var(--ant-color-bg-container, #ffffff) !important;
     }
 

@@ -9,6 +9,8 @@ from typing import Dict, List, Optional, Sequence
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
+from core.utils.amount_precision import quantize_business_amount
+
 from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.kuaizhizao.models.outsource_settlement import OutsourceSettlement, OutsourceSettlementItem
 from apps.kuaizhizao.models.outsource_work_order import (
@@ -185,8 +187,10 @@ class OutsourceSettlementService:
             raise ValidationError(f"收货单 {receipt.code} 结算数量须大于 0")
         if qty > settleable:
             raise ValidationError(f"收货单 {receipt.code} 可结算数量 {settleable}，超出 {qty}")
+        from apps.kuaizhizao.utils.document_amount_write import line_total_qty_unit_price
+
         unit_price = Decimal(str(item.unit_price))
-        amount = (qty * unit_price).quantize(Decimal("0.01"))
+        amount = line_total_qty_unit_price(qty, unit_price)
         return {
             "line_no": line_no,
             "line_type": LINE_TYPE_PROCESSING,
@@ -226,7 +230,10 @@ class OutsourceSettlementService:
         previews = await OutsourceMaterialDeductionService.preview_deductions(
             tenant_id, supplier_id=supplier_id, work_order_ids=[wo_id]
         )
-        basis_amount = Decimal(str(item.deduction_basis_amount)).quantize(Decimal("0.01"))
+        from core.utils.amount_precision import quantize_business_amount
+        from apps.kuaizhizao.utils.document_amount_write import line_total_qty_unit_price
+
+        basis_amount = quantize_business_amount(Decimal(str(item.deduction_basis_amount)), 2)
         matching = [
             p for p in previews
             if p.outsource_work_order_id == wo_id
@@ -238,7 +245,7 @@ class OutsourceSettlementService:
 
         qty = Decimal(str(item.settlement_quantity))
         unit_price = Decimal(str(item.unit_price))
-        expected_amount = (qty * unit_price).quantize(Decimal("0.01"))
+        expected_amount = line_total_qty_unit_price(qty, unit_price)
         if expected_amount != basis_amount:
             raise ValidationError(f"工单 {work_order.code} 扣款金额与快照不一致")
 
@@ -317,7 +324,7 @@ class OutsourceSettlementService:
                 total -= amount
             else:
                 total += amount
-        return total.quantize(Decimal("0.01"))
+        return quantize_business_amount(total, 2)
 
     @classmethod
     async def _load_items(cls, tenant_id: int, settlement_id: int) -> List[OutsourceSettlementItem]:
@@ -731,7 +738,7 @@ class OutsourceSettlementService:
                 continue
             proc_cost = Decimal(str(receipt.processing_unit_cost or receipt.unit_price or 0))
             delta = (Decimal(str(item.unit_price)) - proc_cost) * Decimal(str(item.settlement_quantity))
-            delta = delta.quantize(Decimal("0.01"))
+            delta = quantize_business_amount(delta, 2)
             if delta == 0:
                 continue
             await cost_svc.adjust_material_cost_for_outsource_settlement(
@@ -800,7 +807,7 @@ class OutsourceSettlementService:
                 tenant_id, receipt_ids
             )
             settlement_total = Decimal(str(row.total_amount or 0))
-            diff = (settlement_total - provisional).quantize(Decimal("0.01"))
+            diff = quantize_business_amount(settlement_total - provisional, 2)
 
             payable_id = await OutsourceSettlementFinanceBridge.create_settlement_payable_delta(
                 tenant_id=tenant_id,
@@ -988,17 +995,20 @@ class OutsourceSettlementService:
             (Decimal(str(p.total_amount or 0)) for p in settlement_payables), Decimal("0")
         )
 
-        unsettled = (processing_total - settled_total - deduction_total).quantize(Decimal("0.01"))
+        unsettled = quantize_business_amount(
+            processing_total - settled_total - deduction_total,
+            2,
+        )
 
         return OutsourceSettlementReconciliationPreviewResponse(
             supplier_id=supplier.id,
             supplier_name=supplier.name,
-            processing_total=processing_total.quantize(Decimal("0.01")),
-            deduction_total=deduction_total.quantize(Decimal("0.01")),
-            settled_total=settled_total.quantize(Decimal("0.01")),
+            processing_total=quantize_business_amount(processing_total, 2),
+            deduction_total=quantize_business_amount(deduction_total, 2),
+            settled_total=quantize_business_amount(settled_total, 2),
             unsettled_total=unsettled,
             provisional_payable_total=provisional,
-            settlement_payable_total=settlement_payable_total.quantize(Decimal("0.01")),
+            settlement_payable_total=quantize_business_amount(settlement_payable_total, 2),
         )
 
     @classmethod
@@ -1024,7 +1034,10 @@ class OutsourceSettlementService:
             )
             for p in payables
         ]
-        total = sum((p.amount for p in preview_items), Decimal("0")).quantize(Decimal("0.01"))
+        total = quantize_business_amount(
+            sum((p.amount for p in preview_items), Decimal("0")),
+            2,
+        )
         return OutsourceSettlementInvoicePreviewResponse(
             settlement_id=row.id,
             supplier_id=row.supplier_id,

@@ -480,7 +480,9 @@ class SalesOrderService:
 
     @staticmethod
     def _money(value: Decimal) -> Decimal:
-        return Decimal(str(value or 0)).quantize(Decimal("0.01"))
+        from core.utils.amount_precision import quantize_business_amount
+
+        return quantize_business_amount(Decimal(str(value or 0)), 2)
 
     @staticmethod
     def _merged_delivery_progress(
@@ -863,45 +865,25 @@ class SalesOrderService:
         source_amounts: List[Decimal],
         target_total: Decimal,
     ) -> List[Decimal]:
-        """
-        P1-S-004: 整单金额覆盖 + 尾差平摊。
-        - 按原始行金额占比分配目标总额
-        - 按“最大余数法”分配分币尾差，确保行合计严格等于目标总额
-        """
+        """整单金额覆盖：按行金额权重分摊，末行吃尾差（与付款申请 allocate_amount_by_weights 同源）。"""
+        from apps.kuaizhizao.utils.document_amount_write import allocate_amount_by_weights
+
         if not source_amounts:
             return []
 
         target = cls._money(target_total)
         if target < Decimal("0"):
             target = Decimal("0")
-        target_cents = int((target * 100).to_integral_value())
 
         normalized = [cls._money(max(Decimal("0"), Decimal(str(v or 0)))) for v in source_amounts]
-        subtotal = sum(normalized, Decimal("0"))
-        if subtotal <= Decimal("0"):
+        if sum(normalized, Decimal("0")) <= Decimal("0"):
             out = [Decimal("0.00") for _ in normalized]
-            out[0] = target
+            if out:
+                out[0] = target
             return out
 
-        raw_cents: List[Decimal] = [
-            (Decimal(target_cents) * amt / subtotal) if amt > 0 else Decimal("0")
-            for amt in normalized
-        ]
-        base_cents: List[int] = [int(v) for v in raw_cents]
-        residual = target_cents - sum(base_cents)
-
-        # 最大余数优先补分，保证总额守恒且分配尽量公平
-        if residual > 0:
-            frac_pairs = sorted(
-                [(raw_cents[i] - Decimal(base_cents[i]), i) for i in range(len(base_cents))],
-                key=lambda x: x[0],
-                reverse=True,
-            )
-            for n in range(residual):
-                _, idx = frac_pairs[n % len(frac_pairs)]
-                base_cents[idx] += 1
-
-        return [Decimal(c) / Decimal("100") for c in base_cents]
+        parts = allocate_amount_by_weights(target, normalized)
+        return [cls._money(p) for p in parts]
 
     async def _log_state_transition(
         self,
@@ -4500,7 +4482,9 @@ class SalesOrderService:
             if mid > 0:
                 remaining_cursor[mid] = remain - qty
             unit_price = Decimal(str(it.unit_price or 0))
-            item_amount = (qty * unit_price).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            from apps.kuaizhizao.utils.document_amount_write import line_total_qty_unit_price
+
+            item_amount = line_total_qty_unit_price(qty, unit_price)
             total_qty += qty
             total_amt += item_amount
             material_code, material_name = self._resolve_item_material_display(it, material_fallback)
@@ -6365,7 +6349,12 @@ class SalesOrderService:
                     header_wh_id = line_wh_id
                     header_wh_name = line_wh_name
 
-                amt = qty * (it.unit_price or Decimal("0"))
+                amt = ShipmentNoticeService._shipment_notice_line_amount(
+                    qty,
+                    it.unit_price or Decimal("0"),
+                    sales_order_item=it,
+                    price_type=getattr(order, "price_type", None),
+                )
                 await ShipmentNoticeItem.create(
                     tenant_id=tenant_id,
                     notice_id=notice.id,
@@ -6602,7 +6591,13 @@ class SalesOrderService:
                     if header_wh_id is None:
                         header_wh_id = line_wh_id
                         header_wh_name = line_wh_name
-                    amt = qty * (it.unit_price or Decimal("0"))
+                    order = order_by_id[int(it.sales_order_id)]
+                    amt = ShipmentNoticeService._shipment_notice_line_amount(
+                        qty,
+                        it.unit_price or Decimal("0"),
+                        sales_order_item=it,
+                        price_type=getattr(order, "price_type", None),
+                    )
                     await ShipmentNoticeItem.create(
                         tenant_id=tenant_id,
                         notice_id=notice.id,

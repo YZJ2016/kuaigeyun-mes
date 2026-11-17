@@ -88,6 +88,8 @@ export interface PurchaseInquiry {
   buyer_id?: number;
   buyer_name?: string;
   buyer_phone?: string;
+  department_id?: number | null;
+  department_name?: string | null;
   currency?: string;
   exchange_rate?: number;
   invoice_type?: string;
@@ -109,6 +111,7 @@ export interface PurchaseInquiry {
   quotes?: PurchaseSupplierQuote[];
   lifecycle?: Record<string, unknown>;
   capabilities?: PurchaseInquiryCapabilities;
+  audit?: { phase?: string; allowed_actions?: string[] };
 }
 
 export interface ComparisonCell {
@@ -336,6 +339,10 @@ export async function previewPushInquiryToPurchaseOrder(inquiryId: number): Prom
 
 export async function submitPurchaseInquiry(id: number): Promise<PurchaseInquiry> {
   return apiRequest(`/apps/kuaizhizao/purchase-inquiries/${id}/submit`, { method: 'POST' });
+}
+
+export async function submitPurchaseInquiryForReview(id: number): Promise<PurchaseInquiry> {
+  return apiRequest(`/core/uni-audit/purchase_inquiry/${id}/submit_review`, { method: 'POST' });
 }
 
 export async function approvePurchaseInquiry(id: number, approved: boolean, review_remarks?: string): Promise<PurchaseInquiry> {

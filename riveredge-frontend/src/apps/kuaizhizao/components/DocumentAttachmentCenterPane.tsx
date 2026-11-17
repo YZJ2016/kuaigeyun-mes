@@ -11,6 +11,7 @@ import {
   PaperClipOutlined,
   UploadOutlined,
 } from '@ant-design/icons';
+import { ProForm } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { SecureImage } from '../../../components/secure-image';
 import FilePreviewModal from '../../../components/file-preview';
@@ -21,9 +22,11 @@ import {
   type DocumentAttachmentCenterData,
   type DocumentAttachmentCenterGroup,
 } from '../services/document-relation';
+import DocumentAttachmentsField from './DocumentAttachmentsField';
 import {
   downloadDocumentAttachment,
   isSystemDocumentAttachment,
+  mapAttachmentsToUploadList,
   normalizeDocumentAttachments,
   type DocumentAttachmentFile,
 } from '../utils/documentAttachments';
@@ -38,6 +41,14 @@ function looksLikeImage(name?: string): boolean {
   return IMAGE_EXT_RE.test(n);
 }
 
+export type DocumentAttachmentCenterHostUpload = {
+  category: string;
+  allowed: boolean;
+  disabledReason?: string | null;
+  initialAttachments?: DocumentAttachmentFile[] | null;
+  onSave: (attachments: ReturnType<typeof normalizeDocumentAttachments>) => Promise<void>;
+};
+
 export type DocumentAttachmentCenterPaneProps = {
   documentType: string;
   documentId: number;
@@ -51,6 +62,8 @@ export type DocumentAttachmentCenterPaneProps = {
   onDeleteSelfAttachment?: (fileUid: string) => Promise<void>;
   /** 上传成功后追加本单附件 */
   onAddSelfAttachments?: (files: DocumentAttachmentFile[]) => Promise<void>;
+  /** 本单附件补充（已审核后仍可用时由单据页传入） */
+  hostUpload?: DocumentAttachmentCenterHostUpload | null;
 };
 
 export const DocumentAttachmentCenterPane: React.FC<DocumentAttachmentCenterPaneProps> = ({
@@ -61,6 +74,7 @@ export const DocumentAttachmentCenterPane: React.FC<DocumentAttachmentCenterPane
   canManageSelfAttachments = false,
   onDeleteSelfAttachment,
   onAddSelfAttachments,
+  hostUpload = null,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -72,6 +86,8 @@ export const DocumentAttachmentCenterPane: React.FC<DocumentAttachmentCenterPane
   const [previewFile, setPreviewFile] = useState<{ uuid: string; name: string } | null>(null);
   const [deletingUid, setDeletingUid] = useState<string | null>(null);
   const uploadChainRef = useRef(Promise.resolve());
+  const [attachmentForm] = ProForm.useForm();
+  const [attachmentsSaving, setAttachmentsSaving] = useState(false);
 
   const canUpload =
     Boolean(canManageSelfAttachments) &&
@@ -101,6 +117,42 @@ export const DocumentAttachmentCenterPane: React.FC<DocumentAttachmentCenterPane
     if (!active) return;
     void load();
   }, [active, load]);
+
+  const hostAttachmentsEditable = Boolean(hostUpload?.allowed);
+
+  useEffect(() => {
+    if (!hostAttachmentsEditable || !hostUpload) return;
+    const fromCenter = data?.groups?.find((g) => g.is_self)?.attachments;
+    const initial =
+      (fromCenter && fromCenter.length > 0 ? fromCenter : null) ||
+      hostUpload.initialAttachments ||
+      [];
+    attachmentForm.setFieldsValue({
+      attachments: mapAttachmentsToUploadList(initial as DocumentAttachmentFile[]),
+    });
+  }, [
+    attachmentForm,
+    data?.groups,
+    hostAttachmentsEditable,
+    hostUpload,
+    hostUpload?.initialAttachments,
+  ]);
+
+  const handleSaveHostAttachments = useCallback(async () => {
+    if (!hostUpload) return;
+    try {
+      const values = await attachmentForm.validateFields();
+      setAttachmentsSaving(true);
+      await hostUpload.onSave(normalizeDocumentAttachments(values.attachments));
+      messageApi.success(t('app.uniDetail.attachmentCenter.attachmentsSaved'));
+      await load();
+    } catch (e: unknown) {
+      if ((e as { errorFields?: unknown })?.errorFields) return;
+      messageApi.error((e as Error)?.message || t('common.saveFailed'));
+    } finally {
+      setAttachmentsSaving(false);
+    }
+  }, [attachmentForm, hostUpload, load, messageApi, t]);
 
   const openPreview = useCallback((uuid: string, name: string) => {
     const id = String(uuid || '').trim();
@@ -361,6 +413,29 @@ export const DocumentAttachmentCenterPane: React.FC<DocumentAttachmentCenterPane
     [data?.groups],
   );
 
+  const hostUploadPanel = hostAttachmentsEditable && hostUpload ? (
+    <div style={{ marginBottom: 16 }}>
+      <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+        {t('app.uniDetail.attachmentCenter.hostUploadTitle')}
+      </Typography.Text>
+      <ProForm form={attachmentForm} submitter={false} layout="vertical">
+        <DocumentAttachmentsField category={hostUpload.category} label={false} />
+        <Button
+          type="primary"
+          loading={attachmentsSaving}
+          title={hostUpload.disabledReason || undefined}
+          onClick={() => void handleSaveHostAttachments()}
+        >
+          {t('app.uniDetail.attachmentCenter.saveAttachments')}
+        </Button>
+      </ProForm>
+    </div>
+  ) : hostUpload && !hostUpload.allowed && hostUpload.disabledReason ? (
+    <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+      {hostUpload.disabledReason}
+    </Typography.Text>
+  ) : null;
+
   const previewModal = (
     <FilePreviewModal
       open={previewOpen}
@@ -402,6 +477,7 @@ export const DocumentAttachmentCenterPane: React.FC<DocumentAttachmentCenterPane
   if (!data || totalFiles === 0) {
     return (
       <>
+        {hostUploadPanel}
         <div
           style={{
             minHeight: 160,
@@ -417,7 +493,9 @@ export const DocumentAttachmentCenterPane: React.FC<DocumentAttachmentCenterPane
             description={
               canUpload
                 ? t('app.uniDetail.attachmentCenter.emptyUploadHint')
-                : t('app.uniDetail.attachmentCenter.empty')
+                : hostAttachmentsEditable
+                  ? t('app.uniDetail.attachmentCenter.emptyHintUpload')
+                  : t('app.uniDetail.attachmentCenter.empty')
             }
           />
           {uploadButton}
@@ -429,6 +507,7 @@ export const DocumentAttachmentCenterPane: React.FC<DocumentAttachmentCenterPane
 
   return (
     <>
+      {hostUploadPanel}
       {canUpload ? (
         <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'flex-end' }}>{uploadButton}</div>
       ) : null}

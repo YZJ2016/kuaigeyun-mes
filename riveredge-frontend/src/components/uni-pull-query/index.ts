@@ -12,6 +12,13 @@ export type {
   UniPullQuerySelectionBarProps,
 } from './UniPullQuerySelectionBar';
 export { useUniPullQuery } from './useUniPullQuery';
+export { resolvePullConfirmNumericIds } from './resolvePullConfirmNumericIds';
+export {
+  normalizePullLineListResponse,
+  toUniPullQueryHttpParams,
+  wrapPullLineLoadData,
+} from './uniPullQueryHttpParams';
+export type { UniPullQueryHttpListParams } from './uniPullQueryHttpParams';
 export {
   PULL_SOURCE_REFERENCE,
   loadPullSourceReferenceOptions,
@@ -43,3 +50,12 @@ export type {
   UseUniPullQueryOptions,
 } from './types';
 export type { UniPullQueryFilterBarProps } from './UniPullQueryFilterBar';
+export {
+  isPullOpenLineRowDisabled,
+  isPullOpenLineSelectable,
+  isPullRequisitionOpenLineSelectable,
+  readPullOpenLinePushedQty,
+  readPullOpenLineRemainingQty,
+  readPullOpenLineSuggestedQty,
+} from './pullOpenLine';
+export type { PullOpenLineQtyRow, PullRequisitionOpenLineRow } from './pullOpenLine';

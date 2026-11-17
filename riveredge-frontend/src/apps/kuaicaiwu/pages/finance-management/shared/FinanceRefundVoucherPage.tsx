@@ -11,13 +11,18 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Modal, Spin, Alert, Table, Empty, Form } from 'antd';
+import { App, Button, Modal, Alert, Table, Form, theme } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import {
+  ListPageTemplate,
+  MODAL_CONFIG,
+  MODAL_NESTED_ABOVE_PARENT_OFFSET,
+} from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { FinanceVoucherDetailDrawer } from '../shared/FinanceVoucherDetailDrawer';
@@ -173,6 +178,8 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
   const filterSourceIdRef = useRef<number | null>(null);
   const [filterSourceId, setFilterSourceId] = useState<number | null>(null);
   const perms = useResourcePermissions(cfg.resource);
+  const refundCapabilityNs =
+    mode === 'receipt-refund' ? 'app.kuaicaiwu.receiptRefund' : 'app.kuaicaiwu.paymentRefund';
   const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
 
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
@@ -186,6 +193,9 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
   const [pullSubmitting, setPullSubmitting] = useState(false);
   const [pullForm] = Form.useForm();
   const pullCloseRef = useRef<(() => void) | null>(null);
+  const pullOpenRef = useRef<(() => void) | null>(null);
+  const { token } = theme.useToken();
+  const pullPreviewZIndex = token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET * 2;
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -216,22 +226,35 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
     pullForm.resetFields();
   };
 
-  const openPullPreview = async (sourceIdsInput: number | number[]) => {
+  const openPullPreview = async (
+    sourceIdsInput: number | number[],
+    options?: { closeSourceModal?: () => void; reopenSourceModal?: () => void },
+  ) => {
     const sourceIds = (Array.isArray(sourceIdsInput) ? sourceIdsInput : [sourceIdsInput])
       .map((id) => Number(id))
       .filter((id) => Number.isFinite(id) && id > 0);
     if (!sourceIds.length) return;
 
-    setPullPreviewOpen(true);
+    options?.closeSourceModal?.();
+    setPullPreviewOpen(false);
     setPullPreviewLoading(true);
     setPullPreviewData(null);
     setPullPreviewSourceIds(sourceIds);
+    const hideLoading = messageApi.loading(t(`${NS}.pullPreviewLoading`), 0);
     try {
       const data =
         sourceIds.length === 1
           ? await cfg.previewPull(sourceIds[0])
           : await cfg.previewPullMulti(sourceIds);
-      setPullPreviewData(data);
+      if (data.has_blocking_issues) {
+        messageApi.warning(
+          financeRefundCapabilityReasonMessage(refundCapabilityNs, data.blocking_reason, t)
+            || t(`${NS}.pullPreviewBlocked`),
+        );
+        resetPull();
+        options?.reopenSourceModal?.();
+        return;
+      }
       const maxPush =
         Number(
           (data as { max_push_total?: number }).max_push_total ??
@@ -240,6 +263,13 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
               0,
             ),
         ) || 0;
+      if (maxPush <= 0) {
+        messageApi.warning(t(`${NS}.pullNoRefundableAmount`));
+        resetPull();
+        options?.reopenSourceModal?.();
+        return;
+      }
+      setPullPreviewData(data);
       const dateKey = cfg.dateField;
       pullForm.setFieldsValue({
         source_code: data.source_code,
@@ -250,10 +280,13 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
         payment_method: BANK_TRANSFER_PAYMENT_METHOD,
         notes: t(`${NS}.defaultNote`, { code: data.source_code }),
       });
+      setPullPreviewOpen(true);
     } catch (e) {
       messageApi.error(getApiErrorMessage(e, t(`${NS}.loadSourceFailed`)));
       resetPull();
+      options?.reopenSourceModal?.();
     } finally {
+      hideLoading();
       setPullPreviewLoading(false);
     }
   };
@@ -347,11 +380,14 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
         messageApi.warning(t(`${NS}.samePartnerRequired`));
         return;
       }
-      pullCloseRef.current?.();
-      await openPullPreview(selectedIds);
+      await openPullPreview(selectedIds, {
+        closeSourceModal: () => pullCloseRef.current?.(),
+        reopenSourceModal: () => pullOpenRef.current?.(),
+      });
     },
   });
   pullCloseRef.current = pullQuery.closeModal;
+  pullOpenRef.current = pullQuery.openModal;
 
   const handlePullSubmit = async (values: Record<string, unknown>) => {
     if (!pullPreviewData || !pullPreviewSourceIds.length) return false;
@@ -860,100 +896,25 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
         scopeOptions={pullQuery.scopeOptions}
         scope={pullQuery.scope}
         onScopeChange={pullQuery.handleScopeChange}
-        okText={t('common.next')}
+        okText={pullAction.targetLabel}
       />
 
       <Modal
-        title={pullAction.label}
+        title={t(`${NS}.pullPreviewTitle`)}
         open={pullPreviewOpen}
         onCancel={resetPull}
         destroyOnHidden
-        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        zIndex={pullPreviewZIndex}
         okText={pullAction.targetLabel}
         cancelText={t('common.cancel')}
         confirmLoading={pullSubmitting}
         okButtonProps={{
-          disabled:
-            pullPreviewLoading ||
-            !pullPreviewData ||
-            !!pullPreviewData?.has_blocking_issues ||
-            pullPreviewMaxPush <= 0,
+          disabled: !pullPreviewData || pullPreviewMaxPush <= 0,
         }}
         onOk={() => pullForm.submit()}
       >
-        {pullPreviewLoading ? (
-          <div
-            style={{
-              minHeight: 120,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 12,
-            }}
-          >
-            <Spin />
-            <div style={{ color: 'var(--ant-color-primary)' }}>
-              {t('app.kuaizhizao.salesOrder.loadingPreview')}
-            </div>
-          </div>
-        ) : pullPreviewData ? (
-          <div>
-            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPreviewData.summary}</p>
-            {pullPreviewData.has_blocking_issues && pullPreviewData.blocking_reason ? (
-              <Alert
-                type="warning"
-                showIcon
-                style={{ marginBottom: 12 }}
-                title={financeRefundCapabilityReasonMessage(
-                  capabilityNs,
-                  pullPreviewData.blocking_reason,
-                  t,
-                )}
-              />
-            ) : null}
-            {pullPreviewData.items?.length ? (
-              <Table
-                size="small"
-                dataSource={pullPreviewData.items}
-                rowKey={(row) => String(row.item_id)}
-                pagination={false}
-                scroll={{ x: 720 }}
-                columns={[
-                  { title: t(`${NS}.pullCol.sourceCode`), dataIndex: 'source_code', width: 140, ellipsis: true },
-                  {
-                    title: t(cfg.partnerLabelKey),
-                    dataIndex: mode === 'receipt-refund' ? 'customer_name' : 'supplier_name',
-                    width: 160,
-                    ellipsis: true,
-                  },
-                  {
-                    title: t(`${NS}.pullCol.docAmount`),
-                    dataIndex: 'quantity',
-                    align: 'right',
-                    width: 120,
-                    render: (v: number) => formatPullMoney(v),
-                  },
-                  {
-                    title: t(`${NS}.pullCol.refundedAmount`),
-                    dataIndex: 'pushed_quantity',
-                    align: 'right',
-                    width: 120,
-                    render: (v: number) => formatPullMoney(v),
-                  },
-                  {
-                    title: t(`${NS}.pullCol.refundableAmount`),
-                    dataIndex: 'max_push_quantity',
-                    align: 'right',
-                    width: 120,
-                    render: (v: number) => formatPullMoney(v),
-                  },
-                ]}
-              />
-            ) : (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />
-            )}
-            {!pullPreviewData.has_blocking_issues && pullPreviewMaxPush > 0 ? (
+        {pullPreviewData ? (
               <ProForm
                 key={`pull-refund-${pullPreviewSourceIds.join('-')}`}
                 form={pullForm}
@@ -999,8 +960,6 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
                   category={mode === 'receipt-refund' ? 'receipt_attachments' : 'payment_attachments'}
                 />
               </ProForm>
-            ) : null}
-          </div>
         ) : null}
       </Modal>
 

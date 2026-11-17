@@ -8,11 +8,11 @@
  * @date 2026-02-22
  */
 
-import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
 import {
@@ -36,11 +36,21 @@ import {
   theme,
   Alert,
 } from 'antd';
-import { PlusOutlined, SendOutlined, AppstoreAddOutlined, ImportOutlined, DownOutlined, RollbackOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, PlusOutlined, SendOutlined, AppstoreAddOutlined, ImportOutlined, DownOutlined, RollbackOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
-import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
+import {
+  UniBatchMenuButton,
+  UniCapabilityBatchButton,
+  pickCapability,
+  runCapabilityBatchLoop,
+  useAuditBatchRunner,
+  withDocumentSubmitCombinedItem,
+  type UniBatchMenuItem,
+} from '../../../../../components/uni-batch';
+import { isPendingReviewStatus } from '../../../constants/documentStatus';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -55,19 +65,26 @@ import { UniMaterialBatchPicker } from '../../../../../components/uni-material-b
 import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
+import { DocumentAmountSummaryWatch } from '../../../components/document-amount-summary/DocumentAmountSummary';
+import { computeSimpleDocumentLineTotal } from '../../../utils/documentLineAmounts';
 import {
   ListPageTemplate,
   DetailDrawerTemplate,
   DetailDrawerActions,
-  FormModalTemplate,
   DRAWER_CONFIG,
   MODAL_CONFIG,
+  DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
+  DocumentFormPageHeaderActions,
+  DocumentFormPageLayout,
   useDetailDrawerDescriptionItems,
   type StatCard,
 } from '../../../../../components/layout-templates';
+import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
+import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   UniPullQueryModal,
+  isPullOpenLineSelectable,
   isPullableScope,
   renderPullCapabilityTag,
   useUniPullQuery,
@@ -77,7 +94,13 @@ import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { receiptNoticeApi, type ReceiptNotice, type ReceiptNoticeNotifyPreviewResponse } from '../../../services/receipt-notice';
+import {
+  PurchaseDepartmentFormField,
+  resolvePurchaseDepartmentPayload,
+  usePurchaseDepartmentOptions,
+} from '../shared/PurchaseDepartmentFormField';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import {
   receiptNoticeBatchNotifyAllowed,
   receiptNoticeBatchWithdrawAllowed,
@@ -100,8 +123,21 @@ import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
 import {
   KUAIZHIZAO_DOC_HOST,
+  loadMaterialFormReferenceList,
   loadSupplierFormReferenceList,
 } from '../../../../../utils/documentFormReferenceLoad';
+import {
+  collectImportMaterialCodes,
+  findMaterialByImportCode,
+  normalizeImportMaterialCode,
+  resolveMaterialsByCodesForImport,
+} from '../../../../master-data/utils/materialImportResolve';
+import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
+import { useImportMaterialUnitOptions } from '../../../../master-data/hooks/useImportMaterialUnitOptions';
+import { pickImportExampleValue } from '../../../../../utils/loadImportDictionaryValues';
+const LazyUniImport = lazy(() =>
+  import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
+);
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import type { ReceiptNoticeListParams } from '../../../services/receipt-notice';
@@ -132,7 +168,8 @@ import {
 } from '../../../components/DocumentAttachmentsReadonly';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { formatBusinessDateOnly, formatDateTime, formatQuantity, formatPrice, formatAmount } from '../../../../../utils/format';
-import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
+import { QuantityWithUnitDisplay, buildDocumentLineDualQuantityFormColumns } from '../../../../../components/quantity-with-unit';
+import { pickDocumentLineDualQuantityFields } from '../../../../../utils/materialDualQuantity';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 interface ReceiptNoticeDetail extends ReceiptNotice {
   items?: { id?: number; material_code: string; material_name: string; material_unit: string; notice_quantity: number; unit_price?: number; total_amount?: number }[];
@@ -172,17 +209,39 @@ const RN_STAT_SPARK_4 = [18, 20, 22, 24, 26, 28, 30];
 const RN_DETAIL_ITEMS_MIN_WIDTH = 960;
 
 const RECEIPT_NOTICE_RESOURCE = 'kuaizhizao:receipt-notice';
+const RECEIPT_NOTICE_LIST_PATH = '/apps/kuaizhizao/purchase-management/receipt-notices';
+const RECEIPT_NOTICE_CREATE_PATH = `${RECEIPT_NOTICE_LIST_PATH}/new`;
+const receiptNoticeEditPath = (id: number) => `${RECEIPT_NOTICE_LIST_PATH}/${id}/edit`;
 
 const ReceiptNoticesPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const {
+    options: departmentOptions,
+    loading: departmentOptionsLoading,
+    resolveName: resolveDepartmentName,
+  } = usePurchaseDepartmentOptions();
   const { quantity: quantityDecimals, price: priceDecimals } = useNumericPrecision();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isCreatePage = location.pathname.endsWith('/receipt-notices/new');
+  const editRouteMatch = location.pathname.match(/\/receipt-notices\/(\d+)\/edit$/);
+  const editRouteId = editRouteMatch ? Number(editRouteMatch[1]) : null;
+  const isEditPage = editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0;
+  const isFormPage = isCreatePage || isEditPage;
+  const leaveReceiptNoticeFormPage = useLeaveFormTab(RECEIPT_NOTICE_LIST_PATH);
+  const formPageInitKeyRef = useRef<string | null>(null);
+  const [formPageLoading, setFormPageLoading] = useState(false);
+  const pendingCreateFormValuesRef = useRef<Record<string, unknown> | null>(null);
   const { token } = theme.useToken();
   const receiptNoticeDetailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi, modal: modalApi } = App.useApp();
   const pullFromPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'receipt_notice.pull_from_purchase_order');
   const pushToPurchaseReceiptAction = resolveKuaizhizaoDocumentAction(t, 'purchase_receipt.pull_from_receipt_notice');
   const defaultUnit = t('app.kuaizhizao.shipmentNotice.defaultUnit');
+  const ReceiptNoticeFormSummary: React.FC = () => (
+    <DocumentAmountSummaryWatch variant="basic" quantityField="notice_quantity" />
+  );
+
   const defaultReceiptItem = useMemo(
     () => ({
       material_id: undefined,
@@ -275,9 +334,11 @@ const ReceiptNoticesPage: React.FC = () => {
     rnTrackingRefreshKey,
   );
 
-  const [createModalVisible, setCreateModalVisible] = useState(false);
-  const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingBusinessStatus, setEditingBusinessStatus] = useState('待收货');
+  const [editingReviewStatus, setEditingReviewStatus] = useState('草稿');
+  const createCommitAfterSaveRef = useRef(false);
+  const editCommitAfterSaveRef = useRef(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const selectedNoticesForBatch = useMemo(
@@ -294,6 +355,180 @@ const ReceiptNoticesPage: React.FC = () => {
     if (!Number.isFinite(id) || id <= 0) return null;
     return tableRowsRef.current.find((row) => row.id === id) ?? null;
   }, [selectedRowKeys]);
+
+  const receiptNoticeToolbarAuditMenus = useMemo(() => {
+    const rows = selectedNoticesForBatch;
+    const reload = () => {
+      setSelectedRowKeys([]);
+      setStatsVersion((v) => v + 1);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    };
+    const reviewOf = (row: ReceiptNotice) => String(row.review_status || '').trim();
+    const allowed = (row: ReceiptNotice, key: string) => pickCapability(row, key)?.allowed === true;
+    const run = (
+      keys: React.Key[],
+      records: ReceiptNotice[],
+      capabilityKey: string,
+      permAllowed: boolean,
+      onRun: (id: number) => Promise<unknown>,
+      notAllowedMessage?: string,
+    ) =>
+      runCapabilityBatchLoop({
+        keys,
+        records,
+        capabilityKey,
+        permAllowed,
+        notAllowedMessage,
+        onRun,
+        onSuccess: reload,
+        message: messageApi,
+        t,
+      });
+    const submitRows = rows.filter((row) => allowed(row, 'submit'));
+    const committedRows = rows.filter(
+      (row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'withdraw_submit'),
+    );
+    const pendingRows = rows.filter((row) => {
+      const review = reviewOf(row);
+      return review !== 'SUBMITTED' && isPendingReviewStatus(review) && allowed(row, 'withdraw_submit');
+    });
+    const reviewRows = rows.filter((row) => allowed(row, 'submit_review'));
+    const approveRows = rows.filter(
+      (row) => reviewOf(row) !== 'SUBMITTED' && isPendingReviewStatus(reviewOf(row)) && allowed(row, 'approve'),
+    );
+    const revokeRows = rows.filter((row) => allowed(row, 'revoke_approval'));
+    const canSubmit = receiptNoticePerms.canAction?.('submit') ?? false;
+    const canApprove = receiptNoticePerms.canAction?.('approve') ?? false;
+    const canRevoke = receiptNoticePerms.canAction?.('revoke') ?? false;
+    const hasSelection = rows.length > 0;
+    const submitDisabled = hasSelection && !(canSubmit && submitRows.length > 0);
+    const submitItems: UniBatchMenuItem[] = withDocumentSubmitCombinedItem(
+      [
+        {
+          key: 'submit',
+          label: t('common.submit'),
+          disabled: submitDisabled,
+          onClick: (keys) => run(keys, submitRows, 'submit', canSubmit, (id) => receiptNoticeApi.commit(id)),
+        },
+        {
+          key: 'withdraw-submit',
+          label: t('app.kuaizhizao.receiptNotice.toolbar.withdrawSubmit'),
+          disabled: hasSelection && committedRows.length === 0,
+          onClick: (keys) =>
+            run(keys, committedRows, 'withdraw_submit', canSubmit, (id) => receiptNoticeApi.withdrawSubmit(id)),
+        },
+        {
+          key: 'submit-review',
+          label: t('app.kuaizhizao.receiptNotice.toolbar.submitReview'),
+          disabled: hasSelection && !(canSubmit && reviewRows.length > 0),
+          onClick: (keys) =>
+            run(
+              keys,
+              reviewRows,
+              'submit_review',
+              canSubmit,
+              (id) => receiptNoticeApi.submitForReview(id),
+              t('app.kuaizhizao.receiptNotice.toolbar.submitReviewNotAllowed'),
+            ),
+        },
+      ],
+      {
+        t,
+        message: messageApi,
+        disabled: submitDisabled,
+        commitRecords: submitRows,
+        permAllowed: canSubmit,
+        commit: (id) => receiptNoticeApi.commit(id),
+        submitReview: (id) => receiptNoticeApi.submitForReview(id),
+        onSuccess: reload,
+      },
+    );
+    const auditItems: UniBatchMenuItem[] = [
+      {
+        key: 'approve',
+        label: t('common.audit'),
+        disabled: hasSelection && !(canApprove && approveRows.length > 0),
+        onClick: (keys) => run(keys, approveRows, 'approve', canApprove, (id) => receiptNoticeApi.approve(id)),
+      },
+      {
+        key: 'withdraw-review',
+        label: t('app.kuaizhizao.receiptNotice.toolbar.withdrawReview'),
+        disabled: hasSelection && pendingRows.length === 0,
+        onClick: (keys) =>
+          run(keys, pendingRows, 'withdraw_submit', canApprove, (id) => receiptNoticeApi.withdrawSubmit(id)),
+      },
+      {
+        key: 'revoke',
+        label: t('app.kuaizhizao.receiptNotice.toolbar.revoke'),
+        disabled: hasSelection && !(canRevoke && revokeRows.length > 0),
+        onClick: (keys) =>
+          run(keys, revokeRows, 'revoke_approval', canRevoke, (id) => receiptNoticeApi.revokeApproval(id)),
+      },
+    ];
+    return { submitItems, auditItems };
+  }, [invalidateMenuBadgeCounts, messageApi, receiptNoticePerms, selectedNoticesForBatch, t]);
+
+  const handleCopySelectedReceiptNotice = useCallback(async () => {
+    if (selectedNoticesForBatch.length !== 1 || !selectedNoticesForBatch[0]?.id) {
+      messageApi.warning(t('app.kuaizhizao.receiptNotice.selectToCopy'));
+      return;
+    }
+    try {
+      const detail = (await receiptNoticeApi.get(String(selectedNoticesForBatch[0].id))) as ReceiptNotice & {
+        items?: Array<Record<string, unknown>>;
+      };
+      let noticeCode = '';
+      let ruleCode = getPageRuleCode('kuaizhizao-receipt-notice');
+      let autoGenerate = isAutoGenerateEnabled('kuaizhizao-receipt-notice');
+      try {
+        const pageConfig = await getCodeRulePageConfig('kuaizhizao-receipt-notice');
+        if (pageConfig?.ruleCode) {
+          ruleCode = pageConfig.ruleCode;
+          autoGenerate = !!pageConfig.autoGenerate;
+        }
+      } catch {
+        /* 编号规则读取失败时仍打开复制表单，编码留空由保存时再生成 */
+      }
+      if (autoGenerate && ruleCode) {
+        setEffectiveRuleCode(ruleCode);
+        const preview = await testGenerateCode({ rule_code: ruleCode });
+        noticeCode = preview.code ?? '';
+        setPreviewCode(noticeCode || null);
+      }
+      const items = Array.isArray(detail.items) ? detail.items : [];
+      pendingCreateFormValuesRef.current = {
+        notice_code: noticeCode,
+        purchase_order_id: detail.purchase_order_id,
+        purchase_order_code: detail.purchase_order_code,
+        supplier_id: detail.supplier_id,
+        supplier_name: detail.supplier_name,
+        supplier_contact: detail.supplier_contact,
+        supplier_phone: detail.supplier_phone,
+        department_id: detail.department_id ?? undefined,
+        department_name: detail.department_name ?? undefined,
+        warehouse_id: detail.warehouse_id,
+        warehouse_name: detail.warehouse_name,
+        planned_receipt_date: dayjs(),
+        notes: detail.notes,
+        items: items.length
+          ? items.map((it) => ({
+              material_id: it.material_id,
+              material_code: it.material_code || '',
+              material_name: it.material_name || '',
+              material_unit: it.material_unit || defaultUnit,
+              notice_quantity: Number(it.notice_quantity) || 0,
+              unit_price: Number(it.unit_price) || 0,
+              purchase_order_item_id: it.purchase_order_item_id,
+            }))
+          : [defaultReceiptItem],
+      };
+      formPageInitKeyRef.current = null;
+      navigate(RECEIPT_NOTICE_CREATE_PATH);
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.shipmentNotice.loadDetailFailed')));
+    }
+  }, [messageApi, selectedNoticesForBatch, t]);
 
   const canPushPurchaseReceiptToolbar = !!selectedNoticeForToolbar
     && selectedNoticeForToolbar.capabilities?.withdraw?.allowed === true
@@ -347,8 +582,34 @@ const ReceiptNoticesPage: React.FC = () => {
 
   const createFormRef = useRef<any>(null);
   const editFormRef = useRef<any>(null);
-  const [pendingEditFormValues, setPendingEditFormValues] = useState<Record<string, any> | null>(null);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
+  const [importVisible, setImportVisible] = useState(false);
+  const materialUnitImport = useImportMaterialUnitOptions();
+  const materialUnitImportOptions = materialUnitImport.options;
+
+  const noticeItemImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'material', labelKey: 'app.kuaizhizao.receiptNotice.import.materialCode', aliases: ['产品编号'] },
+          { field: 'quantity', labelKey: 'common.quantity', aliases: ['数量'] },
+          { field: 'unitPrice', labelKey: 'app.kuaizhizao.receiptNotice.import.unitPrice', aliases: ['单价'] },
+          { field: 'name', labelKey: 'app.kuaizhizao.receiptNotice.import.materialName', aliases: ['产品名称'] },
+          { field: 'specification', labelKey: 'app.kuaizhizao.receiptNotice.import.specification', aliases: ['规格'] },
+          { field: 'unit', labelKey: 'common.unit', aliases: ['单位'], options: materialUnitImportOptions },
+        ],
+        [
+          t('app.kuaizhizao.receiptNotice.importExample.materialCode'),
+          t('app.kuaizhizao.receiptNotice.importExample.quantity'),
+          t('app.kuaizhizao.receiptNotice.importExample.unitPrice'),
+          t('app.kuaizhizao.receiptNotice.importExample.materialName'),
+          t('app.kuaizhizao.receiptNotice.importExample.specification'),
+          pickImportExampleValue(materialUnitImportOptions, t('app.kuaizhizao.receiptNotice.importExample.unit')),
+        ],
+      ),
+    [t, i18n.language, materialUnitImportOptions],
+  );
   const [purchaseOrderList, setPurchaseOrderList] = useState<any[]>([]);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
@@ -381,6 +642,48 @@ const ReceiptNoticesPage: React.FC = () => {
     },
     [defaultUnit, messageApi, t]
   );
+
+  const applyExcelRowsToNoticeForm = async (data: any[][]) => {
+    if (data.length <= 1) return;
+    const rows = data.slice(1).filter((row) => row[0]);
+    const loaded = await loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.receiptNotice);
+    const materials = await resolveMaterialsByCodesForImport(
+      collectImportMaterialCodes(rows, 0),
+      loaded,
+    );
+    const items = rows.map((row) => {
+      const materialCode = normalizeImportMaterialCode(row[0]);
+      const mat = findMaterialByImportCode(materials, materialCode);
+      const unitRaw = String(row[5] || '').trim();
+      const material_unit = mat?.baseUnit
+        || (unitRaw ? materialUnitImport.parse(unitRaw) ?? unitRaw : defaultUnit);
+      return {
+        material_id: mat?.id,
+        material_code: mat?.mainCode || mat?.code || materialCode,
+        notice_quantity: Number(row[1]) || 1,
+        unit_price: Number(row[2]) || 0,
+        material_name: mat?.name || String(row[3] || ''),
+        material_spec: mat?.specification || String(row[4] || ''),
+        material_unit,
+      };
+    });
+
+    if (items.length === 0) {
+      messageApi.warning(t('app.kuaizhizao.receiptNotice.importNoValidData'));
+      return;
+    }
+
+    const currentItems = createFormRef.current?.getFieldValue('items') || [];
+    const filteredCurrent = currentItems.filter((it: any) => it.material_id || it.material_code);
+    createFormRef.current?.setFieldsValue({
+      items: [...filteredCurrent, ...items],
+    });
+    messageApi.success(t('app.kuaizhizao.receiptNotice.importSuccessCount', { count: items.length }));
+  };
+
+  const handleFormLineImport = (data: any[][]) => {
+    void applyExcelRowsToNoticeForm(data);
+  };
 
   const handleDetail = async (record: ReceiptNotice) => {
     try {
@@ -419,36 +722,51 @@ const ReceiptNoticesPage: React.FC = () => {
     })();
   }, [searchParams, messageApi, t]);
 
-  const handleEdit = async (record: ReceiptNotice) => {
-    try {
-      const detail = await receiptNoticeApi.get(record.id!.toString()) as ReceiptNoticeDetail;
-      const itemsForm = (detail.items || []).map((it: any) => ({
-        material_id: it.material_id,
-        material_code: it.material_code || '',
-        material_name: it.material_name || '',
-        material_unit: it.material_unit || defaultUnit,
-        notice_quantity: Number(it.notice_quantity) || 0,
-        unit_price: Number(it.unit_price) || 0,
-      }));
-      setPendingEditFormValues({
-        purchase_order_id: detail.purchase_order_id,
-        purchase_order_code: detail.purchase_order_code,
-        supplier_id: detail.supplier_id,
-        supplier_name: detail.supplier_name,
-        supplier_contact: detail.supplier_contact,
-        supplier_phone: detail.supplier_phone,
-        warehouse_id: detail.warehouse_id,
-        warehouse_name: detail.warehouse_name,
-        planned_receipt_date: detail.planned_receipt_date ? dayjs(detail.planned_receipt_date) : undefined,
-        notes: detail.notes,
-        attachments: mapAttachmentsToUploadList(detail.attachments),
-        items: itemsForm.length ? itemsForm : [defaultReceiptItem],
-      });
-      setEditingId(record.id!);
-      setEditModalVisible(true);
-    } catch {
-      messageApi.error(t('app.kuaizhizao.shipmentNotice.loadDetailFailed'));
-    }
+  const loadReceiptNoticeEditForm = useCallback(
+    async (id: number) => {
+      setFormPageLoading(true);
+      try {
+        const detail = (await receiptNoticeApi.get(String(id))) as ReceiptNoticeDetail;
+        const itemsForm = (detail.items || []).map((it: { material_id?: number; material_code?: string; material_name?: string; material_unit?: string; notice_quantity?: number; unit_price?: number }) => ({
+          material_id: it.material_id,
+          material_code: it.material_code || '',
+          material_name: it.material_name || '',
+          material_unit: it.material_unit || defaultUnit,
+          notice_quantity: Number(it.notice_quantity) || 0,
+          unit_price: Number(it.unit_price) || 0,
+        }));
+        setEditingId(id);
+        setEditingBusinessStatus(String(detail.status || '待收货'));
+        setEditingReviewStatus(String(detail.review_status || '草稿'));
+        editFormRef.current?.resetFields();
+        editFormRef.current?.setFieldsValue({
+          purchase_order_id: detail.purchase_order_id,
+          purchase_order_code: detail.purchase_order_code,
+          supplier_id: detail.supplier_id,
+          supplier_name: detail.supplier_name,
+          supplier_contact: detail.supplier_contact,
+          supplier_phone: detail.supplier_phone,
+          department_id: detail.department_id ?? undefined,
+          department_name: detail.department_name ?? undefined,
+          warehouse_id: detail.warehouse_id,
+          warehouse_name: detail.warehouse_name,
+          planned_receipt_date: detail.planned_receipt_date ? dayjs(detail.planned_receipt_date) : undefined,
+          notes: detail.notes,
+          attachments: mapAttachmentsToUploadList(detail.attachments),
+          items: itemsForm.length ? itemsForm : [defaultReceiptItem],
+        });
+      } catch {
+        messageApi.error(t('app.kuaizhizao.shipmentNotice.loadDetailFailed'));
+        leaveReceiptNoticeFormPage();
+      } finally {
+        setFormPageLoading(false);
+      }
+    },
+    [defaultUnit, leaveReceiptNoticeFormPage, messageApi, t],
+  );
+
+  const handleEdit = (record: ReceiptNotice) => {
+    if (record.id) navigate(receiptNoticeEditPath(record.id));
   };
 
   const resetNotifyPreviewModal = useCallback(() => {
@@ -819,21 +1137,6 @@ const ReceiptNoticesPage: React.FC = () => {
               </Button>
             );
           }
-          if (record.capabilities?.delete?.allowed === true) {
-            parts.push(
-              <Button {...rowActionKind('delete')}
-                key="del"
-                type="link"
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(record);
-                }}
-              >
-                {t('common.delete')}
-              </Button>
-            );
-          }
           if (record.capabilities?.withdraw?.allowed === true) {
             parts.push(
               <Button {...rowActionKind('revoke')}
@@ -1061,7 +1364,7 @@ const ReceiptNoticesPage: React.FC = () => {
         align: 'center' as const,
         render: (_: unknown, record: PullPurchaseOrderCandidate) =>
           renderPullCapabilityTag(
-            Number(record.remaining_quantity ?? 0) > 0,
+            isPullOpenLineSelectable(record),
             t('app.kuaizhizao.purchaseRequisition.pull.canCreate'),
             t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate'),
           ),
@@ -1109,34 +1412,17 @@ const ReceiptNoticesPage: React.FC = () => {
           </AntForm.Item>
         ),
       },
-      {
-        title: t('common.unit'),
-        dataIndex: 'material_unit',
-        width: 80,
-        render: (_: any, __: any, index: number) => (
-          <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-            <Input placeholder={t('common.unit')} size="small" />
-          </AntForm.Item>
-        ),
-      },
-      {
-        title: t('common.quantity'),
-        dataIndex: 'notice_quantity',
-        width: 100,
-        align: 'right' as const,
-        render: (_: any, __: any, index: number) => (
-          <AntForm.Item
-            name={[index, 'notice_quantity']}
-            rules={[
-              { required: true, message: t('common.required') },
-              { type: 'number', min: 0.01, message: t('app.kuaizhizao.shipmentNotice.quantityPositive') },
-            ]}
-            style={{ margin: 0 }}
-          >
-            <InputNumber placeholder={t('common.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size="small" />
-          </AntForm.Item>
-        ),
-      },
+      ...buildDocumentLineDualQuantityFormColumns({
+        t,
+        getForm: () => createFormRef.current,
+        quantityField: 'notice_quantity',
+        unitField: 'material_unit',
+        scenario: 'purchase',
+        quantityDecimals,
+        unitWidth: 80,
+        quantityWidth: 180,
+        controlSize: 'small',
+      }),
       {
         title: t('app.kuaizhizao.shipmentNotice.import.unitPrice'),
         dataIndex: 'unit_price',
@@ -1175,14 +1461,17 @@ const ReceiptNoticesPage: React.FC = () => {
     [t, i18n.language],
   );
 
-  const handleCreate = async () => {
+  const initReceiptNoticeCreateForm = useCallback(async () => {
+    setEditingId(null);
+    createFormRef.current?.resetFields();
+    const pending = pendingCreateFormValuesRef.current;
+    if (pending) {
+      pendingCreateFormValuesRef.current = null;
+      createFormRef.current?.setFieldsValue(pending);
+      return;
+    }
     setPreviewCode(null);
     setEffectiveRuleCode(null);
-    setEditingId(null);
-    setCreateModalVisible(true);
-    window.setTimeout(() => {
-      createFormRef.current?.setFieldsValue({ items: [defaultReceiptItem] });
-    }, 100);
     let ruleCode = getPageRuleCode('kuaizhizao-receipt-notice');
     let autoGenerate = isAutoGenerateEnabled('kuaizhizao-receipt-notice');
     try {
@@ -1191,30 +1480,47 @@ const ReceiptNoticesPage: React.FC = () => {
         ruleCode = pageConfig.ruleCode;
         autoGenerate = !!pageConfig.autoGenerate;
       }
-    } catch {}
+    } catch {
+      /* 编号规则读取失败时仍打开表单 */
+    }
+    let noticeCode = '';
     if (autoGenerate && ruleCode) {
       setEffectiveRuleCode(ruleCode);
-      testGenerateCode({ rule_code: ruleCode })
-        .then((res) => {
-          const preview = res.code;
-          setPreviewCode(preview ?? null);
-          window.setTimeout(() => {
-            createFormRef.current?.setFieldsValue({ notice_code: preview ?? '', items: [defaultReceiptItem] });
-          }, 100);
-        })
-        .catch((e) => {
-          window.console.warn(t('app.kuaizhizao.receiptNotice.codePreviewFailed'), e);
-          setPreviewCode(null);
-        });
-    } else {
-      setPreviewCode(null);
+      try {
+        const preview = await testGenerateCode({ rule_code: ruleCode });
+        noticeCode = preview.code ?? '';
+        setPreviewCode(noticeCode || null);
+      } catch (e) {
+        window.console.warn(t('app.kuaizhizao.receiptNotice.codePreviewFailed'), e);
+        setPreviewCode(null);
+      }
     }
+    createFormRef.current?.setFieldsValue({
+      notice_code: noticeCode,
+      items: [defaultReceiptItem],
+    });
+  }, [defaultReceiptItem, t]);
+
+  const handleCreate = () => {
+    pendingCreateFormValuesRef.current = null;
+    navigate(RECEIPT_NOTICE_CREATE_PATH);
   };
 
-  const isPullLineSelectable = useCallback(
-    (record: { remaining_quantity?: number }) => Number(record.remaining_quantity ?? 0) > 0,
-    [],
-  );
+  useEffect(() => {
+    if (!isFormPage) {
+      formPageInitKeyRef.current = null;
+      return;
+    }
+    const initKey = isCreatePage ? 'create' : `edit-${editRouteId}`;
+    if (formPageInitKeyRef.current === initKey) return;
+    formPageInitKeyRef.current = initKey;
+    if (isCreatePage) {
+      void initReceiptNoticeCreateForm();
+    } else if (editRouteId != null) {
+      void loadReceiptNoticeEditForm(editRouteId);
+    }
+  }, [editRouteId, initReceiptNoticeCreateForm, isCreatePage, isFormPage, loadReceiptNoticeEditForm]);
+
 
   const pullFromPurchaseOrderScopeOptions = useMemo(
     () => [
@@ -1260,10 +1566,10 @@ const ReceiptNoticesPage: React.FC = () => {
         return { data: [], total: 0 };
       }
     },
-    isRowDisabled: (record) => !isPullLineSelectable(record),
+    isRowDisabled: (record) => !isPullOpenLineSelectable(record),
     onConfirm: async (_keys, rows) => {
       const selectedIds = rows
-        .filter((row) => isPullLineSelectable(row))
+        .filter((row) => isPullOpenLineSelectable(row))
         .map((row) => Number(row.id))
         .filter((id) => id > 0);
       if (!selectedIds.length) {
@@ -1313,6 +1619,8 @@ const ReceiptNoticesPage: React.FC = () => {
       supplier_name: order.supplier_name,
       supplier_contact: order.supplier_contact,
       supplier_phone: order.supplier_phone,
+      department_id: order.department_id ?? undefined,
+      department_name: order.department_name ?? undefined,
     });
     if (order.items && order.items.length > 0) {
       const items = order.items.map((it: any) => ({
@@ -1326,7 +1634,9 @@ const ReceiptNoticesPage: React.FC = () => {
       createFormRef.current?.setFieldsValue({ items });
     }
   };
-  useNewShortcut(handleCreate);
+  useNewShortcut(() => {
+    if (!isFormPage) handleCreate();
+  });
   const createButtonLabel = useMemo(
     () => withSingleNewShortcutHint(t('app.kuaizhizao.receiptNotice.create')),
     [t],
@@ -1357,8 +1667,10 @@ const ReceiptNoticesPage: React.FC = () => {
         window.console.warn(t('app.kuaizhizao.receiptNotice.codeGenerateFailed'), e);
       }
     }
+    const shouldCommit = createCommitAfterSaveRef.current;
+    createCommitAfterSaveRef.current = false;
     try {
-      await receiptNoticeApi.create({
+      const created = (await receiptNoticeApi.create({
         notice_code: noticeCode || undefined,
         purchase_order_id: values.purchase_order_id,
         purchase_order_code: values.purchase_order_code,
@@ -1366,6 +1678,11 @@ const ReceiptNoticesPage: React.FC = () => {
         supplier_name: values.supplier_name ?? supplier.supplier_name,
         supplier_contact: values.supplier_contact,
         supplier_phone: values.supplier_phone,
+        ...resolvePurchaseDepartmentPayload(
+          values.department_id,
+          resolveDepartmentName,
+          values.department_name,
+        ),
         warehouse_id: values.warehouse_id,
         warehouse_name: values.warehouse_name,
         planned_receipt_date: values.planned_receipt_date ? formatDateTime(values.planned_receipt_date, 'YYYY-MM-DD') : undefined,
@@ -1376,17 +1693,59 @@ const ReceiptNoticesPage: React.FC = () => {
           material_code: it.material_code,
           material_name: it.material_name,
           material_unit: it.material_unit || defaultUnit,
+          ...pickDocumentLineDualQuantityFields(it as Record<string, unknown>),
           notice_quantity: Number(it.notice_quantity) || 0,
           unit_price: it.unit_price || 0,
+          total_amount: computeSimpleDocumentLineTotal(
+            Number(it.notice_quantity) || 0,
+            Number(it.unit_price) || 0,
+          ),
         })),
-      });
-      messageApi.success(t('common.createSuccess'));
-      setCreateModalVisible(false);
+      })) as { id?: number };
+      const savedId = created?.id;
+      if (shouldCommit) {
+        if (savedId == null) {
+          messageApi.error(t('common.operationFailed'));
+          return;
+        }
+        try {
+          await receiptNoticeApi.commit(savedId);
+        } catch (error: unknown) {
+          setEditingId(savedId);
+          setEditingBusinessStatus('待收货');
+          setEditingReviewStatus('草稿');
+          editFormRef.current?.setFieldsValue({
+            purchase_order_id: values.purchase_order_id,
+            purchase_order_code: values.purchase_order_code,
+            supplier_id: values.supplier_id,
+            supplier_name: values.supplier_name,
+            supplier_contact: values.supplier_contact,
+            supplier_phone: values.supplier_phone,
+            department_id: values.department_id,
+            department_name: values.department_name,
+            warehouse_id: values.warehouse_id,
+            warehouse_name: values.warehouse_name,
+            planned_receipt_date: values.planned_receipt_date,
+            notes: values.notes,
+            attachments: normalizeDocumentAttachments(values.attachments),
+            items: validItems,
+          });
+          formPageInitKeyRef.current = null;
+          navigate(receiptNoticeEditPath(savedId));
+          messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+          setStatsVersion((v) => v + 1);
+          actionRef.current?.reload();
+          return;
+        }
+        messageApi.success(t('app.kuaizhizao.receiptNotice.committed'));
+      } else {
+        messageApi.success(t('common.createSuccess'));
+      }
       setEffectiveRuleCode(null);
       setStatsVersion((v) => v + 1);
       invalidateMenuBadgeCounts();
-
       actionRef.current?.reload();
+      leaveReceiptNoticeFormPage();
     } catch (error: any) {
       messageApi.error(error.message || t('common.createFailed'));
       throw error;
@@ -1394,26 +1753,44 @@ const ReceiptNoticesPage: React.FC = () => {
   };
 
   const handleEditSubmit = async (values: any) => {
-    if (!editingId) return;
+    const saveId = editingId ?? editRouteId;
+    if (!saveId) return;
+    const shouldCommit = editCommitAfterSaveRef.current;
+    editCommitAfterSaveRef.current = false;
     try {
-      await receiptNoticeApi.update(editingId.toString(), {
+      await receiptNoticeApi.update(String(saveId), {
         supplier_contact: values.supplier_contact,
         supplier_phone: values.supplier_phone,
+        ...resolvePurchaseDepartmentPayload(
+          values.department_id,
+          resolveDepartmentName,
+          values.department_name,
+        ),
         warehouse_id: values.warehouse_id,
         warehouse_name: values.warehouse_name,
         planned_receipt_date: values.planned_receipt_date ? formatDateTime(values.planned_receipt_date, 'YYYY-MM-DD') : undefined,
         notes: values.notes,
         attachments: normalizeDocumentAttachments(values.attachments),
       });
-      messageApi.success(t('common.updateSuccess'));
-      setEditModalVisible(false);
-      if (noticeDetail?.id === editingId) {
-        const fresh = await receiptNoticeApi.get(editingId.toString());
+      if (shouldCommit) {
+        try {
+          await receiptNoticeApi.commit(saveId);
+        } catch (error: unknown) {
+          messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+          actionRef.current?.reload();
+          return;
+        }
+        messageApi.success(t('app.kuaizhizao.receiptNotice.committed'));
+      } else {
+        messageApi.success(t('common.updateSuccess'));
+      }
+      if (noticeDetail?.id === saveId) {
+        const fresh = await receiptNoticeApi.get(String(saveId));
         setNoticeDetail(fresh as ReceiptNoticeDetail);
       }
       invalidateMenuBadgeCounts();
-
       actionRef.current?.reload();
+      leaveReceiptNoticeFormPage();
     } catch (error: any) {
       messageApi.error(error.message || t('common.updateFailed'));
       throw error;
@@ -1501,7 +1878,12 @@ const ReceiptNoticesPage: React.FC = () => {
         <Col span={8}>
           <ProFormDatePicker name="planned_receipt_date" label={t('app.kuaizhizao.receiptNotice.plannedReceiptDate')} fieldProps={buildFutureDateShortcutFieldProps({ getForm: () => createFormRef.current, fieldName: 'planned_receipt_date', t })} />
         </Col>
-        <Col span={8} />
+        <Col span={8}>
+          <PurchaseDepartmentFormField
+            options={departmentOptions}
+            loading={departmentOptionsLoading}
+          />
+        </Col>
         <Col span={8} />
       </Row>
       <UniTableDetail
@@ -1547,6 +1929,7 @@ const ReceiptNoticesPage: React.FC = () => {
           style: { width: '100%', margin: 0 },
         }}
       />
+      <ReceiptNoticeFormSummary />
       <ProFormTextArea name="notes" label={t('common.remark')} placeholder={t('common.remark')} fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
       <DocumentAttachmentsField category="receipt_notice_attachments" />
     </>
@@ -1581,6 +1964,14 @@ const ReceiptNoticesPage: React.FC = () => {
           <ProFormDatePicker name="planned_receipt_date" label={t('app.kuaizhizao.receiptNotice.plannedReceiptDate')} fieldProps={buildFutureDateShortcutFieldProps({ getForm: () => editFormRef.current, fieldName: 'planned_receipt_date', t })} />
         </Col>
       </Row>
+      <Row gutter={16}>
+        <Col span={8}>
+          <PurchaseDepartmentFormField
+            options={departmentOptions}
+            loading={departmentOptionsLoading}
+          />
+        </Col>
+      </Row>
       <ProFormText name="warehouse_name" hidden />
       <div className="uni-table-detail" style={{ width: '100%' }}>
         <div style={{ fontWeight: 500, marginBottom: 8 }}>{t('app.kuaizhizao.shipmentNotice.noticeItems')}</div>
@@ -1599,6 +1990,7 @@ const ReceiptNoticesPage: React.FC = () => {
           }}
         </AntForm.Item>
       </div>
+      <ReceiptNoticeFormSummary />
       <ProFormTextArea name="notes" label={t('common.remark')} placeholder={t('common.remark')} fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
       <DocumentAttachmentsField category="receipt_notice_attachments" />
     </>
@@ -1643,6 +2035,101 @@ const ReceiptNoticesPage: React.FC = () => {
   const showReceiptNoticeAttachments =
     Boolean(noticeDetail) && hasDocumentAttachments(receiptNoticeAttachments);
 
+  const receiptNoticeCanCommitEdit =
+    isCreatePage
+    || (['待收货'].includes(String(editingBusinessStatus ?? '').trim())
+      && ['', '草稿', 'draft', 'DRAFT', '已驳回', '审核驳回', 'rejected'].includes(
+        String(editingReviewStatus ?? '').trim(),
+      ));
+
+  const triggerReceiptNoticeCommit = useCallback(() => {
+    if (isCreatePage) {
+      createCommitAfterSaveRef.current = true;
+      void createFormRef.current?.submit?.();
+      return;
+    }
+    editCommitAfterSaveRef.current = true;
+    void editFormRef.current?.submit?.();
+  }, [isCreatePage]);
+
+  const submitReceiptNoticeForm = useCallback(() => {
+    if (isCreatePage) {
+      void createFormRef.current?.submit?.();
+      return;
+    }
+    void editFormRef.current?.submit?.();
+  }, [isCreatePage]);
+
+  useSubmitShortcut(submitReceiptNoticeForm, isFormPage);
+
+  if (isFormPage) {
+    return (
+      <>
+        <DocumentFormPageLayout
+          header={
+            <>
+              <Space align="center" size={8}>
+                <Button
+                  type="text"
+                  icon={<ArrowLeftOutlined />}
+                  aria-label={t('common.back')}
+                  onClick={leaveReceiptNoticeFormPage}
+                />
+                <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
+                  {isCreatePage
+                    ? t('app.kuaizhizao.receiptNotice.create')
+                    : t('app.kuaizhizao.receiptNotice.edit')}
+                </Typography.Title>
+              </Space>
+              <DocumentFormPageHeaderActions
+                onCancel={leaveReceiptNoticeFormPage}
+                onSaveDraft={submitReceiptNoticeForm}
+                onPrimarySubmit={submitReceiptNoticeForm}
+                isCreatePage={isCreatePage}
+                showSaveDraft={false}
+                canSubmitAfterSave={false}
+                showCommitSubmit={receiptNoticeCanCommitEdit}
+                onCommitSubmit={triggerReceiptNoticeCommit}
+              />
+            </>
+          }
+        >
+          <Spin spinning={formPageLoading}>
+            <ProForm
+              formRef={isCreatePage ? createFormRef : editFormRef}
+              layout="vertical"
+              submitter={false}
+              initialValues={isCreatePage ? { items: [defaultReceiptItem] } : undefined}
+              onFinish={isCreatePage ? handleCreateSubmit : handleEditSubmit}
+            >
+              {isCreatePage ? renderCreateForm() : renderEditForm()}
+            </ProForm>
+          </Spin>
+        </DocumentFormPageLayout>
+        {isCreatePage ? (
+          <>
+            <UniMaterialBatchPicker
+              open={materialPickerOpen}
+              onCancel={() => setMaterialPickerOpen(false)}
+              onConfirm={appendReceiptNoticeItemsFromMaterials}
+            />
+            <Suspense fallback={null}>
+              <LazyUniImport
+                visible={importVisible}
+                onCancel={() => setImportVisible(false)}
+                onConfirm={handleFormLineImport}
+                title={t('app.kuaizhizao.receiptNotice.importItemsTitle')}
+                headers={noticeItemImportTemplate.importHeaders}
+                exampleRow={noticeItemImportTemplate.importExampleRow}
+                columnOptions={noticeItemImportTemplate.importColumnOptions}
+              />
+            </Suspense>
+          </>
+        ) : null}
+      </>
+    );
+  }
+
   return (
     <>
       <ListPageTemplate statCards={statCards}>
@@ -1674,15 +2161,24 @@ const ReceiptNoticesPage: React.FC = () => {
               createIcon={<PlusOutlined />}
               createLabel={createButtonLabel}
               onCreate={handleCreate}
-              menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
-                {
-                  key: 'pull-from-purchase-order',
-                  actionKey: 'receipt_notice.pull_from_purchase_order',
-                  onClick: () => {
-                    pullFromPurchaseOrderQuery.openModal();
+              menuItems={[
+                ...buildKuaizhizaoPullCreateMenuItems(t, [
+                  {
+                    key: 'pull-from-purchase-order',
+                    actionKey: 'receipt_notice.pull_from_purchase_order',
+                    onClick: () => {
+                      pullFromPurchaseOrderQuery.openModal();
+                    },
                   },
+                ]),
+                { type: 'divider' as const, key: 'copy-selected-divider' },
+                {
+                  key: 'copy-selected',
+                  label: t('app.kuaizhizao.receiptNotice.copySelectedCreate'),
+                  disabled: selectedNoticesForBatch.length !== 1,
+                  onClick: () => void handleCopySelectedReceiptNotice(),
                 },
-              ])}
+              ]}
             />,
             <UniPushToolbarButton
               key={`receipt-notice-push-${selectedNoticeForToolbar?.id ?? 'none'}`}
@@ -1696,11 +2192,24 @@ const ReceiptNoticesPage: React.FC = () => {
               }
               pushTargets={{ 'push-purchase-receipt': 'purchase_receipt' }}
             />,
+            <UniBatchMenuButton
+              key="receipt-notice-submit"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={receiptNoticeToolbarAuditMenus.submitItems}
+              buttonText={t('common.submit')}
+            />,
+            <UniBatchMenuButton
+              key="receipt-notice-audit"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={receiptNoticeToolbarAuditMenus.auditItems}
+              buttonText={t('components.uniAction.audit')}
+            />,
           ]}
           enableRowSelection={viewTypeState !== 'detailTable'}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
+          deleteButtonText={t('common.delete')}
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.receiptNotice.confirmBatchDelete', { count })}
           toolBarActionsAfterBatch={[
@@ -1888,7 +2397,26 @@ const ReceiptNoticesPage: React.FC = () => {
         size={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           noticeDetail ? (
-            <DetailDrawerActions
+            <Space>
+              <UniWorkflowActions
+                {...rowActionKind('skip')}
+                record={noticeDetail}
+                entityName={t('app.kuaizhizao.receiptNotice.entityName')}
+                entityType="receipt_notice"
+                auditNodeKey="receipt_notice"
+                unifiedAudit
+                resourcePrefix={RECEIPT_NOTICE_RESOURCE}
+                statusField="status"
+                reviewStatusField="review_status"
+                draftStatuses={['待收货']}
+                pendingStatuses={['待审核']}
+                approvedStatuses={['审核通过', '已通过', '已审核']}
+                rejectedStatuses={['审核驳回', '已驳回']}
+                onSuccess={() => {
+                  actionRef.current?.reload();
+                }}
+              />
+              <DetailDrawerActions
               items={[
                 {
                   key: 'notify',
@@ -1938,6 +2466,7 @@ const ReceiptNoticesPage: React.FC = () => {
                 },
               ]}
             />
+            </Space>
           ) : null
         }
         collaborationTitleSuffix={
@@ -2027,47 +2556,6 @@ const ReceiptNoticesPage: React.FC = () => {
               }
             : undefined
         }
-      />
-
-      <FormModalTemplate
-        title={t('app.kuaizhizao.receiptNotice.create')}
-        open={createModalVisible}
-        onClose={() => { setCreateModalVisible(false); setEffectiveRuleCode(null); }}
-        formRef={createFormRef}
-        onFinish={handleCreateSubmit}
-        width={MODAL_CONFIG.LARGE_WIDTH}
-        grid={false}
-        initialValues={{ items: [defaultReceiptItem] }}
-      >
-        {renderCreateForm()}
-      </FormModalTemplate>
-
-      <FormModalTemplate
-        title={t('app.kuaizhizao.receiptNotice.edit')}
-        open={editModalVisible}
-        onClose={() => setEditModalVisible(false)}
-        afterOpenChange={(open) => {
-          if (open && pendingEditFormValues) {
-            editFormRef.current?.setFieldsValue(pendingEditFormValues);
-            return;
-          }
-          if (!open) {
-            setPendingEditFormValues(null);
-            editFormRef.current?.resetFields?.();
-          }
-        }}
-        formRef={editFormRef}
-        onFinish={handleEditSubmit}
-        width={MODAL_CONFIG.LARGE_WIDTH}
-        grid={false}
-      >
-        {renderEditForm()}
-      </FormModalTemplate>
-
-      <UniMaterialBatchPicker
-        open={materialPickerOpen}
-        onCancel={() => setMaterialPickerOpen(false)}
-        onConfirm={appendReceiptNoticeItemsFromMaterials}
       />
 
       <Modal

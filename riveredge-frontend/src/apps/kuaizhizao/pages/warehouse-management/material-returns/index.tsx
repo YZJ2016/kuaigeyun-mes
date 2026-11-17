@@ -15,7 +15,7 @@ import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormT
 import { App, Button, Col, Descriptions, Form, InputNumber, Modal, Row, Table, Tag, Typography } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
@@ -29,7 +29,15 @@ import { normalizeDocumentAttachments } from '../../../utils/documentAttachments
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
-import {formatDateTime, formatQuantity} from '../../../../../utils/format';
+import { formatDateTime, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import {
+  enrichStandaloneDocsWithDetail,
+  exportWarehouseDocLinesXlsx,
+  filterWarehouseFlatRowsByExportKeys,
+  flattenStandaloneWarehouseDocsForExport,
+  resolveWarehouseListExportHeaders,
+} from '../shared/warehouseDocListExport';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
@@ -656,7 +664,58 @@ const MaterialReturnsPage: React.FC = () => {
               noun: t('app.kuaizhizao.warehouseMaterialReturn.title'),
             })
           }
-          request={async (params, sort, _filter, searchFormValues) => {
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            try {
+              const loadAll = async () => {
+                const listParams = resolveWarehouseDocListParams({}, undefined, {
+                  docDateParamPrefix: 'return',
+                });
+                const rows = await fetchAllListItems((p) =>
+                  warehouseApi.materialReturn.list({ ...listParams, ...p }),
+                );
+                return rows;
+              };
+              const headers = await resolveWarehouseListExportHeaders(
+                type,
+                keys,
+                pageData as MaterialReturn[] | undefined,
+                listRowsRef.current,
+                loadAll,
+              );
+              if (headers.length === 0) {
+                messageApi.warning(t('common.exportNoData'));
+                return;
+              }
+              const enriched = await enrichStandaloneDocsWithDetail(headers, (id) =>
+                warehouseApi.materialReturn.get(String(id)),
+              );
+              let flatRows = flattenStandaloneWarehouseDocsForExport(enriched, {
+                docCodeField: 'return_code',
+                docTypeLabel: t('app.kuaizhizao.warehouseInbound.receiptType.material_return'),
+                partnerField: 'returner_name',
+                dateFields: ['return_time'],
+                operatorFields: ['returner_name'],
+              });
+              if (type === 'selected' && keys?.length) {
+                flatRows = filterWarehouseFlatRowsByExportKeys(flatRows, keys);
+              }
+              await exportWarehouseDocLinesXlsx(
+                flatRows,
+                `material-return-lines-${todaySiteDateString()}.xlsx`,
+                {
+                  t,
+                  sheetName: t('app.kuaizhizao.warehouseMaterialReturn.title'),
+                  includeDocTypeColumn: false,
+                  direction: 'standalone',
+                },
+              );
+              messageApi.success(t('common.exportSuccess', { count: flatRows.length }));
+            } catch (error: unknown) {
+              messageApi.error((error as { message?: string })?.message || t('common.exportFailed'));
+            }
+          }}
+          request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             try {
               const listParams = resolveWarehouseDocListParams(searchFormValues, sort, {
                 docDateParamPrefix: 'return',

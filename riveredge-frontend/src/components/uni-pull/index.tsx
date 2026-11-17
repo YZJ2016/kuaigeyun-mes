@@ -1,15 +1,15 @@
 import React from 'react';
-import { Button, Dropdown, Space } from 'antd';
+import { Button, Dropdown, Space, Tooltip } from 'antd';
 import type { ButtonProps } from 'antd';
 import { DownOutlined, FileSearchOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { withSingleNewShortcutHint } from '../../utils/globalNewShortcut';
 
 export interface UniPullMenuItem {
   key: string;
-  label: React.ReactNode;
+  label?: React.ReactNode;
   onClick?: () => void;
   disabled?: boolean;
+  type?: 'divider';
 }
 
 export interface UniPullCreateToolbarProps {
@@ -17,6 +17,7 @@ export interface UniPullCreateToolbarProps {
   onCreate: () => void;
   menuItems: UniPullMenuItem[];
   createIcon?: React.ReactNode;
+  size?: ButtonProps['size'];
   /** 作为列表子项时的 React key（与 compactKey 默认同值） */
   compactKey?: string;
 }
@@ -30,28 +31,38 @@ export const UniPullCreateToolbar: React.FC<UniPullCreateToolbarProps> = ({
   onCreate,
   menuItems,
   createIcon,
+  size,
   compactKey = 'uni-pull-create-toolbar',
 }) => {
+  const { t } = useTranslation();
   const createButtonLabel =
-    typeof createLabel === 'string' ? withSingleNewShortcutHint(createLabel) : createLabel;
+    typeof createLabel === 'string'
+      ? createLabel.replace(/\s*\(Alt\+N\)/gi, '').trimEnd()
+      : createLabel;
 
   return (
     <Space.Compact key={compactKey} className="uni-pull-create-toolbar">
-      <Button type="primary" icon={createIcon} onClick={onCreate}>
-        {createButtonLabel}
-      </Button>
+      <Tooltip title={t('common.shortcutNewHover')}>
+        <Button type="primary" size={size} icon={createIcon} onClick={onCreate}>
+          {createButtonLabel}
+        </Button>
+      </Tooltip>
       <Dropdown
         trigger={['click']}
         menu={{
-          items: menuItems.map((it) => ({
-            key: it.key,
-            label: it.label,
-            disabled: it.disabled,
-            onClick: it.onClick,
-          })),
+          items: menuItems.map((it) =>
+            it.type === 'divider'
+              ? { type: 'divider' as const, key: it.key }
+              : {
+                  key: it.key,
+                  label: it.label,
+                  disabled: it.disabled,
+                  onClick: it.onClick,
+                },
+          ),
         }}
       >
-        <Button type="primary" icon={<DownOutlined />} />
+        <Button type="primary" size={size} icon={<DownOutlined />} />
       </Dropdown>
     </Space.Compact>
   );
@@ -82,7 +93,7 @@ export const UniPullLoadButton: React.FC<UniPullLoadButtonProps> = ({
 }) => {
   const { t } = useTranslation();
   const resolvedLabel = label ?? t('components.uniPull.loadFromDocument');
-  const actionableItems = menuItems.filter((item) => !item.disabled);
+  const actionableItems = menuItems.filter((item) => item.type !== 'divider' && !item.disabled);
 
   if (actionableItems.length === 1 && actionableItems[0].onClick) {
     const onlyItem = actionableItems[0];
@@ -105,12 +116,16 @@ export const UniPullLoadButton: React.FC<UniPullLoadButtonProps> = ({
     key={compactKey}
     trigger={['click']}
     menu={{
-      items: menuItems.map((it) => ({
-        key: it.key,
-        label: it.label,
-        disabled: it.disabled,
-        onClick: it.onClick,
-      })),
+      items: menuItems.map((it) =>
+        it.type === 'divider'
+          ? { type: 'divider' as const, key: it.key }
+          : {
+              key: it.key,
+              label: it.label,
+              disabled: it.disabled,
+              onClick: it.onClick,
+            },
+      ),
     }}
   >
     <Button type={type} color={color} variant={variant} icon={icon ?? <FileSearchOutlined />}>

@@ -38,6 +38,22 @@ from apps.kuaizhizao.services.document_action_policy.enricher import (
 )
 
 
+def _receipt_notice_line_amount(
+    qty: Decimal,
+    unit_price: Any,
+    *,
+    explicit_total: Any = None,
+) -> Decimal:
+    from apps.kuaizhizao.utils.document_amount_write import (
+        line_total_qty_unit_price,
+        resolve_simple_line_total,
+    )
+
+    if explicit_total is not None:
+        return resolve_simple_line_total(qty, unit_price, explicit_total)
+    return line_total_qty_unit_price(qty, unit_price)
+
+
 async def _first_storage_location_for_warehouse(
     tenant_id: int, warehouse_id: int
 ) -> Tuple[Optional[int], Optional[str]]:
@@ -287,10 +303,10 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             for item_data in items:
                 qty = Decimal(str(item_data.notice_quantity))
                 unit_p = Decimal(str(item_data.unit_price or 0))
-                amt = (
-                    Decimal(str(item_data.total_amount))
-                    if item_data.total_amount is not None
-                    else qty * unit_p
+                amt = _receipt_notice_line_amount(
+                    qty,
+                    unit_p,
+                    explicit_total=item_data.total_amount,
                 )
                 # 显式字段落库，避免 model_dump **展开带入 Tortoise 未定义字段导致 TypeError（500）
                 spec = item_data.material_spec
@@ -740,7 +756,7 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             unit_p = Decimal(str(ni.unit_price or 0))
             if unit_p <= 0 and po_item is not None:
                 unit_p = po_item.unit_price
-            total_amt = qty * unit_p
+            total_amt = _receipt_notice_line_amount(qty, unit_p)
             po_line_id = int(ni.purchase_order_item_id) if ni.purchase_order_item_id else 0
             material_spec = (getattr(po_item, "material_spec", None) or None) or ni.material_spec
 

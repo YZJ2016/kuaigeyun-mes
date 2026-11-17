@@ -21,6 +21,10 @@ export interface DocumentFormPageHeaderActionsProps {
   primarySaveLabel?: string;
   primaryLoading?: boolean;
   saveDraftLoading?: boolean;
+  /** 保存只落草稿，另显示「提交」写成已提交。不影响未传入的页面。 */
+  showCommitSubmit?: boolean;
+  onCommitSubmit?: () => void;
+  commitSubmitLoading?: boolean;
 }
 
 export function DocumentFormPageHeaderActions({
@@ -36,6 +40,9 @@ export function DocumentFormPageHeaderActions({
   primarySaveLabel,
   primaryLoading = false,
   saveDraftLoading = false,
+  showCommitSubmit = false,
+  onCommitSubmit,
+  commitSubmitLoading = false,
 }: DocumentFormPageHeaderActionsProps) {
   const { t } = useTranslation();
 
@@ -50,6 +57,21 @@ export function DocumentFormPageHeaderActions({
       ? primaryCreateLabel ?? t('common.save')
       : primarySubmitLabel ?? t('components.layoutTemplates.documentFormPage.saveAndSubmit')
     : primarySaveLabel ?? t('common.save');
+
+  if (showCommitSubmit) {
+    return (
+      <Space wrap>
+        <Button onClick={onCancel}>{t('common.cancel')}</Button>
+        <Button type="primary" loading={saveDraftLoading} onClick={onSaveDraft}>
+          {t('common.save')}
+          {SUBMIT_SHORTCUT_HINT}
+        </Button>
+        <Button loading={commitSubmitLoading} onClick={onCommitSubmit}>
+          {t('common.submit')}
+        </Button>
+      </Space>
+    );
+  }
 
   return (
     <Space wrap>

@@ -26,10 +26,14 @@ export interface ReceiptNotice {
   supplier_name?: string;
   supplier_contact?: string;
   supplier_phone?: string;
+  department_id?: number | null;
+  department_name?: string | null;
   warehouse_id?: number;
   warehouse_name?: string;
   planned_receipt_date?: string;
   status?: string;
+  review_status?: string;
+  audit?: { phase?: string; allowed_actions?: string[] };
   notified_at?: string;
   purchase_receipt_id?: number;
   purchase_receipt_code?: string;
@@ -123,4 +127,14 @@ export const receiptNoticeApi = {
     ),
   withdraw: async (id: string) =>
     apiRequest(`/apps/kuaizhizao/receipt-notices/${id}/withdraw`, { method: 'POST' }),
+  commit: async (id: number) =>
+    apiRequest(`/core/uni-audit/receipt_notice/${id}/submit`, { method: 'POST' }),
+  submitForReview: async (id: number) =>
+    apiRequest(`/core/uni-audit/receipt_notice/${id}/submit_review`, { method: 'POST' }),
+  withdrawSubmit: async (id: number) =>
+    apiRequest(`/core/uni-audit/receipt_notice/${id}/withdraw`, { method: 'POST' }),
+  approve: async (id: number) =>
+    apiRequest(`/core/uni-audit/receipt_notice/${id}/approve`, { method: 'POST' }),
+  revokeApproval: async (id: number) =>
+    apiRequest(`/core/uni-audit/receipt_notice/${id}/revoke`, { method: 'POST' }),
 };

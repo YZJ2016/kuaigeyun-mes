@@ -23,13 +23,84 @@ export type DocumentLineDualQuantityFormColumnOptions = {
   onAfterQuantityChange?: (rowIndex: number) => void;
 };
 
-/** 单据明细表：单位列 + 主/副数量列（与采购/销售订单同一套交互）。 */
+const DUAL_QUANTITY_COL_WIDTH = 168;
+
+export type DocumentLineDualQuantityPairColumnOptions = {
+  t: (key: string) => string;
+  getForm: () => FormInstance | null | undefined;
+  listName?: string;
+  quantityField: string;
+  unitField: string;
+  scenario?: MaterialScenario;
+  quantityPrecision?: number;
+  width?: number;
+  columnSpread?: Record<string, unknown>;
+  /** 默认 true：单位贴主数量；有独立单位列时须显式 false */
+  inlineUnitWithQuantity?: boolean;
+  onAfterQuantityChange?: (rowIndex: number) => void;
+};
+
+/** 主数量、副数量两列。无副单位时副数量列仍显示；默认单位贴主数量（与采购申请一致）。 */
+export function buildDocumentLineDualQuantityPairColumns(
+  params: DocumentLineDualQuantityPairColumnOptions,
+): Record<string, unknown>[] {
+  const listName = params.listName ?? 'items';
+  const width = params.width ?? DUAL_QUANTITY_COL_WIDTH;
+  const scenario = params.scenario ?? 'purchase';
+  const quantityPrecision = params.quantityPrecision ?? 4;
+  const inlineUnitWithQuantity = params.inlineUnitWithQuantity !== false;
+
+  const makeColumn = (part: 'primary' | 'aux') => ({
+    title: params.t(part === 'primary' ? 'common.primaryQuantity' : 'common.auxQuantity'),
+    dataIndex: part === 'primary' ? params.quantityField : 'aux_quantity',
+    width,
+    ...params.columnSpread,
+    render: (_: unknown, __: unknown, index: number) => (
+      <AntForm.Item
+        noStyle
+        shouldUpdate={(prev: Record<string, unknown>, curr: Record<string, unknown>) =>
+          (prev?.[listName] as Record<string, unknown>[])?.[index]?.material_id !==
+          (curr?.[listName] as Record<string, unknown>[])?.[index]?.material_id
+        }
+      >
+        {({ getFieldValue }) => {
+          const materialId = getFieldValue([listName, index, 'material_id']);
+          const form = params.getForm();
+          if (!form) return null;
+          return (
+            <DocumentLineDualQuantityFormCell
+              part={part}
+              form={form}
+              listName={listName}
+              rowIndex={index}
+              quantityField={params.quantityField}
+              unitField={params.unitField}
+              scenario={scenario}
+              quantityPrecision={quantityPrecision}
+              materialId={materialId}
+              inlineUnitWithQuantity={inlineUnitWithQuantity}
+              onAfterQuantityChange={
+                params.onAfterQuantityChange
+                  ? () => params.onAfterQuantityChange?.(index)
+                  : undefined
+              }
+            />
+          );
+        }}
+      </AntForm.Item>
+    ),
+  });
+
+  return [makeColumn('primary'), makeColumn('aux')];
+}
+
+/** 单据明细表：单位列 + 主数量列 + 副数量列。 */
 export function buildDocumentLineDualQuantityFormColumns(
   params: DocumentLineDualQuantityFormColumnOptions,
 ): Record<string, unknown>[] {
   const listName = params.listName ?? 'items';
   const unitWidth = params.unitWidth ?? 108;
-  const quantityWidth = params.quantityWidth ?? 192;
+  const quantityWidth = params.quantityWidth ?? DUAL_QUANTITY_COL_WIDTH;
   const scenario = params.scenario ?? 'purchase';
   const quantityDecimals = params.quantityDecimals ?? 4;
   const controlSize = params.controlSize ?? 'small';
@@ -71,44 +142,18 @@ export function buildDocumentLineDualQuantityFormColumns(
         </AntForm.Item>
       ),
     },
-    {
-      title: params.t('common.quantity'),
-      dataIndex: params.quantityField,
+    ...buildDocumentLineDualQuantityPairColumns({
+      t: params.t,
+      getForm: params.getForm,
+      listName,
+      quantityField: params.quantityField,
+      unitField: params.unitField,
+      scenario,
+      quantityPrecision: quantityDecimals,
       width: quantityWidth,
-      align: alignQuantity,
-      ...params.quantityColumnSpread,
-      render: (_: unknown, __: unknown, index: number) => (
-        <AntForm.Item
-          noStyle
-          shouldUpdate={(prev: Record<string, unknown>, curr: Record<string, unknown>) =>
-            (prev?.[listName] as Record<string, unknown>[])?.[index]?.material_id !==
-            (curr?.[listName] as Record<string, unknown>[])?.[index]?.material_id
-          }
-        >
-          {({ getFieldValue }) => {
-            const materialId = getFieldValue([listName, index, 'material_id']);
-            const form = params.getForm();
-            if (!form) return null;
-            return (
-              <DocumentLineDualQuantityFormCell
-                form={form}
-                listName={listName}
-                rowIndex={index}
-                quantityField={params.quantityField}
-                unitField={params.unitField}
-                scenario={scenario}
-                quantityPrecision={quantityDecimals}
-                materialId={materialId}
-                onAfterQuantityChange={
-                  params.onAfterQuantityChange
-                    ? () => params.onAfterQuantityChange?.(index)
-                    : undefined
-                }
-              />
-            );
-          }}
-        </AntForm.Item>
-      ),
-    },
+      columnSpread: { align: alignQuantity, ...params.quantityColumnSpread },
+      inlineUnitWithQuantity: false,
+      onAfterQuantityChange: params.onAfterQuantityChange,
+    }),
   ];
 }

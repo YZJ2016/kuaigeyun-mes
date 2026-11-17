@@ -431,15 +431,24 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="purchase-management/purchase-orders/new" element={withPageSuspense(PurchaseOrdersPage)} />
       <Route path="purchase-management/purchase-orders/:id/edit" element={withPageSuspense(PurchaseOrdersPage)} />
       <Route path="purchase-management/purchase-orders" element={withPageSuspense(PurchaseOrdersPage)} />
+      <Route path="purchase-management/payment-applications/new" element={withPageSuspense(PaymentApplicationsPage)} />
+      <Route path="purchase-management/payment-applications/:id/edit" element={withPageSuspense(PaymentApplicationsPage)} />
       <Route path="purchase-management/payment-applications" element={withPageSuspense(PaymentApplicationsPage)} />
+      <Route path="purchase-management/purchase-order-changes/:id/edit" element={withPageSuspense(PurchaseOrderChangesPage)} />
       <Route path="purchase-management/purchase-order-changes" element={withPageSuspense(PurchaseOrderChangesPage)} />
       <Route path="purchase-management/arrival-warnings" element={withPageSuspense(PurchaseArrivalWarningsPage)} />
       <Route path="purchase-management/purchase-requisitions/new" element={withPageSuspense(PurchaseRequisitionsPage)} />
       <Route path="purchase-management/purchase-requisitions/:id/edit" element={withPageSuspense(PurchaseRequisitionsPage)} />
       <Route path="purchase-management/purchase-requisitions" element={withPageSuspense(PurchaseRequisitionsPage)} />
+      <Route path="purchase-management/purchase-inquiries/new" element={withPageSuspense(PurchaseInquiriesPage)} />
+      <Route path="purchase-management/purchase-inquiries/:id/edit" element={withPageSuspense(PurchaseInquiriesPage)} />
       <Route path="purchase-management/purchase-inquiries" element={withPageSuspense(PurchaseInquiriesPage)} />
       <Route path="purchase-management/purchase-demand-parties" element={withPageSuspense(PurchaseDemandPartiesPage)} />
+      <Route path="purchase-management/receipt-notices/new" element={withPageSuspense(ReceiptNoticesPage)} />
+      <Route path="purchase-management/receipt-notices/:id/edit" element={withPageSuspense(ReceiptNoticesPage)} />
       <Route path="purchase-management/receipt-notices" element={withPageSuspense(ReceiptNoticesPage)} />
+      <Route path="purchase-management/purchase-returns/new" element={withPageSuspense(PurchaseReturnsPage)} />
+      <Route path="purchase-management/purchase-returns/:id/edit" element={withPageSuspense(PurchaseReturnsPage)} />
       <Route path="purchase-management/purchase-returns" element={withPageSuspense(PurchaseReturnsPage)} />
       <Route path="purchase-management/inbound" element={withPageSuspense(PurchaseInboundPage)} />
 
@@ -531,10 +540,16 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="sales-management/sales-orders/new" element={withPageSuspense(SalesOrdersPage)} />
       <Route path="sales-management/sales-orders/:id/edit" element={withPageSuspense(SalesOrdersPage)} />
       <Route path="sales-management/sales-orders" element={withPageSuspense(SalesOrdersPage)} />
+      <Route path="sales-management/sales-order-changes/new" element={withPageSuspense(SalesOrderChangesPage)} />
+      <Route path="sales-management/sales-order-changes/:id/edit" element={withPageSuspense(SalesOrderChangesPage)} />
       <Route path="sales-management/sales-order-changes" element={withPageSuspense(SalesOrderChangesPage)} />
+      <Route path="sales-management/shipment-notices/new" element={withPageSuspense(ShipmentNoticesPage)} />
+      <Route path="sales-management/shipment-notices/:id/edit" element={withPageSuspense(ShipmentNoticesPage)} />
       <Route path="sales-management/shipment-notices" element={withPageSuspense(ShipmentNoticesPage)} />
       <Route path="sales-management/customer-follow-ups" element={withPageSuspense(CustomerFollowUpsPage)} />
       <Route path="sales-management/sales-reviews" element={withPageSuspense(SalesReviewsPage)} />
+      <Route path="sales-management/sales-returns/new" element={withPageSuspense(SalesReturnsPage)} />
+      <Route path="sales-management/sales-returns/:id/edit" element={withPageSuspense(SalesReturnsPage)} />
       <Route path="sales-management/sales-returns" element={withPageSuspense(SalesReturnsPage)} />
       <Route path="sales-management/outbound" element={withPageSuspense(SalesOutboundPage)} />
       <Route path="sales-management/inbound" element={withPageSuspense(SalesInboundPage)} />

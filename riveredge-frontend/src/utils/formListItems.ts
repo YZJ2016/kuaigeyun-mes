@@ -17,3 +17,21 @@ export function normalizeFormListItems<T>(raw: unknown): T[] {
 export function hasFormListItems(raw: unknown): boolean {
   return normalizeFormListItems(raw).length > 0;
 }
+
+/** ProForm 提交时 Form.List 字段优先读 form 实例（onFinish 的 values 可能缺嵌套列表） */
+export function resolveFormListFieldForSubmit(
+  formRef: { current?: { getFieldValue?: (name: string) => unknown } | null } | null,
+  values: Record<string, unknown>,
+  fieldName: string,
+): unknown {
+  const fromRef = formRef?.current?.getFieldValue?.(fieldName);
+  const refRows = normalizeFormListItems(fromRef);
+  const valRows = normalizeFormListItems(values[fieldName]);
+  if (refRows.length > 0) {
+    return fromRef;
+  }
+  if (valRows.length > 0) {
+    return values[fieldName];
+  }
+  return fromRef ?? values[fieldName];
+}

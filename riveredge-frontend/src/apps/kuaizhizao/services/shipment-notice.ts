@@ -56,6 +56,7 @@ export interface ShipmentNotice {
   planned_ship_date?: string;
   shipping_address?: string;
   status?: string;
+  review_status?: string;
   notified_at?: string;
   sales_delivery_id?: number;
   sales_delivery_code?: string;
@@ -147,4 +148,14 @@ export const shipmentNoticeApi = {
     }),
   withdraw: async (id: string) =>
     apiRequest(`/apps/kuaizhizao/shipment-notices/${id}/withdraw`, { method: 'POST' }),
+  commit: async (id: number) =>
+    apiRequest(`/core/uni-audit/shipment_notice/${id}/submit`, { method: 'POST' }),
+  submitForReview: async (id: number) =>
+    apiRequest(`/core/uni-audit/shipment_notice/${id}/submit_review`, { method: 'POST' }),
+  withdrawSubmit: async (id: number) =>
+    apiRequest(`/core/uni-audit/shipment_notice/${id}/withdraw`, { method: 'POST' }),
+  approve: async (id: number) =>
+    apiRequest(`/core/uni-audit/shipment_notice/${id}/approve`, { method: 'POST' }),
+  revokeApproval: async (id: number) =>
+    apiRequest(`/core/uni-audit/shipment_notice/${id}/revoke`, { method: 'POST' }),
 };

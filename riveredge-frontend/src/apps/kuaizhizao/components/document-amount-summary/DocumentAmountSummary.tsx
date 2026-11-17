@@ -11,6 +11,8 @@ import {
   computePurchaseDocumentTotals,
   computeSalesDocumentTotals,
   formatDocumentMoneyYuan,
+  normalizeDocumentFormPriceType,
+  type DocumentGoodsTotals,
   type DocumentTotalsWithDiscount,
   type PurchaseDocumentTotals,
   type SalesDocumentTotals,
@@ -39,6 +41,7 @@ function splitBodyAndEmphasis(rows: SummaryRowDef[]): {
     'afterDiscount',
     'estimatedReceivable',
     'estimatedPayable',
+    'estimatedPayableAfterPrepayment',
     'estimatedTotalCost',
     'amount',
   ]);
@@ -174,6 +177,7 @@ function buildPurchaseRows(
   t: (key: string) => string,
   totals: PurchaseDocumentTotals,
   priceType: string,
+  prepaymentUnsettledBalance?: number,
 ): SummaryRowDef[] {
   const isInclusive = priceType === 'tax_inclusive';
   const hasFees = totals.otherSideFees > 0.005 || totals.ourSideFees > 0.005;
@@ -234,14 +238,35 @@ function buildPurchaseRows(
     },
   );
 
+  const payableBase = isInclusive
+    ? totals.estimatedPayable
+    : totals.goodsExcl + totals.otherSideFees;
+  const prepayUnsettled = prepaymentUnsettledBalance ?? 0;
+  if (prepayUnsettled > 0.005) {
+    rows.push({
+      key: 'prepaymentUnsettled',
+      label: t('app.kuaizhizao.purchaseOrder.amountPrepaymentUnsettled'),
+      hint: t('app.kuaizhizao.purchaseOrder.amountPrepaymentUnsettledHint'),
+      value: prepayUnsettled,
+      secondary: true,
+    });
+    rows.push({
+      key: 'estimatedPayableAfterPrepayment',
+      label: t('app.kuaizhizao.purchaseOrder.amountEstimatedPayableAfterPrepayment'),
+      hint: t('app.kuaizhizao.purchaseOrder.amountEstimatedPayableAfterPrepaymentHint'),
+      value: Math.max(0, payableBase - prepayUnsettled),
+      emphasis: !hasFees,
+    });
+  }
+
   if (hasFees) {
     rows.push(
       {
         key: 'estimatedPayable',
         label: t('app.kuaizhizao.purchaseOrder.amountEstimatedPayable'),
         hint: t('app.kuaizhizao.purchaseOrder.amountEstimatedPayableHint'),
-        value: isInclusive ? totals.estimatedPayable : totals.goodsExcl + totals.otherSideFees,
-        emphasis: true,
+        value: payableBase,
+        emphasis: prepayUnsettled <= 0.005,
       },
       {
         key: 'estimatedTotalCost',
@@ -444,6 +469,10 @@ export type DocumentAmountSummaryProps = {
   currencyCode?: string;
   /** 本位币，用于控制大写金额仅本币展示 */
   baseCurrencyCode?: string;
+  /** 采购单关联预付未核销（详情/编辑回显） */
+  prepaymentUnsettledBalance?: number;
+  /** 采购入库等：覆盖默认货值汇总（与后端 settlement rollup 同源） */
+  goodsTotalsFn?: (items: unknown[]) => DocumentGoodsTotals;
   style?: React.CSSProperties;
 };
 
@@ -502,6 +531,8 @@ export const DocumentAmountSummary: React.FC<DocumentAmountSummaryProps> = ({
   getFieldValue,
   currencyCode: currencyCodeProp,
   baseCurrencyCode,
+  prepaymentUnsettledBalance,
+  goodsTotalsFn,
   style,
 }) => {
   const { t } = useTranslation();
@@ -509,7 +540,10 @@ export const DocumentAmountSummary: React.FC<DocumentAmountSummaryProps> = ({
 
   const items = itemsProp ?? normalizeFormListItems(getFieldValue?.('items'));
   const feeDetails = feeDetailsProp ?? normalizeFormListItems(getFieldValue?.('fee_details'));
-  const priceType = (priceTypeProp ?? getFieldValue?.('price_type') ?? 'tax_exclusive') as string;
+  const priceType = normalizeDocumentFormPriceType(
+    priceTypeProp ?? getFieldValue?.('price_type'),
+    variant === 'purchase' ? 'purchase' : 'sales',
+  );
   const showDiscount =
     showDiscountProp ?? (variant === 'lines' || variant === 'sales');
   const discountAmount = showDiscount
@@ -528,12 +562,14 @@ export const DocumentAmountSummary: React.FC<DocumentAmountSummaryProps> = ({
 
   const goodsInclForCap = useMemo(
     () =>
-      computeDocumentGoodsTotals(items, priceType, (row) => ({
-        qty: row[quantityField],
-        price: row.unit_price,
-        taxRate: row.tax_rate,
-      })).goodsIncl,
-    [items, priceType, quantityField],
+      goodsTotalsFn
+        ? goodsTotalsFn(items).goodsIncl
+        : computeDocumentGoodsTotals(items, priceType, (row) => ({
+            qty: row[quantityField],
+            price: row.unit_price,
+            taxRate: row.tax_rate,
+          })).goodsIncl,
+    [goodsTotalsFn, items, priceType, quantityField],
   );
 
   const rows = useMemo(() => {
@@ -554,10 +590,29 @@ export const DocumentAmountSummary: React.FC<DocumentAmountSummaryProps> = ({
       );
     }
     if (variant === 'purchase') {
+      const purchaseTotals = goodsTotalsFn
+        ? (() => {
+            const goods = goodsTotalsFn(items);
+            const feesOnly = computePurchaseDocumentTotals(
+              [],
+              feeDetails,
+              priceType,
+              quantityField,
+            );
+            return {
+              ...goods,
+              otherSideFees: feesOnly.otherSideFees,
+              ourSideFees: feesOnly.ourSideFees,
+              estimatedPayable: goods.goodsIncl + feesOnly.otherSideFees,
+              estimatedTotalCost: goods.goodsIncl + feesOnly.ourSideFees,
+            };
+          })()
+        : computePurchaseDocumentTotals(items, feeDetails, priceType, quantityField);
       return buildPurchaseRows(
         t,
-        computePurchaseDocumentTotals(items, feeDetails, priceType, quantityField),
+        purchaseTotals,
         priceType,
+        prepaymentUnsettledBalance,
       );
     }
     return buildLinesRows(
@@ -565,7 +620,7 @@ export const DocumentAmountSummary: React.FC<DocumentAmountSummaryProps> = ({
       computeDocumentTotalsWithDiscount(items, priceType, quantityField, discountAmount),
       priceType,
     );
-  }, [variant, items, feeDetails, priceType, quantityField, discountAmount, t]);
+  }, [variant, items, feeDetails, priceType, quantityField, discountAmount, prepaymentUnsettledBalance, t]);
 
   const visibleRows = rows.filter((row) => !row.hidden);
   const { bodyRows, emphasisRows } = splitBodyAndEmphasis(visibleRows);

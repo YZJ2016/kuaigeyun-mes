@@ -3,8 +3,12 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { App, Input, InputNumber, Table, Typography } from 'antd';
+import { App, Button, Input, InputNumber, Select, Space, Table, Typography } from 'antd';
+import { ThunderboltOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { SerialNumbersImportTrigger } from '../../../../../components/serial-numbers-import';
+import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
+import { materialBatchApi, materialSerialApi, MATERIAL_SERIAL_GENERATE_MAX_COUNT } from '../../../../master-data/services/material';
 import {
   FormModalTemplate,
   MODAL_CONFIG,
@@ -21,6 +25,18 @@ import {
 } from './inboundHubTypes';
 import { normalizeInboundHubDetail } from './inboundHubNormalize';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { computeSimpleDocumentLineTotal } from '../../../utils/documentLineAmounts';
+import {
+  filterWarehouseTrackingColumns,
+  isMaterialBatchEntryEnabled,
+  isMaterialSerialEntryEnabled,
+  useWarehouseTrackingFlags,
+} from '../shared/warehouseTrackingFlags';
+import {
+  enrichInboundFormItemsTracking,
+  loadConfirmPreviewMaterialMeta,
+  type ConfirmPreviewMaterialMeta,
+} from './inboundItemTracking';
 
 type OtherInboundLineItem = {
   id?: number;
@@ -71,6 +87,18 @@ export const OtherInboundEditModal: React.FC<OtherInboundEditModalProps> = ({
   const [notes, setNotes] = useState('');
   const [editableQuantities, setEditableQuantities] = useState<Record<number, number>>({});
   const [editableUnitPrices, setEditableUnitPrices] = useState<Record<number, number>>({});
+  const [editableLocations, setEditableLocations] = useState<Record<number, string>>({});
+  const [editableBatches, setEditableBatches] = useState<Record<number, string>>({});
+  const [editableSerials, setEditableSerials] = useState<Record<number, string[]>>({});
+  const [lineMaterialMeta, setLineMaterialMeta] = useState<Record<number, ConfirmPreviewMaterialMeta>>({});
+  const [generatingBatchRowId, setGeneratingBatchRowId] = useState<number | null>(null);
+  const [generatingSerialRowId, setGeneratingSerialRowId] = useState<number | null>(null);
+  const trackingFlags = useWarehouseTrackingFlags();
+  const {
+    locationOptions,
+    updateSelectedWarehouseId,
+    resetSelectedWarehouseId,
+  } = useWarehouseLocationOptions();
 
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -84,7 +112,12 @@ export const OtherInboundEditModal: React.FC<OtherInboundEditModalProps> = ({
     setNotes('');
     setEditableQuantities({});
     setEditableUnitPrices({});
-  }, []);
+    setEditableLocations({});
+    setEditableBatches({});
+    setEditableSerials({});
+    setLineMaterialMeta({});
+    resetSelectedWarehouseId();
+  }, [resetSelectedWarehouseId]);
 
   useEffect(() => {
     if (!open) {
@@ -116,18 +149,38 @@ export const OtherInboundEditModal: React.FC<OtherInboundEditModalProps> = ({
           onCloseRef.current();
           return;
         }
-        setDetail({ ...merged, ...detailData, items: detailData.items ?? merged.items });
+        const enrichedItems = await enrichInboundFormItemsTracking(
+          (detailData.items ?? merged.items ?? []) as Record<string, unknown>[],
+        );
+        setDetail({ ...merged, ...detailData, items: enrichedItems as OtherInboundLineItem[] });
+        if (detailData.warehouse_id != null) {
+          updateSelectedWarehouseId(detailData.warehouse_id);
+        }
         setReasonDesc(String(detailData.reason_desc ?? '').trim());
         setNotes(String(detailData.notes ?? '').trim());
         const qtyMap: Record<number, number> = {};
         const priceMap: Record<number, number> = {};
-        (detailData.items || []).forEach((it) => {
+        const locMap: Record<number, string> = {};
+        const batchMap: Record<number, string> = {};
+        const serialMap: Record<number, string[]> = {};
+        enrichedItems.forEach((it) => {
           if (it?.id == null) return;
-          qtyMap[Number(it.id)] = Number(it.inbound_quantity ?? 0);
-          priceMap[Number(it.id)] = Number(it.unit_price ?? 0);
+          const rid = Number(it.id);
+          qtyMap[rid] = Number(it.inbound_quantity ?? 0);
+          priceMap[rid] = Number(it.unit_price ?? 0);
+          locMap[rid] = String(it.location_code ?? '').trim();
+          batchMap[rid] = String(it.batch_number ?? '').trim();
+          serialMap[rid] = Array.isArray(it.serial_numbers)
+            ? it.serial_numbers.map((s) => String(s).trim()).filter(Boolean)
+            : [];
         });
         setEditableQuantities(qtyMap);
         setEditableUnitPrices(priceMap);
+        setEditableLocations(locMap);
+        setEditableBatches(batchMap);
+        setEditableSerials(serialMap);
+        const meta = await loadConfirmPreviewMaterialMeta(enrichedItems, new Map());
+        setLineMaterialMeta(meta);
       } catch (e: unknown) {
         if (cancelled) return;
         const err = e as { message?: string };
@@ -141,7 +194,7 @@ export const OtherInboundEditModal: React.FC<OtherInboundEditModalProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [loadKey, messageApi, t]);
+  }, [loadKey, messageApi, t, updateSelectedWarehouseId]);
 
   const handleClose = () => {
     resetState();
@@ -173,6 +226,36 @@ export const OtherInboundEditModal: React.FC<OtherInboundEditModalProps> = ({
           );
         }
         const unitPrice = Number(editableUnitPrices[rowId] ?? it.unit_price ?? 0);
+        const locationCode = String(editableLocations[rowId] ?? it.location_code ?? '').trim();
+        if (!locationCode) {
+          throw new Error(
+            t('app.kuaizhizao.warehouseInbound.msg.selectLocationForMaterial', {
+              material: it.material_code || it.material_name || '-',
+            }),
+          );
+        }
+        const meta = lineMaterialMeta[rowId];
+        const batchStr = String(editableBatches[rowId] ?? it.batch_number ?? '').trim();
+        if (isMaterialBatchEntryEnabled(trackingFlags, meta?.batchManaged) && !batchStr) {
+          throw new Error(
+            t('app.kuaizhizao.warehouseOutbound.confirm.batchRequired', {
+              material: it.material_code || it.material_name || '-',
+              batches: '—',
+            }),
+          );
+        }
+        const serialList = editableSerials[rowId] ?? [];
+        if (isMaterialSerialEntryEnabled(trackingFlags, meta?.serialManaged)) {
+          if (serialList.length !== qty) {
+            throw new Error(
+              t('app.kuaizhizao.warehouseOutbound.confirm.serialCountMismatch', {
+                material: it.material_code || it.material_name || '-',
+                expected: qty,
+                actual: serialList.length,
+              }),
+            );
+          }
+        }
         return {
           material_id: Number(it.material_id),
           material_code: it.material_code || '',
@@ -180,9 +263,10 @@ export const OtherInboundEditModal: React.FC<OtherInboundEditModalProps> = ({
           material_unit: it.material_unit || '个',
           inbound_quantity: qty,
           unit_price: unitPrice,
-          total_amount: Number((qty * unitPrice).toFixed(2)),
-          location_code: it.location_code || undefined,
-          batch_number: it.batch_number || undefined,
+          total_amount: computeSimpleDocumentLineTotal(qty, unitPrice),
+          location_code: locationCode,
+          batch_number: batchStr || undefined,
+          serial_numbers: serialList.length ? serialList : undefined,
           status: it.status || detail.status || '待入库',
         };
       });
@@ -216,10 +300,42 @@ export const OtherInboundEditModal: React.FC<OtherInboundEditModalProps> = ({
     return `${t('common.edit')} ${t('app.kuaizhizao.warehouseInbound.receiptType.other_inbound')}${code ? ` - ${code}` : ''}`;
   }, [detail?.inbound_code, detail?.receipt_code, t]);
 
+  const handleGenerateBatch = async (rowId: number, materialUuid: string | undefined) => {
+    if (!materialUuid) return;
+    setGeneratingBatchRowId(rowId);
+    try {
+      const res = await materialBatchApi.generate(materialUuid, {});
+      setEditableBatches((prev) => ({ ...prev, [rowId]: res.batch_no }));
+      messageApi.success(t('app.kuaizhizao.warehouseOtherInbound.msg.batchGenerated'));
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      messageApi.error(err?.message || t('app.kuaizhizao.warehouseOtherInbound.msg.batchGenerateFailed'));
+    } finally {
+      setGeneratingBatchRowId(null);
+    }
+  };
+
+  const handleGenerateSerials = async (rowId: number, qty: number, materialUuid: string | undefined) => {
+    if (!materialUuid || !(qty > 0)) return;
+    const count = Math.min(Math.floor(qty), MATERIAL_SERIAL_GENERATE_MAX_COUNT);
+    setGeneratingSerialRowId(rowId);
+    try {
+      const res = await materialSerialApi.generate(materialUuid, count, {});
+      setEditableSerials((prev) => ({ ...prev, [rowId]: res.serial_nos }));
+      messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.serialGenerated', { count: res.count }));
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      messageApi.error(err?.message || t('app.kuaizhizao.warehouseInbound.msg.serialGenerateFailed'));
+    } finally {
+      setGeneratingSerialRowId(null);
+    }
+  };
+
   const lineColumns = useMemo(
     () =>
-      appendWarehouseLineAmountColumns(
-        [
+      filterWarehouseTrackingColumns(
+        appendWarehouseLineAmountColumns(
+          [
           {
             title: t('app.kuaizhizao.warehouseInbound.col.materialCode'),
             dataIndex: 'material_code',
@@ -282,12 +398,105 @@ export const OtherInboundEditModal: React.FC<OtherInboundEditModalProps> = ({
             width: 72,
             render: (_: unknown, row: OtherInboundLineItem) => row.material_unit || '-',
           },
+          {
+            title: t('app.kuaizhizao.warehouseOtherInbound.col.location'),
+            dataIndex: 'location_code',
+            width: 150,
+            render: (_: unknown, row: OtherInboundLineItem) => {
+              if (row.id == null) return row.location_code || '—';
+              const rid = Number(row.id);
+              return (
+                <Select
+                  options={locationOptions}
+                  value={editableLocations[rid] || undefined}
+                  onChange={(v) => setEditableLocations((prev) => ({ ...prev, [rid]: String(v ?? '') }))}
+                  placeholder={t('app.kuaizhizao.warehouseOtherInbound.field.selectLocation')}
+                  style={{ width: '100%' }}
+                  size="small"
+                  showSearch
+                  optionFilterProp="label"
+                  disabled={!detail?.warehouse_id}
+                />
+              );
+            },
+          },
+          {
+            title: t('app.kuaizhizao.warehouseOtherInbound.col.batchNo'),
+            dataIndex: 'batch_number',
+            width: 130,
+            render: (_: unknown, row: OtherInboundLineItem) => {
+              if (row.id == null) return row.batch_number || '—';
+              const rid = Number(row.id);
+              const meta = lineMaterialMeta[rid];
+              if (!isMaterialBatchEntryEnabled(trackingFlags, meta?.batchManaged)) return '—';
+              return (
+                <Space size={2}>
+                  <Input
+                    size="small"
+                    style={{ width: 96 }}
+                    value={editableBatches[rid] ?? ''}
+                    onChange={(e) =>
+                      setEditableBatches((prev) => ({ ...prev, [rid]: e.target.value }))
+                    }
+                  />
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<ThunderboltOutlined />}
+                    loading={generatingBatchRowId === rid}
+                    onClick={() => void handleGenerateBatch(rid, meta?.materialUuid)}
+                    style={{ padding: 0 }}
+                  />
+                </Space>
+              );
+            },
+          },
+          {
+            title: t('app.kuaizhizao.warehouseOtherInbound.col.serialNo'),
+            dataIndex: 'serial_numbers',
+            width: 150,
+            render: (_: unknown, row: OtherInboundLineItem) => {
+              if (row.id == null) return '—';
+              const rid = Number(row.id);
+              const meta = lineMaterialMeta[rid];
+              if (!isMaterialSerialEntryEnabled(trackingFlags, meta?.serialManaged)) return '—';
+              const qty = Number(editableQuantities[rid] ?? row.inbound_quantity ?? 0);
+              return (
+                <SerialNumbersImportTrigger
+                  serials={editableSerials[rid] ?? []}
+                  expectedCount={qty > 0 ? qty : undefined}
+                  materialLabel={row.material_code || row.material_name}
+                  generateLoading={generatingSerialRowId === rid}
+                  onSerialsChange={(next) => setEditableSerials((prev) => ({ ...prev, [rid]: next }))}
+                  onGenerate={() =>
+                    void handleGenerateSerials(rid, qty, meta?.materialUuid)
+                  }
+                />
+              );
+            },
+          },
         ],
         t,
-        true,
+        // 其他入库：保留可编辑单价，不自动展示金额列、不叠只读单价列
+        false,
         -3,
       ),
-    [editableQuantities, editableUnitPrices, quantityDecimals, t],
+        trackingFlags,
+      ),
+    [
+      detail?.warehouse_id,
+      editableBatches,
+      editableLocations,
+      editableQuantities,
+      editableSerials,
+      generatingBatchRowId,
+      generatingSerialRowId,
+      lineMaterialMeta,
+      locationOptions,
+      quantityDecimals,
+      t,
+      trackingFlags,
+    ],
   );
 
   return (

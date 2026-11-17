@@ -67,8 +67,6 @@ function stripFormSubmitResponseMeta(
 
 export interface FormModalTemplateProps {
   title: ReactNode;
-  /** Namespace field DOM IDs when forms are nested. */
-  formName?: string;
   open: boolean;
   /** 关闭弹窗（与 Modal onCancel 一致） */
   onClose?: () => void;
@@ -79,7 +77,7 @@ export interface FormModalTemplateProps {
    * 仅传本属性、未传 onClose/onCancel 时也能关闭。
    */
   onOpenChange?: (open: boolean) => void;
-  onFinish: (values: any) => Promise<void | boolean>;
+  onFinish: (values: any) => Promise<void>;
   isEdit?: boolean;
   initialValues?: Record<string, any>;
   /** 表单项；仅使用 formItems 动态表单时可省略 */
@@ -128,7 +126,6 @@ export interface FormModalTemplateProps {
 
 export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   title,
-  formName,
   open,
   onClose,
   onCancel,
@@ -298,7 +295,6 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
     >
       <div className="form-modal-content-inner">
         <ProForm
-          name={formName}
           formRef={formRef}
           form={form}
           readonly={readOnly}

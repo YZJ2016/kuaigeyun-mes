@@ -44,6 +44,1526 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'purchase-receipt-push-return-r01',
+    date: '2026-11-17',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-push-return-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.purchase-receipt-push-return-r01.description',
+  },
+  {
+    id: 'document-line-tax-unified-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.document-line-tax-unified-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.document-line-tax-unified-r01.description',
+  },
+  {
+    id: 'purchase-receipt-line-tax-calc-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-line-tax-calc-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.purchase-receipt-line-tax-calc-r01.description',
+  },
+  {
+    id: 'warehouse-doc-line-price-type-switch-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-doc-line-price-type-switch-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.warehouse-doc-line-price-type-switch-r01.description',
+  },
+  {
+    id: 'finance-pull-preview-direct-form-r04',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-pull-preview-direct-form-r04.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-pull-preview-direct-form-r04.description',
+  },
+  {
+    id: 'supply-chain-doc-form-unitab-m4-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.supply-chain-doc-form-unitab-m4-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.supply-chain-doc-form-unitab-m4-r01.description',
+  },
+  {
+    id: 'supply-chain-doc-form-unitab-m3-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.supply-chain-doc-form-unitab-m3-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.supply-chain-doc-form-unitab-m3-r01.description',
+  },
+  {
+    id: 'supply-chain-doc-form-unitab-m2-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.supply-chain-doc-form-unitab-m2-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.supply-chain-doc-form-unitab-m2-r01.description',
+  },
+  {
+    id: 'supply-chain-doc-form-unitab-m1-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.supply-chain-doc-form-unitab-m1-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.supply-chain-doc-form-unitab-m1-r01.description',
+  },
+  {
+    id: 'quality-inspection-conduct-numeric-criteria-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-inspection-conduct-numeric-criteria-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-inspection-conduct-numeric-criteria-r01.description',
+  },
+  {
+    id: 'audit-hub-preview-node-key-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-hub-preview-node-key-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-hub-preview-node-key-r01.description',
+  },
+  {
+    id: 'kuaioa-form-template-ref-delete-guard-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-form-template-ref-delete-guard-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-form-template-ref-delete-guard-r01.description',
+  },
+  {
+    id: 'kuaioa-form-request-bt-audit-detail-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-form-request-bt-audit-detail-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-form-request-bt-audit-detail-r01.description',
+  },
+  {
+    id: 'kuaiplm-rd-project-workbench-actions-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-rd-project-workbench-actions-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-rd-project-workbench-actions-r01.description',
+  },
+  {
+    id: 'kuaiplm-engineering-link-type-i18n-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-engineering-link-type-i18n-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-engineering-link-type-i18n-r01.description',
+  },
+  {
+    id: 'kuaioa-form-request-entity-name-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-form-request-entity-name-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-form-request-entity-name-r01.description',
+  },
+  {
+    id: 'tenant-restore-config-heal-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.tenant-restore-config-heal-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.tenant-restore-config-heal-r01.description',
+  },
+  {
+    id: 'tenant-not-found-message-format-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.tenant-not-found-message-format-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.tenant-not-found-message-format-r01.description',
+  },
+  {
+    id: 'audit-bindings-soft-delete-revive-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-bindings-soft-delete-revive-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-bindings-soft-delete-revive-r01.description',
+  },
+  {
+    id: 'manual-create-auto-submit-r01',
+    date: '2026-11-13',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.manual-create-auto-submit-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.manual-create-auto-submit-r01.description',
+  },
+  {
+    id: 'material-inspection-plan-required-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.material-inspection-plan-required-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-inspection-plan-required-r01.description',
+  },
+  {
+    id: 'purchase-receipt-withdraw-payable-unwind-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-withdraw-payable-unwind-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-withdraw-payable-unwind-r01.description',
+  },
+  {
+    id: 'warehouse-inout-list-export-r01',
+    date: '2026-11-13',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-inout-list-export-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.warehouse-inout-list-export-r01.description',
+  },
+  {
+    id: 'purchase-invoice-pull-direct-form-r03',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-invoice-pull-direct-form-r03.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-invoice-pull-direct-form-r03.description',
+  },
+  {
+    id: 'purchase-invoice-pull-next-visible-r02',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-invoice-pull-next-visible-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-invoice-pull-next-visible-r02.description',
+  },
+  {
+    id: 'document-amount-shipment-push-r13',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-amount-shipment-push-r13.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.document-amount-shipment-push-r13.description',
+  },
+  {
+    id: 'document-amount-wh-notice-r12',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-amount-wh-notice-r12.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.document-amount-wh-notice-r12.description',
+  },
+  {
+    id: 'document-amount-so-wh-r11',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-amount-so-wh-r11.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.document-amount-so-wh-r11.description',
+  },
+  {
+    id: 'document-amount-contract-r10',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-amount-contract-r10.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.document-amount-contract-r10.description',
+  },
+  {
+    id: 'document-amount-po-tiera-r09',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-amount-po-tiera-r09.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.document-amount-po-tiera-r09.description',
+  },
+  {
+    id: 'document-amount-change-mrp-r08',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-amount-change-mrp-r08.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.document-amount-change-mrp-r08.description',
+  },
+  {
+    id: 'document-amount-outsource-r07',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-amount-outsource-r07.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.document-amount-outsource-r07.description',
+  },
+  {
+    id: 'document-amount-po-push-r06',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-amount-po-push-r06.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.document-amount-po-push-r06.description',
+  },
+  {
+    id: 'document-amount-delivery-note-r05',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-amount-delivery-note-r05.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.document-amount-delivery-note-r05.description',
+  },
+  {
+    id: 'document-amount-notice-wave-r04',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-amount-notice-wave-r04.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.document-amount-notice-wave-r04.description',
+  },
+  {
+    id: 'document-amount-tierb-r03',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-amount-tierb-r03.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.document-amount-tierb-r03.description',
+  },
+  {
+    id: 'document-amount-warehouse-req-r02',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-amount-warehouse-req-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.document-amount-warehouse-req-r02.description',
+  },
+  {
+    id: 'document-amount-unified-scan-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-amount-unified-scan-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.document-amount-unified-scan-r01.description',
+  },
+  {
+    id: 'finance-allow-negative-balance-r01',
+    date: '2026-11-13',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-allow-negative-balance-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-allow-negative-balance-r01.description',
+  },
+  {
+    id: 'eight-d-collab-admin-transition-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.eight-d-collab-admin-transition-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.eight-d-collab-admin-transition-r01.description',
+  },
+  {
+    id: 'approval-wecom-card-recall-fix-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.approval-wecom-card-recall-fix-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.approval-wecom-card-recall-fix-r01.description',
+  },
+  {
+    id: 'drawing-upload-default-200mb-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-upload-default-200mb-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.drawing-upload-default-200mb-r01.description',
+  },
+  {
+    id: 'purchase-receipt-settlement-unified-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-settlement-unified-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-settlement-unified-r01.description',
+  },
+  {
+    id: 'document-status-converted-badge-color-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-status-converted-badge-color-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.document-status-converted-badge-color-r01.description',
+  },
+  {
+    id: 'purchase-list-material-keyword-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-list-material-keyword-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-list-material-keyword-r01.description',
+  },
+  {
+    id: 'purchase-requisition-code-conflict-retry-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-requisition-code-conflict-retry-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-code-conflict-retry-r01.description',
+  },
+  {
+    id: 'purchase-receipt-pull-amount-po-rollup-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-pull-amount-po-rollup-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-pull-amount-po-rollup-r01.description',
+  },
+  {
+    id: 'purchase-invoice-pull-preview-defer-close-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-invoice-pull-preview-defer-close-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-invoice-pull-preview-defer-close-r01.description',
+  },
+  {
+    id: 'idle-gateway-poll-modal-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.idle-gateway-poll-modal-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.idle-gateway-poll-modal-r01.description',
+  },
+  {
+    id: 'material-inspection-stages-save-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-inspection-stages-save-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-inspection-stages-save-r01.description',
+  },
+  {
+    id: 'inspection-plan-step-modal-nested-zindex-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.inspection-plan-step-modal-nested-zindex-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inspection-plan-step-modal-nested-zindex-r01.description',
+  },
+  {
+    id: 'print-header-title-unify-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.print-header-title-unify-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.print-header-title-unify-r01.description',
+  },
+  {
+    id: 'print-preset-import-fix-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.print-preset-import-fix-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.print-preset-import-fix-r01.description',
+  },
+  {
+    id: 'outbound-inventory-unit-batch-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-inventory-unit-batch-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-inventory-unit-batch-r01.description',
+  },
+  {
+    id: 'payment-application-print-visual-po-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-print-visual-po-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-print-visual-po-r01.description',
+  },
+  {
+    id: 'print-header-site-name-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.print-header-site-name-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.print-header-site-name-r01.description',
+  },
+  {
+    id: 'payment-application-detail-line-materials-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-detail-line-materials-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-detail-line-materials-r01.description',
+  },
+  {
+    id: 'payment-application-detail-print-min-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-detail-print-min-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.payment-application-detail-print-min-r01.description',
+  },
+  {
+    id: 'purchase-requisition-line-notes-display-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-requisition-line-notes-display-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-line-notes-display-r01.description',
+  },
+  {
+    id: 'mobile-approval-finance-header-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-approval-finance-header-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mobile-approval-finance-header-r01.description',
+  },
+  {
+    id: 'wecom-approval-tenant-header-jwt-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.wecom-approval-tenant-header-jwt-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.wecom-approval-tenant-header-jwt-r01.description',
+  },
+  {
+    id: 'mobile-payment-application-approval-lines-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-payment-application-approval-lines-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-payment-application-approval-lines-r01.description',
+  },
+  {
+    id: 'other-expense-application-entry-offline-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.other-expense-application-entry-offline-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.other-expense-application-entry-offline-r01.description',
+  },
+  {
+    id: 'po-print-last-approver-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.po-print-last-approver-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.po-print-last-approver-r01.description',
+  },
+  {
+    id: 'other-expense-toolbar-push-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.other-expense-toolbar-push-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.other-expense-toolbar-push-r01.description',
+  },
+  {
+    id: 'other-expense-po-print-fields-r01',
+    date: '2026-11-13',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.other-expense-po-print-fields-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.other-expense-po-print-fields-r01.description',
+  },
+  {
+    id: 'print-price-amount-decimals-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.print-price-amount-decimals-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.print-price-amount-decimals-r01.description',
+  },
+  {
+    id: 'uni-table-row-more-single-inline-r01',
+    date: '2026-11-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-table-row-more-single-inline-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.uni-table-row-more-single-inline-r01.description',
+  },
+  {
+    id: 'user-multi-dept-approval-r01',
+    date: '2026-11-12',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.user-multi-dept-approval-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.user-multi-dept-approval-r01.description',
+  },
+  {
+    id: 'inventory-alert-check-timeout-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inventory-alert-check-timeout-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inventory-alert-check-timeout-r01.description',
+  },
+  {
+    id: 'inspection-simple-switch-plan-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inspection-simple-switch-plan-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inspection-simple-switch-plan-r01.description',
+  },
+  {
+    id: 'process-inspection-push-reuse-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.process-inspection-push-reuse-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.process-inspection-push-reuse-r01.description',
+  },
+  {
+    id: 'kuaiplm-rd-project-workbench-usage-guide-r01',
+    date: '2026-11-12',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-rd-project-workbench-usage-guide-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-rd-project-workbench-usage-guide-r01.description',
+  },
+  {
+    id: 'customer-select-snapshot-echo-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.customer-select-snapshot-echo-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.customer-select-snapshot-echo-r01.description',
+  },
+  {
+    id: 'kuaiplm-system-archive-link-targets-harden-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-system-archive-link-targets-harden-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-system-archive-link-targets-harden-r01.description',
+  },
+  {
+    id: 'kuaiplm-gate-pass-system-archive-r01',
+    date: '2026-11-12',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-gate-pass-system-archive-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-gate-pass-system-archive-r01.description',
+  },
+  {
+    id: 'kuaiplm-sample-process-form-contract-r01',
+    date: '2026-11-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-sample-process-form-contract-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-sample-process-form-contract-r01.description',
+  },
+  {
+    id: 'kuaiplm-project-proposal-form-contract-r01',
+    date: '2026-11-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-project-proposal-form-contract-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-project-proposal-form-contract-r01.description',
+  },
+  {
+    id: 'kuaiplm-lab-request-project-workbench-r01',
+    date: '2026-11-12',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-lab-request-project-workbench-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-lab-request-project-workbench-r01.description',
+  },
+  {
+    id: 'rd-archive-link-select-search-r01',
+    date: '2026-11-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.rd-archive-link-select-search-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.rd-archive-link-select-search-r01.description',
+  },
+  {
+    id: 'rd-workbench-ecn-project-filter-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.rd-workbench-ecn-project-filter-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.rd-workbench-ecn-project-filter-r01.description',
+  },
+  {
+    id: 'project-proposal-customer-select-search-r01',
+    date: '2026-11-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.project-proposal-customer-select-search-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.project-proposal-customer-select-search-r01.description',
+  },
+  {
+    id: 'project-proposal-expected-date-only-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.project-proposal-expected-date-only-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.project-proposal-expected-date-only-r01.description',
+  },
+  {
+    id: 'automation-push-default-draft-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.automation-push-default-draft-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.automation-push-default-draft-r01.description',
+  },
+  {
+    id: 'tax-rate-one-percent-normalize-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.tax-rate-one-percent-normalize-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.tax-rate-one-percent-normalize-r01.description',
+  },
+  {
+    id: 'kingdee-purin-skip-dirty-aux-unit-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-purin-skip-dirty-aux-unit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-purin-skip-dirty-aux-unit-r01.description',
+  },
+  {
+    id: 'sales-delivery-batch-col-tenant-gate-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-delivery-batch-col-tenant-gate-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-delivery-batch-col-tenant-gate-r01.description',
+  },
+  {
+    id: 'purchase-receipt-red-voucher-cell-wrap-v8',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-red-voucher-cell-wrap-v8.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-red-voucher-cell-wrap-v8.description',
+  },
+  {
+    id: 'po-pull-sales-order-import-fix-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.po-pull-sales-order-import-fix-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.po-pull-sales-order-import-fix-r01.description',
+  },
+  {
+    id: 'sync-push-hub-auto-push-pause-r01',
+    date: '2026-11-12',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-push-hub-auto-push-pause-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sync-push-hub-auto-push-pause-r01.description',
+  },
+  {
+    id: 'quotation-line-amount-qty-resync-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.quotation-line-amount-qty-resync-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quotation-line-amount-qty-resync-r01.description',
+  },
+  {
+    id: 'kingdee-push-billno-org-prefix-all-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-push-billno-org-prefix-all-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-push-billno-org-prefix-all-r01.description',
+  },
+  {
+    id: 'kingdee-push-billno-org-prefix-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-push-billno-org-prefix-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-push-billno-org-prefix-r01.description',
+  },
+  {
+    id: 'kingdee-otherout-billno-org-prefix-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-otherout-billno-org-prefix-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-otherout-billno-org-prefix-r01.description',
+  },
+  {
+    id: 'kingdee-purin-trdbillno-org-prefix-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-purin-trdbillno-org-prefix-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-purin-trdbillno-org-prefix-r01.description',
+  },
+  {
+    id: 'uni-pull-query-checkbox-key-normalize-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-pull-query-checkbox-key-normalize-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uni-pull-query-checkbox-key-normalize-r01.description',
+  },
+  {
+    id: 'kingdee-outbound-invtype-gift-fallback-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-outbound-invtype-gift-fallback-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-outbound-invtype-gift-fallback-r01.description',
+  },
+  {
+    id: 'inventory-ledger-other-outbound-withdraw-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inventory-ledger-other-outbound-withdraw-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inventory-ledger-other-outbound-withdraw-r01.description',
+  },
+  {
+    id: 'outbound-confirm-location-scoped-deduct-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-confirm-location-scoped-deduct-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-confirm-location-scoped-deduct-r01.description',
+  },
+  {
+    id: 'uni-im-dissolve-group-tx-realtime-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-im-dissolve-group-tx-realtime-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uni-im-dissolve-group-tx-realtime-r01.description',
+  },
+  {
+    id: 'purchase-order-price-settlement-self-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-price-settlement-self-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-price-settlement-self-r01.description',
+  },
+  {
+    id: 'drawing-detail-header-actions-overflow-r02',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-detail-header-actions-overflow-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.drawing-detail-header-actions-overflow-r02.description',
+  },
+  {
+    id: 'drawing-detail-lifecycle-actions-normalize-r01',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-detail-lifecycle-actions-normalize-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.drawing-detail-lifecycle-actions-normalize-r01.description',
+  },
+  {
+    id: 'uni-im-dissolve-group-r01',
+    date: '2026-11-11',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-im-dissolve-group-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.uni-im-dissolve-group-r01.description',
+  },
+  {
+    id: 'kingdee-avb-precheck-composite-location-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-avb-precheck-composite-location-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-avb-precheck-composite-location-r01.description',
+  },
+  {
+    id: 'sales-delivery-edit-serial-picker-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-delivery-edit-serial-picker-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-delivery-edit-serial-picker-r01.description',
+  },
+  {
+    id: 'other-outbound-edit-keep-line-id-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.other-outbound-edit-keep-line-id-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.other-outbound-edit-keep-line-id-r01.description',
+  },
+  {
+    id: 'warelocareference-no-material-fill-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.warelocareference-no-material-fill-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.warelocareference-no-material-fill-r01.description',
+  },
+  {
+    id: 'inventory-sync-location-invtype-sum-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inventory-sync-location-invtype-sum-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inventory-sync-location-invtype-sum-r01.description',
+  },
+  {
+    id: 'other-outbound-list-tdz-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.other-outbound-list-tdz-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.other-outbound-list-tdz-r01.description',
+  },
+  {
+    id: 'kingdee-im-warehouse-edit-batch-update-r01',
+    date: '2026-11-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-im-warehouse-edit-batch-update-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-im-warehouse-edit-batch-update-r01.description',
+  },
+  {
+    id: 'other-outbound-kingdee-batch-update-r01',
+    date: '2026-11-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.other-outbound-kingdee-batch-update-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.other-outbound-kingdee-batch-update-r01.description',
+  },
+  {
+    id: 'other-outbound-full-edit-modal-r01',
+    date: '2026-11-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.other-outbound-full-edit-modal-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.other-outbound-full-edit-modal-r01.description',
+  },
+  {
+    id: 'inventory-sync-bulk-sql-params-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inventory-sync-bulk-sql-params-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inventory-sync-bulk-sql-params-r01.description',
+  },
+  {
+    id: 'kingdee-consistency-orchestrate-r01',
+    date: '2026-11-12',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-consistency-orchestrate-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-consistency-orchestrate-r01.description',
+  },
+  {
+    id: 'kingdee-avb-location-align-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-avb-location-align-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-avb-location-align-r01.description',
+  },
+  {
+    id: 'partner-settlement-pay-on-invoice-r01',
+    date: '2026-11-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.partner-settlement-pay-on-invoice-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.partner-settlement-pay-on-invoice-r01.description',
+  },
+  {
+    id: 'approval-wecom-dynamic-card-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.approval-wecom-dynamic-card-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.approval-wecom-dynamic-card-r01.description',
+  },
+  {
+    id: 'purchase-order-pull-requisition-approved-only-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-order-pull-requisition-approved-only-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-pull-requisition-approved-only-r01.description',
+  },
+  {
+    id: 'mobile-purchase-requisition-submit-review-r01',
+    date: '2026-11-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-purchase-requisition-submit-review-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-purchase-requisition-submit-review-r01.description',
+  },
+  {
+    id: 'warehouse-kingdee-outbound-avb-precheck-r01',
+    date: '2026-11-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-kingdee-outbound-avb-precheck-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.warehouse-kingdee-outbound-avb-precheck-r01.description',
+  },
+  {
+    id: 'warehouse-kingdee-confirm-push-rollback-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-kingdee-confirm-push-rollback-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.warehouse-kingdee-confirm-push-rollback-r01.description',
+  },
+  {
+    id: 'po-print-totals-no-excl-amount-r01',
+    date: '2026-11-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.po-print-totals-no-excl-amount-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.po-print-totals-no-excl-amount-r01.description',
+  },
+  {
+    id: 'po-print-no-header-buyer-font-r01',
+    date: '2026-11-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.po-print-no-header-buyer-font-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.po-print-no-header-buyer-font-r01.description',
+  },
+  {
+    id: 'po-print-qty-incl-unit-amount-r01',
+    date: '2026-11-12',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.po-print-qty-incl-unit-amount-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.po-print-qty-incl-unit-amount-r01.description',
+  },
+  {
+    id: 'print-sign-purchaser-auditor-r01',
+    date: '2026-11-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.print-sign-purchaser-auditor-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.print-sign-purchaser-auditor-r01.description',
+  },
+  {
+    id: 'print-pdf-chromium-cli-r01',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.print-pdf-chromium-cli-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.print-pdf-chromium-cli-r01.description',
+  },
+  {
+    id: 'defect-rework-qty-from-inspection-r01',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.defect-rework-qty-from-inspection-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.defect-rework-qty-from-inspection-r01.description',
+  },
+  {
+    id: 'inspection-criteria-supplement-display-r02',
+    date: '2026-11-11',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.inspection-criteria-supplement-display-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inspection-criteria-supplement-display-r02.description',
+  },
+  {
+    id: 'inspection-criteria-supplement-display-r01',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.inspection-criteria-supplement-display-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inspection-criteria-supplement-display-r01.description',
+  },
+  {
+    id: 'quality-exception-responsible-person-id-r01',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.quality-exception-responsible-person-id-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-exception-responsible-person-id-r01.description',
+  },
+  {
+    id: 'batch-query-location-fields-outbound-stock-r01',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.batch-query-location-fields-outbound-stock-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.batch-query-location-fields-outbound-stock-r01.description',
+  },
+  {
+    id: 'outbound-same-batch-multi-location-deduct-r01',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.outbound-same-batch-multi-location-deduct-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-same-batch-multi-location-deduct-r01.description',
+  },
+  {
+    id: 'purchase-order-price-settlement-staticmethod-r01',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-order-price-settlement-staticmethod-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-price-settlement-staticmethod-r01.description',
+  },
+  {
+    id: 'web-array-tosorted-polyfill-r02',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.web-array-tosorted-polyfill-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.web-array-tosorted-polyfill-r02.description',
+  },
+  {
+    id: 'web-array-tosorted-polyfill-r01',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.web-array-tosorted-polyfill-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.web-array-tosorted-polyfill-r01.description',
+  },
+  {
+    id: 'purchase-invoice-pull-next-step-r01',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-invoice-pull-next-step-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-invoice-pull-next-step-r01.description',
+  },
+  {
+    id: 'warehouse-kingdee-strong-sync-r01',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-kingdee-strong-sync-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.warehouse-kingdee-strong-sync-r01.description',
+  },
+  {
+    id: 'purchase-receipt-kingdee-dual-unit-amount-r01',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-dual-unit-amount-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-dual-unit-amount-r01.description',
+  },
+  {
+    id: 'rework-order-code-fr-line-year-r01',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.rework-order-code-fr-line-year-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.rework-order-code-fr-line-year-r01.description',
+  },
+  {
+    id: 'purchase-pull-open-line-remaining-r01',
+    date: '2026-11-11',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-pull-open-line-remaining-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-pull-open-line-remaining-r01.description',
+  },
+  {
+    id: 'purchase-order-change-apply-pricing-r01',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-change-apply-pricing-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-change-apply-pricing-r01.description',
+  },
+  {
+    id: 'purchase-order-change-unapply-r01',
+    date: '2026-11-11',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-change-unapply-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-change-unapply-r01.description',
+  },
+  {
+    id: 'purchase-order-non-gift-price-required-r01',
+    date: '2026-11-11',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-order-non-gift-price-required-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-non-gift-price-required-r01.description',
+  },
+  {
+    id: 'uni-audit-entity-business-type-resolve-r01',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-audit-entity-business-type-resolve-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uni-audit-entity-business-type-resolve-r01.description',
+  },
+  {
+    id: 'custom-field-associated-grid-col-r01',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.custom-field-associated-grid-col-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.custom-field-associated-grid-col-r01.description',
+  },
+  {
+    id: 'custom-field-associated-readonly-input-r01',
+    date: '2026-11-11',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.custom-field-associated-readonly-input-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.custom-field-associated-readonly-input-r01.description',
+  },
+  {
+    id: 'infra-operation-chart-label-g2-r01',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.infra-operation-chart-label-g2-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.infra-operation-chart-label-g2-r01.description',
+  },
+  {
+    id: 'unitable-toolbar-reload-feedback-r01',
+    date: '2026-11-11',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-toolbar-reload-feedback-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.unitable-toolbar-reload-feedback-r01.description',
+  },
+  {
+    id: 'purchase-order-list-detail-api-perf-r01',
+    date: '2026-11-10',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-list-detail-api-perf-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-list-detail-api-perf-r01.description',
+  },
+  {
+    id: 'kuaioa-annual-stats-table-height-r01',
+    date: '2026-11-11',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-annual-stats-table-height-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-annual-stats-table-height-r01.description',
+  },
+  {
+    id: 'kuaioa-annual-stats-subtotal-source-r01',
+    date: '2026-11-11',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-annual-stats-subtotal-source-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-annual-stats-subtotal-source-r01.description',
+  },
+  {
+    id: 'kuaioa-annual-stats-batch-delete-r01',
+    date: '2026-11-11',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-annual-stats-batch-delete-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-annual-stats-batch-delete-r01.description',
+  },
+  {
+    id: 'kuaioa-annual-stats-import-wage-no-stack-r01',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-annual-stats-import-wage-no-stack-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-annual-stats-import-wage-no-stack-r01.description',
+  },
+  {
+    id: 'kuaioa-annual-stats-unit-filter-r01',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-annual-stats-unit-filter-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-annual-stats-unit-filter-r01.description',
+  },
+  {
+    id: 'kuaioa-leave-register-attendance-prune-r01',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-leave-register-attendance-prune-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-leave-register-attendance-prune-r01.description',
+  },
+  {
+    id: 'purchase-requisition-convert-progress-r01',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-requisition-convert-progress-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-convert-progress-r01.description',
+  },
+  {
+    id: 'purchase-requisition-code-and-price-r01',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-requisition-code-and-price-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-code-and-price-r01.description',
+  },
+  {
+    id: 'purchase-requisition-line-quantity-number-r01',
+    date: '2026-11-11',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-requisition-line-quantity-number-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-line-quantity-number-r01.description',
+  },
+  {
+    id: 'purchase-service-receipt-confirm-without-warehouse-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-service-receipt-confirm-without-warehouse-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-service-receipt-confirm-without-warehouse-r01.description',
+  },
+  {
+    id: 'purchase-service-receipt-warehouse-optional-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-service-receipt-warehouse-optional-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-service-receipt-warehouse-optional-r01.description',
+  },
+  {
+    id: 'material-aux-batch-schedule-r01',
+    date: '2026-11-10',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.material-aux-batch-schedule-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.material-aux-batch-schedule-r01.description',
+  },
+  {
+    id: 'requisition-push-inclusive-price-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.requisition-push-inclusive-price-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.requisition-push-inclusive-price-r01.description',
+  },
+  {
+    id: 'pending-my-approval-task-filter-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.pending-my-approval-task-filter-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.pending-my-approval-task-filter-r01.description',
+  },
+  {
+    id: 'kingdee-submit-already-submitted-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-submit-already-submitted-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-submit-already-submitted-r01.description',
+  },
+  {
+    id: 'purchase-service-material-filter-r01',
+    date: '2026-11-10',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-service-material-filter-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.purchase-service-material-filter-r01.description',
+  },
+  {
+    id: 'warehouse-kingdee-alignment-gate-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-kingdee-alignment-gate-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.warehouse-kingdee-alignment-gate-r01.description',
+  },
+  {
+    id: 'purchase-service-empty-category-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-service-empty-category-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.purchase-service-empty-category-r01.description',
+  },
+  {
+    id: 'material-unit-quick-create-zindex-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-unit-quick-create-zindex-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.material-unit-quick-create-zindex-r01.description',
+  },
+  {
+    id: 'purchase-service-type-r01',
+    date: '2026-11-10',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-service-type-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.purchase-service-type-r01.description',
+  },
+  {
+    id: 'approval-branch-target-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.approval-branch-target-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.approval-branch-target-r01.description',
+  },
+  {
+    id: 'kingdee-im-unsubmit-path-case-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-im-unsubmit-path-case-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-im-unsubmit-path-case-r01.description',
+  },
+  {
+    id: 'purchase-audit-queue-filter-r01',
+    date: '2026-11-10',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-audit-queue-filter-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-audit-queue-filter-r01.description',
+  },
+  {
+    id: 'purchase-receipt-line-summary-r01',
+    date: '2026-11-10',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-line-summary-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-line-summary-r01.description',
+  },
+  {
+    id: 'quotation-print-valid-until-r01',
+    date: '2026-11-10',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.quotation-print-valid-until-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quotation-print-valid-until-r01.description',
+  },
+  {
+    id: 'purchase-order-print-tax-inclusive-amount-r01',
+    date: '2026-11-10',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-print-tax-inclusive-amount-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-print-tax-inclusive-amount-r01.description',
+  },
+  {
+    id: 'purchase-requisition-print-line-no-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-requisition-print-line-no-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-print-line-no-r01.description',
+  },
+  {
+    id: 'purchase-receipt-kingdee-tax-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-tax-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-tax-r01.description',
+  },
+  {
+    id: 'sales-delivery-tax-align-r01',
+    date: '2026-11-10',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-delivery-tax-align-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sales-delivery-tax-align-r01.description',
+  },
+  {
+    id: 'finished-goods-serial-submit-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.finished-goods-serial-submit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finished-goods-serial-submit-r01.description',
+  },
+  {
+    id: 'outbound-confirm-auto-batch-fifo-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-confirm-auto-batch-fifo-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-confirm-auto-batch-fifo-r01.description',
+  },
+  {
+    id: 'print-pdf-target-crashed-r06',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.print-pdf-target-crashed-r06.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.print-pdf-target-crashed-r06.description',
+  },
+  {
+    id: 'push-qty-default-without-over-issue-r01',
+    date: '2026-11-10',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.push-qty-default-without-over-issue-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.push-qty-default-without-over-issue-r01.description',
+  },
+  {
+    id: 'sales-delivery-push-draft-or-submit-r01',
+    date: '2026-11-10',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-delivery-push-draft-or-submit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-delivery-push-draft-or-submit-r01.description',
+  },
+  {
+    id: 'wh-single-location-autofill-r01',
+    date: '2026-11-10',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.wh-single-location-autofill-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.wh-single-location-autofill-r01.description',
+  },
+  {
+    id: 'wo-batch-push-picking-skip-warehouse-r01',
+    date: '2026-11-10',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.wo-batch-push-picking-skip-warehouse-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.wo-batch-push-picking-skip-warehouse-r01.description',
+  },
+  {
+    id: 'po-push-receipt-notice-qty-unit-r01',
+    date: '2026-11-10',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.po-push-receipt-notice-qty-unit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.po-push-receipt-notice-qty-unit-r01.description',
+  },
+  {
+    id: 'mrp-push-pr-honor-draft-mode-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mrp-push-pr-honor-draft-mode-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mrp-push-pr-honor-draft-mode-r01.description',
+  },
+  {
+    id: 'mrp-push-wo-default-individual-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mrp-push-wo-default-individual-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mrp-push-wo-default-individual-r01.description',
+  },
+  {
+    id: 'quotation-push-so-keep-price-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.quotation-push-so-keep-price-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quotation-push-so-keep-price-r01.description',
+  },
+  {
+    id: 'maintenance-plan-equipment-optional-r01',
+    date: '2026-11-10',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.maintenance-plan-equipment-optional-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.maintenance-plan-equipment-optional-r01.description',
+  },
+  {
+    id: 'custom-field-associated-id-text-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.custom-field-associated-id-text-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.custom-field-associated-id-text-r01.description',
+  },
+  {
+    id: 'sales-line-qty-keep-spec-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-line-qty-keep-spec-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sales-line-qty-keep-spec-r01.description',
+  },
+  {
+    id: 'other-outbound-pick-date-r01',
+    date: '2026-11-10',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.other-outbound-pick-date-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.other-outbound-pick-date-r01.description',
+  },
+  {
     id: 'document-line-tax-single-logic-r01',
     date: '2026-11-10',
     type: 'fix',
@@ -2060,6 +3580,7 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.document-relation-target-id-bigint-r01.description',
   },
   {
+    id: 'purchase-inquiry-vendor-system-pdf-r01',
     date: '2026-10-20',
     type: 'feature',
     titleKey:
@@ -2103,6 +3624,12 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.customer-pool-claim-tenant-row-r01.description',
   },
   {
+    id: 'approval-pending-wecom-push-r01',
+    date: '2026-10-19',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.approval-pending-wecom-push-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.approval-pending-wecom-push-r01.description',
   },
   {
     id: 'kuaiplm-design-docs-optional-project-title-first-r01',

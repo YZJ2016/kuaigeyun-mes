@@ -340,10 +340,35 @@ def purchase_receipt_header_out_of_sync(
     )
 
 
+def purchase_order_item_settlement_gross(
+    order: Any,
+    item: Any,
+    *,
+    amount_places: int = 2,
+) -> Decimal:
+    """单行价税合计，与 compute_purchase_order_header_rollup / 订单列表 net_amount 同源。"""
+    rolled = compute_purchase_order_header_rollup(order, [item], amount_places=amount_places)
+    if rolled is None:
+        excl = quantize_money(getattr(item, "total_price", 0) or 0)
+        if excl <= 0:
+            return Decimal("0.00")
+        pct = resolve_purchase_line_tax_rate_percent(
+            line_tax_rate=getattr(item, "tax_rate", None),
+            header_tax_rate=getattr(order, "tax_rate", None),
+        )
+        _, _, gross = compute_tax_from_excluding(excl, pct)
+        return gross
+    _, _, _, net, _ = rolled
+    return quantize_money(net)
+
+
 def compute_purchase_receipt_line_settlement_amounts(
     receipt: Any,
     line: Any,
     poi_by_id: Mapping[int, Any],
+    *,
+    purchase_order_by_id: Optional[Mapping[int, Any]] = None,
+    amount_places: int = 2,
 ) -> Tuple[Decimal, Decimal, Decimal]:
     """单行未税/税额/价税（与 rollup、列表 settlement 同源）。"""
     qty = Decimal(str(getattr(line, "receipt_quantity", 0) or 0))
@@ -360,14 +385,57 @@ def compute_purchase_receipt_line_settlement_amounts(
         line_total_amount=line_total,
         poi_by_id=poi_by_id,
     )
+    if (
+        poi_id
+        and poi_id in poi_by_id
+        and purchase_order_by_id
+    ):
+        poi = poi_by_id[poi_id]
+        order_id = int(getattr(poi, "order_id", 0) or 0)
+        order = purchase_order_by_id.get(order_id) if order_id > 0 else None
+        if order is not None:
+            poi_excl = quantize_money(getattr(poi, "total_price", 0) or 0)
+            poi_gross = purchase_order_item_settlement_gross(
+                order, poi, amount_places=amount_places
+            )
+            if poi_excl > 0 and poi_gross > 0 and line_excl > 0:
+                gross = proportional_line_gross(line_excl, poi_excl, poi_gross)
+                tax = quantize_money(gross - line_excl)
+                return line_excl, tax, gross
     tax_pct = resolve_receipt_line_tax_rate_percent(
         receipt=receipt,
         purchase_order_item_id=poi_id,
         poi_by_id=poi_by_id,
         receipt_line=line,
     )
-    _, tax, gross = compute_tax_from_excluding(line_excl, tax_pct)
-    return line_excl, quantize_money(tax), gross
+    from apps.kuaizhizao.constants.price_type import DEFAULT_PURCHASE_PRICE_TYPE
+    from apps.kuaizhizao.utils.document_line_amounts import calc_document_line_amounts
+
+    display_raw = getattr(line, "display_unit_price", None)
+    has_display = display_raw is not None and Decimal(str(display_raw or 0)) > 0
+    price_type = (
+        "tax_inclusive" if has_display else DEFAULT_PURCHASE_PRICE_TYPE
+    )
+    if price_type == "tax_inclusive" and has_display:
+        excl, tax, gross = calc_document_line_amounts(
+            qty,
+            Decimal(str(display_raw)),
+            tax_pct,
+            "tax_inclusive",
+            amount_places,
+        )
+        return excl, quantize_money(tax), gross
+    if line_total is not None and line_total > 0 and not has_display:
+        _, tax, gross = compute_tax_from_excluding(line_excl, tax_pct)
+        return line_excl, quantize_money(tax), gross
+    excl, tax, gross = calc_document_line_amounts(
+        qty,
+        unit_price,
+        tax_pct,
+        "tax_exclusive",
+        amount_places,
+    )
+    return excl, quantize_money(tax), gross
 
 
 async def sync_purchase_receipt_line_settlement_amounts(

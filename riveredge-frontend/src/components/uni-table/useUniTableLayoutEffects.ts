@@ -9,7 +9,9 @@ import React from 'react'
 import {
   measureTableBodyOverflowsViewport,
   measureFillViewportTableBodyScrollY,
+  measureTableFixedSummaryChromePx,
 } from './uniTableScrollPolicy'
+import { LIST_PAGE_TABLE_SCROLL } from '../layout-templates/constants'
 import { resolveUniReportTableBodyScrollY } from '../uni-report/uniReportScrollPolicy'
 import { observeLayoutTargets } from './observeLayoutTargets'
 import {
@@ -29,6 +31,7 @@ export type UseUniTableLayoutEffectsParams = {
   fillViewportBody: boolean
   proTableBodyScrollYEnabled: boolean
   setFillViewportMeasuredScrollY: React.Dispatch<React.SetStateAction<number | undefined>>
+  setListFixedSummaryChromePx: React.Dispatch<React.SetStateAction<number>>
   reportLayout: boolean
   reportHasFixedSummary: boolean
   reportMeasuredScrollYRef: React.MutableRefObject<number | undefined>
@@ -61,6 +64,7 @@ export function useUniTableLayoutEffects(p: UseUniTableLayoutEffectsParams): voi
     fillViewportBody,
     proTableBodyScrollYEnabled,
     setFillViewportMeasuredScrollY,
+    setListFixedSummaryChromePx,
     reportLayout,
     reportHasFixedSummary,
     reportMeasuredScrollYRef,
@@ -83,6 +87,37 @@ export function useUniTableLayoutEffects(p: UseUniTableLayoutEffectsParams): voi
     isMobile,
     setSelectionAlertLayout,
   } = p
+
+  React.useLayoutEffect(() => {
+    if (reportLayout || fillViewportBody || tableSummaryProp == null) {
+      setListFixedSummaryChromePx(0)
+      return
+    }
+    const root = containerRef.current
+    if (!root) return
+
+    const measure = () => {
+      const measured = measureTableFixedSummaryChromePx(root)
+      const next =
+        measured > 0 ? Math.ceil(measured) : LIST_PAGE_TABLE_SCROLL.TABLE_FIXED_SUMMARY_EXTRA_PX
+      setListFixedSummaryChromePx((prev) => (prev === next ? prev : next))
+    }
+
+    measure()
+    return observeLayoutTargets(
+      [root, root.querySelector('.ant-table-wrapper'), root.querySelector('.ant-table-summary')],
+      measure,
+    )
+  }, [
+    containerRef,
+    fillViewportBody,
+    reportLayout,
+    tableSummaryProp,
+    columnStructureSig,
+    showDelayedLoading,
+    tableDataLength,
+    setListFixedSummaryChromePx,
+  ])
 
   React.useLayoutEffect(() => {
     if (!fillViewportBody || !proTableBodyScrollYEnabled) {
@@ -229,7 +264,12 @@ export function useUniTableLayoutEffects(p: UseUniTableLayoutEffectsParams): voi
     const tbody = (scrollBody?.querySelector('.ant-table-tbody') ??
       root.querySelector('.ant-table-tbody')) as Element | null
     return observeLayoutTargets(
-      [tbody, scrollBody, root.querySelector('.ant-table-wrapper')],
+      [
+        tbody,
+        scrollBody,
+        root.querySelector('.ant-table-wrapper'),
+        root.querySelector('.ant-table-summary'),
+      ],
       observeOverflowOn,
     )
     // 依赖列结构签名而非 effectiveTableColumns：实测会改列宽并生成新 columns 引用，
@@ -244,6 +284,7 @@ export function useUniTableLayoutEffects(p: UseUniTableLayoutEffectsParams): voi
     columnStructureSig,
     showDelayedLoading,
     reportLayout,
+    tableSummaryProp,
   ])
 
   React.useLayoutEffect(() => {

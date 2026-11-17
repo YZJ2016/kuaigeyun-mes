@@ -90,6 +90,7 @@ import {
 } from '../../../../../components/custom-fields';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { computeSimpleDocumentLineTotal } from '../../../utils/documentLineAmounts';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { buildDocumentCreateDraftKey, setDocumentFormDraft } from '../../../../../utils/documentFormDraftCache';
@@ -994,11 +995,17 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
 
       // 计算总金额（转换为下划线命名）
       if (values.quantity && values.unit_price) {
-        values.total_amount = values.quantity * values.unit_price;
+        values.total_amount = computeSimpleDocumentLineTotal(
+          values.quantity,
+          values.unit_price,
+        );
       } else if (values.quantity && values.unitPrice) {
         values.unit_price = values.unitPrice;
         delete values.unitPrice;
-        values.total_amount = values.quantity * values.unit_price;
+        values.total_amount = computeSimpleDocumentLineTotal(
+          values.quantity,
+          values.unit_price,
+        );
       }
 
       values.attachments = normalizeDocumentAttachments(values.attachments);

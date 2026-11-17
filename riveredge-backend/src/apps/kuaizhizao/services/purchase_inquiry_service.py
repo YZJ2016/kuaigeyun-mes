@@ -166,14 +166,19 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             quote_id__in=list(quote_to_inquiry.keys()),
             is_awarded=True,
         ).values("quote_id", "quoted_quantity", "unit_price")
+        from apps.kuaizhizao.utils.document_amount_write import line_total_qty_unit_price
+
         for row in q_items:
             iid = quote_to_inquiry.get(int(row["quote_id"]))
             if iid is None:
                 continue
-            result[iid] += Decimal(str(row.get("quoted_quantity") or 0)) * Decimal(
-                str(row.get("unit_price") or 0)
+            result[iid] += line_total_qty_unit_price(
+                row.get("quoted_quantity") or 0,
+                row.get("unit_price") or 0,
             )
-        return {k: v.quantize(Decimal("0.01")) for k, v in result.items()}
+        from core.utils.amount_precision import quantize_business_amount
+
+        return {k: quantize_business_amount(v, 2) for k, v in result.items()}
 
     async def _build_response(
         self,
@@ -199,13 +204,17 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                 quote_items_by_quote.setdefault(int(qi.quote_id), []).append(qi)
 
         quote_resps: List[PurchaseSupplierQuoteResponse] = []
+        from apps.kuaizhizao.utils.document_amount_write import line_total_qty_unit_price
+        from core.utils.amount_precision import quantize_business_amount
+
         awarded_total_amount = Decimal(0)
         for q in quotes:
             q_items = quote_items_by_quote.get(int(q.id), [])
             for qi in q_items:
                 if qi.is_awarded:
-                    awarded_total_amount += Decimal(str(qi.quoted_quantity or 0)) * Decimal(
-                        str(qi.unit_price or 0)
+                    awarded_total_amount += line_total_qty_unit_price(
+                        qi.quoted_quantity or 0,
+                        qi.unit_price or 0,
                     )
             quote_resps.append(
                 PurchaseSupplierQuoteResponse.model_validate({
@@ -223,7 +232,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         resp = PurchaseInquiryResponse.model_validate({
             **{k: getattr(inquiry, k) for k in inquiry._meta.fields_map if hasattr(inquiry, k)},
             "items_count": len(items),
-            "total_amount": awarded_total_amount.quantize(Decimal("0.01")),
+            "total_amount": quantize_business_amount(awarded_total_amount, 2),
             "items": [PurchaseInquiryItemResponse.model_validate(i) for i in items],
             "vendors": [PurchaseInquiryVendorResponse.model_validate(v) for v in vendors],
             "quotes": quote_resps,
@@ -1111,12 +1120,18 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                 }).save()
 
             await PurchaseSupplierQuoteItem.filter(tenant_id=tenant_id, quote_id=quote.id).delete()
+            from apps.kuaizhizao.utils.document_amount_write import line_total_qty_unit_price
+            from core.utils.amount_precision import quantize_business_amount
+
             total_amount = Decimal(0)
             inquiry_item_ids = {i.id for i in await PurchaseInquiryItem.filter(tenant_id=tenant_id, inquiry_id=inquiry_id).all()}
             for row in data.items:
                 if row.inquiry_item_id not in inquiry_item_ids:
                     raise BusinessLogicError(f"询价明细不存在: {row.inquiry_item_id}")
-                line_amount = (row.quoted_quantity or Decimal(0)) * (row.unit_price or Decimal(0))
+                line_amount = line_total_qty_unit_price(
+                    row.quoted_quantity or 0,
+                    row.unit_price or 0,
+                )
                 total_amount += line_amount
                 await PurchaseSupplierQuoteItem.create(
                     tenant_id=tenant_id,
@@ -1128,7 +1143,9 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                     lead_time_days=row.lead_time_days,
                     notes=row.notes,
                 )
-            await quote.update_from_dict({"total_amount": total_amount.quantize(Decimal("0.01"))}).save()
+            await quote.update_from_dict(
+                {"total_amount": quantize_business_amount(total_amount, 2)}
+            ).save()
             await vendor.update_from_dict({
                 "status": PurchaseInquiryVendorStatus.QUOTED.value,
                 "quoted_at": resolve_business_datetime(),

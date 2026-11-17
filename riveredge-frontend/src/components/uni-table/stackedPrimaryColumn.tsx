@@ -12,6 +12,7 @@
 import React from 'react';
 import { CopyOutlined } from '@ant-design/icons';
 import { Typography, theme } from 'antd';
+import { EMPTY_VALUE_PLACEHOLDER } from '../../utils/format';
 import { LinkedDocumentCode } from '../linked-document-code/LinkedDocumentCode';
 import { resolveStackedSecondaryLinkedDocument } from '../../apps/kuaizhizao/utils/linkedDocumentAutoLink';
 
@@ -167,8 +168,8 @@ export function UniTableStackedPrimaryCell({
   secondaryBadge,
 }: UniTableStackedPrimaryCellProps) {
   const { token } = theme.useToken();
-  const primaryText = primary?.trim() ? primary.trim() : '-';
-  const secondaryText = secondary?.trim() ? secondary.trim() : '-';
+  const primaryText = primary?.trim() ? primary.trim() : EMPTY_VALUE_PLACEHOLDER;
+  const secondaryText = secondary?.trim() ? secondary.trim() : EMPTY_VALUE_PLACEHOLDER;
   const linkedDoc =
     skipLinkedDocumentLink || !record
       ? null
@@ -279,7 +280,7 @@ export function formatMaterialCodeSpecLine(code?: string | null, spec?: string |
   const c = code?.trim() ?? '';
   const s = spec?.trim() ?? '';
   if (c && s) return `${c} - ${s}`;
-  return c || s || '-';
+  return c || s || EMPTY_VALUE_PLACEHOLDER;
 }
 
 /**
@@ -382,7 +383,7 @@ export function MaterialStackedCell({
   primaryExtra,
 }: MaterialStackedCellProps) {
   const { token } = theme.useToken();
-  const name = String(material_name ?? '').trim() || '-';
+  const name = String(material_name ?? '').trim() || EMPTY_VALUE_PLACEHOLDER;
   const code = String(material_code ?? '').trim();
   const spec = String(material_spec ?? '').trim();
   const copyIconStyle: React.CSSProperties = { color: DOC_FOLDER_COPY_ICON_COLOR, fontSize: 11 };

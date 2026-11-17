@@ -1,6 +1,9 @@
+import type { PriceTypeValue } from '../../../components/price-type-switch/PriceTypeSwitch';
 import { getCachedNumericPrecisionPlaces } from '../../../hooks/useNumericPrecision';
 import { normalizeFormListItems } from '../../../utils/formListItems';
 import { formatCurrencyAmount } from '../../../utils/format';
+import { DEFAULT_PURCHASE_PRICE_TYPE } from '../pages/purchase-management/shared/purchasePriceType';
+import { DEFAULT_SALES_PRICE_TYPE } from '../pages/sales-management/shared/salesPriceType';
 
 const toSafeNumber = (value: unknown): number => {
   const n = Number(value);
@@ -70,6 +73,49 @@ const roundToPlaces = (value: number, places: number): number => {
   return Math.round(value * factor) / factor;
 };
 
+/** 无价税列单据：数量×单价行合计（跟站点 amount_decimal_places，禁止 toFixed(2)） */
+export function computeSimpleDocumentLineTotal(
+  qtyInput: unknown,
+  unitPriceInput: unknown,
+): number {
+  const qty = toSafeNumber(qtyInput);
+  const price = toSafeNumber(unitPriceInput);
+  const scale = getAmountScale();
+  return fromAmountUnits(Math.round(qty * price * scale), scale);
+}
+
+/** 业务金额舍入（跟站点 amount_decimal_places） */
+export function roundBusinessAmount(value: unknown): number {
+  const scale = getAmountScale();
+  return fromAmountUnits(toAmountUnits(value, scale), scale);
+}
+
+/**
+ * 按权重分摊总金额，最后一行吃尾差（付款申请/付款单等多行请款）
+ */
+export function allocateAmountByWeights(totalInput: unknown, weightsInput: number[]): number[] {
+  const totalUnits = toAmountUnits(totalInput);
+  if (!weightsInput.length) {
+    return [];
+  }
+  const scale = getAmountScale();
+  const normalized = weightsInput.map((w) => (w > 0 ? w : 0));
+  const weightSum = normalized.reduce((acc, w) => acc + w, 0);
+  const weights = weightSum > 0 ? normalized : weightsInput.map(() => 1);
+  const effSum = weights.reduce((acc, w) => acc + w, 0);
+  let allocated = 0;
+  return weights.map((w, index) => {
+    let units: number;
+    if (index === weights.length - 1) {
+      units = totalUnits - allocated;
+    } else {
+      units = Math.round((totalUnits * w) / effSum);
+      allocated += units;
+    }
+    return fromAmountUnits(units, scale);
+  });
+}
+
 /** 价税合计为真源时反算未税/税额（允许与 qty×单价舍入结果存在尾差） */
 export function calcDocumentLineAmountsFromInclTotal(inclTotal: unknown, taxRateInput: unknown) {
   const scale = getAmountScale();
@@ -137,6 +183,39 @@ export type DocumentLineAmountDeriveRow = {
   item_amount?: unknown;
   is_gift?: unknown;
 };
+
+export type DocumentFormLineAmountRow = DocumentLineAmountDeriveRow;
+
+/**
+ * 表单明细行价税展示（采购/销售/仓储共用，唯一真源 resolveDocumentLineDisplayAmounts）。
+ */
+export function resolveDocumentFormLineAmounts(
+  row: DocumentFormLineAmountRow,
+  priceType: string | undefined,
+  opts?: { qty?: unknown; taxRatePercent?: number },
+): { excl: number; tax: number; incl: number } {
+  const qty = opts?.qty !== undefined ? opts.qty : row.qty;
+  const taxRate = opts?.taxRatePercent ?? row.tax_rate;
+  return resolveDocumentLineDisplayAmounts(
+    {
+      qty,
+      unit_price: row.unit_price,
+      tax_rate: taxRate,
+      item_amount: row.item_amount,
+      is_gift: row.is_gift,
+    },
+    priceType,
+  );
+}
+
+export function normalizeDocumentFormPriceType(
+  value: unknown,
+  module: 'purchase' | 'sales',
+): PriceTypeValue {
+  const v = String(value ?? '').trim();
+  if (v === 'tax_inclusive' || v === 'tax_exclusive') return v;
+  return module === 'purchase' ? DEFAULT_PURCHASE_PRICE_TYPE : DEFAULT_SALES_PRICE_TYPE;
+}
 
 /** 未税/价税合计是否与当前行推导一致（未改值却 blur 时不反写单价） */
 export function documentLineAmountMatchesDerived(
@@ -396,6 +475,84 @@ export function recalcDocumentStoredLineAmount(
   if (row.is_gift) return 0;
   const line = calcDocumentLineAmounts(row.qty, row.unit_price, row.tax_rate, priceType);
   return resolveSalesDocumentStoredLineAmount(line, priceType);
+}
+
+/** 销售明细常用数量字段（双单位列写入后同步 item_amount 时探测） */
+export const DOCUMENT_LINE_STORED_AMOUNT_QTY_FIELDS = [
+  'required_quantity',
+  'requiredQuantity',
+  'quote_quantity',
+  'contract_quantity',
+  'delivery_quantity',
+  'return_quantity',
+  'ordered_quantity',
+  'receipt_quantity',
+  'quantity',
+] as const;
+
+export function readDocumentLineQuantityForStoredAmount(
+  row: Record<string, unknown>,
+  quantityField?: string,
+): unknown {
+  if (quantityField) {
+    const direct = row[quantityField];
+    if (direct != null && direct !== '') return direct;
+  }
+  for (const key of DOCUMENT_LINE_STORED_AMOUNT_QTY_FIELDS) {
+    const raw = row[key];
+    if (raw != null && raw !== '') return raw;
+  }
+  return quantityField ? row[quantityField] : undefined;
+}
+
+type FormListStoredAmountSync = {
+  getFieldValue: (name: string | (string | number)[]) => unknown;
+  setFieldsValue: (values: Record<string, unknown>) => void;
+};
+
+/**
+ * 双单位主数量经 setFieldValue 写入时不会触发 Form onValuesChange，
+ * 而展示又以 item_amount 为真源 → 改数量后价税合计停在旧值（常见=单价）。
+ * 仅当行上已有 item_amount（销售报价/订单/合同等）时同步；采购行无此字段不碰。
+ */
+export function syncFormListLineItemAmountAfterQuantityChange(
+  form: FormListStoredAmountSync | null | undefined,
+  index: number,
+  quantityField: string,
+  quantityOverride?: unknown,
+  listName = 'items',
+): boolean {
+  if (!form) return false;
+  const items = [...normalizeFormListItems<Record<string, unknown>>(form.getFieldValue(listName))];
+  const row = items[index];
+  if (!row) return false;
+  if (
+    !Object.prototype.hasOwnProperty.call(row, 'item_amount') &&
+    !hasFiniteStoredLineAmount(row.item_amount)
+  ) {
+    return false;
+  }
+  const qty =
+    quantityOverride !== undefined
+      ? quantityOverride
+      : readDocumentLineQuantityForStoredAmount(row, quantityField);
+  const priceType = normalizeDocumentFormPriceType(
+    form.getFieldValue('price_type'),
+    'sales',
+  );
+  const item_amount = recalcDocumentStoredLineAmount(
+    {
+      qty,
+      unit_price: row.unit_price,
+      tax_rate: row.tax_rate,
+      is_gift: row.is_gift,
+    },
+    priceType,
+  );
+  if (documentLineAmountsEqual(row.item_amount, item_amount)) return false;
+  items[index] = { ...row, [quantityField]: qty, item_amount };
+  form.setFieldsValue({ [listName]: items });
+  return true;
 }
 
 export interface DocumentGoodsTotals {

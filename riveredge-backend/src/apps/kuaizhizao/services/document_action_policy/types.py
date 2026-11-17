@@ -311,6 +311,7 @@ class InboundHubCapabilities(BaseModel):
     update: ActionCapability
     print: ActionCapability
     push_payment_application: Optional[ActionCapability] = None
+    push_purchase_return: Optional[ActionCapability] = None
 
 
 class OutboundHubCapabilities(BaseModel):
@@ -611,6 +612,9 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "purchase_order.push_payment_application.no_amount": "采购单未填写预付款金额或无可请款预付额度",
     "purchase_receipt.push_payment_application.not_posted": "仅已过账的采购入库可下推付款申请",
     "purchase_receipt.push_payment_application.no_open_amount": "该入库应付无可请款余额",
+    "purchase_receipt.push_purchase_return.not_posted": "仅已入库的采购入库单可下推采购退货",
+    "purchase_receipt.push_purchase_return.no_lines": "采购入库单无可退货明细",
+    "purchase_receipt.push_purchase_return.no_returnable": "采购入库单可退数量已全部占用",
     "payment_application.pull_from_purchase_order.no_amount": "该采购订单预付请款额度已用尽",
     "payment.pull_from_payment_application.not_allowed": "付款申请单不可取单生成付款（须已批准且有余额）",
     "payment_application.update.not_allowed": "当前状态不可编辑付款申请",

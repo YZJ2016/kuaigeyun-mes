@@ -5,18 +5,23 @@
  * - 选中态不合法时整钮禁用；选中单条后应展示全部下推项，不可操作项置灰（disabled + title）
  * - 下推菜单项不使用 icon，以完整文案区分目标单据
  * - 传入 sourceDocument + pushTargets 时：打开菜单拉取下游关联；
- *   已下推单据以右侧级联子菜单展示编号，可点击打开详情
+ *   已下推单据以右侧级联子菜单展示编号；点击编号打开详情，旁侧「转到」跳转业务列表并筛选
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Dropdown, Tag, Tooltip } from 'antd';
 import type { ButtonProps, MenuProps } from 'antd';
 import { ArrowDownOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getDocumentRelations } from '../../apps/kuaizhizao/services/document-relation';
 import { useOptionalLinkedDocumentDetail } from '../linked-document-detail/LinkedDocumentDetailContext';
 import { canOpenLinkedDocumentDetail } from '../../apps/kuaizhizao/utils/linkedDocumentDetail';
 import type { UniPushLinkedDocument, UniPushSourceDocument } from './index';
+import {
+  buildPushedDocumentNavigateUrl,
+  canNavigateToPushedDocument,
+} from './pushedDocumentListNavigation';
 
 export type UniPushMenuItem = NonNullable<MenuProps['items']>[number];
 
@@ -53,6 +58,7 @@ export const UniPushToolbarButton: React.FC<UniPushToolbarButtonProps> = ({
   pushTargets,
 }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const linkedCtx = useOptionalLinkedDocumentDetail();
   const label = buttonText ?? t('components.uniPush.push');
   const [open, setOpen] = useState(false);
@@ -113,6 +119,16 @@ export const UniPushToolbarButton: React.FC<UniPushToolbarButtonProps> = ({
     [linkedCtx],
   );
 
+  const goToPushedDoc = useCallback(
+    (doc: UniPushLinkedDocument) => {
+      const url = buildPushedDocumentNavigateUrl(doc);
+      if (!url) return;
+      setOpen(false);
+      navigate(url);
+    },
+    [navigate],
+  );
+
   const enrichedMenuItems = useMemo(() => {
     if (!enrichEnabled) return menuItems;
     return (menuItems || []).map((item) => {
@@ -156,6 +172,8 @@ export const UniPushToolbarButton: React.FC<UniPushToolbarButtonProps> = ({
           const code = doc.documentCode || `#${doc.documentId}`;
           const deleted = Boolean(doc.isDeleted);
           const canOpen = !deleted && canOpenLinkedDocumentDetail(doc.documentType);
+          const canGo = canNavigateToPushedDocument(doc);
+          const itemDisabled = deleted || (!canOpen && !canGo);
           return {
             key: `${key}__doc-${doc.documentType}-${doc.documentId}`,
             label: (
@@ -163,8 +181,8 @@ export const UniPushToolbarButton: React.FC<UniPushToolbarButtonProps> = ({
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 6,
-                  maxWidth: 280,
+                  gap: 8,
+                  maxWidth: 320,
                 }}
               >
                 <span
@@ -173,6 +191,8 @@ export const UniPushToolbarButton: React.FC<UniPushToolbarButtonProps> = ({
                     opacity: deleted ? 0.65 : 1,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
+                    flex: 1,
+                    minWidth: 0,
                   }}
                 >
                   {code}
@@ -182,16 +202,49 @@ export const UniPushToolbarButton: React.FC<UniPushToolbarButtonProps> = ({
                     {t('components.uniPush.pushedDocDeleted')}
                   </Tag>
                 ) : null}
+                {canGo ? (
+                  <span
+                    data-uni-push-go-to="1"
+                    role="link"
+                    tabIndex={0}
+                    style={{
+                      flexShrink: 0,
+                      color: 'var(--ant-color-primary)',
+                      cursor: 'pointer',
+                      fontSize: 12,
+                    }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      goToPushedDoc(doc);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        goToPushedDoc(doc);
+                      }
+                    }}
+                  >
+                    {t('components.uniPush.goToPushedDocument')}
+                  </span>
+                ) : null}
               </span>
             ),
             title: deleted
               ? t('components.uniPush.pushedDocDeletedHint')
               : canOpen
                 ? t('components.uniPush.openPushedDetail')
-                : code,
-            disabled: !canOpen,
+                : canGo
+                  ? t('components.uniPush.goToPushedDocumentHint')
+                  : code,
+            disabled: itemDisabled,
             onClick: canOpen
-              ? () => {
+              ? (info) => {
+                  const target = info.domEvent?.target as HTMLElement | null;
+                  if (target?.closest?.('[data-uni-push-go-to]')) {
+                    return;
+                  }
                   openPushedDoc(doc);
                 }
               : undefined,
@@ -215,7 +268,7 @@ export const UniPushToolbarButton: React.FC<UniPushToolbarButtonProps> = ({
         popupClassName: 'uni-push-submenu-popup',
       };
     });
-  }, [downstreamByType, enrichEnabled, menuItems, openPushedDoc, pushTargets, t]);
+  }, [downstreamByType, enrichEnabled, goToPushedDoc, menuItems, openPushedDoc, pushTargets, t]);
 
   const resolvedDisabledReason = useMemo(() => {
     if (!disabled) return undefined;

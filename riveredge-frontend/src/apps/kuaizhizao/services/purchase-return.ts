@@ -2,6 +2,8 @@
  * 采购退货单类型（API 见 warehouse-execution / production warehouseApi）
  */
 
+import { apiRequest } from '../../../services/api';
+
 export interface ActionCapability {
   allowed: boolean;
   reason?: string | null;
@@ -41,6 +43,7 @@ export interface PurchaseReturn {
   review_remarks?: string;
   return_reason?: string;
   return_type?: string;
+  replenish?: boolean;
   status?: string;
   total_quantity?: number;
   total_amount?: number;
@@ -57,8 +60,8 @@ export interface PurchaseReturn {
     phase?: string;
     enabled?: boolean;
     mode?: string;
+    allowed_actions?: string[];
   } | null;
-  finance_outcome?: PurchaseReturnFinanceOutcome | null;
   items?: PurchaseReturnItem[];
 }
 
@@ -85,6 +88,7 @@ export interface PurchaseReturnFinanceOutcome {
 
 export interface PurchaseReturnDetail extends PurchaseReturn {
   items?: PurchaseReturnItem[];
+  finance_outcome?: PurchaseReturnFinanceOutcome | null;
 }
 
 export interface PurchaseReturnItem {
@@ -124,4 +128,24 @@ export interface PurchaseReturnListResult {
   data: PurchaseReturn[];
   total: number;
   success: boolean;
+}
+
+export function commitPurchaseReturn(id: number) {
+  return apiRequest(`/core/uni-audit/purchase_return/${id}/submit`, { method: 'POST' });
+}
+
+export function submitPurchaseReturnForReview(id: number) {
+  return apiRequest(`/core/uni-audit/purchase_return/${id}/submit_review`, { method: 'POST' });
+}
+
+export function withdrawPurchaseReturn(id: number) {
+  return apiRequest(`/core/uni-audit/purchase_return/${id}/withdraw`, { method: 'POST' });
+}
+
+export function approvePurchaseReturn(id: number) {
+  return apiRequest(`/core/uni-audit/purchase_return/${id}/approve`, { method: 'POST' });
+}
+
+export function revokePurchaseReturn(id: number) {
+  return apiRequest(`/core/uni-audit/purchase_return/${id}/revoke`, { method: 'POST' });
 }

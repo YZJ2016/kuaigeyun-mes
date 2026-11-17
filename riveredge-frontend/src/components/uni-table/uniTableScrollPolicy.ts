@@ -128,6 +128,12 @@ export function measureFillViewportTableBodyScrollY(root: HTMLElement | null): n
  * 必须量 `.ant-table-body` 内的 tbody / scrollHeight。即便量准，调用方也不得
  * 在已限高时仅凭一次 false 关回 natural（列宽/loading 重跑会形成 React #185）。
  */
+/** 表格外吸底合计行占用高度（`Table.Summary fixed`） */
+export function measureTableFixedSummaryChromePx(root: HTMLElement | null): number {
+  if (!root) return 0
+  return measureElementHeight(root.querySelector('.ant-table-summary'))
+}
+
 export function measureTableBodyOverflowsViewport(root: HTMLElement | null): boolean {
   if (!root || typeof window === 'undefined') return false
   const tableWrapper = root.querySelector('.ant-table-wrapper')
@@ -143,7 +149,13 @@ export function measureTableBodyOverflowsViewport(root: HTMLElement | null): boo
   const headerBottom =
     header?.getBoundingClientRect().bottom ?? tableWrapper.getBoundingClientRect().top
   const pagerHeight = pager?.offsetHeight ?? 56
-  const available = window.innerHeight - headerBottom - pagerHeight - VIEWPORT_SCROLL_MEASURE_BOTTOM_GAP_PX
+  const summaryHeight = measureTableFixedSummaryChromePx(root)
+  const available =
+    window.innerHeight -
+    headerBottom -
+    pagerHeight -
+    summaryHeight -
+    VIEWPORT_SCROLL_MEASURE_BOTTOM_GAP_PX
   const content = scrollBody ? scrollBody.scrollHeight : tbody.scrollHeight
   return content > available && available > VIEWPORT_SCROLL_MIN_AVAILABLE_PX
 }

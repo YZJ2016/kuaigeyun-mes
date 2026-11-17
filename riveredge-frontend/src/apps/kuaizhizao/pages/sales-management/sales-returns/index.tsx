@@ -10,7 +10,7 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import type { TFunction } from 'i18next';
 import { rowActionKind, rowActionCreateRefund } from '../../../../../components/uni-action';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useDocumentHighlightDeepLink } from '../../../../../hooks/useDocumentHighlightDeepLink';
 import {
   receiptRefundService,
@@ -28,14 +28,21 @@ import {
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Space, Table, Row, Col, Form as AntForm, InputNumber, Input, Select, Dropdown, Typography, Spin, Empty, List, Descriptions } from 'antd';
-import { EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined, MoreOutlined, CopyOutlined, EditOutlined, PrinterOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, EyeOutlined, CheckCircleOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined, MoreOutlined, CopyOutlined, EditOutlined, PrinterOutlined } from '@ant-design/icons';
 import { theme as AntdTheme } from 'antd';
 import { UniTable, readPersistedUniTableViewType, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { UniCapabilityBatchButton, UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
+import {
+  UniCapabilityBatchButton,
+  UniBatchMenuButton,
+  pickCapability,
+  runCapabilityBatchLoop,
+  withDocumentSubmitCombinedItem,
+  type UniBatchMenuItem,
+} from '../../../../../components/uni-batch';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
@@ -45,7 +52,17 @@ import {
   renderPullQueryDocStatus,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG, MODAL_CONFIG, FormModalTemplate,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
+import {
+  ListPageTemplate,
+  DetailDrawerTemplate,
+  DRAWER_CONFIG,
+  DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
+  DocumentFormPageHeaderActions,
+  DocumentFormPageLayout,
+  useDetailDrawerDescriptionItems,
+} from '../../../../../components/layout-templates';
+import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
+import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
 );
@@ -70,6 +87,14 @@ import {
 } from '../../../../master-data/utils/materialImportResolve';
 import { warehouseApi } from '../../../services/production';
 import type { SalesReturn, SalesReturnItem, SalesReturnListParams } from '../../../services/sales-return';
+import {
+  approveSalesReturn,
+  commitSalesReturn,
+  revokeSalesReturn,
+  submitSalesReturnForReview,
+  withdrawSalesReturnSubmit,
+} from '../../../services/sales-return';
+import { isPendingReviewStatus } from '../../../constants/documentStatus';
 import {
   KUAIZHIZAO_DOC_HOST,
   loadCustomerFormReferenceList,
@@ -125,8 +150,10 @@ import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { formatBusinessDateOnly, formatDateTime, formatQuantity, formatAmount } from '../../../../../utils/format';
+import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import type { SalesReturnDeliveryPullLine, SalesReturnOrderPullLine } from '../../../services/warehouse-execution';
-import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
+import { QuantityWithUnitDisplay, buildDocumentLineDualQuantityFormColumns } from '../../../../../components/quantity-with-unit';
+import { pickDocumentLineDualQuantityFields } from '../../../../../utils/materialDualQuantity';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
@@ -159,6 +186,8 @@ function resolveSalesReturnSnapshotName(raw: unknown): string {
 const SALES_RETURN_RESOURCE = 'kuaizhizao:sales-return';
 const SALES_RETURN_LIST_PERSISTENCE_ID =
   'apps.kuaizhizao.pages.sales-management.sales-returns-width-v2';
+const SALES_RETURN_LIST_PATH = '/apps/kuaizhizao/sales-management/sales-returns';
+const salesReturnEditPath = (id: number) => `${SALES_RETURN_LIST_PATH}/${id}/edit`;
 const SALES_RETURN_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_sales_returns';
 const SALES_RETURN_REFUNDED_STATUSES = new Set(['已退货', 'completed', '已完成', 'RETURNED']);
 
@@ -364,10 +393,21 @@ function getImportRowValue(row: Record<string, unknown>, keys: string[]) {
 
 const SalesReturnsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const { quantity: quantityDecimals } = useNumericPrecision();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const pullFromSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'sales_return.pull_from_sales_order');
   const pullFromSalesDeliveryAction = resolveKuaizhizaoDocumentAction(t, 'sales_return.pull_from_sales_delivery');
   const navigate = useNavigate();
+  const location = useLocation();
+  const isCreatePage = location.pathname.endsWith('/sales-returns/new');
+  const editRouteMatch = location.pathname.match(/\/sales-returns\/(\d+)\/edit$/);
+  const editRouteId = editRouteMatch ? Number(editRouteMatch[1]) : null;
+  const isEditPage = editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0;
+  const isFormPage = isCreatePage || isEditPage;
+  const leaveSalesReturnFormPage = useLeaveFormTab(SALES_RETURN_LIST_PATH);
+  const formPageInitKeyRef = useRef<string | null>(null);
+  const [formPageLoading, setFormPageLoading] = useState(false);
+  const pendingCreateFormValuesRef = useRef<Record<string, unknown> | null>(null);
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const { token } = AntdTheme.useToken();
@@ -400,10 +440,8 @@ const SalesReturnsPage: React.FC = () => {
   );
 
   // 创建/编辑相关状态
-  const [modalVisible, setModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingDetail, setEditingDetail] = useState<SalesReturnDetail | null>(null);
-  const [pendingFormValues, setPendingFormValues] = useState<Record<string, any> | null>(null);
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const tableRowsRef = useRef<SalesReturn[]>([]);
@@ -444,13 +482,8 @@ const SalesReturnsPage: React.FC = () => {
     }
   };
 
-  const salesReturnAuditBatchHandlers = useMemo(
-    () => createUniAuditBatchHandlers('sales_return'),
-    [],
-  );
-
   useEffect(() => {
-    if (!modalVisible) return;
+    if (!isFormPage) return;
     let cancelled = false;
     void loadCustomerFormReferenceList(KUAIZHIZAO_DOC_HOST.salesReturn).then((list) => {
       if (!cancelled) setCustomerList(list);
@@ -458,7 +491,7 @@ const SalesReturnsPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [modalVisible]);
+  }, [isFormPage]);
 
   const selectedReturnsForBatch = useMemo(
     () =>
@@ -467,6 +500,123 @@ const SalesReturnsPage: React.FC = () => {
         .filter((row): row is SalesReturn => row != null),
     [selectedRowKeys],
   );
+
+  const salesReturnToolbarAuditMenus = useMemo(() => {
+    const reload = () => {
+      setSelectedRowKeys([]);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    };
+    const reviewOf = (row: SalesReturn) => String(row.review_status || '').trim();
+    const allowed = (row: SalesReturn, key: string) => pickCapability(row, key)?.allowed === true;
+    const run = (
+      keys: React.Key[],
+      records: SalesReturn[],
+      capabilityKey: string,
+      permAllowed: boolean,
+      onRun: (id: number) => Promise<unknown>,
+      notAllowedMessage?: string,
+    ) =>
+      runCapabilityBatchLoop({
+        keys,
+        records,
+        capabilityKey,
+        permAllowed,
+        notAllowedMessage,
+        onRun,
+        onSuccess: reload,
+        message: messageApi,
+        t,
+      });
+    const submitRows = selectedReturnsForBatch.filter((row) => allowed(row, 'submit'));
+    const committedRows = selectedReturnsForBatch.filter(
+      (row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'withdraw_submit'),
+    );
+    const pendingRows = selectedReturnsForBatch.filter((row) => {
+      const review = reviewOf(row);
+      return review !== 'SUBMITTED' && isPendingReviewStatus(review) && allowed(row, 'withdraw_submit');
+    });
+    const reviewRows = selectedReturnsForBatch.filter((row) => allowed(row, 'submit_review'));
+    const approveRows = selectedReturnsForBatch.filter(
+      (row) => reviewOf(row) !== 'SUBMITTED' && isPendingReviewStatus(reviewOf(row)) && allowed(row, 'approve'),
+    );
+    const revokeRows = selectedReturnsForBatch.filter((row) => allowed(row, 'revoke_approval'));
+    const canSubmit = salesReturnPerms.canAction?.('submit') ?? false;
+    const canApprove = salesReturnPerms.canAction?.('approve') ?? false;
+    const canRevoke = salesReturnPerms.canAction?.('revoke') ?? false;
+    const hasSelection = selectedReturnsForBatch.length > 0;
+    const submitDisabled = hasSelection && !(canSubmit && submitRows.length > 0);
+    const submitItems: UniBatchMenuItem[] = withDocumentSubmitCombinedItem(
+      [
+        {
+          key: 'submit',
+          label: t('common.submit'),
+          disabled: submitDisabled,
+          onClick: (keys) => run(keys, submitRows, 'submit', canSubmit, (id) => commitSalesReturn(id)),
+        },
+        {
+          key: 'withdraw-submit',
+          label: t('app.kuaizhizao.salesReturn.toolbar.withdrawSubmit'),
+          disabled: hasSelection && committedRows.length === 0,
+          onClick: (keys) =>
+            run(keys, committedRows, 'withdraw_submit', canSubmit, (id) => withdrawSalesReturnSubmit(id)),
+        },
+        {
+          key: 'submit-review',
+          label: t('app.kuaizhizao.salesReturn.toolbar.submitReview'),
+          disabled: hasSelection && !(canSubmit && reviewRows.length > 0),
+          onClick: (keys) =>
+            run(
+              keys,
+              reviewRows,
+              'submit_review',
+              canSubmit,
+              (id) => submitSalesReturnForReview(id),
+              t('app.kuaizhizao.salesReturn.toolbar.submitReviewNotAllowed'),
+            ),
+        },
+      ],
+      {
+        t,
+        message: messageApi,
+        disabled: submitDisabled,
+        commitRecords: submitRows,
+        permAllowed: canSubmit,
+        commit: (id) => commitSalesReturn(id),
+        submitReview: (id) => submitSalesReturnForReview(id),
+        onSuccess: reload,
+      },
+    );
+    const auditItems: UniBatchMenuItem[] = [
+      {
+        key: 'approve',
+        label: t('common.audit'),
+        disabled: hasSelection && !(canApprove && approveRows.length > 0),
+        onClick: (keys) => run(keys, approveRows, 'approve', canApprove, (id) => approveSalesReturn(id)),
+      },
+      {
+        key: 'withdraw-review',
+        label: t('app.kuaizhizao.salesReturn.toolbar.withdrawReview'),
+        disabled: hasSelection && pendingRows.length === 0,
+        onClick: (keys) =>
+          run(keys, pendingRows, 'withdraw_submit', canApprove, (id) => withdrawSalesReturnSubmit(id)),
+      },
+      {
+        key: 'revoke',
+        label: t('app.kuaizhizao.salesReturn.toolbar.revoke'),
+        disabled: hasSelection && !(canRevoke && revokeRows.length > 0),
+        onClick: (keys) =>
+          run(keys, revokeRows, 'revoke_approval', canRevoke, (id) => revokeSalesReturn(id)),
+      },
+    ];
+    return { submitItems, auditItems };
+  }, [
+    invalidateMenuBadgeCounts,
+    messageApi,
+    salesReturnPerms,
+    selectedReturnsForBatch,
+    t,
+  ]);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [productScope, setProductScope] = useState<'make' | 'all'>('make');
   const materialSourceType = productScope === 'make' ? 'Make' : undefined;
@@ -500,7 +650,7 @@ const SalesReturnsPage: React.FC = () => {
     extractFormValues: extractSalesReturnFormValues,
     saveCustomFieldValues: saveSalesReturnCustomFieldValues,
     resetFieldValues: resetSalesReturnFormFieldValues,
-  } = useCustomFields({ tableName: SALES_RETURN_CUSTOM_FIELD_TABLE, loadWhenOpen: true, open: modalVisible });
+  } = useCustomFields({ tableName: SALES_RETURN_CUSTOM_FIELD_TABLE, loadWhenOpen: true, open: isFormPage });
 
   const {
     customFields: salesReturnListCustomFields,
@@ -574,7 +724,7 @@ const SalesReturnsPage: React.FC = () => {
 
   /** 打开表单时拉取字典；若租户未初始化则尝试同步系统字典（与 core 配置一致） */
   useEffect(() => {
-    if (!modalVisible) return;
+    if (!isFormPage) return;
     let cancelled = false;
     (async () => {
       setDictOptionsLoading(true);
@@ -608,7 +758,7 @@ const SalesReturnsPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [modalVisible, fallbackReturnReasonOptions, fallbackReturnTypeOptions, fallbackShippingMethodOptions]);
+  }, [isFormPage, fallbackReturnReasonOptions, fallbackReturnTypeOptions, fallbackShippingMethodOptions]);
 
   const salesReturnCustomFieldColumns = generateSalesReturnCustomFieldColumns();
 
@@ -633,7 +783,7 @@ const SalesReturnsPage: React.FC = () => {
           messageApi.warning(t('app.kuaizhizao.salesReturn.refundNoReceipt'));
           return;
         }
-        navigate('/apps/kuaicaiwu/finance-management/receipt-refunds', {
+        navigate('/apps/kuaizhizao/finance-management/receipt-refunds', {
           state: { pullSourceIds: ids },
         });
       } catch (error) {
@@ -912,6 +1062,7 @@ const SalesReturnsPage: React.FC = () => {
         partner_material_code: it.partner_material_code ?? undefined,
         partner_material_name: it.partner_material_name ?? undefined,
         material_unit: it.material_unit || t('app.kuaizhizao.salesReturn.defaultUnit'),
+        ...pickDocumentLineDualQuantityFields(it as Record<string, unknown>),
         return_quantity: qty,
         unit_price: price,
         total_amount: total,
@@ -923,15 +1074,54 @@ const SalesReturnsPage: React.FC = () => {
 
   // 处理新增
   const handleCreate = () => {
-    setEditingId(null);
-    setEditingDetail(null);
-    resetSalesReturnFormFieldValues();
-    resetSelectedWarehouseId();
-    setPendingFormValues({
-      return_time: dayjs(),
-      items: [{ return_quantity: 1, unit_price: 0 }],
-    });
-    setModalVisible(true);
+    pendingCreateFormValuesRef.current = null;
+    navigate(`${SALES_RETURN_LIST_PATH}/new`);
+  };
+
+  const handleCopySelectedSalesReturn = async () => {
+    const source = selectedReturnsForBatch.length === 1 ? selectedReturnsForBatch[0] : null;
+    if (source?.id == null) {
+      messageApi.warning(t('app.kuaizhizao.salesReturn.selectToCopy'));
+      return;
+    }
+    try {
+      const detail = (await warehouseApi.salesReturn.get(String(source.id))) as SalesReturnDetail;
+      setEditingId(null);
+      setEditingDetail(null);
+      resetSalesReturnFormFieldValues();
+      updateSelectedWarehouseId(detail.warehouse_id ?? null);
+      pendingCreateFormValuesRef.current = {
+        customer_id: detail.customer_id,
+        customer_name: detail.customer_name,
+        warehouse_id: detail.warehouse_id,
+        warehouse_name: detail.warehouse_name,
+        return_time: dayjs(),
+        return_reason: detail.return_reason,
+        return_type: detail.return_type,
+        shipping_method: detail.shipping_method,
+        currency_code: String(detail.currency_code || 'CNY').trim().toUpperCase() || 'CNY',
+        exchange_rate: Number(detail.exchange_rate ?? 1) || 1,
+        notes: detail.notes,
+        items: (detail.items || []).map((it) => ({
+          material_id: it.material_id,
+          material_code: it.material_code,
+          material_name: it.material_name,
+          return_quantity: it.return_quantity,
+          unit_price: it.unit_price,
+          batch_number: it.batch_number,
+          location_code: it.location_code,
+          notes: it.notes,
+          material_spec: (it as { material_spec?: string }).material_spec,
+          material_unit:
+            (it as { material_unit?: string }).material_unit ??
+            t('app.kuaizhizao.salesReturn.defaultUnit'),
+        })),
+      };
+      formPageInitKeyRef.current = null;
+      navigate(`${SALES_RETURN_LIST_PATH}/new`);
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('common.loadFailed')));
+    }
   };
 
   const isPullLineSelectable = useCallback(
@@ -1214,52 +1404,121 @@ const SalesReturnsPage: React.FC = () => {
   };
 
 
-  const handleEdit = async (record: SalesReturn) => {
-    try {
-      const detail = (await warehouseApi.salesReturn.get(record.id!.toString())) as SalesReturnDetail;
-      setEditingId(record.id!);
-      setEditingDetail(detail);
-      updateSelectedWarehouseId(detail.warehouse_id ?? null);
-      const rt = detail.return_time ? dayjs(detail.return_time) : dayjs();
-      setPendingFormValues({
-        customer_id: detail.customer_id,
-        customer_name: detail.customer_name,
-        warehouse_id: detail.warehouse_id,
-        warehouse_name: detail.warehouse_name,
-        return_time: rt,
-        return_reason: detail.return_reason,
-        return_type: detail.return_type,
-        shipping_method: detail.shipping_method,
-        currency_code: String(detail.currency_code || 'CNY').trim().toUpperCase() || 'CNY',
-        exchange_rate: Number(detail.exchange_rate ?? 1) || 1,
-        notes: detail.notes,
-        attachments: mapAttachmentsToUploadList(detail.attachments),
-        items: (detail.items || []).map((it) => ({
-          material_id: it.material_id,
-          material_code: it.material_code,
-          material_name: it.material_name,
-          return_quantity: it.return_quantity,
-          unit_price: it.unit_price,
-          batch_number: it.batch_number,
-          location_code: it.location_code,
-          notes: it.notes,
-          sales_delivery_item_id: it.sales_delivery_item_id,
-          material_spec: (it as any).material_spec,
-          material_unit: (it as any).material_unit ?? t('app.kuaizhizao.salesReturn.defaultUnit'),
-        })),
-      });
-      if (record.id != null) {
-        window.setTimeout(() => {
-          loadSalesReturnFormFieldValues(record.id!).then((fieldFormValues) => {
-            formRef.current?.setFieldsValue(fieldFormValues);
-          });
-        }, 100);
-      }
-      setModalVisible(true);
-    } catch {
-      messageApi.error(t('app.kuaizhizao.salesReturn.loadDetailFailed'));
-    }
+  const handleEdit = (record: SalesReturn) => {
+    if (record.id == null) return;
+    navigate(salesReturnEditPath(record.id));
   };
+
+  const loadSalesReturnEditForm = useCallback(
+    async (id: number) => {
+      setFormPageLoading(true);
+      try {
+        const detail = (await warehouseApi.salesReturn.get(String(id))) as SalesReturnDetail;
+        if (detail.capabilities?.update?.allowed !== true) {
+          messageApi.warning(t('app.kuaizhizao.salesReturn.editNotAllowed'));
+          leaveSalesReturnFormPage();
+          return;
+        }
+        setEditingId(id);
+        setEditingDetail(detail);
+        updateSelectedWarehouseId(detail.warehouse_id ?? null);
+        const rt = detail.return_time ? dayjs(detail.return_time) : dayjs();
+        formRef.current?.resetFields?.();
+        formRef.current?.setFieldsValue({
+          customer_id: detail.customer_id,
+          customer_name: detail.customer_name,
+          warehouse_id: detail.warehouse_id,
+          warehouse_name: detail.warehouse_name,
+          return_time: rt,
+          return_reason: detail.return_reason,
+          return_type: detail.return_type,
+          shipping_method: detail.shipping_method,
+          currency_code: String(detail.currency_code || 'CNY').trim().toUpperCase() || 'CNY',
+          exchange_rate: Number(detail.exchange_rate ?? 1) || 1,
+          notes: detail.notes,
+          attachments: mapAttachmentsToUploadList(detail.attachments),
+          items: (detail.items || []).map((it) => ({
+            material_id: it.material_id,
+            material_code: it.material_code,
+            material_name: it.material_name,
+            return_quantity: it.return_quantity,
+            unit_price: it.unit_price,
+            batch_number: it.batch_number,
+            location_code: it.location_code,
+            notes: it.notes,
+            sales_delivery_item_id: it.sales_delivery_item_id,
+            material_spec: (it as { material_spec?: string }).material_spec,
+            material_unit:
+              (it as { material_unit?: string }).material_unit ??
+              t('app.kuaizhizao.salesReturn.defaultUnit'),
+          })),
+        });
+        const fieldFormValues = await loadSalesReturnFormFieldValues(id);
+        formRef.current?.setFieldsValue(fieldFormValues);
+      } catch {
+        messageApi.error(t('app.kuaizhizao.salesReturn.loadDetailFailed'));
+        leaveSalesReturnFormPage();
+      } finally {
+        setFormPageLoading(false);
+      }
+    },
+    [
+      leaveSalesReturnFormPage,
+      loadSalesReturnFormFieldValues,
+      messageApi,
+      t,
+      updateSelectedWarehouseId,
+    ],
+  );
+
+  const initSalesReturnCreateForm = useCallback(() => {
+    setEditingId(null);
+    setEditingDetail(null);
+    resetSalesReturnFormFieldValues();
+    resetSelectedWarehouseId();
+    formRef.current?.resetFields?.();
+    const pending = pendingCreateFormValuesRef.current;
+    if (pending) {
+      pendingCreateFormValuesRef.current = null;
+      formRef.current?.setFieldsValue(pending);
+      const warehouseId = pending.warehouse_id;
+      if (warehouseId != null && warehouseId !== '') {
+        updateSelectedWarehouseId(Number(warehouseId));
+      }
+      return;
+    }
+    formRef.current?.setFieldsValue({
+      return_time: dayjs(),
+      items: [{ return_quantity: 1, unit_price: 0 }],
+    });
+  }, [
+    resetSalesReturnFormFieldValues,
+    resetSelectedWarehouseId,
+    updateSelectedWarehouseId,
+  ]);
+
+  useEffect(() => {
+    if (!isFormPage) {
+      formPageInitKeyRef.current = null;
+      return;
+    }
+    const initKey = isCreatePage ? 'create' : `edit:${editRouteId}`;
+    if (formPageInitKeyRef.current === initKey) return;
+    formPageInitKeyRef.current = initKey;
+    if (isCreatePage) {
+      initSalesReturnCreateForm();
+      return;
+    }
+    if (editRouteId != null) {
+      void loadSalesReturnEditForm(editRouteId);
+    }
+  }, [
+    editRouteId,
+    initSalesReturnCreateForm,
+    isCreatePage,
+    isFormPage,
+    loadSalesReturnEditForm,
+  ]);
 
   // 处理批量删除
   const handleDelete = async (keys: React.Key[]) => {
@@ -1310,14 +1569,15 @@ const SalesReturnsPage: React.FC = () => {
         messageApi.warning(t('app.kuaizhizao.salesReturn.selectWarehouse'));
         return;
       }
+      const saveId = editingId ?? editRouteId;
       let recordId: number | undefined;
-      if (editingId) {
+      if (saveId) {
         const detail = editingDetail;
         if (!detail?.capabilities?.update?.allowed) {
           messageApi.warning(t('app.kuaizhizao.salesReturn.editNotAllowed'));
           return;
         }
-        await warehouseApi.salesReturn.update(editingId.toString(), {
+        await warehouseApi.salesReturn.update(String(saveId), {
           customer_id: standardValues.customer_id,
           customer_name:
             customerName || resolveSalesReturnSnapshotName(detail.customer_name),
@@ -1341,7 +1601,7 @@ const SalesReturnsPage: React.FC = () => {
           status: detail.status,
           items: itemsPayload,
         });
-        recordId = editingId;
+        recordId = saveId;
         messageApi.success(t('app.kuaizhizao.salesReturn.updateSuccess'));
       } else {
         const created = await warehouseApi.salesReturn.create({
@@ -1358,15 +1618,14 @@ const SalesReturnsPage: React.FC = () => {
       if (recordId != null) {
         await saveSalesReturnCustomFieldValues(recordId, customData);
       }
-      setModalVisible(false);
       resetSalesReturnFormFieldValues();
       setEditingId(null);
       setEditingDetail(null);
-      setPendingFormValues(null);
       resetSelectedWarehouseId();
       invalidateMenuBadgeCounts();
-
       actionRef.current?.reload();
+      formPageInitKeyRef.current = null;
+      leaveSalesReturnFormPage();
     } catch (error: any) {
       messageApi.error(error.message || t('common.operationFailed'));
     }
@@ -1881,264 +2140,15 @@ const SalesReturnsPage: React.FC = () => {
   const showSalesReturnAttachments =
     Boolean(returnDetail) && hasDocumentAttachments(salesReturnAttachments);
 
-  return (
-    <>
-      <ListPageTemplate>
-        <UniTable
-          columnPersistenceId={SALES_RETURN_LIST_PERSISTENCE_ID}
-          headerTitle={t('app.kuaizhizao.salesReturn.title')}
-          actionRef={actionRef}
-          viewTypes={['table', 'detailTable', 'help']}
-          defaultViewType={viewTypeState === 'help' ? 'table' : viewTypeState}
-          onViewTypeChange={(v) => {
-            dataViewModeRef.current = resolveDetailTableViewMode(v as 'table' | 'detailTable' | 'help');
-            setViewTypeState(v as 'table' | 'detailTable' | 'help');
-            setSelectedRowKeys([]);
-            setTimeout(() => actionRef.current?.reload(), 0);
-          }}
-          detailTableColumns={detailTableColumns}
-          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.salesReturn)}
-          rowKey={dataViewMode === 'detail' ? '_rowKey' : 'id'}
-          columns={columns}
-          onTableDataChange={(rows) => {
-            if (dataViewModeRef.current === 'order') {
-              tableRowsRef.current = rows as SalesReturn[];
-            }
-          }}
-          selectedRowKeys={selectedRowKeys}
-          onRowSelectionChange={setSelectedRowKeys}
-          showAdvancedSearch={true}
-          skipFuzzyPinyinClientFilter
-          pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
-          pinnedTabsValueEnum={salesReturnLifecycleValueEnum}
-          showCreateButton={false}
-          createButtonText={t('app.kuaizhizao.salesReturn.create')}
-          onCreate={handleCreate}
-          showImportButton={salesReturnPerms.canCreate}
-          onImport={handleListImport}
-          importHeaders={salesReturnListImportTemplate.importHeaders}
-          importExampleRow={salesReturnListImportTemplate.importExampleRow}
-          importColumnOptions={salesReturnListImportTemplate.importColumnOptions}
-          importFieldMap={salesReturnListImportTemplate.importHeaderMap}
-          toolBarRender={() => [
-            <UniPullCreateToolbar
-              compactKey="create-sales-return-with-pull"
-              createIcon={<PlusOutlined />}
-              createLabel={t('app.kuaizhizao.salesReturn.create')}
-              onCreate={handleCreate}
-              menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
-                {
-                  key: 'pull-from-sales-delivery',
-                  actionKey: 'sales_return.pull_from_sales_delivery',
-                  onClick: openPullFromSalesDelivery,
-                },
-                {
-                  key: 'pull-from-sales-order',
-                  actionKey: 'sales_return.pull_from_sales_order',
-                  onClick: openPullFromSalesOrder,
-                },
-              ])}
-            />,
-          ]}
-          request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
-            try {
-              const apiParams = resolveSalesReturnListApiParams(
-                params,
-                sort,
-                searchFormValues,
-              ) as SalesReturnListParams;
-              const response = await warehouseApi.salesReturn.list(apiParams);
-              const list = response?.data ?? [];
-              const enriched = meta?.purpose === 'prefetch'
-                ? list
-                : await enrichSalesReturnRecordsWithCustomFields(list);
-              // 行缓存唯一真源：onTableDataChange（prefetch 会走本 request，禁止在此覆盖）
-              if (dataViewModeRef.current === 'order') {
-                return {
-                  data: enriched,
-                  success: true,
-                  total: response?.total ?? enriched.length,
-                };
-              }
-              const flatRows = flattenDocumentDetailRows<SalesReturn, SalesReturnItem>({
-                headers: enriched,
-                getHeaderId: (h) => h.id,
-                getItems: (h) => h.items,
-                buildRowKey: (h, item, index) =>
-                  item?.id
-                    ? `return-${h.id}-item-${item.id}`
-                    : `return-${h.id}-idx-${index}`,
-                mapItemRow: (h, item) => ({
-                  ...item,
-                  return_id: h.id ?? 0,
-                  return_code: h.return_code,
-                  customer_name: h.customer_name,
-                  sales_delivery_code: h.sales_delivery_code,
-                  sales_order_code: h.sales_order_code,
-                  warehouse_name: h.warehouse_name,
-                  return_time: h.return_time,
-                  status: h.status,
-                  review_status: h.review_status,
-                  lifecycle: h.lifecycle,
-                  capabilities: h.capabilities,
-                  audit: h.audit,
-                }),
-                mapEmptyHeaderRow: (h) => ({
-                  return_id: h.id ?? 0,
-                  return_code: h.return_code,
-                  customer_name: h.customer_name,
-                  sales_delivery_code: h.sales_delivery_code,
-                  sales_order_code: h.sales_order_code,
-                  warehouse_name: h.warehouse_name,
-                  return_time: h.return_time,
-                  status: h.status,
-                  review_status: h.review_status,
-                  lifecycle: h.lifecycle,
-                  capabilities: h.capabilities,
-                  audit: h.audit,
-                  material_code: '-',
-                  material_name: '-',
-                  return_quantity: 0,
-                  unit_price: 0,
-                  total_amount: 0,
-                }),
-              }) as SalesReturnItemRow[];
-              return {
-                data: flatRows,
-                success: true,
-                total: response?.total ?? enriched.length,
-              };
-            } catch {
-              messageApi.error(t('app.kuaizhizao.salesReturn.listFailed'));
-              return {
-                data: [],
-                success: false,
-                total: 0,
-              };
-            }
-          }}
-          enableRowSelection={viewTypeState !== 'detailTable'}
-          rowSelectionGetCheckboxProps={(record) => ({
-            disabled: !isSalesReturnRowSelectable(record),
-          })}
-          showDeleteButton={viewTypeState !== 'detailTable'}
-          onDelete={handleDelete}
-          deleteConfirmTitle={(count) => t('app.kuaizhizao.salesReturn.confirmBatchDelete', { count })}
-          toolBarActionsAfterDelete={[
-            <UniAuditBatchMenuButton
-              key="sales-return-batch-menu"
-              selectedRowKeys={selectedRowKeys}
-              selectedRecords={selectedReturnsForBatch}
-              auditEnabled={salesReturnAuditEnabled}
-              permGates={salesReturnPerms}
-              handlers={salesReturnAuditBatchHandlers}
-              onSuccess={() => {
-                setSelectedRowKeys([]);
-                void handleSalesReturnAuditSuccess();
-              }}
-              toolBarButtonSize="middle"
-            />,
-          ]}
-          toolBarActionsAfterBatch={[
-            <UniCapabilityBatchButton
-              key="sales-return-confirm"
-              selectedRowKeys={selectedRowKeys}
-              selectedRecords={selectedReturnsForBatch}
-              capabilityKey="confirm"
-              permAllowed={salesReturnPerms.canAction?.('execute') ?? false}
-              batchAllowed={salesReturnBatchConfirmAllowed}
-              onRun={(id) => warehouseApi.salesReturn.confirm(String(id))}
-              notAllowedMessage={t('app.kuaizhizao.salesReturn.batchConfirmNotAllowed')}
-              onSuccess={() => {
-                setSelectedRowKeys([]);
-                invalidateMenuBadgeCounts();
-    actionRef.current?.reload();
-              }}
-              requireConfirm
-              labels={{
-                single: t('app.kuaizhizao.salesReturn.confirmReturn'),
-                batch: t('app.kuaizhizao.salesReturn.batchConfirm'),
-                singleConfirmTitle: t('app.kuaizhizao.salesReturn.confirmTitle'),
-              }}
-              icon={<CheckCircleOutlined />}
-              size="medium"
-              color="green"
-              variant="solid"
-            />,
-            <UniCapabilityBatchButton
-              key="sales-return-withdraw"
-              selectedRowKeys={selectedRowKeys}
-              selectedRecords={selectedReturnsForBatch}
-              capabilityKey="withdraw"
-              permAllowed={salesReturnPerms.canAction?.('revoke') ?? false}
-              batchAllowed={salesReturnBatchWithdrawAllowed}
-              onRun={(id) => warehouseApi.salesReturn.withdraw(String(id))}
-              notAllowedMessage={t('app.kuaizhizao.salesReturn.batchWithdrawNotAllowed')}
-              onSuccess={() => {
-                setSelectedRowKeys([]);
-                invalidateMenuBadgeCounts();
-    actionRef.current?.reload();
-              }}
-              requireConfirm
-              labels={{
-                single: t('app.kuaizhizao.salesReturn.withdrawConfirm'),
-                batch: t('app.kuaizhizao.salesReturn.batchWithdraw'),
-              }}
-              icon={<CopyOutlined />}
-              size="medium"
-              color="orange"
-              variant="solid"
-            />,
-          ]}
-          rightToolBarActionsBeforeExport={[
-            <UniCapabilityBatchButton
-              key="sales-return-print"
-              selectedRowKeys={selectedRowKeys}
-              selectedRecords={selectedReturnsForBatch}
-              capabilityKey="print"
-              permAllowed={salesReturnPerms.canPrint}
-              batchAllowed={(records, perm) =>
-                Boolean(perm) && records.some((record) => record.capabilities?.print?.allowed === true)
-              }
-              singleOnly
-              onRun={async (id) => {
-                openPrint({ documentType: 'sales_return', documentId: id });
-              }}
-              labels={{
-                single: t('components.uniAction.print'),
-                batch: t('components.uniAction.print'),
-              }}
-              icon={<PrinterOutlined />}
-              size="medium"
-            />,
-          ]}
-        />
-      </ListPageTemplate>
 
-      <FormModalTemplate
-        title={editingId ? t('app.kuaizhizao.salesReturn.editTitle') : t('app.kuaizhizao.salesReturn.createTitle')}
-        open={modalVisible}
-        onClose={() => {
-          setModalVisible(false);
-          setEditingId(null);
-          setEditingDetail(null);
-          setPendingFormValues(null);
-          resetSalesReturnFormFieldValues();
-        }}
-        afterOpenChange={(open) => {
-          if (open) {
-            if (pendingFormValues) {
-              formRef.current?.setFieldsValue(pendingFormValues);
-            }
-            return;
-          }
-          formRef.current?.resetFields?.();
-          setPendingFormValues(null);
-        }}
-        onFinish={onFinish}
-        formRef={formRef}
-        width={MODAL_CONFIG.LARGE_WIDTH}
-      >
+  const submitSalesReturnForm = useCallback(() => {
+    void formRef.current?.submit?.();
+  }, []);
+
+  useSubmitShortcut(submitSalesReturnForm, isFormPage);
+
+  const renderSalesReturnFormFields = () => (
+    <>
         <Row gutter={16}>
           <Col span={8}>
             <ProForm.Item
@@ -2401,17 +2411,6 @@ const SalesReturnsPage: React.FC = () => {
                       ),
                     },
                     {
-                      title: t('app.kuaizhizao.salesReturn.returnQuantity'),
-                      dataIndex: 'return_quantity',
-                      width: DOCUMENT_DETAIL_COL_WIDTH.quantity,
-                      ...DOCUMENT_DETAIL_NUM_COL,
-                      render: (_: unknown, __: unknown, index: number) => (
-                        <AntForm.Item name={[index, 'return_quantity']} noStyle>
-                          <InputNumber size={DOCUMENT_DETAIL_CONTROL_SIZE} style={{ width: '100%' }} min={1} />
-                        </AntForm.Item>
-                      ),
-                    },
-                    {
                       title: (
                         <AntForm.Item
                           noStyle
@@ -2457,13 +2456,332 @@ const SalesReturnsPage: React.FC = () => {
 
         <ProFormTextArea name="notes" label={t('common.remark')} placeholder={t('app.kuaizhizao.salesReturn.notesPlaceholder')} fieldProps={{ rows: 3 }} />
         <DocumentAttachmentsField category="sales_return_attachments" />
-      </FormModalTemplate>
+    </>
+  );
 
-      <UniMaterialBatchPicker
-        open={materialPickerOpen}
-        onCancel={() => setMaterialPickerOpen(false)}
-        onConfirm={appendItemsFromMaterials}
-      />
+  if (isFormPage) {
+    return (
+      <>
+        <DocumentFormPageLayout
+          header={
+            <>
+              <Space align="center" size={8}>
+                <Button
+                  type="text"
+                  icon={<ArrowLeftOutlined />}
+                  aria-label={t('common.back')}
+                  onClick={leaveSalesReturnFormPage}
+                />
+                <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
+                  {isCreatePage
+                    ? t('app.kuaizhizao.salesReturn.createTitle')
+                    : t('app.kuaizhizao.salesReturn.editTitle')}
+                </Typography.Title>
+              </Space>
+              <DocumentFormPageHeaderActions
+                onCancel={leaveSalesReturnFormPage}
+                onSaveDraft={submitSalesReturnForm}
+                onPrimarySubmit={submitSalesReturnForm}
+                isCreatePage={isCreatePage}
+                showSaveDraft={false}
+                canSubmitAfterSave={false}
+                showCommitSubmit={false}
+              />
+            </>
+          }
+        >
+          <Spin spinning={formPageLoading}>
+            <ProForm formRef={formRef} layout="vertical" submitter={false} onFinish={onFinish}>
+              {renderSalesReturnFormFields()}
+            </ProForm>
+          </Spin>
+        </DocumentFormPageLayout>
+        <UniMaterialBatchPicker
+          open={materialPickerOpen}
+          onCancel={() => setMaterialPickerOpen(false)}
+          onConfirm={appendItemsFromMaterials}
+        />
+        <Suspense fallback={null}>
+          <LazyUniImport
+            visible={importModalVisible}
+            onCancel={() => setImportModalVisible(false)}
+            onConfirm={handleImport}
+            title={t('app.kuaizhizao.salesReturn.importTitle')}
+            headers={[
+              t('app.kuaizhizao.salesReturn.import.materialCode'),
+              t('common.unit'),
+              t('app.kuaizhizao.salesReturn.import.returnQuantity'),
+              t('app.kuaizhizao.salesReturn.import.unitPrice'),
+              t('app.kuaizhizao.salesReturn.import.batchNumber'),
+              t('app.kuaizhizao.salesReturn.import.location'),
+              t('common.remark'),
+            ]}
+            exampleRow={[
+              'MAT001',
+              pickImportExampleValue(
+                salesReturnLineUnitOptions,
+                t('app.kuaizhizao.salesReturn.defaultUnit'),
+              ),
+              '10',
+              '99.5',
+              'B001',
+              'A-01',
+              '',
+            ]}
+            columnOptions={salesReturnLineImportColumnOptions}
+          />
+        </Suspense>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <ListPageTemplate>
+        <UniTable
+          columnPersistenceId={SALES_RETURN_LIST_PERSISTENCE_ID}
+          headerTitle={t('app.kuaizhizao.salesReturn.title')}
+          actionRef={actionRef}
+          viewTypes={['table', 'detailTable', 'help']}
+          defaultViewType={viewTypeState === 'help' ? 'table' : viewTypeState}
+          onViewTypeChange={(v) => {
+            dataViewModeRef.current = resolveDetailTableViewMode(v as 'table' | 'detailTable' | 'help');
+            setViewTypeState(v as 'table' | 'detailTable' | 'help');
+            setSelectedRowKeys([]);
+            setTimeout(() => actionRef.current?.reload(), 0);
+          }}
+          detailTableColumns={detailTableColumns}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.salesReturn)}
+          rowKey={dataViewMode === 'detail' ? '_rowKey' : 'id'}
+          columns={columns}
+          onTableDataChange={(rows) => {
+            if (dataViewModeRef.current === 'order') {
+              tableRowsRef.current = rows as SalesReturn[];
+            }
+          }}
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
+          showAdvancedSearch={true}
+          skipFuzzyPinyinClientFilter
+          pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
+          pinnedTabsValueEnum={salesReturnLifecycleValueEnum}
+          showCreateButton={false}
+          createButtonText={t('app.kuaizhizao.salesReturn.create')}
+          onCreate={handleCreate}
+          showImportButton={salesReturnPerms.canCreate}
+          onImport={handleListImport}
+          importHeaders={salesReturnListImportTemplate.importHeaders}
+          importExampleRow={salesReturnListImportTemplate.importExampleRow}
+          importColumnOptions={salesReturnListImportTemplate.importColumnOptions}
+          importFieldMap={salesReturnListImportTemplate.importHeaderMap}
+          toolBarRender={() => [
+            <UniPullCreateToolbar
+              key="create-sales-return-with-pull"
+              compactKey="create-sales-return-with-pull"
+              createIcon={<PlusOutlined />}
+              createLabel={t('app.kuaizhizao.salesReturn.create')}
+              onCreate={handleCreate}
+              menuItems={[
+                ...buildKuaizhizaoPullCreateMenuItems(t, [
+                  {
+                    key: 'pull-from-sales-delivery',
+                    actionKey: 'sales_return.pull_from_sales_delivery',
+                    onClick: openPullFromSalesDelivery,
+                  },
+                  {
+                    key: 'pull-from-sales-order',
+                    actionKey: 'sales_return.pull_from_sales_order',
+                    onClick: openPullFromSalesOrder,
+                  },
+                ]),
+                { type: 'divider', key: 'copy-selected-divider' },
+                {
+                  key: 'copy-selected',
+                  label: t('app.kuaizhizao.salesReturn.copySelectedCreate'),
+                  disabled: selectedReturnsForBatch.length !== 1,
+                  onClick: () => void handleCopySelectedSalesReturn(),
+                },
+              ]}
+            />,
+            ...(viewTypeState === 'detailTable'
+              ? []
+              : [
+                  <UniBatchMenuButton
+                    key="sales-return-submit"
+                    selectedRowKeys={selectedRowKeys}
+                    menuItems={salesReturnToolbarAuditMenus.submitItems}
+                    buttonText={t('common.submit')}
+                  />,
+                  <UniBatchMenuButton
+                    key="sales-return-audit"
+                    selectedRowKeys={selectedRowKeys}
+                    menuItems={salesReturnToolbarAuditMenus.auditItems}
+                    buttonText={t('components.uniAction.audit')}
+                  />,
+                ]),
+          ]}
+          request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
+            try {
+              const apiParams = resolveSalesReturnListApiParams(
+                params,
+                sort,
+                searchFormValues,
+              ) as SalesReturnListParams;
+              const response = await warehouseApi.salesReturn.list(apiParams);
+              const list = response?.data ?? [];
+              const enriched = meta?.purpose === 'prefetch'
+                ? list
+                : await enrichSalesReturnRecordsWithCustomFields(list);
+              // 行缓存唯一真源：onTableDataChange（prefetch 会走本 request，禁止在此覆盖）
+              if (dataViewModeRef.current === 'order') {
+                return {
+                  data: enriched,
+                  success: true,
+                  total: response?.total ?? enriched.length,
+                };
+              }
+              const flatRows = flattenDocumentDetailRows<SalesReturn, SalesReturnItem>({
+                headers: enriched,
+                getHeaderId: (h) => h.id,
+                getItems: (h) => h.items,
+                buildRowKey: (h, item, index) =>
+                  item?.id
+                    ? `return-${h.id}-item-${item.id}`
+                    : `return-${h.id}-idx-${index}`,
+                mapItemRow: (h, item) => ({
+                  ...item,
+                  return_id: h.id ?? 0,
+                  return_code: h.return_code,
+                  customer_name: h.customer_name,
+                  sales_delivery_code: h.sales_delivery_code,
+                  sales_order_code: h.sales_order_code,
+                  warehouse_name: h.warehouse_name,
+                  return_time: h.return_time,
+                  status: h.status,
+                  review_status: h.review_status,
+                  lifecycle: h.lifecycle,
+                  capabilities: h.capabilities,
+                  audit: h.audit,
+                }),
+                mapEmptyHeaderRow: (h) => ({
+                  return_id: h.id ?? 0,
+                  return_code: h.return_code,
+                  customer_name: h.customer_name,
+                  sales_delivery_code: h.sales_delivery_code,
+                  sales_order_code: h.sales_order_code,
+                  warehouse_name: h.warehouse_name,
+                  return_time: h.return_time,
+                  status: h.status,
+                  review_status: h.review_status,
+                  lifecycle: h.lifecycle,
+                  capabilities: h.capabilities,
+                  audit: h.audit,
+                  material_code: '-',
+                  material_name: '-',
+                  return_quantity: 0,
+                  unit_price: 0,
+                  total_amount: 0,
+                }),
+              }) as SalesReturnItemRow[];
+              return {
+                data: flatRows,
+                success: true,
+                total: response?.total ?? enriched.length,
+              };
+            } catch {
+              messageApi.error(t('app.kuaizhizao.salesReturn.listFailed'));
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
+          }}
+          enableRowSelection={viewTypeState !== 'detailTable'}
+          rowSelectionGetCheckboxProps={(record) => ({
+            disabled: !isSalesReturnRowSelectable(record),
+          })}
+          showDeleteButton={viewTypeState !== 'detailTable'}
+          deleteButtonText={t('common.delete')}
+          onDelete={handleDelete}
+          deleteConfirmTitle={(count) => t('app.kuaizhizao.salesReturn.confirmBatchDelete', { count })}
+          toolBarActionsAfterDelete={[]}
+          toolBarActionsAfterBatch={[
+            <UniCapabilityBatchButton
+              key="sales-return-confirm"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedReturnsForBatch}
+              capabilityKey="confirm"
+              permAllowed={salesReturnPerms.canAction?.('execute') ?? false}
+              batchAllowed={salesReturnBatchConfirmAllowed}
+              onRun={(id) => warehouseApi.salesReturn.confirm(String(id))}
+              notAllowedMessage={t('app.kuaizhizao.salesReturn.batchConfirmNotAllowed')}
+              onSuccess={() => {
+                setSelectedRowKeys([]);
+                invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+              }}
+              requireConfirm
+              labels={{
+                single: t('app.kuaizhizao.salesReturn.confirmReturn'),
+                batch: t('app.kuaizhizao.salesReturn.batchConfirm'),
+                singleConfirmTitle: t('app.kuaizhizao.salesReturn.confirmTitle'),
+              }}
+              icon={<CheckCircleOutlined />}
+              size="medium"
+              color="green"
+              variant="solid"
+            />,
+            <UniCapabilityBatchButton
+              key="sales-return-withdraw"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedReturnsForBatch}
+              capabilityKey="withdraw"
+              permAllowed={salesReturnPerms.canAction?.('revoke') ?? false}
+              batchAllowed={salesReturnBatchWithdrawAllowed}
+              onRun={(id) => warehouseApi.salesReturn.withdraw(String(id))}
+              notAllowedMessage={t('app.kuaizhizao.salesReturn.batchWithdrawNotAllowed')}
+              onSuccess={() => {
+                setSelectedRowKeys([]);
+                invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+              }}
+              requireConfirm
+              labels={{
+                single: t('app.kuaizhizao.salesReturn.withdrawConfirm'),
+                batch: t('app.kuaizhizao.salesReturn.batchWithdraw'),
+              }}
+              icon={<CopyOutlined />}
+              size="medium"
+              color="orange"
+              variant="solid"
+            />,
+          ]}
+          rightToolBarActionsBeforeExport={[
+            <UniCapabilityBatchButton
+              key="sales-return-print"
+              selectedRowKeys={selectedRowKeys}
+              selectedRecords={selectedReturnsForBatch}
+              capabilityKey="print"
+              permAllowed={salesReturnPerms.canPrint}
+              batchAllowed={(records, perm) =>
+                Boolean(perm) && records.some((record) => record.capabilities?.print?.allowed === true)
+              }
+              singleOnly
+              onRun={async (id) => {
+                openPrint({ documentType: 'sales_return', documentId: id });
+              }}
+              labels={{
+                single: t('components.uniAction.print'),
+                batch: t('components.uniAction.print'),
+              }}
+              icon={<PrinterOutlined />}
+              size="medium"
+            />,
+          ]}
+        />
+      </ListPageTemplate>
+
 
       <UniPullQueryModal<SalesReturnOrderPullLine>
         open={pullFromSalesOrderQuery.open}
@@ -2571,39 +2889,6 @@ const SalesReturnsPage: React.FC = () => {
         okText={t('app.kuaizhizao.salesReturn.pull.ok')}
       />
 
-
-      <Suspense fallback={null}>
-        <LazyUniImport
-          visible={importModalVisible}
-          onCancel={() => setImportModalVisible(false)}
-          onConfirm={handleImport}
-          title={t('app.kuaizhizao.salesReturn.importTitle')}
-          headers={[
-            t('app.kuaizhizao.salesReturn.import.materialCode'),
-            t('common.unit'),
-            t('app.kuaizhizao.salesReturn.import.returnQuantity'),
-            t('app.kuaizhizao.salesReturn.import.unitPrice'),
-            t('app.kuaizhizao.salesReturn.import.batchNumber'),
-            t('app.kuaizhizao.salesReturn.import.location'),
-            t('common.remark'),
-          ]}
-          exampleRow={[
-            'MAT001',
-            pickImportExampleValue(
-              salesReturnLineUnitOptions,
-              t('app.kuaizhizao.salesReturn.defaultUnit'),
-            ),
-            '10',
-            '99.5',
-            'B20260117001',
-            'A01-01-01',
-            t('app.kuaizhizao.salesReturn.import.notesExample'),
-          ]}
-          columnOptions={salesReturnLineImportColumnOptions}
-        />
-      </Suspense>
-
-      {/* 详情Drawer */}
       <DetailDrawerTemplate
         title={t('app.kuaizhizao.salesReturn.detailTitle', {
           suffix: returnDetail?.return_code ? ` - ${returnDetail.return_code}` : '',

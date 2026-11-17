@@ -6926,9 +6926,11 @@ class DemandComputationService(AppBaseService):
             supplier_code = getattr(supplier, "code", None) or str(outsource_supplier_id)
             supplier_name = getattr(supplier, "name", None) or mc.get("outsource_supplier_name", "待指定")
             
+            from apps.kuaizhizao.utils.document_amount_write import line_total_qty_unit_price
+
             quantity = item.suggested_work_order_quantity or Decimal("0")
             unit_price = Decimal(str(mc.get("outsource_price") or 0))
-            total_amount = quantity * unit_price
+            total_amount = line_total_qty_unit_price(quantity, unit_price)
             
             schedule_direction = normalize_schedule_direction(
                 (computation.computation_params or {}).get("schedule_direction")

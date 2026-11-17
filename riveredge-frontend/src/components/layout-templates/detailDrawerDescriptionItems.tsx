@@ -6,7 +6,7 @@
 import { useMemo, type Key, type ReactNode } from 'react';
 import type { DescriptionsProps } from 'antd';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../utils/format';
+import { EMPTY_VALUE_PLACEHOLDER, formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../utils/format';
 import {
   resolveLinkedDocumentColumn,
   shouldInjectLinkedDocumentRender,
@@ -114,7 +114,7 @@ export function detailDrawerDescriptionItems<T extends Record<string, any>>(
     return {
       key: itemKey as Key,
       label: col.title as ReactNode,
-      children: content !== undefined && content !== null ? content : '-',
+      children: content !== undefined && content !== null ? content : EMPTY_VALUE_PLACEHOLDER,
       span: col.span ?? 1,
     };
   });

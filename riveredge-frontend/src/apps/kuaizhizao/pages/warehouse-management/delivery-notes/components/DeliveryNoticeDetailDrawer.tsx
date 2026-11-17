@@ -65,6 +65,7 @@ export type DeliveryNoticeDetailDrawerProps = {
   trackingRefreshKey?: number;
   extra?: React.ReactNode;
   collaboration?: React.ReactNode;
+  supplementary?: React.ReactNode;
 };
 
 export const DeliveryNoticeDetailDrawer: React.FC<DeliveryNoticeDetailDrawerProps> = ({
@@ -78,6 +79,7 @@ export const DeliveryNoticeDetailDrawer: React.FC<DeliveryNoticeDetailDrawerProp
   trackingRefreshKey = 0,
   extra,
   collaboration: collaborationOverride,
+  supplementary,
 }) => {
   const { t } = useTranslation();
   const contentReady = Boolean(notice?.id);
@@ -201,6 +203,7 @@ export const DeliveryNoticeDetailDrawer: React.FC<DeliveryNoticeDetailDrawerProp
         ) : undefined
       }
       collaboration={collaboration}
+      supplementary={contentReady ? supplementary : undefined}
       linesTitle={t('app.kuaizhizao.deliveryNote.section.lineDetails')}
       lines={
         notice?.items && notice.items.length > 0 ? (

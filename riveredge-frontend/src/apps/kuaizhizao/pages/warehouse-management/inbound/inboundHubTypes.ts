@@ -51,6 +51,12 @@ export interface InboundHubOrder {
   returned_at?: string;
   supplier_id?: number;
   supplier_name?: string;
+  buyer_id?: number;
+  buyer_name?: string;
+  buyer_operator_number?: string;
+  pay_mode?: string;
+  tax_rate?: number;
+  currency?: string;
   customer_id?: number;
   customer_name?: string;
   work_order_id?: number;
@@ -68,7 +74,13 @@ export interface InboundHubOrder {
   /** 明细单位一致时的单位；不一致为 null */
   quantity_unit?: string | null;
   unit_price?: number;
+  /** 未税合计（采购入库等） */
   total_amount?: number;
+  tax_amount?: number;
+  /** 价税合计（采购入库等） */
+  net_amount?: number;
+  /** 列表/详情：按 PO 行比例重算的价税合计 */
+  settlement_gross?: number;
   total_items?: number;
   /** 列表「明细」列预览（仅 material_name） */
   items?: { material_name?: string | null }[];
@@ -90,7 +102,13 @@ export interface InboundHubOrder {
     print?: { allowed?: boolean; reason?: string };
     delete?: { allowed?: boolean; reason?: string };
     update?: { allowed?: boolean; reason?: string };
+    submit?: { allowed?: boolean; reason?: string };
+    submit_review?: { allowed?: boolean; reason?: string };
+    withdraw_submit?: { allowed?: boolean; reason?: string };
+    approve?: { allowed?: boolean; reason?: string };
+    revoke_approval?: { allowed?: boolean; reason?: string };
     push_payment_application?: { allowed?: boolean; reason?: string };
+    push_purchase_return?: { allowed?: boolean; reason?: string };
   };
   [key: string]: unknown;
 }
@@ -134,6 +152,20 @@ export const INBOUND_RECEIPT_TYPES: InboundReceiptType[] = [
   'other_inbound',
   'material_return',
 ];
+
+/** 制造「生产入库」菜单：成品/半成品/生产退料，不含采购入库 */
+export function isProductionInboundHubScope(
+  scoped?: readonly InboundReceiptType[],
+): boolean {
+  if (!scoped?.length) return false;
+  const set = new Set(scoped);
+  return (
+    set.has('finished_goods') &&
+    set.has('semi_finished_goods') &&
+    set.has('production_return') &&
+    !set.has('purchase')
+  );
+}
 
 export function inboundReceiptTypeLabel(t: TFunction, type: InboundReceiptType): string {
   return t(`app.kuaizhizao.warehouseInbound.receiptType.${type}`);

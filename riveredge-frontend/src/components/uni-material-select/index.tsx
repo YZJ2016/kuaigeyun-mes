@@ -1,6 +1,8 @@
 import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { Form, App } from 'antd';
+import type { ColProps } from 'antd';
 import type { SelectProps } from 'antd';
+import { ProFormItem } from '@ant-design/pro-components';
 import { useDebounceFn } from 'ahooks';
 import { Material } from '../../apps/master-data/types/material';
 import { apiRequest } from '../../services/api';
@@ -107,6 +109,15 @@ interface UniMaterialSelectProps {
   formItemProps?: any;
   /** 透传给内部 Select（兼容 ProForm 风格的 fieldProps） */
   fieldProps?: Partial<SelectProps>;
+  /** ProForm grid 下与 ProFormText 同级的 Col 栅格（须配合外层 ProForm grid） */
+  colProps?: ColProps;
+  /**
+   * 由外层 ProFormField 承担 Form.Item 与 colProps 时启用（ProForm 只认直接子节点栅格）。
+   * 仅渲染下拉与快速新建弹窗，须放在 ProFormField renderFormItem 内。
+   */
+  embedInProFormField?: boolean;
+  /** embed 时 ProFormField 注入的 onChange，用于校验与脏检查 */
+  proFormFieldOnChange?: (value: number | number[] | undefined) => void;
   /** 组件所在的是否是 Form.List 的子项？如果是，请传递该行的 field.name 以便计算回填路径 */
   listFieldKey?: number | string;
   /** Form.List 的 name（当在 Form.List 内时，用于 fillMapping 的 setFieldValue 完整路径） */
@@ -149,7 +160,7 @@ interface UniMaterialSelectProps {
 export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   name,
   label = '物料名称',
-  placeholder = '请选择物料（支持名称/编号搜索）',
+  placeholder = '请选择物料（支持名称、编号、拼音首字母）',
   required = false,
   disabled = false,
   readonly = false,
@@ -164,7 +175,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   mastersOnly = true,
   listFieldKey,
   listFieldName,
-  size='middle',
+  size='medium',
   showQuickCreate = true,
   quickCreate: quickCreateProp,
   showAdvancedSearch = true,
@@ -177,6 +188,9 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   onChange,
   formItemProps,
   fieldProps,
+  colProps,
+  embedInProFormField = false,
+  proFormFieldOnChange,
 }) => {
   const { style: formItemStyle, ...restFormItemProps } = formItemProps || {}
   const {
@@ -456,7 +470,12 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   ): Promise<Material | undefined> => {
     let selected =
       currentData.find((m) => Number((m as any).id) === Number(val)) ?? undefined;
-    if (selected) return selected;
+    if (selected) {
+      const hasVariantMeta =
+        (selected as Material).variantManaged !== undefined ||
+        (selected as Material).variant_managed !== undefined;
+      if (hasVariantMeta) return selected;
+    }
 
     try {
       const items = await resolveReferenceDisplay({
@@ -511,6 +530,9 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
       if (onChangeRef.current) {
         onChangeRef.current(ids, selectedMaterials);
       }
+      if (embedInProFormField) {
+        proFormFieldOnChange?.(ids);
+      }
       return;
     }
 
@@ -558,6 +580,9 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
 
     if (onChangeRef.current) {
       onChangeRef.current(singleVal, selectedMaterial);
+    }
+    if (embedInProFormField) {
+      proFormFieldOnChange?.(singleVal);
     }
   };
 
@@ -622,6 +647,12 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
     [materialById],
   );
 
+  const embedValueProps = embedInProFormField
+    ? isMultiple
+      ? uniMaterialSelectMultipleGetValueProps(currentValue)
+      : uniMaterialSelectGetValueProps(currentValue)
+    : {};
+
   /**
    * rc-field-form：Form.Item 经 toChildrenArray 展开 Fragment 后若出现多个子节点，不会对任一子节点注入 value/onChange，
    * 导致 Select 仅本地展示、store 无 material_id。故 Form.Item 只包裹 UniDropdown，MaterialFormModal 放在外层兄弟节点。
@@ -639,6 +670,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
       filterOption={false}
       onSearch={debounceFetch}
       onChange={mergedOnChange}
+      {...embedValueProps}
       getPopupContainer={getPopupContainer ?? fieldPropsGetPopupContainer}
       optionRender={optionRender}
       listItemHeight={MATERIAL_SELECT_OPTION_ITEM_HEIGHT}
@@ -744,25 +776,39 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
     />
   );
 
+  const formItemRules = required ? [{ required: true, message: `请选择${label || '物料'}` }] : undefined;
+  const formItemCommon = {
+    name,
+    label: label || undefined,
+    rules: formItemRules,
+    validateTrigger: ['onChange', 'onBlur'] as const,
+    getValueFromEvent: (val: unknown) =>
+      isMultiple ? uniMaterialSelectMultipleValueFromEvent(val) : uniMaterialSelectValueFromEvent(val),
+    getValueProps: (v: any) =>
+      isMultiple ? uniMaterialSelectMultipleGetValueProps(v) : uniMaterialSelectGetValueProps(v),
+    /** 勿用 margin:0，会吃掉 ant-form-item 默认 margin-bottom，导致与下一表单项贴死 */
+    style: { marginTop: 0, marginInline: 0, ...formItemStyle },
+    ...restFormItemProps,
+  };
+
+  if (embedInProFormField) {
+    return (
+      <>
+        {dropdown}
+        {modal}
+      </>
+    );
+  }
+
   return (
     <>
-      <Form.Item
-        name={name}
-        label={label || undefined}
-        rules={required ? [{ required: true, message: `请选择${label || '物料'}` }] : undefined}
-        validateTrigger={['onChange', 'onBlur']}
-        getValueFromEvent={(val: unknown) =>
-          isMultiple ? uniMaterialSelectMultipleValueFromEvent(val) : uniMaterialSelectValueFromEvent(val)
-        }
-        getValueProps={(v: any) =>
-          isMultiple ? uniMaterialSelectMultipleGetValueProps(v) : uniMaterialSelectGetValueProps(v)
-        }
-        /** 勿用 margin:0，会吃掉 ant-form-item 默认 margin-bottom，导致与下一表单项贴死 */
-        style={{ marginTop: 0, marginInline: 0, ...formItemStyle }}
-        {...restFormItemProps}
-      >
-        {dropdown}
-      </Form.Item>
+      {colProps ? (
+        <ProFormItem colProps={colProps} {...formItemCommon}>
+          {dropdown}
+        </ProFormItem>
+      ) : (
+        <Form.Item {...formItemCommon}>{dropdown}</Form.Item>
+      )}
       {modal}
     </>
   );

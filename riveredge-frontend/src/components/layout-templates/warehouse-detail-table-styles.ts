@@ -37,6 +37,11 @@ export const WAREHOUSE_DETAIL_TABLE_STYLES = `
   .warehouse-detail-table .ant-form-item-explain-error {
     display: none !important;
   }
+  .warehouse-detail-table .ant-input-number {
+    min-width: 96px;
+    width: 100%;
+    max-width: 100%;
+  }
   .warehouse-detail-table .ant-input-number-input::selection,
   .warehouse-detail-table .ant-input::selection {
     background-color: var(--ant-color-primary);
@@ -101,6 +106,11 @@ export const WAREHOUSE_FORM_DETAIL_TABLE_FRAME_STYLES = `
   .warehouse-form-detail-table-frame .warehouse-detail-table .ant-form-item-explain,
   .warehouse-form-detail-table-frame .warehouse-detail-table .ant-form-item-explain-error {
     display: none !important;
+  }
+  .warehouse-form-detail-table-frame .warehouse-detail-table .ant-input-number {
+    min-width: 96px;
+    width: 100%;
+    max-width: 100%;
   }
   .warehouse-form-detail-table-frame .warehouse-detail-table .ant-input-number-input::selection,
   .warehouse-form-detail-table-frame .warehouse-detail-table .ant-input::selection {

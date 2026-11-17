@@ -17,6 +17,7 @@ import {
   isOrderChangeLineUnitPriceLocked,
   resolveOrderChangeLineAfterUnitPrice,
 } from '../../utils/orderChangeLinePricing';
+import { computeSimpleDocumentLineTotal } from '../../utils/documentLineAmounts';
 
 export type OrderChangeItemsTablePricing = {
   side: 'sales' | 'purchase';
@@ -43,7 +44,9 @@ function calcDelta(row: OrderChangeItem): number {
   const aq = Number(row.after_quantity ?? 0);
   const bp = Number(row.before_unit_price ?? 0);
   const ap = Number(row.after_unit_price ?? 0);
-  return Number((aq * ap - bq * bp).toFixed(2));
+  return (
+    computeSimpleDocumentLineTotal(aq, ap) - computeSimpleDocumentLineTotal(bq, bp)
+  );
 }
 
 /** 与后端 diff_sales_item / diff_purchase_item 一致：按 before/after 推断变更维度 */
@@ -177,10 +180,10 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({
     const qty = Number(row?.after_quantity ?? 1) || 1;
     updateItem(index, {
       material_id: material.id,
-      material_code: material.code,
+      material_code: material.mainCode ?? material.code,
       material_name: material.name,
-      material_spec: material.spec,
-      material_unit: material.unit,
+      material_spec: material.specification,
+      material_unit: material.baseUnit,
     });
     void repriceLineIfAllowed(index, material, qty);
   };

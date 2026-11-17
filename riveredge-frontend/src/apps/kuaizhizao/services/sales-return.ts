@@ -2,6 +2,8 @@
  * 销售退货单类型（API 见 warehouse-execution / production warehouseApi）
  */
 
+import { apiRequest } from '../../../services/api';
+
 export interface ActionCapability {
   allowed: boolean;
   reason?: string | null;
@@ -86,4 +88,24 @@ export interface SalesReturnItem {
   location_code?: string;
   sales_delivery_item_id?: number;
   notes?: string;
+}
+
+export function commitSalesReturn(id: number) {
+  return apiRequest(`/core/uni-audit/sales_return/${id}/submit`, { method: 'POST' });
+}
+
+export function submitSalesReturnForReview(id: number) {
+  return apiRequest(`/core/uni-audit/sales_return/${id}/submit_review`, { method: 'POST' });
+}
+
+export function withdrawSalesReturnSubmit(id: number) {
+  return apiRequest(`/core/uni-audit/sales_return/${id}/withdraw`, { method: 'POST' });
+}
+
+export function approveSalesReturn(id: number) {
+  return apiRequest(`/core/uni-audit/sales_return/${id}/approve`, { method: 'POST' });
+}
+
+export function revokeSalesReturn(id: number) {
+  return apiRequest(`/core/uni-audit/sales_return/${id}/revoke`, { method: 'POST' });
 }

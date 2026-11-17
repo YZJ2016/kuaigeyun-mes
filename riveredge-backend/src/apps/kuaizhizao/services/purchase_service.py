@@ -51,6 +51,7 @@ from apps.kuaizhizao.services.document_action_policy.enricher import (
 )
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date, today_site_str
 from core.utils.quantity_precision import quantize_business_quantity
+from apps.kuaizhizao.utils.document_amount_write import line_total_qty_unit_price
 from apps.kuaizhizao.services.document_action_policy.purchase_order import (
     assert_purchase_order_capability,
     derive_purchase_order_capabilities,
@@ -196,6 +197,48 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         item_dict["price_settlement_status"] = settlement_status
         item_dict["provisional_unit_price"] = provisional_price
 
+    @staticmethod
+    def _po_line_excl_total_from_form_item(
+        *,
+        qty: Decimal,
+        item_data: Any,
+        order_price_type: str,
+        header_tax_rate: Any,
+        price_decimal_places: int,
+        amount_decimal_places: int,
+    ) -> Decimal:
+        """表单落库行未税合计（与 calc_document_line_amounts / 变更生效写价一致）。"""
+        from apps.kuaicaiwu.services.finance_tax import quantize_money
+        from apps.kuaicaiwu.services.purchase_settlement import (
+            coerce_purchase_order_display_unit_price,
+            normalize_po_tax_rate_to_percent,
+        )
+        from apps.kuaizhizao.utils.document_line_amounts import calc_document_line_amounts
+
+        if item_data.total_price is not None:
+            return quantize_money(item_data.total_price)
+
+        price_type = str(order_price_type or "tax_exclusive")
+        line_tax_pct = normalize_po_tax_rate_to_percent(getattr(item_data, "tax_rate", None))
+        if line_tax_pct <= 0:
+            line_tax_pct = normalize_po_tax_rate_to_percent(header_tax_rate)
+
+        display = coerce_purchase_order_display_unit_price(
+            getattr(item_data, "display_unit_price", None),
+            price_decimal_places,
+        )
+        if display is None:
+            display = coerce_purchase_order_display_unit_price(
+                item_data.unit_price, price_decimal_places
+            )
+        if display is None:
+            display = Decimal("0")
+
+        excl, _tax, _incl = calc_document_line_amounts(
+            qty, display, line_tax_pct, price_type, amount_decimal_places
+        )
+        return quantize_money(excl)
+
     async def _ensure_prepayment_payment_after_confirm(
         self,
         *,
@@ -274,6 +317,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             purchase_price_fluctuation_limit = await config_service.get_purchase_price_fluctuation_limit_percent(tenant_id)
             quantity_decimal_places = await config_service.get_quantity_decimal_places(tenant_id)
             price_decimal_places = await config_service.get_price_decimal_places(tenant_id)
+            amount_decimal_places = await config_service.get_amount_decimal_places(tenant_id)
             require_purchase_requisition = (
                 biz_config.get("parameters", {})
                 .get("procurement", {})
@@ -410,7 +454,17 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 ordered_qty = quantize_business_quantity(
                     item_data.ordered_quantity, quantity_decimal_places
                 )
-                total_price = ordered_qty * item_data.unit_price
+                if item_data.total_price is not None:
+                    total_price = quantize_money(item_data.total_price)
+                else:
+                    total_price = self._po_line_excl_total_from_form_item(
+                        qty=ordered_qty,
+                        item_data=item_data,
+                        order_price_type=order_dict["price_type"],
+                        header_tax_rate=order_data.tax_rate,
+                        price_decimal_places=price_decimal_places,
+                        amount_decimal_places=amount_decimal_places,
+                    )
                 outstanding_quantity = ordered_qty
                 line_tax_pct = normalize_po_tax_rate_to_percent(
                     getattr(item_data, "tax_rate", None)
@@ -1387,6 +1441,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 )
                 quantity_decimal_places = await BusinessConfigService().get_quantity_decimal_places(tenant_id)
                 price_decimal_places = await BusinessConfigService().get_price_decimal_places(tenant_id)
+                amount_decimal_places = await BusinessConfigService().get_amount_decimal_places(tenant_id)
                 partner_settlement_method = None
                 supplier_id_for_items = int(update_dict.get("supplier_id", order.supplier_id) or 0)
                 if supplier_id_for_items > 0:
@@ -1437,7 +1492,20 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     ordered_qty = quantize_business_quantity(
                         item_data.ordered_quantity, quantity_decimal_places
                     )
-                    total_price = ordered_qty * item_data.unit_price
+                    if item_data.total_price is not None:
+                        total_price = quantize_money(item_data.total_price)
+                    else:
+                        order_price_type = str(
+                            update_dict.get("price_type", order.price_type) or "tax_exclusive"
+                        )
+                        total_price = self._po_line_excl_total_from_form_item(
+                            qty=ordered_qty,
+                            item_data=item_data,
+                            order_price_type=order_price_type,
+                            header_tax_rate=header_tax_fallback,
+                            price_decimal_places=price_decimal_places,
+                            amount_decimal_places=amount_decimal_places,
+                        )
                     outstanding_quantity = ordered_qty
                     line_tax_pct = normalize_po_tax_rate_to_percent(
                         getattr(item_data, "tax_rate", None)
@@ -3262,7 +3330,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 material_unit=snapshot["material_unit"],
                 receipt_quantity=receipt_quantity,
                 unit_price=item.unit_price,
-                total_amount=receipt_quantity * item.unit_price,
+                total_amount=line_total_qty_unit_price(receipt_quantity, item.unit_price),
                 qualified_quantity=receipt_quantity,  # 默认全部合格，后续可通过检验调整
                 unqualified_quantity=Decimal('0'),  # 默认无不合格数量
                 batch_number=batch_number,
@@ -3643,7 +3711,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 material_unit=str(item.unit or "件"),
                 notice_quantity=qty,
                 unit_price=unit_price,
-                total_amount=qty * unit_price,
+                total_amount=line_total_qty_unit_price(qty, unit_price),
                 purchase_order_item_id=item.id,
                 warehouse_id=line_wh_id,
                 warehouse_name=line_wh_name,
@@ -3855,7 +3923,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                         material_unit=str(item.unit or "件"),
                         notice_quantity=qty,
                         unit_price=unit_price,
-                        total_amount=qty * unit_price,
+                        total_amount=line_total_qty_unit_price(qty, unit_price),
                         purchase_order_item_id=item.id,
                         warehouse_id=line_wh_id,
                         warehouse_name=line_wh_name,

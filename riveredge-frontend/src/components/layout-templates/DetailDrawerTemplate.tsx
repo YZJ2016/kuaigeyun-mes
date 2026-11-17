@@ -148,19 +148,12 @@ export interface DetailDrawerTemplateProps<T extends Record<string, any> = Recor
   /**
    * 附件中心：独立 Tab，默认不加载，切到该 Tab 后才请求聚合 API。
    * 已传 traceDocument 时可省略（模板按同 type/id 自动派生）。
+   * hostUpload：本单附件补充（已审核后仍可上传时由单据页传入）。
    */
   attachmentCenter?: {
     documentType: string;
     documentId: number;
-    /** 上传分类（草稿可上传时必填，如 purchase_inquiry_attachments） */
-    attachmentCategory?: string;
-    /** 是否允许上传/删除本单附件 */
-    canManageSelfAttachments?: boolean;
-    onDeleteSelfAttachment?: (fileUid: string) => Promise<void>;
-    /** 上传成功后写回本单 attachments */
-    onAddSelfAttachments?: (
-      files: Array<{ uid?: string; name?: string; status?: string; url?: string }>,
-    ) => Promise<void>;
+    hostUpload?: import('../../apps/kuaizhizao/components/DocumentAttachmentCenterPane').DocumentAttachmentCenterHostUpload | null;
   } | null;
 }
 
@@ -262,6 +255,8 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   const drawerSize = size;
   const isPresetDrawerSize = drawerSize === 'default' || drawerSize === 'large';
   const isNumericDrawerSize = typeof drawerSize === 'number';
+  /** antd6：百分比等字符串宽度走 size，勿再塞 styles.wrapper.width 或遗留 width prop */
+  const usesSizeProp = isPresetDrawerSize || isNumericDrawerSize || typeof drawerSize === 'string';
   const resolvedPlacement = placement ?? linkedChrome?.placement ?? 'right';
 
   const drawerFloatingWrapperStyle = useMemo(
@@ -312,16 +307,10 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
       return {
         documentType: traceDocument.documentType,
         documentId: traceDocument.documentId,
-        attachmentCategory: undefined as string | undefined,
-        canManageSelfAttachments: undefined as boolean | undefined,
-        onDeleteSelfAttachment: undefined as ((fileUid: string) => Promise<void>) | undefined,
-        onAddSelfAttachments: undefined as
-          | ((files: Array<{ uid?: string; name?: string; status?: string; url?: string }>) => Promise<void>)
-          | undefined,
       };
     }
     return null;
-  }, [attachmentCenter, traceDocument?.documentId, traceDocument?.documentType]);
+  }, [attachmentCenter, traceDocument?.documentId, traceDocument?.documentType, traceDocument]);
 
   const hasAttachmentCenter = Boolean(resolvedAttachmentCenter?.documentId);
 
@@ -497,10 +486,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
           documentType={resolvedAttachmentCenter.documentType}
           documentId={resolvedAttachmentCenter.documentId}
           active={isOpen && activeTab === ATTACHMENT_CENTER_TAB_KEY}
-          attachmentCategory={resolvedAttachmentCenter.attachmentCategory}
-          canManageSelfAttachments={resolvedAttachmentCenter.canManageSelfAttachments}
-          onDeleteSelfAttachment={resolvedAttachmentCenter.onDeleteSelfAttachment}
-          onAddSelfAttachments={resolvedAttachmentCenter.onAddSelfAttachments}
+          hostUpload={resolvedAttachmentCenter.hostUpload ?? null}
         />
       </Suspense>
     ) : null;
@@ -563,21 +549,30 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
       rootClassName="drawer-slide-motion"
       destroyOnHidden={false}
       loading={false}
-      size={
-        isPresetDrawerSize
-          ? (drawerSize as 'default' | 'large')
-          : isNumericDrawerSize
-            ? drawerSize
-            : undefined
-      }
+      size={usesSizeProp ? drawerSize : undefined}
       styles={{
         ...styles,
         wrapper: {
           ...drawerFloatingWrapperStyle,
-          ...(!isPresetDrawerSize && !isNumericDrawerSize && drawerSize
-            ? { width: drawerSize }
-            : {}),
           ...styles?.wrapper,
+        },
+        // 标题优先占位且不换行；extra 可收缩，避免动作条把「图纸详情」挤成竖排单字列
+        title: {
+          flex: '0 1 auto',
+          minWidth: 72,
+          maxWidth: '42%',
+          overflow: 'hidden',
+          whiteSpace: 'nowrap',
+          textOverflow: 'ellipsis',
+          ...styles?.title,
+        },
+        extra: {
+          flex: '1 1 auto',
+          minWidth: 0,
+          overflow: 'hidden',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          ...styles?.extra,
         },
       }}
       className={className}
