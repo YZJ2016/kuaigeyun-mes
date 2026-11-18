@@ -10141,6 +10141,23 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     it.material_id for it in (receipt_data.items or []) if it.material_id
                 ],
             )
+            from apps.kuaicaiwu.services.purchase_settlement import (
+                resolve_purchase_receipt_line_excl_amount,
+            )
+            from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+            poi_ids = sorted(
+                {
+                    int(getattr(i, "purchase_order_item_id", 0) or 0)
+                    for i in (receipt_data.items or [])
+                    if int(getattr(i, "purchase_order_item_id", 0) or 0) > 0
+                }
+            )
+            poi_by_id: Dict[int, PurchaseOrderItem] = {}
+            if poi_ids:
+                for poi in await PurchaseOrderItem.filter(tenant_id=tenant_id, id__in=poi_ids):
+                    poi_by_id[int(poi.id)] = poi
+
             for item_data in receipt_data.items or []:
                 item_dict = item_data.model_dump(exclude_unset=True)
                 clear_blank_purchase_receipt_line_warehouse(item_dict)
@@ -10197,12 +10214,24 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         material_label=material_label,
                     )
 
+                line_total = (
+                    Decimal(str(item_data.total_amount))
+                    if item_data.total_amount is not None
+                    else None
+                )
+                line_excl = resolve_purchase_receipt_line_excl_amount(
+                    receipt_quantity=receipt_quantity,
+                    unit_price=unit_price,
+                    purchase_order_item_id=purchase_order_item_id if purchase_order_item_id > 0 else None,
+                    line_total_amount=line_total,
+                    poi_by_id=poi_by_id,
+                )
                 item_dict.update({
                     'tenant_id': tenant_id,
                     'receipt_id': receipt.id,
                     'receipt_quantity': receipt_quantity,
                     'unit_price': unit_price,
-                    'total_amount': receipt_quantity * unit_price,
+                    'total_amount': line_excl,
                 })
                 resolved_qualified_qty, resolved_unqualified_qty, resolved_quality_status = _resolve_purchase_item_quality_fields(
                     receipt_quantity=receipt_quantity,
@@ -10222,10 +10251,10 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 item_dict.update(snapshot_kwargs_for_orm(item_dict))
                 
                 await PurchaseReceiptItem.create(**item_dict)
-                
+
                 total_quantity += receipt_quantity
-                total_amount += item_dict['total_amount']
-            
+                total_amount += line_excl
+
             from apps.kuaicaiwu.services.purchase_settlement import (
                 rollup_purchase_receipt_amounts_from_lines,
                 rollup_purchase_receipt_header_tax,
@@ -11142,14 +11171,42 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         it.material_id for it in receipt_data.items if it.material_id
                     ],
                 )
+                from apps.kuaicaiwu.services.purchase_settlement import (
+                    resolve_purchase_receipt_line_excl_amount,
+                )
+                from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+                poi_ids = sorted(
+                    {
+                        int(getattr(i, "purchase_order_item_id", 0) or 0)
+                        for i in receipt_data.items
+                        if int(getattr(i, "purchase_order_item_id", 0) or 0) > 0
+                    }
+                )
+                poi_by_id: Dict[int, PurchaseOrderItem] = {}
+                if poi_ids:
+                    for poi in await PurchaseOrderItem.filter(tenant_id=tenant_id, id__in=poi_ids):
+                        poi_by_id[int(poi.id)] = poi
+
                 for item_data in receipt_data.items:
                     qty = Decimal(str(item_data.receipt_quantity or 0))
                     if qty <= 0:
                         raise ValidationError(f"物料 {item_data.material_code} 的实际数量必须大于 0")
                     unit_price = Decimal(str(item_data.unit_price or 0))
-                    line_amount = qty * unit_price
 
                     purchase_order_item_id = int(getattr(item_data, "purchase_order_item_id", 0) or 0)
+                    line_total = (
+                        Decimal(str(item_data.total_amount))
+                        if item_data.total_amount is not None
+                        else None
+                    )
+                    line_amount = resolve_purchase_receipt_line_excl_amount(
+                        receipt_quantity=qty,
+                        unit_price=unit_price,
+                        purchase_order_item_id=purchase_order_item_id if purchase_order_item_id > 0 else None,
+                        line_total_amount=line_total,
+                        poi_by_id=poi_by_id,
+                    )
                     if purchase_order_item_id > 0:
                         from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
 
@@ -11379,6 +11436,25 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             push_payment_application_open=push_pa_open,
             push_purchase_return_open=push_pr_open,
         )
+        from apps.kuaicaiwu.services.finance_tax import money_to_json_float
+        from apps.kuaicaiwu.services.purchase_settlement import (
+            batch_purchase_receipt_settlement_gross,
+        )
+
+        gross_map = await batch_purchase_receipt_settlement_gross(tenant_id, receipts)
+        if gross_map:
+            enriched = [
+                r.model_copy(
+                    update={
+                        "settlement_gross": money_to_json_float(
+                            gross_map[int(getattr(r, "id", 0) or 0)]
+                        )
+                    }
+                )
+                if int(getattr(r, "id", 0) or 0) in gross_map
+                else r
+                for r in enriched
+            ]
         return enriched, total
 
     async def confirm_receipt(
@@ -11451,8 +11527,14 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
 
                     payable_service = PayableService()
 
-                    # 创建应付单
-                    total_amount = Decimal(str(receipt_for_payable.total_amount or 0))
+                    from apps.kuaicaiwu.services.purchase_settlement import (
+                        purchase_receipt_settlement_gross_async,
+                    )
+
+                    # 创建应付单（价税合计）
+                    total_amount = await purchase_receipt_settlement_gross_async(
+                        tenant_id, receipt_for_payable
+                    )
                     if total_amount > 0:
                         from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
 

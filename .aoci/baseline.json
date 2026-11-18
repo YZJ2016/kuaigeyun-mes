@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-10-07T06:04:21Z",
-  "updated_at": "2026-11-18T07:30:26Z",
+  "updated_at": "2026-11-18T08:20:38Z",
   "files": {
     ".agents/skills/banner-design/SKILL.md": {
       "role": "index",
@@ -1271,9 +1271,9 @@
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "a1ab7c2859ec831cc3614ba876a779ef361a551fe1f4f80464ac628dac8dd60e",
-      "size": 1692717,
-      "normalized_sha256": "a1ab7c2859ec831cc3614ba876a779ef361a551fe1f4f80464ac628dac8dd60e"
+      "sha256": "622c528f097ad6b9fd7a8a23f098893afe9861f31dda786c0fd49dfff99cd8cb",
+      "size": 1694306,
+      "normalized_sha256": "622c528f097ad6b9fd7a8a23f098893afe9861f31dda786c0fd49dfff99cd8cb"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -1451,9 +1451,9 @@
     },
     "docs/上游同步台账.md": {
       "role": "index",
-      "sha256": "1839f8aefde878c7cfa46b394f7dedd0af96afaa1f4d87c9ac5de624d939fe50",
-      "size": 145408,
-      "normalized_sha256": "1839f8aefde878c7cfa46b394f7dedd0af96afaa1f4d87c9ac5de624d939fe50"
+      "sha256": "dae3d98f6690f0082e12b6a9943ab91ad5e12a0288700c6b1d4666f610338654",
+      "size": 150692,
+      "normalized_sha256": "d352498897cee99883d1dd0e96290fca6d02baf5cd7f2e19c358e30b2a8a1dd3"
     },
     "docs/功能清单.md": {
       "role": "index",
@@ -11221,9 +11221,9 @@
     },
     "riveredge-backend/src/apps/kuaicaiwu/api/finance/payments.py": {
       "role": "index",
-      "sha256": "afca31c801abd09ef0c83b1b690c6066cdf21af2cc9f7c6999ad7f2d138bf9b1",
-      "size": 33454,
-      "normalized_sha256": "afca31c801abd09ef0c83b1b690c6066cdf21af2cc9f7c6999ad7f2d138bf9b1"
+      "sha256": "505e8956f4af74fc682d7eabedfdc71d8aa67af10be7cde21e61984f65533500",
+      "size": 34656,
+      "normalized_sha256": "505e8956f4af74fc682d7eabedfdc71d8aa67af10be7cde21e61984f65533500"
     },
     "riveredge-backend/src/apps/kuaicaiwu/api/finance/price_settlement.py": {
       "role": "index",
@@ -11245,9 +11245,9 @@
     },
     "riveredge-backend/src/apps/kuaicaiwu/api/finance/receipts.py": {
       "role": "index",
-      "sha256": "5cc15059109bd5efbd131e9fa7be24df250a10c5f0846f89aaaf6ad431e40aef",
-      "size": 17820,
-      "normalized_sha256": "89a79d16374686154a4cfa0d46c6a9917b7e00199a3dd2b518c05313b4fde038"
+      "sha256": "0c14291bce89d44b1f92c9806515d483572806c057e033dce71f411150b4a5f3",
+      "size": 18595,
+      "normalized_sha256": "0c14291bce89d44b1f92c9806515d483572806c057e033dce71f411150b4a5f3"
     },
     "riveredge-backend/src/apps/kuaicaiwu/api/finance/receivables.py": {
       "role": "index",
@@ -11323,9 +11323,9 @@
     },
     "riveredge-backend/src/apps/kuaicaiwu/constants/finance_source_types.py": {
       "role": "index",
-      "sha256": "83544d135cdefac76f8480d011efebc00c1c83f8c1bd57b2a8ca1dd54d92f50b",
-      "size": 2610,
-      "normalized_sha256": "83544d135cdefac76f8480d011efebc00c1c83f8c1bd57b2a8ca1dd54d92f50b"
+      "sha256": "968a62f1aa4d067dae7095bdc024ab41fae003aa975afa83623fd50c80c42873",
+      "size": 3430,
+      "normalized_sha256": "968a62f1aa4d067dae7095bdc024ab41fae003aa975afa83623fd50c80c42873"
     },
     "riveredge-backend/src/apps/kuaicaiwu/constants/payment_method.py": {
       "role": "index",
@@ -11689,9 +11689,9 @@
     },
     "riveredge-backend/src/apps/kuaicaiwu/services/document_reconciliation_service.py": {
       "role": "index",
-      "sha256": "70c08975cfc691d22d8ba761ca488be243a8b52d2cf34fd8278fda3d266d293e",
-      "size": 33724,
-      "normalized_sha256": "70c08975cfc691d22d8ba761ca488be243a8b52d2cf34fd8278fda3d266d293e"
+      "sha256": "a6727c0117e3702841f9b557e3ee9d6d98a6059cb95f235d89497543756acd66",
+      "size": 33221,
+      "normalized_sha256": "a6727c0117e3702841f9b557e3ee9d6d98a6059cb95f235d89497543756acd66"
     },
     "riveredge-backend/src/apps/kuaicaiwu/services/exchange_rate_service.py": {
       "role": "index",
@@ -11761,9 +11761,9 @@
     },
     "riveredge-backend/src/apps/kuaicaiwu/services/finance_integration_hooks.py": {
       "role": "index",
-      "sha256": "9ead525a23161530c4594f4c109792233f7b2132ca5d410d265d1fcd80898a1e",
-      "size": 27750,
-      "normalized_sha256": "9ead525a23161530c4594f4c109792233f7b2132ca5d410d265d1fcd80898a1e"
+      "sha256": "61cef537fce6ded79e4a480e2b2b412d11fcc5b9c007227ed3a3c12bed4f83ca",
+      "size": 27846,
+      "normalized_sha256": "61cef537fce6ded79e4a480e2b2b412d11fcc5b9c007227ed3a3c12bed4f83ca"
     },
     "riveredge-backend/src/apps/kuaicaiwu/services/finance_list_core.py": {
       "role": "index",
@@ -11791,9 +11791,9 @@
     },
     "riveredge-backend/src/apps/kuaicaiwu/services/finance_service.py": {
       "role": "index",
-      "sha256": "9c23a9388e2479a16c49753962fd202be5e6ace1d6ac3e4e182e2f127be73ec7",
-      "size": 134016,
-      "normalized_sha256": "9c23a9388e2479a16c49753962fd202be5e6ace1d6ac3e4e182e2f127be73ec7"
+      "sha256": "8365bb0fc95049999b066ff64ceeffafb8e0cb552c01684a90f740d707b4964a",
+      "size": 135049,
+      "normalized_sha256": "8365bb0fc95049999b066ff64ceeffafb8e0cb552c01684a90f740d707b4964a"
     },
     "riveredge-backend/src/apps/kuaicaiwu/services/finance_settlement_hierarchy.py": {
       "role": "index",
@@ -11827,9 +11827,9 @@
     },
     "riveredge-backend/src/apps/kuaicaiwu/services/finance_voucher_posting_service.py": {
       "role": "index",
-      "sha256": "b27524baa77a55e1ea7a83b4971c6d8d026136d32057082f1a102b72fd899e6c",
-      "size": 11157,
-      "normalized_sha256": "b27524baa77a55e1ea7a83b4971c6d8d026136d32057082f1a102b72fd899e6c"
+      "sha256": "778a64c6f1dc7d888e1b2068dd92651a3e92c4d0bf2b7f9382294d39b862b8d6",
+      "size": 13146,
+      "normalized_sha256": "778a64c6f1dc7d888e1b2068dd92651a3e92c4d0bf2b7f9382294d39b862b8d6"
     },
     "riveredge-backend/src/apps/kuaicaiwu/services/fund_transfer_audit_service.py": {
       "role": "index",
@@ -12025,9 +12025,9 @@
     },
     "riveredge-backend/src/apps/kuaicaiwu/services/payable_pull_service.py": {
       "role": "index",
-      "sha256": "8a987bb363f2b4e67d12fcda679ea40280a1f1cf622dc34c5bdd66e229c84ce4",
-      "size": 36728,
-      "normalized_sha256": "27cb5c6a405e4981156cc9d9a14d32fe53a8951c8087ada0ef5f08ae36571568"
+      "sha256": "3accc47554cd0398e88628e94f80de07e821db15c39e1701bd86cba1d26c74d0",
+      "size": 37025,
+      "normalized_sha256": "235580e5509b34c9d853b17f2417d2caaf3f1b308eb462b15afe2c0da96e8ae2"
     },
     "riveredge-backend/src/apps/kuaicaiwu/services/payment_advance_service.py": {
       "role": "index",
@@ -12079,15 +12079,27 @@
     },
     "riveredge-backend/src/apps/kuaicaiwu/services/price_settlement_service.py": {
       "role": "index",
-      "sha256": "c73c649375f3e5853d202ab33f19350b2c9f86ec8446f005c91d14ea940f39f2",
-      "size": 26168,
-      "normalized_sha256": "c1d18b1e5d7fdd7fb83e185fbe534306a73342eb334282f56ea018345b444947"
+      "sha256": "e2310b8e11404f1476ef4d85f964d8eb0820278efa0f7f80b692b303c0d86d67",
+      "size": 26318,
+      "normalized_sha256": "5114ac9a288f767b7fc67fe3b400c30a45774e3815102593ae64153f1405b813"
     },
     "riveredge-backend/src/apps/kuaicaiwu/services/purchase_invoice_pull_service.py": {
       "role": "index",
-      "sha256": "99f829947b185f0d5faf14afb85fac20ec4e0a980f8023ab959bab2e7be25b04",
-      "size": 36935,
-      "normalized_sha256": "18572d28661484badd6ab38609d001cd951f6317ef1e9989504d69e0b6604a3c"
+      "sha256": "4dc132500d99fd68b15deecb053fb9c536cbbbff517b04be8bf22af89a52e702",
+      "size": 66713,
+      "normalized_sha256": "4dc132500d99fd68b15deecb053fb9c536cbbbff517b04be8bf22af89a52e702"
+    },
+    "riveredge-backend/src/apps/kuaicaiwu/services/purchase_order_finance_lifecycle.py": {
+      "role": "index",
+      "sha256": "46f16d57343deb232f2a299bc744e4a8f38c736b1f5395fb1b970cafbef9918f",
+      "size": 8996,
+      "normalized_sha256": "46f16d57343deb232f2a299bc744e4a8f38c736b1f5395fb1b970cafbef9918f"
+    },
+    "riveredge-backend/src/apps/kuaicaiwu/services/purchase_receipt_finance_occupancy_backfill.py": {
+      "role": "index",
+      "sha256": "487056a3a0389bfb3ee691b4e2069fd0ffbc857856e5da05899db9e727b2ed42",
+      "size": 7294,
+      "normalized_sha256": "487056a3a0389bfb3ee691b4e2069fd0ffbc857856e5da05899db9e727b2ed42"
     },
     "riveredge-backend/src/apps/kuaicaiwu/services/receipt_pull_service.py": {
       "role": "index",
