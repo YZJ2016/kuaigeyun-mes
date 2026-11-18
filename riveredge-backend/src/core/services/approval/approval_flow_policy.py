@@ -325,6 +325,37 @@ async def resolve_final_approval_context(
     return last_node_id, approvers
 
 
+async def resolve_print_reviewer_name(
+    tenant_id: int,
+    entity_type: str,
+    entity_id: int,
+    *,
+    fallback: str = "",
+) -> str:
+    """打印签核栏「审核人」：终审节点时间序最后通过人；无审批记录时用单据头快照回退。"""
+    fb = str(fallback or "").strip()
+    last_id = await resolve_last_final_approver_user_id(
+        tenant_id, entity_type, int(entity_id)
+    )
+    if not last_id:
+        return fb
+    from infra.models.user import User as UserModel
+
+    user = await UserModel.filter(
+        tenant_id=tenant_id,
+        id=int(last_id),
+        deleted_at__isnull=True,
+    ).first()
+    if not user:
+        return fb
+    resolved = str(
+        getattr(user, "full_name", None)
+        or getattr(user, "username", None)
+        or user.id
+    ).strip()
+    return resolved if resolved else fb
+
+
 def next_approval_node_id_on_instance_path(
     process_nodes: Any,
     from_node_id: str,

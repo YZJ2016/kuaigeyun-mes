@@ -40,6 +40,7 @@ import {
   resolveSupplierListParams,
 } from '../../../utils/supplyChainListCore';
 import { SupplierFormModal } from '../../../components/SupplierFormModal';
+import { PartnerAddressesDetailTable } from '../../../components/PartnerAddressesDetailTable';
 import SupplierSyncFromSourceModal from '../../../components/SupplierSyncFromSourceModal';
 import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-modal/SyncFreshnessBadge';
 import {
@@ -1181,6 +1182,9 @@ const SuppliersPage: React.FC = () => {
                   supplierDetail,
                 )}
               />
+            </DetailDrawerSection>
+            <DetailDrawerSection title={t('field.supplier.addresses')}>
+              <PartnerAddressesDetailTable rows={supplierDetail.addresses} />
             </DetailDrawerSection>
             <DetailDrawerSection title={t('field.partner.tabInvoice')}>
               <Descriptions

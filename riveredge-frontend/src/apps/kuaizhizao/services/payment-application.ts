@@ -53,6 +53,8 @@ export interface PaymentApplication {
   expectedPaymentDate?: string;
   applicantId?: number;
   applicantName?: string;
+  departmentId?: number;
+  departmentName?: string;
   totalRequestAmount: number;
   paidAmount: number;
   remainingAmount: number;

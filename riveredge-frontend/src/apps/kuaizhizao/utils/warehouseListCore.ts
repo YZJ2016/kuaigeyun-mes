@@ -7,6 +7,7 @@ import {
   pickSearchRaw,
   pickSearchTriStateBoolean,
 } from '../../../utils/tableQueryKey';
+import { documentLineMaterialKeywordHaystack } from '../../../components/document-line-materials-preview';
 import { parseSalesReportDateRange } from '../services/reports';
 
 export const WAREHOUSE_DOC_PINNED_STATUS_FIELD = 'status';
@@ -848,7 +849,8 @@ export function filterOutboundHubRows(
       ]
         .map((x) => String(x ?? '').toLowerCase())
         .join(' ');
-      if (!hay.includes(keyword)) return false;
+      const materialHay = documentLineMaterialKeywordHaystack(row);
+      if (!`${hay} ${materialHay}`.includes(keyword)) return false;
     }
     if (customerName) {
       if (!String(row.customer_name ?? '')
@@ -915,7 +917,8 @@ export function filterInboundHubRows(
       ]
         .map((x) => String(x ?? '').toLowerCase())
         .join(' ');
-      if (!hay.includes(keyword)) return false;
+      const materialHay = documentLineMaterialKeywordHaystack(row);
+      if (!`${hay} ${materialHay}`.includes(keyword)) return false;
     }
     if (supplierName) {
       if (!String(row.supplier_name ?? '')

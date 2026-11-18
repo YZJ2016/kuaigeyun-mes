@@ -154,19 +154,23 @@ import { useUniTableLayoutEffects } from './useUniTableLayoutEffects'
 import { syncFixedColumnStickyOffsets } from './uniTableDomMeasure'
 import {
   buildUniTableFillerColumn,
+  getUniTableAuditPhaseCellClassName,
   getUniTableLifecycleCellClassName,
+  getUniTablePaymentSettlementCellClassName,
   isUniTableAuditPhaseColumn,
   isUniTableAuditStackedColumn,
   isUniTableDetailProgressColumn,
   isUniTableFillerColumn,
   isUniTableLifecycleColumn,
   isUniTableMarkerBadgeColumn,
+  isUniTablePaymentSettlementColumn,
   isUniTableProgressColumn,
   isUniTableStatusBadgeColumn,
   resolveUniTableAuditStackedColumnWidth,
   resolveUniTableDetailProgressColumnWidth,
   resolveUniTableAuditPhaseColumnWidth,
   resolveUniTableLifecycleColumnWidth,
+  resolveUniTablePaymentSettlementColumnWidth,
   resolveUniTableMarkerBadgeColumnWidth,
   resolveUniTableProgressColumnWidth,
   resolveUniTableOperationColumnWidth,
@@ -268,6 +272,12 @@ function applyUniTableHeaderCellPolicy(columns: any[]): any[] {
     }
     if (isUniTableFillerColumn(col)) {
       return mergeUniTableHeaderCell(col, 'uni-table-filler-cell')
+    }
+    if (isUniTableAuditPhaseColumn(col)) {
+      return mergeUniTableHeaderCell(col, getUniTableAuditPhaseCellClassName())
+    }
+    if (isUniTablePaymentSettlementColumn(col)) {
+      return mergeUniTableHeaderCell(col, getUniTablePaymentSettlementCellClassName())
     }
     if (isUniTableLifecycleColumn(col)) {
       return mergeUniTableHeaderCell(col, getUniTableLifecycleCellClassName(col))
@@ -1108,9 +1118,9 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   searchParamsRef?: React.MutableRefObject<Record<string, any> | undefined>
   /**
-   * 内置钉住 Tab 只从该列 valueEnum 生成（传给 QuerySearchButton；未传则按列打分取最高一列）
+   * 内置钉住 Tab 只从该列 valueEnum 生成（传给 QuerySearchButton；未传则按列打分取最高一列；支持多列）
    */
-  pinnedTabsField?: string
+  pinnedTabsField?: string | string[]
   /**
    * 工具栏按钮尺寸（新建、删除、导入、导出、同步等）
    * middle 为 Ant Design 默认尺寸
@@ -1772,9 +1782,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           uniTableKeepWidth: true,
         }
       }
-      /** 审核状态列：四字「待我审核 / 您已审核」，屏蔽页面手写 width 漂移 */
+      /** 审核状态列：四字徽章，与执行/付款状态同宽 SystemFixed */
       if (isUniTableAuditPhaseColumn(col)) {
         const { width: _w, minWidth: _mw, sorter: _sorter, defaultSortOrder: _dso, ...auditRest } = col
+        const userOnCell = auditRest.onCell
+        const cellClass = getUniTableAuditPhaseCellClassName()
         return {
           ...auditRest,
           width: resolveUniTableAuditPhaseColumnWidth(),
@@ -1783,6 +1795,36 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           align: 'center' as const,
           uniTableKeepWidth: true,
           sorter: false,
+          onCell: (record: unknown, rowIndex?: number) => {
+            const base =
+              typeof userOnCell === 'function' ? userOnCell(record, rowIndex) || {} : {}
+            return {
+              ...base,
+              className: `${cellClass} ${base.className || ''}`.trim(),
+            }
+          },
+        }
+      }
+      if (isUniTablePaymentSettlementColumn(col)) {
+        const { width: _w, minWidth: _mw, sorter: _sorter, defaultSortOrder: _dso, ...payRest } = col
+        const userOnCell = payRest.onCell
+        const cellClass = getUniTablePaymentSettlementCellClassName()
+        return {
+          ...payRest,
+          width: resolveUniTablePaymentSettlementColumnWidth(),
+          minWidth: resolveUniTablePaymentSettlementColumnWidth(),
+          resizable: false,
+          align: 'center' as const,
+          uniTableKeepWidth: true,
+          sorter: false,
+          onCell: (record: unknown, rowIndex?: number) => {
+            const base =
+              typeof userOnCell === 'function' ? userOnCell(record, rowIndex) || {} : {}
+            return {
+              ...base,
+              className: `${cellClass} ${base.className || ''}`.trim(),
+            }
+          },
         }
       }
       /** 更新时间堆叠列：SystemFixed 120px，禁止页面/持久化漂移 */

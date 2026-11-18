@@ -33,11 +33,13 @@ import {
 import { QuickCreateModal } from '../../../components/uni-dropdown';
 import {
   normalizePartnerContactsForSubmit,
+  normalizePartnerAddressesForSubmit,
   normalizePartnerSettlementAccountsForSubmit,
   supplierDetailToFormValues,
 } from '../utils/partner-form-map';
 import { PartnerSettlementAccountsFormTable } from './PartnerSettlementAccountsFormTable';
 import { SupplierContactsFormTable } from './SupplierContactsFormTable';
+import { PartnerAddressesFormTable } from './PartnerAddressesFormTable';
 import { useCustomFields } from '../../../hooks/useCustomFields';
 import { CustomFieldsFormSection } from '../../../components/custom-fields';
 
@@ -191,6 +193,7 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
       const payload: Record<string, unknown> & { contacts: PartnerContact[]; code?: string; isActive?: boolean } = {
         ...standardValues,
         contacts: normalizePartnerContactsForSubmit(standardValues.contacts ?? values.contacts),
+        addresses: normalizePartnerAddressesForSubmit(standardValues.addresses ?? values.addresses),
         settlementAccounts: normalizePartnerSettlementAccountsForSubmit(
           standardValues.settlementAccounts ?? values.settlementAccounts,
         ),
@@ -342,6 +345,9 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
                           });
                         }}
                       />
+                    </Col>
+                    <Col span={24}>
+                      <PartnerAddressesFormTable titleKey="field.supplier.addresses" />
                     </Col>
                     <Col span={24}>
                       <PartnerSettlementAccountsFormTable titleKey="field.supplier.paymentAccounts" />

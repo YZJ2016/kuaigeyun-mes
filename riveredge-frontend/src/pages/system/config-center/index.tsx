@@ -462,10 +462,6 @@ const ConfigCenterPage: React.FC = () => {
 
   useEffect(() => {
     const initialValues = flattenBusinessParams(bizRes?.parameters || {});
-    const priceOrder = initialValues['supply_chain.partner_price_resolution_order'];
-    if (Array.isArray(priceOrder)) {
-      initialValues['supply_chain.partner_price_resolution_order'] = priceOrder.join(',');
-    }
     form.setFieldsValue(initialValues);
     void qualityApi.stageToggles.get().then((toggles) => {
       form.setFieldsValue({

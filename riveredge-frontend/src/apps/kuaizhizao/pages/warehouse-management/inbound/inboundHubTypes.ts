@@ -167,6 +167,59 @@ export function isProductionInboundHubScope(
   );
 }
 
+/** SyncPushHub 出站面板：采购入库 vs 成品入库（生产完工入库→其他入库） */
+export type InboundDocumentPushMode = 'purchase' | 'finished_goods' | 'mixed';
+
+/**
+ * 解析入库 Hub 外推面板。
+ * 生产入库 scoped 页不含采购：一律成品入库面板，禁止回落到采购入库绑定（会误出 purinbill）。
+ */
+export function resolveInboundDocumentPushMode(params: {
+  fixedReceiptType?: InboundReceiptType;
+  scopedReceiptTypes?: readonly InboundReceiptType[];
+  receiptTypeFilter: string;
+  selectedReceiptTypes: ReadonlyArray<InboundReceiptType | undefined>;
+}): InboundDocumentPushMode {
+  const {
+    fixedReceiptType,
+    scopedReceiptTypes,
+    receiptTypeFilter,
+    selectedReceiptTypes,
+  } = params;
+
+  if (fixedReceiptType === 'purchase') return 'purchase';
+  if (
+    fixedReceiptType === 'finished_goods' ||
+    fixedReceiptType === 'semi_finished_goods'
+  ) {
+    return 'finished_goods';
+  }
+
+  if (isProductionInboundHubScope(scopedReceiptTypes)) {
+    return 'finished_goods';
+  }
+
+  if (receiptTypeFilter === 'purchase') return 'purchase';
+  if (
+    receiptTypeFilter === 'finished_goods' ||
+    receiptTypeFilter === 'semi_finished_goods'
+  ) {
+    return 'finished_goods';
+  }
+
+  const types = new Set(
+    selectedReceiptTypes.filter((t): t is InboundReceiptType => Boolean(t)),
+  );
+  if (types.size === 1) {
+    const only = [...types][0];
+    if (only === 'purchase') return 'purchase';
+    if (only === 'finished_goods' || only === 'semi_finished_goods') {
+      return 'finished_goods';
+    }
+  }
+  return 'mixed';
+}
+
 export function inboundReceiptTypeLabel(t: TFunction, type: InboundReceiptType): string {
   return t(`app.kuaizhizao.warehouseInbound.receiptType.${type}`);
 }

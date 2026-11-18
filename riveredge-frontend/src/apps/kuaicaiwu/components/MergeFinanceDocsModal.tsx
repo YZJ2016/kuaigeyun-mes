@@ -16,11 +16,12 @@ import {
 } from 'antd';
 import {
   ProFormDatePicker,
-  ProFormDigit,
+  ProFormItem,
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
+import { TaxRatePercentInput } from '../../kuaizhizao/components/document-detail-table/documentDetailTable';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { useNumericPrecisionPlaces } from '../../../hooks/useNumericPrecision';
@@ -391,14 +392,13 @@ export const MergeFinanceDocsModal: React.FC<Props> = ({
               />
             </Col>
             <Col span={12}>
-              <ProFormDigit
+              <ProFormItem
                 name="tax_rate"
                 label={t('app.kuaicaiwu.mergeFinance.taxRate')}
-                min={0}
-                max={100}
-                fieldProps={{ precision: 2, suffix: '%' }}
                 rules={[{ required: true }]}
-              />
+              >
+                <TaxRatePercentInput />
+              </ProFormItem>
             </Col>
           </>
         ) : null}

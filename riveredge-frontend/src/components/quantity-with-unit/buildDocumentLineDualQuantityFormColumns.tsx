@@ -3,6 +3,8 @@ import { Form as AntForm } from 'antd';
 import type { FormInstance } from 'antd/es/form';
 import { DocumentLineUnitSelect } from './DocumentLineUnitSelect';
 import { DocumentLineDualQuantityFormCell } from './documentLineDualQuantityColumn';
+import { QuantityWithUnitDisplay } from './QuantityWithUnitDisplay';
+import { EMPTY_VALUE_PLACEHOLDER } from '../../utils/format';
 import type { MaterialScenario } from '../../utils/materialScenarioUnit';
 
 export type DocumentLineDualQuantityFormColumnOptions = {
@@ -92,6 +94,55 @@ export function buildDocumentLineDualQuantityPairColumns(
   });
 
   return [makeColumn('primary'), makeColumn('aux')];
+}
+
+export type DocumentLineDualQuantityDetailColumnOptions = {
+  t: (key: string) => string;
+  quantityField?: string;
+  unitField?: string;
+  auxQuantityField?: string;
+  auxUnitField?: string;
+  width?: number;
+};
+
+/** 详情抽屉/只读 Table：主数量 + 副数量，与 buildDocumentLineDualQuantityPairColumns 列序一致 */
+export function buildDocumentLineDualQuantityDetailColumns(
+  params: DocumentLineDualQuantityDetailColumnOptions,
+): Record<string, unknown>[] {
+  const quantityField = params.quantityField ?? 'quantity';
+  const unitField = params.unitField ?? 'unit';
+  const auxQuantityField = params.auxQuantityField ?? 'aux_quantity';
+  const auxUnitField = params.auxUnitField ?? 'aux_unit';
+  const width = params.width ?? DUAL_QUANTITY_COL_WIDTH;
+
+  return [
+    {
+      title: params.t('common.primaryQuantity'),
+      dataIndex: quantityField,
+      width,
+      align: 'right' as const,
+      render: (val: unknown, row: Record<string, unknown>) => (
+        <QuantityWithUnitDisplay quantity={val} unit={row[unitField]} />
+      ),
+    },
+    {
+      title: params.t('common.auxQuantity'),
+      dataIndex: auxQuantityField,
+      width,
+      align: 'right' as const,
+      render: (_: unknown, row: Record<string, unknown>) => {
+        const auxQty = row[auxQuantityField];
+        const auxUnit = row[auxUnitField];
+        const auxNum = auxQty != null && auxQty !== '' ? Number(auxQty) : NaN;
+        const hasAux =
+          (Number.isFinite(auxNum) && auxNum > 0) || String(auxUnit ?? '').trim().length > 0;
+        if (!hasAux) {
+          return EMPTY_VALUE_PLACEHOLDER;
+        }
+        return <QuantityWithUnitDisplay quantity={auxQty} unit={auxUnit} />;
+      },
+    },
+  ];
 }
 
 /** 单据明细表：单位列 + 主数量列 + 副数量列。 */

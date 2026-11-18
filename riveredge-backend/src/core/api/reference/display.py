@@ -30,6 +30,12 @@ async def search_reference_display(
     host_resource: Optional[str] = Query(None, description="宿主 {app}:{module}"),
     group_id: Optional[int] = Query(None),
     source_type: Optional[str] = Query(None),
+    customer_id: Optional[int] = Query(
+        None, description="销售场景下按该客户的客户料号/品名参与物料检索"
+    ),
+    supplier_id: Optional[int] = Query(
+        None, description="采购场景下按该供应商的供应商料号/品名参与物料检索"
+    ),
     auth: AuthContext = Depends(get_auth_context),
     tenant_id: int = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
@@ -43,7 +49,12 @@ async def search_reference_display(
         keyword=keyword,
         is_active=is_active,
         host_resource=host_resource,
-        extra={"group_id": group_id, "source_type": source_type},
+        extra={
+            "group_id": group_id,
+            "source_type": source_type,
+            "customer_id": customer_id,
+            "supplier_id": supplier_id,
+        },
         is_infra_admin=auth.is_infra_admin,
         is_tenant_admin=auth.is_tenant_admin,
     )

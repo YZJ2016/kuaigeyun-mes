@@ -76,6 +76,12 @@ import {
   resolvePurchaseDepartmentPayload,
   usePurchaseDepartmentOptions,
 } from '../shared/PurchaseDepartmentFormField';
+import { PurchaseSupplierContactPickInput } from '../shared/PurchaseSupplierContactFormFields';
+import {
+  resolveFullSupplierFromList,
+  type SupplierLike,
+} from '../shared/applySupplierFormFields';
+import { buildSupplierContactPickOptions } from '../shared/partnerSupplierFormSnapshot';
 import {
   handoffInquiryToPurchaseOrderCreate,
   handoffRequisitionToPurchaseInquiryCreate,
@@ -260,7 +266,7 @@ const PurchaseInquiriesPage: React.FC = () => {
   const [compareInquiryId, setCompareInquiryId] = useState<number | null>(null);
   const [compareRows, setCompareRows] = useState<ComparisonRow[]>([]);
   const [awardSelection, setAwardSelection] = useState<Record<number, number>>({});
-  const [supplierOptions, setSupplierOptions] = useState<Array<{ id: number; name: string; code?: string }>>([]);
+  const [supplierOptions, setSupplierOptions] = useState<SupplierLike[]>([]);
   const [demandPartyOptions, setDemandPartyOptions] = useState<PurchaseDemandParty[]>([]);
   const [demandPartyOpen, setDemandPartyOpen] = useState(false);
   const [userList, setUserList] = useState<User[]>([]);
@@ -417,7 +423,7 @@ const PurchaseInquiriesPage: React.FC = () => {
   const [selectedSupplierIdsForAdd, setSelectedSupplierIdsForAdd] = useState<number[]>([]);
 
   const availableSuppliersForAdd = useMemo(
-    () => supplierOptions.filter((s) => !editVendors.some((v) => v.supplier_id === s.id)),
+    () => supplierOptions.filter((s) => !editVendors.some((v) => v.supplier_id === Number(s.id))),
     [supplierOptions, editVendors],
   );
 
@@ -1542,7 +1548,7 @@ const PurchaseInquiriesPage: React.FC = () => {
       return;
     }
     const toAdd = supplierOptions.filter(
-      (s) => selectedSupplierIdsForAdd.includes(s.id) && !editVendors.some((v) => v.supplier_id === s.id),
+      (s) => selectedSupplierIdsForAdd.includes(Number(s.id)) && !editVendors.some((v) => v.supplier_id === Number(s.id)),
     );
     if (!toAdd.length) {
       message.warning(t('app.kuaizhizao.purchaseInquiry.suppliersAlreadyAdded'));
@@ -1550,14 +1556,18 @@ const PurchaseInquiriesPage: React.FC = () => {
     }
     setEditVendors((prev) => [
       ...prev,
-      ...toAdd.map((s) => ({
-        supplier_id: s.id,
-        supplier_name: s.name,
-        contact_name: undefined,
-        contact_phone: undefined,
-        contact_email: undefined,
-        email_notify: false,
-      })),
+      ...toAdd.map((s) => {
+        const full = resolveFullSupplierFromList({ id: s.id }, supplierOptions);
+        const firstContact = full ? buildSupplierContactPickOptions(full)[0] : undefined;
+        return {
+          supplier_id: Number(s.id),
+          supplier_name: String(s.name ?? ''),
+          contact_name: firstContact?.value,
+          contact_phone: firstContact?.phone,
+          contact_email: undefined,
+          email_notify: false,
+        };
+      }),
     ]);
     setAddVendorModalOpen(false);
     setSelectedSupplierIdsForAdd([]);
@@ -1565,7 +1575,11 @@ const PurchaseInquiriesPage: React.FC = () => {
   };
 
   const formatSupplierLabel = useCallback(
-    (s: { id: number; name: string; code?: string }) => (s.code ? `${s.code} - ${s.name}` : s.name),
+    (s: SupplierLike) => {
+      const code = String(s.code ?? '').trim();
+      const name = String(s.name ?? s.supplier_name ?? '').trim();
+      return code ? `${code} - ${name}` : name;
+    },
     [],
   );
 
@@ -1591,11 +1605,19 @@ const PurchaseInquiriesPage: React.FC = () => {
         title: t('app.kuaizhizao.purchaseInquiry.vendorContact'),
         width: 120,
         render: (_: unknown, r: PurchaseInquiryVendor) => (
-          <Input
-            size="small"
+          <PurchaseSupplierContactPickInput
+            supplierId={r.supplier_id}
+            supplierList={supplierOptions}
+            hostResource={KUAIZHIZAO_DOC_HOST.purchaseInquiry}
             value={r.contact_name}
             placeholder={t('app.kuaizhizao.purchaseInquiry.vendorContact')}
-            onChange={(e) => patchEditVendor(r.supplier_id!, { contact_name: e.target.value })}
+            onChange={(contactName, contactPhone) => {
+              const patch: Partial<PurchaseInquiryVendor> = { contact_name: contactName };
+              if (contactPhone !== undefined) {
+                patch.contact_phone = contactPhone;
+              }
+              patchEditVendor(r.supplier_id!, patch);
+            }}
           />
         ),
       },

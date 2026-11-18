@@ -145,7 +145,7 @@ async def list_spot_checks(
 async def get_spot_check(row_id: int, tenant_id: int = Depends(get_current_tenant)):
     try:
         header = await svc.spot_check_service.get(tenant_id, row_id)
-        lines = await svc.spot_check_service._load_lines(tenant_id, header.id)
+        lines = await svc.spot_check_service.resolve_display_lines(tenant_id, header)
         return await _spot_check_response(header, lines)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -199,7 +199,7 @@ async def approve_spot_check(
         header = await svc.spot_check_service.approve(
             tenant_id, row_id, current_user=current_user
         )
-        lines = await svc.spot_check_service._load_lines(tenant_id, header.id)
+        lines = await svc.spot_check_service.resolve_display_lines(tenant_id, header)
         return await _spot_check_response(header, lines)
     except (ValidationError, NotFoundError) as e:
         code = status.HTTP_404_NOT_FOUND if isinstance(e, NotFoundError) else status.HTTP_422_UNPROCESSABLE_ENTITY
@@ -224,7 +224,7 @@ async def reject_spot_check(
             reject_reason=data.reject_reason,
             current_user=current_user,
         )
-        lines = await svc.spot_check_service._load_lines(tenant_id, header.id)
+        lines = await svc.spot_check_service.resolve_display_lines(tenant_id, header)
         return await _spot_check_response(header, lines)
     except (ValidationError, NotFoundError) as e:
         code = status.HTTP_404_NOT_FOUND if isinstance(e, NotFoundError) else status.HTTP_422_UNPROCESSABLE_ENTITY

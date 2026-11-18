@@ -35,7 +35,8 @@ export interface AuditPhaseRecord {
 const PHASE_I18N: Record<string, string> = {
   draft: 'components.uniAudit.phaseDraft',
   submitted: 'components.uniAudit.phaseSubmitted',
-  pending: 'components.uniAudit.phasePending',
+  pending: 'components.uniAudit.phaseInReview',
+  in_review: 'components.uniAudit.phaseInReview',
   approved: 'components.uniAudit.phaseApproved',
   rejected: 'components.uniAudit.phaseRejected',
   none: 'components.uniAudit.phaseNone',
@@ -44,8 +45,9 @@ const PHASE_I18N: Record<string, string> = {
 const PHASE_FALLBACK: Record<string, string> = {
   draft: '草稿',
   submitted: '已提交',
-  pending: '待审核',
-  approved: '已通过',
+  pending: '审核中',
+  in_review: '审核中',
+  approved: '已审核',
   rejected: '已驳回',
   none: '—',
 };
@@ -104,12 +106,15 @@ export function AuditPhaseBadge({
   } else if (phase === 'pending' && mine) {
     label = t('components.uniAudit.phasePendingMine', { defaultValue: '待我审核' });
     color = DOCUMENT_STATUS_SEMANTIC_COLOR.active;
+  } else if (phase === 'submitted' && audit.enabled !== false) {
+    label = t('components.uniAudit.phaseInReview', { defaultValue: '审核中' });
+    color = resolveAuditPhaseTagColor('pending');
   } else {
     const i18nKey = PHASE_I18N[phase];
     label = i18nKey
       ? t(i18nKey, { defaultValue: PHASE_FALLBACK[phase] ?? phase })
       : (PHASE_FALLBACK[phase] ?? phase);
-    if (phase === 'pending' && viewer?.block_reason) {
+    if ((phase === 'pending' || phase === 'in_review') && viewer?.block_reason) {
       hint = viewer.block_reason;
     }
   }

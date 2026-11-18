@@ -517,6 +517,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
       DOCUMENT_QRCODE_FIELD,
       { key: 'supplier_name', label: '供应商', type: 'string' },
       { key: 'applicant_name', label: '申请人', type: 'string' },
+      { key: 'department_name', label: '申请部门', type: 'string' },
       { key: 'application_kind', label: '申请类型', type: 'string' },
       { key: 'application_date', label: '申请日期', type: 'date' },
       { key: 'expected_payment_date', label: '期望付款日', type: 'date' },

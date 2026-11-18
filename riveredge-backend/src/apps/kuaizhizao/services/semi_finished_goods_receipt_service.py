@@ -239,10 +239,17 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
         if filters.get("warehouse_id"):
             query = query.filter(warehouse_id=filters["warehouse_id"])
 
+        from apps.kuaizhizao.services.equipment_list_core import pick_search_keyword
+        from apps.kuaizhizao.utils.list_item_material_keyword import (
+            apply_query_header_or_line_material_keyword,
+        )
+        from apps.kuaizhizao.models.semi_finished_goods_receipt_item import SemiFinishedGoodsReceiptItem
+
+        kw = pick_search_keyword(filters.get("keyword"), filters.get("search"))
         query, order_clause = apply_warehouse_doc_list_filters(
             query,
-            keyword=filters.get("keyword"),
-            search=filters.get("search"),
+            keyword=None,
+            search=None,
             order_by=filters.get("order_by"),
             allowed_fields=SEMI_FINISHED_GOODS_RECEIPT_SORTABLE_FIELDS,
             default_order="-created_at",
@@ -255,6 +262,15 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
             updated_start_date=filters.get("updated_start_date"),
             updated_end_date=filters.get("updated_end_date"),
         )
+        if kw:
+            query = await apply_query_header_or_line_material_keyword(
+                query,
+                tenant_id=tenant_id,
+                kw=kw,
+                keyword_fields=SEMI_FINISHED_GOODS_RECEIPT_KEYWORD_FIELDS,
+                item_model=SemiFinishedGoodsReceiptItem,
+                item_header_fk_field="receipt_id",
+            )
         total = await query.count()
         receipts = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_action_policy.enricher import (
@@ -263,7 +279,6 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
             batch_document_item_homogeneous_units,
             enrich_inbound_hub_list_capabilities,
         )
-        from apps.kuaizhizao.models.semi_finished_goods_receipt_item import SemiFinishedGoodsReceiptItem
 
         responses = [SemiFinishedGoodsReceiptResponse.model_validate(r) for r in receipts]
         receipt_ids = [r.id for r in receipts]

@@ -93,6 +93,7 @@ import {
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import type { PurchaseInvoiceListParams } from '../../../types/finance/purchase-invoice';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { TaxRatePercentInput } from '../../../../kuaizhizao/components/document-detail-table/documentDetailTable';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
@@ -155,6 +156,26 @@ const PurchaseInvoiceList: React.FC = () => {
   const pullQueryModalZIndex = token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET;
   const pullPreviewZIndex = pullQueryModalZIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET;
   const { t } = useTranslation();
+
+  const showPullFlowNotice = useCallback(
+    (kind: 'warning' | 'error', content: string, title?: string) => {
+      const resolvedTitle =
+        title ?? (kind === 'error' ? t('common.operationFailed') : t('common.hint'));
+      const modalProps = {
+        title: resolvedTitle,
+        content,
+        centered: true,
+        zIndex: pullQueryModalZIndex + 100,
+      };
+      if (kind === 'error') {
+        Modal.error(modalProps);
+      } else {
+        Modal.warning(modalProps);
+      }
+      messageApi.open({ type: kind, content, duration: 6 });
+    },
+    [messageApi, pullQueryModalZIndex, t],
+  );
   const navigate = useNavigate();
   const location = useLocation();
   const invoiceTypeOptions = useMemo(
@@ -373,7 +394,8 @@ const PurchaseInvoiceList: React.FC = () => {
   };
 
   const isPullPurchaseInvoiceSelectable = useCallback(
-    (record: PurchaseInvoicePullCandidate) => record.capabilities?.pull_purchase_invoice?.allowed !== false,
+    (record: PurchaseInvoicePullCandidate) =>
+      record.capabilities?.pull_purchase_invoice?.allowed === true,
     [],
   );
 
@@ -430,6 +452,9 @@ const PurchaseInvoiceList: React.FC = () => {
         reopenSourceModal: () => pullFromPurchaseOrderOpenRef.current?.(),
       });
     },
+    onConfirmFailed: (error) => {
+      showPullFlowNotice('error', resolveApiErrorMessage(error, t(`${P}.loadSourceFailed`)));
+    },
   });
   pullFromPurchaseOrderCloseRef.current = pullFromPurchaseOrderQuery.closeModal;
   pullFromPurchaseOrderOpenRef.current = pullFromPurchaseOrderQuery.openModal;
@@ -479,6 +504,9 @@ const PurchaseInvoiceList: React.FC = () => {
         reopenSourceModal: () => pullFromPurchaseReceiptOpenRef.current?.(),
       });
     },
+    onConfirmFailed: (error) => {
+      showPullFlowNotice('error', resolveApiErrorMessage(error, t(`${P}.loadSourceFailed`)));
+    },
   });
   pullFromPurchaseReceiptCloseRef.current = pullFromPurchaseReceiptQuery.closeModal;
   pullFromPurchaseReceiptOpenRef.current = pullFromPurchaseReceiptQuery.openModal;
@@ -527,6 +555,9 @@ const PurchaseInvoiceList: React.FC = () => {
         closeSourceModal: () => pullFromPayableCloseRef.current?.(),
         reopenSourceModal: () => pullFromPayableOpenRef.current?.(),
       });
+    },
+    onConfirmFailed: (error) => {
+      showPullFlowNotice('error', resolveApiErrorMessage(error, t(`${P}.loadSourceFailed`)));
     },
   });
   pullFromPayableCloseRef.current = pullFromPayableQuery.closeModal;
@@ -609,6 +640,9 @@ const PurchaseInvoiceList: React.FC = () => {
         closeSourceModal: () => pullFromPartnerStatementCloseRef.current?.(),
         reopenSourceModal: () => pullFromPartnerStatementOpenRef.current?.(),
       });
+    },
+    onConfirmFailed: (error) => {
+      showPullFlowNotice('error', resolveApiErrorMessage(error, t(`${P}.loadSourceFailed`)));
     },
   });
   pullFromPartnerStatementCloseRef.current = pullFromPartnerStatementQuery.closeModal;
@@ -1978,16 +2012,15 @@ const PurchaseInvoiceList: React.FC = () => {
           fieldProps={{ style: { width: '100%' }, format: 'YYYY-MM-DD' }}
           colProps={financeColHalf}
         />
-        <ProFormDigit
+        <ProFormItem
           name="tax_rate"
           label={t(`${P}.col.taxRate`)}
           initialValue={13}
-          min={0}
-          max={100}
           rules={[{ required: true, message: t(`${P}.form.taxRateRequired`) }]}
-          fieldProps={{ style: { width: '100%' } }}
           colProps={financeColHalf}
-        />
+        >
+          <TaxRatePercentInput />
+        </ProFormItem>
         <ProFormDigit
           name="invoice_amount"
           label={t(`${P}.col.exclTax`)}

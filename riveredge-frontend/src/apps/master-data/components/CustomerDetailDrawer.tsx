@@ -20,6 +20,7 @@ import {
 } from '../utils/partner-static-labels';
 import { renderMasterActiveTag } from '../utils/masterListPresentation';
 import { PartnerMasterDetailDrawer } from '../pages/shared/PartnerMasterDetailDrawer';
+import { PartnerAddressesDetailTable } from './PartnerAddressesDetailTable';
 import { useDetailDrawerFeatures } from '../../../hooks/useDetailDrawerFeatures';
 import {
   alignDescriptionColumns,
@@ -289,6 +290,9 @@ export const CustomerDetailDrawer: React.FC<CustomerDetailDrawerProps> = ({
                 customerDetail,
               )}
             />
+          </DetailDrawerSection>
+          <DetailDrawerSection title={t('field.customer.addresses')}>
+            <PartnerAddressesDetailTable rows={customerDetail.addresses} />
           </DetailDrawerSection>
           <DetailDrawerSection title={t('field.partner.tabInvoice')}>
             <Descriptions

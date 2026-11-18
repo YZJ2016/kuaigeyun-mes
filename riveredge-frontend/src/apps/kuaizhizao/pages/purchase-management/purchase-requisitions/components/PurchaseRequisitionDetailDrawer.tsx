@@ -18,7 +18,7 @@ import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle'
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../../components/document-tracking-panel';
 import { UniWorkflowActions } from '../../../../../../components/uni-workflow-actions';
 import { rowActionKind } from '../../../../../../components/uni-action';
-import { QuantityWithUnitDisplay } from '../../../../../../components/quantity-with-unit';
+import { buildDocumentLineDualQuantityDetailColumns } from '../../../../../../components/quantity-with-unit';
 import {
   buildMaterialModelSpecColumns,
   buildPartnerMaterialLineColumns,
@@ -42,7 +42,7 @@ import type { AuditPhaseRecord } from '../../../../../../components/uni-audit/Au
 
 const PURCHASE_REQUISITION_RESOURCE = 'kuaizhizao:purchase-requisition';
 const PLACEHOLDER: PurchaseRequisition = { id: 0 };
-const DETAIL_ITEMS_MIN_WIDTH = 980;
+const DETAIL_ITEMS_MIN_WIDTH = 1148;
 
 export const PURCHASE_REQUISITION_WORKFLOW_PROPS = {
   resourcePrefix: PURCHASE_REQUISITION_RESOURCE,
@@ -306,15 +306,7 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
                   width: col.width,
                   ellipsis: true,
                 })),
-                {
-                  title: t('common.quantity'),
-                  dataIndex: 'quantity',
-                  width: 140,
-                  align: 'right',
-                  render: (val: number, row: PurchaseRequisitionItem) => (
-                    <QuantityWithUnitDisplay quantity={val} unit={row.unit} />
-                  ),
-                },
+                ...buildDocumentLineDualQuantityDetailColumns({ t, width: 140 }),
                 {
                   title: t('app.kuaizhizao.purchaseRequisition.col.suggestedPrice'),
                   dataIndex: 'suggested_unit_price',

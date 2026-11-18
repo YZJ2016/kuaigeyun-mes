@@ -10,6 +10,7 @@ import {
   searchReferenceDisplayAll,
   resolveReferenceDisplay,
   referenceDisplayToIdOptions,
+  mapPartnerReferenceDisplayItem,
   type ReferenceDisplayItem,
 } from './referenceDisplay';
 
@@ -98,15 +99,7 @@ export async function loadCustomerFormReferenceList(hostResource: string): Promi
 export function referenceDisplayItemsToCustomers(items: ReferenceDisplayItem[]): Customer[] {
   return items
     .filter((item) => item.id != null)
-    .map(
-      (item) =>
-        ({
-          id: item.id as number,
-          uuid: item.uuid ?? undefined,
-          code: item.code ?? undefined,
-          name: item.name ?? undefined,
-        }) as Customer,
-    );
+    .map((item) => mapPartnerReferenceDisplayItem(item) as Customer);
 }
 
 export async function loadUserFormReferenceOptions(

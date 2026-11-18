@@ -91,11 +91,17 @@ import {
 } from '../../../utils/documentAttachments';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { MarkerTag } from '../../../../../constants/statusBadges';
-import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import {
+  UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+  UNI_TABLE_PAYMENT_SETTLEMENT_COLUMN_DEFAULTS,
+} from '../../../../../utils/uniTableLayoutColumns';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
-import { financeDocCodePartnerSearchColumns } from '../../../../kuaicaiwu/utils/financeListCore';
+import {
+  financeDocCodePartnerSearchColumns,
+  resolvePaymentApplicationListParams,
+} from '../../../../kuaicaiwu/utils/financeListCore';
 import {
   assertBankAccountForPaymentMethod,
   BANK_TRANSFER_PAYMENT_METHOD,
@@ -155,8 +161,17 @@ import {
   type PaymentApplicationPurchaseOrderSource,
 } from '../../../services/payment-application';
 import { getPurchaseOrder, type PurchaseOrderItem } from '../../../services/purchase';
+import {
+  PurchaseDepartmentFormField,
+  resolvePurchaseDepartmentPayload,
+  usePurchaseDepartmentOptions,
+} from '../shared/PurchaseDepartmentFormField';
+import { resolvePaymentApplicationSettlementDisplay } from './paymentApplicationListStatus';
 
 const RESOURCE = 'kuaizhizao:payment-application';
+
+/** 搜索行钉住 Tab：审批阶段 + 付款状态 */
+const PAYMENT_APPLICATION_PINNED_TABS_FIELDS = ['approvalPhase', 'paymentSettlement'] as const;
 const PAYMENT_APPLICATION_LIST_PATH = '/apps/kuaizhizao/purchase-management/payment-applications';
 const PAYMENT_APPLICATION_CREATE_PATH = `${PAYMENT_APPLICATION_LIST_PATH}/new`;
 const paymentApplicationEditPath = (id: number) => `${PAYMENT_APPLICATION_LIST_PATH}/${id}/edit`;
@@ -461,6 +476,33 @@ const PaymentApplicationsPage: React.FC = () => {
     onOpenPayablePull: () => setPullPayableOpen(true),
   });
   const perms = useResourcePermissions(RESOURCE);
+  const {
+    options: departmentOptions,
+    loading: departmentOptionsLoading,
+    resolveName: resolveDepartmentName,
+  } = usePurchaseDepartmentOptions();
+  const paymentApplicationApprovalPhaseEnum = useMemo(
+    () =>
+      ({
+        draft: { text: t('app.kuaizhizao.paymentApplication.approvalPhase.draft') },
+        submitted: { text: t('app.kuaizhizao.paymentApplication.approvalPhase.submitted') },
+        pending_review: {
+          text: t('app.kuaizhizao.paymentApplication.approvalPhase.pendingReview'),
+        },
+        approved: { text: t('app.kuaizhizao.paymentApplication.approvalPhase.approved') },
+        rejected: { text: t('app.kuaizhizao.paymentApplication.approvalPhase.rejected') },
+      }) as const,
+    [t],
+  );
+  const paymentApplicationSettlementEnum = useMemo(
+    () =>
+      ({
+        unpaid: { text: t('app.kuaizhizao.paymentApplication.settlement.unpaid') },
+        partial: { text: t('app.kuaizhizao.paymentApplication.settlement.partial') },
+        paid: { text: t('app.kuaizhizao.paymentApplication.settlement.paid') },
+      }) as const,
+    [t],
+  );
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const auditEnabled = useAuditRequired('payment_application', true);
   const paymentApplicationAuditColumn = useMemo(
@@ -777,6 +819,7 @@ const PaymentApplicationsPage: React.FC = () => {
         formRef.current?.resetFields();
         formRef.current?.setFieldsValue({
           supplierId: full.supplierId,
+          department_id: full.departmentId,
           applicationDate: coerceFormDate(full.applicationDate) ?? dayjs(),
           expectedPaymentDate: coerceFormDate(full.expectedPaymentDate),
           paymentMethod: full.paymentMethod || BANK_TRANSFER_PAYMENT_METHOD,
@@ -1005,14 +1048,25 @@ const PaymentApplicationsPage: React.FC = () => {
           ...buildDocumentAuditColumns<PaymentApplication>(t),
           ...(paymentApplicationAuditColumn ? [paymentApplicationAuditColumn] : []),
           {
-            title: t('app.kuaizhizao.paymentApplication.status'),
-            key: 'lifecycle',
-            dataIndex: 'status',
+            title: t('app.kuaizhizao.paymentApplication.col.approvalStatus'),
+            key: 'approval_phase',
+            dataIndex: 'approvalPhase',
+            hideInTable: true,
+            valueType: 'select',
+            valueEnum: paymentApplicationApprovalPhaseEnum,
+          },
+          {
+            title: t('app.kuaizhizao.paymentApplication.col.paymentSettlement'),
+            key: 'payment_settlement',
+            dataIndex: 'paymentSettlement',
+            ...UNI_TABLE_PAYMENT_SETTLEMENT_COLUMN_DEFAULTS,
             fixed: 'right',
-            hideInSearch: true,
+            valueType: 'select',
+            valueEnum: paymentApplicationSettlementEnum,
             render: (_, r) => {
-              const raw = String(r.status ?? '');
-              return renderDocumentStatusTag(getStatusLabel(raw), raw);
+              const settlement = resolvePaymentApplicationSettlementDisplay(r);
+              if (!settlement) return '—';
+              return renderDocumentStatusTag(settlement.label, settlement.raw);
             },
           },
           {
@@ -1042,6 +1096,8 @@ const PaymentApplicationsPage: React.FC = () => {
       openDetail,
       openEdit,
       paymentApplicationAuditColumn,
+      paymentApplicationApprovalPhaseEnum,
+      paymentApplicationSettlementEnum,
       perms.canRead,
       perms.canUpdate,
       t,
@@ -1116,9 +1172,15 @@ const PaymentApplicationsPage: React.FC = () => {
     const employeeAdvance = isEmployeeAdvancePaymentMethod(values.paymentMethod);
     const hidePayeeAccount = hidesSupplierPayeeAccount(values.paymentMethod);
     const applicationKind = formApplicationKind(values.applicationKind);
+    const deptPayload = resolvePurchaseDepartmentPayload(
+      values.department_id,
+      resolveDepartmentName,
+    );
     const payload = {
       supplierId: values.supplierId,
       supplierName: supplier?.name ?? values.supplierName,
+      departmentId: deptPayload.department_id,
+      departmentName: deptPayload.department_name,
       applicationKind,
       applicationDate: toApiDateString(values.applicationDate),
       expectedPaymentDate: toApiDateString(values.expectedPaymentDate),
@@ -1421,6 +1483,13 @@ const PaymentApplicationsPage: React.FC = () => {
               name="expectedPaymentDate"
               label={t('app.kuaizhizao.paymentApplication.expectedPaymentDate')}
               fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={8}>
+            <PurchaseDepartmentFormField
+              required
+              options={departmentOptions}
+              loading={departmentOptionsLoading}
             />
           </Col>
           <Col span={8}>
@@ -1776,7 +1845,8 @@ const PaymentApplicationsPage: React.FC = () => {
         <UniTable<PaymentApplication>
           actionRef={actionRef}
           permissionResource={RESOURCE}
-          columnPersistenceId="apps.kuaizhizao.pages.purchase-management.payment-applications-width-v7"
+          pinnedTabsField={[...PAYMENT_APPLICATION_PINNED_TABS_FIELDS]}
+          columnPersistenceId="apps.kuaizhizao.pages.purchase-management.payment-applications-width-v9"
           headerTitle={t('app.kuaizhizao.menu.purchase-management.payment-applications')}
           rowKey="id"
           columns={columns}
@@ -1888,11 +1958,13 @@ const PaymentApplicationsPage: React.FC = () => {
           onTableDataChange={(rows) => {
             tableRowsRef.current = rows;
           }}
-          request={async (params) => {
+          skipFuzzyPinyinClientFilter
+          request={async (params, _sort, _filter, searchFormValues) => {
+            const listParams = resolvePaymentApplicationListParams(searchFormValues);
             const res = await listPaymentApplications({
               skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
               limit: params.pageSize ?? 20,
-              keyword: params.applicationCode as string,
+              ...listParams,
             });
             return { data: res.data, success: true, total: res.total };
           }}
@@ -1951,8 +2023,15 @@ const PaymentApplicationsPage: React.FC = () => {
               <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.supplierName')}>
                 {detail.supplierName}
               </Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.status')}>
-                {renderDocumentStatusTag(getStatusLabel(detail.status), detail.status)}
+              <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.col.paymentSettlement')}>
+                {(() => {
+                  const settlement = resolvePaymentApplicationSettlementDisplay(detail);
+                  if (!settlement) return '—';
+                  return renderDocumentStatusTag(settlement.label, settlement.raw);
+                })()}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.purchase.field.department')}>
+                {detail.departmentName?.trim() || '—'}
               </Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.paymentApplication.invoiceStatus')}>
                 {detail.invoiceStatus || '—'}

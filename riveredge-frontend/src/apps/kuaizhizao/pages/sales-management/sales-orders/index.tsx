@@ -5282,26 +5282,20 @@ const SalesOrdersPage: React.FC = () => {
                     {
                       title: (
                         <TaxRateBatchColumnTitle
-                          onBatch={() => {
+                          onBatch={(num) => {
                             const items = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
                             if (items.length === 0) return;
-                            const rate = prompt(t('app.kuaizhizao.salesOrder.taxRateBatch'), '13');
-                            if (rate != null && rate !== '') {
-                              const num = Math.round(parseFloat(rate));
-                              if (!Number.isNaN(num) && num >= 0 && num <= 100) {
-                                const pt = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
-                                const next = items.map((it: any) =>
-                                  applyDocumentLineTaxRateChange({
-                                    row: it,
-                                    qty: it.required_quantity,
-                                    newTaxRate: num,
-                                    priceType: pt,
-                                    priceDecimals,
-                                  }),
-                                );
-                                formRef.current?.setFieldsValue({ items: next });
-                              }
-                            }
+                            const pt = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
+                            const next = items.map((it: any) =>
+                              applyDocumentLineTaxRateChange({
+                                row: it,
+                                qty: it.required_quantity,
+                                newTaxRate: num,
+                                priceType: pt,
+                                priceDecimals,
+                              }),
+                            );
+                            formRef.current?.setFieldsValue({ items: next });
                           }}
                         />
                       ),
@@ -5527,6 +5521,7 @@ const SalesOrdersPage: React.FC = () => {
                 <DocumentDetailTableStyles />
                 <UniTableDetail
                   name="items"
+                  enableRowDragSort
                   title={t('app.kuaizhizao.salesOrder.orderItems')}
                   required
                   requiredMessage={t('app.kuaizhizao.salesOrder.itemsRequired')}

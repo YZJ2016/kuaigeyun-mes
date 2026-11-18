@@ -12,12 +12,28 @@ import {
   type DocumentGoodsTotals,
 } from '../../../utils/documentLineAmounts';
 import { purchaseFormPriceType } from './purchasePriceType';
+import type { PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
 
 const roundMoney = (value: number): number => {
   const places = getCachedNumericPrecisionPlaces('amount');
   const factor = 10 ** places;
   return Math.round(value * factor) / factor;
 };
+
+/**
+ * 采购行库字段 total_price / total_amount 恒为未税金额。
+ * resolveDocumentLineDisplayAmounts 的 item_amount 在含税价类下表示价税合计，禁止把未税库值直传（会 gross=excl、税额 0）。
+ */
+export function purchaseStoredExclAsFormItemAmount(
+  storedExcl: unknown,
+  priceType: string | PriceTypeValue,
+): number | undefined {
+  const pt = purchaseFormPriceType(priceType);
+  if (pt !== 'tax_exclusive') return undefined;
+  if (storedExcl == null || storedExcl === '') return undefined;
+  const n = Number(storedExcl);
+  return Number.isFinite(n) ? n : undefined;
+}
 
 /**
  * 头表 tax_rate 存小数（0.13）；行 / 入库 / 价本存百分比（13）。
@@ -109,16 +125,18 @@ export function resolvePurchaseReceiptLineAmounts(
   opts?: { headerTaxRate?: unknown },
 ): { excl: number; tax: number; incl: number; taxPct: number } {
   const taxPct = resolvePurchaseReceiptLineTaxPercent(row.tax_rate, opts?.headerTaxRate);
+  const pt = purchaseFormPriceType(priceType);
+  const itemAmount = purchaseStoredExclAsFormItemAmount(row.total_amount, pt);
   return {
     ...resolveDocumentFormLineAmounts(
       {
         qty: row.receipt_quantity,
         unit_price: row.unit_price,
         tax_rate: taxPct,
-        item_amount: row.total_amount,
+        ...(itemAmount != null ? { item_amount: itemAmount } : {}),
         is_gift: row.is_gift,
       },
-      purchaseFormPriceType(priceType),
+      pt,
     ),
     taxPct,
   };
@@ -175,7 +193,7 @@ export function resolvePurchaseOrderDisplayAmount(order: {
   return resolveDocumentStoredNetGrossAmount(order);
 }
 
-/** 详情/编辑单价：只读 display_unit_price。含税旧行没有该字段时返回 null。 */
+/** 详情「含税单价」：只读 display_unit_price；缺字段显示「—」，禁止把未税 unit_price 冒充含税。 */
 export function purchaseOrderDetailUnitPriceIncl(
   row: {
     unit_price?: number | null;
@@ -183,9 +201,12 @@ export function purchaseOrderDetailUnitPriceIncl(
     displayUnitPrice?: number | null;
   },
   _headerTaxRate?: unknown,
-  priceType: 'tax_inclusive' | 'tax_exclusive' = 'tax_inclusive',
+  _priceType: 'tax_inclusive' | 'tax_exclusive' = 'tax_inclusive',
 ): number | null {
-  return readPurchaseOrderEnteredUnitPrice(row, priceType);
+  const raw = row.display_unit_price ?? row.displayUnitPrice;
+  if (raw == null || String(raw) === '') return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
 }
 
 /**

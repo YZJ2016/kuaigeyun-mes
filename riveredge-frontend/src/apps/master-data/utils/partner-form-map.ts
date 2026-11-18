@@ -4,6 +4,7 @@
 
 import type {
   Customer,
+  PartnerAddress,
   PartnerContact,
   PartnerSettlementAccount,
   Supplier,
@@ -95,6 +96,73 @@ function partnerSettlementAccountsFromDetail(d: {
   }));
 }
 
+function partnerAddressesFromDetail(d: {
+  addresses?: PartnerAddress[];
+  address?: string;
+  deliveryAddress?: string;
+  deliveryContactName?: string;
+  deliveryContactPhone?: string;
+  invoiceAddress?: string;
+}): PartnerAddress[] {
+  if (Array.isArray(d.addresses) && d.addresses.length > 0) {
+    return d.addresses.map((row) => ({
+      addressType: row.addressType,
+      address: row.address,
+      contactName: row.contactName,
+      contactPhone: row.contactPhone,
+      isDefault: Boolean(row.isDefault),
+    }));
+  }
+  const legacy: PartnerAddress[] = [];
+  if (d.address?.trim()) {
+    legacy.push({ addressType: 'registered', address: d.address.trim(), isDefault: true });
+  }
+  if (d.deliveryAddress?.trim()) {
+    legacy.push({
+      addressType: 'delivery',
+      address: d.deliveryAddress.trim(),
+      contactName: d.deliveryContactName,
+      contactPhone: d.deliveryContactPhone,
+    });
+  }
+  if (d.invoiceAddress?.trim()) {
+    legacy.push({ addressType: 'invoice', address: d.invoiceAddress.trim() });
+  }
+  return legacy;
+}
+
+export function normalizePartnerAddressesForSubmit(
+  rows: PartnerAddress[] | undefined,
+): PartnerAddress[] {
+  if (!Array.isArray(rows)) return [];
+  const normalized = rows
+    .map((row) => {
+      const addressType = row.addressType?.trim() || undefined;
+      const address = row.address?.trim() || undefined;
+      const contactName = row.contactName?.trim() || undefined;
+      const contactPhone = row.contactPhone?.trim() || undefined;
+      if (!address) return null;
+      return {
+        addressType: addressType || 'other',
+        address,
+        contactName,
+        contactPhone,
+        isDefault: Boolean(row.isDefault),
+      };
+    })
+    .filter((row): row is PartnerAddress => row != null);
+  if (normalized.length > 0 && !normalized.some((row) => row.isDefault)) {
+    normalized[0] = { ...normalized[0], isDefault: true };
+  }
+  let defaultSeen = false;
+  return normalized.map((row) => {
+    if (!row.isDefault) return row;
+    if (defaultSeen) return { ...row, isDefault: false };
+    defaultSeen = true;
+    return row;
+  });
+}
+
 export function normalizePartnerSettlementAccountsForSubmit(
   rows: PartnerSettlementAccount[] | undefined,
 ): PartnerSettlementAccount[] {
@@ -141,6 +209,7 @@ export function customerDetailToFormValues(d: Customer): Record<string, unknown>
     name: d.name,
     shortName: d.shortName,
     contacts: partnerContactsFromDetail(d),
+    addresses: partnerAddressesFromDetail(d),
     settlementAccounts: partnerSettlementAccountsFromDetail(d),
     address: d.address,
     category: d.category,
@@ -170,6 +239,7 @@ export function supplierDetailToFormValues(d: Supplier): Record<string, unknown>
     name: d.name,
     shortName: d.shortName,
     contacts: partnerContactsFromDetail(d),
+    addresses: partnerAddressesFromDetail(d),
     settlementAccounts: partnerSettlementAccountsFromDetail(d),
     address: d.address,
     category: d.category,

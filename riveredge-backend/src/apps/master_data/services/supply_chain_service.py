@@ -18,6 +18,7 @@ from apps.master_data.schemas.supply_chain_schemas import (
     CustomerCreate,
     CustomerUpdate,
     CustomerResponse,
+    PartnerAddressItem,
     PartnerSettlementAccountItem,
     SupplierCreate,
     SupplierUpdate,
@@ -370,6 +371,148 @@ def _partner_settlement_accounts_for_response(
     return rows
 
 
+def _normalize_partner_address_row(row: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(row, dict):
+        return None
+    from apps.master_data.config.partner_address_type_codes import coerce_partner_address_type_code
+
+    address_type = coerce_partner_address_type_code(
+        row.get("address_type") if row.get("address_type") is not None else row.get("addressType")
+    )
+    address = _pick_contact_field(row, "address")
+    contact_name = _pick_contact_field(row, "contact_name", "contactName")
+    contact_phone = _pick_contact_field(row, "contact_phone", "contactPhone")
+    if not address:
+        return None
+    raw_default = row.get("is_default")
+    if raw_default is None:
+        raw_default = row.get("isDefault")
+    is_default = bool(raw_default) if raw_default is not None else False
+    return {
+        "address_type": address_type or "other",
+        "address": address,
+        "contact_name": contact_name,
+        "contact_phone": contact_phone,
+        "is_default": is_default,
+    }
+
+
+def _legacy_partner_address_rows(data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    address = data.get("address")
+    if address is not None and str(address).strip():
+        rows.append(
+            {
+                "address_type": "registered",
+                "address": str(address).strip(),
+                "contact_name": None,
+                "contact_phone": None,
+                "is_default": True,
+            }
+        )
+    delivery_address = data.get("delivery_address")
+    if delivery_address is not None and str(delivery_address).strip():
+        rows.append(
+            {
+                "address_type": "delivery",
+                "address": str(delivery_address).strip(),
+                "contact_name": _pick_contact_field(
+                    data, "delivery_contact_name", "deliveryContactName"
+                ),
+                "contact_phone": _pick_contact_field(
+                    data, "delivery_contact_phone", "deliveryContactPhone"
+                ),
+                "is_default": False,
+            }
+        )
+    invoice_address = data.get("invoice_address")
+    if invoice_address is not None and str(invoice_address).strip():
+        rows.append(
+            {
+                "address_type": "invoice",
+                "address": str(invoice_address).strip(),
+                "contact_name": None,
+                "contact_phone": None,
+                "is_default": False,
+            }
+        )
+    return rows
+
+
+def _first_partner_address_row(
+    rows: List[Dict[str, Any]], address_type: str
+) -> Optional[Dict[str, Any]]:
+    for row in rows:
+        if row.get("address_type") == address_type:
+            return row
+    return None
+
+
+def _apply_partner_addresses_payload(data: Dict[str, Any]) -> None:
+    """将 addresses 明细写入 payload，并同步首条登记/收货/开票地址至 legacy 字段。"""
+    if "addresses" not in data:
+        legacy_rows = _legacy_partner_address_rows(data)
+        if legacy_rows:
+            data["addresses"] = legacy_rows
+        return
+
+    raw_rows = data.get("addresses")
+    normalized: List[Dict[str, Any]] = []
+    if isinstance(raw_rows, list):
+        for row in raw_rows:
+            item = _normalize_partner_address_row(row)
+            if item:
+                normalized.append(item)
+
+    default_seen = False
+    for item in normalized:
+        if item.get("is_default"):
+            if default_seen:
+                item["is_default"] = False
+            else:
+                default_seen = True
+    if normalized and not default_seen:
+        normalized[0]["is_default"] = True
+
+    data["addresses"] = normalized
+
+    registered = _first_partner_address_row(normalized, "registered")
+    if registered is None and normalized:
+        registered = normalized[0]
+    data["address"] = registered.get("address") if registered else None
+
+    delivery = _first_partner_address_row(normalized, "delivery")
+    data["delivery_address"] = delivery.get("address") if delivery else None
+    data["delivery_contact_name"] = delivery.get("contact_name") if delivery else None
+    data["delivery_contact_phone"] = delivery.get("contact_phone") if delivery else None
+
+    invoice = _first_partner_address_row(normalized, "invoice")
+    if invoice:
+        data["invoice_address"] = invoice.get("address")
+
+
+def _partner_addresses_for_response(entity: Customer | Supplier) -> List[Dict[str, Any]]:
+    stored = entity.addresses
+    if isinstance(stored, list) and stored:
+        rows: List[Dict[str, Any]] = []
+        for row in stored:
+            item = _normalize_partner_address_row(row)
+            if item:
+                rows.append(item)
+        if rows:
+            return rows
+    legacy = _legacy_partner_address_rows(
+        {
+            "address": entity.address,
+            "delivery_address": entity.delivery_address,
+            "delivery_contact_name": entity.delivery_contact_name,
+            "delivery_contact_phone": entity.delivery_contact_phone,
+            "invoice_address": entity.invoice_address,
+        }
+    )
+    return legacy
+
+
 def _to_customer_response(customer: Customer) -> CustomerResponse:
     resp = CustomerResponse.model_validate(customer)
     contact_rows = _partner_contacts_for_response(customer)
@@ -378,7 +521,17 @@ def _to_customer_response(customer: Customer) -> CustomerResponse:
     account_items = (
         [PartnerSettlementAccountItem.model_validate(row) for row in account_rows] if account_rows else None
     )
-    return resp.model_copy(update={"contacts": contact_items, "settlement_accounts": account_items})
+    address_rows = _partner_addresses_for_response(customer)
+    address_items = (
+        [PartnerAddressItem.model_validate(row) for row in address_rows] if address_rows else None
+    )
+    return resp.model_copy(
+        update={
+            "contacts": contact_items,
+            "settlement_accounts": account_items,
+            "addresses": address_items,
+        }
+    )
 
 
 def _to_supplier_response(supplier: Supplier) -> SupplierResponse:
@@ -389,7 +542,17 @@ def _to_supplier_response(supplier: Supplier) -> SupplierResponse:
     account_items = (
         [PartnerSettlementAccountItem.model_validate(row) for row in account_rows] if account_rows else None
     )
-    return resp.model_copy(update={"contacts": contact_items, "settlement_accounts": account_items})
+    address_rows = _partner_addresses_for_response(supplier)
+    address_items = (
+        [PartnerAddressItem.model_validate(row) for row in address_rows] if address_rows else None
+    )
+    return resp.model_copy(
+        update={
+            "contacts": contact_items,
+            "settlement_accounts": account_items,
+            "addresses": address_items,
+        }
+    )
 
 
 _CUSTOMER_PAGE_CODE = "master-data-supply-chain-customer"
@@ -484,6 +647,7 @@ class SupplyChainService:
 
         _apply_partner_contacts_payload(create_data)
         _apply_partner_settlement_accounts_payload(create_data)
+        _apply_partner_addresses_payload(create_data)
         if require_contact_channel:
             _assert_customer_phone_or_email(create_data)
 
@@ -701,6 +865,7 @@ class SupplyChainService:
 
         _apply_partner_contacts_payload(update_data)
         _apply_partner_settlement_accounts_payload(update_data)
+        _apply_partner_addresses_payload(update_data)
         contact_keys = ("phone", "email", "contacts", "contact_person", "contact_title")
         if require_contact_channel and any(k in update_data for k in contact_keys):
             merged_contact = {
@@ -865,6 +1030,7 @@ class SupplyChainService:
 
         _apply_partner_contacts_payload(create_data)
         _apply_partner_settlement_accounts_payload(create_data)
+        _apply_partner_addresses_payload(create_data)
 
         try:
             apply_create_audit(create_data, current_user)
@@ -1069,6 +1235,7 @@ class SupplyChainService:
 
         _apply_partner_contacts_payload(update_data)
         _apply_partner_settlement_accounts_payload(update_data)
+        _apply_partner_addresses_payload(update_data)
 
         for key, value in update_data.items():
             setattr(supplier, key, value)

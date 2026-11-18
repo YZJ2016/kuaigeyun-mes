@@ -289,6 +289,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         P1-S-011: 通知仓库前校验库存预占量。
         按行出库仓库 + 物料汇总需求，扣除其他「已通知」单据同仓预占后再判断。
         """
+        # 明细表无 deleted_at 字段，勿传 deleted_at__isnull（会 Unknown filter param）
         notice_items = await ShipmentNoticeItem.filter(
             tenant_id=tenant_id,
             notice_id=notice.id,
@@ -332,6 +333,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
 
         reserved_by_wh_material: dict[tuple[int, int], Decimal] = defaultdict(lambda: Decimal("0"))
         if reserved_notice_ids:
+            # 明细表无 deleted_at；未删除头单已由 reserved_notice_ids 约束
             reserved_items = await ShipmentNoticeItem.filter(
                 tenant_id=tenant_id,
                 notice_id__in=list(reserved_notice_ids),

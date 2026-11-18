@@ -22,6 +22,7 @@ import {
   MaterialSelectOptionContent,
   formatMaterialSelectLabel,
 } from './materialSelectOption';
+import { useMaterialQuickCreateAllowed } from '../../hooks/useMaterialQuickCreateAllowed';
 
 const MATERIAL_REFERENCE_RESOURCE = 'master-data:material';
 
@@ -160,7 +161,7 @@ interface UniMaterialSelectProps {
 export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   name,
   label = '物料名称',
-  placeholder = '请选择物料（支持名称、编号、拼音首字母）',
+  placeholder = '请选择物料（支持编号、名称、客户/供应商料号、拼音首字母）',
   required = false,
   disabled = false,
   readonly = false,
@@ -205,15 +206,17 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   } = (fieldProps || {}) as Partial<SelectProps & { quickCreate?: unknown; advancedSearch?: unknown }>;
   const form = Form.useFormInstance();
   const [materialModalVisible, setMaterialModalVisible] = useState(false);
+  const allowMaterialQuickCreate = useMaterialQuickCreateAllowed(true);
 
-  const effectiveQuickCreate =
-    quickCreateProp ??
-    (showQuickCreate
-      ? {
-          label: '快速新增物料',
-          onClick: () => setMaterialModalVisible(true),
-        }
-      : undefined);
+  const effectiveQuickCreate = allowMaterialQuickCreate
+    ? quickCreateProp ??
+      (showQuickCreate
+        ? {
+            label: '快速新增物料',
+            onClick: () => setMaterialModalVisible(true),
+          }
+        : undefined)
+    : undefined;
   const { message } = App.useApp();
   const [data, setData] = useState<Material[]>([]);
   const [loading, setLoading] = useState(false);
@@ -248,6 +251,20 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
     }
     return name;
   }, [listFieldName, listFieldKey, name]);
+
+  const watchedCustomerId = Form.useWatch('customer_id', form);
+  const watchedSupplierId = Form.useWatch('supplier_id', form);
+  const referenceSearchPartnerIds = useMemo(() => {
+    const cid = Number(watchedCustomerId);
+    const sid = Number(watchedSupplierId);
+    if (Number.isFinite(cid) && cid > 0) {
+      return { customerId: cid };
+    }
+    if (Number.isFinite(sid) && sid > 0) {
+      return { supplierId: sid };
+    }
+    return {};
+  }, [watchedCustomerId, watchedSupplierId]);
 
   const currentValue = Form.useWatch(watchedName, form);
   if (isMultiple) {
@@ -297,26 +314,64 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
     try {
       let rows: Material[] = [];
       if (resolvedWarehouseId) {
+        const kw = searchText.trim();
         const balanceRes: any = await apiRequest('/apps/kuaizhizao/reports/inventory/material-balances', {
           method: 'GET',
           params: {
             warehouse_id: resolvedWarehouseId,
             include_zero_stock: false,
-            keyword: searchText || undefined,
+            keyword: kw || undefined,
             current: 1,
-            page_size: 200,
+            page_size: kw ? 500 : 200,
           },
           signal: ac.signal,
         });
         if (ac.signal.aborted) return;
         const balanceRows = balanceRes?.items || balanceRes?.data || [];
-        const materialIds = [
+        let materialIds = [
           ...new Set(
             (Array.isArray(balanceRows) ? balanceRows : [])
               .map((row: { material_id?: number }) => Number(row.material_id))
               .filter((id: number) => Number.isFinite(id) && id > 0),
           ),
         ] as number[];
+        if (kw) {
+          const refRes = await searchReferenceDisplay({
+            resource: MATERIAL_REFERENCE_RESOURCE,
+            hostResource,
+            keyword: kw,
+            isActive: activeOnly ? true : undefined,
+            sourceType: sourceType || undefined,
+            groupId: resolvedGroupId,
+            pageSize: 200,
+            ...referenceSearchPartnerIds,
+          });
+          if (ac.signal.aborted) return;
+          const refIds = (refRes.items ?? [])
+            .map((item) => Number(item.id))
+            .filter((id) => Number.isFinite(id) && id > 0);
+          if (refIds.length) {
+            materialIds = [...new Set([...materialIds, ...refIds])];
+            const stockRes: any = await apiRequest('/apps/kuaizhizao/reports/inventory/material-balances', {
+              method: 'GET',
+              params: {
+                warehouse_id: resolvedWarehouseId,
+                include_zero_stock: false,
+                current: 1,
+                page_size: 500,
+              },
+              signal: ac.signal,
+            });
+            if (ac.signal.aborted) return;
+            const stockRows = stockRes?.items || stockRes?.data || [];
+            const inStock = new Set(
+              (Array.isArray(stockRows) ? stockRows : [])
+                .map((row: { material_id?: number; quantity?: number }) => Number(row.material_id))
+                .filter((id: number) => Number.isFinite(id) && id > 0),
+            );
+            materialIds = materialIds.filter((id) => inStock.has(id));
+          }
+        }
         if (!materialIds.length) {
           setData((prev) => {
             const selectedIds = isMultiple
@@ -349,6 +404,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
           sourceType: sourceType || undefined,
           groupId: resolvedGroupId,
           pageSize: 200,
+          ...referenceSearchPartnerIds,
         });
         if (ac.signal.aborted) return;
         rows = filterSelectableMaterials(
@@ -396,8 +452,17 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
       listAbortRef.current?.abort();
     };
     // fetchMaterials 闭包随 deps 更新；debounce 经 useLatest 取最新 fn
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅过滤条件变化时重拉
-  }, [activeOnly, mastersOnly, sourceType, resolvedGroupId, resolvedWarehouseId, hostResource]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 过滤条件或表头伙伴变化时重拉
+  }, [
+    activeOnly,
+    mastersOnly,
+    sourceType,
+    resolvedGroupId,
+    resolvedWarehouseId,
+    hostResource,
+    watchedCustomerId,
+    watchedSupplierId,
+  ]);
 
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -685,10 +750,19 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
               fields: [
                 { name: 'mainCode', label: '物料编号' },
                 { name: 'name', label: '物料名称' },
+                { name: 'partnerMaterialCode', label: '客户/供应商料号' },
                 { name: 'specification', label: '规格' },
               ],
               onSearch: async (values) => {
-                const kw = [values.mainCode, values.name, values.specification].filter(Boolean).join(' ').trim();
+                const kw = [
+                  values.mainCode,
+                  values.name,
+                  values.partnerMaterialCode,
+                  values.specification,
+                ]
+                  .filter(Boolean)
+                  .join(' ')
+                  .trim();
                 let items: Material[] = [];
                 if (resolvedWarehouseId) {
                   const balanceRes: any = await apiRequest('/apps/kuaizhizao/reports/inventory/material-balances', {
@@ -726,6 +800,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
                     sourceType: sourceType || undefined,
                     groupId: resolvedGroupId,
                     pageSize: 200,
+                    ...referenceSearchPartnerIds,
                   });
                   items = filterSelectableMaterials(
                     referenceDisplayItemsToMaterials(response.items ?? []),
@@ -750,7 +825,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
 
   const modal = (
     <MaterialFormModal
-      open={materialModalVisible}
+      open={materialModalVisible && allowMaterialQuickCreate}
       onClose={() => setMaterialModalVisible(false)}
       onSuccess={(newMaterial) => {
         setData((prev) => [newMaterial, ...prev.filter((m) => m.id !== newMaterial.id)]);

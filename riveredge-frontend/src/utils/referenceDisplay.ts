@@ -60,6 +60,10 @@ export async function searchReferenceDisplay(args: {
   hostResource?: string;
   groupId?: number;
   sourceType?: string;
+  /** 销售单据：按该客户编号映射检索伙伴料号/品名 */
+  customerId?: number;
+  /** 采购单据：按该供应商编号映射检索伙伴料号/品名 */
+  supplierId?: number;
 }): Promise<ReferenceDisplayListResponse> {
   return requestDisplaySearch<ReferenceDisplayListResponse>(
     '/core/reference/display-search',
@@ -72,6 +76,8 @@ export async function searchReferenceDisplay(args: {
       host_resource: args.hostResource,
       group_id: args.groupId,
       source_type: args.sourceType,
+      customer_id: args.customerId,
+      supplier_id: args.supplierId,
     },
   );
 }

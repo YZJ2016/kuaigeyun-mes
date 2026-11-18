@@ -84,6 +84,22 @@ def _receipt_line_gross_from_stored(line: Any) -> Decimal:
     return (qty * unit).quantize(Decimal("0.01"))
 
 
+def _receipt_line_total_still_qty_times_display(
+    line: Any, *, tol: Decimal = Decimal("0.02"),
+) -> bool:
+    """已写 display_unit_price，但未税额仍等于 qty×含税展示价。"""
+    display_raw = getattr(line, "display_unit_price", None)
+    if display_raw is None:
+        return False
+    qty = Decimal(str(getattr(line, "receipt_quantity", 0) or 0))
+    display = Decimal(str(display_raw))
+    if qty <= 0 or display <= 0:
+        return False
+    excl = Decimal(str(getattr(line, "total_amount", 0) or 0))
+    implied = (qty * display).quantize(Decimal("0.01"))
+    return abs(excl - implied) <= tol
+
+
 def _po_line_looks_misentered_inclusive(item: Any, order: Any, *, tol: Decimal = Decimal("0.05")) -> bool:
     """含税价类下行未税金额≈数量×录入单价 → 录入价被当未税存了。"""
     qty = Decimal(str(getattr(item, "ordered_quantity", 0) or 0))
@@ -156,6 +172,8 @@ async def run(args: argparse.Namespace) -> int:
         "po_headers_synced": 0,
         "skipped_frozen": 0,
         "skipped_no_pattern": 0,
+        "receipt_lines_display_as_excl_fixed": 0,
+        "receipts_settlement_resynced": 0,
     }
 
     from apps.kuaizhizao.constants.price_type import DEFAULT_PURCHASE_PRICE_TYPE
@@ -195,7 +213,7 @@ async def run(args: argparse.Namespace) -> int:
         if order is None:
             continue
         pt = str(getattr(order, "price_type", None) or DEFAULT_PURCHASE_PRICE_TYPE)
-        if pt != "tax_inclusive":
+        if pt != "tax_inclusive" and not args.fix_po_exclusive_misentry:
             continue
         if getattr(item, "display_unit_price", None) is not None:
             continue
@@ -239,6 +257,10 @@ async def run(args: argparse.Namespace) -> int:
                 unit_price=stored_unit,
                 total_price=line_excl,
             )
+            if pt != "tax_inclusive" and args.fix_po_exclusive_misentry:
+                await PurchaseOrder.filter(tenant_id=item.tenant_id, id=item.order_id).update(
+                    price_type="tax_inclusive",
+                )
         stats["po_lines_fixed"] += 1
         touched_po_orders.add((int(item.tenant_id), int(item.order_id)))
 
@@ -274,7 +296,44 @@ async def run(args: argparse.Namespace) -> int:
         receipt = receipt_by_id.get(int(line.receipt_id))
         if receipt is None:
             continue
+        if _receipt_line_total_still_qty_times_display(line):
+            tax_pct = _tax_pct(line.tax_rate, receipt.tax_rate)
+            qty = Decimal(str(line.receipt_quantity or 0))
+            entered = Decimal(str(getattr(line, "display_unit_price", 0) or 0))
+            if qty > 0 and entered > 0 and tax_pct > 0:
+                display, stored_unit, line_excl, _incl = _convert_inclusive_entry(
+                    qty, entered, tax_pct, price_places=price_places, amount_places=amount_places
+                )
+                snapshots.append(
+                    LineSnapshot(
+                        kind="purchase_receipt_item_display_as_excl",
+                        tenant_id=int(line.tenant_id),
+                        header_id=int(line.receipt_id),
+                        line_id=int(line.id),
+                        before={
+                            "unit_price": str(line.unit_price),
+                            "display_unit_price": str(line.display_unit_price),
+                            "total_amount": str(line.total_amount),
+                        },
+                    )
+                )
+                if not args.dry_run:
+                    await PurchaseReceiptItem.filter(
+                        tenant_id=line.tenant_id, id=line.id
+                    ).update(
+                        unit_price=stored_unit,
+                        total_amount=line_excl,
+                    )
+                    line.unit_price = stored_unit
+                    line.total_amount = line_excl
+                stats["receipt_lines_display_as_excl_fixed"] += 1
+                stats["receipt_lines_fixed"] += 1
+                touched_receipts.add((int(line.tenant_id), int(line.receipt_id)))
+            continue
+
         if getattr(line, "display_unit_price", None) is not None:
+            if args.resync_settlement:
+                touched_receipts.add((int(line.tenant_id), int(line.receipt_id)))
             continue
         if not args.include_frozen and str(getattr(receipt, "status", "") or "") in FROZEN_RECEIPT_STATUSES:
             stats["skipped_frozen"] += 1
@@ -369,6 +428,7 @@ async def run(args: argparse.Namespace) -> int:
         )
         if changed:
             stats["receipt_headers_synced"] += 1
+        stats["receipts_settlement_resynced"] += 1
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out_dir = Path(args.snapshot_dir)
@@ -395,6 +455,16 @@ def main() -> None:
     parser.add_argument("--only-blank-po", action="store_true", default=True)
     parser.add_argument("--all-receipt-lines", action="store_true", help="含 PO 下推行")
     parser.add_argument("--include-frozen", action="store_true")
+    parser.add_argument(
+        "--fix-po-exclusive-misentry",
+        action="store_true",
+        help="价类为未税但行指纹为含税误存时仍修正，并将单头价类改为含税",
+    )
+    parser.add_argument(
+        "--resync-settlement",
+        action="store_true",
+        help="凡已有 display_unit_price 的入库行所属单据，按新 settlement 重算税额/价税合计",
+    )
     parser.add_argument(
         "--snapshot-dir",
         type=str,

@@ -44,6 +44,385 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'purchase-receipt-amount-single-entry-r01',
+    date: '2026-11-16',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-amount-single-entry-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-amount-single-entry-r01.description',
+  },
+  {
+    id: 'purchase-receipt-inclusive-gross-r01',
+    date: '2026-11-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-inclusive-gross-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-inclusive-gross-r01.description',
+  },
+  {
+    id: 'purchase-receipt-dual-qty-no-aux-r01',
+    date: '2026-11-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-dual-qty-no-aux-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-dual-qty-no-aux-r01.description',
+  },
+  {
+    id: 'purchase-receipt-dual-qty-submit-r01',
+    date: '2026-11-16',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-dual-qty-submit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-dual-qty-submit-r01.description',
+  },
+  {
+    id: 'purchase-order-supplier-contact-pick-r01',
+    date: '2026-11-16',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-order-supplier-contact-pick-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-supplier-contact-pick-r01.description',
+  },
+  {
+    id: 'purchase-order-detail-excl-unit-price-r01',
+    date: '2026-11-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-detail-excl-unit-price-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-detail-excl-unit-price-r01.description',
+  },
+  {
+    id: 'purchase-order-sync-price-fields-r01',
+    date: '2026-11-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-sync-price-fields-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-sync-price-fields-r01.description',
+  },
+  {
+    id: 'purchase-order-sync-price-tax-validate-r01',
+    date: '2026-11-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-sync-price-tax-validate-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-sync-price-tax-validate-r01.description',
+  },
+  {
+    id: 'purchase-order-sync-display-price-r01',
+    date: '2026-11-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-sync-display-price-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-sync-display-price-r01.description',
+  },
+  {
+    id: 'purchase-order-sync-prefetch-r01',
+    date: '2026-11-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-sync-prefetch-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-sync-prefetch-r01.description',
+  },
+  {
+    id: 'purchase-receipt-warehouse-service-nameerror-r01',
+    date: '2026-11-14',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-warehouse-service-nameerror-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-warehouse-service-nameerror-r01.description',
+  },
+  {
+    id: 'material-quick-create-config-r01',
+    date: '2026-11-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.material-quick-create-config-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-quick-create-config-r01.description',
+  },
+  {
+    id: 'production-inbound-push-finished-goods-r01',
+    date: '2026-11-14',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.production-inbound-push-finished-goods-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.production-inbound-push-finished-goods-r01.description',
+  },
+  {
+    id: 'tax-rate-percent-suffix-input-r01',
+    date: '2026-11-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.tax-rate-percent-suffix-input-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.tax-rate-percent-suffix-input-r01.description',
+  },
+  {
+    id: 'partner-price-source-exclusive-r01',
+    date: '2026-11-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.partner-price-source-exclusive-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.partner-price-source-exclusive-r01.description',
+  },
+  {
+    id: 'material-select-partner-code-search-r01',
+    date: '2026-11-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.material-select-partner-code-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.material-select-partner-code-search-r01.description',
+  },
+  {
+    id: 'sales-doc-partner-material-snapshot-r01',
+    date: '2026-11-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-doc-partner-material-snapshot-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sales-doc-partner-material-snapshot-r01.description',
+  },
+  {
+    id: 'sales-doc-customer-contact-address-r01',
+    date: '2026-11-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-doc-customer-contact-address-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sales-doc-customer-contact-address-r01.description',
+  },
+  {
+    id: 'master-partner-multi-address-r01',
+    date: '2026-11-14',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.master-partner-multi-address-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.master-partner-multi-address-r01.description',
+  },
+  {
+    id: 'sales-order-line-drag-sort-r01',
+    date: '2026-11-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-line-drag-sort-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sales-order-line-drag-sort-r01.description',
+  },
+  {
+    id: 'quotation-line-drag-sort-r01',
+    date: '2026-11-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.quotation-line-drag-sort-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.quotation-line-drag-sort-r01.description',
+  },
+  {
+    id: 'mobile-approval-tier-a-document-r01',
+    date: '2026-11-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-approval-tier-a-document-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-approval-tier-a-document-r01.description',
+  },
+  {
+    id: 'mobile-other-expense-approval-payee-r01',
+    date: '2026-11-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-other-expense-approval-payee-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-other-expense-approval-payee-r01.description',
+  },
+  {
+    id: 'purchase-requisition-detail-dual-qty-r01',
+    date: '2026-11-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-requisition-detail-dual-qty-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-detail-dual-qty-r01.description',
+  },
+  {
+    id: 'material-default-supplier-defaults-fallback-r01',
+    date: '2026-11-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-default-supplier-defaults-fallback-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-default-supplier-defaults-fallback-r01.description',
+  },
+  {
+    id: 'production-picking-create-line-stock-r01',
+    date: '2026-11-14',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.production-picking-create-line-stock-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.production-picking-create-line-stock-r01.description',
+  },
+  {
+    id: 'po-print-exclusive-amount-r01',
+    date: '2026-11-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.po-print-exclusive-amount-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.po-print-exclusive-amount-r01.description',
+  },
+  {
+    id: 'payment-application-print-department-r01',
+    date: '2026-11-14',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.payment-application-print-department-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-print-department-r01.description',
+  },
+  {
+    id: 'payment-application-list-search-keyword-r01',
+    date: '2026-11-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-list-search-keyword-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-list-search-keyword-r01.description',
+  },
+  {
+    id: 'unitable-flow-status-badge-width-r01',
+    date: '2026-11-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-flow-status-badge-width-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.unitable-flow-status-badge-width-r01.description',
+  },
+  {
+    id: 'purchase-order-list-payment-settlement-r01',
+    date: '2026-11-13',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-list-payment-settlement-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-list-payment-settlement-r01.description',
+  },
+  {
+    id: 'audit-phase-column-in-review-audited-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-phase-column-in-review-audited-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.audit-phase-column-in-review-audited-r01.description',
+  },
+  {
+    id: 'other-expense-print-counterparty-bank-r01',
+    date: '2026-11-14',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.other-expense-print-counterparty-bank-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.other-expense-print-counterparty-bank-r01.description',
+  },
+  {
+    id: 'other-expense-print-created-by-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.other-expense-print-created-by-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.other-expense-print-created-by-r01.description',
+  },
+  {
+    id: 'other-expense-approval-summary-attachments-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.other-expense-approval-summary-attachments-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.other-expense-approval-summary-attachments-r01.description',
+  },
+  {
+    id: 'other-expense-print-detail-column-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.other-expense-print-detail-column-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.other-expense-print-detail-column-r01.description',
+  },
+  {
+    id: 'print-reviewer-last-approver-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.print-reviewer-last-approver-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.print-reviewer-last-approver-r01.description',
+  },
+  {
+    id: 'payment-application-pin-settlement-tabs-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-pin-settlement-tabs-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-pin-settlement-tabs-r01.description',
+  },
+  {
+    id: 'payment-application-hide-approval-col-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-hide-approval-col-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-hide-approval-col-r01.description',
+  },
+  {
+    id: 'payment-application-approval-settlement-filter-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.payment-application-approval-settlement-filter-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-approval-settlement-filter-r01.description',
+  },
+  {
+    id: 'doc-list-line-material-search-unify-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.doc-list-line-material-search-unify-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.doc-list-line-material-search-unify-r01.description',
+  },
+  {
+    id: 'purchase-receipt-list-line-material-search-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-list-line-material-search-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-list-line-material-search-r01.description',
+  },
+  {
+    id: 'sales-invoice-pull-flow-align-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-invoice-pull-flow-align-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sales-invoice-pull-flow-align-r01.description',
+  },
+  {
+    id: 'purchase-invoice-pull-partner-key-import-r05',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-invoice-pull-partner-key-import-r05.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-invoice-pull-partner-key-import-r05.description',
+  },
+  {
+    id: 'purchase-invoice-list-t-init-r04',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-invoice-list-t-init-r04.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-invoice-list-t-init-r04.description',
+  },
+  {
+    id: 'purchase-invoice-po-pull-notice-modal-r03',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-invoice-po-pull-notice-modal-r03.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-invoice-po-pull-notice-modal-r03.description',
+  },
+  {
+    id: 'purchase-invoice-po-pull-defer-close-r02',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-invoice-po-pull-defer-close-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-invoice-po-pull-defer-close-r02.description',
+  },
+  {
     id: 'partner-statement-ledger-line-save-r01',
     date: '2026-11-16',
     type: 'fix',
@@ -325,6 +704,22 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.purchase-order-tax-incl-unit-600-r01.description',
   },
   {
+    id: 'inbound-po-pull-display-perm-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inbound-po-pull-display-perm-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inbound-po-pull-display-perm-r01.description',
+  },
+  {
+    id: 'purchase-order-detail-incl-unit-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-detail-incl-unit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-detail-incl-unit-r01.description',
+  },
+  {
     id: 'sales-order-action-crash-fix-r01',
     date: '2026-11-17',
     type: 'fix',
@@ -408,6 +803,31 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     titleKey: 'pages.dashboard.updateLog.entries.warehouse-doc-line-price-type-switch-r01.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.warehouse-doc-line-price-type-switch-r01.description',
+  },
+  {
+    id: 'mobile-payment-application-approval-purchase-lines-r02',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.mobile-payment-application-approval-purchase-lines-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-payment-application-approval-purchase-lines-r02.description',
+  },
+  {
+    id: 'equipment-spot-check-lines-display-r02',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.equipment-spot-check-lines-display-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.equipment-spot-check-lines-display-r02.description',
+  },
+  {
+    id: 'equipment-spot-check-detail-equipment-code-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.equipment-spot-check-detail-equipment-code-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.equipment-spot-check-detail-equipment-code-r01.description',
   },
   {
     id: 'finance-pull-preview-direct-form-r04',
@@ -2936,6 +3356,22 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.work-order-pick-decimal-pending-r01.description',
   },
   {
+    id: 'sales-order-push-fulfillable-map-r01',
+    date: '2026-11-03',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-push-fulfillable-map-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-push-fulfillable-map-r01.description',
+  },
+  {
+    id: 'sales-order-create-gl-book-settings-r01',
+    date: '2026-11-03',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-create-gl-book-settings-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-create-gl-book-settings-r01.description',
+  },
+  {
     id: 'document-line-material-attachments-r01',
     date: '2026-11-01',
     type: 'feature',
@@ -3717,6 +4153,22 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     titleKey: 'pages.dashboard.updateLog.entries.cosmic-location-getlist-missing-data-r01.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.cosmic-location-getlist-missing-data-r01.description',
+  },
+  {
+    id: 'shipment-notice-item-deleted-at-filter-r01',
+    date: '2026-10-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.shipment-notice-item-deleted-at-filter-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.shipment-notice-item-deleted-at-filter-r01.description',
+  },
+  {
+    id: 'sidebar-menu-morphicons-hover-r01',
+    date: '2026-10-28',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sidebar-menu-morphicons-hover-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sidebar-menu-morphicons-hover-r01.description',
   },
   {
     id: 'purchase-requisition-form-field-settings-r01',

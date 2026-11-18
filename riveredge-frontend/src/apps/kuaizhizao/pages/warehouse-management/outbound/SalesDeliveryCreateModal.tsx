@@ -53,6 +53,8 @@ import {
   DOCUMENT_DETAIL_TABLE_PROPS,
   DOCUMENT_DETAIL_TEXT_COL,
   DocumentDetailTableStyles,
+  TaxRateBatchColumnTitle,
+  TaxRateDetailCell,
 } from '../../../components/document-detail-table/documentDetailTable';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import {
@@ -66,6 +68,7 @@ import { warehouseApi } from '../../../services/production';
 import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { toApiBusinessDocumentDateTime } from '../../../../../utils/formDate';
 import {
+  buildDocumentDetailPartnerMaterialFormColumns,
   buildDocumentDetailSpecModelFormColumns,
   withMaterialLineFillMapping,
 } from '../../sales-management/shared/materialLineFormDetail';
@@ -129,6 +132,8 @@ const defaultLineItem = {
   delivery_quantity: 1,
   unit_price: 0,
   tax_rate: 0,
+  partner_material_code: '',
+  partner_material_name: '',
   warehouse_id: undefined as number | undefined,
   warehouse_name: undefined as string | undefined,
   location_id: undefined as number | undefined,
@@ -689,6 +694,10 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
             material_code: String(line.material_code ?? ''),
             material_name: String(line.material_name ?? ''),
             material_spec: line.material_spec != null ? String(line.material_spec) : undefined,
+            partner_material_code:
+              line.partner_material_code != null ? String(line.partner_material_code) : '',
+            partner_material_name:
+              line.partner_material_name != null ? String(line.partner_material_name) : '',
             material_unit: String(line.material_unit ?? ''),
             delivery_quantity: Number(line.delivery_quantity) || 1,
             unit_price: Number(line.unit_price) || 0,
@@ -722,6 +731,10 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
         formRef.current?.setFieldsValue({
           customer_id: Number(detail.customer_id) > 0 ? Number(detail.customer_id) : undefined,
           customer_name: String(detail.customer_name ?? ''),
+          customer_contact: detail.customer_contact != null ? String(detail.customer_contact) : undefined,
+          customer_phone: detail.customer_phone != null ? String(detail.customer_phone) : undefined,
+          shipping_address:
+            detail.shipping_address != null ? String(detail.shipping_address) : undefined,
           revenue_recognition:
             detail.revenue_recognition ?? orgRevenueRecognitionDefault,
           deliverer_id: detailDelivererId ?? defaultPerson.id,
@@ -892,6 +905,7 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
         ),
       },
       ...buildDocumentDetailSpecModelFormColumns(t),
+      ...buildDocumentDetailPartnerMaterialFormColumns(t, 'customer'),
       ...buildDocumentLineDualQuantityPairColumns({
         t,
         getForm: () => formRef.current,
@@ -1158,19 +1172,25 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
       ...(showTaxColumns
         ? [
             {
-              title: t('app.kuaizhizao.salesOrder.taxRate'),
+              title: (
+                <TaxRateBatchColumnTitle
+                  onBatch={(num) => {
+                    const items = normalizeFormListItems<Record<string, unknown>>(
+                      formRef.current?.getFieldValue('items'),
+                    );
+                    if (items.length === 0) return;
+                    formRef.current?.setFieldsValue({
+                      items: items.map((it) => ({ ...it, tax_rate: num })),
+                    });
+                  }}
+                />
+              ),
               dataIndex: 'tax_rate',
-              width: DOCUMENT_DETAIL_COL_WIDTH.unitPrice,
+              width: DOCUMENT_DETAIL_COL_WIDTH.taxRate,
               ...DOCUMENT_DETAIL_NUM_COL,
+              onCell: () => ({ className: 'quotation-tax-rate-col' }),
               render: (_: unknown, __: unknown, index: number) => (
-                <AntForm.Item name={[index, 'tax_rate']} noStyle>
-                  <InputNumber
-                    size={DOCUMENT_DETAIL_CONTROL_SIZE}
-                    style={{ width: '100%' }}
-                    min={0}
-                    max={100}
-                  />
-                </AntForm.Item>
+                <TaxRateDetailCell index={index} />
               ),
             },
           ]
@@ -1487,6 +1507,7 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
         await warehouseApi.salesDelivery.update(String(editingId), {
           customer_id: customerId,
           customer_name: String(values.customer_name ?? '').trim(),
+          shipping_address: String(values.shipping_address ?? '').trim() || undefined,
           warehouse_id: headerWhId,
           warehouse_name: headerWhName,
           delivery_time: deliveryTime,
@@ -1540,6 +1561,7 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
           sales_order_code: '',
           customer_id: customerId,
           customer_name: String(values.customer_name ?? '').trim(),
+          shipping_address: String(values.shipping_address ?? '').trim() || undefined,
           revenue_recognition: values.revenue_recognition,
           // 表头仓仅列表汇总：取首行；真源在明细行
           warehouse_id: headerWhId,
@@ -1710,7 +1732,21 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
             <UniDropdown options={revenueLedgerRecognitionOptions} style={{ width: '100%' }} />
           </ProFormItem>
         </Col>
-        <Col span={12}>
+        <Col span={8}>
+          <ProFormText
+            name="customer_contact"
+            label={t('app.kuaizhizao.salesOrder.customerContact')}
+            placeholder={t('field.customer.contactPersonPlaceholder')}
+          />
+        </Col>
+        <Col span={8}>
+          <ProFormText
+            name="customer_phone"
+            label={t('app.kuaizhizao.salesOrder.customerPhone')}
+            placeholder={t('field.customer.phonePlaceholder')}
+          />
+        </Col>
+        <Col span={8}>
           <UserPickField
             name="deliverer_id"
             nameField="deliverer_name"
@@ -1718,6 +1754,13 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
             placeholder={t('app.kuaizhizao.warehouseOutbound.field.operator')}
             userList={users}
             loading={usersLoading}
+          />
+        </Col>
+        <Col span={24}>
+          <ProFormText
+            name="shipping_address"
+            label={t('app.kuaizhizao.salesOrder.shippingAddress')}
+            placeholder={t('app.kuaizhizao.quotation.form.shippingAddressPlaceholder')}
           />
         </Col>
         <Col span={12}>

@@ -63,14 +63,6 @@ export const supplierFormSchemaBasicTail: FieldConfig[] = [
     allowClear: true,
   },
   {
-    name: 'address',
-    type: 'textarea',
-    labelKey: 'field.supplier.address',
-    placeholderKey: 'field.supplier.addressPlaceholder',
-    colSpan: 24,
-    fieldProps: { rows: 3, maxLength: 500 },
-  },
-  {
     name: 'isActive',
     type: 'switch',
     labelKey: 'common.enabled',

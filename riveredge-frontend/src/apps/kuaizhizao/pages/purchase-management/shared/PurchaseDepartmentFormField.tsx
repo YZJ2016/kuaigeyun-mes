@@ -73,6 +73,7 @@ export function resolvePurchaseDepartmentPayload(
 type PurchaseDepartmentFormFieldProps = {
   name?: string;
   disabled?: boolean;
+  required?: boolean;
   options: PurchaseDepartmentOption[];
   loading?: boolean;
 };
@@ -81,6 +82,7 @@ type PurchaseDepartmentFormFieldProps = {
 export const PurchaseDepartmentFormField: React.FC<PurchaseDepartmentFormFieldProps> = ({
   name = 'department_id',
   disabled,
+  required = false,
   options,
   loading,
 }) => {
@@ -92,10 +94,11 @@ export const PurchaseDepartmentFormField: React.FC<PurchaseDepartmentFormFieldPr
       label={t('app.kuaizhizao.purchase.field.department')}
       options={options}
       disabled={disabled}
+      rules={required ? [{ required: true, message: t('common.required') }] : undefined}
       fieldProps={{
         showSearch: true,
         optionFilterProp: 'label',
-        allowClear: true,
+        allowClear: !required,
         loading,
       }}
     />

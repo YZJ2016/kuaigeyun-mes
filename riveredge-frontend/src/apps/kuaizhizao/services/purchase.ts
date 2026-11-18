@@ -182,7 +182,11 @@ export interface PurchaseOrder {
   /** 空：还没跑过。missing：未补齐。backfilled：已补齐。 */
   prepayment_backfill_status?: string | null;
   payment_milestones?: PurchaseOrderPaymentMilestone[];
+  /** 列表/详情：未付款 unpaid / 部分付款 partial / 已付款 paid */
+  payment_settlement?: PurchaseOrderPaymentSettlement | string | null;
 }
+
+export type PurchaseOrderPaymentSettlement = 'unpaid' | 'partial' | 'paid';
 
 export interface PurchaseOrderItem {
   id?: number;

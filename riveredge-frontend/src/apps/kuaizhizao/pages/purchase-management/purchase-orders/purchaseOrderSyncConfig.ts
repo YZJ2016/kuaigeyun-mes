@@ -20,8 +20,10 @@ import {
   syncPurchaseOrdersFromSource,
 } from '../../../services/purchase';
 import {
+  PURCHASE_ORDER_SYNC_AVAILABLE_TARGET_FIELDS,
   PURCHASE_ORDER_SYNC_CUSTOM_FIELD_TABLE,
   PURCHASE_ORDER_SYNC_REQUIRED_TARGETS,
+  PURCHASE_ORDER_SYNC_TARGET_ALIASES,
   PURCHASE_ORDER_SYNC_TARGET_FIELDS,
 } from './purchaseOrderSyncFields';
 
@@ -61,6 +63,8 @@ export function createPurchaseOrderSyncConfig(): SyncFromSourceConfig {
     ],
     skipBackendPrerequisites: true,
     targetFields: PURCHASE_ORDER_SYNC_TARGET_FIELDS,
+    availableTargetFields: PURCHASE_ORDER_SYNC_AVAILABLE_TARGET_FIELDS,
+    targetAliases: PURCHASE_ORDER_SYNC_TARGET_ALIASES,
     loadAvailableTargetFields: () => loadSyncCustomTargetFields(PURCHASE_ORDER_SYNC_CUSTOM_FIELD_TABLE),
     customFieldTableName: PURCHASE_ORDER_SYNC_CUSTOM_FIELD_TABLE,
     requiredTargets: PURCHASE_ORDER_SYNC_REQUIRED_TARGETS,

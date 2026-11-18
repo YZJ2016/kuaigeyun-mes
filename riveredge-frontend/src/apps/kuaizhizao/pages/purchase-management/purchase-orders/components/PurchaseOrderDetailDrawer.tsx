@@ -64,7 +64,7 @@ import { normalizePurchasePriceType } from '../../shared/purchasePriceType';
 
 const PURCHASE_ORDER_RESOURCE = 'kuaizhizao:purchase-order';
 const PLACEHOLDER: PurchaseOrder = { id: 0 };
-const DETAIL_ITEMS_MIN_WIDTH = 1200;
+const DETAIL_ITEMS_MIN_WIDTH = 1320;
 
 export const PURCHASE_ORDER_WORKFLOW_PROPS = {
   entityType: 'purchase_order' as const,
@@ -566,8 +566,27 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
                   ),
                 },
                 {
-                  title: t('app.kuaizhizao.purchaseOrder.col.taxUnitPrice'),
+                  title: t('app.kuaizhizao.purchaseOrder.col.exclUnitPrice'),
                   dataIndex: 'unit_price',
+                  width: 100,
+                  align: 'right',
+                  render: (val: number, row: PurchaseOrderItem) => {
+                    const raw = val != null ? val : row.unit_price;
+                    const unitExcl = raw == null || String(raw) === '' ? NaN : Number(raw);
+                    return (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                        {Number.isFinite(unitExcl) ? formatCurrencyPrice(unitExcl) : '—'}
+                        {(row as PurchaseOrderItem & { price_settlement_status?: string }).price_settlement_status ===
+                        'PROVISIONAL' ? (
+                          <MarkerTag color="warning">{t('app.kuaizhizao.purchaseOrder.priceProvisional')}</MarkerTag>
+                        ) : null}
+                      </span>
+                    );
+                  },
+                },
+                {
+                  title: t('app.kuaizhizao.purchaseOrder.col.taxUnitPrice'),
+                  key: 'display_unit_price',
                   width: 100,
                   align: 'right',
                   render: (_text: number, row: PurchaseOrderItem) => {
@@ -576,15 +595,7 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
                       effective.tax_rate,
                       normalizePurchasePriceType(effective.price_type),
                     );
-                    return (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-                        {formatCurrencyPrice(unitIncl)}
-                        {(row as PurchaseOrderItem & { price_settlement_status?: string }).price_settlement_status ===
-                        'PROVISIONAL' ? (
-                          <MarkerTag color="warning">{t('app.kuaizhizao.purchaseOrder.priceProvisional')}</MarkerTag>
-                        ) : null}
-                      </span>
-                    );
+                    return unitIncl != null ? formatCurrencyPrice(unitIncl) : '—';
                   },
                 },
                 {

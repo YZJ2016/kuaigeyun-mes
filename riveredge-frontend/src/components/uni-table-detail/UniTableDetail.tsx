@@ -1,9 +1,15 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
-import { Table, Form as AntForm, Button, Space, Tooltip } from 'antd';
+import { Table, Form as AntForm, Button, Space, Tooltip, theme } from 'antd';
 import type { TableProps, ColumnsType } from 'antd/es/table';
 import { PlusOutlined, ImportOutlined, DeleteOutlined, AppstoreAddOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { hasFormListItems } from '../../utils/formListItems';
+import {
+  UNI_TABLE_DETAIL_DRAG_INDEX_COL_WIDTH,
+  UniTableDetailSortableTable,
+  buildUniTableDetailDragIndexColumn,
+  uniTableDetailSortableComponents,
+} from './sortableFormListTable';
 import './index.less';
 
 export interface UniTableDetailProps<RecordType = any> {
@@ -51,6 +57,8 @@ export interface UniTableDetailProps<RecordType = any> {
   containerStyle?: React.CSSProperties;
   /** 添加按钮位置：header=标题栏右上（默认），footer=表格底栏 */
   addPlacement?: 'header' | 'footer';
+  /** 明细行左侧拖拽排序（Form.List move） */
+  enableRowDragSort?: boolean;
 }
 
 export interface UniTableDetailHeaderProps {
@@ -255,8 +263,10 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
   containerStyle,
   requiredMessage,
   addPlacement = 'header',
+  enableRowDragSort = false,
 }) => {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
 
   return (
     <div className="uni-table-detail" style={containerStyle}>
@@ -272,7 +282,7 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
           },
         ]}
       >
-        {(fields, { add, remove }) => {
+        {(fields, { add, remove, move }) => {
           const handleAdd = () => {
             const row = typeof initialValue === 'function' ? initialValue() : initialValue;
             add(row);
@@ -305,10 +315,18 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
             (!disabledAdd && addPlacement === 'footer') ||
             (Boolean(onBatchSelect) && addPlacement === 'footer');
 
+          const dragSortActive = enableRowDragSort && fields.length > 0;
+          const dragColWidth = dragSortActive ? UNI_TABLE_DETAIL_DRAG_INDEX_COL_WIDTH : 0;
           // 计算列总宽度（用于横向滚动）
-          const totalWidth = columns.reduce((s, c) => s + (Number(c.width) || 0), 0) + (hideOperation ? 0 : 48);
+          const totalWidth =
+            columns.reduce((s, c) => s + (Number(c.width) || 0), 0) +
+            dragColWidth +
+            (hideOperation ? 0 : 48);
 
           const finalColumns: ColumnsType<any> = [...columns];
+          if (dragSortActive) {
+            finalColumns.unshift(buildUniTableDetailDragIndexColumn(t, token));
+          }
           if (!hideOperation && !disabledRemove) {
             finalColumns.push({
               title: t('common.actions'),
@@ -346,53 +364,75 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
                 importText={importText}
               />
               <div className="uni-table-detail-body">
-                <AdaptiveScrollDetailTable
-                  totalWidth={totalWidth}
-                  rowCount={fields.length}
-                  dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
-                  columns={finalColumns}
-                  pagination={false}
-                  size="small"
-                  bordered={false}
-                  rowKey="key"
-                  {...tableProps}
-                  // uni-detail-table 必须始终存在（固定列不透明背景 CSS 依赖它）；
-                  // 与调用方自定义 className 合并，避免被 tableProps 覆盖丢失。
-                  className={['uni-detail-table', tableProps?.className].filter(Boolean).join(' ')}
-                  style={{ width: '100%', margin: 0, ...tableProps?.style }}
-                  summary={summary}
-                  footer={
-                    showFooter
-                      ? () => (
-                          <div className="detail-table-footer">
-                            <Space style={{ width: '100%' }} wrap>
-                              {!disabledAdd && addPlacement === 'footer' && (
-                                <Button
-                                  type="dashed"
-                                  icon={<PlusOutlined />}
-                                  onClick={handleAdd}
-                                  style={{ flex: 1, minWidth: 120 }}
-                                >
-                                  {addText || t('common.addDetail')}
-                                </Button>
-                              )}
-                              {onBatchSelect && addPlacement === 'footer' && (
-                                <Button
-                                  type="default"
-                                  icon={<AppstoreAddOutlined />}
-                                  onClick={onBatchSelect}
-                                  style={{ flex: 1, minWidth: 120 }}
-                                >
-                                  {batchSelectText || t('app.kuaizhizao.common.materialBatchSelect')}
-                                </Button>
-                              )}
-                              {footerExtra}
-                            </Space>
-                          </div>
-                        )
-                      : undefined
-                  }
-                />
+                {(() => {
+                  const tableEl = (
+                    <AdaptiveScrollDetailTable
+                      totalWidth={totalWidth}
+                      rowCount={fields.length}
+                      dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
+                      columns={finalColumns}
+                      pagination={false}
+                      size="small"
+                      bordered={false}
+                      rowKey="key"
+                      {...tableProps}
+                      components={
+                        dragSortActive
+                          ? {
+                              ...tableProps?.components,
+                              ...uniTableDetailSortableComponents,
+                              body: {
+                                ...(tableProps?.components as { body?: Record<string, unknown> } | undefined)?.body,
+                                ...uniTableDetailSortableComponents.body,
+                              },
+                            }
+                          : tableProps?.components
+                      }
+                      // uni-detail-table 必须始终存在（固定列不透明背景 CSS 依赖它）；
+                      // 与调用方自定义 className 合并，避免被 tableProps 覆盖丢失。
+                      className={['uni-detail-table', tableProps?.className].filter(Boolean).join(' ')}
+                      style={{ width: '100%', margin: 0, ...tableProps?.style }}
+                      summary={summary}
+                      footer={
+                        showFooter
+                          ? () => (
+                              <div className="detail-table-footer">
+                                <Space style={{ width: '100%' }} wrap>
+                                  {!disabledAdd && addPlacement === 'footer' && (
+                                    <Button
+                                      type="dashed"
+                                      icon={<PlusOutlined />}
+                                      onClick={handleAdd}
+                                      style={{ flex: 1, minWidth: 120 }}
+                                    >
+                                      {addText || t('common.addDetail')}
+                                    </Button>
+                                  )}
+                                  {onBatchSelect && addPlacement === 'footer' && (
+                                    <Button
+                                      type="default"
+                                      icon={<AppstoreAddOutlined />}
+                                      onClick={onBatchSelect}
+                                      style={{ flex: 1, minWidth: 120 }}
+                                    >
+                                      {batchSelectText || t('app.kuaizhizao.common.materialBatchSelect')}
+                                    </Button>
+                                  )}
+                                  {footerExtra}
+                                </Space>
+                              </div>
+                            )
+                          : undefined
+                      }
+                    />
+                  );
+                  if (!dragSortActive) return tableEl;
+                  return (
+                    <UniTableDetailSortableTable fields={fields} move={move}>
+                      {tableEl}
+                    </UniTableDetailSortableTable>
+                  );
+                })()}
               </div>
             </>
           );

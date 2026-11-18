@@ -28,6 +28,25 @@ def normalize_dictionary_item_token(value: Any) -> str:
     return str(value or "").strip()
 
 
+def dictionary_item_ids_outside_exact_preset(
+    items: List[Tuple[int, str]],
+    preset_values: Set[str],
+) -> List[int]:
+    """预置即全集时，保留每个预置 value 的最小 id，其余项退役。"""
+    keep: Dict[str, int] = {}
+    retire: List[int] = []
+    for item_id, raw_value in sorted(items, key=lambda row: row[0]):
+        value = normalize_dictionary_item_token(raw_value)
+        if value not in preset_values:
+            retire.append(item_id)
+            continue
+        if value in keep:
+            retire.append(item_id)
+            continue
+        keep[value] = item_id
+    return retire
+
+
 def dictionary_item_duplicate_message(
     *,
     candidate_value: str,
@@ -730,6 +749,27 @@ class DataDictionaryService:
         dictionary_uuid = str(dictionary.uuid)
         items_created = 0
         items_updated = 0
+
+        from core.config.system_dictionaries import EXACT_PRESET_DICTIONARY_CODES
+
+        if dict_config["code"] in EXACT_PRESET_DICTIONARY_CODES:
+            preset_values = {
+                normalize_dictionary_item_token(item.get("value"))
+                for item in dict_config.get("items", [])
+            }
+            preset_values.discard("")
+            rows = await DictionaryItem.filter(
+                tenant_id=tenant_id,
+                dictionary_id=dictionary.id,
+                deleted_at__isnull=True,
+            ).values_list("id", "value")
+            retire_ids = dictionary_item_ids_outside_exact_preset(list(rows), preset_values)
+            if retire_ids:
+                await DictionaryItem.filter(
+                    id__in=retire_ids,
+                    tenant_id=tenant_id,
+                    dictionary_id=dictionary.id,
+                ).update(deleted_at=now_utc())
 
         for item_config in dict_config.get("items", []):
             existing_item = await DictionaryItem.filter(

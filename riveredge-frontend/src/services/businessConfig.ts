@@ -63,6 +63,7 @@ export function resolveDrawingMaxUploadSizeMb(
   config: BusinessConfig | null | undefined,
 ): number {
   const raw = config?.parameters?.master_data?.drawing_max_upload_size_mb;
+
   let mb = PLATFORM_MAX_UPLOAD_SIZE_MB;
   if (raw != null) {
     const parsed = Number(raw);
@@ -71,6 +72,23 @@ export function resolveDrawingMaxUploadSizeMb(
     }
   }
   return Math.max(1, Math.min(PLATFORM_MAX_UPLOAD_SIZE_MB, mb));
+}
+
+/**
+ * 单据物料下拉是否允许「快速新增物料」。
+ * 读取 parameters.master_data.allow_material_quick_create；缺省 true（保持历史行为）。
+ */
+export function isMaterialQuickCreateAllowed(
+  config: BusinessConfig | null | undefined,
+): boolean {
+  const raw = config?.parameters?.master_data?.allow_material_quick_create;
+  if (raw === undefined || raw === null) return true;
+  if (typeof raw === 'boolean') return raw;
+  if (typeof raw === 'number') return raw !== 0;
+  const text = String(raw).trim().toLowerCase();
+  if (['0', 'false', 'no', 'off', 'n'].includes(text)) return false;
+  if (['1', 'true', 'yes', 'on', 'y'].includes(text)) return true;
+  return true;
 }
 
 export function resolveDrawingMaxUploadBytes(

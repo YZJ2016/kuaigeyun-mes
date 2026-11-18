@@ -106,6 +106,16 @@ class SalesOrderService:
 
     @staticmethod
     async def _tenant_base_currency(tenant_id: int) -> str:
+        """
+        读账套本位币。真源：快财 GlBookSettings。
+
+        轻财务未挂 ORM 时模型无 default_connection，返回空（外币汇率默认 1）。
+        """
+        from apps.kuaicaiwu.models.gl_book_settings import GlBookSettings
+
+        meta = getattr(GlBookSettings, "_meta", None)
+        if meta is None or getattr(meta, "default_connection", None) is None:
+            return ""
         from apps.kuaicaiwu.services.gl.settings_service import GlSettingsService
 
         row = await GlSettingsService().get_or_create(tenant_id)

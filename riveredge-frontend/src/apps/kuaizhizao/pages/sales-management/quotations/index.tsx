@@ -3751,26 +3751,20 @@ const QuotationsPage: React.FC = () => {
                       {
                         title: (
                           <TaxRateBatchColumnTitle
-                            onBatch={() => {
+                            onBatch={(num) => {
                               const itemsVal = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
                               if (itemsVal.length === 0) return;
-                              const rate = prompt(t('app.kuaizhizao.salesOrder.taxRateBatch'), '13');
-                              if (rate != null && rate !== '') {
-                                const num = Math.round(parseFloat(rate));
-                                if (!Number.isNaN(num) && num >= 0 && num <= 100) {
-                                  const pt = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
-                                  const next = itemsVal.map((it: any) =>
-                                    applyDocumentLineTaxRateChange({
-                                      row: it,
-                                      qty: it.quote_quantity,
-                                      newTaxRate: num,
-                                      priceType: pt,
-                                      priceDecimals,
-                                    }),
-                                  );
-                                  formRef.current?.setFieldsValue({ items: next });
-                                }
-                              }
+                              const pt = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
+                              const next = itemsVal.map((it: any) =>
+                                applyDocumentLineTaxRateChange({
+                                  row: it,
+                                  qty: it.quote_quantity,
+                                  newTaxRate: num,
+                                  priceType: pt,
+                                  priceDecimals,
+                                }),
+                              );
+                              formRef.current?.setFieldsValue({ items: next });
                             }}
                           />
                         ),
@@ -3999,6 +3993,7 @@ const QuotationsPage: React.FC = () => {
                   `}</style>
               <UniTableDetail
                 name="items"
+                enableRowDragSort
                 title={t('app.kuaizhizao.quotation.form.itemsTitle')}
                 required
                 leftExtra={(

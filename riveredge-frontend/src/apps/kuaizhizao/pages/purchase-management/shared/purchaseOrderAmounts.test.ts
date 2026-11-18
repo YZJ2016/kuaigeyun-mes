@@ -4,10 +4,18 @@ import {
   computePurchaseReceiptFormLineAmounts,
   purchaseOrderFormLineToStored,
   purchaseOrderTaxRateToPercent,
+  purchaseStoredExclAsFormItemAmount,
   readPurchaseOrderEnteredUnitPrice,
   resolvePurchaseOrderDisplayAmount,
   resolvePurchaseOrderLineAmounts,
 } from './purchaseOrderAmounts';
+
+describe('purchaseStoredExclAsFormItemAmount', () => {
+  it('never maps stored excl into inclusive item_amount', () => {
+    expect(purchaseStoredExclAsFormItemAmount(97.35, 'tax_inclusive')).toBeUndefined();
+    expect(purchaseStoredExclAsFormItemAmount(97.35, 'tax_exclusive')).toBe(97.35);
+  });
+});
 
 describe('purchaseOrderTaxRateToPercent', () => {
   it('keeps percent 1 as 1% and converts header decimal 0.01 to 1', () => {

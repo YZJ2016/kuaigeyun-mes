@@ -255,6 +255,10 @@ class PurchaseOrderResponse(PurchaseOrderBase):
         max_length=20,
         description="预付补齐状态：空=还没跑过，missing=未补齐，backfilled=已补齐",
     )
+    payment_settlement: Optional[str] = Field(
+        None,
+        description="付款状态 unpaid=未付款 partial=部分付款 paid=已付款（审核通过后才有意义）",
+    )
 
 
 class PurchaseOrderListResponse(PurchaseOrderResponse):

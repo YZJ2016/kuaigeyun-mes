@@ -4,6 +4,10 @@
 import type { ProFormInstance } from '@ant-design/pro-components';
 import { resolveRevenueRecognitionFromPartner } from '../../../../../utils/documentLedgerRecognition';
 import { formatUserDisplayLabel, normalizeUserDisplayName } from '../../../../../utils/userDisplay';
+import {
+  resolveCustomerContactFieldsFromPartner,
+  resolveCustomerShippingAddressFromPartner,
+} from './partnerCustomerFormSnapshot';
 
 export type CustomerLike = Record<string, unknown>;
 
@@ -150,22 +154,16 @@ export function resolveCustomerFormFieldValues(
     paymentTermsOptions.length > 0
       ? resolvePaymentTermsFromCustomer(customer, paymentTermsOptions)
       : undefined;
+  const { customer_contact: resolvedContact, customer_phone: resolvedPhone } =
+    resolveCustomerContactFieldsFromPartner(customer);
+  const resolvedShippingAddress = resolveCustomerShippingAddressFromPartner(customer);
   return {
     customer_name: customer.name ?? customer.customer_name,
-    customer_contact:
-      customer.contactPerson ??
-      customer.contact_person ??
-      customer.contact ??
-      customer.customer_contact,
-    customer_phone: customer.phone ?? customer.customer_phone,
+    customer_contact: resolvedContact,
+    customer_phone: resolvedPhone,
     salesman_id: sId,
     salesman_name: sName,
-    shipping_address:
-      customer.deliveryAddress ??
-      customer.delivery_address ??
-      customer.address ??
-      customer.shipping_address ??
-      '',
+    shipping_address: resolvedShippingAddress ?? '',
     ...(paymentMethod != null
       ? { payment_method_code: paymentMethod }
       : { payment_method_code: undefined }),

@@ -16,7 +16,9 @@ import { resolveLifecycleDisplayLabel } from '../shared/ListUniLifecycleCell';
 
 const AUDIT_PHASE_I18N: Record<string, string> = {
   draft: 'components.uniAudit.phaseDraft',
-  pending: 'components.uniAudit.phasePending',
+  submitted: 'components.uniAudit.phaseInReview',
+  pending: 'components.uniAudit.phaseInReview',
+  in_review: 'components.uniAudit.phaseInReview',
   approved: 'components.uniAudit.phaseApproved',
   rejected: 'components.uniAudit.phaseRejected',
   none: 'components.uniAudit.phaseNone',

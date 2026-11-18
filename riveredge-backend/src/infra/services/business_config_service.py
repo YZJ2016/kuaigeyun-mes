@@ -358,6 +358,7 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
     "parameters.automation.manual_create_auto_submit": {"type": "boolean"},
 
     "parameters.master_data.drawing_max_upload_size_mb": {"type": "number", "min": 1, "max": 100},
+    "parameters.master_data.allow_material_quick_create": {"type": "boolean"},
     "parameters.warehouse.fifo_mode": {
         "type": "select",
         "options": [
@@ -384,6 +385,32 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
     "parameters.kuaiplm.lab_request_delegate_dept_uuids": {"type": "tags"},
     "parameters.kuaiplm.lab_request_test_dept_uuids": {"type": "tags"},
     "parameters.supply_chain.partner_price_resolution_order": {"type": "string"},
+    "parameters.sales.partner_price_source": {
+        "type": "select",
+        "selectOptions": [
+            {
+                "value": "recent",
+                "labelKey": "pages.system.configCenter.param.sales_partner_price_source_opt_recent",
+            },
+            {
+                "value": "price_book",
+                "labelKey": "pages.system.configCenter.param.sales_partner_price_source_opt_price_book",
+            },
+        ],
+    },
+    "parameters.purchase.partner_price_source": {
+        "type": "select",
+        "selectOptions": [
+            {
+                "value": "recent",
+                "labelKey": "pages.system.configCenter.param.purchase_partner_price_source_opt_recent",
+            },
+            {
+                "value": "price_book",
+                "labelKey": "pages.system.configCenter.param.purchase_partner_price_source_opt_price_book",
+            },
+        ],
+    },
 }
 
 
@@ -534,6 +561,8 @@ PARAMETER_KEYS = {
     "parameters.warehouse.allow_non_bom_production_issue",
     "parameters.purchase.tolerance_percentage",
     "parameters.purchase.price_fluctuation_limit_percent",
+    "parameters.purchase.partner_price_source",
+    "parameters.sales.partner_price_source",
     "parameters.quality.incoming_inspection",
     "parameters.quality.require_incoming_inspection_for_receipt",
     "parameters.quality.require_incoming_inspection_for_customer_material",
@@ -575,9 +604,12 @@ PARAMETER_KEYS = {
     "parameters.automation.push_default_mode",
     "parameters.automation.manual_create_auto_submit",
     "parameters.master_data.drawing_max_upload_size_mb",
+    "parameters.master_data.allow_material_quick_create",
     "parameters.kuaiplm.lab_request_delegate_dept_uuids",
     "parameters.kuaiplm.lab_request_test_dept_uuids",
     "parameters.supply_chain.partner_price_resolution_order",
+    "parameters.sales.partner_price_source",
+    "parameters.purchase.partner_price_source",
 }
 
 # 已实装并在后端有明确生效点的配置项（用于前端禁用"假开关"）
@@ -628,6 +660,8 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.warehouse.allow_non_bom_production_issue",
     "parameters.purchase.tolerance_percentage",
     "parameters.purchase.price_fluctuation_limit_percent",
+    "parameters.purchase.partner_price_source",
+    "parameters.sales.partner_price_source",
     "parameters.quality.incoming_inspection",
     "parameters.quality.require_incoming_inspection_for_receipt",
     "parameters.quality.require_incoming_inspection_for_customer_material",
@@ -668,9 +702,12 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.automation.push_default_mode",
     "parameters.automation.manual_create_auto_submit",
     "parameters.master_data.drawing_max_upload_size_mb",
+    "parameters.master_data.allow_material_quick_create",
     "parameters.kuaiplm.lab_request_delegate_dept_uuids",
     "parameters.kuaiplm.lab_request_test_dept_uuids",
     "parameters.supply_chain.partner_price_resolution_order",
+    "parameters.sales.partner_price_source",
+    "parameters.purchase.partner_price_source",
 }
 
 
@@ -743,10 +780,29 @@ def coerce_drawing_max_upload_size_mb(raw: Any, *, default: int = 100) -> int:
     return max(1, min(global_max_mb, mb))
 
 
+def coerce_allow_material_quick_create(raw: Any, *, default: bool = True) -> bool:
+    """单据物料下拉是否允许「快速新增物料」；缺省开启以保持既有行为。"""
+    if raw is None:
+        return default
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, (int, float)):
+        return bool(raw)
+    text = str(raw).strip().lower()
+    if text in {"1", "true", "yes", "on", "y"}:
+        return True
+    if text in {"0", "false", "no", "off", "n"}:
+        return False
+    return default
+
+
 def coerce_master_data_parameters(master_data: Dict[str, Any]) -> Dict[str, Any]:
     data = dict(master_data or {})
     data["drawing_max_upload_size_mb"] = coerce_drawing_max_upload_size_mb(
         data.get("drawing_max_upload_size_mb")
+    )
+    data["allow_material_quick_create"] = coerce_allow_material_quick_create(
+        data.get("allow_material_quick_create")
     )
     return data
 
@@ -939,6 +995,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "auto_create_oqc_on_sales_delivery": False,
     },
     "sales": {
+        "partner_price_source": "recent",
         "audit_enabled": False,
         "low_margin_threshold_percent": 0,
         "price_deviation_approval_threshold_percent": 0,
@@ -961,6 +1018,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         },
     },
     "purchase": {
+        "partner_price_source": "recent",
         "auto_approval": False,
         "tolerance_percentage": 0,
         "price_fluctuation_limit_percent": 0,
@@ -990,7 +1048,8 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "auto_push_purchase_on_computation_complete": False,
     },
     "automation": {
-        "push_default_mode": "confirm",
+        # 与其它业务自动化布尔开关一致：默认保守（草稿），避免下推即提交/待审
+        "push_default_mode": "draft",
         # 手动建单后自动提交（有审批流则待审、不过审）；单证见 manual_create_doc_*
         "manual_create_auto_submit": False,
     },
@@ -999,6 +1058,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
     },
     "master_data": {
         "drawing_max_upload_size_mb": 100,
+        "allow_material_quick_create": True,
     },
     "supply_chain": {
         "partner_price_resolution_order": ["recent", "book_standard", "book_tier"],
@@ -1153,6 +1213,22 @@ def _build_parameter_keys_schema() -> Dict[str, List[str]]:
     return result
 
 
+def _merge_parameter_category(
+    defaults: Dict[str, Any],
+    stored: Dict[str, Any],
+) -> Dict[str, Any]:
+    """类别内一层深合并：嵌套 object（如 kingdee_*_push）保留默认键，再被租户覆盖。"""
+    out: Dict[str, Any] = dict(defaults or {})
+    for key, value in (stored or {}).items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            nested = dict(out[key])
+            nested.update(value)
+            out[key] = nested
+        else:
+            out[key] = value
+    return out
+
+
 def _build_parameter_implementation_schema() -> Dict[str, Dict[str, bool]]:
     """返回参数实装状态：{category: {key: implemented_bool}}"""
     result: Dict[str, Dict[str, bool]] = {}
@@ -1251,9 +1327,9 @@ class BusinessConfigService:
 
         merged: Dict[str, Dict[str, Any]] = {}
         for category, defaults in DEFAULT_PARAMETERS.items():
-            category_values = dict(defaults)
-            category_values.update(stored_params.get(category, {}) or {})
-            merged[category] = category_values
+            merged[category] = _merge_parameter_category(
+                defaults, stored_params.get(category, {}) or {}
+            )
 
         for category, values in stored_params.items():
             if category not in merged:
@@ -1639,17 +1715,18 @@ class BusinessConfigService:
     async def get_push_default_mode(self, tenant_id: int) -> str:
         """
         下推默认模式：
-        - draft: 下推为草稿
-        - confirm: 下推为正式（执行单据确认/下达路径）
+        - draft: 下推为草稿（默认；不自动提交）
+        - confirm: 下推为正式（自动提交：有审核→待审核，无审核→已确认）
+        与「创建后自动审核」无关；后者只负责审核通过。
         """
         config = await self.get_business_config(tenant_id)
         raw = (
             config.get("parameters", {})
             .get("automation", {})
-            .get("push_default_mode", "confirm")
+            .get("push_default_mode", "draft")
         )
-        mode = str(raw or "confirm").strip().lower()
-        return mode if mode in ("draft", "confirm") else "confirm"
+        mode = str(raw or "draft").strip().lower()
+        return mode if mode in ("draft", "confirm") else "draft"
 
     async def manual_create_auto_submit_global(self, tenant_id: int) -> bool:
         """手动建单后是否全局自动提交（有审批流则待审、不过审）。"""

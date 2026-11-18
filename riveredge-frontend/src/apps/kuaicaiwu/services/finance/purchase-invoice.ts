@@ -119,7 +119,7 @@ export const purchaseInvoiceService = {
   previewPullFromPurchaseOrder: async (orderId: number) =>
     apiRequest<PurchaseInvoicePullPreview>(
       `${PURCHASE_INVOICE_API}/from-purchase-order/${orderId}/pull-preview`,
-      { method: 'GET', notifyOnGatewayError: true },
+      { method: 'GET', notifyOnGatewayError: true, timeoutMs: 60_000 },
     ),
 
   previewPullFromPurchaseOrders: async (orderIds: number[]) =>

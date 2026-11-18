@@ -69,6 +69,7 @@ class Customer(BaseModel):
     settlement_accounts = fields.JSONField(
         null=True, default=list, description="收付款账户明细 JSON 数组"
     )
+    addresses = fields.JSONField(null=True, default=list, description="地址明细 JSON 数组")
     address = fields.TextField(null=True, description="地址")
     
     # 分类信息

@@ -5,8 +5,8 @@
  * 勿修改报价单页面本身；本文件为唯一共享真源。
  */
 
-import React from 'react';
-import { Button, Form, Input, InputNumber, Space } from 'antd';
+import React, { useState } from 'react';
+import { Button, Form, Input, InputNumber, Popconfirm, Space, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 
 /** 与报价单明细表一致的 table className */
@@ -130,14 +130,61 @@ export function DocumentDetailTableStyles() {
   return <style>{DOCUMENT_DETAIL_TABLE_STYLE_BLOCK}</style>;
 }
 
-export function TaxRateBatchColumnTitle({ onBatch }: { onBatch: () => void }) {
+const TAX_RATE_BATCH_POPCONFIRM_BODY: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 10,
+  minWidth: 220,
+  paddingTop: 2,
+};
+
+export function TaxRateBatchColumnTitle({ onBatch }: { onBatch: (rate: number) => void }) {
   const { t } = useTranslation();
+  const [rate, setRate] = useState(13);
+
   return (
     <span style={{ whiteSpace: 'nowrap' }}>
       {t('app.kuaizhizao.salesOrder.taxRate')}
-      <Button type="link" size="small" style={{ padding: '0 4px', height: 'auto' }} onClick={onBatch}>
-        {t('app.kuaizhizao.salesOrder.batch')}
-      </Button>
+      <Popconfirm
+        icon={null}
+        title={t('app.kuaizhizao.salesOrder.taxRateBatchTitle')}
+        description={
+          <div style={TAX_RATE_BATCH_POPCONFIRM_BODY}>
+            <Typography.Text type="secondary" style={{ fontSize: 12, lineHeight: 1.5 }}>
+              {t('app.kuaizhizao.salesOrder.taxRateBatchHint')}
+            </Typography.Text>
+            <Space.Compact style={{ width: '100%' }}>
+              <InputNumber
+                min={0}
+                max={100}
+                precision={0}
+                value={rate}
+                onChange={(value) => setRate(typeof value === 'number' ? value : 13)}
+                style={{ width: '100%' }}
+              />
+              <span style={TAX_RATE_PERCENT_SUFFIX_STYLE}>%</span>
+            </Space.Compact>
+          </div>
+        }
+        onConfirm={() => {
+          const num = Math.round(Number(rate));
+          if (!Number.isNaN(num) && num >= 0 && num <= 100) {
+            onBatch(num);
+          }
+        }}
+        onOpenChange={(open) => {
+          if (open) setRate(13);
+        }}
+      >
+        <Button
+          type="link"
+          size="small"
+          style={{ padding: '0 4px', height: 'auto' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {t('app.kuaizhizao.salesOrder.batch')}
+        </Button>
+      </Popconfirm>
     </span>
   );
 }
@@ -145,25 +192,30 @@ export function TaxRateBatchColumnTitle({ onBatch }: { onBatch: () => void }) {
 const TAX_RATE_PERCENT_SUFFIX_STYLE: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
-  padding: '0 8px',
+  padding: '0 4px',
   color: 'var(--ant-color-text-secondary)',
   background: 'var(--ant-color-fill-alter)',
   border: '1px solid var(--ant-color-border)',
   borderLeft: 0,
   borderRadius: '0 var(--ant-border-radius) var(--ant-border-radius) 0',
   fontSize: 'inherit',
+  flexShrink: 0,
 };
 
-/** Form.Item 子组件须接收 value/onChange；不可直接用 Space.Compact 包裹 InputNumber */
-function TaxRatePercentInput({
+/** Form.Item 子组件须接收 value/onChange；不可直接用 Space.Compact 包裹 InputNumber。值一律百分比整数（13=13%），禁止小数 0.13。 */
+export function TaxRatePercentInput({
   value,
   onChange,
+  size = DOCUMENT_DETAIL_CONTROL_SIZE,
+  inputWidth = 64,
 }: {
   value?: number | null;
   onChange?: (value: number | null) => void;
+  size?: typeof DOCUMENT_DETAIL_CONTROL_SIZE | 'small' | 'large';
+  inputWidth?: number;
 }) {
   return (
-    <Space.Compact style={{ width: '100%' }}>
+    <Space.Compact style={{ width: 'auto', minWidth: 0 }}>
       <InputNumber
         value={value}
         onChange={onChange}
@@ -172,8 +224,8 @@ function TaxRatePercentInput({
         max={100}
         precision={0}
         controls={false}
-        size={DOCUMENT_DETAIL_CONTROL_SIZE}
-        style={{ width: '100%' }}
+        size={size}
+        style={{ width: inputWidth, minWidth: 0 }}
       />
       <span style={TAX_RATE_PERCENT_SUFFIX_STYLE}>%</span>
     </Space.Compact>

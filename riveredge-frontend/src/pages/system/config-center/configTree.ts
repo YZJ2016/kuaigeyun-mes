@@ -102,38 +102,13 @@ const MASTER_DATA_PARAMETER_CATEGORY: ConfigCategory = {
       max: 100,
     },
     {
-      key: 'supply_chain.partner_price_resolution_order',
-      nameKey: 'pages.system.configCenter.param.supply_chain_partner_price_resolution_order',
-      descriptionKey: 'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_desc',
+      key: 'master_data.allow_material_quick_create',
+      nameKey: 'pages.system.configCenter.param.master_data_allow_material_quick_create',
+      descriptionKey:
+        'pages.system.configCenter.param.master_data_allow_material_quick_create_desc',
       source: 'business_config',
-      sourcePath: 'parameters.supply_chain.partner_price_resolution_order',
-      type: 'select',
-      selectOptions: [
-        {
-          value: 'recent,book_standard,book_tier',
-          labelKey: 'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_rsb',
-        },
-        {
-          value: 'recent,book_tier,book_standard',
-          labelKey: 'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_rbs',
-        },
-        {
-          value: 'book_standard,book_tier,recent',
-          labelKey: 'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_sbr',
-        },
-        {
-          value: 'book_standard,recent,book_tier',
-          labelKey: 'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_srb',
-        },
-        {
-          value: 'book_tier,book_standard,recent',
-          labelKey: 'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_bsr',
-        },
-        {
-          value: 'book_tier,recent,book_standard',
-          labelKey: 'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_brs',
-        },
-      ],
+      sourcePath: 'parameters.master_data.allow_material_quick_create',
+      type: 'boolean',
     },
   ],
 };
@@ -213,6 +188,24 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = [
     },
   ],
   sales: [
+    {
+      key: 'sales.partner_price_source',
+      nameKey: 'pages.system.configCenter.param.sales_partner_price_source',
+      descriptionKey: 'pages.system.configCenter.param.sales_partner_price_source_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.sales.partner_price_source',
+      type: 'select',
+      selectOptions: [
+        {
+          value: 'recent',
+          labelKey: 'pages.system.configCenter.param.sales_partner_price_source_opt_recent',
+        },
+        {
+          value: 'price_book',
+          labelKey: 'pages.system.configCenter.param.sales_partner_price_source_opt_price_book',
+        },
+      ],
+    },
     {
       key: 'sales.require_audit_before_print',
       nameKey: 'pages.system.configCenter.param.sales_require_audit_before_print',
@@ -724,6 +717,26 @@ export const FLOW_CATEGORIES: ConfigCategory[] = createCategories({
       sectionNameKey: 'pages.system.configCenter.paramSection.procurement_process',
     },
     {
+      key: 'purchase.partner_price_source',
+      nameKey: 'pages.system.configCenter.param.purchase_partner_price_source',
+      descriptionKey: 'pages.system.configCenter.param.purchase_partner_price_source_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.purchase.partner_price_source',
+      type: 'select',
+      selectOptions: [
+        {
+          value: 'recent',
+          labelKey: 'pages.system.configCenter.param.purchase_partner_price_source_opt_recent',
+        },
+        {
+          value: 'price_book',
+          labelKey: 'pages.system.configCenter.param.purchase_partner_price_source_opt_price_book',
+        },
+      ],
+      sectionKey: 'procurement.tolerance',
+      sectionNameKey: 'pages.system.configCenter.paramSection.procurement_tolerance',
+    },
+    {
       key: 'purchase.tolerance_percentage',
       nameKey: 'pages.system.configCenter.param.purchase_tolerance_percentage',
       descriptionKey: 'pages.system.configCenter.param.purchase_tolerance_percentage_desc',
@@ -826,8 +839,8 @@ export const AUTOMATION_CATEGORIES: ConfigCategory[] = createCategories({
       sourcePath: 'parameters.automation.push_default_mode',
       type: 'select',
       selectOptions: [
-        { value: 'confirm', labelKey: 'pages.system.configCenter.param.automation_push_default_mode_opt_confirm' },
         { value: 'draft', labelKey: 'pages.system.configCenter.param.automation_push_default_mode_opt_draft' },
+        { value: 'confirm', labelKey: 'pages.system.configCenter.param.automation_push_default_mode_opt_confirm' },
       ],
     },
   ],

@@ -1269,8 +1269,9 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
             )
 
             order_gross = purchase_order_settlement_gross(order)
+            status_ok = str(getattr(order, "status", "") or "").strip() in self._PO_ELIGIBLE_STATUSES
             allowed, reason = self._derive_pull_capability(
-                source_allowed=order_gross > 0,
+                source_allowed=status_ok and order_gross > 0,
                 preview_items=preview_items,
                 not_allowed_reason="purchase_invoice.pull_from_purchase_order.not_allowed",
                 no_lines_reason="purchase_invoice.pull_from_purchase_order.no_lines",

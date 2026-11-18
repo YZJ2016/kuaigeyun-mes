@@ -10,6 +10,10 @@ import type { PartnerPriceResolveResult } from '../types/partner-price-book';
 import { parseVariantAttributesValue } from '../components/VariantAttributeFields';
 import { normalizeFormListItems } from '../../../utils/formListItems';
 import { isDocumentLineUnitPriceLocked } from '../../kuaizhizao/utils/documentLinePriceLock';
+import {
+  readDocumentLineQuantityForStoredAmount,
+  recalcDocumentStoredLineAmount,
+} from '../../kuaizhizao/utils/documentLineAmounts';
 
 type FormWithLineItems = {
   getFieldValue: (name: string | (string | number)[]) => unknown;
@@ -247,12 +251,27 @@ export async function resolveCustomerSalePrice(
   asOf?: string | dayjs.Dayjs,
   variantAttributes?: Record<string, unknown>,
 ): Promise<PartnerPriceResolveResult> {
-  return customerPriceBookApi.resolve({
+  const { resolvePartnerMaterialLinePrice } = await import('../services/partner-price-book');
+  const item = await resolvePartnerMaterialLinePrice({
+    side: 'sales',
     partnerId: customerId,
     materialId,
     asOf: formatAsOf(asOf),
     variantAttributes,
   });
+  return partnerLinePriceToResolveResult(item);
+}
+
+function partnerLinePriceToResolveResult(
+  item: import('../services/partner-price-book').PartnerMaterialLinePriceResolveResult,
+): PartnerPriceResolveResult {
+  return {
+    found: item.found,
+    unitPrice: item.unitPrice,
+    taxRate: item.taxRate,
+    partnerMaterialCode: item.partnerMaterialCode,
+    partnerMaterialName: item.partnerMaterialName,
+  } as PartnerPriceResolveResult;
 }
 
 export async function resolveCustomerSalePricesBatch(
@@ -263,12 +282,17 @@ export async function resolveCustomerSalePricesBatch(
 ): Promise<PartnerPriceResolveResult[]> {
   const lines = normalizeBatchLines(materialIdsOrLines, materials);
   if (!customerId || !lines.length) return [];
-  const res = await customerPriceBookApi.resolveBatch({
+  const { resolvePartnerMaterialLinePriceBatch } = await import('../services/partner-price-book');
+  const res = await resolvePartnerMaterialLinePriceBatch({
+    side: 'sales',
     partnerId: customerId,
-    items: lines,
     asOf: formatAsOf(asOf),
+    items: lines.map((line) => ({
+      materialId: line.materialId,
+      variantAttributes: line.variantAttributes,
+    })),
   });
-  return res.items ?? [];
+  return (res.items ?? []).map(partnerLinePriceToResolveResult);
 }
 
 export async function resolveSupplierPurchasePrice(
@@ -277,12 +301,15 @@ export async function resolveSupplierPurchasePrice(
   asOf?: string | dayjs.Dayjs,
   variantAttributes?: Record<string, unknown>,
 ): Promise<PartnerPriceResolveResult> {
-  return supplierPriceBookApi.resolve({
+  const { resolvePartnerMaterialLinePrice } = await import('../services/partner-price-book');
+  const item = await resolvePartnerMaterialLinePrice({
+    side: 'purchase',
     partnerId: supplierId,
     materialId,
     asOf: formatAsOf(asOf),
     variantAttributes,
   });
+  return partnerLinePriceToResolveResult(item);
 }
 
 export async function resolveSupplierPurchasePricesBatch(
@@ -293,12 +320,17 @@ export async function resolveSupplierPurchasePricesBatch(
 ): Promise<PartnerPriceResolveResult[]> {
   const lines = normalizeBatchLines(materialIdsOrLines, materials);
   if (!supplierId || !lines.length) return [];
-  const res = await supplierPriceBookApi.resolveBatch({
+  const { resolvePartnerMaterialLinePriceBatch } = await import('../services/partner-price-book');
+  const res = await resolvePartnerMaterialLinePriceBatch({
+    side: 'purchase',
     partnerId: supplierId,
-    items: lines,
     asOf: formatAsOf(asOf),
+    items: lines.map((line) => ({
+      materialId: line.materialId,
+      variantAttributes: line.variantAttributes,
+    })),
   });
-  return res.items ?? [];
+  return (res.items ?? []).map(partnerLinePriceToResolveResult);
 }
 
 export function pickSaleUnitPrice(
@@ -455,20 +487,28 @@ export async function resolveOrderLineSalePrice(
       asOf: formatAsOf(asOf),
       variantAttributes: attrs,
     });
+    const resolvedFromUnified = {
+      found: unified.found,
+      unitPrice: unified.unitPrice,
+      taxRate: unified.taxRate,
+      partnerMaterialCode: unified.partnerMaterialCode,
+      partnerMaterialName: unified.partnerMaterialName,
+    } as PartnerPriceResolveResult;
+    const partnerCode = String(unified.partnerMaterialCode ?? '').trim();
+    const partnerName = String(unified.partnerMaterialName ?? '').trim();
+    const hasPartnerSnapshot = partnerCode !== '' || partnerName !== '';
     if (unified.found && unified.unitPrice != null && unified.unitPrice > 0) {
       const taxRate = unified.taxRate != null ? Number(unified.taxRate) : taxR;
       return {
         unitPrice: Number(unified.unitPrice),
         taxRate,
-        resolved: {
-          found: true,
-          unitPrice: unified.unitPrice,
-          taxRate: unified.taxRate,
-          partnerMaterialCode: unified.partnerMaterialCode,
-          partnerMaterialName: unified.partnerMaterialName,
-        } as PartnerPriceResolveResult,
+        resolved: resolvedFromUnified,
         snapshot: null,
       };
+    }
+    if (hasPartnerSnapshot) {
+      const fb = await fallbackMarket();
+      return { ...fb, resolved: resolvedFromUnified };
     }
   } catch {
     /* 统一解析失败则走物料/行情回落 */
@@ -528,6 +568,11 @@ export async function applySalesDocumentLineMaterialPricing(
   options?: {
     materialList?: Array<Material | Record<string, unknown>>;
     asOfField?: string;
+    /**
+     * 改数量重算：只更新价税与 pricing_snapshot。
+     * 禁止覆盖行上已有规格/型号/伙伴料号快照（选料 stub 常缺 uuid，重读会写成空串）。
+     */
+    priceOnly?: boolean;
   },
 ): Promise<void> {
   if (!form) return;
@@ -582,27 +627,62 @@ export async function applySalesDocumentLineMaterialPricing(
   if (pt === 'tax_inclusive' && up > 0) {
     up = convertUnitPriceByPriceType(up, taxRate, 'tax_exclusive', 'tax_inclusive');
   }
+  const priceOnly = options?.priceOnly === true;
   const items = [...normalizeFormListItems<Record<string, unknown>>(form.getFieldValue('items'))];
   if (!items[index]) return;
-  items[index] = {
+  // 改数量重算：价本未命中时保留行上已有单价/税率，避免下推打开页把来源价冲成 0
+  if (priceOnly && !(up > 0)) {
+    const existingPrice = Number(items[index]?.unit_price);
+    if (Number.isFinite(existingPrice) && existingPrice > 0) {
+      up = existingPrice;
+      const existingTax = Number(items[index]?.tax_rate);
+      if (Number.isFinite(existingTax) && existingTax >= 0) {
+        taxRate = existingTax;
+      }
+    }
+  }
+  const customerIdNum = customerId != null && customerId !== '' ? Number(customerId) : NaN;
+  const refreshPartnerSnapshot =
+    !priceOnly || (Number.isFinite(customerIdNum) && customerIdNum > 0);
+  const nextRow: Record<string, unknown> = {
     ...items[index],
     unit_price: up,
     tax_rate: taxRate,
     pricing_snapshot: snapshot ?? null,
-    material_spec: materialSpec,
-    material_model: materialModel,
-    partner_material_code: partnerSnapshot.partner_material_code,
-    partner_material_name: partnerSnapshot.partner_material_name,
   };
+  if (!priceOnly) {
+    nextRow.material_spec = materialSpec;
+    nextRow.material_model = materialModel;
+  }
+  if (refreshPartnerSnapshot) {
+    nextRow.partner_material_code = partnerSnapshot.partner_material_code;
+    nextRow.partner_material_name = partnerSnapshot.partner_material_name;
+  }
+  // setFieldsValue 不走 onValuesChange；销售行金额以 item_amount 为展示真源，须同步 qty×单价
+  nextRow.item_amount = recalcDocumentStoredLineAmount(
+    {
+      qty: readDocumentLineQuantityForStoredAmount(nextRow),
+      unit_price: up,
+      tax_rate: taxRate,
+      is_gift: nextRow.is_gift,
+    },
+    pt,
+  );
+  items[index] = nextRow;
   form.setFieldsValue({ items });
   // 嵌套字段显式写入，避免 Form.List 行内 InputNumber 与 store 不同步
   form.setFieldValue?.(['items', index, 'unit_price'], up);
   form.setFieldValue?.(['items', index, 'tax_rate'], taxRate);
   form.setFieldValue?.(['items', index, 'pricing_snapshot'], snapshot ?? null);
-  form.setFieldValue?.(['items', index, 'material_spec'], materialSpec);
-  form.setFieldValue?.(['items', index, 'material_model'], materialModel);
-  form.setFieldValue?.(['items', index, 'partner_material_code'], partnerSnapshot.partner_material_code);
-  form.setFieldValue?.(['items', index, 'partner_material_name'], partnerSnapshot.partner_material_name);
+  form.setFieldValue?.(['items', index, 'item_amount'], nextRow.item_amount);
+  if (!priceOnly) {
+    form.setFieldValue?.(['items', index, 'material_spec'], materialSpec);
+    form.setFieldValue?.(['items', index, 'material_model'], materialModel);
+  }
+  if (refreshPartnerSnapshot) {
+    form.setFieldValue?.(['items', index, 'partner_material_code'], partnerSnapshot.partner_material_code);
+    form.setFieldValue?.(['items', index, 'partner_material_name'], partnerSnapshot.partner_material_name);
+  }
 }
 
 export type ResolvedPurchaseMaterialLinePricing = {

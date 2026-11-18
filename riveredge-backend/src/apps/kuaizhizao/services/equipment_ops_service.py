@@ -985,6 +985,57 @@ class EquipmentSpotCheckService:
             deleted_at__isnull=True,
         ).order_by("line_no", "id").all()
 
+    async def resolve_display_lines(
+        self,
+        tenant_id: int,
+        header: EquipmentSpotCheck,
+    ) -> List[EquipmentSpotCheckLine]:
+        """详情展示用行：库内有则返回；无行且非 B 采集时按方案快照补展示（不写库）。"""
+        lines = await self._load_lines(tenant_id, header.id)
+        if lines:
+            return lines
+        capture_mode = _normalize_capture_mode(getattr(header, "capture_mode", None))
+        if capture_mode == "B" or not header.scheme_id:
+            return []
+        _, scheme_lines = await self.scheme_service.get_with_lines(tenant_id, header.scheme_id)
+        if not scheme_lines:
+            return []
+        item_map = await _load_inspection_item_map(
+            tenant_id,
+            [sl.item_id for sl in scheme_lines if sl.item_id],
+        )
+        display: List[EquipmentSpotCheckLine] = []
+        for idx, sl in enumerate(scheme_lines):
+            spec = _resolve_inspection_item_value_spec(
+                item_map.get(int(sl.item_id)) if sl.item_id else None,
+                fallback_value_type=sl.value_type,
+                fallback_unit=sl.unit,
+                fallback_numeric_min=sl.numeric_min,
+                fallback_numeric_max=sl.numeric_max,
+            )
+            display.append(
+                EquipmentSpotCheckLine(
+                    id=-(idx + 1),
+                    tenant_id=tenant_id,
+                    spot_check_id=header.id,
+                    line_no=idx + 1,
+                    item_id=sl.item_id,
+                    item_code=sl.item_code,
+                    item_name=sl.item_name,
+                    requirement=sl.requirement,
+                    method=getattr(sl, "method", None),
+                    judgment_standard=getattr(sl, "judgment_standard", None),
+                    value_type=spec["value_type"],
+                    unit=spec["unit"],
+                    numeric_min=spec["numeric_min"],
+                    numeric_max=spec["numeric_max"],
+                    measured_value=None,
+                    is_pass=None,
+                    photo_required=bool(getattr(sl, "photo_required", False)),
+                )
+            )
+        return display
+
     async def create(
         self,
         tenant_id: int,

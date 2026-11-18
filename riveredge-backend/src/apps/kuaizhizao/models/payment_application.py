@@ -26,6 +26,8 @@ class PaymentApplication(BaseModel):
 
     applicant_id = fields.IntField(null=True, description="申请人ID")
     applicant_name = fields.CharField(max_length=100, null=True, description="申请人姓名")
+    department_id = fields.IntField(null=True, description="申请部门ID")
+    department_name = fields.CharField(max_length=200, null=True, description="申请部门名称")
 
     total_request_amount = fields.DecimalField(
         max_digits=16, decimal_places=4, default=0, description="申请总额"

@@ -1176,6 +1176,25 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         delete processedDefaults.marketProcessFee;
         delete processedDefaults.marketQtyFactor;
       }
+      if (
+        !hideDefaultSupplierField &&
+        sourceTypes.includes('Buy') &&
+        !filteredSourceConfig.default_supplier_id &&
+        processedDefaults.defaultSuppliers?.length
+      ) {
+        const first = processedDefaults.defaultSuppliers[0];
+        const sid = first?.supplierId ?? first?.supplier_id;
+        if (sid) {
+          filteredSourceConfig.default_supplier_id = sid;
+          const name = first?.supplierName ?? first?.supplier_name;
+          if (name) {
+            filteredSourceConfig.default_supplier_name = name;
+          } else {
+            const supplier = suppliers.find((s) => s.id === sid);
+            if (supplier) filteredSourceConfig.default_supplier_name = supplier.name;
+          }
+        }
+      }
 
       // 将 ID 数组转换为对象数组
       if (formDefaults.defaultSupplierIds && Array.isArray(formDefaults.defaultSupplierIds)) {

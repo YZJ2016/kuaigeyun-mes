@@ -21,8 +21,10 @@ import {
   isUniTableAuditStackedColumn,
   isUniTableDetailProgressColumn,
   isUniTableFillerColumn,
+  isUniTableAuditPhaseColumn,
   isUniTableLifecycleColumn,
   isUniTableMarkerBadgeColumn,
+  isUniTablePaymentSettlementColumn,
   isUniTableProgressColumn,
   resolveUniTableColumnLayoutWidth,
   UNI_TABLE_EMPTY_FALLBACK_COL_WIDTH,
@@ -99,11 +101,13 @@ function isUniTableLayoutColumn(col: Record<string, unknown>): boolean {
   )
 }
 
-/** 右固定组内顺序：其它 right → 下推进度 → 执行状态 → 余量吸收 → 操作 */
+/** 右固定组内顺序：其它 right → 下推进度 → 审核状态 → 执行状态 → 付款状态 → 余量吸收 → 操作 */
 function getUniTableRightFixedOrderRank(col: Record<string, unknown>): number {
   if (isUniTableOperationColumn(col)) return 3
   if (isUniTableFillerColumn(col)) return 2.5
+  if (isUniTablePaymentSettlementColumn(col)) return 2.25
   if (isUniTableLifecycleColumn(col)) return 2
+  if (isUniTableAuditPhaseColumn(col)) return 1.75
   if (isUniTableDetailProgressColumn(col)) return 1
   return 0
 }
@@ -642,7 +646,7 @@ export function normalizeFixedRightColumnOrder<T extends Record<string, unknown>
 
 /**
  * 原生固定列顺序契约：左固定连续置前 → 中间滚动列 → 右固定连续垫后。
- * 右固定组内：其它 right → 下推进度 → lifecycle → operation（操作列最右）。
+ * 右固定组内：其它 right → 下推进度 → 审核 → 执行状态 → 付款状态 → operation（操作列最右）。
  */
 export function normalizeFixedColumnOrder<T extends Record<string, unknown>>(columns: T[]): T[] {
   if (!columns?.length) return columns

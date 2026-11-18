@@ -69,9 +69,13 @@
       background-color: var(--ant-color-bg-container, #ffffff) !important;
     }
 
-    /* antd v6 固定右列类名为 fix-end；同时保留旧版 fix-right 以兼容 */
+    /* antd v6 固定列：左 fix-start / 右 fix-end（兼留旧版 fix-left / fix-right） */
+    .ant-table-thead > tr > th.uni-detail-drag-index-header,
     .ant-table-thead > tr > th.uni-detail-fixed-op-header,
     .ant-table-thead > tr > th.uni-detail-fixed-amount-header,
+    .ant-table-thead > tr > th.ant-table-cell-fix-start,
+    .ant-table-thead > tr > th.ant-table-cell-fix-left,
+    .ant-table-thead > tr > th.ant-table-cell-fix-left-first,
     .ant-table-thead > tr > th.ant-table-cell-fix-end,
     .ant-table-thead > tr > th.ant-table-cell-fix-right,
     .ant-table-thead > tr > th.ant-table-cell-fix-right-first {
@@ -79,6 +83,10 @@
       z-index: calc(var(--ant-z-index-table-fixed, 2) + 1);
     }
 
+    .ant-table-tbody > tr > td.uni-detail-drag-index-cell,
+    .ant-table-tbody > tr > td.ant-table-cell-fix-start,
+    .ant-table-tbody > tr > td.ant-table-cell-fix-left,
+    .ant-table-tbody > tr > td.ant-table-cell-fix-left-first,
     .ant-table-tbody > tr > td.ant-table-cell-fix-end,
     .ant-table-tbody > tr > td.ant-table-cell-fix-right,
     .ant-table-tbody > tr > td.ant-table-cell-fix-right-first {
@@ -95,6 +103,16 @@
       background-color: var(--ant-color-primary, #1677ff);
       color: #fff;
       border-radius: 0;
+    }
+
+    .ant-table-thead > tr > th.uni-detail-drag-index-header,
+    .ant-table-tbody > tr > td.uni-detail-drag-index-cell {
+      padding-inline: 8px;
+    }
+
+    .uni-detail-drag-index-cell .ant-space {
+      flex-wrap: nowrap;
+      max-width: 100%;
     }
   }
 

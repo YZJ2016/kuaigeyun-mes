@@ -136,4 +136,6 @@ export interface UseUniPullQueryOptions<T extends object> {
   onClose?: () => void;
   /** 默认 true：筛选栏展示来源单据日期范围 */
   enableDateFilter?: boolean;
+  /** 取单确认 `onConfirm` 抛错时回调（避免无提示） */
+  onConfirmFailed?: (error: unknown) => void;
 }

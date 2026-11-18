@@ -306,6 +306,19 @@ export function partnerSettlementTermsLabel(t: TFunction, code?: string | null):
   return mapLabel(t, SETTLEMENT_TERMS_KEYS, code);
 }
 
+const PARTNER_ADDRESS_TYPE_KEYS: Record<string, string> = {
+  registered: 'field.partner.addressType.registered',
+  delivery: 'field.partner.addressType.delivery',
+  invoice: 'field.partner.addressType.invoice',
+  other: 'field.partner.addressType.other',
+};
+
+export function partnerAddressTypeLabel(t: TFunction, code?: string | null): string {
+  if (code == null || code === '') return '—';
+  const key = PARTNER_ADDRESS_TYPE_KEYS[code];
+  return key ? t(key) : String(code);
+}
+
 /** @deprecated 使用 partnerDefaultPaymentMethodLabel / partnerSettlementTermsLabel */
 export function partnerSettlementMethodLabel(t: TFunction, code?: string | null): string {
   if (code == null || code === '') return '—';

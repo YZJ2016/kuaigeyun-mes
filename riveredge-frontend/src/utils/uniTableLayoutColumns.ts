@@ -14,14 +14,16 @@ import {
 } from './listLifecycleStage';
 
 /**
- * 状态徽章列统一宽度：审核状态与执行状态（生命周期）等单徽章列共用这一个真源。
- * 两列必须等宽等对齐，各写各的数字就会漂移。消费方见
- * `sales-management/shared/listAuditPhaseColumn.tsx` 与本文件的生命周期列宽推导。
- * 审核 / 生命周期列不参与排序：UniTable 注入 `sorter: false`。
+ * MarkerTag 窄列（启用/类型等）：短文案 80px。
  */
 export const UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH = 80;
-/** 审核状态列：待我审核 / 您已审核 为四字，比三字「待审核」略宽 */
-export const UNI_TABLE_AUDIT_PHASE_COLUMN_WIDTH = 104;
+/**
+ * 流程状态徽章列（审核 / 执行状态 / 付款状态）：与 Marker 窄列同宽 80px。
+ * 与 `uni-table.less` 中 `.uni-table-flow-status-badge-cell` 须同数值。
+ */
+export const UNI_TABLE_FLOW_STATUS_BADGE_COLUMN_WIDTH = UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH;
+/** @deprecated 使用 UNI_TABLE_FLOW_STATUS_BADGE_COLUMN_WIDTH */
+export const UNI_TABLE_AUDIT_PHASE_COLUMN_WIDTH = UNI_TABLE_FLOW_STATUS_BADGE_COLUMN_WIDTH;
 
 /**
  * 下推 / 交货 / 完成进度条列统一宽度。
@@ -39,6 +41,13 @@ export const UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS = {
   minWidth: UNI_TABLE_MARKER_BADGE_COLUMN_WIDTH,
   uniTableKeepWidth: true,
   uniTableMarkerBadgeColumn: true,
+  resizable: false,
+  align: 'center' as const,
+} as const;
+
+/** 付款状态列：列身份 + SystemFixed 标记；宽度由 UniTable 注入 */
+export const UNI_TABLE_PAYMENT_SETTLEMENT_COLUMN_DEFAULTS = {
+  uniTableKeepWidth: true,
   resizable: false,
   align: 'center' as const,
 } as const;
@@ -245,6 +254,7 @@ export function isUniTableLifecycleColumn(col: unknown): boolean {
 }
 
 const AUDIT_PHASE_COLUMN_KEYS = new Set(['audit_phase']);
+const PAYMENT_SETTLEMENT_COLUMN_KEYS = new Set(['payment_settlement']);
 
 /** 审核状态列：key=audit_phase，或 dataIndex 为 audit.phase */
 export function isUniTableAuditPhaseColumn(col: unknown): boolean {
@@ -255,6 +265,19 @@ export function isUniTableAuditPhaseColumn(col: unknown): boolean {
     ? c.dataIndex.join('.')
     : String(c.dataIndex ?? '');
   return AUDIT_PHASE_COLUMN_KEYS.has(key) || dataIndex === 'audit.phase';
+}
+
+/** 列表「付款状态」列（采购订单等与付款申请同语义） */
+export function isUniTablePaymentSettlementColumn(col: unknown): boolean {
+  if (!col || typeof col !== 'object') return false;
+  const c = col as { key?: unknown; dataIndex?: unknown };
+  const key = String(c.key ?? '');
+  const dataIndex = Array.isArray(c.dataIndex)
+    ? c.dataIndex.join('.')
+    : String(c.dataIndex ?? '');
+  return (
+    PAYMENT_SETTLEMENT_COLUMN_KEYS.has(key) || dataIndex === 'paymentSettlement'
+  );
 }
 
 /**
@@ -287,7 +310,12 @@ export function resolveUniTableAuditStackedColumnWidth(): number {
 
 /** 审核状态 + 生命周期：单徽章状态列（等宽、居中、不排序） */
 export function isUniTableStatusBadgeColumn(col: unknown): boolean {
-  return isUniTableLifecycleColumn(col) || isUniTableAuditPhaseColumn(col) || isUniTableMarkerBadgeColumn(col);
+  return (
+    isUniTableLifecycleColumn(col)
+    || isUniTableAuditPhaseColumn(col)
+    || isUniTablePaymentSettlementColumn(col)
+    || isUniTableMarkerBadgeColumn(col)
+  );
 }
 
 /** 非流程 MarkerTag 窄列（启用/类型等）：与状态徽章列同宽 80px */
@@ -300,14 +328,22 @@ export function resolveUniTableMarkerBadgeColumnWidth(): number {
   return UNI_TABLE_MARKER_BADGE_COLUMN_WIDTH;
 }
 
-/** 生命周期（执行状态）列宽：与审核状态列同宽，无论是否右固定 */
-export function resolveUniTableLifecycleColumnWidth(): number {
-  return UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH;
+/** 审核 / 执行状态 / 付款状态：流程徽章列统一宽 */
+export function resolveUniTableFlowStatusBadgeColumnWidth(): number {
+  return UNI_TABLE_FLOW_STATUS_BADGE_COLUMN_WIDTH;
 }
 
-/** 审核状态列：按当前审核人展示「待我审核 / 您已审核」 */
+/** @deprecated 使用 resolveUniTableFlowStatusBadgeColumnWidth */
+export function resolveUniTableLifecycleColumnWidth(): number {
+  return resolveUniTableFlowStatusBadgeColumnWidth();
+}
+
 export function resolveUniTableAuditPhaseColumnWidth(): number {
-  return UNI_TABLE_AUDIT_PHASE_COLUMN_WIDTH;
+  return resolveUniTableFlowStatusBadgeColumnWidth();
+}
+
+export function resolveUniTablePaymentSettlementColumnWidth(): number {
+  return resolveUniTableFlowStatusBadgeColumnWidth();
 }
 
 /**
@@ -343,10 +379,29 @@ export function resolveUniTableOperationColumnWidth(col: {
   return resolveUniTableOperationWidthForSlots(resolveRowActionInlineSlots(resolvedSlotOptions));
 }
 
+/** 与 `uni-table.less` 流程状态徽章列宽一致 */
+export const UNI_TABLE_FLOW_STATUS_BADGE_CELL_CLASS = 'uni-table-flow-status-badge-cell';
+
+export function getUniTableFlowStatusBadgeCellClassName(...parts: string[]): string {
+  const extra = parts.filter(Boolean).join(' ').trim();
+  return extra
+    ? `${UNI_TABLE_FLOW_STATUS_BADGE_CELL_CLASS} ${extra}`.trim()
+    : UNI_TABLE_FLOW_STATUS_BADGE_CELL_CLASS;
+}
+
+export function getUniTableAuditPhaseCellClassName(): string {
+  return UNI_TABLE_FLOW_STATUS_BADGE_CELL_CLASS;
+}
+
+export function getUniTablePaymentSettlementCellClassName(): string {
+  return UNI_TABLE_FLOW_STATUS_BADGE_CELL_CLASS;
+}
+
 export function getUniTableLifecycleCellClassName(col: { fixed?: unknown }): string {
-  return isUniTableLifecycleColumnFixedRight(col)
+  const lifecycleOnly = isUniTableLifecycleColumnFixedRight(col)
     ? `uni-table-lifecycle-cell ${UNI_TABLE_LIFECYCLE_FIXED_RIGHT_CELL_CLASS}`
     : 'uni-table-lifecycle-cell';
+  return getUniTableFlowStatusBadgeCellClassName(lifecycleOnly);
 }
 
 /**
@@ -363,6 +418,9 @@ export function getUniTableColumnScrollContribution(col: unknown): number {
 
   if (isUniTableAuditPhaseColumn(col)) {
     return resolveUniTableAuditPhaseColumnWidth();
+  }
+  if (isUniTablePaymentSettlementColumn(col)) {
+    return resolveUniTablePaymentSettlementColumnWidth();
   }
   if (isUniTableLifecycleColumn(col)) {
     return resolveUniTableLifecycleColumnWidth();

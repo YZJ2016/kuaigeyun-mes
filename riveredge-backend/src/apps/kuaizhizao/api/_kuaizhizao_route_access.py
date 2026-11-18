@@ -18,6 +18,15 @@ _SALES_ORDER_DETAIL_GET_RE = re.compile(r"/sales-orders/(\d+)(?:/)?$")
 _SALES_ORDER_TRACKING_GET_RE = re.compile(r"/sales-orders/(\d+)/tracking(?:/)?$")
 _WORK_ORDER_DETAIL_GET_RE = re.compile(r"/work-orders/(\d+)(?:/)?$")
 _WORK_ORDER_OPERATIONS_GET_RE = re.compile(r"/work-orders/(\d+)/operations(?:/)?$")
+_PURCHASE_ORDER_DETAIL_GET_RE = re.compile(r"/purchase-orders/(\d+)(?:/)?$", re.IGNORECASE)
+_PURCHASE_ORDER_REFERENCE_GET_RE = re.compile(
+    r"/purchase-orders/(?:"
+    r"receipt-pull-candidates|"
+    r"receipt-notice-pull-lines|"
+    r"sales-order-pull-orders"
+    r")(?:/|$)",
+    re.IGNORECASE,
+)
 
 # 仅声明 :audit（无 :approve/:reject）的模块：/approve、/reject 均走 audit
 _AUDIT_ONLY_REVIEW_MODULES = frozenset({
@@ -242,6 +251,16 @@ async def _apply_station_terminal_required(
     return override if override is not None else required
 
 
+def _purchase_order_get_accepts_display(request: Request) -> bool:
+    """采购订单引用/取单：具备 :read 或 :display 即可（与 reference_resources 回显契约一致）。"""
+    if (request.method or "").upper() != "GET":
+        return False
+    path = request.url.path or ""
+    if _is_single_resource_detail_get(request, _PURCHASE_ORDER_DETAIL_GET_RE):
+        return True
+    return _PURCHASE_ORDER_REFERENCE_GET_RE.search(path) is not None
+
+
 def require_kuaizhizao_module_access(
     module_code: str,
     *,
@@ -266,6 +285,15 @@ def require_kuaizhizao_module_access(
             and action == "create"
         ):
             required = list(collection_create_permissions)
+        elif (
+            module_code == "purchase-order"
+            and action == "read"
+            and _purchase_order_get_accepts_display(request)
+        ):
+            required = [
+                build_permission_code("kuaizhizao", "purchase-order", "read"),
+                build_permission_code("kuaizhizao", "purchase-order", "display"),
+            ]
         else:
             required = [build_permission_code("kuaizhizao", module_code, action)]
         required = await _apply_station_terminal_required(request, auth, tenant_id, required)

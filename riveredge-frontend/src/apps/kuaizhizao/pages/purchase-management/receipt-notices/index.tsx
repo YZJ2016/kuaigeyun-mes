@@ -90,6 +90,11 @@ import {
   resolvePurchaseDepartmentPayload,
   usePurchaseDepartmentOptions,
 } from '../shared/PurchaseDepartmentFormField';
+import {
+  PurchaseSupplierContactFormField,
+  PurchaseSupplierPartnerDetailBridge,
+  PurchaseSupplierPhoneFormField,
+} from '../shared/PurchaseSupplierContactFormFields';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import {
   receiptNoticeBatchNotifyAllowed,
@@ -1679,22 +1684,34 @@ const ReceiptNoticesPage: React.FC = () => {
       </Row>
       <ProFormText name="purchase_order_code" hidden />
       <ProFormText name="supplier_id" hidden />
-      <Row gutter={16}>
-        <Col span={8}>
-          <ProFormText name="supplier_contact" label={t('field.supplier.contactPerson')} placeholder={t('field.supplier.contactPersonPlaceholder')} />
-        </Col>
-        <Col span={8}>
-          <ProFormText name="supplier_phone" label={t('field.supplier.phone')} placeholder={t('field.supplier.phonePlaceholder')} />
-        </Col>
-        <Col span={8}>
-          <UniWarehouseSelect
-            name="warehouse_id"
-            label={t('app.kuaizhizao.receiptNotice.inboundWarehouse')}
-            placeholder={t('app.kuaizhizao.receiptNotice.selectInboundWarehouse')}
-            onChange={(val, wh) => createFormRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
-          />
-        </Col>
-      </Row>
+      <PurchaseSupplierPartnerDetailBridge
+        supplierList={supplierList as unknown as Array<Record<string, unknown>>}
+        hostResource={KUAIZHIZAO_DOC_HOST.receiptNotice}
+      >
+        <Row gutter={16}>
+          <Col span={8}>
+            <PurchaseSupplierContactFormField
+              formRef={createFormRef}
+              label={t('field.supplier.contactPerson')}
+              placeholder={t('field.supplier.contactPersonPlaceholder')}
+            />
+          </Col>
+          <Col span={8}>
+            <PurchaseSupplierPhoneFormField
+              label={t('field.supplier.phone')}
+              placeholder={t('field.supplier.phonePlaceholder')}
+            />
+          </Col>
+          <Col span={8}>
+            <UniWarehouseSelect
+              name="warehouse_id"
+              label={t('app.kuaizhizao.receiptNotice.inboundWarehouse')}
+              placeholder={t('app.kuaizhizao.receiptNotice.selectInboundWarehouse')}
+              onChange={(val, wh) => createFormRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+            />
+          </Col>
+        </Row>
+      </PurchaseSupplierPartnerDetailBridge>
       <ProFormText name="warehouse_name" hidden />
       <Row gutter={16}>
         <Col span={8}>
@@ -1759,6 +1776,7 @@ const ReceiptNoticesPage: React.FC = () => {
 
   const renderEditForm = () => (
     <>
+      <ProFormText name="supplier_id" hidden />
       <Row gutter={16}>
         <Col span={8}>
           <ProFormText name="purchase_order_code" label={t('app.kuaizhizao.receiptNotice.purchaseOrderCode')} disabled />
@@ -1767,25 +1785,42 @@ const ReceiptNoticesPage: React.FC = () => {
           <ProFormText name="supplier_name" label={t('app.kuaizhizao.receiptNotice.supplier')} disabled />
         </Col>
         <Col span={8}>
-          <ProFormText name="supplier_contact" label={t('field.supplier.contactPerson')} placeholder={t('field.supplier.contactPersonPlaceholder')} />
+          <PurchaseSupplierPartnerDetailBridge
+            supplierList={supplierList as unknown as Array<Record<string, unknown>>}
+            hostResource={KUAIZHIZAO_DOC_HOST.receiptNotice}
+          >
+            <PurchaseSupplierContactFormField
+              formRef={editFormRef}
+              label={t('field.supplier.contactPerson')}
+              placeholder={t('field.supplier.contactPersonPlaceholder')}
+            />
+          </PurchaseSupplierPartnerDetailBridge>
         </Col>
       </Row>
-      <Row gutter={16}>
-        <Col span={8}>
-          <ProFormText name="supplier_phone" label={t('field.supplier.phone')} placeholder={t('field.supplier.phonePlaceholder')} />
-        </Col>
-        <Col span={8}>
-          <UniWarehouseSelect
-            name="warehouse_id"
-            label={t('app.kuaizhizao.receiptNotice.inboundWarehouse')}
-            placeholder={t('app.kuaizhizao.receiptNotice.selectInboundWarehouse')}
-            onChange={(val, wh) => editFormRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
-          />
-        </Col>
-        <Col span={8}>
-          <ProFormDatePicker name="planned_receipt_date" label={t('app.kuaizhizao.receiptNotice.plannedReceiptDate')} fieldProps={buildFutureDateShortcutFieldProps({ getForm: () => editFormRef.current, fieldName: 'planned_receipt_date', t })} />
-        </Col>
-      </Row>
+      <PurchaseSupplierPartnerDetailBridge
+        supplierList={supplierList as unknown as Array<Record<string, unknown>>}
+        hostResource={KUAIZHIZAO_DOC_HOST.receiptNotice}
+      >
+        <Row gutter={16}>
+          <Col span={8}>
+            <PurchaseSupplierPhoneFormField
+              label={t('field.supplier.phone')}
+              placeholder={t('field.supplier.phonePlaceholder')}
+            />
+          </Col>
+          <Col span={8}>
+            <UniWarehouseSelect
+              name="warehouse_id"
+              label={t('app.kuaizhizao.receiptNotice.inboundWarehouse')}
+              placeholder={t('app.kuaizhizao.receiptNotice.selectInboundWarehouse')}
+              onChange={(val, wh) => editFormRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+            />
+          </Col>
+          <Col span={8}>
+            <ProFormDatePicker name="planned_receipt_date" label={t('app.kuaizhizao.receiptNotice.plannedReceiptDate')} fieldProps={buildFutureDateShortcutFieldProps({ getForm: () => editFormRef.current, fieldName: 'planned_receipt_date', t })} />
+          </Col>
+        </Row>
+      </PurchaseSupplierPartnerDetailBridge>
       <Row gutter={16}>
         <Col span={8}>
           <PurchaseDepartmentFormField

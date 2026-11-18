@@ -283,6 +283,29 @@ class PartnerMaterialLinePriceResolveResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class PartnerMaterialLinePriceBatchItem(BaseModel):
+    material_id: int = Field(..., alias="materialId")
+    quantity: Optional[Decimal] = Field(None, description="计价数量")
+    variant_attributes: Optional[Dict[str, Any]] = Field(None, alias="variantAttributes")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class PartnerMaterialLinePriceBatchRequest(BaseModel):
+    side: Literal["purchase", "sales"]
+    partner_id: int = Field(..., alias="partnerId")
+    as_of: Optional[date] = Field(None, alias="asOf")
+    items: List[PartnerMaterialLinePriceBatchItem]
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class PartnerMaterialLinePriceBatchResponse(BaseModel):
+    items: List[PartnerMaterialLinePriceResolveResponse]
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class PartnerPriceBookBulkLine(BaseModel):
     material_id: int = Field(..., alias="materialId")
     unit_price: Optional[Decimal] = Field(None, alias="unitPrice", gt=0)

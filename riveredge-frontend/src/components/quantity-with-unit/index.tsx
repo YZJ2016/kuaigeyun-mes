@@ -50,10 +50,12 @@ export {
   type DocumentLineUnitFields,
 } from './formHelpers';
 export {
+  buildDocumentLineDualQuantityDetailColumns,
   buildDocumentLineDualQuantityFormColumns,
   buildDocumentLineDualQuantityPairColumns,
 } from './buildDocumentLineDualQuantityFormColumns';
 export type {
+  DocumentLineDualQuantityDetailColumnOptions,
   DocumentLineDualQuantityFormColumnOptions,
   DocumentLineDualQuantityPairColumnOptions,
 } from './buildDocumentLineDualQuantityFormColumns';

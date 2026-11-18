@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
 from typing import Any, Dict, Literal, Optional
@@ -47,9 +47,25 @@ class PartnerMaterialPriceResolver:
         variant_attributes: Optional[Dict[str, Any]] = None,
     ) -> PartnerMaterialPriceResult:
         partner_type = "customer" if side == "sales" else "supplier"
-        order = await get_partner_price_resolution_order(tenant_id)
+        order = await get_partner_price_resolution_order(tenant_id, side)
         as_of = as_of or date.today()
         qty = Decimal(str(quantity)) if quantity is not None else None
+        # 价本标准价与阶梯价属于同一本：有数量时按 auto（命中阶梯优先，否则标准价），
+        # 禁止 book_standard 先命中后永远跳过 book_tier。
+        book_consumed = False
+        alias_code: Optional[str] = None
+        alias_name: Optional[str] = None
+
+        def attach_alias(res: PartnerMaterialPriceResult) -> PartnerMaterialPriceResult:
+            ac = res.partner_material_code or alias_code
+            an = res.partner_material_name or alias_name
+            if ac == res.partner_material_code and an == res.partner_material_name:
+                return res
+            return replace(
+                res,
+                partner_material_code=ac,
+                partner_material_name=an,
+            )
 
         for step in order:
             if step == "recent":
@@ -57,37 +73,23 @@ class PartnerMaterialPriceResolver:
                     tenant_id, side, partner_id, material_id
                 )
                 if recent is not None and recent > 0:
-                    return PartnerMaterialPriceResult(
-                        found=True,
-                        unit_price=recent,
-                        price_source="recent",
+                    return attach_alias(
+                        PartnerMaterialPriceResult(
+                            found=True,
+                            unit_price=recent,
+                            price_source="recent",
+                        )
                     )
-            elif step == "book_standard":
-                book = await PartnerPriceBookService.resolve(
-                    tenant_id,
-                    partner_type,
-                    PartnerPriceResolveRequest(
-                        partner_id=partner_id,
-                        material_id=material_id,
-                        variant_attributes=variant_attributes,
-                        as_of=as_of,
-                        quantity=qty,
-                        resolve_mode="standard_only",
-                    ),
-                )
-                if book.found and book.unit_price is not None and book.unit_price > 0:
-                    return PartnerMaterialPriceResult(
-                        found=True,
-                        unit_price=book.unit_price,
-                        tax_rate=book.tax_rate,
-                        price_source=book.price_source or "book_standard",
-                        currency_code=book.currency_code,
-                        partner_material_code=book.partner_material_code,
-                        partner_material_name=book.partner_material_name,
-                    )
-            elif step == "book_tier":
-                if qty is None or qty <= 0:
+            elif step in ("book_standard", "book_tier"):
+                if book_consumed:
                     continue
+                if step == "book_tier" and (qty is None or qty <= 0):
+                    # 无数量时阶梯位跳过，留给后续标准价位
+                    continue
+                book_consumed = True
+                resolve_mode = (
+                    "auto" if qty is not None and qty > 0 else "standard_only"
+                )
                 book = await PartnerPriceBookService.resolve(
                     tenant_id,
                     partner_type,
@@ -97,18 +99,24 @@ class PartnerMaterialPriceResolver:
                         variant_attributes=variant_attributes,
                         as_of=as_of,
                         quantity=qty,
-                        resolve_mode="tier_only",
+                        resolve_mode=resolve_mode,
                     ),
                 )
+                if book.partner_material_code:
+                    alias_code = book.partner_material_code
+                if book.partner_material_name:
+                    alias_name = book.partner_material_name
                 if book.found and book.unit_price is not None and book.unit_price > 0:
-                    return PartnerMaterialPriceResult(
-                        found=True,
-                        unit_price=book.unit_price,
-                        tax_rate=book.tax_rate,
-                        price_source=book.price_source or "book_tier",
-                        currency_code=book.currency_code,
-                        partner_material_code=book.partner_material_code,
-                        partner_material_name=book.partner_material_name,
+                    return attach_alias(
+                        PartnerMaterialPriceResult(
+                            found=True,
+                            unit_price=book.unit_price,
+                            tax_rate=book.tax_rate,
+                            price_source=book.price_source or "book_standard",
+                            currency_code=book.currency_code,
+                            partner_material_code=book.partner_material_code,
+                            partner_material_name=book.partner_material_name,
+                        )
                     )
 
         material = await Material.filter(
@@ -117,14 +125,26 @@ class PartnerMaterialPriceResolver:
         if material:
             mat_price = resolve_material_default_unit_price(material.defaults, side, qty)
             if mat_price is not None and mat_price > 0:
-                return PartnerMaterialPriceResult(
-                    found=True,
-                    unit_price=mat_price,
-                    tax_rate=material_default_tax_rate(material.defaults or {}),
-                    price_source="material_default",
+                return attach_alias(
+                    PartnerMaterialPriceResult(
+                        found=True,
+                        unit_price=mat_price,
+                        tax_rate=material_default_tax_rate(material.defaults or {}),
+                        price_source="material_default",
+                    )
                 )
 
-        return PartnerMaterialPriceResult(found=False, unit_price=Decimal("0"))
+        if not alias_code and not alias_name:
+            alias = await PartnerPriceBookService._get_partner_alias(
+                tenant_id, partner_type, partner_id, material_id
+            )
+            if alias:
+                alias_code = alias.code
+                alias_name = alias.name
+
+        return attach_alias(
+            PartnerMaterialPriceResult(found=False, unit_price=Decimal("0"))
+        )
 
     @classmethod
     async def _resolve_recent(

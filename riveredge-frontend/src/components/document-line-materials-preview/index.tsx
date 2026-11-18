@@ -149,3 +149,29 @@ export const DOCUMENT_LINE_MATERIAL_SPECS_COLUMN_WIDTH_FLAGS = {
   hideInSearch: true,
   onCell: () => ({ style: { whiteSpace: 'normal' as const } }),
 } as const;
+
+/** 列表行 `items` 明细预览文本拼串，供 Hub/本地关键词二次筛选（与后端明细反查一致） */
+export function documentLineMaterialKeywordHaystack(
+  row: Record<string, unknown> | { items?: unknown },
+): string {
+  const items =
+    'items' in row && row.items !== undefined
+      ? row.items
+      : (row as Record<string, unknown>).items;
+  if (!Array.isArray(items)) return '';
+  return items
+    .flatMap((it) => {
+      if (!it || typeof it !== 'object') return [];
+      const line = it as Record<string, unknown>;
+      return [
+        line.material_name,
+        line.material_code,
+        line.material_spec,
+        line.material_model,
+        line.name,
+        line.code,
+      ];
+    })
+    .map((x) => String(x ?? '').toLowerCase())
+    .join(' ');
+}

@@ -71,6 +71,8 @@ async def list_payment_applications(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=200),
     status: Optional[str] = None,
+    approval_phase: Optional[str] = Query(None, alias="approvalPhase"),
+    payment_settlement: Optional[str] = Query(None, alias="paymentSettlement"),
     supplier_id: Optional[int] = None,
     keyword: Optional[str] = None,
     sort_field: Optional[str] = None,
@@ -92,6 +94,8 @@ async def list_payment_applications(
         sort_order=sort_order,
         approved_only=approved_only,
         with_remaining=with_remaining,
+        approval_phase=approval_phase,
+        payment_settlement=payment_settlement,
         viewer_id=current_user.id,
     )
 

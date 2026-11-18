@@ -1726,6 +1726,23 @@ class DocumentPrintService:
             "items": items_data,
         }
 
+    async def _resolve_print_reviewer_name(
+        self,
+        *,
+        tenant_id: int,
+        entity_type: str,
+        entity_id: int,
+        fallback: Any,
+    ) -> str:
+        from core.services.approval.approval_flow_policy import resolve_print_reviewer_name
+
+        return await resolve_print_reviewer_name(
+            tenant_id,
+            entity_type,
+            int(entity_id),
+            fallback=str(fallback or "").strip(),
+        )
+
     @staticmethod
     def _resolve_print_document_status(i18n: PrintLocalization, raw: Any) -> str:
         text = str(raw or "").strip()
@@ -1793,7 +1810,12 @@ class DocumentPrintService:
                 requisition.source_type
             ),
             "source_code": requisition.source_code or "",
-            "reviewer_name": requisition.reviewer_name or "",
+            "reviewer_name": await self._resolve_print_reviewer_name(
+                tenant_id=requisition.tenant_id,
+                entity_type="purchase_requisition",
+                entity_id=requisition.id,
+                fallback=requisition.reviewer_name,
+            ),
             "review_time": to_api_isoformat(requisition.review_time)
             if requisition.review_time
             else None,
@@ -1895,7 +1917,15 @@ class DocumentPrintService:
             "supplier_bank_name": application.supplier_bank_name or "",
             "supplier_bank_account": application.supplier_bank_account or "",
             "payment_reason": application.payment_reason or "",
-            "reviewer_name": application.reviewer_name or "",
+            "department_name": str(
+                getattr(application, "department_name", None) or ""
+            ).strip(),
+            "reviewer_name": await self._resolve_print_reviewer_name(
+                tenant_id=application.tenant_id,
+                entity_type="payment_application",
+                entity_id=application.id,
+                fallback=application.reviewer_name,
+            ),
             "review_time": to_api_isoformat(application.review_time)
             if application.review_time
             else None,
@@ -2252,7 +2282,12 @@ class DocumentPrintService:
             "effective_date": to_api_isoformat(change_order.effective_date) if change_order.effective_date else None,
             "status": change_order.status,
             "review_status": change_order.review_status,
-            "reviewer_name": change_order.reviewer_name,
+            "reviewer_name": await self._resolve_print_reviewer_name(
+                tenant_id=change_order.tenant_id,
+                entity_type="sales_order_change",
+                entity_id=change_order.id,
+                fallback=change_order.reviewer_name,
+            ),
             "review_time": to_api_isoformat(change_order.review_time) if change_order.review_time else None,
             "before_total_quantity": str(change_order.before_total_quantity or 0),
             "after_total_quantity": str(change_order.after_total_quantity or 0),
@@ -2336,7 +2371,12 @@ class DocumentPrintService:
             "return_time": to_api_isoformat(sales_return.return_time) if sales_return.return_time else None,
             "returner_name": sales_return.returner_name,
             "review_status": sales_return.review_status,
-            "reviewer_name": sales_return.reviewer_name,
+            "reviewer_name": await self._resolve_print_reviewer_name(
+                tenant_id=sales_return.tenant_id,
+                entity_type="sales_return",
+                entity_id=sales_return.id,
+                fallback=sales_return.reviewer_name,
+            ),
             "review_time": to_api_isoformat(sales_return.review_time) if sales_return.review_time else None,
             "return_reason": sales_return.return_reason,
             "return_type": sales_return.return_type,

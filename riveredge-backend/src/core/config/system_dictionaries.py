@@ -7,7 +7,12 @@ Author: Luigi Lu
 Date: 2026-01-16
 """
 
-from typing import List, Dict, Any
+from typing import FrozenSet, List, Dict, Any
+
+
+# 预置项即全集。同步时去掉不在预置中的项，以及同一 value 的重复行。
+# 采购订单类型只允许标准采购、资产采购；旧预置「框架协议」不再显示。
+EXACT_PRESET_DICTIONARY_CODES: FrozenSet[str] = frozenset({"ORDER_TYPE"})
 
 
 # 系统字典定义
@@ -178,8 +183,8 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
         "name": "订单类型",
         "description": "采购订单等业务单据的订单类型",
         "items": [
-            {"label": "标准采购", "value": "标准采购", "description": "常规采购订单", "sort_order": 1},
-            {"label": "框架协议", "value": "框架协议", "description": "按框架协议执行的采购订单", "sort_order": 2},
+            {"label": "标准采购", "value": "标准采购", "description": "常规采购订单与标准采购入库", "sort_order": 1},
+            {"label": "资产采购", "value": "资产采购", "description": "固定资产类采购订单与资产采购入库", "sort_order": 2},
         ],
     },
     {

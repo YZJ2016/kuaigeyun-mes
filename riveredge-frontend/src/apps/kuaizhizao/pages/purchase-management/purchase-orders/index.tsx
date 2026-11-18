@@ -87,6 +87,11 @@ import {
   resolveSupplierDefaultTaxRatePercent,
 } from '../shared/purchasePriceType';
 import {
+  PurchaseSupplierContactFormField,
+  PurchaseSupplierPartnerDetailBridge,
+  PurchaseSupplierPhoneFormField,
+} from '../shared/PurchaseSupplierContactFormFields';
+import {
   purchaseOrderFormLineToStored,
   purchaseOrderTaxRateToDecimal,
   readPurchaseOrderEnteredUnitPrice,
@@ -261,6 +266,12 @@ import { useKuaiaiEntryAvailable } from '../../../../kuaiai/hooks/useKuaiaiEntry
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
+import { UNI_TABLE_PAYMENT_SETTLEMENT_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
+import {
+  buildPurchaseOrderPaymentSettlementEnum,
+  resolvePurchaseOrderPaymentSettlementDisplay,
+} from './purchaseOrderListStatus';
 import {
   alignProColumns,
   GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK,
@@ -517,7 +528,7 @@ const PurchaseOrdersPage: React.FC = () => {
   /** 列表当前页数据（唯一源：UniTable onTableDataChange，与表格展示一致） */
   const [tableOrders, setTableOrders] = useState<PurchaseOrder[]>([]);
   const purchaseOrderListPersistenceId =
-    'apps.kuaizhizao.pages.purchase-management.purchase-orders-width-v2';
+    'apps.kuaizhizao.pages.purchase-management.purchase-orders-width-v7';
   const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>(() =>
     readPersistedUniTableViewType(purchaseOrderListPersistenceId, 'table', [
       'table',
@@ -758,6 +769,10 @@ const PurchaseOrdersPage: React.FC = () => {
   const purchaseOrderAuditColumn = useMemo(
     () => createListAuditPhaseColumn<PurchaseOrder>({ t, auditEnabled: purchaseOrderAuditEnabled }),
     [t, purchaseOrderAuditEnabled],
+  );
+  const purchaseOrderPaymentSettlementEnum = useMemo(
+    () => buildPurchaseOrderPaymentSettlementEnum(t),
+    [t],
   );
 
   // 供应商列表、订单类型、币种
@@ -1218,6 +1233,21 @@ const PurchaseOrdersPage: React.FC = () => {
         <ListUniLifecycleCell lifecycle={getPurchaseOrderLifecycle(record, purchaseOrderAuditEnabled, t)} />
       ),
     },
+    {
+      title: t('app.kuaizhizao.paymentApplication.col.paymentSettlement'),
+      key: 'payment_settlement',
+      dataIndex: 'paymentSettlement',
+      ...UNI_TABLE_PAYMENT_SETTLEMENT_COLUMN_DEFAULTS,
+      fixed: 'right',
+      hideInSearch: true,
+      valueType: 'select',
+      valueEnum: purchaseOrderPaymentSettlementEnum,
+      render: (_, record) => {
+        const settlement = resolvePurchaseOrderPaymentSettlementDisplay(record, t);
+        if (!settlement) return '—';
+        return renderDocumentStatusTag(settlement.label, settlement.raw);
+      },
+    },
     ...purchaseOrderCustomFieldColumns,
     {
       title: t('common.actions'),
@@ -1281,7 +1311,7 @@ const PurchaseOrdersPage: React.FC = () => {
         return parts;
       },
     },
-  ], SALES_DOC_LIST_FIELD_RANK), [t, purchaseOrderAuditEnabled, lifecycleValueEnum, purchaseOrderAuditColumn, purchaseOrderCustomFieldColumns, purchaseOrderPerms, purchaseOrderSupplierSearchOptions, detailDrawerVisible, orderDetail?.id]);
+  ], SALES_DOC_LIST_FIELD_RANK), [t, purchaseOrderAuditEnabled, lifecycleValueEnum, purchaseOrderAuditColumn, purchaseOrderPaymentSettlementEnum, purchaseOrderCustomFieldColumns, purchaseOrderPerms, purchaseOrderSupplierSearchOptions, detailDrawerVisible, orderDetail?.id]);
 
   /** 明细表格列序：GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK（禁止套用 LIST rank） */
   const detailTableColumns: ProColumns<PurchaseOrderItemRow>[] = useMemo(
@@ -4145,6 +4175,10 @@ const PurchaseOrdersPage: React.FC = () => {
       </Row>
           </div>
           <div className="document-form-untitled-group">
+            <PurchaseSupplierPartnerDetailBridge
+              supplierList={supplierList as unknown as Array<Record<string, unknown>>}
+              hostResource={KUAIZHIZAO_DOC_HOST.purchaseOrder}
+            >
             <Row gutter={16}>
               <Col span={6}>
                 <ProFormDatePicker
@@ -4188,8 +4222,8 @@ const PurchaseOrdersPage: React.FC = () => {
                 </ProForm.Item>
               </Col>
               <Col span={6}>
-                <ProFormText
-                  name="supplier_contact"
+                <PurchaseSupplierContactFormField
+                  formRef={formRef}
                   label={t('app.kuaizhizao.purchaseOrder.form.contact')}
                   placeholder={t('app.kuaizhizao.purchaseOrder.form.contactPlaceholder')}
                 />
@@ -4197,13 +4231,13 @@ const PurchaseOrdersPage: React.FC = () => {
             </Row>
             <Row gutter={16}>
               <Col span={6}>
-                <ProFormText
-                  name="supplier_phone"
+                <PurchaseSupplierPhoneFormField
                   label={t('app.kuaizhizao.purchaseOrder.form.phone')}
                   placeholder={t('app.kuaizhizao.purchaseOrder.form.phonePlaceholder')}
                 />
               </Col>
             </Row>
+            </PurchaseSupplierPartnerDetailBridge>
           </div>
           <CustomFieldsFormSection
             customFields={purchaseOrderFormCustomFields}
@@ -4547,17 +4581,14 @@ const PurchaseOrdersPage: React.FC = () => {
                         {
                           title: (
                             <TaxRateBatchColumnTitle
-                              onBatch={() => {
-                                const items = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
+                              onBatch={(num) => {
+                                const items = normalizeFormListItems<Record<string, unknown>>(
+                                  formRef.current?.getFieldValue('items'),
+                                );
                                 if (items.length === 0) return;
-                                const rate = prompt(t('app.kuaizhizao.salesOrder.taxRateBatch'), '13');
-                                if (rate != null && rate !== '') {
-                                  const num = Math.round(parseFloat(rate));
-                                  if (!Number.isNaN(num) && num >= 0 && num <= 100) {
-                                    const next = items.map((it: any) => ({ ...it, tax_rate: num }));
-                                    formRef.current?.setFieldsValue({ items: next });
-                                  }
-                                }
+                                formRef.current?.setFieldsValue({
+                                  items: items.map((it) => ({ ...it, tax_rate: num })),
+                                });
                               }}
                             />
                           ),

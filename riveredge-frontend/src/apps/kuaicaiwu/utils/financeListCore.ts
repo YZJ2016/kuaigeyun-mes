@@ -399,6 +399,35 @@ export function resolveReceiptListParams(
   });
 }
 
+/** 付款申请列表：模糊词走 keyword；高级搜索单号/供应商名亦映射 keyword */
+export function resolvePaymentApplicationListParams(
+  searchFormValues?: Record<string, unknown> | null,
+): Record<string, string | number | undefined> {
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
+  const params: Record<string, string | number | undefined> = {
+    approvalPhase: pickSearchString(searchFormValues, 'approvalPhase'),
+    paymentSettlement: pickSearchString(searchFormValues, 'paymentSettlement'),
+  };
+
+  const supplierId = pickOptionalId(searchFormValues ?? {}, 'supplierId');
+  if (supplierId) params.supplier_id = supplierId;
+
+  if (fuzzyKeyword) {
+    params.keyword = fuzzyKeyword;
+    return params;
+  }
+
+  const docCode = pickSearchString(searchFormValues, 'applicationCode');
+  const supplierName = pickSearchString(searchFormValues, 'supplierName');
+  if (docCode) {
+    params.keyword = docCode;
+  } else if (supplierName) {
+    params.keyword = supplierName;
+  }
+
+  return params;
+}
+
 export const FINANCE_INVOICE_PINNED_REVIEW_FIELD = 'review_status';
 
 export function financeInvoiceNumberSearchColumn(title: string, order = 13): ProColumns {

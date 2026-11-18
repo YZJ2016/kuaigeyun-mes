@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Set
+from typing import Dict, List, Optional, Sequence, Set
 
 from apps.common.app_orm import finance_orm_ready
 
@@ -23,6 +23,138 @@ class PurchaseOrderFinanceLifecycleSnapshot:
     has_purchase_invoice: bool
     invoice_amount_progress: float
     payment_progress: float
+    effective_paid_total: Decimal = Decimal("0")
+    obligation_total: Decimal = Decimal("0")
+    payment_settlement: Optional[str] = None
+
+
+_MONEY_EPSILON = Decimal("0.01")
+
+
+def resolve_purchase_order_payment_settlement(
+    paid: Decimal,
+    obligation: Decimal,
+) -> Optional[str]:
+    """付款状态：未付款 unpaid / 部分付款 partial / 已付款 paid（相对订单结算总额）。"""
+    paid = paid.quantize(_money_scale())
+    obligation = obligation.quantize(_money_scale())
+    if obligation <= _MONEY_EPSILON:
+        if paid <= _MONEY_EPSILON:
+            return None
+        return "paid"
+    if paid <= _MONEY_EPSILON:
+        return "unpaid"
+    if paid + _MONEY_EPSILON >= obligation:
+        return "paid"
+    return "partial"
+
+
+def purchase_order_shows_payment_settlement(order: object) -> bool:
+    """审核通过后才展示付款状态（与付款申请列表一致）。"""
+    from apps.kuaizhizao.services.document_lifecycle_service import _is_approved
+
+    return _is_approved(getattr(order, "review_status", None))
+
+
+async def _sum_prepayment_unsettled_for_order(tenant_id: int, order_id: int) -> Decimal:
+    """采购订单关联已确认预付付款单的待核销余额（未核销=已付现金尚未冲应付）。"""
+    from apps.kuaizhizao.finance.models.payment import Payment
+    from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+    payment_ids = await DocumentRelation.filter(
+        tenant_id=tenant_id,
+        source_type="purchase_order",
+        source_id=int(order_id),
+        target_type="payment",
+    ).values_list("target_id", flat=True)
+    ids = [int(x) for x in payment_ids if x]
+    if not ids:
+        return Decimal("0")
+    rows = await Payment.filter(
+        tenant_id=tenant_id,
+        id__in=ids,
+        settlement_type="prepayment",
+        status="Confirmed",
+        deleted_at__isnull=True,
+    ).values_list("unsettled_amount", flat=True)
+    total = sum((Decimal(str(x or 0)) for x in rows), Decimal("0"))
+    return max(Decimal("0"), total.quantize(_money_scale()))
+
+
+async def batch_sum_prepayment_unsettled_by_order_ids(
+    tenant_id: int,
+    order_ids: List[int],
+) -> Dict[int, Decimal]:
+    """批量：订单 → 预付付款单待核销合计。"""
+    from apps.kuaizhizao.finance.models.payment import Payment
+    from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+    if not order_ids:
+        return {}
+    result: Dict[int, Decimal] = {int(oid): Decimal("0") for oid in order_ids}
+    rel_rows = await DocumentRelation.filter(
+        tenant_id=tenant_id,
+        source_type="purchase_order",
+        source_id__in=[int(x) for x in order_ids],
+        target_type="payment",
+    ).values_list("source_id", "target_id")
+    if not rel_rows:
+        return result
+    payment_ids = sorted({int(tid) for _, tid in rel_rows if tid})
+    unsettled_by_payment: Dict[int, Decimal] = {}
+    if payment_ids:
+        pay_rows = await Payment.filter(
+            tenant_id=tenant_id,
+            id__in=payment_ids,
+            settlement_type="prepayment",
+            status="Confirmed",
+            deleted_at__isnull=True,
+        ).values_list("id", "unsettled_amount")
+        for pid, unsettled in pay_rows:
+            unsettled_by_payment[int(pid)] = Decimal(str(unsettled or 0))
+    for source_id, target_id in rel_rows:
+        oid = int(source_id or 0)
+        pid = int(target_id or 0)
+        if oid not in result or pid not in unsettled_by_payment:
+            continue
+        result[oid] += unsettled_by_payment[pid]
+    scale = _money_scale()
+    return {oid: max(Decimal("0"), amt.quantize(scale)) for oid, amt in result.items()}
+
+
+async def batch_purchase_order_payment_settlement(
+    tenant_id: int,
+    orders: Sequence[object],
+) -> Dict[int, Optional[str]]:
+    """列表批量解析付款状态（含预付付款单，未入库也可展示）。"""
+    if not finance_orm_ready():
+        return {}
+    from apps.kuaizhizao.finance.services.purchase_settlement import (
+        purchase_order_settlement_gross,
+    )
+
+    eligible = [o for o in orders if purchase_order_shows_payment_settlement(o)]
+    if not eligible:
+        return {}
+    order_ids = [int(o.id) for o in eligible]
+    prepay_unsettled_map = await batch_sum_prepayment_unsettled_by_order_ids(
+        tenant_id, order_ids
+    )
+    settlements: Dict[int, Optional[str]] = {}
+    for order in eligible:
+        oid = int(order.id)
+        gross = purchase_order_settlement_gross(order)
+        snap = await compute_purchase_order_finance_lifecycle(
+            tenant_id,
+            oid,
+            gross,
+            prepayment_unsettled=prepay_unsettled_map.get(oid),
+        )
+        if not purchase_order_shows_payment_settlement(order):
+            settlements[oid] = None
+        else:
+            settlements[oid] = snap.payment_settlement
+    return settlements
 
 
 def _money_scale() -> Decimal:
@@ -101,12 +233,16 @@ async def compute_purchase_order_finance_lifecycle(
     tenant_id: int,
     order_id: int,
     order_gross: Decimal,
+    *,
+    prepayment_unsettled: Optional[Decimal] = None,
 ) -> PurchaseOrderFinanceLifecycleSnapshot:
-    if not finance_orm_ready() or order_gross <= 0:
+    scale = _money_scale()
+    if not finance_orm_ready():
         return PurchaseOrderFinanceLifecycleSnapshot(
             has_purchase_invoice=False,
             invoice_amount_progress=0.0,
             payment_progress=0.0,
+            obligation_total=Decimal("0"),
         )
 
     from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
@@ -122,8 +258,22 @@ async def compute_purchase_order_finance_lifecycle(
         ).exclude(status__in=list(_EXCLUDED_INVOICE_STATUSES)).values_list("total_amount", flat=True)
         invoiced_total = sum((Decimal(str(x or 0)) for x in inv_rows), Decimal("0"))
 
-    scale = _money_scale()
     order_gross = order_gross.quantize(scale)
+    if order_gross <= 0:
+        unsettled = prepayment_unsettled
+        if unsettled is None:
+            unsettled = await _sum_prepayment_unsettled_for_order(tenant_id, order_id)
+        effective_paid = unsettled.quantize(scale)
+        return PurchaseOrderFinanceLifecycleSnapshot(
+            has_purchase_invoice=False,
+            invoice_amount_progress=0.0,
+            payment_progress=0.0,
+            effective_paid_total=effective_paid,
+            obligation_total=order_gross,
+            payment_settlement=resolve_purchase_order_payment_settlement(
+                effective_paid, order_gross
+            ),
+        )
     invoiced_total = invoiced_total.quantize(scale)
 
     invoice_amount_progress = float(
@@ -159,15 +309,28 @@ async def compute_purchase_order_finance_lifecycle(
 
     payable_total = payable_total.quantize(scale)
     paid_total = paid_total.quantize(scale)
-    if payable_total <= 0:
-        payment_progress = 100.0 if invoice_amount_progress >= 100 and paid_total > 0 else 0.0
+    if prepayment_unsettled is None:
+        prepayment_unsettled = await _sum_prepayment_unsettled_for_order(tenant_id, order_id)
+    prepayment_unsettled = prepayment_unsettled.quantize(scale)
+    effective_paid = (paid_total + prepayment_unsettled).quantize(scale)
+    if order_gross > 0:
+        payment_progress = float(
+            min(Decimal("100"), (effective_paid / order_gross) * Decimal("100"))
+        )
+    elif effective_paid > 0:
+        payment_progress = 100.0
     else:
-        payment_progress = float(min(Decimal("100"), (paid_total / payable_total) * Decimal("100")))
+        payment_progress = 0.0
 
     return PurchaseOrderFinanceLifecycleSnapshot(
         has_purchase_invoice=has_purchase_invoice,
         invoice_amount_progress=round(invoice_amount_progress, 1),
         payment_progress=round(payment_progress, 1),
+        effective_paid_total=effective_paid,
+        obligation_total=order_gross,
+        payment_settlement=resolve_purchase_order_payment_settlement(
+            effective_paid, order_gross
+        ),
     )
 
 

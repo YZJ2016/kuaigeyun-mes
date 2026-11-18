@@ -3,7 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { App, Button, Col, Form as AntForm, Input, Row, Space } from 'antd';
+import { App, Button, Col, Form as AntForm, Input, Row, Space, Typography } from 'antd';
 import {
   ProFormDatePicker,
   ProFormItem,
@@ -87,10 +87,13 @@ import {
   useWarehouseTrackingFlags,
 } from '../shared/warehouseTrackingFlags';
 import {
+  loadAvailableQtyByMaterialId,
   loadBatchOptionsByMaterialId,
   resolveOutboundConfirmBatchValue,
   type InventoryPickOption,
 } from './outboundConfirmInventoryOptions';
+import { fetchBatchMaterialInventory } from '../../../../../components/uni-material-batch-picker/utils';
+import { formatQuantity } from '../../../../../utils/format';
 import OutboundBatchAllocationField from './OutboundBatchAllocationField';
 import {
   allocateBatchQuantitiesFifo,
@@ -102,6 +105,26 @@ import { isOutboundEditable, outboundDocumentCode } from './outboundHubTypes';
 import type { OutboundHubOrder } from './outboundHubTypes';
 
 const OUTBOUND_HOST_RESOURCE = 'kuaizhizao:outbound';
+
+/** 明细物料+仓库指纹：触发按行仓库存重拉 */
+function productionPickingLineStockFingerprint(items: unknown): string {
+  if (!Array.isArray(items)) return '';
+  return [
+    ...new Set(
+      items
+        .map((raw) => {
+          const it = raw as { material_id?: unknown; warehouse_id?: unknown };
+          const mid = Number(it?.material_id);
+          const wh = Number(it?.warehouse_id);
+          if (!(mid > 0)) return '';
+          return wh > 0 ? `${mid}:${wh}` : `${mid}:`;
+        })
+        .filter(Boolean),
+    ),
+  ]
+    .sort()
+    .join(',');
+}
 
 const defaultLineItem = {
   id: undefined as number | undefined,
@@ -251,6 +274,7 @@ function ProductionPickingCreateWarehouseCell({
   trackingFlags,
   clearLineWarehouseDependents,
   ensureBatchOptions,
+  syncLineStockKeyFromForm,
   formRef,
   t,
 }: {
@@ -258,6 +282,7 @@ function ProductionPickingCreateWarehouseCell({
   trackingFlags: ReturnType<typeof useWarehouseTrackingFlags>;
   clearLineWarehouseDependents: (index: number) => void;
   ensureBatchOptions: (materialId: number, warehouseId: number, lineIndex: number) => Promise<void>;
+  syncLineStockKeyFromForm: () => void;
   formRef: React.MutableRefObject<ProFormInstance | undefined>;
   t: (key: string, opts?: Record<string, unknown>) => string;
 }) {
@@ -289,6 +314,7 @@ function ProductionPickingCreateWarehouseCell({
             clearLineWarehouseDependents(index);
             const whId = Number(wh?.id ?? _id ?? 0);
             formRef.current?.setFieldValue(['items', index, 'warehouse_name'], wh?.name ?? '');
+            syncLineStockKeyFromForm();
             if (whId > 0) {
               const mid = Number(
                 formRef.current?.getFieldValue(['items', index, 'material_id']) || 0,
@@ -411,6 +437,13 @@ export const ProductionPickingCreateModal: React.FC<ProductionPickingCreateModal
   const [departmentsLoading, setDepartmentsLoading] = useState(false);
   const [batchOptionsByKey, setBatchOptionsByKey] = useState<Record<string, InventoryPickOption[]>>({});
   const [batchOptionsLoadingKey, setBatchOptionsLoadingKey] = useState<string | null>(null);
+  const [stockByKey, setStockByKey] = useState<Record<string, number>>({});
+  const [stockLoading, setStockLoading] = useState(false);
+  const [lineStockKey, setLineStockKey] = useState('');
+
+  const syncLineStockKeyFromForm = useCallback(() => {
+    setLineStockKey(productionPickingLineStockFingerprint(formRef.current?.getFieldValue('items')));
+  }, []);
 
   const defaultPerson = useMemo(() => {
     if (!currentUser) return { id: undefined as number | undefined, name: '' };
@@ -548,12 +581,77 @@ export const ProductionPickingCreateModal: React.FC<ProductionPickingCreateModal
     [trackingFlags],
   );
 
-  const clearLineWarehouseDependents = useCallback((index: number) => {
-    formRef.current?.setFieldValue(['items', index, 'location_id'], undefined);
-    formRef.current?.setFieldValue(['items', index, 'location_code'], '');
-    formRef.current?.setFieldValue(['items', index, 'batch_number'], undefined);
-    formRef.current?.setFieldValue(['items', index, 'batch_allocations'], []);
-  }, []);
+  const clearLineWarehouseDependents = useCallback(
+    (index: number) => {
+      formRef.current?.setFieldValue(['items', index, 'location_id'], undefined);
+      formRef.current?.setFieldValue(['items', index, 'location_code'], '');
+      formRef.current?.setFieldValue(['items', index, 'batch_number'], undefined);
+      formRef.current?.setFieldValue(['items', index, 'batch_allocations'], []);
+      syncLineStockKeyFromForm();
+    },
+    [syncLineStockKeyFromForm],
+  );
+
+  useEffect(() => {
+    if (!open) {
+      setStockByKey({});
+      setStockLoading(false);
+      setLineStockKey('');
+      return;
+    }
+    const pairs = lineStockKey
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((s) => {
+        const [midRaw, whRaw] = s.split(':');
+        return { mid: Number(midRaw), wh: Number(whRaw) };
+      })
+      .filter((p) => Number.isFinite(p.mid) && p.mid > 0);
+    if (!pairs.length) {
+      setStockByKey({});
+      setStockLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setStockLoading(true);
+    void (async () => {
+      const next: Record<string, number> = {};
+      const withWh = new Map<number, number[]>();
+      const noWh: number[] = [];
+      for (const p of pairs) {
+        if (p.wh > 0) {
+          const list = withWh.get(p.wh) ?? [];
+          list.push(p.mid);
+          withWh.set(p.wh, list);
+        } else {
+          noWh.push(p.mid);
+        }
+      }
+      try {
+        for (const [whId, mids] of withWh) {
+          const map = await loadAvailableQtyByMaterialId([...new Set(mids)], whId);
+          for (const mid of mids) {
+            next[`${mid}:${whId}`] = map[mid] ?? 0;
+          }
+        }
+        if (noWh.length) {
+          const map = await fetchBatchMaterialInventory([...new Set(noWh)]);
+          for (const mid of noWh) {
+            next[`${mid}:`] = map[mid] ?? 0;
+          }
+        }
+        if (!cancelled) setStockByKey(next);
+      } catch {
+        if (!cancelled) setStockByKey({});
+      } finally {
+        if (!cancelled) setStockLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, lineStockKey]);
 
   useEffect(() => {
     if (!open) return;
@@ -670,6 +768,7 @@ export const ProductionPickingCreateModal: React.FC<ProductionPickingCreateModal
           notes: String(detail.notes ?? ''),
           items: items.length ? items : [{ ...defaultLineItem }],
         });
+        setLineStockKey(productionPickingLineStockFingerprint(items.length ? items : [{ ...defaultLineItem }]));
         setBatchOptionsByKey({});
         await Promise.all(
           items.map(async (row, index) => {
@@ -770,6 +869,7 @@ export const ProductionPickingCreateModal: React.FC<ProductionPickingCreateModal
                 formRef.current?.setFieldValue(['items', index, 'serial_numbers'], undefined);
                 if (!material) {
                   void syncLineMaterialTracking(index, undefined);
+                  syncLineStockKeyFromForm();
                   return;
                 }
                 const mat = material as Material;
@@ -787,6 +887,7 @@ export const ProductionPickingCreateModal: React.FC<ProductionPickingCreateModal
                     void ensureBatchOptions(Number(mat.id), primaryWh.id, index);
                   }
                 }
+                syncLineStockKeyFromForm();
               }}
             />
           </div>
@@ -850,9 +951,43 @@ export const ProductionPickingCreateModal: React.FC<ProductionPickingCreateModal
             trackingFlags={trackingFlags}
             clearLineWarehouseDependents={clearLineWarehouseDependents}
             ensureBatchOptions={ensureBatchOptions}
+            syncLineStockKeyFromForm={syncLineStockKeyFromForm}
             formRef={formRef}
             t={t}
           />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.pull.colCurrentStock'),
+        key: 'current_stock',
+        width: 100,
+        ...DOCUMENT_DETAIL_NUM_COL,
+        render: (_: unknown, __: unknown, index: number) => (
+          <AntForm.Item
+            noStyle
+            shouldUpdate={(prev, curr) =>
+              prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id ||
+              prev?.items?.[index]?.warehouse_id !== curr?.items?.[index]?.warehouse_id ||
+              prev?.items?.[index]?.required_quantity !== curr?.items?.[index]?.required_quantity
+            }
+          >
+            {({ getFieldValue }) => {
+              const mid = Number(getFieldValue(['items', index, 'material_id']) || 0);
+              const whId = Number(getFieldValue(['items', index, 'warehouse_id']) || 0);
+              if (!(mid > 0)) return '—';
+              if (stockLoading) return '…';
+              const key = whId > 0 ? `${mid}:${whId}` : `${mid}:`;
+              const stock = stockByKey[key];
+              if (stock == null) return '—';
+              const qty = Number(getFieldValue(['items', index, 'required_quantity']) || 0);
+              const insufficient = qty > 0 && stock < qty;
+              return (
+                <Typography.Text type={insufficient ? 'danger' : undefined}>
+                  {formatQuantity(stock)}
+                </Typography.Text>
+              );
+            }}
+          </AntForm.Item>
         ),
       },
       {
@@ -986,7 +1121,10 @@ export const ProductionPickingCreateModal: React.FC<ProductionPickingCreateModal
     clearLineWarehouseDependents,
     ensureBatchOptions,
     quantityDecimals,
+    stockByKey,
+    stockLoading,
     syncLineMaterialTracking,
+    syncLineStockKeyFromForm,
     t,
     trackingFlags,
   ]);
@@ -1320,6 +1458,7 @@ export const ProductionPickingCreateModal: React.FC<ProductionPickingCreateModal
                     { ...defaultLineItem },
                   ];
                   formRef.current?.setFieldsValue({ items: next });
+                  syncLineStockKeyFromForm();
                 }}
               >
                 {t('common.addDetail')}

@@ -47,6 +47,7 @@ from apps.kuaizhizao.utils.material_source_helper import (
     expand_bom_with_source_control,
     explode_bom_one_level_for_mrp,
     resolve_computation_item_source_config,
+    resolve_default_supplier_id_from_material,
     resolve_default_supplier_id_from_source_config,
     SOURCE_TYPE_MAKE,
     SOURCE_TYPE_BUY,
@@ -6167,8 +6168,11 @@ class DemandComputationService(AppBaseService):
                 continue
             remaining = remaining_by_material.get(mid, 0.0)
             pushed_qty = self._purchase_pushed_qty_for_material(mid, suggested, exclusions)
-            sc = resolve_computation_item_source_config(item.material_source_config)
-            supplier_id = sc.get("default_supplier_id")
+            supplier_id = resolve_default_supplier_id_from_source_config(
+                item.material_source_config
+            )
+            if not supplier_id and material:
+                supplier_id = resolve_default_supplier_id_from_material(material)
             if push_as_confirm and not supplier_id and remaining > 0:
                 skipped_without_supplier += 1
             material = material_by_id.get(mid)

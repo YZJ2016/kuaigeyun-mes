@@ -62,10 +62,14 @@ async def test_create_from_purchase_orders_merges_same_supplier():
         "source_code": "PO1",
         "max_push_quantity": 100.0,
     }
-    order = SimpleNamespace(id=10, supplier_id=5)
+    order = SimpleNamespace(
+        id=10, supplier_id=5, department_id=3, department_name="采购部"
+    )
 
     preview_b = {**preview, "source_code": "PO2"}
-    order_b = SimpleNamespace(id=11, supplier_id=5)
+    order_b = SimpleNamespace(
+        id=11, supplier_id=5, department_id=3, department_name="采购部"
+    )
 
     with patch.object(
         svc,
@@ -73,7 +77,7 @@ async def test_create_from_purchase_orders_merges_same_supplier():
         new=AsyncMock(side_effect=[preview, preview_b]),
     ), patch(
         "apps.kuaizhizao.models.purchase_order.PurchaseOrder.get",
-        new=AsyncMock(side_effect=[order, order_b]),
+        new=AsyncMock(side_effect=[order, order_b, order]),
     ), patch(
         "apps.kuaizhizao.services.payment_application_line_materials.lines_from_purchase_order_items",
         new=AsyncMock(return_value=[line]),

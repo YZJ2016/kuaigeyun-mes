@@ -191,6 +191,7 @@ const SalesInvoicesPage: React.FC = () => {
     },
     [messageApi, pullQueryModalZIndex, t],
   );
+
   const pullFromSalesOrderAction = getKuaicaiwuDocumentAction('sales_invoice.pull_from_sales_order');
   const pullFromSalesDeliveryAction = getKuaicaiwuDocumentAction('sales_invoice.pull_from_sales_delivery');
   const pullFromReceivableAction = getKuaicaiwuDocumentAction('sales_invoice.pull_from_receivable');
@@ -367,7 +368,7 @@ const SalesInvoicesPage: React.FC = () => {
   };
 
   const isPullSalesInvoiceSelectable = useCallback(
-    (record: SalesInvoicePullCandidate) => record.capabilities?.pull_sales_invoice?.allowed !== false,
+    (record: SalesInvoicePullCandidate) => record.capabilities?.pull_sales_invoice?.allowed === true,
     [],
   );
 
@@ -1457,8 +1458,9 @@ const SalesInvoicesPage: React.FC = () => {
         open={pullFromSalesOrderQuery.open}
         title={pullFromSalesOrderAction.label}
         onCancel={pullFromSalesOrderQuery.closeModal}
-        onOk={pullFromSalesOrderQuery.handleConfirm}
-        zIndex={pullQueryModalZIndex}
+        onOk={() => {
+          void pullFromSalesOrderQuery.handleConfirm();
+        }}
         rowKey="id"
         columns={pullTableColumns}
         dataSource={pullFromSalesOrderQuery.dataSource}
@@ -1490,8 +1492,9 @@ const SalesInvoicesPage: React.FC = () => {
         open={pullFromSalesDeliveryQuery.open}
         title={pullFromSalesDeliveryAction.label}
         onCancel={pullFromSalesDeliveryQuery.closeModal}
-        onOk={pullFromSalesDeliveryQuery.handleConfirm}
-        zIndex={pullQueryModalZIndex}
+        onOk={() => {
+          void pullFromSalesDeliveryQuery.handleConfirm();
+        }}
         rowKey="id"
         columns={pullDeliveryColumns}
         dataSource={pullFromSalesDeliveryQuery.dataSource}
@@ -1523,8 +1526,9 @@ const SalesInvoicesPage: React.FC = () => {
         open={pullFromReceivableQuery.open}
         title={pullFromReceivableAction.label}
         onCancel={pullFromReceivableQuery.closeModal}
-        onOk={pullFromReceivableQuery.handleConfirm}
-        zIndex={pullQueryModalZIndex}
+        onOk={() => {
+          void pullFromReceivableQuery.handleConfirm();
+        }}
         rowKey="id"
         columns={pullReceivableColumns}
         dataSource={pullFromReceivableQuery.dataSource}

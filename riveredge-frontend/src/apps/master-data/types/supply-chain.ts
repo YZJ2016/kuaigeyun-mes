@@ -41,6 +41,18 @@ export interface PartnerSettlementAccount {
   isDefault?: boolean;
 }
 
+export const PARTNER_ADDRESS_TYPE_CODES = ['registered', 'delivery', 'invoice', 'other'] as const;
+
+export type PartnerAddressType = (typeof PARTNER_ADDRESS_TYPE_CODES)[number];
+
+export interface PartnerAddress {
+  addressType?: PartnerAddressType | string;
+  address?: string;
+  contactName?: string;
+  contactPhone?: string;
+  isDefault?: boolean;
+}
+
 /** @deprecated 使用 PartnerContact */
 export type CustomerContact = PartnerContact;
 
@@ -58,6 +70,7 @@ export interface Customer extends PartnerInvoiceAndExtendedFields {
   email?: string;
   contacts?: CustomerContact[];
   settlementAccounts?: PartnerSettlementAccount[];
+  addresses?: PartnerAddress[];
   address?: string;
   category?: string;
   industryCode?: string;
@@ -93,6 +106,7 @@ export interface CustomerCreate extends PartnerInvoiceAndExtendedFields {
   shortName?: string;
   contacts?: PartnerContact[];
   settlementAccounts?: PartnerSettlementAccount[];
+  addresses?: PartnerAddress[];
   address?: string;
   category?: string;
   industryCode?: string;
@@ -118,6 +132,7 @@ export interface CustomerUpdate extends PartnerInvoiceAndExtendedFields {
   shortName?: string;
   contacts?: PartnerContact[];
   settlementAccounts?: PartnerSettlementAccount[];
+  addresses?: PartnerAddress[];
   address?: string;
   category?: string;
   industryCode?: string;
@@ -175,6 +190,7 @@ export interface Supplier extends PartnerInvoiceAndExtendedFields {
   email?: string;
   contacts?: PartnerContact[];
   settlementAccounts?: PartnerSettlementAccount[];
+  addresses?: PartnerAddress[];
   address?: string;
   category?: string;
   industryCode?: string;
@@ -204,6 +220,7 @@ export interface SupplierCreate extends PartnerInvoiceAndExtendedFields {
   shortName?: string;
   contacts?: PartnerContact[];
   settlementAccounts?: PartnerSettlementAccount[];
+  addresses?: PartnerAddress[];
   address?: string;
   category?: string;
   industryCode?: string;
@@ -224,6 +241,7 @@ export interface SupplierUpdate extends PartnerInvoiceAndExtendedFields {
   shortName?: string;
   contacts?: PartnerContact[];
   settlementAccounts?: PartnerSettlementAccount[];
+  addresses?: PartnerAddress[];
   address?: string;
   category?: string;
   industryCode?: string;

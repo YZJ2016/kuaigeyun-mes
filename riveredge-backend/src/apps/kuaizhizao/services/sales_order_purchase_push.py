@@ -330,18 +330,13 @@ async def collect_sales_order_buy_push_lines(
             continue
         remaining_cursor[mid] = remain - max_qty
         material = material_by_id.get(mid)
-        source_config = (
-            material.source_config if material and isinstance(material.source_config, dict) else {}
+        from apps.kuaizhizao.utils.material_source_helper import (
+            resolve_default_supplier_id_from_material,
+            resolve_default_supplier_name_from_material,
         )
-        inner = (
-            source_config.get("source_config")
-            if isinstance(source_config.get("source_config"), dict)
-            else source_config
-        )
-        supplier_id = inner.get("default_supplier_id") if isinstance(inner, dict) else None
-        supplier_name = (
-            (inner.get("default_supplier_name") or "") if isinstance(inner, dict) else ""
-        )
+
+        supplier_id = resolve_default_supplier_id_from_material(material)
+        supplier_name = resolve_default_supplier_name_from_material(material) or ""
         unit_price = Decimal("0")
         if material and supplier_id:
             from apps.master_data.services.partner_material_price_resolver import (

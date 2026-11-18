@@ -40,6 +40,10 @@ from apps.kuaizhizao.utils.material_unit_utils import convert_to_base_quantity
 from apps.kuaizhizao.utils.material_dual_quantity_utils import (
     document_line_dual_quantity_for_push,
 )
+from apps.kuaizhizao.utils.document_amount_write import (
+    line_total_qty_unit_price,
+    resolve_simple_line_total,
+)
 
 
 def _document_line_dual_quantity_update_fields(line: Any) -> Dict[str, Any]:
@@ -2111,7 +2115,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             apply_warehouse_doc_list_filters,
         )
         from apps.kuaizhizao.utils.list_item_material_keyword import (
-            header_ids_matching_item_material,
+            apply_query_header_or_line_material_keyword,
         )
 
         query = ProductionPicking.filter(tenant_id=tenant_id, deleted_at__isnull=True)
@@ -2163,16 +2167,14 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             updated_end_date=filters.get("updated_end_date"),
         )
         if kw:
-            material_picking_ids = await header_ids_matching_item_material(
-                tenant_id,
-                ProductionPickingItem,
-                "picking_id",
-                kw,
+            query = await apply_query_header_or_line_material_keyword(
+                query,
+                tenant_id=tenant_id,
+                kw=kw,
+                keyword_fields=PRODUCTION_PICKING_KEYWORD_FIELDS,
+                item_model=ProductionPickingItem,
+                item_header_fk_field="picking_id",
             )
-            header_cond = Q()
-            for field in PRODUCTION_PICKING_KEYWORD_FIELDS:
-                header_cond |= Q(**{f"{field}__icontains": kw})
-            query = query.filter(header_cond | Q(id__in=material_picking_ids))
         total = await query.count()
         pickings = await query.offset(skip).limit(limit).order_by(order_clause)
         from tortoise.functions import Count, Sum
@@ -4870,10 +4872,17 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
         if filters.get("picking_id"):
             query = query.filter(picking_id=filters["picking_id"])
 
+        from apps.kuaizhizao.services.equipment_list_core import pick_search_keyword
+        from apps.kuaizhizao.utils.list_item_material_keyword import (
+            apply_query_header_or_line_material_keyword,
+        )
+        from apps.kuaizhizao.models.production_return_item import ProductionReturnItem
+
+        kw = pick_search_keyword(filters.get("keyword"), filters.get("search"))
         query, order_clause = apply_warehouse_doc_list_filters(
             query,
-            keyword=filters.get("keyword"),
-            search=filters.get("search"),
+            keyword=None,
+            search=None,
             order_by=filters.get("order_by"),
             allowed_fields=PRODUCTION_RETURN_SORTABLE_FIELDS,
             default_order="-created_at",
@@ -4886,6 +4895,15 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
             updated_start_date=filters.get("updated_start_date"),
             updated_end_date=filters.get("updated_end_date"),
         )
+        if kw:
+            query = await apply_query_header_or_line_material_keyword(
+                query,
+                tenant_id=tenant_id,
+                kw=kw,
+                keyword_fields=PRODUCTION_RETURN_KEYWORD_FIELDS,
+                item_model=ProductionReturnItem,
+                item_header_fk_field="return_id",
+            )
         total = await query.count()
         rets = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_action_policy.enricher import (
@@ -5524,10 +5542,17 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
         if filters.get("warehouse_id"):
             query = query.filter(warehouse_id=filters["warehouse_id"])
 
+        from apps.kuaizhizao.services.equipment_list_core import pick_search_keyword
+        from apps.kuaizhizao.utils.list_item_material_keyword import (
+            apply_query_header_or_line_material_keyword,
+        )
+        from apps.kuaizhizao.models.finished_goods_receipt_item import FinishedGoodsReceiptItem
+
+        kw = pick_search_keyword(filters.get("keyword"), filters.get("search"))
         query, order_clause = apply_warehouse_doc_list_filters(
             query,
-            keyword=filters.get("keyword"),
-            search=filters.get("search"),
+            keyword=None,
+            search=None,
             order_by=filters.get("order_by"),
             allowed_fields=FINISHED_GOODS_RECEIPT_SORTABLE_FIELDS,
             default_order="-created_at",
@@ -5540,6 +5565,15 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             updated_start_date=filters.get("updated_start_date"),
             updated_end_date=filters.get("updated_end_date"),
         )
+        if kw:
+            query = await apply_query_header_or_line_material_keyword(
+                query,
+                tenant_id=tenant_id,
+                kw=kw,
+                keyword_fields=FINISHED_GOODS_RECEIPT_KEYWORD_FIELDS,
+                item_model=FinishedGoodsReceiptItem,
+                item_header_fk_field="receipt_id",
+            )
         total = await query.count()
         receipts = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_action_policy.enricher import (
@@ -5548,7 +5582,6 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             batch_document_item_homogeneous_units,
             enrich_inbound_hub_list_capabilities,
         )
-        from apps.kuaizhizao.models.finished_goods_receipt_item import FinishedGoodsReceiptItem
 
         responses = [FinishedGoodsReceiptResponse.model_validate(receipt) for receipt in receipts]
         receipt_ids = [r.id for r in receipts]
@@ -7193,10 +7226,17 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 | Q(sales_order_id__in=filters["scoped_sales_order_ids"])
             )
 
+        from apps.kuaizhizao.services.equipment_list_core import pick_search_keyword
+        from apps.kuaizhizao.utils.list_item_material_keyword import (
+            apply_query_header_or_line_material_keyword,
+        )
+        from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
+
+        kw = pick_search_keyword(filters.get("keyword"), filters.get("search"))
         query, order_clause = apply_warehouse_doc_list_filters(
             query,
-            keyword=filters.get("keyword"),
-            search=filters.get("search"),
+            keyword=None,
+            search=None,
             order_by=filters.get("order_by"),
             allowed_fields=SALES_DELIVERY_SORTABLE_FIELDS,
             default_order="-created_at",
@@ -7209,6 +7249,15 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             updated_start_date=filters.get("updated_start_date"),
             updated_end_date=filters.get("updated_end_date"),
         )
+        if kw:
+            query = await apply_query_header_or_line_material_keyword(
+                query,
+                tenant_id=tenant_id,
+                kw=kw,
+                keyword_fields=SALES_DELIVERY_KEYWORD_FIELDS,
+                item_model=SalesDeliveryItem,
+                item_header_fk_field="delivery_id",
+            )
         total = await query.count()
         deliveries = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_action_policy.enricher import (
@@ -8936,7 +8985,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             unit_price = Decimal("0")  # 默认价格为0
             
             # 计算金额
-            item_total_amount = WarehouseService._qty_price_line_total(delivery_qty, unit_price)
+            item_total_amount = line_total_qty_unit_price(delivery_qty, unit_price)
             
             delivery_items.append(
                 SalesDeliveryItemCreate(
@@ -10642,7 +10691,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         material_unit=snapshot["material_unit"],
                         receipt_quantity=qty,
                         unit_price=unit_price,
-                        total_amount=WarehouseService._qty_price_line_total(qty, unit_price),
+                        total_amount=line_total_qty_unit_price(qty, unit_price),
                         tax_rate=line_tax_pct if line_tax_pct > 0 else None,
                         qualified_quantity=qty,
                         unqualified_quantity=0,
@@ -10929,7 +10978,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         material_unit=item.material_unit or "件",
                         receipt_quantity=qty,
                         unit_price=unit_price,
-                        total_amount=WarehouseService._qty_price_line_total(qty, unit_price),
+                        total_amount=line_total_qty_unit_price(qty, unit_price),
                         qualified_quantity=qty,
                         unqualified_quantity=0,
                         warehouse_id=line_wh_id,
@@ -11426,10 +11475,9 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
 
         from apps.kuaizhizao.services.equipment_list_core import pick_search_keyword
         from apps.kuaizhizao.utils.list_item_material_keyword import (
-            header_ids_matching_item_material,
+            apply_query_header_or_line_material_keyword,
         )
         from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
-        from tortoise.expressions import Q
 
         kw = pick_search_keyword(filters.get("keyword"), filters.get("search"))
         query, order_clause = apply_warehouse_doc_list_filters(
@@ -11449,16 +11497,14 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             updated_end_date=filters.get("updated_end_date"),
         )
         if kw:
-            material_receipt_ids = await header_ids_matching_item_material(
-                tenant_id,
-                PurchaseReceiptItem,
-                "receipt_id",
-                kw,
+            query = await apply_query_header_or_line_material_keyword(
+                query,
+                tenant_id=tenant_id,
+                kw=kw,
+                keyword_fields=PURCHASE_RECEIPT_KEYWORD_FIELDS,
+                item_model=PurchaseReceiptItem,
+                item_header_fk_field="receipt_id",
             )
-            header_cond = Q()
-            for field in PURCHASE_RECEIPT_KEYWORD_FIELDS:
-                header_cond |= Q(**{f"{field}__icontains": kw})
-            query = query.filter(header_cond | Q(id__in=material_receipt_ids))
         total = await query.count()
         receipts = await query.offset(skip).limit(limit).order_by(order_clause)
         out: List[PurchaseReceiptResponse] = []
@@ -11853,7 +11899,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                             if existing is not None:
                                 unit_price = getattr(existing, "unit_price", None)
                                 if unit_price is not None:
-                                    item_update["total_amount"] = WarehouseService._qty_price_line_total(
+                                    item_update["total_amount"] = line_total_qty_unit_price(
                                         qty, unit_price
                                     )
                         if getattr(item_data, "secondary_quantity", None) is not None:
@@ -12430,7 +12476,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                             material_unit=item.unit,
                             receipt_quantity=item.outstanding_quantity,
                             unit_price=item.unit_price,
-                            total_amount=WarehouseService._qty_price_line_total(
+                            total_amount=line_total_qty_unit_price(
                                 item.outstanding_quantity, item.unit_price
                             )
                         ))
@@ -12587,19 +12633,11 @@ class SalesReturnService(AppBaseService[SalesReturn]):
         return {int(r["return_id"]): int(r["cnt"] or 0) for r in rows}
 
     @staticmethod
-    def _qty_price_line_total(qty: Any, unit_price: Any) -> Decimal:
-        from apps.kuaizhizao.utils.document_amount_write import line_total_qty_unit_price
-
-        return line_total_qty_unit_price(qty, unit_price)
-
-    @staticmethod
     def _sales_return_line_amount(
         qty: Any,
         unit_price: Any,
         total_amount: Any = None,
     ) -> Decimal:
-        from apps.kuaizhizao.utils.document_amount_write import resolve_simple_line_total
-
         return resolve_simple_line_total(qty, unit_price, total_amount)
 
     async def _backfill_sales_return_item_unit_price(
@@ -13130,7 +13168,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             if item_delivery_id:
                 header_delivery_ids.add(item_delivery_id)
             unit_price = Decimal(str(item.unit_price or 0))
-            total_amount = WarehouseService._sales_return_line_amount(selected_qty, unit_price)
+            total_amount = resolve_simple_line_total(selected_qty, unit_price)
             return_items.append(
                 SalesReturnItemCreate(
                     material_id=item.material_id,
@@ -13333,7 +13371,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             line = line_by_item_id[item_id]
             batch_number = str(line.batch_number or "").strip() or None
             unit_price = Decimal(str(line.unit_price or 0))
-            total_amount = WarehouseService._sales_return_line_amount(selected_qty, unit_price)
+            total_amount = resolve_simple_line_total(selected_qty, unit_price)
             delivery_item = await SalesDeliveryItem.get_or_none(
                 tenant_id=tenant_id,
                 id=item_id,
@@ -13615,7 +13653,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                         material_unit=item.material_unit or "个",
                         return_quantity=qty,
                         unit_price=unit_price,
-                        total_amount=WarehouseService._qty_price_line_total(qty, unit_price),
+                        total_amount=line_total_qty_unit_price(qty, unit_price),
                         batch_number=batch_number,
                         status="待退货",
                     )
@@ -13878,7 +13916,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                         material_unit=item.material_unit or "个",
                         return_quantity=qty,
                         unit_price=unit_price,
-                        total_amount=WarehouseService._qty_price_line_total(qty, unit_price),
+                        total_amount=line_total_qty_unit_price(qty, unit_price),
                         batch_number=str(getattr(item, "batch_number", None) or "").strip() or None,
                         status="待退货",
                     )
@@ -15011,8 +15049,6 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
         unit_price: Any,
         total_amount: Any = None,
     ) -> Decimal:
-        from apps.kuaizhizao.utils.document_amount_write import resolve_simple_line_total
-
         return resolve_simple_line_total(qty, unit_price, total_amount)
 
     async def _purchase_return_totals_by_id(
@@ -15425,7 +15461,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                     f"物料 {item.material_code or item.material_name} 的退货数量不能超过可退数量 {max_return_qty}"
                 )
             unit_price = Decimal(str(item.unit_price or 0))
-            total_amount = WarehouseService._purchase_return_line_amount(selected_qty, unit_price)
+            total_amount = resolve_simple_line_total(selected_qty, unit_price)
             material = material_by_id.get(int(item.material_id or 0))
             requires_batch = bool(
                 batch_mgmt_enabled and material and getattr(material, "batch_managed", False)
@@ -15638,7 +15674,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             line = line_by_item_id[item_id]
             batch_number = str(line.batch_number or "").strip() or None
             unit_price = Decimal(str(line.unit_price or 0))
-            total_amount = WarehouseService._purchase_return_line_amount(selected_qty, unit_price)
+            total_amount = resolve_simple_line_total(selected_qty, unit_price)
             return_items.append(
                 PurchaseReturnItemCreate(
                     purchase_receipt_item_id=item_id,
@@ -16021,7 +16057,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                         material_unit=item.material_unit or "个",
                         return_quantity=qty,
                         unit_price=unit_price,
-                        total_amount=WarehouseService._qty_price_line_total(qty, unit_price),
+                        total_amount=line_total_qty_unit_price(qty, unit_price),
                         batch_number=batch,
                         location_id=resolved_loc_id,
                         location_code=resolved_loc_code,
@@ -16396,7 +16432,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                         material_unit=item.unit or "件",
                         return_quantity=qty,
                         unit_price=unit_price,
-                        total_amount=WarehouseService._qty_price_line_total(qty, unit_price),
+                        total_amount=line_total_qty_unit_price(qty, unit_price),
                         batch_number=requested_batch,
                         status="待退货",
                     )
@@ -17458,7 +17494,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
             for item_data in items:
                 qty = Decimal(str(item_data.inbound_quantity))
                 price = Decimal(str(item_data.unit_price or 0))
-                amt = WarehouseService._qty_price_line_total(qty, price)
+                amt = line_total_qty_unit_price(qty, price)
                 item_dict = item_data.model_dump(exclude_unset=True, exclude={"inbound_quantity", "unit_price", "total_amount"})
                 material = await Material.get_or_none(
                     tenant_id=tenant_id,
@@ -17547,10 +17583,17 @@ class OtherInboundService(AppBaseService[OtherInbound]):
         if filters.get("scoped_ids") is not None:
             query = query.filter(id__in=filters["scoped_ids"])
 
+        from apps.kuaizhizao.services.equipment_list_core import pick_search_keyword
+        from apps.kuaizhizao.utils.list_item_material_keyword import (
+            apply_query_header_or_line_material_keyword,
+        )
+        from apps.kuaizhizao.models.other_inbound_item import OtherInboundItem
+
+        kw = pick_search_keyword(filters.get("keyword"), filters.get("search"))
         query, order_clause = apply_warehouse_doc_list_filters(
             query,
-            keyword=filters.get("keyword"),
-            search=filters.get("search"),
+            keyword=None,
+            search=None,
             order_by=filters.get("order_by"),
             allowed_fields=OTHER_INBOUND_SORTABLE_FIELDS,
             default_order="-created_at",
@@ -17563,6 +17606,15 @@ class OtherInboundService(AppBaseService[OtherInbound]):
             updated_start_date=filters.get("updated_start_date"),
             updated_end_date=filters.get("updated_end_date"),
         )
+        if kw:
+            query = await apply_query_header_or_line_material_keyword(
+                query,
+                tenant_id=tenant_id,
+                kw=kw,
+                keyword_fields=OTHER_INBOUND_KEYWORD_FIELDS,
+                item_model=OtherInboundItem,
+                item_header_fk_field="inbound_id",
+            )
         total = await query.count()
         inbounds = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_action_policy.enricher import (
@@ -17638,7 +17690,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                             f"物料 {item_data.material_code or item_data.material_id} 的入库数量必须大于 0"
                         )
                     price = Decimal(str(item_data.unit_price or 0))
-                    amt = WarehouseService._qty_price_line_total(qty, price)
+                    amt = line_total_qty_unit_price(qty, price)
                     item_dict = item_data.model_dump(
                         exclude_unset=True,
                         exclude={"inbound_quantity", "unit_price", "total_amount"},
@@ -18136,7 +18188,7 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                     material_label=material_label,
                 )
                 price = Decimal(str(item_data.unit_price or 0))
-                amt = WarehouseService._qty_price_line_total(qty, price)
+                amt = line_total_qty_unit_price(qty, price)
                 await OtherOutboundItem.create(
                     tenant_id=tenant_id,
                     outbound_id=outbound.id,
@@ -18210,10 +18262,17 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
         if filters.get("scoped_ids") is not None:
             query = query.filter(id__in=filters["scoped_ids"])
 
+        from apps.kuaizhizao.services.equipment_list_core import pick_search_keyword
+        from apps.kuaizhizao.utils.list_item_material_keyword import (
+            apply_query_header_or_line_material_keyword,
+        )
+        from apps.kuaizhizao.models.other_outbound_item import OtherOutboundItem
+
+        kw = pick_search_keyword(filters.get("keyword"), filters.get("search"))
         query, order_clause = apply_warehouse_doc_list_filters(
             query,
-            keyword=filters.get("keyword"),
-            search=filters.get("search"),
+            keyword=None,
+            search=None,
             order_by=filters.get("order_by"),
             allowed_fields=OTHER_OUTBOUND_SORTABLE_FIELDS,
             default_order="-created_at",
@@ -18226,6 +18285,15 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
             updated_start_date=filters.get("updated_start_date"),
             updated_end_date=filters.get("updated_end_date"),
         )
+        if kw:
+            query = await apply_query_header_or_line_material_keyword(
+                query,
+                tenant_id=tenant_id,
+                kw=kw,
+                keyword_fields=OTHER_OUTBOUND_KEYWORD_FIELDS,
+                item_model=OtherOutboundItem,
+                item_header_fk_field="outbound_id",
+            )
         total = await query.count()
         outbounds = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_action_policy.enricher import (
@@ -18340,7 +18408,7 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                     else:
                         unit_price = Decimal(str(item_updates.get("unit_price", item.unit_price or 0)))
                     effective_qty = Decimal(str(item_updates.get("outbound_quantity", qty)))
-                    item_updates["total_amount"] = WarehouseService._qty_price_line_total(
+                    item_updates["total_amount"] = line_total_qty_unit_price(
                         effective_qty, unit_price
                     )
 
@@ -18463,7 +18531,7 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
         unit_price = Decimal(str(item.unit_price or 0))
         item_update["batch_number"] = first_batch
         item_update["outbound_quantity"] = first_qty
-        item_update["total_amount"] = WarehouseService._qty_price_line_total(first_qty, unit_price)
+        item_update["total_amount"] = line_total_qty_unit_price(first_qty, unit_price)
         await OtherOutboundItem.filter(
             tenant_id=tenant_id, id=item.id, outbound_id=outbound_id
         ).update(**item_update)
@@ -18479,7 +18547,7 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                 material_unit=item.material_unit,
                 outbound_quantity=qty,
                 unit_price=item.unit_price,
-                total_amount=WarehouseService._qty_price_line_total(qty, unit_price),
+                total_amount=line_total_qty_unit_price(qty, unit_price),
                 warehouse_id=getattr(item, "warehouse_id", None),
                 warehouse_name=getattr(item, "warehouse_name", None),
                 location_id=item.location_id,
@@ -18924,10 +18992,17 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
         if filters.get("scoped_ids") is not None:
             query = query.filter(id__in=filters["scoped_ids"])
 
+        from apps.kuaizhizao.services.equipment_list_core import pick_search_keyword
+        from apps.kuaizhizao.utils.list_item_material_keyword import (
+            apply_query_header_or_line_material_keyword,
+        )
+        from apps.kuaizhizao.models.material_borrow_item import MaterialBorrowItem
+
+        kw = pick_search_keyword(filters.get("keyword"), filters.get("search"))
         query, order_clause = apply_warehouse_doc_list_filters(
             query,
-            keyword=filters.get("keyword"),
-            search=filters.get("search"),
+            keyword=None,
+            search=None,
             order_by=filters.get("order_by"),
             allowed_fields=MATERIAL_BORROW_SORTABLE_FIELDS,
             default_order="-created_at",
@@ -18940,6 +19015,15 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
             updated_start_date=filters.get("updated_start_date"),
             updated_end_date=filters.get("updated_end_date"),
         )
+        if kw:
+            query = await apply_query_header_or_line_material_keyword(
+                query,
+                tenant_id=tenant_id,
+                kw=kw,
+                keyword_fields=MATERIAL_BORROW_KEYWORD_FIELDS,
+                item_model=MaterialBorrowItem,
+                item_header_fk_field="borrow_id",
+            )
         total = await query.count()
         borrows = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_action_policy.enricher import (
@@ -19507,10 +19591,17 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
         if filters.get("scoped_ids") is not None:
             query = query.filter(id__in=filters["scoped_ids"])
 
+        from apps.kuaizhizao.services.equipment_list_core import pick_search_keyword
+        from apps.kuaizhizao.utils.list_item_material_keyword import (
+            apply_query_header_or_line_material_keyword,
+        )
+        from apps.kuaizhizao.models.material_return_item import MaterialReturnItem
+
+        kw = pick_search_keyword(filters.get("keyword"), filters.get("search"))
         query, order_clause = apply_warehouse_doc_list_filters(
             query,
-            keyword=filters.get("keyword"),
-            search=filters.get("search"),
+            keyword=None,
+            search=None,
             order_by=filters.get("order_by"),
             allowed_fields=MATERIAL_RETURN_SORTABLE_FIELDS,
             default_order="-created_at",
@@ -19523,6 +19614,15 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
             updated_start_date=filters.get("updated_start_date"),
             updated_end_date=filters.get("updated_end_date"),
         )
+        if kw:
+            query = await apply_query_header_or_line_material_keyword(
+                query,
+                tenant_id=tenant_id,
+                kw=kw,
+                keyword_fields=MATERIAL_RETURN_KEYWORD_FIELDS,
+                item_model=MaterialReturnItem,
+                item_header_fk_field="return_id",
+            )
         total = await query.count()
         returns = await query.offset(skip).limit(limit).order_by(order_clause)
         from apps.kuaizhizao.services.document_action_policy.enricher import (

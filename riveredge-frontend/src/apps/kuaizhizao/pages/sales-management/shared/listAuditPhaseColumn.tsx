@@ -2,10 +2,7 @@ import type { ProColumns } from '@ant-design/pro-components';
 import type { TFunction } from 'i18next';
 import type { AuditPhaseRecord } from '../../../../../components/uni-audit/AuditPhaseBadge';
 import { isUniTableOperationColumn } from '../../../../../components/uni-action/operationColumn';
-import {
-  isUniTableLifecycleColumn,
-  UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH,
-} from '../../../../../utils/uniTableLayoutColumns';
+import { isUniTableLifecycleColumn } from '../../../../../utils/uniTableLayoutColumns';
 import { ListAuditPhaseCell } from './ListAuditPhaseCell';
 
 export interface ListAuditPhaseColumnOptions {
@@ -13,22 +10,22 @@ export interface ListAuditPhaseColumnOptions {
   /** @deprecated 列始终展示；false=自动通过模式，仍显示 phase */
   auditEnabled?: boolean;
   title?: string;
-  width?: number;
   fixed?: 'left' | 'right';
 }
 
 export function createListAuditPhaseColumn<T extends AuditPhaseRecord>(
   options: ListAuditPhaseColumnOptions,
 ): ProColumns<T> {
-  const { t, title, width = UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH, fixed = 'right' } = options;
+  const { t, title, fixed = 'right' } = options;
 
   return {
     key: 'audit_phase',
     title: title ?? t('components.uniAudit.colAuditStatus', { defaultValue: '审核状态' }),
     dataIndex: ['audit', 'phase'],
-    width,
     fixed,
     align: 'center',
+    resizable: false,
+    uniTableKeepWidth: true,
     sorter: false,
     hideInSearch: true,
     render: (_: unknown, record: T) => <ListAuditPhaseCell record={record} />,

@@ -42,9 +42,11 @@ import { QuickCreateModal } from '../../../components/uni-dropdown';
 import {
   customerDetailToFormValues,
   normalizeCustomerContactsForSubmit,
+  normalizePartnerAddressesForSubmit,
   normalizePartnerSettlementAccountsForSubmit,
 } from '../utils/partner-form-map';
 import { CustomerContactsFormTable } from './CustomerContactsFormTable';
+import { PartnerAddressesFormTable } from './PartnerAddressesFormTable';
 import { PartnerSettlementAccountsFormTable } from './PartnerSettlementAccountsFormTable';
 import { useCustomFields } from '../../../hooks/useCustomFields';
 import { CustomFieldsFormSection } from '../../../components/custom-fields';
@@ -344,6 +346,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
       const payload: Record<string, unknown> = {
         ...restValues,
         contacts: normalizeCustomerContactsForSubmit(standardValues.contacts ?? values.contacts),
+        addresses: normalizePartnerAddressesForSubmit(standardValues.addresses ?? values.addresses),
         settlementAccounts: normalizePartnerSettlementAccountsForSubmit(
           standardValues.settlementAccounts ?? values.settlementAccounts,
         ),
@@ -582,6 +585,9 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                           });
                         }}
                       />
+                    </Col>
+                    <Col span={24}>
+                      <PartnerAddressesFormTable titleKey="field.customer.addresses" />
                     </Col>
                     <Col span={24}>
                       <PartnerSettlementAccountsFormTable titleKey="field.customer.receiptAccounts" />

@@ -995,6 +995,7 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
 
   // —— 88 审核 / 生命周期 / 系统 ——
   audit_phase: 89,
+  payment_settlement: 91.5,
   phase: 89,
   /** 需求变更：审核态（右固定，紧挨 lifecycle 之前） */
   approval_status: 90,
@@ -1087,6 +1088,7 @@ export const GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK = {
   // 系统尾部
   updated_at: 88,
   audit_phase: 89,
+  payment_settlement: 91.5,
   lifecycle_stage: 90,
   status: 91,
   action: 94,

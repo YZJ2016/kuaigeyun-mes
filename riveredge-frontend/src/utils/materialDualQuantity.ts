@@ -238,12 +238,32 @@ export function documentLineDualQuantityForPush(
   };
 }
 
+export function lineRequiresFloatingDualQuantityValidation(
+  material: MaterialLike | null | undefined,
+  value: DocumentDualQuantityValue,
+  scenario: MaterialScenario = 'purchase',
+): boolean {
+  // 无副单位录入场景（主单位=库存单位）不做浮动双录校验；勿用配置里的辅助单位误触发
+  if (!shouldShowDualQuantityEntry(material, scenario)) return false;
+
+  const materialUnit = String(value.material_unit ?? '').trim();
+  const auxUnit = String(
+    value.aux_unit ?? resolveAuxUnitForScenario(material, scenario),
+  ).trim();
+  if (materialUnit && isFloatingLineUnit(material, materialUnit)) return true;
+  if (auxUnit && isFloatingLineUnit(material, auxUnit)) return true;
+  return isFloatingMaterialUnit(findMaterialAuxUnitRow(material, auxUnit));
+}
+
 export function validateDualQuantityBeforeSave(params: {
   material: MaterialLike | null | undefined;
   value: DocumentDualQuantityValue;
+  scenario?: MaterialScenario;
 }): string | undefined {
-  const unit = String(params.value.material_unit ?? '').trim();
-  if (!isFloatingLineUnit(params.material, unit)) return undefined;
+  const scenario = params.scenario ?? 'purchase';
+  if (!lineRequiresFloatingDualQuantityValidation(params.material, params.value, scenario)) {
+    return undefined;
+  }
   const primary = Number(params.value.quantity);
   const aux = Number(params.value.aux_quantity);
   const rate = Number(params.value.unit_conversion_rate);

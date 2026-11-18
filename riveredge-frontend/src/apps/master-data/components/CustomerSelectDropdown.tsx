@@ -22,6 +22,9 @@ const INITIAL_PAGE_SIZE = 50;
 const SEARCH_PAGE_SIZE = 100;
 const SEARCH_DEBOUNCE_MS = 300;
 
+/** 仅有名称快照、尚无客户 id 时的回显占位 value（不落库） */
+const SNAPSHOT_ECHO_VALUE = '__customer_snapshot_echo__';
+
 function formatCustomerLabel(c: Customer | Record<string, unknown>): string {
   const row = c as Record<string, unknown>;
   return (
@@ -191,7 +194,8 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
     [applyCustomerList, customersProp, fetchCustomers, messageApi],
   );
 
-  const selectedId = value != null && value !== '' ? Number(value) : NaN;
+  const selectedId =
+    value != null && value !== '' && value !== SNAPSHOT_ECHO_VALUE ? Number(value) : NaN;
 
   useEffect(() => {
     if (!Number.isFinite(selectedId)) return;
@@ -258,7 +262,14 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
       value: getCustomerId(c),
       label: formatCustomerLabel(c),
     }));
-    if (!Number.isFinite(selectedId) || base.some((o) => o.value === selectedId)) {
+    if (!Number.isFinite(selectedId)) {
+      // 无 id、仅有名称快照：注入占位选项，避免编辑回显空白
+      if (snapshotDisplayLabel) {
+        return [{ value: SNAPSHOT_ECHO_VALUE, label: snapshotDisplayLabel }, ...base];
+      }
+      return base;
+    }
+    if (base.some((o) => o.value === selectedId)) {
       return base;
     }
     const resolved = resolvedById.get(selectedId);
@@ -270,10 +281,19 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
     return [...base, { value: selectedId, label }];
   }, [allCustomers, selectedId, resolvedById, snapshotDisplayLabel, resolvingId]);
 
+  const displayValue = Number.isFinite(selectedId)
+    ? value
+    : snapshotDisplayLabel
+      ? SNAPSHOT_ECHO_VALUE
+      : value;
+
   const handleChange = useCallback(
-    (nextValue: number | undefined, option: unknown) => {
+    (nextValue: number | string | undefined, option: unknown) => {
+      if (nextValue === SNAPSHOT_ECHO_VALUE) {
+        return;
+      }
       onChange?.(nextValue, option as Parameters<NonNullable<UniDropdownProps['onChange']>>[1]);
-      if (nextValue == null) {
+      if (nextValue == null || nextValue === '') {
         onCustomerPick?.(null);
         return;
       }
@@ -365,7 +385,7 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
     <>
       <UniDropdown
         {...rest}
-        value={value}
+        value={displayValue}
         showSearch
         allowClear
         filterOption={false}

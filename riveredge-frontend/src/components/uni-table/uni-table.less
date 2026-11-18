@@ -334,7 +334,9 @@
   box-sizing: border-box;
 }
 
-/* 生命周期/状态列：SystemFixed 80px，禁止 table-layout:fixed 拉伸后在操作列前留白 */
+/* 流程状态徽章列（审核/执行/付款）：SystemFixed 80px，与 uniTableLayoutColumns 真源一致 */
+.uni-table-container .ant-table-thead > tr > th.uni-table-flow-status-badge-cell,
+.uni-table-container .ant-table-tbody > tr > td.uni-table-flow-status-badge-cell,
 .uni-table-container .ant-table-thead > tr > th.uni-table-lifecycle-cell,
 .uni-table-container .ant-table-tbody > tr > td.uni-table-lifecycle-cell {
   width: 80px;

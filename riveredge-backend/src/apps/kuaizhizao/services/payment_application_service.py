@@ -45,6 +45,48 @@ PAYMENT_APPLICATION_SORTABLE = frozenset({
 })
 
 
+def _assert_payment_application_department(
+    department_id: Any, department_name: Any
+) -> tuple[int, str]:
+    did = int(department_id or 0)
+    name = str(department_name or "").strip()
+    if did <= 0 or not name:
+        raise ValidationError("请选择申请部门")
+    return did, name
+
+
+def _apply_payment_application_approval_filter(query, approval_phase: Optional[str]):
+    phase = str(approval_phase or "").strip().lower()
+    if not phase:
+        return query
+    if phase == "draft":
+        return query.filter(status="草稿")
+    if phase == "submitted":
+        return query.filter(status="已提交")
+    if phase == "pending_review":
+        return query.filter(status="待审核")
+    if phase == "approved":
+        return query.filter(review_status=ReviewStatus.APPROVED.value)
+    if phase == "rejected":
+        return query.filter(
+            Q(status="已驳回") | Q(review_status=ReviewStatus.REJECTED.value)
+        )
+    return query
+
+
+def _apply_payment_application_settlement_filter(query, payment_settlement: Optional[str]):
+    settlement = str(payment_settlement or "").strip().lower()
+    if not settlement:
+        return query
+    if settlement == "unpaid":
+        return query.filter(status="已批准")
+    if settlement == "partial":
+        return query.filter(status="部分付款")
+    if settlement == "paid":
+        return query.filter(status="已付款")
+    return query
+
+
 async def resolve_payment_application_linked_payments(
     tenant_id: int,
     payment_rels: List[Any],
@@ -210,6 +252,9 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
             advance_payee_name=data.advance_payee_name,
         )
         total = await self._validate_lines(tenant_id, data.supplier_id, data.items)
+        dept_id, dept_name = _assert_payment_application_department(
+            data.department_id, data.department_name
+        )
         async with in_transaction():
             code = data.application_code or await self._generate_code(tenant_id)
             user = await self.get_user_info(created_by)
@@ -223,6 +268,8 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
                 expected_payment_date=data.expected_payment_date,
                 applicant_id=data.applicant_id or created_by,
                 applicant_name=data.applicant_name or user["name"],
+                department_id=dept_id,
+                department_name=dept_name,
                 total_request_amount=total,
                 paid_amount=Decimal("0"),
                 remaining_amount=total,
@@ -324,11 +371,15 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
         sort_order: Optional[str] = None,
         approved_only: bool = False,
         with_remaining: bool = False,
+        approval_phase: Optional[str] = None,
+        payment_settlement: Optional[str] = None,
         viewer_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         query = PaymentApplication.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if status:
             query = query.filter(status=status)
+        query = _apply_payment_application_approval_filter(query, approval_phase)
+        query = _apply_payment_application_settlement_filter(query, payment_settlement)
         if supplier_id:
             query = query.filter(supplier_id=supplier_id)
         if approved_only:
@@ -427,6 +478,13 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
             dump["invoice_status"] = self._coerce_invoice_status(
                 dump["invoice_status"], allow_default=False
             )
+        merged_dept_id = dump.get("department_id", app.department_id)
+        merged_dept_name = dump.get("department_name", app.department_name)
+        dept_id, dept_name = _assert_payment_application_department(
+            merged_dept_id, merged_dept_name
+        )
+        dump["department_id"] = dept_id
+        dump["department_name"] = dept_name
         user = await self.get_user_info(updated_by)
         dump["updated_by"] = updated_by
         dump["updated_by_name"] = user["name"]

@@ -496,8 +496,8 @@ interface QuerySearchModalProps {
   searchParamsRef?: React.MutableRefObject<Record<string, any> | undefined>;
   /** searchParamsRef 提交后回调（UniTable 用于刷新钉住 Tab 激活态） */
   onSearchParamsApplied?: () => void;
-  /** 内置钉住 Tab 只从该列 valueEnum 生成（与 UniTable pinnedTabsField 一致） */
-  pinnedTabsField?: string;
+  /** 内置钉住 Tab 只从该列 valueEnum 生成（与 UniTable pinnedTabsField 一致；支持多列） */
+  pinnedTabsField?: string | string[];
 }
 
 const BUILTIN_LIFECYCLE_STAGE_SEARCH_PREFIX = '__builtin__:lifecycle-stage:';
@@ -536,9 +536,30 @@ function scoreLifecycleStageColumn(column: ProColumns<any>, field: string): numb
   return score;
 }
 
+const resolvePinnedColumnForField = (
+  searchableColumns: ProColumns<any>[],
+  pinnedField: string,
+) => {
+  const match = searchableColumns.find((column) => {
+    const field = getColumnFieldName(column);
+    if (field === pinnedField) return true;
+    return column.key === pinnedField;
+  });
+  if (!match) return null;
+  const field = getColumnFieldName(match) ?? pinnedField;
+  const valueEnum = match.valueEnum as Record<string, any>;
+  const values = Object.keys(valueEnum).filter((key) => key !== '');
+  if (values.length === 0) return null;
+  return {
+    field,
+    valueEnum,
+    score: scoreLifecycleStageColumn(match, field),
+  };
+};
+
 const getLifecycleStageCandidates = (
   columns: ProColumns<any>[],
-  pinnedTabsField?: string,
+  pinnedTabsField?: string | string[],
 ) => {
   const searchableColumns = columns.filter((column) => {
     if (column.hideInSearch) return false;
@@ -547,26 +568,22 @@ const getLifecycleStageCandidates = (
     return true;
   });
 
-  const resolvePinnedColumn = () => {
-    if (!pinnedTabsField) return null;
-    const match = searchableColumns.find((column) => {
-      const field = getColumnFieldName(column);
-      if (field === pinnedTabsField) return true;
-      return column.key === pinnedTabsField;
-    });
-    if (!match) return null;
-    const field = getColumnFieldName(match) ?? pinnedTabsField;
-    const valueEnum = match.valueEnum as Record<string, any>;
-    const values = Object.keys(valueEnum).filter((key) => key !== '');
-    if (values.length === 0) return null;
-    return {
-      field,
-      valueEnum,
-      score: scoreLifecycleStageColumn(match, field),
-    };
-  };
+  if (Array.isArray(pinnedTabsField) && pinnedTabsField.length > 0) {
+  const pinnedMany = pinnedTabsField
+      .map((field) => resolvePinnedColumnForField(searchableColumns, field))
+      .filter(
+        (item): item is { field: string; valueEnum: Record<string, any>; score: number } =>
+          item != null,
+      );
+    if (pinnedMany.length > 0) {
+      return pinnedMany;
+    }
+  }
 
-  const pinnedOverride = resolvePinnedColumn();
+  const pinnedOverride =
+    typeof pinnedTabsField === 'string' && pinnedTabsField
+      ? resolvePinnedColumnForField(searchableColumns, pinnedTabsField)
+      : null;
   if (pinnedOverride) {
     return [pinnedOverride];
   }
@@ -594,38 +611,41 @@ const createBuiltinLifecycleStageSearches = (
   pagePath: string,
   userId: number | undefined,
   stageNameTemplate: (stage: string) => string,
-  pinnedTabsField?: string,
+  pinnedTabsField?: string | string[],
 ): SavedSearch[] => {
   const lifecycles = getLifecycleStageCandidates(columns, pinnedTabsField);
   if (lifecycles.length === 0) return [];
 
-  const lifecycle = lifecycles[0];
   const now = new Date().toISOString();
   let idSeq = 0;
+  const out: SavedSearch[] = [];
 
-  const stageValues = Object.keys(lifecycle.valueEnum).filter((key) => key !== '');
-  return stageValues.map((stageValue) => {
-    const enumItem = lifecycle.valueEnum[stageValue];
-    const stageLabel =
-      typeof enumItem === 'object' && enumItem !== null && 'text' in enumItem
-        ? String((enumItem as any).text)
-        : String(enumItem ?? stageValue);
-    idSeq += 1;
-    return {
-      id: -idSeq,
-      uuid: `${BUILTIN_LIFECYCLE_STAGE_SEARCH_PREFIX}${pagePath}:${lifecycle.field}:${encodeURIComponent(stageValue)}`,
-      user_id: userId ?? 0,
-      page_path: pagePath,
-      name: stageNameTemplate(stageLabel),
-      is_shared: true,
-      is_pinned: true,
-      search_params: {
-        [lifecycle.field]: stageValue,
-      },
-      created_at: now,
-      updated_at: now,
-    };
-  });
+  for (const lifecycle of lifecycles) {
+    const stageValues = Object.keys(lifecycle.valueEnum).filter((key) => key !== '');
+    for (const stageValue of stageValues) {
+      const enumItem = lifecycle.valueEnum[stageValue];
+      const stageLabel =
+        typeof enumItem === 'object' && enumItem !== null && 'text' in enumItem
+          ? String((enumItem as any).text)
+          : String(enumItem ?? stageValue);
+      idSeq += 1;
+      out.push({
+        id: -idSeq,
+        uuid: `${BUILTIN_LIFECYCLE_STAGE_SEARCH_PREFIX}${pagePath}:${lifecycle.field}:${encodeURIComponent(stageValue)}`,
+        user_id: userId ?? 0,
+        page_path: pagePath,
+        name: stageNameTemplate(stageLabel),
+        is_shared: true,
+        is_pinned: true,
+        search_params: {
+          [lifecycle.field]: stageValue,
+        },
+        created_at: now,
+        updated_at: now,
+      });
+    }
+  }
+  return out;
 };
 
 const isBuiltinSavedSearch = (search: SavedSearch): boolean =>
@@ -2694,8 +2714,8 @@ interface QuerySearchButtonProps {
   pinnedSearchUiEpoch?: number;
   /** searchParamsRef 提交后回调（UniTable 用于刷新钉住 Tab 激活态） */
   onSearchParamsApplied?: () => void;
-  /** 内置钉住 Tab 只从该列 valueEnum 生成（与 UniTable pinnedTabsField 一致） */
-  pinnedTabsField?: string;
+  /** 内置钉住 Tab 只从该列 valueEnum 生成（与 UniTable pinnedTabsField 一致；支持多列） */
+  pinnedTabsField?: string | string[];
 }
 
 /**

@@ -780,6 +780,25 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         response = await enrich_purchase_order_detail_capabilities(
             tenant_id, order, response, has_items=len(items) > 0
         )
+        if finance_lifecycle:
+            from apps.kuaizhizao.finance.services.purchase_order_finance_lifecycle import (
+                purchase_order_shows_payment_settlement,
+            )
+
+            if (
+                hasattr(response, "model_fields")
+                and "payment_settlement" in response.model_fields
+                and hasattr(response, "model_copy")
+            ):
+                response = response.model_copy(
+                    update={
+                        "payment_settlement": (
+                            finance_lifecycle.payment_settlement
+                            if purchase_order_shows_payment_settlement(order)
+                            else None
+                        )
+                    }
+                )
         response.payment_milestones = payment_milestones
         from apps.common.app_orm import finance_orm_ready
 
@@ -874,22 +893,22 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         if params.keyword:
             keyword = params.keyword.strip()
             if keyword:
-                material_order_ids = (
-                    await PurchaseOrderItem.filter(tenant_id=tenant_id)
-                    .filter(
-                        Q(material_code__icontains=keyword)
-                        | Q(material_name__icontains=keyword)
-                        | Q(material_spec__icontains=keyword)
-                    )
-                    .distinct()
-                    .values_list("order_id", flat=True)
+                from apps.kuaizhizao.utils.list_item_material_keyword import (
+                    apply_query_header_or_line_material_keyword,
                 )
-                query = query.filter(
-                    Q(order_code__icontains=keyword)
-                    | Q(supplier_name__icontains=keyword)
-                    | Q(buyer_name__icontains=keyword)
-                    | Q(notes__icontains=keyword)
-                    | Q(id__in=list(material_order_ids))
+
+                query = await apply_query_header_or_line_material_keyword(
+                    query,
+                    tenant_id=tenant_id,
+                    kw=keyword,
+                    keyword_fields=(
+                        "order_code",
+                        "supplier_name",
+                        "buyer_name",
+                        "notes",
+                    ),
+                    item_model=PurchaseOrderItem,
+                    item_header_fk_field="order_id",
                 )
 
         if getattr(params, "column_filters", None):
@@ -1073,6 +1092,41 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         enriched = await enrich_purchase_order_list_capabilities(
             tenant_id, orders, result, has_items_by_id=has_items_by_id
         )
+
+        from apps.common.optional_pro import finance_orm_ready
+
+        settlement_map: Dict[int, Optional[str]] = {}
+        if finance_orm_ready() and orders:
+            from apps.kuaizhizao.finance.services.purchase_order_finance_lifecycle import (
+                batch_purchase_order_payment_settlement,
+            )
+
+            try:
+                settlement_map = await batch_purchase_order_payment_settlement(
+                    tenant_id, orders
+                )
+            except Exception as exc:
+                logger.exception(
+                    "采购订单列表 payment_settlement 计算失败 tenant_id=%s: %s",
+                    tenant_id,
+                    exc,
+                )
+
+        if settlement_map and enriched:
+            sample = enriched[0]
+            if (
+                hasattr(sample, "model_fields")
+                and "payment_settlement" in sample.model_fields
+                and hasattr(sample, "model_copy")
+            ):
+                enriched = [
+                    item.model_copy(
+                        update={
+                            "payment_settlement": settlement_map.get(int(item.id)),
+                        }
+                    )
+                    for item in enriched
+                ]
 
         # 返回前端期望的格式 { data, total, success }
         from core.services.approval.audit_record_enricher import enrich_data_payload

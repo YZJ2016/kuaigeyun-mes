@@ -1856,7 +1856,8 @@
     ],
     "inbound": [
       "master-data:material",
-      "master-data:warehouse:warehouse"
+      "master-data:warehouse:warehouse",
+      "purchase-order"
     ],
     "outbound": [
       "master-data:material",

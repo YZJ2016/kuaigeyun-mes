@@ -3,9 +3,11 @@
 from types import SimpleNamespace
 
 from apps.kuaizhizao.utils.material_source_helper import (
+    build_material_source_config,
     is_make_and_buy_material,
     normalize_source_config_payload,
     resolve_computation_item_source_config,
+    resolve_default_supplier_id_from_material,
     resolve_material_purchase_line_unit_price,
     resolve_mrp_supply_source_type,
     SOURCE_TYPE_BUY,
@@ -122,6 +124,22 @@ def test_resolve_material_purchase_line_unit_price_from_material_defaults():
     )
     price = resolve_material_purchase_line_unit_price(material=material)
     assert price == 12
+
+
+def test_resolve_default_supplier_from_defaults_only():
+    material = _material(
+        source_type=SOURCE_TYPE_BUY,
+        source_config={"source_types": ["Buy"]},
+        defaults={
+            "defaultSuppliers": [
+                {"supplierId": 42, "supplierName": "优先供应商", "priority": 1},
+                {"supplierId": 99, "supplierName": "备选", "priority": 2},
+            ]
+        },
+    )
+    assert resolve_default_supplier_id_from_material(material) == 42
+    cfg = build_material_source_config(material)
+    assert cfg.get("default_supplier_id") == 42
 
 
 def test_resolve_material_purchase_line_unit_price_converts_tax_inclusive_default():

@@ -116,7 +116,22 @@ const KINGDEE_TARGET_ALIASES: Record<string, string[]> = {
   'item.material_unit': ['FUnitId.FNumber', 'FBaseUnitId.FNumber'],
   'item.required_quantity': ['FQty'],
   'item.ordered_quantity': ['FQty'],
-  'item.unit_price': ['FPrice', 'FTaxPrice'],
+  // 未税单价：勿混入 FTaxPrice（含税请映 item.display_unit_price）
+  'item.unit_price': [
+    'FPrice',
+    'FEntityFPrice',
+    'billentryFPrice',
+    'billentry.price',
+    'billentryprice',
+  ],
+  'item.display_unit_price': [
+    'FTaxPrice',
+    'FEntityFTaxPrice',
+    'TaxPrice',
+    'FPriceIncludingTax',
+    'billentry.priceandtax',
+    'billentrypriceandtax',
+  ],
   'item.tax_rate': ['FEntryTaxRate'],
   'item.delivery_date': ['FDeliveryDate'],
 };

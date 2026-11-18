@@ -933,6 +933,55 @@ def _positive_int_or_none(raw: Any) -> Optional[int]:
     return n if n > 0 else None
 
 
+def _first_default_supplier_from_defaults(
+    defaults: Any,
+) -> tuple[Optional[int], Optional[str]]:
+    """采购默认值页 defaultSuppliers：按 priority 取第一项。"""
+    if not isinstance(defaults, dict):
+        return None, None
+    suppliers = defaults.get("defaultSuppliers") or defaults.get("default_suppliers")
+    if not isinstance(suppliers, list) or not suppliers:
+        return None, None
+    sorted_entries = sorted(
+        (e for e in suppliers if isinstance(e, dict)),
+        key=lambda e: int(e.get("priority") or 999),
+    )
+    for entry in sorted_entries:
+        sid = _positive_int_or_none(entry.get("supplierId") or entry.get("supplier_id"))
+        if sid is None:
+            continue
+        name = entry.get("supplierName") or entry.get("supplier_name")
+        return sid, str(name).strip() if name else None
+    return None, None
+
+
+def enrich_buy_source_config_from_material(material: Any) -> Dict[str, Any]:
+    """扁平 source_config，并在缺省时从 defaults.defaultSuppliers 补优先供应商。"""
+    source_config = dict(normalize_source_config_payload(getattr(material, "source_config", None) or {}))
+    if _positive_int_or_none(source_config.get("default_supplier_id")) is not None:
+        return source_config
+    sid, name = _first_default_supplier_from_defaults(getattr(material, "defaults", None))
+    if sid is not None:
+        source_config["default_supplier_id"] = sid
+        if name:
+            source_config["default_supplier_name"] = name
+    return source_config
+
+
+def resolve_default_supplier_id_from_material(material: Any) -> Optional[int]:
+    if material is None:
+        return None
+    return _positive_int_or_none(enrich_buy_source_config_from_material(material).get("default_supplier_id"))
+
+
+def resolve_default_supplier_name_from_material(material: Any) -> Optional[str]:
+    if material is None:
+        return None
+    sc = enrich_buy_source_config_from_material(material)
+    name = sc.get("default_supplier_name")
+    return str(name).strip() if name else None
+
+
 def resolve_computation_item_source_config(
     material_source_config: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
@@ -973,13 +1022,20 @@ def resolve_computation_item_source_config(
                 merged["default_supplier_id"] = sid
         if not merged.get("default_supplier_name") and purchase.get("default_supplier_name"):
             merged["default_supplier_name"] = purchase.get("default_supplier_name")
+    if _positive_int_or_none(merged.get("default_supplier_id")) is None:
+        defaults = cfg.get("defaults")
+        sid, name = _first_default_supplier_from_defaults(defaults)
+        if sid is not None:
+            merged["default_supplier_id"] = sid
+            if name and not merged.get("default_supplier_name"):
+                merged["default_supplier_name"] = name
     return merged
 
 
 def resolve_default_supplier_id_from_source_config(
     material_source_config: Optional[Dict[str, Any]],
 ) -> Optional[int]:
-    """从计算明细/物料来源快照取默认供应商 ID（含 purchase 嵌套）。"""
+    """从计算明细/物料来源快照取默认供应商 ID（含 purchase 嵌套、defaults 多选）。"""
     sc = resolve_computation_item_source_config(material_source_config)
     return _positive_int_or_none(sc.get("default_supplier_id"))
 
@@ -1122,7 +1178,7 @@ def build_material_source_config(material: Material) -> Dict[str, Any]:
     供 MRP LLC 层批量预取后复用，避免按物料再查库。
     """
     source_type = material.source_type
-    source_config = normalize_source_config_payload(material.source_config or {})
+    source_config = enrich_buy_source_config_from_material(material)
 
     config: Dict[str, Any] = {
         "source_type": source_type,

@@ -6,10 +6,12 @@ from datetime import date
 from typing import Annotated, Any, Dict, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from loguru import logger
 
 from apps.master_data.schemas.partner_price_book_schemas import (
+    PartnerMaterialLinePriceBatchRequest,
+    PartnerMaterialLinePriceBatchResponse,
     PartnerMaterialLinePriceResolveRequest,
     PartnerMaterialLinePriceResolveResponse,
     PartnerPriceBookBulkCreate,
@@ -251,24 +253,53 @@ _register_price_book_routes("customer", "customer-price-books")
 _register_price_book_routes("supplier", "supplier-price-books")
 
 
+def _line_price_resolve_permission_codes(side: str) -> list[str]:
+    if side == "sales":
+        return [
+            build_permission_code("master-data", "supply-chain:customer-price-book", "read"),
+            build_permission_code("kuaizhizao", "sales-order", "read"),
+            build_permission_code("kuaizhizao", "quotation", "read"),
+            build_permission_code("kuaizhizao", "sales-contract", "read"),
+            build_permission_code("kuaizhizao", "sales-return", "read"),
+            build_permission_code("kuaizhizao", "sales-delivery", "read"),
+        ]
+    return [
+        build_permission_code("master-data", "supply-chain:supplier-price-book", "read"),
+        build_permission_code("kuaizhizao", "purchase-order", "read"),
+        build_permission_code("kuaizhizao", "purchase-requisition", "read"),
+        build_permission_code("kuaizhizao", "purchase-return", "read"),
+        build_permission_code("kuaizhizao", "purchase-receipt", "read"),
+    ]
+
+
+def _partner_material_line_price_response(result) -> PartnerMaterialLinePriceResolveResponse:
+    return PartnerMaterialLinePriceResolveResponse(
+        found=result.found,
+        unit_price=result.unit_price if result.found else None,
+        tax_rate=result.tax_rate,
+        price_source=result.price_source,
+        currency_code=result.currency_code,
+        partner_material_code=result.partner_material_code,
+        partner_material_name=result.partner_material_name,
+    )
+
+
 @router.post(
     "/resolve-partner-material-line-price",
     response_model=PartnerMaterialLinePriceResolveResponse,
 )
 async def resolve_partner_material_line_price(
     data: PartnerMaterialLinePriceResolveRequest,
+    request: Request,
     auth: Annotated[AuthContext, Depends(get_auth_context)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
 ):
-    module = (
-        "supply-chain:customer-price-book"
-        if data.side == "sales"
-        else "supply-chain:supplier-price-book"
-    )
     await ensure_permission_codes(
         auth,
         tenant_id,
-        [build_permission_code("master-data", module, "read")],
+        request,
+        _line_price_resolve_permission_codes(data.side),
+        require_all=False,
         check_abac=False,
     )
     result = await PartnerMaterialPriceResolver.resolve(
@@ -280,12 +311,37 @@ async def resolve_partner_material_line_price(
         as_of=data.as_of,
         variant_attributes=data.variant_attributes,
     )
-    return PartnerMaterialLinePriceResolveResponse(
-        found=result.found,
-        unit_price=result.unit_price if result.found else None,
-        tax_rate=result.tax_rate,
-        price_source=result.price_source,
-        currency_code=result.currency_code,
-        partner_material_code=result.partner_material_code,
-        partner_material_name=result.partner_material_name,
+    return _partner_material_line_price_response(result)
+
+
+@router.post(
+    "/resolve-partner-material-line-price-batch",
+    response_model=PartnerMaterialLinePriceBatchResponse,
+)
+async def resolve_partner_material_line_price_batch(
+    data: PartnerMaterialLinePriceBatchRequest,
+    request: Request,
+    auth: Annotated[AuthContext, Depends(get_current_tenant)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    await ensure_permission_codes(
+        auth,
+        tenant_id,
+        request,
+        _line_price_resolve_permission_codes(data.side),
+        require_all=False,
+        check_abac=False,
     )
+    items: list[PartnerMaterialLinePriceResolveResponse] = []
+    for line in data.items:
+        result = await PartnerMaterialPriceResolver.resolve(
+            tenant_id,
+            data.side,
+            data.partner_id,
+            line.material_id,
+            quantity=line.quantity,
+            as_of=data.as_of,
+            variant_attributes=line.variant_attributes,
+        )
+        items.append(_partner_material_line_price_response(result))
+    return PartnerMaterialLinePriceBatchResponse(items=items)

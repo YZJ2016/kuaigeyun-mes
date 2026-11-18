@@ -91,3 +91,22 @@ export function resolvePartnerMaterialLinePrice(
 ): Promise<PartnerMaterialLinePriceResolveResult> {
   return api.post('/apps/master-data/supply-chain/resolve-partner-material-line-price', params);
 }
+
+export type PartnerMaterialLinePriceBatchItem = {
+  materialId: number;
+  quantity?: number;
+  variantAttributes?: Record<string, unknown>;
+};
+
+export type PartnerMaterialLinePriceBatchParams = {
+  side: 'purchase' | 'sales';
+  partnerId: number;
+  asOf?: string;
+  items: PartnerMaterialLinePriceBatchItem[];
+};
+
+export function resolvePartnerMaterialLinePriceBatch(
+  params: PartnerMaterialLinePriceBatchParams,
+): Promise<{ items: PartnerMaterialLinePriceResolveResult[] }> {
+  return api.post('/apps/master-data/supply-chain/resolve-partner-material-line-price-batch', params);
+}

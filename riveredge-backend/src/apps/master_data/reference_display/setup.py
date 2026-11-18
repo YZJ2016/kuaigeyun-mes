@@ -10,6 +10,7 @@ from apps.master_data.models.customer import Customer
 from apps.master_data.models.drawing import EngineeringDrawing
 from apps.master_data.models.factory import Plant, ProductionLine, WorkCenter, Workshop, Workstation
 from apps.master_data.models.material import BOM, Material, MaterialGroup
+from apps.master_data.models.material_code_alias import MaterialCodeAlias
 from apps.master_data.models.process import DefectType, Operation, ProcessRoute, SOP
 from apps.master_data.models.supplier import Supplier
 from apps.master_data.models.warehouse import StorageArea, StorageLocation, Warehouse
@@ -21,6 +22,7 @@ from core.services.authorization.data_scope_service import DataScopeService
 from core.services.reference.reference_display_provider_registry import register_reference_display_provider
 from core.services.reference.tenant_model_display_provider import make_tenant_model_display_provider
 from core.services.user.user_display_service import UserDisplayService
+from core.utils.search_utils import apply_keyword_icontains
 from infra.models.user import User
 
 _registered = False
@@ -60,7 +62,27 @@ def _partner_primary_contact_fields(entity: Any) -> dict[str, Any]:
 
 def _customer_display_row(entity: Any) -> dict[str, Any]:
     """客户下拉回填：首条联系人 + 业务员/地址（供销售订单等表单自动带出）。"""
+    from apps.master_data.services.supply_chain_service import (
+        _first_partner_address_row,
+        _partner_addresses_for_response,
+    )
+
     contact = _partner_primary_contact_fields(entity)
+    address_rows = _partner_addresses_for_response(entity)
+    delivery = _first_partner_address_row(address_rows, "delivery")
+    if delivery:
+        if delivery.get("contact_name"):
+            contact = {**contact, "contact_person": delivery.get("contact_name")}
+        if delivery.get("contact_phone"):
+            contact = {**contact, "phone": delivery.get("contact_phone")}
+    shipping_address = None
+    if delivery and delivery.get("address"):
+        shipping_address = delivery.get("address")
+    elif address_rows:
+        default_row = next((r for r in address_rows if r.get("is_default")), None)
+        registered = _first_partner_address_row(address_rows, "registered")
+        picked = default_row or registered or address_rows[0]
+        shipping_address = picked.get("address")
     return _row(
         id=int(entity.id),
         uuid=_partner_uuid(entity),
@@ -69,7 +91,7 @@ def _customer_display_row(entity: Any) -> dict[str, Any]:
         contact_person=contact.get("contact_person"),
         phone=contact.get("phone"),
         address=getattr(entity, "address", None),
-        delivery_address=getattr(entity, "delivery_address", None),
+        delivery_address=shipping_address or getattr(entity, "delivery_address", None),
         salesman_id=getattr(entity, "salesman_id", None),
         salesman_name=getattr(entity, "salesman_name", None),
         payment_terms_days=getattr(entity, "payment_terms_days", None),
@@ -245,6 +267,52 @@ class _SupplierDisplayProvider:
         return [_supplier_display_row(r) for r in rows]
 
 
+async def _material_ids_matching_partner_alias_keyword(
+    tenant_id: int,
+    keyword: str | None,
+    extra: dict[str, Any] | None,
+) -> list[int]:
+    """客户/供应商编号映射：按伙伴料号、品名反查物料 id。"""
+    text = (keyword or "").strip()
+    if not text:
+        return []
+    extra = extra or {}
+    customer_id = extra.get("customer_id") or extra.get("customerId")
+    supplier_id = extra.get("supplier_id") or extra.get("supplierId")
+    alias_q = MaterialCodeAlias.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+    if customer_id is not None:
+        try:
+            cid = int(customer_id)
+        except (TypeError, ValueError):
+            cid = 0
+        if cid > 0:
+            alias_q = alias_q.filter(
+                code_type="CUSTOMER",
+                external_entity_type="customer",
+                external_entity_id=cid,
+            )
+        else:
+            return []
+    elif supplier_id is not None:
+        try:
+            sid = int(supplier_id)
+        except (TypeError, ValueError):
+            sid = 0
+        if sid > 0:
+            alias_q = alias_q.filter(
+                code_type="SUPPLIER",
+                external_entity_type="supplier",
+                external_entity_id=sid,
+            )
+        else:
+            return []
+    else:
+        alias_q = alias_q.filter(code_type__in=["CUSTOMER", "SUPPLIER"])
+    alias_q = apply_keyword_icontains(alias_q, text, ("code", "name"))
+    raw_ids = await alias_q.values_list("material_id", flat=True)
+    return sorted({int(i) for i in raw_ids if i is not None and int(i) > 0})
+
+
 class _MaterialDisplayProvider:
     resource_key = "master-data:material"
 
@@ -286,6 +354,22 @@ class _MaterialDisplayProvider:
         total = await query.count()
         offset = (page - 1) * page_size
         rows = await query.order_by("main_code", "code").offset(offset).limit(page_size).all()
+        alias_material_ids = await _material_ids_matching_partner_alias_keyword(
+            tenant_id, keyword, extra
+        )
+        if alias_material_ids:
+            seen = {int(r.id) for r in rows}
+            need = [mid for mid in alias_material_ids if mid not in seen]
+            if need:
+                remaining = max(int(page_size) - len(rows), 0)
+                if remaining > 0:
+                    alias_rows = list(
+                        await query.filter(id__in=need)
+                        .order_by("main_code", "code")
+                        .limit(remaining)
+                    )
+                    rows = alias_rows + rows
+                total = max(total, len(alias_material_ids))
         return {
             "items": [
                 {

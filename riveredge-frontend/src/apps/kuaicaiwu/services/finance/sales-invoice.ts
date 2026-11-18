@@ -62,11 +62,13 @@ export const salesInvoiceService = {
   previewPullFromSalesOrder: async (orderId: number) =>
     apiRequest<SalesInvoicePullPreview>(`/apps/kuaicaiwu/sales-invoices/from-sales-order/${orderId}/pull-preview`, {
       method: 'GET',
+      notifyOnGatewayError: true,
+      timeoutMs: 60_000,
     }),
   previewPullFromSalesDelivery: async (deliveryId: number) =>
     apiRequest<SalesInvoicePullPreview>(
       `/apps/kuaicaiwu/sales-invoices/from-sales-delivery/${deliveryId}/pull-preview`,
-      { method: 'GET' },
+      { method: 'GET', notifyOnGatewayError: true, timeoutMs: 60_000 },
     ),
   listReceivablePullCandidates: async (params?: FinancePullCandidateListParams) =>
     apiRequest<{ data: SalesInvoicePullCandidate[]; total: number; success: boolean }>(
@@ -81,6 +83,6 @@ export const salesInvoiceService = {
   previewPullFromReceivable: async (receivableId: number) =>
     apiRequest<SalesInvoicePullPreview>(
       `/apps/kuaicaiwu/sales-invoices/from-receivable/${receivableId}/pull-preview`,
-      { method: 'GET' },
+      { method: 'GET', notifyOnGatewayError: true, timeoutMs: 60_000 },
     ),
 };

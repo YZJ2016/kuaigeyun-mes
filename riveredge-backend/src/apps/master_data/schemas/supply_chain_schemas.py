@@ -84,6 +84,31 @@ class PartnerSettlementAccountItem(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class PartnerAddressItem(BaseModel):
+    """客户/供应商地址明细行"""
+
+    address_type: Optional[str] = Field(
+        None, max_length=20, description="地址类型：registered/delivery/invoice/other", alias="addressType"
+    )
+    address: Optional[str] = Field(None, description="详细地址")
+    contact_name: Optional[str] = Field(None, max_length=100, description="联系人", alias="contactName")
+    contact_phone: Optional[str] = Field(None, max_length=30, description="联系电话", alias="contactPhone")
+    is_default: bool = Field(False, description="是否默认地址", alias="isDefault")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @validator("address_type", pre=True)
+    def validate_address_type(cls, v):
+        from apps.master_data.config.partner_address_type_codes import coerce_partner_address_type_code
+
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        coerced = coerce_partner_address_type_code(v)
+        if coerced is None:
+            raise ValueError("无效的地址类型")
+        return coerced
+
+
 class CustomerCreate(PartnerInvoiceAndExtendedMixin):
     """创建客户 Schema（归属仅通过 salesmanId，池状态由服务写入）"""
 
@@ -101,6 +126,7 @@ class CustomerCreate(PartnerInvoiceAndExtendedMixin):
     settlement_accounts: Optional[List[PartnerSettlementAccountItem]] = Field(
         None, description="收付款账户明细", alias="settlementAccounts"
     )
+    addresses: Optional[List[PartnerAddressItem]] = Field(None, description="地址明细")
     industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
     customer_level_code: Optional[str] = Field(None, max_length=50, description="客户级别字典值", alias="customerLevelCode")
     estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购量", alias="estimatedAnnualPurchase")
@@ -256,6 +282,8 @@ class CustomerUpdate(PartnerInvoiceAndExtendedMixin):
     settlement_accounts: Optional[List[PartnerSettlementAccountItem]] = Field(
         None, description="收付款账户明细", alias="settlementAccounts"
     )
+    addresses: Optional[List[PartnerAddressItem]] = Field(None, description="地址明细")
+    addresses: Optional[List[PartnerAddressItem]] = Field(None, description="地址明细")
     industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
     customer_level_code: Optional[str] = Field(None, max_length=50, description="客户级别字典值", alias="customerLevelCode")
     estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购量", alias="estimatedAnnualPurchase")
@@ -370,6 +398,7 @@ class SupplierBase(PartnerInvoiceAndExtendedMixin):
     settlement_accounts: Optional[List[PartnerSettlementAccountItem]] = Field(
         None, description="收付款账户明细", alias="settlementAccounts"
     )
+    addresses: Optional[List[PartnerAddressItem]] = Field(None, description="地址明细")
     industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
     estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购额", alias="estimatedAnnualPurchase")
     source_channel_code: Optional[str] = Field(None, max_length=50, description="来源渠道字典值", alias="sourceChannelCode")
@@ -469,6 +498,7 @@ class SupplierUpdate(PartnerInvoiceAndExtendedMixin):
     settlement_accounts: Optional[List[PartnerSettlementAccountItem]] = Field(
         None, description="收付款账户明细", alias="settlementAccounts"
     )
+    addresses: Optional[List[PartnerAddressItem]] = Field(None, description="地址明细")
     industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
     estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购额", alias="estimatedAnnualPurchase")
     source_channel_code: Optional[str] = Field(None, max_length=50, description="来源渠道字典值", alias="sourceChannelCode")

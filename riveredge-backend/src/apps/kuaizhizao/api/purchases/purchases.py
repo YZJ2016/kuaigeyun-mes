@@ -492,6 +492,7 @@ async def list_receipt_notice_pull_lines(
     "/purchase-orders/receipt-pull-candidates",
     response_model=PurchaseReceiptPullCandidateListResponse,
     summary="List purchase orders for inbound pull modal",
+    dependencies=[Depends(require_read_or_display("kuaizhizao:purchase-order"))],
 )
 async def list_purchase_receipt_pull_candidates(
     skip: int = Query(0, ge=0, description="跳过数量"),

@@ -220,8 +220,7 @@ export const partnerExtendedCommonFormFields: FieldConfig[] = [
   ...partnerDeliveryContactFormFields,
 ];
 
-/** 客户扩展 TAB：不含财务联系人（基本信息 TAB 已有联系人明细表） */
+/** 客户扩展 TAB：不含财务联系人（基本信息 TAB 已有联系人/地址明细表） */
 export const partnerExtendedFormFieldsWithoutFinance: FieldConfig[] = [
   ...partnerExtendedSettlementFormFields,
-  ...partnerDeliveryContactFormFields,
 ];

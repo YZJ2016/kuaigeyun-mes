@@ -25,6 +25,14 @@ from apps.kuaizhizao.services.payment_application_service import PaymentApplicat
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 
 
+def _department_payload_from_model(model: Any, *, label: str) -> Dict[str, Any]:
+    did = int(getattr(model, "department_id", None) or 0)
+    dname = str(getattr(model, "department_name", None) or "").strip()
+    if did <= 0 or not dname:
+        raise BusinessLogicError(f"{label}未填写申请部门，无法下推付款申请")
+    return {"department_id": did, "department_name": dname}
+
+
 def prepayment_application_base_amount(order: Any) -> Decimal:
     """付款申请自采购订单取单：有预付计划用预付额，否则用订单价税合计。"""
     from apps.kuaicaiwu.services.finance_tax import quantize_money
@@ -254,6 +262,7 @@ class PaymentApplicationPullService:
                     request_amount=amount,
                 )
             ],
+            **_department_payload_from_model(order, label="采购订单"),
         )
         return await self._apps.create_application(
             tenant_id, create, created_by, skip_manual_create_auto_submit=True
@@ -316,11 +325,13 @@ class PaymentApplicationPullService:
         if not merged_items:
             raise BusinessLogicError("所选采购订单无可合并的请款明细")
 
+        first_order = await PurchaseOrder.get(id=ids[0])
         create = PaymentApplicationCreate(
             supplier_id=int(supplier_id),
             supplier_name=str(supplier_name or ""),
             application_kind="prepayment",
             items=merged_items,
+            **_department_payload_from_model(first_order, label="采购订单"),
         )
         return await self._apps.create_application(
             tenant_id, create, created_by, skip_manual_create_auto_submit=True
@@ -473,21 +484,19 @@ class PaymentApplicationPullService:
         if not items_raw:
             raise BusinessLogicError("该入库单无可请款明细")
         items = [PaymentApplicationLineCreate.model_validate(row) for row in items_raw]
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+
+        receipt = await PurchaseReceipt.get_or_none(
+            tenant_id=tenant_id, id=purchase_receipt_id, deleted_at__isnull=True
+        )
+        if not receipt:
+            raise NotFoundError(f"采购入库单不存在: {purchase_receipt_id}")
         create = PaymentApplicationCreate(
             supplier_id=int(payable.supplier_id),
             supplier_name=str(payable.supplier_name or ""),
             application_kind="goods",
-            items=[
-                PaymentApplicationLineCreate(
-                    source_type="purchase_receipt",
-                    source_id=purchase_receipt_id,
-                    source_code=code,
-                    payable_id=int(payable.id),
-                    payable_code=payable.payable_code,
-                    line_kind="goods",
-                    request_amount=req_amount,
-                )
-            ],
+            items=items,
+            **_department_payload_from_model(receipt, label="采购入库单"),
         )
         return await self._apps.create_application(
             tenant_id, create, created_by, skip_manual_create_auto_submit=True
@@ -530,11 +539,19 @@ class PaymentApplicationPullService:
         if not merged_items:
             raise BusinessLogicError("所选入库单无可合并的请款明细")
 
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+
+        first_receipt = await PurchaseReceipt.get_or_none(
+            tenant_id=tenant_id, id=ids[0], deleted_at__isnull=True
+        )
+        if not first_receipt:
+            raise NotFoundError(f"采购入库单不存在: {ids[0]}")
         create = PaymentApplicationCreate(
             supplier_id=int(supplier_id),
             supplier_name=str(supplier_name or ""),
             application_kind="goods",
             items=merged_items,
+            **_department_payload_from_model(first_receipt, label="采购入库单"),
         )
         return await self._apps.create_application(
             tenant_id, create, created_by, skip_manual_create_auto_submit=True

@@ -83,7 +83,10 @@ import {
   repriceUnlockedPurchaseDocumentLineIfNeeded,
 } from '../../../../master-data/utils/resolve-partner-material-price';
 import { partnerPaymentMethodSelectOptions } from '../../../../master-data/utils/partner-static-labels';
-import { normalizeFormListItems } from '../../../../../utils/formListItems';
+import {
+  normalizeFormListItems,
+  resolveFormListFieldForSubmit,
+} from '../../../../../utils/formListItems';
 import {
   applyMaterialTrackingToFormRow,
   readMaterialTrackingFromPicker,
@@ -1298,7 +1301,8 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
   );
 
   const handleFinish = async (values: Record<string, unknown>) => {
-    const items = (values.items as Record<string, unknown>[]) ?? [];
+    const itemsRaw = resolveFormListFieldForSubmit(formRef, values, 'items');
+    const items = normalizeFormListItems<Record<string, unknown>>(itemsRaw);
     const validItems = items.filter(
       (it) => it.material_id && (Number(it.receipt_quantity) || 0) > 0,
     );
@@ -1345,6 +1349,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
       const material = await fetchMaterialForUnitSelectCache(Number(it.material_id));
       const dualErr = validateDualQuantityBeforeSave({
         material: material as Material | null,
+        scenario: 'purchase',
         value: {
           quantity: Number(it.receipt_quantity),
           material_unit: String(it.material_unit ?? ''),
@@ -1355,8 +1360,9 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
         },
       });
       if (dualErr) {
-        messageApi.error(dualErr);
-        throw new Error(dualErr);
+        const msg = `${materialLabel}：${dualErr}`;
+        messageApi.error(msg);
+        throw new Error(msg);
       }
     }
 
