@@ -62,6 +62,7 @@ export interface PurchaseReturn {
     mode?: string;
     allowed_actions?: string[];
   } | null;
+  finance_outcome?: PurchaseReturnFinanceOutcome | null;
   items?: PurchaseReturnItem[];
 }
 
