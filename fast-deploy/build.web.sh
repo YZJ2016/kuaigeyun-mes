@@ -87,9 +87,8 @@ npm run sync:libredwg
 echo "sync:libredwg 耗时 $((SECONDS - SYNC_START))s"
 if [ "${BUILD_WEB_SKIP_AMOUNT_SCAN:-0}" != "1" ]; then
   echo "采购价税契约扫描（scan_purchase_amount_contract）..."
-fi
-if [ "${BUILD_WEB_SKIP_AMOUNT_SCAN:-0}" != "1" ]; then
-  python scripts/scan_purchase_amount_contract.py --fail-on high || {
+  PYBIN="$(command -v python || command -v python3)"
+  "$PYBIN" scripts/scan_purchase_amount_contract.py --fail-on high || {
     echo "错误: 采购价税契约扫描失败。修复后重试，或仅本地调试 BUILD_WEB_SKIP_AMOUNT_SCAN=1"
     exit 1
   }
