@@ -5,7 +5,7 @@ import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react'
 import { rowActionKind, rowActionMakePayment, rowActionIssueInvoice } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Typography, Modal, Alert, Table, Empty, Form, theme } from 'antd';
+import { App, Button, Typography, Modal, Alert, Table, Empty, Form, InputNumber, theme } from 'antd';
 import { ModalForm, ProForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import type { ProFormInstance } from '@ant-design/pro-components';
 import { PlusOutlined } from '@ant-design/icons';
@@ -52,6 +52,12 @@ import {
 import { buildPayableStatusEnum, buildReviewStatusEnum } from '../../../utils/financeSharedOptions';
 import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '../../../constants/documentActionRegistry';
 import { payableCapabilityReasonMessage } from '../../../utils/payableCapabilityMessages';
+import {
+  initPullReceiptLineSelection,
+  reconcilePullReceiptLinesForHeaderAmount,
+  sumPullReceiptLineAmounts,
+  type PullReceiptFinanceDetailLine,
+} from '../../../../kuaizhizao/utils/pullReceiptFinanceLines';
 import { renderRefundExecutionMarker } from '../../../utils/financeUiLabels';
 import dayjs from 'dayjs';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
@@ -118,6 +124,8 @@ const PayableList: React.FC = () => {
     const [pullPreviewData, setPullPreviewData] = useState<PayablePullPreview | null>(null);
     const [pullPreviewSourceIds, setPullPreviewSourceIds] = useState<number[]>([]);
     const [pullPreviewKind, setPullPreviewKind] = useState<PullPreviewKind | null>(null);
+    const [pullReceiptSelectedIds, setPullReceiptSelectedIds] = useState<number[]>([]);
+    const [pullReceiptLineAmounts, setPullReceiptLineAmounts] = useState<Record<number, number>>({});
     const pullFromPurchaseOrderCloseRef = useRef<(() => void) | null>(null);
     const pullFromPurchaseOrderOpenRef = useRef<(() => void) | null>(null);
     const pullFromPurchaseReceiptCloseRef = useRef<(() => void) | null>(null);
@@ -517,6 +525,41 @@ const PayableList: React.FC = () => {
             messageApi.warning(t(`${P}.pullExceedMax`, { max: formatAmount(maxPush) }));
             return false;
         }
+        let pullReceiptLines: PayableCreateData['pull_receipt_lines'];
+        if (
+            pullPreviewKind === 'purchase_receipt'
+            && (pullPreviewData.detail_lines?.length ?? 0) > 0
+        ) {
+            if (pullReceiptSelectedIds.length === 0) {
+                messageApi.warning(t(`${P}.pull.selectAtLeastOneLine`));
+                return false;
+            }
+            const detailLines = pullPreviewData.detail_lines ?? [];
+            const reconciled = reconcilePullReceiptLinesForHeaderAmount(
+                pullReceiptSelectedIds,
+                detailLines,
+                totalAmount,
+                pullReceiptLineAmounts,
+            );
+            if (reconciled.selectedItemIds.length === 0) {
+                messageApi.warning(t(`${P}.pull.selectAtLeastOneLine`));
+                return false;
+            }
+            if (Math.abs(reconciled.lineSum - totalAmount) > 0.009) {
+                messageApi.warning(t(`${P}.pull.lineAmountMismatch`));
+                return false;
+            }
+            const detailById = new Map(detailLines.map((row) => [row.purchase_receipt_item_id, row]));
+            for (const id of reconciled.selectedItemIds) {
+                const cap = Number(detailById.get(id)?.max_push_amount ?? 0);
+                const amt = Number(reconciled.amounts[id] ?? 0);
+                if (amt <= 0 || amt > cap + 0.009) {
+                    messageApi.warning(t(`${P}.pull.lineExceedMax`));
+                    return false;
+                }
+            }
+            pullReceiptLines = reconciled.payload;
+        }
         const sourceLabel =
             pullPreviewKind === 'purchase_order'
                 ? pullFromPurchaseOrderAction.sourceLabel
@@ -549,6 +592,7 @@ const PayableList: React.FC = () => {
                         code: pullPreviewData.source_code,
                     }),
                 attachments: normalizeDocumentAttachments(values.attachments),
+                pull_receipt_lines: pullReceiptLines,
             });
             messageApi.success(t(`${P}.pullCreateSuccess`, { target: pullFromPurchaseOrderAction.targetLabel }));
             resetPullPreview();
@@ -611,6 +655,51 @@ const PayableList: React.FC = () => {
         if (!pullPreviewOpen || pullPreviewLoading || !pullFormInitialValues) return;
         pullForm.setFieldsValue(pullFormInitialValues);
     }, [pullPreviewOpen, pullPreviewLoading, pullFormInitialValues, pullForm]);
+
+    useEffect(() => {
+        if (!pullPreviewOpen || pullPreviewKind !== 'purchase_receipt' || !pullPreviewData) return;
+        const lines = (pullPreviewData.detail_lines ?? []) as PullReceiptFinanceDetailLine[];
+        if (!lines.length) {
+            setPullReceiptSelectedIds([]);
+            setPullReceiptLineAmounts({});
+            return;
+        }
+        const { selectedItemIds, amounts } = initPullReceiptLineSelection(lines);
+        setPullReceiptSelectedIds(selectedItemIds);
+        setPullReceiptLineAmounts(amounts);
+        const sum = sumPullReceiptLineAmounts(selectedItemIds, amounts);
+        if (sum > 0) {
+            pullForm.setFieldsValue({ total_amount: sum });
+        }
+    }, [pullPreviewOpen, pullPreviewKind, pullPreviewData, pullForm]);
+
+    const pullTotalAmountWatch = Form.useWatch('total_amount', pullForm);
+
+    useEffect(() => {
+        if (!pullPreviewOpen || pullPreviewKind !== 'purchase_receipt' || !pullPreviewData) return;
+        if (pullReceiptSelectedIds.length === 0) return;
+        const target = Number(pullTotalAmountWatch || 0);
+        if (!(target > 0)) return;
+        const detailLines = (pullPreviewData.detail_lines ?? []) as PullReceiptFinanceDetailLine[];
+        const currentSum = sumPullReceiptLineAmounts(pullReceiptSelectedIds, pullReceiptLineAmounts);
+        if (Math.abs(currentSum - target) <= 0.009) return;
+        const reconciled = reconcilePullReceiptLinesForHeaderAmount(
+            pullReceiptSelectedIds,
+            detailLines,
+            target,
+        );
+        setPullReceiptLineAmounts(reconciled.amounts);
+        if (reconciled.selectedItemIds.join(',') !== pullReceiptSelectedIds.join(',')) {
+            setPullReceiptSelectedIds(reconciled.selectedItemIds);
+        }
+    }, [
+        pullPreviewOpen,
+        pullPreviewKind,
+        pullPreviewData,
+        pullReceiptSelectedIds,
+        pullReceiptLineAmounts,
+        pullTotalAmountWatch,
+    ]);
 
     const handlePullPreviewOk = async () => {
         if (pullPreviewLoading || !pullPreviewData) {
@@ -1434,6 +1523,115 @@ const PayableList: React.FC = () => {
                         ) : (
                             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseReturn.pull.previewNoLines')} />
                         )}
+                        {pullPreviewKind === 'purchase_receipt' ? (
+                            <>
+                                <Typography.Paragraph strong style={{ marginTop: 16, marginBottom: 8 }}>
+                                    {t(`${P}.pull.detailTitle`)}
+                                </Typography.Paragraph>
+                                {(pullPreviewData.detail_lines?.length ?? 0) > 0 ? (
+                                    <Table<PullReceiptFinanceDetailLine>
+                                        size="small"
+                                        dataSource={pullPreviewData.detail_lines as PullReceiptFinanceDetailLine[]}
+                                        rowKey={(row) => String(row.purchase_receipt_item_id)}
+                                        pagination={false}
+                                        scroll={{ x: 980, y: 240 }}
+                                        rowSelection={{
+                                            selectedRowKeys: pullReceiptSelectedIds,
+                                            onChange: (keys) => {
+                                                const ids = keys.map((k) => Number(k)).filter((id) => id > 0);
+                                                setPullReceiptSelectedIds(ids);
+                                                const sum = sumPullReceiptLineAmounts(ids, pullReceiptLineAmounts);
+                                                if (sum > 0) {
+                                                    pullForm.setFieldsValue({ total_amount: sum });
+                                                }
+                                            },
+                                            getCheckboxProps: (row) => ({
+                                                disabled: Number(row.max_push_amount ?? 0) <= 0,
+                                            }),
+                                        }}
+                                        columns={[
+                                            {
+                                                title: t(`${P}.pull.col.lineNo`),
+                                                dataIndex: 'line_no',
+                                                width: 56,
+                                                align: 'center',
+                                            },
+                                            {
+                                                title: t(`${P}.pull.col.materialCode`),
+                                                dataIndex: 'material_code',
+                                                width: 120,
+                                                ellipsis: true,
+                                            },
+                                            {
+                                                title: t(`${P}.pull.col.materialName`),
+                                                dataIndex: 'material_name',
+                                                width: 140,
+                                                ellipsis: true,
+                                            },
+                                            {
+                                                title: t(`${P}.pull.col.lineAmount`),
+                                                dataIndex: 'amount',
+                                                width: 100,
+                                                align: 'right',
+                                                render: (v: number) => formatPullMoney(v),
+                                            },
+                                            {
+                                                title: t(`${P}.pull.col.occupiedAmount`),
+                                                dataIndex: 'occupied_amount',
+                                                width: 100,
+                                                align: 'right',
+                                                render: (v: number) => formatPullMoney(v),
+                                            },
+                                            {
+                                                title: t(`${P}.pull.col.payableableAmount`),
+                                                dataIndex: 'max_push_amount',
+                                                width: 100,
+                                                align: 'right',
+                                                render: (v: number) => formatPullMoney(v),
+                                            },
+                                            {
+                                                title: t(`${P}.pull.col.thisPayableAmount`),
+                                                width: 130,
+                                                align: 'right',
+                                                render: (_, row) => {
+                                                    const id = row.purchase_receipt_item_id;
+                                                    const selected = pullReceiptSelectedIds.includes(id);
+                                                    const cap = Number(row.max_push_amount ?? 0);
+                                                    return (
+                                                        <InputNumber
+                                                            size="small"
+                                                            min={0}
+                                                            max={cap}
+                                                            precision={2}
+                                                            disabled={!selected || cap <= 0}
+                                                            value={pullReceiptLineAmounts[id]}
+                                                            onChange={(val) => {
+                                                                const next = Number(val ?? 0);
+                                                                setPullReceiptLineAmounts((prev) => {
+                                                                    const merged = { ...prev, [id]: next };
+                                                                    const sum = sumPullReceiptLineAmounts(
+                                                                        pullReceiptSelectedIds,
+                                                                        merged,
+                                                                    );
+                                                                    pullForm.setFieldsValue({ total_amount: sum });
+                                                                    return merged;
+                                                                });
+                                                            }}
+                                                            style={{ width: '100%' }}
+                                                        />
+                                                    );
+                                                },
+                                            },
+                                        ]}
+                                    />
+                                ) : (
+                                    <Empty
+                                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                                        description={t(`${P}.pull.detailEmpty`)}
+                                    />
+                                )}
+                            </>
+                        ) : null}
                         {pullPreviewData.tip ? (
                             <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 16 }}>
                                 {pullPreviewData.tip}

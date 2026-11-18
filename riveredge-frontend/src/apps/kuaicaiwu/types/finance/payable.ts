@@ -81,6 +81,7 @@ export interface PayableCreateData {
     pull_source_type?: 'purchase_order' | 'purchase_receipt';
     pull_source_id?: number;
     pull_source_ids?: number[];
+    pull_receipt_lines?: { purchase_receipt_item_id: number; amount: number }[];
 }
 
 export interface PaymentRecordCreate {

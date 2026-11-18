@@ -2141,6 +2141,15 @@ class ReportService:
             tenant_id, [h.get("supplier_id") for h in rmap.values()]
         )
         item_ids = [int(r["id"]) for r in rows]
+        finance_occ: Dict[int, Dict[str, float]] = {}
+        if item_ids:
+            from apps.kuaicaiwu.services.purchase_receipt_line_finance_occupancy_service import (
+                PurchaseReceiptLineFinanceOccupancyService,
+            )
+
+            finance_occ = await PurchaseReceiptLineFinanceOccupancyService().sums_by_receipt_item_ids(
+                tenant_id, item_ids
+            )
         items = []
         for r in rows:
             head = rmap.get(r["receipt_id"], {})
@@ -2169,6 +2178,7 @@ class ReportService:
                 "quantity": float(r.get("receipt_quantity") or 0),
                 "unit_price": float(r.get("unit_price") or 0),
                 "amount": float(r.get("total_amount") or 0),
+                **finance_occ.get(int(r["id"]), {}),
             })
         agg = await self._aggregate_sums(
             item_q,

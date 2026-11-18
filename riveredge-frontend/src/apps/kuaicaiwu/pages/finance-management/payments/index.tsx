@@ -54,12 +54,10 @@ import {
   financeFormGridProps,
 } from '../../../utils/financeFormLayout';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { loadFinancePullCandidatePage } from '../shared/loadFinancePullCandidatePage';
 import {
   UniPullQueryModal,
-  filterByPullScope,
-  paginatePullRows,
   renderPullQueryReviewStatus,
-  UNI_PULL_QUERY_MAX_FETCH_LIMIT,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import dayjs from 'dayjs';
@@ -163,7 +161,7 @@ const PaymentsPage: React.FC = () => {
   const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
   const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
   const [pullPreviewData, setPullPreviewData] = useState<PaymentPullPreview | null>(null);
-  const [pullPreviewSourceId, setPullPreviewSourceId] = useState<number | null>(null);
+  const [pullPreviewSourceIds, setPullPreviewSourceIds] = useState<number[]>([]);
   const [pullForm] = Form.useForm();
   const pullFromPayableCloseRef = useRef<(() => void) | null>(null);
   const pullFromPayableOpenRef = useRef<(() => void) | null>(null);
@@ -414,33 +412,103 @@ const PaymentsPage: React.FC = () => {
     }
   };
 
+  const buildPullLinesFromToolbarPreview = (
+    preview: PaymentPullPreview,
+    sourceIds: number[],
+    kind: 'payable' | 'payment_application',
+    totalAmount: number,
+  ) => {
+    if (kind === 'payment_application') {
+      return [
+        {
+          source_type: 'payment_application' as const,
+          source_id: sourceIds[0],
+          source_code: String(preview.source_code ?? sourceIds[0]),
+          amount: totalAmount,
+        },
+      ];
+    }
+    let left = totalAmount;
+    const lines: Array<{
+      source_type: 'payable';
+      source_id: number;
+      source_code?: string;
+      amount: number;
+    }> = [];
+    for (const item of preview.items ?? []) {
+      if (left <= 0) break;
+      const sourceId = Number(item.item_id ?? 0);
+      if (!sourceId) continue;
+      const maxPush = Number(item.max_push_quantity ?? 0);
+      if (!(maxPush > 0)) continue;
+      const amount = Math.min(maxPush, left);
+      left -= amount;
+      lines.push({
+        source_type: 'payable',
+        source_id: sourceId,
+        source_code: String((item as { source_code?: unknown }).source_code ?? sourceId),
+        amount,
+      });
+    }
+    return lines;
+  };
+
   const resetPullPreview = () => {
     setPullPreviewOpen(false);
-    setPullPreviewSourceId(null);
+    setPullPreviewSourceIds([]);
     setPullPreviewData(null);
     pullForm.resetFields();
   };
 
   const openPullPreview = async (
-    sourceId: number,
+    sourceIdsInput: number | number[],
     kind: 'payable' | 'payment_application' = 'payable',
     options?: { closeSourceModal?: () => void; reopenSourceModal?: () => void },
   ) => {
+    const sourceIds = (Array.isArray(sourceIdsInput) ? sourceIdsInput : [sourceIdsInput])
+      .map((id) => Number(id))
+      .filter((id) => Number.isFinite(id) && id > 0);
+    if (!sourceIds.length) return;
+
+    options?.closeSourceModal?.();
     setPullSourceKind(kind);
     setPullPreviewOpen(false);
     setPullPreviewLoading(true);
     setPullPreviewData(null);
-    setPullPreviewSourceId(sourceId);
+    setPullPreviewSourceIds(sourceIds);
     const sourceAction =
       kind === 'payment_application' ? pullFromPaymentApplicationAction : pullFromPayableAction;
     const hideLoading = messageApi.loading(t(`${P}.pullPreviewLoading`), 0);
     try {
       const data =
         kind === 'payment_application'
-          ? await paymentService.previewPullFromPaymentApplication(sourceId)
-          : await paymentService.previewPullFromPayable(sourceId);
+          ? await paymentService.previewPullFromPaymentApplication(sourceIds[0])
+          : sourceIds.length === 1
+            ? await paymentService.previewPullFromPayable(sourceIds[0])
+            : await paymentService.previewPullFromPayables(sourceIds);
+      if (data.has_blocking_issues) {
+        messageApi.warning(
+          paymentCapabilityReasonMessage(data.blocking_reason, t) || t(`${P}.pullPreviewBlocked`),
+        );
+        resetPullPreview();
+        options?.reopenSourceModal?.();
+        return;
+      }
+      const maxPush =
+        Number(
+          data.max_push_total ??
+            (data.items || []).reduce(
+              (sum, row) => sum + Number(row.max_push_quantity ?? 0),
+              0,
+            ),
+        ) || 0;
+      if (maxPush <= 0) {
+        messageApi.warning(t(`${P}.pullNoPayableAmount`));
+        resetPullPreview();
+        options?.reopenSourceModal?.();
+        return;
+      }
       setPullPreviewData(data);
-      const maxPush = Number(data.items?.[0]?.max_push_quantity ?? 0);
       pullForm.setFieldsValue({
         source_code: data.source_code,
         supplier_id: data.supplier_id,
@@ -486,20 +554,18 @@ const PaymentsPage: React.FC = () => {
 
   const pullFromPayableQuery = useUniPullQuery<PullPayableCandidate>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     scopeOptions: pullQueryScopeOptions,
     defaultScope: 'pullable',
     isRowDisabled: (record) => !isPullPaymentSelectable(record),
-    loadData: async ({ keyword, page, pageSize, scope }) => {
+    loadData: async (params) => {
       try {
-        const res = await paymentService.listPayablePullCandidates({
-          skip: 0,
-          limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
-          keyword: keyword.trim() || undefined,
-        });
-        const rows = res.data || [];
-        const filtered = filterByPullScope(rows, scope, isPullPaymentSelectable);
-        return paginatePullRows(filtered, page, pageSize);
+        return await loadFinancePullCandidatePage(
+          params,
+          params.scope,
+          isPullPaymentSelectable,
+          (api) => paymentService.listPayablePullCandidates(api),
+        );
       } catch (e: any) {
         messageApi.error(
           e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
@@ -508,13 +574,28 @@ const PaymentsPage: React.FC = () => {
       }
     },
     onConfirm: async (keys, rows) => {
-      const selected = rows.find((x) => String(x.id) === String(keys[0]));
-      if (!selected?.id) {
+      const selectedIds = rows
+        .filter((x) => keys.some((k) => String(k) === String(x.id)))
+        .map((x) => Number(x.id))
+        .filter((id) => Number.isFinite(id) && id > 0);
+      if (!selectedIds.length) {
         messageApi.warning(t(`${P}.selectSource`, { label: pullFromPayableAction.sourceLabel }));
         return;
       }
-      pullFromPayableCloseRef.current?.();
-      await openPullPreview(selected.id, 'payable');
+      const supplierIds = new Set(
+        rows
+          .filter((x) => selectedIds.includes(Number(x.id)))
+          .map((x) => Number(x.supplier_id ?? 0))
+          .filter((id) => id > 0),
+      );
+      if (supplierIds.size > 1) {
+        messageApi.warning(t(`${P}.sameSupplierRequired`));
+        return;
+      }
+      await openPullPreview(selectedIds, 'payable', {
+        closeSourceModal: () => pullFromPayableCloseRef.current?.(),
+        reopenSourceModal: () => pullFromPayableOpenRef.current?.(),
+      });
     },
   });
   pullFromPayableCloseRef.current = pullFromPayableQuery.closeModal;
@@ -522,22 +603,20 @@ const PaymentsPage: React.FC = () => {
 
   const pullFromPaymentApplicationQuery = useUniPullQuery<PaymentPullCandidate>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     scopeOptions: pullQueryScopeOptions,
     defaultScope: 'pullable',
     isRowDisabled: (record) => record.capabilities?.pull_payment?.allowed === false,
-    loadData: async ({ keyword, page, pageSize, scope }) => {
+    loadData: async (params) => {
       try {
-        const res = await paymentService.listPaymentApplicationPullCandidates({
-          skip: 0,
-          limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
-          keyword: keyword.trim() || undefined,
-        });
-        const rows = res.data || [];
         const isSelectable = (record: PaymentPullCandidate) =>
           record.capabilities?.pull_payment?.allowed !== false;
-        const filtered = filterByPullScope(rows, scope, isSelectable);
-        return paginatePullRows(filtered, page, pageSize);
+        return await loadFinancePullCandidatePage(
+          params,
+          params.scope,
+          isSelectable,
+          (api) => paymentService.listPaymentApplicationPullCandidates(api),
+        );
       } catch (e: any) {
         messageApi.error(
           e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
@@ -546,14 +625,17 @@ const PaymentsPage: React.FC = () => {
       }
     },
     onConfirm: async (keys, rows) => {
-      const selected = rows.find((x) => String(x.id) === String(keys[0]));
-      if (!selected?.id) {
+      const selectedIds = rows
+        .filter((x) => keys.some((k) => String(k) === String(x.id)))
+        .map((x) => Number(x.id))
+        .filter((id) => Number.isFinite(id) && id > 0);
+      if (!selectedIds.length) {
         messageApi.warning(
           t(`${P}.selectSource`, { label: pullFromPaymentApplicationAction.sourceLabel }),
         );
         return;
       }
-      await openPullPreview(selected.id, 'payment_application', {
+      await openPullPreview(selectedIds, 'payment_application', {
         closeSourceModal: () => pullFromPaymentApplicationCloseRef.current?.(),
         reopenSourceModal: () => pullFromPaymentApplicationOpenRef.current?.(),
       });
@@ -571,7 +653,7 @@ const PaymentsPage: React.FC = () => {
   }, [location.state, location.pathname, navigate]);
 
   const handlePullCreateSubmit = async (values: any) => {
-    if (!pullPreviewData || !pullPreviewSourceId) return false;
+    if (!pullPreviewData || !pullPreviewSourceIds.length) return false;
     if (pullPreviewData.has_blocking_issues) return false;
     try {
       assertBankAccountForPaymentMethod(values.payment_method, values.bank_account_id, t);
@@ -579,7 +661,14 @@ const PaymentsPage: React.FC = () => {
       messageApi.warning((e as Error).message);
       return false;
     }
-    const maxPush = Number(pullPreviewData.items?.[0]?.max_push_quantity ?? 0);
+    const maxPush =
+      Number(
+        pullPreviewData.max_push_total ??
+          (pullPreviewData.items || []).reduce(
+            (sum, row) => sum + Number(row.max_push_quantity ?? 0),
+            0,
+          ),
+      ) || 0;
     const totalAmount = Number(values.total_amount) || 0;
     if (totalAmount <= 0) {
       messageApi.warning(t(`${P}.amountMustPositive`));
@@ -595,11 +684,20 @@ const PaymentsPage: React.FC = () => {
         pullSourceKind === 'payment_application'
           ? pullFromPaymentApplicationAction
           : pullFromPayableAction;
+      const pull_lines = buildPullLinesFromToolbarPreview(
+        pullPreviewData,
+        pullPreviewSourceIds,
+        pullSourceKind,
+        totalAmount,
+      );
+      if (!pull_lines.length) {
+        messageApi.warning(t(`${P}.pullLines.noNewLines`));
+        return false;
+      }
       const created = await paymentService.create({
         supplier_id: Number(pullPreviewData.supplier_id || 0),
         supplier_name: pullPreviewData.supplier_name || '',
-        source_type: pullSourceKind,
-        source_id: pullPreviewSourceId,
+        pull_lines,
         total_amount: totalAmount,
         payment_date: formatDateTime(values.payment_date || dayjs(), 'YYYY-MM-DD'),
         payment_method: values.payment_method || '银行转账',
@@ -960,7 +1058,14 @@ const PaymentsPage: React.FC = () => {
     [t],
   );
 
-  const pullPreviewMaxPush = Number(pullPreviewData?.items?.[0]?.max_push_quantity ?? 0);
+  const pullPreviewMaxPush =
+    Number(
+      pullPreviewData?.max_push_total ??
+        (pullPreviewData?.items || []).reduce(
+          (sum, row) => sum + Number(row.max_push_quantity ?? 0),
+          0,
+        ),
+    ) || 0;
   const formatPullMoney = (v: number) =>
     formatCurrencyAmount(v || 0);
 
@@ -1634,7 +1739,7 @@ const PaymentsPage: React.FC = () => {
       >
         {pullPreviewData ? (
               <ProForm
-                key={`pull-payment-${pullPreviewSourceId}`}
+                key={`pull-payment-${pullPreviewSourceIds.join('-')}`}
                 form={pullForm}
                 submitter={false}
                 onFinish={handlePullCreateSubmit}
