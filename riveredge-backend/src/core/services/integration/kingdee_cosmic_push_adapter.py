@@ -23,6 +23,17 @@ __all__ = [
     "extract_cosmic_saved_bill_ref",
 ]
 
+def _cosmic_batch_first_result(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    data = payload.get("data")
+    if isinstance(data, dict):
+        result = data.get("result")
+        if isinstance(result, list) and result and isinstance(result[0], dict):
+            return result[0]
+        return data
+    if isinstance(data, list) and data and isinstance(data[0], dict):
+        return data[0]
+    return None
+
 
 def extract_cosmic_response_status(payload: Any) -> Tuple[bool, str]:
     if not isinstance(payload, dict):
@@ -31,6 +42,30 @@ def extract_cosmic_response_status(payload: Any) -> Tuple[bool, str]:
     status = payload.get("status")
     message = str(payload.get("message") or payload.get("msg") or "").strip()
     ok = status is True or str(status).lower() == "true" or error_code in {"0", "success", "SUCCESS"}
+    first = _cosmic_batch_first_result(payload)
+    if isinstance(first, dict):
+        bill_status = first.get("billStatus")
+        if bill_status is False or str(bill_status).lower() == "false":
+            ok = False
+            row_msgs = first.get("errors") or first.get("rowMsg") or []
+            if isinstance(row_msgs, list) and row_msgs:
+                chunks: list[str] = []
+                for item in row_msgs:
+                    if isinstance(item, dict):
+                        nested = item.get("rowMsg") or item.get("message")
+                        if isinstance(nested, list):
+                            chunks.extend(str(x) for x in nested if x)
+                        elif nested:
+                            chunks.append(str(nested))
+                    elif item:
+                        chunks.append(str(item))
+                if chunks:
+                    message = "；".join(chunks)[:500]
+        data = payload.get("data")
+        if isinstance(data, dict):
+            fail_count = str(data.get("failCount") or "").strip()
+            if fail_count and fail_count not in {"0", "0.0"}:
+                ok = False
     if ok:
         return True, (message or "成功")[:500]
     if message:
@@ -43,9 +78,7 @@ def extract_cosmic_response_status(payload: Any) -> Tuple[bool, str]:
 def extract_cosmic_saved_bill_ref(payload: Any, fallback: str = "") -> Tuple[int, str]:
     if not isinstance(payload, dict):
         return 0, str(fallback or "")
-    data = payload.get("data")
-    if isinstance(data, list) and data:
-        data = data[0]
+    data = _cosmic_batch_first_result(payload)
     if not isinstance(data, dict):
         data = payload
     raw_id = data.get("id") or data.get("Id") or data.get("billid") or data.get("billId") or 0
@@ -53,11 +86,13 @@ def extract_cosmic_saved_bill_ref(payload: Any, fallback: str = "") -> Tuple[int
         target_id = int(raw_id)
     except (TypeError, ValueError):
         target_id = 0
+    keys = data.get("keys") if isinstance(data.get("keys"), dict) else {}
     number = str(
         data.get("billno")
         or data.get("billNo")
         or data.get("number")
         or data.get("Number")
+        or (keys.get("billno") if keys else "")
         or fallback
         or ""
     ).strip()
@@ -84,6 +119,9 @@ class KingdeeCosmicPushAdapter:
         wrap = str(config.get("body_wrap") or "data").strip().lower()
         if wrap in {"", "none", "flat"}:
             return dict(model)
+        # batchAdd 等接口：data 为单据数组
+        if wrap in {"data_list", "data_array", "list"}:
+            return {"data": [dict(model)]}
         # 默认与开放平台 / 制造链路写入一致：业务字段放在 data 内
         return {"data": dict(model)}
 

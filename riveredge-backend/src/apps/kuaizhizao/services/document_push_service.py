@@ -47,6 +47,22 @@ from apps.kuaizhizao.services.kingdee_purchase_receipt_push_service import (
     TARGET_PROFILE as PR_KD_PROFILE,
     KingdeePurchaseReceiptPushService,
 )
+from apps.kuaizhizao.services.kingdee_other_outbound_push_service import (
+    TARGET_PROFILE as OO_KD_PROFILE,
+    KingdeeOtherOutboundPushService,
+)
+from apps.kuaizhizao.services.kingdee_stocktaking_surplus_push_service import (
+    TARGET_PROFILE as ST_SURPLUS_KD_PROFILE,
+    KingdeeStocktakingSurplusPushService,
+)
+from apps.kuaizhizao.services.kingdee_stocktaking_deficit_push_service import (
+    TARGET_PROFILE as ST_DEFICIT_KD_PROFILE,
+    KingdeeStocktakingDeficitPushService,
+)
+from apps.kuaizhizao.services.kingdee_sales_delivery_push_service import (
+    TARGET_PROFILE as SD_KD_PROFILE,
+    KingdeeSalesDeliveryPushService,
+)
 from apps.kuaizhizao.services.kingdee_sales_order_push_service import (
     TARGET_PROFILE as SO_KD_PROFILE,
     KingdeeSalesOrderPushService,
@@ -68,6 +84,10 @@ SUPPORTED_PROFILES: Set[Tuple[str, str]] = {
     ("sales_order", SO_KD_PROFILE),
     ("purchase_order", PO_KD_PROFILE),
     ("purchase_receipt", PR_KD_PROFILE),
+    ("sales_delivery", SD_KD_PROFILE),
+    ("other_outbound", OO_KD_PROFILE),
+    ("stocktaking", ST_SURPLUS_KD_PROFILE),
+    ("stocktaking", ST_DEFICIT_KD_PROFILE),
     ("material_batch", INV_KD_PROFILE),
     ("material", MAT_KD_PROFILE),
     ("engineering_bom", BOM_KD_PROFILE),
@@ -81,6 +101,9 @@ _SOURCE_CONFIG_CATEGORY: Dict[str, str] = {
     "sales_order": "sales",
     "purchase_order": "purchase",
     "purchase_receipt": "warehouse",
+    "sales_delivery": "warehouse",
+    "other_outbound": "warehouse",
+    "stocktaking": "warehouse",
     "material_batch": "warehouse",
     "material": "master_data",
     "engineering_bom": "master_data",
@@ -312,6 +335,118 @@ async def _handle_purchase_receipt_kingdee(
     return result
 
 
+async def _handle_sales_delivery_kingdee(
+    *,
+    tenant_id: int,
+    acting_user_id: int,
+    source_id: int,
+    connection_code: Optional[str],
+    save_api_uuid: Optional[str],
+    dry_run: bool,
+    **_: Any,
+) -> Dict[str, Any]:
+    result = await KingdeeSalesDeliveryPushService().push_sales_delivery(
+        tenant_id=tenant_id,
+        sales_delivery_id=int(source_id),
+        acting_user_id=acting_user_id,
+        connection_code=connection_code,
+        save_api_uuid=save_api_uuid,
+        dry_run=dry_run,
+    )
+    if result is None:
+        return _disabled_result(
+            source_type="sales_delivery",
+            source_id=source_id,
+            target_profile=SD_KD_PROFILE,
+            message="金蝶销售出库推送未启用或出库单不存在",
+        )
+    return result
+
+
+async def _handle_other_outbound_kingdee(
+    *,
+    tenant_id: int,
+    acting_user_id: int,
+    source_id: int,
+    connection_code: Optional[str],
+    save_api_uuid: Optional[str],
+    dry_run: bool,
+    **_: Any,
+) -> Dict[str, Any]:
+    result = await KingdeeOtherOutboundPushService().push_other_outbound(
+        tenant_id=tenant_id,
+        other_outbound_id=int(source_id),
+        acting_user_id=acting_user_id,
+        connection_code=connection_code,
+        save_api_uuid=save_api_uuid,
+        dry_run=dry_run,
+    )
+    if result is None:
+        return _disabled_result(
+            source_type="other_outbound",
+            source_id=source_id,
+            target_profile=OO_KD_PROFILE,
+            message="金蝶其他出库推送未启用或出库单不存在",
+        )
+    return result
+
+
+async def _handle_stocktaking_surplus_kingdee(
+    *,
+    tenant_id: int,
+    acting_user_id: int,
+    source_id: int,
+    connection_code: Optional[str],
+    save_api_uuid: Optional[str],
+    dry_run: bool,
+    **_: Any,
+) -> Dict[str, Any]:
+    result = await KingdeeStocktakingSurplusPushService().push_stocktaking_surplus(
+        tenant_id=tenant_id,
+        stocktaking_id=int(source_id),
+        acting_user_id=acting_user_id,
+        connection_code=connection_code,
+        save_api_uuid=save_api_uuid,
+        dry_run=dry_run,
+    )
+    if result is None:
+        return _disabled_result(
+            source_type="stocktaking",
+            source_id=source_id,
+            target_profile=ST_SURPLUS_KD_PROFILE,
+            message="金蝶盘盈推送未启用或盘点单不存在",
+        )
+    return result
+
+
+async def _handle_stocktaking_deficit_kingdee(
+    *,
+    tenant_id: int,
+    acting_user_id: int,
+    source_id: int,
+    connection_code: Optional[str],
+    save_api_uuid: Optional[str],
+    dry_run: bool,
+    **_: Any,
+) -> Dict[str, Any]:
+    result = await KingdeeStocktakingDeficitPushService().push_stocktaking_deficit(
+        tenant_id=tenant_id,
+        stocktaking_id=int(source_id),
+        acting_user_id=acting_user_id,
+        connection_code=connection_code,
+        save_api_uuid=save_api_uuid,
+        dry_run=dry_run,
+    )
+    if result is None:
+        return _disabled_result(
+            source_type="stocktaking",
+            source_id=source_id,
+            target_profile=ST_DEFICIT_KD_PROFILE,
+            message="金蝶盘亏推送未启用或盘点单不存在",
+        )
+    return result
+
+
 async def _handle_material_batch_kingdee(
     *,
     tenant_id: int,
@@ -435,6 +570,10 @@ def ensure_default_push_handlers_registered() -> None:
     register_push_handler("sales_order", SO_KD_PROFILE, _handle_sales_order_kingdee)
     register_push_handler("purchase_order", PO_KD_PROFILE, _handle_purchase_order_kingdee)
     register_push_handler("purchase_receipt", PR_KD_PROFILE, _handle_purchase_receipt_kingdee)
+    register_push_handler("sales_delivery", SD_KD_PROFILE, _handle_sales_delivery_kingdee)
+    register_push_handler("other_outbound", OO_KD_PROFILE, _handle_other_outbound_kingdee)
+    register_push_handler("stocktaking", ST_SURPLUS_KD_PROFILE, _handle_stocktaking_surplus_kingdee)
+    register_push_handler("stocktaking", ST_DEFICIT_KD_PROFILE, _handle_stocktaking_deficit_kingdee)
     register_push_handler("material_batch", INV_KD_PROFILE, _handle_material_batch_kingdee)
     register_push_handler("material", MAT_KD_PROFILE, _handle_material_kingdee)
     register_push_handler("engineering_bom", BOM_KD_PROFILE, _handle_engineering_bom_kingdee)

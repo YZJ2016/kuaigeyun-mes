@@ -44,6 +44,42 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'stocktaking-deficit-kingdee-cosmic-push-r01',
+    date: '2026-10-25',
+    type: 'feature',
+    titleKey:
+      'pages.dashboard.updateLog.entries.stocktaking-deficit-kingdee-cosmic-push-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.stocktaking-deficit-kingdee-cosmic-push-r01.description',
+  },
+  {
+    id: 'stocktaking-surplus-kingdee-cosmic-push-r01',
+    date: '2026-10-25',
+    type: 'feature',
+    titleKey:
+      'pages.dashboard.updateLog.entries.stocktaking-surplus-kingdee-cosmic-push-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.stocktaking-surplus-kingdee-cosmic-push-r01.description',
+  },
+  {
+    id: 'other-outbound-kingdee-cosmic-push-r01',
+    date: '2026-10-25',
+    type: 'feature',
+    titleKey:
+      'pages.dashboard.updateLog.entries.other-outbound-kingdee-cosmic-push-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.other-outbound-kingdee-cosmic-push-r01.description',
+  },
+  {
+    id: 'sales-delivery-kingdee-cosmic-push-r01',
+    date: '2026-10-25',
+    type: 'feature',
+    titleKey:
+      'pages.dashboard.updateLog.entries.sales-delivery-kingdee-cosmic-push-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-delivery-kingdee-cosmic-push-r01.description',
+  },
+  {
     id: 'cosmic-warehouse-getlist-sync-r01',
     date: '2026-10-25',
     type: 'fix',

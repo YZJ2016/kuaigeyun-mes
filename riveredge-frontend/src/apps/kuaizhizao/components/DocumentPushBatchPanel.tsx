@@ -34,6 +34,10 @@ export const DOCUMENT_PUSH_PROFILE_LABEL_KEYS: Record<string, string> = {
   kingdee_sal_saleorder: 'app.kuaizhizao.documentPush.profile.kingdee_sal_saleorder',
   kingdee_pur_purchaseorder: 'app.kuaizhizao.documentPush.profile.kingdee_pur_purchaseorder',
   kingdee_im_purinbill: 'app.kuaizhizao.documentPush.profile.kingdee_im_purinbill',
+  kingdee_im_saloutbill: 'app.kuaizhizao.documentPush.profile.kingdee_im_saloutbill',
+  kingdee_im_otheroutbill: 'app.kuaizhizao.documentPush.profile.kingdee_im_otheroutbill',
+  kingdee_im_surplusbill: 'app.kuaizhizao.documentPush.profile.kingdee_im_surplusbill',
+  kingdee_im_deficitbill: 'app.kuaizhizao.documentPush.profile.kingdee_im_deficitbill',
   kingdee_stk_miscellaneous: 'app.kuaizhizao.documentPush.profile.kingdee_stk_miscellaneous',
   kingdee_bd_material: 'app.kuaizhizao.documentPush.profile.kingdee_bd_material',
   kingdee_eng_bom: 'app.kuaizhizao.documentPush.profile.kingdee_eng_bom',
@@ -94,6 +98,8 @@ export interface DocumentPushBatchPanelProps<T extends { id: number }> {
   }) => Promise<{ data: T[]; total: number }>;
   matchSaveApi?: (api: API, connection: ApplicationConnection) => boolean;
   preferSaveApi?: (items: API[]) => string | undefined;
+  /** 多金蝶目标时按 profile 解析各自写入接口；缺省回落 preferSaveApi / 当前选中 */
+  resolveSaveApiForProfile?: (profile: string, items: API[]) => string | undefined;
   saveApiSearchHints?: string[];
   loadBinding?: () => Promise<DocumentPushBindingState | null | undefined>;
   saveBinding?: (payload: DocumentPushBindingState) => Promise<unknown>;
@@ -185,6 +191,7 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   loadCandidates,
   matchSaveApi,
   preferSaveApi = defaultPreferSaveApi,
+  resolveSaveApiForProfile,
   saveApiSearchHints = EMPTY_STRING_ARRAY,
   loadBinding,
   saveBinding,
@@ -274,6 +281,8 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   const settingProfileRef = useRef<string | null>(null);
   const targetProfilesRef = useRef<string[]>([]);
   const profileOptionsRef = useRef<Array<{ label: string; value: string }>>([]);
+  const saveApisRef = useRef<API[]>([]);
+  const resolveSaveApiForProfileRef = useRef(resolveSaveApiForProfile);
   connectionCodeRef.current = connectionCode;
   saveApiUuidRef.current = saveApiUuid;
   syncModeRef.current = syncMode;
@@ -286,6 +295,20 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   targetActionMapRef.current = targetActionMap;
   targetProfilesRef.current = targetProfiles;
   profileOptionsRef.current = profileOptions;
+  saveApisRef.current = saveApis;
+  resolveSaveApiForProfileRef.current = resolveSaveApiForProfile;
+
+  const pickSaveApiUuidForProfile = useCallback(
+    (profile: string, fallback?: string) => {
+      const resolve = resolveSaveApiForProfileRef.current;
+      if (resolve) {
+        const picked = resolve(profile, saveApisRef.current);
+        if (picked) return picked;
+      }
+      return fallback || saveApiUuidRef.current;
+    },
+    [],
+  );
 
   const needsKingdeeConnector = useMemo(() => {
     const profiles = new Set(targetProfiles);
@@ -503,7 +526,16 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
     if (!connectionCode) return false;
     if (matchSaveApi) {
       if (apisLoading) return false;
-      if (!saveApiUuid) return false;
+      const kdProfiles = targetProfiles.filter(
+        (profile) =>
+          kingdeeProfiles.includes(profile) &&
+          (destinationKinds[profile] ?? 'api') === 'api',
+      );
+      if (
+        kdProfiles.some((profile) => !pickSaveApiUuidForProfile(profile, saveApiUuid))
+      ) {
+        return false;
+      }
     }
     return true;
   }, [
@@ -513,6 +545,7 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
     destinationKinds,
     kingdeeProfiles,
     matchSaveApi,
+    pickSaveApiUuidForProfile,
     saveApiUuid,
     targetProfiles,
   ]);
@@ -534,15 +567,27 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
     if (needsKingdeeConnector && !connectionCode) {
       return t('app.kuaizhizao.documentPush.batch.needConnector');
     }
-    if (needsKingdeeConnector && matchSaveApi && !saveApiUuid) {
+    if (
+      needsKingdeeConnector &&
+      matchSaveApi &&
+      targetProfiles.some(
+        (profile) =>
+          kingdeeProfiles.includes(profile) &&
+          (destinationKinds[profile] ?? 'api') === 'api' &&
+          !pickSaveApiUuidForProfile(profile, saveApiUuid),
+      )
+    ) {
       return t('app.kuaizhizao.documentPush.batch.needApi');
     }
     return null;
   }, [
     allowedProfileSet,
     connectionCode,
+    destinationKinds,
+    kingdeeProfiles,
     matchSaveApi,
     needsKingdeeConnector,
+    pickSaveApiUuidForProfile,
     profileOptions.length,
     profilesLoaded,
     profilesLoading,
@@ -614,7 +659,14 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
         });
         return;
       }
-      if (needKd && matchSaveApi && !apiUuid) {
+      if (
+        needKd &&
+        matchSaveApi &&
+        apiProfiles.some(
+          (profile) =>
+            kingdeeProfiles.includes(profile) && !pickSaveApiUuidForProfile(profile, apiUuid),
+        )
+      ) {
         Modal.warning({
           title,
           content: t('app.kuaizhizao.documentPush.batch.needApi'),
@@ -648,7 +700,7 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
             save_api_uuid:
               kingdeeProfiles.includes(profile) &&
               (destinationKindsRef.current[profile] ?? 'api') === 'api'
-                ? apiUuid
+                ? pickSaveApiUuidForProfile(profile, apiUuid)
                 : undefined,
           }));
           const autoActions = [
@@ -690,7 +742,7 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
               save_api_uuid:
                 kingdeeProfiles.includes(profile) &&
                 (destinationKindsRef.current[profile] ?? 'api') === 'api'
-                  ? apiUuid
+                  ? pickSaveApiUuidForProfile(profile, apiUuid)
                   : undefined,
             }));
             const result = await pushDocumentExternal({
@@ -859,7 +911,14 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
       });
       return;
     }
-    if (needKd && matchSaveApi && !apiUuid) {
+    if (
+      needKd &&
+      matchSaveApi &&
+      apiProfiles.some(
+        (profile) =>
+          kingdeeProfiles.includes(profile) && !pickSaveApiUuidForProfile(profile, apiUuid),
+      )
+    ) {
       Modal.warning({
         title: t('app.kuaizhizao.documentPush.previewTitle'),
         content: t('app.kuaizhizao.documentPush.batch.needApi'),
@@ -871,9 +930,14 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
       const result = await pushDocumentExternal({
         source_type: sourceType,
         source_id: Number(first.id),
-        target_profiles: apiProfiles,
-        connection_code: needKd ? conn : undefined,
-        save_api_uuid: needKd ? apiUuid : undefined,
+        targets: apiProfiles.map((profile) => ({
+          target_profile: profile,
+          connection_code: needKd && kingdeeProfiles.includes(profile) ? conn : undefined,
+          save_api_uuid:
+            needKd && kingdeeProfiles.includes(profile)
+              ? pickSaveApiUuidForProfile(profile, apiUuid)
+              : undefined,
+        })),
         dry_run: true,
       });
       const model = (result.model || {}) as Record<string, unknown>;
@@ -1315,7 +1379,7 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
           : undefined,
       save_api_uuid:
         kingdeeProfiles.includes(profile) && (destinationKinds[profile] ?? 'api') === 'api'
-          ? saveApiUuid
+          ? pickSaveApiUuidForProfile(profile, saveApiUuid)
           : undefined,
       user_saved: true,
     }));

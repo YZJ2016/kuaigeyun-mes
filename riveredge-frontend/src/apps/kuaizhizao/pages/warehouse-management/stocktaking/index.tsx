@@ -57,6 +57,9 @@ import {
   resolveStocktakingListParams,
 } from '../../../utils/warehouseListCore';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { useToolbarSyncPushFlags } from '../../../../../hooks/useToolbarSyncPushFlags';
+import { SyncPushHubButton } from '../../../../../components/sync-push-hub';
+import StocktakingSurplusDocumentPushPanel from './StocktakingSurplusDocumentPushPanel';
 
 interface Stocktaking {
   id?: number;
@@ -121,6 +124,17 @@ const StocktakingPage: React.FC = () => {
   const canExecuteStocktaking = canAction?.('execute') ?? false;
   /** 开始盘点：后端 create/update 任一即可；仅 create 时也应能启动刚建的单据 */
   const canStartStocktaking = canUpdate || canCreate;
+  const toolbarSyncPush = useToolbarSyncPushFlags(STOCKTAKING_RESOURCE);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const listRowsRef = useRef<Map<string, Stocktaking>>(new Map());
+  const selectedStocktakingIdsForDocumentPush = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => listRowsRef.current.get(String(key)))
+        .filter((row): row is Stocktaking => row != null && Number(row.id) > 0)
+        .map((row) => Number(row.id)),
+    [selectedRowKeys],
+  );
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   // Modal 相关状态
@@ -973,7 +987,41 @@ const StocktakingPage: React.FC = () => {
             return { data: [], success: false, total: 0 };
           }
         }}
-        enableRowSelection={canDelete}
+        enableRowSelection={canDelete || toolbarSyncPush.pushEnabled}
+        onTableDataChange={(rows) => {
+          const next = new Map<string, Stocktaking>();
+          for (const row of rows) {
+            if (row.id != null) next.set(String(row.id), row);
+          }
+          listRowsRef.current = next;
+        }}
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
+        showSyncButton={toolbarSyncPush.hubVisible && toolbarSyncPush.pushEnabled}
+        onSync={() => undefined}
+        syncToolbarExtra={
+          toolbarSyncPush.hubVisible && toolbarSyncPush.pushEnabled
+            ? () => (
+                <SyncPushHubButton
+                  syncEnabled={false}
+                  pushEnabled={toolbarSyncPush.pushEnabled}
+                  size="medium"
+                  renderPushPanel={({ active, close }) => (
+                    <StocktakingSurplusDocumentPushPanel
+                      embedded
+                      open={active}
+                      onClose={close}
+                      stocktakingIds={selectedStocktakingIdsForDocumentPush}
+                      onComplete={() => {
+                        actionRef.current?.reload?.();
+                        close();
+                      }}
+                    />
+                  )}
+                />
+              )
+            : undefined
+        }
         showDeleteButton={canDelete}
         onDelete={async (keys) => {
           try {
@@ -982,7 +1030,7 @@ const StocktakingPage: React.FC = () => {
             }
             messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteSuccess', { count: keys.length }));
             invalidateMenuBadgeCounts();
-    actionRef.current?.reload();
+            actionRef.current?.reload();
           } catch (error: any) {
             messageApi.error(error.message || t('common.deleteFailed'));
           }

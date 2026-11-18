@@ -37,6 +37,18 @@ from apps.kuaizhizao.services.kingdee_purchase_order_push_service import (
 from apps.kuaizhizao.services.kingdee_purchase_receipt_push_service import (
     TARGET_PROFILE as PR_PROFILE,
 )
+from apps.kuaizhizao.services.kingdee_sales_delivery_push_service import (
+    TARGET_PROFILE as SD_PROFILE,
+)
+from apps.kuaizhizao.services.kingdee_other_outbound_push_service import (
+    TARGET_PROFILE as OO_PROFILE,
+)
+from apps.kuaizhizao.services.kingdee_stocktaking_surplus_push_service import (
+    TARGET_PROFILE as ST_SURPLUS_PROFILE,
+)
+from apps.kuaizhizao.services.kingdee_stocktaking_deficit_push_service import (
+    TARGET_PROFILE as ST_DEFICIT_PROFILE,
+)
 from apps.kuaizhizao.services.kingdee_sales_order_push_service import (
     TARGET_PROFILE as SO_PROFILE,
 )
@@ -57,6 +69,10 @@ _EXPECTED_SUPPORTED_PROFILES = {
     ("sales_order", SO_PROFILE),
     ("purchase_order", PO_PROFILE),
     ("purchase_receipt", PR_PROFILE),
+    ("sales_delivery", SD_PROFILE),
+    ("other_outbound", OO_PROFILE),
+    ("stocktaking", ST_SURPLUS_PROFILE),
+    ("stocktaking", ST_DEFICIT_PROFILE),
     ("material_batch", INV_PROFILE),
     ("material", MAT_PROFILE),
     ("engineering_bom", BOM_PROFILE),

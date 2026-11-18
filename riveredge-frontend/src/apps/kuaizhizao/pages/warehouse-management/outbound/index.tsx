@@ -10,7 +10,12 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { getBusinessConfig } from '../../../../../services/businessConfig';
-import { TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY } from '../../../../../hooks/useToolbarSyncPushFlags';
+import {
+  TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY,
+  useToolbarSyncPushFlags,
+} from '../../../../../hooks/useToolbarSyncPushFlags';
+import { SyncPushHubButton } from '../../../../../components/sync-push-hub';
+import SalesDeliveryDocumentPushPanel from './SalesDeliveryDocumentPushPanel';
 import { ActionType, ProColumns, type ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Tooltip, Typography, Spin, Empty, Select, theme as AntdTheme } from 'antd';
 import { CheckCircleOutlined, PlayCircleOutlined, RollbackOutlined } from '@ant-design/icons';
@@ -308,6 +313,9 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
   const deliveryNoticePerms = useResourcePermissions('kuaizhizao:delivery-notice');
   const currentUser = useCurrentUser();
   const packingBindingPerms = useResourcePermissions('kuaizhizao:production-execution-packing-binding');
+  const toolbarSyncPush = useToolbarSyncPushFlags(
+    permissionResource === 'kuaizhizao:outbound' ? 'kuaizhizao:outbound' : permissionResource,
+  );
 
   const [confirmPreviewOpen, setConfirmPreviewOpen] = useState(false);
   const [confirmPreviewRecord, setConfirmPreviewRecord] = useState<OutboundOrder | null>(null);
@@ -818,6 +826,14 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
     if (!row || row.outbound_type !== 'sales_delivery' || row.id == null) return null;
     return row;
   }, [selectedOutboundForBatch, showSalesDeliveryPush]);
+
+  const selectedSalesDeliveryIdsForDocumentPush = useMemo(
+    () =>
+      selectedOutboundForBatch
+        .filter((row) => row.outbound_type === 'sales_delivery' && Number(row.id) > 0)
+        .map((row) => Number(row.id)),
+    [selectedOutboundForBatch],
+  );
 
   const handlePushToDeliveryNotice = useCallback(
     async (record: OutboundOrder) => {
@@ -1572,10 +1588,36 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
         enableRowSelection={
           outboundPerms.canDelete ||
           outboundPerms.canPrint ||
-          (showSalesDeliveryPush && deliveryNoticePerms.canCreate)
+          (showSalesDeliveryPush && deliveryNoticePerms.canCreate) ||
+          toolbarSyncPush.pushEnabled
         }
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
+        showSyncButton={toolbarSyncPush.hubVisible && toolbarSyncPush.pushEnabled}
+        onSync={() => undefined}
+        syncToolbarExtra={
+          toolbarSyncPush.hubVisible && toolbarSyncPush.pushEnabled
+            ? () => (
+                <SyncPushHubButton
+                  syncEnabled={false}
+                  pushEnabled={toolbarSyncPush.pushEnabled}
+                  size="medium"
+                  renderPushPanel={({ active, close }) => (
+                    <SalesDeliveryDocumentPushPanel
+                      embedded
+                      open={active}
+                      onClose={close}
+                      deliveryIds={selectedSalesDeliveryIdsForDocumentPush}
+                      onComplete={() => {
+                        actionRef.current?.reload?.();
+                        close();
+                      }}
+                    />
+                  )}
+                />
+              )
+            : undefined
+        }
         showDeleteButton={outboundPerms.canDelete}
         rowSelectionGetCheckboxProps={(record) => ({
           disabled: !isOutboundDeletable(record) && !isOutboundPrintable(record),
