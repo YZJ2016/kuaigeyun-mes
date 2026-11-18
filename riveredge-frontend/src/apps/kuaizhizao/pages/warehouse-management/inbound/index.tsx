@@ -37,10 +37,13 @@ import { buildHubMergedCustomFieldColumns } from '../../../../../components/cust
 import { ListPageTemplate, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { LinkedDocumentCodesFromFields } from '../../../../../components/linked-document-code';
 import { UniPullLoadButton } from '../../../../../components/uni-pull';
+import { SyncPushHubButton } from '../../../../../components/sync-push-hub';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useToolbarSyncPushFlags } from '../../../../../hooks/useToolbarSyncPushFlags';
 import { useGlobalStore } from '../../../../../stores';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { InboundDetailDrawer } from './components/InboundDetailDrawer';
+import PurchaseReceiptDocumentPushPanel from './PurchaseReceiptDocumentPushPanel';
 import { WarehouseTraceBriefPrimaryActions } from '../WarehouseTraceBriefFooter';
 import {
   warehouseApi,
@@ -1889,6 +1892,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
    */
   const listRowsRef = useRef<Map<string, InboundOrder>>(new Map());
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const toolbarSyncPush = useToolbarSyncPushFlags('kuaizhizao:inbound');
 
   const inboundRowKey = (record: InboundOrder) => `${record.receipt_type}::${record.id}`;
 
@@ -1907,6 +1911,14 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
         .map((key) => listRowsRef.current.get(String(key)))
         .filter((row): row is InboundOrder => row != null),
     [selectedRowKeys],
+  );
+
+  const selectedPurchaseReceiptIds = useMemo(
+    () =>
+      selectedInboundForBatch
+        .filter((row) => row.receipt_type === 'purchase' && Number(row.id) > 0)
+        .map((row) => Number(row.id)),
+    [selectedInboundForBatch],
   );
 
   const canToolbarPrint =
@@ -2627,9 +2639,36 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
         beforeSearchButtons={receiptTypeSelect}
         pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
         skipFuzzyPinyinClientFilter
-        enableRowSelection={inboundPerms.canDelete || inboundPerms.canPrint}
+        enableRowSelection={
+          inboundPerms.canDelete || inboundPerms.canPrint || toolbarSyncPush.pushEnabled
+        }
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
+        showSyncButton={toolbarSyncPush.hubVisible && toolbarSyncPush.pushEnabled}
+        onSync={() => undefined}
+        syncToolbarExtra={
+          toolbarSyncPush.hubVisible && toolbarSyncPush.pushEnabled
+            ? () => (
+                <SyncPushHubButton
+                  syncEnabled={false}
+                  pushEnabled={toolbarSyncPush.pushEnabled}
+                  size="medium"
+                  renderPushPanel={({ active, close }) => (
+                    <PurchaseReceiptDocumentPushPanel
+                      embedded
+                      open={active}
+                      onClose={close}
+                      receiptIds={selectedPurchaseReceiptIds}
+                      onComplete={() => {
+                        actionRef.current?.reload?.();
+                        close();
+                      }}
+                    />
+                  )}
+                />
+              )
+            : undefined
+        }
         showDeleteButton={inboundPerms.canDelete}
         rowSelectionGetCheckboxProps={(record) => ({
           disabled: !isInboundDeletable(record) && !isInboundPrintable(record),

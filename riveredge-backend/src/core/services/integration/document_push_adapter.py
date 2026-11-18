@@ -91,10 +91,12 @@ def ensure_default_adapters_registered() -> None:
         return
     from core.services.integration.feishu_im_push_adapter import FeishuImPushAdapter
     from core.services.integration.http_webhook_push_adapter import HttpWebhookPushAdapter
+    from core.services.integration.kingdee_cosmic_push_adapter import KingdeeCosmicPushAdapter
     from core.services.integration.kingdee_galaxy_push_adapter import KingdeeGalaxyPushAdapter
 
     galaxy = KingdeeGalaxyPushAdapter()
     register_push_adapter(galaxy, "kingdee_galaxy")
+    register_push_adapter(KingdeeCosmicPushAdapter(), "kingdee_cosmic")
 
     webhook = HttpWebhookPushAdapter()
     # Webhook 为 OA/CRM 通用 HTTP 通道；飞书走专用 Adapter，不在此注册

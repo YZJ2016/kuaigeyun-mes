@@ -28,6 +28,7 @@ PROFILE_CONNECTOR_TYPE: Dict[str, str] = {
     "kingdee_bd_material": "kingdee_galaxy",
     "kingdee_eng_bom": "kingdee_galaxy",
     "kingdee_eng_process": "kingdee_galaxy",
+    "kingdee_im_purinbill": "kingdee_cosmic",
     "oa_http_webhook": "Webhook",
     "feishu_im_notify": "feishu",
 }
@@ -35,6 +36,7 @@ PROFILE_CONNECTOR_TYPE: Dict[str, str] = {
 # 同 Adapter 族的 type 别名（与 document_push_adapter 注册别名对齐；禁止扩到 WMS/PLM）
 _CONNECTOR_TYPE_FAMILY: Dict[str, FrozenSet[str]] = {
     "kingdee_galaxy": frozenset({"kingdee_galaxy"}),
+    "kingdee_cosmic": frozenset({"kingdee_cosmic"}),
     "feishu": frozenset({"feishu"}),
     "Webhook": frozenset(
         {

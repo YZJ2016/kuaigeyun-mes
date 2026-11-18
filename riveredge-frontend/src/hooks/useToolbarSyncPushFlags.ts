@@ -27,6 +27,7 @@ export type ToolbarSyncPushResource =
   | 'kuaizhizao:sales-order'
   | 'kuaizhizao:purchase-order'
   | 'kuaizhizao:inventory'
+  | 'kuaizhizao:inbound'
   | 'master-data:material'
   | 'master-data:process:engineering-bom'
   | 'master-data:process:operation';

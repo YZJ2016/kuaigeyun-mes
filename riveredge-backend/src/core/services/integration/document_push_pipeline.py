@@ -217,9 +217,10 @@ class DocumentPushPipeline:
                 timeout=timeout,
             )
         else:
+            save_path = str(config.get("save_path") or "").strip() or adapter.save_path
             response = await adapter.call_direct(
                 connection,
-                adapter.save_path,
+                save_path,
                 body,
                 timeout=timeout,
             )

@@ -2323,6 +2323,7 @@
     "kuaizhizao:inbound:reject",
     "kuaizhizao:inbound:print",
     "kuaizhizao:inbound:execute",
+    "kuaizhizao:inbound:push",
     "kuaizhizao:inventory:read",
     "kuaizhizao:inventory:create",
     "kuaizhizao:inventory:delete",

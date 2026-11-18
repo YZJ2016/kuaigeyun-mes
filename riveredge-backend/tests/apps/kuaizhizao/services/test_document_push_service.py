@@ -34,6 +34,9 @@ from apps.kuaizhizao.services.kingdee_production_report_push_service import (
 from apps.kuaizhizao.services.kingdee_purchase_order_push_service import (
     TARGET_PROFILE as PO_PROFILE,
 )
+from apps.kuaizhizao.services.kingdee_purchase_receipt_push_service import (
+    TARGET_PROFILE as PR_PROFILE,
+)
 from apps.kuaizhizao.services.kingdee_sales_order_push_service import (
     TARGET_PROFILE as SO_PROFILE,
 )
@@ -53,6 +56,7 @@ _EXPECTED_SUPPORTED_PROFILES = {
     ("reporting_record", RPT_PROFILE),
     ("sales_order", SO_PROFILE),
     ("purchase_order", PO_PROFILE),
+    ("purchase_receipt", PR_PROFILE),
     ("material_batch", INV_PROFILE),
     ("material", MAT_PROFILE),
     ("engineering_bom", BOM_PROFILE),

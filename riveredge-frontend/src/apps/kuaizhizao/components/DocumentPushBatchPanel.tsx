@@ -33,6 +33,7 @@ export const DOCUMENT_PUSH_PROFILE_LABEL_KEYS: Record<string, string> = {
   kingdee_prd_morpt: 'app.kuaizhizao.documentPush.profile.kingdee_prd_morpt',
   kingdee_sal_saleorder: 'app.kuaizhizao.documentPush.profile.kingdee_sal_saleorder',
   kingdee_pur_purchaseorder: 'app.kuaizhizao.documentPush.profile.kingdee_pur_purchaseorder',
+  kingdee_im_purinbill: 'app.kuaizhizao.documentPush.profile.kingdee_im_purinbill',
   kingdee_stk_miscellaneous: 'app.kuaizhizao.documentPush.profile.kingdee_stk_miscellaneous',
   kingdee_bd_material: 'app.kuaizhizao.documentPush.profile.kingdee_bd_material',
   kingdee_eng_bom: 'app.kuaizhizao.documentPush.profile.kingdee_eng_bom',

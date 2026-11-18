@@ -33,7 +33,7 @@ def test_rewrite_saved_supplier_sys_query_to_batch_query():
     assert rewrite("kapi/sys/bd_supplier/query") == "kapi/v2/basedata/bd_supplier/query"
     assert rewrite("kapi/v2/basedata/bd_supplier/batchQuery") == "kapi/v2/basedata/bd_supplier/batchQuery"
     assert rewrite("kapi/sys/bd_customer/query") == "kapi/v2/basedata/bd_customer/batchQuery"
-    assert rewrite("kapi/sys/bd_warehouse/query") == "kapi/v2/basedata/bd_warehouse/batchQuery"
+    assert rewrite("kapi/sys/bd_warehouse/query") == "kapi/v2/sbd/bd_warehouse/getList"
 
 
 def test_normalize_cosmic_openapi_endpoint_fixes_v2_prefix():
@@ -100,25 +100,25 @@ def test_v2_inventory_params_body_not_wrapped_as_data():
     ) == {"params": {"org": "100"}, "pageNo": 1, "pageSize": 100}
 
 
-def test_warehouse_list_query_rewrites_to_batchquery_and_injects_org():
+def test_warehouse_list_query_rewrites_to_getlist_and_injects_org():
     prepare = _mod.prepare_kingdee_cosmic_outbound
     method, url, params, body = prepare(
-        {"org_number": "WANG"},
+        {"org_number": "BU-00000"},
         "https://x/kapi/v2/basedata/bd_warehouse/query",
         "GET",
         {},
         {"data": {}, "pageNo": 1, "pageSize": 1000},
     )
     assert method == "POST"
-    assert url.endswith("/bd_warehouse/batchQuery")
+    assert url.endswith("/sbd/bd_warehouse/getList")
     assert body == {
-        "data": {"createorg_number": "WANG"},
+        "data": {"createorg_number": "BU-00000"},
         "pageNo": 1,
         "pageSize": 1000,
     }
 
 
-def test_warehouse_batchquery_puts_createorg_in_data():
+def test_warehouse_batchquery_rewrites_to_getlist_and_puts_createorg_in_data():
     prepare = _mod.prepare_kingdee_cosmic_outbound
     method, url, params, body = prepare(
         {},
@@ -128,17 +128,18 @@ def test_warehouse_batchquery_puts_createorg_in_data():
         {"data": {}, "pageNo": 1, "pageSize": 1000},
     )
     assert method == "POST"
+    assert url.endswith("/sbd/bd_warehouse/getList")
     assert body == {
-        "data": {"createorg_number": "WANG"},
+        "data": {"createorg_number": "BU-00000"},
         "pageNo": 1,
         "pageSize": 1000,
     }
 
 
-def test_warehouse_query_with_number_keeps_get_and_injects_param():
+def test_warehouse_query_with_number_keeps_basedata_query_and_injects_param():
     prepare = _mod.prepare_kingdee_cosmic_outbound
     method, url, params, body = prepare(
-        {"org_number": "WANG"},
+        {"org_number": "BU-00000"},
         "https://x/kapi/v2/basedata/bd_warehouse/query",
         "GET",
         {"number": "CK01"},
@@ -146,19 +147,20 @@ def test_warehouse_query_with_number_keeps_get_and_injects_param():
     )
     assert method == "GET"
     assert url.endswith("/bd_warehouse/query")
-    assert params["createorg_number"] == "WANG"
+    assert params["createorg_number"] == "BU-00000"
     assert params["number"] == "CK01"
 
 
-def test_warehouse_body_keeps_existing_createorg():
+def test_warehouse_getlist_keeps_existing_createorg():
     prepare = _mod.prepare_kingdee_cosmic_outbound
     method, url, params, body = prepare(
         {},
-        "https://x/kapi/v2/basedata/bd_warehouse/batchQuery",
+        "https://x/kapi/v2/sbd/bd_warehouse/getList",
         "POST",
         {},
         {"data": {"createorg_number": "ORG01"}, "pageNo": 1, "pageSize": 1000},
     )
+    assert url.endswith("/sbd/bd_warehouse/getList")
     assert body["data"]["createorg_number"] == "ORG01"
     assert body["pageSize"] == 1000
 

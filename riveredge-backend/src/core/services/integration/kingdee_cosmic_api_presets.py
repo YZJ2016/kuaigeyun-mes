@@ -185,12 +185,37 @@ MATERIAL_SYNC_SELECT = (
 GOODS_CLASS_QUERY_PATH = "kapi/v2/gmc/mdr_goodsclass/getMalGoodsClass"
 
 
-def build_warehouse_batch_query_preset_body() -> Dict[str, Any]:
-    """仓库 batchQuery：createorg_number 必须放在 data 里。"""
+def build_warehouse_get_list_preset_body() -> Dict[str, Any]:
+    """
+    仓库列表查询 getList：createorg_number 必须放在 data 里。
+    默认示例可按本环境创建组织编码修改；出站时也会用连接器 org_number 补缺。
+    """
     return {
-        "data": {"createorg_number": "WANG"},
+        "data": {"createorg_number": "BU-00000"},
         "pageNo": 1,
         "pageSize": 1000,
+    }
+
+
+# 兼容旧名：仓库同步已切到 sbd getList，不再走 basedata batchQuery
+build_warehouse_batch_query_preset_body = build_warehouse_get_list_preset_body
+
+
+def build_warehouse_get_list_preset() -> KingdeeCosmicApiPreset:
+    return {
+        "code_suffix": WAREHOUSE_PRESET_CODE_SUFFIX,
+        "name": "苍穹查询仓库",
+        "description": (
+            "供应链基础资料「仓库列表查询」（API 编码 getList）。"
+            f"请求地址 /v2/sbd/{BIZ_BD_WAREHOUSE}/getList。"
+            "请求体为 data、pageNo、pageSize；"
+            "金蝶要求 data.createorg_number（创建组织编码）必填，"
+            "默认示例 BU-00000，可按本环境修改；也可由连接器 org_number 在出站时补缺。"
+            "返回含 number/name/createorg_number/enable/status 等，供仓库入站同步映射。"
+        ),
+        "path": WAREHOUSE_GET_LIST_PATH,
+        "method": "POST",
+        "request_body": build_warehouse_get_list_preset_body(),
     }
 
 
@@ -289,13 +314,55 @@ def kingdee_supplier_api_upgrade_fields() -> Dict[str, Any]:
     }
 
 
-def warehouse_batch_query_preset_needs_upgrade(request_body: Any) -> bool:
+def warehouse_preset_needs_upgrade(
+    path: Any,
+    request_body: Any = None,
+    method: Any = None,
+) -> bool:
+    """须为 POST …/sbd/bd_warehouse/getList，且 body 含 data + 分页。"""
+    if str(method or "").upper() not in ("", "POST"):
+        return True
+    lower = str(path or "").lower().replace("\\", "/")
+    if "/sbd/bd_warehouse/getlist" not in lower:
+        return True
+    if not isinstance(request_body, dict):
+        return True
+    if request_body.get("pageNo") in (None, "") or request_body.get("pageSize") in (None, ""):
+        return True
+    data = request_body.get("data")
+    if not isinstance(data, dict):
+        return True
+    return False
+
+
+def warehouse_batch_query_preset_needs_upgrade(
+    request_body: Any,
+    path: Any = None,
+    method: Any = None,
+) -> bool:
+    """兼容旧调用：无 path 时仅看 body；有 path 时按 getList 契约判定。"""
+    if path is not None:
+        return warehouse_preset_needs_upgrade(path, request_body, method)
     if not isinstance(request_body, dict):
         return True
     data = request_body.get("data")
     if not isinstance(data, dict):
         return True
-    return not str(data.get("createorg_number") or data.get("createOrgNumber") or "").strip()
+    if request_body.get("pageNo") in (None, "") or request_body.get("pageSize") in (None, ""):
+        return True
+    return False
+
+
+def kingdee_warehouse_api_upgrade_fields() -> Dict[str, Any]:
+    preset = build_warehouse_get_list_preset()
+    return {
+        "path": preset["path"],
+        "method": preset["method"],
+        "name": preset["name"],
+        "description": preset["description"],
+        "request_params": preset.get("request_params"),
+        "request_body": preset.get("request_body") or {},
+    }
 
 
 def _resolve_request_select(request_body: Any = None, request_params: Any = None) -> str:
@@ -1889,21 +1956,7 @@ def list_kingdee_cosmic_api_presets() -> List[KingdeeCosmicApiPreset]:
         build_im_otherinbill_finished_goods_batch_delete_preset(),
         build_im_surplusbill_batch_add_preset(),
         build_im_deficitbill_batch_add_preset(),
-        {
-            **_basedata_batch_query_preset(
-                code_suffix=WAREHOUSE_PRESET_CODE_SUFFIX,
-                name="苍穹查询仓库",
-                biz_object=BIZ_BD_WAREHOUSE,
-                usage="仓库",
-                request_body=build_warehouse_batch_query_preset_body(),
-            ),
-            "description": (
-                "基础资料API服务里的仓库批量查询。"
-                "请求地址 /v2/basedata/bd_warehouse/batchQuery。"
-                "请求体为 data、pageNo、pageSize；"
-                "金蝶要求把 createorg_number 放在 data 内，默认示例 WANG，可按本环境创建组织编码修改。"
-            ),
-        },
+        build_warehouse_get_list_preset(),
         {
             "code_suffix": "query_purchase_order",
             "name": "苍穹查询采购订单",

@@ -16,6 +16,8 @@ _BASEDATA_BATCH_OBJECTS = {
     "bd_warehouse",
 }
 
+WAREHOUSE_GET_LIST_ENDPOINT = "kapi/v2/sbd/bd_warehouse/getList"
+
 
 _INCOMPLETE_SUPPLIER_PATH_MARKERS = frozenset(
     {
@@ -82,6 +84,9 @@ def rewrite_basedata_sys_query_path(endpoint: str) -> str:
     biz = lower[len(prefix) : -len(suffix)]
     if biz == "bd_supplier":
         return f"kapi/v2/basedata/{biz}/query"
+    if biz == "bd_warehouse":
+        # 仓库列表真源：供应链基础资料 getList（非 basedata batchQuery）
+        return WAREHOUSE_GET_LIST_ENDPOINT
     if biz not in _BASEDATA_BATCH_OBJECTS:
         return ep
     return f"kapi/v2/basedata/{biz}/batchQuery"
@@ -249,6 +254,24 @@ def _is_basedata_single_query(path: str) -> bool:
 
 def _is_warehouse_path(path: str) -> bool:
     return "bd_warehouse" in _path_without_query(path).lower()
+
+
+def _rewrite_warehouse_list_url(url: str) -> str:
+    """旧 basedata/bd_warehouse/query|batchQuery → sbd getList；已是 getList 则原样。"""
+    raw = _path_without_query(url)
+    lower = raw.lower().replace("\\", "/")
+    if not _is_warehouse_path(raw):
+        return url
+    if "/sbd/bd_warehouse/getlist" in lower:
+        return url
+    if "/basedata/" not in lower:
+        return url
+    if "batchquery" not in lower and not lower.rstrip("/").endswith("/query"):
+        return url
+    m = re.match(r"(?i)^(https?://[^/]+)", raw)
+    if m:
+        return f"{m.group(1).rstrip('/')}/{WAREHOUSE_GET_LIST_ENDPOINT}"
+    return WAREHOUSE_GET_LIST_ENDPOINT
 
 
 def _is_location_path(path: str) -> bool:
@@ -423,23 +446,6 @@ def apply_connector_org_to_payload(payload: Any, org: str) -> Any:
     return _walk(payload, parent_is_org_field=False)
 
 
-def _rewrite_warehouse_list_url(url: str) -> str:
-    """仓库列表统一走 sbd/bd_warehouse/getList。basedata 路径网关 2530。"""
-    raw = _path_without_query(url)
-    lower = raw.lower().replace("\\", "/")
-    if not _is_warehouse_path(raw):
-        return url
-    if "/sbd/bd_warehouse/getlist" in lower:
-        return url
-    is_list = "batchquery" in lower or lower.rstrip("/").endswith("/query")
-    if not is_list:
-        return url
-    m = re.match(r"(?i)^(https?://[^/]+)", raw)
-    if m:
-        return f"{m.group(1).rstrip('/')}/{WAREHOUSE_LIST_ENDPOINT}"
-    return WAREHOUSE_LIST_ENDPOINT
-
-
 def _is_inventory_balance_query_path(url: str) -> bool:
     """库存余额/即时库存：getInventoryAvbQty、getInventoryDetail、getInventorySum 等。"""
     lower = _path_without_query(url).lower()
@@ -458,8 +464,8 @@ def prepare_kingdee_cosmic_outbound(
     body: Optional[Dict[str, Any]],
 ) -> Tuple[str, str, Dict[str, Any], Dict[str, Any]]:
     """
-    仓库列表走 batchQuery，并把连接器组织编码写入 createorg_number。
-    GET /bd_warehouse/query 且未指定 number 时改为 POST batchQuery。
+    仓库列表走 sbd/bd_warehouse/getList，并把连接器组织编码写入 data.createorg_number。
+    旧 basedata query/batchQuery 列表路径自动改写为 getList。
     """
     params_out: Dict[str, Any] = dict(params or {})
     body_out: Dict[str, Any] = dict(body) if isinstance(body, dict) else {}
@@ -470,10 +476,12 @@ def prepare_kingdee_cosmic_outbound(
         return method_out, url_out, params_out, body_out
 
     number = str(params_out.get("number") or "").strip()
-    if _is_warehouse_path(url_out) and _is_basedata_single_query(url_out) and not number:
-        url_out = re.sub(r"(?i)/query/?$", "/batchQuery", _path_without_query(url_out))
-        method_out = "POST"
-        params_out.pop("number", None)
+    if _is_warehouse_path(url_out) and not number:
+        rewritten = _rewrite_warehouse_list_url(url_out)
+        if rewritten != url_out:
+            url_out = rewritten
+            method_out = "POST"
+            params_out.pop("number", None)
     body_out = ensure_kingdee_v2_request_body(url_out, body_out)
     org = resolve_kingdee_cosmic_createorg_number(cfg)
     lower = _path_without_query(url_out).lower()
@@ -481,12 +489,16 @@ def prepare_kingdee_cosmic_outbound(
     already = str(params_out.get("createorg_number") or "").strip() or str(
         data_obj.get("createorg_number") or data_obj.get("createOrgNumber") or ""
     ).strip()
-    createorg = already or org or ("WANG" if _is_warehouse_path(url_out) else "")
+    createorg = already or org or ("BU-00000" if _is_warehouse_path(url_out) else "")
 
-    if _is_warehouse_path(url_out) and "batchquery" in lower:
+    if _is_warehouse_path(url_out) and (
+        "getlist" in lower or "batchquery" in lower
+    ):
         data = dict(data_obj)
-        data["createorg_number"] = createorg
+        if createorg:
+            data["createorg_number"] = createorg
         body_out["data"] = data
+        method_out = "POST"
 
     # 仓位 getList 契约必含 data（可为空对象）。生产库接口体常只有 pageNo/pageSize；
     # 仓库因注入 createorg 会顺带补上 data，仓位无组织字段时须在此保证，且不依赖连接器组织。
