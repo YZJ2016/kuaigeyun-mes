@@ -45,14 +45,7 @@ class FinanceVoucherPostingService:
         if direction != "out":
             return
         amt = Decimal(str(getattr(row, "total_amount", None) or 0))
-        if amt <= 0:
-            return
-        account = await bank_svc.get_by_id(tenant_id, int(bank_account_id))
-        current = Decimal(str(account.current_balance or 0))
-        if current - amt < 0:
-            raise ValidationError(
-                f"账户 {account.account_code} 余额不足，当前 {current}，本次出款 {amt}"
-            )
+        await bank_svc.assert_out_funds(tenant_id, int(bank_account_id), amt)
 
     async def _finalize_receipt_confirmed(
         self,
@@ -233,11 +226,15 @@ class FinanceVoucherPostingService:
                     payment_id=payment_id,
                     operator_id=op_id,
                 )
-            return await self._finalize_payment_confirmed(
+            payment = await self._finalize_payment_confirmed(
                 tenant_id=tenant_id,
                 payment_id=payment_id,
                 operator=operator,
             )
+            from apps.kuaicaiwu.services.payment_advance_service import PaymentAdvanceService
+
+            await PaymentAdvanceService().record_on_payment_confirmed(tenant_id, payment)
+            return payment
         except Exception:
             if was_draft:
                 await bank_svc.reverse_from_voucher(

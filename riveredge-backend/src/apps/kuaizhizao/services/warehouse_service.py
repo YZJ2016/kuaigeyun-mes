@@ -11500,6 +11500,27 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                                 receipt_for_payable.receipt_code,
                             )
                             raise
+                        receipt_po_for_prepay = int(
+                            getattr(receipt_for_payable, "purchase_order_id", 0) or 0
+                        )
+                        if receipt_po_for_prepay > 0:
+                            try:
+                                from apps.kuaicaiwu.services.payable_prepayment_apply_service import (
+                                    PayablePrepaymentApplyService,
+                                )
+
+                                await PayablePrepaymentApplyService().auto_apply_after_payable_created(
+                                    tenant_id,
+                                    payable_id=int(payable.id),
+                                    purchase_order_id=receipt_po_for_prepay,
+                                    operator_id=confirmed_by,
+                                )
+                            except Exception as prep_e:
+                                logger.exception(
+                                    "采购入库单 %s 自动应付后核销预付失败: %s",
+                                    receipt_for_payable.receipt_code,
+                                    prep_e,
+                                )
             except Exception as e:
                 # spec 142：过账已提交，应付生成失败为可见失败（入库已确认、账未记）
                 logger.exception(

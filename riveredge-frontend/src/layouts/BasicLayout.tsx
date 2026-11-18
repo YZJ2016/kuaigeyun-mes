@@ -1044,6 +1044,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const showSiteName = useConfigStore((s) => s.configs.show_site_name !== false);
   const layoutTitle = showSiteName ? siteName : false;
   const enableSystemDashboard = useConfigStore((s) => s.configs.enable_system_dashboard !== false);
+  /** 组织开关：关闭后侧栏/系统配置浮层不显示 PRO 徽章 */
+  const showMenuProBadge = useConfigStore((s) => s.configs.show_pro_badge !== false);
   const documentVisible = useDocumentVisible();
 
   const tenantIdStrForHome = getTenantId()?.toString() ?? null;
@@ -1326,10 +1328,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         // 数据中心后续将剥离为 PRO；浮层组标题与侧栏同款 PRO 徽标
         const groupNameText = typeof group.name === 'string' ? group.name : '';
         const showProBadge =
-          rawKey === 'data-center-group' ||
-          rawKey === 'menu.group.data-center' ||
-          groupNameText === 'menu.group.data-center' ||
-          groupNameText === t('menu.group.data-center');
+          showMenuProBadge &&
+          (rawKey === 'data-center-group' ||
+            rawKey === 'menu.group.data-center' ||
+            groupNameText === 'menu.group.data-center' ||
+            groupNameText === t('menu.group.data-center'));
         return {
           key: rawKey,
           name: group.name,
@@ -1350,7 +1353,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         return aOrder - bOrder;
       });
     return visibleGroups;
-  }, [systemMenuEntry, t]);
+  }, [systemMenuEntry, t, showMenuProBadge]);
 
   const systemSettingsPanelGridColumns = useMemo(() => {
     if (!systemSettingsGroups.length) return 6;
@@ -3061,7 +3064,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         menuTextRender={(item: any, defaultText: React.ReactNode) => {
           // 应用分组标题：全部套主色样式；PRO 徽标仅对 PRO 应用
           if (!isSidebarAppGroupTitleItem(item)) {
-            if (item?.meta?.is_pro === true) {
+            if (showMenuProBadge && item?.meta?.is_pro === true) {
               return (
                 <>
                   {defaultText}
@@ -3072,7 +3075,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             return defaultText;
           }
           const appCode = resolveSidebarAppGroupCode(item);
-          const showPro = Boolean(appCode && (PRO_APP_CODES as readonly string[]).includes(appCode));
+          const showPro = showMenuProBadge && Boolean(appCode && (PRO_APP_CODES as readonly string[]).includes(appCode));
           return (
             <span
               className="menu-group-title-app-label"
@@ -3189,7 +3192,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             const groupTitle = appCode
               ? resolveAppMenuGroupDisplayName(appCode, fallback, t)
               : fallback;
-            const showPro = Boolean(appCode && (PRO_APP_CODES as readonly string[]).includes(appCode));
+            const showPro = showMenuProBadge && Boolean(appCode && (PRO_APP_CODES as readonly string[]).includes(appCode));
 
             return (
               <div

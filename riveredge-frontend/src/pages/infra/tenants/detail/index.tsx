@@ -210,6 +210,17 @@ const SuperAdminTenantDetail: React.FC = () => {
             ),
           },
           {
+            title: t('pages.infra.tenant.formShowProBadge'),
+            dataIndex: 'show_pro_badge',
+            render: (_, record) => (
+              <Tag color={record.show_pro_badge !== false ? 'success' : 'default'}>
+                {record.show_pro_badge !== false
+                  ? t('pages.infra.tenant.sensitiveWordEnabledOn')
+                  : t('pages.infra.tenant.sensitiveWordEnabledOff')}
+              </Tag>
+            ),
+          },
+          {
             title: t('pages.infra.tenant.maxUsers'),
             dataIndex: 'max_users',
           },

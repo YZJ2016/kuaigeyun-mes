@@ -110,6 +110,12 @@ class PurchaseOrderBase(BaseSchema):
     estimated_payable_after_prepayment: Optional[Decimal] = Field(
         None, ge=0, description="按订单金额扣未核销预付后的预计待付（详情）"
     )
+    prepayment_unsettled_balance: Optional[Decimal] = Field(
+        None, ge=0, description="关联预付付款单未核销余额（详情）"
+    )
+    estimated_payable_after_prepayment: Optional[Decimal] = Field(
+        None, ge=0, description="按订单金额扣未核销预付后的预计待付（详情）"
+    )
 
     @field_validator("price_type", mode="before")
     @classmethod

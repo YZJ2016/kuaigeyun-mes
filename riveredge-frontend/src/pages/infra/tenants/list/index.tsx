@@ -824,6 +824,7 @@ const SuperAdminTenantList: React.FC = () => {
           status: TenantStatus.INACTIVE,
           plan: defaultPlan,
           sensitive_word_enabled: false,
+          show_pro_badge: true,
         });
     }, 0);
   };
@@ -844,6 +845,7 @@ const SuperAdminTenantList: React.FC = () => {
           status: TenantStatus.ACTIVE,
           plan: defaultPlan,
           sensitive_word_enabled: false,
+          show_pro_badge: true,
         });
     }, 0);
   };
@@ -873,6 +875,7 @@ const SuperAdminTenantList: React.FC = () => {
           max_storage: data.max_storage,
           expires_at: data.expires_at,
           sensitive_word_enabled: Boolean(data.sensitive_word_enabled),
+          show_pro_badge: data.show_pro_badge !== false,
         });
       }, 0);
     } catch (error: any) {
@@ -951,6 +954,7 @@ const SuperAdminTenantList: React.FC = () => {
           max_storage: values.max_storage,
           expires_at: values.expires_at,
           sensitive_word_enabled: Boolean(values.sensitive_word_enabled),
+          show_pro_badge: values.show_pro_badge !== false,
         };
         // 使用平台超级管理员接口更新组织
         await apiRequest<Tenant>(`/infra/tenants/${currentTenantId}`, {
@@ -971,6 +975,7 @@ const SuperAdminTenantList: React.FC = () => {
           max_storage: values.max_storage,
           expires_at: values.expires_at,
           sensitive_word_enabled: Boolean(values.sensitive_word_enabled),
+          show_pro_badge: values.show_pro_badge !== false,
           admin_account: {
             username: adminAccount.username,
             password: adminAccount.password,
@@ -1535,6 +1540,7 @@ const SuperAdminTenantList: React.FC = () => {
         status: TenantStatus.ACTIVE,
         plan: defaultPlan || undefined,
         sensitive_word_enabled: false,
+        show_pro_badge: true,
       }}
     >
         {!isEdit && createParentTenantId && (
@@ -1597,6 +1603,12 @@ const SuperAdminTenantList: React.FC = () => {
           name="sensitive_word_enabled"
           label={t('pages.infra.tenant.formSensitiveWordEnabled')}
           extra={t('pages.infra.tenant.formSensitiveWordEnabledExtra')}
+          colProps={{ span: 8 }}
+        />
+        <ProFormSwitch
+          name="show_pro_badge"
+          label={t('pages.infra.tenant.formShowProBadge')}
+          extra={t('pages.infra.tenant.formShowProBadgeExtra')}
           colProps={{ span: 8 }}
         />
         <SafeProFormSelect

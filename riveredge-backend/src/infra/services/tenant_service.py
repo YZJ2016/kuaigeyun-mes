@@ -104,6 +104,7 @@ class TenantService:
                 max_users=max_users,
                 max_storage=max_storage,
                 sensitive_word_enabled=bool(data.sensitive_word_enabled),
+                show_pro_badge=bool(data.show_pro_badge),
                 expires_at=data.expires_at,
             )
             
@@ -723,7 +724,14 @@ class TenantService:
                 changes.append(f"套餐变更：{old_plan.value} → {value.value}")
             elif field == "status" and old_value != value:
                 changes.append(f"状态变更：{old_status.value} → {value.value}")
-            elif field in ["name", "domain", "max_users", "max_storage", "sensitive_word_enabled"]:
+            elif field in [
+                "name",
+                "domain",
+                "max_users",
+                "max_storage",
+                "sensitive_word_enabled",
+                "show_pro_badge",
+            ]:
                 changes.append(f"{field} 变更：{old_value} → {value}")
         
         await tenant.save()

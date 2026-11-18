@@ -211,6 +211,7 @@ async def get_settings(
     tenant = await Tenant.get_or_none(id=tenant_id)
     if tenant:
         merged_settings["tenant_domain"] = tenant.domain
+        merged_settings["show_pro_badge"] = bool(tenant.show_pro_badge)
     merged_settings = mask_integrations_for_response(merged_settings)
     merged_settings = mask_company_seal_for_response(
         merged_settings,
@@ -246,7 +247,9 @@ async def update_settings(
     """
     settings_payload = dict(data.settings or {})
     settings_payload.pop("private_files_password_hash", None)
+    # 组织表真源字段，禁止写回 site_settings JSON
     tenant_domain = settings_payload.pop("tenant_domain", None)
+    settings_payload.pop("show_pro_badge", None)
     current_tenant = await Tenant.get_or_none(id=tenant_id)
     if not current_tenant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前组织不存在")
@@ -308,6 +311,7 @@ async def update_settings(
     tenant = await Tenant.get_or_none(id=tenant_id)
     if tenant:
         merged_settings["tenant_domain"] = tenant.domain
+        merged_settings["show_pro_badge"] = bool(tenant.show_pro_badge)
     merged_settings = mask_integrations_for_response(merged_settings)
     merged_settings = mask_company_seal_for_response(
         merged_settings,

@@ -77,6 +77,8 @@ class PaymentApplicationCreate(BaseModel):
     supplier_bank_account: Optional[str] = Field(None, alias="supplierBankAccount")
     payment_reason: Optional[str] = Field(None, alias="paymentReason")
     payment_method: Optional[str] = Field(None, alias="paymentMethod")
+    advance_payee_id: Optional[int] = Field(None, alias="advancePayeeId")
+    advance_payee_name: Optional[str] = Field(None, alias="advancePayeeName")
     invoice_status: Optional[str] = Field(None, alias="invoiceStatus")
     payment_terms: Optional[str] = Field(None, alias="paymentTerms")
     notes: Optional[str] = None
@@ -102,6 +104,8 @@ class PaymentApplicationUpdate(BaseModel):
     supplier_bank_account: Optional[str] = Field(None, alias="supplierBankAccount")
     payment_reason: Optional[str] = Field(None, alias="paymentReason")
     payment_method: Optional[str] = Field(None, alias="paymentMethod")
+    advance_payee_id: Optional[int] = Field(None, alias="advancePayeeId")
+    advance_payee_name: Optional[str] = Field(None, alias="advancePayeeName")
     invoice_status: Optional[str] = Field(None, alias="invoiceStatus")
     payment_terms: Optional[str] = Field(None, alias="paymentTerms")
     notes: Optional[str] = None
@@ -142,6 +146,8 @@ class PaymentApplicationResponse(UuidStrCoerceMixin, BaseSchema):
     supplier_bank_account: Optional[str] = Field(None, alias="supplierBankAccount")
     payment_reason: Optional[str] = Field(None, alias="paymentReason")
     payment_method: Optional[str] = Field(None, alias="paymentMethod")
+    advance_payee_id: Optional[int] = Field(None, alias="advancePayeeId")
+    advance_payee_name: Optional[str] = Field(None, alias="advancePayeeName")
     invoice_status: Optional[str] = Field(None, alias="invoiceStatus")
     payment_terms: Optional[str] = Field(None, alias="paymentTerms")
     notes: Optional[str] = None

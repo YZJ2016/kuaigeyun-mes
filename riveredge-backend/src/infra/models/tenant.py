@@ -96,6 +96,10 @@ class Tenant(BaseModel):
         default=False,
         description="是否开启敏感词控制（默认关闭）",
     )
+    show_pro_badge = fields.BooleanField(
+        default=True,
+        description="高级应用是否显示PRO徽章（默认开启）",
+    )
     expires_at = fields.DatetimeField(null=True, description="过期时间（可选）")
 
     class Meta:

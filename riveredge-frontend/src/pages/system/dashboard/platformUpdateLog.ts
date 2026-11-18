@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'tenant-show-pro-badge-toggle-r01',
+    date: '2026-11-18',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.tenant-show-pro-badge-toggle-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.tenant-show-pro-badge-toggle-r01.description',
+  },
+  {
     id: 'purchase-receipt-settlement-unified-r01',
     date: '2026-11-13',
     type: 'fix',
@@ -368,6 +376,14 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     titleKey: 'pages.dashboard.updateLog.entries.purchase-invoice-pull-next-visible-r02.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.purchase-invoice-pull-next-visible-r02.description',
+  },
+  {
+    id: 'purchase-invoice-doc-relation-deleted-at-r01',
+    date: '2026-11-18',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-invoice-doc-relation-deleted-at-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-invoice-doc-relation-deleted-at-r01.description',
   },
   {
     id: 'document-amount-shipment-push-r13',

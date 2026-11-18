@@ -107,8 +107,8 @@ async def test_post_expense_blocks_when_bank_balance_insufficient(monkeypatch):
     )
     bank_svc = MagicMock()
     bank_svc.validate_voucher_account = AsyncMock()
-    bank_svc.get_by_id = AsyncMock(
-        return_value=SimpleNamespace(account_code="1002", current_balance=Decimal("0"))
+    bank_svc.assert_out_funds = AsyncMock(
+        side_effect=ValidationError("账户 1002 余额不足，当前 0，本次出款 9000")
     )
     bank_svc.sync_from_confirmed_voucher = AsyncMock()
     bank_svc.reverse_from_voucher = AsyncMock(return_value=0)

@@ -4,7 +4,7 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind, rowActionFillInvoiceNumber } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Alert, Spin, Table, Empty, Form, InputNumber } from 'antd';
+import { App, Button, Modal, Typography, Alert, Spin, Table, Empty, Form, InputNumber, theme } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { apiRequest, formatApiErrorDetail } from '../../../../../services/api';
@@ -13,7 +13,7 @@ import {
   type PurchaseInvoicePullCandidate,
   type PurchaseInvoicePullPreview,
 } from '../../../services/finance/purchase-invoice';
-import { PurchaseInvoice } from '../../../types/finance/purchase-invoice';
+import { PurchaseInvoice, type PurchaseInvoiceCreateData } from '../../../types/finance/purchase-invoice';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
@@ -21,7 +21,7 @@ import { ActionConfirmPopconfirm } from '../../../../../components/action-confir
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { ListPageTemplate, MODAL_CONFIG, FormModalGridBlock } from '../../../../../components/layout-templates';
+import { ListPageTemplate, MODAL_CONFIG, MODAL_NESTED_ABOVE_PARENT_OFFSET, FormModalGridBlock } from '../../../../../components/layout-templates';
 import { financeColFull, financeColHalf, financeFormGridProps } from '../../../utils/financeFormLayout';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -140,11 +140,16 @@ const PurchaseInvoiceList: React.FC = () => {
   const pullAmountModeRef = useRef<InvoiceAmountInputMode>('tax_exclusive');
   const pullTaxRateRef = useRef<number>(13);
   const pullFromPurchaseOrderCloseRef = useRef<(() => void) | null>(null);
+  const pullFromPurchaseOrderOpenRef = useRef<(() => void) | null>(null);
   const pullFromPurchaseReceiptCloseRef = useRef<(() => void) | null>(null);
+  const pullFromPurchaseReceiptOpenRef = useRef<(() => void) | null>(null);
   const pullFromPayableCloseRef = useRef<(() => void) | null>(null);
+  const pullFromPayableOpenRef = useRef<(() => void) | null>(null);
   const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
+  const pullPreviewZIndex = token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET * 2;
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
@@ -321,21 +326,23 @@ const PurchaseInvoiceList: React.FC = () => {
   const openPullPreview = async (
     kind: PullPreviewKind,
     sourceIdsInput: number | number[],
-    options?: { closeSourceModal?: () => void },
+    options?: { closeSourceModal?: () => void; reopenSourceModal?: () => void },
   ) => {
     const sourceIds = (Array.isArray(sourceIdsInput) ? sourceIdsInput : [sourceIdsInput])
       .map((id) => Number(id))
       .filter((id) => Number.isFinite(id) && id > 0);
     if (!sourceIds.length) return;
+    // 先关取单窗再开预览，避免同层 zIndex 下预览被挡住、看起来像「下一步无反应」
+    options?.closeSourceModal?.();
     setPullPreviewKind(kind);
     setPullPreviewSourceIds(sourceIds);
     setPullPreviewSourceId(sourceIds[0]);
     setPullReceiptSelectedIds([]);
     setPullReceiptLineAmounts({});
-    setPullPreviewOpen(false);
+    setPullPreviewOpen(true);
     setPullPreviewLoading(true);
     setPullPreviewData(null);
-    setPullPreviewSourceId(sourceId);
+    const hideLoading = messageApi.loading(t(`${P}.pullPreviewLoading`), 0);
     try {
       const data =
         kind === 'purchase_order'
@@ -349,14 +356,13 @@ const PurchaseInvoiceList: React.FC = () => {
             : sourceIds.length === 1
               ? await purchaseInvoiceService.previewPullFromPayable(sourceIds[0])
               : await purchaseInvoiceService.previewPullFromPayables(sourceIds);
-      options?.closeSourceModal?.();
       setPullPreviewData(data);
-    } catch (e: any) {
-      messageApi.error(
-        e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
-      );
+    } catch (e: unknown) {
+      messageApi.error(resolveApiErrorMessage(e, t(`${P}.loadSourceFailed`)));
       resetPullPreview();
+      options?.reopenSourceModal?.();
     } finally {
+      hideLoading();
       setPullPreviewLoading(false);
     }
   };
@@ -416,10 +422,12 @@ const PurchaseInvoiceList: React.FC = () => {
       }
       await openPullPreview('purchase_order', selectedIds, {
         closeSourceModal: () => pullFromPurchaseOrderCloseRef.current?.(),
+        reopenSourceModal: () => pullFromPurchaseOrderOpenRef.current?.(),
       });
     },
   });
   pullFromPurchaseOrderCloseRef.current = pullFromPurchaseOrderQuery.closeModal;
+  pullFromPurchaseOrderOpenRef.current = pullFromPurchaseOrderQuery.openModal;
 
   const pullFromPurchaseReceiptQuery = useUniPullQuery<PurchaseInvoicePullCandidate>({
     rowKey: 'id',
@@ -463,10 +471,12 @@ const PurchaseInvoiceList: React.FC = () => {
       }
       await openPullPreview('purchase_receipt', selectedIds, {
         closeSourceModal: () => pullFromPurchaseReceiptCloseRef.current?.(),
+        reopenSourceModal: () => pullFromPurchaseReceiptOpenRef.current?.(),
       });
     },
   });
   pullFromPurchaseReceiptCloseRef.current = pullFromPurchaseReceiptQuery.closeModal;
+  pullFromPurchaseReceiptOpenRef.current = pullFromPurchaseReceiptQuery.openModal;
 
   const pullFromPayableQuery = useUniPullQuery<PurchaseInvoicePullCandidate>({
     rowKey: 'id',
@@ -510,10 +520,12 @@ const PurchaseInvoiceList: React.FC = () => {
       }
       await openPullPreview('payable', selectedIds, {
         closeSourceModal: () => pullFromPayableCloseRef.current?.(),
+        reopenSourceModal: () => pullFromPayableOpenRef.current?.(),
       });
     },
   });
   pullFromPayableCloseRef.current = pullFromPayableQuery.closeModal;
+  pullFromPayableOpenRef.current = pullFromPayableQuery.openModal;
 
   const handlePullCreateSubmit = async (values: any) => {
     if (!pullPreviewData || !pullPreviewSourceIds.length || !pullPreviewKind) {
@@ -1271,6 +1283,7 @@ const PurchaseInvoiceList: React.FC = () => {
         open={pullPreviewOpen}
         destroyOnHidden
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        zIndex={pullPreviewZIndex}
         onCancel={resetPullPreview}
         okText={pullPreviewTargetLabel}
         cancelText={t('common.cancel')}

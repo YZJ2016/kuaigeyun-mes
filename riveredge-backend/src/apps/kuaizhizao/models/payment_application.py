@@ -50,6 +50,11 @@ class PaymentApplication(BaseModel):
     supplier_bank_name = fields.CharField(max_length=200, null=True, description="收款开户行")
     supplier_bank_account = fields.CharField(max_length=64, null=True, description="收款账号")
 
+    advance_payee_id = fields.IntField(null=True, description="员工垫付领款人ID")
+    advance_payee_name = fields.CharField(
+        max_length=100, null=True, description="员工垫付领款人姓名"
+    )
+
     payment_reason = fields.TextField(null=True, description="付款事由")
     payment_method = fields.CharField(max_length=50, null=True, description="付款方式")
     invoice_status = fields.CharField(max_length=50, null=True, description="发票情况")

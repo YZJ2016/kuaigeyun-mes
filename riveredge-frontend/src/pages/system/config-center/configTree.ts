@@ -612,6 +612,14 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = [
   finance: [
     { key: 'finance.auto_write_off_precision_limit', nameKey: 'pages.system.configCenter.param.finance_auto_write_off_precision_limit', descriptionKey: 'pages.system.configCenter.param.finance_auto_write_off_precision_limit_desc', source: 'business_config', sourcePath: 'parameters.finance.auto_write_off_precision_limit', type: 'number', min: 0, max: 100 },
     {
+      key: 'finance.allow_negative_balance',
+      nameKey: 'pages.system.configCenter.param.finance_allow_negative_balance',
+      descriptionKey: 'pages.system.configCenter.param.finance_allow_negative_balance_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.finance.allow_negative_balance',
+      type: 'boolean',
+    },
+    {
       key: 'finance.revenue_recognition',
       nameKey: 'pages.system.configCenter.param.finance_revenue_recognition',
       descriptionKey: 'pages.system.configCenter.param.finance_revenue_recognition_desc',

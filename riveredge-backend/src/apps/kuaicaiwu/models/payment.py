@@ -43,6 +43,20 @@ class Payment(BaseModel):
         description="结算类型 normal/prepayment/refund",
     )
 
+    counterparty_account_name = fields.CharField(
+        max_length=200, null=True, description="对方收款户名"
+    )
+    counterparty_bank_name = fields.CharField(
+        max_length=200, null=True, description="对方收款开户行"
+    )
+    counterparty_bank_account = fields.CharField(
+        max_length=64, null=True, description="对方收款账号"
+    )
+    advance_payee_id = fields.IntField(null=True, description="员工垫付领款人ID")
+    advance_payee_name = fields.CharField(
+        max_length=100, null=True, description="员工垫付领款人姓名"
+    )
+
     refunded_amount = fields.DecimalField(
         max_digits=16, decimal_places=4, default=0, description="已确认退款合计"
     )

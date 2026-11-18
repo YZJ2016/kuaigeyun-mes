@@ -48,3 +48,13 @@ def is_payable_red_total_source(source_type: str | None) -> bool:
         or is_outsource_settlement_credit_payable(st)
         or st == PAYABLE_SOURCE_PRICE_SETTLEMENT
     )
+
+
+def payable_total_must_be_negative(source_type: str | None) -> bool:
+    """业务上须为负数的红字应付（不含可正可负的采购调价）。"""
+    st = str(source_type or "").strip()
+    return (
+        is_purchase_return_offset_payable(st)
+        or is_outsource_return_offset_payable(st)
+        or is_outsource_settlement_credit_payable(st)
+    )

@@ -105,6 +105,11 @@ class PaymentApplicationPushService:
                 "status": "Draft",
                 "notes": notes,
                 "require_payment_voucher": bool(getattr(app, "require_payment_voucher", False)),
+                "counterparty_account_name": getattr(app, "supplier_account_name", None),
+                "counterparty_bank_name": getattr(app, "supplier_bank_name", None),
+                "counterparty_bank_account": getattr(app, "supplier_bank_account", None),
+                "advance_payee_id": getattr(app, "advance_payee_id", None),
+                "advance_payee_name": getattr(app, "advance_payee_name", None),
             }
             apply_create_audit(payload, current_user)
             payment = await Payment.create(**payload)

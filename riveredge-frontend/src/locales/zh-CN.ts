@@ -4864,6 +4864,10 @@ export default {
     '图纸批量上传默认上限调整为 200 MB',
   'pages.dashboard.updateLog.entries.drawing-upload-default-200mb-r01.description':
     '业务配置「图纸主文件上传大小」默认由 100 MB 调整为 200 MB，与平台文件服务硬上限一致；新建、编辑与批量上传前后端同步校验。',
+  'pages.dashboard.updateLog.entries.tenant-show-pro-badge-toggle-r01.title':
+    '组织可按租户关闭侧栏 PRO 徽标',
+  'pages.dashboard.updateLog.entries.tenant-show-pro-badge-toggle-r01.description':
+    '组织管理新增「显示 PRO 徽标」开关，默认开启；关闭后该租户侧栏应用分组与菜单项不再展示 PRO 徽标，站点设置同步回显该配置。',
   'pages.dashboard.updateLog.entries.purchase-receipt-settlement-unified-r01.title':
     '采购入库详情编辑价税与采购订单一致',
   'pages.dashboard.updateLog.entries.purchase-receipt-settlement-unified-r01.description':

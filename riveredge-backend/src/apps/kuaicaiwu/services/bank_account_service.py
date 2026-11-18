@@ -21,6 +21,7 @@ from core.utils.timezone_utils import now_utc
 _ACCOUNT_TYPES = frozenset({"bank", "cash"})
 _BANK_TRANSFER_METHOD = "银行转账"
 _CASH_METHOD = "现金"
+_EMPLOYEE_ADVANCE_METHOD = "员工垫付"
 _SUMMARY_MAX_LEN = 500
 
 
@@ -40,6 +41,7 @@ def build_voucher_bank_summary(
     partner_name: Optional[str] = None,
     source_codes: Optional[List[str]] = None,
     notes: Optional[str] = None,
+    payee_name: Optional[str] = None,
 ) -> Optional[str]:
     """收/付款确认写入银行流水时的摘要。备注优先；否则拼单号、往来与关联应收/应付单号。"""
     notes_text = (notes or "").strip()
@@ -70,6 +72,9 @@ def build_voucher_bank_summary(
         parts.append(code)
     if partner:
         parts.append(partner)
+    payee = (payee_name or "").strip()
+    if payee:
+        parts.append(f"领款 {payee}")
     if codes and source_label:
         parts.append(f"{source_label} {','.join(codes)}")
     return clip_bank_summary(" ".join(parts))
@@ -131,6 +136,14 @@ class BankAccountService:
             account = await self.get_by_id(tenant_id, int(bank_account_id))
             if self.normalize_account_type(getattr(account, "account_type", None)) != "cash":
                 raise ValidationError("现金收付款请选择库存现金类账户")
+            return
+        if method == _EMPLOYEE_ADVANCE_METHOD:
+            if not bank_account_id:
+                raise ValidationError("员工垫付须选择出账账户")
+            account = await self.get_by_id(tenant_id, int(bank_account_id))
+            if self.normalize_account_type(getattr(account, "account_type", None)) == "cash":
+                return
+            return
 
     async def create(
         self,
@@ -272,6 +285,35 @@ class BankAccountService:
         row.is_active = False
         await row.save()
 
+    @staticmethod
+    async def _get_allow_negative_balance(tenant_id: int) -> bool:
+        """组织财务参数：是否允许付款账户账面余额为负。"""
+        from infra.services.business_config_service import BusinessConfigService
+
+        cfg = await BusinessConfigService().get_business_config(tenant_id)
+        fin = cfg.get("parameters", {}).get("finance", {})
+        return bool(fin.get("allow_negative_balance", False))
+
+    async def assert_out_funds(
+        self,
+        tenant_id: int,
+        bank_account_id: int,
+        amount: Decimal,
+    ) -> None:
+        """出款预检：余额不足且未开启「允许账户负余额」时拦截。"""
+        amt = Decimal(str(amount or 0))
+        if amt <= 0:
+            return
+        account = await self.get_by_id(tenant_id, int(bank_account_id))
+        current = Decimal(str(account.current_balance or 0))
+        if current - amt >= 0:
+            return
+        if await self._get_allow_negative_balance(tenant_id):
+            return
+        raise ValidationError(
+            f"账户 {account.account_code} 余额不足，当前 {current}，本次出款 {amt}"
+        )
+
     async def record_transaction(
         self,
         tenant_id: int,
@@ -300,7 +342,7 @@ class BankAccountService:
 
         current = Decimal(str(account.current_balance or 0))
         balance_after = current + amt if direction == "in" else current - amt
-        if balance_after < 0:
+        if balance_after < 0 and not await self._get_allow_negative_balance(tenant_id):
             raise ValidationError(f"账户 {account.account_code} 余额不足，当前 {current}，本次出款 {amt}")
 
         user = operator
@@ -500,7 +542,7 @@ class BankAccountService:
                 new_bal = current + amt
             else:
                 raise ValidationError(f"无法冲回未知方向的银行流水: {direction}")
-            if new_bal < 0:
+            if new_bal < 0 and not await self._get_allow_negative_balance(tenant_id):
                 raise ValidationError(
                     f"账户 {account.account_code} 冲回后余额不足，当前 {current}，冲回收入 {amt}"
                 )
@@ -565,12 +607,16 @@ class BankAccountService:
             target_type="payment",
             target_id=int(row.id),
         )
+        payee_name = None
+        if str(getattr(row, "payment_method", "") or "").strip() == _EMPLOYEE_ADVANCE_METHOD:
+            payee_name = getattr(row, "advance_payee_name", None)
         return build_voucher_bank_summary(
             voucher_kind="payment",
             voucher_code=getattr(row, "payment_code", None),
             partner_name=getattr(row, "supplier_name", None),
             source_codes=codes,
             notes=getattr(row, "notes", None),
+            payee_name=payee_name,
         )
 
     @staticmethod

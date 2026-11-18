@@ -219,6 +219,7 @@ async def list_payments(
     supplier_id: Optional[int] = None,
     unsettled_only: bool = Query(False, description="仅返回有余额的付款单（unsettled_amount > 0）"),
     settlement_type: Optional[str] = None,
+    payment_method: Optional[str] = Query(None, description="付款方式筛选"),
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     keyword: Optional[str] = Query(None),
@@ -247,6 +248,8 @@ async def list_payments(
         query = query.filter(unsettled_amount__gt=0).exclude(status="Cancelled")
     if supplier_id:
         query = query.filter(supplier_id=supplier_id)
+    if payment_method:
+        query = query.filter(payment_method=str(payment_method).strip())
 
     doc_date_start = start_date.isoformat() if start_date else None
     doc_date_end = end_date.isoformat() if end_date else None
@@ -506,7 +509,16 @@ async def update_payment(
     update_data = data.model_dump(exclude_unset=True)
     method = update_data.get("payment_method", payment.payment_method)
     account_id = update_data.get("bank_account_id", payment.bank_account_id)
+    settlement = update_data.get("settlement_type", payment.settlement_type)
+    payee_id = update_data.get("advance_payee_id", payment.advance_payee_id)
+    payee_name = update_data.get("advance_payee_name", payment.advance_payee_name)
     try:
+        assert_payment_voucher_payee_fields(
+            payment_method=method,
+            advance_payee_id=payee_id,
+            advance_payee_name=payee_name,
+            settlement_type=settlement,
+        )
         await BankAccountService().validate_voucher_account(
             tenant_id, payment_method=method, bank_account_id=account_id
         )
@@ -681,4 +693,16 @@ async def delete_payment(
             )
     except (BusinessLogicError, ValidationError) as exc:
         raise _http_exception_with_trace(400, str(exc), "/payments/{id}", tenant_id) from exc
-    await Payment.filter(id=id).delete()
+    from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+    await DocumentRelation.filter(
+        tenant_id=tenant_id,
+        target_type="payment",
+        target_id=id,
+    ).delete()
+    await DocumentRelation.filter(
+        tenant_id=tenant_id,
+        source_type="payment",
+        source_id=id,
+    ).delete()
+    await Payment.filter(tenant_id=tenant_id, id=id).delete()

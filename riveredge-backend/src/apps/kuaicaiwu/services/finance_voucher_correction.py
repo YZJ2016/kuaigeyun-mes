@@ -268,3 +268,7 @@ async def apply_confirmed_voucher_unpost(
         voucher_id=voucher_id,
         operator_id=operator_id,
     )
+    if voucher_type == "payment":
+        from apps.kuaicaiwu.services.payment_advance_service import PaymentAdvanceService
+
+        await PaymentAdvanceService().void_for_payment(tenant_id, voucher_id)

@@ -23,6 +23,7 @@ from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.models.sales_order_milestone import SalesOrderMilestone
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 from infra.services.business_config_service import BusinessConfigService
+from loguru import logger
 
 
 class ContractMilestoneBillingService:
@@ -294,6 +295,23 @@ class ContractMilestoneBillingService:
         milestone.payable_code = payable.payable_code
         milestone.status = "invoiced"
         await milestone.save(update_fields=["payable_id", "payable_code", "status", "updated_at"])
+        try:
+            from apps.kuaicaiwu.services.payable_prepayment_apply_service import (
+                PayablePrepaymentApplyService,
+            )
+
+            await PayablePrepaymentApplyService().auto_apply_after_payable_created(
+                tenant_id,
+                payable_id=int(payable.id),
+                purchase_order_id=int(purchase_order_id),
+                operator_id=created_by,
+            )
+        except Exception as prep_e:
+            logger.exception(
+                "采购订单 %s 里程碑应付开立后自动核销预付失败: %s",
+                order.order_code,
+                prep_e,
+            )
         return payable
 
     async def auto_generate_receivables_for_sales_order(

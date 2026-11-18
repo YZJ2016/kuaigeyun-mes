@@ -9,6 +9,7 @@ from .finance_source_types import (
     RECEIVABLE_SOURCE_SALES_RETURN,
     is_purchase_return_offset_payable,
     is_sales_return_offset_receivable,
+    payable_total_must_be_negative,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "RECEIVABLE_SOURCE_SALES_RETURN",
     "is_purchase_return_offset_payable",
     "is_sales_return_offset_receivable",
+    "payable_total_must_be_negative",
 ]

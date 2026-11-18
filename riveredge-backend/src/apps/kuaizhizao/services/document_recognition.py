@@ -182,16 +182,16 @@ async def resolve_payable_recognition_for_purchase_invoice(
 
     from apps.kuaizhizao.models.document_relation import DocumentRelation
 
+    # DocumentRelation 无 deleted_at；加载建票约定 source=入库 → target=发票
     rel = await DocumentRelation.filter(
         tenant_id=tenant_id,
-        source_type="purchase_invoice",
-        source_id=int(invoice.id),
-        target_type="purchase_receipt",
-        deleted_at__isnull=True,
+        source_type="purchase_receipt",
+        target_type="purchase_invoice",
+        target_id=int(invoice.id),
     ).first()
-    if rel and rel.target_id:
+    if rel and rel.source_id:
         receipt = await PurchaseReceipt.get_or_none(
-            tenant_id=tenant_id, id=int(rel.target_id), deleted_at__isnull=True
+            tenant_id=tenant_id, id=int(rel.source_id), deleted_at__isnull=True
         )
         if receipt is not None:
             return payable_recognition_from_doc(receipt)

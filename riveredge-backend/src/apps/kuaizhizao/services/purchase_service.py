@@ -778,6 +778,22 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             tenant_id, order, response, has_items=len(items) > 0
         )
         response.payment_milestones = payment_milestones
+        from apps.common.app_orm import finance_orm_ready
+
+        if finance_orm_ready():
+            from apps.kuaicaiwu.services.payable_prepayment_apply_service import (
+                PayablePrepaymentApplyService,
+            )
+
+            prep_svc = PayablePrepaymentApplyService()
+            unsettled, estimated_net = await prep_svc.enrich_purchase_order_prepayment_snapshot(
+                tenant_id,
+                purchase_order_id=order_id,
+                order_total_amount=Decimal(str(order.total_amount or 0)),
+            )
+            if unsettled > 0:
+                response.prepayment_unsettled_balance = unsettled
+                response.estimated_payable_after_prepayment = estimated_net
         return await enrich_record(tenant_id, "purchase_order", response)
 
     async def list_purchase_orders(

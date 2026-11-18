@@ -23,8 +23,10 @@ async def test_post_payment_keeps_draft_when_bank_balance_insufficient(monkeypat
     monkeypatch.setattr(module.Payment, "get_or_none", AsyncMock(return_value=payment))
     bank_svc = MagicMock()
     bank_svc.validate_voucher_account = AsyncMock()
-    bank_svc.get_by_id = AsyncMock(
-        return_value=SimpleNamespace(account_code="1", current_balance=Decimal("0"))
+    bank_svc.assert_out_funds = AsyncMock(
+        side_effect=module.ValidationError(
+            "账户 1 余额不足，当前 0，本次出款 50000"
+        )
     )
     bank_svc.sync_from_confirmed_voucher = AsyncMock()
     bank_svc.reverse_from_voucher = AsyncMock(return_value=0)

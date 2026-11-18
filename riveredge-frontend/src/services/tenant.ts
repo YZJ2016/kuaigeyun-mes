@@ -181,6 +181,8 @@ export interface Tenant {
   max_users: number;
   max_storage: number;
   sensitive_word_enabled?: boolean;
+  /** 高级应用侧栏是否显示 PRO 徽章（默认 true） */
+  show_pro_badge?: boolean;
   user_count?: number;
   expires_at?: string;
   last_login_at?: string;
@@ -236,6 +238,7 @@ export interface CreateTenantData {
   max_storage?: number;
   expires_at?: string;
   sensitive_word_enabled?: boolean;
+  show_pro_badge?: boolean;
   admin_account: TenantAdminAccountData;
 }
 
@@ -252,6 +255,7 @@ export interface UpdateTenantData {
   max_storage?: number;
   expires_at?: string;
   sensitive_word_enabled?: boolean;
+  show_pro_badge?: boolean;
 }
 
 /**

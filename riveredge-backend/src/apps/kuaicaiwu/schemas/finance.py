@@ -12,7 +12,12 @@ from decimal import Decimal
 from typing import Optional, List, Dict, Any
 from pydantic import Field, model_validator
 from core.schemas.base import BaseSchema
-from apps.kuaicaiwu.constants.finance_source_types import PAYABLE_SOURCE_PURCHASE_RETURN
+from apps.kuaicaiwu.constants.finance_source_types import (
+    PAYABLE_SOURCE_PRICE_SETTLEMENT,
+    PAYABLE_SOURCE_PURCHASE_RETURN,
+    is_payable_red_total_source,
+    payable_total_must_be_negative,
+)
 
 
 # === 应付单 ===
@@ -25,9 +30,9 @@ class PayableBase(BaseSchema):
     source_code: str = Field(..., max_length=50, description="来源单据编码")
     supplier_id: int = Field(..., description="供应商ID")
     supplier_name: str = Field(..., max_length=200, description="供应商名称")
-    total_amount: Decimal = Field(..., description="应付总金额（采购退货红字为负）")
+    total_amount: Decimal = Field(..., description="应付总金额（红字/冲减来源可为负）")
     paid_amount: Decimal = Field(Decimal("0"), ge=0, description="已付金额")
-    remaining_amount: Decimal = Field(..., ge=0, description="剩余金额")
+    remaining_amount: Decimal = Field(..., description="剩余金额（红字应付可为负或零）")
     due_date: date = Field(..., description="到期日期")
     payment_terms: Optional[str] = Field(None, max_length=100, description="付款条件")
     status: str = Field("未付款", max_length=20, description="付款状态")
@@ -48,11 +53,21 @@ class PayableBase(BaseSchema):
     def _validate_payable_total_amount_sign(self) -> "PayableBase":
         src = str(self.source_type or "").strip()
         amt = Decimal(str(self.total_amount or 0))
-        if src == PAYABLE_SOURCE_PURCHASE_RETURN:
+        remaining = Decimal(str(self.remaining_amount or 0))
+        if payable_total_must_be_negative(src):
             if amt >= 0:
-                raise ValueError("采购退货红字应付金额须为负数")
-        elif amt <= 0:
+                if src == PAYABLE_SOURCE_PURCHASE_RETURN:
+                    raise ValueError("采购退货红字应付金额须为负数")
+                raise ValueError("红字应付金额须为负数")
+        elif src == PAYABLE_SOURCE_PRICE_SETTLEMENT:
+            if amt == 0:
+                raise ValueError("应付金额不能为 0")
+        elif not is_payable_red_total_source(src) and amt <= 0:
             raise ValueError("应付总金额须大于 0")
+        if amt > 0 and remaining < 0:
+            raise ValueError("剩余金额不能为负")
+        if amt < 0 and remaining > 0:
+            raise ValueError("红字应付剩余金额不能为正")
         return self
 
 
@@ -355,6 +370,11 @@ class PaymentVoucherBase(BaseSchema):
     payment_method: str = Field(..., max_length=50, description="付款方式")
     bank_account: Optional[str] = Field(None, max_length=100, description="出款账号")
     bank_account_id: Optional[int] = Field(None, description="银行账户ID")
+    counterparty_account_name: Optional[str] = Field(None, max_length=200, description="对方收款户名")
+    counterparty_bank_name: Optional[str] = Field(None, max_length=200, description="对方收款开户行")
+    counterparty_bank_account: Optional[str] = Field(None, max_length=64, description="对方收款账号")
+    advance_payee_id: Optional[int] = Field(None, description="员工垫付领款人ID")
+    advance_payee_name: Optional[str] = Field(None, max_length=100, description="员工垫付领款人姓名")
     settlement_type: str = Field("normal", max_length=20, description="结算类型 normal/prepayment/refund")
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
@@ -377,6 +397,11 @@ class PaymentVoucherUpdate(BaseSchema):
     payment_method: Optional[str] = Field(None, max_length=50)
     bank_account: Optional[str] = Field(None, max_length=100)
     bank_account_id: Optional[int] = None
+    counterparty_account_name: Optional[str] = Field(None, max_length=200)
+    counterparty_bank_name: Optional[str] = Field(None, max_length=200)
+    counterparty_bank_account: Optional[str] = Field(None, max_length=64)
+    advance_payee_id: Optional[int] = None
+    advance_payee_name: Optional[str] = Field(None, max_length=100)
     settlement_type: Optional[str] = Field(None, max_length=20)
     notes: Optional[str] = None
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
@@ -384,6 +409,8 @@ class PaymentVoucherUpdate(BaseSchema):
 
 class PaymentVoucherResponse(PaymentVoucherBase):
     """付款单响应schema"""
+    # 读侧允许 0：align_draft_payments_to_payable_remaining 会把超出应付剩余的草稿压到 0
+    total_amount: Decimal = Field(..., ge=0, description="付款总额")
     id: int
     tenant_id: int
     payment_code: str
@@ -460,6 +487,8 @@ class ReceiptVoucherUpdate(BaseSchema):
 
 class ReceiptVoucherResponse(ReceiptVoucherBase):
     """收款单响应schema"""
+    # 读侧允许 0：align_draft_receipts_to_receivable_remaining 会把超出应收剩余的草稿压到 0
+    total_amount: Decimal = Field(..., ge=0, description="收款总额")
     id: int
     tenant_id: int
     receipt_code: str

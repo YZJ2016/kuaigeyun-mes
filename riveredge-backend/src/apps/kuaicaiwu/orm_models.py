@@ -26,6 +26,7 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaicaiwu.models.partner_statement",
     "apps.kuaicaiwu.models.payable",
     "apps.kuaicaiwu.models.payment",
+    "apps.kuaicaiwu.models.payment_advance_record",
     "apps.kuaicaiwu.models.price_settlement_batch",
     "apps.kuaicaiwu.models.price_settlement_line",
     "apps.kuaicaiwu.models.purchase_invoice",

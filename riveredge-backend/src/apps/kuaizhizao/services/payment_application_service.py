@@ -45,6 +45,35 @@ PAYMENT_APPLICATION_SORTABLE = frozenset({
 })
 
 
+async def resolve_payment_application_linked_payments(
+    tenant_id: int,
+    payment_rels: List[Any],
+) -> List[Dict[str, Any]]:
+    """付款申请 → 付款单关联：仅返回仍存在的付款单（避免已删单留下 DocumentRelation 幽灵链接）。"""
+    from apps.kuaicaiwu.models.payment import Payment
+
+    ids = [int(r.target_id) for r in payment_rels if getattr(r, "target_id", None)]
+    if not ids:
+        return []
+    rows = await Payment.filter(
+        tenant_id=tenant_id, id__in=ids, deleted_at__isnull=True
+    ).all()
+    by_id = {int(p.id): p for p in rows}
+    linked: List[Dict[str, Any]] = []
+    for rel in payment_rels:
+        pid = int(rel.target_id) if rel.target_id else 0
+        pay = by_id.get(pid)
+        if not pay:
+            continue
+        linked.append(
+            {
+                "id": pid,
+                "code": str(pay.payment_code or getattr(rel, "target_code", None) or ""),
+            }
+        )
+    return linked
+
+
 class PaymentApplicationService(AppBaseService[PaymentApplication]):
     def __init__(self) -> None:
         super().__init__(PaymentApplication)
@@ -125,14 +154,12 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
             source_id=int(app.id),
             target_type="payment",
         ).all()
-        caps = derive_payment_application_capabilities(
-            app, has_linked_payment=bool(payment_rels)
+        linked_payments = await resolve_payment_application_linked_payments(
+            app.tenant_id, payment_rels
         )
-        linked_payments = [
-            {"id": int(r.target_id), "code": str(r.target_code or "")}
-            for r in payment_rels
-            if r.target_id
-        ]
+        caps = derive_payment_application_capabilities(
+            app, has_linked_payment=bool(linked_payments)
+        )
         from apps.kuaizhizao.services.payment_application_purchase_order_sources import (
             load_payment_application_purchase_order_sources,
         )
@@ -173,6 +200,15 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
     ) -> PaymentApplicationResponse:
         if not data.items:
             raise ValidationError("至少一行申请明细")
+        from apps.kuaicaiwu.constants.payment_method import (
+            assert_payment_application_payee_fields,
+        )
+
+        assert_payment_application_payee_fields(
+            payment_method=data.payment_method,
+            advance_payee_id=data.advance_payee_id,
+            advance_payee_name=data.advance_payee_name,
+        )
         total = await self._validate_lines(tenant_id, data.supplier_id, data.items)
         async with in_transaction():
             code = data.application_code or await self._generate_code(tenant_id)
@@ -197,6 +233,8 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
                 supplier_bank_account=data.supplier_bank_account,
                 payment_reason=data.payment_reason,
                 payment_method=data.payment_method,
+                advance_payee_id=data.advance_payee_id,
+                advance_payee_name=data.advance_payee_name,
                 invoice_status=self._coerce_invoice_status(
                     data.invoice_status, allow_default=True
                 ),
@@ -335,6 +373,18 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
         assert_payment_application_capability(app, "update")
 
         dump = data.model_dump(exclude_unset=True, by_alias=False)
+        from apps.kuaicaiwu.constants.payment_method import (
+            assert_payment_application_payee_fields,
+        )
+
+        merged_method = dump.get("payment_method", app.payment_method)
+        merged_payee_id = dump.get("advance_payee_id", app.advance_payee_id)
+        merged_payee_name = dump.get("advance_payee_name", app.advance_payee_name)
+        assert_payment_application_payee_fields(
+            payment_method=merged_method,
+            advance_payee_id=merged_payee_id,
+            advance_payee_name=merged_payee_name,
+        )
         items = dump.pop("items", None)
         if items is not None:
             supplier_id = int(dump.get("supplier_id") or app.supplier_id)
@@ -594,14 +644,17 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
         )
         if not app:
             raise NotFoundError(f"付款申请单不存在: {application_id}")
-        has_payment = await DocumentRelation.filter(
+        payment_rels = await DocumentRelation.filter(
             tenant_id=tenant_id,
             source_type="payment_application",
             source_id=int(application_id),
             target_type="payment",
-        ).exists()
+        ).all()
+        linked_payments = await resolve_payment_application_linked_payments(
+            tenant_id, payment_rels
+        )
         assert_payment_application_capability(
-            app, "revoke_approval", has_linked_payment=has_payment
+            app, "revoke_approval", has_linked_payment=bool(linked_payments)
         )
 
         audit_required = await self.business_config_service.check_audit_required(

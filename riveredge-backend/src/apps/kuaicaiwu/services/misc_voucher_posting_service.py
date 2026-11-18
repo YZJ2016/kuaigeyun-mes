@@ -63,13 +63,7 @@ class MiscVoucherPostingService:
         )
         if voucher_type == "other_expense" and row.bank_account_id:
             amt = Decimal(str(row.total_amount or 0))
-            if amt > 0:
-                account = await bank_svc.get_by_id(tenant_id, int(row.bank_account_id))
-                current = Decimal(str(account.current_balance or 0))
-                if current - amt < 0:
-                    raise ValidationError(
-                        f"账户 {account.account_code} 余额不足，当前 {current}，本次出款 {amt}"
-                    )
+            await bank_svc.assert_out_funds(tenant_id, int(row.bank_account_id), amt)
 
         was_approved = row.status == "Approved"
         try:

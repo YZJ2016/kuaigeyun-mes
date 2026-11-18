@@ -186,11 +186,49 @@ async def link_finance_document_relation(
         ) from e
 
 
+async def _unwind_payable_review_for_receipt_cleanup(
+    tenant_id: int,
+    payable_id: int,
+    acting_user_id: int,
+    code_label: str,
+) -> None:
+    """入库撤回/删除前：将自动生成的应付单从已审/待审回到草稿，以便 delete_payable。"""
+    from infra.exceptions.exceptions import BusinessLogicError
+    from apps.kuaicaiwu.services.finance_audit_workflow import (
+        _APPROVED_REVIEW,
+        _PENDING_REVIEW,
+        _norm_review,
+    )
+    from apps.kuaicaiwu.services.finance_service import PayableService
+
+    operator_id = acting_user_id if acting_user_id > 0 else 1
+    svc = PayableService()
+    for _ in range(8):
+        payable = await svc.get_payable_by_id(tenant_id, payable_id)
+        raw = str(getattr(payable, "review_status", None) or "").strip()
+        norm = _norm_review(raw)
+        if norm in {"", "草稿", "draft", "驳回", "rejected", "已驳回"}:
+            return
+        if raw == "SUBMITTED" or norm in _PENDING_REVIEW:
+            await svc.withdraw_payable(tenant_id, payable_id, operator_id)
+            continue
+        if norm in _APPROVED_REVIEW:
+            await svc.revoke_payable(tenant_id, payable_id, operator_id)
+            continue
+        raise BusinessLogicError(
+            f"关联应付单 {code_label} 审核状态为「{raw}」，无法随入库撤回自动清理，请先在应付单撤销审核"
+        )
+    raise BusinessLogicError(
+        f"关联应付单 {code_label} 审核状态回退未结束，请人工处理应付单后再撤回入库"
+    )
+
+
 async def cleanup_payables_for_purchase_receipt(
     *,
     tenant_id: int,
     receipt_id: int,
     receipt_code: Optional[str] = None,
+    acting_user_id: int = 0,
 ) -> int:
     """
     采购入库撤回确认 / 删除时，清理由该入库单生成的应付单。
@@ -274,6 +312,12 @@ async def cleanup_payables_for_purchase_receipt(
                 f"关联应付单 {code_label} 已关联采购发票，无法撤回或删除入库单，请先处理发票"
             )
 
+        await _unwind_payable_review_for_receipt_cleanup(
+            tenant_id,
+            payable_id,
+            acting_user_id,
+            code_label,
+        )
         await payable_svc.delete_payable(tenant_id, payable_id)
         rel_svc = DocumentRelationNewService()
         payable_target_rows = await DocumentRelation.filter(
