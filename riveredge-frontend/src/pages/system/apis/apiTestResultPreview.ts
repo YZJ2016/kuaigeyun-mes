@@ -300,6 +300,19 @@ export function extractKingdeeFieldKeys(testRequestJson: string): string[] | nul
   }
 }
 
+/** 苍穹网关失败外壳：勿当业务表预览（如 612 无查询权限）。 */
+function isCosmicGatewayErrorEnvelope(body: Record<string, unknown>): boolean {
+  const errorCode = String(body.errorCode ?? body.error_code ?? '').trim();
+  if (!errorCode || errorCode === '0' || errorCode.toLowerCase() === 'success') {
+    return false;
+  }
+  const status = body.status;
+  if (status === true || String(status).toLowerCase() === 'true') {
+    return false;
+  }
+  return true;
+}
+
 export function buildApiTestBodyTablePreview(
   body: unknown,
   fieldKeyHint?: string[] | null,
@@ -311,6 +324,9 @@ export function buildApiTestBodyTablePreview(
     return buildFromArray(normalized, fieldKeyHint ?? undefined, { collapseToUnits: false });
   }
   if (isPlainObject(normalized)) {
+    if (isCosmicGatewayErrorEnvelope(normalized)) {
+      return null;
+    }
     const nestedRows = extractArrayFromObject(normalized);
     if (nestedRows) {
       return buildFromArray(nestedRows, fieldKeyHint ?? undefined, { collapseToUnits });

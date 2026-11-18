@@ -43,6 +43,20 @@ def test_normalize_cosmic_status_false_raises():
         )
 
 
+def test_normalize_cosmic_612_without_status_raises():
+    """开放平台常见：仅 errorCode+message，无 status=false，不得当业务行。"""
+    import pytest
+
+    with pytest.raises(ValueError, match="bd_warehouse"):
+        normalize_api_body_to_rows(
+            {
+                "data": None,
+                "errorCode": "612",
+                "message": "当前用户，无应用 sbd 下业务对象 bd_warehouse 的查询功能权限",
+            }
+        )
+
+
 def test_normalize_items_array():
     rows = normalize_api_body_to_rows({"items": [{"id": 1}]})
     assert rows == [{"id": 1}]

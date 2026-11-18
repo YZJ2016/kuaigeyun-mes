@@ -43,8 +43,12 @@ function rememberMaterialForUnitSelect(material: Material): void {
   if (material.uuid) materialByKeyCache.set(String(material.uuid), material);
 }
 
+function looksLikeMaterialUuid(idStr: string): boolean {
+  return idStr.includes('-') && idStr.length > 20;
+}
+
 /**
- * 拉取单条物料（每次请求最新；同 id 并发去重）
+ * 拉取单条物料（同 id 并发去重）。数字 id 用 ids 精确查，禁止 limit=2000 全表扫。
  */
 export async function fetchMaterialForUnitSelectCache(materialId: number | string): Promise<Material | null> {
   const cacheKey = String(materialId);
@@ -58,12 +62,12 @@ export async function fetchMaterialForUnitSelectCache(materialId: number | strin
     const idStr = String(materialId);
     let resp: Material | null = null;
 
-    if (idStr.includes('-') && idStr.length > 20) {
+    if (looksLikeMaterialUuid(idStr)) {
       resp = await materialApi.get(idStr);
     } else {
       const numericId = Number(idStr);
-      if (Number.isFinite(numericId)) {
-        const listRes = await materialApi.list({ limit: 2000, isActive: true });
+      if (Number.isFinite(numericId) && numericId > 0) {
+        const listRes = await materialApi.list({ ids: [numericId], limit: 1 });
         const items = Array.isArray(listRes?.items) ? listRes.items : [];
         resp = items.find((m) => Number(m.id) === numericId) ?? null;
       }
@@ -79,7 +83,7 @@ export async function fetchMaterialForUnitSelectCache(materialId: number | strin
 }
 
 /**
- * 批量预取物料档案（写入组件内部缓存）。
+ * 批量预取物料档案（写入组件内部缓存）。数字 id 一次 ids 查询，避免 N 次或全表扫。
  */
 export async function prefetchMaterialsForUnitSelect(
   materialIds: Array<number | string | null | undefined>
@@ -94,8 +98,42 @@ export async function prefetchMaterialsForUnitSelect(
   const out = new Map<string, Material>();
   if (unique.length === 0) return out;
 
+  const missingNumeric: number[] = [];
+  const missingUuid: string[] = [];
+  for (const key of unique) {
+    const cached = materialByKeyCache.get(key);
+    if (cached) {
+      out.set(key, cached);
+      continue;
+    }
+    if (looksLikeMaterialUuid(key)) {
+      missingUuid.push(key);
+      continue;
+    }
+    const numericId = Number(key);
+    if (Number.isFinite(numericId) && numericId > 0) {
+      missingNumeric.push(numericId);
+    }
+  }
+
+  if (missingNumeric.length > 0) {
+    try {
+      const listRes = await materialApi.list({
+        ids: missingNumeric,
+        limit: missingNumeric.length,
+      });
+      for (const m of listRes.items || []) {
+        rememberMaterialForUnitSelect(m);
+        out.set(String(m.id), m);
+        if (m.uuid) out.set(String(m.uuid), m);
+      }
+    } catch (error) {
+      console.error('Failed to load material units:', error);
+    }
+  }
+
   await Promise.all(
-    unique.map(async (key) => {
+    missingUuid.map(async (key) => {
       try {
         const m = await fetchMaterialForUnitSelectCache(key);
         if (m) out.set(key, m);

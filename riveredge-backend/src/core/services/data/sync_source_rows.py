@@ -35,16 +35,43 @@ def _collect_kingdee_error_messages(payload: Any) -> List[str]:
     return messages
 
 
+def _format_cosmic_gateway_error(error_code: str, message: str) -> str:
+    text = str(message or error_code or "苍穹接口返回失败").strip()
+    code = str(error_code or "").strip()
+    if code == "612" or "查询功能权限" in text or ("无应用" in text and "业务对象" in text):
+        hint = (
+            " 仓库列表路由是 kapi/v2/sbd/bd_warehouse/getList。"
+            "basedata 下的 query/batchQuery 网关返回 2530 路由未找到。"
+            "612 是连接器代理用户缺少应用 sbd、业务对象 bd_warehouse 的查询功能权限。"
+        )
+        if "开放服务云" not in text:
+            text = f"{text}{hint}"
+    return text
+
+
 def _raise_if_cosmic_error_payload(body: Any) -> None:
-    """苍穹网关失败：status=false 且带 errorCode/data 外壳，禁止当成业务行。"""
+    """苍穹网关失败：禁止把 errorCode/message 外壳当成业务行。
+
+    部分环境失败体只有 errorCode+message、无 status=false（如 612 无查询权限），
+    旧逻辑会整包当成 1 行预览数据。
+    """
     if not isinstance(body, dict):
         return
-    if body.get("status") is not False:
+    error_code = str(body.get("errorCode") or body.get("error_code") or "").strip()
+    status = body.get("status")
+    status_ok = status is True or str(status).lower() in {"true", "1", "success"}
+    status_false = status is False or str(status).lower() in {"false", "0"}
+    success_codes = {"", "0", "success", "SUCCESS"}
+    if status_ok:
         return
-    if "errorCode" not in body and "data" not in body:
+    # 无失败 status 且无失败码 → 普通业务体；有 612 等码即使无 status 也要拦
+    if error_code in success_codes and not status_false:
         return
-    msg = body.get("message") or body.get("errorCode") or "苍穹接口返回失败"
-    raise ValueError(str(msg))
+    msg = _format_cosmic_gateway_error(
+        error_code,
+        str(body.get("message") or body.get("msg") or ""),
+    )
+    raise ValueError(msg)
 
 
 def _unwrap_kingdee_execute_bill_layers(body: Any) -> Any:

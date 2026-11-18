@@ -103,7 +103,7 @@ def test_v2_inventory_params_body_not_wrapped_as_data():
 def test_warehouse_list_query_rewrites_to_getlist_and_injects_org():
     prepare = _mod.prepare_kingdee_cosmic_outbound
     method, url, params, body = prepare(
-        {"org_number": "BU-00000"},
+        {"org_number": "BU-00001"},
         "https://x/kapi/v2/basedata/bd_warehouse/query",
         "GET",
         {},
@@ -112,13 +112,13 @@ def test_warehouse_list_query_rewrites_to_getlist_and_injects_org():
     assert method == "POST"
     assert url.endswith("/sbd/bd_warehouse/getList")
     assert body == {
-        "data": {"createorg_number": "BU-00000"},
+        "data": {"createorg_number": "BU-00001"},
         "pageNo": 1,
         "pageSize": 1000,
     }
 
 
-def test_warehouse_batchquery_rewrites_to_getlist_and_puts_createorg_in_data():
+def test_warehouse_batchquery_rewrites_to_getlist_without_inventing_org():
     prepare = _mod.prepare_kingdee_cosmic_outbound
     method, url, params, body = prepare(
         {},
@@ -129,11 +129,58 @@ def test_warehouse_batchquery_rewrites_to_getlist_and_puts_createorg_in_data():
     )
     assert method == "POST"
     assert url.endswith("/sbd/bd_warehouse/getList")
-    assert body == {
-        "data": {"createorg_number": "BU-00000"},
-        "pageNo": 1,
-        "pageSize": 1000,
-    }
+    assert body["data"] == {}
+    assert body["pageSize"] == 1000
+
+
+def test_warehouse_getlist_keeps_body_createorg_when_connector_org_missing():
+    prepare = _mod.prepare_kingdee_cosmic_outbound
+    method, url, params, body = prepare(
+        {},
+        "https://x/kapi/v2/sbd/bd_warehouse/getList",
+        "POST",
+        {},
+        {"data": {"createorg_number": "ORG01"}, "pageNo": 1, "pageSize": 1000},
+    )
+    assert method == "POST"
+    assert url.endswith("/sbd/bd_warehouse/getList")
+    assert body["data"]["createorg_number"] == "ORG01"
+    assert body["pageSize"] == 1000
+
+
+def test_warehouse_getlist_prefers_connector_org_over_preset_example():
+    prepare = _mod.prepare_kingdee_cosmic_outbound
+    method, url, params, body = prepare(
+        {"org_number": "BU-00001"},
+        "https://x/kapi/v2/sbd/bd_warehouse/getList",
+        "POST",
+        {},
+        {"data": {"createorg_number": "BU-00000"}, "pageNo": 1, "pageSize": 1000},
+    )
+    assert method == "POST"
+    assert url.endswith("/sbd/bd_warehouse/getList")
+    assert body["data"]["createorg_number"] == "BU-00001"
+
+
+def test_outbound_replace_org_placeholders_from_connector():
+    prepare = _mod.prepare_kingdee_cosmic_outbound
+    method, url, params, body = prepare(
+        {"org_number": "BU-00001"},
+        "https://x/kapi/v2/im/im_purinbill/add",
+        "POST",
+        {},
+        {
+            "data": {
+                "org_number": "REPLACE_ORG",
+                "bizorg_number": "REPLACE_ORG",
+                "billentry": [{"entrysettleorg_number": "REPLACE_ORG"}],
+            }
+        },
+    )
+    assert method == "POST"
+    assert body["data"]["org_number"] == "BU-00001"
+    assert body["data"]["bizorg_number"] == "BU-00001"
+    assert body["data"]["billentry"][0]["entrysettleorg_number"] == "BU-00001"
 
 
 def test_warehouse_query_with_number_keeps_basedata_query_and_injects_param():
@@ -151,18 +198,17 @@ def test_warehouse_query_with_number_keeps_basedata_query_and_injects_param():
     assert params["number"] == "CK01"
 
 
-def test_warehouse_getlist_keeps_existing_createorg():
+def test_warehouse_getlist_fills_missing_createorg_from_connector():
     prepare = _mod.prepare_kingdee_cosmic_outbound
     method, url, params, body = prepare(
-        {},
+        {"org_number": "BU-00001"},
         "https://x/kapi/v2/sbd/bd_warehouse/getList",
         "POST",
         {},
-        {"data": {"createorg_number": "ORG01"}, "pageNo": 1, "pageSize": 1000},
+        {"data": {}, "pageNo": 1, "pageSize": 1000},
     )
     assert url.endswith("/sbd/bd_warehouse/getList")
-    assert body["data"]["createorg_number"] == "ORG01"
-    assert body["pageSize"] == 1000
+    assert body["data"]["createorg_number"] == "BU-00001"
 
 
 def test_project_row_by_select_reads_nested_group_and_baseunit():

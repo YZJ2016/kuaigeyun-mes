@@ -435,13 +435,14 @@ class APIService:
             build_material_group_goods_class_preset,
             kingdee_material_group_api_upgrade_fields,
             kingdee_supplier_api_upgrade_fields,
+            kingdee_warehouse_api_upgrade_fields,
             list_kingdee_cosmic_api_presets,
             material_group_preset_needs_upgrade,
             material_preset_needs_upgrade,
             measureunits_preset_needs_upgrade,
             resolve_preset_api_code,
             supplier_preset_needs_upgrade,
-            warehouse_batch_query_preset_needs_upgrade,
+            warehouse_preset_needs_upgrade,
         )
         from core.services.integration.kingdee_cosmic_mfg_api_presets import (
             list_kingdee_cosmic_mfg_api_presets,
@@ -478,21 +479,31 @@ class APIService:
             if existing:
                 if (
                     code_suffix == WAREHOUSE_PRESET_CODE_SUFFIX
-                    and warehouse_batch_query_preset_needs_upgrade(existing.request_body)
+                    and warehouse_preset_needs_upgrade(
+                        existing.path,
+                        existing.request_body,
+                        existing.method,
+                        existing.description,
+                    )
                 ):
-                    body = dict(existing.request_body or {}) if isinstance(existing.request_body, dict) else {}
-                    data = dict(body.get("data") or {}) if isinstance(body.get("data"), dict) else {}
-                    data["createorg_number"] = str(
-                        data.get("createorg_number") or data.get("createOrgNumber") or "WANG"
-                    ).strip() or "WANG"
-                    body["data"] = data
-                    if body.get("pageNo") in (None, ""):
-                        body["pageNo"] = 1
-                    if body.get("pageSize") in (None, ""):
-                        body["pageSize"] = 1000
-                    existing.request_body = body
-                    existing.description = preset["description"]
-                    await existing.save(update_fields=["request_body", "description", "updated_at"])
+                    fields = kingdee_warehouse_api_upgrade_fields()
+                    existing.path = fields["path"]
+                    existing.name = fields["name"]
+                    existing.description = fields["description"]
+                    existing.method = fields.get("method") or existing.method or "POST"
+                    existing.request_params = fields.get("request_params")
+                    existing.request_body = fields.get("request_body") or {}
+                    await existing.save(
+                        update_fields=[
+                            "path",
+                            "name",
+                            "description",
+                            "method",
+                            "request_params",
+                            "request_body",
+                            "updated_at",
+                        ]
+                    )
                     upgraded.append(code)
                 elif code_suffix == MEASUREUNITS_PRESET_CODE_SUFFIX and measureunits_preset_needs_upgrade(
                     existing.path,
@@ -1525,6 +1536,42 @@ class APIService:
                 api_path = str(api.path or "").strip()
                 call_request_params = fields.get("request_params") or {}
                 call_request_body = fields.get("request_body") or {}
+        elif conn_type in ("kingdee_cosmic", "kingdee_xinghan", "kingdee_ai_suite") and (
+            "query_warehouse" in str(api.code or "")
+            or "bd_warehouse" in api_path.lower()
+        ):
+            from core.services.integration.kingdee_cosmic_api_presets import (
+                kingdee_warehouse_api_upgrade_fields,
+                warehouse_preset_needs_upgrade,
+            )
+
+            if warehouse_preset_needs_upgrade(
+                api_path,
+                call_request_body,
+                api.method,
+                api.description,
+            ):
+                fields = kingdee_warehouse_api_upgrade_fields()
+                api.path = fields["path"]
+                api.method = fields["method"]
+                api.request_body = fields.get("request_body") or {}
+                api.request_params = fields.get("request_params")
+                api.description = fields["description"]
+                api.name = fields.get("name") or api.name
+                await api.save(
+                    update_fields=[
+                        "path",
+                        "method",
+                        "request_body",
+                        "request_params",
+                        "description",
+                        "name",
+                        "updated_at",
+                    ]
+                )
+                api_path = str(api.path or "").strip()
+                call_request_body = fields.get("request_body") or {}
+                call_request_params = fields.get("request_params")
         elif api_path != str(api.path or "").strip():
             api.path = api_path
             await api.save(update_fields=["path", "updated_at"])

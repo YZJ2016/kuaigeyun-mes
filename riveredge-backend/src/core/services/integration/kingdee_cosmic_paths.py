@@ -13,10 +13,12 @@ _BASEDATA_BATCH_OBJECTS = {
     "bd_materialgroup",
     "bd_supplier",
     "bd_customer",
-    "bd_warehouse",
 }
 
-WAREHOUSE_GET_LIST_ENDPOINT = "kapi/v2/sbd/bd_warehouse/getList"
+# 测试环境实调：basedata/bd_warehouse/query 与 batchQuery 均为 404/2530（路由未发布）。
+# 唯一发布的仓库列表是 sbd/getList；缺 createorg 为 603，带组织后若无功能权限为 612。
+WAREHOUSE_LIST_ENDPOINT = "kapi/v2/sbd/bd_warehouse/getList"
+WAREHOUSE_GET_LIST_ENDPOINT = WAREHOUSE_LIST_ENDPOINT
 
 
 _INCOMPLETE_SUPPLIER_PATH_MARKERS = frozenset(
@@ -85,8 +87,7 @@ def rewrite_basedata_sys_query_path(endpoint: str) -> str:
     if biz == "bd_supplier":
         return f"kapi/v2/basedata/{biz}/query"
     if biz == "bd_warehouse":
-        # 仓库列表真源：供应链基础资料 getList（非 basedata batchQuery）
-        return WAREHOUSE_GET_LIST_ENDPOINT
+        return WAREHOUSE_LIST_ENDPOINT
     if biz not in _BASEDATA_BATCH_OBJECTS:
         return ep
     return f"kapi/v2/basedata/{biz}/batchQuery"
@@ -234,7 +235,7 @@ def ensure_kingdee_v2_request_body(url: str, body: Dict[str, Any]) -> Dict[str, 
 
 
 def resolve_kingdee_cosmic_createorg_number(cfg: Optional[Dict[str, Any]]) -> str:
-    """连接器组织编码：仓库/供应商 basedata 查询的 createorg_number。"""
+    """连接器组织编码：仓库/库存/基础资料查询与出站单据的唯一组织真源。"""
     data = cfg if isinstance(cfg, dict) else {}
     for key in ("createorg_number", "create_org_number", "org_number", "orgNumber"):
         val = str(data.get(key) or "").strip()
@@ -257,21 +258,20 @@ def _is_warehouse_path(path: str) -> bool:
 
 
 def _rewrite_warehouse_list_url(url: str) -> str:
-    """旧 basedata/bd_warehouse/query|batchQuery → sbd getList；已是 getList 则原样。"""
+    """仓库列表统一走 sbd/bd_warehouse/getList。basedata 路径网关 2530。"""
     raw = _path_without_query(url)
     lower = raw.lower().replace("\\", "/")
     if not _is_warehouse_path(raw):
         return url
     if "/sbd/bd_warehouse/getlist" in lower:
         return url
-    if "/basedata/" not in lower:
-        return url
-    if "batchquery" not in lower and not lower.rstrip("/").endswith("/query"):
+    is_list = "batchquery" in lower or lower.rstrip("/").endswith("/query")
+    if not is_list:
         return url
     m = re.match(r"(?i)^(https?://[^/]+)", raw)
     if m:
-        return f"{m.group(1).rstrip('/')}/{WAREHOUSE_GET_LIST_ENDPOINT}"
-    return WAREHOUSE_GET_LIST_ENDPOINT
+        return f"{m.group(1).rstrip('/')}/{WAREHOUSE_LIST_ENDPOINT}"
+    return WAREHOUSE_LIST_ENDPOINT
 
 
 def _is_location_path(path: str) -> bool:
@@ -464,8 +464,9 @@ def prepare_kingdee_cosmic_outbound(
     body: Optional[Dict[str, Any]],
 ) -> Tuple[str, str, Dict[str, Any], Dict[str, Any]]:
     """
-    仓库列表走 sbd/bd_warehouse/getList，并把连接器组织编码写入 data.createorg_number。
-    旧 basedata query/batchQuery 列表路径自动改写为 getList。
+    仓库列表走 sbd/bd_warehouse/getList。
+    凡组织字段一律取连接器 org_number / createorg_number，禁止沿用预设硬编码。
+    basedata 的 query/batchQuery 会改写到 getList（网关对 basedata 仓库地址返回 2530）。
     """
     params_out: Dict[str, Any] = dict(params or {})
     body_out: Dict[str, Any] = dict(body) if isinstance(body, dict) else {}
@@ -485,20 +486,6 @@ def prepare_kingdee_cosmic_outbound(
     body_out = ensure_kingdee_v2_request_body(url_out, body_out)
     org = resolve_kingdee_cosmic_createorg_number(cfg)
     lower = _path_without_query(url_out).lower()
-    data_obj = body_out.get("data") if isinstance(body_out.get("data"), dict) else {}
-    already = str(params_out.get("createorg_number") or "").strip() or str(
-        data_obj.get("createorg_number") or data_obj.get("createOrgNumber") or ""
-    ).strip()
-    createorg = already or org or ("BU-00000" if _is_warehouse_path(url_out) else "")
-
-    if _is_warehouse_path(url_out) and (
-        "getlist" in lower or "batchquery" in lower
-    ):
-        data = dict(data_obj)
-        if createorg:
-            data["createorg_number"] = createorg
-        body_out["data"] = data
-        method_out = "POST"
 
     # 仓位 getList 契约必含 data（可为空对象）。生产库接口体常只有 pageNo/pageSize；
     # 仓库因注入 createorg 会顺带补上 data，仓位无组织字段时须在此保证，且不依赖连接器组织。

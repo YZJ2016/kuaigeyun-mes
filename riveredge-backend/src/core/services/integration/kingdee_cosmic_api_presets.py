@@ -187,17 +187,15 @@ GOODS_CLASS_QUERY_PATH = "kapi/v2/gmc/mdr_goodsclass/getMalGoodsClass"
 
 def build_warehouse_get_list_preset_body() -> Dict[str, Any]:
     """
-    仓库列表查询 getList：createorg_number 必须放在 data 里。
-    默认示例可按本环境创建组织编码修改；出站时也会用连接器 org_number 补缺。
+    仓库列表 getList：组织编码由连接器 org_number 在出站时写入，预设不硬编码。
     """
     return {
-        "data": {"createorg_number": "BU-00000"},
+        "data": {},
         "pageNo": 1,
         "pageSize": 1000,
     }
 
 
-# 兼容旧名：仓库同步已切到 sbd getList，不再走 basedata batchQuery
 build_warehouse_batch_query_preset_body = build_warehouse_get_list_preset_body
 
 
@@ -206,12 +204,12 @@ def build_warehouse_get_list_preset() -> KingdeeCosmicApiPreset:
         "code_suffix": WAREHOUSE_PRESET_CODE_SUFFIX,
         "name": "苍穹查询仓库",
         "description": (
-            "供应链基础资料「仓库列表查询」（API 编码 getList）。"
+            "供应链基础资料「仓库列表查询」，API 编码 getList，"
             f"请求地址 /v2/sbd/{BIZ_BD_WAREHOUSE}/getList。"
-            "请求体为 data、pageNo、pageSize；"
-            "金蝶要求 data.createorg_number（创建组织编码）必填，"
-            "默认示例 BU-00000，可按本环境修改；也可由连接器 org_number 在出站时补缺。"
-            "返回含 number/name/createorg_number/enable/status 等，供仓库入站同步映射。"
+            "请求体 data、pageNo、pageSize；"
+            "data.createorg_number 出站时取连接器组织编码，勿在预设里写死。"
+            "网关未注册 /v2/basedata/bd_warehouse/query 与 batchQuery，实调返回 2530 路由未找到。"
+            "若返回 612，是连接器代理用户缺少应用 sbd、业务对象 bd_warehouse 的查询功能权限。"
         ),
         "path": WAREHOUSE_GET_LIST_PATH,
         "method": "POST",
@@ -318,8 +316,9 @@ def warehouse_preset_needs_upgrade(
     path: Any,
     request_body: Any = None,
     method: Any = None,
+    description: Any = None,
 ) -> bool:
-    """须为 POST …/sbd/bd_warehouse/getList，且 body 含 data + 分页。"""
+    """须为 POST …/sbd/bd_warehouse/getList；组织由连接器填充，库内勿残留硬编码示例。"""
     if str(method or "").upper() not in ("", "POST"):
         return True
     lower = str(path or "").lower().replace("\\", "/")
@@ -332,6 +331,11 @@ def warehouse_preset_needs_upgrade(
     data = request_body.get("data")
     if not isinstance(data, dict):
         return True
+    # 历史预设把 BU-00000 写死在库里，须升级为 data 空对象由连接器注入
+    if str(data.get("createorg_number") or "").strip().upper() == "BU-00000":
+        return True
+    if "连接器组织" not in str(description or ""):
+        return True
     return False
 
 
@@ -339,10 +343,11 @@ def warehouse_batch_query_preset_needs_upgrade(
     request_body: Any,
     path: Any = None,
     method: Any = None,
+    description: Any = None,
 ) -> bool:
     """兼容旧调用：无 path 时仅看 body；有 path 时按 getList 契约判定。"""
     if path is not None:
-        return warehouse_preset_needs_upgrade(path, request_body, method)
+        return warehouse_preset_needs_upgrade(path, request_body, method, description)
     if not isinstance(request_body, dict):
         return True
     data = request_body.get("data")

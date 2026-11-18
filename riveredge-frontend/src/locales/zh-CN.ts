@@ -5976,6 +5976,26 @@ export default {
     '体系文件列表对齐三桶列宽',
   'pages.dashboard.updateLog.entries.kuaizhizao-system-documents-three-bucket-r01.description':
     '质量体系文件列表按三桶定宽：编号/版本/类型/体系/条款/复审/未回收 KeepWidth，标题吃余量；文件类型改 MarkerTag；状态右固定；行操作改为发放/履历/升版等双字目录文案。',
+  'pages.dashboard.updateLog.entries.cosmic-warehouse-basedata-query-r01.title':
+    '苍穹仓库列表维持 getList',
+  'pages.dashboard.updateLog.entries.cosmic-warehouse-basedata-query-r01.description':
+    '实测测试账套：/v2/basedata/bd_warehouse/query 与 batchQuery 返回 2530 路由未找到；已注册的仓库列表是 /v2/sbd/bd_warehouse/getList。调用会改写回 getList，并带上 data.createorg_number。',
+  'pages.dashboard.updateLog.entries.cosmic-warehouse-612-preview-r01.title':
+    '苍穹仓库查询 612 不再误显示为预览行',
+  'pages.dashboard.updateLog.entries.cosmic-warehouse-612-preview-r01.description':
+    '开放平台返回失败码且无 status=false 时，同步预览改为明确报错，不再把 errorCode/message 外壳显示成一行仓库数据。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-external-push-gate-r01.title':
+    '采购入库外推预览报不支持源类型',
+  'pages.dashboard.updateLog.entries.purchase-receipt-external-push-gate-r01.description':
+    '外推权限映射补登 purchase_receipt→kuaizhizao:inbound:push，数据互通 dry-run/手动推送不再误报未配置。',
+  'pages.dashboard.updateLog.entries.material-unit-select-no-limit-2000-r01.title':
+    '物料单位下拉不再一次拉两千物料',
+  'pages.dashboard.updateLog.entries.material-unit-select-no-limit-2000-r01.description':
+    '采购订单等页的单位选择在只有数字物料 ID 时改为按 ids 精确查询，不再请求 materials?limit=2000，避免网关 504 并弹出服务器暂时不可用。',
+  'pages.dashboard.updateLog.entries.cosmic-warehouse-getlist-org-priority-r01.title':
+    '苍穹接口组织编码改取连接器',
+  'pages.dashboard.updateLog.entries.cosmic-warehouse-getlist-org-priority-r01.description':
+    '仓库列表、库存查询及出站单据中的组织字段统一取连接器 org_number，预设不再写死 BU-00000；历史硬编码在调用时会被连接器组织覆盖。',
   'pages.dashboard.updateLog.entries.menu-sync-prompt-relax-r01.title':
     '菜单更新提示不再频繁打扰',
   'pages.dashboard.updateLog.entries.menu-sync-prompt-relax-r01.description':

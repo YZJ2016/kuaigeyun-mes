@@ -445,14 +445,47 @@ function normalizeBodyValue(body: unknown): unknown {
   }
 }
 
+function formatCosmicGatewayError(errorCode: string, message: string): string {
+  const text = String(message || errorCode || '苍穹接口返回失败').trim();
+  if (
+    errorCode === '612' ||
+    text.includes('查询功能权限') ||
+    (text.includes('无应用') && text.includes('业务对象'))
+  ) {
+    if (text.includes('开放服务云')) return text;
+    return (
+      `${text} 仓库列表路由是 kapi/v2/sbd/bd_warehouse/getList。` +
+      'basedata 下的 query/batchQuery 网关返回 2530 路由未找到。612 是连接器代理用户缺少应用 sbd、业务对象 bd_warehouse 的查询功能权限。'
+    );
+  }
+  return text;
+}
+
+/** 苍穹失败外壳（含无 status=false 的 612）不得当成业务行。 */
+function throwIfCosmicGatewayError(body: Record<string, unknown>): void {
+  const errorCode = String(body.errorCode ?? body.error_code ?? '').trim();
+  const status = body.status;
+  const statusOk = status === true || String(status).toLowerCase() === 'true';
+  const statusFalse = status === false || String(status).toLowerCase() === 'false';
+  const successCodes = new Set(['', '0', 'success', 'SUCCESS']);
+  if (statusOk) return;
+  if (successCodes.has(errorCode) && !statusFalse) return;
+  throw new Error(
+    formatCosmicGatewayError(errorCode, String(body.message ?? body.msg ?? '')),
+  );
+}
+
 function normalizeApiBodyToRowsRaw(
   body: unknown,
   columnNames?: string[],
 ): Record<string, unknown>[] {
   const normalized = normalizeBodyValue(body);
   if (normalized == null) return [];
-  if (isPlainObject(normalized) && 'error' in normalized) {
+  if (isPlainObject(normalized) && 'error' in normalized && normalized.error) {
     throw new Error(String(normalized.error));
+  }
+  if (isPlainObject(normalized)) {
+    throwIfCosmicGatewayError(normalized);
   }
   if (Array.isArray(normalized)) {
     if (normalized.length === 0) return [];

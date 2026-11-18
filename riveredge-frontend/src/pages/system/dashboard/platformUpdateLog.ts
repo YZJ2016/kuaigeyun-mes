@@ -80,6 +80,49 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.sales-delivery-kingdee-cosmic-push-r01.description',
   },
   {
+    id: 'material-unit-select-no-limit-2000-r01',
+    date: '2026-10-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-unit-select-no-limit-2000-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-unit-select-no-limit-2000-r01.description',
+  },
+  {
+    id: 'cosmic-warehouse-getlist-org-priority-r01',
+    date: '2026-10-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.cosmic-warehouse-getlist-org-priority-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.cosmic-warehouse-getlist-org-priority-r01.description',
+  },
+  {
+    id: 'cosmic-warehouse-basedata-query-r01',
+    date: '2026-10-26',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.cosmic-warehouse-basedata-query-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.cosmic-warehouse-basedata-query-r01.description',
+  },
+  {
+    id: 'cosmic-warehouse-612-preview-r01',
+    date: '2026-10-26',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.cosmic-warehouse-612-preview-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.cosmic-warehouse-612-preview-r01.description',
+  },
+  {
+    id: 'purchase-receipt-external-push-gate-r01',
+    date: '2026-10-26',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-external-push-gate-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-external-push-gate-r01.description',
+  },
+  {
     id: 'cosmic-warehouse-getlist-sync-r01',
     date: '2026-10-25',
     type: 'fix',
