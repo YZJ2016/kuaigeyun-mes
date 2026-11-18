@@ -78,6 +78,14 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
     def _format_user_display_name(user: Any) -> str:
         return str(getattr(user, "full_name", None) or getattr(user, "username", None) or user.id)
 
+    @staticmethod
+    async def _purchase_order_has_purchase_receipt(tenant_id: int, order_id: int) -> bool:
+        from apps.kuaicaiwu.services.purchase_order_finance_lifecycle import (
+            purchase_order_has_linked_purchase_receipt,
+        )
+
+        return await purchase_order_has_linked_purchase_receipt(tenant_id, int(order_id))
+
     async def _resolve_buyer_fields(self, data: Dict[str, Any]) -> None:
         """buyer_id 有值但 buyer_name 为空时，从用户主数据解析姓名；清空采购员时同步清空姓名。"""
         if "buyer_id" not in data:
@@ -250,21 +258,11 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         order: PurchaseOrder,
         operator_id: int,
     ) -> None:
-        """订单进入已确认后：按预付金额幂等生成预付付款单（供预收预付余额消费）。"""
-        from apps.kuaicaiwu.services.finance_integration_hooks import (
-            ensure_prepayment_payment_for_purchase_order,
-        )
+        """订单进入已确认后：付款计划里程碑应付等副作用（预付付款单须人工下推或付款申请，审单不自动生成）。"""
+        from apps.common.app_orm import finance_orm_ready
 
-        await ensure_prepayment_payment_for_purchase_order(
-            tenant_id=tenant_id,
-            order_id=int(order.id),
-            order_code=str(order.order_code or ""),
-            supplier_id=int(order.supplier_id),
-            supplier_name=str(order.supplier_name or ""),
-            prepayment_amount=order.prepayment_amount,
-            prepayment_bank_account_id=order.prepayment_bank_account_id,
-            operator_id=operator_id,
-        )
+        if not finance_orm_ready():
+            return
         from apps.kuaizhizao.services.contract_milestone_billing_service import (
             ContractMilestoneBillingService,
         )
@@ -714,17 +712,19 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 return await self.get_user_name(int(response.buyer_id))
             return response.buyer_name
 
-        async def _invoice_exists() -> bool:
+        async def _finance_lifecycle():
             from apps.common.app_orm import finance_orm_ready
-            from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
+            from apps.kuaicaiwu.services.purchase_order_finance_lifecycle import (
+                compute_purchase_order_finance_lifecycle,
+            )
+            from apps.kuaicaiwu.services.purchase_settlement import (
+                purchase_order_settlement_gross,
+            )
 
             if not finance_orm_ready():
-                return False
-            return await PurchaseInvoice.filter(
-                tenant_id=tenant_id,
-                purchase_order_id=order_id,
-                deleted_at__isnull=True,
-            ).exists()
+                return None
+            gross = purchase_order_settlement_gross(order)
+            return await compute_purchase_order_finance_lifecycle(tenant_id, order_id, gross)
 
         (
             buyer_name,
@@ -733,7 +733,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             has_receipt_notice,
             has_incoming_inspection,
             has_purchase_receipt,
-            has_purchase_invoice,
+            finance_lifecycle,
         ) = await asyncio.gather(
             _buyer_name(),
             self._apply_po_item_receipt_tolerance_fields(tenant_id, items),
@@ -744,11 +744,10 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             IncomingInspection.filter(
                 tenant_id=tenant_id, purchase_order_id=order_id, deleted_at__isnull=True
             ).exists(),
-            PurchaseReceipt.filter(
-                tenant_id=tenant_id, purchase_order_id=order_id, deleted_at__isnull=True
-            ).exists(),
-            _invoice_exists(),
+            self._purchase_order_has_purchase_receipt(tenant_id, order_id),
+            _finance_lifecycle(),
         )
+        has_purchase_invoice = bool(finance_lifecycle and finance_lifecycle.has_purchase_invoice)
         if buyer_name:
             response.buyer_name = buyer_name
 
@@ -772,7 +771,11 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             has_receipt_notice=bool(has_receipt_notice),
             has_incoming_inspection=bool(has_incoming_inspection),
             has_purchase_receipt=bool(has_purchase_receipt),
-            has_purchase_invoice=bool(has_purchase_invoice),
+            has_purchase_invoice=has_purchase_invoice,
+            invoice_amount_progress=(
+                finance_lifecycle.invoice_amount_progress if finance_lifecycle else None
+            ),
+            payment_progress=finance_lifecycle.payment_progress if finance_lifecycle else None,
         )
         response = await enrich_purchase_order_detail_capabilities(
             tenant_id, order, response, has_items=len(items) > 0
@@ -784,12 +787,15 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             from apps.kuaicaiwu.services.payable_prepayment_apply_service import (
                 PayablePrepaymentApplyService,
             )
+            from apps.kuaicaiwu.services.purchase_settlement import (
+                purchase_order_settlement_gross,
+            )
 
             prep_svc = PayablePrepaymentApplyService()
             unsettled, estimated_net = await prep_svc.enrich_purchase_order_prepayment_snapshot(
                 tenant_id,
                 purchase_order_id=order_id,
-                order_total_amount=Decimal(str(order.total_amount or 0)),
+                order_total_amount=purchase_order_settlement_gross(order),
             )
             if unsettled > 0:
                 response.prepayment_unsettled_balance = unsettled
@@ -1690,7 +1696,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         audit_required = await config_service.check_audit_required(tenant_id, "purchase_order")
 
         if not audit_required:
-            # 无需审核，直接确认（须同步生成预付付款单，否则预收预付余额无明细）
+            # 无需审核，直接确认（预付付款单不自动生成，见下推/付款申请）
             await order.update_from_dict({
                 'status': DocumentStatus.CONFIRMED.value,
                 'review_status': ReviewStatus.APPROVED.value,
@@ -2807,10 +2813,14 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
         order_items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).all()
+        from apps.kuaicaiwu.services.purchase_settlement import (
+            purchase_order_settlement_gross,
+        )
+
         pull_svc = PurchaseInvoicePullService()
         oid = int(order_model.id)
         code = str(order_model.order_code or oid)
-        order_total = quantize_money(Decimal(str(order_model.total_amount or 0)))
+        order_total = quantize_money(purchase_order_settlement_gross(order_model))
         pushed_map = await pull_svc._sum_pushed_totals_by_source(
             tenant_id, "purchase_order", [oid], {oid: code}
         )
@@ -2905,6 +2915,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
     ) -> Dict[str, Any]:
         """下推预付付款单预览。"""
         from apps.kuaicaiwu.services.finance_tax import money_to_json_float, quantize_money
+        from apps.kuaicaiwu.services.purchase_settlement import (
+            purchase_order_settlement_gross,
+        )
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             _order_prepayment_linked_by_ids,
         )
@@ -2936,29 +2949,27 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             require_payment_application=require_app,
         )
 
-        amount = quantize_money(Decimal(str(order_model.prepayment_amount or 0)))
         bank_id = order_model.prepayment_bank_account_id
-        has_blocking = amount <= 0 or prepay_map.get(order_id, False)
+        has_blocking = prepay_map.get(order_id, False)
         blocking_reason = None
         if prepay_map.get(order_id, False):
             blocking_reason = "purchase_order.push_prepayment.already_exists"
-        elif amount <= 0:
-            blocking_reason = "purchase_order.push_prepayment.no_amount"
 
         return {
             "target_type": "payment",
             "order_id": order_id,
             "order_code": order_model.order_code,
             "summary": (
-                f"将按采购订单 {order_model.order_code} 生成预付付款单（金额 {money_to_json_float(amount)}）"
+                f"将按采购订单 {order_model.order_code} 生成预付付款单"
                 if not has_blocking
                 else "当前采购订单不可下推预付付款单"
             ),
             "items": [],
             "has_blocking_issues": has_blocking,
             "blocking_reason": blocking_reason,
-            "tip": "确认后将生成已确认的预付付款单；金额默认取订单预付款，可在此调整。",
-            "prepayment_amount": money_to_json_float(amount),
+            "tip": "确认后将生成已确认的预付付款单，请填写本次预付金额。",
+            "order_total": money_to_json_float(purchase_order_settlement_gross(order_model)),
+            "prepayment_amount": None,
             "prepayment_bank_account_id": int(bank_id) if bank_id else None,
             "supplier_id": int(order_model.supplier_id) if order_model.supplier_id else None,
             "supplier_name": order_model.supplier_name,
@@ -3008,11 +3019,19 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             require_payment_application=require_app,
         )
 
+        from apps.kuaizhizao.services.payment_application_pull_service import (
+            prepayment_application_base_amount,
+        )
+
         amount_override = None
         if amount is not None:
             amount_override = quantize_money(Decimal(str(amount)))
             if amount_override <= 0:
                 raise BusinessLogicError("预付金额须大于 0")
+        else:
+            fallback = quantize_money(prepayment_application_base_amount(order))
+            if fallback > 0:
+                amount_override = fallback
 
         note_text = (notes or "").strip() or (
             f"从采购订单 {order.order_code} 下推预付付款单"
@@ -4080,10 +4099,14 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         order = await self.get_purchase_order_by_id(tenant_id, order_id)
         order_items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).all()
 
+        from apps.kuaicaiwu.services.purchase_settlement import (
+            purchase_order_settlement_gross,
+        )
+
         pull_svc = PurchaseInvoicePullService()
         oid = int(order.id)
         code = str(order.order_code or oid)
-        order_total = quantize_money(Decimal(str(order.total_amount or 0)))
+        order_total = quantize_money(purchase_order_settlement_gross(order))
         pushed_map = await pull_svc._sum_pushed_totals_by_source(
             tenant_id, "purchase_order", [oid], {oid: code}
         )

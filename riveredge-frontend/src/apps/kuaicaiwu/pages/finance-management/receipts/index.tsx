@@ -26,6 +26,12 @@ import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { FinanceVoucherDetailDrawer } from '../shared/FinanceVoucherDetailDrawer';
 import {
+  toReceiptRemediationSnapshot,
+  VoucherRemediationSettleModal,
+  type RemediationVoucherSnapshot,
+} from '../shared/VoucherRemediationSettleModal';
+import { shouldOpenManualRemediationAfterRepairFailure } from '../shared/financeRemediationSettle';
+import {
   financeAmountDigitFieldProps,
   financeColFull,
   financeColHalf,
@@ -116,6 +122,7 @@ const ReceiptsPage: React.FC = () => {
   const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [remediationVoucher, setRemediationVoucher] = useState<RemediationVoucherSnapshot | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailRecord, setDetailRecord] = useState<ReceiptVoucher | null>(null);
@@ -453,6 +460,31 @@ const ReceiptsPage: React.FC = () => {
         } catch (e: any) {
           messageApi.error(e?.message || t('common.operationFailed'));
         }
+  };
+
+  const executeRepairSettle = async (record: ReceiptVoucher) => {
+    try {
+      await receiptService.repairSettlement(record.id);
+      messageApi.success(t(`${R}.repairSettleSuccess`));
+      actionRef.current?.reload();
+      refreshOpenDetail();
+    } catch (e: unknown) {
+      const msg = getApiErrorMessage(e, t('common.operationFailed'));
+      if (shouldOpenManualRemediationAfterRepairFailure(msg, 'receipt')) {
+        try {
+          const detail = await receiptService.getReceipt(record.id);
+          const snap = toReceiptRemediationSnapshot(detail);
+          if (snap) {
+            setRemediationVoucher(snap);
+            messageApi.info(t(`${R}.repairSettleManualFallback`));
+            return;
+          }
+        } catch {
+          // fall through
+        }
+      }
+      messageApi.error(msg);
+    }
   };
 
   const executeUnconfirm = async (record: ReceiptVoucher) => {
@@ -886,16 +918,18 @@ const ReceiptsPage: React.FC = () => {
         }
         if (record.status === 'Confirmed' && Number(record.unsettled_amount ?? 0) > 0) {
           acts.push(
-            <Button
+            <ActionConfirmPopconfirm
               key="st"
-              {...rowActionSettleVoucher('submit')}
-              onClick={() => {
-                const qs = new URLSearchParams({ tab: 'receivable' });
-                if (record.customer_id != null) qs.set('customerId', String(record.customer_id));
-                if (record.id != null) qs.set('receiptId', String(record.id));
-                navigate(`/apps/kuaicaiwu/finance-management/settlement?${qs.toString()}`);
-              }}
-            />,
+              title={t(`${R}.repairSettleTitle`)}
+              description={t(`${R}.repairSettleContent`, { code: record.receipt_code })}
+              onConfirm={() => executeRepairSettle(record)}
+            >
+              <Button
+                {...rowActionSettleVoucher('submit')}
+                title={t(`${R}.repairSettleHint`)}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </ActionConfirmPopconfirm>,
           );
         }
         if (
@@ -982,7 +1016,7 @@ const ReceiptsPage: React.FC = () => {
         return acts;
       },
     },
-  ], [t, customerOptions, receiptPerms, receiptRefundPerms, navigate, openDetail, handleConfirm, handleCancel, handleDelete, receiptSettlementTypeOptions]);
+  ], [t, customerOptions, receiptPerms, receiptRefundPerms, navigate, openDetail, handleConfirm, executeRepairSettle, handleCancel, handleDelete, receiptSettlementTypeOptions]);
 
 
   return (
@@ -1370,17 +1404,18 @@ const ReceiptsPage: React.FC = () => {
                   key: 'settle',
                   visible: detailRecord.status === 'Confirmed' && Number(detailRecord.unsettled_amount ?? 0) > 0,
                   render: (
-                    <Button
-                      {...rowActionKind('submit')}
-                      onClick={() => {
-                        const qs = new URLSearchParams({ tab: 'receivable' });
-                        if (detailRecord.customer_id != null) qs.set('customerId', String(detailRecord.customer_id));
-                        if (detailRecord.id != null) qs.set('receiptId', String(detailRecord.id));
-                        navigate(`/apps/kuaicaiwu/finance-management/settlement?${qs.toString()}`);
-                      }}
+                    <ActionConfirmPopconfirm
+                      title={t(`${R}.repairSettleTitle`)}
+                      description={t(`${R}.repairSettleContent`, { code: detailRecord.receipt_code })}
+                      onConfirm={() => executeRepairSettle(detailRecord)}
                     >
-                      {t('app.kuaicaiwu.common.settle')}
-                    </Button>
+                      <Button
+                        {...rowActionSettleVoucher('submit')}
+                        title={t(`${R}.repairSettleHint`)}
+                      >
+                        {t('app.kuaicaiwu.common.settle')}
+                      </Button>
+                    </ActionConfirmPopconfirm>
                   ),
                 },
                 {
@@ -1425,6 +1460,16 @@ const ReceiptsPage: React.FC = () => {
             />
           ) : null
         }
+      />
+      <VoucherRemediationSettleModal
+        open={remediationVoucher != null}
+        side="receipt"
+        voucher={remediationVoucher}
+        onClose={() => setRemediationVoucher(null)}
+        onSuccess={() => {
+          actionRef.current?.reload();
+          refreshOpenDetail();
+        }}
       />
     </ListPageTemplate>
   );

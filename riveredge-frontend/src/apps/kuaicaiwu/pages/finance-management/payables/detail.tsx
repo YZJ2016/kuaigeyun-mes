@@ -12,6 +12,7 @@ import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecis
 import { useLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 
 import { payableService } from '../../../services/finance/payable';
+import { payableSourceDiagnosisKey } from '../../../utils/payableSourceDiagnosis';
 
 import { Payable } from '../../../types/finance/payable';
 
@@ -352,6 +353,15 @@ const PayableDetail: React.FC = () => {
               {data.source_code} ({data.source_type})
 
             </ProDescriptions.Item>
+
+            {(() => {
+              const key = payableSourceDiagnosisKey(data.source_type);
+              return key ? (
+                <ProDescriptions.Item label={t('app.kuaicaiwu.payable.sourceDiagnosis.label')} span={3}>
+                  <Typography.Text type="secondary">{t(key)}</Typography.Text>
+                </ProDescriptions.Item>
+              ) : null;
+            })()}
 
             <ProDescriptions.Item label={t(`${P}.col.invoiceStatus`)}>
 

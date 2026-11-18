@@ -121,6 +121,12 @@ export const receiptService = {
     });
   },
 
+  repairSettlement: (id: number) => {
+    return apiRequest<ReceiptVoucher>(`${RECEIPT_API}/${id}/repair-settlement`, {
+      method: 'POST',
+    });
+  },
+
   unconfirmReceipt: (id: number) => {
     return apiRequest<ReceiptVoucher>(`${RECEIPT_API}/${id}/unconfirm`, {
       method: 'POST',

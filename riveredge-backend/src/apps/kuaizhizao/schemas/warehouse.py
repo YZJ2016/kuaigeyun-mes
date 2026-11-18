@@ -1055,6 +1055,10 @@ class PurchaseReceiptResponse(PurchaseReceiptBase):
         None,
         description="明细单位一致时的单位；不一致或无明细为 null（列表展示种类数）",
     )
+    settlement_gross: Optional[float] = Field(
+        None,
+        description="价税合计（按明细与来源采购订单行 total_price 比例重算，列表/详情展示真源）",
+    )
     items: Optional[List[DocumentLineMaterialPreview]] = Field(
         None, description="明细物料名预览（列表「明细」列）",
     )

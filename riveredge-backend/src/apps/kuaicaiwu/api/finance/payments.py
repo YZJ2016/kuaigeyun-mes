@@ -708,6 +708,31 @@ async def confirm_payment(
     return _serialize(payment)
 
 
+@router.post("/{id}/repair-settlement", response_model=PaymentVoucherResponse)
+async def repair_payment_settlement(
+    id: int,
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payment:audit")),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """已确认付款单按创建时加载的应付/付款申请补核销（无需再选手工匹配）。"""
+    await _get_or_404(tenant_id, id, route="/payments/{id}/repair-settlement")
+    from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+    try:
+        await payment_pull_service.repair_confirmed_payment_settlement(
+            tenant_id,
+            payment_id=id,
+            operator_id=current_user.id,
+        )
+    except NotFoundError as exc:
+        raise _http_exception_with_trace(404, str(exc), "/payments/{id}/repair-settlement", tenant_id) from exc
+    except ValidationError as exc:
+        raise _http_exception_with_trace(400, str(exc), "/payments/{id}/repair-settlement", tenant_id) from exc
+    payment = await _get_or_404(tenant_id, id, route="/payments/{id}/repair-settlement")
+    return await _serialize_detail(tenant_id, payment)
+
+
 @router.post("/{id}/cancel", response_model=PaymentVoucherResponse)
 async def cancel_payment(
     id: int,

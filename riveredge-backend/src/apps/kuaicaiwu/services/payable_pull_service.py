@@ -15,6 +15,10 @@ from apps.kuaicaiwu.constants.finance_source_types import (
     is_purchase_return_offset_payable,
 )
 from apps.kuaicaiwu.services.finance_service import derive_invoice_amount_status
+from apps.kuaicaiwu.services.purchase_settlement import (
+    purchase_order_settlement_gross,
+    purchase_receipt_settlement_gross_async,
+)
 from apps.kuaicaiwu.models.payable import Payable
 from apps.kuaizhizao.models.document_relation import DocumentRelation
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
@@ -168,7 +172,7 @@ class PayablePullService(AppBaseService[Payable]):
     ) -> List[Dict[str, Any]]:
         oid = int(order.id)
         code = str(order.order_code or oid)
-        total = Decimal(str(order.total_amount or 0))
+        total = purchase_order_settlement_gross(order)
         if total <= 0:
             return []
         if pushed is None:
@@ -195,7 +199,7 @@ class PayablePullService(AppBaseService[Payable]):
     ) -> List[Dict[str, Any]]:
         rid = int(receipt.id)
         code = str(receipt.receipt_code or rid)
-        total = Decimal(str(receipt.total_amount or 0))
+        total = await purchase_receipt_settlement_gross_async(tenant_id, receipt)
         if total <= 0:
             return []
         if pushed is None:
@@ -227,9 +231,10 @@ class PayablePullService(AppBaseService[Payable]):
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
         status = str(getattr(order, "status", "") or "").strip()
-        source_allowed = status in self._PO_ELIGIBLE_STATUSES and Decimal(
-            str(order.total_amount or 0)
-        ) > 0
+        source_allowed = (
+            status in self._PO_ELIGIBLE_STATUSES
+            and purchase_order_settlement_gross(order) > 0
+        )
         preview_items = await self._build_preview_items_for_purchase_order(tenant_id, order)
         allowed, reason = self._derive_pull_capability(
             source_allowed=source_allowed,
@@ -349,9 +354,8 @@ class PayablePullService(AppBaseService[Payable]):
             raise NotFoundError(f"采购入库单不存在: {receipt_id}")
 
         status = str(getattr(receipt, "status", "") or "").strip()
-        source_allowed = status in self._PR_ELIGIBLE_STATUSES and Decimal(
-            str(receipt.total_amount or 0)
-        ) > 0
+        receipt_gross = await purchase_receipt_settlement_gross_async(tenant_id, receipt)
+        source_allowed = status in self._PR_ELIGIBLE_STATUSES and receipt_gross > 0
         preview_items = await self._build_preview_items_for_purchase_receipt(tenant_id, receipt)
         allowed, reason = self._derive_pull_capability(
             source_allowed=source_allowed,
@@ -427,8 +431,9 @@ class PayablePullService(AppBaseService[Payable]):
                 order,
                 pushed=pushed_map.get(oid, Decimal("0")),
             )
+            gross = purchase_order_settlement_gross(order)
             allowed, reason = self._derive_pull_capability(
-                source_allowed=Decimal(str(order.total_amount or 0)) > 0,
+                source_allowed=gross > 0,
                 preview_items=preview_items,
                 not_allowed_reason="payable.pull_from_purchase_order.not_allowed",
                 no_lines_reason="payable.pull_from_purchase_order.no_lines",
@@ -445,7 +450,7 @@ class PayablePullService(AppBaseService[Payable]):
                     "supplier_name": order.supplier_name,
                     "source_status": order.status,
                     "source_date": str(getattr(order, "order_date", "") or ""),
-                    "amount": float(order.total_amount or 0),
+                    "amount": float(gross),
                     "capabilities": {
                         "pull_payable": {
                             "allowed": allowed,
@@ -492,8 +497,9 @@ class PayablePullService(AppBaseService[Payable]):
                 receipt,
                 pushed=pushed_map.get(rid, Decimal("0")),
             )
+            receipt_gross = await purchase_receipt_settlement_gross_async(tenant_id, receipt)
             allowed, reason = self._derive_pull_capability(
-                source_allowed=Decimal(str(receipt.total_amount or 0)) > 0,
+                source_allowed=receipt_gross > 0,
                 preview_items=preview_items,
                 not_allowed_reason="payable.pull_from_purchase_receipt.not_allowed",
                 no_lines_reason="payable.pull_from_purchase_receipt.no_lines",
@@ -513,7 +519,7 @@ class PayablePullService(AppBaseService[Payable]):
                     "source_date": str(
                         getattr(receipt, "receipt_time", "") or getattr(receipt, "created_at", "") or ""
                     ),
-                    "amount": float(receipt.total_amount or 0),
+                    "amount": float(receipt_gross),
                     "capabilities": {
                         "pull_payable": {
                             "allowed": allowed,

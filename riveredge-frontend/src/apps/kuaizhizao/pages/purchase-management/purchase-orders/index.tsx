@@ -12,6 +12,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { inboundPoEntryPath } from '../../warehouse-management/inbound/inboundPaths';
 import { completeDeliveryNodeDocumentLinkIfPending } from '../../delivery-project/shared/deliveryNodeDocumentLink';
 import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -2009,9 +2010,11 @@ const PurchaseOrdersPage: React.FC = () => {
 
   const handlePushToReceipt = useCallback(
     (record: PurchaseOrder) => {
-      void loadPushPreview(record, 'receipt');
+      const orderId = record.id;
+      if (orderId == null || !(Number(orderId) > 0)) return;
+      navigate(inboundPoEntryPath(Number(orderId)));
     },
-    [loadPushPreview],
+    [navigate],
   );
 
   const handlePushToNotice = useCallback(

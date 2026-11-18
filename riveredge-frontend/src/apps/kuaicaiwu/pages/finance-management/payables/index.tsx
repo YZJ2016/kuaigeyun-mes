@@ -958,6 +958,7 @@ const PayableList: React.FC = () => {
             key: 'action',
             fixed: 'right',
             hideInSearch: true,
+            uniActionRenderOptions: { directMax: 2, minPrimaryVisible: 1 },
             render: (_, record) => {
                 const acts: React.ReactNode[] = [
                     <Button

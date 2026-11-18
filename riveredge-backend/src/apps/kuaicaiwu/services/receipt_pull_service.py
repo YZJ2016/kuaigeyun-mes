@@ -370,6 +370,89 @@ class ReceiptPullService(AppBaseService[Receipt]):
             operator_id=operator_id,
         )
 
+    async def align_draft_receipts_to_receivable_remaining(
+        self,
+        tenant_id: int,
+        receivable_id: int,
+    ) -> None:
+        """应收剩余变化后，把仍挂在该应收上的草稿货款收款单总额/待核销下调到不超过剩余。
+
+        已确认收款单不改。预收、退款单不参与占额。占额顺序与付款草稿相同。
+        """
+        receivable = await Receivable.get_or_none(
+            tenant_id=tenant_id, id=int(receivable_id), deleted_at__isnull=True
+        )
+        if not receivable:
+            return
+        # DocumentRelation 无 soft-delete 字段，禁止 deleted_at__isnull
+        relations = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="receivable",
+            source_id=int(receivable_id),
+            target_type="receipt",
+        ).all()
+        receipt_ids = [int(rel.target_id) for rel in relations if rel.target_id]
+        if not receipt_ids:
+            return
+        drafts = await Receipt.filter(
+            tenant_id=tenant_id,
+            id__in=receipt_ids,
+            status="Draft",
+            deleted_at__isnull=True,
+        ).order_by("id").all()
+        claims: List[tuple[int, Decimal]] = []
+        for draft in drafts:
+            kind = str(getattr(draft, "settlement_type", "normal") or "normal")
+            if kind in ("prepayment", "refund"):
+                continue
+            claims.append((int(draft.id), Decimal(str(draft.unsettled_amount or 0))))
+        from apps.kuaicaiwu.services.payment_pull_service import PaymentPullService
+
+        updates = PaymentPullService.allocate_draft_claims_to_remaining(
+            Decimal(str(receivable.remaining_amount or 0)),
+            claims,
+        )
+        for receipt_id, allowed in updates:
+            await Receipt.filter(tenant_id=tenant_id, id=receipt_id, status="Draft").update(
+                total_amount=allowed,
+                settled_amount=Decimal("0.00"),
+                unsettled_amount=allowed,
+            )
+
+    async def prepare_linked_draft_before_confirm(
+        self,
+        tenant_id: int,
+        receipt_id: int,
+    ) -> Receipt:
+        """确认前按应收剩余回写来源草稿，使银行入账与随后核销使用同一金额。"""
+        receipt = await Receipt.get_or_none(
+            tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+        )
+        if not receipt or receipt.status != "Draft":
+            if not receipt:
+                raise NotFoundError(f"收款单不存在: {receipt_id}")
+            return receipt
+        if str(getattr(receipt, "settlement_type", "normal") or "normal") in ("prepayment", "refund"):
+            return receipt
+        rel = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="receivable",
+            target_type="receipt",
+            target_id=receipt_id,
+        ).first()
+        if not rel or not rel.source_id:
+            return receipt
+        await self.align_draft_receipts_to_receivable_remaining(tenant_id, int(rel.source_id))
+        receipt = await Receipt.get_or_none(
+            tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+        )
+        if not receipt:
+            raise NotFoundError(f"收款单不存在: {receipt_id}")
+        unsettled = Decimal(str(receipt.unsettled_amount or 0))
+        if unsettled <= 0:
+            raise ValidationError("应收已由其他收款核销，本单已无待收金额")
+        return receipt
+
     @staticmethod
     def normal_receipt_requires_settlement_source_before_confirm(receipt: Receipt) -> bool:
         kind = str(getattr(receipt, "settlement_type", "normal") or "normal")
@@ -431,6 +514,41 @@ class ReceiptPullService(AppBaseService[Receipt]):
         if unsettled > 0:
             raise ValidationError(
                 "确认后仍有待核销金额，请检查收款单是否已从应收加载且金额与应收剩余一致"
+            )
+
+    async def repair_confirmed_receipt_settlement(
+        self,
+        tenant_id: int,
+        *,
+        receipt_id: int,
+        operator_id: int,
+    ) -> None:
+        payment = await Receipt.get_or_none(
+            tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+        )
+        if not payment:
+            raise NotFoundError(f"收款单不存在: {receipt_id}")
+        if str(getattr(payment, "status", "") or "") != "Confirmed":
+            raise ValidationError("仅已确认且有待核销的收款单可执行补核销")
+        unsettled = Decimal(str(getattr(payment, "unsettled_amount", 0) or 0))
+        if unsettled <= 0:
+            raise ValidationError("该收款单已无待核销金额")
+        await self.assert_normal_receipt_has_settlement_source(
+            tenant_id, receipt_id, receipt=payment
+        )
+        settled = await self.settle_draft_receipt_if_linked(
+            tenant_id=tenant_id,
+            receipt_id=receipt_id,
+            operator_id=operator_id,
+        )
+        if not settled:
+            raise ValidationError("未能按已关联应收完成核销，请检查应收剩余")
+        payment = await Receipt.get_or_none(
+            tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+        )
+        if payment:
+            await self.assert_normal_receipt_fully_settled_after_confirm(
+                tenant_id, receipt_id, receipt=payment
             )
 
     async def settle_draft_receipt_if_linked(

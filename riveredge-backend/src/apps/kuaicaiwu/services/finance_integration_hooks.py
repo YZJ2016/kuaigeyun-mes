@@ -400,7 +400,8 @@ async def backfill_missing_purchase_order_prepayments(
     tenant_id: int, *, operator_id: int
 ) -> int:
     """
-    补齐历史缺口：已确认采购订单填写了预付金额，但提交时未生成预付付款单。
+    运维补齐（勿在业务热路径调用）：已确认 PO 有预付金额但未关联预付付款单的历史数据。
+    现行规则为人工下推/付款申请出单，默认不再自动调用本函数。
     已有 purchase_order→payment 关联则标已补齐并跳过生成。
     生成失败把该订单标未补齐并提交后继续下一张；标记写入失败则上抛。
     """
@@ -441,7 +442,7 @@ async def backfill_missing_purchase_order_prepayments(
             )
         except Exception as e:
             logger.warning(
-                "补齐采购订单 %s 预付付款单失败: %s",
+                "补齐采购订单 %s 生成预付付款单失败: %s",
                 getattr(order, "order_code", order.id),
                 e,
             )
@@ -468,7 +469,7 @@ async def ensure_prepayment_payment_for_purchase_order(
     notes_override: Optional[str] = None,
     raise_if_exists: bool = False,
 ) -> Optional[int]:
-    """采购订单审核/确认或下推：按预付金额生成预付付款单（幂等）。"""
+    """采购订单下推预付或运维补齐：按预付金额生成预付付款单（幂等）。审单确认不再调用。"""
     amount = _q_money(
         amount_override if amount_override is not None else (prepayment_amount or 0)
     )
@@ -512,7 +513,7 @@ async def ensure_prepayment_payment_for_purchase_order(
         biz_date = to_site_date(resolve_business_datetime())
 
         note_text = (notes_override or "").strip() or (
-            f"采购订单 {order_code} 审核通过自动生成预付付款单"
+            f"采购订单 {order_code} 预付付款单"
         )
         # spec 142：付款单创建 + 单据关联 + 会计事件同事务——
         # 任一步失败全部回滚，重试不会产出无关联的重复付款单
@@ -563,17 +564,17 @@ async def ensure_prepayment_payment_for_purchase_order(
                 target_doc_code=payment.payment_code,
                 amount=amount,
                 operator_id=operator_id,
-                notes=f"采购订单 {order_code} 自动生成预付付款单",
+                notes=f"采购订单 {order_code} 预付付款单",
             )
         return payment.id
     except Exception as e:
         logger.error(
-            "采购订单 %s 自动生成预付付款单失败: %s", order_code, e
+            "采购订单 %s 生成预付付款单失败: %s", order_code, e
         )
         from infra.exceptions.exceptions import BusinessLogicError
 
         raise BusinessLogicError(
-            f"采购订单 {order_code} 自动生成预付付款单失败: {e}"
+            f"采购订单 {order_code} 生成预付付款单失败: {e}"
         ) from e
 
 

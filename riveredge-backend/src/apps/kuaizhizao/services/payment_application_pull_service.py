@@ -154,7 +154,10 @@ class PaymentApplicationPullService:
         return reserved_map.get(purchase_order_id, Decimal("0"))
 
     async def preview_from_purchase_order(
-        self, tenant_id: int, purchase_order_id: int
+        self,
+        tenant_id: int,
+        purchase_order_id: int,
+        amount: Optional[Decimal] = None,
     ) -> Dict[str, Any]:
         order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=purchase_order_id)
         if not order:
@@ -180,6 +183,26 @@ class PaymentApplicationPullService:
         )
         app_cap = caps.push_payment_application
         allowed = bool(app_cap.allowed) and max_push > 0
+        preview_items: List[Dict[str, Any]] = []
+        if allowed:
+            from apps.kuaizhizao.services.payment_application_line_materials import (
+                lines_from_purchase_order_items,
+            )
+
+            req_amt = Decimal(str(amount)) if amount is not None else max_push
+            if req_amt > max_push:
+                raise ValidationError(f"申请金额超过可预付请款额度 {max_push}")
+            if req_amt <= 0:
+                raise ValidationError("申请金额必须大于 0")
+            line_models = await lines_from_purchase_order_items(
+                tenant_id=tenant_id,
+                order=order,
+                request_amount=req_amt,
+                line_kind="prepayment",
+            )
+            preview_items = [
+                ln.model_dump(by_alias=True, mode="json") for ln in line_models
+            ]
         return {
             "target_type": "payment_application",
             "source_type": "purchase_order",
@@ -193,7 +216,7 @@ class PaymentApplicationPullService:
                 if allowed
                 else "当前采购订单不可下推付款申请"
             ),
-            "items": [],
+            "items": preview_items,
             "has_blocking_issues": not allowed,
             "blocking_reason": app_cap.reason if not app_cap.allowed else (
                 "payment_application.pull_from_purchase_order.no_amount" if max_push <= 0 else None

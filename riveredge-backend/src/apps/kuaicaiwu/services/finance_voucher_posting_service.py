@@ -127,6 +127,14 @@ class FinanceVoucherPostingService:
         )
 
         was_draft = receipt.status == "Draft"
+        receipt_pull_svc = ReceiptPullService()
+        if was_draft:
+            receipt = await receipt_pull_svc.prepare_linked_draft_before_confirm(
+                tenant_id, receipt_id
+            )
+            await receipt_pull_svc.assert_normal_receipt_has_settlement_source(
+                tenant_id, receipt_id, receipt=receipt
+            )
         try:
             if receipt.bank_account_id:
                 await bank_svc.sync_from_confirmed_voucher(
@@ -136,8 +144,20 @@ class FinanceVoucherPostingService:
                     operator_id=op_id,
                 )
             if was_draft:
-                pull_svc = ReceiptPullService()
-                await pull_svc.settle_draft_receipt_if_linked(
+                await receipt_pull_svc.settle_draft_receipt_if_linked(
+                    tenant_id=tenant_id,
+                    receipt_id=receipt_id,
+                    operator_id=op_id,
+                )
+                receipt = await Receipt.get_or_none(
+                    tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+                )
+                if receipt:
+                    await receipt_pull_svc.assert_normal_receipt_fully_settled_after_confirm(
+                        tenant_id, receipt_id, receipt=receipt
+                    )
+            elif Decimal(str(receipt.unsettled_amount or 0)) > 0:
+                await receipt_pull_svc.settle_draft_receipt_if_linked(
                     tenant_id=tenant_id,
                     receipt_id=receipt_id,
                     operator_id=op_id,
@@ -211,6 +231,14 @@ class FinanceVoucherPostingService:
             )
 
         was_draft = payment.status == "Draft"
+        pull_svc = PaymentPullService()
+        if was_draft:
+            payment = await pull_svc.prepare_linked_draft_before_confirm(
+                tenant_id, payment_id
+            )
+            await pull_svc.assert_normal_payment_has_settlement_source(
+                tenant_id, payment_id, payment=payment
+            )
         try:
             if payment.bank_account_id and not is_prepay_offset:
                 await bank_svc.sync_from_confirmed_voucher(
@@ -220,7 +248,6 @@ class FinanceVoucherPostingService:
                     operator_id=op_id,
                 )
             if was_draft:
-                pull_svc = PaymentPullService()
                 await pull_svc.settle_draft_payment_if_linked(
                     tenant_id=tenant_id,
                     payment_id=payment_id,
@@ -231,6 +258,20 @@ class FinanceVoucherPostingService:
                 )
 
                 await PaymentApplicationPushService().apply_payment_confirmed(
+                    tenant_id=tenant_id,
+                    payment_id=payment_id,
+                    operator_id=op_id,
+                )
+                payment = await Payment.get_or_none(
+                    tenant_id=tenant_id, id=payment_id, deleted_at__isnull=True
+                )
+                if payment:
+                    await pull_svc.assert_normal_payment_fully_settled_after_confirm(
+                        tenant_id, payment_id, payment=payment
+                    )
+            elif Decimal(str(payment.unsettled_amount or 0)) > 0:
+                # 已确认但待核销仍为全额（如历史从付款申请加载未核销应付）：补核销，不回写申请已付
+                await pull_svc.settle_draft_payment_if_linked(
                     tenant_id=tenant_id,
                     payment_id=payment_id,
                     operator_id=op_id,

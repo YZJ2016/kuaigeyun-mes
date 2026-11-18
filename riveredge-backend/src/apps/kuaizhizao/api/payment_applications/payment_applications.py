@@ -198,10 +198,17 @@ async def pull_from_reconciliation(
 @router.get("/payment-applications/pull-from-purchase-order/preview")
 async def preview_pull_from_purchase_order(
     purchase_order_id: int = Query(...),
+    amount: Optional[float] = Query(None, gt=0),
     tenant_id: int = Depends(get_current_tenant),
     _auth: object = Depends(require_permission_codes("kuaizhizao:payment-application:read")),
 ):
-    return await _pull.preview_from_purchase_order(tenant_id, purchase_order_id)
+    from decimal import Decimal
+
+    amt = Decimal(str(amount)) if amount is not None else None
+    try:
+        return await _pull.preview_from_purchase_order(tenant_id, purchase_order_id, amount=amt)
+    except ValidationError as e:
+        raise _http(400, str(e), "/payment-applications/pull-from-purchase-order/preview", tenant_id) from e
 
 
 @router.get("/payment-applications/{application_id}", response_model=PaymentApplicationResponse)

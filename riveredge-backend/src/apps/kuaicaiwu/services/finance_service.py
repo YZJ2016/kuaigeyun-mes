@@ -263,6 +263,11 @@ class PayableService(AppBaseService[Payable]):
         )
 
         await enrich_payable_payment_terms_fields(tenant_id, [payable])
+        from apps.kuaicaiwu.services.purchase_settlement import (
+            align_payables_from_purchase_receipt_settlement,
+        )
+
+        await align_payables_from_purchase_receipt_settlement(tenant_id, [payable])
         resp = PayableResponse.model_validate(payable)
         from core.services.approval.audit_record_enricher import enrich_record
 
@@ -317,6 +322,11 @@ class PayableService(AppBaseService[Payable]):
         )
 
         await enrich_payable_payment_terms_fields(tenant_id, payables)
+        from apps.kuaicaiwu.services.purchase_settlement import (
+            align_payables_from_purchase_receipt_settlement,
+        )
+
+        await align_payables_from_purchase_receipt_settlement(tenant_id, payables)
         from core.services.approval.audit_record_enricher import enrich_items
 
         rows = [PayableResponse.model_validate(payable) for payable in payables]
@@ -801,10 +811,22 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
     ) -> Optional[int]:
         if invoice.payable_id:
             return None
-        _sup_id = getattr(invoice, "supplier_id", None)
-        if not await self.business_config_service.should_auto_generate_payable_from_purchase_invoice_effective(
-            tenant_id, int(_sup_id) if _sup_id is not None else None
-        ):
+        from apps.kuaizhizao.services.document_recognition import (
+            resolve_payable_recognition_for_purchase_invoice,
+            should_auto_payable_on_purchase_invoice,
+        )
+
+        strategy = await resolve_payable_recognition_for_purchase_invoice(tenant_id, invoice)
+        if not should_auto_payable_on_purchase_invoice(strategy):
+            return None
+        config = await self.business_config_service.get_business_config(tenant_id)
+        fin = config["parameters"].get("finance", {}) or {}
+        org_pay = str(fin.get("payable_recognition") or "on_receipt").strip()
+        auto_flag = bool(fin.get("auto_generate_payable_from_purchase_invoice", False))
+        if org_pay == "on_purchase_invoice":
+            if not auto_flag:
+                return None
+        elif strategy != "on_purchase_invoice":
             return None
         if not await self.business_config_service.check_node_enabled(tenant_id, "payable"):
             return None

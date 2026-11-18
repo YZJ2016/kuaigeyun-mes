@@ -332,6 +332,31 @@ async def confirm_receipt(
     return await _serialize(tenant_id, current_user.id, receipt)
 
 
+@router.post("/{id}/repair-settlement", response_model=ReceiptVoucherResponse)
+async def repair_receipt_settlement(
+    id: int,
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receipt:audit")),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """已确认收款单按创建时关联的应收补核销（无需再选手工匹配）。"""
+    await _get_or_404(tenant_id, id, route="/receipts/{id}/repair-settlement")
+    from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+    try:
+        await receipt_pull_service.repair_confirmed_receipt_settlement(
+            tenant_id,
+            receipt_id=id,
+            operator_id=current_user.id,
+        )
+    except NotFoundError as exc:
+        raise _http_exception_with_trace(404, str(exc), "/receipts/{id}/repair-settlement", tenant_id) from exc
+    except ValidationError as exc:
+        raise _http_exception_with_trace(400, str(exc), "/receipts/{id}/repair-settlement", tenant_id) from exc
+    receipt = await _get_or_404(tenant_id, id, route="/receipts/{id}/repair-settlement")
+    return await _serialize(tenant_id, current_user.id, receipt)
+
+
 @router.post("/{id}/cancel", response_model=ReceiptVoucherResponse)
 async def cancel_receipt(
     id: int,

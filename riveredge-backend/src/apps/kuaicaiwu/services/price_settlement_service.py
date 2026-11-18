@@ -591,8 +591,13 @@ class PriceSettlementService(AppBaseService):
         )
         total_qty = sum(Decimal(str(i.ordered_quantity or 0)) for i in items)
         total_amt = sum(Decimal(str(i.total_price or 0)) for i in items)
-        tax_amount = total_amt * Decimal(str(order.tax_rate or 0))
-        net_amount = total_amt + tax_amount
+        from apps.kuaicaiwu.services.finance_tax import (
+            compute_purchase_order_header_amounts,
+        )
+
+        total_amt, tax_amount, net_amount = compute_purchase_order_header_amounts(
+            total_amt, order.tax_rate or 0
+        )
         await PurchaseOrder.filter(id=order_id, tenant_id=tenant_id).update(
             total_quantity=total_qty,
             total_amount=total_amt,

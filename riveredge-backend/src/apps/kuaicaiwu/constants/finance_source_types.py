@@ -58,3 +58,24 @@ def payable_total_must_be_negative(source_type: str | None) -> bool:
         or is_outsource_return_offset_payable(st)
         or is_outsource_settlement_credit_payable(st)
     )
+
+
+PAYABLE_EARLY_SOURCE_TYPES = frozenset(
+    {
+        PAYABLE_SOURCE_ORDER_MILESTONE,
+        PAYABLE_SOURCE_PURCHASE_RECEIPT,
+        PAYABLE_SOURCE_PURCHASE_INVOICE,
+    }
+)
+
+
+def payable_source_diagnosis_key(source_type: str | None) -> str | None:
+    """应付来源诊断 i18n key（区分「建单即应付」误报）。"""
+    st = str(source_type or "").strip()
+    if st == PAYABLE_SOURCE_ORDER_MILESTONE:
+        return "app.kuaicaiwu.payable.sourceDiagnosis.orderMilestone"
+    if st in (PAYABLE_SOURCE_PURCHASE_RECEIPT, "purchase_receipt", "PurchaseReceipt"):
+        return "app.kuaicaiwu.payable.sourceDiagnosis.purchaseReceipt"
+    if st in (PAYABLE_SOURCE_PURCHASE_INVOICE, "purchase_invoice", "PurchaseInvoice"):
+        return "app.kuaicaiwu.payable.sourceDiagnosis.purchaseInvoice"
+    return None

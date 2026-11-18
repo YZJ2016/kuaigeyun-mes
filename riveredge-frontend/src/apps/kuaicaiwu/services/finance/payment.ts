@@ -197,6 +197,12 @@ export const paymentService = {
     });
   },
 
+  repairSettlement: (id: number) => {
+    return apiRequest<PaymentVoucher>(`${PAYMENT_API}/${id}/repair-settlement`, {
+      method: 'POST',
+    });
+  },
+
   cancelPayment: (id: number) => {
     return apiRequest<PaymentVoucher>(`${PAYMENT_API}/${id}/cancel`, {
       method: 'POST',
