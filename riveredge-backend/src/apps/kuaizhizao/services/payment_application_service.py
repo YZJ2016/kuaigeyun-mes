@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-from datetime import date
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -27,7 +26,7 @@ from apps.kuaizhizao.services.document_action_policy.payment_application import 
     derive_payment_application_capabilities,
 )
 from apps.kuaizhizao.services.payable_open_amount_service import PayableOpenAmountService
-from core.utils.timezone_utils import resolve_business_datetime
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
 from loguru import logger
@@ -184,7 +183,7 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
                 supplier_id=data.supplier_id,
                 supplier_name=data.supplier_name.strip(),
                 application_kind=data.application_kind or "goods",
-                application_date=data.application_date or date.today(),
+                application_date=data.application_date or to_site_date(resolve_business_datetime()),
                 expected_payment_date=data.expected_payment_date,
                 applicant_id=data.applicant_id or created_by,
                 applicant_name=data.applicant_name or user["name"],
@@ -213,7 +212,9 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
             for idx, item in enumerate(data.items, start=1):
                 max_amt = item.request_amount
                 if item.payable_id:
-                    payable = await Payable.get(id=int(item.payable_id))
+                    payable = await Payable.get(
+                        id=int(item.payable_id), tenant_id=tenant_id, deleted_at__isnull=True
+                    )
                     max_amt = await self._open_amount.max_request_for_payable(tenant_id, payable)
                 await PaymentApplicationLine.create(
                     tenant_id=tenant_id,
@@ -347,7 +348,11 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
                 for idx, item in enumerate(items, start=1):
                     max_amt = item["request_amount"]
                     if item.get("payable_id"):
-                        payable = await Payable.get(id=int(item["payable_id"]))
+                        payable = await Payable.get(
+                            id=int(item["payable_id"]),
+                            tenant_id=tenant_id,
+                            deleted_at__isnull=True,
+                        )
                         max_amt = await self._open_amount.max_request_for_payable(
                             tenant_id, payable, exclude_application_id=application_id
                         )

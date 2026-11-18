@@ -19,15 +19,11 @@ def test_flat_param_key_and_defaults_cover_all_docs():
     assert "parameters.automation.manual_create_doc_purchase_order" in keys
 
 
-def test_unknown_node_key_not_enabled():
-    import asyncio
-
+@pytest.mark.asyncio
+async def test_unknown_node_key_not_enabled():
     assert (
-        asyncio.get_event_loop().run_until_complete(
-            m.is_manual_create_auto_submit_enabled(1, "no_such_node")
-        )
-        is False
-    )
+        await m.is_manual_create_auto_submit_enabled(1, "no_such_node")
+    ) is False
 
 
 @pytest.mark.asyncio
@@ -97,7 +93,10 @@ async def test_procurement_submitters_registered():
         "payment_application",
         "purchase_inquiry",
         "purchase_return",
-        "receipt_notice",
-        "purchase_receipt",
     ):
         assert m._resolve_submitter(key) is not None, key
+
+
+def test_every_declared_doc_has_registered_submitter():
+    for doc in m.MANUAL_CREATE_LIFECYCLE_DOCS:
+        assert m._resolve_submitter(doc["node_key"]) is not None, doc["node_key"]

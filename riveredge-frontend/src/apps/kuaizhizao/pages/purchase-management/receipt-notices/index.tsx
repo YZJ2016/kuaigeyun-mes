@@ -40,16 +40,7 @@ import { ArrowLeftOutlined, PlusOutlined, SendOutlined, AppstoreAddOutlined, Imp
 import dayjs from 'dayjs';
 import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
-import {
-  UniBatchMenuButton,
-  UniCapabilityBatchButton,
-  pickCapability,
-  runCapabilityBatchLoop,
-  useAuditBatchRunner,
-  withDocumentSubmitCombinedItem,
-  type UniBatchMenuItem,
-} from '../../../../../components/uni-batch';
-import { isPendingReviewStatus } from '../../../constants/documentStatus';
+import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import {
   UniTableStackedPrimaryCell,
@@ -100,7 +91,6 @@ import {
   usePurchaseDepartmentOptions,
 } from '../shared/PurchaseDepartmentFormField';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import {
   receiptNoticeBatchNotifyAllowed,
   receiptNoticeBatchWithdrawAllowed,
@@ -337,8 +327,6 @@ const ReceiptNoticesPage: React.FC = () => {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingBusinessStatus, setEditingBusinessStatus] = useState('待收货');
   const [editingReviewStatus, setEditingReviewStatus] = useState('草稿');
-  const createCommitAfterSaveRef = useRef(false);
-  const editCommitAfterSaveRef = useRef(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const selectedNoticesForBatch = useMemo(
@@ -355,119 +343,6 @@ const ReceiptNoticesPage: React.FC = () => {
     if (!Number.isFinite(id) || id <= 0) return null;
     return tableRowsRef.current.find((row) => row.id === id) ?? null;
   }, [selectedRowKeys]);
-
-  const receiptNoticeToolbarAuditMenus = useMemo(() => {
-    const rows = selectedNoticesForBatch;
-    const reload = () => {
-      setSelectedRowKeys([]);
-      setStatsVersion((v) => v + 1);
-      invalidateMenuBadgeCounts();
-      actionRef.current?.reload();
-    };
-    const reviewOf = (row: ReceiptNotice) => String(row.review_status || '').trim();
-    const allowed = (row: ReceiptNotice, key: string) => pickCapability(row, key)?.allowed === true;
-    const run = (
-      keys: React.Key[],
-      records: ReceiptNotice[],
-      capabilityKey: string,
-      permAllowed: boolean,
-      onRun: (id: number) => Promise<unknown>,
-      notAllowedMessage?: string,
-    ) =>
-      runCapabilityBatchLoop({
-        keys,
-        records,
-        capabilityKey,
-        permAllowed,
-        notAllowedMessage,
-        onRun,
-        onSuccess: reload,
-        message: messageApi,
-        t,
-      });
-    const submitRows = rows.filter((row) => allowed(row, 'submit'));
-    const committedRows = rows.filter(
-      (row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'withdraw_submit'),
-    );
-    const pendingRows = rows.filter((row) => {
-      const review = reviewOf(row);
-      return review !== 'SUBMITTED' && isPendingReviewStatus(review) && allowed(row, 'withdraw_submit');
-    });
-    const reviewRows = rows.filter((row) => allowed(row, 'submit_review'));
-    const approveRows = rows.filter(
-      (row) => reviewOf(row) !== 'SUBMITTED' && isPendingReviewStatus(reviewOf(row)) && allowed(row, 'approve'),
-    );
-    const revokeRows = rows.filter((row) => allowed(row, 'revoke_approval'));
-    const canSubmit = receiptNoticePerms.canAction?.('submit') ?? false;
-    const canApprove = receiptNoticePerms.canAction?.('approve') ?? false;
-    const canRevoke = receiptNoticePerms.canAction?.('revoke') ?? false;
-    const hasSelection = rows.length > 0;
-    const submitDisabled = hasSelection && !(canSubmit && submitRows.length > 0);
-    const submitItems: UniBatchMenuItem[] = withDocumentSubmitCombinedItem(
-      [
-        {
-          key: 'submit',
-          label: t('common.submit'),
-          disabled: submitDisabled,
-          onClick: (keys) => run(keys, submitRows, 'submit', canSubmit, (id) => receiptNoticeApi.commit(id)),
-        },
-        {
-          key: 'withdraw-submit',
-          label: t('app.kuaizhizao.receiptNotice.toolbar.withdrawSubmit'),
-          disabled: hasSelection && committedRows.length === 0,
-          onClick: (keys) =>
-            run(keys, committedRows, 'withdraw_submit', canSubmit, (id) => receiptNoticeApi.withdrawSubmit(id)),
-        },
-        {
-          key: 'submit-review',
-          label: t('app.kuaizhizao.receiptNotice.toolbar.submitReview'),
-          disabled: hasSelection && !(canSubmit && reviewRows.length > 0),
-          onClick: (keys) =>
-            run(
-              keys,
-              reviewRows,
-              'submit_review',
-              canSubmit,
-              (id) => receiptNoticeApi.submitForReview(id),
-              t('app.kuaizhizao.receiptNotice.toolbar.submitReviewNotAllowed'),
-            ),
-        },
-      ],
-      {
-        t,
-        message: messageApi,
-        disabled: submitDisabled,
-        commitRecords: submitRows,
-        permAllowed: canSubmit,
-        commit: (id) => receiptNoticeApi.commit(id),
-        submitReview: (id) => receiptNoticeApi.submitForReview(id),
-        onSuccess: reload,
-      },
-    );
-    const auditItems: UniBatchMenuItem[] = [
-      {
-        key: 'approve',
-        label: t('common.audit'),
-        disabled: hasSelection && !(canApprove && approveRows.length > 0),
-        onClick: (keys) => run(keys, approveRows, 'approve', canApprove, (id) => receiptNoticeApi.approve(id)),
-      },
-      {
-        key: 'withdraw-review',
-        label: t('app.kuaizhizao.receiptNotice.toolbar.withdrawReview'),
-        disabled: hasSelection && pendingRows.length === 0,
-        onClick: (keys) =>
-          run(keys, pendingRows, 'withdraw_submit', canApprove, (id) => receiptNoticeApi.withdrawSubmit(id)),
-      },
-      {
-        key: 'revoke',
-        label: t('app.kuaizhizao.receiptNotice.toolbar.revoke'),
-        disabled: hasSelection && !(canRevoke && revokeRows.length > 0),
-        onClick: (keys) =>
-          run(keys, revokeRows, 'revoke_approval', canRevoke, (id) => receiptNoticeApi.revokeApproval(id)),
-      },
-    ];
-    return { submitItems, auditItems };
-  }, [invalidateMenuBadgeCounts, messageApi, receiptNoticePerms, selectedNoticesForBatch, t]);
 
   const handleCopySelectedReceiptNotice = useCallback(async () => {
     if (selectedNoticesForBatch.length !== 1 || !selectedNoticesForBatch[0]?.id) {
@@ -1667,10 +1542,8 @@ const ReceiptNoticesPage: React.FC = () => {
         window.console.warn(t('app.kuaizhizao.receiptNotice.codeGenerateFailed'), e);
       }
     }
-    const shouldCommit = createCommitAfterSaveRef.current;
-    createCommitAfterSaveRef.current = false;
     try {
-      const created = (await receiptNoticeApi.create({
+      await receiptNoticeApi.create({
         notice_code: noticeCode || undefined,
         purchase_order_id: values.purchase_order_id,
         purchase_order_code: values.purchase_order_code,
@@ -1701,46 +1574,8 @@ const ReceiptNoticesPage: React.FC = () => {
             Number(it.unit_price) || 0,
           ),
         })),
-      })) as { id?: number };
-      const savedId = created?.id;
-      if (shouldCommit) {
-        if (savedId == null) {
-          messageApi.error(t('common.operationFailed'));
-          return;
-        }
-        try {
-          await receiptNoticeApi.commit(savedId);
-        } catch (error: unknown) {
-          setEditingId(savedId);
-          setEditingBusinessStatus('待收货');
-          setEditingReviewStatus('草稿');
-          editFormRef.current?.setFieldsValue({
-            purchase_order_id: values.purchase_order_id,
-            purchase_order_code: values.purchase_order_code,
-            supplier_id: values.supplier_id,
-            supplier_name: values.supplier_name,
-            supplier_contact: values.supplier_contact,
-            supplier_phone: values.supplier_phone,
-            department_id: values.department_id,
-            department_name: values.department_name,
-            warehouse_id: values.warehouse_id,
-            warehouse_name: values.warehouse_name,
-            planned_receipt_date: values.planned_receipt_date,
-            notes: values.notes,
-            attachments: normalizeDocumentAttachments(values.attachments),
-            items: validItems,
-          });
-          formPageInitKeyRef.current = null;
-          navigate(receiptNoticeEditPath(savedId));
-          messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
-          setStatsVersion((v) => v + 1);
-          actionRef.current?.reload();
-          return;
-        }
-        messageApi.success(t('app.kuaizhizao.receiptNotice.committed'));
-      } else {
-        messageApi.success(t('common.createSuccess'));
-      }
+      });
+      messageApi.success(t('common.createSuccess'));
       setEffectiveRuleCode(null);
       setStatsVersion((v) => v + 1);
       invalidateMenuBadgeCounts();
@@ -1755,8 +1590,6 @@ const ReceiptNoticesPage: React.FC = () => {
   const handleEditSubmit = async (values: any) => {
     const saveId = editingId ?? editRouteId;
     if (!saveId) return;
-    const shouldCommit = editCommitAfterSaveRef.current;
-    editCommitAfterSaveRef.current = false;
     try {
       await receiptNoticeApi.update(String(saveId), {
         supplier_contact: values.supplier_contact,
@@ -1772,18 +1605,7 @@ const ReceiptNoticesPage: React.FC = () => {
         notes: values.notes,
         attachments: normalizeDocumentAttachments(values.attachments),
       });
-      if (shouldCommit) {
-        try {
-          await receiptNoticeApi.commit(saveId);
-        } catch (error: unknown) {
-          messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
-          actionRef.current?.reload();
-          return;
-        }
-        messageApi.success(t('app.kuaizhizao.receiptNotice.committed'));
-      } else {
-        messageApi.success(t('common.updateSuccess'));
-      }
+      messageApi.success(t('common.updateSuccess'));
       if (noticeDetail?.id === saveId) {
         const fresh = await receiptNoticeApi.get(String(saveId));
         setNoticeDetail(fresh as ReceiptNoticeDetail);
@@ -2035,23 +1857,6 @@ const ReceiptNoticesPage: React.FC = () => {
   const showReceiptNoticeAttachments =
     Boolean(noticeDetail) && hasDocumentAttachments(receiptNoticeAttachments);
 
-  const receiptNoticeCanCommitEdit =
-    isCreatePage
-    || (['待收货'].includes(String(editingBusinessStatus ?? '').trim())
-      && ['', '草稿', 'draft', 'DRAFT', '已驳回', '审核驳回', 'rejected'].includes(
-        String(editingReviewStatus ?? '').trim(),
-      ));
-
-  const triggerReceiptNoticeCommit = useCallback(() => {
-    if (isCreatePage) {
-      createCommitAfterSaveRef.current = true;
-      void createFormRef.current?.submit?.();
-      return;
-    }
-    editCommitAfterSaveRef.current = true;
-    void editFormRef.current?.submit?.();
-  }, [isCreatePage]);
-
   const submitReceiptNoticeForm = useCallback(() => {
     if (isCreatePage) {
       void createFormRef.current?.submit?.();
@@ -2088,8 +1893,7 @@ const ReceiptNoticesPage: React.FC = () => {
                 isCreatePage={isCreatePage}
                 showSaveDraft={false}
                 canSubmitAfterSave={false}
-                showCommitSubmit={receiptNoticeCanCommitEdit}
-                onCommitSubmit={triggerReceiptNoticeCommit}
+                showCommitSubmit={false}
               />
             </>
           }
@@ -2191,18 +1995,6 @@ const ReceiptNoticesPage: React.FC = () => {
                   : null
               }
               pushTargets={{ 'push-purchase-receipt': 'purchase_receipt' }}
-            />,
-            <UniBatchMenuButton
-              key="receipt-notice-submit"
-              selectedRowKeys={selectedRowKeys}
-              menuItems={receiptNoticeToolbarAuditMenus.submitItems}
-              buttonText={t('common.submit')}
-            />,
-            <UniBatchMenuButton
-              key="receipt-notice-audit"
-              selectedRowKeys={selectedRowKeys}
-              menuItems={receiptNoticeToolbarAuditMenus.auditItems}
-              buttonText={t('components.uniAction.audit')}
             />,
           ]}
           enableRowSelection={viewTypeState !== 'detailTable'}

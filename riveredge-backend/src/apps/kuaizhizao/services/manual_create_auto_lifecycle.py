@@ -34,8 +34,7 @@ MANUAL_CREATE_LIFECYCLE_DOCS: Tuple[Dict[str, str], ...] = (
     {"node_key": "payment_application", "category": "procurement", "name": "付款申请"},
     {"node_key": "purchase_inquiry", "category": "procurement", "name": "采购询价"},
     {"node_key": "purchase_return", "category": "procurement", "name": "采购退货"},
-    {"node_key": "receipt_notice", "category": "procurement", "name": "收货通知"},
-    {"node_key": "purchase_receipt", "category": "procurement", "name": "采购入库"},
+
     {"node_key": "work_order", "category": "production", "name": "生产工单"},
     {"node_key": "rework_order", "category": "production", "name": "返工单"},
     {"node_key": "reporting_record", "category": "production", "name": "报工记录"},
@@ -43,7 +42,6 @@ MANUAL_CREATE_LIFECYCLE_DOCS: Tuple[Dict[str, str], ...] = (
     {"node_key": "freight_bill", "category": "warehouse", "name": "运费单"},
     {"node_key": "other_income", "category": "finance", "name": "其他费用收入"},
     {"node_key": "other_expense", "category": "finance", "name": "其他费用支出"},
-    {"node_key": "other_expense_application", "category": "finance", "name": "其他费用支出申请"},
 )
 
 MANUAL_CREATE_LIFECYCLE_NODE_KEYS = frozenset(d["node_key"] for d in MANUAL_CREATE_LIFECYCLE_DOCS)
@@ -176,16 +174,6 @@ def _resolve_submitter(node_key: str) -> Optional[SubmitFn]:
 
         return await PurchaseReturnService().submit_purchase_return(tid, eid, oid)
 
-    async def _receipt_notice(tid: int, eid: int, oid: int) -> Any:
-        from apps.kuaizhizao.services.receipt_notice_service import ReceiptNoticeService
-
-        return await ReceiptNoticeService().submit_receipt_notice(tid, eid, oid)
-
-    async def _purchase_receipt(tid: int, eid: int, oid: int) -> Any:
-        from apps.kuaizhizao.services.warehouse_service import PurchaseReceiptService
-
-        return await PurchaseReceiptService().submit_purchase_receipt(tid, eid, oid)
-
     async def _work_order(tid: int, eid: int, oid: int) -> Any:
         from apps.kuaizhizao.services.work_order_service import WorkOrderService
 
@@ -212,21 +200,14 @@ def _resolve_submitter(node_key: str) -> Optional[SubmitFn]:
         return await FreightBillService().submit_freight_bill(tid, eid, oid)
 
     async def _other_income(tid: int, eid: int, oid: int) -> Any:
-        from apps.kuaizhizao.services.other_income_audit_service import OtherIncomeAuditService
+        from apps.kuaicaiwu.services.other_income_service import OtherIncomeService
 
-        return await OtherIncomeAuditService().submit_income(tid, eid, oid)
+        return await OtherIncomeService().submit_income(tid, eid, oid)
 
     async def _other_expense(tid: int, eid: int, oid: int) -> Any:
-        from apps.kuaizhizao.services.other_expense_audit_service import OtherExpenseAuditService
+        from apps.kuaicaiwu.services.other_expense_service import OtherExpenseService
 
-        return await OtherExpenseAuditService().submit_expense(tid, eid, oid)
-
-    async def _other_expense_application(tid: int, eid: int, oid: int) -> Any:
-        from apps.kuaizhizao.services.other_expense_application_service import (
-            OtherExpenseApplicationService,
-        )
-
-        return await OtherExpenseApplicationService().submit_application(tid, eid, oid)
+        return await OtherExpenseService().submit_expense(tid, eid, oid)
 
     registry: Dict[str, SubmitFn] = {
         "sales_order": _sales_order,
@@ -242,8 +223,6 @@ def _resolve_submitter(node_key: str) -> Optional[SubmitFn]:
         "payment_application": _payment_application,
         "purchase_inquiry": _purchase_inquiry,
         "purchase_return": _purchase_return,
-        "receipt_notice": _receipt_notice,
-        "purchase_receipt": _purchase_receipt,
         "work_order": _work_order,
         "rework_order": _rework_order,
         "reporting_record": _reporting_record,
@@ -251,7 +230,6 @@ def _resolve_submitter(node_key: str) -> Optional[SubmitFn]:
         "freight_bill": _freight_bill,
         "other_income": _other_income,
         "other_expense": _other_expense,
-        "other_expense_application": _other_expense_application,
     }
     return registry.get(node_key)
 

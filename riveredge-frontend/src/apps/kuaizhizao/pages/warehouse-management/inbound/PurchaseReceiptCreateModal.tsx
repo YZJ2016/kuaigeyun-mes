@@ -348,16 +348,6 @@ function purchaseReceiptFormPriceType(taxRatePercent: number): 'tax_inclusive' |
   return taxRatePercent > 0 ? 'tax_inclusive' : 'tax_exclusive';
 }
 
-function resolveReceiptLineTaxPercent(
-  lineTax: unknown,
-  headerTax: unknown,
-  fallback = 13,
-): number {
-  const fromLine = purchaseOrderTaxRateToPercent(lineTax);
-  if (fromLine > 0) return fromLine;
-  const fromHeader = purchaseOrderTaxRateToPercent(headerTax);
-  return fromHeader > 0 ? fromHeader : fallback;
-}
 
 function parseSerialNumbers(raw: unknown): string[] | undefined {
   if (Array.isArray(raw)) {

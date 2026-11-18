@@ -17,9 +17,7 @@ from typing import List, Optional, Dict, Any, Tuple, Iterable
 from datetime import datetime, date, timedelta
 from decimal import Decimal, InvalidOperation
 import json
-import time
 import uuid
-from pathlib import Path
 from types import SimpleNamespace
 from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
@@ -53,25 +51,6 @@ def _document_line_dual_quantity_update_fields(line: Any) -> Dict[str, Any]:
             out[key] = getattr(line, key, None)
     return out
 
-
-def _agent_debug_ndjson(location: str, message: str, data: dict, hypothesis_id: str, run_id: str = "pre-fix") -> None:
-    # #region agent log
-    try:
-        p = Path(__file__).resolve().parents[5] / "debug-2f32a1.log"
-        line = {
-            "sessionId": "2f32a1",
-            "runId": run_id,
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(time.time() * 1000),
-        }
-        with open(p, "a", encoding="utf-8") as f:
-            f.write(json.dumps(line, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-    # #endregion
 
 
 from apps.kuaizhizao.models.production_picking import ProductionPicking
