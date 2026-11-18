@@ -8,7 +8,6 @@ import {
   computeDocumentGoodsTotals,
   mapDocumentGoodsTotalsToPurchaseHeader,
   resolveDocumentFormLineAmounts,
-  resolveDocumentLineDisplayAmounts,
   resolveDocumentStoredNetGrossAmount,
   type DocumentGoodsTotals,
 } from '../../../utils/documentLineAmounts';

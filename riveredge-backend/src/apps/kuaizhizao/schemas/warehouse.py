@@ -707,6 +707,11 @@ class SalesDeliveryBase(BaseSchema):
     
     customer_id: int = Field(..., description="客户ID")
     customer_name: str = Field(..., max_length=200, description="客户名称")
+    revenue_recognition: Optional[str] = Field(
+        None,
+        max_length=32,
+        description="立账策略（应收确认时点）",
+    )
     warehouse_id: int = Field(..., description="出库仓库ID")
     warehouse_name: str = Field(..., max_length=100, description="出库仓库名称")
     delivery_time: Optional[datetime] = Field(None, description="实际出库时间")
@@ -1100,6 +1105,11 @@ class SalesReturnBase(BaseSchema):
     
     customer_id: int = Field(..., description="客户ID")
     customer_name: str = Field(..., max_length=200, description="客户名称")
+    revenue_recognition: Optional[str] = Field(
+        None,
+        max_length=32,
+        description="立账策略（应收确认时点）",
+    )
     warehouse_id: int = Field(..., description="退货入库仓库ID")
     warehouse_name: str = Field(..., max_length=100, description="退货入库仓库名称")
     return_time: Optional[datetime] = Field(None, description="实际退货时间")
@@ -1245,6 +1255,11 @@ class PurchaseReturnBase(BaseSchema):
     
     supplier_id: int = Field(..., description="供应商ID")
     supplier_name: str = Field(..., max_length=200, description="供应商名称")
+    payable_recognition: Optional[str] = Field(
+        None,
+        max_length=32,
+        description="立账策略（应付确认时点）",
+    )
     warehouse_id: int = Field(..., description="退货出库仓库ID")
     warehouse_name: str = Field(..., max_length=100, description="退货出库仓库名称")
     return_time: Optional[datetime] = Field(None, description="实际退货时间")

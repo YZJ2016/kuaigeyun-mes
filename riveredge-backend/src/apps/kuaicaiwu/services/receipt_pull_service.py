@@ -279,6 +279,7 @@ class ReceiptPullService(AppBaseService[Receipt]):
                     "id": rid,
                     "code": label,
                     "receivable_code": code,
+                    "customer_id": receivable.customer_id,
                     "customer_name": receivable.customer_name,
                     "source_status": receivable.status,
                     "review_status": receivable.review_status,
@@ -294,6 +295,20 @@ class ReceiptPullService(AppBaseService[Receipt]):
                 }
             )
         return {"data": rows, "total": total, "success": True}
+
+    @staticmethod
+    def _normalize_source_ids(source_ids: Sequence[int]) -> List[int]:
+        ordered: List[int] = []
+        seen: set[int] = set()
+        for raw in source_ids:
+            sid = int(raw)
+            if sid <= 0 or sid in seen:
+                continue
+            seen.add(sid)
+            ordered.append(sid)
+        if not ordered:
+            raise BusinessLogicError("请至少选择一张源单")
+        return ordered
 
     async def preview_pull_from_receivables(
         self,
@@ -545,6 +560,7 @@ class ReceiptPullService(AppBaseService[Receipt]):
         source_type: str,
         source_id: int,
         total_amount: Decimal,
+        pull_source_ids: Optional[Sequence[int]] = None,
         operator_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         normalized = str(source_type or "").strip()
@@ -565,14 +581,27 @@ class ReceiptPullService(AppBaseService[Receipt]):
             return preview
         if normalized != "receivable":
             raise BusinessLogicError(f"不支持的加载源单类型: {source_type}")
-        preview = await self.preview_pull_from_receivable(tenant_id, source_id)
+        ids = self._normalize_source_ids(pull_source_ids or [source_id])
+        preview = (
+            await self.preview_pull_from_receivables(
+                tenant_id, ids, operator_id=operator_id
+            )
+            if len(ids) > 1
+            else await self.preview_pull_from_receivable(
+                tenant_id, ids[0], operator_id=operator_id
+            )
+        )
         if preview.get("has_blocking_issues"):
             reason = preview.get("blocking_reason") or "当前不可加载收款单"
             raise BusinessLogicError(reason)
         items = preview.get("items") or []
         if not items:
             raise BusinessLogicError("无可收款金额")
-        max_push = Decimal(str(items[0].get("max_push_quantity") or 0))
+        max_push = Decimal(str(preview.get("max_push_total") or 0))
+        if max_push <= 0:
+            max_push = sum(
+                Decimal(str(item.get("max_push_quantity") or 0)) for item in items
+            )
         if total_amount > max_push:
             raise BusinessLogicError(f"收款金额 {total_amount} 超过可收款金额 {max_push}")
         return preview

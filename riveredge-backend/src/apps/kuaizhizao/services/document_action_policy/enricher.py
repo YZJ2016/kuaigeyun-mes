@@ -1176,19 +1176,61 @@ async def _order_prepayment_linked_by_ids(
     source_type: str,
     target_type: str,
 ) -> dict[int, bool]:
-    """订单是否已存在预付/预收单据关联。"""
+    """订单是否已关联未作废的预收/预付单（作废单据不占用下推与取单名额）。"""
     from apps.kuaizhizao.models.document_relation import DocumentRelation
 
     if not order_ids:
         return {}
     result: dict[int, bool] = {oid: False for oid in order_ids}
-    rows = await DocumentRelation.filter(
+    rels = await DocumentRelation.filter(
         tenant_id=tenant_id,
         source_type=source_type,
         source_id__in=order_ids,
         target_type=target_type,
-    ).values_list("source_id", flat=True)
-    for sid in rows:
+    ).values_list("source_id", "target_id")
+    if not rels:
+        return result
+
+    target_ids = list({int(tid) for _, tid in rels if tid})
+    active_target_ids: set[int] = set()
+    if target_type == "receipt":
+        from apps.kuaicaiwu.models.receipt import Receipt
+
+        active_target_ids = {
+            int(rid)
+            for rid in await Receipt.filter(
+                tenant_id=tenant_id,
+                id__in=target_ids,
+                deleted_at__isnull=True,
+                settlement_type="prepayment",
+            )
+            .exclude(status="Cancelled")
+            .values_list("id", flat=True)
+        }
+    elif target_type == "payment":
+        from apps.kuaicaiwu.models.payment import Payment
+
+        active_target_ids = {
+            int(pid)
+            for pid in await Payment.filter(
+                tenant_id=tenant_id,
+                id__in=target_ids,
+                deleted_at__isnull=True,
+                settlement_type="prepayment",
+            )
+            .exclude(status="Cancelled")
+            .values_list("id", flat=True)
+        }
+    else:
+        for sid, _ in rels:
+            oid = int(sid or 0)
+            if oid in result:
+                result[oid] = True
+        return result
+
+    for sid, tid in rels:
+        if int(tid or 0) not in active_target_ids:
+            continue
         oid = int(sid or 0)
         if oid in result:
             result[oid] = True

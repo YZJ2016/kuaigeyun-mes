@@ -350,6 +350,8 @@ const PayableList: React.FC = () => {
         setPullPreviewSourceIds([]);
         setPullPreviewData(null);
         setPullPreviewKind(null);
+        setPullReceiptSelectedIds([]);
+        setPullReceiptLineAmounts({});
         pullForm.resetFields();
     };
 

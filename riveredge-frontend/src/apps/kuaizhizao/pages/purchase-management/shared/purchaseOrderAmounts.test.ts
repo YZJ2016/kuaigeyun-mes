@@ -91,6 +91,37 @@ describe('purchaseOrderAmounts unified with documentLineAmounts', () => {
     expect(line.tax).toBeCloseTo(12.65, 2);
   });
 
+  it('purchase receipt PO tax_inclusive uses display price for gross not excl total_price', () => {
+    const poCtx = {
+      priceType: 'tax_inclusive' as const,
+      headerTaxRate: 13,
+      poiById: {
+        101: {
+          ordered_quantity: 2,
+          total_price: 97.35,
+          unit_price: 48.6725,
+          display_unit_price: 55,
+          tax_rate: 13,
+        },
+      },
+    };
+    const line = computePurchaseReceiptFormLineAmounts(
+      {
+        receipt_quantity: 2,
+        display_unit_price: 55,
+        unit_price: 48.6725,
+        tax_rate: 13,
+        purchase_order_item_id: 101,
+      },
+      13,
+      'tax_inclusive',
+      poCtx,
+    );
+    expect(line.excl).toBeCloseTo(97.35, 2);
+    expect(line.incl).toBe(110);
+    expect(line.tax).toBeCloseTo(12.65, 2);
+  });
+
   it('purchase receipt uses qty times entered price even when PO total differs by a cent', () => {
     const poCtx = {
       priceType: 'tax_exclusive' as const,

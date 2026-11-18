@@ -111,6 +111,8 @@ async def create_receipt(
             )
 
         pull_preview: Optional[Dict[str, Any]] = None
+        pull_source_type = str(data.source_type or "").strip()
+        pull_source_ids: list[int] = []
         if has_pull_lines:
             pull_preview = await receipt_pull_service.validate_pull_lines_for_create(
                 tenant_id,
@@ -119,12 +121,18 @@ async def create_receipt(
                 settlement_type=data.settlement_type,
                 operator_id=current_user.id,
             )
-        elif data.source_type and data.source_id:
+        if data.source_ids:
+            pull_source_ids = [int(x) for x in data.source_ids if x]
+        elif data.source_id:
+            pull_source_ids = [int(data.source_id)]
+        if not has_pull_lines and pull_source_type and pull_source_ids:
             pull_preview = await receipt_pull_service.assert_pull_create_allowed(
                 tenant_id=tenant_id,
-                source_type=str(data.source_type).strip(),
-                source_id=int(data.source_id),
+                source_type=pull_source_type,
+                source_id=int(pull_source_ids[0]),
                 total_amount=Decimal(data.total_amount),
+                pull_source_ids=pull_source_ids,
+                operator_id=current_user.id,
             )
 
         from apps.kuaicaiwu.services.finance_voucher_codes import allocate_receipt_code
@@ -166,16 +174,24 @@ async def create_receipt(
                 pull_lines=data.pull_lines,
                 created_by=current_user.id,
             )
-        elif pull_preview and data.source_type and data.source_id:
-            await receipt_pull_service.create_pull_relation(
-                tenant_id=tenant_id,
-                source_type=str(data.source_type).strip(),
-                source_id=int(data.source_id),
-                source_code=str(pull_preview.get("source_code") or ""),
-                receipt_id=int(receipt.id),
-                receipt_code=str(receipt.receipt_code),
-                created_by=current_user.id,
-            )
+        elif pull_preview and pull_source_type and pull_source_ids:
+            code_by_source: Dict[int, str] = {}
+            for item in pull_preview.get("items") or []:
+                iid = int(item.get("item_id") or 0)
+                if iid > 0:
+                    code_by_source[iid] = str(item.get("source_code") or iid)
+            for sid in pull_source_ids:
+                await receipt_pull_service.create_pull_relation(
+                    tenant_id=tenant_id,
+                    source_type=pull_source_type,
+                    source_id=int(sid),
+                    source_code=code_by_source.get(
+                        int(sid), str(pull_preview.get("source_code") or "")
+                    ),
+                    receipt_id=int(receipt.id),
+                    receipt_code=str(receipt.receipt_code),
+                    created_by=current_user.id,
+                )
         return await _serialize_detail(tenant_id, current_user.id, receipt)
     except BusinessLogicError as e:
         raise _http_exception_with_trace(422, str(e), "/receipts", tenant_id) from e

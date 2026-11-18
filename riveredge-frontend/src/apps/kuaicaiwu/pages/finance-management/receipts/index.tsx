@@ -1392,11 +1392,11 @@ const ReceiptsPage: React.FC = () => {
           customerOptions={customerOptions}
           paymentMethodOptions={paymentMethodOptions}
           settlementTypeOptions={receiptSettlementTypeOptions}
-          showPullLines
+          showPullLines={editingRecord?.status === 'Draft'}
           pullLineColumns={editLinePull.pullLineColumns}
           pullLineHeaderExtra={editLinePull.renderPullLineHeaderActions()}
         />
-        {editLinePull.renderPullModals()}
+        {editingRecord?.status === 'Draft' ? editLinePull.renderPullModals() : null}
       </FormModalTemplate>
 
       <FinanceVoucherDetailDrawer

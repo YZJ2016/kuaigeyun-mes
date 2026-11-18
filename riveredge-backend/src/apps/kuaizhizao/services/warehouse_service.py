@@ -260,7 +260,18 @@ def _build_purchase_receipt_item_response(
         "material_unit": str(getattr(item, "material_unit", "") or ""),
         "receipt_quantity": float(getattr(item, "receipt_quantity", 0) or 0),
         "unit_price": float(getattr(item, "unit_price", 0) or 0),
+        "display_unit_price": (
+            float(item.display_unit_price)
+            if getattr(item, "display_unit_price", None) is not None
+            else None
+        ),
         "total_amount": float(getattr(item, "total_amount", 0) or 0),
+        "tax_amount": (
+            float(item.tax_amount) if getattr(item, "tax_amount", None) is not None else None
+        ),
+        "net_amount": (
+            float(item.net_amount) if getattr(item, "net_amount", None) is not None else None
+        ),
         "qualified_quantity": float(getattr(item, "qualified_quantity", 0) or 0),
         "unqualified_quantity": float(getattr(item, "unqualified_quantity", 0) or 0),
         "quality_status": str(getattr(item, "quality_status", "合格") or "合格"),
@@ -6851,6 +6862,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 demand_type=demand_type,
                 customer_id=delivery_data.customer_id,
                 customer_name=delivery_data.customer_name,
+                revenue_recognition=delivery_revenue_recognition,
                 warehouse_id=delivery_data.warehouse_id,
                 warehouse_name=delivery_data.warehouse_name,
                 delivery_time=coerce_business_datetime_to_utc(delivery_data.delivery_time),
@@ -10282,6 +10294,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 if line_tax_raw is None:
                     line_tax_raw = receipt.tax_rate
                 line_tax_pct = float(_norm_line_tax_pct(line_tax_raw)) if line_tax_raw is not None else 0.0
+                display_unit = _purchase_receipt_display_unit_price_from_item(item_data)
                 item_dict.update({
                     'tenant_id': tenant_id,
                     'receipt_id': receipt.id,
@@ -10290,6 +10303,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     'total_amount': line_excl,
                     'tax_rate': line_tax_pct if line_tax_pct > 0 else None,
                 })
+                if display_unit is not None:
+                    item_dict["display_unit_price"] = display_unit
                 resolved_qualified_qty, resolved_unqualified_qty, resolved_quality_status = _resolve_purchase_item_quality_fields(
                     receipt_quantity=receipt_quantity,
                     qualified_quantity=getattr(item_data, "qualified_quantity", None),
@@ -11315,6 +11330,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     line_tax_pct = (
                         float(_norm_upd_line_tax(line_tax_raw)) if line_tax_raw is not None else 0.0
                     )
+                    display_unit = _purchase_receipt_display_unit_price_from_item(item_data)
                     item_dict.update({
                         "tenant_id": tenant_id,
                         "receipt_id": receipt_id,
@@ -11323,6 +11339,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         "total_amount": line_amount,
                         "tax_rate": line_tax_pct if line_tax_pct > 0 else None,
                     })
+                    if display_unit is not None:
+                        item_dict["display_unit_price"] = display_unit
                     resolved_qualified_qty, resolved_unqualified_qty, resolved_quality_status = _resolve_purchase_item_quality_fields(
                         receipt_quantity=qty,
                         qualified_quantity=getattr(item_data, "qualified_quantity", None),
@@ -11373,6 +11391,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     lines=refreshed_items,
                     poi_by_id=poi_by_id,
                 )
+
+            await sync_purchase_receipt_header_amounts(tenant_id, receipt_id)
 
             return PurchaseReceiptResponse.model_validate(
                 await PurchaseReceipt.get(tenant_id=tenant_id, id=receipt_id)
@@ -11532,7 +11552,15 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         # 自动生成应付须在过账事务外执行：create_payable 内部另有 in_transaction()，
         # 与 serialize 外层嵌套时可能导致库存/状态回滚但接口仍返回成功（确认→撤回→再确认可无限点）。
         # 应付确认策略为「以采购发票为准」时不在此处生成应付，避免与进项发票路径重复记账。
+        from apps.kuaicaiwu.services.purchase_settlement import (
+            sync_purchase_receipt_header_amounts,
+        )
+
         receipt_for_payable = await PurchaseReceipt.get(tenant_id=tenant_id, id=receipt_id)
+        await sync_purchase_receipt_header_amounts(
+            tenant_id, receipt_id, receipt=receipt_for_payable
+        )
+        await receipt_for_payable.refresh_from_db()
         _sup_id = getattr(receipt_for_payable, "supplier_id", None)
         receipt_po_id = int(getattr(receipt_for_payable, "purchase_order_id", 0) or 0)
         try:
@@ -12789,6 +12817,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                 sales_order_code=sales_order_code or "",
                 customer_id=return_data.customer_id,
                 customer_name=return_data.customer_name,
+                revenue_recognition=return_revenue_recognition,
                 warehouse_id=resolved_warehouse_id,
                 warehouse_name=resolved_warehouse_name,
                 return_time=return_data.return_time,
