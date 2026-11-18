@@ -44,6 +44,29 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'finance-fund-transfer-r01',
+    date: '2026-11-18',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-fund-transfer-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.finance-fund-transfer-r01.description',
+  },
+  {
+    id: 'po-prepayment-header-milestone-wipe-r01',
+    date: '2026-11-18',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.po-prepayment-header-milestone-wipe-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.po-prepayment-header-milestone-wipe-r01.description',
+  },
+  {
+    id: 'po-prepayment-apply-confirm-hook-r01',
+    date: '2026-11-18',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.po-prepayment-apply-confirm-hook-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.po-prepayment-apply-confirm-hook-r01.description',
+  },
+  {
     id: 'tenant-show-pro-badge-toggle-r01',
     date: '2026-11-18',
     type: 'improvement',

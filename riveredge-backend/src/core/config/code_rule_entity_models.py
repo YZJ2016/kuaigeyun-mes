@@ -256,6 +256,7 @@ ENTITY_MODEL_BY_RULE_CODE: Dict[str, Tuple[str, str]] = {
     "RD_REQUIREMENT_CODE": ("apps.kuaiplm.models.phase2", "RdRequirement"),
     "OTHER_INCOME_CODE": ("apps.kuaicaiwu.models.other_voucher", "OtherIncome"),
     "OTHER_EXPENSE_CODE": ("apps.kuaicaiwu.models.other_voucher", "OtherExpense"),
+    "FUND_TRANSFER_CODE": ("apps.kuaicaiwu.models.fund_transfer", "FundTransfer"),
     "RECEIPT_CODE": ("apps.kuaicaiwu.models.receipt", "Receipt"),
     "RECEIPT_NOTICE_CODE": ("apps.kuaizhizao.models.receipt_notice", "ReceiptNotice"),
     "RECEIPT_REFUND_CODE": ("apps.kuaicaiwu.models.receipt", "Receipt"),

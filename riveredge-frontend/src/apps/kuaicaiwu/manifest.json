@@ -236,6 +236,12 @@
             "path": "/apps/kuaicaiwu/finance-management/finance-misc-categories",
             "permission": "kuaicaiwu:finance-misc-category:read",
             "sort_order": 16
+          },
+          {
+            "title": "app.kuaicaiwu.menu.finance-management.fund-transfers",
+            "path": "/apps/kuaicaiwu/finance-management/fund-transfers",
+            "permission": "kuaicaiwu:fund-transfer:read",
+            "sort_order": 17
           }
         ]
       },

@@ -238,6 +238,12 @@
             "path": "/apps/kuaicaiwu/finance-management/finance-misc-categories",
             "permission": "kuaicaiwu:finance-misc-category:read",
             "sort_order": 16
+          },
+          {
+            "title": "app.kuaicaiwu.menu.finance-management.fund-transfers",
+            "path": "/apps/kuaicaiwu/finance-management/fund-transfers",
+            "permission": "kuaicaiwu:fund-transfer:read",
+            "sort_order": 17
           }
         ]
       },
@@ -430,6 +436,18 @@
     "kuaicaiwu:bank-account:audit",
     "kuaicaiwu:bank-account:reject",
     "kuaicaiwu:bank-account:print",
+    "kuaicaiwu:fund-transfer:read",
+    "kuaicaiwu:fund-transfer:create",
+    "kuaicaiwu:fund-transfer:delete",
+    "kuaicaiwu:fund-transfer:update",
+    "kuaicaiwu:fund-transfer:import",
+    "kuaicaiwu:fund-transfer:export",
+    "kuaicaiwu:fund-transfer:submit",
+    "kuaicaiwu:fund-transfer:revoke",
+    "kuaicaiwu:fund-transfer:approve",
+    "kuaicaiwu:fund-transfer:audit",
+    "kuaicaiwu:fund-transfer:reject",
+    "kuaicaiwu:fund-transfer:print",
     "kuaicaiwu:notes-receivable:read",
     "kuaicaiwu:notes-receivable:create",
     "kuaicaiwu:notes-receivable:delete",
@@ -739,6 +757,15 @@
       "template": "simple",
       "config_category": "finance",
       "config_section": "finance_misc"
+    },
+    {
+      "node_key": "fund_transfer",
+      "entity_type": "fund_transfer",
+      "resource": "kuaicaiwu:fund-transfer",
+      "name": "资金调拨审核",
+      "template": "simple",
+      "config_category": "finance",
+      "config_section": "finance_ar_ap"
     }
   ],
   "dependencies": {

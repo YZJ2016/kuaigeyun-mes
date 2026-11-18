@@ -18,6 +18,7 @@ _RECEIPT_REFUND_PAGE = "kuaicaiwu-finance-receipt-refund"
 _PAYMENT_REFUND_PAGE = "kuaicaiwu-finance-payment-refund"
 _OTHER_INCOME_PAGE = "kuaicaiwu-finance-other-income"
 _OTHER_EXPENSE_PAGE = "kuaicaiwu-finance-other-expense"
+_FUND_TRANSFER_PAGE = "kuaicaiwu-finance-fund-transfer"
 
 RECEIPT_RULE = "RECEIPT_CODE"
 PAYMENT_RULE = "PAYMENT_CODE"
@@ -25,6 +26,7 @@ RECEIPT_REFUND_RULE = "RECEIPT_REFUND_CODE"
 PAYMENT_REFUND_RULE = "PAYMENT_REFUND_CODE"
 OTHER_INCOME_RULE = "OTHER_INCOME_CODE"
 OTHER_EXPENSE_RULE = "OTHER_EXPENSE_CODE"
+FUND_TRANSFER_RULE = "FUND_TRANSFER_CODE"
 
 
 async def _ensure_rule(tenant_id: int, rule_code: str, page_code: str) -> None:
@@ -87,4 +89,13 @@ async def allocate_other_expense_code(tenant_id: int) -> str:
     today = today_site_str()
     return await AppBaseService().generate_code(
         tenant_id, OTHER_EXPENSE_RULE, prefix=f"QZ{today}"
+    )
+
+
+async def allocate_fund_transfer_code(tenant_id: int) -> str:
+    """资金调拨单号（ZD + YYYYMMDD + 序号）。"""
+    await _ensure_rule(tenant_id, FUND_TRANSFER_RULE, _FUND_TRANSFER_PAGE)
+    today = today_site_str()
+    return await AppBaseService().generate_code(
+        tenant_id, FUND_TRANSFER_RULE, prefix=f"ZD{today}"
     )

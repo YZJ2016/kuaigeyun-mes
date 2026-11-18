@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import logging
 from decimal import Decimal
 from typing import Optional
 
@@ -20,6 +21,8 @@ from apps.kuaicaiwu.services.payment_pull_service import PaymentPullService
 from apps.kuaicaiwu.services.receipt_pull_service import ReceiptPullService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
+
+logger = logging.getLogger(__name__)
 
 
 class FinanceVoucherPostingService:
@@ -237,6 +240,27 @@ class FinanceVoucherPostingService:
                 payment_id=payment_id,
                 operator=operator,
             )
+            if (
+                was_draft
+                and str(getattr(payment, "settlement_type", "") or "") == "prepayment"
+            ):
+                try:
+                    from apps.kuaicaiwu.services.payable_prepayment_apply_service import (
+                        PayablePrepaymentApplyService,
+                    )
+
+                    await PayablePrepaymentApplyService().auto_apply_after_prepayment_confirmed(
+                        tenant_id,
+                        payment_id=int(payment_id),
+                        operator_id=op_id,
+                    )
+                    payment = await Payment.get_or_none(
+                        tenant_id=tenant_id, id=payment_id, deleted_at__isnull=True
+                    ) or payment
+                except Exception:
+                    logger.exception(
+                        "预付付款单确认后自动冲应付失败 payment_id=%s", payment_id
+                    )
             from apps.kuaicaiwu.services.payment_advance_service import PaymentAdvanceService
 
             await PaymentAdvanceService().record_on_payment_confirmed(tenant_id, payment)

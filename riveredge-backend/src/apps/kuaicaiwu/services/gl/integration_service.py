@@ -24,6 +24,7 @@ _BUSINESS_TYPE_LABELS: Dict[str, str] = {
     "fixed_asset_disposal": "固定资产处置",
     "fixed_asset_impairment": "固定资产减值",
     "fx_revaluation": "汇兑损益",
+    "fund_transfer": "资金调拨",
 }
 
 _SOURCE_DOC_TYPE_LABELS: Dict[str, str] = {
@@ -54,6 +55,7 @@ _SOURCE_DOC_TYPE_LABELS: Dict[str, str] = {
     "SalesOrder": "销售订单",
     "PurchaseReceipt": "采购入库单",
     "SalesDelivery": "销售出库单",
+    "fund_transfer": "资金调拨",
 }
 
 _EVENT_TYPE_LABELS: Dict[str, str] = {

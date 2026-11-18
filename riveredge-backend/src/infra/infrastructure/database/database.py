@@ -378,6 +378,12 @@ TORTOISE_ORM = {
                 "apps.kuaicaiwu.models.price_settlement_batch",  # 月结定价单
                 "apps.kuaicaiwu.models.price_settlement_line",  # 月结定价单行
                 "apps.kuaicaiwu.models.fixed_asset",  # 固定资产
+                "apps.kuaicaiwu.models.finance_misc_category",  # 其他收支类别
+                "apps.kuaicaiwu.models.other_voucher",  # 其他收支单
+                "apps.kuaicaiwu.models.payment_advance_record",  # 员工垫付台账
+                "apps.kuaicaiwu.models.payment_pull_line",  # 付款单加载明细
+                "apps.kuaicaiwu.models.purchase_receipt_line_finance_occupancy",  # 入库行财务占用
+                "apps.kuaicaiwu.models.fund_transfer",  # 资金调拨
                 # 快研发 kuaiplm
                 "apps.kuaiplm.models.rd_project",
                 "apps.kuaiplm.models.gate_template",

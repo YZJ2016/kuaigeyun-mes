@@ -54,7 +54,7 @@ aoci-cursor-setup.md[SU3T]: F:说明Cursor三仓AOCI接入、选仓与本机检�
 报工思路.md[DU3T]: F:Implements 报工思路.md | R:- | A:- | S:59L
 报工新思路.md[DU3S]: F:Implements 报工新思路.md | R:- | A:- | S:143L
 文件路径.md[DU3T]: F:Implements 文件路径.md | R:- | A:- | S:33L
-上游同步台账.md[SW3L]: F:私有fork上游同步台账:gitee水位、批A-G摘取映射、跳过清单与逐批复核手法 | R:code:AGENTS.md | A:远端与水位,已同步映射,批C价税采购段,基线清理记录 | S:勿用upstream;fetch半克隆;新批次置顶;财务=kuaicaiwu权威
+上游同步台账.md[SW3L]: F:私有fork上游同步台账:gitee水位、批A-G摘取映射、跳过清单与逐批复核手法 | R:code:AGENTS.md | A:远端与水位,已同步映射,批C价税采购段,批C3财务适配段,基线清理记录 | S:勿用upstream;fetch半克隆;新批次置顶;财务=kuaicaiwu权威
 成熟度与技术再评估.md[SG4M]: F:MES/MOM全领域成熟度再评估,含领域评分,链路核查与Q01-Q20问题清单 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/posting_service.py | A:总评,各领域成熟度盘点,业务主链路评估,技术评估,Q01-Q20具体问题,优先补齐方向 | S:评分非上线验收;spec标记≠运行证据;历史测试不作本轮验证
 
 ===D:/kuaigeyun-pro/kuaigeyun/fast-deploy/===
@@ -1155,6 +1155,15 @@ config-center-ops.md[SO2T]: F:config center ops | R:- | A:3 control points | S:c
 974_20261105140000_create_payment_pull_lines_and_receipt_occupancy.py[PD3T]: F:迁移:建kuaicaiwu付款pull明细+入库行财务占用两表 | R:- | A:payment_pull_lines+receipt_line_occupancies | S:72L
 975_20261107003000_purchase_order_line_tax_price_type.py[PD3T]: F:迁移:orders加price_type+行tax_rate并从头税率回填 | R:- | A:采购行税率/价税类型 | S:头税率<=1按小数×100回填;38L
 976_20261107140000_purchase_order_payment_recognition_columns.py[PD3T]: F:迁移:orders加付款方式/结算/账期天数/立账策略 | R:- | A:采购付款与立账列 | S:payable_recognition默认on_receipt;36L
+20261118100000_material_inventory_category.py[MV1S]: F:迁移:materials加inventory_category列 | R:- | A:VARCHAR(32)可空,ADD IF NOT EXISTS幂等 | S:RUN_IN_TRANSACTION,downgrade DROP COLUMN
+20261118101000_purchase_requisition_order_type.py[MV2S]: F:迁移:purchase_requisitions加order_type采购类型 | R:- | A:VARCHAR(20)非空默认标准采购,带COMMENT | S:标准/资产/服务采购枚举语义在服务层校验
+20261118102000_purchase_receipt_warehouse_nullable.py[MV3S]: F:迁移:purchase_receipts仓库两列放开可空 | R:- | A:warehouse_id/warehouse_name DROP NOT NULL,服务采购不入库 | S:downgrade先UPDATE回填0再恢复NOT NULL
+20261118103000_purchase_receipt_header_fields.py[MV4M]: F:迁移:purchase_receipts表头扩展列 | R:- | A:purchase_order_id/行po_item_id放开可空,加order_type/payable_recognition/buyer/department/pay_mode/金蝶编码/税率币别/税额价税 | S:与purchase_requisition_order_type同批采购类型语义
+20261118104000_payment_counterparty_account.py[MV5S]: F:迁移:payments加对方收款账户字段 | R:- | A:counterparty_bank_name/account_no/account_name可空 | S:批C3 e75380e080摘取
+20261118105000_payment_employee_advance.py[MV6M]: F:迁移:payments加员工垫付字段+payment_advance_records台账表 | R:- | A:advance_payee_*字段,uuid VARCHAR(36),审计四列,deleted_at软删 | S:台账随付款确认写入、作废软删
+20261118106000_tenant_show_pro_badge.py[MV7S]: F:迁移:tenants加show_pro_badge | R:- | A:BOOLEAN NOT NULL默认true | S:租户级PRO徽章开关,本地无pro分层仅门控既有PRO_APP_CODES
+20261118107000_payment_advance_record_active_unique.py[MV8S]: F:迁移:payment_advance_records加部分唯一索引 | R:- | A:(tenant_id,payment_id) WHERE deleted_at IS NULL | S:防并发重复入账,评审修复新增
+20261118108000_fund_transfers.py[MV9M]: F:迁移:apps_kuaicaiwu_fund_transfers建表 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/fund_transfer.py | A:调拨码/日期/类型/双账户/外部账户/金额/币别/状态/附件/审计列,部分唯一索引(tenant_id,transfer_code)WHERE deleted_at IS NULL | S:内部调拨禁同账户由服务层校验,deleted_at软删
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/scripts/===
 pack_sensitive_words.py[XC3T]: F:敏感词打包脚本 | R:code:riveredge-backend/pyproject.toml | A:lexicon pack | S:gh mirror fallback; 90L
@@ -1288,8 +1297,8 @@ standard_costs.py[AE4S]: F:标准成本库API | R:code:riveredge-backend/src/app
 __init__.py[AA2T]: F:财务API包 | R:code:riveredge-backend/src/apps/kuaicaiwu/api/exchange_rates.py | A:finance pkg | S:3L; docstring
 partner_statements.py[AE7M]: F:往来对账单API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/__init__.py | A:11 endpoints | S:xlsx/pdf export;line-detail钻取; 307L
 payables.py[AE8L]: F:应付管理API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/partner_statements.py | A:8 endpoints | S:pull from PO/PR; 399L
-payment_refunds.py[AE8L]: F:付款退款API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/payables.py | A:10 endpoints | S:field mask; 417L
-payments.py[AE8L]: F:付款单管理API:CRUD+print+pull_lines多源拉取+pull-preview | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/payment_refunds.py | A:15 endpoints | S:pull_lines与legacy source二选一互斥;删除反过账
+payment_refunds.py[AE8L]: F:付款退款API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/payables.py | A:10 endpoints,创建期垫付领款人校验前置 | S:field mask;退款禁员工垫付
+payments.py[AE8L]: F:付款单管理API:CRUD+print+pull_lines多源拉取+pull-preview | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/payment_refunds.py | A:15 endpoints,schema含require_payment_voucher/pull_lines/对方账户/垫付领款人 | S:pull_lines与legacy source二选一互斥;删除反过账
 price_settlement.py[AE5M]: F:月结定价API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/payments.py | A:5 endpoints | S:batch apply; 175L
 purchase_invoices.py[AE8L]: F:采购发票API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/price_settlement.py | A:12 endpoints | S:concurrent pay; 500L
 receipt_refunds.py[AE8L]: F:收款退款API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/purchase_invoices.py | A:10 endpoints | S:field mask; 417L
@@ -1298,6 +1307,7 @@ receivables.py[AE8L]: F:应收管理API | R:code:riveredge-backend/src/apps/kuai
 sales_invoices.py[AE9L]: F:销售发票API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/receivables.py | A:15 endpoints | S:red letter; 896L
 finance_misc_categories.py[AE4S]: F:其他收支类别API(income/expense分表) | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/__init__.py | A:4 endpoints | S:kind闭集校验;ensure_defaults种子;trace_id错误; 130L
 misc_vouchers.py[AE6M]: F:其他费用收入/支出单据API(收支共享spec工厂) | R:- | A:other_incomes_router,other_expenses_router | S:提交/审批/确认/撤确认/作废;capabilities回参;11 endpoints each; 303L
+fund_transfers.py[FU1M]: F:资金调拨API:CRUD+confirm/unconfirm/cancel+uni-audit | R:code:riveredge-backend/src/apps/kuaicaiwu/services/fund_transfer_service.py | A:prefix /fund-transfers,权限kuaicaiwu:fund-transfer | S:confirm过账银行流水;uni-audit实体fund_transfer;草稿可删,确认仅可取消
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaicaiwu/constants/===
 __init__.py[AA2T]: F:财务常量包 | R:code:riveredge-backend/src/apps/kuaicaiwu/bootstrap.py | A:re-export | S:8 constants; 23L

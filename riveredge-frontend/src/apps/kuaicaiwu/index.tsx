@@ -48,6 +48,7 @@ const PartnerStatementDetailPage = lazy(() => import('./pages/finance-management
 const PriceSettlementPage = lazy(() => import('./pages/finance-management/price-settlement'));
 const DocumentReconciliationPage = lazy(() => import('./pages/finance-management/document-reconciliation'));
 const BankAccountsPage = lazy(() => import('./pages/finance-management/bank-accounts'));
+const FundTransfersPage = lazy(() => import('./pages/finance-management/fund-transfers'));
 const NotesReceivablePage = lazy(() => import('./pages/finance-management/notes-receivable'));
 const NotesPayablePage = lazy(() => import('./pages/finance-management/notes-payable'));
 const PrepaymentsPage = lazy(() => import('./pages/finance-management/prepayments'));
@@ -112,6 +113,7 @@ const KuaicaiwuApp: React.FC = () => {
       />
       <Route path="finance-management/document-reconciliation" element={withPageSuspense(DocumentReconciliationPage)} />
       <Route path="finance-management/bank-accounts" element={withPageSuspense(BankAccountsPage)} />
+      <Route path="finance-management/fund-transfers" element={withPageSuspense(FundTransfersPage)} />
       <Route path="finance-management/notes-receivable" element={withPageSuspense(NotesReceivablePage)} />
       <Route path="finance-management/notes-payable" element={withPageSuspense(NotesPayablePage)} />
       <Route path="finance-management/prepayments" element={withPageSuspense(PrepaymentsPage)} />

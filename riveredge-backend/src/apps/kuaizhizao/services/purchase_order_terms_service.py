@@ -57,17 +57,25 @@ class PurchaseOrderTermsService:
     async def sync_order_prepayment_from_milestones(
         cls, tenant_id: int, purchase_order_id: int
     ) -> None:
-        """预付节点回写订单表头预付字段，保证确认后自动生成预付付款单逻辑不断。"""
+        """预付节点回写订单表头预付字段，保证确认后自动生成预付付款单逻辑不断。
+
+        无付款计划行时：表头预付是真源（表单直填 / load 虚拟里程碑），不得清空。
+        有计划行但无预付节点：视为计划侧去掉预付，同步清空表头。
+        """
         order = await PurchaseOrder.get_or_none(
             tenant_id=tenant_id, id=purchase_order_id, deleted_at__isnull=True
         )
         if not order:
             return
-        prepay_rows = await PurchaseOrderMilestone.filter(
-            tenant_id=tenant_id, purchase_order_id=purchase_order_id, is_prepayment=True
+        all_rows = await PurchaseOrderMilestone.filter(
+            tenant_id=tenant_id, purchase_order_id=purchase_order_id
         )
+        prepay_rows = [row for row in all_rows if bool(row.is_prepayment)]
         if len(prepay_rows) > 1:
             raise BusinessLogicError("付款计划中最多只能有一个预付节点")
+        if not all_rows:
+            # 无付款计划行时表头预付是真源（表单直填 / load 虚拟里程碑），不得清空
+            return
         if not prepay_rows:
             order.prepayment_amount = None
             order.prepayment_bank_account_id = None

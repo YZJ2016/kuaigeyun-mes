@@ -1439,7 +1439,15 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
             # 更新订单头
             update_dict = order_data.model_dump(
-                exclude_unset=True, exclude={'items', 'change_reason', 'payment_milestones'}
+                exclude_unset=True,
+                exclude={
+                    'items',
+                    'change_reason',
+                    'payment_milestones',
+                    'audit',
+                    'prepayment_unsettled_balance',
+                    'estimated_payable_after_prepayment',
+                },
             )
             from core.services.document_code_service import pop_and_apply_code_change_from_update_dict
 

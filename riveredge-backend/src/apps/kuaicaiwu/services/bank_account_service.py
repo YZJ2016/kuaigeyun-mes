@@ -518,16 +518,32 @@ class BankAccountService:
         operator_id: Optional[int] = None,
     ) -> int:
         """冲回收/付款确认产生的银行流水，并回滚账户余额。返回冲回条数。"""
-        from apps.kuaicaiwu.models.bank_transaction import BankTransaction
-
         if voucher_type in ("other_income", "other_expense"):
             source_type = voucher_type
         else:
             source_type = "receipt" if voucher_type == "receipt" else "payment"
-        txs = await BankTransaction.filter(
-            tenant_id=tenant_id,
+        return await self.reverse_from_source_doc(
+            tenant_id,
             source_doc_type=source_type,
             source_doc_id=int(voucher_id),
+            operator_id=operator_id,
+        )
+
+    async def reverse_from_source_doc(
+        self,
+        tenant_id: int,
+        *,
+        source_doc_type: str,
+        source_doc_id: int,
+        operator_id: Optional[int] = None,
+    ) -> int:
+        """按来源单据冲回全部银行流水并回滚账户余额。返回冲回条数。"""
+        from apps.kuaicaiwu.models.bank_transaction import BankTransaction
+
+        txs = await BankTransaction.filter(
+            tenant_id=tenant_id,
+            source_doc_type=str(source_doc_type or "").strip(),
+            source_doc_id=int(source_doc_id),
             deleted_at__isnull=True,
         ).all()
         if not txs:

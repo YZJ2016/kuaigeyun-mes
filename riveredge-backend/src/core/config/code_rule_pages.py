@@ -151,6 +151,7 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaicaiwu-finance-payment-refund": "TP",       # 付款退款
     "kuaicaiwu-finance-other-income": "QS",         # 其他费用收入
     "kuaicaiwu-finance-other-expense": "QZ",        # 其他费用支出
+    "kuaicaiwu-finance-fund-transfer": "ZD",        # 资金调拨
     "kuaicaiwu-finance-purchase-invoice": "PI",     # 进项发票
     "kuaicaiwu-finance-settlement": "HX",           # 核销
     "kuaicaiwu-cost-calculations": "CC",            # 成本核算
@@ -2186,6 +2187,18 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "account-book",
         "auto_generate": True,
         "rule_code": "OTHER_EXPENSE_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaicaiwu-finance-fund-transfer",
+        "page_name": "资金调拨",
+        "page_path": "/apps/kuaicaiwu/finance-management/fund-transfers",
+        "code_field": "transfer_code",
+        "code_field_label": "资金调拨单号",
+        "module": "轻管理会计",
+        "module_icon": "account-book",
+        "auto_generate": True,
+        "rule_code": "FUND_TRANSFER_CODE",
         "allow_manual_edit": True,
     },
     {
