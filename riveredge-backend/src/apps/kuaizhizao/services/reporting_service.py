@@ -2036,66 +2036,66 @@ class ReportingService(AppBaseService[ReportingRecord]):
             
             await work_order.save()
 
-            if operation_became_completed:
-                await notify_next_operation_assignees_after_completed(
-                    tenant_id,
-                    work_order,
-                    work_order_operation,
-                    operations=all_operations,
-                )
+            if operation_became_completed or wo_became_completed:
+                from core.utils.db_transaction import schedule_after_commit
 
-            if wo_became_completed:
-                from apps.kuaizhizao.services.kuaizhizao_business_notification import (
-                    notify_work_order_completed,
-                )
-
-                try:
-                    await notify_work_order_completed(
+                completed_wo = work_order
+                completed_op = work_order_operation
+                completed_ops = list(all_operations)
+                if operation_became_completed:
+                    next_notice = lambda: notify_next_operation_assignees_after_completed(
                         tenant_id,
-                        work_order_id=work_order.id,
-                        work_order_code=work_order.code or str(work_order.id),
-                        product_name=work_order.product_name or "—",
-                        completed_quantity=str(
-                            work_order.completed_quantity or work_order.quantity or 0
-                        ),
-                        creator_user_id=work_order.created_by,
+                        completed_wo,
+                        completed_op,
+                        operations=completed_ops,
                     )
-                except Exception as exc:
-                    logger.warning(
-                        "工单完工消息提醒失败 tenant={} wo={}: {}",
-                        tenant_id,
-                        work_order.id,
-                        exc,
-                    )
-                try:
-                    from apps.kuaizhizao.services.delivery_project_service import (
-                        DeliveryProjectService,
+                    if not schedule_after_commit(next_notice):
+                        await next_notice()
+                if wo_became_completed:
+                    from apps.kuaizhizao.services.kuaizhizao_business_notification import (
+                        notify_work_order_completed,
                     )
 
-                    actor = None
-                    if work_order.updated_by:
-                        actor = await User.get_or_none(
-                            id=work_order.updated_by, tenant_id=tenant_id
+                    wo_id = int(work_order.id)
+                    wo_code = work_order.code or str(work_order.id)
+                    product_name = work_order.product_name or "—"
+                    completed_qty = str(
+                        work_order.completed_quantity or work_order.quantity or 0
+                    )
+                    creator_id = work_order.created_by
+                    actor_id = work_order.updated_by
+
+                    completed_notice = lambda: notify_work_order_completed(
+                        tenant_id,
+                        work_order_id=wo_id,
+                        work_order_code=wo_code,
+                        product_name=product_name,
+                        completed_quantity=completed_qty,
+                        creator_user_id=creator_id,
+                    )
+                    if not schedule_after_commit(completed_notice):
+                        await completed_notice()
+
+                    async def _write_delivery_node() -> None:
+                        from apps.kuaizhizao.services.delivery_project_service import (
+                            DeliveryProjectService,
                         )
-                    idem = f"{int(work_order.id)}:delivery_completed"
-                    updated = await DeliveryProjectService().apply_work_order_completed(
-                        tenant_id, work_order.id, actor_user=actor
-                    )
-                    logger.info(
-                        "工单完工回写交付节点完成 tenant={} wo={} idem={} updated={}",
-                        tenant_id,
-                        work_order.id,
-                        idem,
-                        updated,
-                    )
-                except Exception as exc:
-                    logger.error(
-                        "工单完工回写交付节点失败 tenant={} wo={} idem={}: {}",
-                        tenant_id,
-                        work_order.id,
-                        f"{int(work_order.id)}:delivery_completed",
-                        exc,
-                    )
+
+                        actor = None
+                        if actor_id:
+                            actor = await User.get_or_none(id=actor_id, tenant_id=tenant_id)
+                        updated = await DeliveryProjectService().apply_work_order_completed(
+                            tenant_id, wo_id, actor_user=actor
+                        )
+                        logger.info(
+                            "工单完工回写交付节点完成 tenant={} wo={} updated={}",
+                            tenant_id,
+                            wo_id,
+                            updated,
+                        )
+
+                    if not schedule_after_commit(_write_delivery_node):
+                        await _write_delivery_node()
 
             # 报工创建时若已自动审核：倒冲/模具/质检放到事务提交后执行（失败可补偿，不回滚报工主记录）
             post_commit_backflush = reporting_data.status == "approved"

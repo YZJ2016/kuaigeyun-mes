@@ -14,7 +14,11 @@ import os
 import sys
 from typing import Any
 
+from core.utils.db_transaction import install_reentrant_nested_transaction
 from infra.config.infra_config import infra_settings as settings
+
+# 进程加载数据库模块时即生效，覆盖 API 与 Taskiq worker，避免首个请求才碰到未修补的嵌套锁。
+install_reentrant_nested_transaction()
 
 
 def _is_aerich_migration_process() -> bool:

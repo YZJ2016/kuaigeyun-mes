@@ -4,6 +4,8 @@
  * 提供错误恢复机制，包括重试、降级、回退等
  */
 
+import i18n from 'i18next';
+
 import { getAntdMessage, getAntdModal } from './antdAppApis';
 import { isBulkImportErrorToastSuppressed } from './bulkImportErrorSuppress';
 import { handleError } from './errorHandler';
@@ -46,9 +48,11 @@ const DEFAULT_RETRY_CONFIG: RetryConfig = {
     if ([401, 400].includes(error?.response?.status)) {
       return false;
     }
-    // 服务器错误（502, 503, 504）可重试
-    const isServerError = [502, 503, 504].includes(error?.response?.status);
-    if (isServerError) return true;
+    // 502/503/504 表示这次请求已经失败或超时。立刻再打一次会把卡住的服务再压一遍，
+    // 写操作还可能重复提交。交给用户在原页面再提交。
+    if ([502, 503, 504].includes(error?.response?.status)) {
+      return false;
+    }
     // 网络/连接类错误可重试（含连接重置、超时等）
     const msg = (error?.message || error?.originalError?.message || '').toLowerCase();
     const isNetworkError =
@@ -261,14 +265,12 @@ export function handleServerError(error: any): void {
       return;
     }
     serverUnavailableModalOpen = true;
+    const timedOut = status === 504;
     getAntdModal().warning({
-      title: '服务器暂时不可用',
-      content: '服务器正在维护或暂时不可用，请稍后重试。',
-      okText: '重试',
+      title: i18n.t(timedOut ? 'errors.operationTimeout.title' : 'errors.serviceUnreachable.title'),
+      content: i18n.t(timedOut ? 'errors.operationTimeout.content' : 'errors.serviceUnreachable.content'),
+      okText: i18n.t(timedOut ? 'errors.operationTimeout.ok' : 'errors.serviceUnreachable.ok'),
       ...stationConfirmModalProps(),
-      onOk: () => {
-        window.location.reload();
-      },
       afterClose: () => {
         serverUnavailableModalOpen = false;
         serverUnavailableModalCooldownUntil = Date.now() + SERVER_UNAVAILABLE_MODAL_COOLDOWN_MS;

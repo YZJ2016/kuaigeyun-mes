@@ -1413,6 +1413,39 @@ async def _dispatch_other_expense(
     _unsupported("other_expense", action)
 
 
+async def _dispatch_fund_transfer(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+    payload: Optional[Dict[str, Any]] = None,
+) -> Any:
+    from apps.common.app_orm import require_finance_orm
+    from apps.kuaicaiwu.services.fund_transfer_audit_service import (
+        FundTransferAuditService,
+    )
+
+    require_finance_orm()
+    svc = FundTransferAuditService()
+    if action == "submit":
+        return await svc.commit_transfer(tenant_id, entity_id, user_id)
+    if action == "submit_review":
+        return await svc.submit_transfer_for_review(tenant_id, entity_id, user_id)
+    if action == "withdraw":
+        return await svc.withdraw_transfer(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_transfer(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.approve_transfer(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "revoke":
+        return await svc.revoke_transfer(tenant_id, entity_id, user_id)
+    _unsupported("fund_transfer", action)
+
+
 async def _dispatch_freight_bill(
     action: str,
     *,
@@ -1676,6 +1709,7 @@ HANDLERS: Dict[str, DispatchFn] = {
     "freight_bill": _dispatch_freight_bill,
     "other_income": _dispatch_other_income,
     "other_expense": _dispatch_other_expense,
+    "fund_transfer": _dispatch_fund_transfer,
     "kuaioa_form_request": _dispatch_kuaioa_form_request,
     "kuaioa_asset_purchase": _dispatch_kuaioa_asset_purchase,
     "kuaioa_leave": _dispatch_kuaioa_leave,

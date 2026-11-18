@@ -165,7 +165,7 @@ class PayablePrepaymentApplyService:
         tenant_id: int,
         payable_id: int,
     ) -> Optional[int]:
-        """解析应付单关联的采购订单（预付抵扣须同 PO 预付池）。"""
+        """解析应付单关联的采购订单。有订单时预付抵扣须用同订单预付；没有订单时不限制预付池。"""
         payable = await Payable.get_or_none(
             tenant_id=tenant_id, id=int(payable_id), deleted_at__isnull=True
         )

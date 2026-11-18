@@ -25,7 +25,7 @@ from core.services.code_rule.code_rule_component_service import (
     resolve_code_render_datetime,
 )
 from core.config.code_rule_pages import get_seq_sync_entity_for_rule
-from core.utils.db_transaction import reuse_or_begin_transaction
+from core.utils.db_transaction import independent_transaction
 from infra.exceptions.exceptions import ValidationError
 from core.utils.timezone_utils import now_utc, resolve_business_datetime, to_site_date
 
@@ -389,9 +389,9 @@ class CodeGenerationService:
             rule, rule_code, context, components
         )
         
-        # 事务内对序号行加锁再递增，否则 FOR UPDATE 在语句结束后立即释放。
-        # 须 reuse_or_begin：外层已有事务时再 in_transaction 会 Nested 死锁（通知仓库等 504）。
-        async with reuse_or_begin_transaction():
+        # 序号在独立连接上提交。并入外层建单事务时，FOR UPDATE 会留到整单结束，
+        # 同规则的其它提交堵在序号行上，连接池被占满后整站超时。
+        async with independent_transaction():
             sequence = (
                 await CodeSequence.filter(
                     code_rule_id=rule.id,
@@ -530,7 +530,7 @@ class CodeGenerationService:
         )
 
         codes: List[str] = []
-        async with reuse_or_begin_transaction():
+        async with independent_transaction():
             sequence = (
                 await CodeSequence.filter(
                     code_rule_id=rule.id,

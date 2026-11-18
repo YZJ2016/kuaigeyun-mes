@@ -164,6 +164,21 @@ class BusinessNotificationService:
         if not doc or not action:
             return 0
 
+        from core.utils.db_transaction import schedule_after_commit
+
+        variables_snapshot = dict(variables or {})
+        context_snapshot = dict(context or {})
+        if schedule_after_commit(
+            lambda: BusinessNotificationService.dispatch(
+                tenant_id,
+                trigger_document=doc,
+                trigger_action=action,
+                variables=variables_snapshot,
+                context=context_snapshot,
+            )
+        ):
+            return 0
+
         cfg = await BusinessConfigService().get_business_config(tenant_id)
         rules = _normalize_rules((cfg.get("parameters") or {}).get("notifications"))
         ctx = dict(context or {})

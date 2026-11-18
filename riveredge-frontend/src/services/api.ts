@@ -435,7 +435,8 @@ export async function apiRequest<T = any>(
           const msg = String(error?.message || error?.name || '').toLowerCase();
           if (msg.includes('timeout') || error?.name === 'TimeoutError') return false;
           if ([401, 400].includes(error?.response?.status)) return false;
-          if ([502, 503, 504].includes(error?.response?.status)) return attempt < 2;
+          // 超时和网关错误不再自动重试：用户已经等满时限，再打一次只会延长卡顿。
+          if ([502, 503, 504].includes(error?.response?.status)) return false;
           return (
             msg.includes('fetch') ||
             msg.includes('network') ||

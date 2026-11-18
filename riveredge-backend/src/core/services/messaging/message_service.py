@@ -57,7 +57,9 @@ class MessageService:
         Raises:
             NotFoundError: 当模板或配置不存在时抛出
         """
-        # 获取消息模板（如果提供了 template_uuid 或 template_code）
+        from core.utils.db_transaction import schedule_after_commit
+
+        # 模板不存在要当场抛出，审批通知才能回落明文。写入、群同步和外部通道放到事务提交之后。
         template: Optional[MessageTemplate] = None
         if request.template_uuid:
             template = await MessageTemplateService.get_message_template_by_uuid(
@@ -67,7 +69,11 @@ class MessageService:
             template = await MessageTemplateService.get_message_template_by_code(
                 tenant_id, str(request.template_code)
             )
-            
+        if schedule_after_commit(
+            lambda: MessageService.send_message(tenant_id, request)
+        ):
+            return SendMessageResponse(success=True, message_log_uuid=None, inngest_run_id=None)
+
         if template:
             # 渲染模板
             variables = request.variables or {}

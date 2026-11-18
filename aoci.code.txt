@@ -1167,6 +1167,7 @@ config-center-ops.md[SO2T]: F:config center ops | R:- | A:3 control points | S:c
 20261118109000_payment_require_voucher_backfill.py[MV1T]: F:回填:付款申请経由下推済付款単のrequire_payment_voucherを申請真源から復元 | R:- | A:upgrade,downgrade,RUN_IN_TRANSACTION | S:relations結合申請真源;不可逆;30L
 20261118109100_payment_application_paid_repair.py[MV2S]: F:回填:確認済付款単が存在しない付款申請の已付金額/状態を修復 | R:- | A:upgrade,downgrade,RUN_IN_TRANSACTION | S:confirmed決済不在の申請はpaid=0状態=已批准;62L
 20261118109200_other_expense_payee_related_receipts.py[MV3T]: F:other_expense_linesにpayee_id/payee_name,other_expensesにrelated_purchase_receipts(JSONB)追加 | R:- | A:upgrade,downgrade,RUN_IN_TRANSACTION | S:従業員立替行領収人必須はサービス層;関連入庫はsupplier往来のみ;33L
+20261118110000_fund_transfer_review_status.py[MV1T]: F:apps_kuaicaiwu_fund_transfersにreview_status列追加(草稿初期) | R:code:riveredge-backend/src/apps/kuaicaiwu/models/fund_transfer.py | A:upgrade,downgrade,RUN_IN_TRANSACTION | S:審核状態列;IF NOT EXISTS冪等;19L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/scripts/===
 pack_sensitive_words.py[XC3T]: F:敏感词打包脚本 | R:code:riveredge-backend/pyproject.toml | A:lexicon pack | S:gh mirror fallback; 90L
@@ -1356,7 +1357,10 @@ voucher_line.py[PB3T]: F:凭证分录ORM | R:code:riveredge-backend/src/apps/kua
 voucher_summary.py[PC1T]: F:凭证摘要库ORM | R:code:riveredge-backend/src/apps/kuaicaiwu/models/voucher_line.py | A:VoucherSummaryEntry | S:23L; dict
 finance_misc_category.py[PM2T]: F:其他收支类别ORM | R:code:riveredge-backend/src/apps/kuaicaiwu/models/cost_rule.py | A:MiscIncomeCategory,MiscExpenseCategory | S:收入/支出分表;含默认会计科目编码与排序
 other_voucher.py[PM4S]: F:其他費用収入/支出単據ORM | R:code:riveredge-backend/src/apps/kuaicaiwu/models/invoice.py | A:OtherIncome,OtherIncomeLine,OtherExpense,OtherExpenseLine | S:不産応収応付;支出行payee/頭関連入庫追加;6態審核
-fund_transfer.py[PM9S]: F:資金調撥ORM:調撥碼/日付/類型/双口座/外部口座/金額/幣別/状態/附件 | R:code:riveredge-backend/migrations/models/20261118108000_fund_transfers.py | A:FundTransfer | S:internal双leg/external_out|in単leg;deleted_at軟削除
+fund_transfer.py[PM9S]: F:資金調撥ORM:調撥碼/日付/類型/双口座/外部口座/金額/幣別/状態/審核状態/附件 | R:code:riveredge-backend/migrations/models/20261118108000_fund_transfers.py | A:FundTransfer | S:internal双leg/external_out|in単leg;review_status確認前必審;deleted_at軟削除
+payment_advance_record.py[PM5T]: F:従業員立替台帳ORM:立替人/金額/参照単據/状態/作廢時刻 | R:code:riveredge-backend/migrations/models/20261118105000_payment_employee_advance.py | A:PaymentAdvanceRecord | S:確認記一筆;作廢軟削除;部分唯一(tenant,payment)活件;uuid36
+payment_pull_line.py[PM6T]: F:付款単取単明細ORM:source_type/source_id/金額/快照 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/payment.py | A:PaymentPullLine | S:多源(payable等)取単;persist/validate済;deleted_at軟削除
+purchase_receipt_line_finance_occupancy.py[PM5T]: F:採購入庫行財務占用ORM:行別占用単據/金額/状態 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/purchase_receipt_finance_pull_lines.py | A:PurchaseReceiptLineFinanceOccupancy | S:行占用防重複立賬;backfill済;軟削除
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaicaiwu/reference_display/===
 __init__.py[AC2T]: F:快财务引用展示Provider包 | R:- | A:- | S:单行docstring; provider实现在setup.py
@@ -1364,7 +1368,7 @@ setup.py[AD4M]: F:银行账户引用展示Provider注册 | R:code:riveredge-back
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaicaiwu/schemas/===
 __init__.py[AC2T]: F:快财务Schema包 | R:code:riveredge-backend/src/apps/kuaicaiwu/schemas/finance.py | A:- | S:导出Payable/PurchaseInvoice/Receivable/收款/付款单据Schema
-finance.py[CB6L]: F:财务协同Pydantic Schema | R:code:riveredge-backend/src/apps/kuaicaiwu/models/payable.py, code:riveredge-backend/src/apps/kuaicaiwu/models/receivable.py | A:PayableCreate,ReceivableCreate,PaymentVoucherCreate,ReceiptVoucherCreate,SalesInvoiceCreate,OtherVoucherCreate | S:应付收/发票/对账单/合并/其他收支schema;红字负额;capabilities下推
+finance.py[CB6L]: F:财务协同Pydantic Schema | R:code:riveredge-backend/src/apps/kuaicaiwu/models/payable.py, code:riveredge-backend/src/apps/kuaicaiwu/models/receivable.py | A:PayableCreate,ReceivableCreate,PaymentVoucherCreate,ReceiptVoucherCreate,SalesInvoiceCreate,OtherVoucherCreate | S:应付收/发票/对账单/合并/其他收支schema;红字负额;capabilities下推;支出关联入库/payee/部门/附件
 invoice.py[CB5S]: F:发票Pydantic Schema(销项/进项统一) | R:code:riveredge-backend/src/apps/kuaicaiwu/models/invoice.py | A:InvoiceBase,InvoiceCreate,InvoiceUpdate,InvoiceResponse,InvoiceListResponse | S:category IN=进项OUT=销项; 税率默认0.13小数口径; 含红字冲销指标
 price_settlement_schemas.py[CB5S]: F:月结定价Pydantic Schema | R:code:riveredge-backend/src/apps/kuaicaiwu/models/price_settlement_batch.py | A:PriceSettlementCandidateResponse,PriceSettlementLineInput,PriceSettlementBatchCreate | S:period格式YYYY-MM; side=sales|purchase; 行after_unit_price≥0
 standard_cost.py[CB5T]: F:标准成本Pydantic Schema | R:code:riveredge-backend/src/apps/kuaicaiwu/models/standard_cost.py | A:StandardCostBase,StandardCostCreate,StandardCostUpdate,StandardCostResponse | S:target_type=material/work_center/work_station; Update不继承BaseSchema; 日期coerce
@@ -1372,7 +1376,7 @@ standard_cost.py[CB5T]: F:标准成本Pydantic Schema | R:code:riveredge-backend
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaicaiwu/services/===
 __init__.py[AC1T]: F:快财务服务包 | R:- | A:- | S:仅docstring; 无符号导出
 accounting_event_service.py[AD3S]: F:会计事件链路记录 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/accounting_event.py | A:record_event | S:AE-+12位hex事件码; 事件日=业务时间转site_date
-bank_account_service.py[AD7L]: F:银行账户与银行流水核心服务 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/bank_account.py, code:riveredge-backend/src/apps/kuaicaiwu/models/bank_transaction.py | A:BankAccountService,clip_bank_summary,build_voucher_bank_summary | S:bank/cash双型;余额随方向增减防负;确认单幂等同步/可冲回;CSV对账导入
+bank_account_service.py[AD7L]: F:银行账户与银行流水核心服务 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/bank_account.py, code:riveredge-backend/src/apps/kuaicaiwu/models/bank_transaction.py | A:BankAccountService,clip_bank_summary,build_voucher_bank_summary | S:bank/cash双型;assert_out_funds集中出款预检;确认单幂等同步/可冲回;CSV对账导入
 bank_transaction_summary_repair.py[AD3T]: F:合并收付款银行流水摘要修复 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/bank_account_service.py | A:BankTransactionSummaryRepairService | S:回填空摘要收付款流水及空备注收付款单notes; dry_run不写库
 cost_list_core.py[AD3M]: F:成本列表过滤排序核心 | R:code:riveredge-backend/src/apps/master_data/services/master_data_list_core.py | A:apply_cost_calculation_list_filters | S:keyword/sort白名单防注入; 默认created_at降序
 cost_service.py[AD7L]: F:成本核算规则与记录服务 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/cost_rule.py, code:riveredge-backend/src/apps/kuaicaiwu/models/cost_calculation.py | A:CostRuleService,CostCalculationService | S:规则码CR+日期+序号; 生产/委外核算留在kuaizhizao; 标准成本因子缺失提示配置费率
