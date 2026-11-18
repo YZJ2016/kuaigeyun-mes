@@ -6,4 +6,5 @@ export type FinancePullCandidateListParams = {
   date_from?: string;
   date_to?: string;
   supplier_id?: number;
+  customer_id?: number;
 };

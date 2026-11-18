@@ -367,6 +367,26 @@ class LinkedSourceDocumentRef(BaseSchema):
     code: str
 
 
+class ReceiptPullLineCreate(BaseSchema):
+    """收款单加载明细行（创建/更新）"""
+
+    source_type: str = Field(..., max_length=50, description="receivable|sales_order")
+    source_id: int = Field(..., gt=0, description="来源单据ID")
+    source_code: Optional[str] = Field(None, max_length=50, description="来源单号")
+    amount: Decimal = Field(..., gt=0, description="本次收款金额")
+
+
+class ReceiptPullLineResponse(BaseSchema):
+    """收款单加载明细行（读）"""
+
+    line_no: int
+    source_type: str
+    source_id: int
+    source_code: Optional[str] = None
+    amount: Decimal
+    max_amount: Optional[Decimal] = Field(None, description="可收上限（草稿读侧 enrich）")
+
+
 class PaymentPullLineCreate(BaseSchema):
     """付款单加载明细行（创建/更新）"""
 
@@ -527,6 +547,15 @@ class ReceiptVoucherBase(BaseSchema):
     payment_method: str = Field(..., max_length=50, description="收款方式")
     bank_account: Optional[str] = Field(None, max_length=100, description="收款账号")
     bank_account_id: Optional[int] = Field(None, description="银行账户ID")
+    counterparty_account_name: Optional[str] = Field(
+        None, max_length=200, description="对方付款户名"
+    )
+    counterparty_bank_name: Optional[str] = Field(
+        None, max_length=200, description="对方付款开户行"
+    )
+    counterparty_bank_account: Optional[str] = Field(
+        None, max_length=64, description="对方付款账号"
+    )
     settlement_type: str = Field("normal", max_length=20, description="结算类型 normal/prepayment/refund")
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
@@ -535,9 +564,12 @@ class ReceiptVoucherBase(BaseSchema):
 class ReceiptVoucherCreate(ReceiptVoucherBase):
     """收款单创建schema"""
 
-    source_type: Optional[str] = Field(None, description="加载源单类型 receivable|receipt")
+    source_type: Optional[str] = Field(None, description="加载源单类型 receivable|receipt（与 pull_lines 二选一）")
     source_id: Optional[int] = Field(None, description="加载源单ID（单源兼容）")
     source_ids: Optional[List[int]] = Field(None, description="加载源收款单ID列表（多源一起退款）")
+    pull_lines: Optional[List[ReceiptPullLineCreate]] = Field(
+        None, description="加载明细行（与 source_type/source_id 二选一）"
+    )
 
 
 class ReceiptVoucherUpdate(BaseSchema):
@@ -549,9 +581,15 @@ class ReceiptVoucherUpdate(BaseSchema):
     payment_method: Optional[str] = Field(None, max_length=50)
     bank_account: Optional[str] = Field(None, max_length=100)
     bank_account_id: Optional[int] = None
+    counterparty_account_name: Optional[str] = Field(None, max_length=200)
+    counterparty_bank_name: Optional[str] = Field(None, max_length=200)
+    counterparty_bank_account: Optional[str] = Field(None, max_length=64)
     settlement_type: Optional[str] = Field(None, max_length=20)
     notes: Optional[str] = None
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    pull_lines: Optional[List[ReceiptPullLineCreate]] = Field(
+        None, description="替换加载明细（仅草稿）"
+    )
 
 
 class ReceiptVoucherResponse(ReceiptVoucherBase):
@@ -577,6 +615,7 @@ class ReceiptVoucherResponse(ReceiptVoucherBase):
     )
     linked_refund_vouchers: Optional[List[FinanceVoucherLinkRef]] = None
     linked_partner_statements: Optional[List[PartnerStatementBriefRef]] = None
+    pull_lines: Optional[List[ReceiptPullLineResponse]] = None
     capabilities: Optional[Dict[str, Any]] = None
 
     class Config:
@@ -813,7 +852,7 @@ class PartnerStatementPreviewResponse(BaseSchema):
 
 class PartnerStatementCreate(BaseSchema):
     partner_id: int
-    partner_type: str = Field(..., description="Customer 或 Supplier")
+    partner_type: str = Field(..., description="Customer、Supplier 或 Outsource")
     statement_period: str = Field(..., description="YYYY-MM")
     start_date: Optional[date] = None
     end_date: Optional[date] = None
@@ -821,6 +860,9 @@ class PartnerStatementCreate(BaseSchema):
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
     line_amounts: Optional[List[PartnerStatementLineAmountInput]] = Field(
         None, description="勾选纳入的单据及本次对账金额；有值时仅生成列表中的单据"
+    )
+    ledger_posting_mode: Optional[str] = Field(
+        "immediate", description="立账方式 immediate 或 by_invoice（按对账单立账客商）"
     )
 
 
@@ -858,6 +900,9 @@ class PartnerStatementResponse(BaseSchema):
     disputed_at: Optional[datetime] = None
     notes: Optional[str] = None
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    ledger_posting_mode: Optional[str] = "immediate"
+    ledger_posted_at: Optional[datetime] = None
+    ledger_posted_by: Optional[int] = None
     created_by: Optional[int] = None
     created_by_name: Optional[str] = None
     updated_by: Optional[int] = None

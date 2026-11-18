@@ -6819,7 +6819,25 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     "currency_code": code_rate[0],
                     "exchange_rate": provided_rate if provided_rate is not None else code_rate[1],
                 }
-            
+
+            from apps.kuaizhizao.models.sales_order import SalesOrder
+            from apps.kuaizhizao.services.document_recognition import resolve_revenue_for_downstream
+
+            upstream_so = None
+            if sales_order_id:
+                upstream_so = await SalesOrder.get_or_none(tenant_id=tenant_id, id=sales_order_id)
+            rev_fields_set = getattr(delivery_data, "model_fields_set", set()) or set()
+            provided_rev = (
+                getattr(delivery_data, "revenue_recognition", None)
+                if "revenue_recognition" in rev_fields_set
+                else None
+            )
+            delivery_revenue_recognition = await resolve_revenue_for_downstream(
+                tenant_id,
+                delivery_data.customer_id,
+                upstream=upstream_so,
+                provided=provided_rev,
+            )
             delivery = await SalesDelivery.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
@@ -8124,6 +8142,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             demand_type="sales_order",  # 销售出库与需求关联功能增强
             customer_id=sales_order.customer_id,
             customer_name=sales_order.customer_name,
+            revenue_recognition=getattr(sales_order, "revenue_recognition", None),
             warehouse_id=warehouse_id,
             warehouse_name=warehouse_name,
             status="待出库",
@@ -8375,6 +8394,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     demand_type="sales_order",
                     customer_id=primary.customer_id,
                     customer_name=primary.customer_name,
+                    revenue_recognition=getattr(primary, "revenue_recognition", None),
                     warehouse_id=header_wh_id,
                     warehouse_name=header_wh_name,
                     delivery_time=resolve_business_datetime(),
@@ -8710,6 +8730,11 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 total_amount += item_total
             if not delivery_items:
                 continue
+            revenue_recognition = None
+            if getattr(primary, "sales_order_id", None):
+                src_order = order_by_id.get(int(primary.sales_order_id))
+                if src_order is not None:
+                    revenue_recognition = getattr(src_order, "revenue_recognition", None)
             created = await self.create_sales_delivery(
                 tenant_id=tenant_id,
                 delivery_data=SalesDeliveryCreate(
@@ -8718,6 +8743,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     demand_type="sales_order",
                     customer_id=primary.customer_id,
                     customer_name=primary.customer_name,
+                    revenue_recognition=revenue_recognition,
                     warehouse_id=header_wh_id,
                     warehouse_name=header_wh_name,
                     delivery_time=resolve_business_datetime(),
@@ -9547,10 +9573,21 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         # 自动生成应收单：必须在出库主事务提交之后执行。create_receivable 内部另有 in_transaction()，
         # 与外层嵌套时部分环境下会导致出库/库存更新被回滚，但接口仍返回成功体（用户看到成功提示但单据未过账）。
         # 收入确认策略为「以开票为准」时不在此处生成应收，避免与销项发票路径重复记账。
-        _cust_id = getattr(updated_delivery, "customer_id", None)
-        if not await self.business_config_service.should_auto_generate_receivable_on_sales_delivery(
-            tenant_id, int(_cust_id) if _cust_id is not None else None
-        ):
+        from apps.kuaizhizao.services.document_recognition import (
+            describe_sales_delivery_receivable_auto_skip,
+            revenue_recognition_from_doc,
+            should_auto_receivable_on_sales_delivery,
+        )
+
+        delivery_strategy = revenue_recognition_from_doc(updated_delivery)
+        if not should_auto_receivable_on_sales_delivery(delivery_strategy):
+            skip_reason = describe_sales_delivery_receivable_auto_skip(delivery_strategy)
+            if skip_reason:
+                logger.info(
+                    "销售出库单 %s 跳过自动生成应收：%s",
+                    getattr(updated_delivery, "delivery_code", delivery_id),
+                    skip_reason,
+                )
             return updated_delivery
         try:
             from apps.kuaicaiwu.services.finance_service import ReceivableService
@@ -9911,6 +9948,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     sales_order_code=sales_order.order_code,
                     customer_id=sales_order.customer_id,
                     customer_name=sales_order.customer_name,
+                    revenue_recognition=getattr(sales_order, "revenue_recognition", None),
                     warehouse_id=delivery_wh_id,
                     warehouse_name=delivery_wh_name,
                     delivery_time=resolve_business_datetime(delivery_data.get('delivery_time')),
@@ -10105,7 +10143,23 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     getattr(po_upstream, "payment_method_code", None)
                 )
             receipt_dict["pay_mode"] = normalized_pay
+            if receipt_dict.get("receipt_time") is not None:
+                receipt_dict["receipt_time"] = resolve_business_datetime(
+                    receipt_dict["receipt_time"]
+                )
+            from apps.kuaizhizao.services.document_recognition import resolve_payable_for_downstream
 
+            provided_pay = (
+                receipt_dict.get("payable_recognition")
+                if "payable_recognition" in pay_fields_set
+                else None
+            )
+            receipt_dict["payable_recognition"] = await resolve_payable_for_downstream(
+                tenant_id,
+                receipt_dict.get("supplier_id") or getattr(receipt_data, "supplier_id", None),
+                upstream=po_upstream,
+                provided=provided_pay,
+            )
             receipt = await PurchaseReceipt.create(**receipt_dict)
             
             # 创建入库单明细
@@ -10142,7 +10196,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 ],
             )
             from apps.kuaicaiwu.services.purchase_settlement import (
-                resolve_purchase_receipt_line_excl_amount,
+                compute_purchase_receipt_line_settlement_amounts,
+                normalize_po_tax_rate_to_percent as _norm_line_tax_pct,
             )
             from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
 
@@ -10214,24 +10269,26 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         material_label=material_label,
                     )
 
-                line_total = (
-                    Decimal(str(item_data.total_amount))
-                    if item_data.total_amount is not None
-                    else None
+                line_excl, _, _ = compute_purchase_receipt_line_settlement_amounts(
+                    receipt,
+                    item_data,
+                    poi_by_id,
                 )
-                line_excl = resolve_purchase_receipt_line_excl_amount(
-                    receipt_quantity=receipt_quantity,
-                    unit_price=unit_price,
-                    purchase_order_item_id=purchase_order_item_id if purchase_order_item_id > 0 else None,
-                    line_total_amount=line_total,
-                    poi_by_id=poi_by_id,
-                )
+                line_tax_raw = getattr(item_data, "tax_rate", None)
+                if line_tax_raw is None and purchase_order_item_id > 0:
+                    poi = poi_by_id.get(purchase_order_item_id)
+                    if poi is not None:
+                        line_tax_raw = getattr(poi, "tax_rate", None)
+                if line_tax_raw is None:
+                    line_tax_raw = receipt.tax_rate
+                line_tax_pct = float(_norm_line_tax_pct(line_tax_raw)) if line_tax_raw is not None else 0.0
                 item_dict.update({
                     'tenant_id': tenant_id,
                     'receipt_id': receipt.id,
                     'receipt_quantity': receipt_quantity,
                     'unit_price': unit_price,
                     'total_amount': line_excl,
+                    'tax_rate': line_tax_pct if line_tax_pct > 0 else None,
                 })
                 resolved_qualified_qty, resolved_unqualified_qty, resolved_quality_status = _resolve_purchase_item_quality_fields(
                     receipt_quantity=receipt_quantity,
@@ -10256,35 +10313,19 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 total_amount += line_excl
 
             from apps.kuaicaiwu.services.purchase_settlement import (
-                rollup_purchase_receipt_amounts_from_lines,
-                rollup_purchase_receipt_header_tax,
-                normalize_po_tax_rate_to_percent,
+                sync_purchase_receipt_header_amounts,
             )
-            from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem as _POI
             from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem as _PRI
 
             created_items = await _PRI.filter(
                 tenant_id=tenant_id, receipt_id=receipt.id, deleted_at__isnull=True
             ).all()
-            poi_ids = {
-                int(i.purchase_order_item_id or 0)
-                for i in created_items
-                if int(i.purchase_order_item_id or 0) > 0
-            }
-            poi_by_id = {}
-            if poi_ids:
-                for poi in await _POI.filter(tenant_id=tenant_id, id__in=list(poi_ids)):
-                    poi_by_id[int(poi.id)] = poi
-            if created_items:
-                excl, tax_amt, net_amt = rollup_purchase_receipt_amounts_from_lines(
-                    receipt, created_items, poi_by_id
-                )
-            else:
-                tax_pct = normalize_po_tax_rate_to_percent(receipt.tax_rate)
-                excl, tax_amt, net_amt = rollup_purchase_receipt_header_tax(total_amount, tax_pct)
-            await PurchaseReceipt.filter(id=receipt.id).update(
-                total_quantity=total_quantity,
-                total_amount=total_amount
+            await sync_purchase_receipt_header_amounts(
+                tenant_id,
+                int(receipt.id),
+                receipt=receipt,
+                lines=created_items,
+                poi_by_id=poi_by_id,
             )
 
             created_receipt_id = receipt.id
@@ -10433,10 +10474,15 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     "warehouse_name": line_wh_name,
                 }
             )
+        # 单据日期优先倒序，同日再按单号倒序（新单在前）
         lines.sort(
-            key=lambda r: (str(r.get("material_code") or ""), int(r.get("id") or 0))
+            key=lambda r: (
+                str(r.get("document_date") or r.get("order_date") or ""),
+                str(r.get("order_code") or ""),
+                int(r.get("id") or 0),
+            ),
+            reverse=True,
         )
-        lines.sort(key=lambda r: str(r.get("order_code") or ""), reverse=True)
         return {"data": lines[skip : skip + limit], "total": len(lines)}
 
     async def create_purchase_receipts_from_po_items(
@@ -11134,6 +11180,10 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 receipt_dict["pay_mode"] = normalize_purchase_receipt_pay_mode(
                     receipt_dict.get("pay_mode")
                 )
+            if receipt_dict.get("receipt_time") is not None:
+                receipt_dict["receipt_time"] = resolve_business_datetime(
+                    receipt_dict["receipt_time"]
+                )
             receipt_dict["updated_by"] = updated_by
             receipt_dict["updated_by_name"] = user_info.get("name", "")
             await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(**receipt_dict)
@@ -11172,7 +11222,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     ],
                 )
                 from apps.kuaicaiwu.services.purchase_settlement import (
-                    resolve_purchase_receipt_line_excl_amount,
+                    compute_purchase_receipt_line_settlement_amounts,
+                    normalize_po_tax_rate_to_percent as _norm_upd_line_tax,
                 )
                 from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
 
@@ -11195,17 +11246,10 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     unit_price = Decimal(str(item_data.unit_price or 0))
 
                     purchase_order_item_id = int(getattr(item_data, "purchase_order_item_id", 0) or 0)
-                    line_total = (
-                        Decimal(str(item_data.total_amount))
-                        if item_data.total_amount is not None
-                        else None
-                    )
-                    line_amount = resolve_purchase_receipt_line_excl_amount(
-                        receipt_quantity=qty,
-                        unit_price=unit_price,
-                        purchase_order_item_id=purchase_order_item_id if purchase_order_item_id > 0 else None,
-                        line_total_amount=line_total,
-                        poi_by_id=poi_by_id,
+                    line_amount, _, _ = compute_purchase_receipt_line_settlement_amounts(
+                        receipt,
+                        item_data,
+                        poi_by_id,
                     )
                     if purchase_order_item_id > 0:
                         from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
@@ -11261,12 +11305,23 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
 
                     item_dict = item_data.model_dump(exclude_unset=True)
                     clear_blank_purchase_receipt_line_warehouse(item_dict)
+                    line_tax_raw = getattr(item_data, "tax_rate", None)
+                    if line_tax_raw is None and purchase_order_item_id > 0:
+                        poi = poi_by_id.get(purchase_order_item_id)
+                        if poi is not None:
+                            line_tax_raw = getattr(poi, "tax_rate", None)
+                    if line_tax_raw is None:
+                        line_tax_raw = getattr(receipt, "tax_rate", None)
+                    line_tax_pct = (
+                        float(_norm_upd_line_tax(line_tax_raw)) if line_tax_raw is not None else 0.0
+                    )
                     item_dict.update({
                         "tenant_id": tenant_id,
                         "receipt_id": receipt_id,
                         "receipt_quantity": qty,
                         "unit_price": unit_price,
                         "total_amount": line_amount,
+                        "tax_rate": line_tax_pct if line_tax_pct > 0 else None,
                     })
                     resolved_qualified_qty, resolved_unqualified_qty, resolved_quality_status = _resolve_purchase_item_quality_fields(
                         receipt_quantity=qty,
@@ -11294,9 +11349,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
 
                 refreshed = await PurchaseReceipt.get(tenant_id=tenant_id, id=receipt_id)
                 from apps.kuaicaiwu.services.purchase_settlement import (
-                    normalize_po_tax_rate_to_percent,
-                    rollup_purchase_receipt_amounts_from_lines,
-                    rollup_purchase_receipt_header_tax,
+                    sync_purchase_receipt_header_amounts,
                 )
                 from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem as _POI
                 from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem as _PRI
@@ -11313,18 +11366,12 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 if poi_ids:
                     for poi in await _POI.filter(tenant_id=tenant_id, id__in=list(poi_ids)):
                         poi_by_id[int(poi.id)] = poi
-                if refreshed_items:
-                    excl, tax_amt, net_amt = rollup_purchase_receipt_amounts_from_lines(
-                        refreshed, refreshed_items, poi_by_id
-                    )
-                else:
-                    tax_pct = normalize_po_tax_rate_to_percent(refreshed.tax_rate)
-                    excl, tax_amt, net_amt = rollup_purchase_receipt_header_tax(
-                        total_amount, tax_pct
-                    )
-                await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
-                    total_quantity=total_quantity,
-                    total_amount=total_amount,
+                await sync_purchase_receipt_header_amounts(
+                    tenant_id,
+                    receipt_id,
+                    receipt=refreshed,
+                    lines=refreshed_items,
+                    poi_by_id=poi_by_id,
                 )
 
             return PurchaseReceiptResponse.model_validate(
@@ -11506,9 +11553,15 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 receipt_id,
                 exc,
             )
-        if await self.business_config_service.should_auto_generate_payable_on_purchase_receipt(
-            tenant_id, int(_sup_id) if _sup_id is not None else None
-        ):
+        from apps.kuaizhizao.services.document_recognition import (
+            payable_recognition_from_doc,
+            should_auto_payable_on_purchase_receipt,
+        )
+
+        receipt_row = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=receipt_id)
+        receipt_strategy = payable_recognition_from_doc(receipt_row) if receipt_row else "on_receipt"
+        auto_payable_id: Optional[int] = None
+        if int(_sup_id or 0) > 0 and should_auto_payable_on_purchase_receipt(receipt_strategy):
             try:
                 from apps.kuaizhizao.services.contract_milestone_billing_service import (
                     ContractMilestoneBillingService,
@@ -11565,6 +11618,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                             payable_data=payable_data,
                             created_by=confirmed_by
                         )
+                        auto_payable_id = int(payable.id)
                         try:
                             from apps.kuaicaiwu.services.finance_integration_hooks import (
                                 link_finance_document_relation,
@@ -11580,6 +11634,17 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                                 target_id=payable.id,
                                 target_code=getattr(payable, "payable_code", None),
                                 relation_desc="采购入库确认自动生成应付单",
+                                created_by=confirmed_by,
+                            )
+                            from apps.kuaicaiwu.services.purchase_receipt_line_finance_occupancy_service import (
+                                record_purchase_receipt_payable_occupancy,
+                            )
+
+                            await record_purchase_receipt_payable_occupancy(
+                                tenant_id,
+                                int(receipt_id),
+                                int(payable.id),
+                                total_amount,
                                 created_by=confirmed_by,
                             )
                             await record_finance_accounting_event(
@@ -11647,6 +11712,22 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         if receipt_po_id > 0:
             await sync_purchase_order_receipt_quantities(tenant_id, receipt_po_id)
         updated_receipt = await self.get_purchase_receipt_by_id(tenant_id, receipt_id)
+        from apps.kuaizhizao.services.document_recognition import (
+            describe_purchase_receipt_payable_auto_skip,
+        )
+        from apps.kuaizhizao.schemas.warehouse import PurchaseReceiptFinanceOutcome
+
+        skip_reason = None
+        if auto_payable_id is None:
+            skip_reason = describe_purchase_receipt_payable_auto_skip(receipt_strategy)
+            if int(_sup_id or 0) <= 0 and skip_reason is None:
+                skip_reason = "未选择供应商，确认入库时未自动生成应付"
+        updated_receipt.finance_outcome = PurchaseReceiptFinanceOutcome(
+            payable_recognition=receipt_strategy,
+            auto_payable_skipped=auto_payable_id is None,
+            auto_payable_skip_reason=skip_reason,
+            auto_payable_id=auto_payable_id,
+        )
         # #region agent log
         _agent_debug_ndjson(
             "warehouse_service.confirm_receipt:exit",
@@ -12679,7 +12760,25 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                     "currency_code": code_rate[0],
                     "exchange_rate": provided_rate if provided_rate is not None else code_rate[1],
                 }
-            
+
+            from apps.kuaizhizao.models.sales_order import SalesOrder
+            from apps.kuaizhizao.services.document_recognition import resolve_revenue_for_downstream
+
+            upstream_rev = delivery
+            if upstream_rev is None and sales_order_id:
+                upstream_rev = await SalesOrder.get_or_none(tenant_id=tenant_id, id=sales_order_id)
+            ret_rev_fields_set = getattr(return_data, "model_fields_set", set()) or set()
+            provided_ret_rev = (
+                getattr(return_data, "revenue_recognition", None)
+                if "revenue_recognition" in ret_rev_fields_set
+                else None
+            )
+            return_revenue_recognition = await resolve_revenue_for_downstream(
+                tenant_id,
+                return_data.customer_id,
+                upstream=upstream_rev,
+                provided=provided_ret_rev,
+            )
             return_obj = await SalesReturn.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
@@ -14511,12 +14610,16 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             from apps.kuaicaiwu.services.finance_service import ReceivableService
             from apps.kuaicaiwu.schemas.finance import ReceivableCreate
 
+            from apps.kuaizhizao.services.document_recognition import (
+                revenue_recognition_from_doc,
+                should_auto_receivable_on_sales_return,
+            )
+
+            return_strategy = revenue_recognition_from_doc(ret_obj)
             if (
                 total_amount > 0
                 and cust_id
-                and await BusinessConfigService().should_auto_generate_receivable_on_sales_return(
-                    tenant_id, cust_id
-                )
+                and should_auto_receivable_on_sales_return(return_strategy)
             ):
                 from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
 
@@ -15051,13 +15154,34 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
         purchase_order_code = return_data.purchase_order_code
 
         # 如果提供了purchase_receipt_id但没有purchase_receipt_code，尝试获取
-        if purchase_receipt_id and not purchase_receipt_code:
-            receipt = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=purchase_receipt_id)
-            if receipt:
-                purchase_receipt_code = receipt.receipt_code
+        receipt_upstream = None
+        if purchase_receipt_id:
+            receipt_upstream = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=purchase_receipt_id)
+            if receipt_upstream:
+                if not purchase_receipt_code:
+                    purchase_receipt_code = receipt_upstream.receipt_code
                 if not purchase_order_id:
-                    purchase_order_id = receipt.purchase_order_id
-                    purchase_order_code = receipt.purchase_order_code
+                    purchase_order_id = receipt_upstream.purchase_order_id
+                    purchase_order_code = receipt_upstream.purchase_order_code
+
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+        from apps.kuaizhizao.services.document_recognition import resolve_payable_for_downstream
+
+        upstream_pay = receipt_upstream
+        if upstream_pay is None and purchase_order_id:
+            upstream_pay = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=purchase_order_id)
+        pr_fields_set = getattr(return_data, "model_fields_set", set()) or set()
+        provided_pr_pay = (
+            getattr(return_data, "payable_recognition", None)
+            if "payable_recognition" in pr_fields_set
+            else None
+        )
+        return_payable_recognition = await resolve_payable_for_downstream(
+            tenant_id,
+            return_data.supplier_id,
+            upstream=upstream_pay,
+            provided=provided_pr_pay,
+        )
 
         async with in_transaction():
             return_obj = await PurchaseReturn.create(
@@ -15070,6 +15194,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                 purchase_order_code=purchase_order_code or "",
                 supplier_id=return_data.supplier_id,
                 supplier_name=return_data.supplier_name,
+                payable_recognition=return_payable_recognition,
                 warehouse_id=return_data.warehouse_id,
                 warehouse_name=return_data.warehouse_name,
                 return_time=return_data.return_time,
@@ -16899,12 +17024,16 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             from apps.kuaicaiwu.services.finance_service import PayableService
             from apps.kuaicaiwu.schemas.finance import PayableCreate
 
+            from apps.kuaizhizao.services.document_recognition import (
+                payable_recognition_from_doc,
+                should_auto_payable_on_purchase_return,
+            )
+
+            return_strategy = payable_recognition_from_doc(ret_obj)
             if (
                 total_amount > 0
                 and supplier_id
-                and await BusinessConfigService().should_auto_generate_payable_on_purchase_return(
-                    tenant_id, supplier_id
-                )
+                and should_auto_payable_on_purchase_return(return_strategy)
             ):
                 from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
 

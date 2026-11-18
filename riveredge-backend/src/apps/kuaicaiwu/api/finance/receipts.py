@@ -21,7 +21,7 @@ from core.api.deps.deps import get_current_tenant
 from core.services.authorization.permission_policy_service import PermissionPolicyService
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
-from infra.exceptions.exceptions import BusinessLogicError
+from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 
 router = APIRouter(prefix="/receipts", tags=["App - Kuaicaiwu - Finance"])
 receipt_pull_service = ReceiptPullService()
@@ -71,6 +71,11 @@ async def _serialize_detail(tenant_id: int, user_id: int, obj: Receipt) -> Recei
 
     base = await _serialize(tenant_id, user_id, obj)
     enriched = await enrich_voucher_detail(tenant_id, base.model_dump(), kind="receipt")
+    pull_lines = await receipt_pull_service.list_pull_lines_for_receipt(
+        tenant_id, int(obj.id)
+    )
+    if pull_lines:
+        enriched["pull_lines"] = pull_lines
     return ReceiptVoucherResponse.model_validate(enriched)
 
 
@@ -95,8 +100,26 @@ async def create_receipt(
         except FinanceValidationError as exc:
             raise _http_exception_with_trace(400, str(exc), "/receipts", tenant_id) from exc
 
+        has_pull_lines = bool(data.pull_lines)
+        has_legacy_pull = bool(data.source_type and (data.source_id or data.source_ids))
+        if has_pull_lines and has_legacy_pull:
+            raise _http_exception_with_trace(
+                400,
+                "加载明细与 source_type/source_id 不可同时提交",
+                "/receipts",
+                tenant_id,
+            )
+
         pull_preview: Optional[Dict[str, Any]] = None
-        if data.source_type and data.source_id:
+        if has_pull_lines:
+            pull_preview = await receipt_pull_service.validate_pull_lines_for_create(
+                tenant_id,
+                pull_lines=data.pull_lines or [],
+                total_amount=Decimal(data.total_amount),
+                settlement_type=data.settlement_type,
+                operator_id=current_user.id,
+            )
+        elif data.source_type and data.source_id:
             pull_preview = await receipt_pull_service.assert_pull_create_allowed(
                 tenant_id=tenant_id,
                 source_type=str(data.source_type).strip(),
@@ -125,6 +148,9 @@ async def create_receipt(
             "payment_method": data.payment_method,
             "bank_account": data.bank_account,
             "bank_account_id": data.bank_account_id,
+            "counterparty_account_name": data.counterparty_account_name,
+            "counterparty_bank_name": data.counterparty_bank_name,
+            "counterparty_bank_account": data.counterparty_bank_account,
             "settlement_type": data.settlement_type or "normal",
             "status": "Draft",
             "notes": data.notes,
@@ -132,7 +158,15 @@ async def create_receipt(
         }
         apply_create_audit(receipt_payload, current_user)
         receipt = await Receipt.create(**receipt_payload)
-        if pull_preview and data.source_type and data.source_id:
+        if has_pull_lines and data.pull_lines:
+            await receipt_pull_service.persist_pull_lines(
+                tenant_id,
+                receipt_id=int(receipt.id),
+                receipt_code=str(receipt.receipt_code),
+                pull_lines=data.pull_lines,
+                created_by=current_user.id,
+            )
+        elif pull_preview and data.source_type and data.source_id:
             await receipt_pull_service.create_pull_relation(
                 tenant_id=tenant_id,
                 source_type=str(data.source_type).strip(),
@@ -142,7 +176,7 @@ async def create_receipt(
                 receipt_code=str(receipt.receipt_code),
                 created_by=current_user.id,
             )
-        return await _serialize(tenant_id, current_user.id, receipt)
+        return await _serialize_detail(tenant_id, current_user.id, receipt)
     except BusinessLogicError as e:
         raise _http_exception_with_trace(422, str(e), "/receipts", tenant_id) from e
 
@@ -217,6 +251,27 @@ async def list_receipts(
 
 
 @router.get(
+    "/pull-candidates/sales-orders",
+    summary="List sales order prepayment pull candidates for receipt",
+)
+async def list_receipt_sales_order_prepayment_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    customer_id: Optional[int] = Query(None, description="客户 ID（必选，与收款单表头一致）"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receipt:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await receipt_pull_service.list_sales_order_prepayment_pull_candidates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+        customer_id=customer_id,
+    )
+
+
+@router.get(
     "/pull-candidates/receivables",
     summary="List receivable pull candidates for receipt",
 )
@@ -252,6 +307,65 @@ async def preview_pull_receipt_from_receivable(
     )
 
 
+@router.get(
+    "/from-receivables/pull-preview",
+    summary="Preview merge pull receipt from receivables",
+)
+async def preview_pull_receipt_from_receivables(
+    receivable_ids: str = Query(..., description="应收单ID，逗号分隔"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receipt:read")),
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    parsed: list[int] = []
+    for part in str(receivable_ids or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            parsed.append(int(part))
+        except ValueError as exc:
+            raise _http_exception_with_trace(
+                422,
+                f"无效的应收单ID: {part}",
+                "/receipts/from-receivables/pull-preview",
+                tenant_id,
+            ) from exc
+    try:
+        return await receipt_pull_service.preview_pull_from_receivables(
+            tenant_id=tenant_id,
+            receivable_ids=parsed,
+            operator_id=current_user.id,
+        )
+    except (NotFoundError, BusinessLogicError) as exc:
+        raise _http_exception_with_trace(
+            422, str(exc), "/receipts/from-receivables/pull-preview", tenant_id
+        ) from exc
+
+
+@router.get(
+    "/from-sales-order/{sales_order_id}/pull-preview",
+    summary="Preview pull prepayment receipt lines from sales order",
+)
+async def preview_pull_receipt_from_sales_order(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receipt:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    try:
+        return await receipt_pull_service.preview_pull_from_sales_order(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            404,
+            str(e),
+            f"/receipts/from-sales-order/{sales_order_id}/pull-preview",
+            tenant_id,
+        ) from e
+
+
 @router.get("/{id}", response_model=ReceiptVoucherResponse)
 async def get_receipt(
     id: int,
@@ -283,6 +397,7 @@ async def update_receipt(
     except BusinessLogicError as exc:
         raise _http_exception_with_trace(400, str(exc), "/receipts/{id}", tenant_id) from exc
     update_data = data.model_dump(exclude_unset=True)
+    pull_lines = update_data.pop("pull_lines", None)
     method = update_data.get("payment_method", receipt.payment_method)
     account_id = update_data.get("bank_account_id", receipt.bank_account_id)
     try:
@@ -291,13 +406,35 @@ async def update_receipt(
         )
     except FinanceValidationError as exc:
         raise _http_exception_with_trace(400, str(exc), "/receipts/{id}", tenant_id) from exc
+    if pull_lines is not None:
+        effective_total = Decimal(
+            str(update_data.get("total_amount", receipt.total_amount) or 0)
+        )
+        effective_settlement = str(
+            update_data.get("settlement_type", receipt.settlement_type) or "normal"
+        )
+        if pull_lines:
+            try:
+                await receipt_pull_service.replace_receipt_pull_lines(
+                    tenant_id,
+                    receipt_id=int(receipt.id),
+                    receipt_code=str(receipt.receipt_code),
+                    pull_lines=pull_lines,
+                    total_amount=effective_total,
+                    operator_id=current_user.id,
+                    settlement_type=effective_settlement,
+                )
+            except BusinessLogicError as exc:
+                raise _http_exception_with_trace(422, str(exc), "/receipts/{id}", tenant_id) from exc
+        else:
+            await receipt_pull_service.clear_receipt_pull_sources(tenant_id, int(receipt.id))
     if "total_amount" in update_data:
         total = update_data["total_amount"]
         update_data["settled_amount"] = 0
         update_data["unsettled_amount"] = total
     apply_update_audit(update_data, current_user)
     await Receipt.filter(id=id).update(**update_data)
-    return await _serialize(tenant_id, current_user.id, await _get_or_404(tenant_id, id))
+    return await _serialize_detail(tenant_id, current_user.id, await _get_or_404(tenant_id, id))
 
 
 @router.post("/{id}/confirm", response_model=ReceiptVoucherResponse)

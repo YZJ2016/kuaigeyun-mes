@@ -2,6 +2,7 @@ export type KuaicaiwuDocumentActionKey =
   | 'sales_invoice.pull_from_sales_order'
   | 'sales_invoice.pull_from_sales_delivery'
   | 'sales_invoice.pull_from_receivable'
+  | 'sales_invoice.pull_from_partner_statement'
   | 'receivable.pull_from_sales_order'
   | 'receivable.pull_from_sales_delivery'
   | 'payable.pull_from_purchase_order'
@@ -10,6 +11,7 @@ export type KuaicaiwuDocumentActionKey =
   | 'purchase_invoice.pull_from_purchase_order'
   | 'purchase_invoice.pull_from_purchase_receipt'
   | 'purchase_invoice.pull_from_payable'
+  | 'purchase_invoice.pull_from_partner_statement'
   | 'payment.pull_from_payable'
   | 'payment.pull_from_payment_application'
   | 'payment.pull_from_purchase_order'
@@ -49,6 +51,14 @@ export const KUAICAIWU_DOCUMENT_ACTION_REGISTRY: Record<KuaicaiwuDocumentActionK
     kind: 'pull_create',
     label: '从应收单创建销售发票',
     sourceLabel: '应收单',
+    targetLabel: '销售发票',
+  },
+  'sales_invoice.pull_from_partner_statement': {
+    key: 'sales_invoice.pull_from_partner_statement',
+    module: 'kuaicaiwu',
+    kind: 'pull_create',
+    label: '从往来对账单创建销售发票',
+    sourceLabel: '往来对账单',
     targetLabel: '销售发票',
   },
   'receivable.pull_from_sales_order': {
@@ -113,6 +123,14 @@ export const KUAICAIWU_DOCUMENT_ACTION_REGISTRY: Record<KuaicaiwuDocumentActionK
     kind: 'pull_create',
     label: '从应付单创建采购发票',
     sourceLabel: '应付单',
+    targetLabel: '采购发票',
+  },
+  'purchase_invoice.pull_from_partner_statement': {
+    key: 'purchase_invoice.pull_from_partner_statement',
+    module: 'kuaicaiwu',
+    kind: 'pull_create',
+    label: '从往来对账单创建采购发票',
+    sourceLabel: '往来对账单',
     targetLabel: '采购发票',
   },
   'payment.pull_from_payable': {

@@ -165,6 +165,10 @@ export const LedgerAccountFormFields: React.FC<Props> = ({
                   placeholder={placeholder}
                   showSearch
                   allowClear={!required}
+                  fieldProps={{
+                    optionFilterProp: 'label',
+                    optionLabelProp: 'label',
+                  }}
                   extra={options.length === 0 && required ? emptyHint : undefined}
                   rules={[
                     ({ getFieldValue }) => ({

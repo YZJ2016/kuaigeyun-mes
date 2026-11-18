@@ -547,7 +547,7 @@ export function partnerStatementSearchColumns(options: {
 export function resolvePartnerStatementListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
-  partnerType?: 'Customer' | 'Supplier',
+  partnerType?: 'Customer' | 'Supplier' | 'Outsource',
 ): Record<string, string | number | boolean | undefined> {
   const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   const { sort_field, sort_order } = resolveFinanceSort(sort);

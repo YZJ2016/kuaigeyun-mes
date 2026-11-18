@@ -32,6 +32,12 @@ class PurchaseReturn(BaseModel):
     supplier_id = fields.IntField(description="供应商ID")
     supplier_name = fields.CharField(max_length=200, description="供应商名称")
 
+    payable_recognition = fields.CharField(
+        max_length=32,
+        default="on_receipt",
+        description="立账策略（应付确认时点，单据真源）",
+    )
+
     # 退货信息
     warehouse_id = fields.IntField(description="退货出库仓库ID")
     warehouse_name = fields.CharField(max_length=100, description="退货出库仓库名称")

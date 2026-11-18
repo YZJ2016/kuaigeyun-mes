@@ -94,6 +94,24 @@ def should_auto_receivable_on_sales_delivery(strategy: str) -> bool:
     return coerce_revenue_recognition(strategy) in ("on_shipment", "mixed")
 
 
+def should_auto_receivable_on_sales_invoice(strategy: str) -> bool:
+    return coerce_revenue_recognition(strategy) == "on_invoice"
+
+
+def describe_sales_delivery_receivable_auto_skip(strategy: str) -> str | None:
+    """确认出库未自动生成应收时的原因（供日志/结果展示）。"""
+    s = coerce_revenue_recognition(strategy)
+    if s == "on_invoice":
+        return "立账策略为以销售发票为准，确认出库时未自动生成应收"
+    if s == "manual":
+        return "立账策略为手工立账，确认出库时未自动生成应收"
+    if s == "on_partner_statement":
+        return "立账策略为以按月结对账单为准，确认出库时未自动生成应收"
+    if s == "on_milestone":
+        return "立账策略为以合同里程碑为准，确认出库时不在此路径自动生成应收"
+    return None
+
+
 def should_auto_receivable_on_sales_return(strategy: str) -> bool:
     s = coerce_revenue_recognition(strategy)
     return s not in ("manual", "on_partner_statement")
@@ -143,6 +161,20 @@ def describe_purchase_invoice_payable_auto_skip(strategy: str) -> str | None:
         return "立账策略为手工立账，创建发票时未自动生成应付"
     if s == "on_partner_statement":
         return "立账策略为对账立账，创建发票时未自动生成应付"
+    return None
+
+
+def purchase_receipt_direct_invoice_pull_block_reason(doc: Any) -> str | None:
+    """月结对账立账的入库单不得从「采购入库→采购发票」直接取单，须先走往来对账单。"""
+    if payable_recognition_from_doc(doc) == "on_partner_statement":
+        return "purchase_invoice.pull_from_purchase_receipt.partner_statement_ledger"
+    return None
+
+
+def sales_delivery_direct_invoice_pull_block_reason(doc: Any) -> str | None:
+    """月结对账立账的出库单不得从「销售出库→销售发票」直接取单，须先走往来对账单。"""
+    if revenue_recognition_from_doc(doc) == "on_partner_statement":
+        return "sales_invoice.pull_from_sales_delivery.partner_statement_ledger"
     return None
 
 
@@ -199,6 +231,54 @@ async def resolve_payable_recognition_for_purchase_invoice(
     supplier_id = getattr(invoice, "supplier_id", None)
     return await default_payable_recognition(
         tenant_id, int(supplier_id) if supplier_id is not None else None
+    )
+
+
+async def resolve_revenue_recognition_for_sales_invoice(
+    tenant_id: int,
+    invoice: Any,
+) -> str:
+    """销项发票自动应收门控：优先读加载源 sales_order / sales_delivery 头上的 revenue_recognition。"""
+    from apps.kuaizhizao.models.document_relation import DocumentRelation
+    from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+    from apps.kuaizhizao.models.sales_order import SalesOrder
+
+    invoice_id = int(getattr(invoice, "id", 0) or 0)
+    if invoice_id > 0:
+        rel = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            target_type="sales_invoice",
+            target_id=invoice_id,
+        ).first()
+        if rel and rel.source_id:
+            st = str(rel.source_type or "").strip()
+            sid = int(rel.source_id)
+            if st == "sales_order":
+                order = await SalesOrder.get_or_none(
+                    tenant_id=tenant_id, id=sid, deleted_at__isnull=True
+                )
+                if order is not None:
+                    return revenue_recognition_from_doc(order)
+            if st == "sales_delivery":
+                delivery = await SalesDelivery.get_or_none(
+                    tenant_id=tenant_id, id=sid, deleted_at__isnull=True
+                )
+                if delivery is not None:
+                    if getattr(delivery, "revenue_recognition", None):
+                        return revenue_recognition_from_doc(delivery)
+                    if getattr(delivery, "sales_order_id", None):
+                        order = await SalesOrder.get_or_none(
+                            tenant_id=tenant_id,
+                            id=int(delivery.sales_order_id),
+                            deleted_at__isnull=True,
+                        )
+                        if order is not None:
+                            return revenue_recognition_from_doc(order)
+                    return revenue_recognition_from_doc(delivery)
+
+    partner_id = getattr(invoice, "partner_id", None)
+    return await default_revenue_recognition(
+        tenant_id, int(partner_id) if partner_id is not None else None
     )
 
 

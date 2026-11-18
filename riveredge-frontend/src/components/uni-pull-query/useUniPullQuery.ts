@@ -13,6 +13,7 @@ export function useUniPullQuery<T extends object>(options: UseUniPullQueryOption
     rowKey,
     loadData,
     onConfirm,
+    onConfirmFailed,
     isRowDisabled,
     selectionType = 'radio',
     pageSize: defaultPageSize = DEFAULT_PAGE_SIZE,
@@ -287,10 +288,12 @@ export function useUniPullQuery<T extends object>(options: UseUniPullQueryOption
         })
         .filter((row): row is T => row != null);
       await onConfirm(selectedRowKeys, resolvedRows);
+    } catch (error) {
+      onConfirmFailed?.(error);
     } finally {
       setConfirmLoading(false);
     }
-  }, [dataSource, onConfirm, rowKey, selectedRowKeys]);
+  }, [dataSource, onConfirm, onConfirmFailed, rowKey, selectedRowKeys]);
 
   const pullQuery = useMemo(
     () => ({

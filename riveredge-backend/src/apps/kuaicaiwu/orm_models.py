@@ -35,6 +35,7 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaicaiwu.models.purchase_invoice",
     "apps.kuaicaiwu.models.purchase_receipt_line_finance_occupancy",
     "apps.kuaicaiwu.models.receipt",
+    "apps.kuaicaiwu.models.receipt_pull_line",
     "apps.kuaicaiwu.models.receivable",
     "apps.kuaicaiwu.models.settlement",
     "apps.kuaicaiwu.models.standard_cost",

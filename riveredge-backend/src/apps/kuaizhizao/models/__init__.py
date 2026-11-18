@@ -23,6 +23,7 @@ from .rework_position_plan_template import (
 )
 # CostRule, CostCalculation 已迁移至 kuaicaiwu
 from .outsource_order import OutsourceOrder
+from .outsource_order_receipt import OutsourceOrderReceipt
 from .outsource_work_order import (
     OutsourceWorkOrder,
     OutsourceMaterialIssue,
@@ -322,6 +323,7 @@ __all__ = [
     'ReworkOrder',
     'ReworkOrderOperation',
     'OutsourceOrder',
+    'OutsourceOrderReceipt',
     'OutsourceWorkOrder',
     'OutsourceMaterialIssue',
     'OutsourceMaterialReceipt',

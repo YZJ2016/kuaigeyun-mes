@@ -10,7 +10,7 @@ import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Form, theme, Typography } from 'antd';
 import { ModalForm, ProForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import type { ProFormInstance } from '@ant-design/pro-components';
-import { PlusOutlined, PrinterOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, PlusOutlined, PrinterOutlined, RollbackOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -126,10 +126,39 @@ type PullPayableCandidate = PaymentPullCandidate;
 const P = 'app.kuaicaiwu.payment';
 const PAYMENT_RESOURCE = 'kuaicaiwu:payment';
 
+/** 列表功能区确认/撤回：合成 capabilities（对齐出入库 UniCapabilityBatchButton） */
+function withPaymentExecutionCapabilities(row: PaymentVoucher): PaymentVoucher {
+  const confirmAllowed = row.status === 'Draft';
+  const unconfirmAllowed = row.status === 'Confirmed' && canCorrectFinanceVoucher(row);
+  return {
+    ...row,
+    capabilities: {
+      ...row.capabilities,
+      confirm: {
+        allowed: confirmAllowed,
+        reason: confirmAllowed
+          ? undefined
+          : row.status === 'Confirmed'
+            ? 'payment.confirm.already_confirmed'
+            : 'payment.confirm.not_approved',
+      },
+      unconfirm: {
+        allowed: unconfirmAllowed,
+        reason: unconfirmAllowed
+          ? undefined
+          : row.status !== 'Confirmed'
+            ? 'payment.unconfirm.not_confirmed'
+            : 'payment.unconfirm.blocked_by_refund',
+      },
+    },
+  };
+}
+
 const PaymentsPage: React.FC = () => {
   const actionRef = useRef<ActionType>();
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [createSeed, setCreateSeed] = useState<Record<string, unknown> | undefined>(undefined);
   const [editingRecord, setEditingRecord] = useState<PaymentVoucher | null>(null);
   const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
   const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
@@ -880,19 +909,6 @@ const PaymentsPage: React.FC = () => {
     }
   };
 
-  const handleBatchConfirm = async (keys: React.Key[]) => {
-    try {
-      for (const key of keys) {
-      await paymentService.confirmPayment(Number(key));
-      }
-      messageApi.success(t(`${P}.batchConfirmed`, { count: keys.length }));
-      setSelectedRowKeys([]);
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaicaiwu.common.batchConfirmFailed'));
-    }
-  };
-
   const handleBatchCancel = async (keys: React.Key[]) => {
     try {
       for (const key of keys) {
@@ -949,6 +965,10 @@ const PaymentsPage: React.FC = () => {
     formatCurrencyAmount(v || 0);
 
   const tableRowsRef = useRef<PaymentVoucher[]>([]);
+  const reloadPaymentListAfterCapability = useCallback(() => {
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  }, []);
   const selectedPaymentsForBatch = useMemo(
     () =>
       selectedRowKeys
@@ -989,14 +1009,6 @@ const PaymentsPage: React.FC = () => {
   };
 
   const batchMenuItems = useMemo(() => [
-    {
-      key: 'batch-confirm',
-      label: t('app.kuaicaiwu.common.batchConfirm'),
-      requireConfirm: true,
-      confirmTitle: (count: number) => t(`${P}.batchConfirmTitle`, { count }),
-      confirmDescription: t(`${P}.batchConfirmDesc`),
-      onClick: handleBatchConfirm,
-    },
     {
       key: 'batch-create-refund',
       label: t('app.kuaicaiwu.payment.batchCreateRefund'),
@@ -1251,16 +1263,10 @@ const PaymentsPage: React.FC = () => {
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
+        // 确认/撤回确认/作废/删除走功能区；行上只留详情、编辑与核销/退款专属入口
         const acts: React.ReactNode[] = [
           <Button key="det" {...rowActionKind('read')} onClick={() => openDetail(record)} />,
         ];
-        if (record.status === 'Draft' && paymentPerms.canAction?.('audit')) {
-          acts.push(
-            <ActionConfirmPopconfirm title={t(`${P}.confirmTitle`)} description={t(`${P}.confirmContent`, { code: record.payment_code })} onConfirm={() => executeConfirm(record)}>
-              <Button key="cf" {...rowActionKind('audit')} onClick={(e) => e.stopPropagation()} />
-            </ActionConfirmPopconfirm>,
-          );
-        }
         if (record.status === 'Confirmed' && Number(record.unsettled_amount ?? 0) > 0) {
           acts.push(
             <ActionConfirmPopconfirm
@@ -1320,43 +1326,6 @@ const PaymentsPage: React.FC = () => {
             <Button key="ed" {...rowActionKind('update')} onClick={() => openEdit(record)} />,
           );
         }
-        if (
-          record.status === 'Confirmed' &&
-          canCorrectFinanceVoucher(record) &&
-          paymentPerms.canAction?.('revoke')
-        ) {
-          acts.push(
-            <ActionConfirmPopconfirm
-              title={t(`${P}.unconfirmTitle`)}
-              description={t(`${P}.unconfirmContent`, { code: record.payment_code })}
-              onConfirm={() => executeUnconfirm(record)}
-            >
-              <Button key="uc" {...rowActionKind('revoke')} onClick={(e) => e.stopPropagation()} />
-            </ActionConfirmPopconfirm>,
-          );
-        }
-        if (
-          record.status === 'Draft' &&
-          canCorrectFinanceVoucher(record) &&
-          paymentPerms.canAction?.('revoke')
-        ) {
-          acts.push(
-            <ActionConfirmPopconfirm title={t(`${P}.voidTitle`)} description={t(`${P}.voidContent`, { code: record.payment_code })} onConfirm={() => executeCancelVoucher(record)}>
-              <Button key="ca" {...rowActionKind('revoke')} onClick={(e) => e.stopPropagation()} />
-            </ActionConfirmPopconfirm>,
-          );
-        }
-        if (
-          canCorrectFinanceVoucher(record) &&
-          paymentPerms.canDelete &&
-          (record.status === 'Draft' || record.status === 'Cancelled' || record.status === 'Confirmed')
-        ) {
-          acts.push(
-            <ActionConfirmPopconfirm title={t(`${P}.deleteTitle`)} description={t(`${P}.deleteContent`, { code: record.payment_code })} okType="danger" onConfirm={() => executeDelete(record)}>
-              <Button key="del" {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
-            </ActionConfirmPopconfirm>,
-          );
-        }
         return acts;
       },
     },
@@ -1388,6 +1357,66 @@ const PaymentsPage: React.FC = () => {
         onDelete={handleBatchDelete}
         deleteConfirmTitle={t('app.kuaicaiwu.common.confirmBatchDelete')}
         deleteConfirmDescription={(count) => t(`${P}.deleteConfirm`, { count })}
+        toolBarActionsAfterBatch={[
+          <UniCapabilityBatchButton
+            key="payment-confirm"
+            selectedRowKeys={selectedRowKeys}
+            selectedRecords={selectedPaymentsForBatch}
+            capabilityKey="confirm"
+            permAllowed={paymentPerms.canAction?.('audit') ?? false}
+            notAllowedMessage={t(`${P}.batchConfirmNoneEligible`)}
+            onRun={async (id) => {
+              const row = selectedPaymentsForBatch.find((r) => Number(r.id) === id);
+              if (!row || row.status !== 'Draft') {
+                throw new Error(t(`${P}.batchConfirmNoneEligible`));
+              }
+              await paymentService.confirmPayment(id);
+            }}
+            onSuccess={reloadPaymentListAfterCapability}
+            requireConfirm
+            labels={{
+              single: t(`${P}.confirmAction`),
+              batch: t(`${P}.confirmAction`),
+              singleConfirmTitle: t(`${P}.confirmTitle`),
+              singleConfirmDescription: t(`${P}.batchConfirmDesc`),
+              batchConfirmTitle: (count) => t(`${P}.batchConfirmTitle`, { count }),
+              batchConfirmDescription: t(`${P}.batchConfirmDesc`),
+            }}
+            icon={<CheckCircleOutlined />}
+            size="medium"
+            color="green"
+            variant="solid"
+          />,
+          <UniCapabilityBatchButton
+            key="payment-unconfirm"
+            selectedRowKeys={selectedRowKeys}
+            selectedRecords={selectedPaymentsForBatch}
+            capabilityKey="unconfirm"
+            permAllowed={paymentPerms.canAction?.('revoke') ?? false}
+            notAllowedMessage={t(`${P}.batchUnconfirmNoneEligible`)}
+            onRun={async (id) => {
+              const row = selectedPaymentsForBatch.find((r) => Number(r.id) === id);
+              if (!row || row.status !== 'Confirmed' || !canCorrectFinanceVoucher(row)) {
+                throw new Error(t(`${P}.batchUnconfirmNoneEligible`));
+              }
+              await paymentService.unconfirmPayment(id);
+            }}
+            onSuccess={reloadPaymentListAfterCapability}
+            requireConfirm
+            labels={{
+              single: t(`${P}.unconfirm`),
+              batch: t(`${P}.unconfirm`),
+              singleConfirmTitle: t(`${P}.unconfirmTitle`),
+              singleConfirmDescription: t(`${P}.batchUnconfirmDesc`),
+              batchConfirmTitle: (count) => t(`${P}.batchUnconfirmTitle`, { count }),
+              batchConfirmDescription: t(`${P}.batchUnconfirmDesc`),
+            }}
+            icon={<RollbackOutlined />}
+            size="medium"
+            color="orange"
+            variant="solid"
+          />,
+        ]}
         toolBarActionsAfterDelete={[
           <UniBatchMenuButton
             key="payment-batch-actions"
@@ -1456,19 +1485,45 @@ const PaymentsPage: React.FC = () => {
             compactKey="create-payment-with-pull"
             createIcon={<PlusOutlined />}
             createLabel={t(`${P}.createTitle`)}
-            onCreate={() => setCreateModalVisible(true)}
-            menuItems={buildKuaicaiwuPullCreateMenuItems([
+            onCreate={() => {
+              setCreateSeed(undefined);
+              setCreateModalVisible(true);
+            }}
+            menuItems={[
+              ...buildKuaicaiwuPullCreateMenuItems([
+                {
+                  key: 'pull-from-payable',
+                  actionKey: 'payment.pull_from_payable',
+                  onClick: pullFromPayableQuery.openModal,
+                },
+                {
+                  key: 'pull-from-payment-application',
+                  actionKey: 'payment.pull_from_payment_application',
+                  onClick: pullFromPaymentApplicationQuery.openModal,
+                },
+              ]),
+              { type: 'divider', key: 'copy-selected-divider' },
               {
-                key: 'pull-from-payable',
-                actionKey: 'payment.pull_from_payable',
-                onClick: pullFromPayableQuery.openModal,
+                key: 'copy-selected',
+                label: t(`${P}.copySelectedCreate`),
+                disabled: selectedPaymentsForBatch.length !== 1,
+                onClick: () => {
+                  const row = selectedPaymentsForBatch[0];
+                  if (!row) return;
+                  setCreateSeed({
+                    supplier_id: row.supplier_id,
+                    total_amount: row.total_amount,
+                    payment_date: dayjs(),
+                    payment_method: row.payment_method || BANK_TRANSFER_PAYMENT_METHOD,
+                    settlement_type: row.settlement_type || 'normal',
+                    bank_account_id: row.bank_account_id,
+                    bank_account: row.bank_account,
+                    notes: row.notes,
+                  });
+                  setCreateModalVisible(true);
+                },
               },
-              {
-                key: 'pull-from-payment-application',
-                actionKey: 'payment.pull_from_payment_application',
-                onClick: pullFromPaymentApplicationQuery.openModal,
-              },
-            ])}
+            ]}
           />,
         ]}
         request={async (params, sort, _filter, searchFormValues) => {
@@ -1480,8 +1535,9 @@ const PaymentsPage: React.FC = () => {
             ...listParams,
           };
           const res = await paymentService.listPayments(apiParams);
+          const items = (res?.items || []).map(withPaymentExecutionCapabilities);
           return {
-            data: res?.items || [],
+            data: items,
             total: res?.total || 0,
             success: true,
           };
@@ -1637,14 +1693,23 @@ const PaymentsPage: React.FC = () => {
       </Modal>
 
       <ModalForm
+        key={createSeed ? 'create-payment-copy' : 'create-payment'}
         title={t(`${P}.createTitle`)}
         open={createModalVisible}
-        onOpenChange={setCreateModalVisible}
+        onOpenChange={(open) => {
+          setCreateModalVisible(open);
+          if (!open) setCreateSeed(undefined);
+        }}
         onFinish={handleCreate}
         width={MODAL_CONFIG.LARGE_WIDTH}
         grid={false}
         formRef={createPaymentFormRef}
-        initialValues={{ payment_date: dayjs(), settlement_type: 'normal' }}
+        initialValues={{
+          payment_date: dayjs(),
+          payment_method: BANK_TRANSFER_PAYMENT_METHOD,
+          settlement_type: 'normal',
+          ...(createSeed || {}),
+        }}
         onValuesChange={(changedValues, allValues) => {
           handlePaymentVoucherFormValuesChange(
             createPaymentFormRef,

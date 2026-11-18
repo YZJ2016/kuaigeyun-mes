@@ -6,9 +6,9 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind, rowActionSettleVoucher, rowActionCreateRefund, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Modal, Form, theme } from 'antd';
-import { ModalForm, ProForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import { ProForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { PlusOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -18,10 +18,20 @@ import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import {
   DetailDrawerActions,
+  FormModalTemplate,
   ListPageTemplate,
   MODAL_CONFIG,
   MODAL_NESTED_ABOVE_PARENT_OFFSET,
 } from '../../../../../components/layout-templates';
+import { resolveFormListFieldForSubmit } from '../../../../../utils/formListItems';
+import { ReceiptVoucherFormBody } from '../shared/ReceiptVoucherFormBody';
+import {
+  applyReceiptHeaderAmountToPullLines,
+  handleReceiptVoucherFormValuesChange,
+  mapFormPullLinesToApi,
+  requireReceiptPullLinesForNormalSettlement,
+  useReceiptVoucherFormLinePull,
+} from '../shared/useReceiptVoucherFormLinePull';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { FinanceVoucherDetailDrawer } from '../shared/FinanceVoucherDetailDrawer';
@@ -65,6 +75,7 @@ import {
   assertBankAccountForPaymentMethod,
   formatBankAccountOptionLabel,
   BANK_TRANSFER_PAYMENT_METHOD,
+  hidesSupplierPayeeAccount,
   isNotePaymentMethod,
 } from '../../../utils/financeSharedOptions';
 import {
@@ -72,9 +83,10 @@ import {
   resolveFinanceVoucherReferenceNote,
 } from '../../../components/LedgerAccountFormFields';
 import { linkAcceptanceNoteAfterVoucherCreate } from '../../../components/AcceptanceBillLinkFields';
+import { ReceiptCounterpartyPayerFormSection } from '../shared/ReceiptCounterpartyPayerFormSection';
 import { financeNoteService, type FinanceNote } from '../../../services/finance/note';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
-import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
 import { receiptCapabilityReasonMessage } from '../../../utils/receiptCapabilityMessages';
 import { formatDateTime, formatCurrencyAmount } from '../../../../../utils/format';
@@ -147,6 +159,10 @@ const ReceiptsPage: React.FC = () => {
 
   const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
   const receiptSettlementTypeOptions = useMemo(() => getReceiptSettlementTypeOptions(t), [t]);
+  const createReceiptFormRef = useRef<ProFormInstance>();
+  const editReceiptFormRef = useRef<ProFormInstance>();
+  const createLinePull = useReceiptVoucherFormLinePull({ formRef: createReceiptFormRef });
+  const editLinePull = useReceiptVoucherFormLinePull({ formRef: editReceiptFormRef });
 
   useEffect(() => {
     const load = async () => {
@@ -211,36 +227,93 @@ const ReceiptsPage: React.FC = () => {
     if (detailOpen && id != null) void loadDetail(id);
   };
 
+  const syncReceiptFormPullLinesFromHeader = (values: Record<string, unknown>) => {
+    const total = Number(values.total_amount);
+    const rows = values.pull_lines;
+    if (!Array.isArray(rows) || !rows.length || !Number.isFinite(total) || total <= 0) {
+      return values;
+    }
+    return {
+      ...values,
+      pull_lines: applyReceiptHeaderAmountToPullLines(total, rows as Record<string, unknown>[]),
+    };
+  };
+
+  const counterpartyFieldsFromForm = (values: Record<string, unknown>) => {
+    if (hidesSupplierPayeeAccount(String(values.payment_method ?? ''))) {
+      return {
+        counterparty_account_name: undefined,
+        counterparty_bank_name: undefined,
+        counterparty_bank_account: undefined,
+      };
+    }
+    const trimOptional = (key: string) => {
+      const text = String(values[key] ?? '').trim();
+      return text || undefined;
+    };
+    return {
+      counterparty_account_name: trimOptional('counterparty_account_name'),
+      counterparty_bank_name: trimOptional('counterparty_bank_name'),
+      counterparty_bank_account: trimOptional('counterparty_bank_account'),
+    };
+  };
+
   const handleCreate = async (values: any) => {
+    let formValues: any = {
+      ...(values as Record<string, unknown>),
+      pull_lines: resolveFormListFieldForSubmit(
+        createReceiptFormRef,
+        values as Record<string, unknown>,
+        'pull_lines',
+      ),
+    };
+    formValues = syncReceiptFormPullLinesFromHeader(formValues);
     try {
-      assertBankAccountForPaymentMethod(values.payment_method, values.bank_account_id, t);
+      assertBankAccountForPaymentMethod(
+        formValues.payment_method as string,
+        formValues.bank_account_id as number,
+        t,
+      );
     } catch (e: unknown) {
       messageApi.warning((e as Error).message);
       return false;
     }
+    const pullLineError = requireReceiptPullLinesForNormalSettlement(
+      formValues.settlement_type,
+      formValues.pull_lines,
+      Number(formValues.total_amount),
+      t,
+    );
+    if (pullLineError) {
+      messageApi.warning(pullLineError);
+      return false;
+    }
+    const pull_lines = mapFormPullLinesToApi(formValues.pull_lines);
     const data = {
-      customer_id: values.customer_id,
-      customer_name: customerOptions.find(o => o.value === values.customer_id)?.label || '',
-      total_amount: values.total_amount,
-      receipt_date: formatDateTime(values.receipt_date || dayjs(), 'YYYY-MM-DD'),
-      payment_method: values.payment_method,
-      bank_account_id: values.bank_account_id,
+      customer_id: formValues.customer_id,
+      customer_name: customerOptions.find(o => o.value === formValues.customer_id)?.label || '',
+      total_amount: formValues.total_amount,
+      pull_lines,
+      receipt_date: formatDateTime(formValues.receipt_date || dayjs(), 'YYYY-MM-DD'),
+      payment_method: formValues.payment_method,
+      bank_account_id: formValues.bank_account_id,
       bank_account: resolveFinanceVoucherReferenceNote(
         bankAccounts,
-        values.payment_method,
-        values.bank_account_id,
-        values.bank_account,
+        formValues.payment_method as string,
+        formValues.bank_account_id as number,
+        formValues.bank_account as string,
       ),
-      settlement_type: values.settlement_type || 'normal',
-      notes: values.notes,
-      attachments: normalizeDocumentAttachments(values.attachments),
+      ...counterpartyFieldsFromForm(formValues),
+      settlement_type: formValues.settlement_type || 'normal',
+      notes: formValues.notes,
+      attachments: normalizeDocumentAttachments(formValues.attachments),
     };
     try {
       const created = await receiptService.create(data);
       try {
         await linkAcceptanceNoteAfterVoucherCreate(
           'receivable',
-          values.note_id,
+          formValues.note_id as number | undefined,
           created.id,
           'receipt',
         );
@@ -400,6 +473,7 @@ const ReceiptsPage: React.FC = () => {
           values.bank_account_id,
           values.bank_account,
         ),
+        ...counterpartyFieldsFromForm(values as Record<string, unknown>),
         settlement_type: values.settlement_type || 'normal',
         notes:
           String(values.notes ?? '').trim() ||
@@ -509,35 +583,71 @@ const ReceiptsPage: React.FC = () => {
         }
   };
 
-  const openEdit = (record: ReceiptVoucher) => {
-    setEditingRecord(record);
+  const openEdit = async (record: ReceiptVoucher) => {
+    try {
+      const full = await receiptService.getReceipt(record.id);
+      setEditingRecord(full);
+    } catch (e) {
+      messageApi.error(getApiErrorMessage(e, t('common.operationFailed')));
+    }
   };
 
   const handleUpdate = async (values: any) => {
     if (!editingRecord) return false;
+    let formValues: any = {
+      ...(values as Record<string, unknown>),
+      pull_lines: resolveFormListFieldForSubmit(
+        editReceiptFormRef,
+        values as Record<string, unknown>,
+        'pull_lines',
+      ),
+    };
+    formValues = syncReceiptFormPullLinesFromHeader(formValues);
     try {
-      assertBankAccountForPaymentMethod(values.payment_method, values.bank_account_id, t);
+      assertBankAccountForPaymentMethod(
+        formValues.payment_method as string,
+        formValues.bank_account_id as number,
+        t,
+      );
     } catch (e: unknown) {
       messageApi.warning((e as Error).message);
       return false;
     }
+    if (editingRecord.status === 'Draft') {
+      const pullLineError = requireReceiptPullLinesForNormalSettlement(
+        formValues.settlement_type,
+        formValues.pull_lines,
+        Number(formValues.total_amount),
+        t,
+      );
+      if (pullLineError) {
+        messageApi.warning(pullLineError);
+        return false;
+      }
+    }
+    const pull_lines =
+      editingRecord.status === 'Draft'
+        ? mapFormPullLinesToApi(formValues.pull_lines)
+        : undefined;
     try {
       await receiptService.updateReceipt(editingRecord.id, {
-        customer_id: values.customer_id,
-        customer_name: customerOptions.find((o) => o.value === values.customer_id)?.label || '',
-        total_amount: values.total_amount,
-        receipt_date: formatDateTime(values.receipt_date || dayjs(), 'YYYY-MM-DD'),
-        payment_method: values.payment_method,
-        bank_account_id: values.bank_account_id,
+        customer_id: formValues.customer_id,
+        customer_name: customerOptions.find((o) => o.value === formValues.customer_id)?.label || '',
+        total_amount: formValues.total_amount,
+        ...(pull_lines !== undefined ? { pull_lines } : {}),
+        receipt_date: formatDateTime(formValues.receipt_date || dayjs(), 'YYYY-MM-DD'),
+        payment_method: formValues.payment_method,
+        bank_account_id: formValues.bank_account_id,
         bank_account: resolveFinanceVoucherReferenceNote(
           bankAccounts,
-          values.payment_method,
-          values.bank_account_id,
-          values.bank_account,
+          formValues.payment_method as string,
+          formValues.bank_account_id as number,
+          formValues.bank_account as string,
         ),
-        settlement_type: values.settlement_type || 'normal',
-        notes: values.notes,
-        attachments: normalizeDocumentAttachments(values.attachments),
+        ...counterpartyFieldsFromForm(formValues),
+        settlement_type: formValues.settlement_type || 'normal',
+        notes: formValues.notes,
+        attachments: normalizeDocumentAttachments(formValues.attachments),
       });
       messageApi.success(t('common.updateSuccess'));
       setEditingRecord(null);
@@ -1182,79 +1292,61 @@ const ReceiptsPage: React.FC = () => {
                   acceptanceNoteDirection="receivable"
                   partnerFieldName="customer_id"
                 />
+                <ReceiptCounterpartyPayerFormSection />
                 <ProFormTextArea name="notes" label={t('common.remark')} fieldProps={{ rows: 3 }} colProps={financeColFull} />
                 <DocumentAttachmentsField category="receipt_attachments" />
               </ProForm>
         ) : null}
       </Modal>
 
-      <ModalForm
+      <FormModalTemplate
         title={t(`${R}.createTitle`)}
         open={createModalVisible}
         onOpenChange={setCreateModalVisible}
-        onFinish={handleCreate}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        {...financeFormGridProps}
+        onFinish={async (values) => { await handleCreate(values); }}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+        grid={false}
+        formRef={createReceiptFormRef}
+        afterOpenChange={(open) => {
+          if (!open) {
+            createReceiptFormRef.current?.resetFields();
+            return;
+          }
+          createReceiptFormRef.current?.setFieldsValue({
+            receipt_date: dayjs(),
+            payment_method: BANK_TRANSFER_PAYMENT_METHOD,
+            settlement_type: 'normal',
+          });
+        }}
+        onValuesChange={(changedValues, allValues) => {
+          handleReceiptVoucherFormValuesChange(
+            createReceiptFormRef,
+            changedValues as Record<string, unknown>,
+            allValues as Record<string, unknown>,
+          );
+        }}
       >
-        <ProFormSelect
-          name="customer_id"
-          label={t('app.kuaicaiwu.common.customer')}
-          options={customerOptions}
-          rules={[{ required: true, message: t('app.kuaicaiwu.common.selectCustomer') }]}
-          placeholder={t('app.kuaicaiwu.common.selectCustomer')}
-          showSearch
-          colProps={financeColHalf}
+        <ReceiptVoucherFormBody
+          mode="create"
+          bankAccounts={bankAccounts}
+          customerOptions={customerOptions}
+          paymentMethodOptions={paymentMethodOptions}
+          settlementTypeOptions={receiptSettlementTypeOptions}
+          showPullLines
+          pullLineColumns={createLinePull.pullLineColumns}
+          pullLineHeaderExtra={createLinePull.renderPullLineHeaderActions()}
         />
-        <ProFormDigit
-          name="total_amount"
-          label={t(`${R}.col.amount`)}
-          min={0.01}
-          rules={[{ required: true }]}
-          fieldProps={financeAmountDigitFieldProps}
-          colProps={financeColHalf}
-        />
-        <ProFormDatePicker
-          name="receipt_date"
-          label={t(`${R}.col.receiptDate`)}
-          rules={[{ required: true }]}
-          initialValue={dayjs()}
-          fieldProps={{ style: { width: '100%' } }}
-          colProps={financeColHalf}
-        />
-        <ProFormSelect
-          name="payment_method"
-          label={t(`${R}.col.paymentMethod`)}
-          options={paymentMethodOptions}
-          rules={[{ required: true, message: t(`${R}.selectPaymentMethod`) }]}
-          placeholder={t(`${R}.selectPaymentMethod`)}
-          colProps={financeColHalf}
-        />
-        <ProFormSelect
-          name="settlement_type"
-          label={t(`${R}.settlementType.label`)}
-          initialValue="normal"
-          options={receiptSettlementTypeOptions}
-          colProps={financeColHalf}
-        />
-        <LedgerAccountFormFields
-          accounts={bankAccounts}
-          accountLabel={t(`${R}.bankAccount`)}
-          noteLabel={t(`${R}.bankAccountNote`)}
-          noteColProps={financeColFull}
-          acceptanceNoteDirection="receivable"
-          partnerFieldName="customer_id"
-        />
-        <ProFormTextArea name="notes" label={t('common.remark')} colProps={financeColFull} />
-        <DocumentAttachmentsField category="receipt_attachments" />
-      </ModalForm>
+        {createLinePull.renderPullModals()}
+      </FormModalTemplate>
 
-      <ModalForm
+      <FormModalTemplate
         key={editingRecord ? `edit-receipt-${editingRecord.id}` : 'edit-receipt'}
         title={t(`${R}.editTitle`)}
         open={Boolean(editingRecord)}
         onOpenChange={(open) => {
           if (!open) setEditingRecord(null);
         }}
+        isEdit
         initialValues={
           editingRecord
             ? {
@@ -1265,63 +1357,47 @@ const ReceiptsPage: React.FC = () => {
                 settlement_type: editingRecord.settlement_type || 'normal',
                 bank_account_id: editingRecord.bank_account_id,
                 bank_account: editingRecord.bank_account,
+                counterparty_account_name: editingRecord.counterparty_account_name,
+                counterparty_bank_name: editingRecord.counterparty_bank_name,
+                counterparty_bank_account: editingRecord.counterparty_bank_account,
                 notes: editingRecord.notes,
+                attachments: mapAttachmentsToUploadList(
+                  editingRecord.attachments as Parameters<typeof mapAttachmentsToUploadList>[0],
+                ),
+                pull_lines: (editingRecord.pull_lines ?? []).map((line) => ({
+                  sourceType: line.source_type,
+                  sourceId: line.source_id,
+                  sourceCode: line.source_code,
+                  receiptAmount: line.amount,
+                  maxAmount: line.max_amount,
+                })),
               }
             : undefined
         }
-        onFinish={handleUpdate}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        {...financeFormGridProps}
+        onFinish={async (values) => { await handleUpdate(values); }}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+        grid={false}
+        formRef={editReceiptFormRef}
+        onValuesChange={(changedValues, allValues) => {
+          handleReceiptVoucherFormValuesChange(
+            editReceiptFormRef,
+            changedValues as Record<string, unknown>,
+            allValues as Record<string, unknown>,
+          );
+        }}
       >
-        <ProFormSelect
-          name="customer_id"
-          label={t('app.kuaicaiwu.common.customer')}
-          options={customerOptions}
-          rules={[{ required: true, message: t('app.kuaicaiwu.common.selectCustomer') }]}
-          placeholder={t('app.kuaicaiwu.common.selectCustomer')}
-          showSearch
-          colProps={financeColHalf}
+        <ReceiptVoucherFormBody
+          mode="edit"
+          bankAccounts={bankAccounts}
+          customerOptions={customerOptions}
+          paymentMethodOptions={paymentMethodOptions}
+          settlementTypeOptions={receiptSettlementTypeOptions}
+          showPullLines
+          pullLineColumns={editLinePull.pullLineColumns}
+          pullLineHeaderExtra={editLinePull.renderPullLineHeaderActions()}
         />
-        <ProFormDigit
-          name="total_amount"
-          label={t(`${R}.col.amount`)}
-          min={0.01}
-          rules={[{ required: true }]}
-          fieldProps={financeAmountDigitFieldProps}
-          colProps={financeColHalf}
-        />
-        <ProFormDatePicker
-          name="receipt_date"
-          label={t(`${R}.col.receiptDate`)}
-          rules={[{ required: true }]}
-          fieldProps={{ style: { width: '100%' } }}
-          colProps={financeColHalf}
-        />
-        <ProFormSelect
-          name="payment_method"
-          label={t(`${R}.col.paymentMethod`)}
-          options={paymentMethodOptions}
-          rules={[{ required: true, message: t(`${R}.selectPaymentMethod`) }]}
-          placeholder={t(`${R}.selectPaymentMethod`)}
-          colProps={financeColHalf}
-        />
-        <ProFormSelect
-          name="settlement_type"
-          label={t(`${R}.settlementType.label`)}
-          options={receiptSettlementTypeOptions}
-          colProps={financeColHalf}
-        />
-        <LedgerAccountFormFields
-          accounts={bankAccounts}
-          accountLabel={t(`${R}.bankAccount`)}
-          noteLabel={t(`${R}.bankAccountNote`)}
-          noteColProps={financeColFull}
-          acceptanceNoteDirection="receivable"
-          partnerFieldName="customer_id"
-        />
-        <ProFormTextArea name="notes" label={t('common.remark')} colProps={financeColFull} />
-        <DocumentAttachmentsField category="receipt_attachments" />
-      </ModalForm>
+        {editLinePull.renderPullModals()}
+      </FormModalTemplate>
 
       <FinanceVoucherDetailDrawer
         kind="receipt"

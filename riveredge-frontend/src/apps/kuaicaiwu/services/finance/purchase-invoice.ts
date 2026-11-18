@@ -42,12 +42,21 @@ export type PurchaseInvoicePullPreview = DocumentPushPreview & {
 export type PurchaseInvoicePullCandidate = {
   id: number;
   code: string;
+  doc_code?: string;
   order_code?: string;
   receipt_code?: string;
+  payable_code?: string;
+  statement_code?: string;
   supplier_name?: string;
   source_status?: string;
   source_date?: string;
   amount?: number;
+  closing_balance?: number;
+  invoiceable_amount?: number;
+  invoiced_amount?: number;
+  payable_ids?: number[];
+  receipt_ids?: number[];
+  ledger_posting_mode?: 'immediate' | 'by_invoice' | string;
   capabilities?: { pull_purchase_invoice?: { allowed?: boolean; reason?: string } };
 };
 
@@ -134,6 +143,11 @@ export const purchaseInvoiceService = {
   listPayablePullCandidates: async (params?: FinancePullCandidateListParams) =>
     apiRequest<{ data: PurchaseInvoicePullCandidate[]; total: number; success: boolean }>(
       `${PURCHASE_INVOICE_API}/pull-candidates/payables`,
+      { method: 'GET', params },
+    ),
+  listPartnerStatementPullCandidates: async (params?: FinancePullCandidateListParams) =>
+    apiRequest<{ data: PurchaseInvoicePullCandidate[]; total: number; success: boolean }>(
+      `${PURCHASE_INVOICE_API}/pull-candidates/partner-statements`,
       { method: 'GET', params },
     ),
 

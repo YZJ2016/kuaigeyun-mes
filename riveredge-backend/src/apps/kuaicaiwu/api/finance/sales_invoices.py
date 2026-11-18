@@ -24,12 +24,9 @@ from apps.kuaicaiwu.schemas.finance import (
     SalesInvoiceLineResponse,
     SalesInvoiceVoidRequest,
     SalesInvoiceRedLetterRequest,
-    ReceivableCreate,
 )
 from apps.kuaicaiwu.models.invoice import Invoice, InvoiceItem
 from apps.kuaicaiwu.models.receivable import Receivable
-from apps.kuaicaiwu.constants import RECEIVABLE_SOURCE_SALES_INVOICE
-from apps.kuaicaiwu.services.finance_service import ReceivableService
 from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
 from apps.kuaicaiwu.services.invoice_service import InvoiceService
 from apps.kuaicaiwu.services.invoice_concurrent_settlement import (
@@ -42,13 +39,10 @@ from core.api.deps.deps import get_current_tenant
 from core.services.authorization.permission_policy_service import PermissionPolicyService
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
-from infra.services.business_config_service import BusinessConfigService
-from core.utils.timezone_utils import resolve_business_datetime, to_site_date, today_site_str
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 from apps.kuaicaiwu.services.tax.tax_period_service import tax_period_from_date
 
 router = APIRouter(prefix="/sales-invoices", tags=["App - Kuaicaiwu - Finance"])
-business_config_service = BusinessConfigService()
-receivable_service = ReceivableService()
 invoice_service = InvoiceService()
 sales_invoice_service = SalesInvoiceService()
 
@@ -223,80 +217,6 @@ async def _serialize_detail(tenant_id: int, user_id: int, obj: Invoice) -> Sales
     return SalesInvoiceDetailResponse.model_validate(masked)
 
 
-async def _maybe_auto_generate_receivable_for_sales_invoice(
-    *,
-    tenant_id: int,
-    invoice: Invoice,
-    created_by: int,
-) -> tuple[Optional[int], Optional[str]]:
-    _partner_id = getattr(invoice, "partner_id", None)
-    if not await business_config_service.should_auto_generate_receivable_from_sales_invoice_effective(
-        tenant_id, int(_partner_id) if _partner_id is not None else None
-    ):
-        return None, None
-    if not await business_config_service.check_node_enabled(tenant_id, "receivable"):
-        return None, None
-
-    if Decimal(invoice.total_amount or 0) <= 0:
-        return None, None
-
-    from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
-
-    biz_date = invoice.invoice_date or to_site_date(resolve_business_datetime())
-    due = await resolve_partner_due_date(
-        tenant_id, "customer", int(invoice.partner_id), biz_date
-    )
-    receivable = await receivable_service.create_receivable(
-        tenant_id=tenant_id,
-        receivable_data=ReceivableCreate(
-            source_type=RECEIVABLE_SOURCE_SALES_INVOICE,
-            source_id=invoice.id,
-            source_code=invoice.invoice_code,
-            customer_id=invoice.partner_id,
-            customer_name=invoice.partner_name,
-            total_amount=Decimal(invoice.total_amount or 0),
-            received_amount=Decimal("0.00"),
-            remaining_amount=Decimal(invoice.total_amount or 0),
-            due_date=due,
-            business_date=biz_date,
-            status="未收款",
-            invoice_issued=True,
-            invoice_number=invoice.invoice_number,
-        ),
-        created_by=created_by,
-        submit_review=False,
-    )
-    await Invoice.filter(tenant_id=tenant_id, id=invoice.id).update(
-        receivable_id=receivable.id,
-        receivable_code=receivable.receivable_code,
-    )
-    try:
-        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
-
-        rel_svc = DocumentRelationNewService()
-        await rel_svc.create_relation(
-            tenant_id=tenant_id,
-            relation_data=DocumentRelationCreate(
-                source_type="sales_invoice",
-                source_id=invoice.id,
-                source_code=invoice.invoice_code,
-                source_name=None,
-                target_type="receivable",
-                target_id=receivable.id,
-                target_code=receivable.receivable_code,
-                target_name=None,
-                relation_type="source",
-                relation_mode="push",
-                relation_desc="销售发票自动生成应收单",
-            ),
-            created_by=created_by,
-        )
-    except Exception as rel_e:
-        logger.warning("创建销售发票→应收单 单据关联失败: {}", rel_e)
-    return receivable.id, receivable.receivable_code
-
-
 @router.post("", response_model=SalesInvoiceResponse, status_code=status.HTTP_201_CREATED)
 async def create_sales_invoice(
     data: SalesInvoiceCreate,
@@ -386,7 +306,6 @@ async def create_sales_invoice(
             "status": "未审核",
         }
         apply_create_audit(create_payload, current_user)
-        auto_receivable_id: Optional[int] = None
         async with in_transaction():
             invoice = await Invoice.create(**create_payload)
             if pull_preview and data.source_type and data.source_id:
@@ -420,21 +339,6 @@ async def create_sales_invoice(
                         or f"销售发票 {invoice.invoice_code} 开票同时收款",
                         current_user=current_user,
                     )
-            elif not (pull_preview and str(data.source_type or "").strip() == "receivable"):
-                auto_receivable_id, _ = await _maybe_auto_generate_receivable_for_sales_invoice(
-                    tenant_id=tenant_id,
-                    invoice=invoice,
-                    created_by=current_user.id,
-                )
-        if auto_receivable_id:
-            await submit_finance_review(
-                model=Receivable,
-                tenant_id=tenant_id,
-                doc_id=int(auto_receivable_id),
-                updated_by=current_user.id,
-                doc_label="应收单",
-                node_key="receivable",
-            )
         invoice = await _get_or_404(tenant_id, invoice.id)
         return await _serialize(tenant_id, current_user.id, invoice)
     except BusinessLogicError as e:
@@ -594,6 +498,25 @@ async def list_sales_invoice_receivable_pull_candidates(
 
 
 @router.get(
+    "/pull-candidates/partner-statements",
+    summary="List partner statement pull candidates for sales invoice",
+)
+async def list_sales_invoice_partner_statement_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:sales-invoice:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await sales_invoice_service.list_partner_statement_pull_candidates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+    )
+
+
+@router.get(
     "/from-receivable/{receivable_id}/pull-preview",
     summary="Preview pull sales invoice from receivable",
 )
@@ -705,6 +628,26 @@ async def approve_sales_invoice(
     approve_payload = {"status": new_status}
     apply_update_audit(approve_payload, current_user)
     await Invoice.filter(id=id).update(**approve_payload)
+    if not rejection_reason:
+        from apps.kuaicaiwu.services.sales_invoice_receivable_auto import (
+            maybe_auto_generate_receivable_for_sales_invoice,
+        )
+
+        invoice_row = await Invoice.get(tenant_id=tenant_id, id=id)
+        auto_receivable_id, _ = await maybe_auto_generate_receivable_for_sales_invoice(
+            tenant_id=tenant_id,
+            invoice=invoice_row,
+            created_by=current_user.id,
+        )
+        if auto_receivable_id:
+            await submit_finance_review(
+                model=Receivable,
+                tenant_id=tenant_id,
+                doc_id=int(auto_receivable_id),
+                updated_by=current_user.id,
+                doc_label="应收单",
+                node_key="receivable",
+            )
     return await _serialize(tenant_id, current_user.id, await _get_or_404(tenant_id, id))
 
 

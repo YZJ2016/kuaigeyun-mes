@@ -43,17 +43,27 @@ import { resolvePartnerStatementVoucherTarget } from '../../../utils/financeVouc
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { pullPaymentApplicationFromReconciliation } from '../../../../kuaizhizao/services/payment-application';
 import { purchaseInvoiceService } from '../../../services/finance/purchase-invoice';
+import {
+  collectStatementInvoiceLines,
+  invoiceSourceDocTypeForMode,
+} from '../../../utils/partnerStatementInvoicePull';
 
 const PS = 'app.kuaicaiwu.partnerStatement';
 const PARTNER_STATEMENT_RESOURCE = 'kuaicaiwu:partner-statement';
 
 function collectPayableStatementLines(lines: PartnerStatementLine[]): PartnerStatementLine[] {
-  return lines.filter((ln) => {
-    if (String(ln.doc_type || '').trim() !== '应付单') return false;
-    if (ln.doc_id == null) return false;
-    if (Number(ln.tree_level ?? 0) > 0) return false;
-    return Number(ln.statement_amount ?? ln.debit ?? 0) > 0;
-  });
+  return collectStatementInvoiceLines(lines, 'Supplier', 'immediate');
+}
+
+function statementInvoiceEmptyMessageKey(
+  partnerType: string,
+  ledgerPostingMode?: string | null,
+): string {
+  const docType = invoiceSourceDocTypeForMode(partnerType, ledgerPostingMode);
+  if (docType === '销售出库') return `${PS}.detail.pushSelectDelivery`;
+  if (docType === '应收单') return `${PS}.detail.pushSelectReceivable`;
+  if (docType === '采购入库') return `${PS}.detail.pushSelectPurchaseReceipt`;
+  return `${PS}.detail.pushSelectPayable`;
 }
 
 function linePushAmount(ln: PartnerStatementLine): number {
@@ -368,17 +378,24 @@ const PartnerStatementDetailPage: React.FC = () => {
       message.warning(t(`${PS}.detail.pushNeedConfirmed`));
       return;
     }
-    const payableLines = collectPayableStatementLines(localLines);
-    if (!payableLines.length) {
-      message.warning(t(`${PS}.detail.pushSelectPayable`));
+    const invoiceLines = collectStatementInvoiceLines(
+      localLines,
+      data.partner_type,
+      data.ledger_posting_mode,
+    );
+    if (!invoiceLines.length) {
+      message.warning(t(statementInvoiceEmptyMessageKey(data.partner_type, data.ledger_posting_mode)));
       return;
     }
+    const byInvoice = data.ledger_posting_mode === 'by_invoice';
     setPushingInvoice(true);
     try {
       const sources: MergeFinanceSourceRow[] = [];
-      for (const ln of payableLines) {
-        const payableId = Number(ln.doc_id);
-        const preview = await purchaseInvoiceService.previewPullFromPayable(payableId);
+      for (const ln of invoiceLines) {
+        const sourceId = Number(ln.doc_id);
+        const preview = byInvoice
+          ? await purchaseInvoiceService.previewPullFromPurchaseReceipt(sourceId)
+          : await purchaseInvoiceService.previewPullFromPayable(sourceId);
         if (preview.has_blocking_issues) {
           continue;
         }
@@ -387,8 +404,8 @@ const PartnerStatementDetailPage: React.FC = () => {
         const amount = Math.min(stmtAmt, pushable > 0 ? pushable : stmtAmt);
         if (!(amount > 0)) continue;
         sources.push({
-          id: payableId,
-          code: String(ln.doc_code || payableId),
+          id: sourceId,
+          code: String(ln.doc_code || sourceId),
           partnerId: Number(data.partner_id),
           partnerName: String(data.partner_name || ''),
           availableAmount: amount,

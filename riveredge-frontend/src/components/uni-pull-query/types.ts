@@ -124,6 +124,8 @@ export interface UseUniPullQueryOptions<T extends object> {
   rowKey: string | ((record: T) => React.Key);
   loadData: (params: UniPullQueryLoadParams) => Promise<UniPullQueryLoadResult<T>>;
   onConfirm: (selectedKeys: React.Key[], selectedRows: T[]) => Promise<void>;
+  /** 取单确认 `onConfirm` 抛错时回调（避免无提示） */
+  onConfirmFailed?: (error: unknown) => void;
   isRowDisabled?: (record: T) => boolean;
   selectionType?: UniPullQuerySelectionType;
   pageSize?: number;

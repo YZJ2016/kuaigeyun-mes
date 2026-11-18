@@ -525,12 +525,18 @@ class PriceSettlementService(AppBaseService):
             )
             if not item:
                 raise NotFoundError(f"销售订单行不存在: {line.source_line_id}")
-            tax_rate = Decimal(str(item.tax_rate or 0))
             qty = Decimal(str(item.order_quantity or 0))
-            excl = qty * after_price
-            total_amount = self._q(excl * (Decimal("1") + tax_rate / Decimal("100")))
+            from apps.kuaicaiwu.services.purchase_settlement import (
+                normalize_po_tax_rate_to_percent,
+            )
+            from apps.kuaizhizao.utils.document_line_amounts import calc_document_line_amounts
+
+            tax_pct = normalize_po_tax_rate_to_percent(item.tax_rate)
+            _, _, incl = calc_document_line_amounts(
+                qty, after_price, tax_pct, "tax_exclusive"
+            )
             item.unit_price = after_price
-            item.total_amount = total_amount
+            item.total_amount = self._q(incl)
             item.price_settlement_status = PriceSettlementStatus.SETTLED.value
             item.price_settled_at = settled_at
             item.price_settled_by = operator_id
@@ -589,15 +595,22 @@ class PriceSettlementService(AppBaseService):
         items = await PurchaseOrderItem.filter(
             tenant_id=tenant_id, order_id=order_id, deleted_at__isnull=True
         )
-        total_qty = sum(Decimal(str(i.ordered_quantity or 0)) for i in items)
-        total_amt = sum(Decimal(str(i.total_price or 0)) for i in items)
-        from apps.kuaicaiwu.services.finance_tax import (
-            compute_purchase_order_header_amounts,
+        from apps.kuaicaiwu.services.purchase_settlement import (
+            compute_purchase_order_header_rollup,
         )
 
-        total_amt, tax_amount, net_amount = compute_purchase_order_header_amounts(
-            total_amt, order.tax_rate or 0
-        )
+        rolled = compute_purchase_order_header_rollup(order, items, amount_places=2)
+        if rolled is None:
+            total_qty = sum(Decimal(str(i.ordered_quantity or 0)) for i in items)
+            total_amt = sum(Decimal(str(i.total_price or 0)) for i in items)
+            await PurchaseOrder.filter(id=order_id, tenant_id=tenant_id).update(
+                total_quantity=total_qty,
+                total_amount=self._q(total_amt),
+                tax_amount=Decimal("0"),
+                net_amount=self._q(total_amt),
+            )
+            return
+        total_qty, total_amt, tax_amount, net_amount, _header_rate = rolled
         await PurchaseOrder.filter(id=order_id, tenant_id=tenant_id).update(
             total_quantity=total_qty,
             total_amount=total_amt,

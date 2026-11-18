@@ -98,13 +98,17 @@ export function assertBankAccountForPaymentMethod(
 
 export function formatBankAccountOptionLabel(account: {
   account_name: string;
+  bank_name?: string | null;
   account_number?: string | null;
   account_type?: string | null;
 }): string {
-  if (String(account.account_type || '').toLowerCase() === 'cash' || !account.account_number) {
-    return account.account_name;
+  if (String(account.account_type || '').toLowerCase() === 'cash') {
+    return String(account.account_name || '').trim();
   }
-  return `${account.account_name} (${account.account_number})`;
+  return [account.account_name, account.bank_name, account.account_number]
+    .map((v) => String(v ?? '').trim())
+    .filter(Boolean)
+    .join(' ');
 }
 
 /** 按收付款方式过滤入账账户：转账→银行，现金→库存现金 */

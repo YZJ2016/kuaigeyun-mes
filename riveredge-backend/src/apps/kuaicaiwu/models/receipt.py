@@ -37,6 +37,15 @@ class Receipt(BaseModel):
     payment_method = fields.CharField(max_length=50, description="收款方式 (银行转账/现金/票据等)")
     bank_account = fields.CharField(max_length=100, null=True, description="收款账号")
     bank_account_id = fields.IntField(null=True, description="银行账户ID")
+    counterparty_account_name = fields.CharField(
+        max_length=200, null=True, description="对方付款户名"
+    )
+    counterparty_bank_name = fields.CharField(
+        max_length=200, null=True, description="对方付款开户行"
+    )
+    counterparty_bank_account = fields.CharField(
+        max_length=64, null=True, description="对方付款账号"
+    )
     settlement_type = fields.CharField(
         max_length=20,
         default="normal",

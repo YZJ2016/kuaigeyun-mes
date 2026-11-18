@@ -6,14 +6,12 @@ from types import SimpleNamespace
 from apps.kuaicaiwu.services.purchase_settlement import (
     compute_purchase_order_header_rollup,
     compute_purchase_receipt_header_rollup,
+    compute_purchase_receipt_line_settlement_amounts,
     compute_purchase_receipt_settlement_gross_from_lines,
     normalize_po_tax_rate_to_percent,
-    proportional_line_gross,
     purchase_order_settlement_gross,
     purchase_receipt_header_out_of_sync,
     purchase_receipt_settlement_gross,
-    resolve_purchase_receipt_line_excl_amount,
-    rollup_purchase_receipt_header_tax,
 )
 from apps.kuaizhizao.services.document_recognition import (
     describe_purchase_receipt_payable_auto_skip,
@@ -122,16 +120,14 @@ def test_compute_purchase_receipt_header_rollup_multi_line_matches_finance():
     )
 
 
-def test_rollup_purchase_receipt_header_tax_13_percent():
-    excl, tax, gross = rollup_purchase_receipt_header_tax(Decimal("1000"), Decimal("13"))
-    assert excl == Decimal("1000.00")
-    assert tax == Decimal("130.00")
-    assert gross == Decimal("1130.00")
-
-
 def test_purchase_receipt_settlement_gross_prefers_net_amount():
     receipt = SimpleNamespace(total_amount=Decimal("1000"), tax_rate=Decimal("13"), net_amount=Decimal("1130"))
     assert purchase_receipt_settlement_gross(receipt) == Decimal("1130.00")
+
+
+def test_purchase_receipt_settlement_gross_without_stored_tax_returns_zero():
+    receipt = SimpleNamespace(total_amount=Decimal("1000"), tax_rate=Decimal("13"), net_amount=Decimal("0"))
+    assert purchase_receipt_settlement_gross(receipt) == Decimal("0.00")
 
 
 def test_purchase_receipt_standalone_tax_inclusive_display_unit_price():
@@ -156,28 +152,21 @@ def test_purchase_receipt_standalone_tax_inclusive_display_unit_price():
     assert tax == Decimal("6.90")
 
 
-def test_purchase_receipt_settlement_gross_from_po_line_avoids_qty_unit_tail():
-    """PO 行未税 8849.56、入库 qty×单价 得 8849.60 时，比例分摊 rollup 应为 10000.00 而非 10000.05。"""
+def test_purchase_receipt_settlement_uses_qty_times_price_not_po_proportion():
+    """入库行金额只按数量×录入单价。PO 行未税 8849.56 不得把价税合计改成 10000.00。"""
     receipt = SimpleNamespace(tax_rate=Decimal("13"))
     poi = SimpleNamespace(ordered_quantity=Decimal("1000"), total_price=Decimal("8849.56"))
     line = SimpleNamespace(
         receipt_quantity=Decimal("1000"),
         unit_price=Decimal("8.8496"),
         purchase_order_item_id=1,
-        total_amount=Decimal("8849.60"),
+        total_amount=Decimal("8849.56"),
+        display_unit_price=None,
     )
     gross = compute_purchase_receipt_settlement_gross_from_lines(
         receipt, [line], {1: poi}
     )
-    assert gross == Decimal("10000.00")
-    line_excl = resolve_purchase_receipt_line_excl_amount(
-        receipt_quantity=Decimal("1000"),
-        unit_price=Decimal("8.8496"),
-        purchase_order_item_id=1,
-        line_total_amount=Decimal("8849.60"),
-        poi_by_id={1: poi},
-    )
-    assert line_excl == Decimal("8849.56")
+    assert gross == Decimal("10000.05")
 
     from apps.kuaicaiwu.services.purchase_settlement import (
         compute_purchase_receipt_line_settlement_amounts,
@@ -186,9 +175,42 @@ def test_purchase_receipt_settlement_gross_from_po_line_avoids_qty_unit_tail():
     excl, tax, gross = compute_purchase_receipt_line_settlement_amounts(
         receipt, line, {1: poi}
     )
-    assert excl == Decimal("8849.56")
-    assert gross == Decimal("10000.00")
+    assert excl == Decimal("8849.60")
+    assert tax == Decimal("1150.45")
+    assert gross == Decimal("10000.05")
     assert excl + tax == gross
+
+
+def test_purchase_receipt_inclusive_two_times_55_is_110_not_110_01():
+    """含税 2×55：价税合计 110.00，税额 12.65。禁止未税 97.35 再乘 13% 得到 110.01。"""
+    receipt = SimpleNamespace(tax_rate=Decimal("13"))
+    poi = SimpleNamespace(
+        ordered_quantity=Decimal("2"),
+        total_price=Decimal("97.35"),
+        unit_price=Decimal("48.672566"),
+        display_unit_price=Decimal("55"),
+        tax_rate=Decimal("13"),
+        order_id=1,
+        id=1,
+    )
+    order = SimpleNamespace(id=1, tax_rate=Decimal("0.13"), price_type="tax_exclusive")
+    line = SimpleNamespace(
+        receipt_quantity=Decimal("2"),
+        unit_price=Decimal("48.672566"),
+        display_unit_price=Decimal("55"),
+        tax_rate=Decimal("13"),
+        purchase_order_item_id=1,
+        total_amount=Decimal("97.35"),
+    )
+    excl, tax, gross = compute_purchase_receipt_line_settlement_amounts(
+        receipt,
+        line,
+        {1: poi},
+        purchase_order_by_id={1: order},
+    )
+    assert excl == Decimal("97.35")
+    assert tax == Decimal("12.65")
+    assert gross == Decimal("110.00")
 
 
 def test_purchase_order_settlement_gross_prefers_net_amount():
@@ -196,9 +218,9 @@ def test_purchase_order_settlement_gross_prefers_net_amount():
     assert purchase_order_settlement_gross(order) == Decimal("1130.00")
 
 
-def test_purchase_order_settlement_gross_rollups_from_excl():
+def test_purchase_order_settlement_gross_without_stored_tax_returns_zero():
     order = SimpleNamespace(total_amount=Decimal("1000"), tax_rate=Decimal("0.13"), net_amount=Decimal("0"))
-    assert purchase_order_settlement_gross(order) == Decimal("1130.00")
+    assert purchase_order_settlement_gross(order) == Decimal("0.00")
 
 
 def test_purchase_order_settlement_gross_uses_tax_amount_when_net_missing():
@@ -211,11 +233,6 @@ def test_purchase_order_settlement_gross_uses_tax_amount_when_net_missing():
     assert purchase_order_settlement_gross(order) == Decimal("200.00")
 
 
-def test_proportional_line_gross():
-    line = proportional_line_gross(Decimal("400"), Decimal("1000"), Decimal("1130"))
-    assert line == Decimal("452.00")
-
-
 def test_receipt_settlement_gross_aligns_with_purchase_order_rollup():
     """多行入库价税合计应与采购订单头 net_amount（按行 qty×单价 rollup）一致，避免 456.00 vs 455.99。"""
     from types import SimpleNamespace
@@ -223,7 +240,6 @@ def test_receipt_settlement_gross_aligns_with_purchase_order_rollup():
     from apps.kuaicaiwu.services.purchase_settlement import (
         compute_purchase_order_header_rollup,
         compute_purchase_receipt_settlement_gross_from_lines,
-        purchase_order_item_settlement_gross,
         purchase_order_settlement_gross,
     )
 
@@ -275,33 +291,10 @@ def test_receipt_settlement_gross_aligns_with_purchase_order_rollup():
     ]
     poi_by_id = {101: lines_po[0], 102: lines_po[1]}
     order_by_id = {1: order}
-    gross_legacy = Decimal("0")
-    for poi in lines_po:
-        share_excl = Decimal(str(poi.total_price))
-        poi_gross = purchase_order_item_settlement_gross(order, poi)
-        from apps.kuaicaiwu.services.purchase_settlement import (
-            compute_tax_from_excluding,
-            resolve_purchase_receipt_line_excl_amount,
-        )
-
-        excl = resolve_purchase_receipt_line_excl_amount(
-            receipt_quantity=Decimal(str(poi.ordered_quantity)),
-            unit_price=Decimal(str(poi.unit_price)),
-            purchase_order_item_id=int(poi.id),
-            line_total_amount=share_excl,
-            poi_by_id=poi_by_id,
-        )
-        _, tax, _ = compute_tax_from_excluding(excl, Decimal("13"))
-        gross_legacy += excl + tax
-
     gross_new = compute_purchase_receipt_settlement_gross_from_lines(
         receipt, receipt_lines, poi_by_id, purchase_order_by_id=order_by_id
     )
-    from apps.kuaicaiwu.services.finance_tax import quantize_money
-
-    gross_legacy = quantize_money(gross_legacy)
     assert gross_new == po_net
-    assert gross_legacy <= po_net
 
 
 def test_on_purchase_invoice_skips_receipt_payable():

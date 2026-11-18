@@ -4,6 +4,7 @@
  */
 import { getCachedNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import {
+  calcDocumentLineAmounts,
   computeDocumentGoodsTotals,
   mapDocumentGoodsTotalsToPurchaseHeader,
   resolveDocumentFormLineAmounts,
@@ -201,18 +202,6 @@ export function purchaseReceiptDetailUnitPriceIncl(row: {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-export function proportionalLineGross(
-  lineExcl: number,
-  headerExcl: number,
-  headerGross: number,
-): number {
-  const line = roundMoney(lineExcl);
-  const headExcl = roundMoney(headerExcl);
-  const headGross = roundMoney(headerGross);
-  if (line <= 0 || headExcl <= 0 || headGross <= 0) return 0;
-  return roundMoney((line / headExcl) * headGross);
-}
-
 export type PurchaseReceiptPoLineSnapshot = {
   ordered_quantity?: number | null;
   total_price?: number | null;
@@ -228,128 +217,59 @@ export type PurchaseReceiptPoSettlementCtx = {
   poiById: Record<number, PurchaseReceiptPoLineSnapshot>;
 };
 
-/** 采购订单行价税合计（与后端 purchase_order_item_settlement_gross 同源） */
-export function purchaseOrderItemSettlementGross(
-  poi: PurchaseReceiptPoLineSnapshot,
-  headerTaxRate: unknown,
-  priceType: string,
-): number {
-  const pt = purchaseFormPriceType(priceType);
-  const entered =
-    readPurchaseOrderEnteredUnitPrice(poi, pt) ??
-    (poi.unit_price != null ? Number(poi.unit_price) : null);
-  const line = resolvePurchaseOrderLineAmounts(
-    {
-      ordered_quantity: poi.ordered_quantity,
-      unit_price: entered,
-      tax_rate: poi.tax_rate,
-      item_amount: poi.total_price,
-    },
-    pt,
-    { headerTaxRate },
-  );
-  return line.incl;
-}
-
-/** 入库行未税（关联 PO 行时按 total_price 比例，与后端 resolve_purchase_receipt_line_excl_amount 同源） */
-export function resolvePurchaseReceiptLineExclAmount(input: {
-  receiptQuantity: number;
-  unitPrice: number;
-  purchaseOrderItemId?: number | null;
-  lineTotalAmount?: number | null;
-  poi?: PurchaseReceiptPoLineSnapshot | null;
-}): number {
-  const qty = input.receiptQuantity > 0 ? input.receiptQuantity : 0;
-  const poiId = Number(input.purchaseOrderItemId) || 0;
-  const poi = input.poi;
-  if (poiId > 0 && poi) {
-    const ordered = Number(poi.ordered_quantity) || 0;
-    const linePrice = Number(poi.total_price) || 0;
-    if (ordered > 0 && linePrice > 0 && qty > 0) {
-      return roundMoney((linePrice * qty) / ordered);
-    }
-  }
-  if (input.lineTotalAmount != null && Number.isFinite(Number(input.lineTotalAmount))) {
-    return roundMoney(Number(input.lineTotalAmount));
-  }
-  return roundMoney(qty * (Number(input.unitPrice) || 0));
-}
+export type PurchaseReceiptLineSettlementInput = {
+  receipt_quantity?: number | null;
+  unit_price?: number | null;
+  display_unit_price?: number | null;
+  displayUnitPrice?: number | null;
+  tax_rate?: number | null;
+  purchase_order_item_id?: number | null;
+  total_amount?: number | null;
+  settlement_excl?: number | null;
+  settlement_tax?: number | null;
+  settlement_gross?: number | null;
+};
 
 /**
- * 采购入库表单/详情行价税（PO 行走比例价税，否则走 documentLineAmounts）。
+ * 采购入库行未税/税额/价税合计。唯一公式是 calcDocumentLineAmounts。
+ *
+ * 含税：价税合计 = round(数量 × 录入单价)，税额 = 价税合计 − 未税。
+ * 不含税：未税 = round(数量 × 单价)，税额 = round(未税 × 税率)。
+ * 禁止读已落库金额、禁止按采购订单行比例改写、禁止用未税再乘税率。
  */
-export function computePurchaseReceiptFormLineAmounts(
-  row: {
-    receipt_quantity?: number | null;
-    unit_price?: number | null;
-    tax_rate?: number | null;
-    purchase_order_item_id?: number | null;
-    total_amount?: number | null;
-    settlement_excl?: number | null;
-    settlement_tax?: number | null;
-    settlement_gross?: number | null;
-  },
+export function computePurchaseReceiptLineSettlementAmounts(
+  row: PurchaseReceiptLineSettlementInput,
   headerTaxRate: unknown,
   priceType: string,
   poCtx?: PurchaseReceiptPoSettlementCtx | null,
 ): { excl: number; tax: number; incl: number; taxPct: number } {
-  const settlementExcl = row.settlement_excl;
-  const settlementTax = row.settlement_tax;
-  const settlementGross = row.settlement_gross;
-  if (
-    settlementExcl != null &&
-    settlementTax != null &&
-    settlementGross != null &&
-    Number.isFinite(Number(settlementExcl)) &&
-    Number.isFinite(Number(settlementTax)) &&
-    Number.isFinite(Number(settlementGross))
-  ) {
-    const taxPct = resolvePurchaseReceiptLineTaxPercent(row.tax_rate, headerTaxRate);
-    return {
-      excl: Number(settlementExcl),
-      tax: Number(settlementTax),
-      incl: Number(settlementGross),
-      taxPct,
-    };
-  }
-
   const taxPct = resolvePurchaseReceiptLineTaxPercent(row.tax_rate, headerTaxRate);
   const qty = Number(row.receipt_quantity) || 0;
-  const unit = Number(row.unit_price) || 0;
-  const poiId = Number(row.purchase_order_item_id) || 0;
-  const poi = poiId > 0 ? poCtx?.poiById?.[poiId] : undefined;
-  const excl = resolvePurchaseReceiptLineExclAmount({
-    receiptQuantity: qty,
-    unitPrice: unit,
-    purchaseOrderItemId: poiId > 0 ? poiId : null,
-    lineTotalAmount: row.total_amount,
-    poi,
-  });
-
-  if (poiId > 0 && poi && poCtx) {
-    const poiExcl = roundMoney(Number(poi.total_price) || 0);
-    const poiGross = purchaseOrderItemSettlementGross(
-      poi,
-      poCtx.headerTaxRate ?? headerTaxRate,
-      poCtx.priceType ?? priceType,
+  const displayRaw = row.display_unit_price ?? row.displayUnitPrice;
+  const hasDisplay =
+    displayRaw != null && String(displayRaw) !== '' && Number(displayRaw) > 0;
+  if (hasDisplay) {
+    const line = calcDocumentLineAmounts(
+      qty,
+      Number(displayRaw),
+      taxPct,
+      'tax_inclusive',
     );
-    if (poiExcl > 0 && poiGross > 0 && excl > 0) {
-      const incl = proportionalLineGross(excl, poiExcl, poiGross);
-      const tax = roundMoney(incl - excl);
-      return { excl, tax, incl, taxPct };
-    }
+    return { excl: line.excl, tax: line.tax, incl: line.incl, taxPct };
   }
+  const unit = Number(row.unit_price) || 0;
+  const line = calcDocumentLineAmounts(qty, unit, taxPct, 'tax_exclusive');
+  return { excl: line.excl, tax: line.tax, incl: line.incl, taxPct };
+}
 
-  return resolvePurchaseReceiptLineAmounts(
-    {
-      receipt_quantity: qty,
-      unit_price: unit,
-      tax_rate: row.tax_rate ?? taxPct,
-      total_amount: row.total_amount,
-    },
-    priceType,
-    { headerTaxRate },
-  );
+/** @deprecated 用名保留；实现已并入 `computePurchaseReceiptLineSettlementAmounts` */
+export function computePurchaseReceiptFormLineAmounts(
+  row: PurchaseReceiptLineSettlementInput,
+  headerTaxRate: unknown,
+  priceType: string,
+  poCtx?: PurchaseReceiptPoSettlementCtx | null,
+): { excl: number; tax: number; incl: number; taxPct: number } {
+  return computePurchaseReceiptLineSettlementAmounts(row, headerTaxRate, priceType, poCtx);
 }
 
 export function computePurchaseReceiptFormGoodsTotals(
@@ -368,8 +288,8 @@ export function computePurchaseReceiptFormGoodsTotals(
     const qty = Number(row.receipt_quantity) || 0;
     if (qty <= 0) continue;
     totalQuantity += qty;
-    const line = computePurchaseReceiptFormLineAmounts(
-      row as Parameters<typeof computePurchaseReceiptFormLineAmounts>[0],
+    const line = computePurchaseReceiptLineSettlementAmounts(
+      row as PurchaseReceiptLineSettlementInput,
       headerTaxRate,
       priceType,
       poCtx,
@@ -381,14 +301,14 @@ export function computePurchaseReceiptFormGoodsTotals(
   return { totalQuantity, goodsExcl, taxAmount, goodsIncl };
 }
 
-/** 详情/只读：行未税、税额、价税（优先 settlement_*，与采购订单 PO 比例分摊同源） */
+/** 详情/只读：行未税、税额、价税（与 computePurchaseReceiptLineSettlementAmounts 同源） */
 export function calcPurchaseReceiptDetailLineAmounts(
-  row: Parameters<typeof computePurchaseReceiptFormLineAmounts>[0],
+  row: PurchaseReceiptLineSettlementInput,
   headerTaxRate?: number | null,
   priceType: string = 'tax_inclusive',
   poCtx?: PurchaseReceiptPoSettlementCtx | null,
 ): { excl: number; tax: number; incl: number; taxPct: number } {
-  return computePurchaseReceiptFormLineAmounts(row, headerTaxRate, priceType, poCtx);
+  return computePurchaseReceiptLineSettlementAmounts(row, headerTaxRate, priceType, poCtx);
 }
 
 export function resolvePurchaseReceiptDisplayAmount(receipt: {

@@ -79,7 +79,7 @@ const PartnerStatementsPage: React.FC = () => {
   const supplierActionRef = useRef<ActionType>();
   const customerLastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const supplierLastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
-  const [activeTab, setActiveTab] = useState<'Customer' | 'Supplier'>('Customer');
+  const [activeTab, setActiveTab] = useState<'Customer' | 'Supplier' | 'Outsource'>('Customer');
   const [customerSelectedRowKeys, setCustomerSelectedRowKeys] = useState<React.Key[]>([]);
   const [supplierSelectedRowKeys, setSupplierSelectedRowKeys] = useState<React.Key[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
@@ -467,7 +467,7 @@ const PartnerStatementsPage: React.FC = () => {
     [previewSelectedRowKeys],
   );
 
-  const tableRequest = (type: 'Customer' | 'Supplier') => async (
+  const tableRequest = (type: 'Customer' | 'Supplier' | 'Outsource') => async (
     params: { current?: number; pageSize?: number },
     sort?: Record<string, unknown>,
     _filter?: unknown,
@@ -592,11 +592,27 @@ const PartnerStatementsPage: React.FC = () => {
       />
       <MultiTabListPageTemplate
         activeTabKey={activeTab}
-        onTabChange={(k) => setActiveTab(k as 'Customer' | 'Supplier')}
+        onTabChange={(k) => setActiveTab(k as 'Customer' | 'Supplier' | 'Outsource')}
         preserveMounted
         tabs={[
           { key: 'Customer', label: t(`${PS}.tabCustomer`), children: customerTable },
           { key: 'Supplier', label: t(`${PS}.tabSupplier`), children: supplierTable },
+          {
+            key: 'Outsource',
+            label: t(`${PS}.tabOutsource`),
+            children: (
+              <UniTable<PartnerStatement>
+                headerTitle={t(`${PS}.tabOutsource`)}
+                actionRef={supplierActionRef}
+                rowKey="id"
+                columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Outsource.list-v1"
+                request={tableRequest('Outsource')}
+                columns={alignProColumns(buildColumns('Supplier'), SALES_DOC_LIST_FIELD_RANK)}
+                skipFuzzyPinyinClientFilter
+                pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}
+              />
+            ),
+          },
         ]}
       />
 

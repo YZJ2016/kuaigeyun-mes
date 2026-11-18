@@ -1,4 +1,5 @@
 import { apiRequest } from '../../../../services/api';
+import type { FinancePullCandidateListParams } from './financePullListParams';
 import type { DocumentPushPreview } from '../../../kuaizhizao/services/purchase-requisition';
 
 export interface ReceiptListParams {
@@ -34,7 +35,13 @@ export interface ReceiptVoucher {
   payment_method: string;
   bank_account?: string;
   bank_account_id?: number;
+  counterparty_account_name?: string;
+  counterparty_bank_name?: string;
+  counterparty_bank_account?: string;
   status: string;
+  source_voucher_id?: number;
+  source_voucher_code?: string;
+  source_vouchers?: { id: number; code: string }[];
   settlement_type?: string;
   refunded_amount?: number;
   refund_execution_status?: string;
@@ -43,10 +50,31 @@ export interface ReceiptVoucher {
   updated_at?: string;
   created_by_name?: string;
   updated_by_name?: string;
+  linked_refund_vouchers?: Array<{ id: number; code: string }>;
+  linked_source_documents?: Array<{
+    source_type: string;
+    id: number;
+    code: string;
+  }>;
+  linked_partner_statements?: Array<{
+    id: number;
+    statement_code: string;
+    statement_period: string;
+    status: string;
+  }>;
   capabilities?: {
     pull_receipt_refund?: { allowed?: boolean; reason?: string };
     repair_bank_flow?: { allowed?: boolean; reason?: string };
   };
+  pull_lines?: Array<{
+    line_no: number;
+    source_type: string;
+    source_id: number;
+    source_code?: string;
+    amount: number;
+    max_amount?: number;
+  }>;
+  attachments?: unknown;
 }
 
 export type ReceiptPullPreview = DocumentPushPreview & {
@@ -59,11 +87,28 @@ export type ReceiptPullPreview = DocumentPushPreview & {
   max_push_total?: number;
 };
 
+export type ReceiptSalesOrderPrepaymentPullCandidate = {
+  id: number;
+  code: string;
+  order_code?: string;
+  customer_id?: number;
+  customer_name?: string;
+  partnerName?: string;
+  documentDate?: string | null;
+  amount?: number | null;
+  status?: string;
+  review_status?: string;
+  capabilities?: {
+    pull_prepayment?: { allowed?: boolean; reason?: string | null };
+  };
+};
+
 export type ReceiptPullCandidate = {
   id: number;
   code: string;
   receivable_code?: string;
   customer_name?: string;
+  customer_id?: number;
   source_status?: string;
   review_status?: string;
   source_date?: string;
@@ -80,11 +125,21 @@ export type ReceiptCreateData = {
   payment_method: string;
   bank_account?: string;
   bank_account_id?: number;
+  counterparty_account_name?: string;
+  counterparty_bank_name?: string;
+  counterparty_bank_account?: string;
   settlement_type?: string;
   notes?: string;
   attachments?: unknown;
   source_type?: 'receivable';
   source_id?: number;
+  source_ids?: number[];
+  pull_lines?: Array<{
+    source_type: string;
+    source_id: number;
+    source_code?: string;
+    amount: number;
+  }>;
 };
 
 const RECEIPT_API = '/apps/kuaicaiwu/receipts';
@@ -152,8 +207,26 @@ export const receiptService = {
       { method: 'GET', params },
     ),
 
+  listSalesOrderPrepaymentPullCandidates: async (params?: FinancePullCandidateListParams) =>
+    apiRequest<{ data: ReceiptSalesOrderPrepaymentPullCandidate[]; total: number; success: boolean }>(
+      `${RECEIPT_API}/pull-candidates/sales-orders`,
+      { method: 'GET', params },
+    ),
+
   previewPullFromReceivable: async (receivableId: number) =>
     apiRequest<ReceiptPullPreview>(`${RECEIPT_API}/from-receivable/${receivableId}/pull-preview`, {
       method: 'GET',
     }),
+
+  previewPullFromReceivables: async (receivableIds: number[]) =>
+    apiRequest<ReceiptPullPreview>(
+      `${RECEIPT_API}/from-receivables/pull-preview?receivable_ids=${receivableIds.join(',')}`,
+      { method: 'GET' },
+    ),
+
+  previewPullFromSalesOrder: async (salesOrderId: number) =>
+    apiRequest<DocumentPushPreview & { customer_id?: number; source_code?: string }>(
+      `${RECEIPT_API}/from-sales-order/${salesOrderId}/pull-preview`,
+      { method: 'GET' },
+    ),
 };

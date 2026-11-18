@@ -112,6 +112,12 @@ class OutsourceOrder(BaseModel):
     # 状态信息
     status = fields.CharField(max_length=20, default="draft", description="委外单状态（draft/released/in_progress/completed/cancelled）")
 
+    payable_recognition = fields.CharField(
+        max_length=40,
+        null=True,
+        description="应付立账策略（on_receipt/on_purchase_invoice/on_partner_statement/manual）",
+    )
+
     # 采购入库关联（用于委外入库）
     purchase_receipt_id = fields.IntField(null=True, description="采购入库单ID（关联PurchaseReceipt）")
     purchase_receipt_code = fields.CharField(max_length=50, null=True, description="采购入库单编码")

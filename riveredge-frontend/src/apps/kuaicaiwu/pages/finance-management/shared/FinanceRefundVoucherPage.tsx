@@ -51,11 +51,13 @@ import {
   getPaymentMethodOptions,
   assertBankAccountForPaymentMethod,
   BANK_TRANSFER_PAYMENT_METHOD,
+  hidesSupplierPayeeAccount,
 } from '../../../utils/financeSharedOptions';
 import {
   LedgerAccountFormFields,
   resolveFinanceVoucherReferenceNote,
 } from '../../../components/LedgerAccountFormFields';
+import { ReceiptCounterpartyPayerFormSection } from './ReceiptCounterpartyPayerFormSection';
 import { formatSettlementType } from '../../../utils/financeUiLabels';
 import { formatDateTime, formatCurrencyAmount } from '../../../../../utils/format';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
@@ -434,6 +436,22 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
           values.bank_account_id,
           values.bank_account as string,
         ),
+        ...(mode === 'receipt-refund'
+          ? hidesSupplierPayeeAccount(String(values.payment_method ?? ''))
+            ? {
+                counterparty_account_name: undefined,
+                counterparty_bank_name: undefined,
+                counterparty_bank_account: undefined,
+              }
+            : {
+                counterparty_account_name:
+                  String(values.counterparty_account_name ?? '').trim() || undefined,
+                counterparty_bank_name:
+                  String(values.counterparty_bank_name ?? '').trim() || undefined,
+                counterparty_bank_account:
+                  String(values.counterparty_bank_account ?? '').trim() || undefined,
+              }
+          : {}),
         notes: String(values.notes ?? '').trim(),
         attachments: normalizeDocumentAttachments(values.attachments),
         source_type: mode === 'receipt-refund' ? 'receipt' : 'payment',
@@ -955,6 +973,7 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
                   acceptanceNoteDirection={cfg.noteDirection}
                   partnerFieldName={cfg.partnerIdField}
                 />
+                {mode === 'receipt-refund' ? <ReceiptCounterpartyPayerFormSection /> : null}
                 <ProFormTextArea name="notes" label={t('common.remark')} fieldProps={{ rows: 3 }} colProps={financeColFull} />
                 <DocumentAttachmentsField
                   category={mode === 'receipt-refund' ? 'receipt_attachments' : 'payment_attachments'}

@@ -86,6 +86,7 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaizhizao.models.other_outbound",
     "apps.kuaizhizao.models.other_outbound_item",
     "apps.kuaizhizao.models.outsource_order",
+    "apps.kuaizhizao.models.outsource_order_receipt",
     "apps.kuaizhizao.models.outsource_work_order",
     "apps.kuaizhizao.models.outsource_settlement",
     "apps.kuaizhizao.models.packing_binding",

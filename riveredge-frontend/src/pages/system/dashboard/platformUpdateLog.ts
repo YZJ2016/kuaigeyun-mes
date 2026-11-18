@@ -44,6 +44,30 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'partner-statement-ledger-line-save-r01',
+    date: '2026-11-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.partner-statement-ledger-line-save-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.partner-statement-ledger-line-save-r01.description',
+  },
+  {
+    id: 'receipt-prepayment-so-pull-r01',
+    date: '2026-11-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.receipt-prepayment-so-pull-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.receipt-prepayment-so-pull-r01.description',
+  },
+  {
+    id: 'purchase-receipt-amount-qty-price-r01',
+    date: '2026-11-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-amount-qty-price-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-amount-qty-price-r01.description',
+  },
+  {
     id: 'payment-app-approval-completion-writeback-r01',
     date: '2026-11-01',
     type: 'fix',

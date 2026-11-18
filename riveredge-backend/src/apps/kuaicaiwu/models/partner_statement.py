@@ -48,6 +48,12 @@ class PartnerStatement(BaseModel):
     confirmed_at = fields.DatetimeField(null=True, description="内部确认时间")
     confirmed_by = fields.IntField(null=True, description="确认人ID")
 
+    ledger_posting_mode = fields.CharField(
+        max_length=20, default="immediate", description="立账方式 immediate/by_invoice"
+    )
+    ledger_posted_at = fields.DatetimeField(null=True, description="审核立账时间")
+    ledger_posted_by = fields.IntField(null=True, description="审核立账操作人")
+
     sent_at = fields.DatetimeField(null=True, description="发送时间")
     sent_by = fields.IntField(null=True, description="发送操作人ID")
     sent_channel = fields.CharField(max_length=30, null=True, description="发送渠道")

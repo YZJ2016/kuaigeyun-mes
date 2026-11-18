@@ -44,8 +44,34 @@ export function pickDefaultPartnerPayeeAccount(
 }
 
 export function partnerPayeeOptionLabel(account: PartnerPayeeAccount, defaultMark: string): string {
-  const text = [account.accountName, account.bankName, account.bankAccount].filter(Boolean).join(' ');
+  const text = partnerPayeeAccountDisplayText(account);
   return account.isDefault ? `${text}（${defaultMark}）` : text;
+}
+
+/** 开户行及账号展示（户名、银行、账号） */
+export function partnerPayeeAccountDisplayText(account: PartnerPayeeAccount): string {
+  return formatPayeeAccountFields(account.accountName, account.bankName, account.bankAccount);
+}
+
+export function formatPayeeAccountFields(
+  accountName?: string | null,
+  bankName?: string | null,
+  bankAccount?: string | null,
+): string {
+  return [accountName, bankName, bankAccount]
+    .map((v) => String(v ?? '').trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
+export function partnerPayeeAccountFromBankInfoText(
+  text: unknown,
+  accounts: PartnerPayeeAccount[],
+): number | undefined {
+  const raw = String(text || '').trim();
+  if (!raw) return undefined;
+  const idx = accounts.findIndex((item) => partnerPayeeAccountDisplayText(item) === raw);
+  return idx >= 0 ? idx : undefined;
 }
 
 export function samePartnerPayeeAccount(
@@ -91,6 +117,26 @@ export async function loadEmployeePayeeAccountsById(
         isDefault: true,
       },
     ],
+  };
+}
+
+export async function loadCustomerPayeeAccountsById(
+  customerId: number,
+): Promise<{ found: boolean; accounts: PartnerPayeeAccount[] }> {
+  const id = Number(customerId);
+  if (!Number.isFinite(id) || id <= 0) {
+    return { found: false, accounts: [] };
+  }
+  const res = await apiRequest<unknown>('/apps/master-data/supply-chain/customers', {
+    params: { limit: 1000, is_active: true },
+  });
+  const row = unwrapSupplierList(res).find((item) => Number(item.id) === id);
+  if (!row) {
+    return { found: false, accounts: [] };
+  }
+  return {
+    found: true,
+    accounts: readPartnerPayeeAccounts(row.settlementAccounts ?? row.settlement_accounts),
   };
 }
 

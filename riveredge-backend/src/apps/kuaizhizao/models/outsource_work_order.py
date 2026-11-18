@@ -143,6 +143,11 @@ class OutsourceWorkOrder(BaseModel):
     # 备注
     remarks = fields.TextField(null=True, description="备注")
     attachments = fields.JSONField(null=True, description="附件列表")
+    payable_recognition = fields.CharField(
+        max_length=32,
+        default="on_receipt",
+        description="立账策略（应付确认时点，单据真源）",
+    )
 
     # 创建更新信息
 
@@ -319,6 +324,11 @@ class OutsourceMaterialReceipt(BaseModel):
     # 委外工单关联
     outsource_work_order_id = fields.IntField(description="委外工单ID")
     outsource_work_order_code = fields.CharField(max_length=50, description="委外工单编码")
+    payable_recognition = fields.CharField(
+        max_length=32,
+        default="on_receipt",
+        description="立账策略（应付确认时点，单据真源）",
+    )
 
     # 收货信息
     quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="收货数量")

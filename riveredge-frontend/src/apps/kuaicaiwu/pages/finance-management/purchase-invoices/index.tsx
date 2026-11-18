@@ -34,6 +34,7 @@ import {
   resolvePullQueryPartnerKey,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
+import { loadFinancePullCandidatePage } from '../shared/loadFinancePullCandidatePage';
 import { getChineseInvoiceLifecycle } from '../../../utils/financeLifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { canDeletePurchaseInvoice, canFillPurchaseInvoiceNumber, faceInvoiceNumberForEdit } from '../../../utils/purchaseInvoiceUi';
@@ -145,11 +146,14 @@ const PurchaseInvoiceList: React.FC = () => {
   const pullFromPurchaseReceiptOpenRef = useRef<(() => void) | null>(null);
   const pullFromPayableCloseRef = useRef<(() => void) | null>(null);
   const pullFromPayableOpenRef = useRef<(() => void) | null>(null);
+  const pullFromPartnerStatementCloseRef = useRef<(() => void) | null>(null);
+  const pullFromPartnerStatementOpenRef = useRef<(() => void) | null>(null);
   const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
-  const pullPreviewZIndex = token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET * 2;
+  const pullQueryModalZIndex = token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET;
+  const pullPreviewZIndex = pullQueryModalZIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET;
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
@@ -161,6 +165,7 @@ const PurchaseInvoiceList: React.FC = () => {
   const pullFromPurchaseOrderAction = getKuaicaiwuDocumentAction('purchase_invoice.pull_from_purchase_order');
   const pullFromPurchaseReceiptAction = getKuaicaiwuDocumentAction('purchase_invoice.pull_from_purchase_receipt');
   const pullFromPayableAction = getKuaicaiwuDocumentAction('purchase_invoice.pull_from_payable');
+  const pullFromPartnerStatementAction = getKuaicaiwuDocumentAction('purchase_invoice.pull_from_partner_statement');
 
   const purchaseInvoiceAuditEnabled = useAuditRequired('purchase_invoice', false);
   const purchaseInvoicePerms = useResourcePermissions(PURCHASE_INVOICE_RESOURCE);
@@ -526,6 +531,88 @@ const PurchaseInvoiceList: React.FC = () => {
   });
   pullFromPayableCloseRef.current = pullFromPayableQuery.closeModal;
   pullFromPayableOpenRef.current = pullFromPayableQuery.openModal;
+
+  const pullFromPartnerStatementQuery = useUniPullQuery<PurchaseInvoicePullCandidate>({
+    rowKey: 'id',
+    selectionType: 'checkbox',
+    scopeOptions: pullQueryScopeOptions,
+    defaultScope: 'pullable',
+    isRowDisabled: (record) => !isPullPurchaseInvoiceSelectable(record),
+    loadData: async (params) => {
+      try {
+        return await loadFinancePullCandidatePage(
+          params,
+          params.scope,
+          isPullPurchaseInvoiceSelectable,
+          (api) => purchaseInvoiceService.listPartnerStatementPullCandidates(api),
+        );
+      } catch (e: any) {
+        messageApi.error(
+          e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`),
+        );
+        return { data: [], total: 0 };
+      }
+    },
+    onConfirm: async (keys, rows) => {
+      const selectedIds = resolvePullConfirmNumericIds(keys, rows, 'id');
+      if (!selectedIds.length) {
+        messageApi.warning(t(`${P}.selectSource`, { label: pullFromPartnerStatementAction.sourceLabel }));
+        return;
+      }
+      const selectedIdSet = new Set(selectedIds);
+      const selected = rows.filter((x) => selectedIdSet.has(Number(x.id)));
+      const partnerKeys = new Set(
+        selected.map((x) => resolvePullQueryPartnerKey(x)).filter(Boolean),
+      );
+      if (partnerKeys.size > 1) {
+        messageApi.warning(t(`${P}.pull.sameSupplierRequired`));
+        return;
+      }
+      const ledgerModes = new Set(
+        selected.map((x) => (x.ledger_posting_mode === 'by_invoice' ? 'by_invoice' : 'immediate')),
+      );
+      if (ledgerModes.size > 1) {
+        messageApi.warning(t(`${P}.pull.partnerStatementSameLedgerModeRequired`));
+        return;
+      }
+      const mode = ledgerModes.values().next().value as 'by_invoice' | 'immediate';
+      if (mode === 'by_invoice') {
+        const receiptIds = Array.from(
+          new Set(
+            selected.flatMap((row) =>
+              (row.receipt_ids || []).map((id) => Number(id)).filter((id) => id > 0),
+            ),
+          ),
+        );
+        if (!receiptIds.length) {
+          messageApi.warning(t('app.kuaicaiwu.partnerStatement.detail.pushSelectPurchaseReceipt'));
+          return;
+        }
+        await openPullPreview('purchase_receipt', receiptIds, {
+          closeSourceModal: () => pullFromPartnerStatementCloseRef.current?.(),
+          reopenSourceModal: () => pullFromPartnerStatementOpenRef.current?.(),
+        });
+        return;
+      }
+      const payableIds = Array.from(
+        new Set(
+          selected.flatMap((row) =>
+            (row.payable_ids || []).map((id) => Number(id)).filter((id) => id > 0),
+          ),
+        ),
+      );
+      if (!payableIds.length) {
+        messageApi.warning(t('app.kuaicaiwu.partnerStatement.detail.pushSelectPayable'));
+        return;
+      }
+      await openPullPreview('payable', payableIds, {
+        closeSourceModal: () => pullFromPartnerStatementCloseRef.current?.(),
+        reopenSourceModal: () => pullFromPartnerStatementOpenRef.current?.(),
+      });
+    },
+  });
+  pullFromPartnerStatementCloseRef.current = pullFromPartnerStatementQuery.closeModal;
+  pullFromPartnerStatementOpenRef.current = pullFromPartnerStatementQuery.openModal;
 
   const handlePullCreateSubmit = async (values: any) => {
     if (!pullPreviewData || !pullPreviewSourceIds.length || !pullPreviewKind) {
@@ -896,6 +983,129 @@ const PurchaseInvoiceList: React.FC = () => {
   );
 
 
+  const pullReceiptColumns = useMemo(
+    () => [
+      {
+        title: t(`${P}.pull.col.receiptDate`),
+        dataIndex: 'source_date',
+        width: 120,
+        render: (v: unknown) => (v ? formatDateTime(String(v), 'YYYY-MM-DD') : '-'),
+      },
+      {
+        title: t(`${P}.pull.col.receiptCode`),
+        dataIndex: 'receipt_code',
+        width: 168,
+        ellipsis: true,
+        render: (_: unknown, row: PurchaseInvoicePullCandidate) =>
+          row.receipt_code || row.doc_code || row.code,
+      },
+      {
+        title: t('app.kuaicaiwu.payable.col.supplierName'),
+        dataIndex: 'supplier_name',
+        width: 160,
+        ellipsis: true,
+      },
+      {
+        title: t(`${P}.pull.col.invoiceableAmount`),
+        dataIndex: 'invoiceable_amount',
+        width: 120,
+        align: 'right' as const,
+        render: (_: unknown, row: PurchaseInvoicePullCandidate) =>
+          formatCurrencyAmount(row.invoiceable_amount ?? row.amount ?? 0),
+      },
+      {
+        title: t(`${P}.pull.col.invoicedAmount`),
+        dataIndex: 'invoiced_amount',
+        width: 120,
+        align: 'right' as const,
+        render: (v: unknown) => formatCurrencyAmount(v || 0),
+      },
+    ],
+    [t],
+  );
+
+  const pullPayableColumns = useMemo(
+    () => [
+      {
+        title: t('components.uniPullQuery.documentDateColumn'),
+        dataIndex: 'source_date',
+        width: 120,
+        render: (v: unknown) => (v ? formatDateTime(String(v), 'YYYY-MM-DD') : '-'),
+      },
+      {
+        title: t(`${P}.pull.col.payableCode`),
+        dataIndex: 'payable_code',
+        width: 168,
+        ellipsis: true,
+        render: (_: unknown, row: PurchaseInvoicePullCandidate) =>
+          row.payable_code || row.doc_code || row.code,
+      },
+      {
+        title: t('app.kuaicaiwu.payable.col.supplierName'),
+        dataIndex: 'supplier_name',
+        width: 160,
+        ellipsis: true,
+      },
+      {
+        title: t(`${P}.pull.col.invoiceableAmount`),
+        dataIndex: 'invoiceable_amount',
+        width: 120,
+        align: 'right' as const,
+        render: (_: unknown, row: PurchaseInvoicePullCandidate) =>
+          formatCurrencyAmount(row.invoiceable_amount ?? row.amount ?? 0),
+      },
+      {
+        title: t(`${P}.pull.col.invoicedAmount`),
+        dataIndex: 'invoiced_amount',
+        width: 120,
+        align: 'right' as const,
+        render: (v: unknown) => formatCurrencyAmount(v || 0),
+      },
+    ],
+    [t],
+  );
+
+  const pullStatementColumns = useMemo(
+    () => [
+      {
+        title: t('components.uniPullQuery.documentDateColumn'),
+        dataIndex: 'source_date',
+        width: 120,
+        render: (v: unknown) => (v ? formatDateTime(String(v), 'YYYY-MM-DD') : '-'),
+      },
+      {
+        title: t('app.kuaicaiwu.partnerStatement.col.code'),
+        dataIndex: 'statement_code',
+        width: 168,
+        ellipsis: true,
+        render: (_: unknown, row: PurchaseInvoicePullCandidate) =>
+          row.statement_code || row.doc_code || row.code,
+      },
+      {
+        title: t('app.kuaicaiwu.partnerStatement.col.supplierName'),
+        dataIndex: 'supplier_name',
+        width: 160,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaicaiwu.partnerStatement.col.closingBalance'),
+        dataIndex: 'closing_balance',
+        width: 120,
+        align: 'right' as const,
+        render: (_: unknown, row: PurchaseInvoicePullCandidate) =>
+          formatCurrencyAmount(row.closing_balance ?? row.amount ?? 0),
+      },
+      {
+        title: t(`${P}.pull.col.invoicedAmount`),
+        dataIndex: 'invoiced_amount',
+        width: 120,
+        align: 'right' as const,
+        render: (v: unknown) => formatCurrencyAmount(v || 0),
+      },
+    ],
+    [t],
+  );
+
   const pullTableColumns = useMemo(
     () => [
       { title: t(`${P}.pull.col.sourceCode`), dataIndex: 'code', width: 220, ellipsis: true },
@@ -1174,6 +1384,11 @@ const PurchaseInvoiceList: React.FC = () => {
                 actionKey: 'purchase_invoice.pull_from_payable',
                 onClick: pullFromPayableQuery.openModal,
               },
+              {
+                key: 'pull-from-partner-statement',
+                actionKey: 'purchase_invoice.pull_from_partner_statement',
+                onClick: pullFromPartnerStatementQuery.openModal,
+              },
             ])}
           />,
         ]}
@@ -1220,7 +1435,7 @@ const PurchaseInvoiceList: React.FC = () => {
           void pullFromPurchaseReceiptQuery.handleConfirm();
         }}
         rowKey="id"
-        columns={pullTableColumns}
+        columns={pullReceiptColumns}
         dataSource={pullFromPurchaseReceiptQuery.dataSource}
         loading={pullFromPurchaseReceiptQuery.loading}
         confirmLoading={pullFromPurchaseReceiptQuery.confirmLoading}
@@ -1253,7 +1468,7 @@ const PurchaseInvoiceList: React.FC = () => {
           void pullFromPayableQuery.handleConfirm();
         }}
         rowKey="id"
-        columns={pullTableColumns}
+        columns={pullPayableColumns}
         dataSource={pullFromPayableQuery.dataSource}
         loading={pullFromPayableQuery.loading}
         confirmLoading={pullFromPayableQuery.confirmLoading}
@@ -1276,6 +1491,41 @@ const PurchaseInvoiceList: React.FC = () => {
         scope={pullFromPayableQuery.scope}
         onScopeChange={pullFromPayableQuery.handleScopeChange}
         okText={pullFromPayableAction.targetLabel}
+      />
+
+      <UniPullQueryModal<PurchaseInvoicePullCandidate>
+        open={pullFromPartnerStatementQuery.open}
+        title={pullFromPartnerStatementAction.label}
+        onCancel={pullFromPartnerStatementQuery.closeModal}
+        onOk={() => {
+          void pullFromPartnerStatementQuery.handleConfirm();
+        }}
+        zIndex={pullQueryModalZIndex}
+        rowKey="id"
+        columns={pullStatementColumns}
+        dataSource={pullFromPartnerStatementQuery.dataSource}
+        loading={pullFromPartnerStatementQuery.loading}
+        confirmLoading={pullFromPartnerStatementQuery.confirmLoading}
+        selectionType={pullFromPartnerStatementQuery.selectionType}
+        selectedRowKeys={pullFromPartnerStatementQuery.selectedRowKeys}
+        selectedRows={pullFromPartnerStatementQuery.selectedRows}
+        onSelectedRowKeysChange={pullFromPartnerStatementQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromPartnerStatementQuery.isRowDisabled}
+        searchDraft={pullFromPartnerStatementQuery.searchDraft}
+        onSearchDraftChange={pullFromPartnerStatementQuery.setSearchDraft}
+        onSearchApply={pullFromPartnerStatementQuery.handleSearchApply}
+        onSearchClear={pullFromPartnerStatementQuery.handleSearchClear}
+        appliedKeyword={pullFromPartnerStatementQuery.appliedKeyword}
+        searchPlaceholder={t(`${P}.pull.searchPlaceholder`)}
+        page={pullFromPartnerStatementQuery.page}
+        pageSize={pullFromPartnerStatementQuery.pageSize}
+        total={pullFromPartnerStatementQuery.total}
+        onPageChange={pullFromPartnerStatementQuery.handlePageChange}
+        scopeOptions={pullFromPartnerStatementQuery.scopeOptions}
+        scope={pullFromPartnerStatementQuery.scope}
+        onScopeChange={pullFromPartnerStatementQuery.handleScopeChange}
+        pullQuery={pullFromPartnerStatementQuery.pullQuery}
+        okText={pullFromPartnerStatementAction.targetLabel}
       />
 
       <Modal

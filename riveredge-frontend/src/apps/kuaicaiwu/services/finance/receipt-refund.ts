@@ -33,6 +33,9 @@ export type ReceiptRefundCreateData = {
   payment_method: string;
   bank_account?: string;
   bank_account_id?: number;
+  counterparty_account_name?: string;
+  counterparty_bank_name?: string;
+  counterparty_bank_account?: string;
   notes?: string;
   attachments?: unknown;
   source_type: 'receipt';

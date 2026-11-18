@@ -43,14 +43,19 @@ def enrich_standard_invoice_line_fields(
     tax_rate_percent: Decimal,
     quantity: Decimal,
     stored_unit_price_excl: Optional[Decimal] = None,
+    tax_amount: Optional[Decimal] = None,
 ) -> Dict[str, float]:
-    """标准发票行：未税单价/金额 + 税率% + 税额（与票面明细列一致）。"""
-    from apps.kuaicaiwu.services.finance_tax import compute_tax_from_excluding
+    """标准发票行：未税单价/金额 + 税率% + 税额（与票面明细列一致）。
+
+    采购入库行必须传入已按数量×录入单价算出的税额，禁止在这里用未税再乘税率。
+    """
     from apps.kuaicaiwu.services.purchase_settlement import quantize_money
 
     excl = quantize_money(line_excl)
     pct = Decimal(str(tax_rate_percent or 0))
-    _, tax_amt, _ = compute_tax_from_excluding(excl, pct)
+    if tax_amount is None:
+        raise ValidationError("采购入库取单行税额须由数量×录入单价拆分，禁止未税×税率")
+    tax_amt = quantize_money(tax_amount)
     qty = Decimal(str(quantity or 0))
     if stored_unit_price_excl is not None and stored_unit_price_excl > 0:
         unit_excl = quantize_money(stored_unit_price_excl)
@@ -84,10 +89,7 @@ async def _purchase_receipt_line_gross_by_item_id(
     from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
     from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
     from apps.kuaicaiwu.services.purchase_settlement import (
-        line_gross_from_excl_and_tax_rate,
-        proportional_line_gross,
-        resolve_purchase_receipt_line_excl_amount,
-        resolve_receipt_line_tax_rate_percent,
+        compute_purchase_receipt_line_settlement_amounts,
     )
 
     receipt = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=receipt_id)
@@ -107,34 +109,19 @@ async def _purchase_receipt_line_gross_by_item_id(
             poi_by_id[int(poi.id)] = poi
 
     line_excl_by_id: Dict[int, Decimal] = {}
-    for item in items:
-        qty = Decimal(str(item.receipt_quantity or 0))
-        unit_price = Decimal(str(item.unit_price or 0))
-        poi_id = int(item.purchase_order_item_id or 0) or None
-        line_excl = resolve_purchase_receipt_line_excl_amount(
-            receipt_quantity=qty,
-            unit_price=unit_price,
-            purchase_order_item_id=poi_id,
-            line_total_amount=_q_money(item.total_amount or 0),
-            poi_by_id=poi_by_id,
-        )
-        line_excl_by_id[int(item.id)] = _q_money(line_excl)
-
     line_gross_by_id: Dict[int, Decimal] = {}
     for item in items:
-        item_id = int(item.id)
-        line_excl = line_excl_by_id[item_id]
-        poi_id = int(item.purchase_order_item_id or 0) or None
-        tax_pct = (
-            resolve_receipt_line_tax_rate_percent(
-                receipt=receipt,
-                purchase_order_item_id=poi_id,
-                poi_by_id=poi_by_id,
-            )
-            if receipt is not None
-            else Decimal("0")
+        if receipt is None:
+            line_excl_by_id[int(item.id)] = Decimal("0.00")
+            line_gross_by_id[int(item.id)] = Decimal("0.00")
+            continue
+        line_excl, _, line_gross = compute_purchase_receipt_line_settlement_amounts(
+            receipt,
+            item,
+            poi_by_id,
         )
-        line_gross_by_id[item_id] = line_gross_from_excl_and_tax_rate(line_excl, tax_pct)
+        line_excl_by_id[int(item.id)] = line_excl
+        line_gross_by_id[int(item.id)] = line_gross
 
     return receipt, items, line_excl_by_id, line_gross_by_id
 
@@ -146,7 +133,6 @@ async def build_purchase_receipt_finance_detail_lines(
 ) -> List[Dict[str, Any]]:
     from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
     from apps.kuaicaiwu.services.purchase_settlement import (
-        normalize_po_tax_rate_to_percent,
         resolve_receipt_line_tax_rate_percent,
     )
 
@@ -184,6 +170,7 @@ async def build_purchase_receipt_finance_detail_lines(
                 receipt=receipt,
                 purchase_order_item_id=poi_id,
                 poi_by_id=poi_by_id,
+                receipt_line=item,
             )
             if receipt is not None
             else Decimal("0")
@@ -193,6 +180,7 @@ async def build_purchase_receipt_finance_detail_lines(
             tax_rate_percent=tax_pct,
             quantity=line_qty,
             stored_unit_price_excl=stored_unit if stored_unit > 0 else None,
+            tax_amount=line_gross - line_excl,
         )
         if line_gross > 0 and max_push > 0 and line_qty > 0:
             max_push_qty = _q_qty((max_push / line_gross) * line_qty)
@@ -314,16 +302,14 @@ async def build_purchase_order_invoice_detail_lines(
     *,
     header_pushed: Decimal,
 ) -> List[Dict[str, Any]]:
-    """采购订单直开进项发票：按行税率算价税合计，并按已开票头额比例展示行占用。"""
+    """采购订单直开进项发票：行价税与 calc_document_line_amounts 同源，并按已开票头额比例展示行占用。"""
     from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
     from apps.kuaicaiwu.services.purchase_settlement import (
-        line_gross_from_excl_and_tax_rate,
-        normalize_po_tax_rate_to_percent,
-        proportional_line_gross,
         purchase_order_settlement_gross,
         quantize_money,
         resolve_purchase_line_tax_rate_percent,
     )
+    from apps.kuaizhizao.utils.document_line_amounts import calc_document_line_amounts
 
     order = await PurchaseOrder.get_or_none(
         tenant_id=tenant_id, id=int(order_id), deleted_at__isnull=True
@@ -343,14 +329,39 @@ async def build_purchase_order_invoice_detail_lines(
     if pushed < 0:
         pushed = Decimal("0")
 
+    header_price_type = str(getattr(order, "price_type", None) or "tax_exclusive")
     lines: List[Dict[str, Any]] = []
     for idx, item in enumerate(items, start=1):
-        line_excl = quantize_money(Decimal(str(getattr(item, "total_price", 0) or 0)))
+        line_qty = _q_qty(getattr(item, "ordered_quantity", 0) or 0)
+        stored_unit = Decimal(str(getattr(item, "unit_price", 0) or 0))
+        display_raw = getattr(item, "display_unit_price", None)
         tax_pct = resolve_purchase_line_tax_rate_percent(
             line_tax_rate=getattr(item, "tax_rate", None),
             header_tax_rate=getattr(order, "tax_rate", None),
         )
-        line_gross = line_gross_from_excl_and_tax_rate(line_excl, tax_pct)
+        if (
+            header_price_type == "tax_inclusive"
+            and display_raw is not None
+            and Decimal(str(display_raw or 0)) > 0
+            and line_qty > 0
+        ):
+            line_excl, line_tax, line_gross = calc_document_line_amounts(
+                line_qty,
+                Decimal(str(display_raw)),
+                tax_pct,
+                "tax_inclusive",
+            )
+        elif line_qty > 0 and stored_unit > 0:
+            line_excl, line_tax, line_gross = calc_document_line_amounts(
+                line_qty,
+                stored_unit,
+                tax_pct,
+                "tax_exclusive",
+            )
+        else:
+            line_excl = line_tax = line_gross = Decimal("0")
+        line_excl = quantize_money(line_excl)
+        line_gross = quantize_money(line_gross)
         if header_gross > 0 and pushed > 0:
             occupied = _q_money((line_gross / header_gross) * pushed)
         else:
@@ -358,13 +369,12 @@ async def build_purchase_order_invoice_detail_lines(
         max_push = _q_money(line_gross - occupied)
         if max_push < 0:
             max_push = Decimal("0")
-        line_qty = _q_qty(getattr(item, "ordered_quantity", 0) or 0)
-        stored_unit = Decimal(str(getattr(item, "unit_price", 0) or 0))
         inv = enrich_standard_invoice_line_fields(
             line_excl=line_excl,
             tax_rate_percent=tax_pct,
             quantity=line_qty,
             stored_unit_price_excl=stored_unit if stored_unit > 0 else None,
+            tax_amount=line_gross - line_excl,
         )
         item_id = int(item.id)
         lines.append(
@@ -413,7 +423,6 @@ async def build_invoice_detail_lines_from_payable(
     from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
     from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
     from apps.kuaicaiwu.services.purchase_settlement import (
-        normalize_po_tax_rate_to_percent,
         resolve_receipt_line_tax_rate_percent,
     )
 
@@ -477,6 +486,7 @@ async def build_invoice_detail_lines_from_payable(
                 receipt=receipt,
                 purchase_order_item_id=poi_id,
                 poi_by_id=poi_by_id,
+                receipt_line=item,
             )
             if receipt is not None
             else Decimal("0")
@@ -486,6 +496,7 @@ async def build_invoice_detail_lines_from_payable(
             tax_rate_percent=tax_pct,
             quantity=line_qty,
             stored_unit_price_excl=stored_unit if stored_unit > 0 else None,
+            tax_amount=line_gross - line_excl,
         )
         if line_gross > 0 and max_push > 0 and line_qty > 0:
             max_push_qty = _q_qty((max_push / line_gross) * line_qty)

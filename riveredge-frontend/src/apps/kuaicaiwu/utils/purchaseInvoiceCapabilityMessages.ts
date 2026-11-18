@@ -10,6 +10,9 @@ export const PURCHASE_INVOICE_CAPABILITY_REASON_MESSAGES: Record<string, string>
   'purchase_invoice.pull_from_payable.not_allowed': '当前状态的应付单不可加载采购发票',
   'purchase_invoice.pull_from_payable.no_lines': '应付单无可开票金额',
   'purchase_invoice.pull_from_payable.already_pulled': '应付单可开票金额已全部开票，删除未审核发票后可再次加载',
+  'purchase_invoice.pull_from_partner_statement.no_lines':
+    '往来对账单中无可用的收票明细行（根据发票立账取采购入库，立即立账取应付单）',
+  'purchase_invoice.pull_from_partner_statement.already_pulled': '往来对账单可开票金额已全部收票，删除未审核发票后可再次加载',
 };
 
 export function purchaseInvoiceCapabilityReasonMessage(

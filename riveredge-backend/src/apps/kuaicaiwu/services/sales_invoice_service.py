@@ -740,17 +740,23 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             code = str(delivery.delivery_code or did)
             name = str(getattr(delivery, "customer_name", "") or "").strip()
             label = f"{code} - {name}" if name else code
+            amount = float(delivery.total_amount or 0)
+            invoiced_amount = float(pushed_map.get(did, Decimal("0")))
+            invoiceable_amount = max(0.0, amount - invoiced_amount)
             rows.append(
                 {
                     "id": did,
                     "code": label,
+                    "doc_code": code,
                     "delivery_code": code,
                     "customer_name": delivery.customer_name,
                     "source_status": delivery.status,
                     "source_date": str(
                         getattr(delivery, "delivery_time", "") or getattr(delivery, "created_at", "") or ""
                     ),
-                    "amount": float(delivery.total_amount or 0),
+                    "amount": amount,
+                    "invoiceable_amount": invoiceable_amount,
+                    "invoiced_amount": invoiced_amount,
                     "capabilities": {
                         "pull_sales_invoice": {
                             "allowed": allowed,
@@ -808,16 +814,98 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             code = str(receivable.receivable_code or rid)
             name = str(getattr(receivable, "customer_name", "") or "").strip()
             label = f"{code} - {name}" if name else code
+            amount = float(receivable.total_amount or 0)
+            invoiced_amount = float(pushed_map.get(rid, Decimal("0")))
+            invoiceable_amount = max(0.0, amount - invoiced_amount)
             rows.append(
                 {
                     "id": rid,
                     "code": label,
+                    "doc_code": code,
                     "receivable_code": code,
                     "customer_name": receivable.customer_name,
                     "source_status": receivable.status,
                     "review_status": receivable.review_status,
                     "source_date": str(getattr(receivable, "business_date", "") or ""),
-                    "amount": float(receivable.total_amount or 0),
+                    "amount": amount,
+                    "invoiceable_amount": invoiceable_amount,
+                    "invoiced_amount": invoiced_amount,
+                    "capabilities": {
+                        "pull_sales_invoice": {
+                            "allowed": allowed,
+                            "reason": reason,
+                        }
+                    },
+                }
+            )
+        return {"data": rows, "total": total, "success": True}
+
+    async def list_partner_statement_pull_candidates(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """客户往来对账单 → 销售发票头表取单候选。"""
+        from apps.kuaicaiwu.models.partner_statement import PartnerStatement
+        from apps.kuaicaiwu.services.partner_statement_invoice_pull import (
+            compute_statement_invoice_pull_metrics,
+            resolve_statement_invoice_source_ids,
+            snapshot_ids_for_api,
+        )
+
+        query = PartnerStatement.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            partner_type="Customer",
+            status__in=["Confirmed", "Sent"],
+        )
+        kw = str(keyword or "").strip()
+        if kw:
+            query = query.filter(
+                Q(statement_code__icontains=kw) | Q(partner_name__icontains=kw)
+            )
+        total = await query.count()
+        statements = await query.offset(skip).limit(limit).order_by("-end_date", "-id")
+        if not statements:
+            return {"data": [], "total": total, "success": True}
+
+        rows: List[Dict[str, Any]] = []
+        for stmt in statements:
+            sid = int(stmt.id)
+            snapshot = resolve_statement_invoice_source_ids(
+                partner_type=stmt.partner_type,
+                ledger_posting_mode=stmt.ledger_posting_mode,
+                transaction_details=stmt.transaction_details,
+            )
+            invoiced, remaining, allowed, reason = await compute_statement_invoice_pull_metrics(
+                tenant_id,
+                side="sales",
+                source_ids=snapshot.source_ids,
+                source_type=snapshot.source_type,
+            )
+            code = str(stmt.statement_code or sid)
+            name = str(stmt.partner_name or "").strip()
+            label = f"{code} - {name}" if name else code
+            closing = float(stmt.closing_balance or 0)
+            id_fields = snapshot_ids_for_api(snapshot)
+            rows.append(
+                {
+                    "id": sid,
+                    "code": label,
+                    "doc_code": code,
+                    "statement_code": code,
+                    "customer_id": int(stmt.partner_id or 0) or None,
+                    "customer_name": stmt.partner_name,
+                    "source_status": stmt.status,
+                    "source_date": str(stmt.end_date or ""),
+                    "amount": closing,
+                    "closing_balance": closing,
+                    "invoiceable_amount": max(0.0, remaining),
+                    "invoiced_amount": invoiced,
+                    "ledger_posting_mode": snapshot.ledger_posting_mode,
+                    **id_fields,
                     "capabilities": {
                         "pull_sales_invoice": {
                             "allowed": allowed,

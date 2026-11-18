@@ -25,6 +25,7 @@ import {
   isEmployeeAdvancePaymentMethod,
   isNotePaymentMethod,
 } from '../../../utils/financeSharedOptions';
+import { formatPayeeAccountFields } from '../../../utils/partnerPayeeAccounts';
 import type { PaymentVoucher } from '../../../services/finance/payment';
 import type { ReceiptVoucher } from '../../../services/finance/receipt';
 import type { FinanceNote } from '../../../services/finance/note';
@@ -141,26 +142,21 @@ export const FinanceVoucherDetailDrawer: React.FC<FinanceVoucherDetailDrawerProp
               } as ProDescriptionsItemProps<FinanceVoucherDetail>,
             ]
           : []),
-        ...(!isReceipt &&
-        !hidesSupplierPayeeAccount(effective.payment_method) &&
+        ...(!hidesSupplierPayeeAccount(effective.payment_method) &&
         ((effective as PaymentVoucher).counterparty_account_name ||
           (effective as PaymentVoucher).counterparty_bank_name ||
           (effective as PaymentVoucher).counterparty_bank_account)
           ? ([
               {
-                title: t(`${prefix}.counterpartyAccountName`),
+                title: t(`${prefix}.counterpartyAccountPick`),
                 dataIndex: 'counterparty_account_name',
                 key: 'counterparty_account_name',
-              },
-              {
-                title: t(`${prefix}.counterpartyBankName`),
-                dataIndex: 'counterparty_bank_name',
-                key: 'counterparty_bank_name',
-              },
-              {
-                title: t(`${prefix}.counterpartyBankAccount`),
-                dataIndex: 'counterparty_bank_account',
-                key: 'counterparty_bank_account',
+                render: (_: unknown, row: FinanceVoucherDetail) =>
+                  formatPayeeAccountFields(
+                    (row as PaymentVoucher).counterparty_account_name,
+                    (row as PaymentVoucher).counterparty_bank_name,
+                    (row as PaymentVoucher).counterparty_bank_account,
+                  ) || '—',
               },
             ] as ProDescriptionsItemProps<FinanceVoucherDetail>[])
           : []),

@@ -61,18 +61,23 @@ def coerce_finance_parameter_dict(finance: Dict[str, Any]) -> Dict[str, Any]:
     Enforce mutual exclusion between shipment/receipt-based AR/AP and invoice-based generation.
     Persisted settings may contain stale booleans; readers should always merge through this.
     """
+    from core.config.finance_recognition import (
+        PAYABLE_RECOGNITION_VALUES,
+        REVENUE_RECOGNITION_VALUES,
+    )
+
     fin = dict(finance or {})
     rev = str(fin.get("revenue_recognition") or "on_shipment").strip()
-    if rev not in ("on_shipment", "on_invoice", "on_milestone", "mixed", "manual"):
+    if rev not in REVENUE_RECOGNITION_VALUES:
         rev = "on_shipment"
     fin["revenue_recognition"] = rev
-    if rev in ("on_shipment", "on_milestone", "mixed", "manual"):
+    if rev in ("on_shipment", "on_milestone", "mixed", "manual", "on_partner_statement"):
         fin["auto_generate_receivable_from_sales_invoice"] = False
     pay = str(fin.get("payable_recognition") or "on_receipt").strip()
-    if pay not in ("on_receipt", "on_purchase_invoice", "manual"):
+    if pay not in PAYABLE_RECOGNITION_VALUES:
         pay = "on_receipt"
     fin["payable_recognition"] = pay
-    if pay in ("on_receipt", "manual"):
+    if pay in ("on_receipt", "manual", "on_partner_statement"):
         fin["auto_generate_payable_from_purchase_invoice"] = False
     return fin
 
@@ -317,6 +322,10 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
             {
                 "value": "manual",
                 "labelKey": "pages.system.configCenter.param.finance_payable_recognition_opt_manual",
+            },
+            {
+                "value": "on_partner_statement",
+                "labelKey": "pages.system.configCenter.param.finance_payable_recognition_opt_on_partner_statement",
             },
         ],
     },
@@ -1448,10 +1457,12 @@ class BusinessConfigService:
 
     async def resolve_revenue_recognition(self, tenant_id: int, customer_id: Optional[int]) -> str:
         """有效应收确认策略：客户覆盖非空则用覆盖，否则用组织 finance.revenue_recognition（已 coerce）。"""
+        from core.config.finance_recognition import REVENUE_RECOGNITION_VALUES
+
         config = await self.get_business_config(tenant_id)
         fin = config["parameters"].get("finance", {}) or {}
         org_rev = str(fin.get("revenue_recognition") or "on_shipment").strip()
-        if org_rev not in ("on_shipment", "on_invoice", "on_milestone", "mixed", "manual"):
+        if org_rev not in REVENUE_RECOGNITION_VALUES:
             org_rev = "on_shipment"
         if not customer_id:
             return org_rev
@@ -1461,14 +1472,16 @@ class BusinessConfigService:
         if not cust or not cust.revenue_recognition_override:
             return org_rev
         ov = str(cust.revenue_recognition_override).strip()
-        return ov if ov in ("on_shipment", "on_invoice", "on_milestone", "mixed", "manual") else org_rev
+        return ov if ov in REVENUE_RECOGNITION_VALUES else org_rev
 
     async def resolve_payable_recognition(self, tenant_id: int, supplier_id: Optional[int]) -> str:
         """有效应付确认策略：供应商覆盖非空则用覆盖，否则用组织 finance.payable_recognition（已 coerce）。"""
+        from core.config.finance_recognition import PAYABLE_RECOGNITION_VALUES
+
         config = await self.get_business_config(tenant_id)
         fin = config["parameters"].get("finance", {}) or {}
         org_pay = str(fin.get("payable_recognition") or "on_receipt").strip()
-        if org_pay not in ("on_receipt", "on_purchase_invoice", "manual"):
+        if org_pay not in PAYABLE_RECOGNITION_VALUES:
             org_pay = "on_receipt"
         if not supplier_id:
             return org_pay
@@ -1478,7 +1491,7 @@ class BusinessConfigService:
         if not sup or not sup.payable_recognition_override:
             return org_pay
         ov = str(sup.payable_recognition_override).strip()
-        return ov if ov in ("on_receipt", "on_purchase_invoice", "manual") else org_pay
+        return ov if ov in PAYABLE_RECOGNITION_VALUES else org_pay
 
     async def should_auto_generate_receivable_on_sales_delivery(
         self, tenant_id: int, customer_id: Optional[int] = None
@@ -1489,12 +1502,16 @@ class BusinessConfigService:
     async def should_auto_generate_receivable_on_sales_return(
         self, tenant_id: int, customer_id: Optional[int] = None
     ) -> bool:
-        """退货红字应收：手工立账不自动建；其余确认时点保持自动冲减台账。"""
+        """退货红字应收：手工立账、按对账单立账不自动建；其余确认时点保持自动冲减台账。"""
         resolved = await self.resolve_revenue_recognition(tenant_id, customer_id)
-        return resolved != "manual"
+        return resolved not in ("manual", "on_partner_statement")
 
     async def should_auto_generate_receivable_from_sales_invoice_effective(
-        self, tenant_id: int, customer_id: Optional[int] = None
+        self,
+        tenant_id: int,
+        customer_id: Optional[int] = None,
+        *,
+        resolved_strategy: Optional[str] = None,
     ) -> bool:
         """
         销项发票是否尝试自动生成应收。
@@ -1503,7 +1520,13 @@ class BusinessConfigService:
         - 组织默认为「按发货」时：参数互斥会把上述开关 coerce 为 False，此时仅当客户在主数据上
           显式覆盖为 on_invoice 时，仍允许走发票路径（避免无法为个别客户按票记账）。
         """
-        resolved = await self.resolve_revenue_recognition(tenant_id, customer_id)
+        from apps.kuaizhizao.services.document_recognition import coerce_revenue_recognition
+
+        resolved = (
+            coerce_revenue_recognition(resolved_strategy)
+            if resolved_strategy is not None
+            else await self.resolve_revenue_recognition(tenant_id, customer_id)
+        )
         if resolved != "on_invoice":
             return False
         config = await self.get_business_config(tenant_id)
@@ -1527,9 +1550,9 @@ class BusinessConfigService:
     async def should_auto_generate_payable_on_purchase_return(
         self, tenant_id: int, supplier_id: Optional[int] = None
     ) -> bool:
-        """退货红字应付：手工立账不自动建；其余确认时点保持自动冲减台账。"""
+        """退货红字应付：手工立账、按对账单立账不自动建；其余确认时点保持自动冲减台账。"""
         resolved = await self.resolve_payable_recognition(tenant_id, supplier_id)
-        return resolved != "manual"
+        return resolved not in ("manual", "on_partner_statement")
 
     async def should_auto_generate_payable_from_purchase_invoice_effective(
         self, tenant_id: int, supplier_id: Optional[int] = None

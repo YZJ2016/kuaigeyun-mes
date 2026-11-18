@@ -380,7 +380,7 @@ const ReceivableList: React.FC = () => {
 
     const pullFromSalesOrderQuery = useUniPullQuery<ReceivablePullCandidate>({
         rowKey: 'id',
-        selectionType: 'radio',
+        selectionType: 'checkbox',
         scopeOptions: pullQueryScopeOptions,
         defaultScope: 'pullable',
         isRowDisabled: (record) => !isPullReceivableSelectable(record),
@@ -402,15 +402,21 @@ const ReceivableList: React.FC = () => {
             }
         },
         onConfirm: async (keys, rows) => {
-            const selected = rows.find((x) => String(x.id) === String(keys[0]));
-            if (!selected?.id) {
+            const selectedIds = rows
+                .filter((x) => keys.some((k) => String(k) === String(x.id)))
+                .map((x) => Number(x.id))
+                .filter((id) => Number.isFinite(id) && id > 0);
+            if (!selectedIds.length) {
                 messageApi.warning(t(`${P}.selectSource`, { label: pullFromSalesOrderAction.sourceLabel }));
                 return;
             }
-            await openPullPreview('sales_order', selected.id, {
+            await openPullPreview('sales_order', selectedIds[0], {
                 closeSourceModal: () => pullFromSalesOrderCloseRef.current?.(),
                 reopenSourceModal: () => pullFromSalesOrderOpenRef.current?.(),
             });
+            if (selectedIds.length > 1) {
+                messageApi.info(t(`${P}.pull.multiSelectedFirstOnly`));
+            }
         },
     });
     pullFromSalesOrderCloseRef.current = pullFromSalesOrderQuery.closeModal;

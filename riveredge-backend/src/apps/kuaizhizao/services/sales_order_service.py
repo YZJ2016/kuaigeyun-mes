@@ -2086,6 +2086,13 @@ class SalesOrderService:
                 if not order_dict.get("salesman_name"):
                     order_dict["salesman_name"] = operator_name
 
+            from apps.kuaizhizao.services.document_recognition import ensure_revenue_recognition_on_create
+
+            order_dict["revenue_recognition"] = await ensure_revenue_recognition_on_create(
+                tenant_id,
+                order_dict.get("customer_id"),
+                order_dict.get("revenue_recognition"),
+            )
             order = await SalesOrder.create(tenant_id=tenant_id, **order_dict)
 
             total_qty = Decimal("0")
@@ -3376,6 +3383,18 @@ class SalesOrderService:
             # status/review_status 由工作流控制，禁止通过 update 修改，确保二者始终同步
             upd.pop("status", None)
             upd.pop("review_status", None)
+
+            if "customer_id" in upd and int(upd.get("customer_id") or 0) != int(order.customer_id or 0):
+                if "revenue_recognition" not in sales_order_data.model_fields_set:
+                    from apps.kuaizhizao.services.document_recognition import (
+                        ensure_revenue_recognition_on_create,
+                    )
+
+                    upd["revenue_recognition"] = await ensure_revenue_recognition_on_create(
+                        tenant_id,
+                        upd.get("customer_id"),
+                        None,
+                    )
 
             old_code = (order.order_code or "").strip()
             code_changed = False

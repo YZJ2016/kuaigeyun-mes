@@ -577,7 +577,7 @@ export function usePaymentVoucherFormLinePull({ formRef }: Props) {
 
   const pullAppQuery = useUniPullQuery<PaymentPullCandidate>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     scopeOptions,
     defaultScope: 'pullable',
     isRowDisabled: (record) => !isPullPaymentSelectable(record),
@@ -610,7 +610,8 @@ export function usePaymentVoucherFormLinePull({ formRef }: Props) {
     },
     onConfirm: async (keys, rows) => {
       if (!assertNoMixedSource('payment_application')) return;
-      const selected = rows.find((x) => String(x.id) === String(keys[0]));
+      const selectedRows = rows.filter((x) => keys.some((k) => String(k) === String(x.id)));
+      const selected = selectedRows[0];
       if (!selected?.id) {
         messageApi.warning(t(`${P}.selectSource`, { label: pullFromAppAction.sourceLabel }));
         return;
@@ -665,6 +666,9 @@ export function usePaymentVoucherFormLinePull({ formRef }: Props) {
           advance_payee_name: preview.advance_payee_name ?? undefined,
         });
         closeAppRef.current?.();
+        if (selectedRows.length > 1) {
+          messageApi.info(t('components.uniPullQuery.multiSelectedFirstOnly'));
+        }
         messageApi.success(t(`${P}.pullLines.applicationMerged`));
       } catch (e) {
         messageApi.error(getApiErrorMessage(e, t(`${P}.loadSourceFailed`)));
@@ -847,7 +851,7 @@ export function usePaymentVoucherFormLinePull({ formRef }: Props) {
               ) : null}
               {showPoPrepayPull ? (
                 <Button size="small" onClick={openPullPurchaseOrder}>
-                  {pullFromPoAction.label}
+                  {t(`${P}.pullLines.loadFromPurchaseOrder`)}
                 </Button>
               ) : null}
               {showAppPull ? (
@@ -864,7 +868,6 @@ export function usePaymentVoucherFormLinePull({ formRef }: Props) {
       openPullApplication,
       openPullPayable,
       openPullPurchaseOrder,
-      pullFromPoAction.label,
       t,
     ],
   );
@@ -935,7 +938,7 @@ export function usePaymentVoucherFormLinePull({ formRef }: Props) {
       />
       <UniPullQueryModal<PoPullRow>
         open={pullPoQuery.open}
-        title={pullFromPoAction.label}
+        title={t(`${P}.pullLines.loadFromPurchaseOrder`)}
         onCancel={pullPoQuery.closeModal}
         onOk={() => void pullPoQuery.handleConfirm()}
         rowKey="id"

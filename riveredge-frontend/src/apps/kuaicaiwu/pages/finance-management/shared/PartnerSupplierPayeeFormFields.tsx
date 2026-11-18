@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Col, Form, Row, Select } from 'antd';
+import { Form } from 'antd';
 import { ProFormText } from '@ant-design/pro-components';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
 import {
+  loadCustomerPayeeAccountsById,
   loadEmployeePayeeAccountsById,
   loadSupplierPayeeAccountsById,
   partnerPayeeOptionLabel,
@@ -11,8 +13,9 @@ import {
 } from '../../../utils/partnerPayeeAccounts';
 
 export type PartnerSupplierPayeeFormFieldsProps = {
-  /** 往来对象 id（供应商/职员等） */
+  /** 往来对象 id（供应商/客户/职员等） */
   supplierFieldName: string;
+  partnerSide?: 'supplier' | 'customer';
   counterpartyKindFieldName?: string;
   allowedCounterpartyKinds?: string[];
   accountNameField: string;
@@ -23,13 +26,15 @@ export type PartnerSupplierPayeeFormFieldsProps = {
   labelAccountEmpty: string;
   labelAccountNeedSupplier: string;
   labelAccountDefaultMark: string;
-  labelAccountName: string;
-  labelBankName: string;
-  labelBankAccount: string;
+  /** @deprecated 合并为单一收款账户栏，保留入参以兼容调用方 */
+  labelAccountName?: string;
+  labelBankName?: string;
+  labelBankAccount?: string;
 };
 
 export function PartnerSupplierPayeeFormFields({
   supplierFieldName,
+  partnerSide = 'supplier',
   counterpartyKindFieldName,
   allowedCounterpartyKinds = ['supplier'],
   accountNameField,
@@ -40,9 +45,6 @@ export function PartnerSupplierPayeeFormFields({
   labelAccountEmpty,
   labelAccountNeedSupplier,
   labelAccountDefaultMark,
-  labelAccountName,
-  labelBankName,
-  labelBankAccount,
 }: PartnerSupplierPayeeFormFieldsProps) {
   const form = Form.useFormInstance();
   const counterpartyId = Form.useWatch(supplierFieldName, form);
@@ -76,7 +78,9 @@ export function PartnerSupplierPayeeFormFields({
     const loadAccounts =
       activeKind === 'employee'
         ? () => loadEmployeePayeeAccountsById(id)
-        : () => loadSupplierPayeeAccountsById(id);
+        : partnerSide === 'customer'
+          ? () => loadCustomerPayeeAccountsById(id)
+          : () => loadSupplierPayeeAccountsById(id);
     loadAccounts()
       .then(({ found, accounts: rows }) => {
         if (cancelled) return;
@@ -129,6 +133,7 @@ export function PartnerSupplierPayeeFormFields({
     counterpartyId,
     counterpartyKind,
     counterpartyKindFieldName,
+    partnerSide,
     supplierFieldName,
   ]);
 
@@ -143,7 +148,6 @@ export function PartnerSupplierPayeeFormFields({
   const matchedIndex = accounts.findIndex((item) =>
     samePartnerPayeeAccount(item, accountName, bankName, bankAccount),
   );
-  const showAccountPicker = accounts.length > 1;
   const placeholder = !supplierReady
     ? labelAccountNeedSupplier
     : loading
@@ -152,53 +156,45 @@ export function PartnerSupplierPayeeFormFields({
         ? labelAccountEmpty
         : labelAccountPickPlaceholder;
 
+  const selectOptions = accounts.map((item, index) => ({
+    value: index,
+    label: partnerPayeeOptionLabel(item, labelAccountDefaultMark),
+  }));
+
   return (
-    <Row gutter={16}>
-      {showAccountPicker ? (
-        <Col span={24}>
-          <Form.Item label={labelAccountPick} style={{ marginBottom: 8 }}>
-            <Select
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              loading={loading}
-              disabled={!supplierReady || loading}
-              placeholder={placeholder}
-              value={matchedIndex >= 0 ? matchedIndex : undefined}
-              options={accounts.map((item, index) => ({
-                value: index,
-                label: partnerPayeeOptionLabel(item, labelAccountDefaultMark),
-              }))}
-              onChange={(value) => {
-                if (value == null) {
-                  form.setFieldsValue({
-                    [accountNameField]: undefined,
-                    [bankNameField]: undefined,
-                    [bankAccountField]: undefined,
-                  });
-                  return;
-                }
-                const picked = accounts[Number(value)];
-                if (!picked) return;
-                form.setFieldsValue({
-                  [accountNameField]: picked.accountName || undefined,
-                  [bankNameField]: picked.bankName || undefined,
-                  [bankAccountField]: picked.bankAccount || undefined,
-                });
-              }}
-            />
-          </Form.Item>
-        </Col>
-      ) : null}
-      <Col span={8}>
-        <ProFormText name={accountNameField} label={labelAccountName} />
-      </Col>
-      <Col span={8}>
-        <ProFormText name={bankNameField} label={labelBankName} />
-      </Col>
-      <Col span={8}>
-        <ProFormText name={bankAccountField} label={labelBankAccount} />
-      </Col>
-    </Row>
+    <>
+      <ProFormText name={accountNameField} hidden />
+      <ProFormText name={bankNameField} hidden />
+      <ProFormText name={bankAccountField} hidden />
+      <Form.Item label={labelAccountPick}>
+        <UniDropdown
+          allowClear
+          showSearch
+          optionFilterProp="label"
+          loading={loading}
+          disabled={!supplierReady || loading || accounts.length === 0}
+          placeholder={placeholder}
+          value={matchedIndex >= 0 ? matchedIndex : undefined}
+          options={selectOptions}
+          onChange={(value) => {
+            if (value == null) {
+              form.setFieldsValue({
+                [accountNameField]: undefined,
+                [bankNameField]: undefined,
+                [bankAccountField]: undefined,
+              });
+              return;
+            }
+            const picked = accounts[Number(value)];
+            if (!picked) return;
+            form.setFieldsValue({
+              [accountNameField]: picked.accountName || undefined,
+              [bankNameField]: picked.bankName || undefined,
+              [bankAccountField]: picked.bankAccount || undefined,
+            });
+          }}
+        />
+      </Form.Item>
+    </>
   );
 }

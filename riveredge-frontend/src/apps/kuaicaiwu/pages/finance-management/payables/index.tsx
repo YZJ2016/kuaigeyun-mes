@@ -110,6 +110,7 @@ const PayableList: React.FC = () => {
     const createFormRef = useRef<ProFormInstance>(null);
     const [pullForm] = Form.useForm();
     const [createModalVisible, setCreateModalVisible] = useState(false);
+    const [createSeed, setCreateSeed] = useState<Record<string, unknown> | undefined>(undefined);
     const [editingRecord, setEditingRecord] = useState<Payable | null>(null);
     const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
     const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
@@ -396,7 +397,7 @@ const PayableList: React.FC = () => {
 
     const pullFromPurchaseOrderQuery = useUniPullQuery<PayablePullCandidate>({
         rowKey: 'id',
-        selectionType: 'radio',
+        selectionType: 'checkbox',
         scopeOptions: pullQueryScopeOptions,
         defaultScope: 'pullable',
         isRowDisabled: (record) => !isPullPayableSelectable(record),
@@ -418,15 +419,21 @@ const PayableList: React.FC = () => {
             }
         },
         onConfirm: async (keys, rows) => {
-            const selected = rows.find((x) => String(x.id) === String(keys[0]));
-            if (!selected?.id) {
+            const selectedIds = rows
+                .filter((x) => keys.some((k) => String(k) === String(x.id)))
+                .map((x) => Number(x.id))
+                .filter((id) => Number.isFinite(id) && id > 0);
+            if (!selectedIds.length) {
                 messageApi.warning(t(`${P}.selectSource`, { label: pullFromPurchaseOrderAction.sourceLabel }));
                 return;
             }
-            await openPullPreview('purchase_order', selected.id, {
+            await openPullPreview('purchase_order', selectedIds[0], {
                 closeSourceModal: () => pullFromPurchaseOrderCloseRef.current?.(),
                 reopenSourceModal: () => pullFromPurchaseOrderOpenRef.current?.(),
             });
+            if (selectedIds.length > 1) {
+                messageApi.info(t(`${P}.pull.multiSelectedFirstOnly`));
+            }
         },
     });
     pullFromPurchaseOrderCloseRef.current = pullFromPurchaseOrderQuery.closeModal;
@@ -1105,23 +1112,48 @@ const PayableList: React.FC = () => {
                         key="create-payable-with-pull"
                         createIcon={<PlusOutlined />}
                         createLabel={t(`${P}.createTitle`)}
-                        onCreate={() => setCreateModalVisible(true)}
-                        menuItems={buildKuaicaiwuPullCreateMenuItems([
+                        onCreate={() => {
+                            setCreateSeed(undefined);
+                            setCreateModalVisible(true);
+                        }}
+                        menuItems={[
+                            ...buildKuaicaiwuPullCreateMenuItems([
+                                {
+                                    key: 'pull-from-purchase-order',
+                                    actionKey: 'payable.pull_from_purchase_order',
+                                    onClick: () => {
+                                        pullFromPurchaseOrderQuery.openModal();
+                                    },
+                                },
+                                {
+                                    key: 'pull-from-purchase-receipt',
+                                    actionKey: 'payable.pull_from_purchase_receipt',
+                                    onClick: () => {
+                                        pullFromPurchaseReceiptQuery.openModal();
+                                    },
+                                },
+                            ]),
+                            { type: 'divider', key: 'copy-selected-divider' },
                             {
-                                key: 'pull-from-purchase-order',
-                                actionKey: 'payable.pull_from_purchase_order',
+                                key: 'copy-selected',
+                                label: t(`${P}.copySelectedCreate`),
+                                disabled:
+                                    selectedRecordsForBatch.length !== 1
+                                    || isPurchaseReturnOffsetPayable(selectedRecordsForBatch[0]),
                                 onClick: () => {
-                                    pullFromPurchaseOrderQuery.openModal();
+                                    const row = selectedRecordsForBatch[0];
+                                    if (!row || isPurchaseReturnOffsetPayable(row)) return;
+                                    setCreateSeed({
+                                        supplier_id: row.supplier_id,
+                                        total_amount: row.total_amount,
+                                        business_date: dayjs(),
+                                        due_date: row.due_date ? dayjs(row.due_date) : dayjs().add(30, 'day'),
+                                        notes: row.notes,
+                                    });
+                                    setCreateModalVisible(true);
                                 },
                             },
-                            {
-                                key: 'pull-from-purchase-receipt',
-                                actionKey: 'payable.pull_from_purchase_receipt',
-                                onClick: () => {
-                                    pullFromPurchaseReceiptQuery.openModal();
-                                },
-                            },
-                        ])}
+                        ]}
                     />,
                 ]}
                 enableRowSelection
@@ -1454,9 +1486,14 @@ const PayableList: React.FC = () => {
             </Modal>
 
             <ModalForm
+                key={createSeed ? 'create-payable-copy' : 'create-payable'}
                 title={t(`${P}.createTitle`)}
                 open={createModalVisible}
-                onOpenChange={setCreateModalVisible}
+                onOpenChange={(open) => {
+                    setCreateModalVisible(open);
+                    if (!open) setCreateSeed(undefined);
+                }}
+                initialValues={createSeed}
                 onFinish={handleCreate}
                 formRef={createFormRef}
                 width={MODAL_CONFIG.STANDARD_WIDTH}

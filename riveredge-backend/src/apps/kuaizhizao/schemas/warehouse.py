@@ -1036,6 +1036,15 @@ class PurchaseReceiptUpdate(PurchaseReceiptBase):
     )
 
 
+class PurchaseReceiptFinanceOutcome(BaseSchema):
+    """采购入库确认后的应付立账结果。"""
+
+    payable_recognition: str = Field(..., description="入库单立账策略")
+    auto_payable_skipped: bool = Field(False, description="是否未在确认入库时自动生成应付")
+    auto_payable_skip_reason: Optional[str] = Field(None, description="未自动立应付的原因")
+    auto_payable_id: Optional[int] = Field(None, description="自动生成的应付单 ID")
+
+
 class PurchaseReceiptResponse(PurchaseReceiptBase):
     """采购入库单响应schema"""
     id: int = Field(..., description="入库单ID")
@@ -1061,6 +1070,9 @@ class PurchaseReceiptResponse(PurchaseReceiptBase):
     )
     items: Optional[List[DocumentLineMaterialPreview]] = Field(
         None, description="明细物料名预览（列表「明细」列）",
+    )
+    finance_outcome: Optional[PurchaseReceiptFinanceOutcome] = Field(
+        None, description="确认入库时的应付立账结果（仅确认接口返回）",
     )
 
     class Config:

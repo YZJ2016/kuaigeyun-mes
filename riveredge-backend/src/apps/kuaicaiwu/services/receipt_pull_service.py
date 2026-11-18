@@ -4,8 +4,9 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from tortoise.queryset import Q
 
@@ -294,6 +295,249 @@ class ReceiptPullService(AppBaseService[Receipt]):
             )
         return {"data": rows, "total": total, "success": True}
 
+    async def preview_pull_from_receivables(
+        self,
+        tenant_id: int,
+        receivable_ids: Sequence[int],
+        *,
+        operator_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        ids = self._normalize_source_ids(receivable_ids)
+        if len(ids) == 1:
+            return await self.preview_pull_from_receivable(
+                tenant_id, ids[0], operator_id=operator_id
+            )
+
+        merged_items: List[Dict[str, Any]] = []
+        blocking_reasons: List[str] = []
+        customer_id: Optional[int] = None
+        customer_name: Optional[str] = None
+        codes: List[str] = []
+
+        for rid in ids:
+            fragment = await self.preview_pull_from_receivable(
+                tenant_id, rid, operator_id=operator_id
+            )
+            frag_customer = int(fragment.get("customer_id") or 0)
+            if customer_id is None:
+                customer_id = frag_customer
+                customer_name = str(fragment.get("customer_name") or "")
+            elif frag_customer != int(customer_id or 0):
+                raise BusinessLogicError("多笔一起加载须为同一客户")
+
+            codes.append(str(fragment.get("source_code") or rid))
+            if fragment.get("has_blocking_issues"):
+                reason = str(fragment.get("blocking_reason") or "")
+                if reason:
+                    blocking_reasons.append(reason)
+            merged_items.extend(fragment.get("items") or [])
+
+        max_push_total = sum(
+            Decimal(str(item.get("max_push_quantity") or 0)) for item in merged_items
+        )
+        allowed = not blocking_reasons and max_push_total > 0
+        joined_codes = "、".join(codes)
+        return {
+            "target_type": "receipt",
+            "source_type": "receivable",
+            "source_id": ids[0],
+            "source_ids": ids,
+            "source_code": joined_codes,
+            "summary": (
+                f"将从 {len(ids)} 张应收单创建收款单（可收款合计 ¥{float(max_push_total):,.2f}）"
+                if allowed
+                else "所选应收单当前不可一起加载收款单"
+            ),
+            "items": merged_items,
+            "has_blocking_issues": not allowed,
+            "blocking_reason": blocking_reasons[0] if blocking_reasons else None,
+            "tip": "收款金额不可超过可收款合计；作废未核销收款单后，可收款金额自动回退。",
+            "customer_id": customer_id,
+            "customer_name": customer_name,
+            "receivable_id": ids[0],
+            "receivable_code": codes[0] if codes else None,
+            "max_push_total": float(max_push_total),
+        }
+
+    async def list_sales_order_prepayment_pull_candidates(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        customer_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """预收收款单：按客户列出可加载预收的销售订单（仅需收款权限，不走销售订单列表数据范围）。"""
+        from tortoise.expressions import Q
+
+        from apps.kuaizhizao.constants import DemandStatus
+        from apps.kuaizhizao.models.sales_order import SalesOrder
+        from apps.kuaizhizao.models.sales_order_milestone import SalesOrderMilestone
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            _order_prepayment_linked_by_ids,
+        )
+        from apps.kuaizhizao.services.document_action_policy.sales_order import (
+            derive_sales_order_capabilities,
+        )
+
+        if customer_id is None or int(customer_id) <= 0:
+            return {"data": [], "total": 0, "success": True}
+
+        audited_q = (
+            Q(status=DemandStatus.AUDITED.value)
+            | Q(status=DemandStatus.CONFIRMED.value)
+            | Q(status__in=["已审核", "审核通过", "已确认", "AUDITED", "CONFIRMED"])
+        )
+        query = SalesOrder.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            customer_id=int(customer_id),
+        ).filter(audited_q)
+        kw = str(keyword or "").strip()
+        if kw:
+            query = query.filter(Q(order_code__icontains=kw) | Q(customer_name__icontains=kw))
+
+        total = await query.count()
+        orders = await query.offset(skip).limit(limit).order_by("-created_at")
+        order_ids = [int(o.id) for o in orders]
+        if not order_ids:
+            return {"data": [], "total": total, "success": True}
+
+        prepay_map = await _order_prepayment_linked_by_ids(
+            tenant_id,
+            order_ids,
+            source_type="sales_order",
+            target_type="receipt",
+        )
+        milestone_amounts: Dict[int, Decimal] = {}
+        for sid, amt in await SalesOrderMilestone.filter(
+            tenant_id=tenant_id,
+            sales_order_id__in=order_ids,
+            is_prepayment=True,
+        ).values_list("sales_order_id", "planned_amount"):
+            milestone_amounts[int(sid)] = Decimal(str(amt or 0))
+
+        rows: List[Dict[str, Any]] = []
+        for order in orders:
+            oid = int(order.id)
+            prepay_amt = Decimal(str(order.prepayment_amount or 0))
+            if prepay_amt <= 0:
+                prepay_amt = milestone_amounts.get(oid, Decimal("0"))
+            caps = derive_sales_order_capabilities(
+                order,
+                has_prepayment_receipt=prepay_map.get(oid, False),
+                has_items=True,
+            )
+            prepay_cap = caps.push_prepayment
+            pullable = bool(prepay_cap.allowed) and prepay_amt > 0
+            reason = prepay_cap.reason
+            if prepay_amt <= 0:
+                reason = "sales_order.push_prepayment.no_amount"
+            code = str(order.order_code or oid)
+            order_date = getattr(order, "order_date", None)
+            rows.append(
+                {
+                    "id": oid,
+                    "code": code,
+                    "order_code": code,
+                    "customer_id": order.customer_id,
+                    "customer_name": order.customer_name,
+                    "partnerName": order.customer_name,
+                    "documentDate": str(order_date) if order_date else None,
+                    "source_date": str(order_date) if order_date else "",
+                    "amount": float(prepay_amt) if prepay_amt > 0 else None,
+                    "status": order.status,
+                    "review_status": getattr(order, "review_status", None),
+                    "capabilities": {
+                        "pull_prepayment": {
+                            "allowed": pullable,
+                            "reason": reason if not pullable else None,
+                        }
+                    },
+                }
+            )
+        return {"data": rows, "total": total, "success": True}
+
+    async def preview_pull_from_sales_order(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        *,
+        amount: Optional[Decimal] = None,
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.models.sales_order import SalesOrder
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            _order_prepayment_linked_by_ids,
+        )
+        from apps.kuaizhizao.services.document_action_policy.sales_order import (
+            derive_sales_order_capabilities,
+        )
+        from apps.kuaizhizao.services.payment_application_line_materials import (
+            lines_from_sales_order_items,
+        )
+
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+
+        prepay_map = await _order_prepayment_linked_by_ids(
+            tenant_id,
+            [sales_order_id],
+            source_type="sales_order",
+            target_type="receipt",
+        )
+        has_receipt = prepay_map.get(sales_order_id, False)
+        max_push = Decimal(str(order.prepayment_amount or 0))
+        caps = derive_sales_order_capabilities(order, has_prepayment_receipt=has_receipt)
+        prepay_cap = caps.push_prepayment
+        allowed = bool(prepay_cap.allowed) and max_push > 0
+        preview_items: List[Dict[str, Any]] = []
+        if allowed:
+            req_amt = Decimal(str(amount)) if amount is not None else max_push
+            if req_amt > max_push:
+                raise ValidationError(f"收款金额超过可预收额度 {max_push}")
+            if req_amt <= 0:
+                raise ValidationError("收款金额必须大于 0")
+            line_models = await lines_from_sales_order_items(
+                tenant_id=tenant_id,
+                order=order,
+                request_amount=req_amt,
+                line_kind="prepayment",
+            )
+            preview_items = [
+                ln.model_dump(by_alias=True, mode="json") for ln in line_models
+            ]
+        code = str(order.order_code or sales_order_id)
+        max_push_f = float(max_push)
+        blocking_reason = prepay_cap.reason if not prepay_cap.allowed else (
+            "sales_order.push_prepayment.no_amount" if max_push <= 0 else (
+                "sales_order.push_prepayment.already_exists" if has_receipt else None
+            )
+        )
+        return {
+            "target_type": "receipt",
+            "source_type": "sales_order",
+            "source_id": sales_order_id,
+            "source_code": code,
+            "order_code": code,
+            "max_push_quantity": max_push_f,
+            "max_push_total": max_push_f,
+            "source_order_amount": max_push_f,
+            "summary": (
+                f"将从销售订单 {code} 加载预收明细（可预收 ¥{max_push_f:,.2f}）"
+                if allowed
+                else f"销售订单 {code} 当前不可加载预收明细"
+            ),
+            "items": preview_items,
+            "has_blocking_issues": not allowed,
+            "blocking_reason": blocking_reason,
+            "tip": "预收收款单须对应尚未关联预收收款单的销售订单；确认过账后关联销售订单。",
+            "customer_id": order.customer_id,
+            "customer_name": order.customer_name,
+        }
+
     async def assert_pull_create_allowed(
         self,
         tenant_id: int,
@@ -301,8 +545,25 @@ class ReceiptPullService(AppBaseService[Receipt]):
         source_type: str,
         source_id: int,
         total_amount: Decimal,
+        operator_id: Optional[int] = None,
     ) -> Dict[str, Any]:
-        if source_type != "receivable":
+        normalized = str(source_type or "").strip()
+        if normalized == "sales_order":
+            preview = await self.preview_pull_from_sales_order(
+                tenant_id, source_id, amount=total_amount
+            )
+            if preview.get("has_blocking_issues"):
+                reason = preview.get("blocking_reason") or "当前不可加载预收明细"
+                raise BusinessLogicError(reason)
+            max_push = Decimal(
+                str(preview.get("max_push_quantity") or preview.get("max_push_total") or 0)
+            )
+            if max_push <= 0:
+                raise BusinessLogicError("无可预收金额")
+            if total_amount > max_push:
+                raise BusinessLogicError(f"收款金额 {total_amount} 超过可预收金额 {max_push}")
+            return preview
+        if normalized != "receivable":
             raise BusinessLogicError(f"不支持的加载源单类型: {source_type}")
         preview = await self.preview_pull_from_receivable(tenant_id, source_id)
         if preview.get("has_blocking_issues"):
@@ -558,8 +819,55 @@ class ReceiptPullService(AppBaseService[Receipt]):
         receipt_id: int,
         operator_id: int,
     ) -> bool:
-        """确认草稿收款单时：若由应收单加载创建且尚未核销，补做核销。预收款不自动核销。"""
+        """确认草稿收款单时：若由应收单加载创建且尚未核销，补做核销。预收款不自动核销。
+
+        确认前先按应收剩余回写本单及同应收上更晚的草稿，避免先开满额草稿、后核销预收时按旧总额审核失败。
+        """
         from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+        from apps.kuaicaiwu.models.receipt_pull_line import ReceiptPullLine
+
+        receipt = await Receipt.get_or_none(
+            tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+        )
+        if not receipt:
+            return False
+        if str(getattr(receipt, "settlement_type", "normal") or "normal") == "prepayment":
+            return False
+
+        pull_rows = await ReceiptPullLine.filter(
+            tenant_id=tenant_id,
+            receipt_id=receipt_id,
+            deleted_at__isnull=True,
+            source_type="receivable",
+        ).order_by("line_no")
+        if pull_rows:
+            settled_any = False
+            by_receivable: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+            for pl in pull_rows:
+                by_receivable[int(pl.source_id)] += Decimal(str(pl.amount or 0))
+            for receivable_id, amount in by_receivable.items():
+                if amount <= 0:
+                    continue
+                await self.align_draft_receipts_to_receivable_remaining(tenant_id, receivable_id)
+                receipt = await Receipt.get_or_none(
+                    tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+                )
+                if not receipt:
+                    return settled_any
+                unsettled = Decimal(str(receipt.unsettled_amount or 0))
+                if unsettled <= 0:
+                    raise ValidationError("应收已由其他收款核销，本单已无待收金额")
+                settle_amt = min(amount, unsettled)
+                await self.settle_pull_created_receipt(
+                    tenant_id=tenant_id,
+                    receivable_id=receivable_id,
+                    receipt_id=receipt_id,
+                    amount=settle_amt,
+                    operator_id=operator_id,
+                )
+                settled_any = True
+            return settled_any
 
         rel = await DocumentRelation.filter(
             tenant_id=tenant_id,
@@ -576,9 +884,15 @@ class ReceiptPullService(AppBaseService[Receipt]):
         if str(getattr(receipt, "settlement_type", "normal") or "normal") == "prepayment":
             # 预收款保留未核销余额，供预收预付余额与「预收转核销」使用，不因来源应收单自动核销。
             return False
+        await self.align_draft_receipts_to_receivable_remaining(
+            tenant_id, int(rel.source_id)
+        )
+        receipt = await Receipt.get_or_none(tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True)
+        if not receipt:
+            return False
         unsettled = Decimal(str(receipt.unsettled_amount or 0))
         if unsettled <= 0:
-            return False
+            raise ValidationError("应收已由其他收款核销，本单已无待收金额")
 
         await self.settle_pull_created_receipt(
             tenant_id=tenant_id,
@@ -588,3 +902,194 @@ class ReceiptPullService(AppBaseService[Receipt]):
             operator_id=operator_id,
         )
         return True
+
+    async def validate_pull_lines_for_create(
+        self,
+        tenant_id: int,
+        *,
+        pull_lines: Sequence[Any],
+        total_amount: Decimal,
+        settlement_type: Optional[str] = None,
+        operator_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        from apps.kuaicaiwu.services.payment_pull_service import (
+            coerce_pull_lines_for_validate,
+            pull_line_field,
+        )
+
+        pull_lines = coerce_pull_lines_for_validate(pull_lines)
+        if not pull_lines:
+            raise BusinessLogicError("加载明细不能为空")
+        source_types = {
+            str(pull_line_field(line, "source_type", "") or "").strip() for line in pull_lines
+        }
+        source_types.discard("")
+        if len(source_types) != 1:
+            raise BusinessLogicError(
+                "同一收款单不可混选不同来源类型" if len(source_types) > 1 else "加载明细不能为空"
+            )
+        normalized_type = next(iter(source_types))
+        if normalized_type not in ("receivable", "sales_order"):
+            raise BusinessLogicError(f"不支持的加载源单类型: {normalized_type}")
+        settlement = str(settlement_type or "normal").strip() or "normal"
+        if normalized_type == "sales_order" and settlement != "prepayment":
+            raise BusinessLogicError("销售订单加载明细仅用于预收收款单")
+        if normalized_type == "receivable" and settlement == "prepayment":
+            raise BusinessLogicError("预收类型不可从应收单加载明细")
+
+        line_total = Decimal("0")
+        first_preview: Optional[Dict[str, Any]] = None
+        if normalized_type == "sales_order":
+            by_so: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+            for line in pull_lines:
+                amount = Decimal(str(pull_line_field(line, "amount", 0) or 0))
+                if amount <= 0:
+                    raise BusinessLogicError("明细收款金额须大于 0")
+                line_total += amount
+                source_id = int(pull_line_field(line, "source_id", 0) or 0)
+                if source_id <= 0:
+                    raise BusinessLogicError("销售订单加载明细缺少来源单")
+                by_so[source_id] += amount
+            for so_id, so_total in by_so.items():
+                preview = await self.assert_pull_create_allowed(
+                    tenant_id=tenant_id,
+                    source_type=normalized_type,
+                    source_id=so_id,
+                    total_amount=so_total,
+                    operator_id=operator_id,
+                )
+                if first_preview is None:
+                    first_preview = preview
+        else:
+            for line in pull_lines:
+                amount = Decimal(str(pull_line_field(line, "amount", 0) or 0))
+                if amount <= 0:
+                    raise BusinessLogicError("明细收款金额须大于 0")
+                line_total += amount
+                source_id = int(pull_line_field(line, "source_id", 0) or 0)
+                preview = await self.assert_pull_create_allowed(
+                    tenant_id=tenant_id,
+                    source_type=normalized_type,
+                    source_id=source_id,
+                    total_amount=amount,
+                    operator_id=operator_id,
+                )
+                if first_preview is None:
+                    first_preview = preview
+
+        expected = Decimal(str(total_amount or 0)).quantize(Decimal("0.01"))
+        if line_total.quantize(Decimal("0.01")) != expected:
+            raise BusinessLogicError("收款总额须与明细合计一致")
+        return first_preview or {}
+
+    async def persist_pull_lines(
+        self,
+        tenant_id: int,
+        *,
+        receipt_id: int,
+        receipt_code: str,
+        pull_lines: Sequence[Any],
+        created_by: int,
+    ) -> None:
+        from apps.kuaicaiwu.models.receipt_pull_line import ReceiptPullLine
+        from apps.kuaicaiwu.services.payment_pull_service import pull_line_field
+
+        relation_seen: set[tuple[str, int]] = set()
+        for index, line in enumerate(pull_lines, start=1):
+            source_type = str(pull_line_field(line, "source_type", "") or "").strip()
+            source_id = int(pull_line_field(line, "source_id", 0) or 0)
+            source_code = str(pull_line_field(line, "source_code", "") or "").strip() or str(
+                source_id
+            )
+            amount = Decimal(str(pull_line_field(line, "amount", 0) or 0))
+            await ReceiptPullLine.create(
+                tenant_id=tenant_id,
+                receipt_id=receipt_id,
+                line_no=index,
+                source_type=source_type,
+                source_id=source_id,
+                source_code=source_code,
+                amount=amount,
+            )
+            rel_key = (source_type, source_id)
+            if rel_key in relation_seen:
+                continue
+            relation_seen.add(rel_key)
+            await self.create_pull_relation(
+                tenant_id=tenant_id,
+                source_type=source_type,
+                source_id=source_id,
+                source_code=source_code,
+                receipt_id=receipt_id,
+                receipt_code=receipt_code,
+                created_by=created_by,
+            )
+
+    async def list_pull_lines_for_receipt(
+        self,
+        tenant_id: int,
+        receipt_id: int,
+    ) -> List[Dict[str, Any]]:
+        from apps.kuaicaiwu.models.receipt_pull_line import ReceiptPullLine
+
+        rows = await ReceiptPullLine.filter(
+            tenant_id=tenant_id,
+            receipt_id=receipt_id,
+            deleted_at__isnull=True,
+        ).order_by("line_no")
+        return [
+            {
+                "line_no": int(r.line_no),
+                "source_type": str(r.source_type),
+                "source_id": int(r.source_id),
+                "source_code": r.source_code,
+                "amount": Decimal(str(r.amount or 0)),
+            }
+            for r in rows
+        ]
+
+    async def clear_receipt_pull_sources(self, tenant_id: int, receipt_id: int) -> None:
+        from core.utils.timezone_utils import resolve_business_datetime
+
+        from apps.kuaicaiwu.models.receipt_pull_line import ReceiptPullLine
+
+        now = resolve_business_datetime()
+        await ReceiptPullLine.filter(
+            tenant_id=tenant_id,
+            receipt_id=receipt_id,
+            deleted_at__isnull=True,
+        ).update(deleted_at=now)
+        await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            target_type="receipt",
+            target_id=receipt_id,
+            relation_mode="pull",
+            source_type__in=["receivable", "sales_order"],
+        ).delete()
+
+    async def replace_receipt_pull_lines(
+        self,
+        tenant_id: int,
+        *,
+        receipt_id: int,
+        receipt_code: str,
+        pull_lines: Sequence[Any],
+        total_amount: Decimal,
+        operator_id: int,
+        settlement_type: Optional[str] = None,
+    ) -> None:
+        await self.validate_pull_lines_for_create(
+            tenant_id,
+            pull_lines=pull_lines,
+            total_amount=total_amount,
+            settlement_type=settlement_type,
+            operator_id=operator_id,
+        )
+        await self.clear_receipt_pull_sources(tenant_id, receipt_id)
+        await self.persist_pull_lines(
+            tenant_id,
+            receipt_id=receipt_id,
+            receipt_code=receipt_code,
+            pull_lines=pull_lines,
+            created_by=operator_id,
+        )

@@ -12,6 +12,7 @@ from .standard_cost import StandardCost
 from .settlement import SettlementRecord
 from .partner_statement import PartnerStatement
 from .receipt import Receipt
+from .receipt_pull_line import ReceiptPullLine
 from .payment import Payment
 from .payment_advance_record import PaymentAdvanceRecord
 from .payment_pull_line import PaymentPullLine
@@ -95,6 +96,7 @@ __all__ = [
     "FaDepreciationAdjustment",
     "FaPeriodClose",
     "PaymentAdvanceRecord",
+    "ReceiptPullLine",
     "PaymentPullLine",
     "PaymentOffsetPrepaymentLine",
     "FundTransfer",

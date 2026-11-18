@@ -63,6 +63,7 @@ export interface PartnerStatement {
   credit_total: number;
   closing_balance: number;
   status: string;
+  ledger_posting_mode?: 'immediate' | 'by_invoice' | string;
   company_name?: string;
   transaction_details?: {
     summary?: PartnerStatementSummary;

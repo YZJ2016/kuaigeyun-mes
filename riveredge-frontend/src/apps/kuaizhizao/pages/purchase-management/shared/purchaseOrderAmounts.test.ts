@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  computePurchaseReceiptFormLineAmounts,
   computePurchaseOrderHeaderAmountsForSave,
   computePurchaseReceiptFormLineAmounts,
   purchaseOrderFormLineToStored,
@@ -65,7 +64,7 @@ describe('purchaseOrderAmounts unified with documentLineAmounts', () => {
 
   it('purchase receipt standalone line tax_inclusive matches purchase order logic', () => {
     const line = computePurchaseReceiptFormLineAmounts(
-      { receipt_quantity: 1, unit_price: 60, tax_rate: 13 },
+      { receipt_quantity: 1, display_unit_price: 60, unit_price: 53.1, tax_rate: 13 },
       13,
       'tax_inclusive',
       null,
@@ -75,7 +74,24 @@ describe('purchaseOrderAmounts unified with documentLineAmounts', () => {
     expect(line.tax).toBeCloseTo(6.9, 2);
   });
 
-  it('purchase receipt PO line uses proportional gross not qty×rate tail', () => {
+  it('purchase receipt API row uses display_unit_price not stored excl unit', () => {
+    const line = computePurchaseReceiptFormLineAmounts(
+      {
+        receipt_quantity: 2,
+        display_unit_price: 55,
+        unit_price: 48.6725,
+        tax_rate: 13,
+      },
+      13,
+      'tax_inclusive',
+      null,
+    );
+    expect(line.incl).toBe(110);
+    expect(line.excl).toBeCloseTo(97.35, 2);
+    expect(line.tax).toBeCloseTo(12.65, 2);
+  });
+
+  it('purchase receipt uses qty times entered price even when PO total differs by a cent', () => {
     const poCtx = {
       priceType: 'tax_exclusive' as const,
       headerTaxRate: 0.13,
@@ -94,12 +110,14 @@ describe('purchaseOrderAmounts unified with documentLineAmounts', () => {
         unit_price: 8.8496,
         tax_rate: 13,
         purchase_order_item_id: 101,
+        total_amount: 8849.56,
       },
       0.13,
       'tax_exclusive',
       poCtx,
     );
-    expect(line.excl).toBe(8849.56);
-    expect(line.incl).toBe(10000);
+    expect(line.excl).toBe(8849.6);
+    expect(line.incl).toBe(10000.05);
+    expect(line.tax).toBe(1150.45);
   });
 });

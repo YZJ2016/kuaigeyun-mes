@@ -482,6 +482,25 @@ async def list_purchase_invoice_payable_pull_candidates(
 
 
 @router.get(
+    "/pull-candidates/partner-statements",
+    summary="List partner statement pull candidates for purchase invoice",
+)
+async def list_purchase_invoice_partner_statement_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await purchase_invoice_pull_service.list_partner_statement_pull_candidates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+    )
+
+
+@router.get(
     "/from-payable/{payable_id}/pull-preview",
     summary="Preview pull purchase invoice from payable",
 )

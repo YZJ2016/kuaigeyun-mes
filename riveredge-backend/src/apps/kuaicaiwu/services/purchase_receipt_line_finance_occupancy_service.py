@@ -583,10 +583,7 @@ async def _line_gross_caps_for_receipt(
     from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
     from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
     from apps.kuaicaiwu.services.purchase_settlement import (
-        compute_purchase_receipt_settlement_gross_from_lines,
-        proportional_line_gross,
-        purchase_receipt_settlement_gross_async,
-        resolve_purchase_receipt_line_excl_amount,
+        compute_purchase_receipt_line_settlement_amounts,
     )
     from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
 
@@ -605,37 +602,14 @@ async def _line_gross_caps_for_receipt(
     if poi_ids:
         for poi in await PurchaseOrderItem.filter(tenant_id=tenant_id, id__in=list(poi_ids)):
             poi_by_id[int(poi.id)] = poi
-    header_excl = Decimal("0")
-    for item in items:
-        qty = Decimal(str(item.receipt_quantity or 0))
-        unit_price = Decimal(str(item.unit_price or 0))
-        poi_id = int(item.purchase_order_item_id or 0) or None
-        header_excl += resolve_purchase_receipt_line_excl_amount(
-            receipt_quantity=qty,
-            unit_price=unit_price,
-            purchase_order_item_id=poi_id,
-            line_total_amount=_q_money(item.total_amount or 0),
-            poi_by_id=poi_by_id,
-        )
-    header_excl = _q_money(header_excl)
-    header_gross = (
-        await purchase_receipt_settlement_gross_async(tenant_id, receipt)
-        if not items
-        else compute_purchase_receipt_settlement_gross_from_lines(receipt, items, poi_by_id)
-    )
     caps: Dict[int, Decimal] = {}
     for item in items:
-        qty = Decimal(str(item.receipt_quantity or 0))
-        unit_price = Decimal(str(item.unit_price or 0))
-        poi_id = int(item.purchase_order_item_id or 0) or None
-        line_excl = resolve_purchase_receipt_line_excl_amount(
-            receipt_quantity=qty,
-            unit_price=unit_price,
-            purchase_order_item_id=poi_id,
-            line_total_amount=_q_money(item.total_amount or 0),
-            poi_by_id=poi_by_id,
+        _, _, line_gross = compute_purchase_receipt_line_settlement_amounts(
+            receipt,
+            item,
+            poi_by_id,
         )
-        caps[int(item.id)] = proportional_line_gross(line_excl, header_excl, header_gross)
+        caps[int(item.id)] = line_gross
     return caps
 
 

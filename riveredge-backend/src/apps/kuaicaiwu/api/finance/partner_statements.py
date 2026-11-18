@@ -76,7 +76,7 @@ async def _to_response(obj) -> PartnerStatementResponse:
 @router.get("/preview", response_model=PartnerStatementPreviewResponse)
 async def preview_partner_statement(
     partner_id: int = Query(...),
-    partner_type: str = Query(..., description="Customer 或 Supplier"),
+    partner_type: str = Query(..., description="Customer、Supplier 或 Outsource"),
     start_date: date = Query(...),
     end_date: date = Query(...),
     _auth: object = Depends(require_permission_codes("kuaicaiwu:partner-statement:read")),
@@ -123,6 +123,7 @@ async def create_partner_statement(
             start_date=data.start_date,
             end_date=data.end_date,
             line_amounts=[item.model_dump() for item in data.line_amounts] if data.line_amounts else None,
+            ledger_posting_mode=str(data.ledger_posting_mode or "immediate"),
         )
         return await _to_response(obj)
     except (ValidationError, NotFoundError, BusinessLogicError) as e:
@@ -257,6 +258,21 @@ async def dispute_partner_statement(
     except (NotFoundError, BusinessLogicError) as e:
         code = 404 if isinstance(e, NotFoundError) else 400
         raise _http_exception_with_trace(code, str(e), "/partner-statements/{id}/dispute", tenant_id)
+
+
+@router.post("/{id}/post-ledger", response_model=PartnerStatementResponse)
+async def post_partner_statement_ledger(
+    id: int,
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:partner-statement:update")),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        obj = await service.post_ledger(tenant_id, id, current_user.id)
+        return await _to_response(obj)
+    except (NotFoundError, BusinessLogicError, ValidationError) as e:
+        code = 404 if isinstance(e, NotFoundError) else 400
+        raise _http_exception_with_trace(code, str(e), "/partner-statements/{id}/post-ledger", tenant_id)
 
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)

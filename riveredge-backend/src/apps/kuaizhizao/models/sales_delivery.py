@@ -36,6 +36,12 @@ class SalesDelivery(BaseModel):
     customer_id = fields.IntField(description="客户ID")
     customer_name = fields.CharField(max_length=200, description="客户名称")
 
+    revenue_recognition = fields.CharField(
+        max_length=32,
+        default="on_shipment",
+        description="立账策略（应收确认时点，单据真源）",
+    )
+
     # 出库信息
     warehouse_id = fields.IntField(description="出库仓库ID")
     warehouse_name = fields.CharField(max_length=100, description="出库仓库名称")

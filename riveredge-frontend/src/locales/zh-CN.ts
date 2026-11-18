@@ -5993,6 +5993,16 @@ export default {
     '价格本客户料号改为非必填',
   'pages.dashboard.updateLog.entries.price-book-partner-code-optional-r01.description':
     '新建或编辑客户/供应商价格本时，客户料号（供应商料号）不再因开启「同步到物料编号映射」而强制必填；未填料号时仅保存价格，不同步编号映射。',
+  'pages.dashboard.updateLog.entries.partner-statement-ledger-line-save-r01.title': '对账单可保存销售出库等立账明细',
+  'pages.dashboard.updateLog.entries.partner-statement-ledger-line-save-r01.description':
+    '按对账单立账模式下，销售出库、采购入库等行纳入 doc 族映射，勾选后生成对账单不再误报「请至少勾选一行」。',
+  'pages.dashboard.updateLog.entries.receipt-prepayment-so-pull-r01.title': '预收收款单可从销售订单取单',
+  'pages.dashboard.updateLog.entries.receipt-prepayment-so-pull-r01.description':
+    '预收加载改走收款专用销售订单候选接口，财务角色无需销售订单列表权限；作废预收单不再占用关联名额。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-amount-qty-price-r01.title':
+    '采购入库价税按数量乘单价',
+  'pages.dashboard.updateLog.entries.purchase-receipt-amount-qty-price-r01.description':
+    '含税入库的价税合计等于数量乘含税单价，税额为价税合计减去未税。列表、明细、新建、编辑和取单使用同一公式，不再把未税金额乘税率多出 1 分。',
   'pages.dashboard.updateLog.entries.payment-app-approval-completion-writeback-r01.title':
     '付款申请流程结束后状态未变为已批准',
   'pages.dashboard.updateLog.entries.payment-app-approval-completion-writeback-r01.description':
@@ -25535,6 +25545,7 @@ export default {
   'app.kuaicaiwu.payment.batchUnconfirmed': '已撤回确认 {{count}} 条付款单',
   'app.kuaicaiwu.payment.batchUnconfirmNoneEligible': '所选付款单均不可撤回确认',
   'app.kuaicaiwu.payment.batchUnconfirmFailed': '批量撤回确认失败',
+  'app.kuaicaiwu.payment.batchConfirmNoneEligible': '所选付款单均不可确认（仅草稿可确认）',
   'app.kuaicaiwu.payment.batchConfirmTitle': '确认批量确认 {{count}} 条付款单',
   'app.kuaicaiwu.payment.batchConfirmDesc': '仅草稿付款单可确认，不满足条件的记录会由后端拒绝。',
   'app.kuaicaiwu.payment.batchVoidTitle': '确认批量作废 {{count}} 条付款单',
