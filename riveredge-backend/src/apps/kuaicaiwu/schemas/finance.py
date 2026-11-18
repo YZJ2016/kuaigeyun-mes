@@ -381,6 +381,26 @@ class PaymentPullLineResponse(BaseSchema):
     max_amount: Optional[Decimal] = Field(None, description="可付上限（草稿读侧 enrich）")
 
 
+class PaymentOffsetPrepaymentLineCreate(BaseSchema):
+    """预付抵扣：预付款付款单扣减行（创建/更新）"""
+
+    prepayment_payment_id: int = Field(..., gt=0, description="预付款付款单ID")
+    source_code: Optional[str] = Field(None, max_length=50, description="预付款单号")
+    amount: Decimal = Field(..., gt=0, description="本次抵扣金额")
+
+
+class PaymentOffsetPrepaymentLineResponse(BaseSchema):
+    """预付抵扣：预付款付款单扣减行（读）"""
+
+    line_no: int
+    prepayment_payment_id: int
+    source_code: Optional[str] = None
+    amount: Decimal
+    purchase_order_id: Optional[int] = Field(None, description="关联采购订单ID")
+    purchase_order_code: Optional[str] = Field(None, description="关联采购订单号")
+    unsettled_amount: Optional[Decimal] = Field(None, description="预付款单未核销余额（草稿 enrich）")
+
+
 class PaymentVoucherBase(BaseSchema):
     """付款单基础schema"""
     supplier_id: int = Field(..., description="供应商ID")
@@ -412,6 +432,9 @@ class PaymentVoucherCreate(PaymentVoucherBase):
     pull_lines: Optional[List[PaymentPullLineCreate]] = Field(
         None, description="加载明细行（与 source_type/source_id 二选一）"
     )
+    offset_prepayment_lines: Optional[List[PaymentOffsetPrepaymentLineCreate]] = Field(
+        None, description="预付抵扣：指定预付款付款单及扣减金额"
+    )
 
 
 class PaymentVoucherUpdate(BaseSchema):
@@ -433,6 +456,9 @@ class PaymentVoucherUpdate(BaseSchema):
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
     pull_lines: Optional[List[PaymentPullLineCreate]] = Field(
         None, description="替换加载明细（仅草稿）"
+    )
+    offset_prepayment_lines: Optional[List[PaymentOffsetPrepaymentLineCreate]] = Field(
+        None, description="替换预付抵扣预付款明细（仅草稿）"
     )
 
 
@@ -463,7 +489,14 @@ class PaymentVoucherResponse(PaymentVoucherBase):
         None, description="加载来源单据（应付单 / 付款申请）"
     )
     pull_lines: Optional[List[PaymentPullLineResponse]] = None
+    offset_prepayment_lines: Optional[List[PaymentOffsetPrepaymentLineResponse]] = None
     capabilities: Optional[Dict[str, Any]] = None
+    linked_payable_total_amount: Optional[Decimal] = Field(
+        None, description="列表 enrichment：关联应付单应付总额合计"
+    )
+    linked_payable_remaining_amount: Optional[Decimal] = Field(
+        None, description="列表 enrichment：关联应付单剩余金额合计"
+    )
 
     class Config:
         from_attributes = True

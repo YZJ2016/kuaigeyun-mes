@@ -15,6 +15,7 @@ from .receipt import Receipt
 from .payment import Payment
 from .payment_advance_record import PaymentAdvanceRecord
 from .payment_pull_line import PaymentPullLine
+from .payment_offset_prepayment_line import PaymentOffsetPrepaymentLine
 from .fund_transfer import FundTransfer
 from .purchase_receipt_line_finance_occupancy import PurchaseReceiptLineFinanceOccupancy
 from .accounting_event import AccountingEvent
@@ -95,5 +96,6 @@ __all__ = [
     "FaPeriodClose",
     "PaymentAdvanceRecord",
     "PaymentPullLine",
+    "PaymentOffsetPrepaymentLine",
     "FundTransfer",
 ]

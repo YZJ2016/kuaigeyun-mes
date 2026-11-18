@@ -10387,14 +10387,9 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 }
             )
         lines.sort(
-            key=lambda r: (
-                str(r.get("order_code") or ""),
-                str(r.get("material_code") or ""),
-                int(r.get("id") or 0),
-            )
+            key=lambda r: (str(r.get("material_code") or ""), int(r.get("id") or 0))
         )
-        # 稳定排序：同日内保持单号序，整体按单据日期倒序（新在前）
-        lines.sort(key=lambda r: str(r.get("document_date") or ""), reverse=True)
+        lines.sort(key=lambda r: str(r.get("order_code") or ""), reverse=True)
         return {"data": lines[skip : skip + limit], "total": len(lines)}
 
     async def create_purchase_receipts_from_po_items(

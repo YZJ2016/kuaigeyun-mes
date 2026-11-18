@@ -2,6 +2,8 @@
  * 收/付款单入账账户字段：按付款方式过滤银行账户 / 库存现金。
  */
 import React, { useEffect, useRef } from 'react';
+import { Col, Row } from 'antd';
+import { FORM_LAYOUT } from '../../../components/layout-templates/constants';
 import { ProForm, ProFormDependency, ProFormSelect, ProFormText } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import type { BankAccount } from '../services/finance/bank-account';
@@ -26,6 +28,10 @@ type Props = {
    * 父级已用 `grid={false}` + 手写 Row/Col 时开启：不再传 ProForm colProps，避免嵌套 Col 裁切标签。
    */
   omitColProps?: boolean;
+  /** 与 `FinanceFormFieldGroup` 内 Row 联用：字段外包 Col，须同时 omitColProps */
+  rowNestedSpans?: { account: number; note: number };
+  /** 父级已包 Row 时：直接输出 Col 子项，不再套 Col24/内层 Row */
+  parentProvidesRow?: boolean;
   /** 付款方式为「票据」时关联应收/应付票据台账 */
   acceptanceNoteDirection?: FinanceNoteDirection;
   partnerFieldName?: 'customer_id' | 'supplier_id';
@@ -77,37 +83,57 @@ export const LedgerAccountFormFields: React.FC<Props> = ({
   accountColProps = { span: 12 },
   noteColProps = { span: 12 },
   omitColProps = false,
+  rowNestedSpans,
+  parentProvidesRow = false,
   acceptanceNoteDirection,
   partnerFieldName = 'customer_id',
 }) => {
   const { t } = useTranslation();
-  const accountCols = omitColProps ? undefined : accountColProps;
-  const noteCols = omitColProps ? undefined : noteColProps;
+  const nested = rowNestedSpans != null;
+  const inlineInParentRow = nested && parentProvidesRow;
+  const accountCols = omitColProps || nested ? undefined : accountColProps;
+  const noteCols = omitColProps || nested ? undefined : noteColProps;
 
-  return (
-    <>
-      <SyncLedgerAccountWithPaymentMethod accounts={accounts} />
-      <ProFormDependency name={['payment_method']}>
-        {({ payment_method }) => {
+  const wrapNested = (node: React.ReactNode, span: number) =>
+    nested ? <Col span={span}>{node}</Col> : node;
+
+  const layoutNested = (cols: React.ReactNode) => {
+    if (!nested) return cols;
+    if (inlineInParentRow) return cols;
+    return (
+      <Row gutter={FORM_LAYOUT.GRID_GUTTER} className="finance-form-field-group__row" wrap>
+        {cols}
+      </Row>
+    );
+  };
+
+  const dependencyBody = (
+    <ProFormDependency name={['payment_method']}>
+      {({ payment_method }) => {
           if (isNotePaymentMethod(payment_method)) {
             if (acceptanceNoteDirection) {
-              return (
+              const acceptanceFields = (
                 <AcceptanceBillLinkFields
                   direction={acceptanceNoteDirection}
                   partnerFieldName={partnerFieldName}
                   noteName={noteName}
                   colProps={noteCols}
+                  rowNestedFieldSpan={nested ? 12 : undefined}
                 />
               );
+              return layoutNested(acceptanceFields);
             }
-            return (
-              <ProFormText
-                name={noteName}
-                label={t('app.kuaicaiwu.common.referenceNumber')}
-                colProps={noteCols}
-                placeholder={t('app.kuaicaiwu.common.referenceNumberPlaceholder')}
-                rules={[{ required: true, message: t('app.kuaicaiwu.common.referenceNumberRequired') }]}
-              />
+            return layoutNested(
+              wrapNested(
+                <ProFormText
+                  name={noteName}
+                  label={t('app.kuaicaiwu.common.referenceNumber')}
+                  colProps={noteCols}
+                  placeholder={t('app.kuaicaiwu.common.referenceNumberPlaceholder')}
+                  rules={[{ required: true, message: t('app.kuaicaiwu.common.referenceNumberRequired') }]}
+                />,
+                rowNestedSpans?.note ?? 12,
+              ),
             );
           }
 
@@ -128,40 +154,52 @@ export const LedgerAccountFormFields: React.FC<Props> = ({
             : (cash
               ? t('app.kuaicaiwu.receipt.bankAccountCashPlaceholder')
               : t('app.kuaicaiwu.receipt.bankAccountPlaceholder'));
-          return (
+          return layoutNested(
             <>
-              <ProFormSelect
-                name="bank_account_id"
-                label={accountLabel}
-                colProps={accountCols}
-                options={options}
-                placeholder={placeholder}
-                showSearch
-                allowClear={!required}
-                extra={options.length === 0 && required ? emptyHint : undefined}
-                rules={[
-                  ({ getFieldValue }) => ({
-                    validator: async (_, value) => {
-                      if (requiresLedgerAccount(getFieldValue('payment_method')) && !value) {
-                        if (isCashPaymentMethod(getFieldValue('payment_method'))) {
-                          throw new Error(t('app.kuaicaiwu.common.bankAccountRequiredForCash'));
+              {wrapNested(
+                <ProFormSelect
+                  name="bank_account_id"
+                  label={accountLabel}
+                  colProps={accountCols}
+                  options={options}
+                  placeholder={placeholder}
+                  showSearch
+                  allowClear={!required}
+                  extra={options.length === 0 && required ? emptyHint : undefined}
+                  rules={[
+                    ({ getFieldValue }) => ({
+                      validator: async (_, value) => {
+                        if (requiresLedgerAccount(getFieldValue('payment_method')) && !value) {
+                          if (isCashPaymentMethod(getFieldValue('payment_method'))) {
+                            throw new Error(t('app.kuaicaiwu.common.bankAccountRequiredForCash'));
+                          }
+                          throw new Error(t('app.kuaicaiwu.common.bankAccountRequiredForTransfer'));
                         }
-                        throw new Error(t('app.kuaicaiwu.common.bankAccountRequiredForTransfer'));
-                      }
-                    },
-                  }),
-                ]}
-              />
-              <ProFormText
-                name={noteName}
-                label={noteLabel}
-                colProps={noteCols}
-                placeholder={t('app.kuaicaiwu.receipt.bankAccountNotePlaceholder')}
-              />
-            </>
+                      },
+                    }),
+                  ]}
+                />,
+                rowNestedSpans?.account ?? 12,
+              )}
+              {wrapNested(
+                <ProFormText
+                  name={noteName}
+                  label={noteLabel}
+                  colProps={noteCols}
+                  placeholder={t('app.kuaicaiwu.receipt.bankAccountNotePlaceholder')}
+                />,
+                rowNestedSpans?.note ?? 12,
+              )}
+            </>,
           );
         }}
       </ProFormDependency>
+  );
+
+  return (
+    <>
+      <SyncLedgerAccountWithPaymentMethod accounts={accounts} />
+      {dependencyBody}
     </>
   );
 };

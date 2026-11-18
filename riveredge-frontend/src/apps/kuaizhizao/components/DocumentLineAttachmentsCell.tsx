@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Button, Space } from 'antd';
-import { FolderOpenOutlined, PaperClipOutlined } from '@ant-design/icons';
+import { FolderOpenOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import LineAttachmentsUpload from './LineAttachmentsUpload';
-import { DocumentAttachmentsReadonly, hasDocumentAttachments } from './DocumentAttachmentsReadonly';
 import MaterialAttachmentsPickerModal from './MaterialAttachmentsPickerModal';
 import {
+  mapAttachmentsToUploadList,
   mergeMaterialSourcesIntoLineAttachments,
   type DocumentAttachmentFile,
   type MaterialLineAttachmentSource,
@@ -34,59 +33,55 @@ export const DocumentLineAttachmentsCell: React.FC<DocumentLineAttachmentsCellPr
   const [materialOpen, setMaterialOpen] = useState(false);
   const mid = Number(materialId);
   const hasMaterial = Number.isFinite(mid) && mid > 0;
+  const lineCount = useMemo(() => mapAttachmentsToUploadList(value).length, [value]);
+
+  const materialButtonLabel =
+    lineCount > 0
+      ? `${t('app.kuaizhizao.documentLineAttachments.materialShort')} (${lineCount})`
+      : t('app.kuaizhizao.documentLineAttachments.materialShort');
 
   if (readOnly) {
     return (
-      <Space size={4} wrap>
-        <DocumentAttachmentsReadonly attachments={value} variant="count" />
-        {hasMaterial ? (
-          <Button
-            type="link"
-            size="small"
-            icon={<FolderOpenOutlined />}
-            onClick={() => setMaterialOpen(true)}
-          >
-            {t('app.kuaizhizao.documentLineAttachments.materialShort')}
-          </Button>
-        ) : null}
-        <MaterialAttachmentsPickerModal
-          open={materialOpen}
-          materialId={mid}
-          readOnly
-          onClose={() => setMaterialOpen(false)}
-        />
-      </Space>
-    );
-  }
-
-  return (
-    <Space orientation="vertical" size={4} style={{ width: '100%' }}>
-      <LineAttachmentsUpload
-        value={value}
-        onChange={onChange}
-        category={category}
-        maxCount={maxCount}
-        disabled={disabled}
-      />
-      <Space size={4} wrap>
-        {hasDocumentAttachments(value) ? (
-          <span style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>
-            <PaperClipOutlined /> {t('app.kuaizhizao.documentLineAttachments.lineCountHint')}
-          </span>
-        ) : null}
+      <>
         <Button
           type="link"
           size="small"
           icon={<FolderOpenOutlined />}
-          disabled={disabled || !hasMaterial}
           onClick={() => setMaterialOpen(true)}
         >
-          {t('app.kuaizhizao.documentLineAttachments.materialShort')}
+          {materialButtonLabel}
         </Button>
-      </Space>
+        <MaterialAttachmentsPickerModal
+          open={materialOpen}
+          materialId={hasMaterial ? mid : undefined}
+          readOnly
+          lineAttachments={value}
+          uploadCategory={category}
+          onClose={() => setMaterialOpen(false)}
+        />
+      </>
+    );
+  }
+
+  return (
+    <Space size={4} wrap align="center">
+      <Button
+        type="link"
+        size="small"
+        icon={<FolderOpenOutlined />}
+        disabled={disabled}
+        onClick={() => setMaterialOpen(true)}
+      >
+        {materialButtonLabel}
+      </Button>
       <MaterialAttachmentsPickerModal
         open={materialOpen}
-        materialId={mid}
+        materialId={hasMaterial ? mid : undefined}
+        lineAttachments={value}
+        onLineAttachmentsChange={onChange}
+        uploadCategory={category}
+        maxUploadCount={maxCount}
+        uploadDisabled={disabled}
         onClose={() => setMaterialOpen(false)}
         onConfirm={(picked: MaterialLineAttachmentSource[]) => {
           onChange?.(mergeMaterialSourcesIntoLineAttachments(value, picked));

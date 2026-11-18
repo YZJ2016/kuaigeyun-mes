@@ -7,8 +7,9 @@ import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react'
 import { rowActionKind, rowActionSettleVoucher, rowActionCreateRefund, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Form, theme } from 'antd';
+import { App, Button, Modal, Form, theme, Typography } from 'antd';
 import { ModalForm, ProForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import type { ProFormInstance } from '@ant-design/pro-components';
 import { PlusOutlined, PrinterOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -21,8 +22,15 @@ import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { FinanceVoucherDetailDrawer } from '../shared/FinanceVoucherDetailDrawer';
 import {
   mapFormPullLinesToApi,
-  validatePaymentPullLinesBeforeSubmit,
+  mapFormOffsetPrepaymentLinesToApi,
+  usePaymentVoucherFormLinePull,
+  requirePaymentPullLinesForNormalSettlement,
+  handlePaymentVoucherFormValuesChange,
+  applyPaymentHeaderAmountToPullLines,
 } from '../shared/usePaymentVoucherFormLinePull';
+import { usePaymentVoucherFormPrepaymentOffsetLines } from '../shared/usePaymentVoucherFormPrepaymentOffsetLines';
+import { PaymentVoucherFormBody } from '../shared/PaymentVoucherFormBody';
+import { resolveFormListFieldForSubmit } from '../../../../../utils/formListItems';
 import {
   PaymentAdvancePayeeField,
   resolveAdvancePayeeName,
@@ -63,6 +71,7 @@ import {
   formatPaymentMethod,
   getPaymentMethodOptions,
   getPaymentSettlementTypeOptions,
+  formatPaymentSettlementType,
   assertBankAccountForPaymentMethod,
   formatBankAccountOptionLabel,
   BANK_TRANSFER_PAYMENT_METHOD,
@@ -145,6 +154,16 @@ const PaymentsPage: React.FC = () => {
     'payment.pull_from_payment_application',
   );
   const [pullSourceKind, setPullSourceKind] = useState<'payable' | 'payment_application'>('payable');
+  const createPaymentFormRef = useRef<ProFormInstance>();
+  const editPaymentFormRef = useRef<ProFormInstance>();
+  const createLinePull = usePaymentVoucherFormLinePull({ formRef: createPaymentFormRef });
+  const editLinePull = usePaymentVoucherFormLinePull({ formRef: editPaymentFormRef });
+  const createOffsetLines = usePaymentVoucherFormPrepaymentOffsetLines({
+    formRef: createPaymentFormRef,
+  });
+  const editOffsetLines = usePaymentVoucherFormPrepaymentOffsetLines({ formRef: editPaymentFormRef });
+  const [createWriteoffLoading, setCreateWriteoffLoading] = useState(false);
+  const [editWriteoffLoading, setEditWriteoffLoading] = useState(false);
   const paymentPerms = useResourcePermissions(PAYMENT_RESOURCE);
   const paymentRefundPerms = useResourcePermissions(PAYMENT_REFUND_RESOURCE);
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
@@ -229,7 +248,31 @@ const PaymentsPage: React.FC = () => {
     if (detailOpen && id != null) void loadDetail(id);
   };
 
-  const handleCreate = async (values: any) => {
+  const syncPaymentFormPullLinesFromHeader = (values: Record<string, unknown>) => {
+    const total = Number(values.total_amount);
+    const rows = values.pull_lines;
+    if (!Array.isArray(rows) || !rows.length || !Number.isFinite(total) || total <= 0) {
+      return values;
+    }
+    return {
+      ...values,
+      pull_lines: applyPaymentHeaderAmountToPullLines(
+        total,
+        rows as Record<string, unknown>[],
+      ),
+    };
+  };
+
+  const handleCreate = async (values: any, opts?: { confirmAfter?: boolean }) => {
+    values = {
+      ...(values as Record<string, unknown>),
+      pull_lines: resolveFormListFieldForSubmit(
+        createPaymentFormRef,
+        values as Record<string, unknown>,
+        'pull_lines',
+      ),
+    };
+    values = syncPaymentFormPullLinesFromHeader(values as Record<string, unknown>);
     const prepayOffset = isPrepaymentOffsetPaymentMethod(values.payment_method);
     if (!prepayOffset) {
       try {
@@ -239,20 +282,28 @@ const PaymentsPage: React.FC = () => {
         return false;
       }
     }
-    const pullLineError = validatePaymentPullLinesBeforeSubmit(
+    const pullLineError = requirePaymentPullLinesForNormalSettlement(
+      values.settlement_type,
       values.pull_lines,
       values.total_amount,
       t,
+      values.payment_method,
+      values.offset_prepayment_lines,
     );
     if (pullLineError) {
       messageApi.warning(pullLineError);
       return false;
     }
     const pull_lines = mapFormPullLinesToApi(values.pull_lines);
+    const offset_prepayment_lines = prepayOffset
+      ? mapFormOffsetPrepaymentLinesToApi(values.offset_prepayment_lines)
+      : undefined;
     const data = {
       supplier_id: values.supplier_id,
       supplier_name: supplierOptions.find(o => o.value === values.supplier_id)?.label || '',
       total_amount: values.total_amount,
+      pull_lines,
+      ...(offset_prepayment_lines ? { offset_prepayment_lines } : {}),
       payment_date: formatDateTime(values.payment_date || dayjs(), 'YYYY-MM-DD'),
       payment_method: values.payment_method,
       bank_account_id: prepayOffset ? undefined : values.bank_account_id,
@@ -274,7 +325,6 @@ const PaymentsPage: React.FC = () => {
       advance_payee_name: isEmployeeAdvancePaymentMethod(values.payment_method)
         ? resolveAdvancePayeeName(values.advance_payee_id, advancePayeeUserOptions)
         : null,
-      pull_lines,
       notes: values.notes,
       attachments: normalizeDocumentAttachments(values.attachments),
     };
@@ -290,14 +340,42 @@ const PaymentsPage: React.FC = () => {
       } catch (linkError) {
         messageApi.warning(getApiErrorMessage(linkError, t('app.kuaicaiwu.notes.linkFailed')));
       }
-      messageApi.success(t(`${P}.createSuccess`));
+      if (opts?.confirmAfter) {
+        await paymentService.confirmPayment(created.id);
+        messageApi.success(t(`${P}.writeoffConfirmSuccess`));
+      } else {
+        messageApi.success(t(`${P}.createSuccess`));
+      }
       setCreateModalVisible(false);
       actionRef.current?.reload();
     } catch (error) {
-      messageApi.error(getApiErrorMessage(error, t('common.createFailed')));
+      messageApi.error(
+        getApiErrorMessage(
+          error,
+          opts?.confirmAfter ? t(`${P}.writeoffConfirmFailed`) : t('common.createFailed'),
+        ),
+      );
       return false;
     }
     return true;
+  };
+
+  const submitCreateAndConfirm = async () => {
+    const inst = createPaymentFormRef.current;
+    if (!inst) return;
+    setCreateWriteoffLoading(true);
+    try {
+      const values = await inst.validateFields();
+      const merged = {
+        ...(inst.getFieldsValue(true) as Record<string, unknown>),
+        ...values,
+      };
+      await handleCreate(merged, { confirmAfter: true });
+    } catch {
+      // validateFields 已提示
+    } finally {
+      setCreateWriteoffLoading(false);
+    }
   };
 
   const resetPullPreview = () => {
@@ -553,11 +631,19 @@ const PaymentsPage: React.FC = () => {
     }
     try {
       let pullLines = record.pull_lines;
-      if (!pullLines || pullLines.length === 0) {
+      let offsetPrepaymentLines = record.offset_prepayment_lines;
+      if (
+        String(record.settlement_type || 'normal') === 'normal' &&
+        ((!pullLines || pullLines.length === 0) ||
+          (isPrepaymentOffsetPaymentMethod(record.payment_method) &&
+            (!offsetPrepaymentLines || offsetPrepaymentLines.length === 0)))
+      ) {
         const detail = await paymentService.getPayment(record.id);
         pullLines = detail.pull_lines;
+        offsetPrepaymentLines = detail.offset_prepayment_lines;
       }
-      const pullGateError = validatePaymentPullLinesBeforeSubmit(
+      const pullGateError = requirePaymentPullLinesForNormalSettlement(
+        record.settlement_type,
         pullLines?.map((line) => ({
           sourceType: line.source_type,
           paymentAmount: line.amount,
@@ -565,6 +651,11 @@ const PaymentsPage: React.FC = () => {
         })),
         Number(record.total_amount ?? 0),
         t,
+        record.payment_method,
+        offsetPrepaymentLines?.map((line) => ({
+          prepaymentPaymentId: line.prepayment_payment_id,
+          offsetAmount: line.amount,
+        })),
       );
       if (pullGateError) {
         messageApi.warning(pullGateError);
@@ -631,8 +722,17 @@ const PaymentsPage: React.FC = () => {
     }
   };
 
-  const handleUpdate = async (values: any) => {
+  const handleUpdate = async (values: any, opts?: { confirmAfter?: boolean }) => {
     if (!editingRecord) return false;
+    values = {
+      ...(values as Record<string, unknown>),
+      pull_lines: resolveFormListFieldForSubmit(
+        editPaymentFormRef,
+        values as Record<string, unknown>,
+        'pull_lines',
+      ),
+    };
+    values = syncPaymentFormPullLinesFromHeader(values as Record<string, unknown>);
     const prepayOffset = isPrepaymentOffsetPaymentMethod(values.payment_method);
     if (!prepayOffset) {
       try {
@@ -642,14 +742,19 @@ const PaymentsPage: React.FC = () => {
         return false;
       }
     }
-    const pullLineError = validatePaymentPullLinesBeforeSubmit(
-      values.pull_lines,
-      values.total_amount,
-      t,
-    );
-    if (pullLineError) {
-      messageApi.warning(pullLineError);
-      return false;
+    if (editingRecord.status === 'Draft') {
+      const pullLineError = requirePaymentPullLinesForNormalSettlement(
+        values.settlement_type,
+        values.pull_lines,
+        values.total_amount,
+        t,
+        values.payment_method,
+        values.offset_prepayment_lines,
+      );
+      if (pullLineError) {
+        messageApi.warning(pullLineError);
+        return false;
+      }
     }
     try {
       await paymentService.updatePayment(editingRecord.id, {
@@ -677,18 +782,56 @@ const PaymentsPage: React.FC = () => {
         advance_payee_name: isEmployeeAdvancePaymentMethod(values.payment_method)
           ? resolveAdvancePayeeName(values.advance_payee_id, advancePayeeUserOptions)
           : null,
-        pull_lines: mapFormPullLinesToApi(values.pull_lines),
+        ...(editingRecord.status === 'Draft'
+          ? {
+              pull_lines: mapFormPullLinesToApi(values.pull_lines) ?? [],
+              ...(prepayOffset
+                ? {
+                    offset_prepayment_lines:
+                      mapFormOffsetPrepaymentLinesToApi(values.offset_prepayment_lines) ?? [],
+                  }
+                : {}),
+            }
+          : {}),
         notes: values.notes,
         attachments: normalizeDocumentAttachments(values.attachments),
       });
-      messageApi.success(t('common.updateSuccess'));
+      if (opts?.confirmAfter) {
+        await paymentService.confirmPayment(editingRecord.id);
+        messageApi.success(t(`${P}.writeoffConfirmSuccess`));
+      } else {
+        messageApi.success(t('common.updateSuccess'));
+      }
       setEditingRecord(null);
       actionRef.current?.reload();
       refreshOpenDetail();
       return true;
     } catch (e: any) {
-      messageApi.error(e?.message || t('common.updateFailed'));
+      messageApi.error(
+        getApiErrorMessage(
+          e,
+          opts?.confirmAfter ? t(`${P}.writeoffConfirmFailed`) : t('common.updateFailed'),
+        ),
+      );
       return false;
+    }
+  };
+
+  const submitEditAndConfirm = async () => {
+    const inst = editPaymentFormRef.current;
+    if (!inst || !editingRecord) return;
+    setEditWriteoffLoading(true);
+    try {
+      const values = await inst.validateFields();
+      const merged = {
+        ...(inst.getFieldsValue(true) as Record<string, unknown>),
+        ...values,
+      };
+      await handleUpdate(merged, { confirmAfter: true });
+    } catch {
+      // validateFields 已提示
+    } finally {
+      setEditWriteoffLoading(false);
     }
   };
 
@@ -741,7 +884,7 @@ const PaymentsPage: React.FC = () => {
         width: 120,
         align: 'center' as const,
         render: (v: unknown) => {
-          const { text, color } = getStatusDisplay(v);
+          const { text, color } = getStatusDisplay(v == null ? undefined : String(v));
           return text === '-' ? '-' : <MarkerTag color={color}>{text}</MarkerTag>;
         },
       },
@@ -874,6 +1017,70 @@ const PaymentsPage: React.FC = () => {
       hideInTable: true,
     },
     {
+      title: t(`${P}.settlementType.label`),
+      key: 'finance_payment_settlement_type',
+      dataIndex: 'settlement_type',
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+      hideInSearch: true,
+      render: (_, record) => {
+        const raw = String(record.settlement_type || 'normal');
+        const color =
+          raw === 'prepayment' ? 'blue' : raw === 'refund' ? 'orange' : ('default' as const);
+        return (
+          <MarkerTag color={color}>
+            {formatPaymentSettlementType(record.settlement_type, t)}
+          </MarkerTag>
+        );
+      },
+    },
+    {
+      title: t(`${P}.col.linkedPayableTotal`),
+      key: 'linked_payable_total_amount',
+      dataIndex: 'linked_payable_total_amount',
+      align: 'right',
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      render: (_, record) => {
+        const total = record.linked_payable_total_amount;
+        if (total == null || !(Number(total) > 0)) {
+          return '—';
+        }
+        const remaining = record.linked_payable_remaining_amount;
+        const remainingText =
+          remaining != null && Number.isFinite(Number(remaining))
+            ? t(`${P}.col.linkedPayableRemainingLine`, {
+                amount: formatCurrencyAmount(remaining),
+              })
+            : undefined;
+        return (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-end',
+              width: '100%',
+              gap: 2,
+            }}
+          >
+            <span style={{ fontWeight: 500, lineHeight: 1.25, whiteSpace: 'nowrap' }}>
+              {formatCurrencyAmount(total)}
+            </span>
+            {remainingText ? (
+              <Typography.Text
+                type="secondary"
+                style={{ fontSize: 12, lineHeight: 1.2, whiteSpace: 'nowrap' }}
+              >
+                {remainingText}
+              </Typography.Text>
+            ) : null}
+          </div>
+        );
+      },
+    },
+    {
       title: t(`${P}.col.totalAmount`),
       dataIndex: 'total_amount',
       valueType: 'money',
@@ -955,18 +1162,6 @@ const PaymentsPage: React.FC = () => {
       render: (_, record) => formatPaymentMethod(record.payment_method, t),
     },
     {
-      title: t('app.kuaicaiwu.common.referenceNumber'),
-      key: 'finance_voucher_reference',
-      dataIndex: 'bank_account',
-      width: 140,
-      minWidth: 140,
-      uniTableKeepWidth: true,
-      resizable: false,
-      hideInSearch: true,
-      ellipsis: true,
-      render: (_, record) => record.bank_account || '—',
-    },
-    {
       // 备注长短不一：唯一 RemainderFlex
       title: t('common.remark'),
       dataIndex: 'notes',
@@ -979,7 +1174,8 @@ const PaymentsPage: React.FC = () => {
       render: (_, record) => record.notes || '—',
     },
     {
-      title: t(`${P}.settlementType`),
+      title: t(`${P}.settlementType.label`),
+      key: 'settlement_type_search',
       dataIndex: 'settlement_type',
       hideInTable: true,
       order: 15,
@@ -1148,7 +1344,7 @@ const PaymentsPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payments.list-v4"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payments.list-v9"
         showAdvancedSearch
         showCreateButton={false}
         createButtonText={t(`${P}.createTitle`)}
@@ -1213,7 +1409,7 @@ const PaymentsPage: React.FC = () => {
               return;
             }
             await downloadRecordsAsXlsx(
-              items as Array<Record<string, unknown>>,
+              items as unknown as Array<Record<string, unknown>>,
               `payments-${todaySiteDateString()}.xlsx`,
             );
             messageApi.success(t('common.exportSuccess', { count: items.length }));
@@ -1411,61 +1607,44 @@ const PaymentsPage: React.FC = () => {
         open={createModalVisible}
         onOpenChange={setCreateModalVisible}
         onFinish={handleCreate}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        {...financeFormGridProps}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+        grid={false}
+        formRef={createPaymentFormRef}
+        initialValues={{ payment_date: dayjs(), settlement_type: 'normal' }}
+        onValuesChange={(changedValues, allValues) => {
+          handlePaymentVoucherFormValuesChange(
+            createPaymentFormRef,
+            changedValues as Record<string, unknown>,
+            allValues as Record<string, unknown>,
+          );
+        }}
+        submitter={{
+          render: (_props, doms) => [
+            <Button
+              key="writeoff-confirm"
+              loading={createWriteoffLoading}
+              onClick={() => void submitCreateAndConfirm()}
+            >
+              {t(`${P}.writeoffAndConfirm`)}
+            </Button>,
+            ...doms,
+          ],
+        }}
       >
-        <ProFormSelect
-          name="supplier_id"
-          label={t('app.kuaicaiwu.common.supplier')}
-          options={supplierOptions}
-          rules={[{ required: true, message: t('app.kuaicaiwu.common.selectSupplier') }]}
-          placeholder={t('app.kuaicaiwu.common.selectSupplier')}
-          showSearch
-          colProps={financeColHalf}
+        <PaymentVoucherFormBody
+          mode="create"
+          bankAccounts={bankAccounts}
+          supplierOptions={supplierOptions}
+          paymentMethodOptions={paymentMethodOptions}
+          settlementTypeOptions={paymentSettlementTypeOptions}
+          showPullLines
+          pullLineColumns={createLinePull.pullLineColumns}
+          pullLineHeaderExtra={createLinePull.renderPullLineHeaderActions()}
+          offsetPrepaymentLineColumns={createOffsetLines.offsetPrepaymentLineColumns}
+          offsetPrepaymentHeaderExtra={createOffsetLines.renderOffsetPrepaymentHeaderActions()}
         />
-        <ProFormDigit
-          name="total_amount"
-          label={t(`${P}.col.amount`)}
-          min={0.01}
-          rules={[{ required: true }]}
-          fieldProps={financeAmountDigitFieldProps}
-          colProps={financeColHalf}
-        />
-        <ProFormDatePicker
-          name="payment_date"
-          label={t(`${P}.col.paymentDate`)}
-          rules={[{ required: true }]}
-          initialValue={dayjs()}
-          fieldProps={{ style: { width: '100%' } }}
-          colProps={financeColHalf}
-        />
-        <ProFormSelect
-          name="payment_method"
-          label={t(`${P}.col.paymentMethod`)}
-          options={paymentMethodOptions}
-          rules={[{ required: true, message: t(`${P}.selectPaymentMethod`) }]}
-          placeholder={t(`${P}.selectPaymentMethod`)}
-          colProps={financeColHalf}
-        />
-        <PaymentAdvancePayeeField colProps={financeColHalf} />
-        <ProFormSelect
-          name="settlement_type"
-          label={t(`${P}.settlementType.label`)}
-          initialValue="normal"
-          options={paymentSettlementTypeOptions}
-          colProps={financeColHalf}
-        />
-        <LedgerAccountFormFields
-          accounts={bankAccounts}
-          accountLabel={t(`${P}.outBankAccount`)}
-          noteLabel={t(`${P}.outAccountNote`)}
-          noteColProps={financeColFull}
-          acceptanceNoteDirection="payable"
-          partnerFieldName="supplier_id"
-        />
-        <PaymentCounterpartyFormSection />
-        <ProFormTextArea name="notes" label={t('common.remark')} colProps={financeColFull} />
-        <DocumentAttachmentsField category="payment_attachments" />
+        {createLinePull.renderPullModals()}
+        {createOffsetLines.renderOffsetPullModals()}
       </ModalForm>
 
       <ModalForm
@@ -1490,6 +1669,22 @@ const PaymentsPage: React.FC = () => {
                 counterparty_bank_account: editingRecord.counterparty_bank_account,
                 advance_payee_id: editingRecord.advance_payee_id,
                 notes: editingRecord.notes,
+                pull_lines: (editingRecord.pull_lines ?? []).map((line) => ({
+                  sourceType: line.source_type,
+                  sourceId: line.source_id,
+                  sourceCode: line.source_code,
+                  paymentAmount: line.amount,
+                  maxAmount: line.max_amount,
+                })),
+                offset_prepayment_lines: (editingRecord.offset_prepayment_lines ?? []).map(
+                  (line) => ({
+                    prepaymentPaymentId: line.prepayment_payment_id,
+                    sourceCode: line.source_code,
+                    purchaseOrderCode: line.purchase_order_code,
+                    maxUnsettled: line.unsettled_amount ?? line.amount,
+                    offsetAmount: line.amount,
+                  }),
+                ),
                 attachments: mapAttachmentsToUploadList(
                   editingRecord.attachments as Parameters<typeof mapAttachmentsToUploadList>[0],
                 ),
@@ -1497,63 +1692,48 @@ const PaymentsPage: React.FC = () => {
             : undefined
         }
         onFinish={handleUpdate}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        {...financeFormGridProps}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+        grid={false}
+        formRef={editPaymentFormRef}
+        onValuesChange={(changedValues, allValues) => {
+          handlePaymentVoucherFormValuesChange(
+            editPaymentFormRef,
+            changedValues as Record<string, unknown>,
+            allValues as Record<string, unknown>,
+          );
+        }}
+        submitter={{
+          render: (_props, doms) =>
+            editingRecord?.status === 'Draft'
+              ? [
+                  <Button
+                    key="writeoff-confirm"
+                    loading={editWriteoffLoading}
+                    onClick={() => void submitEditAndConfirm()}
+                  >
+                    {t(`${P}.writeoffAndConfirm`)}
+                  </Button>,
+                  ...doms,
+                ]
+              : doms,
+        }}
       >
-        <ProFormSelect
-          name="supplier_id"
-          label={t('app.kuaicaiwu.common.supplier')}
-          options={supplierOptions}
-          rules={[{ required: true, message: t('app.kuaicaiwu.common.selectSupplier') }]}
-          placeholder={t('app.kuaicaiwu.common.selectSupplier')}
-          showSearch
-          colProps={financeColHalf}
+        <PaymentVoucherFormBody
+          mode="edit"
+          bankAccounts={bankAccounts}
+          supplierOptions={supplierOptions}
+          paymentMethodOptions={paymentMethodOptions}
+          settlementTypeOptions={paymentSettlementTypeOptions}
+          attachmentsRequired={Boolean(editingRecord?.require_payment_voucher)}
+          attachmentsRequiredMessage={t(`${P}.requirePaymentVoucherMissing`)}
+          showPullLines={editingRecord?.status === 'Draft'}
+          pullLineColumns={editLinePull.pullLineColumns}
+          pullLineHeaderExtra={editLinePull.renderPullLineHeaderActions()}
+          offsetPrepaymentLineColumns={editOffsetLines.offsetPrepaymentLineColumns}
+          offsetPrepaymentHeaderExtra={editOffsetLines.renderOffsetPrepaymentHeaderActions()}
         />
-        <ProFormDigit
-          name="total_amount"
-          label={t(`${P}.col.amount`)}
-          min={0.01}
-          rules={[{ required: true }]}
-          fieldProps={financeAmountDigitFieldProps}
-          colProps={financeColHalf}
-        />
-        <ProFormDatePicker
-          name="payment_date"
-          label={t(`${P}.col.paymentDate`)}
-          rules={[{ required: true }]}
-          fieldProps={{ style: { width: '100%' } }}
-          colProps={financeColHalf}
-        />
-        <ProFormSelect
-          name="payment_method"
-          label={t(`${P}.col.paymentMethod`)}
-          options={paymentMethodOptions}
-          rules={[{ required: true, message: t(`${P}.selectPaymentMethod`) }]}
-          placeholder={t(`${P}.selectPaymentMethod`)}
-          colProps={financeColHalf}
-        />
-        <PaymentAdvancePayeeField colProps={financeColHalf} />
-        <ProFormSelect
-          name="settlement_type"
-          label={t(`${P}.settlementType.label`)}
-          options={paymentSettlementTypeOptions}
-          colProps={financeColHalf}
-        />
-        <LedgerAccountFormFields
-          accounts={bankAccounts}
-          accountLabel={t(`${P}.outBankAccount`)}
-          noteLabel={t(`${P}.outAccountNote`)}
-          noteColProps={financeColFull}
-          acceptanceNoteDirection="payable"
-          partnerFieldName="supplier_id"
-        />
-        <PaymentCounterpartyFormSection />
-        <ProFormTextArea name="notes" label={t('common.remark')} colProps={financeColFull} />
-        <DocumentAttachmentsField
-          category="payment_attachments"
-          required={Boolean(editingRecord?.require_payment_voucher)}
-          requiredMessage={t(`${P}.requirePaymentVoucherMissing`)}
-        />
+        {editingRecord?.status === 'Draft' ? editLinePull.renderPullModals() : null}
+        {editingRecord?.status === 'Draft' ? editOffsetLines.renderOffsetPullModals() : null}
       </ModalForm>
 
       <FinanceVoucherDetailDrawer

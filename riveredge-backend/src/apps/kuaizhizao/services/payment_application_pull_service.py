@@ -25,6 +25,30 @@ from apps.kuaizhizao.services.payment_application_service import PaymentApplicat
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 
 
+def prepayment_application_base_amount(order: Any) -> Decimal:
+    """付款申请自采购订单取单：有预付计划用预付额，否则用订单价税合计。"""
+    from apps.kuaicaiwu.services.finance_tax import quantize_money
+    from apps.kuaicaiwu.services.purchase_settlement import (
+        purchase_order_settlement_gross,
+    )
+
+    gross = purchase_order_settlement_gross(order)
+    prepay = Decimal(str(getattr(order, "prepayment_amount", 0) or 0))
+    if prepay <= 0:
+        return gross
+    prepay_q = quantize_money(prepay)
+    if gross > 0 and prepay_q > gross:
+        return gross
+    excl = quantize_money(Decimal(str(getattr(order, "total_amount", 0) or 0)))
+    if excl > 0 and prepay_q == excl and gross > prepay_q:
+        return gross
+    return prepay_q
+
+
+def compute_prepayment_application_remaining(order: Any, reserved: Decimal) -> Decimal:
+    return max(Decimal("0"), prepayment_application_base_amount(order) - reserved)
+
+
 class PaymentApplicationPullService:
     def __init__(self) -> None:
         self._apps = PaymentApplicationService()
@@ -47,6 +71,46 @@ class PaymentApplicationPullService:
     _PREPAY_APP_RESERVE_STATUSES = frozenset(
         {"已批准", "部分付款", "待审核", "已付款", "APPROVED", "AUDITED", "PENDING", "已通过"}
     )
+    _PREPAY_APP_EXCLUDED_FOR_DIRECT_PO_PREPAY = frozenset(
+        {"已驳回", "已作废", "Cancelled", "cancelled", "REJECTED", "CANCELLED"}
+    )
+
+    async def has_prepayment_application_by_order_ids(
+        self, tenant_id: int, purchase_order_ids: List[int]
+    ) -> Dict[int, bool]:
+        """采购订单是否已有预付类付款申请（非驳回/作废），用于禁止再走 PO 直拉预付款。"""
+        result: Dict[int, bool] = {oid: False for oid in purchase_order_ids}
+        if not purchase_order_ids:
+            return result
+        from apps.kuaizhizao.models.payment_application import (
+            PaymentApplication,
+            PaymentApplicationLine,
+        )
+
+        lines = await PaymentApplicationLine.filter(
+            tenant_id=tenant_id,
+            source_type="purchase_order",
+            source_id__in=purchase_order_ids,
+            line_kind="prepayment",
+        ).all()
+        if not lines:
+            return result
+        app_ids = {int(line.application_id) for line in lines}
+        apps = await PaymentApplication.filter(
+            tenant_id=tenant_id,
+            id__in=list(app_ids),
+            deleted_at__isnull=True,
+        ).all()
+        app_status = {int(app.id): str(app.status or "").strip() for app in apps}
+        for line in lines:
+            oid = int(line.source_id or 0)
+            if oid not in result:
+                continue
+            status = app_status.get(int(line.application_id), "")
+            if status in self._PREPAY_APP_EXCLUDED_FOR_DIRECT_PO_PREPAY:
+                continue
+            result[oid] = True
+        return result
 
     async def prepayment_reserved_by_order_ids(
         self, tenant_id: int, purchase_order_ids: List[int]
@@ -100,9 +164,9 @@ class PaymentApplicationPullService:
         prepay_map = await _order_prepayment_linked_by_ids(
             tenant_id, [purchase_order_id], source_type="purchase_order", target_type="payment"
         )
-        amount = Decimal(str(order.prepayment_amount or 0))
         reserved = await self._sum_prepayment_application_reserved(tenant_id, purchase_order_id)
-        max_push = max(Decimal("0"), amount - reserved)
+        max_push = compute_prepayment_application_remaining(order, reserved)
+        order_base_amount = prepayment_application_base_amount(order)
         require_app = await BusinessConfigService().get_finance_require_payment_application(
             tenant_id
         )
@@ -123,6 +187,7 @@ class PaymentApplicationPullService:
             "source_code": order.order_code,
             "order_code": order.order_code,
             "max_push_quantity": float(max_push),
+            "source_order_amount": float(order_base_amount),
             "summary": (
                 f"将按采购订单 {order.order_code} 生成预付类付款申请（可请款 {max_push}）"
                 if allowed
@@ -586,6 +651,7 @@ class PaymentApplicationPullService:
                     "id": app.id,
                     "code": f"{app.application_code} - {app.supplier_name}",
                     "application_code": app.application_code,
+                    "application_kind": str(app.application_kind or "goods"),
                     "supplier_name": app.supplier_name,
                     "remaining_amount": float(app.remaining_amount or 0),
                     "capabilities": {

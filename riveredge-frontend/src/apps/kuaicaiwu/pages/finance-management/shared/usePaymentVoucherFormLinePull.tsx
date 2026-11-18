@@ -5,6 +5,7 @@ import React, { useCallback, useMemo, useRef } from 'react';
 import type { ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Form, Input, InputNumber, Space } from 'antd';
 import type { FormListFieldData } from 'antd/es/form';
+import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import {
   UniPullQueryModal,
@@ -217,14 +218,60 @@ export function mapFormPullLinesToApi(items: unknown):
       amount: number;
     }>
   | undefined {
+  const rows = filterValidPaymentPullFormLines(items);
+  if (!rows.length) return undefined;
+  return rows.map((row) => {
+    const f = readPaymentPullLineFormFields(row);
+    return {
+      source_type: f.sourceType,
+      source_id: f.sourceId,
+      source_code: f.sourceCode || undefined,
+      amount: f.paymentAmount,
+    };
+  });
+}
+
+export function mapFormOffsetPrepaymentLinesToApi(items: unknown):
+  | Array<{
+      prepayment_payment_id: number;
+      source_code?: string;
+      amount: number;
+    }>
+  | undefined {
   const rows = normalizeFormListItems<Record<string, unknown>>(items);
   if (!rows.length) return undefined;
   return rows.map((row) => ({
-    source_type: String(row.sourceType || '').trim(),
-    source_id: Number(row.sourceId),
+    prepayment_payment_id: Number(row.prepaymentPaymentId ?? row.sourceId ?? 0),
     source_code: String(row.sourceCode || '').trim() || undefined,
-    amount: Number(row.paymentAmount ?? 0),
+    amount: Number(row.offsetAmount ?? 0),
   }));
+}
+
+function validateOffsetPrepaymentFormLines(
+  offsetItems: unknown,
+  totalAmount: number,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string | null {
+  const rows = normalizeFormListItems<Record<string, unknown>>(offsetItems);
+  if (!rows.length) {
+    return t(`${P}.pullLines.requiredOffsetPrepayment`);
+  }
+  let sum = 0;
+  for (const row of rows) {
+    const amt = Number(row.offsetAmount ?? 0);
+    if (!(amt > 0)) {
+      return t(`${P}.pullLines.offsetAmountRequired`);
+    }
+    sum += amt;
+  }
+  const total = Number(totalAmount);
+  if (!Number.isFinite(total) || total <= 0) {
+    return t(`${P}.pullLines.requiredForPrepaymentOffset`);
+  }
+  if (Math.abs(sum - total) > 0.009) {
+    return t(`${P}.pullLines.offsetSumMustMatchTotal`);
+  }
+  return null;
 }
 
 export function requirePaymentPullLinesForNormalSettlement(
@@ -233,6 +280,7 @@ export function requirePaymentPullLinesForNormalSettlement(
   totalAmount: number,
   t: (key: string, opts?: Record<string, unknown>) => string,
   paymentMethod?: unknown,
+  offsetPrepaymentLines?: unknown,
 ): string | null {
   const st = String(settlementType || 'normal').trim() || 'normal';
   if (st === 'refund') {
@@ -243,7 +291,15 @@ export function requirePaymentPullLinesForNormalSettlement(
     if (!rows.length) {
       return t(`${P}.pullLines.requiredForPrepaymentOffset`);
     }
-    return validatePaymentPullLinesBeforeSubmit(items, totalAmount, t);
+    const nonPayable = rows.some(
+      (r) => readPaymentPullLineFormFields(r).sourceType !== 'payable',
+    );
+    if (nonPayable) {
+      return t(`${P}.pullLines.offsetPayableOnly`);
+    }
+    const pullErr = validatePaymentPullLinesBeforeSubmit(items, totalAmount, t);
+    if (pullErr) return pullErr;
+    return validateOffsetPrepaymentFormLines(offsetPrepaymentLines, totalAmount, t);
   }
   if (st === 'prepayment') {
     return null;
@@ -260,19 +316,22 @@ export function validatePaymentPullLinesBeforeSubmit(
   totalAmount: number,
   t: (key: string, opts?: Record<string, unknown>) => string,
 ): string | null {
-  const rows = normalizeFormListItems<Record<string, unknown>>(items);
+  const rows = filterValidPaymentPullFormLines(items);
   if (!rows.length) return null;
-  const types = new Set(rows.map((r) => String(r.sourceType || '').trim()).filter(Boolean));
+  const types = new Set(rows.map((r) => readPaymentPullLineFormFields(r).sourceType));
   if (types.size > 1) {
     return t(`${P}.pullLines.mixedSourceForbidden`);
   }
-  const sum = rows.reduce((acc, row) => acc + Number(row.paymentAmount ?? 0), 0);
+  const sum = rows.reduce(
+    (acc, row) => acc + readPaymentPullLineFormFields(row).paymentAmount,
+    0,
+  );
   if (Math.abs(sum - Number(totalAmount || 0)) > 0.009) {
     return t(`${P}.pullLines.totalMustMatchLines`);
   }
   for (const row of rows) {
     const maxAmt = Number(row.maxAmount ?? 0);
-    const payAmt = Number(row.paymentAmount ?? 0);
+    const payAmt = readPaymentPullLineFormFields(row).paymentAmount;
     if (maxAmt > 0 && payAmt > maxAmt + 0.009) {
       return t(`${P}.pullLines.exceedsMax`);
     }
@@ -382,6 +441,10 @@ export function usePaymentVoucherFormLinePull({ formRef }: Props) {
           );
       formRef.current?.setFieldsValue({ pull_lines: [...existing, ...incoming] });
       syncPaymentTotalFromPullLines(formRef);
+      const paymentMethod = String(formRef.current?.getFieldValue('payment_method') || '');
+      if (isPrepaymentOffsetPaymentMethod(paymentMethod)) {
+        syncOffsetPrepaymentLinesToHeaderTotal(formRef);
+      }
     },
     [formRef],
   );
@@ -482,7 +545,9 @@ export function usePaymentVoucherFormLinePull({ formRef }: Props) {
           existing.map((r) => Number(r.sourceId)).filter((id) => id > 0),
         );
         const newLines: Record<string, unknown>[] = [];
-        for (const item of preview.items ?? []) {
+        const previewItems =
+          (preview.items as unknown as Array<Record<string, unknown>> | undefined) ?? [];
+        for (const item of previewItems) {
           const sourceId = Number(item.item_id ?? item.payable_id ?? 0);
           if (!sourceId || usedIds.has(sourceId)) continue;
           const maxAmount = Number(item.max_push_quantity ?? 0);
@@ -548,6 +613,18 @@ export function usePaymentVoucherFormLinePull({ formRef }: Props) {
       const selected = rows.find((x) => String(x.id) === String(keys[0]));
       if (!selected?.id) {
         messageApi.warning(t(`${P}.selectSource`, { label: pullFromAppAction.sourceLabel }));
+        return;
+      }
+      const settlementType =
+        String(formRef.current?.getFieldValue('settlement_type') || 'normal').trim() || 'normal';
+      const paymentMethod = String(formRef.current?.getFieldValue('payment_method') || '');
+      const expectPrepaymentApp =
+        settlementType === 'prepayment' && !isPrepaymentOffsetPaymentMethod(paymentMethod);
+      const selectedKind = String(
+        (selected as PaymentPullCandidate & { application_kind?: string }).application_kind || '',
+      ).trim();
+      if (expectPrepaymentApp && selectedKind && selectedKind !== 'prepayment') {
+        messageApi.warning(t(`${P}.pullLines.prepaymentApplicationKindOnly`));
         return;
       }
       try {
@@ -645,7 +722,7 @@ export function usePaymentVoucherFormLinePull({ formRef }: Props) {
         const rows: PoPullRow[] = items
           .filter((o) => Number(o.supplier_id) === supplierId)
           .map((o) => {
-            const cap = o.capabilities?.push_payment_application;
+            const cap = o.capabilities?.push_prepayment;
             const prepay = Number(o.prepayment_amount ?? 0);
             const orderTotal = resolvePurchaseOrderDisplayAmount(o);
             const displayAmount = prepay > 0 ? prepay : orderTotal;
@@ -692,7 +769,8 @@ export function usePaymentVoucherFormLinePull({ formRef }: Props) {
             skipped += 1;
             continue;
           }
-          const items = (preview.items as Record<string, unknown>[] | undefined) ?? [];
+          const items =
+            (preview.items as unknown as Record<string, unknown>[] | undefined) ?? [];
           if (!items.length) {
             skipped += 1;
             continue;
@@ -751,7 +829,9 @@ export function usePaymentVoucherFormLinePull({ formRef }: Props) {
           const isOffset = isPrepaymentOffsetPaymentMethod(paymentMethod);
           const showPayablePull = settlementType === 'normal';
           const showPoPrepayPull = settlementType === 'prepayment' && !isOffset;
-          const showAppPull = settlementType === 'normal';
+          const showAppPull =
+            !isOffset &&
+            (settlementType === 'normal' || (settlementType === 'prepayment' && !isOffset));
           const payableBtnLabel = isOffset
             ? t(`${P}.pullLines.offsetLoadFromPayable`)
             : t(`${P}.pullLines.loadFromPayable`);
@@ -917,6 +997,13 @@ export function usePaymentVoucherFormLinePull({ formRef }: Props) {
             <Form.Item name={[field.name, 'lineKind']} hidden>
               <Input />
             </Form.Item>
+            <Form.Item
+              name={[field.name, 'paymentAmount']}
+              hidden
+              rules={[{ required: true, message: t(`${P}.amountMustPositive`) }]}
+            >
+              <InputNumber min={0.01} {...financeAmountDigitFieldProps} />
+            </Form.Item>
             <Form.Item shouldUpdate style={{ margin: 0 }}>
               {() =>
                 sourceTypeLabel(
@@ -977,25 +1064,7 @@ export function usePaymentVoucherFormLinePull({ formRef }: Props) {
           </Form.Item>
         ),
       },
-      {
-        title: t(`${P}.pullLines.col.paymentAmount`),
-        dataIndex: 'paymentAmount',
-        width: 140,
-        render: (_: unknown, field: FormListFieldData) => (
-          <Form.Item
-            name={[field.name, 'paymentAmount']}
-            rules={[{ required: true, message: t(`${P}.amountMustPositive`) }]}
-            style={{ margin: 0 }}
-          >
-            <InputNumber
-              min={0.01}
-              onChange={() => syncPaymentTotalFromPullLines(formRef)}
-              {...financeAmountDigitFieldProps}
-            />
-          </Form.Item>
-        ),
-      },
-    ],
+    ] as unknown as ColumnsType<Record<string, unknown>>,
     [formRef, t],
   );
 

@@ -678,17 +678,6 @@ const ReceivableList: React.FC = () => {
             ),
         },
         {
-            title: t(`${P}.col.paymentTerms`),
-            dataIndex: 'payment_terms',
-            width: 140,
-            minWidth: 140,
-            uniTableKeepWidth: true,
-            resizable: false,
-            hideInSearch: true,
-            ellipsis: true,
-            render: (_, record) => record.payment_terms || '-',
-        },
-        {
             title: t(`${P}.col.invoiceStatus`),
             key: 'invoice_status',
             dataIndex: 'invoice_status',
@@ -772,6 +761,17 @@ const ReceivableList: React.FC = () => {
                         : '-'}
                 </span>
             ),
+        },
+        {
+            title: t(`${P}.col.paymentTerms`),
+            dataIndex: 'payment_terms',
+            width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            ellipsis: true,
+            render: (_, record) => record.payment_terms || '-',
         },
         {
             title: t('app.kuaicaiwu.common.businessDate'),
@@ -1008,7 +1008,7 @@ const ReceivableList: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.receivable)}
                 actionRef={actionRef}
                 columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
-                columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receivables.list-v7"
+                columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receivables.list-v9"
                 request={async (params, sort, _filter, searchFormValues) => {
                     const { current, pageSize } = params;
                     const listParams = resolveReceivableListParams(searchFormValues, sort, urlAgingFilters);

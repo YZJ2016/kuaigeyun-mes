@@ -608,6 +608,7 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "purchase_order.push_prepayment.not_audited": "只有已审核或已确认的采购单才能下推预付付款单",
     "purchase_order.push_prepayment.no_amount": "采购单未填写预付款金额，无法下推预付付款单",
     "purchase_order.push_prepayment.already_exists": "该采购订单已关联预付付款单",
+    "purchase_order.push_prepayment.application_exists": "该采购订单已有预付类付款申请，请从付款申请加载预付款",
     "purchase_order.push_prepayment.require_application": "组织已启用「预付款须走付款申请」，请下推付款申请单",
     "purchase_order.push_payment_application.not_audited": "只有已审核或已确认的采购单才能下推付款申请",
     "purchase_order.push_payment_application.no_amount": "采购单未填写预付款金额或无可请款预付额度",

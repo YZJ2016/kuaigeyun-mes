@@ -58,15 +58,19 @@ def assert_prepayment_offset_payment_contract(
     payment_method: Optional[str],
     settlement_type: Optional[str],
     pull_lines: Optional[Sequence[Any]],
+    offset_prepayment_lines: Optional[Sequence[Any]] = None,
 ) -> None:
-    """预付抵扣须普通付款 + 应付/货款申请加载明细，不可选采购订单预付款行。"""
+    """预付抵扣须普通付款 + 应付明细 + 指定预付款明细，不可选采购订单预付款行。"""
     if not is_prepayment_offset_payment_method(payment_method):
         return
     if str(settlement_type or "normal").strip() != "normal":
         raise ValidationError("预付抵扣须使用普通付款结算类型")
     lines = list(pull_lines or [])
     if not lines:
-        raise ValidationError("预付抵扣须加载应付或货款类付款申请明细")
+        raise ValidationError("预付抵扣须加载待抵扣应付明细")
+    offset_lines = list(offset_prepayment_lines or [])
+    if not offset_lines:
+        raise ValidationError("预付抵扣须选择预付款明细")
     for line in lines:
         if isinstance(line, dict):
             source_type = str(line.get("source_type") or "").strip()
@@ -74,8 +78,8 @@ def assert_prepayment_offset_payment_contract(
             source_type = str(getattr(line, "source_type", "") or "").strip()
         if source_type == "purchase_order":
             raise ValidationError("预付抵扣不可加载采购订单预付款明细")
-        if source_type not in ("payable", "payment_application"):
-            raise ValidationError(f"预付抵扣不支持的加载来源: {source_type or '未知'}")
+        if source_type != "payable":
+            raise ValidationError(f"预付抵扣仅支持应付明细，不支持: {source_type or '未知'}")
 
 
 def assert_payment_application_payee_fields(

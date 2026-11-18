@@ -6,9 +6,24 @@ from __future__ import annotations
 
 import logging
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Optional, Sequence, Tuple
 
-from apps.kuaicaiwu.constants.finance_source_types import is_payable_red_total_source
+from apps.kuaicaiwu.constants.finance_source_types import (
+    PAYABLE_SOURCE_ORDER_MILESTONE,
+    PAYABLE_SOURCE_PURCHASE_RECEIPT,
+    is_payable_red_total_source,
+)
+
+_PURCHASE_ORDER_PAYABLE_SOURCE_TYPES = frozenset(
+    {"purchase_order", "采购订单", "PurchaseOrder"}
+)
+_PURCHASE_RECEIPT_PAYABLE_SOURCE_TYPES = frozenset(
+    {
+        "purchase_receipt",
+        "PurchaseReceipt",
+        PAYABLE_SOURCE_PURCHASE_RECEIPT,
+    }
+)
 from apps.kuaicaiwu.models.payable import Payable
 from apps.kuaicaiwu.models.payment import Payment
 from apps.kuaizhizao.models.document_relation import DocumentRelation
@@ -160,6 +175,67 @@ class PayablePrepaymentApplyService:
             self._restore_tenant_context(prev_tenant)
         return applied.quantize(_MONEY)
 
+    async def apply_selected_prepayments_to_payable(
+        self,
+        tenant_id: int,
+        *,
+        payable_id: int,
+        amount: Decimal,
+        operator_id: int,
+        allocations: Sequence[Tuple[int, Decimal]],
+        offset_payment_id: Optional[int] = None,
+    ) -> Decimal:
+        """按指定预付款单及上限金额核销到应付单，返回实际核销金额。"""
+        apply_total = _money(amount)
+        if apply_total <= 0:
+            return Decimal("0.00")
+
+        from apps.kuaicaiwu.services.prepayment_service import PrepaymentService
+
+        remaining = apply_total
+        applied = Decimal("0.00")
+        prep_svc = PrepaymentService()
+        prev_tenant = self._push_tenant_context(tenant_id)
+        try:
+            for payment_id, max_chunk in allocations:
+                if remaining <= 0:
+                    break
+                cap = _money(max_chunk)
+                if cap <= 0:
+                    continue
+                payable = await Payable.get_or_none(
+                    tenant_id=tenant_id, id=int(payable_id), deleted_at__isnull=True
+                )
+                if not payable:
+                    break
+                pay_remaining = _money(payable.remaining_amount)
+                if pay_remaining <= 0:
+                    break
+                fresh_payment = await Payment.get_or_none(
+                    tenant_id=tenant_id, id=int(payment_id), deleted_at__isnull=True
+                )
+                if not fresh_payment:
+                    continue
+                unsettled = _money(fresh_payment.unsettled_amount)
+                if unsettled <= 0:
+                    continue
+                chunk = min(remaining, cap, unsettled, pay_remaining)
+                if chunk <= 0:
+                    continue
+                await prep_svc.apply_payment_to_payable(
+                    tenant_id,
+                    payment_id=int(payment_id),
+                    payable_id=int(payable_id),
+                    amount=chunk,
+                    operator_id=operator_id,
+                    offset_payment_id=offset_payment_id,
+                )
+                applied += chunk
+                remaining -= chunk
+        finally:
+            self._restore_tenant_context(prev_tenant)
+        return applied.quantize(_MONEY)
+
     async def resolve_purchase_order_id_for_payable(
         self,
         tenant_id: int,
@@ -173,9 +249,9 @@ class PayablePrepaymentApplyService:
             return None
         source_type = str(getattr(payable, "source_type", "") or "").strip()
         source_id = getattr(payable, "source_id", None)
-        if source_type == "purchase_order" and source_id:
+        if source_type in _PURCHASE_ORDER_PAYABLE_SOURCE_TYPES and source_id:
             return int(source_id)
-        if source_type == "purchase_receipt" and source_id:
+        if source_type in _PURCHASE_RECEIPT_PAYABLE_SOURCE_TYPES and source_id:
             from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 
             receipt = await PurchaseReceipt.get_or_none(
@@ -183,6 +259,16 @@ class PayablePrepaymentApplyService:
             )
             if receipt and receipt.purchase_order_id:
                 return int(receipt.purchase_order_id)
+        if source_type == PAYABLE_SOURCE_ORDER_MILESTONE and source_id:
+            from apps.kuaizhizao.models.purchase_order_milestone import (
+                PurchaseOrderMilestone,
+            )
+
+            milestone = await PurchaseOrderMilestone.get_or_none(
+                tenant_id=tenant_id, id=int(source_id), deleted_at__isnull=True
+            )
+            if milestone and milestone.purchase_order_id:
+                return int(milestone.purchase_order_id)
         rel = await DocumentRelation.filter(
             tenant_id=tenant_id,
             source_type="purchase_order",
@@ -191,6 +277,15 @@ class PayablePrepaymentApplyService:
         ).first()
         if rel and rel.source_id:
             return int(rel.source_id)
+        if source_id:
+            po_from_receipt_rel = await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type="purchase_order",
+                target_type="purchase_receipt",
+                target_id=int(source_id),
+            ).first()
+            if po_from_receipt_rel and po_from_receipt_rel.source_id:
+                return int(po_from_receipt_rel.source_id)
         return None
 
     async def list_open_payable_ids_for_purchase_order(

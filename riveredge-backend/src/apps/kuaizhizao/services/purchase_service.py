@@ -2915,8 +2915,15 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
         from infra.services.business_config_service import BusinessConfigService
 
+        from apps.kuaizhizao.services.payment_application_pull_service import (
+            PaymentApplicationPullService,
+        )
+
         prepay_map = await _order_prepayment_linked_by_ids(
             tenant_id, [order_id], source_type="purchase_order", target_type="payment"
+        )
+        prepay_app_map = await PaymentApplicationPullService().has_prepayment_application_by_order_ids(
+            tenant_id, [order_id]
         )
         require_app = await BusinessConfigService().get_finance_require_payment_application(
             tenant_id
@@ -2925,6 +2932,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             order_model,
             "push_prepayment",
             has_prepayment_payment=prepay_map.get(order_id, False),
+            has_prepayment_application=prepay_app_map.get(order_id, False),
             require_payment_application=require_app,
         )
 
@@ -2979,8 +2987,15 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         from infra.services.business_config_service import BusinessConfigService
 
         order = await self.get_purchase_order_by_id(tenant_id, order_id)
+        from apps.kuaizhizao.services.payment_application_pull_service import (
+            PaymentApplicationPullService,
+        )
+
         prepay_map = await _order_prepayment_linked_by_ids(
             tenant_id, [order_id], source_type="purchase_order", target_type="payment"
+        )
+        prepay_app_map = await PaymentApplicationPullService().has_prepayment_application_by_order_ids(
+            tenant_id, [order_id]
         )
         require_app = await BusinessConfigService().get_finance_require_payment_application(
             tenant_id
@@ -2989,6 +3004,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             order,
             "push_prepayment",
             has_prepayment_payment=prepay_map.get(order_id, False),
+            has_prepayment_application=prepay_app_map.get(order_id, False),
             require_payment_application=require_app,
         )
 

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Optional
 
 from apps.kuaicaiwu.models.receipt import Receipt
 from apps.kuaicaiwu.models.payment import Payment
@@ -67,6 +68,7 @@ class PrepaymentService:
         payable_id: int,
         amount: Decimal,
         operator_id: int,
+        offset_payment_id: Optional[int] = None,
     ):
         payment = await Payment.get_or_none(
             tenant_id=tenant_id, id=payment_id, deleted_at__isnull=True
@@ -92,8 +94,18 @@ class PrepaymentService:
         if amt <= 0:
             raise ValidationError("核销金额必须大于 0")
 
+        settlement_extra = (
+            {"offset_payment_id": int(offset_payment_id)}
+            if offset_payment_id is not None and int(offset_payment_id) > 0
+            else None
+        )
         settlement = await AccountSettlementService().settle_payable(
-            tenant_id, payable_id, payment_id, amt, operator_id
+            tenant_id,
+            payable_id,
+            payment_id,
+            amt,
+            operator_id,
+            settlement_extra=settlement_extra,
         )
         return {
             "settlement_id": settlement.id,

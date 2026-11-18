@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { App, Button, Empty, Modal, Space, Table, Typography } from 'antd';
+import { App, Button, Divider, Empty, Modal, Space, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import FilePreviewModal from '../../../components/file-preview';
 import { getFileExt } from '../../../utils/filePreviewKind';
 import { fetchMaterialLineAttachmentSources } from '../services/documentLineMaterialAttachments';
-import type { MaterialLineAttachmentSource } from '../utils/documentAttachments';
+import type { DocumentAttachmentFile, MaterialLineAttachmentSource } from '../utils/documentAttachments';
+import LineAttachmentsUpload from './LineAttachmentsUpload';
+import { DocumentAttachmentsReadonly } from './DocumentAttachmentsReadonly';
 
 export type MaterialAttachmentsPickerModalProps = {
   open: boolean;
@@ -14,6 +16,12 @@ export type MaterialAttachmentsPickerModalProps = {
   onConfirm?: (picked: MaterialLineAttachmentSource[]) => void;
   /** 只读：仅预览，无勾选确认 */
   readOnly?: boolean;
+  /** 行级上传（与物料复制同弹窗） */
+  lineAttachments?: DocumentAttachmentFile[] | null;
+  onLineAttachmentsChange?: (next: DocumentAttachmentFile[]) => void;
+  uploadCategory?: string;
+  maxUploadCount?: number;
+  uploadDisabled?: boolean;
 };
 
 export const MaterialAttachmentsPickerModal: React.FC<MaterialAttachmentsPickerModalProps> = ({
@@ -22,6 +30,11 @@ export const MaterialAttachmentsPickerModal: React.FC<MaterialAttachmentsPickerM
   onClose,
   onConfirm,
   readOnly,
+  lineAttachments,
+  onLineAttachmentsChange,
+  uploadCategory,
+  maxUploadCount = 4,
+  uploadDisabled,
 }) => {
   const { t } = useTranslation();
   const { message } = App.useApp();
@@ -98,6 +111,9 @@ export const MaterialAttachmentsPickerModal: React.FC<MaterialAttachmentsPickerM
     [rows, selectedKeys],
   );
 
+  const showLineUpload = Boolean(uploadCategory && (readOnly || onLineAttachmentsChange));
+  const showMaterialSection = Boolean(materialId);
+
   return (
     <>
       <Modal
@@ -126,30 +142,64 @@ export const MaterialAttachmentsPickerModal: React.FC<MaterialAttachmentsPickerM
           )
         }
       >
-        {!materialId ? (
-          <Typography.Text type="secondary">
-            {t('app.kuaizhizao.documentLineAttachments.selectMaterialFirst')}
-          </Typography.Text>
-        ) : rows.length === 0 && !loading ? (
-          <Empty description={t('app.kuaizhizao.documentLineAttachments.materialSourcesEmpty')} />
+        {showLineUpload ? (
+          <>
+            <Typography.Text strong>
+              {t('app.kuaizhizao.documentLineAttachments.lineUploadSection')}
+            </Typography.Text>
+            <div style={{ marginTop: 8, marginBottom: showMaterialSection ? 0 : 4 }}>
+              {readOnly || !onLineAttachmentsChange ? (
+                <DocumentAttachmentsReadonly attachments={lineAttachments} variant="list" showEmpty />
+              ) : (
+                <LineAttachmentsUpload
+                  value={lineAttachments}
+                  onChange={onLineAttachmentsChange}
+                  category={uploadCategory!}
+                  maxCount={maxUploadCount}
+                  disabled={uploadDisabled}
+                />
+              )}
+            </div>
+            {showMaterialSection ? <Divider style={{ margin: '16px 0' }} /> : null}
+          </>
+        ) : null}
+        {!showMaterialSection ? (
+          showLineUpload ? null : (
+            <Typography.Text type="secondary">
+              {t('app.kuaizhizao.documentLineAttachments.selectMaterialFirst')}
+            </Typography.Text>
+          )
         ) : (
-          <Table
-            size="small"
-            rowKey="key"
-            loading={loading}
-            pagination={false}
-            dataSource={rows}
-            columns={columns}
-            rowSelection={
-              readOnly
-                ? undefined
-                : {
-                    selectedRowKeys: selectedKeys,
-                    onChange: (keys) => setSelectedKeys(keys),
-                  }
-            }
-            scroll={{ y: 360 }}
-          />
+          <>
+            <Typography.Text strong>
+              {t('app.kuaizhizao.documentLineAttachments.materialSourcesSection')}
+            </Typography.Text>
+            {rows.length === 0 && !loading ? (
+              <Empty
+                style={{ marginTop: 12 }}
+                description={t('app.kuaizhizao.documentLineAttachments.materialSourcesEmpty')}
+              />
+            ) : (
+              <Table
+                size="small"
+                rowKey="key"
+                loading={loading}
+                pagination={false}
+                dataSource={rows}
+                columns={columns}
+                style={{ marginTop: 8 }}
+                rowSelection={
+                  readOnly
+                    ? undefined
+                    : {
+                        selectedRowKeys: selectedKeys,
+                        onChange: (keys) => setSelectedKeys(keys),
+                      }
+                }
+                scroll={{ y: 280 }}
+              />
+            )}
+          </>
         )}
       </Modal>
       <FilePreviewModal

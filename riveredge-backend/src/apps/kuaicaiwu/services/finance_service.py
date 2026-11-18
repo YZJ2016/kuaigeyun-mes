@@ -168,6 +168,32 @@ class PayableService(AppBaseService[Payable]):
             if existing:
                 return PayableResponse.model_validate(existing)
         user_info = await self.get_user_info(created_by)
+        create_fields = payable_data.model_dump(
+            exclude_unset=True,
+            exclude={
+                "created_by",
+                "pull_source_type",
+                "pull_source_id",
+                "review_status",
+                "reviewer_id",
+                "reviewer_name",
+                "review_time",
+                "review_remarks",
+            },
+        )
+        if not str(create_fields.get("payment_terms") or "").strip():
+            from apps.kuaicaiwu.services.finance_payment_terms import (
+                resolve_payable_payment_terms_for_source,
+            )
+
+            terms_text = await resolve_payable_payment_terms_for_source(
+                tenant_id,
+                supplier_id=int(payable_data.supplier_id),
+                source_type=payable_data.source_type,
+                source_id=payable_data.source_id,
+            )
+            if terms_text:
+                create_fields["payment_terms"] = terms_text
         last_error: Optional[Exception] = None
         for attempt in range(5):
             try:
@@ -184,19 +210,7 @@ class PayableService(AppBaseService[Payable]):
                         updated_by=created_by,
                         updated_by_name=user_info["name"],
                         review_status="草稿",
-                        **payable_data.model_dump(
-                            exclude_unset=True,
-                            exclude={
-                                'created_by',
-                                'pull_source_type',
-                                'pull_source_id',
-                                'review_status',
-                                'reviewer_id',
-                                'reviewer_name',
-                                'review_time',
-                                'review_remarks',
-                            },
-                        )
+                        **create_fields,
                     )
                     await self.accounting_event_service.record_event(
                         tenant_id=tenant_id,
@@ -244,6 +258,11 @@ class PayableService(AppBaseService[Payable]):
         payable = await Payable.get_or_none(tenant_id=tenant_id, id=payable_id)
         if not payable:
             raise NotFoundError(f"应付单不存在: {payable_id}")
+        from apps.kuaicaiwu.services.finance_payment_terms import (
+            enrich_payable_payment_terms_fields,
+        )
+
+        await enrich_payable_payment_terms_fields(tenant_id, [payable])
         resp = PayableResponse.model_validate(payable)
         from core.services.approval.audit_record_enricher import enrich_record
 
@@ -293,6 +312,11 @@ class PayableService(AppBaseService[Payable]):
 
         total = await query.count()
         payables = await query.offset(skip).limit(limit).order_by(order_expr)
+        from apps.kuaicaiwu.services.finance_payment_terms import (
+            enrich_payable_payment_terms_fields,
+        )
+
+        await enrich_payable_payment_terms_fields(tenant_id, payables)
         from core.services.approval.audit_record_enricher import enrich_items
 
         rows = [PayableResponse.model_validate(payable) for payable in payables]
@@ -2129,6 +2153,7 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
         currency: str = "CNY",
         invoice_exchange_rate: Optional[Decimal] = None,
         payment_exchange_rate: Optional[Decimal] = None,
+        settlement_extra: Optional[dict] = None,
     ) -> SettlementRecord:
         """
         执行核销：将付款单金额分配到应付单。
@@ -2149,6 +2174,7 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
                 currency=currency,
                 invoice_exchange_rate=invoice_exchange_rate,
                 payment_exchange_rate=payment_exchange_rate,
+                settlement_extra=settlement_extra,
             )
 
     async def apply_payable_settlement(
@@ -2162,6 +2188,7 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
         currency: str = "CNY",
         invoice_exchange_rate: Optional[Decimal] = None,
         payment_exchange_rate: Optional[Decimal] = None,
+        settlement_extra: Optional[dict] = None,
     ) -> SettlementRecord:
         """应付核销写入（调用方负责外层事务；settlement_code 须已在事务外生成）。"""
         payable = await Payable.get_or_none(tenant_id=tenant_id, id=payable_id)
@@ -2169,6 +2196,15 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
 
         if not payable or not payment:
             raise NotFoundError("应付单或付款单不存在")
+
+        from apps.kuaicaiwu.constants.payment_method import (
+            is_prepayment_offset_payment_method,
+        )
+
+        if is_prepayment_offset_payment_method(payment.payment_method):
+            raise ValidationError(
+                "预付抵扣付款单不产生银行付款核销，请通过确认按预付款明细冲应付"
+            )
 
         amount = Decimal(amount).quantize(Decimal("0.01"))
         if amount > payable.remaining_amount or amount > payment.unsettled_amount:
@@ -2184,6 +2220,11 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
             currency=currency,
         )
 
+        note_payload: dict = {}
+        if fx_snapshot:
+            note_payload["fx"] = fx_snapshot
+        if settlement_extra:
+            note_payload.update(settlement_extra)
         settlement = await SettlementRecord.create(
             tenant_id=tenant_id,
             settlement_code=settlement_code,
@@ -2200,7 +2241,7 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
             settlement_date=today.date(),
             operator_id=operator_id,
             operator_name=user_name,
-            notes=json.dumps({"fx": fx_snapshot}, ensure_ascii=False) if fx_snapshot else None,
+            notes=json.dumps(note_payload, ensure_ascii=False) if note_payload else None,
         )
 
         write_off_limit = self._money(

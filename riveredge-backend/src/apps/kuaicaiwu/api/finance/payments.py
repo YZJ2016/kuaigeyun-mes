@@ -73,6 +73,12 @@ async def _serialize_detail(tenant_id: int, obj: Payment) -> PaymentVoucherRespo
     )
     if pull_lines:
         enriched["pull_lines"] = pull_lines
+    enrich_offset = str(getattr(obj, "status", "") or "") == "Draft"
+    offset_lines = await payment_pull_service.list_offset_prepayment_lines_for_payment(
+        tenant_id, int(obj.id), enrich=enrich_offset
+    )
+    if offset_lines:
+        enriched["offset_prepayment_lines"] = offset_lines
     return PaymentVoucherResponse.model_validate(enriched)
 
 
@@ -105,6 +111,7 @@ async def create_payment(
                 payment_method=data.payment_method,
                 settlement_type=data.settlement_type,
                 pull_lines=data.pull_lines,
+                offset_prepayment_lines=data.offset_prepayment_lines,
             )
             await BankAccountService().validate_voucher_account(
                 tenant_id,
@@ -130,7 +137,25 @@ async def create_payment(
                 pull_lines=data.pull_lines or [],
                 total_amount=Decimal(data.total_amount),
                 settlement_type=data.settlement_type,
+                payment_method=data.payment_method,
             )
+        if is_prepayment_offset_payment_method(data.payment_method):
+            if not has_pull_lines:
+                raise _http_exception_with_trace(
+                    400,
+                    "预付抵扣须加载应付明细",
+                    "/payments",
+                    tenant_id,
+                )
+            try:
+                await payment_pull_service.validate_offset_prepayment_lines_for_create(
+                    tenant_id,
+                    offset_prepayment_lines=data.offset_prepayment_lines or [],
+                    pull_lines=data.pull_lines or [],
+                    total_amount=Decimal(data.total_amount),
+                )
+            except BusinessLogicError as exc:
+                raise _http_exception_with_trace(422, str(exc), "/payments", tenant_id) from exc
         elif has_legacy_pull:
             pull_preview = await payment_pull_service.assert_pull_create_allowed(
                 tenant_id=tenant_id,
@@ -197,7 +222,14 @@ async def create_payment(
                 pull_lines=data.pull_lines,
                 created_by=current_user.id,
             )
-        elif pull_preview and data.source_type and data.source_id:
+        if is_prepayment_offset_payment_method(data.payment_method) and data.offset_prepayment_lines:
+            await payment_pull_service.persist_offset_prepayment_lines(
+                tenant_id,
+                payment_id=int(payment.id),
+                offset_prepayment_lines=data.offset_prepayment_lines,
+                created_by=current_user.id,
+            )
+        if pull_preview and data.source_type and data.source_id and not has_pull_lines:
             await payment_pull_service.create_pull_relation(
                 tenant_id=tenant_id,
                 source_type=str(data.source_type).strip(),
@@ -274,10 +306,16 @@ async def list_payments(
         default_sort_col="payment_date",
     )
 
+    from apps.kuaicaiwu.services.payment_list_enrichment import (
+        enrich_payment_list_linked_payable_totals,
+    )
+
     total = await query.count()
     items = await query.order_by(order_expr, "-id").offset(skip).limit(limit)
+    serialized = [_serialize(p) for p in items]
+    await enrich_payment_list_linked_payable_totals(tenant_id, serialized)
     return PaymentVoucherListResponse(
-        items=[_serialize(p) for p in items],
+        items=serialized,
         total=total, skip=skip, limit=limit
     )
 
@@ -354,6 +392,32 @@ async def preview_pull_payment_from_payable(
         payable_id=payable_id,
         operator_id=current_user.id,
     )
+
+
+@router.get(
+    "/pull-candidates/prepayment-payments",
+    summary="List prepayment payment pull candidates for offset payment",
+)
+async def list_prepayment_payment_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    supplier_id: int = Query(..., description="供应商ID"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payment:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    try:
+        return await payment_pull_service.list_prepayment_payment_pull_candidates(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            supplier_id=supplier_id,
+        )
+    except BusinessLogicError as exc:
+        raise _http_exception_with_trace(
+            422, str(exc), "/payments/pull-candidates/prepayment-payments", tenant_id
+        ) from exc
 
 
 @router.get(
@@ -529,6 +593,9 @@ async def update_payment(
     if pull_lines is not None:
         # model_dump 已把嵌套模型降为 dict，服务层按属性读取，须还原为 schema 对象
         pull_lines = data.pull_lines or []
+    offset_prepayment_lines = update_data.pop("offset_prepayment_lines", None)
+    if offset_prepayment_lines is not None:
+        offset_prepayment_lines = data.offset_prepayment_lines or []
     if is_prepayment_offset_payment_method(method):
         update_data["bank_account"] = None
         update_data["bank_account_id"] = None
@@ -538,10 +605,18 @@ async def update_payment(
             effective_pull = await payment_pull_service.list_pull_lines_for_payment(
                 tenant_id, int(payment.id), enrich_max=False
             )
+        effective_offset = (
+            offset_prepayment_lines if offset_prepayment_lines is not None else None
+        )
+        if effective_offset is None and is_prepayment_offset_payment_method(method):
+            effective_offset = await payment_pull_service.list_offset_prepayment_lines_for_payment(
+                tenant_id, int(payment.id), enrich=False
+            )
         assert_prepayment_offset_payment_contract(
             payment_method=method,
             settlement_type=settlement,
             pull_lines=effective_pull,
+            offset_prepayment_lines=effective_offset,
         )
     except FinanceValidationError as exc:
         raise _http_exception_with_trace(400, str(exc), "/payments/{id}", tenant_id) from exc
@@ -568,9 +643,34 @@ async def update_payment(
                 settlement_type=str(
                     update_data.get("settlement_type", payment.settlement_type) or "normal"
                 ),
+                payment_method=method,
             )
         else:
             await payment_pull_service.clear_payment_pull_sources(tenant_id, int(payment.id))
+        payment = await _get_or_404(tenant_id, id)
+    if offset_prepayment_lines is not None:
+        effective_total = Decimal(
+            str(update_data.get("total_amount", payment.total_amount) or 0)
+        )
+        effective_pull_for_offset = pull_lines
+        if effective_pull_for_offset is None:
+            effective_pull_for_offset = await payment_pull_service.list_pull_lines_for_payment(
+                tenant_id, int(payment.id), enrich_max=False
+            )
+        if offset_prepayment_lines:
+            try:
+                await payment_pull_service.replace_payment_offset_prepayment_lines(
+                    tenant_id,
+                    payment_id=int(payment.id),
+                    offset_prepayment_lines=offset_prepayment_lines,
+                    pull_lines=effective_pull_for_offset or [],
+                    total_amount=effective_total,
+                    operator_id=current_user.id,
+                )
+            except BusinessLogicError as exc:
+                raise _http_exception_with_trace(422, str(exc), "/payments/{id}", tenant_id) from exc
+        else:
+            await payment_pull_service.clear_offset_prepayment_lines(tenant_id, int(payment.id))
         payment = await _get_or_404(tenant_id, id)
     return await _serialize_detail(tenant_id, payment)
 

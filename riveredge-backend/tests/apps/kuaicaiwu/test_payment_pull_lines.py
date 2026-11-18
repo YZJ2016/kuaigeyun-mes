@@ -25,12 +25,28 @@ def test_prepayment_offset_contract_requires_normal_and_payable_lines():
             payment_method="预付抵扣",
             settlement_type="normal",
             pull_lines=[],
+            offset_prepayment_lines=[{"prepayment_payment_id": 1, "amount": 1}],
+        )
+    with pytest.raises(ValidationError, match="预付款明细"):
+        assert_prepayment_offset_payment_contract(
+            payment_method="预付抵扣",
+            settlement_type="normal",
+            pull_lines=[{"source_type": "payable", "source_id": 1}],
+            offset_prepayment_lines=[],
         )
     with pytest.raises(ValidationError, match="采购订单"):
         assert_prepayment_offset_payment_contract(
             payment_method="预付抵扣",
             settlement_type="normal",
             pull_lines=[{"source_type": "purchase_order", "source_id": 1}],
+            offset_prepayment_lines=[{"prepayment_payment_id": 1, "amount": 1}],
+        )
+    with pytest.raises(ValidationError, match="仅支持应付"):
+        assert_prepayment_offset_payment_contract(
+            payment_method="预付抵扣",
+            settlement_type="normal",
+            pull_lines=[{"source_type": "payment_application", "source_id": 1}],
+            offset_prepayment_lines=[{"prepayment_payment_id": 1, "amount": 1}],
         )
 
 
@@ -93,6 +109,24 @@ async def test_validate_pull_lines_purchase_order_requires_prepayment():
             total_amount=Decimal("10"),
             settlement_type="normal",
         )
+
+
+@pytest.mark.asyncio
+async def test_validate_pull_lines_accepts_dict_payable_line(monkeypatch):
+    svc = PaymentPullService()
+
+    async def _allow(**_kwargs):
+        return {}
+
+    monkeypatch.setattr(svc, "assert_pull_create_allowed", _allow)
+
+    lines = [{"source_type": "payable", "source_id": 101, "amount": Decimal("80.00")}]
+    preview = await svc.validate_pull_lines_for_create(
+        1,
+        pull_lines=lines,
+        total_amount=Decimal("80.00"),
+    )
+    assert preview == {}
 
 
 @pytest.mark.asyncio

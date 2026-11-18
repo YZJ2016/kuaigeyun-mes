@@ -50,6 +50,9 @@ export type PaymentVoucherFormBodyProps = {
   showPullLines?: boolean;
   pullLineColumns?: ColumnsType<Record<string, unknown>>;
   pullLineHeaderExtra?: React.ReactNode;
+  /** 预付抵扣：预付款明细 */
+  offsetPrepaymentLineColumns?: ColumnsType<Record<string, unknown>>;
+  offsetPrepaymentHeaderExtra?: React.ReactNode;
   /** 取单预览：来源单号字段标签（默认应付单） */
   pullSourceCodeLabel?: string;
   /** 锁定结算类型为预付（采购订单下推预付付款单） */
@@ -69,6 +72,8 @@ export function PaymentVoucherFormBody({
   showPullLines,
   pullLineColumns,
   pullLineHeaderExtra,
+  offsetPrepaymentLineColumns,
+  offsetPrepaymentHeaderExtra,
   pullSourceCodeLabel,
   fixedSettlementType,
   hideCounterpartySection = false,
@@ -116,8 +121,11 @@ export function PaymentVoucherFormBody({
           settlement_type: 'normal',
           bank_account_id: undefined,
           bank_account: undefined,
+          offset_prepayment_lines: [],
         });
         syncPullLinesAfterSettlementOrMethodChange('normal');
+      } else {
+        form.setFieldsValue({ offset_prepayment_lines: [] });
       }
       if (hidesSupplierPayeeAccount(normalized)) {
         form.setFieldsValue({
@@ -143,15 +151,24 @@ export function PaymentVoucherFormBody({
     ) : null;
 
   const paymentAmountField = (
-    <Col span={8}>
-      <ProFormDigit
-        name="total_amount"
-        label={t(`${P}.col.amount`)}
-        min={0.01}
-        rules={[{ required: true }]}
-        fieldProps={financeAmountDigitFieldProps}
-      />
-    </Col>
+    <ProFormDependency name={['payment_method']}>
+      {({ payment_method: payMethod }) => {
+        const offsetMode = isPrepaymentOffsetPaymentMethod(payMethod);
+        return (
+          <Col span={8}>
+            <ProFormDigit
+              name="total_amount"
+              label={
+                offsetMode ? t(`${P}.col.prepaymentOffsetTotal`) : t(`${P}.col.amount`)
+              }
+              min={0.01}
+              rules={[{ required: true }]}
+              fieldProps={financeAmountDigitFieldProps}
+            />
+          </Col>
+        );
+      }}
+    </ProFormDependency>
   );
 
   return (
@@ -174,19 +191,10 @@ export function PaymentVoucherFormBody({
                 readonly
               />
             </Col>
-            {fixedSettlementType === 'prepayment' ? prepaymentSettlementField : paymentAmountField}
+            {fixedSettlementType === 'prepayment' ? prepaymentSettlementField : null}
           </Row>
           {fixedSettlementType === 'prepayment' ? (
             <Row gutter={16}>
-              {paymentAmountField}
-              <Col span={8}>
-                <ProFormDatePicker
-                  name="payment_date"
-                  label={t(`${P}.col.paymentDate`)}
-                  rules={[{ required: true }]}
-                  fieldProps={{ style: { width: '100%' } }}
-                />
-              </Col>
               <Col span={8}>
                 <ProFormSelect
                   name="payment_method"
@@ -199,8 +207,41 @@ export function PaymentVoucherFormBody({
                   }}
                 />
               </Col>
+              {paymentAmountField}
+              <Col span={8}>
+                <ProFormDatePicker
+                  name="payment_date"
+                  label={t(`${P}.col.paymentDate`)}
+                  rules={[{ required: true }]}
+                  fieldProps={{ style: { width: '100%' } }}
+                />
+              </Col>
             </Row>
-          ) : null}
+          ) : (
+            <Row gutter={16}>
+              <Col span={8}>
+                <ProFormSelect
+                  name="payment_method"
+                  label={t(`${P}.col.paymentMethod`)}
+                  options={paymentMethodOptions}
+                  rules={[{ required: true, message: t(`${P}.selectPaymentMethod`) }]}
+                  placeholder={t(`${P}.selectPaymentMethod`)}
+                  fieldProps={{
+                    onChange: (value: string) => onPaymentMethodChange(String(value ?? '')),
+                  }}
+                />
+              </Col>
+              {paymentAmountField}
+              <Col span={8}>
+                <ProFormDatePicker
+                  name="payment_date"
+                  label={t(`${P}.col.paymentDate`)}
+                  rules={[{ required: true }]}
+                  fieldProps={{ style: { width: '100%' } }}
+                />
+              </Col>
+            </Row>
+          )}
         </>
       ) : (
         <Row gutter={16}>
@@ -222,15 +263,6 @@ export function PaymentVoucherFormBody({
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
-          <Col span={8}>
-            <ProFormDigit
-              name="total_amount"
-              label={t(`${P}.col.amount`)}
-              min={0.01}
-              rules={[{ required: true }]}
-              fieldProps={financeAmountDigitFieldProps}
-            />
-          </Col>
         </Row>
       )}
 
@@ -248,41 +280,34 @@ export function PaymentVoucherFormBody({
         </ProFormDependency>
       ) : (
         <Row gutter={16}>
-          {mode === 'pull' ? (
-            <Col span={8}>
-              <ProFormDatePicker
-                name="payment_date"
-                label={t(`${P}.col.paymentDate`)}
-                rules={[{ required: true }]}
-                fieldProps={{ style: { width: '100%' } }}
-              />
-            </Col>
-          ) : null}
-          <ProFormDependency name={['settlement_type']}>
-            {({ settlement_type: settlementType }) => {
-              const st = String(settlementType || 'normal').trim() || 'normal';
-              const methodOptions =
-                st === 'prepayment'
-                  ? paymentMethodOptions.filter(
-                      (o) => o.value !== PREPAYMENT_OFFSET_PAYMENT_METHOD,
-                    )
-                  : paymentMethodOptions;
-              return (
-                <Col span={8}>
-                  <ProFormSelect
-                    name="payment_method"
-                    label={t(`${P}.col.paymentMethod`)}
-                    options={methodOptions}
-                    rules={[{ required: true, message: t(`${P}.selectPaymentMethod`) }]}
-                    placeholder={t(`${P}.selectPaymentMethod`)}
-                    fieldProps={{
-                      onChange: (value: string) => onPaymentMethodChange(String(value ?? '')),
-                    }}
-                  />
-                </Col>
-              );
-            }}
-          </ProFormDependency>
+          {mode === 'pull' ? null : (
+            <ProFormDependency name={['settlement_type']}>
+              {({ settlement_type: settlementType }) => {
+                const st = String(settlementType || 'normal').trim() || 'normal';
+                const methodOptions =
+                  st === 'prepayment'
+                    ? paymentMethodOptions.filter(
+                        (o) => o.value !== PREPAYMENT_OFFSET_PAYMENT_METHOD,
+                      )
+                    : paymentMethodOptions;
+                return (
+                  <Col span={8}>
+                    <ProFormSelect
+                      name="payment_method"
+                      label={t(`${P}.col.paymentMethod`)}
+                      options={methodOptions}
+                      rules={[{ required: true, message: t(`${P}.selectPaymentMethod`) }]}
+                      placeholder={t(`${P}.selectPaymentMethod`)}
+                      fieldProps={{
+                        onChange: (value: string) => onPaymentMethodChange(String(value ?? '')),
+                      }}
+                    />
+                  </Col>
+                );
+              }}
+            </ProFormDependency>
+          )}
+          {mode === 'pull' ? null : paymentAmountField}
           {fixedSettlementType === 'prepayment' ? null : (
             <ProFormDependency name={['payment_method']}>
               {({ payment_method: payMethod }) => {
@@ -337,25 +362,42 @@ export function PaymentVoucherFormBody({
       )}
 
       {showPullLines && pullLineColumns ? (
-        <>
-          <UniTableDetail
-            name="pull_lines"
-            title={t(`${P}.pullLines.sectionTitle`)}
-            required={false}
-            disabledAdd
-            headerExtra={pullLineHeaderExtra}
-            columns={pullLineColumns}
-          />
-          <ProFormDependency name={['payment_method']}>
-            {({ payment_method: method }) =>
-              isPrepaymentOffsetPaymentMethod(method) ? (
-                <Typography.Paragraph type="secondary" style={{ marginTop: 4, marginBottom: 8 }}>
-                  {t(`${P}.pullLines.prepaymentOffsetHint`)}
-                </Typography.Paragraph>
-              ) : null
-            }
-          </ProFormDependency>
-        </>
+        <ProFormDependency name={['payment_method']}>
+          {({ payment_method: method }) => {
+            const offsetMode = isPrepaymentOffsetPaymentMethod(method);
+            return (
+              <>
+                <UniTableDetail
+                  name="pull_lines"
+                  title={
+                    offsetMode
+                      ? t(`${P}.pullLines.offsetPayableSectionTitle`)
+                      : t(`${P}.pullLines.sectionTitle`)
+                  }
+                  required={false}
+                  disabledAdd
+                  headerExtra={pullLineHeaderExtra}
+                  columns={pullLineColumns}
+                />
+                {offsetMode && offsetPrepaymentLineColumns ? (
+                  <>
+                    <UniTableDetail
+                      name="offset_prepayment_lines"
+                      title={t(`${P}.pullLines.offsetPrepaymentSectionTitle`)}
+                      required={false}
+                      disabledAdd
+                      headerExtra={offsetPrepaymentHeaderExtra}
+                      columns={offsetPrepaymentLineColumns}
+                    />
+                    <Typography.Paragraph type="secondary" style={{ marginTop: 4, marginBottom: 8 }}>
+                      {t(`${P}.pullLines.prepaymentOffsetHint`)}
+                    </Typography.Paragraph>
+                  </>
+                ) : null}
+              </>
+            );
+          }}
+        </ProFormDependency>
       ) : null}
 
       <ProFormDependency name={['payment_method']}>

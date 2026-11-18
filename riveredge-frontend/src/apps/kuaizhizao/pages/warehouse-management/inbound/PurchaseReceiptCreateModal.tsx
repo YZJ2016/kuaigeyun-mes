@@ -594,6 +594,17 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
     });
   }, [defaultPerson, orgPayableDefault]);
 
+  useEffect(() => {
+    if (!open || editingId) return;
+    const rid = formRef.current?.getFieldValue('receiver_id');
+    if (rid != null && rid !== '') return;
+    if (defaultPerson.id == null && !defaultPerson.name) return;
+    formRef.current?.setFieldsValue({
+      receiver_id: defaultPerson.id,
+      receiver_name: defaultPerson.name,
+    });
+  }, [open, editingId, defaultPerson]);
+
   const clearLineWarehouseDependents = useCallback((index: number) => {
     formRef.current?.setFieldValue(['items', index, 'location_id'], undefined);
     formRef.current?.setFieldValue(['items', index, 'location_code'], '');
@@ -787,8 +798,8 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
             buyer_name: String(orderWithMaterials.buyer_name ?? ''),
             department_id: positiveId(orderWithMaterials.department_id) ?? undefined,
             department_name: String(orderWithMaterials.department_name ?? ''),
-            receiver_id: poCompose.receiverId,
-            receiver_name: poCompose.receiverName ?? '',
+            receiver_id: poCompose.receiverId ?? defaultPerson.id,
+            receiver_name: String(poCompose.receiverName ?? '').trim() || defaultPerson.name,
             receipt_time: poCompose.receiptTimeIso ? dayjs(poCompose.receiptTimeIso) : dayjs(),
             delivery_note: poCompose.deliveryNote ?? '',
             pay_mode: poPayMode,
@@ -896,8 +907,8 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
           buyer_operator_number: String(detail.buyer_operator_number ?? ''),
           department_id: positiveId(detail.department_id) ?? undefined,
           department_name: String(detail.department_name ?? ''),
-          receiver_id: positiveId(detail.receiver_id) ?? undefined,
-          receiver_name: String(detail.receiver_name ?? ''),
+          receiver_id: positiveId(detail.receiver_id) ?? defaultPerson.id,
+          receiver_name: String(detail.receiver_name ?? '').trim() || defaultPerson.name,
           receipt_time: receiptTimeRaw ? dayjs(String(receiptTimeRaw)) : dayjs(),
           delivery_note: String(detail.delivery_note ?? ''),
           pay_mode: formPayMode,

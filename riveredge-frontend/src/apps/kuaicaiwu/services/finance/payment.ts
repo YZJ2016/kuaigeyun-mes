@@ -30,10 +30,19 @@ export interface PaymentVoucher {
   total_amount: number;
   settled_amount: number;
   unsettled_amount: number;
+  /** 列表 enrichment：关联应付单应付总额合计 */
+  linked_payable_total_amount?: number | null;
+  /** 列表 enrichment：关联应付单剩余金额合计 */
+  linked_payable_remaining_amount?: number | null;
   payment_date: string;
   payment_method: string;
   bank_account?: string;
   bank_account_id?: number;
+  counterparty_account_name?: string | null;
+  counterparty_bank_name?: string | null;
+  counterparty_bank_account?: string | null;
+  advance_payee_id?: number | null;
+  advance_payee_name?: string | null;
   status: string;
   settlement_type?: string;
   refunded_amount?: number;
@@ -93,6 +102,26 @@ export type PaymentPullPreview = DocumentPushPreview & {
   advance_payee_name?: string | null;
 };
 
+export type PrepaymentPaymentPullCandidate = {
+  id: number;
+  prepayment_payment_id?: number;
+  code: string;
+  payment_code?: string;
+  supplier_id?: number;
+  supplier_name?: string;
+  source_date?: string;
+  source_status?: string;
+  status?: string;
+  payment_method?: string;
+  total_amount?: number;
+  settled_amount?: number;
+  unsettled_amount?: number;
+  remaining_amount?: number;
+  purchase_order_id?: number;
+  purchase_order_code?: string;
+  capabilities?: { pull_payment?: { allowed?: boolean; reason?: string } };
+};
+
 export type PaymentPullCandidate = {
   id: number;
   code: string;
@@ -119,8 +148,8 @@ export type PaymentCreateData = {
   counterparty_account_name?: string;
   counterparty_bank_name?: string;
   counterparty_bank_account?: string;
-  advance_payee_id?: number;
-  advance_payee_name?: string;
+  advance_payee_id?: number | null;
+  advance_payee_name?: string | null;
   settlement_type?: string;
   notes?: string;
   require_payment_voucher?: boolean;
@@ -130,6 +159,11 @@ export type PaymentCreateData = {
   pull_lines?: Array<{
     source_type: string;
     source_id: number;
+    source_code?: string;
+    amount: number;
+  }>;
+  offset_prepayment_lines?: Array<{
+    prepayment_payment_id: number;
     source_code?: string;
     amount: number;
   }>;
@@ -204,6 +238,17 @@ export const paymentService = {
       method: 'GET',
       params: { payable_ids: payableIds.join(',') },
     }),
+
+  listPrepaymentPaymentPullCandidates: async (params: {
+    skip?: number;
+    limit?: number;
+    keyword?: string;
+    supplier_id: number;
+  }) =>
+    apiRequest<{ data: PrepaymentPaymentPullCandidate[]; total: number; success: boolean }>(
+      `${PAYMENT_API}/pull-candidates/prepayment-payments`,
+      { method: 'GET', params },
+    ),
 
   listPaymentApplicationPullCandidates: async (params?: {
     skip?: number;

@@ -59,7 +59,7 @@ export function ReceiptNoticeLinkedDetailDrawer({
     () =>
       alignDescriptionColumns([
         { title: t('app.kuaizhizao.receiptNotice.noticeCode'), dataIndex: 'notice_code' },
-        { title: t('app.kuaizhizao.purchaseOrder.orderCode'), dataIndex: 'purchase_order_code' },
+        { title: t('app.kuaizhizao.purchaseOrder.col.orderCode'), dataIndex: 'purchase_order_code' },
         { title: t('app.kuaizhizao.purchaseOrder.supplier'), dataIndex: 'supplier_name' },
         { title: t('common.status'), dataIndex: 'status' },
       ] as ProDescriptionsItemProps<Record<string, unknown>>[]),

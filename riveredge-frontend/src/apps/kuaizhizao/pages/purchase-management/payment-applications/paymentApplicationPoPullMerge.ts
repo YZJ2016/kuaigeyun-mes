@@ -1,12 +1,25 @@
 import { previewPullPaymentApplicationFromPurchaseOrder } from '../../../services/payment-application';
 
-export function mapPreviewLineToFormRow(line: Record<string, unknown>): Record<string, unknown> {
+export function mapPreviewLineToFormRow(
+  line: Record<string, unknown>,
+  preview?: { sourceOrderAmount?: number; maxRequestAmount?: number },
+): Record<string, unknown> {
+  const maxRemaining = Number(
+    preview?.maxRequestAmount ?? line.maxRequestAmount ?? line.max_request_amount ?? 0,
+  );
+  const sourceOrderAmount = Number(
+    preview?.sourceOrderAmount ?? line.sourceOrderAmount ?? line.source_order_amount ?? 0,
+  );
+  const defaultRequest = Number(line.requestAmount ?? line.request_amount ?? 0);
+  const requestAmount = maxRemaining > 0 ? maxRemaining : defaultRequest;
   return {
     lineKind: line.lineKind ?? line.line_kind ?? 'prepayment',
     sourceType: line.sourceType ?? line.source_type,
     sourceId: line.sourceId ?? line.source_id,
     sourceCode: line.sourceCode ?? line.source_code,
-    requestAmount: Number(line.requestAmount ?? line.request_amount ?? 0),
+    sourceOrderAmount: sourceOrderAmount > 0 ? sourceOrderAmount : undefined,
+    maxRequestAmount: maxRemaining > 0 ? maxRemaining : undefined,
+    requestAmount,
     materialName: line.materialName ?? line.material_name,
     materialSpec: line.materialSpec ?? line.material_spec,
     quantity: line.quantity != null && line.quantity !== '' ? Number(line.quantity) : undefined,
@@ -39,8 +52,8 @@ export async function collectPaymentApplicationItemsFromPurchaseOrderRows(
         skipped += 1;
         continue;
       }
-      const amount = Number(preview.max_push_quantity ?? 0);
-      if (!(amount > 0)) {
+      const maxRemaining = Number(preview.max_push_quantity ?? 0);
+      if (!(maxRemaining > 0)) {
         skipped += 1;
         continue;
       }
@@ -49,9 +62,13 @@ export async function collectPaymentApplicationItemsFromPurchaseOrderRows(
         skipped += 1;
         continue;
       }
+      const previewAmounts = {
+        sourceOrderAmount: Number(preview.source_order_amount ?? preview.sourceOrderAmount ?? 0),
+        maxRequestAmount: maxRemaining,
+      };
       usedPoIds.add(poId);
       for (const ln of items) {
-        newLines.push(mapPreviewLineToFormRow(ln));
+        newLines.push(mapPreviewLineToFormRow(ln, previewAmounts));
       }
     } catch {
       skipped += 1;

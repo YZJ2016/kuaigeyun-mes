@@ -3,7 +3,7 @@
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { ProForm, ProFormDependency, ProFormSelect, ProFormText } from '@ant-design/pro-components';
-import { App, Typography } from 'antd';
+import { App, Col, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { getApiErrorMessage } from '../../../utils/errorHandler';
 import {
@@ -17,6 +17,8 @@ type Props = {
   partnerFieldName: 'customer_id' | 'supplier_id';
   noteName?: string;
   colProps?: { span: number };
+  /** 父级 Row 内嵌时：不传 colProps，字段外包 Col */
+  rowNestedFieldSpan?: number;
 };
 
 export const AcceptanceBillLinkFields: React.FC<Props> = ({
@@ -24,6 +26,7 @@ export const AcceptanceBillLinkFields: React.FC<Props> = ({
   partnerFieldName,
   noteName = 'bank_account',
   colProps = { span: 12 },
+  rowNestedFieldSpan,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -96,13 +99,18 @@ export const AcceptanceBillLinkFields: React.FC<Props> = ({
   }, [noteId, notes, totalAmount, t]);
 
   const hasPartner = partnerId != null && partnerId !== '';
+  const nested = rowNestedFieldSpan != null;
+  const fieldCols = nested ? undefined : colProps;
+  const wrapNested = (node: React.ReactNode) =>
+    nested ? <Col span={rowNestedFieldSpan}>{node}</Col> : node;
 
   return (
     <>
+      {wrapNested(
       <ProFormSelect
         name="note_id"
         label={t('app.kuaicaiwu.notes.linkField')}
-        colProps={colProps}
+        colProps={fieldCols}
         options={noteOptions}
         showSearch
         allowClear
@@ -117,13 +125,15 @@ export const AcceptanceBillLinkFields: React.FC<Props> = ({
           disabled: !hasPartner,
         }}
         extra={t('app.kuaicaiwu.notes.linkHint')}
-      />
+      />,
+      )}
       <ProFormDependency name={['note_id']}>
-        {({ note_id: linkedNoteId }) => (
+        {({ note_id: linkedNoteId }) =>
+          wrapNested(
           <ProFormText
             name={noteName}
             label={t('app.kuaicaiwu.common.referenceNumber')}
-            colProps={colProps}
+            colProps={fieldCols}
             placeholder={t('app.kuaicaiwu.common.referenceNumberPlaceholder')}
             rules={[
               {
@@ -137,7 +147,8 @@ export const AcceptanceBillLinkFields: React.FC<Props> = ({
               ) : undefined
             }
           />
-        )}
+          )
+        }
       </ProFormDependency>
     </>
   );

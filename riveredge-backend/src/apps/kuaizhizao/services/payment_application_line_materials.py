@@ -95,6 +95,17 @@ async def lines_from_purchase_order_items(
     request_amount: Decimal,
     line_kind: str = "prepayment",
 ) -> List[PaymentApplicationLineCreate]:
+    if line_kind == "prepayment":
+        return [
+            PaymentApplicationLineCreate(
+                source_type="purchase_order",
+                source_id=int(order.id),
+                source_code=order.order_code,
+                line_kind=line_kind,
+                request_amount=request_amount,
+            )
+        ]
+
     from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
 
     items = (

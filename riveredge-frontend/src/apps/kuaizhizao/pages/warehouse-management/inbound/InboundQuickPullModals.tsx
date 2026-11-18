@@ -776,7 +776,21 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
 
     const poPullColumns = useMemo(
       () => [
-        { title: t('app.kuaizhizao.warehouseInbound.col.poCode'), dataIndex: 'order_code', width: 150, ellipsis: true },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.poCode'),
+          dataIndex: 'order_code',
+          width: 150,
+          ellipsis: true,
+          sorter: (a: PullPurchaseOrderCandidate, b: PullPurchaseOrderCandidate) =>
+            String(b.order_code || '').localeCompare(String(a.order_code || '')),
+          defaultSortOrder: 'descend' as const,
+        },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.supplier'),
+          dataIndex: 'supplier_name',
+          width: 200,
+          ellipsis: true,
+        },
         {
           title: t('components.uniPullQuery.documentDateColumn'),
           dataIndex: 'document_date',
@@ -785,7 +799,6 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
             String(a.document_date || a.order_date || '').localeCompare(
               String(b.document_date || b.order_date || ''),
             ),
-          defaultSortOrder: 'descend' as const,
           render: (_: unknown, record: PullPurchaseOrderCandidate) => {
             const raw = record.document_date || record.order_date;
             return raw ? formatBusinessDateOnly(String(raw)) : '-';
@@ -824,7 +837,6 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           align: 'right' as const,
           render: (v: unknown) => formatQuantity(v),
         },
-        { title: t('app.kuaizhizao.warehouseInbound.col.supplier'), dataIndex: 'supplier_name', width: 120, ellipsis: true },
         {
           title: t('app.kuaizhizao.warehouseInbound.pull.gateStatus'),
           key: 'convert_status',

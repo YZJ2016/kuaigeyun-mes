@@ -686,17 +686,6 @@ const PayableList: React.FC = () => {
             ),
         },
         {
-            title: t(`${P}.col.paymentTerms`),
-            dataIndex: 'payment_terms',
-            width: 140,
-            minWidth: 140,
-            uniTableKeepWidth: true,
-            resizable: false,
-            hideInSearch: true,
-            ellipsis: true,
-            render: (_, record) => record.payment_terms || '-',
-        },
-        {
             title: t(`${P}.col.invoiceStatus`),
             key: 'invoice_status',
             dataIndex: 'invoice_status',
@@ -791,6 +780,17 @@ const PayableList: React.FC = () => {
                         : '-'}
                 </span>
             ),
+        },
+        {
+            title: t(`${P}.col.paymentTerms`),
+            dataIndex: 'payment_terms',
+            width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            ellipsis: true,
+            render: (_, record) => record.payment_terms || '-',
         },
         {
             title: t('app.kuaicaiwu.common.businessDate'),
@@ -1026,7 +1026,7 @@ const PayableList: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.payable)}
                 actionRef={actionRef}
                 columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
-                columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payables.list-v4"
+                columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payables.list-v9"
                 request={async (params, sort, _filter, searchFormValues) => {
                     const { current, pageSize } = params;
                     const listParams = resolvePayableListParams(searchFormValues, sort, urlAgingFilters);

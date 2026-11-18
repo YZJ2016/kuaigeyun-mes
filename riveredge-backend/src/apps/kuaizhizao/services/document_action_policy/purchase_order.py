@@ -155,6 +155,7 @@ def derive_purchase_order_capabilities(
     has_pending_change: bool = False,
     has_returnable: bool = False,
     has_prepayment_payment: bool = False,
+    has_prepayment_application: bool = False,
     require_payment_application: bool = False,
     prepayment_application_remaining: Optional[Decimal] = None,
     review_submitted: Optional[bool] = None,
@@ -256,6 +257,8 @@ def derive_purchase_order_capabilities(
             prepay_reason = "purchase_order.push_prepayment.require_application"
         elif has_prepayment_payment:
             prepay_reason = "purchase_order.push_prepayment.already_exists"
+        elif has_prepayment_application:
+            prepay_reason = "purchase_order.push_prepayment.application_exists"
         else:
             prepay_allowed = True
             prepay_reason = None
@@ -362,6 +365,7 @@ def assert_purchase_order_capability(
     has_pending_change: bool = False,
     has_returnable: bool = False,
     has_prepayment_payment: bool = False,
+    has_prepayment_application: bool = False,
     require_payment_application: bool = False,
     prepayment_application_remaining: Optional[Decimal] = None,
     review_submitted: Optional[bool] = None,
@@ -380,6 +384,7 @@ def assert_purchase_order_capability(
         has_pending_change=has_pending_change,
         has_returnable=has_returnable,
         has_prepayment_payment=has_prepayment_payment,
+        has_prepayment_application=has_prepayment_application,
         require_payment_application=require_payment_application,
         prepayment_application_remaining=prepayment_application_remaining,
     )

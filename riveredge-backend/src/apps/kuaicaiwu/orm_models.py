@@ -29,6 +29,7 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaicaiwu.models.payment",
     "apps.kuaicaiwu.models.payment_advance_record",
     "apps.kuaicaiwu.models.payment_pull_line",
+    "apps.kuaicaiwu.models.payment_offset_prepayment_line",
     "apps.kuaicaiwu.models.price_settlement_batch",
     "apps.kuaicaiwu.models.price_settlement_line",
     "apps.kuaicaiwu.models.purchase_invoice",

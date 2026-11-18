@@ -670,8 +670,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   calculation_status: 23.5,
   /** 轻财务：开票/收票状态（MarkerTag） */
   invoice_status: 23.6,
-  /** 轻财务往来：付款条件 */
-  payment_terms: 24,
+  /** 轻财务往来：付款条件（应付/应收列表：金额与收票列之后、业务日期前） */
+  payment_terms: 60.15,
   /** 轻财务发票类型 / 税号 */
   invoice_type: 24.2,
   partner_tax_no: 24.4,
@@ -723,6 +723,9 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   tax_rate: 33.4,
   invoice_amount: 33.5,
   tax_amount: 33.6,
+  /** 付款单列表：结算类型在付款总额之前 */
+  finance_payment_settlement_type: 33.88,
+  linked_payable_total_amount: 33.89,
   total_amount: 34,
   /** 轻财务应收/应付金额簇（紧接总额） */
   received_amount: 34.05,

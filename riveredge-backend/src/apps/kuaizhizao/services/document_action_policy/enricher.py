@@ -1322,6 +1322,7 @@ def enrich_purchase_order_capabilities_on_response(
     has_pending_change: bool = False,
     has_returnable: bool = False,
     has_prepayment_payment: bool = False,
+    has_prepayment_application: bool = False,
     require_payment_application: bool = False,
     prepayment_application_remaining: Optional[Decimal] = None,
 ) -> T:
@@ -1339,6 +1340,7 @@ def enrich_purchase_order_capabilities_on_response(
         has_pending_change=has_pending_change,
         has_returnable=has_returnable,
         has_prepayment_payment=has_prepayment_payment,
+        has_prepayment_application=has_prepayment_application,
         require_payment_application=require_payment_application,
         prepayment_application_remaining=prepayment_application_remaining,
     )
@@ -1377,7 +1379,9 @@ async def enrich_purchase_order_detail_capabilities(
         tenant_id, [order_id], source_type="purchase_order", target_type="payment"
     )
     require_app = await BusinessConfigService().get_finance_require_payment_application(tenant_id)
-    reserved_map = await PaymentApplicationPullService().prepayment_reserved_by_order_ids(
+    pull_svc = PaymentApplicationPullService()
+    reserved_map = await pull_svc.prepayment_reserved_by_order_ids(tenant_id, [order_id])
+    prepay_app_map = await pull_svc.has_prepayment_application_by_order_ids(
         tenant_id, [order_id]
     )
     prepay_remaining = compute_prepayment_application_remaining(
@@ -1400,6 +1404,7 @@ async def enrich_purchase_order_detail_capabilities(
         has_pending_change=pending_change_map.get(order_id, False),
         has_returnable=returnable_map.get(order_id, False),
         has_prepayment_payment=prepay_map.get(order_id, False),
+        has_prepayment_application=prepay_app_map.get(order_id, False),
         require_payment_application=require_app,
         prepayment_application_remaining=prepay_remaining,
     )
@@ -1435,7 +1440,9 @@ async def enrich_purchase_order_list_capabilities(
     )
 
     require_app = await BusinessConfigService().get_finance_require_payment_application(tenant_id)
-    reserved_map = await PaymentApplicationPullService().prepayment_reserved_by_order_ids(
+    pull_svc = PaymentApplicationPullService()
+    reserved_map = await pull_svc.prepayment_reserved_by_order_ids(tenant_id, order_ids)
+    prepay_app_map = await pull_svc.has_prepayment_application_by_order_ids(
         tenant_id, order_ids
     )
     items_map = has_items_by_id or {}
@@ -1456,6 +1463,7 @@ async def enrich_purchase_order_list_capabilities(
             has_pending_change=pending_change_map.get(oid, False),
             has_returnable=returnable_map.get(oid, False),
             has_prepayment_payment=prepay_map.get(oid, False),
+            has_prepayment_application=prepay_app_map.get(oid, False),
             require_payment_application=require_app,
             prepayment_application_remaining=prepay_remaining,
         )
