@@ -44,6 +44,37 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'payable-pull-receipt-material-unit-r01',
+    date: '2026-10-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.payable-pull-receipt-material-unit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payable-pull-receipt-material-unit-r01.description',
+  },
+  {
+    id: 'purchase-return-confirm-finance-outcome-r01',
+    date: '2026-10-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-return-confirm-finance-outcome-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-return-confirm-finance-outcome-r01.description',
+  },
+  {
+    id: 'purchase-return-receipt-pull-qty-r01',
+    date: '2026-10-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-return-receipt-pull-qty-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.purchase-return-receipt-pull-qty-r01.description',
+  },
+  {
+    id: 'payment-application-po-prepay-no-payable-r01',
+    date: '2026-10-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-po-prepay-no-payable-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-po-prepay-no-payable-r01.description',
+  },
+  {
     id: 'finance-fund-transfer-r01',
     date: '2026-11-18',
     type: 'feature',

@@ -38058,6 +38058,22 @@ export default {
   'pages.dashboard.updateLog.entries.finance-fund-transfer-r01.title': '财务管理新增资金调拨',
   'pages.dashboard.updateLog.entries.finance-fund-transfer-r01.description':
     '支持公司内部账户互转、调出至外部与自外部调入；确认后写入银行流水，可撤回确认与批量操作。',
+  'pages.dashboard.updateLog.entries.payable-pull-receipt-material-unit-r01.title':
+    '修复按入库单生成应付报错',
+  'pages.dashboard.updateLog.entries.payable-pull-receipt-material-unit-r01.description':
+    '按采购入库生成应付时取单明细单位字段与入库行 material_unit 对齐，不再访问不存在的 unit 属性。',
+  'pages.dashboard.updateLog.entries.purchase-return-confirm-finance-outcome-r01.title':
+    '修复采购退货确认报错',
+  'pages.dashboard.updateLog.entries.purchase-return-confirm-finance-outcome-r01.description':
+    '财务管理迁入快制造后补回采购退货 finance_outcome 构建方法，确认退货不再因缺少 build_purchase_return_finance_outcome 失败。',
+  'pages.dashboard.updateLog.entries.purchase-return-receipt-pull-qty-r01.title':
+    '采购入库下推退货可取单填写数量',
+  'pages.dashboard.updateLog.entries.purchase-return-receipt-pull-qty-r01.description':
+    '从采购入库单创建采购退货单时，取单表退货数量改为可编辑，创建前即可填写部分退货数量，不必先建单再改明细。',
+  'pages.dashboard.updateLog.entries.payment-application-po-prepay-no-payable-r01.title':
+    '修复采购订单下推付款申请无法保存',
+  'pages.dashboard.updateLog.entries.payment-application-po-prepay-no-payable-r01.description':
+    '来源为采购订单的预付明细不再强制选择应付单，与后端预付请款逻辑一致，避免编辑时报请输入 payableId。',
   'pages.dashboard.updateLog.entries.kuaizhizao-iqc-feedback-r01.title': '来料检验列表与下推体验优化',
   'pages.dashboard.updateLog.entries.kuaizhizao-iqc-feedback-r01.description':
     '已检验分段纳入关审合格单；指标卡可点选筛选；下推进度展示入库占用并支持多选批量下推；无入库关联时登记退货处置不再创建失败；检验方案支持合格标准补充说明与按报检批量比例抽检。',
