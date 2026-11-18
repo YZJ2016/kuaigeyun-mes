@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from tortoise.queryset import Q
 
@@ -260,6 +260,81 @@ class PayablePullService(AppBaseService[Payable]):
             "purchase_order_code": code,
         }
 
+    @staticmethod
+    def _normalize_source_ids(source_ids: Sequence[int]) -> List[int]:
+        ordered: List[int] = []
+        seen: set[int] = set()
+        for raw in source_ids:
+            sid = int(raw)
+            if sid <= 0 or sid in seen:
+                continue
+            seen.add(sid)
+            ordered.append(sid)
+        if not ordered:
+            raise BusinessLogicError("请至少选择一张源单")
+        return ordered
+
+    async def preview_pull_from_purchase_receipts(
+        self,
+        tenant_id: int,
+        receipt_ids: Sequence[int],
+    ) -> Dict[str, Any]:
+        ids = self._normalize_source_ids(receipt_ids)
+        if len(ids) == 1:
+            return await self.preview_pull_from_purchase_receipt(tenant_id, ids[0])
+
+        merged_items: List[Dict[str, Any]] = []
+        merged_detail_lines: List[Dict[str, Any]] = []
+        blocking_reasons: List[str] = []
+        supplier_id: Optional[int] = None
+        supplier_name: Optional[str] = None
+        codes: List[str] = []
+
+        for rid in ids:
+            fragment = await self.preview_pull_from_purchase_receipt(tenant_id, rid)
+            if supplier_id is None:
+                supplier_id = int(fragment.get("supplier_id") or 0)
+                supplier_name = str(fragment.get("supplier_name") or "")
+            elif int(fragment.get("supplier_id") or 0) != int(supplier_id or 0):
+                raise BusinessLogicError("多笔一起加载须为同一供应商")
+
+            codes.append(str(fragment.get("source_code") or rid))
+            if fragment.get("has_blocking_issues"):
+                reason = str(fragment.get("blocking_reason") or "")
+                if reason:
+                    blocking_reasons.append(reason)
+            merged_items.extend(fragment.get("items") or [])
+            for row in fragment.get("detail_lines") or []:
+                line = dict(row)
+                line["purchase_receipt_id"] = rid
+                merged_detail_lines.append(line)
+
+        max_push_total = sum(
+            Decimal(str(item.get("max_push_quantity") or 0)) for item in merged_items
+        )
+        allowed = not blocking_reasons and max_push_total > 0
+        joined_codes = "、".join(codes)
+        return {
+            "target_type": "payable",
+            "source_type": "purchase_receipt",
+            "source_id": ids[0],
+            "source_ids": ids,
+            "source_code": joined_codes,
+            "summary": (
+                f"将从 {len(ids)} 张采购入库单创建应付单（可应付合计 ¥{float(max_push_total):,.2f}）"
+                if allowed
+                else "所选入库单当前不可一起加载应付单"
+            ),
+            "items": merged_items,
+            "detail_lines": merged_detail_lines,
+            "has_blocking_issues": not allowed,
+            "blocking_reason": blocking_reasons[0] if blocking_reasons else None,
+            "tip": "应付金额须与所选入库行合计一致；未勾选行时按各入库单可应付余量依次占用。",
+            "supplier_id": supplier_id,
+            "supplier_name": supplier_name,
+            "max_push_total": float(max_push_total),
+        }
+
     async def preview_pull_from_purchase_receipt(
         self,
         tenant_id: int,
@@ -287,6 +362,13 @@ class PayablePullService(AppBaseService[Payable]):
         )
         code = str(receipt.receipt_code or receipt_id)
         pushable = float(preview_items[0]["max_push_quantity"]) if preview_items else 0.0
+        from apps.kuaicaiwu.services.purchase_receipt_finance_pull_lines import (
+            build_purchase_receipt_finance_detail_lines,
+        )
+
+        detail_lines = await build_purchase_receipt_finance_detail_lines(
+            tenant_id, receipt_id, "payable"
+        )
         return {
             "target_type": "payable",
             "source_type": "purchase_receipt",
@@ -298,13 +380,15 @@ class PayablePullService(AppBaseService[Payable]):
                 else f"采购入库单 {code} 当前不可加载应付单"
             ),
             "items": preview_items,
+            "detail_lines": detail_lines,
             "has_blocking_issues": not allowed,
             "blocking_reason": reason,
-            "tip": "应付金额不可超过可应付金额；删除未审核应付单后，可应付金额自动回退。",
+            "tip": "应付金额须与所选入库行合计一致；未勾选行时按入库行顺序自动分摊。",
             "supplier_id": receipt.supplier_id,
             "supplier_name": receipt.supplier_name,
             "purchase_order_id": receipt.purchase_order_id,
             "purchase_order_code": receipt.purchase_order_code,
+            "max_push_total": pushable,
         }
 
     async def list_purchase_order_pull_candidates(
@@ -423,6 +507,7 @@ class PayablePullService(AppBaseService[Payable]):
                     "id": rid,
                     "code": label,
                     "receipt_code": code,
+                    "supplier_id": int(receipt.supplier_id or 0) or None,
                     "supplier_name": receipt.supplier_name,
                     "source_status": receipt.status,
                     "source_date": str(
@@ -439,6 +524,142 @@ class PayablePullService(AppBaseService[Payable]):
             )
         return {"data": rows, "total": total, "success": True}
 
+    async def _validate_pull_receipt_lines_for_receipts(
+        self,
+        tenant_id: int,
+        receipt_ids: Sequence[int],
+        pull_receipt_lines: Sequence[Any],
+        total_amount: Decimal,
+    ) -> None:
+        from apps.kuaicaiwu.services.purchase_receipt_finance_pull_lines import (
+            build_slices_from_pull_receipt_line_selections,
+        )
+        from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+
+        item_ids: List[int] = []
+        for raw in pull_receipt_lines:
+            if hasattr(raw, "purchase_receipt_item_id"):
+                item_ids.append(int(raw.purchase_receipt_item_id))
+            elif isinstance(raw, dict):
+                item_ids.append(int(raw["purchase_receipt_item_id"]))
+            else:
+                raise BusinessLogicError("行选择格式无效")
+
+        rows = await PurchaseReceiptItem.filter(
+            tenant_id=tenant_id, id__in=item_ids, deleted_at__isnull=True
+        ).all()
+        item_to_receipt = {int(r.id): int(r.receipt_id) for r in rows}
+        allowed_receipts = {int(rid) for rid in receipt_ids}
+
+        grouped: Dict[int, List[Any]] = {}
+        for raw in pull_receipt_lines:
+            item_id = int(
+                raw.purchase_receipt_item_id
+                if hasattr(raw, "purchase_receipt_item_id")
+                else raw["purchase_receipt_item_id"]
+            )
+            rid = item_to_receipt.get(item_id)
+            if rid is None or rid not in allowed_receipts:
+                raise BusinessLogicError(f"入库明细 {item_id} 不属于所选入库单")
+            grouped.setdefault(rid, []).append(raw)
+
+        subtotal = Decimal("0")
+        for rid, selections in grouped.items():
+            part = sum(
+                Decimal(
+                    str(
+                        s.amount
+                        if hasattr(s, "amount")
+                        else s.get("amount", 0)
+                    )
+                )
+                for s in selections
+            )
+            subtotal += part
+            await build_slices_from_pull_receipt_line_selections(
+                tenant_id,
+                int(rid),
+                "payable",
+                selections,
+                header_amount=part,
+            )
+        if abs(subtotal - Decimal(total_amount)) > Decimal("0.01"):
+            raise BusinessLogicError(
+                f"所选入库行金额合计 {subtotal} 与单据金额 {total_amount} 不一致"
+            )
+
+    async def record_multi_receipt_payable_occupancy(
+        self,
+        tenant_id: int,
+        receipt_ids: Sequence[int],
+        payable_id: int,
+        total_amount: Decimal,
+        *,
+        pull_receipt_lines: Optional[Sequence[Any]] = None,
+        created_by: int,
+    ) -> None:
+        from apps.kuaicaiwu.services.purchase_receipt_line_finance_occupancy_service import (
+            record_purchase_receipt_payable_occupancy,
+        )
+        from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+
+        ids = self._normalize_source_ids(receipt_ids)
+        if pull_receipt_lines:
+            grouped: Dict[int, List[Any]] = {}
+            for raw in pull_receipt_lines:
+                item_id = int(
+                    raw.purchase_receipt_item_id
+                    if hasattr(raw, "purchase_receipt_item_id")
+                    else raw["purchase_receipt_item_id"]
+                )
+                item = await PurchaseReceiptItem.get_or_none(
+                    tenant_id=tenant_id, id=item_id, deleted_at__isnull=True
+                )
+                if not item:
+                    raise BusinessLogicError(f"入库明细不存在: {item_id}")
+                grouped.setdefault(int(item.receipt_id), []).append(raw)
+            for rid, selections in grouped.items():
+                part = sum(
+                    Decimal(
+                        str(
+                            s.amount
+                            if hasattr(s, "amount")
+                            else s.get("amount", 0)
+                        )
+                    )
+                    for s in selections
+                )
+                await record_purchase_receipt_payable_occupancy(
+                    tenant_id,
+                    int(rid),
+                    int(payable_id),
+                    part,
+                    line_selections=selections,
+                    created_by=created_by,
+                )
+            return
+
+        remaining = Decimal(total_amount)
+        for rid in ids:
+            if remaining <= 0:
+                break
+            fragment = await self.preview_pull_from_purchase_receipt(tenant_id, int(rid))
+            cap = Decimal("0")
+            for item in fragment.get("items") or []:
+                cap += Decimal(str(item.get("max_push_quantity") or 0))
+            take = min(cap, remaining)
+            if take <= 0:
+                continue
+            await record_purchase_receipt_payable_occupancy(
+                tenant_id,
+                int(rid),
+                int(payable_id),
+                take,
+                line_selections=None,
+                created_by=created_by,
+            )
+            remaining -= take
+
     async def assert_pull_create_allowed(
         self,
         tenant_id: int,
@@ -446,11 +667,18 @@ class PayablePullService(AppBaseService[Payable]):
         source_type: str,
         source_id: int,
         total_amount: Decimal,
+        pull_receipt_lines: Optional[List[Any]] = None,
+        pull_source_ids: Optional[Sequence[int]] = None,
     ) -> Dict[str, Any]:
         if source_type == "purchase_order":
             preview = await self.preview_pull_from_purchase_order(tenant_id, source_id)
         elif source_type == "purchase_receipt":
-            preview = await self.preview_pull_from_purchase_receipt(tenant_id, source_id)
+            ids = self._normalize_source_ids(pull_source_ids or [source_id])
+            preview = (
+                await self.preview_pull_from_purchase_receipts(tenant_id, ids)
+                if len(ids) > 1
+                else await self.preview_pull_from_purchase_receipt(tenant_id, ids[0])
+            )
         else:
             raise BusinessLogicError(f"不支持的加载源单类型: {source_type}")
         if preview.get("has_blocking_issues"):
@@ -459,9 +687,31 @@ class PayablePullService(AppBaseService[Payable]):
         items = preview.get("items") or []
         if not items:
             raise BusinessLogicError("无可应付金额")
-        max_push = Decimal(str(items[0].get("max_push_quantity") or 0))
+        max_push = Decimal(str(preview.get("max_push_total") or 0))
+        if max_push <= 0:
+            max_push = sum(
+                Decimal(str(item.get("max_push_quantity") or 0)) for item in items
+            )
         if total_amount > max_push:
             raise BusinessLogicError(f"应付金额 {total_amount} 超过可应付金额 {max_push}")
+        if source_type == "purchase_receipt" and pull_receipt_lines:
+            ids = self._normalize_source_ids(pull_source_ids or [source_id])
+            if len(ids) > 1:
+                await self._validate_pull_receipt_lines_for_receipts(
+                    tenant_id, ids, pull_receipt_lines, total_amount
+                )
+            else:
+                from apps.kuaicaiwu.services.purchase_receipt_finance_pull_lines import (
+                    build_slices_from_pull_receipt_line_selections,
+                )
+
+                await build_slices_from_pull_receipt_line_selections(
+                    tenant_id,
+                    ids[0],
+                    "payable",
+                    pull_receipt_lines,
+                    header_amount=total_amount,
+                )
         return preview
 
     async def create_pull_relation(

@@ -80,6 +80,7 @@ export interface PayableCreateData {
     notes?: string;
     pull_source_type?: 'purchase_order' | 'purchase_receipt';
     pull_source_id?: number;
+    pull_source_ids?: number[];
 }
 
 export interface PaymentRecordCreate {

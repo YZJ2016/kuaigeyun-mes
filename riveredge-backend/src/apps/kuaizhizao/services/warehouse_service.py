@@ -10088,6 +10088,24 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             )
             receipt_dict["review_status"] = str(receipt_dict.get("review_status") or "草稿")
 
+            from apps.master_data.config.partner_settlement_codes import (
+                coerce_partner_payment_method_code,
+                normalize_purchase_receipt_pay_mode,
+            )
+
+            # 付款方式以采购订单为准：未显式传入或空时继承订单 payment_method_code
+            pay_mode_provided = "pay_mode" in pay_fields_set
+            normalized_pay = (
+                normalize_purchase_receipt_pay_mode(receipt_dict.get("pay_mode"))
+                if pay_mode_provided
+                else None
+            )
+            if normalized_pay is None and po_upstream is not None:
+                normalized_pay = coerce_partner_payment_method_code(
+                    getattr(po_upstream, "payment_method_code", None)
+                )
+            receipt_dict["pay_mode"] = normalized_pay
+
             receipt = await PurchaseReceipt.create(**receipt_dict)
             
             # 创建入库单明细
@@ -11079,6 +11097,14 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     document_label="采购入库单",
                 )
 
+            if "pay_mode" in receipt_dict:
+                from apps.master_data.config.partner_settlement_codes import (
+                    normalize_purchase_receipt_pay_mode,
+                )
+
+                receipt_dict["pay_mode"] = normalize_purchase_receipt_pay_mode(
+                    receipt_dict.get("pay_mode")
+                )
             receipt_dict["updated_by"] = updated_by
             receipt_dict["updated_by_name"] = user_info.get("name", "")
             await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(**receipt_dict)

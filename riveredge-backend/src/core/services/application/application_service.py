@@ -1858,18 +1858,33 @@ class ApplicationService:
         manifest_menu_config: Any,
     ) -> bool:
         """manifest 声明的路由是否尚未写入 core_menus（清单已新、侧栏仍旧时也为 true）。"""
+        drift = await ApplicationService._application_menu_paths_drift(
+            tenant_id, application_uuid, manifest_menu_config
+        )
+        return drift["missing"] or drift["extra"]
+
+    @staticmethod
+    async def _application_menu_paths_drift(
+        tenant_id: int,
+        application_uuid: str,
+        manifest_menu_config: Any,
+    ) -> Dict[str, bool]:
+        """core_menus 叶子 path 与 manifest 双向差异（仅缺失或仍有多余旧路由即为 stale）。"""
         from core.models.menu import Menu
 
         expected = ApplicationService.collect_manifest_menu_paths(manifest_menu_config)
         if not expected:
-            return False
+            return {"missing": False, "extra": False}
         rows = await Menu.filter(
             tenant_id=tenant_id,
             application_uuid=str(application_uuid),
             deleted_at__isnull=True,
         ).values_list("path", flat=True)
         actual = {str(path).strip() for path in rows if path and str(path).strip()}
-        return bool(expected - actual)
+        return {
+            "missing": bool(expected - actual),
+            "extra": bool(actual - expected),
+        }
 
     @staticmethod
     def stable_menu_config_digest(menu_config: Any) -> str:
@@ -1909,9 +1924,10 @@ class ApplicationService:
             if is_industry_pack_shell_code(code):
                 continue
             manifest = manifest_by_code.get(code)
-            if not manifest:
+            disk_manifest = ApplicationService._get_manifest_by_code(code)
+            if not manifest and not disk_manifest:
                 continue
-            manifest_menu_config = manifest.get("menu_config")
+            manifest_menu_config = (disk_manifest or manifest or {}).get("menu_config")
             manifest_digest = ApplicationService.stable_menu_config_digest(manifest_menu_config)
             db_digest = ApplicationService.stable_menu_config_digest(app.get("menu_config"))
             config_stale = manifest_digest != db_digest

@@ -86,6 +86,12 @@ class PayableCreate(PayableBase):
         description="加载源单类型 purchase_order|purchase_receipt（与 source_type 手工创建区分）",
     )
     pull_source_id: Optional[int] = Field(None, description="加载源单ID")
+    pull_source_ids: Optional[List[int]] = Field(
+        None, description="加载源单ID列表（同供应商多入库单合并应付）"
+    )
+    pull_receipt_lines: Optional[List[PurchaseReceiptLinePullSelection]] = Field(
+        None, description="入库行级占用金额（source=purchase_receipt 时可选；未传则按序占用）"
+    )
 
 
 class PayableUpdate(BaseSchema):

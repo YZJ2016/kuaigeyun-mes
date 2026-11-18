@@ -44,6 +44,82 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'payment-app-approval-completion-writeback-r01',
+    date: '2026-11-01',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-app-approval-completion-writeback-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-app-approval-completion-writeback-r01.description',
+  },
+  {
+    id: 'purchase-receipt-pay-mode-align-po-r01',
+    date: '2026-11-01',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-pay-mode-align-po-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-pay-mode-align-po-r01.description',
+  },
+  {
+    id: 'po-detail-incl-amount-r01',
+    date: '2026-11-01',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.po-detail-incl-amount-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.po-detail-incl-amount-r01.description',
+  },
+  {
+    id: 'document-form-page-restore-outer-card-r01',
+    date: '2026-10-23',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-form-page-restore-outer-card-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.document-form-page-restore-outer-card-r01.description',
+  },
+  {
+    id: 'unitab-close-flash-stays-r01',
+    date: '2026-10-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.unitab-close-flash-stays-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitab-close-flash-stays-r01.description',
+  },
+  {
+    id: 'finance-merge-pull-receipt-payable-invoice-r01',
+    date: '2026-10-23',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-merge-pull-receipt-payable-invoice-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-merge-pull-receipt-payable-invoice-r01.description',
+  },
+  {
+    id: 'menu-badge-counts-perf-r01',
+    date: '2026-10-23',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.menu-badge-counts-perf-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.menu-badge-counts-perf-r01.description',
+  },
+  {
+    id: 'unitab-close-wrong-tab-r01',
+    date: '2026-10-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.unitab-close-wrong-tab-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitab-close-wrong-tab-r01.description',
+  },
+  {
+    id: 'purchase-return-edit-quantity-submit-r01',
+    date: '2026-10-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-return-edit-quantity-submit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-return-edit-quantity-submit-r01.description',
+  },
+  {
+    id: 'kuaiplm-process-menu-peer-sync-r01',
+    date: '2026-10-22',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-process-menu-peer-sync-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-process-menu-peer-sync-r01.description',
+  },
+  {
     id: 'other-expense-link-purchase-receipt-r01',
     date: '2026-10-27',
     type: 'feature',

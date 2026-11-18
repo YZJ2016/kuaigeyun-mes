@@ -1791,11 +1791,6 @@ async def get_production_broadcast(
         return ProductionBroadcastResponse(items=[])
 
 
-@cache_by_kwargs(namespace="dashboard:badges", ttl=45, include_kwargs=["user_id"])
-async def _cached_menu_badge_counts(*, tenant_id: int, user_id: int, user: User) -> dict:
-    return await fetch_menu_badge_counts(tenant_id, user)
-
-
 @router.get("/menu-badge-counts", summary="Menu badge open-document counts")
 async def get_menu_badge_counts(
     current_user: User = Depends(get_current_user),
@@ -1812,15 +1807,10 @@ async def get_menu_badge_counts(
     section_keys = None
     if sections and sections.strip():
         section_keys = [s.strip() for s in sections.split(",") if s.strip()]
-        return await fetch_menu_badge_counts(
-            tenant_id,
-            current_user,
-            sections=section_keys,
-        )
-    return await _cached_menu_badge_counts(
-        tenant_id=tenant_id,
-        user_id=current_user.id,
-        user=current_user,
+    return await fetch_menu_badge_counts(
+        tenant_id,
+        current_user,
+        sections=section_keys,
     )
 
 

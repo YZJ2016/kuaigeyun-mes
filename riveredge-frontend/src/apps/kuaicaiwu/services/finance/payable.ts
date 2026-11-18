@@ -37,6 +37,7 @@ export type PayablePullCandidate = {
   order_code?: string;
   receipt_code?: string;
   supplier_name?: string;
+  supplier_id?: number;
   source_status?: string;
   source_date?: string;
   amount?: number;
@@ -83,6 +84,12 @@ export const payableService = {
     apiRequest<PayablePullPreview>(`${PAYABLE_API}/from-purchase-receipt/${receiptId}/pull-preview`, {
       method: 'GET',
     }),
+
+  previewPullFromPurchaseReceipts: async (receiptIds: number[]) =>
+    apiRequest<PayablePullPreview>(
+      `${PAYABLE_API}/from-purchase-receipts/pull-preview?receipt_ids=${receiptIds.join(',')}`,
+      { method: 'GET' },
+    ),
 
   getPayable: (id: number) => {
     return apiRequest<Payable>(`${PAYABLE_API}/${id}`, {

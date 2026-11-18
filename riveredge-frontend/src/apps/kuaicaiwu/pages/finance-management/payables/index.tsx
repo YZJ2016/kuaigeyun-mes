@@ -115,7 +115,7 @@ const PayableList: React.FC = () => {
     const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
     const [pullSubmitting, setPullSubmitting] = useState(false);
     const [pullPreviewData, setPullPreviewData] = useState<PayablePullPreview | null>(null);
-    const [pullPreviewSourceId, setPullPreviewSourceId] = useState<number | null>(null);
+    const [pullPreviewSourceIds, setPullPreviewSourceIds] = useState<number[]>([]);
     const [pullPreviewKind, setPullPreviewKind] = useState<PullPreviewKind | null>(null);
     const pullFromPurchaseOrderCloseRef = useRef<(() => void) | null>(null);
     const pullFromPurchaseOrderOpenRef = useRef<(() => void) | null>(null);
@@ -338,7 +338,7 @@ const PayableList: React.FC = () => {
 
     const resetPullPreview = () => {
         setPullPreviewOpen(false);
-        setPullPreviewSourceId(null);
+        setPullPreviewSourceIds([]);
         setPullPreviewData(null);
         setPullPreviewKind(null);
         pullForm.resetFields();
@@ -346,21 +346,27 @@ const PayableList: React.FC = () => {
 
     const openPullPreview = async (
         kind: PullPreviewKind,
-        sourceId: number,
+        sourceIdsInput: number | number[],
         options?: { closeSourceModal?: () => void; reopenSourceModal?: () => void },
     ) => {
+        const sourceIds = (Array.isArray(sourceIdsInput) ? sourceIdsInput : [sourceIdsInput])
+            .map((id) => Number(id))
+            .filter((id) => Number.isFinite(id) && id > 0);
+        if (!sourceIds.length) return;
         options?.closeSourceModal?.();
         setPullPreviewKind(kind);
         setPullPreviewOpen(false);
         setPullPreviewLoading(true);
         setPullPreviewData(null);
-        setPullPreviewSourceId(sourceId);
+        setPullPreviewSourceIds(sourceIds);
         const hideLoading = messageApi.loading(t(`${P}.pullPreviewLoading`), 0);
         try {
             const data =
                 kind === 'purchase_order'
-                    ? await payableService.previewPullFromPurchaseOrder(sourceId)
-                    : await payableService.previewPullFromPurchaseReceipt(sourceId);
+                    ? await payableService.previewPullFromPurchaseOrder(sourceIds[0])
+                    : sourceIds.length === 1
+                      ? await payableService.previewPullFromPurchaseReceipt(sourceIds[0])
+                      : await payableService.previewPullFromPurchaseReceipts(sourceIds);
             setPullPreviewData(data);
             setPullPreviewOpen(true);
         } catch (e: any) {
@@ -428,7 +434,7 @@ const PayableList: React.FC = () => {
 
     const pullFromPurchaseReceiptQuery = useUniPullQuery<PayablePullCandidate>({
         rowKey: 'id',
-        selectionType: 'radio',
+        selectionType: 'checkbox',
         scopeOptions: pullQueryScopeOptions,
         defaultScope: 'pullable',
         isRowDisabled: (record) => !isPullPayableSelectable(record),
@@ -450,20 +456,33 @@ const PayableList: React.FC = () => {
             }
         },
         onConfirm: async (keys, rows) => {
-            const selected = rows.find((x) => String(x.id) === String(keys[0]));
-            if (!selected?.id) {
+            const selectedIds = rows
+                .filter((x) => keys.some((k) => String(k) === String(x.id)))
+                .map((x) => Number(x.id))
+                .filter((id) => Number.isFinite(id) && id > 0);
+            if (!selectedIds.length) {
                 messageApi.warning(t(`${P}.selectSource`, { label: pullFromPurchaseReceiptAction.sourceLabel }));
                 return;
             }
+            const supplierIds = new Set(
+                rows
+                    .filter((x) => selectedIds.includes(Number(x.id)))
+                    .map((x) => Number(x.supplier_id ?? 0))
+                    .filter((id) => id > 0),
+            );
+            if (supplierIds.size > 1) {
+                messageApi.warning(t('app.kuaicaiwu.mergeFinance.sameSupplierRequired'));
+                return;
+            }
             pullFromPurchaseReceiptCloseRef.current?.();
-            await openPullPreview('purchase_receipt', selected.id);
+            await openPullPreview('purchase_receipt', selectedIds);
         },
     });
     pullFromPurchaseReceiptCloseRef.current = pullFromPurchaseReceiptQuery.closeModal;
     pullFromPurchaseReceiptOpenRef.current = pullFromPurchaseReceiptQuery.openModal;
 
     const handlePullCreateSubmit = async (values: any) => {
-        if (!pullPreviewData || !pullPreviewSourceId || !pullPreviewKind) {
+        if (!pullPreviewData || !pullPreviewSourceIds.length || !pullPreviewKind) {
             messageApi.warning(t(`${P}.pullPreviewIncomplete`));
             return false;
         }
@@ -474,7 +493,14 @@ const PayableList: React.FC = () => {
             );
             return false;
         }
-        const maxPush = Number(pullPreviewData.items?.[0]?.max_push_quantity ?? 0);
+        const maxPush =
+            Number(
+                pullPreviewData.max_push_total ??
+                    (pullPreviewData.items || []).reduce(
+                        (sum, row) => sum + Number(row.max_push_quantity ?? 0),
+                        0,
+                    ),
+            ) || 0;
         const totalAmount = Number(values.total_amount) || 0;
         if (totalAmount <= 0) {
             messageApi.warning(t(`${P}.amountRequired`));
@@ -492,10 +518,14 @@ const PayableList: React.FC = () => {
         try {
             await payableService.createPayable({
                 source_type: pullPreviewKind,
-                source_id: pullPreviewSourceId,
+                source_id: pullPreviewSourceIds[0],
                 source_code: pullPreviewData.source_code || '',
                 pull_source_type: pullPreviewKind,
-                pull_source_id: pullPreviewSourceId,
+                pull_source_id: pullPreviewSourceIds[0],
+                pull_source_ids:
+                    pullPreviewKind === 'purchase_receipt' && pullPreviewSourceIds.length > 1
+                        ? pullPreviewSourceIds
+                        : undefined,
                 supplier_id: Number(pullPreviewData.supplier_id || 0),
                 supplier_name: pullPreviewData.supplier_name || '',
                 total_amount: totalAmount,
@@ -527,12 +557,26 @@ const PayableList: React.FC = () => {
         }
     };
 
-    const pullPreviewMaxPush = Number(pullPreviewData?.items?.[0]?.max_push_quantity ?? 0);
+    const pullPreviewMaxPush =
+        Number(
+            pullPreviewData?.max_push_total ??
+                (pullPreviewData?.items || []).reduce(
+                    (sum, row) => sum + Number(row.max_push_quantity ?? 0),
+                    0,
+                ),
+        ) || 0;
     const pullPreviewTargetLabel = pullFromPurchaseOrderAction.targetLabel;
 
     const pullFormInitialValues = useMemo(() => {
         if (!pullPreviewData || !pullPreviewKind) return undefined;
-        const maxPush = Number(pullPreviewData.items?.[0]?.max_push_quantity ?? 0);
+        const maxPush =
+            Number(
+                pullPreviewData.max_push_total ??
+                    (pullPreviewData.items || []).reduce(
+                        (sum, row) => sum + Number(row.max_push_quantity ?? 0),
+                        0,
+                    ),
+            ) || 0;
         const sourceLabel =
             pullPreviewKind === 'purchase_order'
                 ? pullFromPurchaseOrderAction.sourceLabel
@@ -1364,7 +1408,7 @@ const PayableList: React.FC = () => {
                         ) : null}
                         {!pullPreviewData.has_blocking_issues && pullPreviewMaxPush > 0 ? (
                             <ProForm
-                                key={`pull-payable-${pullPreviewKind}-${pullPreviewSourceId}`}
+                                key={`pull-payable-${pullPreviewKind}-${pullPreviewSourceIds.join('-')}`}
                                 form={pullForm}
                                 initialValues={pullFormInitialValues}
                                 submitter={false}

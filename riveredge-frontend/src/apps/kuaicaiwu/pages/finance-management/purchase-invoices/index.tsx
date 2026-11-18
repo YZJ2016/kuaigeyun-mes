@@ -431,7 +431,7 @@ const PurchaseInvoiceList: React.FC = () => {
 
   const pullFromPurchaseReceiptQuery = useUniPullQuery<PurchaseInvoicePullCandidate>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     scopeOptions: pullQueryScopeOptions,
     defaultScope: 'pullable',
     isRowDisabled: (record) => !isPullPurchaseInvoiceSelectable(record),
@@ -480,7 +480,7 @@ const PurchaseInvoiceList: React.FC = () => {
 
   const pullFromPayableQuery = useUniPullQuery<PurchaseInvoicePullCandidate>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     scopeOptions: pullQueryScopeOptions,
     defaultScope: 'pullable',
     isRowDisabled: (record) => !isPullPurchaseInvoiceSelectable(record),
@@ -1494,7 +1494,7 @@ const PurchaseInvoiceList: React.FC = () => {
             ) : null}
             {!pullPreviewData.has_blocking_issues && pullPreviewMaxPush > 0 ? (
               <ProForm
-                key={`pull-purchase-invoice-${pullPreviewKind}-${pullPreviewSourceId}`}
+                key={`pull-purchase-invoice-${pullPreviewKind}-${pullPreviewSourceIds.join('-')}`}
                 form={pullForm}
                 initialValues={pullFormInitialValues}
                 submitter={false}

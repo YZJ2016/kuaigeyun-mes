@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from datetime import datetime
 from typing import Any, Awaitable, Callable, Dict, List, Tuple
 
@@ -23,6 +24,9 @@ from apps.kuaizhizao.services.exception_service import (
     ACTIVE_QUALITY_EXCEPTION_STATUSES,
 )
 from apps.kuaizhizao.services.menu_badge_scope import (
+    RES_AFTER_SALES_INSTALL,
+    RES_AFTER_SALES_SPARE,
+    RES_AFTER_SALES_TICKET,
     RES_CUSTOMER_FOLLOW_UP,
     RES_INBOUND,
     RES_MATERIAL_BORROW,
@@ -34,9 +38,14 @@ from apps.kuaizhizao.services.menu_badge_scope import (
     RES_PURCHASE_ORDER,
     RES_PURCHASE_RETURN,
     RES_QUOTATION,
+    RES_REPAIR_ORDER,
     RES_REWORK_ORDER,
+    RES_SALES_CONTRACT,
     RES_SALES_ORDER,
+    RES_SALES_ORDER_CHANGE,
     RES_SALES_RETURN,
+    RES_SERVICE_DISPATCH,
+    RES_SERVICE_SETTLEMENT,
     RES_SHIPMENT_NOTICE,
     RES_WORK_ORDER,
     BadgeScopeCtx,
@@ -51,8 +60,46 @@ from infra.models.user import User
 _RV_PENDING = ["待审核", "PENDING", "PENDING_REVIEW"]
 BadgeFragment = Dict[str, Any]
 
-# 与 RIVEREDGE_DB_POOL_MAX 默认 10 对齐：徽章 COUNT 最多同时占用 4 个池位
-_BADGE_COUNT_SEM = asyncio.Semaphore(4)
+def _badge_count_concurrency() -> int:
+    raw = os.getenv("MENU_BADGE_COUNT_CONCURRENCY", "8").strip()
+    try:
+        n = int(raw)
+    except ValueError:
+        n = 8
+    return max(1, min(n, 16))
+
+
+# 全站 COUNT 共享信号量；默认 8（原 4 在远程库下易拖长整段徽章刷新）
+_BADGE_COUNT_SEM = asyncio.Semaphore(_badge_count_concurrency())
+
+# 分区 → 功能资源：用户未授予任一资源则跳过整区 COUNT（管理员仍全量）
+_SECTION_GRANT_RESOURCES: dict[str, tuple[str, ...]] = {
+    "work_orders": (RES_WORK_ORDER, RES_REWORK_ORDER),
+    "sales": (RES_SALES_ORDER,),
+    "purchase": (RES_PURCHASE_ORDER, RES_INBOUND, RES_PURCHASE_RETURN),
+    "warehouse_docs": (
+        RES_INBOUND,
+        RES_OUTBOUND,
+        RES_OTHER_INBOUND,
+        RES_OTHER_OUTBOUND,
+        RES_MATERIAL_BORROW,
+        RES_MATERIAL_RETURN,
+    ),
+    "warehouse_ops": (RES_INBOUND, RES_OUTBOUND, RES_SHIPMENT_NOTICE),
+    "sales_docs": (RES_QUOTATION, RES_SHIPMENT_NOTICE, RES_SALES_RETURN, RES_PURCHASE_RETURN),
+    "misc_ops": (RES_CUSTOMER_FOLLOW_UP, RES_OUTSOURCE_ORDER),
+    "finance": ("kuaicaiwu:receivable", "kuaicaiwu:payable"),
+    "extended": (
+        RES_SALES_CONTRACT,
+        RES_SALES_ORDER_CHANGE,
+        RES_AFTER_SALES_TICKET,
+        RES_AFTER_SALES_INSTALL,
+        RES_REPAIR_ORDER,
+        RES_SERVICE_DISPATCH,
+        RES_SERVICE_SETTLEMENT,
+        RES_AFTER_SALES_SPARE,
+    ),
+}
 
 
 async def _gather_counts(*awaitables: Awaitable[Any]) -> Tuple[Any, ...]:
@@ -799,6 +846,18 @@ async def _section_finance(ctx: BadgeScopeCtx, now_date) -> BadgeFragment:
     }
 
 
+async def _section_granted(ctx: BadgeScopeCtx, section_key: str) -> bool:
+    resources = _SECTION_GRANT_RESOURCES.get(section_key)
+    if not resources:
+        return True
+    from core.services.authorization.effective_access_service import EffectiveAccessService
+
+    access = await EffectiveAccessService.get(ctx.user.id, ctx.tenant_id, user=ctx.user)
+    if access.is_admin_bypass:
+        return True
+    return any(access.grants_resource(code) for code in resources)
+
+
 def _register_menu_badge_runners() -> dict[str, Any]:
     from apps.kuaizhizao.services.menu_badge_counts_extended import fetch_extended_menu_badge_counts
 
@@ -825,20 +884,45 @@ async def fetch_menu_badge_counts(
     *,
     sections: list[str] | None = None,
 ) -> dict:
+    from core.services.authorization.effective_access_service import EffectiveAccessService
+    from core.services.authorization.permission_version_service import PermissionVersionService
+    from apps.kuaizhizao.services.menu_badge_counts_cache import get_or_compute_section
+
     ctx = BadgeScopeCtx(tenant_id=tenant_id, user=user)
     now = resolve_business_datetime()
     now_date = now.date()
 
+    await EffectiveAccessService.get(user.id, tenant_id, user=user)
+    permission_version = int(
+        await PermissionVersionService.get_version(tenant_id=tenant_id, user_id=user.id)
+    )
+
     runners = _register_menu_badge_runners()
     keys = sections if sections else list(runners.keys())
-    tasks = [
-        _safe_section(key, (lambda section_key=key: runners[section_key](ctx, now, now_date)))
-        for key in keys
-        if key in runners
-    ]
-    if not tasks:
+
+    async def _run_section(section_key: str) -> BadgeFragment:
+        if section_key not in runners:
+            return {}
+        if not await _section_granted(ctx, section_key):
+            return {}
+
+        async def compute() -> BadgeFragment:
+            return await _safe_section(
+                section_key,
+                lambda sk=section_key: runners[sk](ctx, now, now_date),
+            )
+
+        return await get_or_compute_section(
+            tenant_id=tenant_id,
+            user_id=int(user.id),
+            permission_version=permission_version,
+            section_key=section_key,
+            compute=compute,
+        )
+
+    if not keys:
         return {}
-    section_results = await asyncio.gather(*tasks)
+    section_results = await asyncio.gather(*(_run_section(key) for key in keys))
 
     counts: dict = {}
     for fragment in section_results:

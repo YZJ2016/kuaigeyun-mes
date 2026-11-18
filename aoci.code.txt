@@ -117,7 +117,7 @@ prod.ps1[OV1T]: F:Win prod deploy entry | R:- | A:DEPLOY_MODE=prod | S:fd_dispat
 riveredge-service.ps1[OV2T]: F:Win boot service entry | R:- | A:boot-service.env | S:3 retries; UV/CADDY env; 60L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/===
-.env.example[SC3S]: F:后端环境变量示例(应用/写防护/DB池/JWT/CORS/超管/文件/推送) | R:- | A:HOST+PORT,DB_*,JWT_SECRET_KEY,CLIENT_CHANNEL_WRITE_GUARD_ENABLED,API_WRITE_RATE_LIMIT_*,PUSH_PROVIDER | S:HOST=0.0.0.0 dev/127.0.0.1 prod;含写防护/开放API/溯源/推送开关
+.env.example[SC3S]: F:后端环境变量示例(应用/写防护/DB池/JWT/CORS/超管/文件/推送/菜单徽章) | R:- | A:HOST+PORT,DB_*,JWT_SECRET_KEY,CLIENT_CHANNEL_WRITE_GUARD_ENABLED,PUSH_PROVIDER,MENU_BADGE_* | S:含写防护/开放API/推送/徽章缓存开关;DB_HOST勿指云库
 pyproject.toml[PC4S]: F:后端UV依赖清单：主依赖+pdf/ocr/kuaiai-rag/dev extras，含pytest/black/ruff/mypy/aerich配置 | R:code:riveredge-backend/uv.lock | A:dependencies,optional-dependencies,tool.aerich,tool.pytest,override-dependencies | S:py>=3.11<3.12;playwright==1.63.0钉死;override禁带GUI的opencv-python
 start-backend.sh[OU5T]: F:echo "RiverEdge SaaS 多组织框架 - 后端服务启动" echo "" if [ ! -f "pyproject.toml" ]; th... | R:- | A:- | S:97L
 start-worker.sh[OU5T]: F:SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)" cd "$SCRIPT_DIR" | R:- | A:- | S:47L
@@ -1301,7 +1301,7 @@ standard_costs.py[AE4S]: F:标准成本库API | R:code:riveredge-backend/src/app
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaicaiwu/api/finance/===
 __init__.py[AA2T]: F:财务API包 | R:code:riveredge-backend/src/apps/kuaicaiwu/api/exchange_rates.py | A:finance pkg | S:3L; docstring
 partner_statements.py[AE7M]: F:往来对账单API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/__init__.py | A:11 endpoints | S:xlsx/pdf export;line-detail钻取; 307L
-payables.py[AE8L]: F:应付管理API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/partner_statements.py | A:8 endpoints | S:pull from PO/PR; 399L
+payables.py[AE8L]: F:应付管理API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/partner_statements.py | A:9 endpoints | S:pull from PO/PR;多入库合并pull-preview+pull_source_ids立账
 payment_refunds.py[AE8L]: F:付款退款API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/payables.py | A:10 endpoints,创建期垫付领款人校验前置 | S:field mask;退款禁员工垫付
 payments.py[AE8L]: F:付款单管理API:CRUD+print+pull_lines多源拉取+pull-preview+预付抵扣 | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/payment_refunds.py | A:16 endpoints,schema含pull_lines/offset_prepayment_lines/对方账户/垫付领款人 | S:pull_lines与legacy source互斥;删除反过账;列表带linked_payable总额
 price_settlement.py[AE5M]: F:月结定价API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/payments.py | A:5 endpoints | S:batch apply; 175L
@@ -1370,7 +1370,7 @@ setup.py[AD4M]: F:银行账户引用展示Provider注册 | R:code:riveredge-back
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaicaiwu/schemas/===
 __init__.py[AC2T]: F:快财务Schema包 | R:code:riveredge-backend/src/apps/kuaicaiwu/schemas/finance.py | A:- | S:导出Payable/PurchaseInvoice/Receivable/收款/付款单据Schema
-finance.py[CB6L]: F:财务协同Pydantic Schema | R:code:riveredge-backend/src/apps/kuaicaiwu/models/payable.py, code:riveredge-backend/src/apps/kuaicaiwu/models/receivable.py | A:PayableCreate,ReceivableCreate,PaymentVoucherCreate,ReceiptVoucherCreate,SalesInvoiceCreate,OtherVoucherCreate | S:应付收/发票/对账单/合并/其他收支schema;红字负额;capabilities下推;支出关联入库/payee/部门/附件;付款offset_prepayment_lines
+finance.py[CB6L]: F:财务协同Pydantic Schema | R:code:riveredge-backend/src/apps/kuaicaiwu/models/payable.py, code:riveredge-backend/src/apps/kuaicaiwu/models/receivable.py | A:PayableCreate,ReceivableCreate,PaymentVoucherCreate,ReceiptVoucherCreate,SalesInvoiceCreate,OtherVoucherCreate | S:应付收/发票/对账单/合并/其他收支schema;红字负额;capabilities下推;支出关联入库/payee/部门/附件;付款offset_prepayment_lines;应付pull_source_ids/pull_receipt_lines多源
 invoice.py[CB5S]: F:发票Pydantic Schema(销项/进项统一) | R:code:riveredge-backend/src/apps/kuaicaiwu/models/invoice.py | A:InvoiceBase,InvoiceCreate,InvoiceUpdate,InvoiceResponse,InvoiceListResponse | S:category IN=进项OUT=销项; 税率默认0.13小数口径; 含红字冲销指标
 price_settlement_schemas.py[CB5S]: F:月结定价Pydantic Schema | R:code:riveredge-backend/src/apps/kuaicaiwu/models/price_settlement_batch.py | A:PriceSettlementCandidateResponse,PriceSettlementLineInput,PriceSettlementBatchCreate | S:period格式YYYY-MM; side=sales|purchase; 行after_unit_price≥0
 standard_cost.py[CB5T]: F:标准成本Pydantic Schema | R:code:riveredge-backend/src/apps/kuaicaiwu/models/standard_cost.py | A:StandardCostBase,StandardCostCreate,StandardCostUpdate,StandardCostResponse | S:target_type=material/work_center/work_station; Update不继承BaseSchema; 日期coerce
@@ -1414,12 +1414,12 @@ invoice_source_allocation.py[AC4S]: F:发票源单分摊归因 | R:code:riveredg
 management_report_service.py[AD6L]: F:管理会计综合报表 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/inventory_cost_service.py | A:ManagementReportService | S:DSO/毛利率/库存周转等指标; 库存价值按批次数量×移动平均成本
 merge_settlement_service.py[AD7L]: F:同往来单位多源合并收付款开票 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/receipt_pull_service.py, code:riveredge-backend/src/apps/kuaicaiwu/services/finance_service.py | A:MergeSettlementService | S:一张凭证+多笔核销/关联; 分摊金额须>0且源单不重复
 partner_statement_service.py[AD7L]: F:往来对账单预览/生成/确认/导出服务 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/partner_statement.py, code:riveredge-backend/src/apps/kuaicaiwu/services/finance_settlement_hierarchy.py | A:PartnerStatementService,period_to_date_range | S:仅纳入已审核应收付与Confirmed收付款; 单据族去重累计已对; 已对净额并期初; 层级排序+运行余额; openpyxl+PDF导出
-payable_pull_service.py[AD7L]: F:应付单加载门控 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/payable.py, code:riveredge-backend/src/apps/kuaizhizao/models/document_relation.py | A:PayablePullService | S:PO/PR候选状态白名单; 列表下推付款capability; 采购退货冲销应付
-payment_pull_service.py[AD6L]: F:付款单加载门控(应付/付款申请→付款) | R:code:riveredge-backend/src/apps/kuaicaiwu/models/payment.py, code:riveredge-backend/src/apps/kuaicaiwu/models/payable.py, code:riveredge-backend/src/apps/kuaizhizao/models/document_relation.py | A:PaymentPullService | S:仅Confirmed付款经DocumentRelation占额度,草稿不占;采购退货冲减源禁拉;确认草稿补核销,预付款不自动核销
+payable_pull_service.py[AD7L]: F:应付单加载门控 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/payable.py, code:riveredge-backend/src/apps/kuaizhizao/models/document_relation.py | A:PayablePullService | S:PO/PR候选状态白名单;多入库单同供应商合并预览+行选校验+占用登记;列表下推付款capability;采购退货冲销应付
+payment_pull_service.py[AD6L]: F:付款单加载门控(应付/付款申请→付款) | R:code:riveredge-backend/src/apps/kuaicaiwu/models/payment.py, code:riveredge-backend/src/apps/kuaicaiwu/models/payable.py, code:riveredge-backend/src/apps/kuaizhizao/models/document_relation.py | A:PaymentPullService | S:仅Confirmed付款经DocumentRelation占额度,草稿不占;采购退货冲减源禁拉;确认草稿补核销;预付抵扣行显式persist/settle
 payment_refund_service.py[AD7L]: F:付款退款服务 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/finance_refund_utils.py, code:riveredge-backend/src/apps/kuaicaiwu/models/payment.py | A:PaymentRefundService | S:仅Confirmed付款单可退款; 多源一张退款单; 冲回核销
 period_close_service.py[AC1T]: F:会计期间关账兼容入口 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/gl/period_service.py | A:PeriodCloseService | S:委托GlPeriodService; 保留旧API路径
 posting_service.py[AD7L]: F:凭证过账服务 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/voucher.py, code:riveredge-backend/src/apps/kuaicaiwu/services/gl/balance_service.py | A:PostingService | S:手工+事件生成; 审核记账反记账; 凭证号前缀词字+年月+4位序
-prepayment_service.py[AD4S]: F:预收预付核销 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/receipt.py, code:riveredge-backend/src/apps/kuaicaiwu/models/payment.py | A:PrepaymentService | S:仅prepayment类型可转核销; 客户/供应商须一致; 核销金额>0
+prepayment_service.py[AD4S]: F:预收预付核销 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/receipt.py, code:riveredge-backend/src/apps/kuaicaiwu/models/payment.py | A:PrepaymentService | S:仅prepayment类型可转核销; 客户/供应商须一致; 核销金额>0;apply_to_payable透传offset_payment_id
 price_settlement_finance_service.py[AD5S]: F:月结定价财务差额服务 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/finance_service.py | A:PriceSettlementFinanceService | S:差额=0则跳过; side=sales生成应收purchase生成应付
 price_settlement_service.py[AD7L]: F:月结定价业务服务 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/price_settlement_batch.py, code:riveredge-backend/src/apps/master_data/services/partner_price_book_service.py | A:PriceSettlementService | S:候选行按期间Y-M; 应用后生成财务差额; 价目表伙伴价源
 purchase_invoice_pull_service.py[AD7L]: F:采购发票加载门控 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/purchase_invoice.py, code:riveredge-backend/src/apps/kuaicaiwu/models/payable.py | A:PurchaseInvoicePullService | S:PO/PR候选状态白名单; 已作废已红冲排除; 金额JSON float转换
@@ -1441,6 +1441,10 @@ other_income_service.py[AD3T]: F:其他费用收入单服务 | R:- | A:OtherInco
 finance_payment_terms.py[AD5S]: F:应付付款条件(账期)解析与列表回填 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/payable.py | A:resolve_supplier_payable_payment_terms,enrich_payable_payment_terms_fields | S:源单据供应商条款快照优先;批量enrich列表
 fund_transfer_audit_service.py[AW5M]: F:资金调拨审核工作流:提交/审核/驳回 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/fund_transfer.py | A:FundTransferAuditService,assert_fund_transfer_review_editable,assert_fund_transfer_review_approved | S:review_status状态机;uni_audit分发对接
 fund_transfer_posting_service.py[AD5M]: F:资金调拨过账:确认写银行流水,撤回/作废冲回 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/bank_account_service.py | A:FundTransferPostingService | S:草稿不产流水;internal/external_out/external_in三类
+fund_transfer_service.py[AD6L]: F:资金调拨单业务服务 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/fund_transfer.py, code:riveredge-backend/src/apps/kuaicaiwu/services/bank_account_service.py | A:FundTransferService | S:internal/external_out/external_in三类;confirm过账扣银行账户;unconfirm/cancel回退;列表enrich银行账户余额
+payable_prepayment_apply_service.py[AD6L]: F:采购订单预付自动/选额核销至应付 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/prepayment_service.py, code:riveredge-backend/src/apps/kuaizhizao/models/purchase_order.py | A:PayablePrepaymentApplyService | S:PO里程碑/入库/采购退货来源应付;apply_selected按付款单选额;应付建单/预付确认后自动核销;PO预付快照enrich
+payment_advance_service.py[AD4S]: F:付款单员工垫付台账 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/payment.py | A:PaymentAdvanceService | S:仅employee_advance方式记台账;确认记录/作废同步;active唯一约束
+payment_list_enrichment.py[AD4S]: F:付款单列表读侧富化 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/payable.py | A:enrich_payment_list_linked_payable_totals | S:按pull关系汇总关联应付/预付抵扣总额;纯读不改单据
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaicaiwu/services/gl/===
 __init__.py[AC2S]: F:总账服务包 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/gl/coa_service.py | A:GlSettingsService,CoaService,GlPeriodService,BalanceService | S:重导出8个GL服务

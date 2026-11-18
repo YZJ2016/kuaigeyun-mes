@@ -70,19 +70,26 @@ async def create_payable(
         pull_preview: Optional[Dict[str, Any]] = None
         pull_source_type = str(data.pull_source_type or "").strip()
         pull_source_id = data.pull_source_id
-        if pull_source_type and pull_source_id:
+        pull_source_ids: list[int] = []
+        if data.pull_source_ids:
+            pull_source_ids = [int(x) for x in data.pull_source_ids if x]
+        elif pull_source_id:
+            pull_source_ids = [int(pull_source_id)]
+        if pull_source_type and pull_source_ids:
             if pull_source_type not in _PULL_SOURCE_TYPES:
                 raise BusinessLogicError(f"不支持的加载源单类型: {pull_source_type}")
             pull_preview = await payable_pull_service.assert_pull_create_allowed(
                 tenant_id=tenant_id,
                 source_type=pull_source_type,
-                source_id=int(pull_source_id),
+                source_id=int(pull_source_ids[0]),
                 total_amount=Decimal(data.total_amount),
+                pull_receipt_lines=data.pull_receipt_lines,
+                pull_source_ids=pull_source_ids,
             )
 
         create_payload = data.model_dump(
             exclude_unset=True,
-            exclude={"pull_source_type", "pull_source_id"},
+            exclude={"pull_source_type", "pull_source_id", "pull_source_ids", "pull_receipt_lines"},
         )
         if pull_preview:
             create_payload["supplier_id"] = int(pull_preview.get("supplier_id") or create_payload.get("supplier_id"))
@@ -96,22 +103,37 @@ async def create_payable(
                 create_payload["source_type"] = "采购订单"
             else:
                 create_payload["source_type"] = pull_source_type
-            create_payload["source_id"] = int(pull_source_id)
+            create_payload["source_id"] = int(pull_source_ids[0])
             create_payload["source_code"] = str(pull_preview.get("source_code") or create_payload.get("source_code") or "")
 
         payable_data = PayableCreate.model_validate(create_payload)
         payable = await payable_service.create_payable(tenant_id, payable_data, current_user.id)
 
-        if pull_preview and pull_source_type and pull_source_id:
-            await payable_pull_service.create_pull_relation(
-                tenant_id=tenant_id,
-                source_type=pull_source_type,
-                source_id=int(pull_source_id),
-                source_code=str(pull_preview.get("source_code") or payable.source_code or ""),
-                payable_id=int(payable.id),
-                payable_code=str(payable.payable_code),
-                created_by=current_user.id,
-            )
+        if pull_preview and pull_source_type and pull_source_ids:
+            code_by_receipt: dict[int, str] = {}
+            for item in pull_preview.get("items") or []:
+                iid = int(item.get("item_id") or 0)
+                if iid > 0:
+                    code_by_receipt[iid] = str(item.get("source_code") or iid)
+            for rid in pull_source_ids:
+                await payable_pull_service.create_pull_relation(
+                    tenant_id=tenant_id,
+                    source_type=pull_source_type,
+                    source_id=int(rid),
+                    source_code=code_by_receipt.get(int(rid), str(pull_preview.get("source_code") or "")),
+                    payable_id=int(payable.id),
+                    payable_code=str(payable.payable_code),
+                    created_by=current_user.id,
+                )
+            if pull_source_type == "purchase_receipt":
+                await payable_pull_service.record_multi_receipt_payable_occupancy(
+                    tenant_id,
+                    pull_source_ids,
+                    int(payable.id),
+                    Decimal(str(payable.total_amount or 0)),
+                    pull_receipt_lines=data.pull_receipt_lines,
+                    created_by=current_user.id,
+                )
         return PayableResponse.model_validate(payable)
     except ValidationError as e:
         raise _http_exception_with_trace(422, str(e), "/payables", tenant_id)
@@ -264,6 +286,37 @@ async def preview_pull_payable_from_purchase_receipt(
         tenant_id=tenant_id,
         receipt_id=receipt_id,
     )
+
+
+@router.get(
+    "/from-purchase-receipts/pull-preview",
+    summary="Preview merge pull payable from purchase receipts",
+)
+async def preview_pull_payable_from_purchase_receipts(
+    receipt_ids: str = Query(..., description="采购入库单ID，逗号分隔"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payable:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    parsed: list[int] = []
+    for part in str(receipt_ids or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            parsed.append(int(part))
+        except ValueError as exc:
+            raise _http_exception_with_trace(
+                422, f"无效的入库单ID: {part}", "/payables/from-purchase-receipts/pull-preview", tenant_id
+            ) from exc
+    try:
+        return await payable_pull_service.preview_pull_from_purchase_receipts(
+            tenant_id=tenant_id,
+            receipt_ids=parsed,
+        )
+    except (NotFoundError, BusinessLogicError) as exc:
+        raise _http_exception_with_trace(
+            422, str(exc), "/payables/from-purchase-receipts/pull-preview", tenant_id
+        ) from exc
 
 
 @router.post(

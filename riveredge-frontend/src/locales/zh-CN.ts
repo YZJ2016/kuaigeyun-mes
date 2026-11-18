@@ -37473,6 +37473,46 @@ export default {
     '修复金蝶云苍穹物料同步报 NoneType 与空拉误导',
   'pages.dashboard.updateLog.entries.material-sync-request-body-none-merge-r01.description':
     '物料同步覆盖 select 时若绑定未带 request_body，不再因 None 合并崩溃；出站继续剥离物料 batchQuery 的 createorg 筛选；接口异常时不再叠加「勿写 createorg」空拉文案。',
+  'pages.dashboard.updateLog.entries.payment-app-approval-completion-writeback-r01.title':
+    '付款申请流程结束后状态未变为已批准',
+  'pages.dashboard.updateLog.entries.payment-app-approval-completion-writeback-r01.description':
+    '多级审批全部通过后，流程实例已结束，但付款申请单据未回写为「已批准」。根因是审批完成回调未注册付款申请写回；现已补齐。已卡住的单据可再点一次「审核」补写状态，或等发版后由运维补齐。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-pay-mode-align-po-r01.title':
+    '采购入库付款方式与采购订单对齐',
+  'pages.dashboard.updateLog.entries.purchase-receipt-pay-mode-align-po-r01.description':
+    '入库单付款方式改用与采购订单相同的客商码表（现金、银行转账等）；下推时继承订单付款方式；不再默认「赊购」。外推金蝶时仍映射为 CREDIT/CASH。',
+  'pages.dashboard.updateLog.entries.po-detail-incl-amount-r01.title':
+    '采购订单详情改为展示含税金额',
+  'pages.dashboard.updateLog.entries.po-detail-incl-amount-r01.description':
+    '详情抽屉订单金额、含税单价、价税合计与扣预付后预计应付按含税口径展示，与财务应付立账一致；库内未税字段不变。',
+  'pages.dashboard.updateLog.entries.document-form-page-restore-outer-card-r01.title':
+    '独立新建编辑页恢复内容区白卡片容器',
+  'pages.dashboard.updateLog.entries.document-form-page-restore-outer-card-r01.description':
+    '销售订单、采购订单等独立 Tab 新建/编辑页在 DocumentFormPageLayout 统一恢复外层 Card 容器，与列表页卡片层次一致。',
+  'pages.dashboard.updateLog.entries.unitab-close-flash-stays-r01.title':
+    '修复标签点关闭后闪一下仍在',
+  'pages.dashboard.updateLog.entries.unitab-close-flash-stays-r01.description':
+    '关闭当前页标签时，在路由切走前不再被「路由同步」立即加回同一标签，点叉后标签会正常消失并切换到相邻页。',
+  'pages.dashboard.updateLog.entries.finance-merge-pull-receipt-payable-invoice-r01.title':
+    '应付与进项发票支持同供应商合并取单',
+  'pages.dashboard.updateLog.entries.finance-merge-pull-receipt-payable-invoice-r01.description':
+    '从采购入库创建应付单、从应付单创建进项发票改为多选勾选；须同一供应商，预览与金额按所选单据合计；多应付合并开票不支持同时付款。',
+  'pages.dashboard.updateLog.entries.menu-badge-counts-perf-r01.title':
+    '优化左侧菜单待办徽章加载性能',
+  'pages.dashboard.updateLog.entries.menu-badge-counts-perf-r01.description':
+    '菜单徽章按业务分区做进程内缓存与并发合并，无权限分区跳过 COUNT，并提高 COUNT 并行度；刷新间隔内重复打开页面不再反复打满数据库。',
+  'pages.dashboard.updateLog.entries.unitab-close-wrong-tab-r01.title':
+    '修复 UniTabs 标签多时点关闭关错页',
+  'pages.dashboard.updateLog.entries.unitab-close-wrong-tab-r01.description':
+    '关闭标签改为只按完整 tabKey 精确匹配，不再按 pathname 误关同路径其它标签；恢复会话时按 key 去重，并提高关闭按钮层级避免点错邻页。',
+  'pages.dashboard.updateLog.entries.purchase-return-edit-quantity-submit-r01.title':
+    '修复采购退货单编辑保存数量校验失败',
+  'pages.dashboard.updateLog.entries.purchase-return-edit-quantity-submit-r01.description':
+    '编辑采购退货单时主副数量未注册到表单，保存误传退货数量为 0；现提交前从表单真源读取数量，并修复主副数量列在 Form.List 中的字段注册。',
+  'pages.dashboard.updateLog.entries.kuaiplm-process-menu-peer-sync-r01.title':
+    '主数据工艺菜单同步会刷新快研发侧栏',
+  'pages.dashboard.updateLog.entries.kuaiplm-process-menu-peer-sync-r01.description':
+    '工艺数据由快研发接管时，同步主数据或一键同步菜单会按磁盘 manifest 重写快研发 core_menus，并识别库内多余的旧图纸子菜单路径，避免 manifest 已扁平但侧栏仍显示反查发放借阅。',
   'pages.dashboard.updateLog.entries.other-expense-link-purchase-receipt-r01.title':
     '其他费用支出可关联供应商采购入库单',
   'pages.dashboard.updateLog.entries.other-expense-link-purchase-receipt-r01.description':

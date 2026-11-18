@@ -673,23 +673,32 @@ class PaymentApplicationPullService:
             raise NotFoundError(f"付款申请单不存在: {application_id}")
         remaining = Decimal(str(app.remaining_amount or 0))
         allowed = str(app.status) in ("已批准", "部分付款") and remaining > 0
+        code = str(app.application_code or application_id)
+        pushable = float(remaining)
         return {
             "target_type": "payment",
             "source_type": "payment_application",
             "source_id": application_id,
-            "source_code": app.application_code,
+            "source_code": code,
+            "summary": (
+                f"将从付款申请 {code} 创建付款单（可付款 ¥{pushable:,.2f}）"
+                if allowed
+                else f"付款申请 {code} 当前不可加载付款单"
+            ),
             "supplier_id": app.supplier_id,
             "supplier_name": app.supplier_name,
             "items": [
                 {
                     "item_id": application_id,
-                    "source_code": app.application_code,
-                    "max_push_quantity": float(remaining),
+                    "source_code": code,
+                    "supplier_name": str(getattr(app, "supplier_name", "") or ""),
+                    "max_push_quantity": pushable,
                 }
             ],
             "has_blocking_issues": not allowed,
             "blocking_reason": None if allowed else "payment.pull_from_payment_application.not_allowed",
-            "max_push_total": float(remaining),
+            "tip": "付款金额不可超过申请单待付余额；确认过账后回写申请单已付金额。",
+            "max_push_total": pushable,
             "require_payment_voucher": bool(getattr(app, "require_payment_voucher", False)),
             "counterparty_account_name": getattr(app, "supplier_account_name", None),
             "counterparty_bank_name": getattr(app, "supplier_bank_name", None),
