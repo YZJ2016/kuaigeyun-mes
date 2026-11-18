@@ -361,6 +361,26 @@ class LinkedSourceDocumentRef(BaseSchema):
     code: str
 
 
+class PaymentPullLineCreate(BaseSchema):
+    """付款单加载明细行（创建/更新）"""
+
+    source_type: str = Field(..., max_length=50, description="payable|payment_application")
+    source_id: int = Field(..., gt=0, description="来源单据ID")
+    source_code: Optional[str] = Field(None, max_length=50, description="来源单号")
+    amount: Decimal = Field(..., gt=0, description="本次付款金额")
+
+
+class PaymentPullLineResponse(BaseSchema):
+    """付款单加载明细行（读）"""
+
+    line_no: int
+    source_type: str
+    source_id: int
+    source_code: Optional[str] = None
+    amount: Decimal
+    max_amount: Optional[Decimal] = Field(None, description="可付上限（草稿读侧 enrich）")
+
+
 class PaymentVoucherBase(BaseSchema):
     """付款单基础schema"""
     supplier_id: int = Field(..., description="供应商ID")
@@ -377,15 +397,21 @@ class PaymentVoucherBase(BaseSchema):
     advance_payee_name: Optional[str] = Field(None, max_length=100, description="员工垫付领款人姓名")
     settlement_type: str = Field("normal", max_length=20, description="结算类型 normal/prepayment/refund")
     notes: Optional[str] = Field(None, description="备注")
+    require_payment_voucher: bool = Field(
+        False, description="是否必须上传付款凭证（来自付款申请要求）"
+    )
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class PaymentVoucherCreate(PaymentVoucherBase):
     """付款单创建schema"""
 
-    source_type: Optional[str] = Field(None, description="加载源单类型 payable|payment")
-    source_id: Optional[int] = Field(None, description="加载源单ID（单源兼容）")
+    source_type: Optional[str] = Field(None, description="加载源单类型 payable|payment（与 pull_lines 二选一）")
+    source_id: Optional[int] = Field(None, description="加载源单ID（单源兼容，与 pull_lines 二选一）")
     source_ids: Optional[List[int]] = Field(None, description="加载源付款单ID列表（多源一起退款）")
+    pull_lines: Optional[List[PaymentPullLineCreate]] = Field(
+        None, description="加载明细行（与 source_type/source_id 二选一）"
+    )
 
 
 class PaymentVoucherUpdate(BaseSchema):
@@ -405,6 +431,9 @@ class PaymentVoucherUpdate(BaseSchema):
     settlement_type: Optional[str] = Field(None, max_length=20)
     notes: Optional[str] = None
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    pull_lines: Optional[List[PaymentPullLineCreate]] = Field(
+        None, description="替换加载明细（仅草稿）"
+    )
 
 
 class PaymentVoucherResponse(PaymentVoucherBase):
@@ -433,6 +462,7 @@ class PaymentVoucherResponse(PaymentVoucherBase):
     linked_source_documents: Optional[List["LinkedSourceDocumentRef"]] = Field(
         None, description="加载来源单据（应付单 / 付款申请）"
     )
+    pull_lines: Optional[List[PaymentPullLineResponse]] = None
     capabilities: Optional[Dict[str, Any]] = None
 
     class Config:

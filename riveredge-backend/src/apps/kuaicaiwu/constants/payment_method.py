@@ -87,3 +87,6 @@ def assert_payment_application_payee_fields(
     if is_employee_advance_payment_method(payment_method):
         if not advance_payee_id or not str(advance_payee_name or "").strip():
             raise ValidationError("员工垫付须指定领款人")
+        return
+    if advance_payee_id or str(advance_payee_name or "").strip():
+        raise ValidationError("非员工垫付不可填写领款人")

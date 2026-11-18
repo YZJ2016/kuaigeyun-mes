@@ -127,6 +127,12 @@ export type PaymentCreateData = {
   attachments?: unknown;
   source_type?: 'payable' | 'payment_application';
   source_id?: number;
+  pull_lines?: Array<{
+    source_type: string;
+    source_id: number;
+    source_code?: string;
+    amount: number;
+  }>;
 };
 
 const PAYMENT_API = '/apps/kuaicaiwu/payments';

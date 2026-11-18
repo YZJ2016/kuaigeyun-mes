@@ -188,7 +188,17 @@ class FinanceVoucherPostingService:
             if not isinstance(attachments, list) or len(attachments) == 0:
                 raise ValidationError("该付款单要求上传付款凭证，请先上传后再确认")
         from apps.kuaicaiwu.constants.payment_method import (
+            assert_payment_voucher_payee_fields,
             is_prepayment_offset_payment_method,
+        )
+
+        # 垫付领款人校验前置：record_on_payment_confirmed 在核销/回写已提交后才执行，
+        # 此处先拦下缺领款人的遗留草稿，避免半成品过账。
+        assert_payment_voucher_payee_fields(
+            payment_method=payment.payment_method,
+            advance_payee_id=getattr(payment, "advance_payee_id", None),
+            advance_payee_name=getattr(payment, "advance_payee_name", None),
+            settlement_type=payment.settlement_type,
         )
 
         is_prepay_offset = is_prepayment_offset_payment_method(payment.payment_method)
@@ -196,10 +206,6 @@ class FinanceVoucherPostingService:
             await self._assert_bank_funds_for_voucher(
                 bank_svc, tenant_id, voucher_type="payment", row=payment
             )
-
-        await self._assert_bank_funds_for_voucher(
-            bank_svc, tenant_id, voucher_type="payment", row=payment
-        )
 
         was_draft = payment.status == "Draft"
         try:

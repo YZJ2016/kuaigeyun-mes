@@ -24,7 +24,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
 
         CREATE TABLE IF NOT EXISTS "apps_kuaicaiwu_payment_advance_records" (
             "id" SERIAL PRIMARY KEY,
-            "uuid" UUID NOT NULL UNIQUE,
+            "uuid" VARCHAR(36) NOT NULL UNIQUE,
             "tenant_id" INT NOT NULL,
             "payment_id" INT NOT NULL,
             "payment_code" VARCHAR(50) NOT NULL,
@@ -37,7 +37,11 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "confirmed_at" TIMESTAMPTZ,
             "deleted_at" TIMESTAMPTZ,
             "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+            "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "created_by" INT,
+            "created_by_name" VARCHAR(100),
+            "updated_by" INT,
+            "updated_by_name" VARCHAR(100)
         );
         CREATE INDEX IF NOT EXISTS "idx_payment_advance_records_tenant_payment"
             ON "apps_kuaicaiwu_payment_advance_records" ("tenant_id", "payment_id");

@@ -92,4 +92,6 @@ __all__ = [
     "FaDepreciationRunLine",
     "FaDepreciationAdjustment",
     "FaPeriodClose",
+    "PaymentAdvanceRecord",
+    "PaymentPullLine",
 ]

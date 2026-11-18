@@ -79,6 +79,16 @@ class PaymentApplicationPushService:
             or getattr(app, "payment_method", None)
             or "银行转账"
         )
+        from apps.kuaicaiwu.constants.payment_method import (
+            assert_payment_voucher_payee_fields,
+        )
+
+        assert_payment_voucher_payee_fields(
+            payment_method=payment_method,
+            advance_payee_id=getattr(app, "advance_payee_id", None),
+            advance_payee_name=getattr(app, "advance_payee_name", None),
+            settlement_type=settlement_type,
+        )
         await BankAccountService().validate_voucher_account(
             tenant_id,
             payment_method=payment_method,

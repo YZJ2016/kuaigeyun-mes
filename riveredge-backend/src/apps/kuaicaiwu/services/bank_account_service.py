@@ -342,7 +342,11 @@ class BankAccountService:
 
         current = Decimal(str(account.current_balance or 0))
         balance_after = current + amt if direction == "in" else current - amt
-        if balance_after < 0 and not await self._get_allow_negative_balance(tenant_id):
+        if (
+            direction == "out"
+            and balance_after < 0
+            and not await self._get_allow_negative_balance(tenant_id)
+        ):
             raise ValidationError(f"账户 {account.account_code} 余额不足，当前 {current}，本次出款 {amt}")
 
         user = operator
@@ -542,7 +546,11 @@ class BankAccountService:
                 new_bal = current + amt
             else:
                 raise ValidationError(f"无法冲回未知方向的银行流水: {direction}")
-            if new_bal < 0 and not await self._get_allow_negative_balance(tenant_id):
+            if (
+                direction == "in"
+                and new_bal < 0
+                and not await self._get_allow_negative_balance(tenant_id)
+            ):
                 raise ValidationError(
                     f"账户 {account.account_code} 冲回后余额不足，当前 {current}，冲回收入 {amt}"
                 )

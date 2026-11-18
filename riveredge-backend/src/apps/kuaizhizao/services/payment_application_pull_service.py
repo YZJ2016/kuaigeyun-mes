@@ -623,4 +623,12 @@ class PaymentApplicationPullService:
             ],
             "has_blocking_issues": not allowed,
             "blocking_reason": None if allowed else "payment.pull_from_payment_application.not_allowed",
+            "max_push_total": float(remaining),
+            "require_payment_voucher": bool(getattr(app, "require_payment_voucher", False)),
+            "counterparty_account_name": getattr(app, "supplier_account_name", None),
+            "counterparty_bank_name": getattr(app, "supplier_bank_name", None),
+            "counterparty_bank_account": getattr(app, "supplier_bank_account", None),
+            "payment_method": getattr(app, "payment_method", None),
+            "advance_payee_id": getattr(app, "advance_payee_id", None),
+            "advance_payee_name": getattr(app, "advance_payee_name", None),
         }

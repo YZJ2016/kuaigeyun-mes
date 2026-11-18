@@ -23,6 +23,13 @@ import {
   mapFormPullLinesToApi,
   validatePaymentPullLinesBeforeSubmit,
 } from '../shared/usePaymentVoucherFormLinePull';
+import {
+  PaymentAdvancePayeeField,
+  resolveAdvancePayeeName,
+} from '../shared/PaymentAdvancePayeeField';
+import { PaymentCounterpartyFormSection } from '../shared/PaymentCounterpartyFormSection';
+import { useQuery } from '@tanstack/react-query';
+import { loadUserFormReferenceOptions } from '../../../../../utils/documentFormReferenceLoad';
 import { useKuaizhizaoPrintModal } from '../../../../kuaizhizao/hooks/useKuaizhizaoPrintModal';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
@@ -61,6 +68,7 @@ import {
   BANK_TRANSFER_PAYMENT_METHOD,
   isNotePaymentMethod,
   isPrepaymentOffsetPaymentMethod,
+  isEmployeeAdvancePaymentMethod,
 } from '../../../utils/financeSharedOptions';
 import {
   LedgerAccountFormFields,
@@ -151,6 +159,11 @@ const PaymentsPage: React.FC = () => {
   );
 
   const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
+  const { data: advancePayeeUserOptions = [] } = useQuery({
+    queryKey: ['payment-advance-payee-users'],
+    queryFn: () => loadUserFormReferenceOptions(),
+    staleTime: 60_000,
+  });
   const paymentSettlementTypeOptions = useMemo(() => getPaymentSettlementTypeOptions(t), [t]);
 
   useEffect(() => {
@@ -252,6 +265,16 @@ const PaymentsPage: React.FC = () => {
             values.bank_account,
           ),
       settlement_type: prepayOffset ? 'normal' : values.settlement_type || 'normal',
+      counterparty_account_name: values.counterparty_account_name,
+      counterparty_bank_name: values.counterparty_bank_name,
+      counterparty_bank_account: values.counterparty_bank_account,
+      advance_payee_id: isEmployeeAdvancePaymentMethod(values.payment_method)
+        ? values.advance_payee_id
+        : null,
+      advance_payee_name: isEmployeeAdvancePaymentMethod(values.payment_method)
+        ? resolveAdvancePayeeName(values.advance_payee_id, advancePayeeUserOptions)
+        : null,
+      pull_lines,
       notes: values.notes,
       attachments: normalizeDocumentAttachments(values.attachments),
     };
@@ -310,8 +333,12 @@ const PaymentsPage: React.FC = () => {
         supplier_name: data.supplier_name,
         total_amount: maxPush > 0 ? maxPush : undefined,
         payment_date: dayjs(),
-        payment_method: BANK_TRANSFER_PAYMENT_METHOD,
+        payment_method: data.payment_method || BANK_TRANSFER_PAYMENT_METHOD,
         settlement_type: 'normal',
+        counterparty_account_name: data.counterparty_account_name,
+        counterparty_bank_name: data.counterparty_bank_name,
+        counterparty_bank_account: data.counterparty_bank_account,
+        advance_payee_id: data.advance_payee_id,
         notes: t('app.kuaicaiwu.common.createdFromSourceNote', {
           source: sourceAction.sourceLabel,
           code: data.source_code,
@@ -477,6 +504,15 @@ const PaymentsPage: React.FC = () => {
             code: pullPreviewData.source_code,
           }),
         require_payment_voucher: Boolean(pullPreviewData.require_payment_voucher),
+        counterparty_account_name: values.counterparty_account_name,
+        counterparty_bank_name: values.counterparty_bank_name,
+        counterparty_bank_account: values.counterparty_bank_account,
+        advance_payee_id: isEmployeeAdvancePaymentMethod(values.payment_method)
+          ? values.advance_payee_id
+          : null,
+        advance_payee_name: isEmployeeAdvancePaymentMethod(values.payment_method)
+          ? resolveAdvancePayeeName(values.advance_payee_id, advancePayeeUserOptions)
+          : null,
         attachments: normalizeDocumentAttachments(values.attachments),
       });
       if (pullSourceKind === 'payable') {
@@ -632,6 +668,16 @@ const PaymentsPage: React.FC = () => {
               values.bank_account,
             ),
         settlement_type: prepayOffset ? 'normal' : values.settlement_type || 'normal',
+        counterparty_account_name: values.counterparty_account_name,
+        counterparty_bank_name: values.counterparty_bank_name,
+        counterparty_bank_account: values.counterparty_bank_account,
+        advance_payee_id: isEmployeeAdvancePaymentMethod(values.payment_method)
+          ? values.advance_payee_id
+          : null,
+        advance_payee_name: isEmployeeAdvancePaymentMethod(values.payment_method)
+          ? resolveAdvancePayeeName(values.advance_payee_id, advancePayeeUserOptions)
+          : null,
+        pull_lines: mapFormPullLinesToApi(values.pull_lines),
         notes: values.notes,
         attachments: normalizeDocumentAttachments(values.attachments),
       });
@@ -1334,6 +1380,7 @@ const PaymentsPage: React.FC = () => {
                   rules={[{ required: true, message: t(`${P}.selectPaymentMethod`) }]}
                   colProps={financeColHalf}
                 />
+                <PaymentAdvancePayeeField colProps={financeColHalf} />
                 <ProFormSelect
                   name="settlement_type"
                   label={t(`${P}.settlementType.label`)}
@@ -1348,6 +1395,7 @@ const PaymentsPage: React.FC = () => {
                   acceptanceNoteDirection="payable"
                   partnerFieldName="supplier_id"
                 />
+                <PaymentCounterpartyFormSection />
                 <ProFormTextArea name="notes" label={t('common.remark')} fieldProps={{ rows: 3 }} colProps={financeColFull} />
                 <DocumentAttachmentsField
                   category="payment_attachments"
@@ -1399,6 +1447,7 @@ const PaymentsPage: React.FC = () => {
           placeholder={t(`${P}.selectPaymentMethod`)}
           colProps={financeColHalf}
         />
+        <PaymentAdvancePayeeField colProps={financeColHalf} />
         <ProFormSelect
           name="settlement_type"
           label={t(`${P}.settlementType.label`)}
@@ -1414,6 +1463,7 @@ const PaymentsPage: React.FC = () => {
           acceptanceNoteDirection="payable"
           partnerFieldName="supplier_id"
         />
+        <PaymentCounterpartyFormSection />
         <ProFormTextArea name="notes" label={t('common.remark')} colProps={financeColFull} />
         <DocumentAttachmentsField category="payment_attachments" />
       </ModalForm>
@@ -1435,6 +1485,10 @@ const PaymentsPage: React.FC = () => {
                 settlement_type: editingRecord.settlement_type || 'normal',
                 bank_account_id: editingRecord.bank_account_id,
                 bank_account: editingRecord.bank_account,
+                counterparty_account_name: editingRecord.counterparty_account_name,
+                counterparty_bank_name: editingRecord.counterparty_bank_name,
+                counterparty_bank_account: editingRecord.counterparty_bank_account,
+                advance_payee_id: editingRecord.advance_payee_id,
                 notes: editingRecord.notes,
                 attachments: mapAttachmentsToUploadList(
                   editingRecord.attachments as Parameters<typeof mapAttachmentsToUploadList>[0],
@@ -1478,6 +1532,7 @@ const PaymentsPage: React.FC = () => {
           placeholder={t(`${P}.selectPaymentMethod`)}
           colProps={financeColHalf}
         />
+        <PaymentAdvancePayeeField colProps={financeColHalf} />
         <ProFormSelect
           name="settlement_type"
           label={t(`${P}.settlementType.label`)}
@@ -1492,6 +1547,7 @@ const PaymentsPage: React.FC = () => {
           acceptanceNoteDirection="payable"
           partnerFieldName="supplier_id"
         />
+        <PaymentCounterpartyFormSection />
         <ProFormTextArea name="notes" label={t('common.remark')} colProps={financeColFull} />
         <DocumentAttachmentsField
           category="payment_attachments"

@@ -184,6 +184,7 @@ async def create_payment(
             "settlement_type": data.settlement_type or "normal",
             "status": "Draft",
             "notes": data.notes,
+            "require_payment_voucher": require_payment_voucher,
             "attachments": data.attachments,
         }
         apply_create_audit(payment_payload, current_user)
@@ -525,6 +526,9 @@ async def update_payment(
     except FinanceValidationError as exc:
         raise _http_exception_with_trace(400, str(exc), "/payments/{id}", tenant_id) from exc
     pull_lines = update_data.pop("pull_lines", None)
+    if pull_lines is not None:
+        # model_dump 已把嵌套模型降为 dict，服务层按属性读取，须还原为 schema 对象
+        pull_lines = data.pull_lines or []
     if is_prepayment_offset_payment_method(method):
         update_data["bank_account"] = None
         update_data["bank_account_id"] = None

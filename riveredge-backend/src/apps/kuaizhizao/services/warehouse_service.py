@@ -11986,7 +11986,12 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         return await self.get_purchase_receipt_by_id(tenant_id, receipt_id)
 
     @serialize_stock_document("purchase_receipt", "receipt_id")
-    async def delete_purchase_receipt(self, tenant_id: int, receipt_id: int) -> bool:
+    async def delete_purchase_receipt(
+        self,
+        tenant_id: int,
+        receipt_id: int,
+        acting_user_id: Optional[int] = None,
+    ) -> bool:
         """
         软删除采购入库单（仅草稿/待入库；未确认入库不影响库存）。
         若已创建未删除的来料检验单则禁止删除。
@@ -12022,7 +12027,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 tenant_id=tenant_id,
                 receipt_id=receipt_id,
                 receipt_code=getattr(receipt, "receipt_code", None),
-                acting_user_id=0,
+                acting_user_id=int(acting_user_id or 0),
             )
 
             from apps.kuaizhizao.models.document_relation import DocumentRelation

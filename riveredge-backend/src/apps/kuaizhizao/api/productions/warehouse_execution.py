@@ -5209,6 +5209,7 @@ async def delete_purchase_receipt(
     await PurchaseReceiptService().delete_purchase_receipt(
         tenant_id=tenant_id,
         receipt_id=receipt_id,
+        acting_user_id=current_user.id,
     )
 
 
@@ -5231,6 +5232,7 @@ async def delete_purchase_receipt_post(
     await PurchaseReceiptService().delete_purchase_receipt(
         tenant_id=tenant_id,
         receipt_id=receipt_id,
+        acting_user_id=current_user.id,
     )
 
 

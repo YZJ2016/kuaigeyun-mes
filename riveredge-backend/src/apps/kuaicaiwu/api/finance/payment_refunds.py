@@ -104,6 +104,16 @@ async def create_payment_refund(
         raise _http_exception_with_trace(400, "付款退款须指定源付款单", "/payment-refunds", tenant_id)
 
     try:
+        from apps.kuaicaiwu.constants.payment_method import (
+            assert_payment_voucher_payee_fields,
+        )
+
+        assert_payment_voucher_payee_fields(
+            payment_method=data.payment_method,
+            advance_payee_id=data.advance_payee_id,
+            advance_payee_name=data.advance_payee_name,
+            settlement_type="refund",
+        )
         await BankAccountService().validate_voucher_account(
             tenant_id,
             payment_method=data.payment_method,

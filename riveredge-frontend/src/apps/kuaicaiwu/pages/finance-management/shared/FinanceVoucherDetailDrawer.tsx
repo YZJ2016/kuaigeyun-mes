@@ -21,6 +21,8 @@ import {
   formatPaymentMethod,
   formatPaymentSettlementType,
   formatReceiptSettlementType,
+  hidesSupplierPayeeAccount,
+  isEmployeeAdvancePaymentMethod,
   isNotePaymentMethod,
 } from '../../../utils/financeSharedOptions';
 import type { PaymentVoucher } from '../../../services/finance/payment';
@@ -128,6 +130,40 @@ export const FinanceVoucherDetailDrawer: React.FC<FinanceVoucherDetailDrawerProp
           dataIndex: 'payment_method',
           render: (_, row) => formatPaymentMethod(row.payment_method, t),
         },
+        ...(isEmployeeAdvancePaymentMethod(effective.payment_method)
+          ? [
+              {
+                title: t(`${prefix}.advancePayee`),
+                dataIndex: 'advance_payee_name',
+                key: 'advance_payee_name',
+                render: (_: unknown, row: FinanceVoucherDetail) =>
+                  (row as PaymentVoucher).advance_payee_name || '—',
+              } as ProDescriptionsItemProps<FinanceVoucherDetail>,
+            ]
+          : []),
+        ...(!isReceipt &&
+        !hidesSupplierPayeeAccount(effective.payment_method) &&
+        ((effective as PaymentVoucher).counterparty_account_name ||
+          (effective as PaymentVoucher).counterparty_bank_name ||
+          (effective as PaymentVoucher).counterparty_bank_account)
+          ? ([
+              {
+                title: t(`${prefix}.counterpartyAccountName`),
+                dataIndex: 'counterparty_account_name',
+                key: 'counterparty_account_name',
+              },
+              {
+                title: t(`${prefix}.counterpartyBankName`),
+                dataIndex: 'counterparty_bank_name',
+                key: 'counterparty_bank_name',
+              },
+              {
+                title: t(`${prefix}.counterpartyBankAccount`),
+                dataIndex: 'counterparty_bank_account',
+                key: 'counterparty_bank_account',
+              },
+            ] as ProDescriptionsItemProps<FinanceVoucherDetail>[])
+          : []),
         ...(isNotePaymentMethod(effective.payment_method)
           ? [
               {

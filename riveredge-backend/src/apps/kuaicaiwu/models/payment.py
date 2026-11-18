@@ -67,6 +67,9 @@ class Payment(BaseModel):
     status = fields.CharField(max_length=20, default="Draft", description="状态 (Draft/Confirmed/Cancelled)")
     
     notes = fields.TextField(null=True, description="备注")
+    require_payment_voucher = fields.BooleanField(
+        default=False, description="是否必须上传付款凭证（来自付款申请要求）"
+    )
     attachments = fields.JSONField(null=True, description="附件列表")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 
