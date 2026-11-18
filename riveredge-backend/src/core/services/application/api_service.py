@@ -48,26 +48,38 @@ class APIService:
             raise ValidationError("仅支持绑定业务系统类应用连接器（ERP/PLM/CRM/OA/WMS/IoT）")
         return integration_config
 
-    async def _create_or_revive_api(
+    async def _create_api(
         self,
         tenant_id: int,
         *,
         code: str,
         **fields: Any,
     ) -> API:
-        """创建接口；若同 code 已软删则恢复，避免撞 unique (tenant_id, code)。"""
-        trashed = await API.filter(
+        """创建接口；同 code 的软删残留先硬删。活跃行已存在则明确报错（按租户隔离，不跨租户）。"""
+        code_norm = str(code or "").strip()
+        if not code_norm:
+            raise ValidationError("接口代码不能为空")
+        await API.filter(
             tenant_id=tenant_id,
-            code=code,
+            code=code_norm,
             deleted_at__isnull=False,
-        ).order_by("-deleted_at", "-id").first()
-        if trashed:
-            trashed.deleted_at = None
-            for key, value in fields.items():
-                setattr(trashed, key, value)
-            await trashed.save()
-            return trashed
-        return await API.create(tenant_id=tenant_id, code=code, **fields)
+        ).delete()
+        live = await API.filter(
+            tenant_id=tenant_id,
+            code=code_norm,
+            deleted_at__isnull=True,
+        ).first()
+        if live:
+            raise ValidationError(
+                f"接口代码 '{code_norm}' 在本组织已存在，请直接编辑该接口或更换代码。"
+                "各组织接口相互独立，不会写入其他组织。"
+            )
+        try:
+            return await API.create(tenant_id=tenant_id, code=code_norm, **fields)
+        except IntegrityError as exc:
+            raise ValidationError(
+                f"接口代码 '{code_norm}' 在本组织已存在，请直接编辑该接口或更换代码。"
+            ) from exc
 
     @staticmethod
     def build_api_response(api: API) -> APIResponse:
@@ -149,8 +161,9 @@ class APIService:
         
         if existing_api:
             raise ValidationError(f"接口代码 '{api_data.code}' 已存在")
-        
+
         create_data = api_data.model_dump(exclude={"connection_uuid", "category_uuid"})
+        code = str(create_data.pop("code") or "").strip()
         integration_config_id = None
         if api_data.connection_uuid:
             integration_config = await self._resolve_business_connector(
@@ -168,13 +181,14 @@ class APIService:
             )
 
         # 创建接口
-        api = await API.create(
-            tenant_id=tenant_id,
+        api = await self._create_api(
+            tenant_id,
+            code=code,
             integration_config_id=integration_config_id,
             category_id=category_id,
             **create_data,
         )
-        
+
         if integration_config_id or category_id:
             await api.fetch_related("integration_config", "category")
         return api
@@ -230,6 +244,7 @@ class APIService:
             build_unit_query_preset_body,
             build_warehouse_query_preset_body,
             customer_preset_needs_upgrade,
+            extract_material_group_query_form_id,
             list_kingdee_galaxy_api_presets,
             master_data_scope_preset_needs_upgrade,
             material_group_preset_needs_upgrade,
@@ -303,11 +318,19 @@ class APIService:
                     upgraded.append(code)
                 elif (
                     code_suffix == MATERIAL_GROUP_PRESET_CODE_SUFFIX
-                    and material_group_preset_needs_upgrade(existing.request_body)
+                    and material_group_preset_needs_upgrade(
+                        existing.request_body, existing.path
+                    )
                 ):
-                    existing.request_body = build_material_group_query_preset_body()
+                    keep_form_id = extract_material_group_query_form_id(existing.request_body)
+                    existing.path = preset["path"]
+                    existing.request_body = build_material_group_query_preset_body(
+                        form_id=keep_form_id
+                    )
                     existing.description = preset["description"]
-                    await existing.save(update_fields=["request_body", "description", "updated_at"])
+                    await existing.save(
+                        update_fields=["path", "request_body", "description", "updated_at"]
+                    )
                     upgraded.append(code)
                 elif (
                     code_suffix == WAREHOUSE_PRESET_CODE_SUFFIX
@@ -333,29 +356,49 @@ class APIService:
                     existing.description = preset["description"]
                     await existing.save(update_fields=["request_body", "description", "updated_at"])
                     upgraded.append(code)
+                # 已存在则绑到当前连接器，避免同 code 再创建撞唯一键；租户内一份即可个性化编辑
+                bind_fields: List[str] = []
+                if existing.integration_config_id != integration.id:
+                    existing.integration_config_id = integration.id
+                    bind_fields.append("integration_config_id")
                 if category_id is not None and existing.category_id is None:
                     existing.category_id = category_id
-                    await existing.save(update_fields=["category_id", "updated_at"])
+                    bind_fields.append("category_id")
                     categorized.append(code)
+                if bind_fields:
+                    bind_fields.append("updated_at")
+                    await existing.save(update_fields=bind_fields)
                 skipped.append(code)
                 continue
-            api = await self._create_or_revive_api(
-                tenant_id,
-                code=code,
-                name=preset["name"],
-                description=preset["description"],
-                path=preset["path"],
-                method=preset["method"],
-                request_headers={"Content-Type": "application/json"},
-                request_params=None,
-                request_body=preset["request_body"],
-                response_format=None,
-                response_example=None,
-                is_active=True,
-                is_system=False,
-                integration_config_id=integration.id,
-                category_id=category_id,
-            )
+            try:
+                api = await self._create_api(
+                    tenant_id,
+                    code=code,
+                    name=preset["name"],
+                    description=preset["description"],
+                    path=preset["path"],
+                    method=preset["method"],
+                    request_headers={"Content-Type": "application/json"},
+                    request_params=None,
+                    request_body=preset["request_body"],
+                    response_format=None,
+                    response_example=None,
+                    is_active=True,
+                    is_system=False,
+                    integration_config_id=integration.id,
+                    category_id=category_id,
+                )
+            except ValidationError:
+                # 并发下已有活跃行：回读并跳过创建，避免 uk_core_apis_tenant_code 冒泡成 500
+                existing = await API.filter(
+                    tenant_id=tenant_id,
+                    code=code,
+                    deleted_at__isnull=True,
+                ).first()
+                if existing is None:
+                    raise
+                skipped.append(code)
+                continue
             created.append(api.code)
 
         return {
@@ -592,7 +635,7 @@ class APIService:
                 skipped.append(code)
                 continue
             request_params = preset.get("request_params")
-            api = await self._create_or_revive_api(
+            api = await self._create_api(
                 tenant_id,
                 code=code,
                 name=preset["name"],
@@ -809,7 +852,7 @@ class APIService:
                     categorized.append(code)
                 skipped.append(code)
                 continue
-            await self._create_or_revive_api(
+            await self._create_api(
                 tenant_id,
                 code=code,
                 name=item["name"],
@@ -1110,20 +1153,20 @@ class APIService:
         if "code" in changed_fields:
             api.code = final_code
 
-        # 仅当真正改 code 时查重；排除自身用主键 id，避免 uuid 比较踩坑
+        # 仅当真正改 code 时查重；排除自身一律用 uuid（禁止按裸 id，撞号时会误伤兄弟行）
         if final_code and final_code != old_code:
             existing_api = await API.filter(
                 tenant_id=tenant_id,
                 code=final_code,
                 deleted_at__isnull=True,
-            ).exclude(id=api.id).first()
+            ).exclude(uuid=api.uuid).first()
             if existing_api:
                 raise ValidationError(
                     f"接口代码 '{final_code}' 在本组织已存在，请更换代码。"
                     "各组织接口相互独立，修改只影响当前组织。"
                 )
 
-        # 清同 code 软删幽灵，避免部分唯一索引下残留行干扰
+        # 清同 code 软删幽灵（历史残留）；产品删除已是硬删
         if final_code:
             await API.filter(
                 tenant_id=tenant_id,
@@ -1134,8 +1177,12 @@ class APIService:
         if changed_fields:
             patch = {field: getattr(api, field) for field in changed_fields}
             patch["updated_at"] = resolve_business_datetime()
-            await API.filter(id=api.id, tenant_id=tenant_id).update(**patch)
-            await api.refresh_from_db()
+            updated = await API.filter(uuid=api.uuid, tenant_id=tenant_id).update(**patch)
+            if updated != 1:
+                raise ValidationError(
+                    f"更新接口失败：按 uuid 命中 {updated} 行（期望 1）。请检查 core_apis 唯一约束。"
+                )
+            api = await self.get_api_by_uuid(tenant_id, api_uuid)
 
         await api.fetch_related("integration_config", "category")
 
@@ -1167,23 +1214,29 @@ class APIService:
         api_uuid: UUID,
     ) -> None:
         """
-        删除接口（软删除）
-        
+        删除接口（硬删除）
+
         Args:
             tenant_id: 组织ID
             api_uuid: 接口UUID
-            
+
         Raises:
             NotFoundError: 接口不存在
-            ValidationError: 系统接口不可删除
+            ValidationError: 系统接口不可删除，或仍被同步绑定引用
         """
         # 获取接口
         api = await self.get_api_by_uuid(tenant_id, api_uuid)
-        
+
         # 检查是否为系统接口
         if api.is_system:
             raise ValidationError("系统接口不可删除")
-        
+
+        from core.services.application.api_sync_binding_refs import (
+            assert_api_uuid_not_bound_by_sync,
+        )
+
+        await assert_api_uuid_not_bound_by_sync(tenant_id, str(api.uuid))
+
         # 通知数据集管理接口将被删除（异步，不阻塞主流程）
         import asyncio
         asyncio.create_task(
@@ -1194,12 +1247,18 @@ class APIService:
                 is_deleted=True
             )
         )
-        
-        # 软删除
-        from datetime import datetime
-        api.deleted_at = resolve_business_datetime()
-        await api.save()
-    
+
+        await api.delete()
+
+    @staticmethod
+    async def _assert_api_not_bound_by_sync(tenant_id: int, api_uuid: str) -> None:
+        """兼容旧调用；真源见 api_sync_binding_refs。"""
+        from core.services.application.api_sync_binding_refs import (
+            assert_api_uuid_not_bound_by_sync,
+        )
+
+        await assert_api_uuid_not_bound_by_sync(tenant_id, api_uuid)
+
     @staticmethod
     async def _notify_datasets(
         tenant_id: int,
@@ -1280,6 +1339,22 @@ class APIService:
 
         api_path = normalize_cosmic_openapi_endpoint(api_path)
         conn_type = str(api.integration_config.type or "").strip() if api.integration_config else ""
+
+        import copy
+
+        call_request_params = copy.deepcopy(api.request_params) if api.request_params else {}
+        call_request_body = copy.deepcopy(api.request_body) if api.request_body else {}
+        # 必须先合并测试/同步覆盖，再跑预置升级。
+        # 若先升级再 update(test_request.body)，同步传入的库内脏 body 会把
+        # createorg/空筛等又盖回去，导致接口调试（常传空/已改 body）正常、
+        # 物料管理同步异常。
+        if test_request.params:
+            call_request_params.update(copy.deepcopy(test_request.params))
+        if test_request.body:
+            if not isinstance(call_request_body, dict):
+                call_request_body = {}
+            call_request_body.update(copy.deepcopy(test_request.body))
+
         if conn_type in ("kingdee_cosmic", "kingdee_xinghan", "kingdee_ai_suite") and (
             "query_supplier" in str(api.code or "")
             or "bd_supplier" in api_path.lower()
@@ -1292,8 +1367,8 @@ class APIService:
             if supplier_preset_needs_upgrade(
                 api_path,
                 api.method,
-                api.request_body,
-                api.request_params,
+                call_request_body,
+                call_request_params,
             ):
                 fields = kingdee_supplier_api_upgrade_fields()
                 api.path = fields["path"]
@@ -1312,6 +1387,8 @@ class APIService:
                     ]
                 )
                 api_path = str(api.path or "").strip()
+                call_request_params = fields.get("request_params") or {}
+                call_request_body = fields.get("request_body") or {}
         elif conn_type in ("kingdee_cosmic", "kingdee_xinghan", "kingdee_ai_suite") and (
             "query_material_group" in str(api.code or "")
             or "bd_materialgroup" in api_path.lower()
@@ -1324,7 +1401,7 @@ class APIService:
             if material_group_preset_needs_upgrade(
                 api_path,
                 api.method,
-                api.request_body,
+                call_request_body,
             ):
                 fields = kingdee_material_group_api_upgrade_fields()
                 api.path = fields["path"]
@@ -1341,6 +1418,113 @@ class APIService:
                     ]
                 )
                 api_path = str(api.path or "").strip()
+                call_request_body = fields.get("request_body") or {}
+        elif conn_type == "kingdee_galaxy" and (
+            "query_material_group" in str(api.code or "").lower()
+        ):
+            from core.services.integration.kingdee_galaxy_api_presets import (
+                build_material_group_query_preset_body,
+                extract_material_group_query_form_id,
+                kingdee_galaxy_material_group_api_upgrade_fields,
+                material_group_preset_needs_upgrade as galaxy_material_group_preset_needs_upgrade,
+            )
+
+            if galaxy_material_group_preset_needs_upgrade(call_request_body, api_path):
+                # 仅修结构；保留租户已填 FormId，避免个性化被预置默认值冲掉
+                keep_form_id = extract_material_group_query_form_id(call_request_body)
+                fields = kingdee_galaxy_material_group_api_upgrade_fields()
+                fields["request_body"] = build_material_group_query_preset_body(
+                    form_id=keep_form_id
+                )
+                api.path = fields["path"]
+                api.method = fields["method"]
+                api.request_body = fields["request_body"]
+                api.description = fields["description"]
+                await api.save(
+                    update_fields=[
+                        "path",
+                        "method",
+                        "request_body",
+                        "description",
+                        "updated_at",
+                    ]
+                )
+                api_path = str(api.path or "").strip()
+                call_request_body = fields.get("request_body") or {}
+        elif conn_type in ("kingdee_cosmic", "kingdee_xinghan", "kingdee_ai_suite") and (
+            (
+                "query_material" in str(api.code or "")
+                and "group" not in str(api.code or "").lower()
+                and "unit" not in str(api.code or "").lower()
+            )
+            or "/bd_material/batchquery" in api_path.lower().replace("\\", "/")
+        ):
+            from core.services.integration.kingdee_cosmic_api_presets import (
+                kingdee_material_api_upgrade_fields,
+                material_preset_needs_upgrade,
+            )
+
+            if material_preset_needs_upgrade(
+                api_path,
+                call_request_body,
+                call_request_params,
+            ):
+                fields = kingdee_material_api_upgrade_fields()
+                api.path = fields["path"]
+                api.name = fields["name"]
+                api.method = fields["method"]
+                api.request_body = fields["request_body"]
+                api.request_params = fields.get("request_params") or {}
+                api.description = fields["description"]
+                await api.save(
+                    update_fields=[
+                        "path",
+                        "name",
+                        "method",
+                        "request_params",
+                        "request_body",
+                        "description",
+                        "updated_at",
+                    ]
+                )
+                api_path = str(api.path or "").strip()
+                call_request_params = fields.get("request_params") or {}
+                call_request_body = fields.get("request_body") or {}
+        elif conn_type in ("kingdee_cosmic", "kingdee_xinghan", "kingdee_ai_suite") and (
+            "query_measureunits" in str(api.code or "")
+            or "bd_measureunits" in api_path.lower().replace("\\", "/")
+        ):
+            from core.services.integration.kingdee_cosmic_api_presets import (
+                kingdee_measureunits_api_upgrade_fields,
+                measureunits_preset_needs_upgrade,
+            )
+
+            if measureunits_preset_needs_upgrade(
+                api_path,
+                call_request_body,
+                call_request_params,
+            ):
+                fields = kingdee_measureunits_api_upgrade_fields()
+                api.path = fields["path"]
+                api.name = fields["name"]
+                api.method = fields["method"]
+                api.request_body = fields["request_body"]
+                api.request_params = fields.get("request_params") or {}
+                api.description = fields["description"]
+                await api.save(
+                    update_fields=[
+                        "path",
+                        "name",
+                        "method",
+                        "request_params",
+                        "request_body",
+                        "description",
+                        "updated_at",
+                    ]
+                )
+                api_path = str(api.path or "").strip()
+                call_request_params = fields.get("request_params") or {}
+                call_request_body = fields.get("request_body") or {}
         elif api_path != str(api.path or "").strip():
             api.path = api_path
             await api.save(update_fields=["path", "updated_at"])
@@ -1388,17 +1572,9 @@ class APIService:
         # 1. 合并请求头（测试请求头优先）
         request_headers = dict(api.request_headers or {})
         
-        # 2. 合并请求参数（测试参数优先）
-        request_params = api.request_params or {}
-        if test_request.params:
-            request_params.update(test_request.params)
-        
-        # 3. 合并请求体（测试请求体优先；深拷贝避免污染 ORM 缓存）
-        import copy
-
-        request_body = copy.deepcopy(api.request_body) if api.request_body else {}
-        if test_request.body:
-            request_body.update(test_request.body)
+        # 2/3. 请求参数与请求体：已在上方与 test_request 合并并完成预置升级
+        request_params = call_request_params
+        request_body = call_request_body
 
         cosmic_cfg = None
         is_cosmic_oauth = False

@@ -78,7 +78,7 @@ _KINGDEE_EXECUTE_BILL_QUERY_CATALOG: List[KingdeeFormCatalogEntry] = [
     },
     {
         "form_id": "BD_MATERIALGROUP",
-        "name": "物料分组",
+        "name": "物料分组（独立对象；缺省时请用物料 FMaterialGroup）",
         "default_field_keys": [
             "FID",
             "FNumber",

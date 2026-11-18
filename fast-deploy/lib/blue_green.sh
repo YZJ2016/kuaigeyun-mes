@@ -30,6 +30,11 @@ update_use_blue_green() {
             *) return 1 ;;
         esac
     fi
+    # 运维台 SSH 常带 PTY（为了实时日志），[ -t 0 ] 为真但不能 read；禁止卡住
+    if [ "${FAST_DEPLOY_NONINTERACTIVE:-0}" = "1" ] || [ "${CI:-}" = "true" ] || [ "${CI:-0}" = "1" ]; then
+        log_info "非交互 update（FAST_DEPLOY_NONINTERACTIVE/CI），默认传统 stop-start（export UPDATE_BLUE_GREEN=1 可启用蓝绿）"
+        return 1
+    fi
     if [ ! -t 0 ]; then
         log_info "非交互 update，默认传统 stop-start（export UPDATE_BLUE_GREEN=1 可启用蓝绿）"
         return 1

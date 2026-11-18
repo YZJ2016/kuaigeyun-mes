@@ -33,12 +33,50 @@ function normalizeBodyValue(body: unknown): unknown {
   }
 }
 
+/**
+ * 与后端 sync_source_rows._extract_array_from_object 对齐：
+ * 含星空 QueryGroupInfo 的 Result.NeedReturnData（可为 JSON 字符串）。
+ */
+function coerceArrayCandidate(value: unknown, depth: number): unknown[] | null {
+  if (Array.isArray(value) && value.length > 0) {
+    return value;
+  }
+  if (
+    typeof value === 'string' &&
+    (value.trim().startsWith('[') || value.trim().startsWith('{'))
+  ) {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+      if (isPlainObject(parsed) && depth < 2) {
+        return extractArrayFromObject(parsed, depth + 1);
+      }
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 function extractArrayFromObject(body: Record<string, unknown>, depth = 0): unknown[] | null {
-  const candidates = ['data', 'items', 'rows', 'records', 'Results', 'result', 'list'];
+  const candidates = [
+    'data',
+    'items',
+    'rows',
+    'records',
+    'Results',
+    'result',
+    'Result',
+    'list',
+    'NeedReturnData',
+    'needReturnData',
+  ];
   for (const key of candidates) {
-    const value = body[key];
-    if (Array.isArray(value) && value.length > 0) {
-      return value;
+    const hit = coerceArrayCandidate(body[key], depth);
+    if (hit) {
+      return hit;
     }
   }
   if (depth >= 2) {

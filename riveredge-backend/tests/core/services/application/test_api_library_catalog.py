@@ -161,7 +161,9 @@ def test_material_group_preset_needs_upgrade_detects_legacy_path():
         "POST",
         build_material_group_batch_query_preset_body(),
     )
-    assert not material_group_preset_needs_upgrade(
+    # createorg 筛选项在 batchQuery 预置中会导致 fetched=0，须升级清理（上游 093512788c 新契约；
+    # 上游同名断言未同步更新，此处按函数真实语义修正）
+    assert material_group_preset_needs_upgrade(
         "kapi/v2/basedata/bd_materialgroup/batchQuery",
         "POST",
         build_material_group_batch_query_preset_body(createorg_numbers=["BU-00000"]),

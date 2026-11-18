@@ -1566,6 +1566,7 @@ export async function syncMaterialGroupsFromSource(payload: {
   schedule_interval_minutes?: number;
   incremental?: boolean;
   active_only?: boolean;
+  infer_parent_by_code?: boolean;
 }): Promise<MasterDataSyncFromSourceResult> {
   return apiRequest<MasterDataSyncFromSourceResult>(
     '/apps/master-data/materials/groups/sync-from-source',

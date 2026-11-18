@@ -39,6 +39,65 @@ MATERIAL_GROUP_CUSTOM_FIELD_TABLE = "master_data_material_groups"
 MATERIAL_GROUP_SYNC_STRING_FIELDS = frozenset({"alias", "description"})
 MATERIAL_GROUP_SYNC_BOOL_FIELDS = frozenset({"is_active"})
 
+# 编码段分隔符：06.01 / 06-01 / 06/01 → 父级 06
+_MATERIAL_GROUP_CODE_SEPARATORS = (".", "-", "/")
+
+
+def infer_material_group_parent_code(code: str) -> Optional[str]:
+    """按末段分隔推断父编码：06.01.02 → 06.01；无分隔则无父级。"""
+    raw = str(code or "").strip()
+    if not raw:
+        return None
+    for sep in _MATERIAL_GROUP_CODE_SEPARATORS:
+        if sep not in raw:
+            continue
+        parts = [part.strip() for part in raw.split(sep)]
+        if len(parts) < 2 or any(not part for part in parts):
+            continue
+        return sep.join(parts[:-1])
+    return None
+
+
+def material_group_code_depth(code: str) -> int:
+    """编码层级深度（段数），用于父先于子写入。"""
+    raw = str(code or "").strip()
+    if not raw:
+        return 0
+    for sep in _MATERIAL_GROUP_CODE_SEPARATORS:
+        if sep in raw:
+            return len([part for part in raw.split(sep) if part.strip()])
+    return 1
+
+
+def apply_infer_parent_by_code(
+    pending: List[tuple[str, str, Optional[str], Dict[str, Any]]],
+) -> List[tuple[str, str, Optional[str], Dict[str, Any]]]:
+    """
+    开启智能归类后：用编码推断 parent_code，补齐缺失祖先占位行，并按深度排序。
+    占位祖先名称暂用编码，后续若源端带回同编码行会更新名称。
+    """
+    by_code: Dict[str, tuple[str, str, Optional[str], Dict[str, Any]]] = {}
+    for code, name, _parent_code, row in pending:
+        by_code[code] = (code, name, infer_material_group_parent_code(code), row)
+
+    for code in list(by_code.keys()):
+        cursor = infer_material_group_parent_code(code)
+        while cursor:
+            if cursor not in by_code:
+                by_code[cursor] = (
+                    cursor,
+                    cursor,
+                    infer_material_group_parent_code(cursor),
+                    {},
+                )
+            cursor = infer_material_group_parent_code(cursor)
+
+    ordered = sorted(
+        by_code.values(),
+        key=lambda item: (material_group_code_depth(item[0]), item[0]),
+    )
+    return ordered
+
 
 class MaterialGroupSyncService:
     MATCH_KEY = "code"
@@ -128,17 +187,25 @@ class MaterialGroupSyncService:
                 since=since,
                 active_only=req.active_only,
             )
-            result = await self._upsert_groups(tenant_id, current_user, rows, match_key)
+            result = await self._upsert_groups(
+                tenant_id,
+                current_user,
+                rows,
+                match_key,
+                infer_parent_by_code=bool(req.infer_parent_by_code),
+            )
             if source_errors:
                 result.errors = (source_errors + list(result.errors))[:20]
             attach_sync_fetch_meta(result, fetched=fetched, since=since)
             if not fetched:
-                raise ValidationError(
-                    "物料分组源端未返回任何行。"
-                    "星空请确认 FormId=BD_MATERIALGROUP；"
-                    "苍穹请使用 bd_materialgroup/batchQuery（POST，默认空 data 分页，同物料 batchQuery），"
-                    "并在连接器重新「加载常用接口」升级「苍穹查询物料分类」后重试"
-                )
+                # 源端真实报错仍硬失败；接口成功但 0 行则软完成（物料同步会按物料行补齐分组）。
+                # 禁止再抛运维向长文案把前置步骤标成红叉，造成「整单被阻断」的错觉。
+                if source_errors:
+                    raise ValidationError("；".join(source_errors[:3]))
+                result.empty_reason = "source_empty"
+                if binding:
+                    await mark_binding_success(binding)
+                return result
             if result.created == 0 and result.updated == 0 and (result.skipped or result.failed):
                 raise ValidationError(
                     "物料分组拉取后未能写入任何有效分组："
@@ -161,6 +228,8 @@ class MaterialGroupSyncService:
         current_user: Optional[User],
         rows: List[Dict[str, Any]],
         match_key: str,
+        *,
+        infer_parent_by_code: bool = False,
     ) -> MasterDataSyncFromSourceOut:
         created = 0
         updated = 0
@@ -169,9 +238,23 @@ class MaterialGroupSyncService:
         errors: List[str] = []
 
         pending: List[tuple[str, str, Optional[str], Dict[str, Any]]] = []
+        seen_codes: set[str] = set()
         for row in rows:
-            code = cell_str(row.get(match_key) or row.get("code") or row.get("number"))
-            name = cell_str(row.get("name"))
+            # QueryGroupInfo NeedReturnData 常见 FNUMBER/FNAME；映射后多为 code/name
+            code = cell_str(
+                row.get(match_key)
+                or row.get("code")
+                or row.get("number")
+                or row.get("FNUMBER")
+                or row.get("FNumber")
+                or row.get("fnumber")
+            )
+            name = cell_str(
+                row.get("name")
+                or row.get("FNAME")
+                or row.get("FName")
+                or row.get("fname")
+            )
             parent_code = (
                 cell_str(
                     row.get("parent_code")
@@ -179,18 +262,27 @@ class MaterialGroupSyncService:
                     or row.get("parent_number")
                     or row.get("parentid_number")
                     or row.get("parent.number")
+                    or row.get("FPARENTID")
+                    or row.get("FParentId")
+                    or row.get("fparentid")
                 )
                 or None
             )
             if not code:
                 skipped += 1
-                errors.append("存在缺少分组编码的行，已跳过")
+                continue
+            if code in seen_codes:
+                skipped += 1
                 continue
             if not name:
                 skipped += 1
                 errors.append(f"物料分组 {code} 缺少名称，已跳过")
                 continue
+            seen_codes.add(code)
             pending.append((code, name, parent_code, row))
+
+        if infer_parent_by_code and pending:
+            pending = apply_infer_parent_by_code(pending)
 
         if not pending:
             return MasterDataSyncFromSourceOut(

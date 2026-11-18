@@ -253,6 +253,8 @@ class MaterialSyncService:
 
             result = MasterDataSyncFromSourceOut()
             fetched_total = 0
+            fetch_had_source_errors = False
+            last_source_api_path = ""
             for src in sources:
                 field_mapping = src.get("field_mapping") or {}
                 source_field_names = {
@@ -263,18 +265,31 @@ class MaterialSyncService:
                 conversion_entries = None
                 api_uuid = str(src.get("api_uuid") or "").strip() or None
                 if api_uuid:
-                    api_obj = await API.filter(tenant_id=tenant_id, uuid=api_uuid).first()
+                    api_obj = await API.filter(
+                        tenant_id=tenant_id,
+                        uuid=api_uuid,
+                        deleted_at__isnull=True,
+                    ).first()
+                    if api_obj is None:
+                        raise ValidationError(
+                            f"物料同步绑定的接口不存在或已删除（api_uuid={api_uuid}）。"
+                            "请在物料管理「来源设置」中重新选择接口。"
+                        )
                     conv = getattr(api_obj, "source_type_conversion_map", None) if api_obj else None
                     if isinstance(conv, list):
                         conversion_entries = conv
                     elif isinstance(conv, dict):
                         conversion_entries = [{"field_name": "source_type", "mapping": conv}]
+                    if api_obj:
+                        last_source_api_path = str(getattr(api_obj, "path", "") or "").lower()
                 rows, source_errors, fetched = await fetch_mapped_rows_from_sources(
                     tenant_id,
                     [src],
                     since=since,
                     active_only=req.active_only,
                 )
+                if source_errors:
+                    fetch_had_source_errors = True
                 fetched_total += fetched
                 one = await self._upsert_materials(
                     tenant_id,
@@ -293,6 +308,34 @@ class MaterialSyncService:
             attach_sync_fetch_meta(result, fetched=fetched_total, since=since)
             if prerequisite_errors:
                 result.errors = (prerequisite_errors + list(result.errors))[:20]
+            # 已有接口异常时勿再盖空拉诊断文案（否则掩盖 NoneType 等真错）
+            if (
+                since is None
+                and fetched_total == 0
+                and not (result.created or result.updated)
+                and not fetch_had_source_errors
+            ):
+                path_norm = last_source_api_path.replace("\\", "/")
+                if "/bd_material/batchquery" in path_norm:
+                    zero_msg = (
+                        "源端未返回任何物料行（fetched=0）。"
+                        "云苍穹常见为集团创建物料再分配子公司，物料 batchQuery 的 data 勿写 createorg_number，"
+                        "也勿保留空的 id/number 等勾选未填项；"
+                        "请检查「苍穹查询物料」接口 request_body，或连接器换票后重试。"
+                    )
+                elif "executebillquery" in path_norm or path_norm.endswith(".kdsvc"):
+                    zero_msg = (
+                        "源端未返回任何物料行（fetched=0）。"
+                        "当前同步源是金蝶星空 ExecuteBillQuery（金蝶查询物料），不是苍穹 batchQuery；"
+                        "请确认星空连接器可访问且账套确有已审核未禁用物料。"
+                        "若应从云苍穹同步，请在同步配置中改选「苍穹查询物料」并重新映射 number/name 等字段。"
+                    )
+                else:
+                    zero_msg = (
+                        "源端未返回任何物料行（fetched=0）。"
+                        "请检查物料同步绑定的接口、连接器与请求体筛选条件。"
+                    )
+                result.errors = ([zero_msg] + list(result.errors))[:20]
             if binding:
                 if result.failed and not (result.created or result.updated):
                     await mark_binding_failure(

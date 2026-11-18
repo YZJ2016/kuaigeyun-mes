@@ -24,5 +24,12 @@ export function createMaterialGroupSyncConfig(): SyncFromSourceConfig {
     completeSuccessKey: 'app.master-data.materials.groupSyncComplete',
     completePartialKey: 'app.master-data.materials.groupSyncPartial',
     failedKey: 'app.master-data.materials.groupSyncFailed',
+    inferParentByCodeOption: {
+      labelKey: 'app.master-data.materials.groupSyncInferParentByCode',
+      onKey: 'app.master-data.materials.groupSyncInferParentByCodeOn',
+      offKey: 'app.master-data.materials.groupSyncInferParentByCodeOff',
+      hintOnKey: 'app.master-data.materials.groupSyncInferParentByCodeHintOn',
+      hintOffKey: 'app.master-data.materials.groupSyncInferParentByCodeHintOff',
+    },
   };
 }

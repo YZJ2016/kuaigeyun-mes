@@ -21,7 +21,7 @@ import {
   Typography,
 } from 'antd';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { getAPIList } from '../../services/apiManagement';
+import { loadAllActiveApis } from '../../utils/activeApiSelectOptions';
 import { getCustomFieldsByTable } from '../../services/customField';
 import { getDatasetList } from '../../services/dataset';
 import { formatDateTimeBySiteSetting } from '../../utils/format';
@@ -81,6 +81,75 @@ function mappingPairLines(
     });
 }
 
+function apiCodeMatchesPreferredSuffix(code: string, suffix: string): boolean {
+  const normalized = String(code || '').trim().toLowerCase();
+  const preferred = String(suffix || '').trim().toLowerCase();
+  return (
+    Boolean(normalized) &&
+    Boolean(preferred) &&
+    (normalized === preferred || normalized.endsWith(`_${preferred}`))
+  );
+}
+
+function preferredTokenRank(haystack: string, tokens: string[]): number {
+  const hay = String(haystack || '').trim().toLowerCase().replace(/\\/g, '/');
+  if (!tokens.length) return 0;
+  const index = tokens.findIndex((token) => token && hay.includes(token));
+  return index >= 0 ? index : tokens.length;
+}
+
+function preferredApiCodeSuffixRank(code: string, preferredSuffixes: string[]): number {
+  if (!preferredSuffixes.length) return 0;
+  const index = preferredSuffixes.findIndex((suffix) =>
+    apiCodeMatchesPreferredSuffix(code, suffix),
+  );
+  return index >= 0 ? index : preferredSuffixes.length;
+}
+
+/** 连接器 type → path 族 → code 后缀；任一层未配置则该层不计分 */
+function preferredApiSortKey(
+  api: { code: string; path?: string | null; connection_type?: string | null },
+  preferredSuffixes: string[],
+  preferredPathTokens: string[],
+  preferredConnectorTypes: string[],
+): [number, number, number] {
+  return [
+    preferredTokenRank(String(api.connection_type || ''), preferredConnectorTypes),
+    preferredTokenRank(String(api.path || ''), preferredPathTokens),
+    preferredApiCodeSuffixRank(api.code, preferredSuffixes),
+  ];
+}
+
+function isPreferredApiHit(
+  api: { code: string; path?: string | null; connection_type?: string | null },
+  preferredSuffixes: string[],
+  preferredPathTokens: string[],
+  preferredConnectorTypes: string[],
+): boolean {
+  const [connRank, pathRank, suffixRank] = preferredApiSortKey(
+    api,
+    preferredSuffixes,
+    preferredPathTokens,
+    preferredConnectorTypes,
+  );
+  const anyConfigured =
+    preferredConnectorTypes.length > 0 ||
+    preferredPathTokens.length > 0 ||
+    preferredSuffixes.length > 0;
+  if (!anyConfigured) return false;
+  // 后缀 / path 已配置则必须命中；连接器 type 仅在接口已带回 type 时强制（无 type 仍可靠 path）
+  if (preferredSuffixes.length && suffixRank >= preferredSuffixes.length) return false;
+  if (preferredPathTokens.length && pathRank >= preferredPathTokens.length) return false;
+  if (
+    preferredConnectorTypes.length &&
+    String(api.connection_type || '').trim() &&
+    connRank >= preferredConnectorTypes.length
+  ) {
+    return false;
+  }
+  return true;
+}
+
 /**
  * 多行表单项共用一列标签宽：按本块最长标签自动撑开（4 字/5 字都齐），禁止换行。
  * 勿再写死像素宽——字数变化会挤换行或对不齐。
@@ -129,6 +198,7 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
   const { message: messageApi } = App.useApp();
 
   const [apiOptions, setApiOptions] = useState<{ label: string; value: string }[]>([]);
+  const [defaultPreferredApiUuid, setDefaultPreferredApiUuid] = useState<string | undefined>();
   const [datasetOptions, setDatasetOptions] = useState<{ label: string; value: string }[]>([]);
   const [sourceDrafts, setSourceDrafts] = useState<SyncSourceDraft[]>(() => []);
   const [settingSourceId, setSettingSourceId] = useState<string | null>(null);
@@ -139,6 +209,7 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
   const [syncElapsedSec, setSyncElapsedSec] = useState(0);
   const [saveBinding, setSaveBinding] = useState(true);
   const [activeOnly, setActiveOnly] = useState(true);
+  const [inferParentByCode, setInferParentByCode] = useState(false);
   const [syncMode, setSyncMode] = useState<string>('manual_full');
   const [scheduleIntervalMinutes, setScheduleIntervalMinutes] = useState<number>(15);
   const [bindingMeta, setBindingMeta] = useState<Pick<
@@ -293,31 +364,60 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
       const preferredSuffixes = (config.preferredApiCodeSuffixes || [])
         .map((item) => String(item || '').trim().toLowerCase())
         .filter(Boolean);
-      const apiOpts: { label: string; value: string; code: string }[] = [];
-      let apiPage = 1;
-      while (apiPage <= 50) {
-        const res = await getAPIList({ page: apiPage, page_size: 100, is_active: true });
-        apiOpts.push(
-          ...res.items.map((item) => ({
-            label: `${item.name} (${item.code})`,
-            value: item.uuid,
-            code: String(item.code || ''),
-          })),
-        );
-        if (res.items.length < 100 || apiOpts.length >= res.total) break;
-        apiPage += 1;
-      }
-      // 单位/物料等页各自优先展示本域预置接口，避免误选同源另一条
-      if (preferredSuffixes.length) {
+      const preferredPathTokens = (config.preferredApiPathTokens || [])
+        .map((item) => String(item || '').trim().toLowerCase().replace(/\\/g, '/'))
+        .filter(Boolean);
+      const preferredConnectorTypes = (config.preferredConnectorTypes || [])
+        .map((item) => String(item || '').trim().toLowerCase())
+        .filter(Boolean);
+      const apiOpts: {
+        label: string;
+        value: string;
+        code: string;
+        path: string;
+        connection_type: string;
+      }[] = (await loadAllActiveApis()).map((item) => ({
+        label: `${item.name} (${item.code})`,
+        value: item.uuid,
+        code: String(item.code || ''),
+        path: String(item.path || ''),
+        connection_type: String(item.connection_type || ''),
+      }));
+      // 单位/物料等：连接器 type → path 族 → code 后缀，默认选中首个命中项
+      let preferredUuid: string | undefined;
+      const hasPreference =
+        preferredSuffixes.length > 0 ||
+        preferredPathTokens.length > 0 ||
+        preferredConnectorTypes.length > 0;
+      if (hasPreference) {
         apiOpts.sort((a, b) => {
-          const aCode = a.code.toLowerCase();
-          const bCode = b.code.toLowerCase();
-          const aHit = preferredSuffixes.some((suffix) => aCode.includes(suffix)) ? 0 : 1;
-          const bHit = preferredSuffixes.some((suffix) => bCode.includes(suffix)) ? 0 : 1;
-          if (aHit !== bHit) return aHit - bHit;
+          const aKey = preferredApiSortKey(
+            a,
+            preferredSuffixes,
+            preferredPathTokens,
+            preferredConnectorTypes,
+          );
+          const bKey = preferredApiSortKey(
+            b,
+            preferredSuffixes,
+            preferredPathTokens,
+            preferredConnectorTypes,
+          );
+          for (let i = 0; i < aKey.length; i += 1) {
+            if (aKey[i] !== bKey[i]) return aKey[i] - bKey[i];
+          }
           return a.label.localeCompare(b.label, 'zh-CN');
         });
+        preferredUuid = apiOpts.find((item) =>
+          isPreferredApiHit(
+            item,
+            preferredSuffixes,
+            preferredPathTokens,
+            preferredConnectorTypes,
+          ),
+        )?.value;
       }
+      setDefaultPreferredApiUuid(preferredUuid);
       setApiOptions(apiOpts.map(({ label, value }) => ({ label, value })));
 
       const dsOpts: { label: string; value: string }[] = [];
@@ -341,7 +441,13 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
     } finally {
       setLoadingOptions(false);
     }
-  }, [config.preferredApiCodeSuffixes, messageApi, t]);
+  }, [
+    config.preferredApiCodeSuffixes,
+    config.preferredApiPathTokens,
+    config.preferredConnectorTypes,
+    messageApi,
+    t,
+  ]);
 
   useEffect(() => {
     if (!open) return;
@@ -353,6 +459,7 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
     setSettingSourceId(null);
     setPendingNewSourceDraft(null);
     setSourceDrafts([]);
+    setDefaultPreferredApiUuid(undefined);
     setLoadedAvailableFields([]);
     void loadOptions();
 
@@ -514,6 +621,9 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
                 save_binding: false,
                 incremental: true,
                 active_only: activeOnly,
+                ...(config.inferParentByCodeOption
+                  ? { infer_parent_by_code: inferParentByCode }
+                  : {}),
               },
               (message) => {
                 patchProgress(step.id, {
@@ -522,9 +632,14 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
                 });
               },
             );
+            const emptyContinue =
+              String(stepResult.empty_reason || '').trim() === 'source_empty' &&
+              stepResult.failed === 0;
             patchProgress(step.id, {
               status: stepResult.failed > 0 ? 'error' : 'finish',
-              description: formatStepResult(stepResult),
+              description: emptyContinue
+                ? t('components.syncFromSource.stepSourceEmptyContinue')
+                : formatStepResult(stepResult),
             });
           } catch (error: unknown) {
           const detail = formatSyncErrorMessage(error, t(config.failedKey));
@@ -557,6 +672,9 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
           // 与「同步方式」一致：定时增量时按 last_success_at 水位拉变更，勿硬编码全量
           incremental: syncMode === 'scheduled_incremental',
           active_only: activeOnly,
+          ...(config.inferParentByCodeOption
+            ? { infer_parent_by_code: inferParentByCode }
+            : {}),
         },
         (message) => {
           patchProgress(mainStepId, {
@@ -658,6 +776,9 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
               icon={<PlusOutlined />}
               onClick={() => {
                 const draft = newSyncSourceDraft('api');
+                if (defaultPreferredApiUuid) {
+                  draft.api_uuid = defaultPreferredApiUuid;
+                }
                 setPendingNewSourceDraft(draft);
                 setSettingSourceId(draft.id);
               }}
@@ -808,6 +929,35 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
             )}
           </Typography.Text>
         </div>
+
+        {config.inferParentByCodeOption ? (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 12,
+            }}
+          >
+            <Space size="medium" align="center">
+              <Typography.Text>{t(config.inferParentByCodeOption.labelKey)}</Typography.Text>
+              <Switch
+                checked={inferParentByCode}
+                onChange={setInferParentByCode}
+                checkedChildren={t(config.inferParentByCodeOption.onKey)}
+                unCheckedChildren={t(config.inferParentByCodeOption.offKey)}
+              />
+            </Space>
+            <Typography.Text type="secondary" style={{ fontSize: 12, flex: 1, minWidth: 240 }}>
+              {t(
+                inferParentByCode
+                  ? config.inferParentByCodeOption.hintOnKey
+                  : config.inferParentByCodeOption.hintOffKey,
+              )}
+            </Typography.Text>
+          </div>
+        ) : null}
 
         <div style={SYNC_FIELD_GRID_STYLE}>
           <Typography.Text type="secondary" style={SYNC_FIELD_LABEL_STYLE}>

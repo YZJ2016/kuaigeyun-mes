@@ -19,6 +19,11 @@ export function createCustomerSyncConfig(): SyncFromSourceConfig {
     loadAvailableTargetFields: () => loadSyncCustomTargetFields(CUSTOMER_SYNC_CUSTOM_FIELD_TABLE),
     customFieldTableName: CUSTOMER_SYNC_CUSTOM_FIELD_TABLE,
     requiredTargets: CUSTOMER_SYNC_REQUIRED_TARGETS,
+    // 默认优先「苍穹查询客户信息」basedata_query（如 sanyitest_basedata_query）；仍可改选其它接口
+    // query_customer 为 batchQuery 预置兜底；别名见 docs/客户信息.md，与销售订单无关
+    preferredApiCodeSuffixes: ['basedata_query', 'query_customer'],
+    preferredApiPathTokens: ['basedata', 'bd_customer', 'executebillquery'],
+    preferredConnectorTypes: ['kingdee_cosmic', 'kingdee_galaxy', 'kingdee_xinghan'],
     getBinding: getCustomerSyncBinding,
     syncFromSource: syncCustomersFromSource,
     completeSuccessKey: 'app.master-data.customers.syncComplete',

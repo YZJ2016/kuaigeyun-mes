@@ -17,7 +17,6 @@ from fastapi import HTTPException
 
 from core.models.integration_config import IntegrationConfig
 from core.schemas.integration_config import IntegrationConfigCreate, IntegrationConfigUpdate
-from core.utils.timezone_utils import resolve_business_datetime
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.http import get_http_client
 from core.config.data_source_type_spec import (
@@ -195,6 +194,12 @@ class IntegrationConfigService:
                     tenant_id=tenant_id,
                     config=payload.get("config") if isinstance(payload.get("config"), dict) else {},
                 )
+            # 清除同 code 软删残留，避免幽灵连接器干扰新建
+            await IntegrationConfig.filter(
+                tenant_id=tenant_id,
+                code=data.code,
+                deleted_at__isnull=False,
+            ).delete()
             integration = IntegrationConfig(
                 tenant_id=tenant_id,
                 **payload,
@@ -420,19 +425,23 @@ class IntegrationConfigService:
         uuid: str
     ) -> None:
         """
-        删除集成配置（软删除）
-        
+        删除集成配置（硬删除）。绑定的接口一并硬删；若仍有数据集引用则拒绝。
+
         Args:
             tenant_id: 组织ID
             uuid: 集成配置UUID
-            
+
         Raises:
             NotFoundError: 当集成配置不存在时抛出
+            ValidationError: 系统默认或仍有数据集/数采连接引用时抛出
         """
         integration = await IntegrationConfigService.get_integration_by_uuid(tenant_id, uuid)
         if integration.code == SYSTEM_DEFAULT_CODE:
             raise ValidationError("系统默认数据源不可删除")
-        
+
+        from core.models.api import API
+        from core.models.dataset import Dataset
+
         async with in_transaction():
             integration = await IntegrationConfig.filter(
                 id=integration.id, tenant_id=tenant_id, deleted_at__isnull=True,
@@ -446,8 +455,33 @@ class IntegrationConfigService:
                 integration_id=integration.id, tenant_id=tenant_id, deleted_at__isnull=True,
             ).exists():
                 raise ValidationError("公共连接已被数采引用，不能删除")
-            integration.deleted_at = resolve_business_datetime()
-            await integration.save()
+
+            live_datasets = await Dataset.filter(
+                tenant_id=tenant_id,
+                integration_config_id=integration.id,
+                deleted_at__isnull=True,
+            ).count()
+            if live_datasets:
+                raise ValidationError(
+                    f"该连接器仍被 {live_datasets} 个数据集引用，请先解除或删除数据集后再删除连接器"
+                )
+
+            # 数据集 FK 为 NOT NULL + RESTRICT：先清已软删的数据集残留，再删接口与连接器
+            await Dataset.filter(
+                tenant_id=tenant_id,
+                integration_config_id=integration.id,
+                deleted_at__isnull=False,
+            ).delete()
+            # 数采连接 FK 为 RESTRICT：已软删残留先解除引用，避免挡住连接器硬删
+            if connection_model is not None:
+                await connection_model.filter(
+                    integration_id=integration.id, tenant_id=tenant_id, deleted_at__isnull=False,
+                ).update(integration_id=None)
+            await API.filter(
+                tenant_id=tenant_id,
+                integration_config_id=integration.id,
+            ).delete()
+            await integration.delete()
 
     @staticmethod
     async def ensure_system_default(tenant_id: int) -> Dict[str, Any]:
@@ -455,7 +489,7 @@ class IntegrationConfigService:
         确保当前租户存在系统默认数据源（code=system_default）。
 
         与迁移 140 行为一致：指向应用主库，密码来自环境变量，config 仅存标识。
-        若已软删除则恢复；已存在则直接返回。
+        若仅有软删残留则硬删后重建；已存在则直接返回。
 
         Returns:
             dict: { created: bool, restored: bool, item: IntegrationConfig }
@@ -468,20 +502,11 @@ class IntegrationConfigService:
         if existing:
             return {"created": False, "restored": False, "item": existing}
 
-        soft_deleted = await IntegrationConfig.filter(
+        await IntegrationConfig.filter(
             tenant_id=tenant_id,
             code=SYSTEM_DEFAULT_CODE,
-        ).first()
-        if soft_deleted and soft_deleted.deleted_at is not None:
-            soft_deleted.deleted_at = None
-            soft_deleted.name = "系统默认数据库"
-            soft_deleted.type = "postgresql"
-            soft_deleted.description = "应用主数据库，密码来自环境变量，不可编辑"
-            soft_deleted.config = {"_system_default": True}
-            soft_deleted.is_active = True
-            soft_deleted.last_error = None
-            await soft_deleted.save()
-            return {"created": False, "restored": True, "item": soft_deleted}
+            deleted_at__isnull=False,
+        ).delete()
 
         integration = await IntegrationConfig.create(
             tenant_id=tenant_id,

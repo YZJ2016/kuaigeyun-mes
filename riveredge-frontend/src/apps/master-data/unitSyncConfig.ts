@@ -48,7 +48,10 @@ export function createUnitSyncConfig(): SyncFromSourceConfig {
         'FName',
       ],
     },
-    preferredApiCodeSuffixes: ['query_measureunits'],
+    // 星空 BD_UNIT=query_unit；苍穹常无物料/多计量单位=query_measureunits
+    preferredApiCodeSuffixes: ['query_unit', 'query_measureunits'],
+    preferredApiPathTokens: ['executebillquery', 'measureunit'],
+    preferredConnectorTypes: ['kingdee_galaxy', 'kingdee_cosmic', 'kingdee_xinghan'],
     collapsePreviewToUniqueUnits: true,
     getBinding: getMaterialUnitSyncBinding,
     syncFromSource: syncMaterialUnitsFromSource,

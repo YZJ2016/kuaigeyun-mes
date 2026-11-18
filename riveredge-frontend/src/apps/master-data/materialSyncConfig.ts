@@ -95,6 +95,9 @@ export function createMaterialSyncConfig(): SyncFromSourceConfig {
       group_name: ['group_name', 'group.name', 'FMaterialGroup.FName'],
     },
     preferredApiCodeSuffixes: ['query_material'],
+    // 星空/苍穹 code 后缀同为 query_material：先 path 分流，禁止只靠后缀猜到另一套
+    preferredApiPathTokens: ['executebillquery', 'bd_material/batchquery'],
+    preferredConnectorTypes: ['kingdee_galaxy', 'kingdee_cosmic', 'kingdee_xinghan'],
     getBinding: getMaterialSyncBinding,
     syncFromSource: syncMaterialsFromSource,
     completeSuccessKey: 'app.master-data.materials.syncComplete',

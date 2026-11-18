@@ -332,6 +332,31 @@ def measureunits_preset_needs_upgrade(
     return "baseunit.number" not in select or "baseunit.name" not in select
 
 
+def _material_batchquery_data_has_createorg_filter(request_body: Any) -> bool:
+    if not isinstance(request_body, dict):
+        return False
+    data = request_body.get("data")
+    if not isinstance(data, dict):
+        return False
+    from core.services.integration.kingdee_cosmic_paths import _is_createorg_filter_key
+
+    return any(_is_createorg_filter_key(k) for k in data)
+
+
+def _material_batchquery_data_has_blank_filters(request_body: Any) -> bool:
+    """开放平台勾选未填会留下 id/number=''，出站前虽会剥离，入库预置仍应清掉。"""
+    if not isinstance(request_body, dict):
+        return False
+    data = request_body.get("data")
+    if not isinstance(data, dict) or not data:
+        return False
+    from core.services.integration.kingdee_cosmic_paths import (
+        _is_blank_material_batchquery_filter_value,
+    )
+
+    return any(_is_blank_material_batchquery_filter_value(v) for v in data.values())
+
+
 def material_preset_needs_upgrade(
     path: Any,
     request_body: Any = None,
@@ -341,6 +366,10 @@ def material_preset_needs_upgrade(
     lower = str(path or "").lower().replace("\\", "/")
     if f"/{BIZ_BD_MATERIAL}/batchquery" not in lower:
         return False
+    if _material_batchquery_data_has_createorg_filter(request_body):
+        return True
+    if _material_batchquery_data_has_blank_filters(request_body):
+        return True
     select = _resolve_request_select(request_body, request_params).lower().replace(" ", "")
     if not select:
         return True
@@ -392,6 +421,18 @@ def build_material_batch_query_preset() -> KingdeeCosmicApiPreset:
             "pageSize": 100,
             "select": MATERIAL_SYNC_SELECT,
         },
+    }
+
+
+def kingdee_material_api_upgrade_fields() -> Dict[str, Any]:
+    preset = build_material_batch_query_preset()
+    return {
+        "path": preset["path"],
+        "method": preset["method"],
+        "name": preset["name"],
+        "description": preset["description"],
+        "request_params": preset.get("request_params") or {},
+        "request_body": preset.get("request_body") or {},
     }
 
 
@@ -456,7 +497,7 @@ def material_group_preset_needs_upgrade(
     method: Any = None,
     request_body: Any = None,
 ) -> bool:
-    """POST …/bd_materialgroup/batchQuery；合法空 data 不升级，占位 WANG 模板须清掉。"""
+    """POST …/bd_materialgroup/batchQuery；合法空 data 不升级；createorg/空筛/WANG 须清掉。"""
     lower = str(path or "").lower().replace("\\", "/")
     if not lower:
         return True
@@ -469,6 +510,11 @@ def material_group_preset_needs_upgrade(
     if not _material_group_query_body_shape_valid(request_body):
         return True
     if _is_material_group_wang_placeholder_body(request_body):
+        return True
+    # 与物料 batchQuery 同契约：createorg / 勾选未填空项会导致 fetched=0
+    if _material_batchquery_data_has_createorg_filter(request_body):
+        return True
+    if _material_batchquery_data_has_blank_filters(request_body):
         return True
     return False
 
@@ -551,6 +597,18 @@ def build_measureunits_batch_query_preset() -> KingdeeCosmicApiPreset:
             "pageSize": 500,
             "select": UNIT_SYNC_MATERIAL_SELECT,
         },
+    }
+
+
+def kingdee_measureunits_api_upgrade_fields() -> Dict[str, Any]:
+    preset = build_measureunits_batch_query_preset()
+    return {
+        "path": preset["path"],
+        "method": preset["method"],
+        "name": preset["name"],
+        "description": preset["description"],
+        "request_params": preset.get("request_params") or {},
+        "request_body": preset.get("request_body") or {},
     }
 
 

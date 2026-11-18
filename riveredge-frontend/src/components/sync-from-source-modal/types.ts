@@ -68,6 +68,8 @@ export interface SyncFromSourcePayload {
   incremental?: boolean;
   /** 仅同步有效主数据或未完成单据，默认 true */
   active_only?: boolean;
+  /** 物料分组：按编码段智能推断父级（如 06.01→06） */
+  infer_parent_by_code?: boolean;
 }
 
 export type SyncProgressHandler = (message: string) => void;
@@ -98,6 +100,8 @@ export interface SyncFromSourceResult {
   failed: number;
   /** 源端本轮拉取行数 */
   fetched?: number;
+  /** 全量且无写入时的空结果原因：source_empty | filtered_all | mapping_empty */
+  empty_reason?: string;
   /** full | incremental */
   mode?: string;
   errors: string[];
@@ -155,6 +159,28 @@ export interface SyncFromSourceConfig {
   /**
    * 添加来源时优先排到前面的接口 code 后缀（如 query_measureunits / query_material）。
    * 只排序不隐藏，避免误绑其它业务接口时仍可选手动项。
+   * 星空/苍穹常共用同一后缀：须配合 preferredApiPathTokens / preferredConnectorTypes，
+   * 禁止只靠后缀在两套产品间猜默认项。
    */
   preferredApiCodeSuffixes?: string[];
+  /**
+   * path 子串优先序（越前越优先）。例：物料页 `['executebillquery', 'bd_material/batchquery']`
+   * 先星空 ExecuteBillQuery，再苍穹 batchQuery。
+   */
+  preferredApiPathTokens?: string[];
+  /**
+   * 连接器 type 优先序（越前越优先）。例：`['kingdee_galaxy', 'kingdee_cosmic']`。
+   */
+  preferredConnectorTypes?: string[];
+  /**
+   * 展示「按编码智能归类」开关：开启后请求体带 infer_parent_by_code。
+   * 仅物料分组等需要时配置；文案 key 由业务页提供，避免弹窗壳绑死 master-data i18n。
+   */
+  inferParentByCodeOption?: {
+    labelKey: string;
+    onKey: string;
+    offKey: string;
+    hintOnKey: string;
+    hintOffKey: string;
+  };
 }

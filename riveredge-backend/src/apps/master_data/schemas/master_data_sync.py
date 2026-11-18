@@ -50,6 +50,8 @@ class MasterDataSyncFromSourceRequest(BaseSchema):
     incremental: Optional[bool] = None
     """仅同步有效主数据（已审核未禁用）或未完成单据（已审核未关闭）。默认开启。"""
     active_only: bool = True
+    """物料分组：按编码段（如 06.01→06）智能推断父级；默认关闭，由同步弹窗勾选。"""
+    infer_parent_by_code: bool = False
 
 
 class MasterDataSyncFromSourceOut(BaseSchema):
@@ -59,6 +61,8 @@ class MasterDataSyncFromSourceOut(BaseSchema):
     failed: int = 0
     """源端本轮拉取行数（增量无变更时为 0）。"""
     fetched: int = 0
+    """全量且无写入时的空结果原因：source_empty | filtered_all | mapping_empty。"""
+    empty_reason: Optional[str] = None
     """full=全量拉取；incremental=按水位增量。"""
     mode: str = "full"
     errors: List[str] = Field(default_factory=list)

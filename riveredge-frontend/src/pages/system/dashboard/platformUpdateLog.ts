@@ -44,6 +44,126 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'master-partners-pk-seq-r01',
+    date: '2026-11-09',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.master-partners-pk-seq-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.master-partners-pk-seq-r01.description',
+  },
+  {
+    id: 'core-apis-pk-uuid-unique-r01',
+    date: '2026-11-07',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.core-apis-pk-uuid-unique-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.core-apis-pk-uuid-unique-r01.description',
+  },
+  {
+    id: 'material-group-sync-empty-soft-r01',
+    date: '2026-11-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.material-group-sync-empty-soft-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-group-sync-empty-soft-r01.description',
+  },
+  {
+    id: 'galaxy-material-group-bd-material-fieldkey-r01',
+    date: '2026-11-02',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.galaxy-material-group-bd-material-fieldkey-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.galaxy-material-group-bd-material-fieldkey-r01.description',
+  },
+  {
+    id: 'api-tenant-code-unique-personalize-r01',
+    date: '2026-11-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.api-tenant-code-unique-personalize-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.api-tenant-code-unique-personalize-r01.description',
+  },
+  {
+    id: 'galaxy-material-group-querygroupinfo-single-param-r01',
+    date: '2026-11-02',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.galaxy-material-group-querygroupinfo-single-param-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.galaxy-material-group-querygroupinfo-single-param-r01.description',
+  },
+  {
+    id: 'material-group-infer-parent-by-code-r01',
+    date: '2026-11-02',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.material-group-infer-parent-by-code-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-group-infer-parent-by-code-r01.description',
+  },
+  {
+    id: 'api-test-needreturndata-table-r01',
+    date: '2026-11-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.api-test-needreturndata-table-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.api-test-needreturndata-table-r01.description',
+  },
+  {
+    id: 'galaxy-material-group-querygroupinfo-r01',
+    date: '2026-11-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.galaxy-material-group-querygroupinfo-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.galaxy-material-group-querygroupinfo-r01.description',
+  },
+  {
+    id: 'connector-api-hard-delete-r01',
+    date: '2026-11-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.connector-api-hard-delete-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.connector-api-hard-delete-r01.description',
+  },
+  {
+    id: 'sync-api-test-parity-upgrade-order-r01',
+    date: '2026-11-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-api-test-parity-upgrade-order-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sync-api-test-parity-upgrade-order-r01.description',
+  },
+  {
+    id: 'material-group-sync-kingdee-error-unwrap-r01',
+    date: '2026-11-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-group-sync-kingdee-error-unwrap-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-group-sync-kingdee-error-unwrap-r01.description',
+  },
+  {
+    id: 'material-sync-request-body-none-merge-r01',
+    date: '2026-10-27',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-sync-request-body-none-merge-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-sync-request-body-none-merge-r01.description',
+  },
+  {
+    id: 'master-sync-galaxy-cosmic-audit-r01',
+    date: '2026-11-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.master-sync-galaxy-cosmic-audit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.master-sync-galaxy-cosmic-audit-r01.description',
+  },
+  {
+    id: 'material-sync-zero-fetch-source-hint-r01',
+    date: '2026-11-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-sync-zero-fetch-source-hint-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-sync-zero-fetch-source-hint-r01.description',
+  },
+  {
     id: 'purchase-receipt-amount-single-entry-r01',
     date: '2026-11-16',
     type: 'improvement',

@@ -185,3 +185,68 @@ def test_project_row_by_select_reads_nested_group_and_baseunit():
     assert out["group_name"] == "紧固件"
     # 不得把 baseunit.number 误匹配成物料 number 后丢掉嵌套
     assert out.get("baseunit") is None
+
+
+def test_material_batchquery_strips_blank_checkbox_filters():
+    prepare = _mod.prepare_kingdee_cosmic_outbound
+    _, _, _, body = prepare(
+        {"org_number": "BU-00001"},
+        "https://x/kapi/v2/basedata/bd_material/batchQuery",
+        "POST",
+        {},
+        {
+            "data": {
+                "id": "",
+                "number": "",
+                "status": "C",
+                "createorg_number": 100,
+                "start_createtime": "",
+            },
+            "pageNo": 1,
+            "pageSize": 1000,
+        },
+    )
+    assert body["data"] == {"status": "C"}
+
+
+def test_material_group_batchquery_strips_createorg_and_blank_filters():
+    """物料分类 batchQuery 与物料同契约：剥离 createorg 与空筛选项。"""
+    prepare = _mod.prepare_kingdee_cosmic_outbound
+    _, _, _, body = prepare(
+        {"org_number": "100"},
+        "https://x/kapi/v2/basedata/bd_materialgroup/batchQuery",
+        "POST",
+        {},
+        {
+            "data": {
+                "id": "",
+                "number": "",
+                "status": "C",
+                "createorg_number": 100,
+                "start_createtime": "",
+            },
+            "pageNo": 1,
+            "pageSize": 1000,
+        },
+    )
+    assert body["data"] == {"status": "C"}
+
+
+def test_material_batchquery_strips_createorg_from_top_level_and_params():
+    prepare = _mod.prepare_kingdee_cosmic_outbound
+    _, _, params, body = prepare(
+        {"org_number": "BU-00001"},
+        "https://x/kapi/v2/basedata/bd_material/batchQuery",
+        "POST",
+        {"createorg_number": "BU-00001", "select": "number"},
+        {
+            "createorg_number": "BU-00001",
+            "data": {"createorg_number": ["BU-00001"]},
+            "pageNo": 1,
+            "pageSize": 100,
+            "select": "number",
+        },
+    )
+    assert "createorg_number" not in params
+    assert "createorg_number" not in body
+    assert "createorg_number" not in body.get("data", {})

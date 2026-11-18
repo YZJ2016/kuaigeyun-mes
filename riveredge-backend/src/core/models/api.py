@@ -64,8 +64,8 @@ class API(BaseModel):
         description="所属分类（可选）",
     )
 
-    # 软删除字段
-    deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
+    # 历史软删列：产品删除已硬删；新建/更新会清同 code 残留。勿再写 deleted_at 当正式删除。
+    deleted_at = fields.DatetimeField(null=True, description="历史软删时间（已废弃，删除走硬删）")
     
     class Meta:
         """
@@ -73,13 +73,12 @@ class API(BaseModel):
         """
         table = "core_apis"
         indexes = [
-            ("tenant_id", "code"),  # 唯一索引
             ("method",),
-            ("uuid",),
             ("code",),
             ("created_at",),
             ("category_id",),
         ]
+        # DB：pk_core_apis(id)、uk_core_apis_uuid(uuid)、uk_core_apis_tenant_code(tenant_id, code)
         unique_together = [("tenant_id", "code")]
     
     def __str__(self):

@@ -2627,6 +2627,8 @@ export default {
   'components.syncFromSource.stepModeIncremental': '增量',
   'components.syncFromSource.stepFetched': '拉取 {{count}} 条',
   'components.syncFromSource.stepIncrementalEmpty': '水位内无变更',
+  'components.syncFromSource.stepSourceEmptyContinue':
+    '源端未返回分组行（拉取 0 条），本步完成；后续物料同步会按物料行补齐本地分组',
   'components.syncFromSource.completeEmpty':
     '同步结束但未写入数据（拉取 {{fetched}} 条，跳过 {{skipped}}）。请检查同步来源接口、字段映射与接口调用参数。',
   'components.syncFromSource.completeEmptySource':
@@ -5890,6 +5892,14 @@ export default {
     '仓库列表默认按编码升序',
   'pages.dashboard.updateLog.entries.master-warehouse-list-code-asc-r01.description':
     '基础资料仓库列表默认按仓库编码从小到大排列（如 1001、1003）；未点列头排序时与下拉选仓等接口一致。',
+  'pages.dashboard.updateLog.entries.core-apis-pk-uuid-unique-r01.title':
+    '接口管理主键与唯一约束修复',
+  'pages.dashboard.updateLog.entries.core-apis-pk-uuid-unique-r01.description':
+    '接口表曾无主键且自增序列落后，同 id 多行导致编辑报 Multiple objects returned 或误改兄弟接口。已消重撞号、清软删幽灵，补主键与 uuid 唯一，更新改按 uuid，删除拦截覆盖出入库等同步绑定；添加来源按连接器类型与 path 族优选，避免星空/苍穹同后缀误选。',
+  'pages.dashboard.updateLog.entries.material-group-sync-empty-soft-r01.title':
+    '物料分组空拉不再显示为阻断失败',
+  'pages.dashboard.updateLog.entries.material-group-sync-empty-soft-r01.description':
+    '物料同步前置「物料分组」在源端成功返回 0 行时改为软完成（不再红叉长文案），整体进度可继续；真实接口错误仍会失败。需重启后端并更新 Web 端后生效。',
   'pages.dashboard.updateLog.entries.galaxy-material-group-bd-material-fieldkey-r01.title':
     '星空物料分组改为 BD_MATERIAL 与 FMaterialGroup',
   'pages.dashboard.updateLog.entries.galaxy-material-group-bd-material-fieldkey-r01.description':

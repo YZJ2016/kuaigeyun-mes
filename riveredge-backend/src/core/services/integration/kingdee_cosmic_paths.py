@@ -256,9 +256,15 @@ def _is_location_path(path: str) -> bool:
 
 
 def _is_material_batchquery_path(path: str) -> bool:
-    """集团创建、子公司管理：batchQuery 仅剥离 createorg 筛选，管理组织 org_number 可选手工填写。"""
+    """集团创建、子公司管理：batchQuery 仅剥离 createorg 筛选，管理组织 org_number 可选手工填写。
+
+    含物料与物料分类（bd_material / bd_materialgroup）；二者均勿用 createorg_number 当子公司范围。
+    """
     lower = _path_without_query(path).lower().replace("\\", "/")
-    return "/bd_material/batchquery" in lower
+    return (
+        "/bd_material/batchquery" in lower
+        or "/bd_materialgroup/batchquery" in lower
+    )
 
 
 def _is_group_created_master_query_path(path: str) -> bool:
@@ -282,8 +288,19 @@ def _is_customer_getcustomer_path(path: str) -> bool:
     lower = _path_without_query(path).lower().replace("\\", "/")
     return lower.endswith("/bd_customer/getcustomer")
 
+def _is_blank_material_batchquery_filter_value(value: Any) -> bool:
+    """勾选未填的空串/空数组不当作有效筛选，否则苍穹常直接返回 0 行。"""
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    if isinstance(value, list):
+        return len(value) == 0 or all(_is_blank_material_batchquery_filter_value(x) for x in value)
+    return False
+
+
 def _strip_org_filters_from_material_batchquery_body(body: Dict[str, Any]) -> Dict[str, Any]:
-    """物料 batchQuery：移除顶层与 data 内 createorg 筛选；管理组织 org_number 保留。"""
+    """物料 batchQuery：移除 createorg 与空筛选项；管理组织 org_number 非空时保留。"""
     if not isinstance(body, dict):
         return body
     out = dict(body)
@@ -293,9 +310,15 @@ def _strip_org_filters_from_material_batchquery_body(body: Dict[str, Any]) -> Di
             out.pop(key, None)
             changed = True
     data = out.get("data")
-    if isinstance(data, dict) and data and any(_is_createorg_filter_key(k) for k in data):
-        out["data"] = {k: v for k, v in data.items() if not _is_createorg_filter_key(k)}
-        changed = True
+    if isinstance(data, dict) and data:
+        cleaned = {
+            k: v
+            for k, v in data.items()
+            if not _is_createorg_filter_key(k) and not _is_blank_material_batchquery_filter_value(v)
+        }
+        if cleaned != data:
+            out["data"] = cleaned
+            changed = True
     return out if changed else body
 
 
@@ -515,6 +538,13 @@ def prepare_kingdee_cosmic_outbound(
         if select_text:
             body_out["select"] = select_text
             params_out["select"] = select_text
+
+    if _is_material_batchquery_path(url_out):
+        body_out = _strip_org_filters_from_material_batchquery_body(body_out)
+        # 查询参数里若残留 createorg，同样剥离（历史接口模板 / 连接器误写）
+        for key in list(params_out.keys()):
+            if _is_createorg_filter_key(key):
+                params_out.pop(key, None)
 
     return method_out, url_out, params_out, body_out
 

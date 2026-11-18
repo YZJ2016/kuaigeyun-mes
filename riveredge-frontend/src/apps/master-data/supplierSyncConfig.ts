@@ -19,6 +19,10 @@ export function createSupplierSyncConfig(): SyncFromSourceConfig {
     loadAvailableTargetFields: () => loadSyncCustomTargetFields(SUPPLIER_SYNC_CUSTOM_FIELD_TABLE),
     customFieldTableName: SUPPLIER_SYNC_CUSTOM_FIELD_TABLE,
     requiredTargets: SUPPLIER_SYNC_REQUIRED_TARGETS,
+    // 默认优先「苍穹查询供应商」query_supplier；别名见 docs/供应商.md
+    preferredApiCodeSuffixes: ['query_supplier'],
+    preferredApiPathTokens: ['bd_supplier', 'executebillquery'],
+    preferredConnectorTypes: ['kingdee_cosmic', 'kingdee_galaxy', 'kingdee_xinghan'],
     getBinding: getSupplierSyncBinding,
     syncFromSource: syncSuppliersFromSource,
     completeSuccessKey: 'app.master-data.suppliers.syncComplete',

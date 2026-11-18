@@ -26,6 +26,9 @@ EXECUTE_BILL_QUERY_PATH = (
     "Kingdee.BOS.WebApi.ServicesStub.DynamicFormService.ExecuteBillQuery.common.kdsvc"
 )
 VIEW_PATH = "Kingdee.BOS.WebApi.ServicesStub.DynamicFormService.View.common.kdsvc"
+QUERY_GROUP_INFO_PATH = (
+    "Kingdee.BOS.WebApi.ServicesStub.DynamicFormService.QueryGroupInfo.common.kdsvc"
+)
 
 # 销售订单 ExecuteBillQuery：表头 + 行（一行一明细）
 SAL_SALE_ORDER_LINE_FIELD_KEYS = (
@@ -56,12 +59,17 @@ UNIT_PRESET_CODE_SUFFIX = "query_unit"
 UNIT_QUERY_FIELD_KEYS = "FUNITID,FNumber,FName,FDocumentStatus,FForbidStatus"
 
 MATERIAL_GROUP_PRESET_CODE_SUFFIX = "query_material_group"
-# 分组树字段因金蝶版本差异大：勿默认带 FParentId.FNumber / 状态列，否则整次查询失败只回 1 条错误对象
-MATERIAL_GROUP_QUERY_FIELD_KEYS = "FID,FNumber,FName"
-# 分组主数据常见无「已审核」语义；仅排除禁用，避免 FilterString 把全部分组滤空
-MATERIAL_GROUP_ACTIVE_FILTER = "FForbidStatus='A'"
-MATERIAL_GROUP_ACTIVE_FILTER_MARKER = "FForbidStatus='A'"
-MATERIAL_GROUP_FIELD_KEYS_MARKER = "FNumber,FName"
+# 物料分组真源：WebAPI「分组信息查询」QueryGroupInfo（非 ExecuteBillQuery BD_MATERIALGROUP）。
+# 官方 .kdsvc：parameters 仅 1 个 JSON（FormId/GroupFieldKey 写在 JSON 内）；
+# 金蝶文档样例：FormId=BD_MATERIAL，GroupFieldKey=FMaterialGroup。
+# 误把 FormId 放 parameters[0] →「data格式错误…U」；
+# 误用 UN_MaterialGroupStockGroup 且 GroupFieldKey 空 → IsSuccess 但 NeedReturnData=null。
+# 勿与存货类别 BD_MATERIALCATEGORY、独立对象 BD_MATERIALGROUP 混淆。
+MATERIAL_GROUP_FORM_ID = "BD_MATERIAL"
+MATERIAL_GROUP_QUERY_GROUP_FORM_ID = MATERIAL_GROUP_FORM_ID
+MATERIAL_GROUP_QUERY_GROUP_FIELD_KEY = "FMaterialGroup"
+# 曾误用的库存分组 FormId：结构合法但多数账套 NeedReturnData 为空，须升级走官方物料分组
+MATERIAL_GROUP_LEGACY_EMPTY_FORM_IDS = frozenset({"UN_MATERIALGROUPSTOCKGROUP"})
 
 WAREHOUSE_PRESET_CODE_SUFFIX = "query_warehouse"
 WAREHOUSE_QUERY_FIELD_KEYS = (
@@ -691,8 +699,14 @@ def list_kingdee_galaxy_api_presets() -> List[KingdeeGalaxyApiPreset]:
         {
             "code_suffix": MATERIAL_GROUP_PRESET_CODE_SUFFIX,
             "name": "金蝶查询物料分组",
-            "description": "ExecuteBillQuery：物料分组（BD_MATERIALGROUP）",
-            "path": EXECUTE_BILL_QUERY_PATH,
+            "description": (
+                "QueryGroupInfo（分组信息查询）：parameters 仅 1 个 JSON，"
+                "FormId=BD_MATERIAL，GroupFieldKey=FMaterialGroup。"
+                "勿发 [formid,data] 两参；勿用 UN_MaterialGroupStockGroup（常 NeedReturnData=null）；"
+                "勿用 ExecuteBillQuery 查 BD_MATERIALGROUP；勿与存货类别 BD_MATERIALCATEGORY 混淆。"
+                "响应取 Result.NeedReturnData；字段映射：FNUMBER→编码，FNAME→名称，FPARENTID→父分组。"
+            ),
+            "path": QUERY_GROUP_INFO_PATH,
             "method": "POST",
             "request_body": build_material_group_query_preset_body(),
         },
@@ -1042,18 +1056,34 @@ def build_unit_query_preset_body(
 
 def build_material_group_query_preset_body(
     *,
-    filter_string: str = MATERIAL_GROUP_ACTIVE_FILTER,
-    start_row: int = 0,
-    limit: int = 2000,
+    form_id: str = "",
+    group_field_key: str = "",
+    group_pk_ids: str = "",
+    ids: str = "",
 ) -> Dict[str, Any]:
-    return build_execute_bill_query_body(
-        form_id="BD_MATERIALGROUP",
-        field_keys=MATERIAL_GROUP_QUERY_FIELD_KEYS,
-        filter_string=filter_string,
-        order_string="FNumber ASC",
-        start_row=start_row,
-        limit=limit,
-    )
+    """星空分组信息查询：parameters = [dataJson]（官方单参，FormId 写在 JSON 内）。"""
+    data = {
+        "FormId": (form_id or MATERIAL_GROUP_QUERY_GROUP_FORM_ID).strip(),
+        "GroupFieldKey": str(group_field_key or MATERIAL_GROUP_QUERY_GROUP_FIELD_KEY),
+        "GroupPkIds": group_pk_ids,
+        "Ids": ids,
+    }
+    return build_kdsvc_envelope([json.dumps(data, ensure_ascii=False)])
+
+
+def kingdee_galaxy_material_group_api_upgrade_fields() -> Dict[str, Any]:
+    return {
+        "path": QUERY_GROUP_INFO_PATH,
+        "method": "POST",
+        "request_body": build_material_group_query_preset_body(),
+        "description": (
+            "QueryGroupInfo（分组信息查询）：parameters 仅 1 个 JSON，"
+            "FormId=BD_MATERIAL，GroupFieldKey=FMaterialGroup。"
+            "勿用 [formid,data] 两参；勿用 UN_MaterialGroupStockGroup（常 NeedReturnData=null）；"
+            "勿用 ExecuteBillQuery 查 BD_MATERIALGROUP；"
+            "响应取 Result.NeedReturnData；FNUMBER/FNAME/FPARENTID 映射编码/名称/父分组。"
+        ),
+    }
 
 
 def build_sales_order_query_preset_body(
@@ -1200,23 +1230,92 @@ def master_data_scope_preset_needs_upgrade(request_body: Any) -> bool:
     return MASTER_DATA_APPROVED_STATUS_MARKER not in filter_string.replace(" ", "")
 
 
-def material_group_preset_needs_upgrade(request_body: Any) -> bool:
-    """物料分组预置：旧版 FieldKeys 含父级/状态列或仍用审核过滤时需升级。"""
-    query = _parse_execute_bill_query(request_body)
-    if query is None:
+def _parse_material_group_query_payload(request_body: Any) -> Optional[Dict[str, Any]]:
+    """解析 QueryGroupInfo 单参/旧两参中的 data JSON；无法解析返回 None。"""
+    if not isinstance(request_body, dict):
+        return None
+    params = request_body.get("parameters")
+    if not isinstance(params, list) or not params:
+        return None
+    # 旧两参：第二段才是 dataJson
+    candidate: Any = params[1] if len(params) >= 2 else params[0]
+    if len(params) >= 2 and isinstance(params[0], str):
+        first = str(params[0] or "").strip()
+        if first and not first.startswith("{") and not first.startswith("["):
+            # parameters[0]=formid 时，以第二段为准；第二段无效则仅有 formid
+            if isinstance(params[1], (str, dict)):
+                candidate = params[1]
+            else:
+                return {"FormId": first}
+    if isinstance(candidate, str):
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            return None
+        return parsed if isinstance(parsed, dict) else None
+    if isinstance(candidate, dict):
+        return candidate
+    return None
+
+
+def extract_material_group_query_form_id(request_body: Any) -> str:
+    """取出 FormId；已知会 NeedReturnData=null 的遗留 FormId 视为空，升级时回落官方默认。"""
+    if not isinstance(request_body, dict):
+        return ""
+    params = request_body.get("parameters")
+    if isinstance(params, list) and len(params) >= 2 and isinstance(params[0], str):
+        first = str(params[0] or "").strip()
+        if first and not first.startswith("{") and not first.startswith("["):
+            if first.upper() in MATERIAL_GROUP_LEGACY_EMPTY_FORM_IDS:
+                return ""
+            return first
+    query = _parse_material_group_query_payload(request_body)
+    if not isinstance(query, dict):
+        return ""
+    form_id = str(query.get("FormId") or query.get("formId") or "").strip()
+    if form_id.upper() in MATERIAL_GROUP_LEGACY_EMPTY_FORM_IDS:
+        return ""
+    return form_id
+
+
+def material_group_preset_needs_upgrade(
+    request_body: Any,
+    path: Any = None,
+) -> bool:
+    """物料分组预置：修结构错误与已知空拉 FormId；其它合法单参可个性化保留。"""
+    path_l = str(path or "").lower().replace("\\", "/")
+    if path is not None and "querygroupinfo" not in path_l:
         return True
-    field_keys = str(query.get("FieldKeys") or query.get("fieldKeys") or "").replace(" ", "")
-    upper_keys = field_keys.upper()
-    if "PARENTID.FNUMBER" in upper_keys:
+    if not isinstance(request_body, dict):
         return True
-    if "FDOCUMENTSTATUS" in upper_keys or "FFORBIDSTATUS" in upper_keys:
+    params = request_body.get("parameters")
+    # 旧误发 [formid, data] 两参会导致生产「data格式错误…U」；须升级为单参 JSON
+    if not isinstance(params, list) or len(params) != 1:
         return True
-    if "FNUMBER" not in upper_keys or "FNAME" not in upper_keys:
+    query = _parse_material_group_query_payload(request_body)
+    if not isinstance(query, dict):
         return True
-    filter_string = str(query.get("FilterString") or query.get("filterString") or "").replace(" ", "")
-    if "FDocumentStatus" in filter_string:
+    # ExecuteBillQuery 单参 JSON（含 FieldKeys/FilterString）一律升级
+    if "FieldKeys" in query or "fieldKeys" in query or "FilterString" in query:
         return True
-    if MATERIAL_GROUP_ACTIVE_FILTER_MARKER.replace(" ", "") not in filter_string:
+    lowered = {str(k).lower() for k in query.keys()}
+    required = {"formid", "groupfieldkey", "grouppkids", "ids"}
+    if not required.issubset(lowered):
+        return True
+    form_id = str(query.get("FormId") or query.get("formId") or "").strip()
+    group_field_key = str(
+        query.get("GroupFieldKey") or query.get("groupFieldKey") or ""
+    ).strip()
+    if not form_id:
+        return True
+    # 库存分组 FormId：接口成功但 NeedReturnData 常为 null，须改官方物料分组
+    if form_id.upper() in MATERIAL_GROUP_LEGACY_EMPTY_FORM_IDS:
+        return True
+    # 官方物料分组须带 FMaterialGroup
+    if (
+        form_id.upper() == MATERIAL_GROUP_QUERY_GROUP_FORM_ID.upper()
+        and group_field_key.upper() != MATERIAL_GROUP_QUERY_GROUP_FIELD_KEY.upper()
+    ):
         return True
     return False
 
