@@ -26,6 +26,8 @@ export interface DocumentPushPayload {
   connection_code?: string;
   save_api_uuid?: string;
   dry_run?: boolean;
+  /** 已推过仍强制再推（重推覆盖） */
+  force?: boolean;
 }
 
 export interface DocumentPushResult {

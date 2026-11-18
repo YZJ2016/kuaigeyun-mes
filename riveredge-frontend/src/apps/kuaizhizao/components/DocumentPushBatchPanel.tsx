@@ -5,7 +5,12 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, App, Button, Checkbox, Empty, Flex, Modal, Select, Space, Table, Typography } from 'antd';
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import {
+  DeleteOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import type { TableColumnsType } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
@@ -16,7 +21,8 @@ import {
   getApplicationConnectionListAll,
   type ApplicationConnection,
 } from '../../../services/applicationConnection';
-import { getAPIList, type API } from '../../../services/apiManagement';
+import type { API } from '../../../services/apiManagement';
+import { loadAllActiveApis, sortApisByPreferredHints } from '../../../utils/activeApiSelectOptions';
 import { ThemedSegmented } from '../../../components/themed-segmented/ThemedSegmented';
 import { getDataSourceListAllMatching, type DataSource } from '../../../services/dataSource';
 import { getDatasetList, type Dataset } from '../../../services/dataset';
@@ -25,6 +31,7 @@ import {
   listDocumentPushProfiles,
   pushDocumentExternal,
 } from '../services/document-push';
+import { getApiErrorMessage } from '../../../utils/errorHandler';
 
 export const DOCUMENT_PUSH_PROFILE_LABEL_KEYS: Record<string, string> = {
   kingdee_prd_mo: 'app.kuaizhizao.documentPush.profile.kingdee_prd_mo',
@@ -36,6 +43,7 @@ export const DOCUMENT_PUSH_PROFILE_LABEL_KEYS: Record<string, string> = {
   kingdee_im_purinbill: 'app.kuaizhizao.documentPush.profile.kingdee_im_purinbill',
   kingdee_im_saloutbill: 'app.kuaizhizao.documentPush.profile.kingdee_im_saloutbill',
   kingdee_im_otheroutbill: 'app.kuaizhizao.documentPush.profile.kingdee_im_otheroutbill',
+  kingdee_im_otherinbill: 'app.kuaizhizao.documentPush.profile.kingdee_im_otherinbill',
   kingdee_im_surplusbill: 'app.kuaizhizao.documentPush.profile.kingdee_im_surplusbill',
   kingdee_im_deficitbill: 'app.kuaizhizao.documentPush.profile.kingdee_im_deficitbill',
   kingdee_stk_miscellaneous: 'app.kuaizhizao.documentPush.profile.kingdee_stk_miscellaneous',
@@ -44,17 +52,27 @@ export const DOCUMENT_PUSH_PROFILE_LABEL_KEYS: Record<string, string> = {
   kingdee_eng_process: 'app.kuaizhizao.documentPush.profile.kingdee_eng_process',
 };
 
+export interface DocumentPushBindActionOption {
+  label: string;
+  value: string;
+  /** action_apis 槽位；默认 [value]。撤回入库须 withdraw + unsubmit */
+  apiKeys?: string[];
+}
+
 export interface DocumentPushTargetBinding {
   connection_code?: string;
   save_api_uuid?: string;
   target_profile: string;
   push_mode?: 'auto' | 'manual';
   trigger_actions?: string[];
+  action_apis?: Record<string, string>;
   destination_kind?: 'api' | 'data_source';
   data_source_uuid?: string;
   dataset_uuid?: string;
   /** 仅点过确认保存的目标。缺省的历史行不展示。 */
   user_saved?: boolean;
+  /** 是否推送；关闭后自动外推/列表推送按钮/详情外推记录均关闭。缺省 true。 */
+  push_enabled?: boolean;
 }
 
 export interface DocumentPushBindingState {
@@ -96,13 +114,32 @@ export interface DocumentPushBatchPanelProps<T extends { id: number }> {
     pageSize: number;
     preferIds: number[];
   }) => Promise<{ data: T[]; total: number }>;
+  /** @deprecated 不再用于过滤下拉；写入接口列表与 sync-from-source 相同（全部启用接口，saveApiSearchHints 仅排序）。 */
   matchSaveApi?: (api: API, connection: ApplicationConnection) => boolean;
+  /** multiApiTargetRows 时按「接口用途」过滤下拉（如 withdraw 仅 batchUnaudit） */
+  matchBindingApi?: (
+    slot: string,
+    api: API,
+    connection: ApplicationConnection | undefined,
+  ) => boolean;
   preferSaveApi?: (items: API[]) => string | undefined;
   /** 多金蝶目标时按 profile 解析各自写入接口；缺省回落 preferSaveApi / 当前选中 */
   resolveSaveApiForProfile?: (profile: string, items: API[]) => string | undefined;
   saveApiSearchHints?: string[];
   loadBinding?: () => Promise<DocumentPushBindingState | null | undefined>;
   saveBinding?: (payload: DocumentPushBindingState) => Promise<unknown>;
+  /** 自动推送时可选的触发动作；缺省为提交/审核 */
+  bindActionOptions?: DocumentPushBindActionOption[];
+  /** 为 true 时每个绑定按钮单独选接口（写入 action_apis） */
+  perActionApiBinding?: boolean;
+  /**
+   * 列表每行一条数据接口（原交互）；可重复添加同一 target_profile。
+   * 落库时每行一条 target，action_apis 仅含该行接口用途单键。
+   */
+  multiApiTargetRows?: boolean;
+  /** multiApiTargetRows 时「接口用途」下拉选项（如 confirm / withdraw） */
+  apiBindingSlotOptions?: Array<{ label: string; value: string }>;
+  resolveActionApiUuid?: (slot: string, items: API[]) => string | undefined;
   showScheduleControls?: boolean;
   successCountKey?: string;
   partialCountKey?: string;
@@ -189,12 +226,17 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   columns,
   getRowLabel,
   loadCandidates,
-  matchSaveApi,
+  matchBindingApi,
   preferSaveApi = defaultPreferSaveApi,
   resolveSaveApiForProfile,
   saveApiSearchHints = EMPTY_STRING_ARRAY,
   loadBinding,
   saveBinding,
+  bindActionOptions,
+  perActionApiBinding = false,
+  multiApiTargetRows = false,
+  apiBindingSlotOptions,
+  resolveActionApiUuid,
   successCountKey = 'app.kuaizhizao.documentPush.batch.success',
   partialCountKey = 'app.kuaizhizao.documentPush.batch.partial',
   failedTitleKey = 'app.kuaizhizao.documentPush.pushFailed',
@@ -219,26 +261,76 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
     () => resolvedBindActionOptions.map((option) => String(option.value)).filter(Boolean),
     [resolvedBindActionOptions],
   );
+  const confirmSlotLabel = useMemo(() => {
+    // multiApi 行展示/下拉默认「确认*」须跟单据方向走，禁止出库页回落到入库文案
+    if (sourceType === 'production_picking') {
+      return t('app.kuaizhizao.warehouseOutbound.action.confirmPicking');
+    }
+    if (
+      sourceType === 'sales_delivery' ||
+      sourceType === 'other_outbound' ||
+      sourceType === 'material_borrow'
+    ) {
+      return t('app.kuaizhizao.warehouseOutbound.action.confirmOutbound');
+    }
+    return t('app.kuaizhizao.documentPush.batch.bindBehavior.confirm');
+  }, [sourceType, t]);
+
   const resolvedApiBindingSlotOptions = useMemo(
-    () =>
-      apiBindingSlotOptions?.length
-        ? apiBindingSlotOptions
-        : [
-            { label: t('app.kuaizhizao.documentPush.batch.actionApi.confirm'), value: 'confirm' },
-            { label: t('app.kuaizhizao.documentPush.batch.actionApi.update'), value: 'update' },
-            { label: t('app.kuaizhizao.documentPush.batch.actionApi.withdraw'), value: 'withdraw' },
-            { label: t('app.kuaizhizao.documentPush.batch.actionApi.unsubmit'), value: 'unsubmit' },
-            { label: t('app.kuaizhizao.documentPush.batch.actionApi.delete'), value: 'delete' },
-          ],
-    [apiBindingSlotOptions, t],
+    () => {
+      if (apiBindingSlotOptions?.length) return apiBindingSlotOptions;
+      if (bindActionOptions?.length) {
+        const mapped = bindActionOptions.map((option) => ({
+          // confirm 文案一律跟 sourceType，避免页面误传「确认入库」到出库单
+          label: option.value === 'confirm' ? confirmSlotLabel : option.label,
+          value: option.value,
+        }));
+        // 落库 action_apis 可能拆出 unsubmit 行；选项里没有时补上，避免回落成错误通用文案
+        if (!mapped.some((option) => option.value === 'unsubmit')) {
+          mapped.push({
+            label: t('app.kuaizhizao.documentPush.batch.bindBehavior.unsubmit'),
+            value: 'unsubmit',
+          });
+        }
+        return mapped;
+      }
+      return [
+        { label: confirmSlotLabel, value: 'confirm' },
+        { label: t('app.kuaizhizao.documentPush.batch.actionApi.update'), value: 'update' },
+        { label: t('app.kuaizhizao.documentPush.batch.actionApi.withdraw'), value: 'withdraw' },
+        { label: t('app.kuaizhizao.documentPush.batch.actionApi.unsubmit'), value: 'unsubmit' },
+        { label: t('app.kuaizhizao.documentPush.batch.actionApi.delete'), value: 'delete' },
+      ];
+    },
+    [apiBindingSlotOptions, bindActionOptions, confirmSlotLabel, t],
+  );
+
+  const bindingSlotLabel = useCallback(
+    (slot: string) => {
+      const key = String(slot || '').trim();
+      const fromOptions = resolvedApiBindingSlotOptions.find((option) => option.value === key)?.label;
+      if (fromOptions) return fromOptions;
+      if (key === 'confirm') return confirmSlotLabel;
+      const i18nKey = `app.kuaizhizao.documentPush.batch.bindBehavior.${key}`;
+      const translated = t(i18nKey);
+      if (translated !== i18nKey) return translated;
+      return key || '—';
+    },
+    [confirmSlotLabel, resolvedApiBindingSlotOptions, t],
   );
   const [connectors, setConnectors] = useState<ApplicationConnection[]>([]);
   const [connectionCode, setConnectionCode] = useState<string | undefined>();
   const [saveApis, setSaveApis] = useState<API[]>([]);
   const [saveApiUuid, setSaveApiUuid] = useState<string | undefined>();
+  /** 按目标记住写入接口；列表名称与落库均优先用它，避免只显示 profile 文案或被 prefer 冲掉 */
+  const [saveApiUuids, setSaveApiUuids] = useState<Record<string, string | undefined>>({});
   const [syncMode, setSyncMode] = useState<string>('manual_full');
   const [targetModes, setTargetModes] = useState<Record<string, 'auto' | 'manual'>>({});
+  const [targetPushEnabled, setTargetPushEnabled] = useState<Record<string, boolean>>({});
   const [targetActionMap, setTargetActionMap] = useState<Record<string, string[]>>({});
+  const [targetActionApiMap, setTargetActionApiMap] = useState<
+    Record<string, Record<string, string | undefined>>
+  >({});
   const [destinationKinds, setDestinationKinds] = useState<Record<string, 'api' | 'data_source'>>({});
   const [dataSourceUuids, setDataSourceUuids] = useState<Record<string, string | undefined>>({});
   const [dataSources, setDataSources] = useState<DataSource[]>([]);
@@ -246,6 +338,9 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   const [datasetUuids, setDatasetUuids] = useState<Record<string, string | undefined>>({});
   const [writeDatasets, setWriteDatasets] = useState<Dataset[]>([]);
   const [rememberBinding, setRememberBinding] = useState(true);
+  /** 暂停自动无感外推（push_enabled=false）；手动勾选推送仍可用 */
+  const [autoPushPaused, setAutoPushPaused] = useState(false);
+  const [autoPushPauseLoading, setAutoPushPauseLoading] = useState(false);
   const [settingProfile, setSettingProfile] = useState<string | null>(null);
   const [scheduleIntervalMinutes, setScheduleIntervalMinutes] = useState<number>(15);
   const [connectorsLoading, setConnectorsLoading] = useState(false);
@@ -254,6 +349,10 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   const [profilesLoading, setProfilesLoading] = useState(false);
   const [profilesLoaded, setProfilesLoaded] = useState(false);
   const [targetProfiles, setTargetProfiles] = useState<string[]>([]);
+  const [targetRowKeys, setTargetRowKeys] = useState<string[]>([]);
+  const [rowBindingMeta, setRowBindingMeta] = useState<
+    Record<string, { profile: string; apiSlot: string }>
+  >({});
   const [profileOptions, setProfileOptions] = useState<Array<{ label: string; value: string }>>([]);
   const preferIdsRef = useRef<number[]>([]);
   const prefilledRef = useRef(false);
@@ -261,6 +360,7 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   const [pendingNewProfile, setPendingNewProfile] = useState<string | null>(null);
   const connectionCodeRef = useRef<string | undefined>();
   const saveApiUuidRef = useRef<string | undefined>();
+  const saveApiUuidsRef = useRef<Record<string, string | undefined>>({});
   const syncModeRef = useRef('manual_full');
   const settingSnapshotRef = useRef<{
     connection?: string;
@@ -277,6 +377,12 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   const dataSourceUuidsRef = useRef<Record<string, string | undefined>>({});
   const datasetUuidsRef = useRef<Record<string, string | undefined>>({});
   const targetActionMapRef = useRef<Record<string, string[]>>({});
+  const targetPushEnabledRef = useRef<Record<string, boolean>>({});
+  const targetActionApiMapRef = useRef<Record<string, Record<string, string | undefined>>>({});
+  const perActionApiBindingRef = useRef(perActionApiBinding);
+  const multiApiTargetRowsRef = useRef(multiApiTargetRows);
+  const rowBindingMetaRef = useRef(rowBindingMeta);
+  const resolveActionApiUuidRef = useRef(resolveActionApiUuid);
   const pushOnlyProfileRef = useRef<string | null>(null);
   const settingProfileRef = useRef<string | null>(null);
   const targetProfilesRef = useRef<string[]>([]);
@@ -285,6 +391,7 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   const resolveSaveApiForProfileRef = useRef(resolveSaveApiForProfile);
   connectionCodeRef.current = connectionCode;
   saveApiUuidRef.current = saveApiUuid;
+  saveApiUuidsRef.current = saveApiUuids;
   syncModeRef.current = syncMode;
   scheduleIntervalRef.current = scheduleIntervalMinutes;
   rememberBindingRef.current = rememberBinding;
@@ -293,13 +400,112 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   dataSourceUuidsRef.current = dataSourceUuids;
   datasetUuidsRef.current = datasetUuids;
   targetActionMapRef.current = targetActionMap;
-  targetProfilesRef.current = targetProfiles;
+  targetPushEnabledRef.current = targetPushEnabled;
+  targetActionApiMapRef.current = targetActionApiMap;
+  perActionApiBindingRef.current = perActionApiBinding;
+  multiApiTargetRowsRef.current = multiApiTargetRows;
+  rowBindingMetaRef.current = rowBindingMeta;
+  resolveActionApiUuidRef.current = resolveActionApiUuid;
+  targetProfilesRef.current = multiApiTargetRows ? targetRowKeys : targetProfiles;
   profileOptionsRef.current = profileOptions;
   saveApisRef.current = saveApis;
   resolveSaveApiForProfileRef.current = resolveSaveApiForProfile;
 
+  const listBindingKeys = multiApiTargetRows ? targetRowKeys : targetProfiles;
+  const profileForBindingKey = useCallback(
+    (key: string) => {
+      if (multiApiTargetRowsRef.current) {
+        return String(rowBindingMetaRef.current[key]?.profile || '').trim();
+      }
+      return key;
+    },
+    [],
+  );
+  const apiSlotForBindingKey = useCallback((key: string) => {
+    if (!multiApiTargetRowsRef.current) return 'confirm';
+    return String(rowBindingMetaRef.current[key]?.apiSlot || 'confirm').trim() || 'confirm';
+  }, []);
+
+  const apiKeysForBindAction = useCallback(
+    (actionValue: string) => {
+      const opt = resolvedBindActionOptions.find((row) => row.value === actionValue);
+      const keys = opt?.apiKeys?.length ? opt.apiKeys : [actionValue];
+      return keys.map((key) => String(key).trim()).filter(Boolean);
+    },
+    [resolvedBindActionOptions],
+  );
+  const requiredApiSlotsForProfile = useCallback(
+    (profile: string, actions?: string[]) => {
+      const selected =
+        actions ??
+        targetActionMapRef.current[profile] ??
+        (perActionApiBindingRef.current ? defaultAutoBindActions : []);
+      const slots = new Set<string>();
+      for (const action of selected) {
+        for (const key of apiKeysForBindAction(action)) {
+          slots.add(key);
+        }
+      }
+      return [...slots];
+    },
+    [apiKeysForBindAction, defaultAutoBindActions],
+  );
+  const buildActionApisForProfile = useCallback(
+    (profile: string, actions: string[]) => {
+      const map = targetActionApiMapRef.current[profile] || {};
+      const out: Record<string, string> = {};
+      for (const slot of requiredApiSlotsForProfile(profile, actions)) {
+        const uuid = String(map[slot] || '').trim();
+        if (uuid) out[slot] = uuid;
+      }
+      return Object.keys(out).length ? out : undefined;
+    },
+    [requiredApiSlotsForProfile],
+  );
+
+  const effectiveBindActionsForProfile = useCallback(
+    (profile: string) => {
+      if (Object.prototype.hasOwnProperty.call(targetActionMapRef.current, profile)) {
+        return targetActionMapRef.current[profile] ?? [];
+      }
+      if (perActionApiBindingRef.current && (targetModesRef.current[profile] ?? 'auto') === 'auto') {
+        return defaultAutoBindActions;
+      }
+      return [];
+    },
+    [defaultAutoBindActions],
+  );
+
+  const seedActionApisForProfile = useCallback(
+    (profile: string, actions: string[]) => {
+      if (!perActionApiBindingRef.current) return;
+      setTargetActionApiMap((prev) => {
+        const row = { ...(prev[profile] || {}) };
+        let changed = false;
+        for (const slot of requiredApiSlotsForProfile(profile, actions)) {
+          if (String(row[slot] || '').trim()) continue;
+          const picked = resolveActionApiUuidRef.current?.(slot, saveApisRef.current);
+          if (picked) {
+            row[slot] = picked;
+            changed = true;
+          }
+        }
+        return changed ? { ...prev, [profile]: row } : prev;
+      });
+    },
+    [requiredApiSlotsForProfile],
+  );
+
   const pickSaveApiUuidForProfile = useCallback(
     (profile: string, fallback?: string) => {
+      if (perActionApiBindingRef.current) {
+        const confirmUuid = String(
+          targetActionApiMapRef.current[profile]?.confirm || '',
+        ).trim();
+        if (confirmUuid) return confirmUuid;
+      }
+      const bound = String(saveApiUuidsRef.current[profile] || '').trim();
+      if (bound) return bound;
       const resolve = resolveSaveApiForProfileRef.current;
       if (resolve) {
         const picked = resolve(profile, saveApisRef.current);
@@ -310,12 +516,81 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
     [],
   );
 
-  const needsKingdeeConnector = useMemo(() => {
+  const openTargetSetting = useCallback(
+    (key: string) => {
+      if (multiApiTargetRowsRef.current) {
+        const slot = apiSlotForBindingKey(key);
+        let apiForRow = saveApiUuidsRef.current[key];
+        if (!apiForRow) {
+          apiForRow = resolveActionApiUuidRef.current?.(slot, saveApisRef.current);
+          if (apiForRow) {
+            setSaveApiUuids((prev) => ({ ...prev, [key]: apiForRow }));
+          }
+        }
+        settingSnapshotRef.current = {
+          connection: connectionCodeRef.current,
+          api: apiForRow,
+          mode: targetModesRef.current[key] ?? 'auto',
+          actions: triggerActionsForBindingSlot(slot),
+          destination: destinationKindsRef.current[key] ?? 'api',
+          dataSourceUuid: dataSourceUuidsRef.current[key],
+        };
+        if (apiForRow) setSaveApiUuid(apiForRow);
+        setSettingProfile(key);
+        return;
+      }
+      const actions = effectiveBindActionsForProfile(key);
+      if (!targetActionMapRef.current[key]?.length && actions.length) {
+        setTargetActionMap((prev) => ({ ...prev, [key]: actions }));
+      }
+      seedActionApisForProfile(key, actions);
+      const apiForProfile =
+        targetActionApiMapRef.current[key]?.confirm ||
+        saveApiUuidsRef.current[key] ||
+        pickSaveApiUuidForProfile(key, saveApiUuidRef.current);
+      settingSnapshotRef.current = {
+        connection: connectionCodeRef.current,
+        api: apiForProfile,
+        mode: targetModesRef.current[key] ?? 'auto',
+        actions: targetActionMapRef.current[key]?.length
+          ? targetActionMapRef.current[key]
+          : actions,
+        destination: destinationKindsRef.current[key] ?? 'api',
+        dataSourceUuid: dataSourceUuidsRef.current[key],
+      };
+      if (apiForProfile) setSaveApiUuid(apiForProfile);
+      setSettingProfile(key);
+    },
+    [apiSlotForBindingKey, effectiveBindActionsForProfile, pickSaveApiUuidForProfile, seedActionApisForProfile],
+  );
+
+  const bindingKeysForReady = useMemo(() => {
+    const keys = new Set(listBindingKeys);
+    if (settingProfile) keys.add(settingProfile);
+    if (pendingNewProfile) keys.add(pendingNewProfile);
+    return [...keys];
+  }, [listBindingKeys, pendingNewProfile, settingProfile]);
+
+  /** 含设置弹窗中的待添加目标；就绪判定与预览/推送不得只看已落列表的 targetProfiles */
+  const readinessProfiles = useMemo(() => {
+    if (multiApiTargetRows) {
+      const profiles = new Set<string>();
+      for (const key of bindingKeysForReady) {
+        const profile = rowBindingMeta[key]?.profile;
+        if (profile) profiles.add(profile);
+      }
+      return [...profiles];
+    }
     const profiles = new Set(targetProfiles);
     if (settingProfile) profiles.add(settingProfile);
     if (pendingNewProfile) profiles.add(pendingNewProfile);
-    return [...profiles].some((p) => kingdeeProfiles.includes(p));
-  }, [kingdeeProfiles, pendingNewProfile, settingProfile, targetProfiles]);
+    return [...profiles];
+  }, [bindingKeysForReady, multiApiTargetRows, pendingNewProfile, rowBindingMeta, settingProfile, targetProfiles]);
+
+  const needsKingdeeConnector = useMemo(
+    () => readinessProfiles.some((p) => kingdeeProfiles.includes(p)),
+    [kingdeeProfiles, readinessProfiles],
+  );
 
   const selectedConnector = useMemo(
     () => connectors.find((row) => row.code === connectionCode),
@@ -362,32 +637,22 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
 
   const loadSaveApis = useCallback(
     async (connection: ApplicationConnection | undefined) => {
-      if (!connection || !matchSaveApi) {
+      if (!connection) {
         setSaveApis([]);
         setSaveApiUuid(undefined);
         return;
       }
       setApisLoading(true);
       try {
-        const res = await getAPIList({
-          is_active: true,
-          page: 1,
-          page_size: 100,
-        });
-        let items = (res.items || []).filter((api) => matchSaveApi(api, connection));
-        for (const hint of saveApiSearchHintsRef.current) {
-          if (items.length) break;
-          const byHint = await getAPIList({
-            is_active: true,
-            page: 1,
-            page_size: 100,
-            search: hint,
-          });
-          items = (byHint.items || []).filter((api) => matchSaveApi(api, connection));
-        }
+        let items = await loadAllActiveApis();
+        items = sortApisByPreferredHints(items, saveApiSearchHintsRef.current);
         setSaveApis(items);
         setSaveApiUuid((prev) => {
           if (prev && items.some((api) => api.uuid === prev)) return prev;
+          const bound = Object.values(saveApiUuidsRef.current).find(
+            (uuid) => uuid && items.some((api) => api.uuid === uuid),
+          );
+          if (bound) return bound;
           return preferSaveApi(items);
         });
       } catch {
@@ -399,7 +664,7 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
     },
     // saveApiHintsKey：内容变才重建；避免内联 ['生产汇报',…] 每帧换引用
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hints via ref + key
-    [matchSaveApi, preferSaveApi, saveApiHintsKey],
+    [preferSaveApi, saveApiHintsKey],
   );
 
   useEffect(() => {
@@ -445,6 +710,8 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
     if (!open) return;
     // 对齐入站：打开先空表，只回填接口里已经保存的目标，绝不填默认 profile
     setTargetProfiles([]);
+    setTargetRowKeys([]);
+    setRowBindingMeta({});
     setPendingNewProfile(null);
     setSettingProfile(null);
     if (!loadBinding) return;
@@ -455,32 +722,76 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
         if (cancelled) return;
         if (!binding) {
           setTargetProfiles([]);
+          setTargetRowKeys([]);
+          setSaveApiUuids({});
+          setAutoPushPaused(false);
           return;
         }
         const rows = (binding.targets || []).filter((row) =>
           sourceType === 'purchase_order' ? row.user_saved === true : Boolean(row.target_profile),
         );
-        setTargetProfiles(rows.map((row) => row.target_profile).filter(Boolean));
+        setAutoPushPaused(
+          rows.length > 0 && rows.every((row) => row.push_enabled === false),
+        );
         const modes: Record<string, 'auto' | 'manual'> = {};
         const actions: Record<string, string[]> = {};
         const kinds: Record<string, 'api' | 'data_source'> = {};
         const sources: Record<string, string | undefined> = {};
         const datasets: Record<string, string | undefined> = {};
-        for (const row of rows) {
-          modes[row.target_profile] = row.push_mode === 'manual' ? 'manual' : 'auto';
-          actions[row.target_profile] = row.trigger_actions?.length
-            ? row.trigger_actions
-            : binding.trigger_actions || [];
-          kinds[row.target_profile] =
-            row.destination_kind === 'data_source' ? 'data_source' : 'api';
-          sources[row.target_profile] = row.data_source_uuid;
-          datasets[row.target_profile] = row.dataset_uuid;
+        const apis: Record<string, string | undefined> = {};
+        const actionApis: Record<string, Record<string, string | undefined>> = {};
+        const meta: Record<string, { profile: string; apiSlot: string }> = {};
+        const rowKeys: string[] = [];
+
+        if (multiApiTargetRows) {
+          const expanded = expandBindingTargetsToRowDrafts(rows);
+          for (const item of expanded) {
+            rowKeys.push(item.rowKey);
+            meta[item.rowKey] = { profile: item.profile, apiSlot: item.apiSlot };
+            const row = item.target;
+            modes[item.rowKey] = row.push_mode === 'manual' ? 'manual' : 'auto';
+            actions[item.rowKey] = row.trigger_actions?.length
+              ? row.trigger_actions
+              : triggerActionsForBindingSlot(item.apiSlot);
+            kinds[item.rowKey] =
+              row.destination_kind === 'data_source' ? 'data_source' : 'api';
+            sources[item.rowKey] = row.data_source_uuid;
+            datasets[item.rowKey] = row.dataset_uuid;
+            apis[item.rowKey] = row.save_api_uuid;
+          }
+          setTargetRowKeys(rowKeys);
+          setRowBindingMeta(meta);
+        } else {
+          setTargetProfiles(rows.map((row) => row.target_profile).filter(Boolean));
+          for (const row of rows) {
+            modes[row.target_profile] = row.push_mode === 'manual' ? 'manual' : 'auto';
+            actions[row.target_profile] = row.trigger_actions?.length
+              ? row.trigger_actions
+              : perActionApiBinding
+                ? defaultAutoBindActions
+                : binding.trigger_actions || [];
+            kinds[row.target_profile] =
+              row.destination_kind === 'data_source' ? 'data_source' : 'api';
+            sources[row.target_profile] = row.data_source_uuid;
+            datasets[row.target_profile] = row.dataset_uuid;
+            const rowActionApis = row.action_apis || {};
+            if (rowActionApis.confirm) {
+              apis[row.target_profile] = rowActionApis.confirm;
+            } else if (row.save_api_uuid) {
+              apis[row.target_profile] = row.save_api_uuid;
+            }
+            if (row.action_apis && Object.keys(row.action_apis).length) {
+              actionApis[row.target_profile] = { ...row.action_apis };
+            }
+          }
         }
         setTargetModes(modes);
         setTargetActionMap(actions);
         setDestinationKinds(kinds);
         setDataSourceUuids(sources);
         setDatasetUuids(datasets);
+        setSaveApiUuids(apis);
+        setTargetActionApiMap(actionApis);
         const kd = rows.find((row) => row.connection_code || row.save_api_uuid);
         if (kd?.connection_code) setConnectionCode(kd.connection_code);
         else if (binding.connection_code) setConnectionCode(binding.connection_code);
@@ -493,12 +804,13 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
       } catch {
         if (cancelled) return;
         setTargetProfiles([]);
+        setTargetRowKeys([]);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [loadBinding, open, sourceType]);
+  }, [defaultAutoBindActions, loadBinding, multiApiTargetRows, open, perActionApiBinding, sourceType]);
 
   const allowedProfileSet = useMemo(
     () => new Set(profileOptions.map((o) => o.value)),
@@ -507,47 +819,75 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
 
   const profilesReady = useMemo(() => {
     if (!profilesLoaded || profilesLoading) return false;
-    if (!profileOptions.length || !targetProfiles.length) return false;
-    return targetProfiles.every((p) => allowedProfileSet.has(p));
+    if (!profileOptions.length) return false;
+    if (multiApiTargetRows) {
+      if (!bindingKeysForReady.length) return false;
+      return bindingKeysForReady.every((key) => {
+        const profile = rowBindingMeta[key]?.profile;
+        return profile && allowedProfileSet.has(profile);
+      });
+    }
+    if (!readinessProfiles.length) return false;
+    return readinessProfiles.every((p) => allowedProfileSet.has(p));
   }, [
     allowedProfileSet,
+    bindingKeysForReady,
+    multiApiTargetRows,
     profileOptions.length,
     profilesLoaded,
     profilesLoading,
-    targetProfiles,
+    readinessProfiles,
+    rowBindingMeta,
   ]);
 
   const connectorReady = useMemo(() => {
-    const needsApiConnector = targetProfiles.some(
-      (profile) => kingdeeProfiles.includes(profile) && (destinationKinds[profile] ?? 'api') === 'api',
-    );
+    const needsApiConnector = bindingKeysForReady.some((key) => {
+      const profile = profileForBindingKey(key);
+      return kingdeeProfiles.includes(profile) && (destinationKinds[key] ?? 'api') === 'api';
+    });
     if (!needsApiConnector) return true;
     if (connectorsLoading) return false;
     if (!connectionCode) return false;
-    if (matchSaveApi) {
-      if (apisLoading) return false;
-      const kdProfiles = targetProfiles.filter(
-        (profile) =>
-          kingdeeProfiles.includes(profile) &&
-          (destinationKinds[profile] ?? 'api') === 'api',
-      );
-      if (
-        kdProfiles.some((profile) => !pickSaveApiUuidForProfile(profile, saveApiUuid))
-      ) {
-        return false;
-      }
+    if (apisLoading) return false;
+    const kdKeys = bindingKeysForReady.filter((key) => {
+      const profile = profileForBindingKey(key);
+      return kingdeeProfiles.includes(profile) && (destinationKinds[key] ?? 'api') === 'api';
+    });
+    if (
+      kdKeys.some((key) => {
+        if (multiApiTargetRows) {
+          return !String(saveApiUuids[key] || '').trim();
+        }
+        if (perActionApiBinding) {
+          const actions =
+            targetActionMap[key]?.length ? targetActionMap[key] : defaultAutoBindActions;
+          return requiredApiSlotsForProfile(key, actions).some(
+            (slot) => !String(targetActionApiMap[key]?.[slot] || '').trim(),
+          );
+        }
+        return !pickSaveApiUuidForProfile(key, saveApiUuid);
+      })
+    ) {
+      return false;
     }
     return true;
   }, [
     apisLoading,
+    bindingKeysForReady,
     connectionCode,
     connectorsLoading,
+    defaultAutoBindActions,
     destinationKinds,
     kingdeeProfiles,
-    matchSaveApi,
+    multiApiTargetRows,
+    perActionApiBinding,
     pickSaveApiUuidForProfile,
+    profileForBindingKey,
+    requiredApiSlotsForProfile,
     saveApiUuid,
-    targetProfiles,
+    saveApiUuids,
+    targetActionApiMap,
+    targetActionMap,
   ]);
 
   const pushReady = profilesReady && connectorReady;
@@ -561,39 +901,71 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
     if (!profileOptions.length) {
       return t('app.kuaizhizao.documentPush.batch.noProfiles');
     }
-    if (!targetProfiles.length || !targetProfiles.every((p) => allowedProfileSet.has(p))) {
+    if (multiApiTargetRows) {
+      if (!bindingKeysForReady.length) {
+        return t('app.kuaizhizao.documentPush.batch.needTargetProfile');
+      }
+      if (
+        !bindingKeysForReady.every((key) => {
+          const profile = rowBindingMeta[key]?.profile;
+          return profile && allowedProfileSet.has(profile);
+        })
+      ) {
+        return t('app.kuaizhizao.documentPush.batch.needTargetProfile');
+      }
+    } else if (
+      !readinessProfiles.length ||
+      !readinessProfiles.every((p) => allowedProfileSet.has(p))
+    ) {
       return t('app.kuaizhizao.documentPush.batch.needTargetProfile');
     }
     if (needsKingdeeConnector && !connectionCode) {
       return t('app.kuaizhizao.documentPush.batch.needConnector');
     }
-    if (
-      needsKingdeeConnector &&
-      matchSaveApi &&
-      targetProfiles.some(
-        (profile) =>
-          kingdeeProfiles.includes(profile) &&
-          (destinationKinds[profile] ?? 'api') === 'api' &&
-          !pickSaveApiUuidForProfile(profile, saveApiUuid),
-      )
-    ) {
-      return t('app.kuaizhizao.documentPush.batch.needApi');
+    if (needsKingdeeConnector) {
+      for (const key of bindingKeysForReady) {
+        const profile = profileForBindingKey(key);
+        if (!kingdeeProfiles.includes(profile)) continue;
+        if ((destinationKinds[key] ?? 'api') !== 'api') continue;
+        if (multiApiTargetRows) {
+          if (!String(saveApiUuids[key] || '').trim()) {
+            return t('app.kuaizhizao.documentPush.batch.needApi');
+          }
+        } else if (perActionApiBinding) {
+          const actions = effectiveBindActionsForProfile(key);
+          for (const slot of requiredApiSlotsForProfile(key, actions)) {
+            if (!String(targetActionApiMap[key]?.[slot] || '').trim()) {
+              return t('app.kuaizhizao.documentPush.batch.needActionApi');
+            }
+          }
+        } else if (!pickSaveApiUuidForProfile(key, saveApiUuid)) {
+          return t('app.kuaizhizao.documentPush.batch.needApi');
+        }
+      }
     }
     return null;
   }, [
     allowedProfileSet,
+    bindingKeysForReady,
     connectionCode,
     destinationKinds,
+    effectiveBindActionsForProfile,
     kingdeeProfiles,
-    matchSaveApi,
+    multiApiTargetRows,
     needsKingdeeConnector,
+    perActionApiBinding,
     pickSaveApiUuidForProfile,
+    profileForBindingKey,
+    readinessProfiles,
     profileOptions.length,
     profilesLoaded,
     profilesLoading,
+    requiredApiSlotsForProfile,
+    rowBindingMeta,
     saveApiUuid,
+    saveApiUuids,
+    targetActionApiMap,
     t,
-    targetProfiles,
   ]);
 
   const pull = useUniPullQuery<T>({
@@ -625,33 +997,49 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
       const conn = connectionCodeRef.current;
       const apiUuid = saveApiUuidRef.current;
       const allowed = new Set(profileOptionsRef.current.map((o) => o.value));
-      const onlyProfile = pushOnlyProfileRef.current;
-      const profiles = targetProfilesRef.current.filter((p) => {
-        if (!p || !allowed.has(p)) return false;
-        if (onlyProfile) return p === onlyProfile;
-        return (targetModesRef.current[p] ?? 'auto') === 'manual';
-      });
-      if (!profiles.length) {
+      const onlyBindingKey = pushOnlyProfileRef.current;
+      // multiApiTargetRows：设置弹窗 key 是绑定行 id，须映射到 target_profile 再校验白名单
+      const profileOfBindingKey = (key: string) => {
+        if (multiApiTargetRowsRef.current) {
+          return String(rowBindingMetaRef.current[key]?.profile || '').trim();
+        }
+        return key;
+      };
+      // 设置弹窗内推送：onlyBindingKey 可能仍是 pending，尚未写入列表
+      const bindingKeys = onlyBindingKey
+        ? (() => {
+            const profile = profileOfBindingKey(onlyBindingKey);
+            return profile && allowed.has(profile) ? [onlyBindingKey] : [];
+          })()
+        : targetProfilesRef.current.filter((key) => {
+            if (!key) return false;
+            const profile = profileOfBindingKey(key);
+            if (!profile || !allowed.has(profile)) return false;
+            return (targetModesRef.current[key] ?? 'auto') === 'manual';
+          });
+      if (!bindingKeys.length) {
         Modal.warning({
           title,
           content: t('app.kuaizhizao.documentPush.batch.needTargetProfile'),
         });
         return;
       }
-      const dataSourceProfiles = profiles.filter(
-        (profile) => (destinationKindsRef.current[profile] ?? 'api') === 'data_source',
+      const dataSourceKeys = bindingKeys.filter(
+        (key) => (destinationKindsRef.current[key] ?? 'api') === 'data_source',
       );
-      if (dataSourceProfiles.some((profile) => !datasetUuidsRef.current[profile])) {
+      if (dataSourceKeys.some((key) => !datasetUuidsRef.current[key])) {
         Modal.warning({
           title,
           content: t('app.kuaizhizao.documentPush.batch.needWriteDataset'),
         });
         return;
       }
-      const apiProfiles = profiles.filter(
-        (profile) => (destinationKindsRef.current[profile] ?? 'api') !== 'data_source',
+      const apiKeys = bindingKeys.filter(
+        (key) => (destinationKindsRef.current[key] ?? 'api') !== 'data_source',
       );
-      const needKd = apiProfiles.some((p) => kingdeeProfiles.includes(p));
+      const needKd = apiKeys.some((key) =>
+        kingdeeProfiles.includes(profileOfBindingKey(key)),
+      );
       if (needKd && !conn) {
         Modal.warning({
           title,
@@ -661,11 +1049,12 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
       }
       if (
         needKd &&
-        matchSaveApi &&
-        apiProfiles.some(
-          (profile) =>
-            kingdeeProfiles.includes(profile) && !pickSaveApiUuidForProfile(profile, apiUuid),
-        )
+        apiKeys.some((key) => {
+          const profile = profileOfBindingKey(key);
+          return (
+            kingdeeProfiles.includes(profile) && !pickSaveApiUuidForProfile(key, apiUuid)
+          );
+        })
       ) {
         Modal.warning({
           title,
@@ -675,34 +1064,59 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
       }
       try {
         if (saveBinding && rememberBindingRef.current) {
-          const allProfiles = targetProfilesRef.current.filter((p) => p && allowed.has(p));
-          const bound = allProfiles.map((profile) => ({
-            target_profile: profile,
-            push_mode: targetModesRef.current[profile] ?? 'auto',
-            destination_kind: destinationKindsRef.current[profile] ?? 'api',
-            data_source_uuid:
-              (destinationKindsRef.current[profile] ?? 'api') === 'data_source'
-                ? dataSourceUuidsRef.current[profile]
-                : undefined,
-            dataset_uuid:
-              (destinationKindsRef.current[profile] ?? 'api') === 'data_source'
-                ? datasetUuidsRef.current[profile]
-                : undefined,
-            trigger_actions:
-              (targetModesRef.current[profile] ?? 'auto') === 'auto'
-                ? targetActionMapRef.current[profile] ?? []
-                : [],
-            connection_code:
-              kingdeeProfiles.includes(profile) &&
-              (destinationKindsRef.current[profile] ?? 'api') === 'api'
-                ? conn
-                : undefined,
-            save_api_uuid:
-              kingdeeProfiles.includes(profile) &&
-              (destinationKindsRef.current[profile] ?? 'api') === 'api'
-                ? pickSaveApiUuidForProfile(profile, apiUuid)
-                : undefined,
-          }));
+          const listed = targetProfilesRef.current.filter((key) => {
+            const profile = profileOfBindingKey(key);
+            return Boolean(key && profile && allowed.has(profile));
+          });
+          const allBindingKeys =
+            onlyBindingKey &&
+            profileOfBindingKey(onlyBindingKey) &&
+            allowed.has(profileOfBindingKey(onlyBindingKey)) &&
+            !listed.includes(onlyBindingKey)
+              ? [...listed, onlyBindingKey]
+              : listed;
+          const bound = allBindingKeys.map((key) => {
+            const profile = profileOfBindingKey(key);
+            const mode = targetModesRef.current[key] ?? 'auto';
+            const actions =
+              mode === 'auto'
+                ? targetActionMapRef.current[key]?.length
+                  ? targetActionMapRef.current[key]
+                  : defaultAutoBindActions
+                : [];
+            const actionApis = perActionApiBindingRef.current
+              ? buildActionApisForProfile(key, actions)
+              : undefined;
+            const saveUuid =
+              actionApis?.confirm ||
+              (kingdeeProfiles.includes(profile) &&
+              (destinationKindsRef.current[key] ?? 'api') === 'api'
+                ? pickSaveApiUuidForProfile(key, apiUuid)
+                : undefined);
+            return {
+              target_profile: profile,
+              push_mode: mode,
+              destination_kind: destinationKindsRef.current[key] ?? 'api',
+              data_source_uuid:
+                (destinationKindsRef.current[key] ?? 'api') === 'data_source'
+                  ? dataSourceUuidsRef.current[key]
+                  : undefined,
+              dataset_uuid:
+                (destinationKindsRef.current[key] ?? 'api') === 'data_source'
+                  ? datasetUuidsRef.current[key]
+                  : undefined,
+              trigger_actions: actions,
+              action_apis: actionApis,
+              connection_code:
+                kingdeeProfiles.includes(profile) &&
+                (destinationKindsRef.current[key] ?? 'api') === 'api'
+                  ? conn
+                  : undefined,
+              save_api_uuid: saveUuid,
+              user_saved: true,
+              push_enabled: !autoPushPaused,
+            };
+          });
           const autoActions = [
             ...new Set(bound.flatMap((row) => row.trigger_actions)),
           ];
@@ -717,34 +1131,38 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
         }
 
         let created = 0;
+        const alreadyPushedIds: number[] = [];
         let skipped = 0;
         let failed = 0;
         const errors: string[] = [];
 
         for (const id of ids) {
           try {
-            const targets = profiles.map((profile) => ({
-              target_profile: profile,
-              destination_kind: destinationKindsRef.current[profile] ?? 'api',
-              data_source_uuid:
-                (destinationKindsRef.current[profile] ?? 'api') === 'data_source'
-                  ? dataSourceUuidsRef.current[profile]
-                  : undefined,
-              dataset_uuid:
-                (destinationKindsRef.current[profile] ?? 'api') === 'data_source'
-                  ? datasetUuidsRef.current[profile]
-                  : undefined,
-              connection_code:
-                kingdeeProfiles.includes(profile) &&
-                (destinationKindsRef.current[profile] ?? 'api') === 'api'
-                  ? conn
-                  : undefined,
-              save_api_uuid:
-                kingdeeProfiles.includes(profile) &&
-                (destinationKindsRef.current[profile] ?? 'api') === 'api'
-                  ? pickSaveApiUuidForProfile(profile, apiUuid)
-                  : undefined,
-            }));
+            const targets = bindingKeys.map((key) => {
+              const profile = profileOfBindingKey(key);
+              return {
+                target_profile: profile,
+                destination_kind: destinationKindsRef.current[key] ?? 'api',
+                data_source_uuid:
+                  (destinationKindsRef.current[key] ?? 'api') === 'data_source'
+                    ? dataSourceUuidsRef.current[key]
+                    : undefined,
+                dataset_uuid:
+                  (destinationKindsRef.current[key] ?? 'api') === 'data_source'
+                    ? datasetUuidsRef.current[key]
+                    : undefined,
+                connection_code:
+                  kingdeeProfiles.includes(profile) &&
+                  (destinationKindsRef.current[key] ?? 'api') === 'api'
+                    ? conn
+                    : undefined,
+                save_api_uuid:
+                  kingdeeProfiles.includes(profile) &&
+                  (destinationKindsRef.current[key] ?? 'api') === 'api'
+                    ? pickSaveApiUuidForProfile(key, apiUuid)
+                    : undefined,
+              };
+            });
             const result = await pushDocumentExternal({
               source_type: sourceType,
               source_id: id,
@@ -767,6 +1185,7 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
               errors.push(`${id}: ${result.message || t(failedTitleKey)}`);
             } else if (result.skipped) {
               skipped += 1;
+              alreadyPushedIds.push(id);
             } else {
               created += 1;
             }
@@ -778,6 +1197,99 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
         }
 
         const notify = embedded ? messageApi : null;
+        const uniqueAlreadyPushed = [...new Set(alreadyPushedIds)];
+        if (
+          sourceType === 'purchase_receipt' &&
+          uniqueAlreadyPushed.length > 0 &&
+          created === 0 &&
+          failed === 0
+        ) {
+          const confirmed = await new Promise<boolean>((resolve) => {
+            Modal.confirm({
+              title: t('app.kuaizhizao.warehouseInbound.msg.externalPushRepushTitle'),
+              content: t('app.kuaizhizao.warehouseInbound.msg.externalPushRepushConfirm', {
+                reason: t(skippedHintKey, { skipped: uniqueAlreadyPushed.length }),
+              }),
+              okText: t('app.kuaizhizao.warehouseInbound.action.repush'),
+              onOk: () => resolve(true),
+              onCancel: () => resolve(false),
+            });
+          });
+          if (confirmed) {
+            let forceCreated = 0;
+            let forceFailed = 0;
+            const forceErrors: string[] = [];
+            const forceTargets = bindingKeys.map((key) => {
+              const profile = profileOfBindingKey(key);
+              return {
+                target_profile: profile,
+                destination_kind: destinationKindsRef.current[key] ?? 'api',
+                data_source_uuid:
+                  (destinationKindsRef.current[key] ?? 'api') === 'data_source'
+                    ? dataSourceUuidsRef.current[key]
+                    : undefined,
+                dataset_uuid:
+                  (destinationKindsRef.current[key] ?? 'api') === 'data_source'
+                    ? datasetUuidsRef.current[key]
+                    : undefined,
+                connection_code:
+                  kingdeeProfiles.includes(profile) &&
+                  (destinationKindsRef.current[key] ?? 'api') === 'api'
+                    ? conn
+                    : undefined,
+                save_api_uuid:
+                  kingdeeProfiles.includes(profile) &&
+                  (destinationKindsRef.current[key] ?? 'api') === 'api'
+                    ? pickSaveApiUuidForProfile(key, apiUuid)
+                    : undefined,
+              };
+            });
+            for (const id of uniqueAlreadyPushed) {
+              try {
+                const result = await pushDocumentExternal({
+                  source_type: sourceType,
+                  source_id: id,
+                  targets: forceTargets,
+                  dry_run: false,
+                  force: true,
+                });
+                if (result.multi) {
+                  forceCreated += Number(result.created || 0);
+                  forceFailed += Number(result.failed || 0);
+                  for (const one of result.results || []) {
+                    if (one.success === false) {
+                      forceErrors.push(
+                        `${id}/${one.target_profile}: ${one.message || t(failedTitleKey)}`,
+                      );
+                    }
+                  }
+                } else if (result.success === false) {
+                  forceFailed += 1;
+                  forceErrors.push(`${id}: ${result.message || t(failedTitleKey)}`);
+                } else if (!result.skipped) {
+                  forceCreated += 1;
+                }
+              } catch (err: unknown) {
+                forceFailed += 1;
+                const msg = err instanceof Error ? err.message : String(err || '');
+                forceErrors.push(`${id}: ${msg || t(failedTitleKey)}`);
+              }
+            }
+            if (forceFailed > 0 && forceCreated === 0) {
+              const detail = forceErrors.slice(0, 5).join('\n') || t(failedTitleKey);
+              if (notify) notify.error(detail);
+              else Modal.error({ title: t(failedTitleKey), content: detail });
+              return;
+            }
+            const title = t('app.kuaizhizao.warehouseInbound.msg.externalPushRepushSuccess');
+            if (notify) notify.success(title);
+            else Modal.success({ title });
+            onComplete?.();
+            onClose();
+            return;
+          }
+        }
+
         if (failed > 0 && created === 0) {
           const detail = errors.slice(0, 5).join('\n') || t(failedTitleKey);
           if (notify) notify.error(detail);
@@ -841,7 +1353,7 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
       return;
     }
     if (pull.open) {
-      pull.closeModal();
+      pull.resetModal();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 只跟随外部 open
   }, [open]);
@@ -880,30 +1392,44 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
     const conn = connectionCodeRef.current;
     const apiUuid = saveApiUuidRef.current;
     const allowed = new Set(profileOptionsRef.current.map((o) => o.value));
-    const onlyProfile = settingProfileRef.current;
-    const profiles = targetProfilesRef.current.filter((p) => {
-      if (!p || !allowed.has(p)) return false;
-      if (onlyProfile) return p === onlyProfile;
-      return true;
-    });
-    if (!profiles.length) {
+    const onlyBindingKey = settingProfileRef.current;
+    const profileOfBindingKey = (key: string) => {
+      if (multiApiTargetRowsRef.current) {
+        return String(rowBindingMetaRef.current[key]?.profile || '').trim();
+      }
+      return key;
+    };
+    // 设置弹窗内预览：当前目标可能尚未落列表；multiApi 行 key ≠ profile
+    const bindingKeys = onlyBindingKey
+      ? (() => {
+          const profile = profileOfBindingKey(onlyBindingKey);
+          return profile && allowed.has(profile) ? [onlyBindingKey] : [];
+        })()
+      : targetProfilesRef.current.filter((key) => {
+          if (!key) return false;
+          const profile = profileOfBindingKey(key);
+          return Boolean(profile && allowed.has(profile));
+        });
+    if (!bindingKeys.length) {
       Modal.warning({
         title: t('app.kuaizhizao.documentPush.previewTitle'),
         content: t('app.kuaizhizao.documentPush.batch.needTargetProfile'),
       });
       return;
     }
-    const apiProfiles = profiles.filter(
-      (profile) => (destinationKindsRef.current[profile] ?? 'api') !== 'data_source',
+    const apiKeys = bindingKeys.filter(
+      (key) => (destinationKindsRef.current[key] ?? 'api') !== 'data_source',
     );
-    if (!apiProfiles.length) {
+    if (!apiKeys.length) {
       Modal.info({
         title: t('app.kuaizhizao.documentPush.previewTitle'),
         content: t('app.kuaizhizao.documentPush.batch.dataSourceNoted'),
       });
       return;
     }
-    const needKd = apiProfiles.some((p) => kingdeeProfiles.includes(p));
+    const needKd = apiKeys.some((key) =>
+      kingdeeProfiles.includes(profileOfBindingKey(key)),
+    );
     if (needKd && !conn) {
       Modal.warning({
         title: t('app.kuaizhizao.documentPush.previewTitle'),
@@ -913,11 +1439,12 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
     }
     if (
       needKd &&
-      matchSaveApi &&
-      apiProfiles.some(
-        (profile) =>
-          kingdeeProfiles.includes(profile) && !pickSaveApiUuidForProfile(profile, apiUuid),
-      )
+      apiKeys.some((key) => {
+        const profile = profileOfBindingKey(key);
+        return (
+          kingdeeProfiles.includes(profile) && !pickSaveApiUuidForProfile(key, apiUuid)
+        );
+      })
     ) {
       Modal.warning({
         title: t('app.kuaizhizao.documentPush.previewTitle'),
@@ -925,25 +1452,29 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
       });
       return;
     }
+    const previewProfiles = apiKeys.map((key) => profileOfBindingKey(key));
     setPreviewLoading(true);
     try {
       const result = await pushDocumentExternal({
         source_type: sourceType,
         source_id: Number(first.id),
-        targets: apiProfiles.map((profile) => ({
-          target_profile: profile,
-          connection_code: needKd && kingdeeProfiles.includes(profile) ? conn : undefined,
-          save_api_uuid:
-            needKd && kingdeeProfiles.includes(profile)
-              ? pickSaveApiUuidForProfile(profile, apiUuid)
-              : undefined,
-        })),
+        targets: apiKeys.map((key) => {
+          const profile = profileOfBindingKey(key);
+          return {
+            target_profile: profile,
+            connection_code: needKd && kingdeeProfiles.includes(profile) ? conn : undefined,
+            save_api_uuid:
+              needKd && kingdeeProfiles.includes(profile)
+                ? pickSaveApiUuidForProfile(key, apiUuid)
+                : undefined,
+          };
+        }),
         dry_run: true,
       });
       const model = (result.model || {}) as Record<string, unknown>;
       const profileLabelText = result.multi
-        ? (result.target_profiles || profiles).map(profileLabel).join(', ')
-        : profileLabel(String(result.target_profile || profiles[0]));
+        ? (result.target_profiles || previewProfiles).map(profileLabel).join(', ')
+        : profileLabel(String(result.target_profile || previewProfiles[0]));
       Modal.info({
         title: t('app.kuaizhizao.documentPush.previewTitle'),
         width: 720,
@@ -977,7 +1508,6 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   }, [
     failedTitleKey,
     kingdeeProfiles,
-    matchSaveApi,
     notReadyReason,
     profileLabel,
     pull.selectedRows,
@@ -994,31 +1524,139 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
     [connectors],
   );
 
-  const apiOptions = useMemo(
-    () =>
-      saveApis.map((api) => ({
-        value: api.uuid,
-        label: api.name ? `${api.name}（${api.code}）` : api.code,
-      })),
-    [saveApis],
-  );
+  const apiOptions = useMemo(() => {
+    const conn = selectedConnector;
+    const settingKey = settingProfile;
+    let items = saveApis;
+    if (multiApiTargetRows && settingKey && matchBindingApi) {
+      const slot = String(rowBindingMeta[settingKey]?.apiSlot || 'confirm').trim() || 'confirm';
+      items = saveApis.filter((api) => matchBindingApi(slot, api, conn));
+    }
+    return items.map((api) => ({
+      value: api.uuid,
+      label: api.name ? `${api.name}（${api.code}）` : api.code,
+    }));
+  }, [
+    matchBindingApi,
+    multiApiTargetRows,
+    rowBindingMeta,
+    saveApis,
+    selectedConnector,
+    settingProfile,
+  ]);
 
   settingProfileRef.current = settingProfile;
+
+  const profileConfigNotReadyReason = useCallback(
+    (key: string): string | null => {
+      const bindingKey = String(key || '').trim();
+      if (!bindingKey) {
+        return t('app.kuaizhizao.documentPush.batch.needTargetProfile');
+      }
+      const profile = profileForBindingKey(bindingKey);
+      if (!profile || !allowedProfileSet.has(profile)) {
+        return t('app.kuaizhizao.documentPush.batch.needTargetProfile');
+      }
+      const kind = destinationKinds[bindingKey] ?? 'api';
+      if (kind === 'data_source') {
+        if (!dataSourceUuids[bindingKey]) {
+          return t('app.kuaizhizao.documentPush.batch.needDataSource');
+        }
+        if (!datasetUuids[bindingKey]) {
+          return t('app.kuaizhizao.documentPush.batch.needWriteDataset');
+        }
+        return null;
+      }
+      if (kingdeeProfiles.includes(profile)) {
+        if (!connectionCode) {
+          return t('app.kuaizhizao.documentPush.batch.needConnector');
+        }
+        if (multiApiTargetRows) {
+          if (!pickSaveApiUuidForProfile(bindingKey, saveApiUuid)) {
+            return t('app.kuaizhizao.documentPush.batch.needApi');
+          }
+        } else if (perActionApiBinding) {
+          const actions = effectiveBindActionsForProfile(bindingKey);
+          for (const slot of requiredApiSlotsForProfile(bindingKey, actions)) {
+            if (!String(targetActionApiMap[bindingKey]?.[slot] || '').trim()) {
+              return t('app.kuaizhizao.documentPush.batch.needActionApi');
+            }
+          }
+        } else if (!pickSaveApiUuidForProfile(bindingKey, saveApiUuid)) {
+          return t('app.kuaizhizao.documentPush.batch.needApi');
+        }
+      }
+      return null;
+    },
+    [
+      allowedProfileSet,
+      connectionCode,
+      dataSourceUuids,
+      datasetUuids,
+      destinationKinds,
+      effectiveBindActionsForProfile,
+      kingdeeProfiles,
+      multiApiTargetRows,
+      perActionApiBinding,
+      pickSaveApiUuidForProfile,
+      profileForBindingKey,
+      requiredApiSlotsForProfile,
+      saveApiUuid,
+      t,
+      targetActionApiMap,
+    ],
+  );
 
   const closeTargetSetting = (apply: boolean) => {
     if (!apply && settingSnapshotRef.current && settingProfile) {
       const snap = settingSnapshotRef.current;
       setConnectionCode(snap.connection);
       setSaveApiUuid(snap.api);
+      setSaveApiUuids((prev) => ({ ...prev, [settingProfile]: snap.api }));
       setTargetModes((prev) => ({ ...prev, [settingProfile]: snap.mode }));
       setTargetActionMap((prev) => ({ ...prev, [settingProfile]: snap.actions }));
       setDestinationKinds((prev) => ({ ...prev, [settingProfile]: snap.destination }));
       setDataSourceUuids((prev) => ({ ...prev, [settingProfile]: snap.dataSourceUuid }));
     }
-    if (apply && pendingNewProfile && settingProfile) {
-      setTargetProfiles((prev) =>
-        prev.includes(settingProfile) ? prev : [...prev, settingProfile],
-      );
+    if (apply && settingProfile) {
+      const blockReason = profileConfigNotReadyReason(settingProfile);
+      if (blockReason) {
+        Modal.warning({
+          title: t('app.kuaizhizao.documentPush.batch.targetSettingTitle'),
+          content: blockReason,
+        });
+        return;
+      }
+      const appliedActions = effectiveBindActionsForProfile(settingProfile);
+      if (appliedActions.length) {
+        setTargetActionMap((prev) => ({ ...prev, [settingProfile]: appliedActions }));
+      }
+      const confirmUuid = targetActionApiMap[settingProfile]?.confirm || saveApiUuid;
+      if (confirmUuid) {
+        setSaveApiUuids((prev) => ({ ...prev, [settingProfile]: confirmUuid }));
+      }
+      if (pendingNewProfile) {
+        if (multiApiTargetRows) {
+          setTargetRowKeys((prev) =>
+            prev.includes(settingProfile) ? prev : [...prev, settingProfile],
+          );
+        } else {
+          setTargetProfiles((prev) =>
+            prev.includes(settingProfile) ? prev : [...prev, settingProfile],
+          );
+        }
+      }
+      if (multiApiTargetRows) {
+        const slot = apiSlotForBindingKey(settingProfile);
+        setTargetActionMap((prev) => ({
+          ...prev,
+          [settingProfile]: triggerActionsForBindingSlot(slot),
+        }));
+        const rowApi = saveApiUuids[settingProfile] || saveApiUuid;
+        if (rowApi) {
+          setSaveApiUuids((prev) => ({ ...prev, [settingProfile]: rowApi }));
+        }
+      }
     }
     setPendingNewProfile(null);
     setSettingProfile(null);
@@ -1113,21 +1751,109 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
             { value: 'manual', label: t('app.kuaizhizao.documentPush.batch.modeManual') },
           ]}
         />
-        {(targetModes[settingProfile] ?? 'auto') === 'auto' ? (
+        {multiApiTargetRows && (destinationKinds[settingProfile] ?? 'api') === 'api' ? (
+          <>
+            <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap', lineHeight: '32px' }}>
+              {t('app.kuaizhizao.documentPush.batch.apiBindingSlot')}
+            </Typography.Text>
+            <Select
+              style={{ width: '100%', maxWidth: 520 }}
+              value={rowBindingMeta[settingProfile]?.apiSlot || 'confirm'}
+              options={resolvedApiBindingSlotOptions}
+              onChange={(slot) => {
+                const profile = profileForBindingKey(settingProfile);
+                setRowBindingMeta((prev) => ({
+                  ...prev,
+                  [settingProfile]: {
+                    profile: prev[settingProfile]?.profile || profile,
+                    apiSlot: slot,
+                  },
+                }));
+                setTargetActionMap((prev) => ({
+                  ...prev,
+                  [settingProfile]: triggerActionsForBindingSlot(slot),
+                }));
+                const picked = resolveActionApiUuidRef.current?.(slot, saveApis);
+                if (picked) {
+                  setSaveApiUuid(picked);
+                  setSaveApiUuids((prev) => ({ ...prev, [settingProfile]: picked }));
+                }
+              }}
+            />
+          </>
+        ) : null}
+        {(targetModes[settingProfile] ?? 'auto') === 'auto' && !multiApiTargetRows ? (
           <>
             <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap', lineHeight: '32px' }}>
               {t('app.kuaizhizao.documentPush.batch.bindActions')}
             </Typography.Text>
-            <Checkbox.Group
-              options={[
-                { label: t('permission.action.submit'), value: 'submit' },
-                { label: t('permission.action.approve'), value: 'approve' },
-              ]}
-              value={targetActionMap[settingProfile] ?? []}
-              onChange={(vals) =>
-                setTargetActionMap((prev) => ({ ...prev, [settingProfile]: vals.map(String) }))
-              }
-            />
+            <div style={{ minWidth: 0 }}>
+              <Checkbox.Group
+                options={resolvedBindActionOptions}
+                value={effectiveBindActionsForProfile(settingProfile)}
+                onChange={(vals) => {
+                  const next = vals.map(String);
+                  setTargetActionMap((prev) => ({ ...prev, [settingProfile]: next }));
+                  if (perActionApiBinding && settingProfile) {
+                    setTargetActionApiMap((prev) => {
+                      const row = { ...(prev[settingProfile] || {}) };
+                      for (const action of next) {
+                        for (const slot of apiKeysForBindAction(action)) {
+                          if (row[slot]) continue;
+                          const picked = resolveActionApiUuidRef.current?.(slot, saveApis);
+                          if (picked) row[slot] = picked;
+                        }
+                      }
+                      return { ...prev, [settingProfile]: row };
+                    });
+                  }
+                }}
+              />
+              {perActionApiBinding ? (
+                <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
+                  {t('app.kuaizhizao.documentPush.batch.bindActionsPerApiHint')}
+                </Typography.Text>
+              ) : null}
+            </div>
+            {perActionApiBinding &&
+            !multiApiTargetRows &&
+            effectiveBindActionsForProfile(settingProfile).length > 0 &&
+            (destinationKinds[settingProfile] ?? 'api') === 'api' &&
+            kingdeeProfiles.includes(profileForBindingKey(settingProfile))
+              ? effectiveBindActionsForProfile(settingProfile).flatMap((action) =>
+                  apiKeysForBindAction(action).map((slot) => (
+                    <React.Fragment key={`${action}-${slot}`}>
+                      <Typography.Text
+                        type="secondary"
+                        style={{ whiteSpace: 'nowrap', lineHeight: '32px' }}
+                      >
+                        {t(`app.kuaizhizao.documentPush.batch.actionApi.${slot}`, slot)}
+                      </Typography.Text>
+                      <Select
+                        style={{ width: '100%', maxWidth: 520 }}
+                        loading={apisLoading}
+                        placeholder={t('app.kuaizhizao.documentPush.batch.apiPlaceholder')}
+                        options={apiOptions}
+                        value={targetActionApiMap[settingProfile]?.[slot]}
+                        onChange={(value) => {
+                          setTargetActionApiMap((prev) => ({
+                            ...prev,
+                            [settingProfile]: { ...(prev[settingProfile] || {}), [slot]: value },
+                          }));
+                          if (slot === 'confirm') {
+                            setSaveApiUuid(value);
+                            setSaveApiUuids((prev) => ({ ...prev, [settingProfile]: value }));
+                          }
+                        }}
+                        allowClear={false}
+                        showSearch
+                        optionFilterProp="label"
+                        notFoundContent={t('app.kuaizhizao.documentPush.batch.apiEmpty')}
+                      />
+                    </React.Fragment>
+                  )),
+                )
+              : null}
           </>
         ) : null}
         {(destinationKinds[settingProfile] ?? 'api') === 'data_source' ? (
@@ -1176,7 +1902,7 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
           </>
         ) : null}
         {(destinationKinds[settingProfile] ?? 'api') === 'api' &&
-        kingdeeProfiles.includes(settingProfile) ? (
+        kingdeeProfiles.includes(profileForBindingKey(settingProfile)) ? (
           <>
         <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap', lineHeight: '32px' }}>
           {t('app.kuaizhizao.documentPush.batch.connectorPlaceholder')}
@@ -1193,7 +1919,7 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
           optionFilterProp="label"
           notFoundContent={t('app.kuaizhizao.documentPush.batch.connectorEmpty')}
         />
-        {matchSaveApi ? (
+        {!perActionApiBinding || multiApiTargetRows ? (
           <>
             <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap', lineHeight: '32px' }}>
               {t('app.kuaizhizao.documentPush.batch.apiPlaceholder')}
@@ -1204,7 +1930,12 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
               placeholder={t('app.kuaizhizao.documentPush.batch.apiPlaceholder')}
               options={apiOptions}
               value={saveApiUuid}
-              onChange={(value) => setSaveApiUuid(value)}
+              onChange={(value) => {
+                setSaveApiUuid(value);
+                if (settingProfile) {
+                  setSaveApiUuids((prev) => ({ ...prev, [settingProfile]: value }));
+                }
+              }}
               allowClear={false}
               showSearch
               optionFilterProp="label"
@@ -1216,7 +1947,7 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
         ) : null}
       </div>
       {(destinationKinds[settingProfile] ?? 'api') === 'api' &&
-      kingdeeProfiles.includes(settingProfile) &&
+      kingdeeProfiles.includes(profileForBindingKey(settingProfile)) &&
       !connectionCode ? (
         <Alert
           type="warning"
@@ -1290,14 +2021,79 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
 
   if (!open) return null;
 
-  const targetRows = targetProfiles.map((profile, index) => ({
-    key: profile,
-    index: index + 1,
-    profile,
-    name: profileLabel(profile),
-  }));
+  const targetRows = listBindingKeys.map((bindingKey, index) => {
+    const profile = profileForBindingKey(bindingKey);
+    const kind = destinationKinds[bindingKey] ?? 'api';
+    let name = profileLabel(profile);
+    if (kind === 'api' && kingdeeProfiles.includes(profile)) {
+      const apiUuid = pickSaveApiUuidForProfile(bindingKey, saveApiUuid);
+      const api = saveApis.find((row) => row.uuid === apiUuid);
+      if (api?.name) name = api.name;
+      else if (api?.code) name = api.code;
+    } else if (kind === 'data_source') {
+      const dataset = writeDatasets.find((row) => row.uuid === datasetUuids[bindingKey]);
+      const dataSource = dataSources.find((row) => row.uuid === dataSourceUuids[bindingKey]);
+      if (dataset?.name) name = dataset.name;
+      else if (dataset?.code) name = dataset.code;
+      else if (dataSource?.name) name = dataSource.name;
+      else if (dataSource?.code) name = dataSource.code;
+    }
+    let bindBehavior = '—';
+    if (multiApiTargetRows) {
+      const slot = apiSlotForBindingKey(bindingKey);
+      bindBehavior = bindingSlotLabel(slot);
+    } else {
+      const mode = targetModes[bindingKey] ?? 'auto';
+      const actions =
+        mode === 'auto'
+          ? targetActionMap[bindingKey]?.length
+            ? targetActionMap[bindingKey]
+            : defaultAutoBindActions
+          : targetActionMap[bindingKey] || [];
+      const labels = actions
+        .map(
+          (action) =>
+            resolvedBindActionOptions.find((option) => option.value === action)?.label || action,
+        )
+        .filter(Boolean);
+      if (labels.length) bindBehavior = labels.join('、');
+    }
+    return {
+      key: bindingKey,
+      index: index + 1,
+      profile: bindingKey,
+      name,
+      bindBehavior,
+    };
+  });
 
   const addTarget = () => {
+    if (multiApiTargetRows) {
+      const profile =
+        kingdeeProfiles.find((p) => allowedProfileSet.has(p)) ||
+        profileOptions.find((option) => allowedProfileSet.has(option.value))?.value;
+      if (!profile) {
+        messageApi.info(t('app.kuaizhizao.documentPush.batch.noProfiles'));
+        return;
+      }
+      const rowKey = createBindingRowKey();
+      const usedSlots = new Set(
+        targetRowKeys.map((k) => rowBindingMeta[k]?.apiSlot).filter(Boolean),
+      );
+      const nextSlot =
+        resolvedApiBindingSlotOptions.find((option) => !usedSlots.has(option.value))?.value ||
+        'confirm';
+      setRowBindingMeta((prev) => ({ ...prev, [rowKey]: { profile, apiSlot: nextSlot } }));
+      setPendingNewProfile(rowKey);
+      setTargetModes((prev) => ({ ...prev, [rowKey]: 'auto' }));
+      setDestinationKinds((prev) => ({ ...prev, [rowKey]: 'api' }));
+      setTargetActionMap((prev) => ({
+        ...prev,
+        [rowKey]: triggerActionsForBindingSlot(nextSlot),
+      }));
+      openTargetSetting(rowKey);
+      return;
+    }
     const preferred = (defaultProfilesRef.current || []).filter(Boolean);
     const used = new Set([...targetProfiles, pendingNewProfile].filter(Boolean) as string[]);
     const next =
@@ -1306,24 +2102,26 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
         .find((option) => option && !used.has(option.value)) ||
       profileOptions.find((option) => !used.has(option.value));
     if (!next) {
+      if (perActionApiBinding && targetProfiles.length === 1) {
+        messageApi.info(t('app.kuaizhizao.documentPush.batch.noMoreTargetsUseSettings'));
+        openTargetSetting(targetProfiles[0]);
+        return;
+      }
       messageApi.info(t('app.kuaizhizao.documentPush.batch.noMoreTargets'));
       return;
     }
     setPendingNewProfile(next.value);
     setTargetModes((prev) => ({ ...prev, [next.value]: prev[next.value] ?? 'auto' }));
-    settingSnapshotRef.current = {
-      connection: connectionCode,
-      api: saveApiUuid,
-      mode: 'auto',
-      actions: [],
-      destination: destinationKinds[next.value] ?? 'api',
-      dataSourceUuid: dataSourceUuids[next.value],
-    };
-    setSettingProfile(next.value);
+    setTargetActionMap((prev) => ({
+      ...prev,
+      [next.value]: prev[next.value]?.length ? prev[next.value] : defaultAutoBindActions,
+    }));
+    openTargetSetting(next.value);
   };
 
   const confirmAuto = async () => {
-    if (targetProfiles.length > 0 && !pushReady) {
+    const hasTargets = multiApiTargetRows ? targetRowKeys.length > 0 : targetProfiles.length > 0;
+    if (hasTargets && !pushReady) {
       Modal.warning({
         title,
         content: notReadyReason || t('components.syncPushHub.pushNotReady'),
@@ -1335,14 +2133,23 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
       return;
     }
     if (!rememberBinding) {
-      onClose();
+      messageApi.warning(t('app.kuaizhizao.documentPush.batch.needRememberBinding'));
       return;
     }
-    const profiles = targetProfiles.filter((profile) => allowedProfileSet.has(profile));
+    const bindingKeys = listBindingKeys.filter((key) =>
+      allowedProfileSet.has(profileForBindingKey(key)),
+    );
+    if (!bindingKeys.length) {
+      Modal.warning({
+        title,
+        content: t('app.kuaizhizao.documentPush.batch.targetsEmpty'),
+      });
+      return;
+    }
     if (
-      profiles.some(
-        (profile) =>
-          (destinationKinds[profile] ?? 'api') === 'data_source' && !dataSourceUuids[profile],
+      bindingKeys.some(
+        (key) =>
+          (destinationKinds[key] ?? 'api') === 'data_source' && !dataSourceUuids[key],
       )
     ) {
       Modal.warning({
@@ -1352,9 +2159,8 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
       return;
     }
     if (
-      profiles.some(
-        (profile) =>
-          (destinationKinds[profile] ?? 'api') === 'data_source' && !datasetUuids[profile],
+      bindingKeys.some(
+        (key) => (destinationKinds[key] ?? 'api') === 'data_source' && !datasetUuids[key],
       )
     ) {
       Modal.warning({
@@ -1363,35 +2169,153 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
       });
       return;
     }
-    const bound = profiles.map((profile) => ({
-      target_profile: profile,
-      push_mode: targetModes[profile] ?? 'auto',
-      destination_kind: destinationKinds[profile] ?? 'api',
-      data_source_uuid:
-        (destinationKinds[profile] ?? 'api') === 'data_source' ? dataSourceUuids[profile] : undefined,
-      dataset_uuid:
-        (destinationKinds[profile] ?? 'api') === 'data_source' ? datasetUuids[profile] : undefined,
-      trigger_actions:
-        (targetModes[profile] ?? 'auto') === 'auto' ? targetActionMap[profile] ?? [] : [],
-      connection_code:
-        kingdeeProfiles.includes(profile) && (destinationKinds[profile] ?? 'api') === 'api'
-          ? connectionCode
-          : undefined,
-      save_api_uuid:
-        kingdeeProfiles.includes(profile) && (destinationKinds[profile] ?? 'api') === 'api'
-          ? pickSaveApiUuidForProfile(profile, saveApiUuid)
-          : undefined,
-      user_saved: true,
-    }));
-    await saveBinding({
-      targets: bound,
-      trigger_actions: [...new Set(bound.flatMap((row) => row.trigger_actions))],
-      connection_code: connectionCode,
-      save_api_uuid: saveApiUuid,
-      sync_mode: syncMode,
-      schedule_interval_minutes: scheduleIntervalMinutes,
+    const configBlock = bindingKeys.map((key) => profileConfigNotReadyReason(key)).find(Boolean);
+    if (configBlock) {
+      Modal.warning({
+        title,
+        content: configBlock,
+      });
+      return;
+    }
+    const bound = bindingKeys.map((key) => {
+      const profile = profileForBindingKey(key);
+      const mode = targetModes[key] ?? 'auto';
+      if (multiApiTargetRows) {
+        const slot = apiSlotForBindingKey(key);
+        const saveUuid = pickSaveApiUuidForProfile(key, saveApiUuid);
+        const actions =
+          mode === 'auto' ? triggerActionsForBindingSlot(slot) : targetActionMap[key] || [];
+        return {
+          target_profile: profile,
+          push_mode: mode,
+          destination_kind: destinationKinds[key] ?? 'api',
+          data_source_uuid:
+            (destinationKinds[key] ?? 'api') === 'data_source' ? dataSourceUuids[key] : undefined,
+          dataset_uuid:
+            (destinationKinds[key] ?? 'api') === 'data_source' ? datasetUuids[key] : undefined,
+          trigger_actions: actions,
+          action_apis: saveUuid ? { [slot]: saveUuid } : undefined,
+          connection_code:
+            kingdeeProfiles.includes(profile) && (destinationKinds[key] ?? 'api') === 'api'
+              ? connectionCode
+              : undefined,
+          save_api_uuid: saveUuid,
+          user_saved: true,
+          push_enabled: !autoPushPaused,
+        };
+      }
+      const actions =
+        mode === 'auto'
+          ? targetActionMap[key]?.length
+            ? targetActionMap[key]
+            : defaultAutoBindActions
+          : [];
+      const actionApis = perActionApiBinding
+        ? buildActionApisForProfile(key, actions)
+        : undefined;
+      const saveUuid =
+        actionApis?.confirm ||
+        (kingdeeProfiles.includes(profile) && (destinationKinds[key] ?? 'api') === 'api'
+          ? pickSaveApiUuidForProfile(key, saveApiUuid)
+          : undefined);
+      return {
+        target_profile: profile,
+        push_mode: mode,
+        destination_kind: destinationKinds[key] ?? 'api',
+        data_source_uuid:
+          (destinationKinds[key] ?? 'api') === 'data_source' ? dataSourceUuids[key] : undefined,
+        dataset_uuid:
+          (destinationKinds[key] ?? 'api') === 'data_source' ? datasetUuids[key] : undefined,
+        trigger_actions: actions,
+        action_apis: actionApis,
+        connection_code:
+          kingdeeProfiles.includes(profile) && (destinationKinds[key] ?? 'api') === 'api'
+            ? connectionCode
+            : undefined,
+        save_api_uuid: saveUuid,
+        user_saved: true,
+        push_enabled: !autoPushPaused,
+      };
     });
-    messageApi.success(t('app.kuaizhizao.documentPush.batch.autoSaved'));
+    try {
+      await saveBinding({
+        targets: bound,
+        trigger_actions: [...new Set(bound.flatMap((row) => row.trigger_actions))],
+        connection_code: connectionCode,
+        save_api_uuid: saveApiUuid,
+        sync_mode: syncMode,
+        schedule_interval_minutes: scheduleIntervalMinutes,
+      });
+      messageApi.success(t('app.kuaizhizao.documentPush.batch.autoSaved'));
+      onClose();
+      onComplete?.();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.documentPush.batch.autoSaveFailed')));
+    }
+  };
+
+  const toggleAutoPushPause = async () => {
+    if (!saveBinding) {
+      messageApi.warning(t('app.kuaizhizao.documentPush.batch.autoNeedBinding'));
+      return;
+    }
+    if (!rememberBinding) {
+      messageApi.warning(t('app.kuaizhizao.documentPush.batch.needRememberBinding'));
+      return;
+    }
+    const nextPaused = !autoPushPaused;
+    setAutoPushPauseLoading(true);
+    try {
+      // 复用确认保存路径：先切本地状态再落库
+      setAutoPushPaused(nextPaused);
+      // 构造与 confirmAuto 相同的 bound 较重；此处直接改已加载目标再保存
+      const binding = loadBinding ? await loadBinding() : null;
+      const existing = (binding?.targets || []).filter(
+        (row) => row && row.user_saved !== false && row.target_profile,
+      );
+      if (!existing.length && !targetRows.length) {
+        setAutoPushPaused(!nextPaused);
+        messageApi.warning(t('components.syncPushHub.autoPushPauseNeedTargets'));
+        return;
+      }
+      if (existing.length) {
+        await saveBinding({
+          targets: existing.map((row) => ({
+            ...row,
+            user_saved: true,
+            push_enabled: !nextPaused,
+          })),
+          trigger_actions: binding?.trigger_actions || [
+            ...new Set(existing.flatMap((row) => row.trigger_actions || [])),
+          ],
+          connection_code: binding?.connection_code || connectionCode,
+          save_api_uuid: binding?.save_api_uuid || saveApiUuid,
+          sync_mode: binding?.sync_mode || syncMode,
+          schedule_interval_minutes:
+            binding?.schedule_interval_minutes || scheduleIntervalMinutes,
+        });
+      } else {
+        // 面板有未确认行：只切本地，点确认时写入 push_enabled
+        messageApi.info(
+          nextPaused
+            ? t('app.kuaizhizao.documentPush.batch.autoPushPausedLocalOnly')
+            : t('app.kuaizhizao.documentPush.batch.autoPushResumedLocalOnly'),
+        );
+        return;
+      }
+      messageApi.success(
+        nextPaused
+          ? t('components.syncPushHub.autoPushPaused')
+          : t('components.syncPushHub.autoPushResumed'),
+      );
+    } catch (error: unknown) {
+      setAutoPushPaused(!nextPaused);
+      messageApi.error(
+        getApiErrorMessage(error, t('components.syncPushHub.autoPushPauseFailed')),
+      );
+    } finally {
+      setAutoPushPauseLoading(false);
+    }
   };
 
   const footer = (
@@ -1399,7 +2323,6 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
       <Button onClick={onClose}>{t('common.cancel')}</Button>
       <Button
         type="primary"
-        disabled={targetProfiles.length > 0 && !pushReady}
         onClick={() => {
           void confirmAuto();
         }}
@@ -1412,14 +2335,36 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   const body = (
     <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
       {hint ? <Alert type="info" showIcon title={hint} /> : null}
+      {autoPushPaused ? (
+        <Alert type="warning" showIcon title={t('app.kuaizhizao.documentPush.batch.autoPushPausedBanner')} />
+      ) : null}
       <Flex justify="space-between" align="center" gap={12} wrap="wrap">
         <Space size={8} wrap align="center" style={{ flex: 1, minWidth: 200 }}>
           <Typography.Text strong>{t('app.kuaizhizao.documentPush.batch.targetProfiles')}</Typography.Text>
           <Typography.Text type="secondary" style={{ fontSize: 12, lineHeight: 1.5 }}>
-            {t('app.kuaizhizao.documentPush.batch.targetsHint')}
+            {multiApiTargetRows
+              ? t('app.kuaizhizao.documentPush.batch.targetsHintMultiApiRows')
+              : perActionApiBinding
+                ? t('app.kuaizhizao.documentPush.batch.targetsHintPerAction')
+                : t('app.kuaizhizao.documentPush.batch.targetsHint')}
           </Typography.Text>
         </Space>
         <Space wrap>
+          {saveBinding ? (
+            <Button
+              icon={autoPushPaused ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
+              danger={autoPushPaused}
+              type={autoPushPaused ? 'primary' : 'default'}
+              loading={autoPushPauseLoading}
+              onClick={() => {
+                void toggleAutoPushPause();
+              }}
+            >
+              {autoPushPaused
+                ? t('components.syncPushHub.autoPushResume')
+                : t('components.syncPushHub.autoPushPause')}
+            </Button>
+          ) : null}
           <Button icon={<PlusOutlined />} onClick={addTarget} disabled={profilesLoading}>
             {t('app.kuaizhizao.documentPush.batch.addTarget')}
           </Button>
@@ -1471,6 +2416,12 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
                 : t('app.kuaizhizao.documentPush.batch.modeAuto'),
           },
           {
+            title: t('app.kuaizhizao.documentPush.batch.bindBehaviorCol'),
+            dataIndex: 'bindBehavior',
+            width: 112,
+            ellipsis: true,
+          },
+          {
             title: t('common.actions'),
             key: 'actions',
             width: 140,
@@ -1479,17 +2430,7 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
                   <Button
                     type="link"
                     size="small"
-                    onClick={() => {
-                      settingSnapshotRef.current = {
-                        connection: connectionCode,
-                        api: saveApiUuid,
-                        mode: targetModes[record.profile] ?? 'auto',
-                        actions: targetActionMap[record.profile] ?? [],
-                        destination: destinationKinds[record.profile] ?? 'api',
-                        dataSourceUuid: dataSourceUuids[record.profile],
-                      };
-                      setSettingProfile(record.profile);
-                    }}
+                    onClick={() => openTargetSetting(record.profile)}
                   >
                     {t('components.syncFromSource.configureSource')}
                   </Button>
@@ -1499,7 +2440,16 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
                   danger
                   icon={<DeleteOutlined />}
                   onClick={() => {
-                    setTargetProfiles((prev) => prev.filter((item) => item !== record.profile));
+                    if (multiApiTargetRows) {
+                      setTargetRowKeys((prev) => prev.filter((item) => item !== record.profile));
+                      setRowBindingMeta((prev) => {
+                        const next = { ...prev };
+                        delete next[record.profile];
+                        return next;
+                      });
+                    } else {
+                      setTargetProfiles((prev) => prev.filter((item) => item !== record.profile));
+                    }
                     if (settingProfile === record.profile) setSettingProfile(null);
                   }}
                 />

@@ -2671,7 +2671,10 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
         }
         showDeleteButton={inboundPerms.canDelete}
         rowSelectionGetCheckboxProps={(record) => ({
-          disabled: !isInboundDeletable(record) && !isInboundPrintable(record),
+          disabled:
+            fixedReceiptType === 'purchase'
+              ? false
+              : !isInboundDeletable(record) && !isInboundPrintable(record),
         })}
         onDelete={handleBatchDelete}
         deleteConfirmTitle={(count) =>

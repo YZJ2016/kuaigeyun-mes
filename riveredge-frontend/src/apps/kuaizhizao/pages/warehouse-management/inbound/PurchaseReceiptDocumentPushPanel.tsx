@@ -136,8 +136,8 @@ export const PurchaseReceiptDocumentPushPanel: React.FC<PurchaseReceiptDocumentP
       const res = await warehouseApi.purchaseReceipt.list({
         keyword: keyword || undefined,
         status: '已入库',
-        current: page,
-        page_size: pageSize,
+        skip: Math.max(0, (page - 1) * pageSize),
+        limit: pageSize,
       });
       let data = ((res.items || []) as Record<string, unknown>[])
         .map(toCandidate)

@@ -8,6 +8,10 @@ from core.models.integration_config import IntegrationConfig
 from core.services.integration.connector_request import resolve_connector_request
 from core.services.integration.kingdee_cosmic_api_presets import IM_PURINBILL_ADD_PATH
 from core.services.integration.kingdee_cosmic_paths import prepare_kingdee_cosmic_outbound
+from core.services.integration.kingdee_cosmic_response_status import (
+    _cosmic_batch_first_result,
+    extract_cosmic_response_status,
+)
 from core.services.integration.kingdee_cosmic_service import (
     apply_kingdee_cosmic_session_headers,
     is_kingdee_cosmic_access_token_rejected,
@@ -22,58 +26,6 @@ __all__ = [
     "extract_cosmic_response_status",
     "extract_cosmic_saved_bill_ref",
 ]
-
-def _cosmic_batch_first_result(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    data = payload.get("data")
-    if isinstance(data, dict):
-        result = data.get("result")
-        if isinstance(result, list) and result and isinstance(result[0], dict):
-            return result[0]
-        return data
-    if isinstance(data, list) and data and isinstance(data[0], dict):
-        return data[0]
-    return None
-
-
-def extract_cosmic_response_status(payload: Any) -> Tuple[bool, str]:
-    if not isinstance(payload, dict):
-        return False, "金蝶苍穹返回非 JSON 对象"
-    error_code = str(payload.get("errorCode") or payload.get("error_code") or "").strip()
-    status = payload.get("status")
-    message = str(payload.get("message") or payload.get("msg") or "").strip()
-    ok = status is True or str(status).lower() == "true" or error_code in {"0", "success", "SUCCESS"}
-    first = _cosmic_batch_first_result(payload)
-    if isinstance(first, dict):
-        bill_status = first.get("billStatus")
-        if bill_status is False or str(bill_status).lower() == "false":
-            ok = False
-            row_msgs = first.get("errors") or first.get("rowMsg") or []
-            if isinstance(row_msgs, list) and row_msgs:
-                chunks: list[str] = []
-                for item in row_msgs:
-                    if isinstance(item, dict):
-                        nested = item.get("rowMsg") or item.get("message")
-                        if isinstance(nested, list):
-                            chunks.extend(str(x) for x in nested if x)
-                        elif nested:
-                            chunks.append(str(nested))
-                    elif item:
-                        chunks.append(str(item))
-                if chunks:
-                    message = "；".join(chunks)[:500]
-        data = payload.get("data")
-        if isinstance(data, dict):
-            fail_count = str(data.get("failCount") or "").strip()
-            if fail_count and fail_count not in {"0", "0.0"}:
-                ok = False
-    if ok:
-        return True, (message or "成功")[:500]
-    if message:
-        return False, message[:500]
-    if error_code:
-        return False, f"金蝶苍穹调用失败 errorCode={error_code}"[:500]
-    return False, "金蝶苍穹调用失败"[:500]
-
 
 def extract_cosmic_saved_bill_ref(payload: Any, fallback: str = "") -> Tuple[int, str]:
     if not isinstance(payload, dict):

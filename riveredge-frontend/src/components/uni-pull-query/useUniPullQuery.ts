@@ -126,6 +126,23 @@ export function useUniPullQuery<T extends object>(options: UseUniPullQueryOption
     void load(buildLoadParams('', 1, {}));
   }, [buildLoadParams, load, onOpen, resolvedDefaultScope]);
 
+  const resetModal = useCallback(() => {
+    setSearchDraft('');
+    setAppliedKeyword('');
+    setDateDraftFrom(undefined);
+    setDateDraftTo(undefined);
+    setAppliedDateFrom(undefined);
+    setAppliedDateTo(undefined);
+    setScope(resolvedDefaultScope);
+    setPage(1);
+    setTotal(0);
+    setSelectedRowKeys([]);
+    selectedRowsByKeyRef.current = new Map();
+    setSelectedRowsVersion((v) => v + 1);
+    setDataSource([]);
+    void load(buildLoadParams('', 1, {}));
+  }, [buildLoadParams, load, resolvedDefaultScope]);
+
   const closeModal = useCallback(() => {
     fetchSeqRef.current += 1;
     setOpen(false);
@@ -345,6 +362,7 @@ export function useUniPullQuery<T extends object>(options: UseUniPullQueryOption
     pullQuery,
     open,
     openModal,
+    resetModal,
     closeModal,
     loading,
     confirmLoading,

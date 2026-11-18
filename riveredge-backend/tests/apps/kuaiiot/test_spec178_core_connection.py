@@ -112,10 +112,13 @@ async def test_referenced_core_cannot_be_deleted_even_when_disabled(db):
 
 @pytest.mark.asyncio
 async def test_unused_core_can_be_deleted(db):
+    from tortoise.exceptions import DoesNotExist
+
     core = await _core()
     await IntegrationConfigService.delete_integration(1, str(core.uuid))
-    await core.refresh_from_db()
-    assert core.deleted_at is not None
+    # 集成配置删除为硬删除（绑定接口一并硬删），行不再存在
+    with pytest.raises(DoesNotExist):
+        await core.refresh_from_db()
 
 
 @pytest.mark.asyncio
