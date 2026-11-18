@@ -128,7 +128,13 @@ class MiscVoucherService:
             "delete": {"allowed": status in _DELETABLE},
         }
 
-    async def _resolve_lines(self, tenant_id: int, lines_in: List[Any]) -> List[Dict[str, Any]]:
+    async def _resolve_lines(
+        self,
+        tenant_id: int,
+        lines_in: List[Any],
+        *,
+        payment_method: str = "",
+    ) -> List[Dict[str, Any]]:
         """校验明细行并回填类别名称；返回落库行 dict 列表。"""
         codes = [
             str(l.category_code or "").strip() for l in lines_in
@@ -139,6 +145,11 @@ class MiscVoucherService:
             tenant_id=tenant_id, code__in=codes, deleted_at__isnull=True
         ).all()
         cat_by_code = {str(c.code): c for c in cats}
+        # 员工垫付领款人仅支出侧启用
+        require_payee = (
+            self.spec.voucher_type == "other_expense"
+            and str(payment_method or "").strip() == "员工垫付"
+        )
         resolved: List[Dict[str, Any]] = []
         for idx, line in enumerate(lines_in, start=1):
             code = str(line.category_code or "").strip()
@@ -148,18 +159,141 @@ class MiscVoucherService:
             amount = Decimal(str(line.amount or 0))
             if amount <= 0:
                 raise ValidationError("明细行金额必须大于 0")
-            resolved.append(
+            payee_id = int(line.payee_id) if getattr(line, "payee_id", None) else None
+            payee_name = (
+                str(line.payee_name).strip() if getattr(line, "payee_name", None) else ""
+            ) or None
+            if self.spec.voucher_type == "other_expense":
+                if require_payee:
+                    if not payee_id or not payee_name:
+                        raise ValidationError(f"第 {idx} 行须选择领款人（员工垫付）")
+                else:
+                    payee_id = None
+                    payee_name = None
+            row: Dict[str, Any] = {
+                "line_no": idx,
+                "category_code": code,
+                "category_name": str(getattr(line, "category_name", None) or cat.name),
+                "amount": amount,
+                "description": getattr(line, "description", None),
+                "gl_account_code": getattr(line, "gl_account_code", None)
+                or cat.default_gl_account_code,
+            }
+            if self.spec.voucher_type == "other_expense":
+                row["payee_id"] = payee_id
+                row["payee_name"] = payee_name
+            resolved.append(row)
+        return resolved
+
+    _PR_LINK_ELIGIBLE_STATUSES = frozenset(
+        {"已入库", "已完成", "部分入库", "COMPLETED", "completed"}
+    )
+
+    async def normalize_related_purchase_receipts(
+        self,
+        tenant_id: int,
+        *,
+        counterparty_kind: str,
+        counterparty_id: Optional[int],
+        related: Optional[List[Any]],
+    ) -> Optional[List[dict]]:
+        """往来为供应商时可关联采购入库；须属于该供应商且已入库类状态。"""
+        if self.spec.voucher_type != "other_expense":
+            return None
+        kind = str(counterparty_kind or "").strip().lower()
+        if kind != "supplier":
+            return None
+        if not related:
+            return []
+        if not counterparty_id:
+            raise ValidationError("关联采购入库前须先选择供应商")
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+        from apps.kuaicaiwu.schemas.finance import RelatedPurchaseReceiptRef
+
+        refs: List[RelatedPurchaseReceiptRef] = []
+        for item in related:
+            if isinstance(item, RelatedPurchaseReceiptRef):
+                refs.append(item)
+            else:
+                refs.append(RelatedPurchaseReceiptRef.model_validate(item))
+        ids = [int(r.id) for r in refs if int(r.id) > 0]
+        if not ids:
+            return []
+        rows = await PurchaseReceipt.filter(
+            tenant_id=tenant_id,
+            id__in=ids,
+            deleted_at__isnull=True,
+        )
+        by_id = {int(r.id): r for r in rows}
+        out: List[dict] = []
+        for rid in ids:
+            receipt = by_id.get(rid)
+            if not receipt:
+                raise ValidationError(f"采购入库单不存在: {rid}")
+            if int(receipt.supplier_id or 0) != int(counterparty_id):
+                raise ValidationError(
+                    f"采购入库单 {receipt.receipt_code} 不属于当前供应商"
+                )
+            status = str(receipt.status or "").strip()
+            if status not in self._PR_LINK_ELIGIBLE_STATUSES:
+                raise ValidationError(
+                    f"采购入库单 {receipt.receipt_code} 状态不可关联（须已入库类）"
+                )
+            out.append(
                 {
-                    "line_no": idx,
-                    "category_code": code,
-                    "category_name": str(getattr(line, "category_name", None) or cat.name),
-                    "amount": amount,
-                    "description": getattr(line, "description", None),
-                    "gl_account_code": getattr(line, "gl_account_code", None)
-                    or cat.default_gl_account_code,
+                    "id": rid,
+                    "code": str(receipt.receipt_code or rid),
                 }
             )
-        return resolved
+        return out
+
+    async def list_purchase_receipt_link_candidates(
+        self,
+        tenant_id: int,
+        *,
+        supplier_id: int,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        if self.spec.voucher_type != "other_expense":
+            raise ValidationError("仅其他费用支出支持关联采购入库")
+        if supplier_id <= 0:
+            raise ValidationError("须指定供应商")
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+        from tortoise.expressions import Q
+
+        query = PurchaseReceipt.filter(
+            tenant_id=tenant_id,
+            supplier_id=supplier_id,
+            status__in=list(self._PR_LINK_ELIGIBLE_STATUSES),
+            deleted_at__isnull=True,
+        )
+        kw = str(keyword or "").strip()
+        if kw:
+            query = query.filter(
+                Q(receipt_code__icontains=kw) | Q(supplier_name__icontains=kw)
+            )
+        total = await query.count()
+        receipts = await query.offset(skip).limit(limit).order_by("-created_at")
+        data = [
+            {
+                "id": int(r.id),
+                "code": str(r.receipt_code or r.id),
+                "receipt_code": str(r.receipt_code or r.id),
+                "supplier_id": int(r.supplier_id or 0) or None,
+                "supplier_name": r.supplier_name,
+                "source_status": r.status,
+                "source_date": str(
+                    getattr(r, "receipt_time", None)
+                    or getattr(r, "created_at", None)
+                    or ""
+                ),
+                "amount": float(r.total_amount or 0),
+            }
+            for r in receipts
+        ]
+        return {"data": data, "total": total, "success": True}
 
     def _assert_counterparty(self, data: Any) -> None:
         self._assert_counterparty_dict(
@@ -208,7 +342,9 @@ class MiscVoucherService:
             payment_method=data.payment_method,
             bank_account_id=data.bank_account_id,
         )
-        resolved = await self._resolve_lines(tenant_id, data.lines)
+        resolved = await self._resolve_lines(
+            tenant_id, data.lines, payment_method=str(data.payment_method or "")
+        )
         total = sum((r["amount"] for r in resolved), Decimal("0"))
         code = await self.spec.allocate_code(tenant_id)
         payload = {
@@ -230,6 +366,15 @@ class MiscVoucherService:
             "notes": data.notes,
             "attachments": data.attachments,
         }
+        if self.spec.voucher_type == "other_expense":
+            payload["related_purchase_receipts"] = (
+                await self.normalize_related_purchase_receipts(
+                    tenant_id,
+                    counterparty_kind=str(data.counterparty_kind or "none"),
+                    counterparty_id=data.counterparty_id,
+                    related=data.related_purchase_receipts,
+                )
+            )
         apply_create_audit(payload, user)
         doc = await self.spec.model.create(**payload)
         for row in resolved:
@@ -250,6 +395,8 @@ class MiscVoucherService:
             )
         update_data = data.model_dump(exclude_unset=True)
         update_data.pop("lines", None)
+        related_provided = "related_purchase_receipts" in update_data
+        related_raw = update_data.pop("related_purchase_receipts", None)
         merged = {**doc.__dict__, **update_data}
         self._assert_counterparty_dict(merged)
         method = update_data.get("payment_method", doc.payment_method)
@@ -257,8 +404,33 @@ class MiscVoucherService:
         await BankAccountService().validate_voucher_account(
             tenant_id, payment_method=method, bank_account_id=account_id
         )
+        if self.spec.voucher_type == "other_expense" and (
+            related_provided
+            or "counterparty_kind" in update_data
+            or "counterparty_id" in update_data
+        ):
+            kind_for_related = str(
+                update_data.get("counterparty_kind", doc.counterparty_kind)
+                or doc.counterparty_kind
+                or "none"
+            )
+            cp_id_for_related = update_data.get("counterparty_id", doc.counterparty_id)
+            update_data["related_purchase_receipts"] = (
+                await self.normalize_related_purchase_receipts(
+                    tenant_id,
+                    counterparty_kind=kind_for_related,
+                    counterparty_id=int(cp_id_for_related) if cp_id_for_related else None,
+                    related=(
+                        related_raw
+                        if related_provided
+                        else getattr(doc, "related_purchase_receipts", None)
+                    ),
+                )
+            )
         if data.lines is not None:
-            resolved = await self._resolve_lines(tenant_id, data.lines)
+            resolved = await self._resolve_lines(
+                tenant_id, data.lines, payment_method=str(method or "")
+            )
             update_data["total_amount"] = sum(
                 (r["amount"] for r in resolved), Decimal("0")
             )

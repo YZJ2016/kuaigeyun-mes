@@ -96,6 +96,33 @@ def _build_router(spec: MiscVoucherSpec) -> APIRouter:
             raise _raise_mapped(exc, router.prefix, tenant_id) from exc
         return await _serialize(tenant_id, doc, with_lines=True)
 
+    if spec.voucher_type == "other_expense":
+
+        @router.get("/pull-candidates/purchase-receipts", response_model=dict)
+        async def list_purchase_receipt_link_candidates(
+            supplier_id: int = Query(..., ge=1, description="供应商ID"),
+            skip: int = Query(0, ge=0),
+            limit: int = Query(20, ge=1, le=100),
+            keyword: Optional[str] = Query(None),
+            _auth: object = Depends(
+                require_permission_codes("kuaicaiwu:other-expense:read")
+            ),
+            tenant_id: int = Depends(get_current_tenant),
+        ):
+            """其他费用支出关联采购入库：按供应商列出可关联入库单。"""
+            try:
+                return await service.list_purchase_receipt_link_candidates(
+                    tenant_id,
+                    supplier_id=supplier_id,
+                    skip=skip,
+                    limit=limit,
+                    keyword=keyword,
+                )
+            except Exception as exc:
+                raise _raise_mapped(
+                    exc, f"{router.prefix}/pull-candidates", tenant_id
+                ) from exc
+
     @router.get("", response_model=OtherVoucherListResponse)
     async def list_vouchers(
         skip: int = Query(0, ge=0),

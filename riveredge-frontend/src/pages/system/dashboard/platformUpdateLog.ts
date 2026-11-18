@@ -44,6 +44,46 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'other-expense-link-purchase-receipt-r01',
+    date: '2026-10-27',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.other-expense-link-purchase-receipt-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.other-expense-link-purchase-receipt-r01.description',
+  },
+  {
+    id: 'other-expense-advance-payee-dept-r01',
+    date: '2026-10-27',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.other-expense-advance-payee-dept-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.other-expense-advance-payee-dept-r01.description',
+  },
+  {
+    id: 'payment-app-unpost-rollback-r01',
+    date: '2026-10-27',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-app-unpost-rollback-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-app-unpost-rollback-r01.description',
+  },
+  {
+    id: 'payment-require-voucher-persist-r01',
+    date: '2026-10-27',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-require-voucher-persist-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-require-voucher-persist-r01.description',
+  },
+  {
+    id: 'partner-statement-pdf-playwright-path-r01',
+    date: '2026-10-27',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.partner-statement-pdf-playwright-path-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.partner-statement-pdf-playwright-path-r01.description',
+  },
+  {
     id: 'payable-pull-receipt-material-unit-r01',
     date: '2026-10-23',
     type: 'fix',

@@ -341,6 +341,10 @@ def _run_html_to_pdf_subprocess(html_string: str) -> bytes:
         raise ValidationError(
             f"打印内容过大（{len(encoded)} 字节），请减少单据照片后重试"
         )
+    from core.services.pdf.playwright_engine import apply_usable_playwright_browsers_path
+
+    # 父进程若带了跨机/sandbox 错误路径，纠正后再传给子进程
+    apply_usable_playwright_browsers_path()
     src_root = str(_print_src_root())
     env = os.environ.copy()
     env["PYTHONPATH"] = os.pathsep.join(

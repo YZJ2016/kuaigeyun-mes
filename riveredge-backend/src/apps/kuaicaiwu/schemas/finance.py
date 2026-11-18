@@ -986,6 +986,14 @@ class OtherVoucherLineIn(BaseSchema):
     amount: Decimal = Field(..., gt=0, description="金额")
     description: Optional[str] = Field(None, description="说明")
     gl_account_code: Optional[str] = Field(None, max_length=20, description="会计科目编码")
+    # 其他费用支出 + 员工垫付时由服务端校验必填；收入侧忽略
+    payee_id: Optional[int] = None
+    payee_name: Optional[str] = Field(None, max_length=100)
+
+
+class RelatedPurchaseReceiptRef(BaseSchema):
+    id: int
+    code: str = Field(..., max_length=50)
 
 
 class OtherVoucherLineOut(OtherVoucherLineIn):
@@ -1012,6 +1020,7 @@ class OtherVoucherCreate(BaseSchema):
     project_name: Optional[str] = Field(None, max_length=200, description="项目名称")
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    related_purchase_receipts: Optional[List[RelatedPurchaseReceiptRef]] = None
     lines: List[OtherVoucherLineIn] = Field(..., min_length=1, description="明细行")
 
 
@@ -1030,6 +1039,7 @@ class OtherVoucherUpdate(BaseSchema):
     project_name: Optional[str] = Field(None, max_length=200)
     notes: Optional[str] = None
     attachments: Optional[List[dict]] = None
+    related_purchase_receipts: Optional[List[RelatedPurchaseReceiptRef]] = None
     lines: Optional[List[OtherVoucherLineIn]] = Field(None, min_length=1)
 
 
@@ -1073,6 +1083,7 @@ class OtherVoucherResponse(BaseSchema):
     project_name: Optional[str] = None
     notes: Optional[str] = None
     attachments: Optional[List[dict]] = None
+    related_purchase_receipts: Optional[List[RelatedPurchaseReceiptRef]] = None
     lines: List[OtherVoucherLineOut] = []
     capabilities: Optional[Dict[str, Any]] = None
     created_at: datetime

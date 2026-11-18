@@ -270,5 +270,12 @@ async def apply_confirmed_voucher_unpost(
     )
     if voucher_type == "payment":
         from apps.kuaicaiwu.services.payment_advance_service import PaymentAdvanceService
+        from apps.kuaizhizao.services.payment_application_push_service import (
+            PaymentApplicationPushService,
+        )
 
         await PaymentAdvanceService().void_for_payment(tenant_id, voucher_id)
+        # 须在删除 DocumentRelation 之前冲回，否则找不到申请单
+        await PaymentApplicationPushService().apply_payment_unconfirmed(
+            tenant_id, voucher_id, operator_id or 0
+        )

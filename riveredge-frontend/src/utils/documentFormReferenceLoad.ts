@@ -127,6 +127,24 @@ export async function loadUserFormReferenceOptions(
   }
 }
 
+export async function loadDepartmentFormReferenceOptions(
+  hostResource?: string,
+): Promise<DocumentFormSelectOption[]> {
+  try {
+    const items = await searchReferenceDisplayAll(
+      {
+        resource: 'system:department',
+        hostResource,
+        isActive: true,
+      },
+      500,
+    );
+    return referenceDisplayToIdOptions(items);
+  } catch {
+    return [];
+  }
+}
+
 export async function loadSupplierFormReferenceList(hostResource: string): Promise<Supplier[]> {
   try {
     const items = await searchReferenceDisplayAll(

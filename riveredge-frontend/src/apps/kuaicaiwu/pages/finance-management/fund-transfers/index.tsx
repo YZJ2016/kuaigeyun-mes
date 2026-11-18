@@ -413,7 +413,7 @@ const FundTransfersPage: React.FC = () => {
   };
 
   const batchMenuItems = useMemo(() => {
-    const items = [];
+    const items: UniBatchMenuItem[] = [];
     if (perms.canAction?.('audit')) {
       items.push({
         key: 'batch-confirm',
@@ -647,7 +647,7 @@ const FundTransfersPage: React.FC = () => {
 
   const handleSubmit = async (values: Record<string, unknown>) => {
     const payload = {
-      transfer_date: toApiDateString(values.transfer_date as dayjs.Dayjs | string),
+      transfer_date: toApiDateString(values.transfer_date as dayjs.Dayjs | string) ?? '',
       transfer_type: values.transfer_type as FundTransferType,
       amount: Number(values.amount),
       from_bank_account_id: values.from_bank_account_id
@@ -656,11 +656,13 @@ const FundTransfersPage: React.FC = () => {
       to_bank_account_id: values.to_bank_account_id
         ? Number(values.to_bank_account_id)
         : undefined,
-      external_account_name: pickSearchString(values.external_account_name),
-      external_bank_name: pickSearchString(values.external_bank_name),
-      external_account_number: pickSearchString(values.external_account_number),
-      notes: pickSearchString(values.notes),
-      attachments: normalizeDocumentAttachments(values.attachments),
+      external_account_name: pickSearchString(values, 'external_account_name'),
+      external_bank_name: pickSearchString(values, 'external_bank_name'),
+      external_account_number: pickSearchString(values, 'external_account_number'),
+      notes: pickSearchString(values, 'notes'),
+      attachments: normalizeDocumentAttachments(
+        values.attachments as Parameters<typeof normalizeDocumentAttachments>[0],
+      ),
     };
     try {
       if (editing?.id) {
@@ -782,10 +784,10 @@ const FundTransfersPage: React.FC = () => {
             const res = await fundTransferService.list({
               skip: ((current || 1) - 1) * (pageSize || 20),
               limit: pageSize || 20,
-              keyword: pickSearchString(searchFormValues?.keyword),
-              transfer_code: pickSearchString(searchFormValues?.transfer_code),
+              keyword: pickSearchString(searchFormValues, 'keyword'),
+              transfer_code: pickSearchString(searchFormValues, 'transfer_code'),
               transfer_type: searchFormValues?.transfer_type as FundTransferType | undefined,
-              status: pickSearchString(searchFormValues?.status),
+              status: pickSearchString(searchFormValues, 'status'),
               transfer_date_start: range?.[0],
               transfer_date_end: range?.[1],
               sort_field: sortField,
@@ -816,8 +818,9 @@ const FundTransfersPage: React.FC = () => {
         }}
         width={MODAL_CONFIG.LARGE_WIDTH}
         grid={false}
-        modalProps={{ destroyOnHidden: true }}
-        onFinish={handleSubmit}
+        onFinish={async (values) => {
+          await handleSubmit(values as Record<string, unknown>);
+        }}
         initialValues={modalInitialValues}
       >
         <Row gutter={16}>
@@ -906,7 +909,7 @@ const FundTransfersPage: React.FC = () => {
             }}
           </ProFormDependency>
           <Col span={24}>
-            <DocumentAttachmentsField name="attachments" />
+            <DocumentAttachmentsField name="attachments" category="fund_transfer_attachments" />
           </Col>
           <Col span={24}>
             <ProFormTextArea name="notes" label={t(`${P}.field.notes`)} fieldProps={{ rows: 2 }} />
@@ -917,13 +920,13 @@ const FundTransfersPage: React.FC = () => {
       <DetailDrawerTemplate
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        size={DRAWER_CONFIG.STANDARD_WIDTH}
         title={detailRecord?.transfer_code || t(`${P}.detailTitle`)}
         loading={detailLoading}
         extra={
           detailRecord ? (
             <DetailDrawerActions
-              actions={[
+              items={[
                 {
                   key: 'workflow',
                   visible: true,
@@ -942,7 +945,7 @@ const FundTransfersPage: React.FC = () => {
                       approvedStatuses={['已审核']}
                       rejectedStatuses={['已驳回', '驳回']}
                       theme="default"
-                      size="middle"
+                      size="medium"
                       onSuccess={() => void loadDetail(detailRecord.id)}
                     />
                   ),

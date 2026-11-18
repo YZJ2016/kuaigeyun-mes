@@ -695,6 +695,20 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
             flow_revoke=_do_revoke,
         )
 
+    @staticmethod
+    def _refresh_application_payment_status(app: PaymentApplication) -> None:
+        total = Decimal(str(app.total_request_amount or 0))
+        paid = max(Decimal("0"), Decimal(str(app.paid_amount or 0)))
+        app.paid_amount = paid
+        app.remaining_amount = max(Decimal("0"), total - paid)
+        if app.remaining_amount <= 0 and paid > 0:
+            app.status = "已付款"
+        elif paid > 0:
+            app.status = "部分付款"
+        else:
+            # 无已付时回到可再次下推付款的已批准态
+            app.status = "已批准"
+
     async def record_line_paid(
         self,
         tenant_id: int,
@@ -720,12 +734,135 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
         if total_paid_delta <= 0:
             return
         app.paid_amount = Decimal(str(app.paid_amount or 0)) + total_paid_delta
-        app.remaining_amount = max(
-            Decimal("0"),
-            Decimal(str(app.total_request_amount or 0)) - Decimal(str(app.paid_amount or 0)),
+        self._refresh_application_payment_status(app)
+        await app.save()
+
+    async def record_line_unpaid(
+        self,
+        tenant_id: int,
+        application_id: int,
+        line_payments: List[tuple[int, Decimal]],
+    ) -> None:
+        """付款单撤回确认/作废/删除后，冲回申请行与头表已付金额。"""
+        app = await PaymentApplication.get_or_none(
+            tenant_id=tenant_id, id=application_id, deleted_at__isnull=True
         )
-        if app.remaining_amount <= 0:
-            app.status = "已付款"
-        elif Decimal(str(app.paid_amount or 0)) > 0:
-            app.status = "部分付款"
+        if not app:
+            return
+        total_unpaid_delta = Decimal("0")
+        for line_id, amount in line_payments:
+            line = await PaymentApplicationLine.get_or_none(
+                tenant_id=tenant_id, id=line_id, application_id=application_id
+            )
+            if not line or amount <= 0:
+                continue
+            current = Decimal(str(line.paid_amount or 0))
+            take = min(current, amount)
+            if take <= 0:
+                continue
+            line.paid_amount = current - take
+            await line.save()
+            total_unpaid_delta += take
+        if total_unpaid_delta <= 0:
+            return
+        app.paid_amount = max(
+            Decimal("0"),
+            Decimal(str(app.paid_amount or 0)) - total_unpaid_delta,
+        )
+        self._refresh_application_payment_status(app)
+        await app.save()
+
+    async def repair_paid_from_confirmed_payments(
+        self,
+        tenant_id: int,
+        application_id: int,
+        *,
+        exclude_payment_ids: Optional[set[int]] = None,
+    ) -> None:
+        """按仍存在的已确认付款单重算申请已付（修复删除/撤回后未冲回的脏数据）。
+
+        分摊语义与 apply_payment_confirmed 一致：prepayment 单只摊到
+        prepayment 行；普通单只摊到已下推（payable→payment 关联）的应付行。
+        """
+        from apps.kuaicaiwu.models.payment import Payment
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+        app = await PaymentApplication.get_or_none(
+            tenant_id=tenant_id, id=application_id, deleted_at__isnull=True
+        )
+        if not app:
+            return
+        exclude = exclude_payment_ids or set()
+        rels = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="payment_application",
+            source_id=application_id,
+            target_type="payment",
+        ).all()
+        payment_ids = [
+            int(r.target_id)
+            for r in rels
+            if r.target_id and int(r.target_id) not in exclude
+        ]
+        payments = []
+        if payment_ids:
+            payments = await Payment.filter(
+                tenant_id=tenant_id,
+                id__in=payment_ids,
+                deleted_at__isnull=True,
+                status="Confirmed",
+            ).order_by("id").all()
+
+        lines = await PaymentApplicationLine.filter(
+            tenant_id=tenant_id, application_id=application_id
+        ).order_by("line_no")
+        paid_by_line: Dict[int, Decimal] = {int(l.id): Decimal("0") for l in lines}
+
+        for pay in payments:
+            remaining = Decimal(str(pay.total_amount or 0))
+            if remaining <= 0:
+                continue
+            if str(pay.settlement_type or "") == "prepayment":
+                eligible = {
+                    int(l.id) for l in lines
+                    if str(l.line_kind) == "prepayment"
+                }
+            else:
+                eligible = set(
+                    await DocumentRelation.filter(
+                        tenant_id=tenant_id,
+                        source_type="payable",
+                        target_type="payment",
+                        target_id=int(pay.id),
+                    ).values_list("source_id", flat=True)
+                )
+            for line in lines:
+                if remaining <= 0:
+                    break
+                line_id = int(line.id)
+                if str(pay.settlement_type or "") == "prepayment":
+                    if line_id not in eligible:
+                        continue
+                elif not line.payable_id or int(line.payable_id) not in eligible:
+                    continue
+                open_amt = (
+                    Decimal(str(line.request_amount or 0)) - paid_by_line[line_id]
+                )
+                if open_amt <= 0:
+                    continue
+                take = min(open_amt, remaining)
+                paid_by_line[line_id] += take
+                remaining -= take
+
+        for line in lines:
+            new_paid = paid_by_line.get(int(line.id), Decimal("0"))
+            if Decimal(str(line.paid_amount or 0)) != new_paid:
+                line.paid_amount = new_paid
+                await line.save()
+
+        app.paid_amount = min(
+            sum(paid_by_line.values(), Decimal("0")),
+            Decimal(str(app.total_request_amount or 0)),
+        )
+        self._refresh_application_payment_status(app)
         await app.save()

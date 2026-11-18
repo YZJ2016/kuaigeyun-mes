@@ -56,7 +56,7 @@ export interface UniAuditActionsProps {
   submitActionLabel?: string;
   onSuccess?: () => void;
   theme?: 'default' | 'link';
-  size?: 'small' | 'middle' | 'large';
+  size?: 'small' | 'medium' | 'large';
   confirmMessages?: Partial<Record<UniAuditAction, string>>;
   resourcePrefix?: string;
   unifiedAudit?: boolean;
@@ -582,7 +582,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
   const submitUsesCustomLabel = effectiveSubmitLabel !== '提交';
 
   const isToolbarTheme = theme === 'default';
-  const btnSize = size ?? (isToolbarTheme ? 'middle' : 'small');
+  const btnSize = size ?? (isToolbarTheme ? 'medium' : 'small');
 
   const renderActionButton = (
     kind: RowActionPermissionKind,

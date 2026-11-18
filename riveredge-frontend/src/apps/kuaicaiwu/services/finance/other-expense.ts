@@ -12,6 +12,24 @@ export type OtherVoucherLine = {
   amount: number;
   description?: string;
   gl_account_code?: string;
+  payee_id?: number;
+  payee_name?: string;
+};
+
+export type RelatedPurchaseReceiptRef = {
+  id: number;
+  code: string;
+};
+
+export type OtherExpensePurchaseReceiptLinkCandidate = {
+  id: number;
+  code: string;
+  receipt_code?: string;
+  supplier_id?: number | null;
+  supplier_name?: string;
+  source_status?: string;
+  source_date?: string;
+  amount?: number;
 };
 
 export type OtherExpenseVoucher = {
@@ -27,6 +45,7 @@ export type OtherExpenseVoucher = {
   status: string;
   notes?: string;
   attachments?: unknown[];
+  related_purchase_receipts?: RelatedPurchaseReceiptRef[] | null;
   lines: OtherVoucherLine[];
   capabilities?: Record<string, { allowed: boolean; reason?: string }>;
   /** 审核后 MiscVoucherFinanceBridge 回写 */
@@ -52,4 +71,14 @@ export const otherExpenseService = {
   confirm: (id: number) => apiRequest<OtherExpenseVoucher>(`${base}/${id}/confirm`, { method: 'POST' }),
   unconfirm: (id: number) => apiRequest<OtherExpenseVoucher>(`${base}/${id}/unconfirm`, { method: 'POST' }),
   cancel: (id: number) => apiRequest<OtherExpenseVoucher>(`${base}/${id}/cancel`, { method: 'POST' }),
+  listPurchaseReceiptLinkCandidates: (params: {
+    supplier_id: number;
+    skip?: number;
+    limit?: number;
+    keyword?: string;
+  }) =>
+    apiRequest<{ data: OtherExpensePurchaseReceiptLinkCandidate[]; total: number; success: boolean }>(
+      `${base}/pull-candidates/purchase-receipts`,
+      { method: 'GET', params },
+    ),
 };

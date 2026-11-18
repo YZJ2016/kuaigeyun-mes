@@ -219,12 +219,9 @@ class PaymentApplicationPushService:
             remaining -= take
         return line_payments
 
-    async def apply_payment_confirmed(
-        self,
-        tenant_id: int,
-        payment_id: int,
-        operator_id: int,
-    ) -> None:
+    async def _resolve_application_id_for_payment(
+        self, tenant_id: int, payment_id: int
+    ) -> Optional[int]:
         from apps.kuaizhizao.models.document_relation import DocumentRelation
 
         rel = await DocumentRelation.filter(
@@ -234,8 +231,20 @@ class PaymentApplicationPushService:
             target_id=payment_id,
         ).first()
         if not rel or not rel.source_id:
+            return None
+        return int(rel.source_id)
+
+    async def apply_payment_confirmed(
+        self,
+        tenant_id: int,
+        payment_id: int,
+        operator_id: int,
+    ) -> None:
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+        app_id = await self._resolve_application_id_for_payment(tenant_id, payment_id)
+        if not app_id:
             return
-        app_id = int(rel.source_id)
         lines = await PaymentApplicationLine.filter(
             tenant_id=tenant_id, application_id=app_id
         ).all()
@@ -284,3 +293,20 @@ class PaymentApplicationPushService:
                     remaining -= amt
         if line_payments:
             await self._app_svc.record_line_paid(tenant_id, app_id, line_payments)
+
+    async def apply_payment_unconfirmed(
+        self,
+        tenant_id: int,
+        payment_id: int,
+        operator_id: int,
+    ) -> None:
+        """付款单撤回确认/作废/删除前：按剩余已确认付款单重算申请已付。"""
+        app_id = await self._resolve_application_id_for_payment(tenant_id, payment_id)
+        if not app_id:
+            return
+        # 当前单仍为 Confirmed，重算时必须排除，否则冲不掉
+        await self._app_svc.repair_paid_from_confirmed_payments(
+            tenant_id,
+            app_id,
+            exclude_payment_ids={int(payment_id)},
+        )

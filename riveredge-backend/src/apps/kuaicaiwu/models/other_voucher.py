@@ -111,6 +111,10 @@ class OtherExpense(BaseModel):
     project_name = fields.CharField(max_length=200, null=True, description="项目名称")
     notes = fields.TextField(null=True, description="备注")
     attachments = fields.JSONField(null=True, description="附件列表")
+    # 往来类型=供应商时关联的采购入库单快照 [{id, code}]
+    related_purchase_receipts = fields.JSONField(
+        null=True, description="关联采购入库单 [{id, code}]"
+    )
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 
     def __str__(self):
@@ -133,6 +137,9 @@ class OtherExpenseLine(BaseModel):
     amount = fields.DecimalField(max_digits=16, decimal_places=4, description="金额")
     description = fields.TextField(null=True, description="说明")
     gl_account_code = fields.CharField(max_length=20, null=True, description="会计科目编码")
+    # 收付方式为「员工垫付」时必填
+    payee_id = fields.IntField(null=True, description="领款人用户ID")
+    payee_name = fields.CharField(max_length=100, null=True, description="领款人姓名快照")
 
     def __str__(self):
         return f"OtherExpenseLine: {self.other_expense_id}#{self.line_no}"
