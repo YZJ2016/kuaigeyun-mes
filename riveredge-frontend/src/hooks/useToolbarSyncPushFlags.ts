@@ -30,6 +30,7 @@ export type ToolbarSyncPushResource =
   | 'kuaizhizao:inbound'
   | 'kuaizhizao:outbound'
   | 'kuaizhizao:other-outbound'
+  | 'kuaizhizao:other-inbound'
   | 'kuaizhizao:warehouse-management-stocktaking'
   | 'master-data:material'
   | 'master-data:process:engineering-bom'

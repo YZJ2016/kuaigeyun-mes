@@ -320,11 +320,19 @@ async def sync_operations_from_source(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
 ):
     from apps.master_data.schemas.master_data_sync import MasterDataSyncFromSourceRequest
+    from apps.master_data.api._sync_from_source_run_log import master_data_sync_from_source_with_run_log
+    from apps.master_data.models.master_data_sync_binding import OperationSyncBinding
+
     try:
-        return await _operation_sync_service().sync_from_source(
-            tenant_id,
-            current_user,
-            MasterDataSyncFromSourceRequest.model_validate(body),
+        return await master_data_sync_from_source_with_run_log(
+            tenant_id=tenant_id,
+            entity_type="process_operation",
+            binding_model=OperationSyncBinding,
+            run_sync=lambda: _operation_sync_service().sync_from_source(
+                tenant_id,
+                current_user,
+                MasterDataSyncFromSourceRequest.model_validate(body),
+            ),
         )
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))

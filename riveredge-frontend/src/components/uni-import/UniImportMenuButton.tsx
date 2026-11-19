@@ -8,6 +8,7 @@ import type { MenuProps } from 'antd';
 import type { ButtonProps } from 'antd';
 import { DownOutlined, ImportOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { useUniTableDataActionIconOnly } from '../uni-table/dataActionIconOnlyContext';
 
 export interface UniImportMenuItem {
   key: string;
@@ -28,10 +29,12 @@ export function UniImportMenuButton({
   items,
   buttonText,
   type = 'default',
-  iconOnly = false,
+  iconOnly: iconOnlyProp = false,
   ...rest
 }: UniImportMenuButtonProps) {
   const { t } = useTranslation();
+  const toolbarIconOnly = useUniTableDataActionIconOnly();
+  const iconOnly = iconOnlyProp || toolbarIconOnly;
   const importLabel = buttonText ?? t('common.import');
 
   const menuItems: MenuProps['items'] = items.map((item) => ({

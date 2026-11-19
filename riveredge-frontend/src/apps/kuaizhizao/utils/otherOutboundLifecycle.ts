@@ -7,16 +7,16 @@ import { createLifecycleResolver } from './createLifecycleResolver';
 export const getOtherOutboundLifecycle = createLifecycleResolver({
   stageDefs: [
     { key: 'pending_outbound', label: '待出库' },
-    { key: 'delivered', label: '已出库' },
+    { key: 'outbound', label: '已出库' },
     { key: 'cancelled', label: '已取消' },
   ],
   statusToKey: {
     待出库: 'pending_outbound',
-    已出库: 'delivered',
+    已出库: 'outbound',
     已取消: 'cancelled',
   },
   exceptionKeys: ['cancelled'],
   exceptionStageKey: 'cancelled',
   nextStepSuggestionKeys: {},
-  successKeys: ['delivered'],
+  successKeys: ['outbound'],
 });

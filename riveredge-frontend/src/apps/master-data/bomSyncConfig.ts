@@ -25,5 +25,6 @@ export function createEngineeringBomSyncConfig(): SyncFromSourceConfig {
     completeSuccessKey: 'app.master-data.bom.syncComplete',
     completePartialKey: 'app.master-data.bom.syncPartial',
     failedKey: 'app.master-data.bom.syncFailed',
+    historySourceType: 'engineering_bom',
   };
 }

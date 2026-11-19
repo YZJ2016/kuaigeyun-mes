@@ -131,3 +131,50 @@ def test_build_kingdee_inventory_misc_in_model():
 def test_material_batch_skip_zero_qty():
     batch = SimpleNamespace(quantity=0, status="in_stock")
     assert material_batch_push_skip_reason(batch, material_code="M1") == "库存数量为 0，跳过推送"
+
+
+def test_build_kingdee_other_outbound_model_pick_header():
+    from apps.kuaizhizao.services.kingdee_other_outbound_push_service import (
+        build_kingdee_other_outbound_model,
+        validate_kingdee_other_outbound_header,
+    )
+
+    outbound = SimpleNamespace(
+        outbound_code="QTCK001",
+        delivery_time=None,
+        created_at=datetime(2026, 10, 26),
+        reason_type="其他",
+        reason_desc=None,
+        notes=None,
+    )
+    items = [
+        SimpleNamespace(
+            material_code="MAT-1",
+            material_name="滑块",
+            material_unit="件",
+            outbound_quantity=Decimal("5"),
+            unit_price=Decimal("0"),
+            location_code=None,
+            batch_number=None,
+            expiry_date=None,
+            notes=None,
+        )
+    ]
+    cfg = {
+        "org_number": "BU-00001",
+        "billtype_number": "BT",
+        "biztype_number": "355",
+        "invscheme_number": "355",
+        "linetype_number": "010",
+        "pickdept_number": "BM-00001",
+        "pickeroperator_number": "ID-000081",
+    }
+    model = build_kingdee_other_outbound_model(
+        outbound=outbound,
+        items=items,
+        cfg=cfg,
+        warehouse_number="1017",
+    )
+    assert model["pickdept_number"] == "BM-00001"
+    assert model["pickeroperator_number"] == "ID-000081"
+    validate_kingdee_other_outbound_header(model)

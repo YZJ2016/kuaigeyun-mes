@@ -55,6 +55,8 @@ from apps.kuaizhizao.services.warehouse_wo_outsource_pull_service import (
     WarehouseWoOutsourcePullService,
 )
 from apps.kuaizhizao.services.purchase_receipt_sync_service import purchase_receipt_sync_service
+from apps.kuaizhizao.services.other_inbound_sync_service import other_inbound_sync_service
+from apps.kuaizhizao.services.other_outbound_sync_service import other_outbound_sync_service
 
 # 初始化服务实例
 batching_order_service = BatchingOrderService()
@@ -137,6 +139,14 @@ from apps.kuaizhizao.schemas.warehouse import (
 from apps.kuaizhizao.schemas.purchase_receipt_sync import (
     PurchaseReceiptPushBindingOut,
     PurchaseReceiptPushBindingUpsert,
+)
+from apps.kuaizhizao.schemas.other_inbound_sync import (
+    OtherInboundPushBindingOut,
+    OtherInboundPushBindingUpsert,
+)
+from apps.kuaizhizao.schemas.other_outbound_sync import (
+    OtherOutboundPushBindingOut,
+    OtherOutboundPushBindingUpsert,
 )
 from apps.kuaizhizao.schemas.replenishment_suggestion import (
     ReplenishmentSuggestionResponse,
@@ -1387,6 +1397,35 @@ async def delete_other_inbound(
     )
 
 
+@router.get(
+    "/other-inbounds/push-binding",
+    response_model=OtherInboundPushBindingOut,
+    summary="其他入库单出站目标",
+)
+async def get_other_inbound_push_binding(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:other-inbound:read")),
+):
+    _ = current_user
+    return await other_inbound_sync_service.get_push_binding(tenant_id)
+
+
+@router.put(
+    "/other-inbounds/push-binding",
+    response_model=OtherInboundPushBindingOut,
+    summary="保存其他入库单出站目标",
+)
+async def put_other_inbound_push_binding(
+    body: OtherInboundPushBindingUpsert,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:other-inbound:update")),
+):
+    _ = current_user
+    return await other_inbound_sync_service.upsert_push_binding(tenant_id, body)
+
+
 @router.post("/other-inbounds/{inbound_id}/confirm", response_model=OtherInboundResponse, summary="Confirm inbound")
 async def confirm_other_inbound(
     inbound_id: int,
@@ -1443,6 +1482,35 @@ async def print_other_inbound(
 
 
 # ============ 其他出库单 API ============
+
+@router.get(
+    "/other-outbounds/push-binding",
+    response_model=OtherOutboundPushBindingOut,
+    summary="其他出库单出站目标",
+)
+async def get_other_outbound_push_binding(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:other-outbound:read")),
+):
+    _ = current_user
+    return await other_outbound_sync_service.get_push_binding(tenant_id)
+
+
+@router.put(
+    "/other-outbounds/push-binding",
+    response_model=OtherOutboundPushBindingOut,
+    summary="保存其他出库单出站目标",
+)
+async def put_other_outbound_push_binding(
+    body: OtherOutboundPushBindingUpsert,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:other-outbound:update")),
+):
+    _ = current_user
+    return await other_outbound_sync_service.upsert_push_binding(tenant_id, body)
+
 
 @router.post("/other-outbounds", response_model=OtherOutboundResponse, summary="Create misc outbound")
 async def create_other_outbound(

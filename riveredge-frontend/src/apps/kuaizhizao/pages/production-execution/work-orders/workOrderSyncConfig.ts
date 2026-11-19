@@ -69,5 +69,6 @@ export function createWorkOrderSyncConfig(): SyncFromSourceConfig {
     completeSuccessKey: 'app.kuaizhizao.workOrder.syncComplete',
     completePartialKey: 'app.kuaizhizao.workOrder.syncPartial',
     failedKey: 'app.kuaizhizao.workOrder.syncFailed',
+    historySourceType: 'work_order',
   };
 }

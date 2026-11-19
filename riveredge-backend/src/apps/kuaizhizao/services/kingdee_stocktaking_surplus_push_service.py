@@ -23,6 +23,10 @@ from core.services.integration.document_push_pipeline import (
     DocumentPushPrepared,
     DocumentPushRequest,
 )
+from core.services.integration.kingdee_warehouse_document_push_config import (
+    enrich_kingdee_warehouse_push_config,
+    merge_warehouse_kingdee_push_config,
+)
 from core.services.integration.kingdee_cosmic_api_presets import (
     BIZ_IM_SURPLUSBILL,
     IM_SURPLUSBILL_BATCH_ADD_PATH,
@@ -195,8 +199,14 @@ def build_kingdee_surplus_model(
         }
         if warehouse_number:
             entry["warehouse_number"] = warehouse_number
-        if item.location_code:
-            entry["location_number"] = str(item.location_code).strip()
+        location_number = str(
+            item.location_code
+            or config.get("location_number")
+            or config.get("location_code")
+            or ""
+        ).strip()
+        if location_number:
+            entry["location_number"] = location_number
         if item.batch_no:
             entry["lotnumber"] = str(item.batch_no).strip()
         if item.remarks:
@@ -334,8 +344,7 @@ class KingdeeStocktakingSurplusPushService:
     async def get_push_config(self, tenant_id: int) -> Dict[str, Any]:
         biz_config = await BusinessConfigService().get_business_config(tenant_id)
         warehouse = (biz_config.get("parameters", {}) or {}).get("warehouse", {}) or {}
-        raw = warehouse.get("kingdee_stocktaking_surplus_push") or {}
-        return dict(raw) if isinstance(raw, dict) else {}
+        return merge_warehouse_kingdee_push_config(warehouse, "kingdee_stocktaking_surplus_push")
 
     async def _push_now(
         self,
@@ -347,6 +356,7 @@ class KingdeeStocktakingSurplusPushService:
         config: Dict[str, Any],
         dry_run: bool = False,
     ) -> Dict[str, Any]:
+        config = await enrich_kingdee_warehouse_push_config(tenant_id, config)
         form_id = str(config.get("form_id") or DEFAULT_FORM_ID).strip() or DEFAULT_FORM_ID
         save_path = str(config.get("save_path") or DEFAULT_SAVE_PATH).strip() or DEFAULT_SAVE_PATH
 

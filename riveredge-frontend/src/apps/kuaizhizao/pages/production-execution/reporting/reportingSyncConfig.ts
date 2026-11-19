@@ -44,5 +44,6 @@ export function createReportingSyncConfig(): SyncFromSourceConfig {
     completeSuccessKey: 'app.kuaizhizao.workReporting.syncComplete',
     completePartialKey: 'app.kuaizhizao.workReporting.syncPartial',
     failedKey: 'app.kuaizhizao.workReporting.syncFailed',
+    historySourceType: 'reporting_record',
   };
 }

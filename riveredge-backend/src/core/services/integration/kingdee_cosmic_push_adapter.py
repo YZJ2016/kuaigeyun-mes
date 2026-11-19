@@ -83,13 +83,18 @@ class KingdeeCosmicPushAdapter:
         form_id: str,
         bill_id: int = 0,
         bill_no: str = "",
+        cfg: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        data: Dict[str, Any] = {}
+        config = cfg or {}
+        row: Dict[str, Any] = {}
         if int(bill_id or 0) > 0:
-            data["id"] = int(bill_id)
+            row["id"] = int(bill_id)
         if bill_no:
-            data["billno"] = str(bill_no)
-        return {"data": data}
+            row["billno"] = str(bill_no)
+        wrap = str(config.get("operate_body_wrap") or "").strip().lower()
+        if wrap in {"data_list", "data_array", "list"}:
+            return {"data": [row] if row else []}
+        return {"data": row}
 
     async def call_direct(
         self,

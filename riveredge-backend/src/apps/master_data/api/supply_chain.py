@@ -172,14 +172,17 @@ async def sync_customers_from_source(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     stream: bool = Query(False, description="为 true 时以 NDJSON 流式返回进度"),
 ):
-    try:
-        if stream:
-            from core.services.data.sync_progress_stream import stream_sync_ndjson
+    from apps.master_data.api._sync_from_source_run_log import master_data_sync_from_source_with_run_log
+    from apps.master_data.models.master_data_sync_binding import CustomerSyncBinding
 
-            return await stream_sync_ndjson(
-                lambda: _customer_sync_service().sync_from_source(tenant_id, current_user, body)
-            )
-        return await _customer_sync_service().sync_from_source(tenant_id, current_user, body)
+    try:
+        return await master_data_sync_from_source_with_run_log(
+            tenant_id=tenant_id,
+            entity_type="customer",
+            binding_model=CustomerSyncBinding,
+            stream=stream,
+            run_sync=lambda: _customer_sync_service().sync_from_source(tenant_id, current_user, body),
+        )
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
@@ -391,14 +394,17 @@ async def sync_suppliers_from_source(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     stream: bool = Query(False, description="为 true 时以 NDJSON 流式返回进度"),
 ):
-    try:
-        if stream:
-            from core.services.data.sync_progress_stream import stream_sync_ndjson
+    from apps.master_data.api._sync_from_source_run_log import master_data_sync_from_source_with_run_log
+    from apps.master_data.models.master_data_sync_binding import SupplierSyncBinding
 
-            return await stream_sync_ndjson(
-                lambda: _supplier_sync_service().sync_from_source(tenant_id, current_user, body)
-            )
-        return await _supplier_sync_service().sync_from_source(tenant_id, current_user, body)
+    try:
+        return await master_data_sync_from_source_with_run_log(
+            tenant_id=tenant_id,
+            entity_type="supplier",
+            binding_model=SupplierSyncBinding,
+            stream=stream,
+            run_sync=lambda: _supplier_sync_service().sync_from_source(tenant_id, current_user, body),
+        )
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 

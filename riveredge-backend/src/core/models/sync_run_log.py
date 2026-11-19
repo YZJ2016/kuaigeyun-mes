@@ -17,6 +17,8 @@ SYNC_ENTITY_TYPES = frozenset(
         "unit",
         "material",
         "material_group",
+        "engineering_bom",
+        "process_operation",
         "inventory",
         "sales_order",
         "purchase_order",

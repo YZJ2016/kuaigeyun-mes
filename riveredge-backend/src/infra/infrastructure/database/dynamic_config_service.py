@@ -81,6 +81,7 @@ class DynamicDatabaseConfigService:
             "core.models.user_preference",
             "core.models.operation_log",
             "core.models.login_log",
+            "core.models.sync_run_log",  # 同步/推送运行历史（与 database.TORTOISE_ORM 基线一致）
             "core.models.ai_audit_log",
             "core.models.kuaiai_assistant_conversation",
             "core.models.user_activity",

@@ -11,6 +11,8 @@ _ENTITY_SOURCE_TYPE: Dict[str, str] = {
     "sales_order": "sales_order",
     "purchase_order": "purchase_order",
     "purchase_receipt": "purchase_receipt",
+    "other_outbound": "other_outbound",
+    "other_inbound": "other_inbound",
     "work_order": "work_order",
     "reporting_record": "reporting_record",
     "material_batch": "material_batch",
@@ -33,6 +35,14 @@ async def _load_binding_row(entity_type: str, tenant_id: int) -> Optional[Any]:
         from apps.kuaizhizao.models.purchase_receipt_sync_binding import PurchaseReceiptSyncBinding
 
         return await PurchaseReceiptSyncBinding.filter(tenant_id=tenant_id).first()
+    if source_type == "other_outbound":
+        from apps.kuaizhizao.models.other_outbound_sync_binding import OtherOutboundSyncBinding
+
+        return await OtherOutboundSyncBinding.filter(tenant_id=tenant_id).first()
+    if source_type == "other_inbound":
+        from apps.kuaizhizao.models.other_inbound_sync_binding import OtherInboundSyncBinding
+
+        return await OtherInboundSyncBinding.filter(tenant_id=tenant_id).first()
     if source_type == "work_order":
         from apps.kuaizhizao.models.work_order_sync_binding import WorkOrderSyncBinding
 
@@ -73,7 +83,14 @@ async def maybe_silent_push_after_audit(
     if act not in triggers:
         return
     raw_targets = getattr(row, "push_targets", None)
-    if entity_type in ("purchase_order", "purchase_receipt") and isinstance(raw_targets, list):
+    if entity_type in (
+        "purchase_order",
+        "purchase_receipt",
+        "other_outbound",
+        "other_inbound",
+    ) and isinstance(
+        raw_targets, list
+    ):
         kept = [item for item in raw_targets if isinstance(item, dict) and item.get("user_saved") is True]
         if len(kept) != len(raw_targets):
             if entity_type == "purchase_order":
@@ -83,12 +100,28 @@ async def maybe_silent_push_after_audit(
                     push_targets=kept,
                     trigger_actions=triggers if kept else [],
                 )
-            else:
+            elif entity_type == "purchase_receipt":
                 from apps.kuaizhizao.models.purchase_receipt_sync_binding import (
                     PurchaseReceiptSyncBinding,
                 )
 
                 await PurchaseReceiptSyncBinding.filter(id=row.id).update(
+                    push_targets=kept,
+                    trigger_actions=triggers if kept else [],
+                )
+            elif entity_type == "other_outbound":
+                from apps.kuaizhizao.models.other_outbound_sync_binding import (
+                    OtherOutboundSyncBinding,
+                )
+                await OtherOutboundSyncBinding.filter(id=row.id).update(
+                    push_targets=kept,
+                    trigger_actions=triggers if kept else [],
+                )
+            else:
+                from apps.kuaizhizao.models.other_inbound_sync_binding import (
+                    OtherInboundSyncBinding,
+                )
+                await OtherInboundSyncBinding.filter(id=row.id).update(
                     push_targets=kept,
                     trigger_actions=triggers if kept else [],
                 )

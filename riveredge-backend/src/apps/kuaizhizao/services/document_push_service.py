@@ -51,6 +51,10 @@ from apps.kuaizhizao.services.kingdee_other_outbound_push_service import (
     TARGET_PROFILE as OO_KD_PROFILE,
     KingdeeOtherOutboundPushService,
 )
+from apps.kuaizhizao.services.kingdee_other_inbound_push_service import (
+    TARGET_PROFILE as OI_KD_PROFILE,
+    KingdeeOtherInboundPushService,
+)
 from apps.kuaizhizao.services.kingdee_stocktaking_surplus_push_service import (
     TARGET_PROFILE as ST_SURPLUS_KD_PROFILE,
     KingdeeStocktakingSurplusPushService,
@@ -86,6 +90,7 @@ SUPPORTED_PROFILES: Set[Tuple[str, str]] = {
     ("purchase_receipt", PR_KD_PROFILE),
     ("sales_delivery", SD_KD_PROFILE),
     ("other_outbound", OO_KD_PROFILE),
+    ("other_inbound", OI_KD_PROFILE),
     ("stocktaking", ST_SURPLUS_KD_PROFILE),
     ("stocktaking", ST_DEFICIT_KD_PROFILE),
     ("material_batch", INV_KD_PROFILE),
@@ -103,6 +108,7 @@ _SOURCE_CONFIG_CATEGORY: Dict[str, str] = {
     "purchase_receipt": "warehouse",
     "sales_delivery": "warehouse",
     "other_outbound": "warehouse",
+    "other_inbound": "warehouse",
     "stocktaking": "warehouse",
     "material_batch": "warehouse",
     "material": "master_data",
@@ -391,6 +397,34 @@ async def _handle_other_outbound_kingdee(
     return result
 
 
+async def _handle_other_inbound_kingdee(
+    *,
+    tenant_id: int,
+    acting_user_id: int,
+    source_id: int,
+    connection_code: Optional[str],
+    save_api_uuid: Optional[str],
+    dry_run: bool,
+    **_: Any,
+) -> Dict[str, Any]:
+    result = await KingdeeOtherInboundPushService().push_other_inbound(
+        tenant_id=tenant_id,
+        other_inbound_id=int(source_id),
+        acting_user_id=acting_user_id,
+        connection_code=connection_code,
+        save_api_uuid=save_api_uuid,
+        dry_run=dry_run,
+    )
+    if result is None:
+        return _disabled_result(
+            source_type="other_inbound",
+            source_id=source_id,
+            target_profile=OI_KD_PROFILE,
+            message="金蝶其他入库推送未启用或入库单不存在",
+        )
+    return result
+
+
 async def _handle_stocktaking_surplus_kingdee(
     *,
     tenant_id: int,
@@ -572,6 +606,7 @@ def ensure_default_push_handlers_registered() -> None:
     register_push_handler("purchase_receipt", PR_KD_PROFILE, _handle_purchase_receipt_kingdee)
     register_push_handler("sales_delivery", SD_KD_PROFILE, _handle_sales_delivery_kingdee)
     register_push_handler("other_outbound", OO_KD_PROFILE, _handle_other_outbound_kingdee)
+    register_push_handler("other_inbound", OI_KD_PROFILE, _handle_other_inbound_kingdee)
     register_push_handler("stocktaking", ST_SURPLUS_KD_PROFILE, _handle_stocktaking_surplus_kingdee)
     register_push_handler("stocktaking", ST_DEFICIT_KD_PROFILE, _handle_stocktaking_deficit_kingdee)
     register_push_handler("material_batch", INV_KD_PROFILE, _handle_material_batch_kingdee)

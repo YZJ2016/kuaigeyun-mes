@@ -233,6 +233,7 @@ def build_inventory_balance_query_preset_body(
         "params": {"org": str(org_number or "BU-00000").strip() or "BU-00000"},
         "pageNo": int(page_no or 1),
         "pageSize": int(page_size or 200),
+        "showNumber": False,
     }
 
 
@@ -399,6 +400,8 @@ def inventory_balance_preset_needs_upgrade(
     if not isinstance(params, dict):
         return True
     if request_body.get("data") not in (None, {}, []):
+        return True
+    if "showNumber" not in request_body:
         return True
     return False
 

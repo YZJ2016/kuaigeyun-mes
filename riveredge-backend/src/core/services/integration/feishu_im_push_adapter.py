@@ -93,6 +93,7 @@ class FeishuImPushAdapter:
         form_id: str,
         bill_id: int = 0,
         bill_no: str = "",
+        cfg: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         return {"form_id": form_id, "bill_id": bill_id, "bill_no": bill_no, "action": "operate"}
 

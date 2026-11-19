@@ -88,5 +88,6 @@ export function createSalesOrderSyncConfig(): SyncFromSourceConfig {
     completeSuccessKey: 'app.kuaizhizao.salesOrder.syncComplete',
     completePartialKey: 'app.kuaizhizao.salesOrder.syncPartial',
     failedKey: 'app.kuaizhizao.salesOrder.syncFailed',
+    historySourceType: 'sales_order',
   };
 }

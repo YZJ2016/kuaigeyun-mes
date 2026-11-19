@@ -44,6 +44,173 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'other-inbound-kingdee-push-bind-r01',
+    date: '2026-10-27',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.other-inbound-kingdee-push-bind-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.other-inbound-kingdee-push-bind-r01.description',
+  },
+  {
+    id: 'other-outbound-kingdee-header-fields-r01',
+    date: '2026-10-27',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.other-outbound-kingdee-header-fields-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.other-outbound-kingdee-header-fields-r01.description',
+  },
+  {
+    id: 'other-outbound-push-bind-confirm-r01',
+    date: '2026-10-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.other-outbound-push-bind-confirm-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.other-outbound-push-bind-confirm-r01.description',
+  },
+  {
+    id: 'other-outbound-confirm-batch-r01',
+    date: '2026-10-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.other-outbound-confirm-batch-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.other-outbound-confirm-batch-r01.description',
+  },
+  {
+    id: 'kingdee-other-outbound-pick-header-r01',
+    date: '2026-10-27',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-other-outbound-pick-header-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kingdee-other-outbound-pick-header-r01.description',
+  },
+  {
+    id: 'document-push-api-list-unified-r01',
+    date: '2026-10-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-push-api-list-unified-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.document-push-api-list-unified-r01.description',
+  },
+  {
+    id: 'other-outbound-manual-confirm-r01',
+    date: '2026-10-27',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.other-outbound-manual-confirm-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.other-outbound-manual-confirm-r01.description',
+  },
+  {
+    id: 'uni-input-number-select-on-focus-r01',
+    date: '2026-10-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-input-number-select-on-focus-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uni-input-number-select-on-focus-r01.description',
+  },
+  {
+    id: 'other-outbound-reason-type-label-r01',
+    date: '2026-10-27',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.other-outbound-reason-type-label-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.other-outbound-reason-type-label-r01.description',
+  },
+  {
+    id: 'kingdee-im-outbound-submit-audit-r01',
+    date: '2026-10-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-im-outbound-submit-audit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-im-outbound-submit-audit-r01.description',
+  },
+  {
+    id: 'kingdee-other-outbound-push-r01',
+    date: '2026-10-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-other-outbound-push-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-other-outbound-push-r01.description',
+  },
+  {
+    id: 'sales-delivery-blank-create-r01',
+    date: '2026-10-26',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-delivery-blank-create-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-delivery-blank-create-r01.description',
+  },
+  {
+    id: 'sync-run-log-orm-baseline-r01',
+    date: '2026-10-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-run-log-orm-baseline-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sync-run-log-orm-baseline-r01.description',
+  },
+  {
+    id: 'inventory-avbqty-shownumber-r01',
+    date: '2026-10-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inventory-avbqty-shownumber-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.inventory-avbqty-shownumber-r01.description',
+  },
+  {
+    id: 'supplier-sync-bulk-write-r01',
+    date: '2026-10-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.supplier-sync-bulk-write-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.supplier-sync-bulk-write-r01.description',
+  },
+  {
+    id: 'supplier-sync-getsupplier-path-fix-r01',
+    date: '2026-10-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.supplier-sync-getsupplier-path-fix-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.supplier-sync-getsupplier-path-fix-r01.description',
+  },
+  {
+    id: 'supplier-sync-getsupplier-custom-r01',
+    date: '2026-10-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.supplier-sync-getsupplier-custom-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.supplier-sync-getsupplier-custom-r01.description',
+  },
+  {
+    id: 'supplier-sync-cosmic-org-scope-r01',
+    date: '2026-10-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.supplier-sync-cosmic-org-scope-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.supplier-sync-cosmic-org-scope-r01.description',
+  },
+  {
+    id: 'material-sync-cosmic-active-filter-r01',
+    date: '2026-10-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-sync-cosmic-active-filter-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-sync-cosmic-active-filter-r01.description',
+  },
+  {
+    id: 'material-sync-zero-fetch-guard-r01',
+    date: '2026-10-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-sync-zero-fetch-guard-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-sync-zero-fetch-guard-r01.description',
+  },
+  {
+    id: 'uni-import-toolbar-icon-only-r01',
+    date: '2026-10-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-import-toolbar-icon-only-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.uni-import-toolbar-icon-only-r01.description',
+  },
+  {
+    id: 'sync-from-source-run-history-all-r01',
+    date: '2026-10-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-from-source-run-history-all-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sync-from-source-run-history-all-r01.description',
+  },
+  {
     id: 'warehouse-sync-run-history-api-r01',
     date: '2026-10-26',
     type: 'fix',

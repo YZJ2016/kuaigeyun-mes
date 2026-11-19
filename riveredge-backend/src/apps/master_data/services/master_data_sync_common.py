@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Type, TypeVar
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Type, TypeVar
 
 from infra.exceptions.exceptions import ValidationError
 
@@ -601,6 +601,40 @@ def attach_sync_fetch_meta(
     if hasattr(result, "truncated"):
         result.truncated = bool(truncated)
     return result
+
+
+async def run_inbound_sync_with_run_log(
+    *,
+    tenant_id: int,
+    entity_type: str,
+    binding: Any,
+    run: Callable[[], Awaitable[Any]],
+) -> Any:
+    """执行一次入站同步并在结束时写入 core_sync_run_logs（成功/失败均记录）。"""
+    started_at = resolve_business_datetime()
+    try:
+        result = await run()
+        await record_sync_run_log(
+            tenant_id=tenant_id,
+            binding=binding,
+            entity_type=entity_type,
+            result=result,
+            started_at=started_at,
+            truncated=False,
+        )
+        return result
+    except ValidationError:
+        raise
+    except Exception as exc:
+        await record_sync_run_log(
+            tenant_id=tenant_id,
+            binding=binding,
+            entity_type=entity_type,
+            result=None,
+            started_at=started_at,
+            error=str(exc),
+        )
+        raise
 
 
 async def record_sync_run_log(

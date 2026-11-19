@@ -28,5 +28,6 @@ export function createSupplierSyncConfig(): SyncFromSourceConfig {
     completeSuccessKey: 'app.master-data.suppliers.syncComplete',
     completePartialKey: 'app.master-data.suppliers.syncPartial',
     failedKey: 'app.master-data.suppliers.syncFailed',
+    historySourceType: 'supplier',
   };
 }

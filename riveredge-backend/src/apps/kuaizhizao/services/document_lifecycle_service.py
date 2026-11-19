@@ -2745,7 +2745,7 @@ def get_customer_material_registration_lifecycle(
 
 OTHER_OUTBOUND_MAIN_STAGES = [
     {"key": "pending_outbound", "label": "待出库"},
-    {"key": "delivered", "label": "已出库"},
+    {"key": "outbound", "label": "已出库"},
     {"key": "cancelled", "label": "已取消"},
 ]
 
@@ -2757,14 +2757,14 @@ def get_other_outbound_lifecycle(
     """其他出库单生命周期计算"""
     status = _norm(getattr(record, "status", None))
     milestones = milestones or []
-    status_map = {"待出库": "pending_outbound", "已出库": "delivered", "已取消": "cancelled"}
+    status_map = {"待出库": "pending_outbound", "已出库": "outbound", "已取消": "cancelled"}
     key = status_map.get(status, "pending_outbound")
-    stage_name_map = {"pending_outbound": "待出库", "delivered": "已出库", "cancelled": "已取消"}
+    stage_name_map = {"pending_outbound": "待出库", "outbound": "已出库", "cancelled": "已取消"}
     stage_name = stage_name_map.get(key, status or "待出库")
     return {
         "current_stage_key": key,
         "current_stage_name": stage_name,
-        "status": "exception" if key == "cancelled" else "success" if key == "delivered" else "normal",
+        "status": "exception" if key == "cancelled" else "success" if key == "outbound" else "normal",
         "main_stages": _build_main_stages(OTHER_OUTBOUND_MAIN_STAGES, key, is_exception=(key == "cancelled")),
         "sub_stages": None,
         "next_step_suggestions": ["确认出库"] if key == "pending_outbound" else [],

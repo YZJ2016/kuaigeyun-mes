@@ -249,6 +249,7 @@ class DocumentPushPipeline:
                     bill_id=target_id,
                     bill_no=bill_no,
                     timeout=timeout,
+                    config=config,
                 )
             if bool(config.get("audit_after_save", False)) and audit_path:
                 await self._submit_or_audit(
@@ -259,6 +260,7 @@ class DocumentPushPipeline:
                     bill_id=target_id,
                     bill_no=bill_no,
                     timeout=timeout,
+                    config=config,
                 )
 
         result = {
@@ -402,8 +404,14 @@ class DocumentPushPipeline:
         bill_id: int,
         bill_no: str,
         timeout: float,
+        config: Optional[Dict[str, Any]] = None,
     ) -> None:
-        body = adapter.wrap_operate(form_id=form_id, bill_id=bill_id, bill_no=bill_no)
+        body = adapter.wrap_operate(
+            form_id=form_id,
+            bill_id=bill_id,
+            bill_no=bill_no,
+            cfg=config,
+        )
         response = await adapter.call_direct(connection, path, body, timeout=timeout)
         ok, message = adapter.parse_status(response)
         if not ok:

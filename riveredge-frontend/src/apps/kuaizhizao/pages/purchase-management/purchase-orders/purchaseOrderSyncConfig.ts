@@ -87,5 +87,6 @@ export function createPurchaseOrderSyncConfig(): SyncFromSourceConfig {
     completeSuccessKey: 'app.kuaizhizao.purchaseOrder.syncComplete',
     completePartialKey: 'app.kuaizhizao.purchaseOrder.syncPartial',
     failedKey: 'app.kuaizhizao.purchaseOrder.syncFailed',
+    historySourceType: 'purchase_order',
   };
 }

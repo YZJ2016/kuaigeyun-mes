@@ -23,5 +23,6 @@ export function createOperationSyncConfig(): SyncFromSourceConfig {
     completeSuccessKey: 'app.master-data.operations.syncComplete',
     completePartialKey: 'app.master-data.operations.syncPartial',
     failedKey: 'app.master-data.operations.syncFailed',
+    historySourceType: 'process_operation',
   };
 }

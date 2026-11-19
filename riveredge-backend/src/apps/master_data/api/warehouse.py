@@ -152,35 +152,18 @@ async def sync_warehouses_from_source(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
 ):
+    from apps.master_data.api._sync_from_source_run_log import master_data_sync_from_source_with_run_log
     from apps.master_data.models.master_data_sync_binding import WarehouseSyncBinding
-    from apps.master_data.services.master_data_sync_common import record_sync_run_log
-    from core.utils.timezone_utils import resolve_business_datetime
 
-    started_at = resolve_business_datetime()
-    binding = await WarehouseSyncBinding.filter(tenant_id=tenant_id).first()
     try:
-        result = await _warehouse_sync_service().sync_from_source(tenant_id, current_user, body)
-        await record_sync_run_log(
+        return await master_data_sync_from_source_with_run_log(
             tenant_id=tenant_id,
-            binding=binding,
             entity_type="warehouse",
-            result=result,
-            started_at=started_at,
-            truncated=False,
+            binding_model=WarehouseSyncBinding,
+            run_sync=lambda: _warehouse_sync_service().sync_from_source(tenant_id, current_user, body),
         )
-        return result
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
-    except Exception as exc:
-        await record_sync_run_log(
-            tenant_id=tenant_id,
-            binding=binding,
-            entity_type="warehouse",
-            result=None,
-            started_at=started_at,
-            error=str(exc),
-        )
-        raise
 
 
 @router.post("/warehouses", response_model=WarehouseResponse, response_model_by_alias=True, summary="Create warehouse")

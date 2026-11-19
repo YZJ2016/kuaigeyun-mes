@@ -767,21 +767,20 @@ async def sync_sales_orders_from_source(
     _auth: object = Depends(require_permission_codes("kuaizhizao:sales-order:create")),
     stream: bool = Query(False, description="为 true 时以 NDJSON 流式返回进度"),
 ):
-    try:
-        if stream:
-            from core.services.data.sync_progress_stream import stream_sync_ndjson
+    from apps.kuaizhizao.api._inbound_sync_run_log import kuaizhizao_sync_from_source_with_run_log
+    from apps.kuaizhizao.models.sales_order_sync_binding import SalesOrderSyncBinding
 
-            return await stream_sync_ndjson(
-                lambda: sales_order_sync_service.sync_from_source(
-                    tenant_id=tenant_id,
-                    user_id=current_user.id,
-                    request=body,
-                )
-            )
-        return await sales_order_sync_service.sync_from_source(
+    try:
+        return await kuaizhizao_sync_from_source_with_run_log(
             tenant_id=tenant_id,
-            user_id=current_user.id,
-            request=body,
+            entity_type="sales_order",
+            binding_model=SalesOrderSyncBinding,
+            stream=stream,
+            run_sync=lambda: sales_order_sync_service.sync_from_source(
+                tenant_id=tenant_id,
+                user_id=current_user.id,
+                request=body,
+            ),
         )
     except ValidationError as e:
         raise _http_exception_with_trace(http_status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/sales-orders/sync-from-source", tenant_id)

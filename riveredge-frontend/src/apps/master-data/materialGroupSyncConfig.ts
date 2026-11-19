@@ -24,6 +24,7 @@ export function createMaterialGroupSyncConfig(): SyncFromSourceConfig {
     completeSuccessKey: 'app.master-data.materials.groupSyncComplete',
     completePartialKey: 'app.master-data.materials.groupSyncPartial',
     failedKey: 'app.master-data.materials.groupSyncFailed',
+    historySourceType: 'material_group',
     inferParentByCodeOption: {
       labelKey: 'app.master-data.materials.groupSyncInferParentByCode',
       onKey: 'app.master-data.materials.groupSyncInferParentByCodeOn',

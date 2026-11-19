@@ -24,6 +24,10 @@ from core.services.integration.document_push_pipeline import (
     DocumentPushPrepared,
     DocumentPushRequest,
 )
+from core.services.integration.kingdee_warehouse_document_push_config import (
+    enrich_kingdee_warehouse_push_config,
+    merge_warehouse_kingdee_push_config,
+)
 from core.services.integration.kingdee_cosmic_api_presets import (
     BIZ_IM_OTHEROUTBILL,
     IM_OTHEROUTBILL_BATCH_ADD_PATH,
@@ -91,6 +95,111 @@ def _date_string(value: Any) -> str:
 
 def _compact_text(*parts: Any) -> str:
     return " ".join(str(part).strip() for part in parts if str(part or "").strip())
+
+
+def _config_text(config: Dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        text = str(config.get(key) or "").strip()
+        if text:
+            return text
+    return ""
+
+
+def normalize_other_outbound_pick_header_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    """领用部门/领用人/客户：与采购入库 bizoperator、bizdept 等同源补齐。"""
+    out = dict(config)
+    picker = _config_text(
+        out,
+        "pickeroperator_number",
+        "picker_number",
+        "bizoperator_operatornumber",
+    )
+    if picker:
+        out["pickeroperator_number"] = picker
+        if not _config_text(out, "picker_number"):
+            out["picker_number"] = picker
+    pickdept = _config_text(out, "pickdept_number", "bizdept_number", "dept_number")
+    if pickdept:
+        out["pickdept_number"] = pickdept
+    customer = _config_text(out, "customer_number", "consumer_number")
+    if customer:
+        out["customer_number"] = customer
+        out["consumer_number"] = customer
+    return out
+
+
+async def _resolve_user_department_code(tenant_id: int, user_id: Optional[int]) -> Optional[str]:
+    uid = int(user_id or 0)
+    if uid <= 0:
+        return None
+    try:
+        from infra.models.user import User
+        from core.models.department import Department
+
+        user = await User.get_or_none(tenant_id=tenant_id, id=uid, deleted_at__isnull=True)
+        if not user:
+            return None
+        dept_id = getattr(user, "department_id", None)
+        if not dept_id:
+            return None
+        dept = await Department.get_or_none(
+            tenant_id=tenant_id,
+            id=int(dept_id),
+            deleted_at__isnull=True,
+        )
+        if not dept:
+            return None
+        code = str(dept.code or "").strip()
+        return code or None
+    except Exception as exc:
+        logger.warning("resolve user department code failed user_id={} err={}", uid, exc)
+        return None
+
+
+async def enrich_other_outbound_pick_header_config(
+    tenant_id: int,
+    outbound: OtherOutbound,
+    acting_user_id: int,
+    config: Dict[str, Any],
+) -> Dict[str, Any]:
+    out = normalize_other_outbound_pick_header_config(config)
+    doc_pickdept = str(getattr(outbound, "pick_department_code", None) or "").strip()
+    if doc_pickdept:
+        out["pickdept_number"] = doc_pickdept
+        if not _config_text(out, "bizdept_number"):
+            out["bizdept_number"] = doc_pickdept
+    doc_picker = str(getattr(outbound, "picker_operator_number", None) or "").strip()
+    if doc_picker:
+        out["pickeroperator_number"] = doc_picker
+        if not _config_text(out, "picker_number"):
+            out["picker_number"] = doc_picker
+    doc_customer = str(getattr(outbound, "customer_number", None) or "").strip()
+    if doc_customer:
+        out["customer_number"] = doc_customer
+    if not _config_text(out, "pickdept_number"):
+        actor_id = int(outbound.picker_id or outbound.deliverer_id or acting_user_id or 0)
+        dept_code = await _resolve_user_department_code(tenant_id, actor_id)
+        if dept_code:
+            out["pickdept_number"] = dept_code
+            if not _config_text(out, "bizdept_number"):
+                out["bizdept_number"] = dept_code
+    return out
+
+
+def validate_kingdee_other_outbound_header(model: Dict[str, Any]) -> None:
+    pickdept = _config_text(model, "pickdept_number", "bizdept_number", "dept_number")
+    customer = _config_text(model, "customer_number", "consumer_number")
+    picker = _config_text(model, "pickeroperator_number", "picker_number", "bizoperator_operatornumber")
+    if not pickdept and not customer:
+        raise BusinessLogicError(
+            "金蝶其他出库缺少领用部门或客户：请在业务配置 parameters.warehouse.kingdee_other_outbound_push "
+            "填写 pickdept_number 或 customer_number，或在所选写入接口 request_body 样例中配置有效 "
+            "pickdept_number / customer_number（可与采购入库 kingdee_purchase_receipt_push 共用 bizdept、bizoperator）"
+        )
+    if not picker:
+        raise BusinessLogicError(
+            "金蝶其他出库缺少领用人：请填写 pickeroperator_number（可与采购入库 bizoperator_operatornumber 同源）"
+        )
 
 
 async def _resolve_warehouse_number(
@@ -164,8 +273,14 @@ def build_kingdee_other_outbound_model(
         }
         if warehouse_number:
             entry["warehouse_number"] = warehouse_number
-        if item.location_code:
-            entry["location_number"] = str(item.location_code).strip()
+        location_number = str(
+            item.location_code
+            or config.get("location_number")
+            or config.get("location_code")
+            or ""
+        ).strip()
+        if location_number:
+            entry["location_number"] = location_number
         if item.batch_number:
             entry["lotnumber"] = str(item.batch_number).strip()
         if item.expiry_date:
@@ -178,6 +293,20 @@ def build_kingdee_other_outbound_model(
             entry["outinvstatus_number"] = out_invstatus
         if out_invtype:
             entry["outinvtype_number"] = out_invtype
+        owner_type = str(config.get("outownertype") or "bos_org").strip() or "bos_org"
+        keeper_type = str(config.get("outkeepertype") or "bos_org").strip() or "bos_org"
+        owner_number = str(
+            config.get("outowner_number") or config.get("org_number") or org_number
+        ).strip()
+        keeper_number = str(
+            config.get("outkeeper_number") or config.get("org_number") or org_number
+        ).strip()
+        entry["outownertype"] = owner_type
+        entry["outkeepertype"] = keeper_type
+        if owner_number:
+            entry["outowner_number"] = owner_number
+        if keeper_number:
+            entry["outkeeper_number"] = keeper_number
         price = _to_float(item.unit_price)
         if price:
             entry["price"] = price
@@ -201,6 +330,12 @@ def build_kingdee_other_outbound_model(
         "dept_number": "dept_number",
         "bizdept_number": "bizdept_number",
         "consumingorg_number": "consumingorg_number",
+        "picker_number": "picker_number",
+        "pickdept_number": "pickdept_number",
+        "pickeroperator_number": "pickeroperator_number",
+        "consumer_number": "consumer_number",
+        "customer_number": "customer_number",
+        "bizoperator_operatornumber": "bizoperator_operatornumber",
         "comment": "comment",
     }
 
@@ -224,9 +359,60 @@ def build_kingdee_other_outbound_model(
                 or config.get("inv_scheme_number")
             )
         if key == "dept_number":
-            return str(config.get("dept_number") or "").strip() or None
+            return (
+                str(config.get("dept_number") or config.get("bizdept_number") or "").strip()
+                or None
+            )
         if key == "bizdept_number":
-            return str(config.get("bizdept_number") or "").strip() or None
+            return (
+                str(config.get("bizdept_number") or config.get("dept_number") or "").strip()
+                or None
+            )
+        if key == "pickdept_number":
+            doc = str(getattr(outbound, "pick_department_code", None) or "").strip()
+            if doc:
+                return doc
+            return (
+                str(
+                    config.get("pickdept_number")
+                    or config.get("bizdept_number")
+                    or config.get("dept_number")
+                    or ""
+                ).strip()
+                or None
+            )
+        if key == "pickeroperator_number":
+            doc = str(getattr(outbound, "picker_operator_number", None) or "").strip()
+            if doc:
+                return doc
+            return (
+                str(
+                    config.get("pickeroperator_number")
+                    or config.get("picker_number")
+                    or config.get("bizoperator_operatornumber")
+                    or config.get("consumer_number")
+                    or ""
+                ).strip()
+                or None
+            )
+        if key in {"picker_number", "consumer_number", "bizoperator_operatornumber"}:
+            return (
+                str(
+                    config.get("picker_number")
+                    or config.get("consumer_number")
+                    or config.get("bizoperator_operatornumber")
+                    or ""
+                ).strip()
+                or None
+            )
+        if key == "customer_number":
+            doc = str(getattr(outbound, "customer_number", None) or "").strip()
+            if doc:
+                return doc
+            return (
+                str(config.get("customer_number") or config.get("consumer_number") or "").strip()
+                or None
+            )
         if key == "consumingorg_number":
             return str(config.get("consumingorg_number") or org_number).strip() or None
         if key == "comment":
@@ -325,8 +511,7 @@ class KingdeeOtherOutboundPushService:
     async def get_push_config(self, tenant_id: int) -> Dict[str, Any]:
         biz_config = await BusinessConfigService().get_business_config(tenant_id)
         warehouse = (biz_config.get("parameters", {}) or {}).get("warehouse", {}) or {}
-        raw = warehouse.get("kingdee_other_outbound_push") or {}
-        return dict(raw) if isinstance(raw, dict) else {}
+        return merge_warehouse_kingdee_push_config(warehouse, "kingdee_other_outbound_push")
 
     async def _push_now(
         self,
@@ -338,6 +523,10 @@ class KingdeeOtherOutboundPushService:
         config: Dict[str, Any],
         dry_run: bool = False,
     ) -> Dict[str, Any]:
+        config = await enrich_kingdee_warehouse_push_config(tenant_id, config)
+        config = await enrich_other_outbound_pick_header_config(
+            tenant_id, outbound, acting_user_id, config
+        )
         form_id = str(config.get("form_id") or DEFAULT_FORM_ID).strip() or DEFAULT_FORM_ID
         save_path = str(config.get("save_path") or DEFAULT_SAVE_PATH).strip() or DEFAULT_SAVE_PATH
 
@@ -384,14 +573,13 @@ class KingdeeOtherOutboundPushService:
             raise BusinessLogicError("缺少仓库编码，无法推送金蝶其他出库单")
 
         first_code = items[0].material_code if items else None
-        first_unit = str(getattr(items[0], "material_unit", None) or "").strip() if items else ""
         unit_code_map = await load_save_api_unit_code_map(
             tenant_id, str(config.get("save_api_uuid") or "").strip() or None
         )
         units = await resolve_unit_for_push(
             tenant_id,
             product_code=first_code,
-            unit_hint=first_unit or None,
+            unit_hint=None,
             unit_code_map=unit_code_map,
         )
         config = {
@@ -410,6 +598,8 @@ class KingdeeOtherOutboundPushService:
         )
         if not (model.get("billentry") or []) and not dry_run:
             raise BusinessLogicError("其他出库单无有效明细数量，无法推送")
+        if not dry_run:
+            validate_kingdee_other_outbound_header(model)
 
         request = DocumentPushRequest(
             source_type=SOURCE_TYPE,

@@ -70,5 +70,6 @@ export function createInventorySyncConfig(): SyncFromSourceConfig {
     completeSuccessKey: 'app.kuaizhizao.warehouseInventory.syncComplete',
     completePartialKey: 'app.kuaizhizao.warehouseInventory.syncPartial',
     failedKey: 'app.kuaizhizao.warehouseInventory.syncFailed',
+    historySourceType: 'material_batch',
   };
 }

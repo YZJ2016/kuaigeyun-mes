@@ -32,6 +32,7 @@ import {
   isInactiveSyncSourceError,
 } from './syncSourceUtils';
 import { SyncSourceSettingModal } from './SyncSourceSettingModal';
+import { createDefaultSyncRunHistoryLoader } from './syncRunHistory';
 import type {
   SyncBinding,
   SyncFromSourceConfig,
@@ -222,7 +223,13 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
   /** 异步加载的可选字段（含自定义字段） */
   const [loadedAvailableFields, setLoadedAvailableFields] = useState<SyncTargetField[]>([]);
   const historySource = String(config.historySourceType || '').trim();
-  const showHistoryTab = Boolean(historySource);
+  const resolvedListSyncRunHistory = useMemo(
+    () =>
+      config.listSyncRunHistory ??
+      (historySource ? createDefaultSyncRunHistoryLoader(historySource) : undefined),
+    [config.listSyncRunHistory, historySource],
+  );
+  const showHistoryTab = Boolean(historySource && resolvedListSyncRunHistory);
   type SyncFromSourceTabKey = 'sync' | 'history';
   const [activeTab, setActiveTab] = useState<SyncFromSourceTabKey>('sync');
   const [lastOpen, setLastOpen] = useState(false);
@@ -1155,7 +1162,7 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
           <SyncRunHistoryPanel
             active={historyTabActive}
             sourceType={historySource}
-            listHistory={config.listSyncRunHistory}
+            listHistory={resolvedListSyncRunHistory}
             refreshNonce={historyRefreshNonce}
           />
         ) : null}

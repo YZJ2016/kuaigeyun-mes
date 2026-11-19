@@ -23,6 +23,7 @@ from apps.master_data.api.drawings import router as drawings_router
 from apps.master_data.api.supply_chain import router as supply_chain_router
 from apps.master_data.api.partner_price_book import router as partner_price_book_router
 from apps.master_data.api.performance import router as performance_router
+from apps.master_data.api.sync_run_history import router as sync_run_history_router
 from apps.master_data.api.product import router as product_router
 from apps.master_data.api.validation import router as validation_router
 from apps.master_data.api.management import router as management_router
@@ -52,6 +53,7 @@ router.include_router(drawings_router)
 router.include_router(supply_chain_router)
 router.include_router(partner_price_book_router)
 router.include_router(performance_router)
+router.include_router(sync_run_history_router)
 router.include_router(product_router)
 router.include_router(validation_router)
 router.include_router(management_router)

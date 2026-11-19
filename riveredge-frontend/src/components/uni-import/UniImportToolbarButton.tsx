@@ -7,6 +7,7 @@ import { Button, Tooltip } from 'antd';
 import type { ButtonProps } from 'antd';
 import { ImportOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { useUniTableDataActionIconOnly } from '../uni-table/dataActionIconOnlyContext';
 
 export type UniImportToolbarButtonProps = Omit<ButtonProps, 'icon' | 'onClick'> & {
   onOpen: () => void;
@@ -21,10 +22,12 @@ export const UniImportToolbarButton: React.FC<UniImportToolbarButtonProps> = ({
   buttonText,
   type = 'default',
   children,
-  iconOnly = false,
+  iconOnly: iconOnlyProp = false,
   ...rest
 }) => {
   const { t } = useTranslation();
+  const toolbarIconOnly = useUniTableDataActionIconOnly();
+  const iconOnly = iconOnlyProp || toolbarIconOnly;
   const label = String(children ?? buttonText ?? t('common.import'));
   const btn = (
     <Button type={type} icon={<ImportOutlined />} onClick={onOpen} aria-label={label} {...rest}>

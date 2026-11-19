@@ -2603,6 +2603,7 @@
     "kuaizhizao:other-inbound:reject",
     "kuaizhizao:other-inbound:print",
     "kuaizhizao:other-inbound:execute",
+    "kuaizhizao:other-inbound:push",
     "kuaizhizao:other-outbound:read",
     "kuaizhizao:other-outbound:create",
     "kuaizhizao:other-outbound:delete",

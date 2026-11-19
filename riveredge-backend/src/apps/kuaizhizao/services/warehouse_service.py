@@ -18069,9 +18069,20 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                 logger.error("其他入库确认-会计事件失败: %s", ev_e)
                 raise
 
-            return OtherInboundResponse.model_validate(
+            result = OtherInboundResponse.model_validate(
                 await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
             )
+
+        from core.services.integration.document_push_silent import maybe_silent_push_after_audit
+
+        await maybe_silent_push_after_audit(
+            tenant_id=tenant_id,
+            user_id=confirmed_by,
+            entity_type="other_inbound",
+            entity_id=inbound_id,
+            action="confirm",
+        )
+        return result
 
 
     async def withdraw_confirmation(
@@ -18167,7 +18178,7 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
         is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "outbound")
         if not is_enabled:
             raise BusinessLogicError("出库管理节点未启用，无法创建其他出库单")
-        location_required, auto_outbound_enabled = await _get_warehouse_policy_flags(tenant_id)
+        location_required, _ = await _get_warehouse_policy_flags(tenant_id)
         created_outbound_id: Optional[int] = None
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
@@ -18237,14 +18248,6 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
             )
             created_outbound_id = outbound.id
 
-        if auto_outbound_enabled and created_outbound_id:
-            outbound_obj = await OtherOutbound.get_or_none(tenant_id=tenant_id, id=created_outbound_id)
-            if outbound_obj and outbound_obj.status == "待出库":
-                return await self.confirm_outbound(
-                    tenant_id=tenant_id,
-                    outbound_id=created_outbound_id,
-                    confirmed_by=created_by,
-                )
         return OtherOutboundResponse.model_validate(
             await OtherOutbound.get(tenant_id=tenant_id, id=created_outbound_id)
         )
@@ -18810,9 +18813,20 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                 logger.error("其他出库确认-会计事件失败: %s", ev_e)
                 raise
 
-            return OtherOutboundResponse.model_validate(
+            result = OtherOutboundResponse.model_validate(
                 await OtherOutbound.get(tenant_id=tenant_id, id=outbound_id)
             )
+
+        from core.services.integration.document_push_silent import maybe_silent_push_after_audit
+
+        await maybe_silent_push_after_audit(
+            tenant_id=tenant_id,
+            user_id=confirmed_by,
+            entity_type="other_outbound",
+            entity_id=outbound_id,
+            action="confirm",
+        )
+        return result
 
     async def withdraw_confirmation(
         self,

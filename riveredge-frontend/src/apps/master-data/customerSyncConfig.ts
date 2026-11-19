@@ -29,5 +29,6 @@ export function createCustomerSyncConfig(): SyncFromSourceConfig {
     completeSuccessKey: 'app.master-data.customers.syncComplete',
     completePartialKey: 'app.master-data.customers.syncPartial',
     failedKey: 'app.master-data.customers.syncFailed',
+    historySourceType: 'customer',
   };
 }

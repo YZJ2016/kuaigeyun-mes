@@ -18,7 +18,7 @@ import { SyncPushHubButton } from '../../../../../components/sync-push-hub';
 import SalesDeliveryDocumentPushPanel from './SalesDeliveryDocumentPushPanel';
 import { ActionType, ProColumns, type ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Tooltip, Typography, Spin, Empty, Select, theme as AntdTheme } from 'antd';
-import { CheckCircleOutlined, PlayCircleOutlined, RollbackOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, PlayCircleOutlined, PlusOutlined, RollbackOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
@@ -40,7 +40,7 @@ import { buildHubMergedCustomFieldColumns } from '../../../../../components/cust
 
 import { ListPageTemplate, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { LinkedDocumentCodesFromFields } from '../../../../../components/linked-document-code';
-import { UniPullLoadButton } from '../../../../../components/uni-pull';
+import { UniPullCreateToolbar, UniPullLoadButton } from '../../../../../components/uni-pull';
 import { WarehouseTraceBriefPrimaryActions } from '../WarehouseTraceBriefFooter';
 
 const LazyOutboundDetailDrawer = lazy(() =>
@@ -521,9 +521,20 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
       ),
     [hubScopedOutboundTypes, requireShipmentNoticeBeforeDelivery, t],
   );
+  const [salesDeliveryCreateOpen, setSalesDeliveryCreateOpen] = useState(false);
+  const enableSalesDeliveryBlankCreate =
+    fixedOutboundType === 'sales_delivery' && outboundPerms.canCreate;
   const handleCreate = useCallback(() => {
+    if (enableSalesDeliveryBlankCreate) {
+      setSalesDeliveryCreateOpen(true);
+      return;
+    }
     quickPullRef.current?.open(defaultOutboundQuickPullKey);
-  }, [defaultOutboundQuickPullKey]);
+  }, [enableSalesDeliveryBlankCreate, defaultOutboundQuickPullKey]);
+  const salesDeliveryCreateButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.warehouseOutbound.createSalesDelivery')),
+    [t],
+  );
 
   useNewShortcut(handleCreate);
   const pullLoadLabel = useMemo(
@@ -1760,7 +1771,30 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
         }}
         toolBarRender={() => {
           const items: React.ReactNode[] = [];
-          if (outboundPullMenuSpecs.length) {
+          const pullMenuItems = buildKuaizhizaoPullCreateMenuItems(t, outboundPullMenuSpecs);
+          if (enableSalesDeliveryBlankCreate && outboundPullMenuSpecs.length) {
+            items.push(
+              <UniPullCreateToolbar
+                key="outbound-sales-delivery-blank-create"
+                compactKey="outbound-sales-delivery-blank-create"
+                createIcon={<PlusOutlined />}
+                createLabel={salesDeliveryCreateButtonLabel}
+                onCreate={handleCreate}
+                menuItems={pullMenuItems}
+              />,
+            );
+          } else if (enableSalesDeliveryBlankCreate) {
+            items.push(
+              <Button
+                key="outbound-sales-delivery-blank-create-only"
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={handleCreate}
+              >
+                {salesDeliveryCreateButtonLabel}
+              </Button>,
+            );
+          } else if (outboundPullMenuSpecs.length) {
             items.push(
               <UniPullLoadButton
                 key="pull"
@@ -1768,7 +1802,7 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
                 label={pullLoadLabel}
                 type="primary"
                 variant="solid"
-                menuItems={buildKuaizhizaoPullCreateMenuItems(t, outboundPullMenuSpecs)}
+                menuItems={pullMenuItems}
               />,
             );
           }
@@ -1964,6 +1998,14 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
         record={editModalRecord}
         onClose={handleEditModalClose}
         onSuccess={handleEditModalSuccess}
+      />
+      <SalesDeliveryCreateModal
+        open={salesDeliveryCreateOpen}
+        onClose={() => setSalesDeliveryCreateOpen(false)}
+        onSuccess={() => {
+          invalidateMenuBadgeCounts();
+          actionRef.current?.reload();
+        }}
       />
       {PrintModal}
     </ListPageTemplate>

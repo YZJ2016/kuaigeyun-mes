@@ -103,5 +103,6 @@ export function createMaterialSyncConfig(): SyncFromSourceConfig {
     completeSuccessKey: 'app.master-data.materials.syncComplete',
     completePartialKey: 'app.master-data.materials.syncPartial',
     failedKey: 'app.master-data.materials.syncFailed',
+    historySourceType: 'material',
   };
 }

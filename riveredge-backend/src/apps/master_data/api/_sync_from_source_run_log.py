@@ -1,0 +1,32 @@
+"""主数据 sync-from-source：统一写入 core_sync_run_logs。"""
+
+from __future__ import annotations
+
+from typing import Any, Awaitable, Callable, Type
+
+from apps.master_data.services.master_data_sync_common import run_inbound_sync_with_run_log
+
+
+async def master_data_sync_from_source_with_run_log(
+    *,
+    tenant_id: int,
+    entity_type: str,
+    binding_model: Type[Any],
+    run_sync: Callable[[], Awaitable[Any]],
+    stream: bool = False,
+):
+    binding = await binding_model.filter(tenant_id=tenant_id).first()
+
+    async def invoke() -> Any:
+        return await run_inbound_sync_with_run_log(
+            tenant_id=tenant_id,
+            entity_type=entity_type,
+            binding=binding,
+            run=run_sync,
+        )
+
+    if stream:
+        from core.services.data.sync_progress_stream import stream_sync_ndjson
+
+        return await stream_sync_ndjson(invoke)
+    return await invoke()

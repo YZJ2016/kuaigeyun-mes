@@ -33,6 +33,21 @@ class OtherOutbound(BaseModel):
     deliverer_id = fields.IntField(null=True, description="出库人ID")
     deliverer_name = fields.CharField(max_length=100, null=True, description="出库人姓名")
 
+    # 金蝶其他出库表头（领用部门 / 领用人 / 客户领用）
+    pick_department_id = fields.IntField(null=True, description="领用部门ID")
+    pick_department_code = fields.CharField(max_length=64, null=True, description="领用部门编码（金蝶 pickdept_number）")
+    pick_department_name = fields.CharField(max_length=100, null=True, description="领用部门名称")
+    picker_id = fields.IntField(null=True, description="领用人用户ID")
+    picker_name = fields.CharField(max_length=100, null=True, description="领用人姓名")
+    picker_operator_number = fields.CharField(
+        max_length=64,
+        null=True,
+        description="金蝶领用人工号 pickeroperator_number",
+    )
+    customer_id = fields.IntField(null=True, description="客户ID（客户领用）")
+    customer_name = fields.CharField(max_length=200, null=True, description="客户名称")
+    customer_number = fields.CharField(max_length=64, null=True, description="金蝶客户编码 customer_number")
+
     # 审核信息
     reviewer_id = fields.IntField(null=True, description="审核人ID")
     reviewer_name = fields.CharField(max_length=100, null=True, description="审核人姓名")

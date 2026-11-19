@@ -1577,6 +1577,19 @@ class OtherOutboundBase(BaseSchema):
     delivery_time: Optional[datetime] = Field(None, description="实际出库时间")
     deliverer_id: Optional[int] = Field(None, description="出库人ID")
     deliverer_name: Optional[str] = Field(None, max_length=100, description="出库人姓名")
+    pick_department_id: Optional[int] = Field(None, description="领用部门ID")
+    pick_department_code: Optional[str] = Field(None, max_length=64, description="领用部门编码")
+    pick_department_name: Optional[str] = Field(None, max_length=100, description="领用部门名称")
+    picker_id: Optional[int] = Field(None, description="领用人用户ID")
+    picker_name: Optional[str] = Field(None, max_length=100, description="领用人姓名")
+    picker_operator_number: Optional[str] = Field(
+        None,
+        max_length=64,
+        description="金蝶领用人工号",
+    )
+    customer_id: Optional[int] = Field(None, description="客户ID")
+    customer_name: Optional[str] = Field(None, max_length=200, description="客户名称")
+    customer_number: Optional[str] = Field(None, max_length=64, description="金蝶客户编码")
     reviewer_id: Optional[int] = Field(None, description="审核人ID")
     reviewer_name: Optional[str] = Field(None, max_length=100, description="审核人姓名")
     review_time: Optional[datetime] = Field(None, description="审核时间")

@@ -2,7 +2,6 @@ import type { SyncFromSourceConfig } from '../../components/sync-from-source-mod
 import { loadSyncCustomTargetFields } from '../../components/sync-from-source-modal/loadSyncCustomTargetFields';
 import {
   getWarehouseSyncBinding,
-  listWarehouseSyncRunHistory,
   syncWarehousesFromSource,
 } from './services/warehouse';
 import {
@@ -29,7 +28,5 @@ export function createWarehouseSyncConfig(): SyncFromSourceConfig {
     completePartialKey: 'app.master-data.warehouses.syncPartial',
     failedKey: 'app.master-data.warehouses.syncFailed',
     historySourceType: 'warehouse',
-    listSyncRunHistory: ({ skip, limit }) =>
-      listWarehouseSyncRunHistory({ skip, limit }),
   };
 }

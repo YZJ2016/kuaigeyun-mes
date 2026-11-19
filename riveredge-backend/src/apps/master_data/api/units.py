@@ -129,8 +129,16 @@ async def sync_material_units_from_source(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
 ):
+    from apps.master_data.api._sync_from_source_run_log import master_data_sync_from_source_with_run_log
+    from apps.master_data.models.master_data_sync_binding import MaterialUnitSyncBinding
+
     try:
-        return await _material_unit_sync_service().sync_from_source(tenant_id, current_user, body)
+        return await master_data_sync_from_source_with_run_log(
+            tenant_id=tenant_id,
+            entity_type="unit",
+            binding_model=MaterialUnitSyncBinding,
+            run_sync=lambda: _material_unit_sync_service().sync_from_source(tenant_id, current_user, body),
+        )
     except ValidationError as e:
         raise _http(status.HTTP_400_BAD_REQUEST, getattr(e, "message", None) or str(e))
 

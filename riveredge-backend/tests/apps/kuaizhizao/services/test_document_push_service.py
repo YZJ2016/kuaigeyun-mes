@@ -43,6 +43,9 @@ from apps.kuaizhizao.services.kingdee_sales_delivery_push_service import (
 from apps.kuaizhizao.services.kingdee_other_outbound_push_service import (
     TARGET_PROFILE as OO_PROFILE,
 )
+from apps.kuaizhizao.services.kingdee_other_inbound_push_service import (
+    TARGET_PROFILE as OI_PROFILE,
+)
 from apps.kuaizhizao.services.kingdee_stocktaking_surplus_push_service import (
     TARGET_PROFILE as ST_SURPLUS_PROFILE,
 )
@@ -71,6 +74,7 @@ _EXPECTED_SUPPORTED_PROFILES = {
     ("purchase_receipt", PR_PROFILE),
     ("sales_delivery", SD_PROFILE),
     ("other_outbound", OO_PROFILE),
+    ("other_inbound", OI_PROFILE),
     ("stocktaking", ST_SURPLUS_PROFILE),
     ("stocktaking", ST_DEFICIT_PROFILE),
     ("material_batch", INV_PROFILE),

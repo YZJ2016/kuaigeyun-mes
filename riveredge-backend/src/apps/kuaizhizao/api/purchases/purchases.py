@@ -130,11 +130,19 @@ async def sync_purchase_orders_from_source(
     tenant_id: int = Depends(get_current_tenant),
     _auth: object = Depends(require_permission_codes("kuaizhizao:purchase-order:create")),
 ):
+    from apps.kuaizhizao.api._inbound_sync_run_log import kuaizhizao_sync_from_source_with_run_log
+    from apps.kuaizhizao.models.purchase_order_sync_binding import PurchaseOrderSyncBinding
+
     try:
-        return await purchase_order_sync_service.sync_from_source(
+        return await kuaizhizao_sync_from_source_with_run_log(
             tenant_id=tenant_id,
-            user_id=current_user.id,
-            request=body,
+            entity_type="purchase_order",
+            binding_model=PurchaseOrderSyncBinding,
+            run_sync=lambda: purchase_order_sync_service.sync_from_source(
+                tenant_id=tenant_id,
+                user_id=current_user.id,
+                request=body,
+            ),
         )
     except ValidationError as e:
         raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))

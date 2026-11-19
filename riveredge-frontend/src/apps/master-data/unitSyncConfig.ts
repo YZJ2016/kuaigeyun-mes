@@ -58,5 +58,6 @@ export function createUnitSyncConfig(): SyncFromSourceConfig {
     completeSuccessKey: 'app.master-data.units.syncComplete',
     completePartialKey: 'app.master-data.units.syncPartial',
     failedKey: 'app.master-data.units.syncFailed',
+    historySourceType: 'unit',
   };
 }

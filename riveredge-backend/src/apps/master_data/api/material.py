@@ -229,8 +229,16 @@ async def sync_material_groups_from_source(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
 ):
+    from apps.master_data.api._sync_from_source_run_log import master_data_sync_from_source_with_run_log
+    from apps.master_data.models.master_data_sync_binding import MaterialGroupSyncBinding
+
     try:
-        return await _material_group_sync_service().sync_from_source(tenant_id, current_user, body)
+        return await master_data_sync_from_source_with_run_log(
+            tenant_id=tenant_id,
+            entity_type="material_group",
+            binding_model=MaterialGroupSyncBinding,
+            run_sync=lambda: _material_group_sync_service().sync_from_source(tenant_id, current_user, body),
+        )
     except ValidationError as e:
         raise _http_error(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
@@ -405,8 +413,16 @@ async def sync_engineering_bom_from_source(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
 ):
+    from apps.master_data.api._sync_from_source_run_log import master_data_sync_from_source_with_run_log
+    from apps.master_data.models.master_data_sync_binding import EngineeringBomSyncBinding
+
     try:
-        return await _engineering_bom_sync_service().sync_from_source(tenant_id, current_user, body)
+        return await master_data_sync_from_source_with_run_log(
+            tenant_id=tenant_id,
+            entity_type="engineering_bom",
+            binding_model=EngineeringBomSyncBinding,
+            run_sync=lambda: _engineering_bom_sync_service().sync_from_source(tenant_id, current_user, body),
+        )
     except ValidationError as e:
         raise _http_error(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
@@ -1793,14 +1809,17 @@ async def sync_materials_from_source(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     stream: bool = Query(False, description="为 true 时以 NDJSON 流式返回进度"),
 ):
-    try:
-        if stream:
-            from core.services.data.sync_progress_stream import stream_sync_ndjson
+    from apps.master_data.api._sync_from_source_run_log import master_data_sync_from_source_with_run_log
+    from apps.master_data.models.master_data_sync_binding import MaterialSyncBinding
 
-            return await stream_sync_ndjson(
-                lambda: _material_sync_service().sync_from_source(tenant_id, current_user, body)
-            )
-        return await _material_sync_service().sync_from_source(tenant_id, current_user, body)
+    try:
+        return await master_data_sync_from_source_with_run_log(
+            tenant_id=tenant_id,
+            entity_type="material",
+            binding_model=MaterialSyncBinding,
+            stream=stream,
+            run_sync=lambda: _material_sync_service().sync_from_source(tenant_id, current_user, body),
+        )
     except ValidationError as e:
         raise _http_error(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
