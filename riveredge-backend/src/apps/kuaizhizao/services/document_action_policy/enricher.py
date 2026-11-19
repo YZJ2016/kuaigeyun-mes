@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, TypeVar
 
@@ -1398,39 +1399,46 @@ async def enrich_purchase_order_detail_capabilities(
     *,
     has_items: bool = True,
 ) -> T:
-    from decimal import Decimal
-    from infra.services.business_config_service import BusinessConfigService
     from apps.kuaizhizao.services.payment_application_pull_service import (
         PaymentApplicationPullService,
+        compute_prepayment_application_remaining,
     )
 
     order_id = int(order.id)
-    has_outstanding = await _purchase_order_has_outstanding(tenant_id, order_id)
-    pushable_receipt_map = await _purchase_order_pushable_receipt_outstanding_by_ids(
-        tenant_id, [order_id]
-    )
-    pushable_notice_map = await _purchase_order_pushable_notice_outstanding_by_ids(
-        tenant_id, [order_id]
-    )
-    has_received_map = await _purchase_order_received_by_ids(tenant_id, [order_id])
-    has_invoice_map = await _purchase_order_invoice_by_ids(tenant_id, [order_id])
-    has_downstream = await purchase_order_has_downstream(tenant_id, order_id)
-    pending_change_map = await _purchase_order_pending_change_by_ids(tenant_id, [order_id])
-    returnable_map = await _purchase_order_returnable_by_ids(tenant_id, [order_id])
-    prepay_map = await _order_prepayment_linked_by_ids(
-        tenant_id, [order_id], source_type="purchase_order", target_type="payment"
-    )
-    require_app = await BusinessConfigService().get_finance_require_payment_application(tenant_id)
     pull_svc = PaymentApplicationPullService()
-    reserved_map = await pull_svc.prepayment_reserved_by_order_ids(tenant_id, [order_id])
-    prepay_app_map = await pull_svc.has_prepayment_application_by_order_ids(
-        tenant_id, [order_id]
+    (
+        has_outstanding,
+        pushable_receipt_map,
+        pushable_notice_map,
+        has_received_map,
+        has_invoice_map,
+        has_downstream,
+        pending_change_map,
+        returnable_map,
+        prepay_map,
+        require_app,
+        reserved_map,
+        prepay_app_map,
+        review_submitted,
+    ) = await asyncio.gather(
+        _purchase_order_has_outstanding(tenant_id, order_id),
+        _purchase_order_pushable_receipt_outstanding_by_ids(tenant_id, [order_id]),
+        _purchase_order_pushable_notice_outstanding_by_ids(tenant_id, [order_id]),
+        _purchase_order_received_by_ids(tenant_id, [order_id]),
+        _purchase_order_invoice_by_ids(tenant_id, [order_id]),
+        purchase_order_has_downstream(tenant_id, order_id),
+        _purchase_order_pending_change_by_ids(tenant_id, [order_id]),
+        _purchase_order_returnable_by_ids(tenant_id, [order_id]),
+        _order_prepayment_linked_by_ids(
+            tenant_id, [order_id], source_type="purchase_order", target_type="payment"
+        ),
+        BusinessConfigService().get_finance_require_payment_application(tenant_id),
+        pull_svc.prepayment_reserved_by_order_ids(tenant_id, [order_id]),
+        pull_svc.has_prepayment_application_by_order_ids(tenant_id, [order_id]),
+        resolve_review_submitted_for_document(tenant_id, "purchase_order", order),
     )
     prepay_remaining = compute_prepayment_application_remaining(
         order, reserved_map.get(order_id, Decimal("0"))
-    )
-    review_submitted = await resolve_review_submitted_for_document(
-        tenant_id, "purchase_order", order
     )
     return enrich_purchase_order_capabilities_on_response(
         order,
@@ -1459,33 +1467,40 @@ async def enrich_purchase_order_list_capabilities(
     *,
     has_items_by_id: Optional[dict[int, bool]] = None,
 ) -> List[T]:
-    order_ids = [int(getattr(o, "id", 0) or 0) for o in orders]
-    outstanding_map = await _purchase_order_outstanding_by_ids(tenant_id, order_ids)
-    pushable_receipt_map = await _purchase_order_pushable_receipt_outstanding_by_ids(
-        tenant_id, order_ids
-    )
-    pushable_notice_map = await _purchase_order_pushable_notice_outstanding_by_ids(
-        tenant_id, order_ids
-    )
-    received_map = await _purchase_order_received_by_ids(tenant_id, order_ids)
-    invoice_map = await _purchase_order_invoice_by_ids(tenant_id, order_ids)
-    downstream_map = await _purchase_order_downstream_by_ids(tenant_id, order_ids)
-    pending_change_map = await _purchase_order_pending_change_by_ids(tenant_id, order_ids)
-    returnable_map = await _purchase_order_returnable_by_ids(tenant_id, order_ids)
-    prepay_map = await _order_prepayment_linked_by_ids(
-        tenant_id, order_ids, source_type="purchase_order", target_type="payment"
-    )
-    from decimal import Decimal
-    from infra.services.business_config_service import BusinessConfigService
     from apps.kuaizhizao.services.payment_application_pull_service import (
         PaymentApplicationPullService,
     )
 
-    require_app = await BusinessConfigService().get_finance_require_payment_application(tenant_id)
+    order_ids = [int(getattr(o, "id", 0) or 0) for o in orders]
     pull_svc = PaymentApplicationPullService()
-    reserved_map = await pull_svc.prepayment_reserved_by_order_ids(tenant_id, order_ids)
-    prepay_app_map = await pull_svc.has_prepayment_application_by_order_ids(
-        tenant_id, order_ids
+    (
+        outstanding_map,
+        pushable_receipt_map,
+        pushable_notice_map,
+        received_map,
+        invoice_map,
+        downstream_map,
+        pending_change_map,
+        returnable_map,
+        prepay_map,
+        require_app,
+        reserved_map,
+        prepay_app_map,
+    ) = await asyncio.gather(
+        _purchase_order_outstanding_by_ids(tenant_id, order_ids),
+        _purchase_order_pushable_receipt_outstanding_by_ids(tenant_id, order_ids),
+        _purchase_order_pushable_notice_outstanding_by_ids(tenant_id, order_ids),
+        _purchase_order_received_by_ids(tenant_id, order_ids),
+        _purchase_order_invoice_by_ids(tenant_id, order_ids),
+        _purchase_order_downstream_by_ids(tenant_id, order_ids),
+        _purchase_order_pending_change_by_ids(tenant_id, order_ids),
+        _purchase_order_returnable_by_ids(tenant_id, order_ids),
+        _order_prepayment_linked_by_ids(
+            tenant_id, order_ids, source_type="purchase_order", target_type="payment"
+        ),
+        BusinessConfigService().get_finance_require_payment_application(tenant_id),
+        pull_svc.prepayment_reserved_by_order_ids(tenant_id, order_ids),
+        pull_svc.has_prepayment_application_by_order_ids(tenant_id, order_ids),
     )
     items_map = has_items_by_id or {}
     out: List[T] = []

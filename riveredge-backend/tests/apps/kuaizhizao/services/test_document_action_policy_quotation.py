@@ -16,11 +16,13 @@ from infra.exceptions.exceptions import BusinessLogicError
 def _q(**kwargs):
     defaults = {
         "status": "草稿",
-        "review_status": "待审核",
+        # 草稿默认未进入审核；勿用「待审核」否则会误判为已提交门禁
+        "review_status": "",
         "is_latest_in_series": True,
         "superseded_by_id": None,
         "sales_order_id": None,
         "contract_id": None,
+        "sales_review_id": None,
     }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
@@ -132,7 +134,7 @@ def test_accepted_with_contract_blocks_cancel_customer_confirm():
         audit_required=True,
     )
     assert not caps.cancel_customer_confirm.allowed
-    assert caps.cancel_customer_confirm.reason == "quotation.cancel_customer_confirm.not_allowed"
+    assert caps.cancel_customer_confirm.reason == "quotation.cancel_customer_confirm.linked_contract"
 
 
 def test_converted_downstream_missing():

@@ -59,6 +59,31 @@ def test_confirmed_order_without_supplier_cannot_push_receipt_or_invoice():
     assert caps.push_purchase_return.reason == "purchase_order.push.no_supplier"
 
 
+def test_receipt_push_blocked_when_qty_occupied():
+    """部分下推：无剩余可入数量时给 qty_occupied 原因。"""
+    order = SimpleNamespace(status="CONFIRMED", review_status="APPROVED", supplier_id=101)
+    caps = derive_purchase_order_capabilities(
+        order,
+        has_items=True,
+        has_outstanding=True,
+        has_pushable_receipt_outstanding=False,
+    )
+    assert caps.push_receipt.allowed is False
+    assert caps.push_receipt.reason == "purchase_order.push_receipt.qty_occupied"
+
+
+def test_receipt_notice_push_blocked_when_qty_occupied():
+    order = SimpleNamespace(status="CONFIRMED", review_status="APPROVED", supplier_id=101)
+    caps = derive_purchase_order_capabilities(
+        order,
+        has_items=True,
+        has_outstanding=True,
+        has_pushable_notice_outstanding=False,
+    )
+    assert caps.push_receipt_notice.allowed is False
+    assert caps.push_receipt_notice.reason == "purchase_order.push_receipt_notice.qty_occupied"
+
+
 def test_draft_order_with_downstream_cannot_delete():
     order = SimpleNamespace(status="DRAFT", review_status="PENDING", supplier_id=101)
     caps = derive_purchase_order_capabilities(

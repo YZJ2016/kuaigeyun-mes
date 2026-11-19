@@ -255,7 +255,7 @@ riveredge-backend/migrations/models/998_20261107180000_arrival_delay_review_draf
 riveredge-backend/migrations/models/999_20261107193000_receipt_review_status.py	a15ef7a5d79e76edd72f2844c9f00fe4bd851d0e	tracked	seed from d81b4b70bf
 riveredge-backend/migrations/models/999_20261109040000_master_partners_pk_and_seq.py	1c94706c08538b3548894e4e8fdea3c61aa99d39	tracked	seed from 05fb1f835e
 riveredge-backend/scripts/backfill_inclusive_tax_misentry.py	80d27a871d1473c213b467d6847a8a5c5cae5ed1	tracked	seed from 37409d3b29
-riveredge-backend/scripts/scan_document_action_bypass.py	c75d95016bc34ed87da0728eb52a52d06b8ab472	tracked	seed from f1c2d18cfb
+riveredge-backend/scripts/scan_document_action_bypass.py	c75d95016bc34ed87da0728eb52a52d06b8ab472	applied	ea1f4da58e刷新反馈+读加速+门禁加固
 riveredge-backend/scripts/scan_finance_host_orm_imports.py	d9b9d5d63fd1a626fcc5373f19b69e116f6ca1c5	tracked	seed from 52bce20beb
 riveredge-backend/scripts/scan_finance_management_orm_registry.py	67aae842b6f8657cea0a279b205eaaaa4ab5658c	tracked	seed from 2c945a39fb
 riveredge-backend/scripts/tenant_kingdee_strong_consistency.py	b2844d17485477f2777040de0c3cfd97a5eb7b86	tracked	seed from 1d4531b7f6
@@ -728,7 +728,7 @@ riveredge-backend/src/apps/kuaizhizao/services/delivery_notice_service.py	33ade6
 riveredge-backend/src/apps/kuaizhizao/services/demand_computation_service.py	e937e5d96b457ab1f57efd7be14a2d124554d3f7	tracked	seed from 0b8630adfd
 riveredge-backend/src/apps/kuaizhizao/services/demand_service.py	e3974f02ffd54ff70a20387e45c9325509ceca9a	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/demand.py	e74dbdc26a5ca6374c922ef5c8f54c3c03392839	tracked	seed from 899307f4d6
-riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/enricher.py	f0c2f064c5eb10de54e4449f1c9f318ed9ad5dec	tracked	seed from 2dd7241cfd
+riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/enricher.py	f0c2f064c5eb10de54e4449f1c9f318ed9ad5dec	applied	ea1f4da58e刷新反馈+读加速+门禁加固
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/other_expense.py	87de9f0bdfca5f1bd0e4124312df8e93cf966af6	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/other_expense_application.py	496403495327070461b2abb6a2a59d4ede77ea38	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/other_income.py	8ca2ebec9456b48fe3ca009d116306264ebabf8d	tracked	seed from d81b4b70bf
@@ -741,7 +741,7 @@ riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/purchase_o
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/purchase_order_change.py	7f992462bc28ab9745a26a0c5389df14292ab966	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/purchase_requisition.py	f321ea8f5e4f7e8a2b6749dd3fdb16a84738dd58	tracked	seed from 57a37e2749
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/purchase_return.py	93f1fe8a4b63c97dfaf0fe97ee64623d61602a1d	tracked	seed from 57a37e2749
-riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/quotation.py	6325ec1c5fe2213053090f31508cc925d0a26576	tracked	seed from 872b76152e
+riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/quotation.py	6325ec1c5fe2213053090f31508cc925d0a26576	applied	ea1f4da58e刷新反馈+读加速+门禁加固
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/receipt_notice.py	ca246ededda2a59889afc0976fc0ff96bd1fa45c	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/review_submission_gate.py	97b3167cbd778a53ba1aa75b43fde78992d55d5b	tracked	seed from 57a37e2749
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/rework_order.py	16fdf3fdff1b4c607cacc3952f4f62af72986002	tracked	seed from e16f2f2939
@@ -751,7 +751,7 @@ riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/sales_orde
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/sales_order_change.py	a3e920cfe13608a71e26287b682525c241ae1315	tracked	seed from 872b76152e
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/sales_return.py	9349f75735132a4b61e5bd28f9d1b63e17dee4a9	tracked	seed from 57a37e2749
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/shipment_notice.py	6b270809f45540b68dd731e9892e9549c96df099	tracked	seed from 899307f4d6
-riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/types.py	affd49c9495c3010cdc38c54322f7ac8c29dbe5a	tracked	seed from 2c945a39fb
+riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/types.py	affd49c9495c3010cdc38c54322f7ac8c29dbe5a	applied	ea1f4da58e刷新反馈+读加速+门禁加固
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/warehouse_inbound_hub.py	de5f6f1890a28559a1c2ffa8880d3d998d3294e8	tracked	seed from 899307f4d6
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/warehouse_outbound_hub.py	160acf1d11d7a6f8137373370be738e6edab4c7e	tracked	seed from 899307f4d6
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/work_order.py	2427aea8d35ae01340eaf5c5a05db41ed7ef187f	tracked	seed from 5b1b9828e4
@@ -882,7 +882,7 @@ riveredge-backend/src/apps/kuaizhizao/services/purchase_order_terms_service.py	7
 riveredge-backend/src/apps/kuaizhizao/services/purchase_receipt_sync_service.py	29a9e262f638fd9d665865fcdd33cafb2c9ddf3f	tracked	seed from 4bd853a94f
 riveredge-backend/src/apps/kuaizhizao/services/purchase_requisition_service.py	3754855b91c53496f92e82f93a6a17cf254e1f1b	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/services/purchase_requisition_stock_service.py	e33ffcbc20cceab7c8fa7db247c5dd7d4e865337	tracked	seed from 93b3cb5998
-riveredge-backend/src/apps/kuaizhizao/services/purchase_service.py	0036f4123011f0805e9357176de5d7fea9942ef6	applied	f40f54e336调度窗+价税簇
+riveredge-backend/src/apps/kuaizhizao/services/purchase_service.py	0036f4123011f0805e9357176de5d7fea9942ef6	applied	ea1f4da58e刷新反馈+读加速+门禁加固
 riveredge-backend/src/apps/kuaizhizao/services/qms_audit_nc_service.py	0cda9ffab9f6a1dc2fe7f6f6d73f736b62bed946	tracked	seed from a2473e9b42
 riveredge-backend/src/apps/kuaizhizao/services/qms_corrective_action_service.py	7cf4b14f37f72ef09b4d58e217cda2c3ef25159d	tracked	seed from a2473e9b42
 riveredge-backend/src/apps/kuaizhizao/services/qms_phase5_service.py	7f3c897caa640cd4ef3f7176befd285e85a7794d	tracked	seed from a2473e9b42
@@ -13588,7 +13588,7 @@ riveredge-frontend/e2e/playwright.finance-chain.config.ts	aa4052c954106b22164f22
 riveredge-frontend/package-lock.json	f0618bf2bb2d07abc3fd67168cf425a5bdb8c785	tracked	seed from 2cb998d625
 riveredge-frontend/package.json	7da58d8e444c484518fb8cb903b9ca6e2f56ee52	tracked	seed from 2cb998d625
 riveredge-frontend/scripts/antd6-legacy-scan.json	57ea61e8779296d0cfcc8cc67eab95493f993cff	tracked	seed from 9de82e8d57
-riveredge-frontend/scripts/perf_menu_baseline.md	de1ce10f898589108c2f1b9d12d4db9d4c072f00	tracked	seed from f1c2d18cfb
+riveredge-frontend/scripts/perf_menu_baseline.md	de1ce10f898589108c2f1b9d12d4db9d4c072f00	applied	ea1f4da58e刷新反馈+读加速+门禁加固
 riveredge-frontend/scripts/scan_document_dual_quantity_integration.py	a88387ce91bb3b409f677c16e296c6167daf59ac	tracked	seed from b12cc66e71
 riveredge-frontend/scripts/scan_document_import_export_ssot.py	b6c95cf864ff5af9d064d06919effcaff412d2f8	tracked	seed from 8c111dd65f
 riveredge-frontend/scripts/scan_purchase_amount_contract.py	dfb48d375f7d4d6e4a0b176ad3cbba0cef29be3d	tracked	seed from 5b1b9828e4
@@ -14112,7 +14112,7 @@ riveredge-frontend/src/apps/master-data/utils/resolve-partner-material-price.con
 riveredge-frontend/src/apps/master-data/utils/resolve-partner-material-price.ts	4f214403892b2c7c6358ff53191d026049cc30ac	tracked	seed from 2c945a39fb
 riveredge-frontend/src/apps/master-data/warehouseSyncConfig.ts	34aab0e494cd3590f3ff48a969c745fa431a3440	tracked	seed from 905787348a
 riveredge-frontend/src/assets/board/dashboard.png	32dc1171fae7c47440e5c6665b8d48a41662fa1d	tracked	seed from ddd31709d6
-riveredge-frontend/src/components/RefreshButton.tsx	cee810eba19b804b75358f8800f4c25232778a52	tracked	seed from f1c2d18cfb
+riveredge-frontend/src/components/RefreshButton.tsx	cee810eba19b804b75358f8800f4c25232778a52	applied	ea1f4da58e刷新反馈+读加速+门禁加固
 riveredge-frontend/src/components/ai-assistant/KuAiLottieMark.tsx	10fb71b1a75e8eeae067534d483b7350ce1e75f0	tracked	seed from 3050130eb5
 riveredge-frontend/src/components/ai-assistant/index.less	4d9295b05f36b1d0edb8bceafe6f2730e22aee39	tracked	seed from 3050130eb5
 riveredge-frontend/src/components/ai-assistant/index.tsx	e0bcf0745bc131e5ad3e8b992a34d4a146f88cff	tracked	seed from 3050130eb5
@@ -14275,7 +14275,7 @@ riveredge-frontend/src/locales/generated/systemDictionary/zh-CN.ts	1007aff6ef6da
 riveredge-frontend/src/locales/zh-CN.login.ts	db74e76107d87f6bd9f68953bc8a91f8f93d3479	tracked	seed from 57a37e2749
 riveredge-frontend/src/locales/zh-CN.ts	708d041f0b521d8012d31f58bdd010921a4280be	superset	updateLog zh-CN键已预置
 riveredge-frontend/src/main.tsx	405b6b630716320f0778bd2c05fa6be0e62364e7	tracked	seed from 66af904bd3
-riveredge-frontend/src/pages/infra/operation/index.tsx	904003c084a70eb933fc63ab32392b2cb8d2f373	tracked	seed from f1c2d18cfb
+riveredge-frontend/src/pages/infra/operation/index.tsx	904003c084a70eb933fc63ab32392b2cb8d2f373	applied	ea1f4da58e刷新反馈+读加速+门禁加固
 riveredge-frontend/src/pages/infra/tenants/detail/index.tsx	80fb77d7276eb3fcbe60906e6cc5877c8046e6f3	tracked	seed from e75380e080
 riveredge-frontend/src/pages/infra/tenants/list/index.tsx	79ebee8abbadc1900e01fe318d4efe79a245d31b	tracked	seed from e75380e080
 riveredge-frontend/src/pages/login/index.tsx	a810d49948460fa99f5f4b2f3addae98d5156f1e	tracked	seed from 1d968cd27b

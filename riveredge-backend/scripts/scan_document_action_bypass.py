@@ -226,13 +226,21 @@ def scan_sales_order_change_service_status_gates() -> list[tuple[str, str]]:
         "apply",
     )
     current_fn: str | None = None
+    fn_has_assert = False
     for i, line in enumerate(text.splitlines(), 1):
         stripped = line.strip()
         if stripped.startswith("async def ") or stripped.startswith("def "):
             name = stripped.split("(")[0].replace("async def ", "").replace("def ", "").strip()
             current_fn = name if name in policy_actions else None
+            fn_has_assert = False
+        if current_fn and "assert_sales_order_change_capability" in line:
+            fn_has_assert = True
         if current_fn and gate.search(line):
             if "assert_sales_order_change_capability" in line:
+                continue
+            if fn_has_assert and (
+                "is_submitted_status(" in line or "PENDING_REVIEW" in line
+            ):
                 continue
             if "APPLIED" in line:
                 continue  # apply 幂等早退，非业务门禁
@@ -265,13 +273,19 @@ def scan_sales_contract_service_status_gates() -> list[tuple[str, str]]:
         "create_contract_change",
     )
     current_fn: str | None = None
+    fn_has_assert = False
     for i, line in enumerate(text.splitlines(), 1):
         stripped = line.strip()
         if stripped.startswith("async def ") or stripped.startswith("def "):
             name = stripped.split("(")[0].replace("async def ", "").replace("def ", "").strip()
             current_fn = name if name in policy_actions else None
+            fn_has_assert = False
+        if current_fn and "assert_sales_contract_capability" in line:
+            fn_has_assert = True
         if current_fn and gate.search(line):
             if "assert_sales_contract_capability" in line:
+                continue
+            if fn_has_assert and "is_submitted_status(" in line:
                 continue
             findings.append(
                 _severity(
@@ -317,13 +331,19 @@ def scan_sales_forecast_service_status_gates() -> list[tuple[str, str]]:
         "push_to_computation",
     )
     current_fn: str | None = None
+    fn_has_assert = False
     for i, line in enumerate(text.splitlines(), 1):
         stripped = line.strip()
         if stripped.startswith("async def ") or stripped.startswith("def "):
             name = stripped.split("(")[0].replace("async def ", "").replace("def ", "").strip()
             current_fn = name if name in policy_actions else None
+            fn_has_assert = False
+        if current_fn and "assert_sales_forecast_capability" in line:
+            fn_has_assert = True
         if current_fn and gate.search(line):
             if "assert_sales_forecast_capability" in line:
+                continue
+            if fn_has_assert and "is_submitted_status(" in line:
                 continue
             findings.append(
                 _severity(

@@ -683,27 +683,20 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         if not order:
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
-        from apps.kuaicaiwu.services.purchase_settlement import (
-            sync_purchase_order_header_amounts,
-        )
-
-        await sync_purchase_order_header_amounts(tenant_id, order_id, order=order)
-        await order.refresh_from_db()
-
+        # 详情只读：头金额/已到货由入库退货等写路径 sync；禁止读侧再 sync（对齐列表契约）
         import asyncio
-        from apps.kuaizhizao.services.warehouse_service import sync_purchase_order_receipt_quantities
         from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_order_lifecycle
         from apps.kuaizhizao.services.purchase_order_terms_service import PurchaseOrderTermsService
         from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
         from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
-        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
         from core.services.approval.audit_record_enricher import enrich_record
-
-        await sync_purchase_order_receipt_quantities(tenant_id, order_id)
+        from apps.common.app_orm import finance_orm_ready
+        from apps.kuaicaiwu.services.purchase_settlement import (
+            purchase_order_settlement_gross,
+        )
 
         # 获取订单明细
         items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).all()
-        material_fallback = await self._load_material_fallback_for_po_items(tenant_id, items)
 
         # 使用model_validate，但需要手动处理items字段（因为order.items是ReverseRelation）
         # 先获取订单的所有字段，排除items
@@ -720,12 +713,8 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             return response.buyer_name
 
         async def _finance_lifecycle():
-            from apps.common.app_orm import finance_orm_ready
             from apps.kuaicaiwu.services.purchase_order_finance_lifecycle import (
                 compute_purchase_order_finance_lifecycle,
-            )
-            from apps.kuaicaiwu.services.purchase_settlement import (
-                purchase_order_settlement_gross,
             )
 
             if not finance_orm_ready():
@@ -734,6 +723,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             return await compute_purchase_order_finance_lifecycle(tenant_id, order_id, gross)
 
         (
+            material_fallback,
             buyer_name,
             _tol,
             payment_milestones,
@@ -742,6 +732,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             has_purchase_receipt,
             finance_lifecycle,
         ) = await asyncio.gather(
+            self._load_material_fallback_for_po_items(tenant_id, items),
             _buyer_name(),
             self._apply_po_item_receipt_tolerance_fields(tenant_id, items),
             PurchaseOrderTermsService.load_payment_milestones(tenant_id, order_id),
@@ -784,9 +775,25 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             ),
             payment_progress=finance_lifecycle.payment_progress if finance_lifecycle else None,
         )
-        response = await enrich_purchase_order_detail_capabilities(
-            tenant_id, order, response, has_items=len(items) > 0
-        )
+        async def _enrich_caps():
+            return await enrich_purchase_order_detail_capabilities(
+                tenant_id, order, response, has_items=len(items) > 0
+            )
+
+        async def _prepay_snapshot():
+            if not finance_orm_ready():
+                return None
+            from apps.kuaicaiwu.services.payable_prepayment_apply_service import (
+                PayablePrepaymentApplyService,
+            )
+
+            return await PayablePrepaymentApplyService().enrich_purchase_order_prepayment_snapshot(
+                tenant_id,
+                purchase_order_id=order_id,
+                order_total_amount=purchase_order_settlement_gross(order),
+            )
+
+        response, prepay_pair = await asyncio.gather(_enrich_caps(), _prepay_snapshot())
         if finance_lifecycle:
             from apps.kuaizhizao.finance.services.purchase_order_finance_lifecycle import (
                 purchase_order_shows_payment_settlement,
@@ -807,22 +814,8 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     }
                 )
         response.payment_milestones = payment_milestones
-        from apps.common.app_orm import finance_orm_ready
-
-        if finance_orm_ready():
-            from apps.kuaicaiwu.services.payable_prepayment_apply_service import (
-                PayablePrepaymentApplyService,
-            )
-            from apps.kuaicaiwu.services.purchase_settlement import (
-                purchase_order_settlement_gross,
-            )
-
-            prep_svc = PayablePrepaymentApplyService()
-            unsettled, estimated_net = await prep_svc.enrich_purchase_order_prepayment_snapshot(
-                tenant_id,
-                purchase_order_id=order_id,
-                order_total_amount=purchase_order_settlement_gross(order),
-            )
+        if prepay_pair:
+            unsettled, estimated_net = prepay_pair
             if unsettled > 0:
                 response.prepayment_unsettled_balance = unsettled
                 response.estimated_payable_after_prepayment = estimated_net
@@ -988,35 +981,48 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
         # 不能直接 model_validate(order)：order.items 是 ReverseRelation，会导致 Pydantic 校验失败
         # 列表禁止读侧 sync 回写已到货数：确认入库/退货/撤回等写路径已 sync；读侧批量 update 易拖垮列表致网关 504
-        order_ids = [order.id for order in orders]
-        totals_by_order = await self._batch_order_receipt_totals(tenant_id, order_ids)
-        downstream_totals_by_order = await self._batch_order_downstream_totals(tenant_id, order_ids)
+        import asyncio
 
-        items_by_order: Dict[int, List[PurchaseOrderItem]] = {}
-        material_fallback: Dict[int, Dict[str, str]] = {}
-        if params.include_items and order_ids:
+        order_ids = [order.id for order in orders]
+        missing_buyer_ids = [
+            int(o.buyer_id)
+            for o in orders
+            if o.buyer_id and not str(o.buyer_name or "").strip()
+        ]
+
+        async def _load_list_items() -> tuple[
+            Dict[int, List[PurchaseOrderItem]], Dict[int, Dict[str, str]]
+        ]:
+            by_order: Dict[int, List[PurchaseOrderItem]] = {}
+            fallback: Dict[int, Dict[str, str]] = {}
+            if not (params.include_items and order_ids):
+                return by_order, fallback
             all_items = (
                 await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id__in=order_ids)
                 .order_by("order_id", "id")
                 .all()
             )
             for it in all_items:
-                items_by_order.setdefault(int(it.order_id), []).append(it)
-            material_fallback = await self._load_material_fallback_for_po_items(tenant_id, all_items)
-
-        missing_buyer_ids = [
-            int(o.buyer_id)
-            for o in orders
-            if o.buyer_id and not str(o.buyer_name or "").strip()
-        ]
-        buyer_name_by_id = await self._batch_buyer_display_names(tenant_id, missing_buyer_ids)
+                by_order.setdefault(int(it.order_id), []).append(it)
+            fallback = await self._load_material_fallback_for_po_items(tenant_id, all_items)
+            return by_order, fallback
 
         from apps.kuaizhizao.services.purchase_arrival_warning_service import (
             PurchaseArrivalWarningService,
         )
 
-        overdue_by_po = await PurchaseArrivalWarningService().batch_po_has_arrival_overdue(
-            tenant_id, order_ids
+        (
+            totals_by_order,
+            downstream_totals_by_order,
+            (items_by_order, material_fallback),
+            buyer_name_by_id,
+            overdue_by_po,
+        ) = await asyncio.gather(
+            self._batch_order_receipt_totals(tenant_id, order_ids),
+            self._batch_order_downstream_totals(tenant_id, order_ids),
+            _load_list_items(),
+            self._batch_buyer_display_names(tenant_id, missing_buyer_ids),
+            PurchaseArrivalWarningService().batch_po_has_arrival_overdue(tenant_id, order_ids),
         )
 
         result = []

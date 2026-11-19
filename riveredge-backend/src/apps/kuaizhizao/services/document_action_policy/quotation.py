@@ -168,8 +168,10 @@ def derive_quotation_capabilities(
     cancel_confirm_allowed = False
     cancel_confirm_reason = "quotation.cancel_customer_confirm.not_allowed"
     if st == "已接受":
-        if linked_contract or linked_review:
-            cancel_confirm_reason = "quotation.cancel_customer_confirm.not_allowed"
+        if linked_contract:
+            cancel_confirm_reason = "quotation.cancel_customer_confirm.linked_contract"
+        elif linked_review:
+            cancel_confirm_reason = "quotation.cancel_customer_confirm.linked_sales_review"
         else:
             cancel_confirm_allowed = True
     cancel_confirm_cap = _cap(

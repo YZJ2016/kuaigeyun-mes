@@ -52,6 +52,7 @@ import localizedFormat from 'dayjs/plugin/localizedFormat';
 import { useTranslation } from 'react-i18next';
 
 import { ListPageTemplate } from '../../../components/layout-templates';
+import { RefreshButton } from '../../../components/RefreshButton';
 import {
   getAccessStatistics,
   getTenantStatistics,
@@ -188,8 +189,7 @@ export default function OperationsDashboard() {
     refetchTenants();
     refetchUsers();
     refetchAccess();
-    messageApi.success(t('pages.infra.operation.refreshSuccess'));
-  }, [refetchTenants, refetchUsers, refetchAccess, messageApi, t]);
+  }, [refetchTenants, refetchUsers, refetchAccess]);
 
   // Chart Data Processing
   const statusChartData = useMemo(() => {
@@ -347,9 +347,7 @@ export default function OperationsDashboard() {
                 >
                   {autoRefresh ? t('pages.infra.operation.autoRefreshOn') : t('pages.infra.operation.autoRefresh')}
                 </Button>
-                <Button icon={<ReloadOutlined />} onClick={handleRefresh} loading={loading}>
-                  {t('common.refresh')}
-                </Button>
+                <RefreshButton onClick={handleRefresh} loading={loading} />
                 <Button icon={<DownloadOutlined />} onClick={handleExport}>
                   {t('common.export')}
                 </Button>
@@ -456,7 +454,11 @@ export default function OperationsDashboard() {
                       colorField="name"
                       radius={0.8}
                       innerRadius={0.6}
-                      label={{ type: 'inner', offset: '-50%', content: '{value}', style: { textAlign: 'center', fontSize: 14 } }}
+                      label={{
+                        text: 'value',
+                        position: 'inside',
+                        style: { textAlign: 'center', fontSize: 14 },
+                      }}
                     />
                   </ChartSuspense>
                 ) : <Empty />}
@@ -472,7 +474,11 @@ export default function OperationsDashboard() {
                       data={planChartData}
                       xField="name"
                       yField="value"
-                      label={{ position: 'center', style: { fill: '#FFFFFF', opacity: 0.6 } }}
+                      label={{
+                        text: 'value',
+                        position: 'inside',
+                        style: { fill: '#FFFFFF', opacity: 0.6 },
+                      }}
                     />
                   </ChartSuspense>
                 ) : <Empty />}

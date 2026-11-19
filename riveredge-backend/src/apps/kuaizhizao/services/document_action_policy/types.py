@@ -404,6 +404,7 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "quotation.confirm.not_approved": "请先完成审核通过后再标记客户确认",
     "quotation.cancel_customer_confirm.not_allowed": "当前状态不可取消客户确认",
     "quotation.cancel_customer_confirm.linked_contract": "已关联有效销售合同，请先处理合同后再取消确认",
+    "quotation.cancel_customer_confirm.linked_sales_review": "已关联订单评审，请先处理评审后再取消确认",
     "quotation.convert_order.not_allowed": "当前状态不可转销售订单",
     "quotation.convert_order.linked_contract": "该报价已关联销售合同，请从销售合同下推订单",
     "quotation.convert_order.linked_sales_review": "该报价已关联订单评审，请从订单评审下推销售订单",

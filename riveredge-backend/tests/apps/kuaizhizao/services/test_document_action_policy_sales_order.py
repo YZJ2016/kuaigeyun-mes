@@ -126,6 +126,50 @@ def test_create_change_order_when_locked():
     assert not caps.update.allowed
 
 
+def test_push_shipment_and_delivery_require_pushable_qty():
+    """部分下推：无可下推数量时禁发运/出库；有剩余则可推。"""
+    blocked = derive_sales_order_capabilities(
+        _o(status="已审核", review_status="审核通过"),
+        has_items=True,
+        has_pushable_qty=False,
+    )
+    assert not blocked.push_shipment_notice.allowed
+    assert blocked.push_shipment_notice.reason == "sales_order.push_shipment.no_backorder"
+    assert not blocked.push_sales_delivery.allowed
+    assert blocked.push_sales_delivery.reason == "sales_order.push_delivery.no_backorder"
+
+    allowed = derive_sales_order_capabilities(
+        _o(status="已审核", review_status="审核通过"),
+        has_items=True,
+        has_pushable_qty=True,
+    )
+    assert allowed.push_shipment_notice.allowed
+    assert allowed.push_sales_delivery.allowed
+
+
+def test_push_delivery_blocked_when_shipment_notice_required():
+    caps = derive_sales_order_capabilities(
+        _o(status="已审核", review_status="审核通过"),
+        has_items=True,
+        has_pushable_qty=True,
+        require_shipment_notice_before_delivery=True,
+    )
+    assert caps.push_shipment_notice.allowed
+    assert not caps.push_sales_delivery.allowed
+    assert caps.push_sales_delivery.reason == "sales_order.push_delivery.require_shipment_notice"
+
+
+def test_delete_and_revoke_blocked_when_has_downstream():
+    caps = derive_sales_order_capabilities(
+        _o(status="已审核", review_status="审核通过"),
+        has_downstream_documents=True,
+    )
+    assert not caps.delete.allowed
+    assert caps.delete.reason == "sales_order.delete.has_downstream"
+    assert not caps.revoke_approval.allowed
+    assert caps.revoke_approval.reason == "sales_order.revoke_approval.has_downstream"
+
+
 def test_push_sales_return_requires_delivered_qty():
     caps = derive_sales_order_capabilities(
         _o(status="已审核", review_status="审核通过"),
