@@ -167,7 +167,8 @@ class PurchaseInvoiceTaxService:
             excl = Decimal(orig.invoice_amount or 0)
             tax = Decimal(orig.tax_amount or 0)
             tot = Decimal(orig.total_amount or 0)
-            neg_excl, neg_tax, neg_tot = -excl, -tax, -tot
+            disc = Decimal(getattr(orig, "discount_amount", None) or 0)
+            neg_excl, neg_tax, neg_tot, neg_disc = -excl, -tax, -tot, -disc
 
             code = await self._base.generate_code(
                 tenant_id, "PURCHASE_INVOICE_CODE", prefix=f"PI{today_site_str()}"
@@ -189,6 +190,8 @@ class PurchaseInvoiceTaxService:
                 invoice_amount=neg_excl,
                 tax_amount=neg_tax,
                 total_amount=neg_tot,
+                discount_amount=neg_disc,
+                adjust_payable=False,
                 status="未审核",
                 review_status="草稿",
                 payable_id=orig.payable_id,

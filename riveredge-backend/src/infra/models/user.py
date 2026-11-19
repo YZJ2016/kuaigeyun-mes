@@ -65,6 +65,9 @@ class User(BaseModel):
     
     # 扩展字段（账户管理模块）
     phone = fields.CharField(max_length=20, null=True, description="手机号（可选）")
+    employee_number = fields.CharField(
+        max_length=50, null=True, description="人员工号（租户内唯一，外推人员标识真源）"
+    )
     avatar = fields.CharField(max_length=36, null=True, description="头像文件UUID（关联文件管理，可选）")
     remark = fields.TextField(null=True, description="备注（可选）")
     

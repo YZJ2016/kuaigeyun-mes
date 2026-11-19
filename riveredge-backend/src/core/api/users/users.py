@@ -147,7 +147,10 @@ class UserResetPasswordResponse(BaseModel):
     user: UserResponse
     temporary_password: Optional[str] = Field(
         None,
-        description="加强模式下自动生成的临时密码（须告知用户并在下次登录修改）",
+        description="未指定新密码时按租户策略生成的默认或临时口令",
+    )
+    must_change_password: bool = Field(
+        False, description="是否要求用户下次登录修改密码",
     )
 
 
@@ -802,11 +805,17 @@ async def reset_user_password(
         return UserResetPasswordResponse(
             user=await _user_to_response(user),
             temporary_password=temporary_password,
+            must_change_password=bool(getattr(user, "must_change_password", False)),
         )
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"重置密码失败: {str(e)}",
         )
     except Exception as e:
         raise HTTPException(

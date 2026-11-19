@@ -158,6 +158,9 @@ const PurchaseInvoiceDetail: React.FC = () => {
           <ProDescriptions.Item label={t(`${P}.col.invoiceAmount`)}>{data.invoice_amount}</ProDescriptions.Item>
           <ProDescriptions.Item label={t(`${P}.col.taxAmount`)}>{data.tax_amount}</ProDescriptions.Item>
           <ProDescriptions.Item label={t(`${P}.col.totalAmount`)}>{data.total_amount}</ProDescriptions.Item>
+          <ProDescriptions.Item label={t(`${P}.col.discountAmount`)}>
+            {data.discount_amount ?? 0}
+          </ProDescriptions.Item>
           <ProDescriptions.Item label={t(`${P}.col.taxRate`)}>{data.tax_rate}%</ProDescriptions.Item>
           <ProDescriptions.Item label={t('app.kuaicaiwu.common.businessStatus')}>{data.status}</ProDescriptions.Item>
           <ProDescriptions.Item label={t('app.kuaicaiwu.common.reviewStatus')}>{data.review_status}</ProDescriptions.Item>

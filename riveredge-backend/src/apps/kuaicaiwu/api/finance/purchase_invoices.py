@@ -20,6 +20,7 @@ from apps.kuaicaiwu.services.invoice_concurrent_settlement import (
     create_concurrent_payment_for_payable,
 )
 from apps.kuaicaiwu.services.purchase_invoice_pull_service import PurchaseInvoicePullService
+from apps.kuaicaiwu.services.purchase_invoice_amounts import purchase_invoice_occupancy_amount
 from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
 from apps.kuaicaiwu.models.payable import Payable
 from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
@@ -73,6 +74,15 @@ async def create_purchase_invoice(
             Decimal(str(data.tax_rate)),
             Decimal(str(data.total_amount)) if data.total_amount is not None else None,
         )
+        discount_for_gate = Decimal(str(data.discount_amount or 0))
+        occupancy_for_gate = total_for_gate + discount_for_gate
+        if total_for_gate <= 0:
+            raise BusinessLogicError("价税合计须大于 0")
+        if bool(data.adjust_payable):
+            if str(data.source_type or "").strip() != "payable":
+                raise BusinessLogicError("仅应付单收票可勾选调整应付")
+            if discount_for_gate == 0:
+                raise BusinessLogicError("无优惠金额时无需调整应付")
         concurrent = data.concurrent_settlement
         want_payment = bool(concurrent and concurrent.enabled)
         settle_amount = Decimal("0")
@@ -105,7 +115,7 @@ async def create_purchase_invoice(
                 tenant_id=tenant_id,
                 source_type=str(data.source_type).strip(),
                 source_id=int(pull_source_ids[0]),
-                total_amount=total_for_gate,
+                total_amount=occupancy_for_gate,
                 pull_receipt_lines=data.pull_receipt_lines,
                 source_ids=pull_source_ids,
             )
@@ -146,9 +156,7 @@ async def create_purchase_invoice(
                             }
                         )
 
-        input_payable_id = data.payable_id
         invoice_id: Optional[int] = None
-        auto_payable_id: Optional[int] = None
         allocated_code = await invoice_service.generate_code(
             tenant_id, "PURCHASE_INVOICE_CODE", prefix=f"PI{today_site_str()}"
         )
@@ -162,8 +170,7 @@ async def create_purchase_invoice(
                 invoice_code=allocated_code,
             )
             invoice_id = int(invoice.id)
-            if invoice.payable_id and not input_payable_id:
-                auto_payable_id = int(invoice.payable_id)
+            occupancy_amt = purchase_invoice_occupancy_amount(invoice)
             if pull_preview and data.source_type and pull_source_ids:
                 code_by_source: dict[int, str] = {}
                 for item in pull_preview.get("items") or []:
@@ -176,7 +183,7 @@ async def create_purchase_invoice(
                         purchase_invoice_pull_service._fifo_allocate_amount_by_preview_items(
                             pull_source_ids,
                             pull_preview.get("items") or [],
-                            Decimal(str(invoice.total_amount or 0)),
+                            occupancy_amt,
                         )
                     )
                 for sid in pull_source_ids:
@@ -212,7 +219,7 @@ async def create_purchase_invoice(
                         tenant_id,
                         pull_source_ids,
                         int(invoice_id),
-                        Decimal(str(invoice.total_amount or 0)),
+                        occupancy_amt,
                         pull_receipt_lines=data.pull_receipt_lines,
                         created_by=current_user.id,
                     )
@@ -221,7 +228,7 @@ async def create_purchase_invoice(
                     tenant_id,
                     pull_source_ids,
                     int(invoice_id),
-                    Decimal(str(invoice.total_amount or 0)),
+                    occupancy_amt,
                     pull_receipt_lines=data.pull_receipt_lines,
                     invoice_number=data.invoice_number,
                     created_by=current_user.id,
@@ -240,15 +247,6 @@ async def create_purchase_invoice(
                         current_user=current_user,
                     )
         # 审核/审批通知不得放在写库事务内：create_task 会与连接行锁互相等待，网关 504。
-        if auto_payable_id:
-            await submit_finance_review(
-                model=Payable,
-                tenant_id=tenant_id,
-                doc_id=auto_payable_id,
-                updated_by=current_user.id,
-                doc_label="应付单",
-                node_key="payable",
-            )
         await submit_finance_review(
             model=PurchaseInvoice,
             tenant_id=tenant_id,
@@ -633,6 +631,10 @@ async def update_purchase_invoice(
         update_data["total_amount"] = total_amount
         if data.tax_rate is not None:
             update_data["tax_rate"] = tax_rate_percent
+    if data.discount_amount is not None:
+        update_data["discount_amount"] = Decimal(str(data.discount_amount))
+    if data.adjust_payable is not None:
+        update_data["adjust_payable"] = bool(data.adjust_payable)
 
     if update_data:
         apply_update_audit(update_data, current_user)

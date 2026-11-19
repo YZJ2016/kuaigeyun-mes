@@ -81,7 +81,7 @@ low_spec_apply_profile() {
     set_deploy_env_value NODE_BUILD_MEM "2048"
     set_deploy_env_value ALLOW_SERVER_BUILD "0"
     set_deploy_env_value TASKIQ_START_TIMEOUT "300"
-    set_deploy_env_value BACKEND_START_TIMEOUT "180"
+    set_deploy_env_value BACKEND_START_TIMEOUT "360"
     set_deploy_env_value BLUE_GREEN_DEPLOY "0"
     set_deploy_env_value UPDATE_BLUE_GREEN "0"
 

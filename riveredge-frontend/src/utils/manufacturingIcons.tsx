@@ -374,6 +374,11 @@ const LUCIDE_BY_NAME: Record<string, React.ComponentType<any>> = {
   Zap,
 };
 
+const LUCIDE_COMPONENT_TO_PASCAL = new globalThis.Map<React.ComponentType<any>, string>();
+for (const [name, component] of Object.entries(LUCIDE_BY_NAME)) {
+  LUCIDE_COMPONENT_TO_PASCAL.set(component, name);
+}
+
 /**
  * 仅从 ManufacturingIcons 预置表取组件；未登记键返回 null（禁止 DynamicIcon / Factory 兜底）。
  * 兼容 manifest/库表中的 Lucide PascalCase（如 LayoutDashboard → layoutDashboard / shield-check）。
@@ -393,6 +398,18 @@ export function resolveMenuIconComponent(iconKey: string): React.ComponentType<a
     if (hit) return hit;
   }
   return null;
+}
+
+/** 菜单键解析出的组件使用同一预置表反查 Lucide 名称。 */
+export function resolveMenuIconLucidePascalName(iconKey: string): string | null {
+  const component = resolveMenuIconComponent(iconKey);
+  return component ? LUCIDE_COMPONENT_TO_PASCAL.get(component) ?? null : null;
+}
+
+export function resolveLucidePascalFromComponent(
+  component: React.ComponentType<any> | null | undefined,
+): string | null {
+  return component ? LUCIDE_COMPONENT_TO_PASCAL.get(component) ?? null : null;
 }
 
 /** 仅供 ManufacturingIcons 表内绑定 Lucide 组件；未知名在模块加载时抛错。 */

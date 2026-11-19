@@ -77,7 +77,10 @@ def coerce_finance_parameter_dict(finance: Dict[str, Any]) -> Dict[str, Any]:
     if pay not in PAYABLE_RECOGNITION_VALUES:
         pay = "on_receipt"
     fin["payable_recognition"] = pay
-    if pay in ("on_receipt", "manual", "on_partner_statement"):
+    if pay == "on_purchase_invoice":
+        # 组织按采购发票立账时，收票审核后自动立应付。
+        fin["auto_generate_payable_from_purchase_invoice"] = True
+    elif pay in ("on_receipt", "manual", "on_partner_statement"):
         fin["auto_generate_payable_from_purchase_invoice"] = False
     return fin
 
@@ -1872,10 +1875,20 @@ class BusinessConfigService:
         return resolved not in ("manual", "on_partner_statement")
 
     async def should_auto_generate_payable_from_purchase_invoice_effective(
-        self, tenant_id: int, supplier_id: Optional[int] = None
+        self,
+        tenant_id: int,
+        supplier_id: Optional[int] = None,
+        *,
+        resolved_strategy: Optional[str] = None,
     ) -> bool:
-        """对称于应收：组织按进项发票时看总开关；组织按入库时仅供应商显式覆盖 on_purchase_invoice 可走发票路径。"""
-        resolved = await self.resolve_payable_recognition(tenant_id, supplier_id)
+        """优先按单据解析策略决定是否自动立应付，组织按票时自动开关恒为 True。"""
+        from apps.kuaizhizao.services.document_recognition import coerce_payable_recognition
+
+        resolved = (
+            coerce_payable_recognition(resolved_strategy)
+            if resolved_strategy is not None
+            else await self.resolve_payable_recognition(tenant_id, supplier_id)
+        )
         if resolved != "on_purchase_invoice":
             return False
         config = await self.get_business_config(tenant_id)
@@ -1884,6 +1897,8 @@ class BusinessConfigService:
         org_pay = fin.get("payable_recognition")
         if org_pay == "on_purchase_invoice":
             return auto
+        if resolved_strategy is not None and resolved == "on_purchase_invoice":
+            return True
         if not supplier_id:
             return False
         sup = await Supplier.get_or_none(

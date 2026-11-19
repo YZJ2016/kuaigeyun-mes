@@ -294,20 +294,9 @@ function sumPaymentApplicationFormLineAmounts(items: unknown): number {
   }, 0);
 }
 
-function sumPaymentApplicationFormLineOrderDisplayAmounts(
-  items: unknown,
-  applicationKind: unknown,
-): number {
-  const kind = formApplicationKind(applicationKind);
-  const rows = normalizeFormListItems<Record<string, unknown>>(items);
-  return rows.reduce((acc, row) => {
-    if (isPrepaymentPurchaseOrderFormLine(row, kind)) {
-      const orderAmount = Number(row.sourceOrderAmount ?? row.maxRequestAmount ?? row.requestAmount ?? 0);
-      return acc + (Number.isFinite(orderAmount) ? orderAmount : 0);
-    }
-    const amount = Number(row.requestAmount);
-    return acc + (Number.isFinite(amount) ? amount : 0);
-  }, 0);
+function resolvePaymentApplicationFormLineOrderAmount(row: Record<string, unknown>): number {
+  const amount = Number(row.sourceOrderAmount ?? 0);
+  return Number.isFinite(amount) && amount > 0 ? amount : 0;
 }
 
 function isPrepaymentPurchaseOrderFormLine(
@@ -401,19 +390,22 @@ function applyHeaderAmountToPrepaymentLines(
 
 /** 明细表 6 列业务字段 + 订单/申请金额列 + 操作列 */
 const PAYMENT_APPLICATION_LINE_SUMMARY_LABEL_COL_SPAN = 6;
-const PAYMENT_APPLICATION_LINE_AMOUNT_COL_INDEX = 6;
-const PAYMENT_APPLICATION_LINE_OP_COL_INDEX = 7;
+const PAYMENT_APPLICATION_LINE_ORDER_AMOUNT_COL_INDEX = 6;
+const PAYMENT_APPLICATION_LINE_REQUEST_AMOUNT_COL_INDEX = 7;
+const PAYMENT_APPLICATION_LINE_OP_COL_INDEX = 8;
 
 function PaymentApplicationLinesSummaryRow() {
   const { t } = useTranslation();
   const form = Form.useFormInstance();
   const items = Form.useWatch('items', form);
-  const applicationKind = Form.useWatch('applicationKind', form);
   const rows = normalizeFormListItems<Record<string, unknown>>(items);
   if (!rows.length) {
     return null;
   }
-  const total = sumPaymentApplicationFormLineOrderDisplayAmounts(items, applicationKind);
+  const requestTotal = sumPaymentApplicationFormLineAmounts(items);
+  const orderTotal = rows.reduce(
+    (acc, row) => acc + resolvePaymentApplicationFormLineOrderAmount(row), 0,
+  );
   return (
     <Table.Summary fixed>
       <Table.Summary.Row>
@@ -423,16 +415,25 @@ function PaymentApplicationLinesSummaryRow() {
           align="left"
         >
           <span style={{ fontWeight: 600 }}>
-            {t('app.kuaizhizao.paymentApplication.linesGrandTotal')}
+            {t('app.kuaizhizao.paymentApplication.requestAmountTotal')}
           </span>
         </Table.Summary.Cell>
         <Table.Summary.Cell
-          index={PAYMENT_APPLICATION_LINE_AMOUNT_COL_INDEX}
+          index={PAYMENT_APPLICATION_LINE_ORDER_AMOUNT_COL_INDEX}
           align="right"
           className="uni-detail-fixed-amount-summary"
         >
           <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
-            {formatCurrencyAmount(total)}
+            {orderTotal > 0 ? formatCurrencyAmount(orderTotal) : '—'}
+          </span>
+        </Table.Summary.Cell>
+        <Table.Summary.Cell
+          index={PAYMENT_APPLICATION_LINE_REQUEST_AMOUNT_COL_INDEX}
+          align="right"
+          className="uni-detail-fixed-amount-summary"
+        >
+          <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+            {formatCurrencyAmount(requestTotal)}
           </span>
         </Table.Summary.Cell>
         <Table.Summary.Cell index={PAYMENT_APPLICATION_LINE_OP_COL_INDEX} className="uni-detail-fixed-op-summary" />
@@ -1535,7 +1536,7 @@ const PaymentApplicationsPage: React.FC = () => {
               name="headerRequestAmount"
               label={t('app.kuaizhizao.paymentApplication.totalRequestAmount')}
               min={0.01}
-              fieldProps={{ precision: 2, style: { width: '100%' } }}
+              fieldProps={{ precision: 2, style: { width: '100%' }, readOnly: true }}
             />
           </Col>
           <Col span={8}>
@@ -1765,16 +1766,34 @@ const PaymentApplicationsPage: React.FC = () => {
               ),
             },
             {
-              title: (
-                <Form.Item noStyle shouldUpdate>
-                  {() => {
-                    const kind = formApplicationKind(formRef.current?.getFieldValue('applicationKind'));
-                    return kind === 'prepayment'
-                      ? t('app.kuaizhizao.paymentApplication.orderOriginalAmount')
-                      : t('app.kuaizhizao.paymentApplication.requestAmount');
-                  }}
-                </Form.Item>
+              title: t('app.kuaizhizao.paymentApplication.orderTotalAmount'),
+              dataIndex: 'sourceOrderAmount',
+              width: 140,
+              align: 'right',
+              fixed: 'right',
+              onHeaderCell: () => ({ className: 'uni-detail-fixed-amount-header' }),
+              render: (_: unknown, field: FormListFieldData) => (
+                <>
+                  <Form.Item name={[field.name, 'sourceOrderAmount']} hidden>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name={[field.name, 'maxRequestAmount']} hidden>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item shouldUpdate style={{ margin: 0 }}>
+                    {() => {
+                      const row = normalizeFormListItems<Record<string, unknown>>(
+                        formRef.current?.getFieldValue('items'),
+                      )[field.name];
+                      const amount = row ? resolvePaymentApplicationFormLineOrderAmount(row) : 0;
+                      return amount > 0 ? formatCurrencyAmount(amount) : '—';
+                    }}
+                  </Form.Item>
+                </>
               ),
+            },
+            {
+              title: t('app.kuaizhizao.paymentApplication.requestAmount'),
               dataIndex: 'requestAmount',
               width: 140,
               align: 'right',
@@ -1782,47 +1801,11 @@ const PaymentApplicationsPage: React.FC = () => {
               onHeaderCell: () => ({ className: 'uni-detail-fixed-amount-header' }),
               render: (_: unknown, field: FormListFieldData) => (
                 <Form.Item
-                  noStyle
-                  shouldUpdate={(prev, cur) =>
-                    prev.applicationKind !== cur.applicationKind || prev.items !== cur.items
-                  }
+                  name={[field.name, 'requestAmount']}
+                  style={{ margin: 0 }}
+                  rules={[{ required: true }]}
                 >
-                  {() => {
-                    const kind = formApplicationKind(formRef.current?.getFieldValue('applicationKind'));
-                    const row = normalizeFormListItems<Record<string, unknown>>(
-                      formRef.current?.getFieldValue('items'),
-                    )[field.name];
-                    const prepayPo =
-                      row != null && isPrepaymentPurchaseOrderFormLine(row, kind);
-                    if (prepayPo) {
-                      const displayAmount = Number(
-                        row.sourceOrderAmount ?? row.maxRequestAmount ?? row.requestAmount ?? 0,
-                      );
-                      return (
-                        <>
-                          <Form.Item name={[field.name, 'sourceOrderAmount']} hidden>
-                            <Input />
-                          </Form.Item>
-                          <Form.Item name={[field.name, 'maxRequestAmount']} hidden>
-                            <Input />
-                          </Form.Item>
-                          <Form.Item name={[field.name, 'requestAmount']} hidden rules={[{ required: true }]}>
-                            <InputNumber min={0.01} precision={2} />
-                          </Form.Item>
-                          {displayAmount > 0 ? formatCurrencyAmount(displayAmount) : '—'}
-                        </>
-                      );
-                    }
-                    return (
-                      <Form.Item
-                        name={[field.name, 'requestAmount']}
-                        style={{ margin: 0 }}
-                        rules={[{ required: true }]}
-                      >
-                        <InputNumber size="small" min={0.01} precision={2} style={{ width: '100%' }} />
-                      </Form.Item>
-                    );
-                  }}
+                  <InputNumber size="small" min={0.01} precision={2} style={{ width: '100%' }} />
                 </Form.Item>
               ),
             },

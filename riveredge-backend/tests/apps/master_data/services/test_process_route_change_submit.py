@@ -5,7 +5,9 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import ValidationError as SchemaValidationError
 
+from apps.master_data.schemas.process_schemas import ProcessRouteUpdate
 from infra.exceptions.exceptions import ValidationError
 
 
@@ -58,3 +60,30 @@ async def test_submit_change_rolls_back_pending_when_flow_missing():
 
     # start 失败前虽写入 pending，事务回滚语义下不应视为已提交成功
     assert change.save.await_count == 1
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"allow_operation_jump": False, "over_report_mode": "percent", "over_report_value": 10},
+        {"allowOperationJump": False, "overReportMode": "percent", "overReportValue": 10},
+    ],
+)
+def test_route_update_retains_snake_and_camel_case_fields(payload):
+    result = ProcessRouteUpdate(**payload).model_dump(exclude_unset=True)
+    assert result["allow_operation_jump"] is False
+    assert result["over_report_mode"] == "percent"
+    assert result["over_report_value"] == 10
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"over_report_mode": "unexpected"},
+        {"over_report_value": -1},
+        {"over_report_mode": "percent", "over_report_value": 101},
+    ],
+)
+def test_route_update_rejects_invalid_over_report_values(payload):
+    with pytest.raises(SchemaValidationError):
+        ProcessRouteUpdate(**payload)

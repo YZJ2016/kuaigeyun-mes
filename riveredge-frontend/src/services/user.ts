@@ -216,7 +216,7 @@ export async function deleteUser(userUuid: string): Promise<void> {
 /**
  * 重置用户密码
  *
- * 重置指定用户的密码为默认密码。
+ * 未传新密码时由后端按租户策略生成默认或临时口令。
  *
  * @param userUuid - 用户 UUID
  * @param newPassword - 新密码（可选，不提供则使用默认密码）
@@ -225,6 +225,7 @@ export async function deleteUser(userUuid: string): Promise<void> {
 export interface UserResetPasswordResult {
   user: User;
   temporary_password?: string | null;
+  must_change_password?: boolean;
 }
 
 export async function resetUserPassword(

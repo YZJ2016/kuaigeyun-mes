@@ -16,6 +16,7 @@ from apps.common.base_service import AppBaseService
 from apps.kuaicaiwu.models.payable import Payable
 from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
 from apps.kuaicaiwu.services.finance_tax import money_exceeds_max, money_to_json_float
+from apps.kuaicaiwu.services.purchase_invoice_amounts import purchase_invoice_occupancy_amount
 from apps.kuaizhizao.models.document_relation import DocumentRelation
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 
@@ -154,7 +155,7 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
             if not entries:
                 continue
             attributed = attribute_invoice_total_to_sources(
-                Decimal(str(inv.total_amount or 0)),
+                purchase_invoice_occupancy_amount(inv),
                 entries,
                 doc_totals,
             )
@@ -186,7 +187,7 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
                     continue
                 sid = int(inv.purchase_order_id)
                 if sid in result:
-                    result[sid] = result.get(sid, Decimal("0")) + Decimal(str(inv.total_amount or 0))
+                    result[sid] = result.get(sid, Decimal("0")) + purchase_invoice_occupancy_amount(inv)
         elif source_type == "purchase_receipt":
             # 入库来源已开票金额仅认 DocumentRelation；不再全表扫 notes。
             _ = code_by_id
@@ -332,7 +333,7 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
             if not entries:
                 continue
             attributed = attribute_invoice_total_to_sources(
-                Decimal(str(inv.total_amount or 0)),
+                purchase_invoice_occupancy_amount(inv),
                 entries,
                 doc_totals,
             )
@@ -382,7 +383,7 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
                         for r in rels
                     ]
                     attributed = attribute_invoice_total_to_sources(
-                        Decimal(str(inv.total_amount or 0)),
+                        purchase_invoice_occupancy_amount(inv),
                         entries,
                         extra_doc_totals,
                     )
@@ -394,7 +395,7 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
                     continue
                 pid = int(inv.payable_id)
                 if pid in result:
-                    result[pid] = result.get(pid, Decimal("0")) + Decimal(str(inv.total_amount or 0))
+                    result[pid] = result.get(pid, Decimal("0")) + purchase_invoice_occupancy_amount(inv)
                     counted_invoice_ids.add(iid)
 
         # 应付已开票金额仅认 payable_id + DocumentRelation；不再全表扫 notes。

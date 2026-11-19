@@ -14,8 +14,9 @@ const PAYABLE_I18N = 'app.kuaicaiwu.payable';
 
 export function buildPaymentPayablePullQueryColumns(
   t: TFunction,
+  options?: { includeExpectedPaymentDate?: boolean },
 ): ColumnsType<PaymentPullCandidate> {
-  return [
+  const columns: ColumnsType<PaymentPullCandidate> = [
     {
       title: t(`${PAYMENT_I18N}.pullCol.payableCode`),
       dataIndex: 'payable_code',
@@ -67,4 +68,13 @@ export function buildPaymentPayablePullQueryColumns(
       render: (v: unknown) => formatCurrencyAmount(v ?? 0),
     },
   ];
+  if (options?.includeExpectedPaymentDate) {
+    columns.splice(5, 0, {
+      title: t('app.kuaizhizao.paymentApplication.expectedPaymentDate'),
+      dataIndex: 'expected_payment_date',
+      width: 120,
+      render: (v: unknown) => (v ? formatDateTime(String(v), 'YYYY-MM-DD') : '—'),
+    });
+  }
+  return columns;
 }

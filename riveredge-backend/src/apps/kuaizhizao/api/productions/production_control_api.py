@@ -20,13 +20,16 @@ from apps.kuaizhizao.schemas.production_control import (
 )
 from apps.kuaizhizao.services.production_control_service import ProductionControlService
 from core.api.deps import get_current_tenant, get_current_user
+from core.api.deps.access import require_permission_codes
 from infra.models.user import User
 
 router = APIRouter(prefix="/production-control", tags=["App - Kuaige Zhizao - Production Planning Control"])
 service = ProductionControlService()
 
+_CONTROL_READ = Depends(require_permission_codes("kuaizhizao:demand:read"))
+_WORK_ORDER_SUBMIT = Depends(require_permission_codes("kuaizhizao:work-order:submit"))
 
-@router.get("/readiness", response_model=List[MaterialReadinessItem])
+@router.get("/readiness", response_model=List[MaterialReadinessItem], dependencies=[_CONTROL_READ])
 async def get_material_readiness(
     _user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -35,7 +38,7 @@ async def get_material_readiness(
     return await service.get_global_material_readiness(tenant_id)
 
 
-@router.get("/resource-load", response_model=List[ResourceLoadItem])
+@router.get("/resource-load", response_model=List[ResourceLoadItem], dependencies=[_CONTROL_READ])
 async def get_resource_load(
     days: int = Query(14, description="分析天数"),
     _user: User = Depends(get_current_user),
@@ -45,7 +48,7 @@ async def get_resource_load(
     return await service.get_resource_load_analysis(tenant_id, days)
 
 
-@router.get("/risks", response_model=List[DeliveryRiskItem])
+@router.get("/risks", response_model=List[DeliveryRiskItem], dependencies=[_CONTROL_READ])
 async def get_delivery_risks(
     _user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -54,7 +57,7 @@ async def get_delivery_risks(
     return await service.get_delivery_risk_orders(tenant_id)
 
 
-@router.get("/summary", response_model=ControlTowerSummary)
+@router.get("/summary", response_model=ControlTowerSummary, dependencies=[_CONTROL_READ])
 async def get_control_tower_summary(
     _user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -116,7 +119,7 @@ async def get_control_tower_summary(
     )
 
 
-@router.get("/human-machine-efficiency", response_model=HumanMachineEfficiencySummary)
+@router.get("/human-machine-efficiency", response_model=HumanMachineEfficiencySummary, dependencies=[_CONTROL_READ])
 async def get_human_machine_efficiency(
     days: int = Query(7, ge=7, le=30, description="统计天数，支持 7 或 30"),
     _user: User = Depends(get_current_user),
@@ -127,7 +130,7 @@ async def get_human_machine_efficiency(
     return await service.get_human_machine_efficiency(tenant_id, span_days)
 
 
-@router.post("/release-kitted")
+@router.post("/release-kitted", dependencies=[_WORK_ORDER_SUBMIT])
 async def bulk_release_kitted_orders(
     req: BulkReleaseRequest,
     current_user: User = Depends(get_current_user),
@@ -141,7 +144,7 @@ async def bulk_release_kitted_orders(
     )
 
 
-@router.post("/simulate-impact", response_model=SimulationResult)
+@router.post("/simulate-impact", response_model=SimulationResult, dependencies=[_CONTROL_READ])
 async def simulate_urgent_order_impact(
     req: UrgentOrderSimulationRequest,
     _user: User = Depends(get_current_user),

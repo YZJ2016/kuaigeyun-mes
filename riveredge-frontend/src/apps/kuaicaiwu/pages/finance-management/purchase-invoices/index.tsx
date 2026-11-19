@@ -141,6 +141,8 @@ const PurchaseInvoiceList: React.FC = () => {
   const [pullForm] = Form.useForm();
   const pullAmountModeRef = useRef<InvoiceAmountInputMode>('tax_exclusive');
   const pullTaxRateRef = useRef<number>(13);
+  /** 拉单带入的含税占用金额，票面为带入金额减优惠。 */
+  const pullBroughtAmountRef = useRef<number>(0);
   const pullFromPurchaseOrderCloseRef = useRef<(() => void) | null>(null);
   const pullFromPurchaseOrderOpenRef = useRef<(() => void) | null>(null);
   const pullFromPurchaseReceiptCloseRef = useRef<(() => void) | null>(null);
@@ -307,6 +309,7 @@ const PurchaseInvoiceList: React.FC = () => {
         invoice_type: values.invoice_type || '增值税专用发票',
         tax_rate: taxRate,
         invoice_amount: invoiceAmount,
+        discount_amount: Number(values.discount_amount) || 0,
         notes: values.notes,
         status: '未审核',
         review_status: '草稿',
@@ -340,10 +343,12 @@ const PurchaseInvoiceList: React.FC = () => {
       if (sumIncl <= 0) return;
       const taxRate = Number(pullForm.getFieldValue('tax_rate') ?? pullTaxRateRef.current ?? 13);
       const mode = (pullForm.getFieldValue('amount_input_mode') || pullAmountModeRef.current) as InvoiceAmountInputMode;
+      pullBroughtAmountRef.current = sumIncl;
+      const faceIncl = sumIncl - (Number(pullForm.getFieldValue('discount_amount')) || 0);
       if (mode === 'tax_inclusive') {
-        pullForm.setFieldsValue({ invoice_amount: sumIncl });
+        pullForm.setFieldsValue({ invoice_amount: faceIncl });
       } else {
-        pullForm.setFieldsValue({ invoice_amount: invoiceExclFromIncl(sumIncl, taxRate) });
+        pullForm.setFieldsValue({ invoice_amount: invoiceExclFromIncl(faceIncl, taxRate) });
       }
     },
     [pullForm],
@@ -674,13 +679,15 @@ const PurchaseInvoiceList: React.FC = () => {
     }
     const taxRate = Number(values.tax_rate) || 13;
     const amountMode = (values.amount_input_mode || 'tax_exclusive') as InvoiceAmountInputMode;
+    const discountAmount = Number(values.discount_amount) || 0;
     const { invoiceAmountExcl: invoiceAmount, totalIncl: estimatedTotal } = resolveInvoiceAmountsForSubmit(
       enteredAmount,
       taxRate,
       amountMode,
-      { maxTotalIncl: maxPush },
+      { maxTotalIncl: maxPush - discountAmount },
     );
-    if (moneyExceedsMax(estimatedTotal, maxPush)) {
+    const occupancyTotal = estimatedTotal + discountAmount;
+    if (moneyExceedsMax(occupancyTotal, maxPush)) {
       messageApi.warning(t(`${P}.pullExceedMax`, { max: formatCurrencyAmount(maxPush) }));
       return false;
     }
@@ -694,14 +701,14 @@ const PurchaseInvoiceList: React.FC = () => {
       const reconciled = reconcilePullReceiptLinesForHeaderAmount(
         pullReceiptSelectedIds,
         detailLines,
-        estimatedTotal,
+        occupancyTotal,
         pullReceiptLineAmounts,
       );
       if (reconciled.selectedItemIds.length === 0) {
         messageApi.warning(t(`${P}.pull.selectAtLeastOneLine`));
         return false;
       }
-      if (Math.abs(reconciled.lineSum - estimatedTotal) > 0.009) {
+      if (Math.abs(reconciled.lineSum - occupancyTotal) > 0.009) {
         messageApi.warning(t(`${P}.pull.lineAmountMismatch`));
         return false;
       }
@@ -772,6 +779,11 @@ const PurchaseInvoiceList: React.FC = () => {
         invoice_amount: invoiceAmount,
         // 始终传价税合计，与后端含税真源一致；不含税录入在分位钳制后也须走合计反算
         total_amount: estimatedTotal,
+        discount_amount: discountAmount,
+        adjust_payable:
+          pullPreviewKind === 'payable'
+          && discountAmount !== 0
+          && Boolean(values.adjust_payable),
         notes:
           String(values.notes ?? '').trim() ||
           t('app.kuaicaiwu.common.createdFromSourceNote', {
@@ -884,6 +896,18 @@ const PurchaseInvoiceList: React.FC = () => {
         align: 'right',
         width: 130,
         minWidth: 130,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t(`${P}.col.discountAmount`),
+        dataIndex: 'discount_amount',
+        valueType: 'money',
+        align: 'right',
+        width: 110,
+        minWidth: 110,
         uniTableKeepWidth: true,
         resizable: false,
         hideInSearch: true,
@@ -1209,6 +1233,8 @@ const PurchaseInvoiceList: React.FC = () => {
       tax_rate: taxRate,
       amount_input_mode: 'tax_exclusive' as InvoiceAmountInputMode,
       invoice_amount: defaultExcl,
+      discount_amount: 0,
+      adjust_payable: false,
       notes: t('app.kuaicaiwu.common.createdFromSourceNote', {
         source: sourceLabel,
         code: pullPreviewData.source_code,
@@ -1241,6 +1267,7 @@ const PurchaseInvoiceList: React.FC = () => {
     if (!pullPreviewOpen || pullPreviewLoading || !pullFormInitialValues) return;
     pullAmountModeRef.current = 'tax_exclusive';
     pullTaxRateRef.current = Number(pullFormInitialValues.tax_rate) || 13;
+    pullBroughtAmountRef.current = Number(pullPreviewData?.items?.[0]?.max_push_quantity) || 0;
     pullForm.setFieldsValue(pullFormInitialValues);
   }, [pullPreviewOpen, pullPreviewLoading, pullFormInitialValues, pullForm]);
 
@@ -1263,6 +1290,21 @@ const PurchaseInvoiceList: React.FC = () => {
   const pullAmountInputMode = Form.useWatch('amount_input_mode', pullForm) as InvoiceAmountInputMode | undefined;
   const pullTaxRateWatch = Form.useWatch('tax_rate', pullForm);
   const pullInvoiceAmountWatch = Form.useWatch('invoice_amount', pullForm);
+  const pullDiscountWatch = Form.useWatch('discount_amount', pullForm);
+
+  useEffect(() => {
+    if (!pullPreviewOpen || !(pullBroughtAmountRef.current > 0)) return;
+    const faceIncl = pullBroughtAmountRef.current - (Number(pullDiscountWatch) || 0);
+    if (faceIncl <= 0) return;
+    const mode = (pullForm.getFieldValue('amount_input_mode') || 'tax_exclusive') as InvoiceAmountInputMode;
+    const taxRate = Number(pullForm.getFieldValue('tax_rate')) || 13;
+    const next = mode === 'tax_inclusive' ? faceIncl : invoiceExclFromIncl(faceIncl, taxRate);
+    const current = Number(pullForm.getFieldValue('invoice_amount')) || 0;
+    if (Math.abs(current - next) > 0.009) {
+      pullForm.setFieldValue('invoice_amount', next);
+    }
+  }, [pullDiscountWatch, pullPreviewOpen, pullForm]);
+
   useEffect(() => {
     if (!pullPreviewOpen || !pullReceiptLineSelectEnabled || !pullPreviewData) return;
     if (pullReceiptSelectedIds.length === 0) return;
@@ -1271,15 +1313,16 @@ const PurchaseInvoiceList: React.FC = () => {
     const taxRate = Number(pullTaxRateWatch) || 13;
     const mode = (pullAmountInputMode || 'tax_exclusive') as InvoiceAmountInputMode;
     const { totalIncl } = resolveInvoiceAmountsForSubmit(entered, taxRate, mode, {
-      maxTotalIncl: pullPreviewMaxPush,
+      maxTotalIncl: pullPreviewMaxPush - (Number(pullDiscountWatch) || 0),
     });
+    const occupancyTotal = totalIncl + (Number(pullDiscountWatch) || 0);
     const detailLines = (pullPreviewData.detail_lines ?? []) as PullReceiptFinanceDetailLine[];
     const currentSum = sumPullReceiptLineAmounts(pullReceiptSelectedIds, pullReceiptLineAmounts);
-    if (Math.abs(currentSum - totalIncl) <= 0.009) return;
+    if (Math.abs(currentSum - occupancyTotal) <= 0.009) return;
     const reconciled = reconcilePullReceiptLinesForHeaderAmount(
       pullReceiptSelectedIds,
       detailLines,
-      totalIncl,
+      occupancyTotal,
     );
     setPullReceiptLineAmounts(reconciled.amounts);
     if (reconciled.selectedItemIds.join(',') !== pullReceiptSelectedIds.join(',')) {
@@ -1292,6 +1335,7 @@ const PurchaseInvoiceList: React.FC = () => {
     pullReceiptSelectedIds,
     pullReceiptLineAmounts,
     pullInvoiceAmountWatch,
+    pullDiscountWatch,
     pullAmountInputMode,
     pullTaxRateWatch,
     pullPreviewMaxPush,
@@ -1304,7 +1348,7 @@ const PurchaseInvoiceList: React.FC = () => {
     if (!(entered > 0)) return '';
     const mode = (pullAmountInputMode || 'tax_exclusive') as InvoiceAmountInputMode;
     const resolved = resolveInvoiceAmountsForSubmit(entered, taxRate, mode, {
-      maxTotalIncl: pullPreviewMaxPush,
+      maxTotalIncl: pullPreviewMaxPush - (Number(pullDiscountWatch) || 0),
     });
     if (mode === 'tax_inclusive') {
       return t(`${P}.form.amountHintExcl`, { amount: formatAmount(resolved.invoiceAmountExcl) });
@@ -1312,7 +1356,7 @@ const PurchaseInvoiceList: React.FC = () => {
     return t(`${P}.form.amountHintIncl`, {
       amount: formatAmount(resolved.totalIncl),
     });
-  }, [pullAmountInputMode, pullInvoiceAmountWatch, pullTaxRateWatch, pullPreviewMaxPush, t]);
+  }, [pullAmountInputMode, pullInvoiceAmountWatch, pullDiscountWatch, pullTaxRateWatch, pullPreviewMaxPush, t]);
 
   const handlePullPreviewOk = async () => {
     if (pullPreviewLoading || !pullPreviewData) {
@@ -1352,7 +1396,7 @@ const PurchaseInvoiceList: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         onTableDataChange={setTableRows}
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.purchase-invoices.list-v3"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.purchase-invoices.list-v4-discount"
         showAdvancedSearch
         request={async (params, sort, _filter, searchFormValues) => {
           const listParams = resolvePurchaseInvoiceListParams(searchFormValues, sort);
@@ -1873,6 +1917,21 @@ const PurchaseInvoiceList: React.FC = () => {
                   colProps={financeColHalf}
                   fieldProps={{ precision: 2, style: { width: '100%' } }}
                 />
+                <ProFormDigit
+                  name="discount_amount"
+                  label={t(`${P}.form.discountAmount`)}
+                  tooltip={t(`${P}.form.discountAmountTip`)}
+                  fieldProps={{ precision: 2, style: { width: '100%' } }}
+                  colProps={financeColHalf}
+                />
+                {pullPreviewKind === 'payable' && Math.abs(Number(pullDiscountWatch) || 0) > 0.0009 ? (
+                  <ProFormSwitch
+                    name="adjust_payable"
+                    label={t(`${P}.form.adjustPayable`)}
+                    tooltip={t(`${P}.form.adjustPayableTip`)}
+                    colProps={financeColHalf}
+                  />
+                ) : null}
                 <ProFormTextArea name="notes" label={t('common.remark')} fieldProps={{ rows: 2 }} colProps={financeColFull} />
                 {canConcurrentPayment ? (
                   <>
@@ -2026,6 +2085,14 @@ const PurchaseInvoiceList: React.FC = () => {
           label={t(`${P}.col.exclTax`)}
           min={0}
           rules={[{ required: true, message: t(`${P}.form.exTaxAmountRequired`) }]}
+          fieldProps={{ precision: 2, style: { width: '100%' } }}
+          colProps={financeColHalf}
+        />
+        <ProFormDigit
+          name="discount_amount"
+          label={t(`${P}.form.discountAmount`)}
+          tooltip={t(`${P}.form.discountAmountTip`)}
+          initialValue={0}
           fieldProps={{ precision: 2, style: { width: '100%' } }}
           colProps={financeColHalf}
         />

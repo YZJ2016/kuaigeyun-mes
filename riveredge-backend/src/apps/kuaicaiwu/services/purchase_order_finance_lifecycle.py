@@ -255,8 +255,14 @@ async def compute_purchase_order_finance_lifecycle(
             tenant_id=tenant_id,
             id__in=list(invoice_ids),
             deleted_at__isnull=True,
-        ).exclude(status__in=list(_EXCLUDED_INVOICE_STATUSES)).values_list("total_amount", flat=True)
-        invoiced_total = sum((Decimal(str(x or 0)) for x in inv_rows), Decimal("0"))
+        ).exclude(status__in=list(_EXCLUDED_INVOICE_STATUSES))
+        from apps.kuaicaiwu.services.purchase_invoice_amounts import (
+            purchase_invoice_occupancy_amount,
+        )
+
+        invoiced_total = sum(
+            (purchase_invoice_occupancy_amount(inv) for inv in inv_rows), Decimal("0")
+        )
 
     order_gross = order_gross.quantize(scale)
     if order_gross <= 0:

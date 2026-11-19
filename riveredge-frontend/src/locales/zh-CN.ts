@@ -12268,6 +12268,8 @@ export default {
   'app.kuaizhizao.paymentApplication.supplierName': '供应商',
   'app.kuaizhizao.paymentApplication.totalRequestAmount': '申请金额',
   'app.kuaizhizao.paymentApplication.linesGrandTotal': '订单金额合计',
+  'app.kuaizhizao.paymentApplication.requestAmountTotal': '申请金额合计',
+  'app.kuaizhizao.paymentApplication.orderTotalAmount': '订单总金额',
   'app.kuaizhizao.paymentApplication.orderOriginalAmount': '订单金额',
   'app.kuaizhizao.paymentApplication.remainingAmount': '待付金额',
   'app.kuaizhizao.paymentApplication.status': '状态',
@@ -26105,6 +26107,21 @@ export default {
   'app.kuaicaiwu.purchaseInvoice.selectSource': '请选择{{label}}',
   'app.kuaicaiwu.purchaseInvoice.col.invoiceNumber': '发票号码',
   'app.kuaicaiwu.purchaseInvoice.col.totalAmount': '价税合计',
+  'app.kuaicaiwu.purchaseInvoice.col.discountAmount': '优惠金额',
+  'app.kuaicaiwu.purchaseInvoice.form.discountAmount': '优惠金额（含税）',
+  'app.kuaicaiwu.purchaseInvoice.form.discountAmountTip':
+    '可正可负。源单占用金额为票面价税合计加优惠金额；拉单带入金额扣减优惠后得到票面金额。',
+  'app.kuaicaiwu.purchaseInvoice.form.adjustPayable': '调整应付',
+  'app.kuaicaiwu.purchaseInvoice.form.adjustPayableTip':
+    '从应付单收票且优惠非零时可选。沿用上游处理顺序，源应付已审核或待审核时不会生成优惠调整应付。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-discount-amount-r01.title':
+    '采购收票支持优惠金额',
+  'pages.dashboard.updateLog.entries.purchase-invoice-discount-amount-r01.description':
+    '收票可填写含税优惠金额，票面金额按带入金额减优惠计算，源单占用按票面加优惠计算。支持正负优惠，红冲时同步冲回优惠金额。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-auto-payable-on-approve-r01.title':
+    '按采购发票立账时审核后自动生成应付',
+  'pages.dashboard.updateLog.entries.purchase-invoice-auto-payable-on-approve-r01.description':
+    '组织选择以采购发票立账后，采购发票审核通过才生成应付并送审，不再在创建发票时提前立账。',
   'app.kuaicaiwu.purchaseInvoice.col.invoiceType': '发票类型',
   'app.kuaicaiwu.purchaseInvoice.col.taxRate': '税率%',
   'app.kuaicaiwu.purchaseInvoice.col.exclTax': '不含税金额',
@@ -32174,7 +32191,7 @@ export default {
     '仅在「收入确认=销售发票」时生效：创建销售发票时自动生成应收；关闭则需手工建应收。若选「以出库为准」或「手工立账」，本开关不可用（出库路径/手工路径另有规则）。',
   'pages.system.configCenter.param.finance_auto_generate_payable_from_purchase_invoice': '采购开票自动生成应付',
   'pages.system.configCenter.param.finance_auto_generate_payable_from_purchase_invoice_desc':
-    '仅在「应付确认=采购发票」时生效：创建采购发票时自动生成应付；关闭则需手工建应付或从入库/订单加载采购发票。若选「以入库为准」或「手工立账」，本开关不可用。选采购发票立账时建议开启，否则确认入库后应付台账不会出现该笔。',
+    '仅在「应付确认=采购发票」时生效：组织选按票立账后本开关由系统保持开启；采购发票审核通过后自动生成应付并送审。若选「以入库为准」「对账单」或「手工立账」，本开关不可用。',
   'pages.system.configCenter.param.finance_credit_limit_enabled': '启用客户信用额度管控',
   'pages.system.configCenter.param.finance_credit_limit_enabled_desc': '开启后，销售订单审核与出库确认将校验客户信用额度（主数据维护额度）。',
   'pages.system.configCenter.param.finance_allow_negative_balance': '允许账户负余额',
@@ -48594,8 +48611,64 @@ export default {
   'field.user.qrcodeGenerateSuccess': '成功生成 {{count}} 个人员二维码',
   'field.user.qrcodeGenerateFailed': '批量生成二维码失败',
   'field.user.passwordRequired': '新建用户必须设置密码',
-  'field.user.resetPasswordSuccess': '密码重置成功，默认密码为：123456',
-  'field.user.resetPasswordSuccessSimple': '密码已重置为默认密码 123456',
+  'field.user.resetPasswordSuccess': '密码重置成功',
+  'field.user.resetPasswordSuccessSimple': '密码已重置为默认密码 {{password}}',
+  'pages.dashboard.updateLog.entries.purchase-requisition-po-pull-qty-r01.title':
+    '采购申请转采购订单取单数量对齐',
+  'pages.dashboard.updateLog.entries.menu-morph-icon-dependencies-r01.title':
+    '修复侧栏动态图标依赖缺失',
+  'pages.dashboard.updateLog.entries.menu-morph-icon-dependencies-r01.description':
+    '补齐侧栏图标名称解析导出和已有动态图标功能所需依赖，避免构建因缺失模块或导出失败。',
+  'pages.dashboard.updateLog.entries.process-route-update-snake-fields-r01.title':
+    '工艺路线跳转与超报设置正确保存',
+  'pages.dashboard.updateLog.entries.process-route-update-snake-fields-r01.description':
+    '工艺路线更新接收实际表单字段，关闭工序跳转不再被忽略；同时校验超报模式、负数及百分比上限。',
+  'pages.dashboard.updateLog.entries.user-employee-number-model-r01.title':
+    '补齐单据外推使用的人员工号字段',
+  'pages.dashboard.updateLog.entries.user-employee-number-model-r01.description':
+    '人员模型与数据库迁移补齐已有外推服务读取的工号字段，按组织内有效账户保持唯一，不混用其他组织的人员工号。',
+  'pages.dashboard.updateLog.entries.manufacturing-api-permission-gates-r01.title':
+    '补强生产和仓储操作接口权限',
+  'pages.dashboard.updateLog.entries.manufacturing-api-permission-gates-r01.description':
+    '单据下推、取单、撤回、叫料、生产管控及波次拣选按既有业务权限鉴权，未授权请求在业务执行前拒绝。',
+  'pages.dashboard.updateLog.entries.deployment-bootstrap-correctness-r01.title':
+    '部署依赖检测与低配启动等待优化',
+  'pages.dashboard.updateLog.entries.deployment-bootstrap-correctness-r01.description':
+    'Windows 安装器补强 Node.js、uv、Caddy 检测与下载校验，低配后端启动等待延长；工作区组装在目标目录未清空时明确停止，避免继续覆盖。',
+  'pages.dashboard.updateLog.entries.payment-application-dual-amount-r01.title':
+    '付款申请分列显示订单总金额和申请金额',
+  'pages.dashboard.updateLog.entries.payment-application-dual-amount-r01.description':
+    '付款申请明细独立展示订单总金额与可编辑的本次申请金额，两列分别汇总；表头申请金额由明细计算，避免混淆订单金额与本次付款。',
+  'pages.dashboard.updateLog.entries.purchase-order-pull-source-reference-r01.title':
+    '采购订单取单来源筛选使用引用权限',
+  'pages.dashboard.updateLog.entries.purchase-order-pull-source-reference-r01.description':
+    '采购申请来源筛选改走标准引用展示接口，具备采购订单引用权限时无需额外开放采购申请列表查询权限。',
+  'pages.dashboard.updateLog.entries.material-form-group-first-r01.title':
+    '新建编辑物料时物料分组移到首位',
+  'pages.dashboard.updateLog.entries.material-form-group-first-r01.description':
+    '基本信息首行字段顺序调整为物料分组、物料主编号、物料名称、基础单位，便于先选分组再生成编号。',
+  'pages.dashboard.updateLog.entries.config-center-hide-scrollbar-r01.title':
+    '配置中心右侧内容区隐藏滚动条',
+  'pages.dashboard.updateLog.entries.config-center-hide-scrollbar-r01.description':
+    '参数设置等页签右侧配置区仍可滚轮或触控板滚动，仅隐藏滚动条。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-po-pull-qty-r01.description':
+    '分批转单拆行后按同申请同物料汇总申请、已转及可取数量，转单以实际下游占用为准；申请列表下推统一打开采购订单草稿新建页。',
+  'pages.dashboard.updateLog.entries.app-scan-windows-stderr-errno22-r01.title':
+    '应用中心扫描插件不再因标准错误输出失效中断',
+  'pages.dashboard.updateLog.entries.app-scan-windows-stderr-errno22-r01.description':
+    'Windows 后端脱离控制台运行时，单个应用注册失败改写应用日志，不再向失效的标准错误输出打印堆栈；不可访问的单个应用目录不再打断其余扫描。',
+  'pages.dashboard.updateLog.entries.menu-sync-prompt-dismiss-after-sync-r02.title':
+    '菜单同步成功后关闭更新提醒',
+  'pages.dashboard.updateLog.entries.menu-sync-prompt-dismiss-after-sync-r02.description':
+    '同步中保持进度提示，成功后关闭并记住本版指纹；已对齐时关闭旧提醒，失败仍可重试，同会话不重复自动弹出。',
+  'pages.dashboard.updateLog.entries.payment-pull-expected-date-account-r01.title':
+    '付款申请取单显示期望付款日，出款账户前移',
+  'pages.dashboard.updateLog.entries.payment-pull-expected-date-account-r01.description':
+    '付款单从付款申请取单时显示期望付款日并带入供应商标识；出款账户移到明细之前，并显示必填标记。',
+  'pages.dashboard.updateLog.entries.user-reset-password-policy-default-r01.title':
+    '账户管理重置密码遵循租户密码策略',
+  'pages.dashboard.updateLog.entries.user-reset-password-policy-default-r01.description':
+    '简易模式按最短长度生成默认口令，加强模式生成临时密码时避开个人弱口令片段，并区分是否要求下次登录修改密码。',
   'field.user.resetPasswordSuccessTemporary': '密码已重置，请将临时密码告知用户：{{password}}（下次登录须修改）',
   'field.user.resetPasswordFailed': '密码重置失败',
   'field.user.errorUsernameExists': '用户名已被使用，请更换其他用户名',

@@ -18,6 +18,30 @@ if (-not $FastDeployDir) {
     $FastDeployDir = Split-Path $PSScriptRoot -Parent
 }
 
+function Get-CaddyPortableExePath {
+    return Join-Path (Join-Path (Join-Path $FastDeployDir '.tools') 'caddy') 'caddy.exe'
+}
+
+function Test-CaddyExeRunnable([string]$ExePath) {
+    if (-not (Test-Path -LiteralPath $ExePath)) { return $false }
+    try {
+        & $ExePath version | Out-Null
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        return $false
+    }
+}
+
+function Test-ZipArchiveFile([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { return $false }
+    try {
+        $bytes = [System.IO.File]::ReadAllBytes($Path)
+        return ($bytes.Length -ge 4 -and $bytes[0] -eq 0x50 -and $bytes[1] -eq 0x4B)
+    } catch {
+        return $false
+    }
+}
+
 function Write-Info([string]$Msg) {
     Write-Host "[$(Get-Date -Format 'HH:mm:ss')] INFO: $Msg" -ForegroundColor Blue
 }
@@ -59,14 +83,14 @@ function Get-GhProxyUrls([string]$Url) {
 }
 
 function Invoke-CurlDownload([string]$Url, [string]$Dest) {
-    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+    $curl = Get-Command curl.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $curl) { return $false }
-    $args = @(
+    $curlArgs = @(
         '-fsSL', '--connect-timeout', '15', '--max-time', '600',
         '-A', 'riveredge-fast-deploy',
         '-L', '-o', $Dest, $Url
     )
-    & $curl.Source @args
+    & $curl.Source @curlArgs
     if ($LASTEXITCODE -ne 0) { return $false }
     if (-not (Test-Path $Dest)) { return $false }
     return ((Get-Item $Dest).Length -gt 0)
@@ -186,15 +210,29 @@ function Get-InstallTempDir {
     return $dir
 }
 
+function Refresh-SessionPathFromRegistry {
+    $machine = [System.Environment]::GetEnvironmentVariable('Path', 'Machine')
+    $user = [System.Environment]::GetEnvironmentVariable('Path', 'User')
+    if ($user -and $machine) {
+        $env:Path = "$user;$machine"
+    } elseif ($user) {
+        $env:Path = $user
+    } elseif ($machine) {
+        $env:Path = $machine
+    }
+}
+
 function Test-NodeReady {
     $toolsNode = Join-Path $FastDeployDir '.tools\node\node.exe'
     if (Test-Path $toolsNode) { return $true }
     foreach ($p in @(
+        (Join-Path $env:LOCALAPPDATA 'Programs\nodejs\node.exe'),
         (Join-Path $env:ProgramFiles 'nodejs\node.exe'),
         (Join-Path ${env:ProgramFiles(x86)} 'nodejs\node.exe')
     )) {
         if (Test-Path $p) { return $true }
     }
+    Refresh-SessionPathFromRegistry
     return ($null -ne (Get-Command node -ErrorAction SilentlyContinue))
 }
 
@@ -223,9 +261,19 @@ function Test-UvReady {
     if (Get-Command uv -ErrorAction SilentlyContinue) { return $true }
     foreach ($p in @(
         "$env:USERPROFILE\.local\bin\uv.exe",
-        "$env:LOCALAPPDATA\Programs\Python\Python312\Scripts\uv.exe"
+        "$env:LOCALAPPDATA\Programs\Python\Python312\Scripts\uv.exe",
+        "$env:APPDATA\Python\Python312\Scripts\uv.exe"
     )) {
         if (Test-Path $p) { return $true }
+    }
+    foreach ($root in @(
+        (Join-Path $env:APPDATA 'Python'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\Python')
+    )) {
+        if (-not (Test-Path $root)) { continue }
+        foreach ($dir in Get-ChildItem $root -Directory -Filter 'Python*' -ErrorAction SilentlyContinue) {
+            if (Test-Path (Join-Path $dir.FullName 'Scripts\uv.exe')) { return $true }
+        }
     }
     return $false
 }
@@ -244,9 +292,9 @@ function Test-PostgresqlReady {
 }
 
 function Test-CaddyReady {
-    $bundled = Join-Path $FastDeployDir '.tools\caddy\caddy.exe'
-    if (Test-Path $bundled) { return $true }
-    return ($null -ne (Get-Command caddy -ErrorAction SilentlyContinue))
+    if (Test-CaddyExeRunnable (Get-CaddyPortableExePath)) { return $true }
+    $cmd = Get-Command caddy.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    return ($cmd -and $cmd.Path -and (Test-CaddyExeRunnable $cmd.Path))
 }
 
 function Get-NodeDistBases([bool]$Mirror) {
@@ -367,8 +415,12 @@ function Install-Node {
     if ($mirror) {
         Write-Info "installing Node.js $ver via CN mirrors..."
         if (Install-NodeMsi $ver $mirror) {
-            Write-Ok "Node.js $ver installed via MSI (reopen terminal to refresh PATH)"
-            return
+            Refresh-SessionPathFromRegistry
+            if (Test-NodeReady) {
+                Write-Ok "Node.js $ver installed via MSI"
+                return
+            }
+            Write-Info 'MSI completed but Node.js is not detectable; installing portable Node.js...'
         }
         Write-Info 'MSI failed, installing portable Node.js (no admin required)...'
         try {
@@ -389,8 +441,12 @@ function Install-Node {
     if (-not $mirror) {
         Write-Info "winget unavailable or incomplete, installing Node.js $ver ..."
         if (Install-NodeMsi $ver $mirror) {
-            Write-Ok "Node.js $ver installed via MSI (reopen terminal to refresh PATH)"
-            return
+            Refresh-SessionPathFromRegistry
+            if (Test-NodeReady) {
+                Write-Ok "Node.js $ver installed via MSI"
+                return
+            }
+            Write-Info 'MSI completed but Node.js is not detectable; installing portable Node.js...'
         }
         Write-Info 'MSI failed, installing portable Node.js (no admin required)...'
         try {
@@ -719,17 +775,27 @@ function Install-CaddyPortable {
 
     $toolsDir = Join-Path $FastDeployDir '.tools\caddy'
     New-Item -ItemType Directory -Force -Path $toolsDir | Out-Null
+    $exe = Get-CaddyPortableExePath
+    if (Test-CaddyExeRunnable $exe) {
+        Write-Ok "portable Caddy already present: $exe"
+        return
+    }
+    if (Test-Path -LiteralPath $exe) {
+        Write-Err "caddy.exe already exists but is not runnable; replace it manually: $exe"
+    }
     $tmpdir = Get-InstallTempDir
     $zip = Join-Path $tmpdir 'caddy.zip'
 
     if (-not (Invoke-DownloadWithFallback $urls $zip)) {
         Write-Err 'Caddy download failed from all sources'
     }
+    if (-not (Test-ZipArchiveFile $zip)) {
+        Write-Err 'Downloaded Caddy archive is not a ZIP; existing installation was not overwritten'
+    }
     Expand-Archive -Path $zip -DestinationPath $toolsDir -Force
 
-    $exe = Join-Path $toolsDir 'caddy.exe'
-    if (-not (Test-Path $exe)) {
-        Write-Err 'caddy.exe not found after extract'
+    if (-not (Test-CaddyExeRunnable $exe)) {
+        Write-Err 'caddy.exe is missing or not runnable after extract'
     }
     Write-Ok "portable Caddy installed: $exe"
 }

@@ -1,12 +1,48 @@
 """菜单同步状态检测。"""
 
 import asyncio
+import json
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from core.services.application.application_service import ApplicationService
 from core.services.system.menu_takeover_service import MenuTakeoverService
+
+
+def test_manifest_scan_skips_inaccessible_entry_but_keeps_other_apps(tmp_path, monkeypatch):
+    blocked = tmp_path / "blocked"
+    good = tmp_path / "good"
+    blocked.mkdir()
+    good.mkdir()
+    (good / "manifest.json").write_text(json.dumps({"name": "Readable app"}), encoding="utf-8")
+    original_is_dir = Path.is_dir
+
+    def is_dir(path):
+        if path == blocked:
+            raise PermissionError("inaccessible junction")
+        return original_is_dir(path)
+
+    monkeypatch.setattr(ApplicationService, "_get_plugins_directory", lambda: tmp_path)
+    monkeypatch.setattr(Path, "is_dir", is_dir)
+    result = ApplicationService._scan_plugin_manifests()
+    assert [item["name"] for item in result] == ["Readable app"]
+    assert result[0]["_plugin_dir"] == str(good)
+
+
+def test_manifest_scan_propagates_directory_enumeration_failure(tmp_path, monkeypatch):
+    original_iterdir = Path.iterdir
+
+    def iterdir(path):
+        if path == tmp_path:
+            raise PermissionError("cannot enumerate manifest root")
+        return original_iterdir(path)
+
+    monkeypatch.setattr(ApplicationService, "_get_plugins_directory", lambda: tmp_path)
+    monkeypatch.setattr(Path, "iterdir", iterdir)
+    with pytest.raises(PermissionError, match="cannot enumerate"):
+        ApplicationService._scan_plugin_manifests()
 
 
 def test_is_consumer_effective_ignores_deployed_manifest():

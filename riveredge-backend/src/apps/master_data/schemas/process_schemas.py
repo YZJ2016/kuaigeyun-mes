@@ -4,7 +4,7 @@
 定义工艺数据的 Pydantic Schema（不良品、工序、工艺路线、作业程序），用于数据验证和序列化。
 """
 
-from pydantic import BaseModel, Field, field_validator, validator, ConfigDict, AliasChoices
+from pydantic import BaseModel, Field, field_validator, model_validator, validator, ConfigDict, AliasChoices
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from decimal import Decimal
@@ -356,6 +356,8 @@ class ProcessRouteCreate(ProcessRouteBase):
 
 class ProcessRouteUpdate(BaseModel):
     """更新工艺路线 Schema"""
+
+    model_config = ConfigDict(populate_by_name=True)
     
     code: Optional[str] = Field(None, max_length=50, description="工艺路线编码")
     name: Optional[str] = Field(None, max_length=200, description="工艺路线名称")
@@ -383,6 +385,28 @@ class ProcessRouteUpdate(BaseModel):
         if v is not None and (not v or not v.strip()):
             raise ValueError("工艺路线名称不能为空")
         return v.strip() if v else None
+
+    @field_validator("over_report_mode")
+    @classmethod
+    def validate_route_over_report_mode_update(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        mode = str(v).lower().strip()
+        if mode not in ("none", "fixed", "percent"):
+            raise ValueError("超报模式必须是: none, fixed, percent")
+        return mode
+
+    @model_validator(mode="after")
+    def validate_route_over_report_pair_update(self) -> "ProcessRouteUpdate":
+        if self.over_report_value is not None and self.over_report_value < 0:
+            raise ValueError("超报值不能为负数")
+        if (
+            self.over_report_mode == "percent"
+            and self.over_report_value is not None
+            and self.over_report_value > Decimal("100")
+        ):
+            raise ValueError("按比例超报时，超报值须在 0-100 之间（百分数）")
+        return self
 
 
 class ProcessRouteResponse(ProcessRouteBase):
@@ -1025,4 +1049,3 @@ class SOPListResponse(BaseModel):
 
     data: List[SOPResponse] = Field(..., description="列表数据")
     total: int = Field(..., ge=0, description="总条数")
-

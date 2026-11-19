@@ -4,6 +4,7 @@
 
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, Path
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from core.api.deps import get_current_user, get_current_tenant
 from core.api.deps.access import require_permission_codes
 from infra.models.user import User
@@ -24,7 +25,13 @@ from apps.kuaizhizao.schemas.warehouse import (
     ProductionPickingWithItemsResponse,
 )
 
-router = APIRouter(prefix="/material-calls", tags=["App - Kuaige Zhizao - Material Call"])
+router = APIRouter(
+    prefix="/material-calls",
+    tags=["App - Kuaige Zhizao - Material Call"],
+    dependencies=[
+        Depends(require_kuaizhizao_module_access("warehouse-management-material-calls", resolve_print=False))
+    ],
+)
 
 @router.post("", response_model=MaterialCallRequestResponse, summary="Create material call request")
 async def create_material_call(

@@ -37,6 +37,10 @@ from apps.kuaizhizao.schemas.purchase_requisition import (
 from apps.kuaizhizao.schemas.purchase import PurchaseOrderCreate, PurchaseOrderItemCreate
 from apps.kuaizhizao.services.purchase_service import PurchaseService
 from apps.kuaizhizao.utils.document_source_types import is_purchase_requisition_source_type
+from apps.kuaizhizao.utils.pull_open_line_quantity import (
+    build_partial_push_qty_triplet,
+    requisition_material_group_key,
+)
 from apps.kuaizhizao.utils.document_line_material_snapshot import (
     partner_snapshot_fields_from_source_line,
 )
@@ -923,7 +927,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         )
 
         item_ids = [int(it.id) for it in all_items if it.id is not None]
-        occupied_map, _ = await self._occupied_purchase_order_qty_by_requisition_item_ids(
+        occupied_map = await self._occupied_purchase_order_qty_by_requisition_item_ids(
             tenant_id, item_ids
         )
         for sid in po_item_by_source.keys():
@@ -1679,7 +1683,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         open_items = [
             item
             for item in (detail.items or [])
-            if item.id is not None and not item.purchase_order_id and float(item.quantity or 0) > 0
+            if item.id is not None and float(item.quantity or 0) > 0
         ]
         occupied_po = await self._occupied_purchase_order_qty_by_requisition_item_ids(
             tenant_id, [int(item.id) for item in open_items]
@@ -1841,12 +1845,25 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             tenant_id=tenant_id,
             requisition_id=requisition_id,
             id__in=selected_ids,
-            purchase_order_id__isnull=True,
         ).values_list("id", flat=True)
         owned_set = {int(v) for v in owned}
-        ordered_ids = [iid for iid in selected_ids if iid in owned_set]
+        candidate_ids = [iid for iid in selected_ids if iid in owned_set]
+        if not candidate_ids:
+            raise BusinessLogicError("所选申请行不属于本单或不存在")
+        occupied_po = await self._occupied_purchase_order_qty_by_requisition_item_ids(
+            tenant_id, candidate_ids
+        )
+        owned_items = await PurchaseRequisitionItem.filter(
+            tenant_id=tenant_id, id__in=candidate_ids,
+        ).all()
+        by_id = {int(i.id): i for i in owned_items if i.id is not None}
+        ordered_ids = [
+            iid for iid in candidate_ids
+            if iid in by_id
+            and Decimal(str(by_id[iid].quantity or 0)) > occupied_po.get(iid, Decimal("0"))
+        ]
         if not ordered_ids:
-            raise BusinessLogicError("没有可转单的申请行或所选行已转单")
+            raise BusinessLogicError("没有可转单的申请行或所选行已无可下推数量")
 
         convert_data = ConvertToPurchaseOrderRequest(
             item_ids=ordered_ids,
@@ -2032,6 +2049,13 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             else {}
         )
 
+        items_by_material_group: Dict[Tuple[int, int], List] = {}
+        for item in items:
+            key = requisition_material_group_key(
+                item.requisition_id, item.material_id, fallback_item_id=item.id,
+            )
+            items_by_material_group.setdefault(key, []).append(item)
+        occupied_map = occupied_po if target == "purchase_order" else occupied_inquiry
         kw = (keyword or "").strip().lower()
         lines: List[Dict[str, Any]] = []
         for item in items:
@@ -2043,18 +2067,27 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             if qty <= 0:
                 continue
             item_id = int(item.id) if item.id is not None else 0
-            # 挂链行视为本行数量已取完；未挂链则按下游占用数量（含草稿）算剩余
-            if item.purchase_order_id:
-                remaining = 0.0
-                pushed = qty
-            elif target == "purchase_order":
-                pushed = min(qty, float(occupied_po.get(item_id, Decimal("0"))))
-                remaining = max(0.0, qty - pushed)
-            else:
-                pushed = min(qty, float(occupied_inquiry.get(item_id, Decimal("0"))))
-                remaining = max(0.0, qty - pushed)
-            selectable = can_push and remaining > 0
-            if pullable_only and not selectable:
+            key = requisition_material_group_key(
+                item.requisition_id, item.material_id, fallback_item_id=item_id or None,
+            )
+            group_items = items_by_material_group[key]
+            group_suggested = sum(Decimal(str(i.quantity or 0)) for i in group_items)
+            group_occupied = sum(
+                (occupied_map.get(int(i.id), Decimal("0")) for i in group_items if i.id is not None),
+                Decimal("0"),
+            )
+            suggested, pushed, remaining = build_partial_push_qty_triplet(
+                group_suggested, group_occupied,
+            )
+            is_open_carrier = qty > float(occupied_map.get(item_id, Decimal("0")))
+            group_ids = [int(i.id) for i in group_items if i.id is not None]
+            is_closed_group_rep = (
+                not is_open_carrier and remaining <= 0
+                and bool(group_ids) and item_id == max(group_ids)
+            )
+            if pullable_only and not is_open_carrier:
+                continue
+            if not pullable_only and not is_open_carrier and not is_closed_group_rep:
                 continue
             material_code = str(item.material_code or "").strip()
             material_name = str(item.material_name or "").strip()
@@ -2063,6 +2096,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 haystack = " ".join([material_code, material_name, material_spec]).lower()
                 if kw not in haystack:
                     continue
+            requisition_date = req.requisition_date.isoformat() if req.requisition_date else None
             lines.append(
                 {
                     "id": int(item.id),
@@ -2078,7 +2112,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                     "material_name": material_name,
                     "material_spec": material_spec or None,
                     "unit": item.unit or "件",
-                    "suggested_quantity": qty,
+                    "suggested_quantity": suggested,
                     "pushed_quantity": pushed,
                     "remaining_quantity": remaining,
                     "required_date": str(item.required_date) if item.required_date else None,
@@ -2136,15 +2170,17 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         items = await PurchaseRequisitionItem.filter(
             tenant_id=tenant_id,
             id__in=selected_ids,
-            purchase_order_id__isnull=True,
         ).all()
         if not items:
-            raise BusinessLogicError("没有可转单的申请行或所选行已转单")
+            raise BusinessLogicError("没有可转单的申请行或所选行不存在")
 
         item_by_id = {int(i.id): i for i in items if i.id is not None}
         ordered_items = [item_by_id[iid] for iid in selected_ids if iid in item_by_id]
         if not ordered_items:
-            raise BusinessLogicError("没有可转单的申请行或所选行已转单")
+            raise BusinessLogicError("没有可转单的申请行或所选行不存在")
+        occupied_po = await self._occupied_purchase_order_qty_by_requisition_item_ids(
+            tenant_id, [int(i.id) for i in ordered_items if i.id is not None]
+        )
 
         requisition_ids = sorted({int(i.requisition_id) for i in ordered_items})
         requisitions = await PurchaseRequisition.filter(
@@ -2209,9 +2245,17 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         po_line_required_dates: List[date] = []
 
         for item in ordered_items:
+            item_id = int(item.id) if item.id is not None else 0
+            remaining = Decimal(str(item.quantity or 0)) - occupied_po.get(item_id, Decimal("0"))
+            if remaining <= 0:
+                raise BusinessLogicError(f"物料 {item.material_code or item_id} 已无可下推数量")
             qty = self._resolve_convert_quantity(item, data)
             if qty <= 0:
                 continue
+            if qty > remaining:
+                raise BusinessLogicError(
+                    f"物料 {item.material_code or item_id} 下推数量 {qty} 超过可取数量 {remaining}"
+                )
             header_required = req_header_required_by_id.get(int(item.requisition_id))
             line_required = self._resolve_requisition_item_required_date(
                 item, header_required, today
@@ -2379,7 +2423,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         )
         if not item or item.id is None:
             return
-        occupied_map, _ = await self._occupied_purchase_order_qty_by_requisition_item_ids(
+        occupied_map = await self._occupied_purchase_order_qty_by_requisition_item_ids(
             tenant_id, [int(item.id)]
         )
         occupied = occupied_map.get(int(item.id), Decimal("0"))
@@ -2693,4 +2737,3 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             "purchase_orders": purchase_orders_out,
             "persisted_material_ids": persisted_material_ids,
         }
-

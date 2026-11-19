@@ -21,6 +21,7 @@ import { NAVIGATION_MENU_TREE_QUERY_KEY } from '../../hooks/useUnifiedMenuData';
 
 const DISMISS_STORAGE_KEY_PREFIX = 'menu-sync-prompt:dismissed';
 const NOTIFICATION_KEY_PREFIX = 'menu-sync-prompt';
+const SESSION_SHOWN_KEY_PREFIX = 'menu-sync-prompt:session-shown';
 /** 抬高于右下角 IterationFloatButton（bottom: 24），避免被盖住 */
 const NOTIFICATION_BOTTOM_OFFSET = 88;
 
@@ -35,7 +36,9 @@ const MenuSyncPrompt: React.FC = () => {
   const currentUser = useCurrentUser();
   const tenantId = currentUser?.tenant_id;
   const shownFingerprintRef = useRef<string | null>(null);
+  const openKeyRef = useRef<string | null>(null);
   const busyRef = useRef(false);
+  const syncingRef = useRef(false);
 
   const { data: bootstrapStatus } = useQuery({
     queryKey: ['tenantBootstrapStatus'],
@@ -53,37 +56,52 @@ const MenuSyncPrompt: React.FC = () => {
   });
 
   useEffect(() => {
-    if (
-      tenantId == null
-      || bootstrapStatus?.pending
-      || !syncStatus?.needs_sync
-      || !syncStatus.manifest_fingerprint
-    ) {
+    const destroyKey = (key: string | null) => {
+      if (!key) return;
+      notification.destroy(key);
+      if (openKeyRef.current === key) openKeyRef.current = null;
+    };
+    if (tenantId == null || bootstrapStatus?.pending) {
+      destroyKey(openKeyRef.current);
       return;
     }
-
-    const fingerprint = syncStatus.manifest_fingerprint;
-    if (shownFingerprintRef.current === fingerprint) {
+    const fingerprint = syncStatus?.manifest_fingerprint;
+    if (!fingerprint) {
+      destroyKey(openKeyRef.current);
       return;
     }
-
+    const notificationKey = `${NOTIFICATION_KEY_PREFIX}-${tenantId}-${fingerprint}`;
     const dismissKey = buildDismissStorageKey(tenantId, fingerprint);
-    // 用 localStorage：同一指纹下「稍后」跨刷新不再烦扰；指纹随发版 manifest 变才会再提示
-    if (localStorage.getItem(dismissKey) === '1') {
+    if (!syncStatus?.needs_sync || localStorage.getItem(dismissKey) === '1') {
+      destroyKey(notificationKey);
+      destroyKey(openKeyRef.current);
       shownFingerprintRef.current = fingerprint;
       return;
     }
-
+    // refetch 不得把同步中的通知重置为空闲，也不得越过对齐后的关闭逻辑。
+    if (syncingRef.current) return;
+    if (shownFingerprintRef.current === fingerprint && openKeyRef.current === notificationKey) return;
+    const sessionShownKey = `${SESSION_SHOWN_KEY_PREFIX}:${tenantId}:${fingerprint}`;
+    if (sessionStorage.getItem(sessionShownKey) === '1') {
+      shownFingerprintRef.current = fingerprint;
+      return;
+    }
     shownFingerprintRef.current = fingerprint;
-    const notificationKey = `${NOTIFICATION_KEY_PREFIX}-${tenantId}-${fingerprint}`;
+    sessionStorage.setItem(sessionShownKey, '1');
     const staleCount = syncStatus.stale_app_count;
 
     const dismiss = () => {
       localStorage.setItem(dismissKey, '1');
-      notification.destroy(notificationKey);
+      destroyKey(notificationKey);
+      destroyKey(openKeyRef.current);
     };
 
     const openIdle = () => {
+      if (localStorage.getItem(dismissKey) === '1') {
+        destroyKey(notificationKey);
+        return;
+      }
+      openKeyRef.current = notificationKey;
       notification.open({
         key: notificationKey,
         title: t('components.menuSyncPrompt.title'),
@@ -94,10 +112,10 @@ const MenuSyncPrompt: React.FC = () => {
         icon: <SyncOutlined style={{ color: 'var(--ant-color-primary)' }} />,
         actions: (
           <Space>
-            <Button size="small" onClick={dismiss}>
+            <Button size="small" onClick={(e) => { e.stopPropagation(); dismiss(); }}>
               {t('components.menuSyncPrompt.later')}
             </Button>
-            <Button type="primary" size="small" onClick={() => void runSync()}>
+            <Button type="primary" size="small" onClick={(e) => { e.stopPropagation(); void runSync(); }}>
               {t('components.menuSyncPrompt.action')}
             </Button>
           </Space>
@@ -107,6 +125,7 @@ const MenuSyncPrompt: React.FC = () => {
     };
 
     const openBusy = () => {
+      openKeyRef.current = notificationKey;
       notification.open({
         key: notificationKey,
         title: t('components.menuSyncPrompt.title'),
@@ -124,15 +143,15 @@ const MenuSyncPrompt: React.FC = () => {
     };
 
     const runSync = async () => {
-      if (busyRef.current) {
+      if (busyRef.current || syncingRef.current) {
         return;
       }
       busyRef.current = true;
+      syncingRef.current = true;
       openBusy();
       try {
         await scanApplications();
         const result = await syncAllManifestsAndMenus();
-        busyRef.current = false;
         dismiss();
         messageApi.success(
           result.message
@@ -144,10 +163,12 @@ const MenuSyncPrompt: React.FC = () => {
         queryClient.invalidateQueries({ queryKey: [NAVIGATION_MENU_TREE_QUERY_KEY] });
         queryClient.invalidateQueries({ queryKey: [...MENU_SYNC_STATUS_QUERY_KEY] });
       } catch (error: unknown) {
-        busyRef.current = false;
         const msg = error instanceof Error ? error.message : String(error || '');
         messageApi.error(msg || t('components.menuSyncPrompt.syncFailed'));
         openIdle();
+      } finally {
+        busyRef.current = false;
+        syncingRef.current = false;
       }
     };
 

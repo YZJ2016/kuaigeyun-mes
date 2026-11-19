@@ -14,6 +14,7 @@ from pydantic import Field, model_validator
 from core.schemas.base import BaseSchema
 from apps.kuaicaiwu.constants.finance_source_types import (
     PAYABLE_SOURCE_PRICE_SETTLEMENT,
+    PAYABLE_SOURCE_PURCHASE_INVOICE_DISCOUNT,
     PAYABLE_SOURCE_PURCHASE_RETURN,
     is_payable_red_total_source,
     payable_total_must_be_negative,
@@ -59,7 +60,7 @@ class PayableBase(BaseSchema):
                 if src == PAYABLE_SOURCE_PURCHASE_RETURN:
                     raise ValueError("采购退货红字应付金额须为负数")
                 raise ValueError("红字应付金额须为负数")
-        elif src == PAYABLE_SOURCE_PRICE_SETTLEMENT:
+        elif src in (PAYABLE_SOURCE_PRICE_SETTLEMENT, PAYABLE_SOURCE_PURCHASE_INVOICE_DISCOUNT):
             if amt == 0:
                 raise ValueError("应付金额不能为 0")
         elif not is_payable_red_total_source(src) and amt <= 0:
@@ -147,6 +148,12 @@ class PurchaseInvoiceBase(BaseSchema):
     invoice_amount: Decimal = Field(..., ge=0, description="未税金额")
     tax_amount: Decimal = Field(..., ge=0, description="税额（服务端按未税金额×税率计算，入参可忽略）")
     total_amount: Decimal = Field(..., ge=0, description="价税合计（服务端计算，入参可忽略）")
+    discount_amount: Decimal = Field(
+        Decimal("0"), description="收票优惠金额(含税,可正可负);占用源单=W=价税合计+优惠"
+    )
+    adjust_payable: bool = Field(
+        False, description="从应付单收票且优惠非零时，审核通过后生成优惠调整应付"
+    )
     status: str = Field("未审核", max_length=20, description="发票状态")
     reviewer_id: Optional[int] = Field(None, description="审核人ID")
     reviewer_name: Optional[str] = Field(None, max_length=100, description="审核人姓名")
@@ -210,6 +217,12 @@ class PurchaseInvoiceUpdate(BaseSchema):
     invoice_amount: Optional[Decimal] = Field(None, ge=0, description="未税金额")
     tax_amount: Optional[Decimal] = Field(None, ge=0, description="税额")
     total_amount: Optional[Decimal] = Field(None, ge=0, description="价税合计")
+    discount_amount: Optional[Decimal] = Field(
+        None, description="收票优惠金额(含税,可正可负)"
+    )
+    adjust_payable: Optional[bool] = Field(
+        None, description="从应付收票是否生成优惠调整应付"
+    )
     notes: Optional[str] = None
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
     attachment_path: Optional[str] = Field(None, max_length=500)

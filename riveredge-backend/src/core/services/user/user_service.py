@@ -785,11 +785,11 @@ class UserService:
         Args:
             tenant_id: 组织ID
             user_uuid: 用户UUID
-            new_password: 新密码（可选，不提供则使用默认密码 '123456'）
+            new_password: 新密码（可选，不提供则按租户密码策略生成默认或临时密码）
             current_user_id: 当前用户ID
             
         Returns:
-            User: 更新后的用户对象
+            (User, optional_plaintext): 用户对象及自动生成的口令（若有）
             
         Raises:
             NotFoundError: 当用户不存在时抛出
@@ -804,21 +804,29 @@ class UserService:
         if not user:
             raise NotFoundError(f"用户不存在: {user_uuid}")
         
-        from core.domain.security.password_policy import generate_temporary_password
+        from core.domain.security.password_policy import (
+            default_simple_reset_password,
+            generate_temporary_password,
+        )
         from core.services.security.password_policy_service import PasswordPolicyService
-        from core.services.security.password_user_utils import apply_login_password_to_user
+        from core.services.security.password_user_utils import (
+            apply_login_password_to_user,
+            build_password_user_context,
+        )
 
         policy = await PasswordPolicyService.get_policy(tenant_id)
+        user_context = build_password_user_context(user)
         generated: Optional[str] = None
         if new_password:
             password = new_password
             must_change = policy.is_strengthened
         elif policy.is_strengthened:
-            password = generate_temporary_password(policy)
+            password = generate_temporary_password(policy, user_context=user_context)
             generated = password
             must_change = True
         else:
-            password = "123456"
+            password = default_simple_reset_password(policy)
+            generated = password
             must_change = False
 
         await apply_login_password_to_user(
@@ -826,6 +834,7 @@ class UserService:
             password,
             policy,
             must_change_password=must_change,
+            user_context=user_context,
         )
         await user.save()
         

@@ -28,7 +28,7 @@ def test_coerce_on_invoice_keeps_receivable_auto_switch():
         }
     )
     assert fin["auto_generate_receivable_from_sales_invoice"] is True
-    assert fin["auto_generate_payable_from_purchase_invoice"] is False
+    assert fin["auto_generate_payable_from_purchase_invoice"] is True
 
 
 def test_coerce_on_shipment_forces_receivable_invoice_auto_off():

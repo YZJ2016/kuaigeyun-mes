@@ -133,6 +133,8 @@ import {
   UniPullQueryModal,
   isPullOpenLineSelectable,
   isPullableScope,
+  loadPullSourceReferenceOptions,
+  PULL_SOURCE_REFERENCE,
   renderPullCapabilityTag,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
@@ -188,7 +190,6 @@ import {
   type PurchaseOrderSalesOrderPullCandidate,
 } from '../../../services/purchase';
 import {
-  listPurchaseRequisitions,
   listPurchaseRequisitionPurchaseOrderPullLines,
   pullPurchaseOrdersFromRequisitionItems,
   type PurchaseRequisitionPullLine,
@@ -3118,14 +3119,12 @@ const PurchaseOrdersPage: React.FC = () => {
     onOpen: () => {
       pullSourceRequisitionIdRef.current = undefined;
       setPullSourceRequisitionId(undefined);
-      void listPurchaseRequisitions({ skip: 0, limit: 100 })
-        .then((res) => {
-          setPullSourceRequisitionOptions(
-            (res?.data ?? [])
-              .filter((row) => row.id != null && row.requisition_code)
-              .map((row) => ({ value: row.id!, label: String(row.requisition_code) })),
-          );
-        })
+      void loadPullSourceReferenceOptions({
+        resource: PULL_SOURCE_REFERENCE.purchaseRequisition,
+        hostResource: PURCHASE_ORDER_RESOURCE,
+        maxItems: 500,
+      })
+        .then(setPullSourceRequisitionOptions)
         .catch((error: unknown) => {
           messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseOrder.pull.loadSourceFailed')));
           setPullSourceRequisitionOptions([]);
@@ -5997,5 +5996,4 @@ const PurchaseOrdersPage: React.FC = () => {
 };
 
 export default PurchaseOrdersPage;
-
 

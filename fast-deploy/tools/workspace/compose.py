@@ -87,6 +87,8 @@ def _link_or_copy(src: Path, dst: Path, mode: str, *, quiet: bool = False) -> No
         raise SystemExit(f"源目录不存在: {src}")
     dst.parent.mkdir(parents=True, exist_ok=True)
     _remove_target(dst)
+    if dst.exists() or dst.is_symlink() or _is_link_or_junction(dst):
+        raise SystemExit(f"组装前无法清空目标目录: {dst}")
     if mode == "copy":
         shutil.copytree(src, dst)
         if not quiet:

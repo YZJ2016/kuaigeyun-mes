@@ -4,10 +4,25 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from core.domain.security.password_policy import (
+    default_simple_reset_password,
+    password_policy_from_security,
+    validate_login_password,
+)
 from core.schemas.user import UserUpdate
 from core.services.user import user_service as service
 from core.services.authorization.user_permission_service import UserPermissionService
 from infra.exceptions.exceptions import AuthorizationError
+
+
+@pytest.mark.parametrize("min_length", [6, 8, 14, 128])
+def test_simple_reset_password_respects_tenant_minimum_length(min_length):
+    policy = password_policy_from_security(
+        {"password_mode": "simple", "password_min_length": min_length}
+    )
+    password = default_simple_reset_password(policy)
+    assert len(password) >= min_length
+    validate_login_password(password, policy)
 
 
 def setup(monkeypatch, *, administrator=False, target_admin=False):

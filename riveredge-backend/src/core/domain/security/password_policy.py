@@ -174,7 +174,21 @@ def validate_login_password(
                 raise ValueError("密码不得包含与本人姓名、工号或手机号相关的弱口令片段")
 
 
-def generate_temporary_password(policy: PasswordPolicy) -> str:
+def default_simple_reset_password(policy: PasswordPolicy) -> str:
+    """按租户最短长度生成简易模式管理员重置用的默认口令。"""
+    digits = "1234567890"
+    length = max(int(policy.min_length), MIN_LENGTH_FLOOR)
+    candidate = "".join(digits[i % len(digits)] for i in range(length))
+    validate_login_password(candidate, policy)
+    return candidate
+
+
+def generate_temporary_password(
+    policy: PasswordPolicy,
+    *,
+    user_context: Optional[Mapping[str, Any]] = None,
+    max_attempts: int = 16,
+) -> str:
     """加强模式下管理员重置用的临时密码。"""
     length = max(policy.min_length, 12)
     pools = [
@@ -184,16 +198,25 @@ def generate_temporary_password(policy: PasswordPolicy) -> str:
         "!@#$%^&*()-_=+",
     ]
     required = min(policy.min_char_classes, len(pools)) if policy.is_strengthened else 1
-    chars: list[str] = []
-    for pool in pools[:required]:
-        chars.append(secrets.choice(pool))
     alphabet = "".join(pools)
-    while len(chars) < length:
-        chars.append(secrets.choice(alphabet))
-    secrets.SystemRandom().shuffle(chars)
-    candidate = "".join(chars)
-    validate_login_password(candidate, policy)
-    return candidate
+    last_error: Optional[Exception] = None
+    for _ in range(max(1, int(max_attempts))):
+        chars: list[str] = []
+        for pool in pools[:required]:
+            chars.append(secrets.choice(pool))
+        while len(chars) < length:
+            chars.append(secrets.choice(alphabet))
+        secrets.SystemRandom().shuffle(chars)
+        candidate = "".join(chars)
+        try:
+            validate_login_password(candidate, policy, user_context=user_context)
+            return candidate
+        except ValueError as exc:
+            last_error = exc
+            continue
+    if last_error is not None:
+        raise ValueError(f"无法生成符合密码策略的临时密码: {last_error}") from last_error
+    raise ValueError("无法生成符合密码策略的临时密码")
 
 
 def _as_utc(dt: datetime) -> datetime:

@@ -2209,6 +2209,13 @@ code {
     min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    &::-webkit-scrollbar {
+      display: none;
+      width: 0;
+      height: 0;
+    }
   }
 }
 .dashboard-bento-top-row.ant-row {

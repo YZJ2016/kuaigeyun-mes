@@ -991,11 +991,9 @@ async def scan_and_register_plugins(
         return result
     except Exception as e:
         logger.exception("扫描插件失败")
-        plugins_dir = ApplicationService._get_plugins_directory()
-        detail = f"扫描插件失败: {str(e)}（manifest 目录: {plugins_dir}）"
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=detail
+            detail=f"扫描插件失败（{type(e).__name__}），请联系管理员查看服务日志",
         )
 
 

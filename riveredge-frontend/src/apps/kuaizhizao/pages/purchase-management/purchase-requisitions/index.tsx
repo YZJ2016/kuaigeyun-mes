@@ -94,7 +94,6 @@ import {
   uniAuditPurchaseRequisition,
   withdrawPurchaseRequisitionSubmit,
   fixPurchaseRequisitionStatus,
-  convertToPurchaseOrder,
   previewPushToPurchaseOrder,
   previewPushToInquiry,
   PurchaseRequisition,
@@ -104,6 +103,7 @@ import {
 import {
   handoffDemandComputationToPurchaseRequisitionCreate,
   handoffRequisitionToPurchaseInquiryCreate,
+  handoffRequisitionToPurchaseOrderCreate,
 } from '../../../utils/documentFlowHandoff';
 import {
   listDemandComputationPurchasePullLines,
@@ -1479,13 +1479,14 @@ const PurchaseRequisitionsPage: React.FC = () => {
       allItems: PurchaseRequisitionItem[],
       unconverted: PurchaseRequisitionItem[],
       suppliers: Array<{ id: number; code?: string; name: string }>,
+      maxPushByItemId: Map<number, number>,
     ) => {
       const defaultSupplierId = unconverted[0]?.supplier_id || suppliers[0]?.id;
       const quantities: Record<number, number> = {};
       const unitPrices: Record<number, number> = {};
       unconverted.forEach((i) => {
         if (i.id != null) {
-          quantities[i.id] = Number(i.quantity ?? 0);
+          quantities[i.id] = maxPushByItemId.get(i.id)!;
           unitPrices[i.id] = Number(i.suggested_unit_price ?? 0);
         }
       });
@@ -1523,15 +1524,19 @@ const PurchaseRequisitionsPage: React.FC = () => {
           return;
         }
         const detail = await getPurchaseRequisition(record.id);
-        const pushableIds = new Set((preview.items || []).map((row) => Number(row.item_id)));
+        const maxPushByItemId = new Map(
+          (preview.items || []).map((row) => [Number(row.item_id), Number(row.max_push_quantity ?? 0)]),
+        );
         const allItems = detail.items || [];
-        const unconverted = allItems.filter((i) => i.id != null && pushableIds.has(i.id!) && !i.purchase_order_id);
+        const unconverted = allItems.filter(
+          (i) => i.id != null && (maxPushByItemId.get(i.id) ?? 0) > 0,
+        );
         if (unconverted.length === 0) {
           messageApi.info(t('app.kuaizhizao.purchaseRequisition.noPushLines'));
           resetPushPoPreviewModal();
           return;
         }
-        setupConvertFormFromDetail(allItems, unconverted, suppliers);
+        setupConvertFormFromDetail(allItems, unconverted, suppliers, maxPushByItemId);
         setPushPoDetailItems(allItems);
         setPushPoSuppliers(suppliers);
       } catch (error: any) {
@@ -1574,7 +1579,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
     }
     setPushPoPreviewConfirming(true);
     try {
-      const result = await convertToPurchaseOrder(pushPoTarget.id, {
+      await handoffRequisitionToPurchaseOrderCreate(navigate, {
         item_ids: selectedIds,
         supplier_id: supplierId || undefined,
         supplier_name: supplierName || undefined,
@@ -1583,18 +1588,11 @@ const PurchaseRequisitionsPage: React.FC = () => {
         item_suppliers: Object.fromEntries(selectedIds.map((id) => [id, itemSuppliers[id]])),
         persist_default_supplier_to_material: persistDefaultSupplier,
       });
-      const pos = result.purchase_orders?.length
-        ? result.purchase_orders
-        : [{ purchase_order_id: result.purchase_order_id, purchase_order_code: result.purchase_order_code, supplier_id: supplierId }];
-      const codes = pos.map((p) => p.purchase_order_code).filter(Boolean).join('、');
       messageApi.success(
-        codes
-          ? `${result.message || t('app.kuaizhizao.purchaseRequisition.pushSuccess')}：${codes}`
-          : (result.message || t('app.kuaizhizao.purchaseRequisition.pushSuccess')),
-        6,
+        t('app.kuaizhizao.documentFlow.openedDownstreamCreate', {
+          target: t('app.kuaizhizao.purchaseOrder.title'),
+        }),
       );
-      invalidateMenuBadgeCounts();
-      actionRef.current?.reload();
       resetPushPoPreviewModal();
       setSelectedRowKeys([]);
     } catch (error: unknown) {
@@ -1602,7 +1600,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
     } finally {
       setPushPoPreviewConfirming(false);
     }
-  }, [invalidateMenuBadgeCounts, messageApi, pushPoPreviewData, pushPoTarget, resetPushPoPreviewModal, t]);
+  }, [messageApi, navigate, pushPoPreviewData, pushPoTarget, resetPushPoPreviewModal, t]);
 
   const openPushInquiryPreview = useCallback(
     async (record: PurchaseRequisition) => {
@@ -3250,6 +3248,11 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 unconvertedIds={(pushPoPreviewData.items || [])
                   .filter((row) => Number(row.max_push_quantity ?? 0) > 0)
                   .map((row) => Number(row.item_id))}
+                maxPushByItemId={Object.fromEntries(
+                  (pushPoPreviewData.items || [])
+                    .filter((row) => Number(row.max_push_quantity ?? 0) > 0)
+                    .map((row) => [Number(row.item_id), Number(row.max_push_quantity)]),
+                )}
                 suppliers={pushPoSuppliers}
                 formRef={convertFormRef}
               />
@@ -3477,6 +3480,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
 const ConvertForm: React.FC<{
   items: PurchaseRequisitionItem[];
   unconvertedIds: number[];
+  maxPushByItemId: Record<number, number>;
   suppliers: Array<{ id: number; code?: string; name: string }>;
   formRef: React.MutableRefObject<{
     selectedIds: number[];
@@ -3487,33 +3491,35 @@ const ConvertForm: React.FC<{
     itemSuppliers: Record<number, number>;
     persistDefaultSupplier: boolean;
   }>;
-}> = ({ items, unconvertedIds, suppliers, formRef }) => {
+}> = ({ items, unconvertedIds, maxPushByItemId, suppliers, formRef }) => {
   const { t } = useTranslation();
   const { quantity: quantityDecimals, price: priceDecimals, amount: amountDecimals } = useNumericPrecision();
   const fallbackSupplierId = suppliers[0]?.id || 0;
   const [selected, setSelected] = useState<number[]>(unconvertedIds);
+  const isPushableItem = (item: PurchaseRequisitionItem) =>
+    item.id != null && unconvertedIds.includes(item.id);
   const [batchSupplierId, setBatchSupplierId] = useState<number>(() => {
-    const first = items.find((i) => i.id != null && unconvertedIds.includes(i.id) && !i.purchase_order_id);
+    const first = items.find(isPushableItem);
     return first?.supplier_id || fallbackSupplierId;
   });
   const [rowSuppliers, setRowSuppliers] = useState<Record<number, number>>(() => {
     const m: Record<number, number> = {};
     items.forEach((i) => {
-      if (i.id == null || i.purchase_order_id || !unconvertedIds.includes(i.id)) return;
+      if (i.id == null || !unconvertedIds.includes(i.id)) return;
       m[i.id] = i.supplier_id || fallbackSupplierId;
     });
     return m;
   });
   const [quantities, setQuantities] = useState<Record<number, number>>(() => {
     const q: Record<number, number> = {};
-    items.filter((i) => !i.purchase_order_id).forEach((i) => {
-      if (i.id != null) q[i.id] = Number(i.quantity ?? 0);
+    items.filter(isPushableItem).forEach((i) => {
+      if (i.id != null) q[i.id] = maxPushByItemId[i.id];
     });
     return q;
   });
   const [unitPrices, setUnitPrices] = useState<Record<number, number>>(() => {
     const p: Record<number, number> = {};
-    items.filter((i) => !i.purchase_order_id).forEach((i) => {
+    items.filter(isPushableItem).forEach((i) => {
       if (i.id != null) p[i.id] = Number(i.suggested_unit_price ?? 0);
     });
     return p;
@@ -3535,7 +3541,7 @@ const ConvertForm: React.FC<{
     setRowSuppliers((prev) => {
       const next = { ...prev };
       items.forEach((i) => {
-        if (i.id == null || !selectedSet.has(i.id) || i.purchase_order_id || !unconvertedIds.includes(i.id)) return;
+        if (i.id == null || !selectedSet.has(i.id) || !unconvertedIds.includes(i.id)) return;
         next[i.id] = batchSupplierId;
       });
       return next;
@@ -3544,7 +3550,7 @@ const ConvertForm: React.FC<{
 
   const hasBatchTargetRows = selected.some((id) => {
     const i = items.find((x) => x.id === id);
-    return i != null && i.id != null && !i.purchase_order_id && unconvertedIds.includes(i.id);
+    return i != null && i.id != null && unconvertedIds.includes(i.id);
   });
 
   useEffect(() => {
@@ -3593,7 +3599,7 @@ const ConvertForm: React.FC<{
           selectedRowKeys: selected,
           onChange: (keys) => setSelected(keys as number[]),
           getCheckboxProps: (record: PurchaseRequisitionItem) => ({
-            disabled: record.purchase_order_id != null,
+            disabled: record.id == null || !unconvertedIds.includes(record.id),
           }),
         }}
         columns={[
@@ -3613,7 +3619,7 @@ const ConvertForm: React.FC<{
             title: t('app.kuaizhizao.purchaseRequisition.convert.col.supplier'),
             width: 380,
             render: (_: unknown, record: PurchaseRequisitionItem) =>
-              record.id != null && !record.purchase_order_id ? (
+              record.id != null && unconvertedIds.includes(record.id) ? (
                 <div
                   style={{
                     display: 'flex',
@@ -3636,9 +3642,9 @@ const ConvertForm: React.FC<{
                     }
                   />
                 </div>
-              ) : record.purchase_order_id ? (
+              ) : (
                 '-'
-              ) : null,
+              ),
           },
           { title: t('app.kuaizhizao.purchaseRequisition.convert.col.demandQty'), dataIndex: 'quantity', width: 88, align: 'right', render: (v: any) => formatQuantity(v) },
           {
@@ -3661,7 +3667,7 @@ const ConvertForm: React.FC<{
             width: 120,
             align: 'right',
             render: (_: unknown, record: PurchaseRequisitionItem) =>
-              record.id != null && !record.purchase_order_id ? (
+              record.id != null && unconvertedIds.includes(record.id) ? (
                 <InputNumber
                   min={0.01}
                   precision={quantityDecimals}
@@ -3669,16 +3675,16 @@ const ConvertForm: React.FC<{
                   onChange={(v) => setQuantities((prev) => ({ ...prev, [record.id!]: Number(v) || 0 }))}
                   style={{ width: 100 }}
                 />
-              ) : record.purchase_order_id ? (
+              ) : (
                 '-'
-              ) : null,
+              ),
           },
           {
             title: t('app.kuaizhizao.purchaseRequisition.convert.col.unitPrice'),
             width: 120,
             align: 'right',
             render: (_: unknown, record: PurchaseRequisitionItem) =>
-              record.id != null && !record.purchase_order_id ? (
+              record.id != null && unconvertedIds.includes(record.id) ? (
                 <InputNumber
                   min={0}
                   precision={priceDecimals}
@@ -3686,16 +3692,16 @@ const ConvertForm: React.FC<{
                   onChange={(v) => setUnitPrices((prev) => ({ ...prev, [record.id!]: Number(v) || 0 }))}
                   style={{ width: 100 }}
                 />
-              ) : record.purchase_order_id ? (
+              ) : (
                 '-'
-              ) : null,
+              ),
           },
           {
             title: t('app.kuaizhizao.purchaseRequisition.convert.col.lineAmount'),
             width: 110,
             align: 'right',
             render: (_: unknown, record: PurchaseRequisitionItem) =>
-              record.id != null && !record.purchase_order_id ? (
+              record.id != null && unconvertedIds.includes(record.id) ? (
                 <Typography.Text>{formatLineAmount(record.id)}</Typography.Text>
               ) : (
                 '-'

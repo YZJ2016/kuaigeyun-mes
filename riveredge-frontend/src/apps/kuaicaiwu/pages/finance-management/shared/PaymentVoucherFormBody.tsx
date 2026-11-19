@@ -361,6 +361,23 @@ export function PaymentVoucherFormBody({
         </Row>
       )}
 
+      <ProFormDependency name={['payment_method']}>
+        {({ payment_method: method }) =>
+          isPrepaymentOffsetPaymentMethod(method) ? null : (
+            <LedgerAccountFormFields
+              accounts={bankAccounts}
+              accountLabel={t(`${P}.outBankAccount`)}
+              noteLabel={t(`${P}.outAccountNote`)}
+              omitColProps
+              rowNestedSpans={{ account: 8, note: 8 }}
+              acceptanceNoteDirection="payable"
+              partnerFieldName="supplier_id"
+              forceAccountRequired
+            />
+          )
+        }
+      </ProFormDependency>
+
       {showPullLines && pullLineColumns ? (
         <ProFormDependency name={['payment_method']}>
           {({ payment_method: method }) => {
@@ -399,22 +416,6 @@ export function PaymentVoucherFormBody({
           }}
         </ProFormDependency>
       ) : null}
-
-      <ProFormDependency name={['payment_method']}>
-        {({ payment_method: method }) =>
-          isPrepaymentOffsetPaymentMethod(method) ? null : (
-            <LedgerAccountFormFields
-              accounts={bankAccounts}
-              accountLabel={t(`${P}.outBankAccount`)}
-              noteLabel={t(`${P}.outAccountNote`)}
-              omitColProps
-              rowNestedSpans={{ account: 8, note: 8 }}
-              acceptanceNoteDirection="payable"
-              partnerFieldName="supplier_id"
-            />
-          )
-        }
-      </ProFormDependency>
 
       {hideCounterpartySection ? null : <PaymentCounterpartyFormSection />}
 

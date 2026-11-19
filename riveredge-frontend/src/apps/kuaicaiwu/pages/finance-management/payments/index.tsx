@@ -36,6 +36,7 @@ import {
   type RemediationVoucherSnapshot,
 } from '../shared/VoucherRemediationSettleModal';
 import { shouldOpenManualRemediationAfterRepairFailure } from '../shared/financeRemediationSettle';
+import { buildPaymentPayablePullQueryColumns } from '../shared/paymentPayablePullQueryColumns';
 import { resolveFormListFieldForSubmit } from '../../../../../utils/formListItems';
 import {
   PaymentAdvancePayeeField,
@@ -57,7 +58,6 @@ import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { loadFinancePullCandidatePage } from '../shared/loadFinancePullCandidatePage';
 import {
   UniPullQueryModal,
-  renderPullQueryReviewStatus,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import dayjs from 'dayjs';
@@ -95,7 +95,6 @@ import {
   normalizeDocumentAttachments,
 } from '../../../../kuaizhizao/utils/documentAttachments';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
-import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
 import { paymentCapabilityReasonMessage } from '../../../utils/paymentCapabilityMessages';
 import { formatDateTime, formatCurrencyAmount, todaySiteDateString } from '../../../../../utils/format';
 import {
@@ -1020,41 +1019,9 @@ const PaymentsPage: React.FC = () => {
     }
   };
 
-  const pullTableColumns = useMemo(
-    () => [
-      { title: t(`${P}.pullCol.payableCode`), dataIndex: 'code', width: 220, ellipsis: true },
-      { title: t('app.kuaicaiwu.common.supplier'), dataIndex: 'supplier_name', width: 200, ellipsis: true },
-      {
-        title: t(`${P}.pullCol.docStatus`),
-        dataIndex: 'source_status',
-        width: 120,
-        align: 'center' as const,
-        render: (v: unknown) => {
-          const { text, color } = getStatusDisplay(v == null ? undefined : String(v));
-          return text === '-' ? '-' : <MarkerTag color={color}>{text}</MarkerTag>;
-        },
-      },
-      {
-        title: t('app.kuaicaiwu.common.reviewStatus'),
-        dataIndex: 'review_status',
-        width: 120,
-        align: 'center' as const,
-        render: (v) => renderPullQueryReviewStatus(t, v),
-      },
-      {
-        title: t('app.kuaicaiwu.common.dueDate'),
-        dataIndex: 'source_date',
-        width: 120,
-        render: (v: unknown) => (v ? formatDateTime(String(v), 'YYYY-MM-DD') : '-'),
-      },
-      {
-        title: t('app.kuaicaiwu.payable.col.remainingAmount'),
-        dataIndex: 'remaining_amount',
-        width: 140,
-        align: 'right' as const,
-        render: (v: unknown) => formatCurrencyAmount(v || 0),
-      },
-    ],
+  const pullTableColumns = useMemo(() => buildPaymentPayablePullQueryColumns(t), [t]);
+  const pullPaymentApplicationColumns = useMemo(
+    () => buildPaymentPayablePullQueryColumns(t, { includeExpectedPaymentDate: true }),
     [t],
   );
 
@@ -1693,7 +1660,7 @@ const PaymentsPage: React.FC = () => {
           void pullFromPaymentApplicationQuery.handleConfirm();
         }}
         rowKey="id"
-        columns={pullTableColumns}
+        columns={pullPaymentApplicationColumns}
         dataSource={pullFromPaymentApplicationQuery.dataSource}
         loading={pullFromPaymentApplicationQuery.loading}
         confirmLoading={pullFromPaymentApplicationQuery.confirmLoading}

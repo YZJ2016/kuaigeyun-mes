@@ -113,6 +113,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 数值精度、数量/单价/金额小数位、0–6、configTree max | `features/numeric-precision-decimal-places-6.md` |
 | 往来对账单下推付款申请/采购收票、开票日期 | `features/partner-statement-push-invoice-date.md` |
 | 采购收票预览、开票明细、进项发票源单物料 | `features/purchase-invoice-pull-detail-lines.md` |
+| 收票优惠 discount_amount、W=I+D、审核生应付、优惠应付早退 | `features/purchase-invoice-discount-approval-payable.md` |
 | 选物料 403、仅回显加载物料列表失败、UniMaterialSelect | `features/uni-material-select-reference-display.md` |
 | 个性化主题保存后又暗、偏好与标签互相冲掉、jsonb merge | `features/user-preference-atomic-merge.md` |
 | 单据明细客户料号、伙伴料号、material_model、document_line_material_snapshot | `features/document-line-partner-material-snapshot.md` |
@@ -147,6 +148,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 驳回上一级、驳回到制单人、reject_target、reject_options | `features/audit-reject-targets.md` |
 | 采购订单采购员空白、不含税金额不能改、金额单价互算 | `features/purchase-order-buyer-amount-edit.md` |
 | 采购申请到货日带入行、行到货日必填、required_date | `features/purchase-requisition-line-delivery-carry.md` |
+| 采购申请分批余量、实际占用、草稿队列建单、取单日期 NameError | `features/purchase-requisition-open-quantity-draft-handoff.md` |
 | 采购申请有权限列表空、角标有数、钉住草稿已驳回无单 | `features/purchase-requisition-lifecycle-pin-mode-a.md` |
 | 确认入库加载确认预览失败、仓库回显、loadConfirmPreviewFailed | `features/inbound-confirm-preview-warehouse-display.md` |
 | 可审人有委托无审核按钮、点审核误报没有权限、列表态未补齐待办、按钮提示待办人仍是上一节点、条件分支未确认就进特批 | `features/audit-hub-approve-button-visible.md` |
@@ -211,6 +213,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/planning-procurement-automation.md` | 需求计算/采购业务自动化开关与 Taskiq | platform-config | 已交付 |
 | `features/partner-statement-push-invoice-date.md` | 对账单下推请款/收票与开票日期列 | finance-ui | 已交付 |
 | `features/purchase-invoice-pull-detail-lines.md` | 收票预览展示源单物料明细 | finance-ui | 已交付 |
+| `features/purchase-invoice-discount-approval-payable.md` | 收票优惠占用与审核生应付及保留限制 | finance-ui | 代码已实现，待部署迁移 |
 | `features/uni-material-select-reference-display.md` | 物料选择器走 reference-display | rbac | 已交付 |
 | `features/user-preference-atomic-merge.md` | 用户偏好 JSON 原子深合并 | system | 已交付 |
 | `features/supplier-select-dropdown.md` | 供应商可搜索下拉 SupplierSelectDropdown | master-data | 已交付 |
@@ -292,6 +295,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/audit-reject-targets.md` | 驳回上一级/制单人 reject_target | approval, UniAudit | 已交付 |
 | `features/purchase-order-buyer-amount-edit.md` | 采购订单采购员默认与金额单价互算 | mes-purchase | 已交付 |
 | `features/purchase-requisition-line-delivery-carry.md` | 采购申请表头到货日带入行且行必填 | mes-purchase | 已交付 |
+| `features/purchase-requisition-open-quantity-draft-handoff.md` | 申请实际余量与采购订单草稿队列 | mes-purchase | 代码已实现，待业务联调 |
 | `features/purchase-requisition-lifecycle-pin-mode-a.md` | 采购申请 Mode A 钉住草稿/驳回筛空 | mes-purchase | 已交付 |
 | `features/inbound-confirm-preview-warehouse-display.md` | 入库确认预览仓库走回显不拦确认 | mes-warehouse | 已交付 |
 | `features/modal-portal-click-isolation.md` | Modal Portal 点击不穿透底层 | modal / portal | 已交付 |

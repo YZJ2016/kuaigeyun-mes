@@ -39,6 +39,12 @@ class PurchaseInvoice(BaseModel):
     invoice_amount = fields.DecimalField(max_digits=14, decimal_places=4, description="发票金额")
     tax_amount = fields.DecimalField(max_digits=14, decimal_places=4, description="税额")
     total_amount = fields.DecimalField(max_digits=14, decimal_places=4, description="价税合计")
+    discount_amount = fields.DecimalField(
+        max_digits=14, decimal_places=4, default=0, description="收票优惠金额(含税,可正可负)"
+    )
+    adjust_payable = fields.BooleanField(
+        default=False, description="从应付收票时审核通过后生成优惠调整应付(-优惠金额)"
+    )
 
     # 状态
     status = fields.CharField(max_length=20, default="未审核", description="发票状态")

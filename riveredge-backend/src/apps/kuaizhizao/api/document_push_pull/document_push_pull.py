@@ -8,10 +8,17 @@ Date: 2025-01-14
 """
 
 from typing import Dict, Any, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import AuthContext, ensure_permission_codes, get_auth_context
+from apps.kuaizhizao.api._kuaizhizao_document_gate import (
+    all_reverse_permission_codes,
+    resolve_internal_pull_permissions,
+    resolve_internal_push_permissions,
+    resolve_reverse_permission,
+)
 from infra.models.user import User
 from apps.kuaizhizao.services.document_push_pull_service import DocumentPushPullService
 from apps.kuaizhizao.services.document_state_engine import DocumentStateEngine
@@ -50,6 +57,8 @@ class ReverseDocumentRequest(BaseModel):
 @router.post("/push", summary="Push document")
 async def push_document(
     request: PushDocumentRequest,
+    http_request: Request,
+    auth: AuthContext = Depends(get_auth_context),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ) -> Dict[str, Any]:
@@ -64,6 +73,10 @@ async def push_document(
     - demand_computation -> purchase_order: 从需求计算下推到采购单
     - purchase_receipt -> incoming_inspection: 从采购入库单下推来料检验
     """
+    codes = resolve_internal_push_permissions(request.source_type, request.target_type)
+    await ensure_permission_codes(
+        auth, tenant_id, http_request, list(codes), require_all=True, check_abac=False,
+    )
     try:
         service = DocumentPushPullService()
         result = await service.push_document(
@@ -88,6 +101,8 @@ async def push_document(
 @router.post("/pull", summary="Pull document")
 async def pull_document(
     request: PullDocumentRequest,
+    http_request: Request,
+    auth: AuthContext = Depends(get_auth_context),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ) -> Dict[str, Any]:
@@ -100,6 +115,10 @@ async def pull_document(
     - work_order -> demand_computation: 从工单加载到需求计算
     - purchase_order -> demand_computation: 从采购单加载到需求计算
     """
+    codes = resolve_internal_pull_permissions(request.source_type, request.target_type)
+    await ensure_permission_codes(
+        auth, tenant_id, http_request, list(codes), require_all=True, check_abac=False,
+    )
     try:
         service = DocumentPushPullService()
         result = await service.pull_document(
@@ -124,6 +143,8 @@ async def pull_document(
 @router.post("/reverse", summary="Reverse document push/pull")
 async def reverse_document(
     request: ReverseDocumentRequest,
+    http_request: Request,
+    auth: AuthContext = Depends(get_auth_context),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ) -> Dict[str, Any]:
@@ -134,6 +155,10 @@ async def reverse_document(
     - withdraw_push: 下推撤回（撤销需求计算），支持 demand、sales_order
     - revoke_state: 状态撤回（如工单 已下达→草稿），支持 work_order
     """
+    code = resolve_reverse_permission(request.document_type)
+    await ensure_permission_codes(
+        auth, tenant_id, http_request, [code], require_all=True, check_abac=False,
+    )
     try:
         engine = DocumentStateEngine()
         result = await engine.reverse_document(
@@ -157,10 +182,16 @@ async def reverse_document(
 
 @router.get("/reverse/supported", summary="List supported reverse types")
 async def get_supported_reverses(
+    http_request: Request,
+    auth: AuthContext = Depends(get_auth_context),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> Dict[str, list]:
-    """返回各单据类型支持的撤回类型，供前端展示（需登录）。"""
-    _ = current_user, tenant_id
+    """返回各单据类型支持的撤回类型，需具备任一对应撤回权限。"""
+    _ = current_user
+    await ensure_permission_codes(
+        auth, tenant_id, http_request, list(all_reverse_permission_codes()),
+        require_all=False, check_abac=False,
+    )
     engine = DocumentStateEngine()
     return engine.get_supported_reverses()

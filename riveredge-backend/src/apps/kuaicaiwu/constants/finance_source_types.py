@@ -16,6 +16,7 @@ PAYABLE_SOURCE_OUTSOURCE_SETTLEMENT_CREDIT = "委外结算红字"
 PAYABLE_SOURCE_OUTSOURCE_RETURN = "委外退货"
 PAYABLE_SOURCE_PURCHASE_RETURN = "采购退货"
 PAYABLE_SOURCE_PRICE_SETTLEMENT = "采购调价"
+PAYABLE_SOURCE_PURCHASE_INVOICE_DISCOUNT = "采购收票优惠调整"
 PAYABLE_SOURCE_ORDER_MILESTONE = "订单里程碑"
 
 
@@ -48,6 +49,7 @@ def is_payable_red_total_source(source_type: str | None) -> bool:
         or is_outsource_return_offset_payable(st)
         or is_outsource_settlement_credit_payable(st)
         or st == PAYABLE_SOURCE_PRICE_SETTLEMENT
+        or st == PAYABLE_SOURCE_PURCHASE_INVOICE_DISCOUNT
     )
 
 

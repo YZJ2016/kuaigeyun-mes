@@ -44,6 +44,120 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'menu-morph-icon-dependencies-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.menu-morph-icon-dependencies-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.menu-morph-icon-dependencies-r01.description',
+  },
+  {
+    id: 'process-route-update-snake-fields-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.process-route-update-snake-fields-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.process-route-update-snake-fields-r01.description',
+  },
+  {
+    id: 'user-employee-number-model-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.user-employee-number-model-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.user-employee-number-model-r01.description',
+  },
+  {
+    id: 'manufacturing-api-permission-gates-r01',
+    date: '2026-11-19',
+    type: 'security',
+    titleKey: 'pages.dashboard.updateLog.entries.manufacturing-api-permission-gates-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.manufacturing-api-permission-gates-r01.description',
+  },
+  {
+    id: 'deployment-bootstrap-correctness-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.deployment-bootstrap-correctness-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.deployment-bootstrap-correctness-r01.description',
+  },
+  {
+    id: 'payment-application-dual-amount-r01',
+    date: '2026-11-19',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-dual-amount-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.payment-application-dual-amount-r01.description',
+  },
+  {
+    id: 'purchase-order-pull-source-reference-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-pull-source-reference-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.purchase-order-pull-source-reference-r01.description',
+  },
+  {
+    id: 'material-form-group-first-r01',
+    date: '2026-11-19',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.material-form-group-first-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.material-form-group-first-r01.description',
+  },
+  {
+    id: 'config-center-hide-scrollbar-r01',
+    date: '2026-11-19',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.config-center-hide-scrollbar-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.config-center-hide-scrollbar-r01.description',
+  },
+  {
+    id: 'purchase-requisition-po-pull-qty-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-requisition-po-pull-qty-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.purchase-requisition-po-pull-qty-r01.description',
+  },
+  {
+    id: 'app-scan-windows-stderr-errno22-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.app-scan-windows-stderr-errno22-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.app-scan-windows-stderr-errno22-r01.description',
+  },
+  {
+    id: 'menu-sync-prompt-dismiss-after-sync-r02',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.menu-sync-prompt-dismiss-after-sync-r02.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.menu-sync-prompt-dismiss-after-sync-r02.description',
+  },
+  {
+    id: 'payment-pull-expected-date-account-r01',
+    date: '2026-11-19',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-pull-expected-date-account-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.payment-pull-expected-date-account-r01.description',
+  },
+  {
+    id: 'user-reset-password-policy-default-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.user-reset-password-policy-default-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.user-reset-password-policy-default-r01.description',
+  },
+  {
+    id: 'purchase-invoice-discount-amount-r01',
+    date: '2026-11-19',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-invoice-discount-amount-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.purchase-invoice-discount-amount-r01.description',
+  },
+  {
+    id: 'purchase-invoice-auto-payable-on-approve-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-invoice-auto-payable-on-approve-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-invoice-auto-payable-on-approve-r01.description',
+  },
+  {
     id: 'kingdee-im-batch-update-after-edit-r01',
     date: '2026-11-19',
     type: 'feature',
@@ -20345,4 +20459,3 @@ export function getUpdateTypeMarkerColor(type: PlatformUpdateType): string {
       return 'default';
   }
 }
-

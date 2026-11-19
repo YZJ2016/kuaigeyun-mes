@@ -144,6 +144,7 @@ export type PaymentPullCandidate = {
   source_status?: string;
   review_status?: string;
   source_date?: string;
+  expected_payment_date?: string;
   amount?: number;
   remaining_amount?: number;
   capabilities?: { pull_payment?: { allowed?: boolean; reason?: string } };

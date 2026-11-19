@@ -13,6 +13,8 @@ export interface PurchaseInvoice {
     invoice_amount: number;
     tax_amount: number;
     total_amount: number;
+    discount_amount?: number;
+    adjust_payable?: boolean;
     status: string;
     reviewer_id?: number;
     reviewer_name?: string;
@@ -63,6 +65,8 @@ export interface PurchaseInvoiceCreateData {
     invoice_amount: number;
     tax_amount?: number;
     total_amount?: number;
+    discount_amount?: number;
+    adjust_payable?: boolean;
     status?: string;
     review_status?: string;
     payable_id?: number;

@@ -35,6 +35,7 @@ type Props = {
   /** 付款方式为「票据」时关联应收/应付票据台账 */
   acceptanceNoteDirection?: FinanceNoteDirection;
   partnerFieldName?: 'customer_id' | 'supplier_id';
+  forceAccountRequired?: boolean;
 };
 
 function SyncLedgerAccountWithPaymentMethod({ accounts }: { accounts: BankAccount[] }) {
@@ -87,6 +88,7 @@ export const LedgerAccountFormFields: React.FC<Props> = ({
   parentProvidesRow = false,
   acceptanceNoteDirection,
   partnerFieldName = 'customer_id',
+  forceAccountRequired = false,
 }) => {
   const { t } = useTranslation();
   const nested = rowNestedSpans != null;
@@ -165,6 +167,7 @@ export const LedgerAccountFormFields: React.FC<Props> = ({
                   placeholder={placeholder}
                   showSearch
                   allowClear={!required}
+                  required={forceAccountRequired || required}
                   fieldProps={{
                     optionFilterProp: 'label',
                     optionLabelProp: 'label',

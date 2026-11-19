@@ -1528,14 +1528,22 @@ class ApplicationService:
         if not plugins_dir.exists():
             return plugins
         
-        # 遍历 src/apps 目录下的所有子目录
-        for plugin_dir in plugins_dir.iterdir():
-            if not plugin_dir.is_dir():
-                continue
-            
-            # 查找 manifest.json 文件
-            manifest_file = plugin_dir / "manifest.json"
-            if not manifest_file.exists():
+        try:
+            plugin_dirs = list(plugins_dir.iterdir())
+        except OSError:
+            logger.exception("无法枚举应用 manifest 目录")
+            raise
+
+        for plugin_dir in plugin_dirs:
+            try:
+                if not plugin_dir.is_dir():
+                    continue
+                manifest_file = plugin_dir / "manifest.json"
+                if not manifest_file.exists():
+                    continue
+            except OSError:
+                # 单个不可访问的 junction 不应中断其余应用扫描。
+                logger.exception("跳过不可访问的应用目录 {}", plugin_dir.name)
                 continue
             
             try:
@@ -1555,7 +1563,7 @@ class ApplicationService:
             except ValidationError as e:
                 logger.warning(f"警告: 插件 {plugin_dir.name} 菜单接管派生失败: {e}")
                 continue
-            except (json.JSONDecodeError, IOError) as e:
+            except (json.JSONDecodeError, OSError) as e:
                 # 忽略无法读取的 manifest.json
                 logger.warning(f"警告: 无法读取插件 {plugin_dir.name} 的 manifest.json: {e}")
                 continue
@@ -2466,10 +2474,8 @@ class ApplicationService:
                 registered_apps.append(application)
                 
             except Exception as e:
-                logger.error(f"错误: 注册插件 {manifest.get('name', 'unknown')} 失败: {e}")
-                import traceback
-                traceback.print_exc()
-                # 暂时不跳过，继续处理下一个插件
+                # Windows 控制台关闭后 stderr 可能失效，禁止 print_exc 再次抛错。
+                logger.exception("错误: 注册插件 {} 失败: {}", manifest.get("name", "unknown"), e)
                 continue
         
         # 已安装行业模块时对齐 industry-pack 容器与侧栏菜单
@@ -2571,4 +2577,3 @@ class ApplicationService:
             return False
         apps = value.get("apps")
         return isinstance(apps, dict) and bool(apps.get(app_code))
-

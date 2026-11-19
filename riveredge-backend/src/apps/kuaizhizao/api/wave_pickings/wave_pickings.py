@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status as http_status
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_permission_codes
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError
 
@@ -20,7 +21,12 @@ from apps.kuaizhizao.schemas.wave_picking import (
 
 router = APIRouter(prefix="/wave-pickings", tags=["App - Kuaige Zhizao - Wave Picking"])
 
-@router.post("/generate", response_model=WavePickingResponse, summary="Generate consolidated wave picking list")
+@router.post(
+    "/generate",
+    response_model=WavePickingResponse,
+    summary="Generate consolidated wave picking list",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:inbound:create"))],
+)
 async def generate_picking_wave(
     request: WavePickingGenerateRequest,
     current_user: User = Depends(get_current_user),

@@ -25,6 +25,7 @@ from apps.kuaicaiwu.models.settlement import SettlementRecord
 from apps.kuaicaiwu.models.partner_statement import PartnerStatement
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaicaiwu.services.accounting_event_service import AccountingEventService
+from apps.kuaicaiwu.services.purchase_invoice_amounts import purchase_invoice_occupancy_amount
 
 _MANUAL_FINANCE_SOURCE_TYPES = frozenset({"手工", "manual", "MANUAL", "Manual"})
 _SETTLEMENT_ELIGIBLE_REVIEW = ("已审核",)
@@ -648,7 +649,10 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
             purchase_order_id=invoice_data.purchase_order_id,
             deleted_at__isnull=True,
         ).all()
-        invoiced_total = sum((self._money(i.total_amount or Decimal("0.00")) for i in invoices), Decimal("0.00"))
+        invoiced_total = sum(
+            (self._money(purchase_invoice_occupancy_amount(i)) for i in invoices),
+            Decimal("0.00"),
+        )
 
         requested_total = self._money(
             resolve_invoice_amounts_for_create(
@@ -658,6 +662,7 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 if invoice_data.total_amount is not None
                 else None,
             )[2]
+            + Decimal(str(invoice_data.discount_amount or 0))
         )
         available_total = self._money(received_total - invoiced_total)
 
@@ -678,7 +683,6 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
     ) -> PurchaseInvoiceResponse:
         """创建采购发票。外层已有事务时须 submit_review=False，编码须在事务外生成。"""
         created_id: Optional[int] = None
-        auto_payable_id: Optional[int] = None
         if not skip_legacy_amount_gate:
             await self._validate_purchase_invoice_amount_gate(tenant_id=tenant_id, invoice_data=invoice_data)
         user_info = await self.get_user_info(created_by)
@@ -729,6 +733,9 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
             payload["invoice_amount"] = amount_excl
             payload["tax_amount"] = tax_amount
             payload["total_amount"] = total_amount
+            payload["discount_amount"] = Decimal(str(payload.get("discount_amount") or 0))
+            if not getattr(invoice_data, "adjust_payable", False):
+                payload["adjust_payable"] = False
             from apps.kuaicaiwu.services.tax.purchase_invoice_tax_service import PurchaseInvoiceTaxService
 
             tax_fields = await PurchaseInvoiceTaxService().apply_tax_fields_on_create(
@@ -774,24 +781,11 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 },
                 notes="采购发票创建",
             )
-            auto_payable_id = await self._maybe_auto_generate_payable_for_purchase_invoice(
-                tenant_id=tenant_id,
-                invoice=invoice,
-                created_by=created_by,
-            )
+            # 应付在采购发票审核通过后生成，避免草稿创建提前立账。
             created_id = invoice.id
         if submit_review:
             from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
 
-            if auto_payable_id:
-                await submit_finance_review(
-                    model=Payable,
-                    tenant_id=tenant_id,
-                    doc_id=int(auto_payable_id),
-                    updated_by=created_by,
-                    doc_label="应付单",
-                    node_key="payable",
-                )
             await submit_finance_review(
                 model=PurchaseInvoice,
                 tenant_id=tenant_id,
@@ -801,94 +795,6 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 node_key="purchase_invoice",
             )
         return await self.get_purchase_invoice_by_id(tenant_id, int(created_id))
-
-    async def _maybe_auto_generate_payable_for_purchase_invoice(
-        self,
-        *,
-        tenant_id: int,
-        invoice: PurchaseInvoice,
-        created_by: int,
-    ) -> Optional[int]:
-        if invoice.payable_id:
-            return None
-        from apps.kuaizhizao.services.document_recognition import (
-            resolve_payable_recognition_for_purchase_invoice,
-            should_auto_payable_on_purchase_invoice,
-        )
-
-        strategy = await resolve_payable_recognition_for_purchase_invoice(tenant_id, invoice)
-        if not should_auto_payable_on_purchase_invoice(strategy):
-            return None
-        config = await self.business_config_service.get_business_config(tenant_id)
-        fin = config["parameters"].get("finance", {}) or {}
-        org_pay = str(fin.get("payable_recognition") or "on_receipt").strip()
-        auto_flag = bool(fin.get("auto_generate_payable_from_purchase_invoice", False))
-        if org_pay == "on_purchase_invoice":
-            if not auto_flag:
-                return None
-        elif strategy != "on_purchase_invoice":
-            return None
-        if not await self.business_config_service.check_node_enabled(tenant_id, "payable"):
-            return None
-
-        payable_service = PayableService()
-        from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
-
-        biz_date = invoice.invoice_date or to_site_date(resolve_business_datetime())
-        due = await resolve_partner_due_date(
-            tenant_id, "supplier", int(invoice.supplier_id), biz_date
-        )
-        payable = await payable_service.create_payable(
-            tenant_id=tenant_id,
-            payable_data=PayableCreate(
-                source_type="PurchaseInvoice",
-                source_id=invoice.id,
-                source_code=invoice.invoice_code,
-                supplier_id=invoice.supplier_id,
-                supplier_name=invoice.supplier_name,
-                total_amount=self._money(invoice.total_amount or Decimal("0.00")),
-                paid_amount=Decimal("0.00"),
-                remaining_amount=self._money(invoice.total_amount or Decimal("0.00")),
-                due_date=due,
-                business_date=biz_date,
-                status="未付款",
-                invoice_received=True,
-                invoice_number=invoice.invoice_number,
-            ),
-            created_by=created_by,
-            submit_review=False,
-        )
-        await PurchaseInvoice.filter(tenant_id=tenant_id, id=invoice.id).update(
-            payable_id=payable.id,
-            payable_code=payable.payable_code,
-        )
-        invoice.payable_id = payable.id
-        invoice.payable_code = payable.payable_code
-        try:
-            from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
-
-            rel_svc = DocumentRelationNewService()
-            await rel_svc.create_relation(
-                tenant_id=tenant_id,
-                relation_data=DocumentRelationCreate(
-                    source_type="purchase_invoice",
-                    source_id=invoice.id,
-                    source_code=invoice.invoice_code,
-                    source_name=None,
-                    target_type="payable",
-                    target_id=payable.id,
-                    target_code=payable.payable_code,
-                    target_name=None,
-                    relation_type="source",
-                    relation_mode="push",
-                    relation_desc="采购发票自动生成应付单",
-                ),
-                created_by=created_by,
-            )
-        except Exception as rel_e:
-            logger.warning("创建采购发票→应付单 单据关联失败: {}", rel_e)
-        return int(payable.id)
 
     async def get_purchase_invoice_by_id(self, tenant_id: int, invoice_id: int) -> PurchaseInvoiceResponse:
         """根据ID获取采购发票"""
@@ -926,6 +832,24 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
         if status in ("已审核", "已作废", "已红冲"):
             raise BusinessLogicError("已审核、已作废或已红冲的发票不能删除（保留审计轨迹）")
 
+        from apps.kuaicaiwu.constants.finance_source_types import (
+            PAYABLE_SOURCE_PURCHASE_INVOICE_DISCOUNT,
+        )
+
+        cascade_payable_ids: List[int] = []
+        discount_adj = await Payable.filter(
+            tenant_id=tenant_id,
+            source_type=PAYABLE_SOURCE_PURCHASE_INVOICE_DISCOUNT,
+            source_id=invoice_id,
+            deleted_at__isnull=True,
+        ).first()
+        if discount_adj:
+            if str(discount_adj.review_status or "").strip() == "已审核":
+                raise BusinessLogicError("已生成并审核优惠调整应付，不可删除发票")
+            if Decimal(str(discount_adj.paid_amount or 0)) > 0:
+                raise BusinessLogicError("优惠调整应付已有付款记录，不可删除发票")
+            cascade_payable_ids.append(int(discount_adj.id))
+
         cascade_payable_id: Optional[int] = None
         payable_id = getattr(invoice, "payable_id", None)
         if payable_id:
@@ -960,12 +884,14 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 except NotFoundError:
                     continue
 
-            if cascade_payable_id is not None:
+            for pid in dict.fromkeys(
+                [*cascade_payable_ids, *([cascade_payable_id] if cascade_payable_id else [])]
+            ):
                 payable_rels = await DocumentRelation.filter(
                     Q(tenant_id=tenant_id)
                     & (
-                        Q(target_type="payable", target_id=cascade_payable_id)
-                        | Q(source_type="payable", source_id=cascade_payable_id)
+                        Q(target_type="payable", target_id=pid)
+                        | Q(source_type="payable", source_id=pid)
                     )
                 ).all()
                 for row in payable_rels:
@@ -973,7 +899,7 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                         await rel_svc.delete_relation(tenant_id, relation_id=row.id)
                     except NotFoundError:
                         continue
-                await Payable.filter(tenant_id=tenant_id, id=cascade_payable_id).delete()
+                await Payable.filter(tenant_id=tenant_id, id=pid).delete()
 
             await PurchaseInvoice.filter(tenant_id=tenant_id, id=invoice_id).update(
                 deleted_at=resolve_business_datetime()
@@ -1090,6 +1016,17 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 approver_id=approved_by,
                 flow_approve=_do_approve,
             )
+        if not rejection_reason:
+            from apps.kuaicaiwu.services.purchase_invoice_payable_auto import (
+                ensure_payable_after_purchase_invoice_approved,
+            )
+
+            await ensure_payable_after_purchase_invoice_approved(
+                tenant_id=tenant_id,
+                invoice_id=invoice_id,
+                user_id=approved_by,
+            )
+            return await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
         return result if result is not None else await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
 
     async def submit_invoice(self, tenant_id: int, invoice_id: int, submitted_by: int) -> PurchaseInvoiceResponse:

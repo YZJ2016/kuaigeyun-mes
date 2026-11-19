@@ -71,6 +71,16 @@ async def _auto_approve_finance(
     if node_key == "purchase_invoice":
         patch["status"] = "已审核"
     await model.filter(tenant_id=tenant_id, id=doc_id).update(**patch)
+    if node_key == "purchase_invoice":
+        from apps.kuaicaiwu.services.purchase_invoice_payable_auto import (
+            ensure_payable_after_purchase_invoice_approved,
+        )
+
+        await ensure_payable_after_purchase_invoice_approved(
+            tenant_id=tenant_id,
+            invoice_id=doc_id,
+            user_id=updated_by,
+        )
 
 
 async def submit_finance_review(

@@ -2538,6 +2538,35 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
       <>
       <div className="material-form-basic-grid">
         <div className="material-form-basic-grid__cell">
+          <ProFormItem
+            name="groupId"
+            label={t('app.master-data.materialForm.materialGroup')}
+            required
+            rules={[
+              { required: true, message: t('app.master-data.materialForm.materialGroupRequired') },
+            ]}
+          >
+            <UniDropdown
+              placeholder={t('app.master-data.materialForm.materialGroupPlaceholder')}
+              options={materialGroups.map((g) => ({
+                label: formatMaterialGroupLabel(g),
+                value: g.id,
+              }))}
+              showSearch
+              style={{ width: '100%' }}
+              optionFilterProp="label"
+              quickCreate={
+                onQuickAddMaterialGroup
+                  ? {
+                      label: t('app.master-data.materialForm.quickAddMaterialGroup'),
+                      onClick: () => onQuickAddMaterialGroup(),
+                    }
+                  : undefined
+              }
+            />
+          </ProFormItem>
+        </div>
+        <div className="material-form-basic-grid__cell">
           <ProFormText
             name="mainCode"
             label={t('app.master-data.materialForm.mainCode')}
@@ -2578,35 +2607,6 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
               { max: 200, message: t('app.master-data.materialForm.materialNameMax') },
             ]}
           />
-        </div>
-        <div className="material-form-basic-grid__cell">
-          <ProFormItem
-            name="groupId"
-            label={t('app.master-data.materialForm.materialGroup')}
-            required
-            rules={[
-              { required: true, message: t('app.master-data.materialForm.materialGroupRequired') },
-            ]}
-          >
-            <UniDropdown
-              placeholder={t('app.master-data.materialForm.materialGroupPlaceholder')}
-              options={materialGroups.map((g) => ({
-                label: formatMaterialGroupLabel(g),
-                value: g.id,
-              }))}
-              showSearch
-              style={{ width: '100%' }}
-              optionFilterProp="label"
-              quickCreate={
-                onQuickAddMaterialGroup
-                  ? {
-                      label: t('app.master-data.materialForm.quickAddMaterialGroup'),
-                      onClick: () => onQuickAddMaterialGroup(),
-                    }
-                  : undefined
-              }
-            />
-          </ProFormItem>
         </div>
         <div className="material-form-basic-grid__cell">
           <ProFormItem

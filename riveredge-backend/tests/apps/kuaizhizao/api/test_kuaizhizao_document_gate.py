@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 from fastapi import HTTPException
+from apps.kuaizhizao.api.document_push_pull import document_push_pull as routes
 
 from apps.kuaizhizao.api._kuaizhizao_document_gate import (
     all_reverse_permission_codes,
@@ -70,3 +74,37 @@ def test_internal_pull_and_reverse():
     )
     assert resolve_reverse_permission("sales_order") == "kuaizhizao:sales-order:revoke"
     assert "kuaizhizao:work-order:revoke" in all_reverse_permission_codes()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "action,body,code",
+    [
+        ("push", {"source_type": "demand_computation", "source_id": 1, "target_type": "work_order"},
+         "kuaizhizao:work-order:create"),
+        ("pull", {"source_type": "demand_computation", "source_id": 1, "target_type": "work_order", "target_id": 2},
+         "kuaizhizao:plan-management-demand-computation:update"),
+        ("reverse", {"document_type": "work_order", "document_id": 1, "reverse_type": "revoke_state"},
+         "kuaizhizao:work-order:revoke"),
+    ],
+)
+async def test_permission_denial_prevents_document_mutation(monkeypatch, action, body, code):
+    guard = AsyncMock(side_effect=HTTPException(status_code=403, detail="denied"))
+    service = MagicMock()
+    engine = MagicMock()
+    monkeypatch.setattr(routes, "ensure_permission_codes", guard)
+    monkeypatch.setattr(routes, "DocumentPushPullService", service)
+    monkeypatch.setattr(routes, "DocumentStateEngine", engine)
+    auth = SimpleNamespace()
+    http_request = SimpleNamespace()
+    with pytest.raises(HTTPException) as exc:
+        await getattr(routes, f"{action}_document")(
+            request=SimpleNamespace(**body), http_request=http_request,
+            auth=auth, current_user=SimpleNamespace(id=7), tenant_id=11,
+        )
+    assert exc.value.status_code == 403
+    guard.assert_awaited_once_with(
+        auth, 11, http_request, [code], require_all=True, check_abac=False,
+    )
+    service.assert_not_called()
+    engine.assert_not_called()

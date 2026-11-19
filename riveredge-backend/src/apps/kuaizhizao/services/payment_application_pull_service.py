@@ -748,6 +748,10 @@ class PaymentApplicationPullService:
                     "code": f"{app.application_code} - {app.supplier_name}",
                     "application_code": app.application_code,
                     "application_kind": str(app.application_kind or "goods"),
+                    "expected_payment_date": (
+                        app.expected_payment_date.isoformat() if app.expected_payment_date else None
+                    ),
+                    "supplier_id": int(app.supplier_id or 0) or None,
                     "supplier_name": app.supplier_name,
                     "remaining_amount": float(app.remaining_amount or 0),
                     "capabilities": {
