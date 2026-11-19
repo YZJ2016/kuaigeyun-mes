@@ -576,6 +576,7 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   supplier_eval_template_version: 20.6,
   supplier_eval_grade_version: 20.7,
   supplier_eval_clause_count: 30.08,
+  supplier_eval_template_reminder_lead: 30.085,
   supplier_eval_plan_progress: 32.1,
   supplier_eval_score: 34.1,
   supplier_eval_grade: 34.2,

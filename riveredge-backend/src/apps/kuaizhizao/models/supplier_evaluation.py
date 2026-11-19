@@ -32,6 +32,10 @@ class SupplierEvalTemplate(BaseModel):
         null=True,
         description="适用周期 annual/quarterly；空表示通用",
     )
+    reminder_lead_days = fields.IntField(
+        default=7,
+        description="到期前提醒提前天数；新建评价计划时作默认",
+    )
     is_active = fields.BooleanField(default=True)
     remarks = fields.TextField(null=True)
     deleted_at = fields.DatetimeField(null=True)

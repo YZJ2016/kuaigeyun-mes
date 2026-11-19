@@ -2164,7 +2164,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     setColumnsStateValue((prev) =>
       mergeColumnsStateWithCodeContract(
         effectiveTableColumns,
-        stripColumnsStateForPersistence(prev) as Record<string, Partial<ColumnsState>>,
+        stripColumnsStateForPersistence(prev, effectiveTableColumns) as Record<
+          string,
+          Partial<ColumnsState>
+        >,
       ),
     )
   }, [
@@ -2180,14 +2183,17 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     if (!tableId || serverColumnsPreference === undefined) return
     const stripped = stripColumnsStateForPersistence(
       serverColumnsPreference as Record<string, ColumnsState>,
+      effectiveTableColumns,
     ) as Record<string, Partial<ColumnsState>>
     if (!stripped || Object.keys(stripped).length === 0) {
       setColumnsStateValue((prev) => {
         const defaults = buildDefaultColumnsStateMap(effectiveTableColumns)
         const defaultsSig = columnsStatePreferenceSignature(
-          stripColumnsStateForPersistence(defaults),
+          stripColumnsStateForPersistence(defaults, effectiveTableColumns),
         )
-        const currentSig = columnsStatePreferenceSignature(stripColumnsStateForPersistence(prev))
+        const currentSig = columnsStatePreferenceSignature(
+          stripColumnsStateForPersistence(prev, effectiveTableColumns),
+        )
         if (defaultsSig === currentSig) return prev
         clearPersistedColumnsState(columnsPersistenceFullKey)
         return defaults
@@ -2196,10 +2202,14 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
     setColumnsStateValue((prev) => {
       const next = mergeColumnsStateWithCodeContract(effectiveTableColumns, stripped)
-      const nextSig = columnsStatePreferenceSignature(stripColumnsStateForPersistence(next))
-      const currentSig = columnsStatePreferenceSignature(stripColumnsStateForPersistence(prev))
+      const nextSig = columnsStatePreferenceSignature(
+        stripColumnsStateForPersistence(next, effectiveTableColumns),
+      )
+      const currentSig = columnsStatePreferenceSignature(
+        stripColumnsStateForPersistence(prev, effectiveTableColumns),
+      )
       if (nextSig === currentSig) return prev
-      writePersistedColumnsState(columnsPersistenceFullKey, next)
+      writePersistedColumnsState(columnsPersistenceFullKey, next, effectiveTableColumns)
       return next
     })
   }, [tableId, serverColumnsPreference, effectiveTableColumns, columnsPersistenceFullKey])
@@ -2219,16 +2229,19 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       onChange: (map: Record<string, ColumnsState> | undefined) => {
         const merged = mergeColumnsStateWithCodeContract(
           effectiveTableColumns,
-          stripColumnsStateForPersistence(map) as Record<string, Partial<ColumnsState>>,
+          stripColumnsStateForPersistence(map, effectiveTableColumns) as Record<
+            string,
+            Partial<ColumnsState>
+          >,
         )
         setColumnsStateValue(merged)
-        writePersistedColumnsState(columnsPersistenceFullKey, merged)
+        writePersistedColumnsState(columnsPersistenceFullKey, merged, effectiveTableColumns)
         user.onChange?.(merged)
         if (!tableId) return
-        const columnsPayload = stripColumnsStateForPersistence(merged) as Record<
-          string,
-          Partial<ColumnsState>
-        >
+        const columnsPayload = stripColumnsStateForPersistence(
+          merged,
+          effectiveTableColumns,
+        ) as Record<string, Partial<ColumnsState>>
         pendingColumnsSyncRef.current = {
           tableId,
           field: columnsPreferenceField,
@@ -3273,10 +3286,16 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   )
 
   const columnsForLayoutPlan = React.useMemo(() => {
+    // 与 ProTable 实际绘制同一套 show：右固定列在 columnsState 里被锁为显示，
+    // 宽度预算若仍读未锁定的 show:false，scroll.x 不含操作列，列会画在视口外。
+    const visibleState = lockCodeOwnedFixedInColumnsState(
+      columnsStateValue,
+      effectiveTableColumns,
+    )
     return effectiveTableColumns.filter((col: any, index: number) => {
       if (col.hideInTable) return false
       const stateKey = getProColumnStateKey(col, index)
-      return columnsStateValue[stateKey]?.show !== false
+      return visibleState[stateKey]?.show !== false
     })
   }, [effectiveTableColumns, columnsStateValue])
 
@@ -3288,6 +3307,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         includeSelection: tableHasRowSelection,
         includeExpandable: tableHasExpandable,
         scrollYEnabled: proTableBodyScrollYEnabled,
+        layoutWidthIsScrollHost: true,
       }),
     [
       columnsForLayoutPlan,

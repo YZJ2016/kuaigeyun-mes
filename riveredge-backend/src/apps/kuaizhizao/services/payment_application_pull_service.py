@@ -76,8 +76,22 @@ class PaymentApplicationPullService:
             raise ValidationError("请至少选择一张源单")
         return ordered
 
+    # 与应付可请款占用对齐：草稿/已提交/待审核即占预付额度，避免保存后下一单取单口径错乱
     _PREPAY_APP_RESERVE_STATUSES = frozenset(
-        {"已批准", "部分付款", "待审核", "已付款", "APPROVED", "AUDITED", "PENDING", "已通过"}
+        {
+            "草稿",
+            "DRAFT",
+            "已提交",
+            "SUBMITTED",
+            "待审核",
+            "PENDING",
+            "已批准",
+            "部分付款",
+            "已付款",
+            "APPROVED",
+            "AUDITED",
+            "已通过",
+        }
     )
     _PREPAY_APP_EXCLUDED_FOR_DIRECT_PO_PREPAY = frozenset(
         {"已驳回", "已作废", "Cancelled", "cancelled", "REJECTED", "CANCELLED"}
@@ -153,6 +167,41 @@ class PaymentApplicationPullService:
             result[oid] += max(Decimal("0"), req - paid)
         return result
 
+    async def prepayment_payment_occupied_by_order_ids(
+        self, tenant_id: int, purchase_order_ids: List[int]
+    ) -> Dict[int, Decimal]:
+        """直拉采购订单的预付付款单占用（不含作废）。"""
+        result: Dict[int, Decimal] = {oid: Decimal("0") for oid in purchase_order_ids}
+        if not purchase_order_ids:
+            return result
+        from apps.kuaizhizao.finance.models.payment import Payment
+        from apps.kuaizhizao.finance.models.payment_pull_line import PaymentPullLine
+
+        lines = await PaymentPullLine.filter(
+            tenant_id=tenant_id,
+            source_type="purchase_order",
+            source_id__in=purchase_order_ids,
+            deleted_at__isnull=True,
+        ).all()
+        if not lines:
+            return result
+        payment_ids = {int(ln.payment_id) for ln in lines if ln.payment_id}
+        live = await Payment.filter(
+            tenant_id=tenant_id,
+            id__in=list(payment_ids),
+            deleted_at__isnull=True,
+            settlement_type="prepayment",
+        ).exclude(status="Cancelled").all()
+        live_ids = {int(p.id) for p in live}
+        for ln in lines:
+            if int(ln.payment_id or 0) not in live_ids:
+                continue
+            oid = int(ln.source_id or 0)
+            if oid not in result:
+                continue
+            result[oid] += Decimal(str(ln.amount or 0))
+        return result
+
     async def _sum_prepayment_application_reserved(
         self, tenant_id: int, purchase_order_id: int
     ) -> Decimal:
@@ -176,7 +225,14 @@ class PaymentApplicationPullService:
             tenant_id, [purchase_order_id], source_type="purchase_order", target_type="payment"
         )
         reserved = await self._sum_prepayment_application_reserved(tenant_id, purchase_order_id)
-        max_push = compute_prepayment_application_remaining(order, reserved)
+        payment_occ = (
+            await self.prepayment_payment_occupied_by_order_ids(
+                tenant_id, [purchase_order_id]
+            )
+        ).get(purchase_order_id, Decimal("0"))
+        max_push = compute_prepayment_application_remaining(
+            order, reserved + payment_occ
+        )
         order_base_amount = prepayment_application_base_amount(order)
         require_app = await BusinessConfigService().get_finance_require_payment_application(
             tenant_id

@@ -1561,6 +1561,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         tenant_id: int,
         item_ids: List[int],
     ) -> List["_InquiryPoPlan"]:
+        """所选已定标询价行合并为一张采购订单；定标供应商不一致时表头为待定供应商。"""
         selected_ids = [int(v) for v in item_ids if v is not None]
         if not selected_ids:
             raise BusinessLogicError("请至少选择一条可下推询价明细")
@@ -1574,112 +1575,149 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         if not items:
             raise BusinessLogicError("没有可转单的已定标询价行")
 
+        item_by_id = {int(i.id): i for i in items if i.id is not None}
+        ordered_items = [item_by_id[iid] for iid in selected_ids if iid in item_by_id]
+        if not ordered_items:
+            raise BusinessLogicError("没有可转单的已定标询价行")
+
         occupied_po = await self._occupied_purchase_order_qty_by_inquiry_item_ids(
-            tenant_id, [int(i.id) for i in items if i.id is not None]
+            tenant_id, [int(i.id) for i in ordered_items if i.id is not None]
         )
 
-        inquiry_ids = sorted({int(i.inquiry_id) for i in items})
+        inquiry_ids = sorted({int(i.inquiry_id) for i in ordered_items})
         inquiries = await PurchaseInquiry.filter(
             tenant_id=tenant_id,
             id__in=inquiry_ids,
             deleted_at__isnull=True,
         ).all()
+        from apps.kuaizhizao.constants.price_type import DEFAULT_PURCHASE_PRICE_TYPE
+        from apps.kuaicaiwu.services.purchase_settlement import (
+            normalize_po_tax_rate_to_percent,
+        )
+        from apps.kuaizhizao.utils.purchase_order_line_amounts import (
+            coalesce_purchase_tax_percent,
+            load_price_amount_places,
+            split_purchase_entered_line,
+        )
+
+        price_places, amount_places = await load_price_amount_places(tenant_id)
         inq_by_id = {int(r.id): r for r in inquiries}
         if len(inq_by_id) != len(inquiry_ids):
             raise NotFoundError("询价单不存在")
         for inquiry in inquiries:
             assert_purchase_inquiry_capability(inquiry, "push_purchase_order")
 
-        groups: Dict[int, List[PurchaseInquiryItem]] = {}
-        for item in items:
-            groups.setdefault(int(item.awarded_supplier_id), []).append(item)
-
-        supplier_rows = await Supplier.filter(
-            tenant_id=tenant_id, id__in=list(groups.keys())
-        ).all()
+        awarded_supplier_ids = {
+            int(i.awarded_supplier_id)
+            for i in ordered_items
+            if i.awarded_supplier_id is not None
+        }
+        supplier_rows = (
+            await Supplier.filter(tenant_id=tenant_id, id__in=list(awarded_supplier_ids)).all()
+            if awarded_supplier_ids
+            else []
+        )
         supplier_by_id = {s.id: s for s in supplier_rows}
+        for sid in awarded_supplier_ids:
+            if sid not in supplier_by_id:
+                raise NotFoundError(f"供应商不存在: {sid}")
+
+        if len(awarded_supplier_ids) == 1:
+            supplier_id = next(iter(awarded_supplier_ids))
+            supplier_name = supplier_by_id[supplier_id].name
+        else:
+            supplier_id = 0
+            supplier_name = "待定供应商"
+
         today = to_site_date(resolve_business_datetime())
-        plans: List[PurchaseInquiryService._InquiryPoPlan] = []
+        max_required = max((i.required_date or today for i in ordered_items), default=today)
+        source_inq_ids = sorted({int(i.inquiry_id) for i in ordered_items})
+        primary = inq_by_id[source_inq_ids[0]]
+        source_codes = " ".join(inq_by_id[iid].inquiry_code for iid in source_inq_ids)
+        po_items: List[PurchaseOrderItemCreate] = []
+        line_inquiry_item_ids: List[int] = []
 
-        for supplier_id, group_items in groups.items():
-            sup = supplier_by_id.get(supplier_id)
-            if not sup:
-                raise NotFoundError(f"供应商不存在: {supplier_id}")
-            max_required = max((i.required_date or today for i in group_items), default=today)
-            source_inq_ids = sorted({int(i.inquiry_id) for i in group_items})
-            primary = inq_by_id[source_inq_ids[0]]
-            source_codes = " ".join(inq_by_id[iid].inquiry_code for iid in source_inq_ids)
-            po_items: List[PurchaseOrderItemCreate] = []
-            line_inquiry_item_ids: List[int] = []
-
-            for item in group_items:
-                line_qty = Decimal(str(item.quantity or 0))
-                occupied = occupied_po.get(int(item.id or 0), Decimal("0"))
-                remaining = line_qty - occupied
-                if remaining <= 0:
-                    continue
-                quote_item = await PurchaseSupplierQuoteItem.get_or_none(
-                    tenant_id=tenant_id, id=item.awarded_quote_item_id
-                )
-                unit_price = quote_item.unit_price if quote_item else Decimal(0)
-                quoted = (
-                    Decimal(str(quote_item.quoted_quantity))
-                    if quote_item and quote_item.quoted_quantity
-                    else line_qty
-                )
-                qty = min(remaining, quoted) if quoted > 0 else remaining
-                if qty <= 0:
-                    continue
-                delivery = quote_item.delivery_date if quote_item else item.required_date
-                total_price = qty * unit_price
-                po_items.append(
-                    PurchaseOrderItemCreate(
-                        material_id=item.material_id,
-                        material_code=item.material_code,
-                        material_name=item.material_name,
-                        material_spec=item.material_spec,
-                        ordered_quantity=qty,
-                        unit=item.unit or "件",
-                        unit_price=unit_price,
-                        total_price=total_price,
-                        received_quantity=Decimal(0),
-                        outstanding_quantity=qty,
-                        required_date=delivery or max_required,
-                        source_type="PurchaseInquiry",
-                        source_id=item.id,
-                        notes=item.notes,
-                    )
-                )
-                if item.id is not None:
-                    line_inquiry_item_ids.append(int(item.id))
-
-            if not po_items:
+        for item in ordered_items:
+            line_qty = Decimal(str(item.quantity or 0))
+            occupied = occupied_po.get(int(item.id or 0), Decimal("0"))
+            remaining = line_qty - occupied
+            if remaining <= 0:
                 continue
-
-            po_create = PurchaseOrderCreate(
-                supplier_id=supplier_id,
-                supplier_name=sup.name,
-                order_date=today,
-                delivery_date=max_required,
-                order_type="标准采购",
-                status=DocumentStatus.DRAFT.value,
-                source_type="PurchaseInquiry",
-                source_id=primary.id,
-                notes=f"由询价单{source_codes}转单生成",
-                items=po_items,
+            quote_item = await PurchaseSupplierQuoteItem.get_or_none(
+                tenant_id=tenant_id, id=item.awarded_quote_item_id
             )
-            plans.append(
-                self._InquiryPoPlan(
-                    po_create=po_create,
-                    supplier_id=supplier_id,
-                    inquiry_item_ids=line_inquiry_item_ids,
-                    inquiry_ids=source_inq_ids,
+            unit_price = quote_item.unit_price if quote_item else Decimal(0)
+            quoted = (
+                Decimal(str(quote_item.quoted_quantity))
+                if quote_item and quote_item.quoted_quantity
+                else line_qty
+            )
+            qty = min(remaining, quoted) if quoted > 0 else remaining
+            if qty <= 0:
+                continue
+            delivery = quote_item.delivery_date if quote_item else item.required_date
+            inq = inq_by_id[int(item.inquiry_id)]
+            raw_tax = getattr(inq, "tax_rate", None)
+            tax_pct = (
+                coalesce_purchase_tax_percent()
+                if raw_tax is None
+                else normalize_po_tax_rate_to_percent(raw_tax)
+            )
+            unit, excl, _tax, _incl = split_purchase_entered_line(
+                qty,
+                unit_price,
+                tax_pct,
+                DEFAULT_PURCHASE_PRICE_TYPE,
+                price_places=price_places,
+                amount_places=amount_places,
+            )
+            po_items.append(
+                PurchaseOrderItemCreate(
+                    material_id=item.material_id,
+                    material_code=item.material_code,
+                    material_name=item.material_name,
+                    material_spec=item.material_spec,
+                    ordered_quantity=qty,
+                    unit=item.unit or "件",
+                    unit_price=unit,
+                    display_unit_price=unit,
+                    total_price=excl,
+                    tax_rate=tax_pct,
+                    received_quantity=Decimal(0),
+                    outstanding_quantity=qty,
+                    required_date=delivery or max_required,
+                    source_type="PurchaseInquiry",
+                    source_id=item.id,
+                    notes=item.notes,
                 )
             )
+            if item.id is not None:
+                line_inquiry_item_ids.append(int(item.id))
 
-        if not plans:
+        if not po_items:
             raise BusinessLogicError("所选明细的剩余可转数量均为 0，无法生成采购订单")
-        return plans
+
+        po_create = PurchaseOrderCreate(
+            supplier_id=supplier_id,
+            supplier_name=supplier_name,
+            order_date=today,
+            delivery_date=max_required,
+            order_type="标准采购",
+            status=DocumentStatus.DRAFT.value,
+            price_type=DEFAULT_PURCHASE_PRICE_TYPE,
+            source_type="PurchaseInquiry",
+            source_id=primary.id,
+            notes=f"由询价单{source_codes}转单生成",
+            items=po_items,
+        )
+        return [
+            self._InquiryPoPlan(
+                po_create=po_create,
+                supplier_id=supplier_id,
+                inquiry_item_ids=line_inquiry_item_ids,
+                inquiry_ids=source_inq_ids,
+            )
+        ]
 
     async def draft_purchase_orders_from_inquiry_convert(
         self,

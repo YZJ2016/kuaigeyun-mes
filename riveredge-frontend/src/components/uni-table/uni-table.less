@@ -11,9 +11,28 @@
   padding: 0;
   margin: 0;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+}
+
+/* 页签是 flex 列且 overflow-x:hidden。子项默认 min-width:auto 时，
+   表格按列最小内容撑开，右缘被页签裁掉，滚动口与表格同宽，不会出现横向滚动条。
+   从托盘到滚动口都限制在页签宽度内，列超出时只由滚动口 overflow-x:auto 滚动。 */
+.uni-table-container .uni-table-pro-table,
+.uni-table-container .ant-pro-card,
+.uni-table-container .ant-pro-card-body,
+.uni-table-container .ant-table-wrapper,
+.uni-table-container .ant-spin-nested-loading,
+.uni-table-container .ant-spin-container,
+.uni-table-container .ant-table,
+.uni-table-container .ant-table-container,
+.uni-table-container .ant-table-wrapper .ant-table-content,
+.uni-table-container .ant-table-wrapper .ant-table-body {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .uni-table-container.uni-table-mobile {

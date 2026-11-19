@@ -608,19 +608,43 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         // 检查标签是否已存在（key 或 path 精确命中）
         const existingTab = prevTabs.find((tab) => tab.key === path || tab.path === path);
         if (existingTab) {
+          // 建单页历史曾只改 path、key 仍是纯 pathname：必须对齐 key，否则 keep-alive 不重建
+          if (isCreateTabKey(path) && existingTab.key !== path) {
+            const nextLabel = getTabTitle(path);
+            return prevTabs.map((tab) =>
+              tab.key === existingTab.key
+                ? { ...tab, key: path, path, label: nextLabel }
+                : tab,
+            );
+          }
           return prevTabs;
         }
 
         const pathname = tabPathname(path);
         const existingSamePathname = prevTabs.find((tab) => tabPathname(tab.key) === pathname);
         if (existingSamePathname) {
-          // 同一路由仅 query 变化（产品工艺 materialUuid 等）：只更新 path/标题；
-          // 列表页若历史 key 仍带 query，收成 pathname，避免与 activeKey 错位。
-          const nextKey =
-            !isCreateTabKey(path) && existingSamePathname.key.includes('?')
-              ? pathname
-              : existingSamePathname.key;
           const nextLabel = getTabTitle(path);
+          // 建单页（/new、/create、/:id/edit）：query（flow/batch/seq）变了必须换 key。
+          // 否则 TabRouteCache 按旧 key 冻结首访树，销售/采购申请 handoff 多行明细灌不进，只见一行。
+          if (isCreateTabKey(path)) {
+            if (
+              existingSamePathname.key === path &&
+              existingSamePathname.path === path &&
+              existingSamePathname.label === nextLabel
+            ) {
+              return prevTabs;
+            }
+            return prevTabs.map((tab) =>
+              tab.key === existingSamePathname.key
+                ? { ...tab, key: path, path, label: nextLabel }
+                : tab,
+            );
+          }
+          // 列表页：同一路由仅 query 变化时只更新 path/标题；
+          // 若历史 key 仍带 query，收成 pathname，避免与 activeKey 错位。
+          const nextKey = existingSamePathname.key.includes('?')
+            ? pathname
+            : existingSamePathname.key;
           if (
             existingSamePathname.key === nextKey &&
             existingSamePathname.path === path &&

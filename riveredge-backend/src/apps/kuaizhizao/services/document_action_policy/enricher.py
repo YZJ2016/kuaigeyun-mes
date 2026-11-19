@@ -1418,6 +1418,7 @@ async def enrich_purchase_order_detail_capabilities(
         prepay_map,
         require_app,
         reserved_map,
+        payment_occ_map,
         prepay_app_map,
         review_submitted,
     ) = await asyncio.gather(
@@ -1434,12 +1435,14 @@ async def enrich_purchase_order_detail_capabilities(
         ),
         BusinessConfigService().get_finance_require_payment_application(tenant_id),
         pull_svc.prepayment_reserved_by_order_ids(tenant_id, [order_id]),
+        pull_svc.prepayment_payment_occupied_by_order_ids(tenant_id, [order_id]),
         pull_svc.has_prepayment_application_by_order_ids(tenant_id, [order_id]),
         resolve_review_submitted_for_document(tenant_id, "purchase_order", order),
     )
-    prepay_remaining = compute_prepayment_application_remaining(
-        order, reserved_map.get(order_id, Decimal("0"))
+    reserved_total = reserved_map.get(order_id, Decimal("0")) + payment_occ_map.get(
+        order_id, Decimal("0")
     )
+    prepay_remaining = compute_prepayment_application_remaining(order, reserved_total)
     return enrich_purchase_order_capabilities_on_response(
         order,
         response,
@@ -1469,6 +1472,7 @@ async def enrich_purchase_order_list_capabilities(
 ) -> List[T]:
     from apps.kuaizhizao.services.payment_application_pull_service import (
         PaymentApplicationPullService,
+        compute_prepayment_application_remaining,
     )
 
     order_ids = [int(getattr(o, "id", 0) or 0) for o in orders]
@@ -1485,6 +1489,7 @@ async def enrich_purchase_order_list_capabilities(
         prepay_map,
         require_app,
         reserved_map,
+        payment_occ_map,
         prepay_app_map,
     ) = await asyncio.gather(
         _purchase_order_outstanding_by_ids(tenant_id, order_ids),
@@ -1500,14 +1505,19 @@ async def enrich_purchase_order_list_capabilities(
         ),
         BusinessConfigService().get_finance_require_payment_application(tenant_id),
         pull_svc.prepayment_reserved_by_order_ids(tenant_id, order_ids),
+        pull_svc.prepayment_payment_occupied_by_order_ids(tenant_id, order_ids),
         pull_svc.has_prepayment_application_by_order_ids(tenant_id, order_ids),
     )
     items_map = has_items_by_id or {}
     out: List[T] = []
     for order_model, resp in zip(orders, responses):
         oid = int(getattr(order_model, "id", 0) or 0)
-        prepay_amount = Decimal(str(getattr(order_model, "prepayment_amount", 0) or 0))
-        prepay_remaining = max(Decimal("0"), prepay_amount - reserved_map.get(oid, Decimal("0")))
+        reserved_total = reserved_map.get(oid, Decimal("0")) + payment_occ_map.get(
+            oid, Decimal("0")
+        )
+        prepay_remaining = compute_prepayment_application_remaining(
+            order_model, reserved_total
+        )
         caps = derive_purchase_order_capabilities(
             order_model,
             has_items=items_map.get(oid, True),

@@ -44,6 +44,103 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'doc-flow-create-tab-query-remount-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.doc-flow-create-tab-query-remount-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.doc-flow-create-tab-query-remount-r01.description',
+  },
+  {
+    id: 'sales-incl-unit-price-roundtrip-r02',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.sales-incl-unit-price-roundtrip-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-incl-unit-price-roundtrip-r02.description',
+  },
+  {
+    id: 'payment-app-prepay-next-doc-pull-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.payment-app-prepay-next-doc-pull-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-app-prepay-next-doc-pull-r01.description',
+  },
+  {
+    id: 'purchase-req-po-qty-reduce-remain-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-req-po-qty-reduce-remain-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-req-po-qty-reduce-remain-r01.description',
+  },
+  {
+    id: 'material-multi-supplier-code-mapping-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.material-multi-supplier-code-mapping-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-multi-supplier-code-mapping-r01.description',
+  },
+  {
+    id: 'purchase-order-save-and-audit-create-pin-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-order-save-and-audit-create-pin-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-save-and-audit-create-pin-r01.description',
+  },
+  {
+    id: 'pr-inquiry-to-po-multi-line-merge-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.pr-inquiry-to-po-multi-line-merge-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.pr-inquiry-to-po-multi-line-merge-r01.description',
+  },
+  {
+    id: 'unitable-fixed-column-single-source-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-fixed-column-single-source-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.unitable-fixed-column-single-source-r01.description',
+  },
+  {
+    id: 'kuaizhizao-supplier-eval-template-reminder-r01',
+    date: '2026-11-19',
+    type: 'feature',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-supplier-eval-template-reminder-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-supplier-eval-template-reminder-r01.description',
+  },
+  {
+    id: 'sales-delivery-so-pull-draft-blank-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.sales-delivery-so-pull-draft-blank-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-delivery-so-pull-draft-blank-r01.description',
+  },
+  {
+    id: 'production-picking-confirm-wo-bom-lines-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.production-picking-confirm-wo-bom-lines-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.production-picking-confirm-wo-bom-lines-r01.description',
+  },
+  {
     id: 'inspection-plan-gb2828-sampling-r01',
     date: '2026-10-26',
     type: 'feature',

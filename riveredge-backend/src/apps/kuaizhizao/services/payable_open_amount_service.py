@@ -15,7 +15,23 @@ from apps.kuaizhizao.models.payment_application import PaymentApplication, Payme
 
 class PayableOpenAmountService:
     _RESERVED_PAYMENT_STATUSES = frozenset({"Confirmed"})
-    _APPROVED_APP_STATUSES = frozenset({"已批准", "部分付款", "APPROVED", "AUDITED", "已通过"})
+    # 从草稿保存起即占用可请款，避免首单保存后仍可重复取同一应付、或下一单误以为额度被清空
+    _APPROVED_APP_STATUSES = frozenset(
+        {
+            "草稿",
+            "DRAFT",
+            "已提交",
+            "SUBMITTED",
+            "待审核",
+            "PENDING",
+            "已批准",
+            "部分付款",
+            "已付款",
+            "APPROVED",
+            "AUDITED",
+            "已通过",
+        }
+    )
 
     async def sum_reserved_unsettled_by_payable(
         self,

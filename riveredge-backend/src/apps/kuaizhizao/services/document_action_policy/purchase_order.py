@@ -247,31 +247,39 @@ def derive_purchase_order_capabilities(
             invoice_reason = None
     push_invoice_cap = _require_supplier_for_push(_cap(invoice_allowed, invoice_reason), order)
 
+    if prepayment_application_remaining is not None:
+        prepay_app_remaining = prepayment_application_remaining
+    else:
+        from apps.kuaizhizao.services.payment_application_pull_service import (
+            prepayment_application_base_amount,
+        )
+
+        prepay_app_remaining = prepayment_application_base_amount(order)
+
+    # 预付付款单与付款申请取单同源：按剩余额度，禁止「有任一预付单/申请就整单不可取」
     prepay_allowed = False
     prepay_reason = "purchase_order.push_prepayment.not_audited"
-    prepay_amount = Decimal(str(getattr(order, "prepayment_amount", 0) or 0))
     if _is_audited_status(status):
-        if prepay_amount <= 0:
-            prepay_reason = "purchase_order.push_prepayment.no_amount"
-        elif require_payment_application:
+        if require_payment_application:
             prepay_reason = "purchase_order.push_prepayment.require_application"
-        elif has_prepayment_payment:
-            prepay_reason = "purchase_order.push_prepayment.already_exists"
-        elif has_prepayment_application:
-            prepay_reason = "purchase_order.push_prepayment.application_exists"
+        elif prepay_app_remaining <= 0:
+            if has_prepayment_payment or has_prepayment_application:
+                prepay_reason = (
+                    "purchase_order.push_prepayment.already_exists"
+                    if has_prepayment_payment
+                    else "purchase_order.push_prepayment.application_exists"
+                )
+            else:
+                prepay_reason = "purchase_order.push_prepayment.no_amount"
         else:
             prepay_allowed = True
             prepay_reason = None
     push_prepayment_cap = _require_supplier_for_push(_cap(prepay_allowed, prepay_reason), order)
 
-    if prepayment_application_remaining is not None:
-        prepay_app_remaining = prepayment_application_remaining
-    else:
-        prepay_app_remaining = prepay_amount
     push_app_allowed = False
     push_app_reason = "purchase_order.push_payment_application.not_audited"
     if _is_audited_status(status):
-        if prepay_amount <= 0 or prepay_app_remaining <= 0:
+        if prepay_app_remaining <= 0:
             push_app_reason = "purchase_order.push_payment_application.no_amount"
         else:
             push_app_allowed = True

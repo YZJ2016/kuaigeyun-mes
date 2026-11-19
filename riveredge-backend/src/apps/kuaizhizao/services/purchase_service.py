@@ -1691,7 +1691,22 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                             operator_id=updated_by,
                             operator_name=operator_name
                         )
-                    await PurchaseOrderItem.create(**item_dict)
+                    created_item = await PurchaseOrderItem.create(**item_dict)
+
+                    src_type = item_dict.get("source_type")
+                    src_id = int(item_dict.get("source_id") or 0)
+                    if _is_purchase_requisition_source_type(src_type) and src_id > 0:
+                        from apps.kuaizhizao.models.purchase_requisition import (
+                            PurchaseRequisitionItem,
+                        )
+
+                        await PurchaseRequisitionItem.filter(
+                            tenant_id=tenant_id, id=src_id
+                        ).update(
+                            purchase_order_id=order_id,
+                            purchase_order_item_id=int(created_item.id),
+                        )
+                        remount_req_item_ids.append(src_id)
 
                     total_quantity += ordered_qty
                     total_amount += total_price
@@ -1709,6 +1724,33 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     'net_amount': net_amount,
                     'updated_by': updated_by
                 }).save()
+
+                if remount_req_item_ids:
+                    from apps.kuaizhizao.models.purchase_requisition import (
+                        PurchaseRequisition,
+                        PurchaseRequisitionItem,
+                    )
+                    from apps.kuaizhizao.services.purchase_requisition_service import (
+                        PurchaseRequisitionService,
+                    )
+
+                    pr_svc = PurchaseRequisitionService()
+                    # 订购量改小后按占用拆出未转申请行，避免「全部转单」挡住再次取单
+                    for src_id in sorted({int(i) for i in remount_req_item_ids if i}):
+                        await pr_svc.sync_requisition_item_to_po_occupation(
+                            tenant_id, src_id
+                        )
+                    req_ids = await PurchaseRequisitionItem.filter(
+                        tenant_id=tenant_id, id__in=remount_req_item_ids
+                    ).values_list("requisition_id", flat=True)
+                    unique_req_ids = sorted({int(rid) for rid in req_ids if rid})
+                    if unique_req_ids:
+                        for rid in unique_req_ids:
+                            req = await PurchaseRequisition.get_or_none(
+                                tenant_id=tenant_id, id=rid, deleted_at__isnull=True
+                            )
+                            if req:
+                                await pr_svc._recalc_conversion_status(tenant_id, req)
 
             if order_data.payment_milestones is not None:
                 from apps.kuaizhizao.services.purchase_order_terms_service import PurchaseOrderTermsService

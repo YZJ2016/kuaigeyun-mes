@@ -50,6 +50,20 @@ export function getProColumnStateKey(col: unknown, columnIndex: number): string 
   return String(columnIndex)
 }
 
+/** 列设置 stateKey 是否对应代码声明的左/右固定列（操作列等） */
+export function columnStateKeyIsCodeOwnedFixed(
+  columns: Record<string, unknown>[],
+  stateKey: string,
+): boolean {
+  for (let index = 0; index < columns.length; index++) {
+    const col = columns[index]
+    if (col.hideInTable) continue
+    if (getProColumnStateKey(col, index) !== stateKey) continue
+    return isCodeOwnedFixed(col.fixed)
+  }
+  return false
+}
+
 function parseUniTableColumnWidthValue(width: unknown): number | undefined {
   if (typeof width === 'number' && Number.isFinite(width)) return width
   if (typeof width === 'string') {
@@ -482,8 +496,9 @@ export function buildDefaultColumnsStateMap(columns: Record<string, unknown>[]):
     const columnKey = getProColumnStateKey(col, index)
     map[columnKey] = {
       ...map[columnKey],
-      show: map[columnKey]?.show ?? true,
+      show: true,
       fixed: col.fixed,
+      disable: true,
     }
   })
   // 左/右固定连续：columnsState.order 与 normalizeFixedColumnOrder 一致，避免 hasGapFixed
@@ -496,6 +511,7 @@ export function buildDefaultColumnsStateMap(columns: Record<string, unknown>[]):
       order: leftOrder++,
       fixed: 'left',
       show: true,
+      disable: true,
     }
   })
   const rightFixedCols: { col: Record<string, unknown>; index: number }[] = []
@@ -514,6 +530,7 @@ export function buildDefaultColumnsStateMap(columns: Record<string, unknown>[]):
       order: UNI_TABLE_CODE_OWNED_RIGHT_ORDER_BASE + i,
       fixed: 'right',
       show: true,
+      disable: true,
     }
   })
   return map
@@ -522,13 +539,18 @@ export function buildDefaultColumnsStateMap(columns: Record<string, unknown>[]):
 /** 持久化层只存 show/order；代码保留区 order（右固定契约）不落盘 */
 export function stripColumnsStateForPersistence(
   map: Record<string, ColumnsState> | undefined,
+  columns?: Record<string, unknown>[],
 ): Record<string, Pick<ColumnsState, 'show' | 'order'>> {
   if (!map) return {}
   const out: Record<string, Pick<ColumnsState, 'show' | 'order'>> = {}
   for (const [k, v] of Object.entries(map)) {
     if (!v) continue
+    const skipShow =
+      columns != null &&
+      columns.length > 0 &&
+      columnStateKeyIsCodeOwnedFixed(columns, k)
     out[k] = {
-      ...(v.show !== undefined ? { show: v.show } : {}),
+      ...(v.show !== undefined && !skipShow ? { show: v.show } : {}),
       ...(v.order !== undefined && !isCodeOwnedOrder(v.order) ? { order: v.order } : {}),
     }
   }
@@ -547,9 +569,11 @@ export function mergeColumnsStateWithCodeContract(
     for (const [k, v] of Object.entries(persisted)) {
       if (!v) continue
       const { fixed: _dropPersistedFixed, ...showOrder } = v
+      const allowShow =
+        showOrder.show !== undefined && !columnStateKeyIsCodeOwnedFixed(columns, k)
       merged[k] = {
         ...merged[k],
-        ...(showOrder.show !== undefined ? { show: showOrder.show } : {}),
+        ...(allowShow ? { show: showOrder.show } : {}),
         // 代码保留区 order 是旧版契约残留（900_000 / 1_000_000+），回灌会打乱固定列连续性
         ...(showOrder.order !== undefined && !isCodeOwnedOrder(showOrder.order)
           ? { order: showOrder.order }
@@ -577,8 +601,9 @@ export function lockCodeOwnedFixedInColumnsState(
     if (isCodeOwnedFixed(v.fixed)) {
       merged[k] = {
         ...merged[k],
-        show: merged[k]?.show ?? true,
+        show: true,
         fixed: v.fixed,
+        disable: true,
         ...(v.order !== undefined ? { order: v.order } : {}),
       }
     } else if (merged[k] && 'fixed' in merged[k] && !isCodeOwnedFixed(merged[k].fixed)) {
@@ -593,8 +618,9 @@ export function lockCodeOwnedFixedInColumnsState(
     const columnKey = getProColumnStateKey(col, index)
     merged[columnKey] = {
       ...merged[columnKey],
-      show: merged[columnKey]?.show ?? true,
+      show: true,
       fixed: col.fixed,
+      disable: true,
       ...(codeDefaults[columnKey]?.order !== undefined
         ? { order: codeDefaults[columnKey].order }
         : {}),
@@ -621,10 +647,14 @@ export function readPersistedColumnsState(
 export function writePersistedColumnsState(
   persistenceKey: string | undefined,
   map: Record<string, ColumnsState> | undefined,
+  columns?: Record<string, unknown>[],
 ): void {
   if (typeof window === 'undefined' || !persistenceKey || !map) return
   try {
-    window.localStorage.setItem(persistenceKey, JSON.stringify(stripColumnsStateForPersistence(map)))
+    window.localStorage.setItem(
+      persistenceKey,
+      JSON.stringify(stripColumnsStateForPersistence(map, columns)),
+    )
   } catch {
     /* ignore quota errors */
   }

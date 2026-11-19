@@ -39,6 +39,9 @@ class SupplierEvalTemplateCreate(BaseModel):
     grade_version: str = "v1"
     grade_bands: Optional[List[dict]] = None
     period_type: Optional[str] = None
+    reminder_lead_days: int = Field(
+        7, ge=1, le=365, description="到期前提醒提前天数"
+    )
     is_active: bool = True
     remarks: Optional[str] = None
     clauses: List[SupplierEvalTemplateClauseInput] = Field(default_factory=list)
@@ -50,6 +53,7 @@ class SupplierEvalTemplateUpdate(BaseModel):
     grade_version: Optional[str] = None
     grade_bands: Optional[List[dict]] = None
     period_type: Optional[str] = None
+    reminder_lead_days: Optional[int] = Field(None, ge=1, le=365)
     is_active: Optional[bool] = None
     remarks: Optional[str] = None
     clauses: Optional[List[SupplierEvalTemplateClauseInput]] = None
@@ -66,6 +70,7 @@ class SupplierEvalTemplateResponse(BaseModel):
     grade_version: str
     grade_bands: Optional[Any] = None
     period_type: Optional[str] = None
+    reminder_lead_days: int = 7
     is_active: bool = True
     remarks: Optional[str] = None
     clauses: List[SupplierEvalTemplateClauseResponse] = Field(default_factory=list)
@@ -85,6 +90,7 @@ class SupplierEvalTemplateListItem(BaseModel):
     version: str
     grade_version: str
     period_type: Optional[str] = None
+    reminder_lead_days: int = 7
     is_active: bool = True
     clause_count: int = 0
     created_at: Optional[datetime] = None

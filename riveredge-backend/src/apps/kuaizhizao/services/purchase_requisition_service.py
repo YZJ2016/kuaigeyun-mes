@@ -37,6 +37,9 @@ from apps.kuaizhizao.schemas.purchase_requisition import (
 from apps.kuaizhizao.schemas.purchase import PurchaseOrderCreate, PurchaseOrderItemCreate
 from apps.kuaizhizao.services.purchase_service import PurchaseService
 from apps.kuaizhizao.utils.document_source_types import is_purchase_requisition_source_type
+from apps.kuaizhizao.utils.document_line_material_snapshot import (
+    partner_snapshot_fields_from_source_line,
+)
 from apps.kuaizhizao.utils.material_source_helper import (
     SOURCE_TYPE_BUY,
     resolve_material_purchase_line_unit_price,
@@ -56,6 +59,40 @@ from apps.kuaizhizao.services.document_action_policy.purchase_requisition import
 def _default_requisition_name(requisition_code: str) -> str:
     code = (requisition_code or "").strip()
     return f"采购申请-{code}" if code else "采购申请"
+
+
+def _supplier_header_contact_fields(sup: Optional[Supplier]) -> Dict[str, str]:
+    """转采购订单草稿头：供应商联系人/电话（contacts 明细首条）。"""
+    if not sup:
+        return {}
+    from apps.master_data.services.supply_chain_service import _partner_contacts_for_response
+
+    rows = _partner_contacts_for_response(sup)
+    if not rows:
+        return {}
+    first = rows[0]
+    out: Dict[str, str] = {}
+    contact = str(first.get("contact_person") or "").strip()
+    phone = str(first.get("phone") or "").strip()
+    if contact:
+        out["supplier_contact"] = contact[:100]
+    if phone:
+        out["supplier_phone"] = phone[:20]
+    return out
+
+
+_DEFAULT_PURCHASE_TAX_RATE_PERCENT = Decimal("13")
+
+
+class _RequisitionPushLinePricing(NamedTuple):
+    """申请下推采购订单行。录入单价只计算一次，价类与该单价一致。"""
+
+    stored_unit_price: Decimal
+    stored_line_excl_total: Decimal
+    tax_rate_percent: Decimal
+    display_gross_incl: Decimal
+    display_unit_price: Decimal
+    price_type: str
 
 
 PURCHASE_REQUISITION_SORTABLE_FIELDS = frozenset({
@@ -874,6 +911,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
     ) -> None:
         """重新计算并保存采购申请的转单状态：
         - 自愈断开的链接（PurchaseOrderItem.source_id 反查）
+        - 按下游 PO 占用数量判定 PARTIAL/FULL（挂链但占用未满仍算未转完）
         - 在「已通过/已确认/已审核/转单」语义区间内回写 PARTIAL_CONVERTED/FULL_CONVERTED
         草稿/待审核/驳回 等状态保持不变。
         """
@@ -884,9 +922,28 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             tenant_id, int(req.id), all_items
         )
 
-        converted_ids = {it.id for it in all_items if it.purchase_order_id} | set(po_item_by_source.keys())
-        has_any = len(converted_ids) > 0
-        all_converted = len(all_items) > 0 and len(converted_ids) >= len(all_items)
+        item_ids = [int(it.id) for it in all_items if it.id is not None]
+        occupied_map, _ = await self._occupied_purchase_order_qty_by_requisition_item_ids(
+            tenant_id, item_ids
+        )
+        for sid in po_item_by_source.keys():
+            occupied_map.setdefault(int(sid), Decimal("0"))
+
+        has_any = False
+        all_converted = len(all_items) > 0
+        for it in all_items:
+            iid = int(it.id) if it.id is not None else 0
+            qty = Decimal(str(it.quantity or 0))
+            occ = occupied_map.get(iid, Decimal("0"))
+            if occ <= 0 and it.purchase_order_id:
+                # 仅有挂链、尚无占用快照时，按行量视为已占用（自愈前瞬时）
+                occ = qty
+            if occ > 0:
+                has_any = True
+            if qty <= 0 or occ + Decimal("0.0000001") < qty:
+                all_converted = False
+        if not all_items:
+            all_converted = False
 
         current_norm = normalize_status(req.status)
         new_status = req.status
@@ -1473,6 +1530,118 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             return requisition_header_required
         return fallback
 
+    async def _resolve_requisition_line_tax_rate_percent(
+        self,
+        tenant_id: int,
+        *,
+        material_id: Optional[int],
+        material_by_id: Dict[int, Material],
+        supplier_id: int,
+        quantity: Decimal,
+    ) -> Decimal:
+        """行税率：供应商价本 → 物料默认 → 13%（百分比）。"""
+        from apps.kuaicaiwu.services.purchase_settlement import (
+            normalize_po_tax_rate_to_percent,
+        )
+        from apps.master_data.services.partner_material_price_defaults import (
+            material_default_tax_rate,
+        )
+        from apps.master_data.services.partner_material_price_resolver import (
+            PartnerMaterialPriceResolver,
+        )
+
+        pct = Decimal("0")
+        mid = int(material_id) if material_id is not None else 0
+        sid = int(supplier_id) if supplier_id else 0
+        if sid > 0 and mid > 0:
+            resolved = await PartnerMaterialPriceResolver.resolve(
+                tenant_id,
+                "purchase",
+                sid,
+                mid,
+                quantity=quantity,
+            )
+            if resolved.tax_rate is not None and Decimal(str(resolved.tax_rate)) > 0:
+                pct = normalize_po_tax_rate_to_percent(resolved.tax_rate)
+        if pct <= 0 and mid > 0:
+            material = material_by_id.get(mid)
+            if material is not None:
+                mat_pct = material_default_tax_rate(material.defaults or {})
+                if mat_pct > 0:
+                    pct = normalize_po_tax_rate_to_percent(mat_pct)
+        if pct <= 0:
+            pct = _DEFAULT_PURCHASE_TAX_RATE_PERCENT
+        return pct
+
+    async def _build_requisition_push_line_pricing(
+        self,
+        tenant_id: int,
+        *,
+        item: PurchaseRequisitionItem,
+        material_by_id: Dict[int, Material],
+        supplier_id: int,
+        quantity: Decimal,
+        price_override: Optional[Decimal] = None,
+    ) -> _RequisitionPushLinePricing:
+        """建议价与转单改价按含税录入；价本回落价按未税录入。单价不反算。"""
+        from apps.kuaizhizao.constants.price_type import DEFAULT_PURCHASE_PRICE_TYPE
+        from apps.kuaizhizao.utils.purchase_order_line_amounts import (
+            load_price_amount_places,
+            split_purchase_entered_line,
+        )
+
+        qty = quantity if quantity > 0 else Decimal("0")
+        tax_pct = await self._resolve_requisition_line_tax_rate_percent(
+            tenant_id,
+            material_id=int(item.material_id) if item.material_id is not None else None,
+            material_by_id=material_by_id,
+            supplier_id=supplier_id,
+            quantity=qty,
+        )
+        price_places, amount_places = await load_price_amount_places(tenant_id)
+
+        if price_override is not None:
+            entered = price_override
+            price_type = DEFAULT_PURCHASE_PRICE_TYPE
+        elif (item.suggested_unit_price or Decimal(0)) > 0:
+            entered = item.suggested_unit_price
+            price_type = DEFAULT_PURCHASE_PRICE_TYPE
+        else:
+            entered = await self._resolve_purchase_order_unit_price_async(
+                tenant_id,
+                item,
+                material_by_id,
+                supplier_id,
+                price_override=None,
+            )
+            price_type = "tax_exclusive"
+
+        if qty <= 0 or Decimal(str(entered or 0)) <= 0:
+            return _RequisitionPushLinePricing(
+                stored_unit_price=Decimal("0"),
+                stored_line_excl_total=Decimal("0"),
+                tax_rate_percent=tax_pct,
+                display_gross_incl=Decimal("0"),
+                display_unit_price=Decimal("0"),
+                price_type=price_type,
+            )
+        unit, excl, _tax, incl = split_purchase_entered_line(
+            qty,
+            entered,
+            tax_pct,
+            price_type,
+            price_places=price_places,
+            amount_places=amount_places,
+        )
+        return _RequisitionPushLinePricing(
+            stored_unit_price=unit,
+            stored_line_excl_total=excl,
+            tax_rate_percent=tax_pct,
+            display_gross_incl=incl,
+            display_unit_price=unit,
+            price_type=price_type,
+        )
+
     async def _persist_buy_default_supplier(
         self,
         tenant_id: int,
@@ -1556,7 +1725,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             "items": preview_items,
             "has_blocking_issues": has_blocking,
             "blocking_reason": blocking_reason,
-            "tip": "系统将按所选明细与数量生成采购订单，可按供应商自动拆单。",
+            "tip": "系统将按所选明细与数量生成采购订单；所选明细合并为一张采购订单，供应商不一致时表头为待定供应商。",
         }
 
     async def preview_push_to_inquiry(
@@ -1655,9 +1824,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         data: ConvertToPurchaseOrderRequest,
         created_by: int,
     ) -> Dict[str, Any]:
-        """将采购申请行转为采购订单；按供应商自动拆成多张采购单，可选回写物料默认供应商"""
-        from apps.kuaizhizao.constants.purchase_order_type import normalize_purchase_order_type
-
+        """将采购申请行转为采购订单；所选明细合并一张（与 draft/plan 同口径），可选回写物料默认供应商。"""
         req = await PurchaseRequisition.get_or_none(
             tenant_id=tenant_id, id=requisition_id, deleted_at__isnull=True
         )
@@ -1666,248 +1833,44 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
 
         assert_purchase_requisition_capability(req, "push_purchase_order")
 
-        items = await PurchaseRequisitionItem.filter(
+        selected_ids = [int(v) for v in (data.item_ids or []) if v is not None]
+        if not selected_ids:
+            raise BusinessLogicError("请至少选择一条可下推采购申请明细")
+
+        owned = await PurchaseRequisitionItem.filter(
             tenant_id=tenant_id,
             requisition_id=requisition_id,
-            id__in=data.item_ids,
+            id__in=selected_ids,
             purchase_order_id__isnull=True,
-        ).all()
-
-        if not items:
+        ).values_list("id", flat=True)
+        owned_set = {int(v) for v in owned}
+        ordered_ids = [iid for iid in selected_ids if iid in owned_set]
+        if not ordered_ids:
             raise BusinessLogicError("没有可转单的申请行或所选行已转单")
 
-        from apps.kuaizhizao.services.purchase_inquiry_service import PurchaseInquiryService
-        await PurchaseInquiryService._assert_requisition_items_not_in_active_inquiry(
-            tenant_id, [i.id for i in items]
+        convert_data = ConvertToPurchaseOrderRequest(
+            item_ids=ordered_ids,
+            supplier_id=data.supplier_id,
+            supplier_name=data.supplier_name,
+            item_quantities=data.item_quantities,
+            item_unit_prices=data.item_unit_prices,
+            item_suppliers=data.item_suppliers,
+            persist_default_supplier_to_material=data.persist_default_supplier_to_material,
         )
-
-        # 行 -> 供应商
-        line_suppliers: List[Tuple[PurchaseRequisitionItem, int]] = []
-        for item in items:
-            sid = self._resolve_line_supplier_id(item, data)
-            # 未维护供应商时，允许先创建草稿采购单，后续在草稿中选择供应商
-            line_suppliers.append((item, int(sid) if sid else 0))
-
-        unique_ids = {sid for _, sid in line_suppliers}
-        supplier_rows = await Supplier.filter(tenant_id=tenant_id, id__in=[sid for sid in unique_ids if sid > 0]).all()
-        supplier_by_id = {s.id: s for s in supplier_rows}
-        for sid in unique_ids:
-            if sid <= 0:
-                continue
-            if sid not in supplier_by_id:
-                raise NotFoundError(f"供应商不存在: {sid}")
-
-        # 按供应商分组
-        groups: Dict[int, List[PurchaseRequisitionItem]] = {}
-        for item, sid in line_suppliers:
-            groups.setdefault(sid, []).append(item)
-
-        material_ids = sorted({int(i.material_id) for i in items if i.material_id is not None})
-        material_rows = (
-            await Material.filter(tenant_id=tenant_id, id__in=material_ids).all()
-            if material_ids
-            else []
+        result = await self.convert_selected_items_to_purchase_orders(
+            tenant_id=tenant_id,
+            item_ids=ordered_ids,
+            created_by=created_by,
+            convert_data=convert_data,
         )
-        material_by_id = {int(m.id): m for m in material_rows}
-
-        today = to_site_date(resolve_business_datetime())
-        purchase_orders_out: List[Dict[str, Any]] = []
-        persisted_material_ids: List[int] = []
-        push_mode = await BusinessConfigService().get_push_default_mode(tenant_id)
-        push_as_confirm = push_mode == "confirm"
-
-        try:
-            from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
-
-            rel_svc = DocumentRelationNewService()
-        except Exception:
-            rel_svc = None
-
-        for supplier_id, group_items in groups.items():
-            sup = supplier_by_id.get(supplier_id) if supplier_id > 0 else None
-            supplier_name = (sup.name if sup else None) or data.supplier_name or "待定供应商"
-
-            po_items = []
-            items_converted: List[tuple] = []
-            po_line_required_dates: List[date] = []
-
-            for item in group_items:
-                price_override = None
-                if data.item_unit_prices:
-                    price_override = data.item_unit_prices.get(item.id) or data.item_unit_prices.get(str(item.id))
-                    if price_override is not None:
-                        price_override = Decimal(str(price_override))
-                unit_price = await self._resolve_purchase_order_unit_price_async(
-                    tenant_id,
-                    item,
-                    material_by_id,
-                    supplier_id,
-                    price_override=price_override,
-                )
-                full_qty = item.quantity
-                qty = full_qty
-                if data.item_quantities:
-                    override = data.item_quantities.get(item.id) or data.item_quantities.get(str(item.id))
-                    if override is not None:
-                        qty = Decimal(str(override))
-                if qty <= 0:
-                    continue
-                line_required = self._resolve_requisition_item_required_date(
-                    item, req.required_date, today
-                )
-                po_line_required_dates.append(line_required)
-                if qty < full_qty:
-                    remaining = full_qty - qty
-                    await PurchaseRequisitionItem.create(
-                        tenant_id=tenant_id,
-                        requisition_id=requisition_id,
-                        material_id=item.material_id,
-                        material_code=item.material_code,
-                        material_name=item.material_name,
-                        material_spec=item.material_spec,
-                        unit=item.unit or "件",
-                        quantity=remaining,
-                        suggested_unit_price=item.suggested_unit_price,
-                        required_date=item.required_date,
-                        demand_computation_item_id=item.demand_computation_item_id,
-                        work_order_id=item.work_order_id,
-                        work_order_code=item.work_order_code,
-                        supplier_id=item.supplier_id,
-                        notes=item.notes,
-                    )
-                    await item.update_from_dict({"quantity": qty}).save()
-                total_price = qty * unit_price
-                items_converted.append((item, qty))
-                po_items.append(
-                    PurchaseOrderItemCreate(
-                        material_id=item.material_id,
-                        material_code=item.material_code,
-                        material_name=item.material_name,
-                        material_spec=item.material_spec,
-                        ordered_quantity=qty,
-                        unit=item.unit or "件",
-                        unit_price=unit_price,
-                        display_unit_price=unit_price,
-                        total_price=total_price,
-                        received_quantity=Decimal(0),
-                        outstanding_quantity=qty,
-                        required_date=line_required,
-                        source_type="purchase_requisition",
-                        source_id=item.id,
-                        demand_computation_item_id=item.demand_computation_item_id,
-                        work_order_id=item.work_order_id,
-                        work_order_code=item.work_order_code,
-                        notes=item.notes,
-                    )
-                )
-
-            if not po_items:
-                continue
-
-            delivery_date = max(po_line_required_dates, default=today)
-
-            po_data = PurchaseOrderCreate(
-                supplier_id=supplier_id,
-                supplier_name=supplier_name,
-                order_date=today,
-                delivery_date=delivery_date,
-                order_type=normalize_purchase_order_type(getattr(req, "order_type", None)),
-                status=DocumentStatus.DRAFT.value,
-                source_type="purchase_requisition",
-                source_id=requisition_id,
-                notes=f"由采购申请{req.requisition_code}转单生成",
-                items=po_items,
-            )
-
-            po = await self.purchase_service.create_purchase_order(
-                tenant_id=tenant_id, order_data=po_data, created_by=created_by
-            )
-            # 与业务自动化「下推默认生成方式」一致：confirm 才自动提交，draft 保持草稿
-            if push_as_confirm:
-                try:
-                    po = await self.purchase_service.submit_purchase_order(
-                        tenant_id=tenant_id,
-                        order_id=po.id,
-                        submitted_by=created_by,
-                    )
-                except Exception as e:
-                    logger.warning(
-                        "采购申请转单后自动提交采购订单失败: requisition_id={} po_id={} err={}",
-                        requisition_id,
-                        po.id,
-                        e,
-                    )
-
-            for i, (item, _) in enumerate(items_converted):
-                po_item = po.items[i] if i < len(po.items) else None
-                po_item_id = getattr(po_item, "id", None) if po_item else None
-                await item.update_from_dict({
-                    "purchase_order_id": po.id,
-                    "purchase_order_item_id": po_item_id,
-                    "supplier_id": supplier_id if supplier_id > 0 else None,
-                }).save()
-
-                if data.persist_default_supplier_to_material and supplier_id > 0:
-                    ok = await self._persist_buy_default_supplier(
-                        tenant_id, item.material_id, supplier_id, supplier_name
-                    )
-                    if ok and item.material_id not in persisted_material_ids:
-                        persisted_material_ids.append(item.material_id)
-
-            po_code = getattr(po, "order_code", str(po.id))
-            purchase_orders_out.append({
-                "purchase_order_id": po.id,
-                "purchase_order_code": po_code,
-                "supplier_id": supplier_id,
-            })
-
-            if rel_svc:
-                try:
-                    await rel_svc.create_relation(
-                        tenant_id=tenant_id,
-                        relation_data=DocumentRelationCreate(
-                            source_type="purchase_requisition",
-                            source_id=requisition_id,
-                            source_code=req.requisition_code,
-                            source_name=req.requisition_name or req.requisition_code,
-                            target_type="purchase_order",
-                            target_id=po.id,
-                            target_code=po_code,
-                            target_name=getattr(po, "order_name", None) or po_code,
-                            relation_type="source",
-                            relation_mode="push",
-                            relation_desc="采购申请转采购订单",
-                        ),
-                        created_by=created_by,
-                    )
-                except Exception as e:
-                    logger.warning("创建采购申请→采购订单 单据关联失败: %s", e)
-
-        if not purchase_orders_out:
-            raise BusinessLogicError("所选明细的本次下推数量均为 0，无法生成采购订单")
-
-        all_items = await PurchaseRequisitionItem.filter(
-            tenant_id=tenant_id, requisition_id=requisition_id
-        ).all()
-        all_converted = len(all_items) > 0 and all(i.purchase_order_id for i in all_items)
-        req.status = DocumentStatus.FULL_CONVERTED.value if all_converted else DocumentStatus.PARTIAL_CONVERTED.value
-        await req.save()
-
-        first = purchase_orders_out[0]
-        msg = (
-            f"转单成功，共生成 {len(purchase_orders_out)} 张采购订单"
-            if len(purchase_orders_out) > 1
-            else "转单成功"
-        )
-        return {
-            "success": True,
-            "message": msg,
-            "purchase_order_id": first["purchase_order_id"],
-            "purchase_order_code": first["purchase_order_code"],
-            "purchase_orders": purchase_orders_out,
-            "persisted_material_ids": persisted_material_ids if data.persist_default_supplier_to_material else [],
-        }
+        if data.persist_default_supplier_to_material:
+            result = {
+                **result,
+                "persisted_material_ids": result.get("persisted_material_ids") or [],
+            }
+        else:
+            result = {**result, "persisted_material_ids": []}
+        return result
 
     async def _occupied_purchase_order_qty_by_requisition_item_ids(
         self,
@@ -2157,7 +2120,13 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         *,
         assert_push_capability: bool = True,
     ) -> List["_RequisitionPoPlan"]:
-        """按转单请求规划采购订单 create 载荷（不写库、不拆申请行）。"""
+        """按转单请求规划采购订单 create 载荷（不写库、不拆申请行）。
+
+        所选明细合并为一张采购订单（与销售订单/需求计算/补货建议直推一致）。
+        行供应商不一致或缺失时表头为待定供应商；禁止按供应商或价类拆成多张导致新建页只见一行。
+        明细顺序与 item_ids 勾选序一致。
+        """
+        from apps.kuaizhizao.constants.price_type import DEFAULT_PURCHASE_PRICE_TYPE
         from apps.kuaizhizao.constants.purchase_order_type import normalize_purchase_order_type
 
         selected_ids = [int(v) for v in data.item_ids if v is not None]
@@ -2172,7 +2141,12 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         if not items:
             raise BusinessLogicError("没有可转单的申请行或所选行已转单")
 
-        requisition_ids = sorted({int(i.requisition_id) for i in items})
+        item_by_id = {int(i.id): i for i in items if i.id is not None}
+        ordered_items = [item_by_id[iid] for iid in selected_ids if iid in item_by_id]
+        if not ordered_items:
+            raise BusinessLogicError("没有可转单的申请行或所选行已转单")
+
+        requisition_ids = sorted({int(i.requisition_id) for i in ordered_items})
         requisitions = await PurchaseRequisition.filter(
             tenant_id=tenant_id,
             id__in=requisition_ids,
@@ -2189,28 +2163,37 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         from apps.kuaizhizao.services.purchase_inquiry_service import PurchaseInquiryService
 
         await PurchaseInquiryService._assert_requisition_items_not_in_active_inquiry(
-            tenant_id, [i.id for i in items]
+            tenant_id, [i.id for i in ordered_items]
         )
 
-        line_suppliers: List[Tuple[PurchaseRequisitionItem, int]] = []
-        for item in items:
+        line_supplier_ids: List[int] = []
+        for item in ordered_items:
             sid = self._resolve_line_supplier_id(item, data)
-            line_suppliers.append((item, int(sid) if sid else 0))
+            line_supplier_ids.append(int(sid) if sid else 0)
 
-        unique_ids = {sid for _, sid in line_suppliers}
-        supplier_rows = await Supplier.filter(
-            tenant_id=tenant_id, id__in=[sid for sid in unique_ids if sid > 0]
-        ).all()
+        unique_positive = {sid for sid in line_supplier_ids if sid > 0}
+        supplier_rows = (
+            await Supplier.filter(tenant_id=tenant_id, id__in=list(unique_positive)).all()
+            if unique_positive
+            else []
+        )
         supplier_by_id = {s.id: s for s in supplier_rows}
-        for sid in unique_ids:
-            if sid > 0 and sid not in supplier_by_id:
+        for sid in unique_positive:
+            if sid not in supplier_by_id:
                 raise NotFoundError(f"供应商不存在: {sid}")
 
-        groups: Dict[int, List[PurchaseRequisitionItem]] = {}
-        for item, sid in line_suppliers:
-            groups.setdefault(sid, []).append(item)
+        if len(unique_positive) == 1:
+            supplier_id = next(iter(unique_positive))
+            sup = supplier_by_id.get(supplier_id)
+            supplier_name = (sup.name if sup else None) or data.supplier_name or "待定供应商"
+        else:
+            supplier_id = 0
+            sup = None
+            supplier_name = data.supplier_name or "待定供应商"
 
-        material_ids = sorted({int(i.material_id) for i in items if i.material_id is not None})
+        material_ids = sorted(
+            {int(i.material_id) for i in ordered_items if i.material_id is not None}
+        )
         material_rows = (
             await Material.filter(tenant_id=tenant_id, id__in=material_ids).all()
             if material_ids
@@ -2218,94 +2201,90 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         )
         material_by_id = {int(m.id): m for m in material_rows}
         today = to_site_date(resolve_business_datetime())
-        plans: List[PurchaseRequisitionService._RequisitionPoPlan] = []
+        source_req_ids = sorted({int(i.requisition_id) for i in ordered_items})
+        primary = req_by_id[source_req_ids[0]]
+        source_codes = " ".join(req_by_id[rid].requisition_code for rid in source_req_ids)
+        po_items: List[PurchaseOrderItemCreate] = []
+        conversions: List[Tuple[PurchaseRequisitionItem, Decimal]] = []
+        po_line_required_dates: List[date] = []
 
-        for supplier_id, group_items in groups.items():
-            sup = supplier_by_id.get(supplier_id) if supplier_id > 0 else None
-            supplier_name = (sup.name if sup else None) or data.supplier_name or "待定供应商"
-            source_req_ids = sorted({int(i.requisition_id) for i in group_items})
-            primary = req_by_id[source_req_ids[0]]
-            source_codes = " ".join(req_by_id[rid].requisition_code for rid in source_req_ids)
-            po_items: List[PurchaseOrderItemCreate] = []
-            conversions: List[Tuple[PurchaseRequisitionItem, Decimal]] = []
-            po_line_required_dates: List[date] = []
-
-            for item in group_items:
-                qty = self._resolve_convert_quantity(item, data)
-                if qty <= 0:
-                    continue
-                header_required = req_header_required_by_id.get(int(item.requisition_id))
-                line_required = self._resolve_requisition_item_required_date(
-                    item, header_required, today
-                )
-                po_line_required_dates.append(line_required)
-                price_override = None
-                if data.item_unit_prices:
-                    price_override = data.item_unit_prices.get(item.id) or data.item_unit_prices.get(
-                        str(item.id)
-                    )
-                    if price_override is not None:
-                        price_override = Decimal(str(price_override))
-                line_supplier_id = self._resolve_line_supplier_id(item, data)
-                unit_price = await self._resolve_purchase_order_unit_price_async(
-                    tenant_id,
-                    item,
-                    material_by_id,
-                    line_supplier_id,
-                    price_override=price_override,
-                )
-                conversions.append((item, qty))
-                total_price = qty * unit_price
-                po_items.append(
-                    PurchaseOrderItemCreate(
-                        material_id=item.material_id,
-                        material_code=item.material_code,
-                        material_name=item.material_name,
-                        material_spec=item.material_spec,
-                        ordered_quantity=qty,
-                        unit=item.unit or "件",
-                        unit_price=unit_price,
-                        display_unit_price=unit_price,
-                        total_price=total_price,
-                        received_quantity=Decimal(0),
-                        outstanding_quantity=qty,
-                        required_date=line_required,
-                        source_type="purchase_requisition",
-                        source_id=item.id,
-                        demand_computation_item_id=item.demand_computation_item_id,
-                        work_order_id=item.work_order_id,
-                        work_order_code=item.work_order_code,
-                        notes=item.notes,
-                    )
-                )
-
-            if not po_items:
+        for item in ordered_items:
+            qty = self._resolve_convert_quantity(item, data)
+            if qty <= 0:
                 continue
-            delivery_date = max(po_line_required_dates, default=today)
-            po_create = PurchaseOrderCreate(
-                supplier_id=supplier_id,
-                supplier_name=supplier_name,
-                order_date=today,
-                delivery_date=delivery_date,
-                order_type=normalize_purchase_order_type(getattr(primary, "order_type", None)),
-                status=DocumentStatus.DRAFT.value,
-                source_type="purchase_requisition",
-                source_id=primary.id,
-                notes=f"由采购申请{source_codes}转单生成",
-                items=po_items,
+            header_required = req_header_required_by_id.get(int(item.requisition_id))
+            line_required = self._resolve_requisition_item_required_date(
+                item, header_required, today
             )
-            plans.append(
-                self._RequisitionPoPlan(
-                    po_create=po_create,
-                    supplier_id=supplier_id,
-                    conversions=conversions,
-                    requisition_ids=source_req_ids,
+            po_line_required_dates.append(line_required)
+            price_override = None
+            if data.item_unit_prices:
+                price_override = data.item_unit_prices.get(item.id) or data.item_unit_prices.get(
+                    str(item.id)
+                )
+                if price_override is not None:
+                    price_override = Decimal(str(price_override))
+            line_supplier_id = self._resolve_line_supplier_id(item, data)
+            line_pricing = await self._build_requisition_push_line_pricing(
+                tenant_id,
+                item=item,
+                material_by_id=material_by_id,
+                supplier_id=line_supplier_id,
+                quantity=qty,
+                price_override=price_override,
+            )
+            conversions.append((item, qty))
+            po_items.append(
+                PurchaseOrderItemCreate(
+                    material_id=item.material_id,
+                    material_code=item.material_code,
+                    material_name=item.material_name,
+                    material_spec=item.material_spec,
+                    ordered_quantity=qty,
+                    unit=item.unit or "件",
+                    unit_price=line_pricing.stored_unit_price,
+                    display_unit_price=line_pricing.display_unit_price,
+                    total_price=line_pricing.stored_line_excl_total,
+                    tax_rate=line_pricing.tax_rate_percent,
+                    received_quantity=Decimal(0),
+                    outstanding_quantity=qty,
+                    required_date=line_required,
+                    source_type="purchase_requisition",
+                    source_id=item.id,
+                    demand_computation_item_id=item.demand_computation_item_id,
+                    work_order_id=item.work_order_id,
+                    work_order_code=item.work_order_code,
+                    notes=item.notes,
+                    **partner_snapshot_fields_from_source_line(item),
                 )
             )
 
-        if not plans:
+        if not po_items:
             raise BusinessLogicError("所选明细的本次下推数量均为 0，无法生成采购订单")
-        return plans
+
+        delivery_date = max(po_line_required_dates, default=today)
+        po_create = PurchaseOrderCreate(
+            supplier_id=supplier_id,
+            supplier_name=supplier_name,
+            order_date=today,
+            delivery_date=delivery_date,
+            order_type=normalize_purchase_order_type(getattr(primary, "order_type", None)),
+            price_type=DEFAULT_PURCHASE_PRICE_TYPE,
+            status=DocumentStatus.DRAFT.value,
+            source_type="purchase_requisition",
+            source_id=primary.id,
+            notes=f"由采购申请{source_codes}转单生成",
+            items=po_items,
+            **_supplier_header_contact_fields(sup),
+        )
+        return [
+            self._RequisitionPoPlan(
+                po_create=po_create,
+                supplier_id=supplier_id,
+                conversions=conversions,
+                requisition_ids=source_req_ids,
+            )
+        ]
 
     async def draft_purchase_orders_from_requisition_convert(
         self,
@@ -2387,6 +2366,86 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         await item.update_from_dict({"quantity": qty}).save()
         return item
 
+    async def sync_requisition_item_to_po_occupation(
+        self, tenant_id: int, requisition_item_id: int
+    ) -> None:
+        """按下游采购订单占用回写申请行数量：
+        - 占用少于行量：拆出未转行（无 purchase_order_id），便于再次取单
+        - 占用多于行量：从同物料未转行吸收数量
+        - 占用为 0：清除挂链
+        """
+        item = await PurchaseRequisitionItem.get_or_none(
+            tenant_id=tenant_id, id=requisition_item_id
+        )
+        if not item or item.id is None:
+            return
+        occupied_map, _ = await self._occupied_purchase_order_qty_by_requisition_item_ids(
+            tenant_id, [int(item.id)]
+        )
+        occupied = occupied_map.get(int(item.id), Decimal("0"))
+        full_qty = Decimal(str(item.quantity or 0))
+        if occupied <= 0:
+            if item.purchase_order_id or item.purchase_order_item_id:
+                await item.update_from_dict(
+                    {"purchase_order_id": None, "purchase_order_item_id": None}
+                ).save()
+            return
+        if full_qty <= 0:
+            await item.update_from_dict({"quantity": occupied}).save()
+            return
+
+        if occupied + Decimal("0.0000001") >= full_qty and occupied <= full_qty:
+            # 已占满（含浮点容差）；数量与占用一致即可
+            if occupied != full_qty:
+                await item.update_from_dict({"quantity": occupied}).save()
+            return
+
+        if occupied < full_qty:
+            remaining = full_qty - occupied
+            await PurchaseRequisitionItem.create(
+                tenant_id=tenant_id,
+                requisition_id=int(item.requisition_id),
+                material_id=item.material_id,
+                material_code=item.material_code,
+                material_name=item.material_name,
+                material_spec=item.material_spec,
+                unit=item.unit or "件",
+                quantity=remaining,
+                suggested_unit_price=item.suggested_unit_price,
+                required_date=item.required_date,
+                demand_computation_item_id=item.demand_computation_item_id,
+                work_order_id=item.work_order_id,
+                work_order_code=item.work_order_code,
+                supplier_id=item.supplier_id,
+                notes=item.notes,
+                **partner_snapshot_fields_from_source_line(item),
+            )
+            await item.update_from_dict({"quantity": occupied}).save()
+            return
+
+        # occupied > full_qty：从同物料未转行吸收
+        need = occupied - full_qty
+        frees = await PurchaseRequisitionItem.filter(
+            tenant_id=tenant_id,
+            requisition_id=int(item.requisition_id),
+            material_id=item.material_id,
+            purchase_order_id__isnull=True,
+        ).exclude(id=int(item.id)).all()
+        for free in frees:
+            if need <= 0:
+                break
+            fq = Decimal(str(free.quantity or 0))
+            if fq <= 0:
+                await free.delete()
+                continue
+            if fq <= need:
+                need -= fq
+                await free.delete()
+            else:
+                await free.update_from_dict({"quantity": fq - need}).save()
+                need = Decimal("0")
+        await item.update_from_dict({"quantity": occupied}).save()
+
     async def finalize_requisition_items_after_purchase_order_created(
         self,
         tenant_id: int,
@@ -2396,8 +2455,8 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         created_by: int,
         requisition_item_ids: List[int],
         convert_data: ConvertToPurchaseOrderRequest,
-    ) -> None:
-        """采购订单保存后回写申请行、关联与申请头状态。"""
+    ) -> List[int]:
+        """采购订单保存后回写申请行、关联与申请头状态。返回已回写默认供应商的物料 id。"""
         from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
         from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
 
@@ -2506,17 +2565,8 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             )
 
         for rid in requisition_ids:
-            all_items = await PurchaseRequisitionItem.filter(
-                tenant_id=tenant_id, requisition_id=rid
-            ).all()
-            all_converted = len(all_items) > 0 and all(i.purchase_order_id for i in all_items)
             req = req_by_id[rid]
-            req.status = (
-                DocumentStatus.FULL_CONVERTED.value
-                if all_converted
-                else DocumentStatus.PARTIAL_CONVERTED.value
-            )
-            await req.save()
+            await self._recalc_conversion_status(tenant_id, req)
 
         # 头表来源：取单创建时若前端未带回 source，按本批申请回写，便于后续自愈
         if requisition_ids:
@@ -2547,6 +2597,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                     purchase_order_id,
                     e,
                 )
+        return persisted_material_ids
 
     def _convert_data_from_document_flow(self, order_data: PurchaseOrderCreate) -> ConvertToPurchaseOrderRequest:
         item_ids = list(getattr(order_data, "document_flow_requisition_item_ids", None) or [])
@@ -2568,11 +2619,25 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         tenant_id: int,
         item_ids: List[int],
         created_by: int,
+        convert_data: Optional[ConvertToPurchaseOrderRequest] = None,
     ) -> Dict[str, Any]:
-        """按申请行 id 转采购订单，可跨多张申请；同供应商合并一张订单。"""
-        data = ConvertToPurchaseOrderRequest(item_ids=[int(v) for v in item_ids if v is not None])
+        """按申请行 id 转采购订单，可跨多张申请；所选明细合并一张订单。"""
+        ordered_ids = [int(v) for v in item_ids if v is not None]
+        if convert_data is not None:
+            data = ConvertToPurchaseOrderRequest(
+                item_ids=ordered_ids,
+                supplier_id=convert_data.supplier_id,
+                supplier_name=convert_data.supplier_name,
+                item_quantities=convert_data.item_quantities,
+                item_unit_prices=convert_data.item_unit_prices,
+                item_suppliers=convert_data.item_suppliers,
+                persist_default_supplier_to_material=convert_data.persist_default_supplier_to_material,
+            )
+        else:
+            data = ConvertToPurchaseOrderRequest(item_ids=ordered_ids)
         plans = await self.plan_purchase_orders_from_requisition_convert(tenant_id, data)
         purchase_orders_out: List[Dict[str, Any]] = []
+        persisted_material_ids: List[int] = []
         for plan in plans:
             po = await self.purchase_service.create_purchase_order(
                 tenant_id=tenant_id,
@@ -2582,14 +2647,19 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             item_ids_plan = [int(it.id) for it, _q in plan.conversions if it.id is not None]
             convert_slice = ConvertToPurchaseOrderRequest(
                 item_ids=item_ids_plan,
+                supplier_id=data.supplier_id,
+                supplier_name=data.supplier_name,
                 item_quantities={
                     int(it.id): float(qty) for it, qty in plan.conversions if it.id is not None
                 },
+                item_unit_prices=data.item_unit_prices,
+                item_suppliers=data.item_suppliers,
+                persist_default_supplier_to_material=data.persist_default_supplier_to_material,
             )
             po_items = await PurchaseOrderItem.filter(
                 tenant_id=tenant_id, order_id=po.id
             ).all()
-            await self.finalize_requisition_items_after_purchase_order_created(
+            persisted = await self.finalize_requisition_items_after_purchase_order_created(
                 tenant_id=tenant_id,
                 purchase_order_id=int(po.id),
                 purchase_order_code=po.order_code,
@@ -2598,6 +2668,9 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 requisition_item_ids=item_ids_plan,
                 convert_data=convert_slice,
             )
+            for mid in persisted:
+                if mid not in persisted_material_ids:
+                    persisted_material_ids.append(mid)
             purchase_orders_out.append(
                 {
                     "purchase_order_id": po.id,
@@ -2618,5 +2691,6 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             "purchase_order_id": first["purchase_order_id"],
             "purchase_order_code": first["purchase_order_code"],
             "purchase_orders": purchase_orders_out,
+            "persisted_material_ids": persisted_material_ids,
         }
 

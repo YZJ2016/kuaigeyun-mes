@@ -745,6 +745,11 @@ const PurchaseOrdersPage: React.FC = () => {
   /** 标记是否在保存后自动提交（草稿转正式） */
   const submitAfterSaveRef = useRef(false);
   const purchaseOrderFormSubmitLockRef = useRef(false);
+  /**
+   * 新建页已 create 成功但尚未离开时，记下 id。
+   * 避免「保存并审核」中途失败/待选审批人后再次提交又走 create → 编码已存在。
+   */
+  const createdOrderIdRef = useRef<number | null>(null);
   const [purchaseOrderFormSubmitting, setPurchaseOrderFormSubmitting] = useState(false);
 
   // Drawer 相关状态
@@ -2835,6 +2840,10 @@ const PurchaseOrdersPage: React.FC = () => {
     if (!isCreatePage) {
       documentFlowSubmitExtrasRef.current = null;
       purchaseOrderCreateDraftKeyRef.current = null;
+      // 进入编辑路由后以 editRouteId 为准；离开新建页清掉 create 钉住
+      if (!isEditPage) {
+        createdOrderIdRef.current = null;
+      }
       return;
     }
     if (!createFormSeed) {
@@ -2844,6 +2853,7 @@ const PurchaseOrdersPage: React.FC = () => {
     }
     setIsEdit(false);
     setCurrentOrder(null);
+    createdOrderIdRef.current = null;
     resetPurchaseOrderFormFieldValues();
     lastHeaderDeliveryRef.current = coerceFormDate(createFormSeed.delivery_date);
 
@@ -3699,15 +3709,25 @@ const PurchaseOrdersPage: React.FC = () => {
       data.prepayment_bank_account_id = prepayMs?.bank_account_id ?? null;
 
       let orderId: number | undefined;
-      if (isEdit && currentOrder?.id) {
-        await updatePurchaseOrder(currentOrder.id, { ...data, items: itemsPayload });
-        orderId = currentOrder.id;
+      const editingId =
+        (isEditPage && editRouteId) ||
+        createdOrderIdRef.current ||
+        (isEdit && currentOrder?.id ? Number(currentOrder.id) : null);
+      if (editingId) {
+        await updatePurchaseOrder(editingId, { ...data, items: itemsPayload });
+        orderId = editingId;
         if (!submitAfterSaveRef.current) {
           messageApi.success(t('app.kuaizhizao.purchaseOrder.updateSuccess'));
         }
       } else {
         const created = await createPurchaseOrder({ ...data, items: itemsPayload });
         orderId = (created as any)?.id;
+        if (orderId != null) {
+          // 对齐工单：create 成功即钉住编辑身份，后续失败/选人也不再二次 create
+          createdOrderIdRef.current = orderId;
+          setIsEdit(true);
+          setCurrentOrder(created as PurchaseOrder);
+        }
         if (hadFlowHandoff) {
           documentFlowSubmitExtrasRef.current = null;
         }
@@ -3731,6 +3751,7 @@ const PurchaseOrdersPage: React.FC = () => {
           });
           if (linked) {
             submitAfterSaveRef.current = false;
+            createdOrderIdRef.current = null;
             return;
           }
         }
@@ -3741,8 +3762,17 @@ const PurchaseOrdersPage: React.FC = () => {
       }
 
       if (submitAfterSaveRef.current && orderId) {
-        await runPurchaseOrderSubmitAfterSave(orderId, isEdit);
         submitAfterSaveRef.current = false;
+        try {
+          await runPurchaseOrderSubmitAfterSave(orderId, isEdit);
+          createdOrderIdRef.current = null;
+        } catch {
+          // 钉住后切编辑路由，避免仍停 /new 再 create → 编码已存在
+          if (isCreatePage && orderId) {
+            navigate(purchaseOrderEditPath(orderId), { replace: true });
+          }
+          return;
+        }
       }
 
       if (isFormPage) {

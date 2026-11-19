@@ -314,6 +314,9 @@ def _build_purchase_receipt_item_response(
         payload["settlement_excl"] = money_to_json_float(line_excl)
         payload["settlement_tax"] = money_to_json_float(line_tax)
         payload["settlement_gross"] = money_to_json_float(line_gross)
+    # Response.tax_rate 必填：在 settlement 之后再次钉死，禁止漏键
+    _tr = getattr(item, "tax_rate", None)
+    payload["tax_rate"] = float(_tr if _tr is not None else 0)
     return PurchaseReceiptItemResponse.model_validate(payload)
 
 
@@ -2985,8 +2988,16 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 )
                 from infra.services.business_config_service import BusinessConfigService
 
-                allow_non_bom_production_issue = await BusinessConfigService().get_allow_non_bom_production_issue(
+                biz_cfg_svc = BusinessConfigService()
+                allow_non_bom_production_issue = await biz_cfg_svc.get_allow_non_bom_production_issue(
                     tenant_id
+                )
+                allow_work_order_without_bom = await biz_cfg_svc.allow_work_order_without_bom(
+                    tenant_id
+                )
+                # 无主数据 BOM 且无工单子件时，与「允许无 BOM 建工单 / BOM 外领料」对齐，不硬卡确认
+                relax_pick_limit_without_bom = (
+                    allow_non_bom_production_issue or allow_work_order_without_bom
                 )
                 from apps.kuaizhizao.utils.over_qty_tolerance import OverQtyToleranceResolver
                 from apps.kuaizhizao.utils.mrp_quantity import mrp_qty
@@ -3013,11 +3024,19 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     issue_qty_by_item_id[item.id] = qty
 
                 # 防超发：按明细来源工单分别校验（批量合并单多工单）
+                # 可领上限口径与建领料/齐套一致：工单已保存子件行优先，禁止只认主数据 BOM
                 wo_ids_for_limit = _picking_related_work_order_ids(picking, picking_items)
                 if wo_ids_for_limit:
                     from apps.kuaizhizao.models.work_order import WorkOrder
+                    from apps.kuaizhizao.services.work_order_bom_line_service import (
+                        WorkOrderBomLineService,
+                    )
                     from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
+                    from apps.kuaizhizao.utils.mrp_bom_snapshot import (
+                        bom_expand_kwargs_from_work_order,
+                    )
 
+                    bom_line_svc = WorkOrderBomLineService()
                     for wo_id in wo_ids_for_limit:
                         wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=wo_id)
                         if not wo:
@@ -3030,14 +3049,38 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                         if not items_for_wo:
                             continue
                         try:
-                            reqs = await calculate_material_requirements_from_bom(
-                                tenant_id=tenant_id,
-                                material_id=wo.product_id,
-                                required_quantity=float(wo.quantity),
-                                only_approved=True,
+                            reqs = await bom_line_svc.build_requirements_from_saved_lines(
+                                tenant_id, wo
                             )
+                            if reqs is None:
+                                try:
+                                    reqs = await calculate_material_requirements_from_bom(
+                                        tenant_id=tenant_id,
+                                        material_id=wo.product_id,
+                                        required_quantity=float(wo.quantity),
+                                        only_approved=True,
+                                        variant_attributes=getattr(
+                                            wo, "variant_attributes", None
+                                        ),
+                                        configurable_selections=getattr(
+                                            wo, "configurable_selections", None
+                                        ),
+                                        for_kitting_analysis=True,
+                                        **bom_expand_kwargs_from_work_order(wo),
+                                    )
+                                except NotFoundError as bom_e:
+                                    if relax_pick_limit_without_bom:
+                                        reqs = []
+                                    else:
+                                        raise BusinessLogicError(
+                                            f"防超发校验失败（工单 {wo.code}）："
+                                            f"产品缺少已审核 BOM 且未保存子件明细，无法计算可领上限。"
+                                            f"请完善 BOM 或在工单中维护子件后再确认。详情：{bom_e}"
+                                        ) from bom_e
                             limit_map = {
-                                r.component_id: mrp_qty(r.gross_requirement) for r in reqs
+                                int(r.component_id): mrp_qty(r.gross_requirement)
+                                for r in (reqs or [])
+                                if getattr(r, "component_id", None)
                             }
 
                             past_header = await ProductionPicking.filter(
@@ -3111,7 +3154,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                                 if skip_work_order_pick_limit_for_non_bom_extra(
                                     allowed_bom,
                                     call_extra,
-                                    allow_non_bom_production_issue=allow_non_bom_production_issue,
+                                    allow_non_bom_production_issue=relax_pick_limit_without_bom,
                                 ):
                                     continue
                                 allowed = resolve_work_order_pick_cap(
@@ -3156,7 +3199,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                             )
                             raise BusinessLogicError(
                                 f"防超发校验失败（工单 {wo.code if wo else wo_id}）："
-                                f"无法按 BOM 计算可领上限，禁止确认出库。详情：{calc_e}"
+                                f"无法按 BOM/工单子件计算可领上限，禁止确认出库。详情：{calc_e}"
                             ) from calc_e
 
                 picking = await ProductionPicking.get(tenant_id=tenant_id, id=picking_id)
@@ -3463,19 +3506,32 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             if work_order.status not in ['已下达', '进行中', 'released', 'in_progress']:
                 raise BusinessLogicError(f"工单状态为 {work_order.status}，无法创建领料单")
             
-            # 2. 从master_data获取产品的BOM并计算物料需求
+            # 2. 物料需求：已保存工单子件行优先（与确认防超发、齐套同一口径）
             # 领料只发一阶物料：自制/委外子件走各自工单或库存，不拆子 BOM
             # （多阶展开会把半成品与其原材料同时列入领料需求，导致双重扣料）
-            try:
-                material_requirements = await calculate_material_requirements_from_bom(
-                    tenant_id=tenant_id,
-                    material_id=work_order.product_id,
-                    required_quantity=float(work_order.quantity),
-                    only_approved=True,
-                    for_kitting_analysis=True,
-                )
-            except NotFoundError as e:
-                raise NotFoundError(f"产品 {work_order.product_code} 的BOM不存在或未审核: {e}")
+            from apps.kuaizhizao.services.work_order_bom_line_service import WorkOrderBomLineService
+            from apps.kuaizhizao.utils.mrp_bom_snapshot import bom_expand_kwargs_from_work_order
+
+            bom_line_svc = WorkOrderBomLineService()
+            material_requirements = await bom_line_svc.build_requirements_from_saved_lines(
+                tenant_id, work_order
+            )
+            if material_requirements is None:
+                try:
+                    material_requirements = await calculate_material_requirements_from_bom(
+                        tenant_id=tenant_id,
+                        material_id=work_order.product_id,
+                        required_quantity=float(work_order.quantity),
+                        only_approved=True,
+                        variant_attributes=getattr(work_order, "variant_attributes", None),
+                        configurable_selections=getattr(
+                            work_order, "configurable_selections", None
+                        ),
+                        for_kitting_analysis=True,
+                        **bom_expand_kwargs_from_work_order(work_order),
+                    )
+                except NotFoundError as e:
+                    raise NotFoundError(f"产品 {work_order.product_code} 的BOM不存在或未审核: {e}")
             
             if not material_requirements:
                 raise ValidationError("BOM中没有物料明细，无法生成领料单")
@@ -4329,8 +4385,10 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         批量领料：多工单合并创建一张生产领料单，明细按工单分段。
         """
         from apps.kuaizhizao.models.work_order import WorkOrder
+        from apps.kuaizhizao.services.work_order_bom_line_service import WorkOrderBomLineService
         from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
         from apps.kuaizhizao.utils.issue_method_resolver import is_pick_list_material
+        from apps.kuaizhizao.utils.mrp_bom_snapshot import bom_expand_kwargs_from_work_order
         from apps.kuaizhizao.services.document_action_policy.work_order import (
             assert_work_order_capability,
         )
@@ -4355,6 +4413,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             warehouse_name=warehouse_name,
         )
 
+        bom_line_svc = WorkOrderBomLineService()
         prepared: List[Tuple[Any, List[Any]]] = []
         for work_order_id in ordered_ids:
             work_order = await WorkOrder.get_or_none(
@@ -4374,15 +4433,26 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     )
                 )
             try:
-                material_requirements = await calculate_material_requirements_from_bom(
-                    tenant_id=tenant_id,
-                    material_id=work_order.product_id,
-                    required_quantity=float(work_order.quantity),
-                    only_approved=True,
-                    for_kitting_analysis=True,
+                material_requirements = await bom_line_svc.build_requirements_from_saved_lines(
+                    tenant_id, work_order
                 )
+                if material_requirements is None:
+                    material_requirements = await calculate_material_requirements_from_bom(
+                        tenant_id=tenant_id,
+                        material_id=work_order.product_id,
+                        required_quantity=float(work_order.quantity),
+                        only_approved=True,
+                        variant_attributes=getattr(work_order, "variant_attributes", None),
+                        configurable_selections=getattr(
+                            work_order, "configurable_selections", None
+                        ),
+                        for_kitting_analysis=True,
+                        **bom_expand_kwargs_from_work_order(work_order),
+                    )
             except NotFoundError as e:
-                raise NotFoundError(f"工单 {work_order.code} 产品 BOM 不存在或未审核: {e}") from e
+                raise NotFoundError(
+                    f"工单 {work_order.code} 产品 BOM 不存在或未审核，且未保存子件明细: {e}"
+                ) from e
             material_requirements = [
                 req
                 for req in (material_requirements or [])
@@ -4393,7 +4463,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             ]
             if not material_requirements:
                 raise ValidationError(
-                    f"工单 {work_order.code} 的 BOM 中没有需事前领料的物料，无法并入领料单"
+                    f"工单 {work_order.code} 没有需事前领料的物料（已保存子件或 BOM），无法并入领料单"
                 )
             prepared.append((work_order, material_requirements))
 
@@ -10367,6 +10437,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         line_tax_raw = getattr(poi, "tax_rate", None)
                 if line_tax_raw is None:
                     line_tax_raw = receipt.tax_rate
+                if line_tax_raw is None:
+                    raise ValidationError("采购入库明细税率不能为空，请填写行税率")
                 line_tax_pct = float(_norm_line_tax_pct(line_tax_raw)) if line_tax_raw is not None else 0.0
                 display_unit = _purchase_receipt_display_unit_price_from_item(item_data)
                 item_dict.update({
@@ -11421,6 +11493,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                             line_tax_raw = getattr(poi, "tax_rate", None)
                     if line_tax_raw is None:
                         line_tax_raw = getattr(receipt, "tax_rate", None)
+                    if line_tax_raw is None:
+                        raise ValidationError("采购入库明细税率不能为空，请填写行税率")
                     line_tax_pct = (
                         float(_norm_upd_line_tax(line_tax_raw)) if line_tax_raw is not None else 0.0
                     )

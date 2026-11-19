@@ -9,6 +9,39 @@ import type { PlatformUpdateLogEntry } from './platformUpdateLog';
 
 export const PLATFORM_UPDATE_LOG_DEDICATED: PlatformUpdateLogEntry[] = [
   {
+    id: 'funide-oa-supplier-eval-template-layout-r03',
+    date: '2026-11-19',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-supplier-eval-template-layout-r03.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-supplier-eval-template-layout-r03.description',
+  },
+  {
+    id: 'funide-oa-supplier-eval-template-layout-r02',
+    date: '2026-11-19',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-supplier-eval-template-layout-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-supplier-eval-template-layout-r02.description',
+  },
+  {
+    id: 'funide-oa-supplier-eval-template-reminder-r01',
+    date: '2026-11-19',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-supplier-eval-template-reminder-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-supplier-eval-template-reminder-r01.description',
+  },
+  {
     id: 'funide-oa-deliverables-menu-rename-r01',
     date: '2026-11-05',
     type: 'improvement',

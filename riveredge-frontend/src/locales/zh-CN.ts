@@ -4202,6 +4202,62 @@ export default {
   'app.kuaizhizao.documentDetail.stockLoading': '加载库存…',
   'app.kuaizhizao.documentDetail.stockEmpty': '无在库',
   'app.kuaizhizao.documentDetail.warehouseStock': '各仓在库',
+  'pages.dashboard.updateLog.entries.material-multi-supplier-code-mapping-r01.title':
+    '物料编号映射可保存多条供应商编码',
+  'pages.dashboard.updateLog.entries.material-multi-supplier-code-mapping-r01.description':
+    '编辑物料时增加多条供应商编号映射后保存，此前可能只留下一行：表单被父级重渲染冲掉未保存行，或后端吞掉别名冲突。现编号映射只在打开物料时灌入一次，客商编号按供应商区分唯一，冲突会明确报错且整段回滚。',
+  'pages.dashboard.updateLog.entries.doc-flow-create-tab-query-remount-r01.title':
+    '转单新建页多选明细不再只剩一行',
+  'pages.dashboard.updateLog.entries.doc-flow-create-tab-query-remount-r01.description':
+    '从销售订单或采购申请多选明细创建采购订单时，若已打开过同模块新建页，标签 keep-alive 会冻住旧表单，看起来只剩一行。现建单页带 flow 参数变化时更换标签身份并重建表单，完整灌入所选明细。更新 Web 端后生效。',
+  'pages.dashboard.updateLog.entries.sales-incl-unit-price-roundtrip-r02.title':
+    '销售含税单价不再落成 799.999998',
+  'pages.dashboard.updateLog.entries.sales-incl-unit-price-roundtrip-r02.description':
+    '含税标准价/最近成交取价时，后端剥未税曾压成 4 位小数，前端再乘税率出现 799.999998，与价税合计 6400÷8=800 冲突。现剥未税与乘回统一 6 位；编辑已保存行锁价，禁止换客户或改日期异步取价冲掉落库单价。',
+  'pages.dashboard.updateLog.entries.payment-app-prepay-next-doc-pull-r01.title':
+    '付款申请预付款下一单仍可取明细',
+  'pages.dashboard.updateLog.entries.payment-app-prepay-next-doc-pull-r01.description':
+    '预付款申请保存后再新建，结算类型会回到普通付款，点添加明细误开从应付单且常为空。现记住上次结算类型；草稿起即按剩余占用应付/采购订单额度，预付付款单取单也按剩余而非整单封死。',
+  'pages.dashboard.updateLog.entries.purchase-req-po-qty-reduce-remain-r01.title':
+    '采购申请转单改量后剩余可再取',
+  'pages.dashboard.updateLog.entries.purchase-req-po-qty-reduce-remain-r01.description':
+    '从采购申请全量转入采购订单后，反审核并改小订购量时，转入界面未转/可取记录会消失。现按下游占用重算剩余并拆出未转行，头状态回写为部分转单，可再次取单。',
+  'pages.dashboard.updateLog.entries.purchase-order-save-and-audit-create-pin-r01.title':
+    '采购订单保存并审核不再误报编码已存在',
+  'pages.dashboard.updateLog.entries.purchase-order-save-and-audit-create-pin-r01.description':
+    '新建页点保存并审核时，单据已创建成功但送审未完成或需选审批人时，页面仍停在新建且再次提交会再走创建导致「采购订单编码已存在」、列表仍为草稿。现创建成功后即钉住为编辑身份，失败切到编辑页，选人完成后离开表单。',
+  'pages.dashboard.updateLog.entries.sales-delivery-so-pull-draft-blank-r01.title':
+    '从销售订单取单创建销售出库变成空白单',
+  'pages.dashboard.updateLog.entries.sales-delivery-so-pull-draft-blank-r01.description':
+    '取单确认后打开新建弹窗时表单尚未挂载就 setFieldsValue，客户与明细丢失；已改为 createFormSeed 经 initialValues 与 remount key 灌入草稿。',
+  'pages.dashboard.updateLog.entries.production-picking-confirm-wo-bom-lines-r01.title':
+    '生产领料确认误要求主数据 BOM',
+  'pages.dashboard.updateLog.entries.production-picking-confirm-wo-bom-lines-r01.description':
+    '确认出库防超发只读主数据已审核 BOM，工单已保存子件或允许无 BOM 建单时仍被拦截；已与齐套/建领料对齐，优先用工单子件计算可领上限。',
+  'pages.dashboard.updateLog.entries.pr-inquiry-to-po-multi-line-merge-r01.title':
+    '采购申请与询价取单多选明细全部带出',
+  'pages.dashboard.updateLog.entries.pr-inquiry-to-po-multi-line-merge-r01.description':
+    '从采购申请或询价创建采购订单时，所选多行合并进同一张草稿，不再按供应商或价类拆成多张导致新建页只见一行；供应商不一致时表头为待定供应商可改选。需重启后端并更新 Web 端后生效。',
+  'pages.dashboard.updateLog.entries.unitable-fixed-column-single-source-r01.title':
+    '列表列超出可视宽度时出现横向滚动条',
+  'pages.dashboard.updateLog.entries.unitable-fixed-column-single-source-r01.description':
+    '列表列超出页签可视宽度时，表格出现横向滚动条，不再把右侧列裁掉。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-supplier-eval-template-reminder-r01.title':
+    '评价模板支持到期预警天数',
+  'pages.dashboard.updateLog.entries.kuaizhizao-supplier-eval-template-reminder-r01.description':
+    '供应商评价模板可配置到期前提醒提前天数（如 5 天、10 天）；新建评价计划默认沿用模板，计划中可单独调整。',
+  'pages.dashboard.updateLog.entries.funide-oa-supplier-eval-template-layout-r03.title':
+    '供方评价模板列表恢复余量列双 flag',
+  'pages.dashboard.updateLog.entries.funide-oa-supplier-eval-template-layout-r03.description':
+    '修复误删 uniTablePrimaryFlex 导致余量列不生效、操作列再次被裁；恢复 v6 编码余量双 flag，到期预警改在详情与编辑弹窗展示。',
+  'pages.dashboard.updateLog.entries.funide-oa-supplier-eval-template-layout-r02.title':
+    '供方评价模板列表操作列恢复可见',
+  'pages.dashboard.updateLog.entries.funide-oa-supplier-eval-template-layout-r02.description':
+    '模板编码余量列去掉无上限 primaryFlex 并封顶宽度，压缩版本等定宽列；右固定详情与编辑列不再被裁切。',
+  'pages.dashboard.updateLog.entries.funide-oa-supplier-eval-template-reminder-r01.title':
+    '供方评价模板可设到期预警天数',
+  'pages.dashboard.updateLog.entries.funide-oa-supplier-eval-template-reminder-r01.description':
+    '福尼特 OA 供方评价模板支持配置到期前提醒提前天数（如提前 5 天、10 天）；新建评价计划时默认带入模板设置，可在计划中再调整。',
   'pages.dashboard.updateLog.entries.work-order-jump-single-source-r01.title':
     '工序跳转收口为工单唯一开关',
   'pages.dashboard.updateLog.entries.work-order-jump-single-source-r01.description':
@@ -11462,6 +11518,10 @@ export default {
   'app.kuaizhizao.supplierEval.colTemplateCode': '模板编码',
   'app.kuaizhizao.supplierEval.colTemplateName': '模板名称',
   'app.kuaizhizao.supplierEval.colTemplateVersion': '模板版本',
+  'app.kuaizhizao.supplierEval.colReminderLeadDays': '到期预警',
+  'app.kuaizhizao.supplierEval.reminderLeadDaysOption': '提前{{days}}天',
+  'app.kuaizhizao.supplierEval.reminderLeadDaysHint':
+    '到期前按该天数发送提醒；评价计划可选用模板默认或单独调整',
   'app.kuaizhizao.supplierEval.colTemplateActive': '启用',
   'app.kuaizhizao.supplierEval.templateActiveYes': '启用',
   'app.kuaizhizao.supplierEval.templateActiveNo': '停用',
@@ -12247,6 +12307,8 @@ export default {
   'app.kuaizhizao.paymentApplication.payableOptionalPrepayment': '预付无需应付单',
   'app.kuaizhizao.paymentApplication.noPayablesForSupplier':
     '该供应商暂无已审核且可请款的应付单（须有余额且未被付款/申请占满）',
+  'app.kuaizhizao.paymentApplication.noPayablesUsePrepaymentPull':
+    '预付款请用「添加明细」从采购订单取单，无需应付单',
   'app.kuaizhizao.paymentApplication.requestAmount': '申请金额',
   'app.kuaizhizao.paymentApplication.paidAmount': '已付金额',
   'app.kuaizhizao.paymentApplication.linkedPayments': '已下推付款单',

@@ -594,9 +594,8 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
     }
   }, [serialOptionsByUuid]);
 
-  const resetForm = useCallback(() => {
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
+  const blankCreateSeed = useMemo(
+    () => ({
       items: [{ ...defaultLineItem }],
       delivery_time: dayjs(),
       currency_code: 'CNY',
@@ -605,7 +604,40 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
       deliverer_id: defaultPerson.id,
       deliverer_name: defaultPerson.name,
       revenue_recognition: orgRevenueRecognitionDefault,
-    });
+    }),
+    [defaultPerson, orgRevenueRecognitionDefault],
+  );
+
+  /** 取单草稿必须进 ProForm initialValues + remount key；禁止 open 后 setFieldsValue（formRef 未挂载会丢明细） */
+  const createFormSeed = useMemo(() => {
+    if (isEdit || !initialDraft) return blankCreateSeed;
+    const items: Array<Record<string, unknown>> = initialDraft.items.length
+      ? initialDraft.items.map((item) => ({ ...defaultLineItem, ...item }))
+      : [{ ...defaultLineItem }];
+    return {
+      ...blankCreateSeed,
+      customer_id:
+        initialDraft.customerId != null && Number(initialDraft.customerId) > 0
+          ? Number(initialDraft.customerId)
+          : undefined,
+      customer_name: String(initialDraft.customerName ?? ''),
+      price_type: initialDraft.priceType ?? DEFAULT_SALES_PRICE_TYPE,
+      items,
+    };
+  }, [blankCreateSeed, initialDraft, isEdit]);
+
+  const formMountKey = useMemo(() => {
+    if (isEdit) return `sales-delivery-edit-${editingId ?? 0}`;
+    if (!initialDraft) return 'sales-delivery-blank';
+    const itemSig = (initialDraft.items || [])
+      .map((it) => `${Number(it.sales_order_item_id) || 0}:${Number(it.delivery_quantity) || 0}`)
+      .join('|');
+    return `sales-delivery-draft-${initialDraft.salesOrderId ?? 0}-${itemSig}`;
+  }, [editingId, initialDraft, isEdit]);
+
+  const resetForm = useCallback(() => {
+    formRef.current?.resetFields();
+    formRef.current?.setFieldsValue({ ...blankCreateSeed });
     setBatchOptionsByKey({});
     setBatchOptionsLoadingKey(null);
     setSerialOptionsByUuid({});
@@ -614,7 +646,7 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
     setSplitLineIndex(null);
     setEditDocumentCode('');
     editLineIdsRef.current = [];
-  }, [defaultPerson, orgRevenueRecognitionDefault]);
+  }, [blankCreateSeed]);
 
   useEffect(() => {
     if (!open) return;
@@ -653,7 +685,12 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
 
     const hydrateEdit = async () => {
       if (!isEdit || editingId == null) {
-        resetForm();
+        // 新建：表体已由 createFormSeed + formMountKey 灌入；此处只做物料侧车预取
+        if (!initialDraft?.items?.length) return;
+        const items = initialDraft.items.map((item) => ({ ...defaultLineItem, ...item }));
+        await prefetchMaterialsForUnitSelect(
+          items.map((item) => Number(item.material_id) || 0),
+        );
         return;
       }
       setFormLoading(true);
@@ -1656,6 +1693,7 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
   return (
     <>
     <FormModalTemplate
+      key={formMountKey}
       title={modalTitle}
       open={open}
       onClose={onClose}
@@ -1665,12 +1703,7 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
       loading={formLoading}
       width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       grid={false}
-      initialValues={{
-        delivery_time: dayjs(),
-        items: [{ ...defaultLineItem }],
-        currency_code: 'CNY',
-        exchange_rate: 1,
-      }}
+      initialValues={isEdit ? undefined : createFormSeed}
     >
       <Row gutter={16}>
         <Col span={12}>

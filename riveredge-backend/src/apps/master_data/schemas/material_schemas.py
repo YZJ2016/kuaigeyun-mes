@@ -333,14 +333,20 @@ class MaterialUpdate(BaseModel):
     customs_code: Optional[str] = Field(None, alias="customsCode", max_length=50, description="海关编码")
     is_active: Optional[bool] = Field(None, description="是否启用")
     
-    # 部门编码列表（用于更新时输入）
-    department_codes: Optional[List[Dict[str, Any]]] = Field(None, description="部门编码列表")
+    # 部门编码列表（用于更新时输入；与 Create 一致同时认 snake/camel）
+    department_codes: Optional[List[Dict[str, Any]]] = Field(
+        None, alias="departmentCodes", description="部门编码列表"
+    )
     
     # 客户编码列表（用于更新时输入）
-    customer_codes: Optional[List[Dict[str, Any]]] = Field(None, description="客户编码列表")
+    customer_codes: Optional[List[Dict[str, Any]]] = Field(
+        None, alias="customerCodes", description="客户编码列表"
+    )
     
     # 供应商编码列表（用于更新时输入）
-    supplier_codes: Optional[List[Dict[str, Any]]] = Field(None, description="供应商编码列表")
+    supplier_codes: Optional[List[Dict[str, Any]]] = Field(
+        None, alias="supplierCodes", description="供应商编码列表"
+    )
     
     # 默认值设置（用于更新时输入）
     defaults: Optional[Dict[str, Any]] = Field(None, description="默认值设置（JSON格式）")

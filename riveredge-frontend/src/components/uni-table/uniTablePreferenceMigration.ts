@@ -10,10 +10,7 @@ import {
   uniTableColumnsPreferenceField,
   type UniTableColumnsPreferenceField,
 } from './uniTableColumnPreference'
-import {
-  readPersistedColumnsState,
-  writePersistedColumnsState,
-} from './uniTableLayoutEngine'
+import { readPersistedColumnsState } from './uniTableLayoutEngine'
 import {
   readPersistedUniTableViewType,
   uniTableViewTypeStorageKey,
@@ -227,18 +224,7 @@ function syncMigratedPreferenceToLocalStorage(
   tableId: string,
   merged: UniTableStoredPreference,
 ): void {
-  if (merged.columns) {
-    writePersistedColumnsState(
-      uniTableColumnsLocalStorageKey(tableId, false),
-      merged.columns as Record<string, ColumnsState>,
-    )
-  }
-  if (merged.columnsDetailTable) {
-    writePersistedColumnsState(
-      uniTableColumnsLocalStorageKey(tableId, true),
-      merged.columnsDetailTable as Record<string, ColumnsState>,
-    )
-  }
+  // columns 不落 LS：由页面 UniTable 合并后 writePersistedColumnsState，避免旧版 show 与契约双轨
   if (merged.viewType) {
     writePersistedUniTableViewType(tableId, merged.viewType)
   }

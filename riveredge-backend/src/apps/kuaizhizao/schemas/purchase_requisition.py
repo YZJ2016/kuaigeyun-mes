@@ -205,7 +205,7 @@ class ConvertToPurchaseOrderRequest(BaseModel):
     )
     item_suppliers: Optional[Dict[int, int]] = Field(
         None,
-        description="申请行ID -> 供应商ID；优先于申请行上的 supplier_id 与顶层的 supplier_id，支持多供应商拆单",
+        description="申请行ID -> 供应商ID；优先于申请行上的 supplier_id 与顶层的 supplier_id；所选行合并一张单，供应商不一致时表头为待定供应商",
     )
     persist_default_supplier_to_material: bool = Field(
         False,

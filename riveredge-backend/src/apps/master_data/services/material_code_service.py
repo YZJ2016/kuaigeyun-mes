@@ -30,6 +30,9 @@ class MaterialCodeService:
         "PACK": "包装材料",
         "AUX": "辅助材料",
     }
+
+    # 客商编号：唯一范围含 external_entity_id（不同供应商可共用同一编号串）
+    PARTNER_CODE_TYPES = frozenset({"CUSTOMER", "SUPPLIER"})
     
     @staticmethod
     async def generate_main_code(
@@ -181,6 +184,10 @@ class MaterialCodeService:
         Raises:
             ValidationError: 当编码已存在或格式无效时抛出
         """
+        if not code or not str(code).strip():
+            raise ValidationError("编号映射的编码不能为空")
+        code = str(code).strip()
+
         # 验证编码格式（如果配置了验证规则）
         from core.services.business.material_code_rule_engine import MaterialCodeRuleEngine
         
@@ -193,33 +200,65 @@ class MaterialCodeService:
         except NotFoundError:
             # 如果没有配置规则，跳过验证
             pass
-        
-        # 检查编码是否已存在
-        # 对于客户编码和供应商编码，需要同时检查external_entity_id
-        query = MaterialCodeAlias.filter(
-            tenant_id=tenant_id,
-            code_type=code_type,
-            code=code,
-            deleted_at__isnull=True
+
+        is_partner = (
+            code_type in MaterialCodeService.PARTNER_CODE_TYPES
+            and bool(external_entity_type)
+            and external_entity_id is not None
         )
-        
-        # 如果是客户编码或供应商编码，需要检查external_entity_id
-        if external_entity_type and external_entity_id:
-            query = query.filter(
-                external_entity_type=external_entity_type,
-                external_entity_id=external_entity_id
+        if code_type in MaterialCodeService.PARTNER_CODE_TYPES and not is_partner:
+            raise ValidationError(
+                f"编码类型 {code_type} 须指定关联客商（external_entity_id）"
             )
-        
-        existing = await query.first()
+
+        def _active_conflict_query():
+            q = MaterialCodeAlias.filter(
+                tenant_id=tenant_id,
+                code_type=code_type,
+                code=code,
+                deleted_at__isnull=True,
+            )
+            if is_partner:
+                q = q.filter(
+                    external_entity_type=external_entity_type,
+                    external_entity_id=external_entity_id,
+                )
+            return q
+
+        def _deleted_conflict_query():
+            q = MaterialCodeAlias.filter(
+                tenant_id=tenant_id,
+                code_type=code_type,
+                code=code,
+                deleted_at__isnull=False,
+            )
+            if is_partner:
+                q = q.filter(
+                    external_entity_type=external_entity_type,
+                    external_entity_id=external_entity_id,
+                )
+            return q
+
+        existing = await _active_conflict_query().first()
         
         if existing:
             # 如果已存在，检查是否映射到同一物料
             if existing.material_id != material_id:
+                partner_hint = (
+                    f"（客商 {external_entity_type}:{external_entity_id}）" if is_partner else ""
+                )
                 raise ValidationError(
-                    f"编码类型 {code_type} 的编码 {code} 已存在，映射到物料 {existing.material_id}。"
+                    f"编码类型 {code_type} 的编码 {code}{partner_hint} 已存在，映射到物料 {existing.material_id}。"
                     f"如需合并物料，请使用物料映射工具。"
                 )
-            # 如果映射到同一物料，直接返回现有记录
+            # 同一物料同一唯一键：回写名称等可变字段后返回
+            existing.department = department
+            existing.description = description
+            existing.name = name
+            existing.is_primary = is_primary
+            existing.external_entity_type = external_entity_type
+            existing.external_entity_id = external_entity_id
+            await existing.save()
             return existing
 
         async def _clear_other_primary_flags() -> None:
@@ -234,8 +273,11 @@ class MaterialCodeService:
 
         async def _restore_deleted_alias(deleted_alias: MaterialCodeAlias) -> MaterialCodeAlias:
             if deleted_alias.material_id != material_id:
+                partner_hint = (
+                    f"（客商 {external_entity_type}:{external_entity_id}）" if is_partner else ""
+                )
                 raise ValidationError(
-                    f"编码类型 {code_type} 的编码 {code} 已存在，映射到物料 {deleted_alias.material_id}。"
+                    f"编码类型 {code_type} 的编码 {code}{partner_hint} 已存在，映射到物料 {deleted_alias.material_id}。"
                     f"如需合并物料，请使用物料映射工具。"
                 )
             await _clear_other_primary_flags()
@@ -250,13 +292,8 @@ class MaterialCodeService:
             logger.info(f"恢复物料 {material_id} 编码别名: {code_type}:{code}")
             return deleted_alias
 
-        # 唯一约束 (tenant_id, code_type, code) 不含 deleted_at，软删后须恢复而非 INSERT
-        deleted_existing = await MaterialCodeAlias.filter(
-            tenant_id=tenant_id,
-            code_type=code_type,
-            code=code,
-            deleted_at__isnull=False,
-        ).first()
+        # 软删后唯一索引（partial）已释放；仍优先恢复同键软删行，避免历史孤儿
+        deleted_existing = await _deleted_conflict_query().order_by("-id").first()
         if deleted_existing:
             return await _restore_deleted_alias(deleted_existing)
 
@@ -276,32 +313,15 @@ class MaterialCodeService:
                 external_entity_id=external_entity_id,
             )
         except IntegrityError as e:
+            # 事务内 IntegrityError 会使当前事务 abort，禁止再查库「恢复」；唯一冲突直接暴露
             error_str = str(e).lower()
             if "unique" not in error_str and "duplicate" not in error_str:
                 raise
-            deleted_retry = await MaterialCodeAlias.filter(
-                tenant_id=tenant_id,
-                code_type=code_type,
-                code=code,
-                deleted_at__isnull=False,
-            ).first()
-            if deleted_retry:
-                return await _restore_deleted_alias(deleted_retry)
-            active_conflict = await MaterialCodeAlias.filter(
-                tenant_id=tenant_id,
-                code_type=code_type,
-                code=code,
-                deleted_at__isnull=True,
-            ).first()
-            if active_conflict and active_conflict.material_id == material_id:
-                return active_conflict
-            if active_conflict:
-                raise ValidationError(
-                    f"编码类型 {code_type} 的编码 {code} 已存在，映射到物料 {active_conflict.material_id}。"
-                    f"如需合并物料，请使用物料映射工具。"
-                ) from e
+            partner_hint = (
+                f"（客商 {external_entity_type}:{external_entity_id}）" if is_partner else ""
+            )
             raise ValidationError(
-                f"编码类型 {code_type} 的编码 {code} 已存在，无法重复创建。"
+                f"编码类型 {code_type} 的编码 {code}{partner_hint} 已存在，无法重复创建。"
             ) from e
 
         logger.info(f"为物料 {material_id} 创建编码别名: {code_type}:{code}")

@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Dict, Literal, Optional
 
 from apps.master_data.services.partner_price_tier_utils import match_tier_unit_price
 
 Side = Literal["purchase", "sales"]
+
+# 与 material_market_price_service.convert_unit_price / 前端 UNIT_PRICE_CONVERT_PLACES 对齐。
+# 禁止压成 4 位：含税 800@13% → 707.9646 → 乘回 799.999998。
+_UNIT_PRICE_CONVERT_QUANT = Decimal("0.000001")
 
 
 def material_default_tax_rate(defaults: Dict[str, Any]) -> Decimal:
@@ -41,7 +45,7 @@ def convert_purchase_default_to_exclusive(
     factor = Decimal("1") + rate
     if factor <= 0:
         return price
-    return (price / factor).quantize(Decimal("0.0001"))
+    return (price / factor).quantize(_UNIT_PRICE_CONVERT_QUANT, rounding=ROUND_HALF_UP)
 
 
 def resolve_material_default_unit_price(

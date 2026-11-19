@@ -292,7 +292,7 @@ export function useUniTableLayoutEffects(p: UseUniTableLayoutEffectsParams): voi
     if (!root) return
 
     const syncContainerLayout = () => {
-      // 只用托盘宽度。纵向滚动条由布局引擎按 scroll.y 扣除，不再改读滚动口。
+      // 列宽预算只读滚动口。该宽度已不含纵向滚动条，布局计划用 layoutWidthIsScrollHost。
       const width = readStableTableBudgetWidth(root)
       if (width > 0) {
         setContainerLayoutWidth((prev) => (prev === width ? prev : width))
@@ -333,6 +333,8 @@ export function useUniTableLayoutEffects(p: UseUniTableLayoutEffectsParams): voi
     return observeLayoutTargets(
       [
         root,
+        root.querySelector('.uni-table-pro-table .ant-table-body'),
+        root.querySelector('.uni-table-pro-table .ant-table-content'),
         root.querySelector('.ant-pro-table-list-toolbar-container'),
         root.querySelector('.ant-pro-table-list-toolbar-left'),
         root.querySelector('.ant-pro-table-list-toolbar-right'),

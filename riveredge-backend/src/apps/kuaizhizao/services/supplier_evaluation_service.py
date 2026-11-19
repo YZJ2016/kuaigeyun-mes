@@ -98,6 +98,13 @@ class SupplierEvalTemplateService(AppBaseService[SupplierEvalTemplate]):
             raise ValidationError(f"非法评价周期类型: {period_type}")
         return pt
 
+    @staticmethod
+    def _validate_reminder_lead_days(value: Optional[int]) -> int:
+        days = 7 if value is None else int(value)
+        if days < 1 or days > 365:
+            raise ValidationError("到期预警提前天数须在 1～365 之间")
+        return days
+
     def _normalize_clauses(
         self, clauses: Sequence[SupplierEvalTemplateClauseInput]
     ) -> List[SupplierEvalTemplateClauseInput]:
@@ -210,6 +217,7 @@ class SupplierEvalTemplateService(AppBaseService[SupplierEvalTemplate]):
             grade_version=(data.grade_version or "v1").strip() or "v1",
             grade_bands=normalize_grade_bands(data.grade_bands),
             period_type=self._validate_period_type(data.period_type),
+            reminder_lead_days=self._validate_reminder_lead_days(data.reminder_lead_days),
             is_active=bool(data.is_active),
             remarks=data.remarks,
         )
@@ -236,6 +244,10 @@ class SupplierEvalTemplateService(AppBaseService[SupplierEvalTemplate]):
             payload["period_type"] = self._validate_period_type(payload.get("period_type"))
         if "grade_bands" in payload:
             payload["grade_bands"] = normalize_grade_bands(payload.get("grade_bands"))
+        if "reminder_lead_days" in payload:
+            payload["reminder_lead_days"] = self._validate_reminder_lead_days(
+                payload.get("reminder_lead_days")
+            )
         if "version" in payload and payload["version"] is not None:
             payload["version"] = str(payload["version"]).strip() or "v1"
         if "grade_version" in payload and payload["grade_version"] is not None:

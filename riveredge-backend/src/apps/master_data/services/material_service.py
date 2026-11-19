@@ -1512,60 +1512,48 @@ class MaterialService:
                 # 如果属性编码生成失败，记录警告但不阻止创建
                 logger.warning(f"生成属性编码失败: {e}")
         
-        # 创建部门编码别名（如果提供了部门编码）
+        # 创建部门/客户/供应商编号映射（失败须暴露，禁止吞掉导致「只剩一行」）
         if data.department_codes:
             for alias_data in data.department_codes:
-                try:
-                    await MaterialCodeService.create_code_alias(
-                        tenant_id=tenant_id,
-                        material_id=material.id,
-                        code_type=alias_data.get("code_type", "CUSTOM"),
-                        code=alias_data.get("code"),
-                        department=alias_data.get("department"),
-                        description=alias_data.get("description"),
-                        is_primary=alias_data.get("is_primary", False)
-                    )
-                except ValidationError as e:
-                    # 如果编码已存在，记录警告但不阻止创建
-                    logger.warning(f"创建编码别名失败: {e}")
+                await MaterialCodeService.create_code_alias(
+                    tenant_id=tenant_id,
+                    material_id=material.id,
+                    code_type=alias_data.get("code_type", "CUSTOM"),
+                    code=alias_data.get("code"),
+                    department=alias_data.get("department"),
+                    description=alias_data.get("description"),
+                    is_primary=alias_data.get("is_primary", False)
+                )
         
-        # 创建客户编码别名（如果提供了客户编码）
         if data.customer_codes:
             for customer_code_data in data.customer_codes:
-                try:
-                    await MaterialCodeService.create_code_alias(
-                        tenant_id=tenant_id,
-                        material_id=material.id,
-                        code_type="CUSTOMER",
-                        code=customer_code_data.get("code"),
-                        name=customer_code_data.get("name"),
-                        description=customer_code_data.get("description"),
-                        external_entity_type="customer",
-                        external_entity_id=_partner_id_from_code_mapping_payload(
-                            customer_code_data, "customer_id", "customerId"
-                        ),
-                    )
-                except ValidationError as e:
-                    logger.warning(f"创建客户编码别名失败: {e}")
+                await MaterialCodeService.create_code_alias(
+                    tenant_id=tenant_id,
+                    material_id=material.id,
+                    code_type="CUSTOMER",
+                    code=customer_code_data.get("code"),
+                    name=customer_code_data.get("name"),
+                    description=customer_code_data.get("description"),
+                    external_entity_type="customer",
+                    external_entity_id=_partner_id_from_code_mapping_payload(
+                        customer_code_data, "customer_id", "customerId"
+                    ),
+                )
         
-        # 创建供应商编码别名（如果提供了供应商编码）
         if data.supplier_codes:
             for supplier_code_data in data.supplier_codes:
-                try:
-                    await MaterialCodeService.create_code_alias(
-                        tenant_id=tenant_id,
-                        material_id=material.id,
-                        code_type="SUPPLIER",
-                        code=supplier_code_data.get("code"),
-                        name=supplier_code_data.get("name"),
-                        description=supplier_code_data.get("description"),
-                        external_entity_type="supplier",
-                        external_entity_id=_partner_id_from_code_mapping_payload(
-                            supplier_code_data, "supplier_id", "supplierId"
-                        ),
-                    )
-                except ValidationError as e:
-                    logger.warning(f"创建供应商编码别名失败: {e}")
+                await MaterialCodeService.create_code_alias(
+                    tenant_id=tenant_id,
+                    material_id=material.id,
+                    code_type="SUPPLIER",
+                    code=supplier_code_data.get("code"),
+                    name=supplier_code_data.get("name"),
+                    description=supplier_code_data.get("description"),
+                    external_entity_type="supplier",
+                    external_entity_id=_partner_id_from_code_mapping_payload(
+                        supplier_code_data, "supplier_id", "supplierId"
+                    ),
+                )
         
         # 构建响应：批量导入用 minimal，跳过别名/可编辑性等重查询
         if (response_mode or "full").strip().lower() == "minimal":
@@ -2989,55 +2977,46 @@ class MaterialService:
             if not material:
                 raise NotFoundError(f"物料 {material_uuid} 不存在")
         
-        # 处理编码映射更新
-        # 如果提供了编码映射，先删除旧的编码别名，然后创建新的
+        # 处理编码映射更新：整段事务，失败回滚，禁止吞 ValidationError 导致只剩部分行
         if data.department_codes is not None or data.customer_codes is not None or data.supplier_codes is not None:
-            # 删除旧的编码别名（软删除）
-            from datetime import datetime
             from tortoise import timezone
-            
-            # 确定要删除的编码类型
-            code_types_to_delete = []
-            if data.department_codes is not None:
-                # 获取所有部门编码类型
-                existing_dept_aliases = await MaterialCodeAlias.filter(
-                    tenant_id=tenant_id,
-                    material_id=material.id,
-                    code_type__in=["SALE", "DES", "PUR", "WH", "PROD"],
-                    deleted_at__isnull=True
-                ).all()
-                for alias in existing_dept_aliases:
-                    alias.deleted_at = timezone.now()
-                    await alias.save()
-            
-            if data.customer_codes is not None:
-                # 删除旧的客户编码
-                existing_customer_aliases = await MaterialCodeAlias.filter(
-                    tenant_id=tenant_id,
-                    material_id=material.id,
-                    code_type="CUSTOMER",
-                    deleted_at__isnull=True
-                ).all()
-                for alias in existing_customer_aliases:
-                    alias.deleted_at = timezone.now()
-                    await alias.save()
-            
-            if data.supplier_codes is not None:
-                # 删除旧的供应商编码
-                existing_supplier_aliases = await MaterialCodeAlias.filter(
-                    tenant_id=tenant_id,
-                    material_id=material.id,
-                    code_type="SUPPLIER",
-                    deleted_at__isnull=True
-                ).all()
-                for alias in existing_supplier_aliases:
-                    alias.deleted_at = timezone.now()
-                    await alias.save()
-            
-            # 创建新的编码别名
-            if data.department_codes:
-                for alias_data in data.department_codes:
-                    try:
+
+            async with in_transaction():
+                if data.department_codes is not None:
+                    existing_dept_aliases = await MaterialCodeAlias.filter(
+                        tenant_id=tenant_id,
+                        material_id=material.id,
+                        code_type__in=["SALE", "DES", "PUR", "WH", "PROD"],
+                        deleted_at__isnull=True
+                    ).all()
+                    for alias in existing_dept_aliases:
+                        alias.deleted_at = timezone.now()
+                        await alias.save()
+
+                if data.customer_codes is not None:
+                    existing_customer_aliases = await MaterialCodeAlias.filter(
+                        tenant_id=tenant_id,
+                        material_id=material.id,
+                        code_type="CUSTOMER",
+                        deleted_at__isnull=True
+                    ).all()
+                    for alias in existing_customer_aliases:
+                        alias.deleted_at = timezone.now()
+                        await alias.save()
+
+                if data.supplier_codes is not None:
+                    existing_supplier_aliases = await MaterialCodeAlias.filter(
+                        tenant_id=tenant_id,
+                        material_id=material.id,
+                        code_type="SUPPLIER",
+                        deleted_at__isnull=True
+                    ).all()
+                    for alias in existing_supplier_aliases:
+                        alias.deleted_at = timezone.now()
+                        await alias.save()
+
+                if data.department_codes:
+                    for alias_data in data.department_codes:
                         await MaterialCodeService.create_code_alias(
                             tenant_id=tenant_id,
                             material_id=material.id,
@@ -3047,12 +3026,9 @@ class MaterialService:
                             description=alias_data.get("description"),
                             is_primary=alias_data.get("is_primary", False)
                         )
-                    except ValidationError as e:
-                        logger.warning(f"创建编码别名失败: {e}")
-            
-            if data.customer_codes:
-                for customer_code_data in data.customer_codes:
-                    try:
+
+                if data.customer_codes:
+                    for customer_code_data in data.customer_codes:
                         await MaterialCodeService.create_code_alias(
                             tenant_id=tenant_id,
                             material_id=material.id,
@@ -3062,15 +3038,12 @@ class MaterialService:
                             description=customer_code_data.get("description"),
                             external_entity_type="customer",
                             external_entity_id=_partner_id_from_code_mapping_payload(
-                            customer_code_data, "customer_id", "customerId"
-                        ),
+                                customer_code_data, "customer_id", "customerId"
+                            ),
                         )
-                    except ValidationError as e:
-                        logger.warning(f"创建客户编码别名失败: {e}")
-            
-            if data.supplier_codes:
-                for supplier_code_data in data.supplier_codes:
-                    try:
+
+                if data.supplier_codes:
+                    for supplier_code_data in data.supplier_codes:
                         await MaterialCodeService.create_code_alias(
                             tenant_id=tenant_id,
                             material_id=material.id,
@@ -3080,11 +3053,9 @@ class MaterialService:
                             description=supplier_code_data.get("description"),
                             external_entity_type="supplier",
                             external_entity_id=_partner_id_from_code_mapping_payload(
-                            supplier_code_data, "supplier_id", "supplierId"
-                        ),
+                                supplier_code_data, "supplier_id", "supplierId"
+                            ),
                         )
-                    except ValidationError as e:
-                        logger.warning(f"创建供应商编码别名失败: {e}")
         
         # 加载编码别名
         aliases = await MaterialCodeService.get_material_aliases(

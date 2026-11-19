@@ -46,7 +46,10 @@ class MaterialCodeAlias(BaseModel):
             ("code",),
             ("uuid",),
         ]
-        unique_together = [("tenant_id", "code_type", "code")]  # 同一组织内，同一类型的编码唯一
+        # 唯一性由迁移 partial unique index 表达：
+        # - 非客商类型：(tenant_id, code_type, code) WHERE deleted_at IS NULL
+        # - CUSTOMER/SUPPLIER：(tenant_id, code_type, code, external_entity_id) WHERE deleted_at IS NULL
+        # 禁止再写 unique_together=(tenant, code_type, code)，否则不同供应商无法共用编号串。
     
     # 主键（BaseModel 不包含 id 字段，需要自己定义）
     id = fields.IntField(pk=True, description="主键ID")

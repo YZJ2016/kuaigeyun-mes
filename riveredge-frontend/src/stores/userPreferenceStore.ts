@@ -101,7 +101,11 @@ const preferenceStorage: any = { // 使用 any 暂时规避类型检查，或者
   },
 };
 
-/** 将偏好中的表格列/视图设置同步到 localStorage（账号偏好 → 本机缓存） */
+/**
+ * 将偏好中的表格视图设置同步到 localStorage。
+ * 列 show/order 仅由 UniTable writePersistedColumnsState 写入（带布局契约裁剪），
+ * 禁止把云端原始 columns 灌进 ui.tables.*.columns，避免与合并逻辑竞争。
+ */
 function syncTableColumnsToLocalStorage(preferences: Record<string, any>): void {
   if (typeof window === 'undefined') return;
   const tables = preferences?.ui?.tables;
@@ -109,24 +113,6 @@ function syncTableColumnsToLocalStorage(preferences: Record<string, any>): void 
   Object.keys(tables).forEach((tableId) => {
     const tablePref = tables[tableId];
     if (!tablePref || typeof tablePref !== 'object') return;
-    if (tablePref.columns && typeof tablePref.columns === 'object') {
-      try {
-        localStorage.setItem(`ui.tables.${tableId}.columns`, JSON.stringify(tablePref.columns));
-      } catch (_) {}
-    } else if (!('viewType' in tablePref) && !('columnsDetailTable' in tablePref)) {
-      // 旧数据：整段即 columns map
-      try {
-        localStorage.setItem(`ui.tables.${tableId}.columns`, JSON.stringify(tablePref));
-      } catch (_) {}
-    }
-    if (tablePref.columnsDetailTable && typeof tablePref.columnsDetailTable === 'object') {
-      try {
-        localStorage.setItem(
-          `ui.tables.${tableId}.columns::detailTable`,
-          JSON.stringify(tablePref.columnsDetailTable),
-        );
-      } catch (_) {}
-    }
     if (typeof tablePref.viewType === 'string' && tablePref.viewType && tablePref.viewType !== 'help') {
       try {
         localStorage.setItem(`ui.tables.${tableId}.viewType`, tablePref.viewType);

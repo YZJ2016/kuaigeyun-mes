@@ -461,7 +461,7 @@ class PaymentPullService(AppBaseService[Payment]):
         )
         from apps.kuaizhizao.services.payment_application_pull_service import (
             PaymentApplicationPullService,
-            prepayment_application_base_amount,
+            compute_prepayment_application_remaining,
         )
         from infra.services.business_config_service import BusinessConfigService
 
@@ -482,12 +482,25 @@ class PaymentPullService(AppBaseService[Payment]):
         require_app = await BusinessConfigService().get_finance_require_payment_application(
             tenant_id
         )
-        max_push = prepayment_application_base_amount(order)
+        reserved = (
+            await pull_svc.prepayment_reserved_by_order_ids(
+                tenant_id, [purchase_order_id]
+            )
+        ).get(purchase_order_id, Decimal("0"))
+        payment_occ = (
+            await pull_svc.prepayment_payment_occupied_by_order_ids(
+                tenant_id, [purchase_order_id]
+            )
+        ).get(purchase_order_id, Decimal("0"))
+        max_push = compute_prepayment_application_remaining(
+            order, reserved + payment_occ
+        )
         caps = derive_purchase_order_capabilities(
             order,
             has_prepayment_payment=prepay_map.get(purchase_order_id, False),
             has_prepayment_application=prepay_app_map.get(purchase_order_id, False),
             require_payment_application=require_app,
+            prepayment_application_remaining=max_push,
         )
         prepay_cap = caps.push_prepayment
         allowed = bool(prepay_cap.allowed) and max_push > 0

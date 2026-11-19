@@ -734,7 +734,12 @@ const PaymentApplicationsPage: React.FC = () => {
         setPayableOptions(options.filter((o) => o.payableId > 0 && o.maxRequestAmount > 0));
         // 编辑打开时静默：已有明细不代表还能再拉新应付；仅用户改供应商时提示
         if (options.length === 0 && !opts?.silentEmpty) {
-          messageApi.info(t('app.kuaizhizao.paymentApplication.noPayablesForSupplier'));
+          const kind = formApplicationKind(formRef.current?.getFieldValue('applicationKind'));
+          messageApi.info(
+            kind === 'prepayment'
+              ? t('app.kuaizhizao.paymentApplication.noPayablesUsePrepaymentPull')
+              : t('app.kuaizhizao.paymentApplication.noPayablesForSupplier'),
+          );
         }
       } catch (err: unknown) {
         setPayableOptions([]);
@@ -877,10 +882,19 @@ const PaymentApplicationsPage: React.FC = () => {
       }
       return;
     }
+    const rememberedKind = (() => {
+      try {
+        const raw = sessionStorage.getItem('kuaizhizao.paymentApplication.lastApplicationKind');
+        return raw === 'prepayment' ? 'prepayment' : 'goods';
+      } catch {
+        return 'goods';
+      }
+    })();
     formRef.current?.setFieldsValue({
       applicationDate: dayjs(),
       paymentMethod: BANK_TRANSFER_PAYMENT_METHOD,
-      applicationKind: 'goods',
+      // 记住上次结算类型，避免预付款保存后再新建误进「从应付单」取单导致明细为空
+      applicationKind: rememberedKind,
       requirePaymentVoucher: false,
       attachments: [],
       items: [],
@@ -1172,6 +1186,14 @@ const PaymentApplicationsPage: React.FC = () => {
     const employeeAdvance = isEmployeeAdvancePaymentMethod(values.paymentMethod);
     const hidePayeeAccount = hidesSupplierPayeeAccount(values.paymentMethod);
     const applicationKind = formApplicationKind(values.applicationKind);
+    try {
+      sessionStorage.setItem(
+        'kuaizhizao.paymentApplication.lastApplicationKind',
+        applicationKind,
+      );
+    } catch {
+      /* ignore quota / private mode */
+    }
     const deptPayload = resolvePurchaseDepartmentPayload(
       values.department_id,
       resolveDepartmentName,

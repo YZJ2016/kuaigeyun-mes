@@ -173,6 +173,8 @@ const AUDIT_MODES = ['document', 'onsite'] as const;
 
 const ENV_DOC_TYPES = ['rohs', 'reach', 'conflict_minerals', 'msds', 'other'] as const;
 
+const SUPPLIER_EVAL_REMINDER_LEAD_DAYS = [5, 7, 10, 14, 30] as const;
+
 const EMPTY_CLAUSE: SupplierEvalTemplateClause = {
   clause_code: '',
   clause_name: '',
@@ -300,6 +302,8 @@ const SupplierEvaluationsPage: React.FC = () => {
 
   >([]);
 
+  const activeTemplateByIdRef = useRef<Map<number, SupplierEvalTemplate>>(new Map());
+
   const [closeRectOpen, setCloseRectOpen] = useState(false);
 
   const [closeRectTarget, setCloseRectTarget] = useState<SupplierEvaluation | null>(null);
@@ -388,26 +392,45 @@ const SupplierEvaluationsPage: React.FC = () => {
 
   );
 
+  const reminderLeadDayOptions = useMemo(
+    () =>
+      SUPPLIER_EVAL_REMINDER_LEAD_DAYS.map((days) => ({
+        value: days,
+        label: t(`${P}.reminderLeadDaysOption`, { days }),
+      })),
+    [t],
+  );
+
   const loadActiveTemplates = useCallback(async () => {
 
     const res = await supplierEvalTemplateApi.list({ is_active: true, limit: 200 });
 
+    const rows = (res.data || []).filter((row) => row.id != null);
+
+    activeTemplateByIdRef.current = new Map(
+      rows.map((row) => [row.id as number, row]),
+    );
+
     setActiveTemplateOptions(
 
-      (res.data || [])
+      rows.map((row) => ({
 
-        .filter((row) => row.id != null)
+        value: row.id!,
 
-        .map((row) => ({
+        label: `${row.name} (${row.code})`,
 
-          value: row.id!,
-
-          label: `${row.name} (${row.code})`,
-
-        })),
+      })),
 
     );
 
+  }, []);
+
+  const applyPlanTemplateReminderDefault = useCallback((templateId?: number) => {
+    if (!templateId) return;
+    const tpl = activeTemplateByIdRef.current.get(templateId);
+    if (tpl?.reminder_lead_days != null) {
+      planFormRef.current?.setFieldsValue({ reminder_lead_days: tpl.reminder_lead_days });
+    }
   }, []);
 
   useEffect(() => {
@@ -1316,6 +1339,20 @@ const SupplierEvaluationsPage: React.FC = () => {
             minWidth: 88,
             uniTableKeepWidth: true,
             resizable: false,
+          },
+          {
+            title: t(`${P}.colReminderLeadDays`),
+            dataIndex: 'reminder_lead_days',
+            key: 'supplier_eval_template_reminder_lead',
+            hideInSearch: true,
+            width: 108,
+            minWidth: 108,
+            uniTableKeepWidth: true,
+            resizable: false,
+            render: (_, record) =>
+              t(`${P}.reminderLeadDaysOption`, {
+                days: record.reminder_lead_days ?? 7,
+              }),
           },
           {
             title: t(`${P}.colTemplateActive`),
@@ -2399,7 +2436,7 @@ const SupplierEvaluationsPage: React.FC = () => {
 
               <UniTable<SupplierEvalTemplate>
 
-                columnPersistenceId="apps.kuaizhizao.pages.quality-management.supplier-evaluations-template-width-v3"
+                columnPersistenceId="apps.kuaizhizao.pages.quality-management.supplier-evaluations-template-width-v6"
 
                 headerTitle={t(`${P}.tabTemplate`)}
 
@@ -2501,6 +2538,8 @@ const SupplierEvaluationsPage: React.FC = () => {
 
                 audit_mode: editingPlan.audit_mode ?? 'document',
 
+                reminder_lead_days: editingPlan.reminder_lead_days ?? 7,
+
                 remarks: editingPlan.remarks,
 
                 lines: (editingPlan.lines || []).map((line, idx) => ({
@@ -2520,6 +2559,8 @@ const SupplierEvaluationsPage: React.FC = () => {
                 period_year: currentEvalYear(),
 
                 audit_mode: 'document',
+
+                reminder_lead_days: 7,
 
                 lines: [],
 
@@ -2625,6 +2666,10 @@ const SupplierEvaluationsPage: React.FC = () => {
 
               rules={[{ required: true, message: t(`${P}.templateRequired`) }]}
 
+              fieldProps={{
+                onChange: (templateId: number) => applyPlanTemplateReminderDefault(templateId),
+              }}
+
             />
 
           </Col>
@@ -2712,6 +2757,28 @@ const SupplierEvaluationsPage: React.FC = () => {
               options={auditModeOptions}
 
               rules={[{ required: true }]}
+
+            />
+
+          </Col>
+
+        </Row>
+
+        <Row gutter={16}>
+
+          <Col span={12}>
+
+            <ProFormSelect
+
+              name="reminder_lead_days"
+
+              label={t(`${P}.colReminderLeadDays`)}
+
+              options={reminderLeadDayOptions}
+
+              rules={[{ required: true }]}
+
+              tooltip={t(`${P}.reminderLeadDaysHint`)}
 
             />
 
@@ -3081,6 +3148,8 @@ const SupplierEvaluationsPage: React.FC = () => {
 
                 period_type: editingTemplate.period_type,
 
+                reminder_lead_days: editingTemplate.reminder_lead_days ?? 7,
+
                 is_active: editingTemplate.is_active ?? true,
 
                 remarks: editingTemplate.remarks,
@@ -3104,6 +3173,8 @@ const SupplierEvaluationsPage: React.FC = () => {
                 grade_bands: DEFAULT_GRADE_BANDS,
 
                 period_type: 'annual',
+
+                reminder_lead_days: 7,
 
                 is_active: true,
 
@@ -3234,6 +3305,28 @@ const SupplierEvaluationsPage: React.FC = () => {
               options={periodOptions}
 
               allowClear
+
+            />
+
+          </Col>
+
+        </Row>
+
+        <Row gutter={16}>
+
+          <Col span={12}>
+
+            <ProFormSelect
+
+              name="reminder_lead_days"
+
+              label={t(`${P}.colReminderLeadDays`)}
+
+              options={reminderLeadDayOptions}
+
+              rules={[{ required: true }]}
+
+              tooltip={t(`${P}.reminderLeadDaysHint`)}
 
             />
 

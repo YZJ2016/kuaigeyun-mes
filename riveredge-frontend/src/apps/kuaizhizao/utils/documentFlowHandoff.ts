@@ -497,7 +497,7 @@ export async function handoffInquiryToPurchaseOrderCreate(
   startPoHandoffDraftQueue(navigate, config, 'purchase_inquiry', drafts, draftRes.source_type);
 }
 
-/** 保存当前采购单后若队列中还有按供应商拆分的 handoff，打开下一张新建页 */
+/** 保存当前采购单后若队列中还有后续 handoff 草稿，打开下一张新建页 */
 export function continuePoHandoffQueueIfAny(navigate: NavigateFunction): boolean {
   const next = popPoHandoffDraftQueue();
   if (!next) return false;

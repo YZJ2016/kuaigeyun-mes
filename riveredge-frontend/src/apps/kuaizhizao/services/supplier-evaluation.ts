@@ -52,6 +52,7 @@ export interface SupplierEvalTemplate {
   grade_version?: string;
   grade_bands?: SupplierEvalGradeBand[] | null;
   period_type?: SupplierEvalPeriodType | string | null;
+  reminder_lead_days?: number;
   is_active?: boolean;
   remarks?: string | null;
   clauses?: SupplierEvalTemplateClause[];
@@ -140,6 +141,7 @@ export interface SupplierEvalPlan {
   template_code?: string | null;
   template_name?: string | null;
   audit_mode?: SupplierEvalAuditMode | string;
+  reminder_lead_days?: number;
   status?: SupplierEvalPlanStatus | string;
   remarks?: string | null;
   lines?: SupplierEvalPlanLine[];

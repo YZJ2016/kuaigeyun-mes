@@ -9,7 +9,11 @@ import { customerPriceBookApi, supplierPriceBookApi } from '../services/partner-
 import type { PartnerPriceResolveResult } from '../types/partner-price-book';
 import { parseVariantAttributesValue } from '../components/VariantAttributeFields';
 import { normalizeFormListItems } from '../../../utils/formListItems';
-import { isDocumentLineUnitPriceLocked } from '../../kuaizhizao/utils/documentLinePriceLock';
+import {
+  clearDocumentLineUnitPriceLock,
+  isDocumentLineUnitPriceLocked,
+} from '../../kuaizhizao/utils/documentLinePriceLock';
+import { getCachedNumericPrecisionPlaces } from '../../../hooks/useNumericPrecision';
 import {
   readDocumentLineQuantityForStoredAmount,
   recalcDocumentStoredLineAmount,
@@ -561,6 +565,13 @@ export function convertUnitPriceByPriceType(
 }
 
 /** 选物料后解析客户价本/物料默认价并回填行单价与税率（与报价单一致） */
+/** 表单展示精度下单价是否相同（禁止剥税乘回把 800 写成 799.99 / 800.000001） */
+function unitPricesDisplayEqual(a: number, b: number): boolean {
+  const places = Math.max(0, getCachedNumericPrecisionPlaces('price'));
+  const factor = 10 ** places;
+  return Math.round(a * factor) === Math.round(b * factor);
+}
+
 export async function applySalesDocumentLineMaterialPricing(
   form: FormWithLineItems | null | undefined,
   index: number,
@@ -631,8 +642,8 @@ export async function applySalesDocumentLineMaterialPricing(
   const items = [...normalizeFormListItems<Record<string, unknown>>(form.getFieldValue('items'))];
   if (!items[index]) return;
   // 改数量重算：价本未命中时保留行上已有单价/税率，避免下推打开页把来源价冲成 0
+  const existingPrice = Number(items[index]?.unit_price);
   if (priceOnly && !(up > 0)) {
-    const existingPrice = Number(items[index]?.unit_price);
     if (Number.isFinite(existingPrice) && existingPrice > 0) {
       up = existingPrice;
       const existingTax = Number(items[index]?.tax_rate);
@@ -640,6 +651,16 @@ export async function applySalesDocumentLineMaterialPricing(
         taxRate = existingTax;
       }
     }
+  }
+  // 取价结果与行上单价在展示精度下相同则保留原值，禁止剥税乘回改写末位（800→799.99 / 799.999998）
+  // 选料与改数量共用：价本含税标准价剥未税再乘回不得改写已录入/已回填的干净单价
+  if (
+    up > 0 &&
+    Number.isFinite(existingPrice) &&
+    existingPrice > 0 &&
+    unitPricesDisplayEqual(existingPrice, up)
+  ) {
+    up = existingPrice;
   }
   const customerIdNum = customerId != null && customerId !== '' ? Number(customerId) : NaN;
   const refreshPartnerSnapshot =
@@ -651,6 +672,8 @@ export async function applySalesDocumentLineMaterialPricing(
     pricing_snapshot: snapshot ?? null,
   };
   if (!priceOnly) {
+    // 选料重新取价：清除手工改价锁
+    nextRow = clearDocumentLineUnitPriceLock(nextRow);
     nextRow.material_spec = materialSpec;
     nextRow.material_model = materialModel;
   }

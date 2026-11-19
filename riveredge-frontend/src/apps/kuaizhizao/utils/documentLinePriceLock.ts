@@ -1,4 +1,20 @@
-/** 来源单据行单价锁定：命中则禁止因改数量自动重算 unit_price */
+/** 来源单据行 / 手工改价锁定：命中则禁止因改数量/换客户/换日期自动重算 unit_price */
+
+/** 表单行内标记：用户改过单价或价税合计反算单价后置 true；选料重新取价时清除。不落库。 */
+export const DOCUMENT_LINE_UNIT_PRICE_LOCKED_KEY = 'unit_price_locked' as const;
+
+export function markDocumentLineUnitPriceLocked<T extends Record<string, unknown>>(line: T): T {
+  return { ...line, [DOCUMENT_LINE_UNIT_PRICE_LOCKED_KEY]: true };
+}
+
+export function clearDocumentLineUnitPriceLock<T extends Record<string, unknown>>(line: T): T {
+  if (!Object.prototype.hasOwnProperty.call(line, DOCUMENT_LINE_UNIT_PRICE_LOCKED_KEY)) {
+    return line;
+  }
+  const next = { ...line };
+  delete (next as Record<string, unknown>)[DOCUMENT_LINE_UNIT_PRICE_LOCKED_KEY];
+  return next;
+}
 
 export function isDocumentLineUnitPriceLocked(line: Record<string, unknown> | null | undefined): boolean {
   if (!line || typeof line !== 'object') return false;
