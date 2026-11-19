@@ -1458,6 +1458,7 @@ class APIService:
             )
         api_path = str(api.path or "").strip()
         from core.services.integration.kingdee_cosmic_paths import (
+            is_kingdee_cosmic_supplier_query_path,
             normalize_cosmic_openapi_endpoint,
         )
 
@@ -1513,8 +1514,103 @@ class APIService:
                 api_path = str(preset.get("path") or "").strip()
                 call_request_body = preset.get("request_body") or call_request_body
         elif conn_type in ("kingdee_cosmic", "kingdee_xinghan", "kingdee_ai_suite") and (
+            "basedata_query_4" in str(api.code or "").lower()
+            or "/bd_suppliergroup/query" in api_path.lower().replace("\\", "/")
+        ):
+            from core.services.application.api_test_request_merge import (
+                preserve_request_paging_fields,
+            )
+            from core.services.integration.kingdee_cosmic_api_presets import (
+                kingdee_supplier_group_api_upgrade_fields,
+                supplier_group_preset_needs_upgrade,
+            )
+
+            if supplier_group_preset_needs_upgrade(
+                api_path,
+                api.method,
+                call_request_body,
+            ):
+                fields = kingdee_supplier_group_api_upgrade_fields()
+                api_path = str(fields["path"] or "").strip() or api_path
+                call_request_body = preserve_request_paging_fields(
+                    call_request_body,
+                    fields.get("request_body") or call_request_body,
+                )
+        elif conn_type in ("kingdee_cosmic", "kingdee_xinghan", "kingdee_ai_suite") and (
+            "basedata_query_6" in str(api.code or "").lower()
+            or "/bd_customergroup/query" in api_path.lower().replace("\\", "/")
+        ):
+            from core.services.application.api_test_request_merge import (
+                preserve_request_paging_fields,
+            )
+            from core.services.integration.kingdee_cosmic_api_presets import (
+                customer_group_preset_needs_upgrade,
+                kingdee_customer_group_api_upgrade_fields,
+            )
+
+            if customer_group_preset_needs_upgrade(
+                api_path,
+                api.method,
+                call_request_body,
+            ):
+                fields = kingdee_customer_group_api_upgrade_fields()
+                api_path = str(fields["path"] or "").strip() or api_path
+                call_request_body = preserve_request_paging_fields(
+                    call_request_body,
+                    fields.get("request_body") or call_request_body,
+                )
+        elif conn_type in ("kingdee_cosmic", "kingdee_xinghan", "kingdee_ai_suite") and (
+            "basedata_query_5" in str(api.code or "").lower()
+            or (
+                "/bd_address/query" in api_path.lower().replace("\\", "/")
+                and "queryaddress" not in api_path.lower().replace("\\", "/")
+            )
+        ):
+            from core.services.application.api_test_request_merge import (
+                preserve_request_paging_fields,
+            )
+            from core.services.integration.kingdee_cosmic_api_presets import (
+                address_query_preset_needs_upgrade,
+                kingdee_address_query_api_upgrade_fields,
+            )
+
+            if address_query_preset_needs_upgrade(
+                api_path,
+                api.method,
+                call_request_body,
+            ):
+                fields = kingdee_address_query_api_upgrade_fields()
+                api_path = str(fields["path"] or "").strip() or api_path
+                call_request_body = preserve_request_paging_fields(
+                    call_request_body,
+                    fields.get("request_body") or call_request_body,
+                )
+        elif conn_type in ("kingdee_cosmic", "kingdee_xinghan", "kingdee_ai_suite") and (
+            "basedata_getlist_2" in str(api.code or "").lower()
+            or "/bd_project/getlist" in api_path.lower().replace("\\", "/")
+        ):
+            from core.services.application.api_test_request_merge import (
+                preserve_request_paging_fields,
+            )
+            from core.services.integration.kingdee_cosmic_api_presets import (
+                kingdee_project_getlist_api_upgrade_fields,
+                project_getlist_preset_needs_upgrade,
+            )
+
+            if project_getlist_preset_needs_upgrade(
+                api_path,
+                api.method,
+                call_request_body,
+            ):
+                fields = kingdee_project_getlist_api_upgrade_fields()
+                api_path = str(fields["path"] or "").strip() or api_path
+                call_request_body = preserve_request_paging_fields(
+                    call_request_body,
+                    fields.get("request_body") or call_request_body,
+                )
+        elif conn_type in ("kingdee_cosmic", "kingdee_xinghan", "kingdee_ai_suite") and (
             "query_supplier" in str(api.code or "")
-            or "bd_supplier" in api_path.lower()
+            or is_kingdee_cosmic_supplier_query_path(api_path)
         ):
             from core.services.integration.kingdee_cosmic_api_presets import (
                 kingdee_supplier_api_upgrade_fields,
@@ -1684,7 +1780,8 @@ class APIService:
                 call_request_body = fields.get("request_body") or {}
         elif conn_type in ("kingdee_cosmic", "kingdee_xinghan", "kingdee_ai_suite") and (
             "query_warehouse" in str(api.code or "")
-            or "bd_warehouse" in api_path.lower()
+            or "/bd_warehouse/" in api_path.lower().replace("\\", "/")
+            or api_path.lower().replace("\\", "/").rstrip("/").endswith("/bd_warehouse")
         ):
             from core.services.integration.kingdee_cosmic_api_presets import (
                 kingdee_warehouse_api_upgrade_fields,
@@ -1722,7 +1819,7 @@ class APIService:
             api.path = api_path
             await api.save(update_fields=["path", "updated_at"])
         path_lower = api_path.lower().replace("\\", "/")
-        if "bd_supplier" in path_lower and "/batchquery" in path_lower:
+        if is_kingdee_cosmic_supplier_query_path(api_path) and "/batchquery" in path_lower:
             return {
                 "status_code": 0,
                 "headers": {},
@@ -1988,13 +2085,13 @@ class APIService:
             ):
                 extra = ""
                 url_lower = str(url or "").lower()
-                if "bd_supplier/batchquery" in url_lower:
+                if is_kingdee_cosmic_supplier_query_path(url) and "/batchquery" in url_lower:
                     extra = (
                         "本环境供应商未挂 batchQuery（制造链路探活为 "
                         "/v2/basedata/bd_supplier/query）。"
                         "请加载常用接口升级「苍穹查询供应商」，勿使用 …/batchQuery。"
                     )
-                elif "bd_supplier" in url_lower:
+                elif is_kingdee_cosmic_supplier_query_path(url):
                     extra = "请以开放平台「查询供应商信息」API 详情中的完整服务地址与请求方式为准。"
                 response_body = {
                     **response_body,

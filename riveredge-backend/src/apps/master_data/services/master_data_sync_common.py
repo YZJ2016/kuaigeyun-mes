@@ -1,4 +1,10 @@
-"""主数据同步：绑定解析与行映射。"""
+"""主数据同步：绑定解析与行映射。
+
+入站写库统一契约（所有 sync_service 必须遵守）：
+1. 用 ``collect_mapped_scalar_proposed`` 只收录「映射行中出现的可写字段」(+ always 如 name)
+2. ``sync_record_needs_update``：映射字段相对本地有变更（或 force）才写库；全无变更才 skip
+3. 未映射字段禁止写进 proposed，禁止因此清空本地值
+"""
 
 from __future__ import annotations
 
@@ -33,6 +39,11 @@ def normalize_sync_mode(value: Optional[str]) -> str:
             "同步模式须为 manual_full、scheduled_full 或 scheduled_incremental"
         )
     return mode
+
+
+def is_force_rewrite_sync_mode(value: Optional[str]) -> bool:
+    """手动全量（强制）：全量拉取且已存在行不按「无变更」跳过，按源端覆盖写入。"""
+    return (value or "").strip() == "manual_force"
 
 
 def normalize_sync_direction(value: Optional[str]) -> str:
@@ -337,11 +348,29 @@ def sync_values_equal(left: Any, right: Any) -> bool:
         return True
     if left is None and right is None:
         return True
+    # 两侧皆为 bool（或可安全解析的 0/1/true/false）才比布尔；None 与 False 不等价
+    if isinstance(left, bool) and isinstance(right, bool):
+        return left == right
     if isinstance(left, bool) or isinstance(right, bool):
-        try:
-            return bool(left) == bool(right)
-        except Exception:
+        def _as_optional_bool(value: Any) -> Optional[bool]:
+            if value is None:
+                return None
+            if isinstance(value, bool):
+                return value
+            text = str(value).strip().lower()
+            if not text:
+                return None
+            if text in {"1", "true", "yes", "y", "是", "启用", "a", "on"}:
+                return True
+            if text in {"0", "false", "no", "n", "否", "禁用", "b", "off"}:
+                return False
+            return None
+
+        left_b = _as_optional_bool(left)
+        right_b = _as_optional_bool(right)
+        if left_b is None or right_b is None:
             return False
+        return left_b == right_b
     from decimal import Decimal, InvalidOperation
 
     if isinstance(left, Decimal) or isinstance(right, Decimal):
@@ -358,15 +387,88 @@ def sync_values_equal(left: Any, right: Any) -> bool:
     return left_text == right_text
 
 
-def record_fields_unchanged(record: Any, proposed: Dict[str, Any]) -> bool:
-    """proposed 中每个字段与 record 当前值均等价时返回 True（用于跳过无变更更新）。"""
-    if not proposed:
-        return True
-    for field_name, new_value in proposed.items():
+def list_changed_sync_fields(record: Any, proposed: Dict[str, Any]) -> List[str]:
+    """返回 proposed 相对 record 有业务差异的字段名（仅 mapped/proposed 键）。"""
+    changed: List[str] = []
+    for field_name, new_value in (proposed or {}).items():
         current = getattr(record, field_name, None)
         if not sync_values_equal(current, new_value):
-            return False
-    return True
+            changed.append(str(field_name))
+    return changed
+
+
+def record_fields_unchanged(record: Any, proposed: Dict[str, Any]) -> bool:
+    """proposed 中每个字段与 record 当前值均等价时返回 True（用于跳过无变更更新）。"""
+    return not list_changed_sync_fields(record, proposed)
+
+
+def collect_mapped_scalar_proposed(
+    mapped_row: Dict[str, Any],
+    *,
+    string_fields: frozenset[str] = frozenset(),
+    bool_fields: frozenset[str] = frozenset(),
+    decimal_fields: frozenset[str] = frozenset(),
+    int_fields: frozenset[str] = frozenset(),
+    always: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    入站同步变更比对真源：只收录 mapped_row 出现的可写标量 + always。
+
+    未映射字段不进 proposed，避免误清空或「看起来没变」却漏更新。
+    """
+    proposed: Dict[str, Any] = dict(always or {})
+    row = mapped_row
+    for field_name in string_fields:
+        if field_name not in row:
+            continue
+        proposed[field_name] = cell_str(row.get(field_name)) or None
+    for field_name in bool_fields:
+        if field_name not in row:
+            continue
+        coerced = cell_optional_bool(row.get(field_name))
+        if coerced is not None:
+            proposed[field_name] = coerced
+    for field_name in decimal_fields:
+        if field_name not in row:
+            continue
+        coerced = cell_optional_decimal(row.get(field_name))
+        if coerced is not None:
+            proposed[field_name] = coerced
+    for field_name in int_fields:
+        if field_name not in row:
+            continue
+        coerced = cell_optional_int(row.get(field_name))
+        if coerced is not None:
+            proposed[field_name] = coerced
+    return proposed
+
+
+def sync_record_needs_update(
+    record: Any,
+    proposed: Dict[str, Any],
+    *,
+    force: bool = False,
+) -> bool:
+    """强制重写，或 proposed 相对 record 任一字段有变更时需要更新。"""
+    if force:
+        return True
+    if not proposed:
+        return False
+    return not record_fields_unchanged(record, proposed)
+
+
+def apply_proposed_fields_to_record(record: Any, proposed: Dict[str, Any]) -> List[str]:
+    """把 proposed 写到 record；返回实际发生变更的字段名。"""
+    touched: List[str] = []
+    for field_name, value in (proposed or {}).items():
+        if not hasattr(record, field_name):
+            continue
+        current = getattr(record, field_name, None)
+        if sync_values_equal(current, value):
+            continue
+        setattr(record, field_name, value)
+        touched.append(str(field_name))
+    return touched
 
 
 def cell_optional_bool(value: Any) -> Optional[bool]:
@@ -441,6 +543,28 @@ async def apply_mapped_custom_field_values(
             record_id=record_id,
             value=raw_value,
         )
+
+
+def expand_legacy_partner_settlement_mapped_row(mapped_row: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    旧映射键 settlement_method_code → default_payment_method_code / settlement_terms_code。
+    已出现的新字段优先；不把旧键再写库（列已 DROP）。
+
+    注意：本 fork 的 Supplier/Customer 仍保留 settlement_method_code 列、无新列，
+    故本地 sync 服务暂不接线此函数（否则有效映射会被改写到不存在的列）。
+    """
+    from apps.master_data.config.partner_settlement_codes import split_legacy_settlement_method_code
+
+    row = dict(mapped_row)
+    if "settlement_method_code" not in row:
+        return row
+    legacy = cell_str(row.pop("settlement_method_code"))
+    payment, terms = split_legacy_settlement_method_code(legacy or None)
+    if payment and "default_payment_method_code" not in row:
+        row["default_payment_method_code"] = payment
+    if terms and "settlement_terms_code" not in row:
+        row["settlement_terms_code"] = terms
+    return row
 
 
 def apply_mapped_scalar_fields(

@@ -16,6 +16,7 @@ from apps.master_data.services.master_data_sync_common import (
     apply_sync_extras_after_write,
     attach_sync_fetch_meta,
     cell_str,
+    collect_mapped_scalar_proposed,
     fetch_sync_rows,
     load_custom_fields_by_code,
     map_sync_rows,
@@ -28,6 +29,7 @@ from apps.master_data.services.master_data_sync_common import (
     resolve_sync_sources,
     serialize_binding_row,
     sources_from_upsert_body,
+    sync_record_needs_update,
     upsert_sync_binding,
 )
 from core.services.data.sync_binding_sources import fetch_mapped_rows_from_sources
@@ -172,6 +174,19 @@ class WarehouseSyncService:
                     deleted_at__isnull=True,
                 ).first()
                 if existing:
+                    # 仅映射字段更新契约：无变更且未映射自定义字段时整行跳过
+                    proposed = collect_mapped_scalar_proposed(
+                        row,
+                        string_fields=WAREHOUSE_SYNC_STRING_FIELDS,
+                        bool_fields=frozenset(),
+                        always={"name": name, "is_active": is_active},
+                    )
+                    has_custom = any(
+                        str(k).startswith("custom:") for k in row.keys()
+                    )
+                    if not has_custom and not sync_record_needs_update(existing, proposed):
+                        skipped += 1
+                        continue
                     update_data = WarehouseUpdate(name=name, is_active=is_active)
                     await WarehouseService.update_warehouse(
                         tenant_id,

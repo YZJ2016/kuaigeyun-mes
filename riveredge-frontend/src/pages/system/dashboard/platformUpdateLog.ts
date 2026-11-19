@@ -44,6 +44,46 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'inbound-sync-mapped-field-update-r01',
+    date: '2026-11-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inbound-sync-mapped-field-update-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inbound-sync-mapped-field-update-r01.description',
+  },
+  {
+    id: 'supplier-sync-pbdfl-active-filter-r01',
+    date: '2026-11-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.supplier-sync-pbdfl-active-filter-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.supplier-sync-pbdfl-active-filter-r01.description',
+  },
+  {
+    id: 'kingdee-api-mgmt-query-contract-r01',
+    date: '2026-11-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-api-mgmt-query-contract-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-api-mgmt-query-contract-r01.description',
+  },
+  {
+    id: 'kingdee-suppliergroup-query-star-r01',
+    date: '2026-11-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-suppliergroup-query-star-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-suppliergroup-query-star-r01.description',
+  },
+  {
+    id: 'kingdee-supplier-path-substring-fix-r01',
+    date: '2026-11-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-supplier-path-substring-fix-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-supplier-path-substring-fix-r01.description',
+  },
+  {
     id: 'other-inbound-kingdee-push-bind-r01',
     date: '2026-10-27',
     type: 'feature',

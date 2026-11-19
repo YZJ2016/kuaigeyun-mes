@@ -15,10 +15,10 @@ from apps.master_data.schemas.master_data_sync import (
 from apps.master_data.services.master_data_sync_common import (
     apply_mapped_custom_field_values,
     apply_mapped_scalar_fields,
-    cell_optional_bool,
-    cell_optional_decimal,
-    cell_optional_int,
+    apply_proposed_fields_to_record,
+    attach_sync_fetch_meta,
     cell_str,
+    collect_mapped_scalar_proposed,
     fetch_sync_rows,
     filter_kingdee_approved_active_master_rows,
     load_custom_fields_by_code,
@@ -27,11 +27,11 @@ from apps.master_data.services.master_data_sync_common import (
     mark_binding_success,
     normalize_schedule_interval,
     normalize_sync_mode,
-    record_fields_unchanged,
     resolve_incremental_since,
     resolve_sync_sources,
     serialize_binding_row,
     sources_from_upsert_body,
+    sync_record_needs_update,
     upsert_sync_binding,
 )
 from core.services.data.sync_binding_sources import fetch_mapped_rows_from_sources
@@ -41,7 +41,7 @@ from core.utils.timezone_utils import resolve_business_datetime
 
 SUPPLIER_CUSTOM_FIELD_TABLE = "master_data_suppliers"
 SUPPLIER_SYNC_STRING_FIELDS = frozenset({
-    "contact_person", "phone", "email", "address", "category", "contact_title",
+    "short_name", "contact_person", "phone", "email", "address", "category", "contact_title",
     "industry_code", "source_channel_code", "tax_registration_no", "invoice_title",
     "invoice_address", "invoice_phone", "invoice_bank_name", "invoice_bank_account",
     "invoice_type_code", "taxpayer_type_code", "legal_representative",
@@ -117,29 +117,15 @@ def _supplier_sync_proposed_core(
     name: str,
     mapped_row: Dict[str, Any],
 ) -> Dict[str, Any]:
-    proposed: Dict[str, Any] = {
-        "name": _normalize_partner_name(name),
-        "short_name": cell_str(mapped_row.get("short_name")) or None,
-    }
-    for field_name in SUPPLIER_SYNC_STRING_FIELDS:
-        if field_name in mapped_row:
-            proposed[field_name] = cell_str(mapped_row.get(field_name)) or None
-    for field_name in SUPPLIER_SYNC_BOOL_FIELDS:
-        if field_name in mapped_row:
-            coerced = cell_optional_bool(mapped_row.get(field_name))
-            if coerced is not None:
-                proposed[field_name] = coerced
-    for field_name in SUPPLIER_SYNC_DECIMAL_FIELDS:
-        if field_name in mapped_row:
-            coerced = cell_optional_decimal(mapped_row.get(field_name))
-            if coerced is not None:
-                proposed[field_name] = coerced
-    for field_name in SUPPLIER_SYNC_INT_FIELDS:
-        if field_name in mapped_row:
-            coerced = cell_optional_int(mapped_row.get(field_name))
-            if coerced is not None:
-                proposed[field_name] = coerced
-    return proposed
+    """只收录映射行出现的可写字段 + name；未映射字段不进 proposed（禁止误清空）。"""
+    return collect_mapped_scalar_proposed(
+        mapped_row,
+        string_fields=SUPPLIER_SYNC_STRING_FIELDS,
+        bool_fields=SUPPLIER_SYNC_BOOL_FIELDS,
+        decimal_fields=SUPPLIER_SYNC_DECIMAL_FIELDS,
+        int_fields=SUPPLIER_SYNC_INT_FIELDS,
+        always={"name": _normalize_partner_name(name)},
+    )
 
 
 def _apply_supplier_mapped_fields(record: Supplier, mapped_row: Dict[str, Any]) -> List[str]:
@@ -251,8 +237,13 @@ class SupplierSyncService:
                     path=path_lower,
                     code=api_code,
                 )
-                is_query = "/bd_supplier/query" in path_lower and not is_getsupplier
+                # 标品 query；勿用裸子串误伤 pbdfl
+                is_query = (
+                    path_lower.rstrip("/").endswith("/bd_supplier/query")
+                    or "/bd_supplier/query?" in path_lower
+                ) and not is_getsupplier
                 if not is_query and not is_getsupplier:
+                    # pbdfl / 其它扩展接口：不做 suppliercommon 组织交集，但仍记录 path 供有效过滤
                     continue
                 await api_obj.fetch_related("integration_config")
                 conn = getattr(api_obj, "integration_config", None)
@@ -372,7 +363,7 @@ class SupplierSyncService:
                 src_for_fetch["field_mapping"] = mapping
                 sources_for_fetch.append(src_for_fetch)
 
-            rows, source_errors, _fetched = await fetch_mapped_rows_from_sources(
+            rows, source_errors, fetched = await fetch_mapped_rows_from_sources(
                 tenant_id,
                 sources_for_fetch,
                 since=since,
@@ -380,14 +371,41 @@ class SupplierSyncService:
                 transform_raw_rows=_filter_raw,
             )
             invalid_skipped = invalid_skipped_holder["n"]
-            result = await self._upsert_suppliers(tenant_id, current_user, rows, match_key)
-            if source_errors:
-                result.errors = (source_errors + list(result.errors))[:20]
+            raw_fetched = int(fetched or 0) + int(invalid_skipped or 0)
             if invalid_skipped:
-                result.skipped = int(getattr(result, "skipped", 0) or 0) + invalid_skipped
                 await emit_sync_progress(
                     f"已排除无效供应商 {invalid_skipped} 条，剩余 {len(rows)} 条…"
                 )
+            await emit_sync_progress(f"字段映射完成，准备写入 {len(rows)} 条供应商…")
+            result = await self._upsert_suppliers(tenant_id, current_user, rows, match_key)
+            if source_errors:
+                result.errors = (source_errors + list(result.errors))[:20]
+            attach_sync_fetch_meta(result, fetched=raw_fetched, since=since)
+            result.after_filter = len(rows)
+            if invalid_skipped:
+                result.skipped = int(getattr(result, "skipped", 0) or 0) + invalid_skipped
+            if (
+                since is None
+                and raw_fetched > 0
+                and len(rows) == 0
+                and not (result.created or result.updated)
+            ):
+                result.empty_reason = "filtered_all"
+                result.errors = (
+                    [
+                        "源端已拉取供应商行，但经「仅有效」或组织过滤后为 0 条。"
+                        "定制 pbdfl 接口无 status 字段时须按 enable 判定；"
+                        "请确认已部署最新同步过滤逻辑后重试。"
+                    ]
+                    + list(result.errors)
+                )[:20]
+            elif (
+                since is None
+                and raw_fetched == 0
+                and not (result.created or result.updated)
+                and not source_errors
+            ):
+                result.empty_reason = "source_empty"
             if binding:
                 if result.failed and not (result.created or result.updated):
                     await mark_binding_failure(binding, "; ".join(result.errors) or "供应商同步失败")
@@ -487,15 +505,15 @@ class SupplierSyncService:
                     if (
                         not has_custom
                         and not has_payment
-                        and record_fields_unchanged(existing, proposed)
+                        and not sync_record_needs_update(existing, proposed)
                     ):
                         skipped += 1
                         continue
-                    existing.name = proposed["name"]
-                    existing.short_name = proposed.get("short_name")
+                    apply_proposed_fields_to_record(existing, proposed)
                     existing.external_sync_at = sync_at
                     existing.updated_at = sync_at
-                    _apply_supplier_mapped_fields(existing, mapped_row)
+                    # 标量已由 proposed 写入；此处只补结算账户（不在 proposed 标量集合）
+                    apply_supplier_payment_account_sync(existing, mapped_row)
                     if current_user is not None:
                         apply_update_audit(existing, current_user)
                     to_update.append(existing)

@@ -756,6 +756,224 @@ def _is_material_group_wang_placeholder_body(request_body: Any) -> bool:
     return data.get("createorg_number") == ["WANG"] and data.get("status") == ["C"]
 
 
+BIZ_BD_SUPPLIERGROUP = "bd_suppliergroup"
+SUPPLIER_GROUP_QUERY_PATH = f"kapi/v2/basedata/{BIZ_BD_SUPPLIERGROUP}/query"
+SUPPLIER_GROUP_LIST_ALL_MARKER = "*"
+
+BIZ_BD_CUSTOMERGROUP = "bd_customergroup"
+CUSTOMER_GROUP_QUERY_PATH = f"kapi/v2/basedata/{BIZ_BD_CUSTOMERGROUP}/query"
+CUSTOMER_GROUP_LIST_ALL_MARKER = "*"
+
+
+def _group_query_filter_filled(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, list):
+        return any(str(x).strip() for x in value)
+    return bool(str(value).strip())
+
+
+def build_supplier_group_query_preset_body() -> Dict[str, Any]:
+    """
+    本环境 bd_suppliergroup/query 强制 data.number + data.name（空则 603）。
+    传 \"*\" 时网关不过滤编码/名称，等价列表全量（实调 filter 仅 createorg）。
+    """
+    return {
+        "data": {
+            "number": SUPPLIER_GROUP_LIST_ALL_MARKER,
+            "name": SUPPLIER_GROUP_LIST_ALL_MARKER,
+        },
+        "pageNo": 1,
+        "pageSize": 1000,
+    }
+
+
+def is_kingdee_cosmic_supplier_group_query_path(path: Any) -> bool:
+    lower = str(path or "").lower().replace("\\", "/")
+    return f"/{BIZ_BD_SUPPLIERGROUP}/query" in lower
+
+
+def supplier_group_preset_needs_upgrade(
+    path: Any,
+    method: Any = None,
+    request_body: Any = None,
+) -> bool:
+    """缺 number/name（或空串）时升级为 */* 列表体；已带有效筛选则不改。"""
+    if not is_kingdee_cosmic_supplier_group_query_path(path):
+        return False
+    if str(method or "").upper() not in ("", "POST"):
+        return True
+    if not isinstance(request_body, dict):
+        return True
+    data = request_body.get("data")
+    if not isinstance(data, dict):
+        return True
+    return not (
+        _group_query_filter_filled(data.get("number"))
+        and _group_query_filter_filled(data.get("name"))
+    )
+
+
+def kingdee_supplier_group_api_upgrade_fields() -> Dict[str, Any]:
+    return {
+        "path": SUPPLIER_GROUP_QUERY_PATH,
+        "method": "POST",
+        "name": "苍穹查询供应商分类信息",
+        "description": (
+            "开放平台 urlformat=/v2/basedata/bd_suppliergroup/query。"
+            "本环境强制 data.number、data.name；列表全量传 number/name=\"*\"."
+        ),
+        "request_body": build_supplier_group_query_preset_body(),
+    }
+
+
+def build_customer_group_query_preset_body() -> Dict[str, Any]:
+    """与供应商分类同契约：number/name 必填；列表全量传 *。"""
+    return {
+        "data": {
+            "number": CUSTOMER_GROUP_LIST_ALL_MARKER,
+            "name": CUSTOMER_GROUP_LIST_ALL_MARKER,
+        },
+        "pageNo": 1,
+        "pageSize": 1000,
+    }
+
+
+def is_kingdee_cosmic_customer_group_query_path(path: Any) -> bool:
+    lower = str(path or "").lower().replace("\\", "/")
+    return f"/{BIZ_BD_CUSTOMERGROUP}/query" in lower
+
+
+def customer_group_preset_needs_upgrade(
+    path: Any,
+    method: Any = None,
+    request_body: Any = None,
+) -> bool:
+    if not is_kingdee_cosmic_customer_group_query_path(path):
+        return False
+    if str(method or "").upper() not in ("", "POST"):
+        return True
+    if not isinstance(request_body, dict):
+        return True
+    data = request_body.get("data")
+    if not isinstance(data, dict):
+        return True
+    return not (
+        _group_query_filter_filled(data.get("number"))
+        and _group_query_filter_filled(data.get("name"))
+    )
+
+
+def kingdee_customer_group_api_upgrade_fields() -> Dict[str, Any]:
+    return {
+        "path": CUSTOMER_GROUP_QUERY_PATH,
+        "method": "POST",
+        "name": "苍穹查询客户分类信息",
+        "description": (
+            "开放平台 urlformat=/v2/basedata/bd_customergroup/query。"
+            "本环境强制 data.number、data.name；列表全量传 number/name=\"*\"。"
+            "勿写入空串 id（会 400 NumberFormatException）。"
+        ),
+        "request_body": build_customer_group_query_preset_body(),
+    }
+
+
+ADDRESS_QUERY_PATH = "kapi/v2/basedata/bd_address/query"
+ADDRESS_QUERY_LIST_ALL_MARKER = "*"
+PROJECT_GETLIST_PATH = "kapi/v2/basedata/bd_project/getList"
+PROJECT_LIST_ALL_MARKER = "*"
+
+
+def is_kingdee_cosmic_address_query_path(path: Any) -> bool:
+    """标准地址 query（非 queryAddress）。空 data 会 603 必填 supplierid。"""
+    lower = str(path or "").lower().replace("\\", "/")
+    if "queryaddress" in lower:
+        return False
+    return lower.rstrip("/").endswith("/bd_address/query")
+
+
+def build_address_query_preset_body() -> Dict[str, Any]:
+    return {
+        "data": {"supplierid": ADDRESS_QUERY_LIST_ALL_MARKER},
+        "pageNo": 1,
+        "pageSize": 1000,
+    }
+
+
+def address_query_preset_needs_upgrade(
+    path: Any,
+    method: Any = None,
+    request_body: Any = None,
+) -> bool:
+    if not is_kingdee_cosmic_address_query_path(path):
+        return False
+    if str(method or "").upper() not in ("", "POST"):
+        return True
+    if not isinstance(request_body, dict):
+        return True
+    data = request_body.get("data")
+    if not isinstance(data, dict):
+        return True
+    return not _group_query_filter_filled(data.get("supplierid"))
+
+
+def kingdee_address_query_api_upgrade_fields() -> Dict[str, Any]:
+    return {
+        "path": ADDRESS_QUERY_PATH,
+        "method": "POST",
+        "name": "苍穹查询地址信息",
+        "description": (
+            "开放平台 urlformat=/v2/basedata/bd_address/query。"
+            "本环境强制 data.supplierid；列表全量可传 \"*\"."
+            "无供应商条件时优先用 bd_address/queryAddress。"
+        ),
+        "request_body": build_address_query_preset_body(),
+    }
+
+
+def is_kingdee_cosmic_project_getlist_path(path: Any) -> bool:
+    lower = str(path or "").lower().replace("\\", "/")
+    return "/bd_project/getlist" in lower
+
+
+def build_project_getlist_preset_body() -> Dict[str, Any]:
+    return {
+        "data": {"useorg_number": PROJECT_LIST_ALL_MARKER},
+        "pageNo": 1,
+        "pageSize": 1000,
+    }
+
+
+def project_getlist_preset_needs_upgrade(
+    path: Any,
+    method: Any = None,
+    request_body: Any = None,
+) -> bool:
+    if not is_kingdee_cosmic_project_getlist_path(path):
+        return False
+    if str(method or "").upper() not in ("", "POST"):
+        return True
+    if not isinstance(request_body, dict):
+        return True
+    data = request_body.get("data")
+    if not isinstance(data, dict):
+        return True
+    return not _group_query_filter_filled(data.get("useorg_number"))
+
+
+def kingdee_project_getlist_api_upgrade_fields() -> Dict[str, Any]:
+    return {
+        "path": PROJECT_GETLIST_PATH,
+        "method": "POST",
+        "name": "苍穹查询项目信息",
+        "description": (
+            "开放平台 urlformat=/v2/basedata/bd_project/getList。"
+            "本环境强制 data.useorg_number；列表全量可传 \"*\"。"
+        ),
+        "request_body": build_project_getlist_preset_body(),
+    }
+
+
 def material_group_preset_needs_upgrade(
     path: Any,
     method: Any = None,

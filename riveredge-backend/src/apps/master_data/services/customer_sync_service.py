@@ -20,6 +20,7 @@ from apps.master_data.services.master_data_sync_common import (
     apply_sync_extras_after_write,
     attach_sync_fetch_meta,
     cell_str,
+    collect_mapped_scalar_proposed,
     fetch_sync_rows,
     filter_kingdee_approved_active_master_rows,
     load_custom_fields_by_code,
@@ -32,6 +33,7 @@ from apps.master_data.services.master_data_sync_common import (
     resolve_sync_sources,
     serialize_binding_row,
     sources_from_upsert_body,
+    sync_record_needs_update,
     upsert_sync_binding,
 )
 from core.services.data.sync_binding_sources import fetch_mapped_rows_from_sources
@@ -41,6 +43,11 @@ from core.services.data.sync_progress import emit_sync_progress
 CUSTOMER_CUSTOM_FIELD_TABLE = "master_data_customers"
 CUSTOMER_SYNC_STRING_FIELDS = frozenset(
     {
+        "short_name",
+        "contact_person",
+        "phone",
+        "email",
+        "address",
         "category",
         "contact_title",
         "industry_code",
@@ -293,6 +300,24 @@ class CustomerSyncService:
                     deleted_at__isnull=True,
                 ).first()
                 if existing:
+                    # 仅映射字段更新契约：proposed 只收录映射行出现的字段；
+                    # 无变更且未映射自定义字段时整行跳过
+                    proposed = collect_mapped_scalar_proposed(
+                        row,
+                        string_fields=CUSTOMER_SYNC_STRING_FIELDS,
+                        bool_fields=CUSTOMER_SYNC_BOOL_FIELDS,
+                        decimal_fields=CUSTOMER_SYNC_DECIMAL_FIELDS,
+                        int_fields=CUSTOMER_SYNC_INT_FIELDS,
+                        always={"name": name},
+                    )
+                    has_custom_mapping = bool(custom_fields_by_code) and any(
+                        str(key).startswith("custom:") for key in row.keys()
+                    )
+                    if not has_custom_mapping and not sync_record_needs_update(
+                        existing, proposed
+                    ):
+                        skipped += 1
+                        continue
                     update_payload: Dict[str, Any] = {"name": name}
                     short_name = cell_str(row.get("short_name"))
                     contact_person = cell_str(row.get("contact_person"))

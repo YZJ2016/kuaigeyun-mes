@@ -59,8 +59,10 @@ class MasterDataSyncFromSourceOut(BaseSchema):
     updated: int = 0
     skipped: int = 0
     failed: int = 0
-    """源端本轮拉取行数（增量无变更时为 0）。"""
+    """源端本轮拉取行数（过滤前；增量无变更时为 0）。"""
     fetched: int = 0
+    """活跃/组织等过滤后行数（映射前）。"""
+    after_filter: int = 0
     """全量且无写入时的空结果原因：source_empty | filtered_all | mapping_empty。"""
     empty_reason: Optional[str] = None
     """full=全量拉取；incremental=按水位增量。"""

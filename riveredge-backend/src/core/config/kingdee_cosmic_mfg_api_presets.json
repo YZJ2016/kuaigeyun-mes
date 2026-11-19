@@ -140,13 +140,16 @@
     {
       "code_suffix": "basedata_query_4",
       "name": "苍穹查询供应商分类信息",
-      "description": "调用此API查询供应商分类信息。服务应用 appid=basedata，接口编码 query。开放平台 urlformat=/v2/basedata/bd_suppliergroup/query。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "description": "调用此API查询供应商分类信息。服务应用 appid=basedata，接口编码 query。开放平台 urlformat=/v2/basedata/bd_suppliergroup/query。本环境该 query 强制要求 data.number、data.name（空 data 会 603）；列表全量时传 number=\"*\"、name=\"*\"。未发布 batchQuery/getList（2530）。换票由应用连接器自动完成。",
       "path": "kapi/v2/basedata/bd_suppliergroup/query",
       "method": "POST",
       "request_body": {
-        "data": {},
+        "data": {
+          "number": "*",
+          "name": "*"
+        },
         "pageNo": 1,
-        "pageSize": 100
+        "pageSize": 1000
       }
     },
     {

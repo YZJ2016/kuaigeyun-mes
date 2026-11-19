@@ -31,6 +31,31 @@ _INCOMPLETE_SUPPLIER_PATH_MARKERS = frozenset(
 SUPPLIER_QUERY_ENDPOINT = "kapi/v2/basedata/bd_supplier/query"
 
 
+def is_kingdee_cosmic_supplier_query_path(endpoint: str) -> bool:
+    """
+    是否「标准供应商 query/batchQuery」路径（含截断 …/basedata/b）。
+
+    禁止用裸子串 ``bd_supplier in path``：会误伤 ``bd_suppliergroup``、
+    ``bd_suppliercommon``、以及自定义 ``…/bd_supplier/pbdfl/query`` 等；
+    测试时被整份升级成供应商 query 后，接口管理里分类/自定义接口会返回
+    与「苍穹查询供应商」相同的数据。
+    """
+    lower = str(endpoint or "").lower().replace("\\", "/").rstrip("/")
+    if not lower:
+        return False
+    if lower in _INCOMPLETE_SUPPLIER_PATH_MARKERS or lower.endswith("/basedata/b"):
+        return True
+    parts = [p for p in lower.split("/") if p]
+    try:
+        idx = parts.index("bd_supplier")
+    except ValueError:
+        return False
+    # …/bd_supplier 或 …/bd_supplier/query|batchQuery；勿匹配 pbdfl/getsupplier 等扩展段
+    if idx + 1 >= len(parts):
+        return True
+    return parts[idx + 1] in ("query", "batchquery")
+
+
 def repair_incomplete_supplier_endpoint(endpoint: str) -> str:
     """
     接口库常见误存路径 …/basedata/b（缺 bd_supplier/query）。
@@ -253,8 +278,15 @@ def _is_basedata_single_query(path: str) -> bool:
     return "/basedata/" in lower and lower.endswith("/query") and "batchquery" not in lower
 
 
+def _path_contains_biz_segment(path: str, biz: str) -> bool:
+    """按路径段匹配业务对象，避免 bd_warehouse 误伤 bd_warehousetree 一类扩展名。"""
+    parts = [p for p in _path_without_query(path).lower().replace("\\", "/").split("/") if p]
+    target = str(biz or "").lower()
+    return target in parts
+
+
 def _is_warehouse_path(path: str) -> bool:
-    return "bd_warehouse" in _path_without_query(path).lower()
+    return _path_contains_biz_segment(path, "bd_warehouse")
 
 
 def _rewrite_warehouse_list_url(url: str) -> str:
@@ -275,7 +307,7 @@ def _rewrite_warehouse_list_url(url: str) -> str:
 
 
 def _is_location_path(path: str) -> bool:
-    return "bd_location" in _path_without_query(path).lower()
+    return _path_contains_biz_segment(path, "bd_location")
 
 
 def _is_material_batchquery_path(path: str) -> bool:
@@ -456,6 +488,56 @@ def _is_inventory_balance_query_path(url: str) -> bool:
     )
 
 
+def strip_blank_filters_from_v2_query_data(url: str, body: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    查询类 data 内空串 / 空列表筛选项一律省略。
+
+    金蝶苍穹把 ``\"id\": \"\"``、``\"materialid_id\": \"\"`` 等当成类型字段解析，
+    会报 400 NumberFormatException（Array&lt;Long&gt;），而省略该键则可正常列表查询。
+    仅作用于 query / batchQuery / getList；写操作 data 为单据数组时不触碰。
+    """
+    path = _path_without_query(url).lower().replace("\\", "/")
+    if "kapi/v2/" not in path and "/kapi/v2/" not in path:
+        return body
+    if not any(
+        marker in path
+        for marker in ("batchquery", "batchequery", "batchquerynew", "/query", "/getlist")
+    ):
+        return body
+    if any(
+        marker in path
+        for marker in (
+            "/batchadd",
+            "/batchupdate",
+            "/batchdelete",
+            "/batchsubmit",
+            "/batchaudit",
+            "/save",
+            "/update",
+            "/delete",
+        )
+    ):
+        return body
+    payload = dict(body) if isinstance(body, dict) else {}
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return payload
+    cleaned: Dict[str, Any] = {}
+    for key, value in data.items():
+        if value is None:
+            continue
+        if isinstance(value, str) and not value.strip():
+            continue
+        if isinstance(value, list):
+            if not value:
+                continue
+            if all(not str(item).strip() for item in value):
+                continue
+        cleaned[key] = value
+    payload["data"] = cleaned
+    return payload
+
+
 def prepare_kingdee_cosmic_outbound(
     cfg: Optional[Dict[str, Any]],
     url: str,
@@ -484,6 +566,7 @@ def prepare_kingdee_cosmic_outbound(
             method_out = "POST"
             params_out.pop("number", None)
     body_out = ensure_kingdee_v2_request_body(url_out, body_out)
+    body_out = strip_blank_filters_from_v2_query_data(url_out, body_out)
     org = resolve_kingdee_cosmic_createorg_number(cfg)
     lower = _path_without_query(url_out).lower()
 

@@ -42,6 +42,89 @@ def test_normalize_cosmic_openapi_endpoint_fixes_v2_prefix():
     assert norm("kapi/v2/basedata/b") == "kapi/v2/basedata/bd_supplier/query"
 
 
+def test_is_kingdee_cosmic_supplier_query_path_excludes_group_and_custom():
+    """裸子串 bd_supplier 会误伤 suppliergroup / pbdfl；须按路径段判断。"""
+    is_sup = _mod.is_kingdee_cosmic_supplier_query_path
+    assert is_sup("kapi/v2/basedata/bd_supplier/query") is True
+    assert is_sup("kapi/v2/basedata/bd_supplier/batchQuery") is True
+    assert is_sup("kapi/v2/basedata/b") is True
+    assert is_sup("kapi/v2/basedata/bd_suppliergroup/query") is False
+    assert is_sup("kapi/v2/basedata/bd_suppliercommon/batchQuery") is False
+    assert is_sup("api/v2/k6s3/basedata/bd_supplier/pbdfl/query") is False
+    assert is_sup("kapi/v2/fd81/basedata/bd_supplier/getsupplier") is False
+    assert is_sup("kapi/v2/basedata/bd_address/query") is False
+
+
+def test_supplier_group_query_requires_star_markers_when_empty():
+    from core.services.integration.kingdee_cosmic_api_presets import (
+        kingdee_supplier_group_api_upgrade_fields,
+        supplier_group_preset_needs_upgrade,
+    )
+
+    path = "kapi/v2/basedata/bd_suppliergroup/query"
+    assert supplier_group_preset_needs_upgrade(path, "POST", {"data": {}, "pageNo": 1, "pageSize": 100})
+    assert supplier_group_preset_needs_upgrade(
+        path, "POST", {"data": {"number": "", "name": ""}, "pageNo": 1, "pageSize": 100}
+    )
+    assert not supplier_group_preset_needs_upgrade(
+        path,
+        "POST",
+        {"data": {"number": "*", "name": "*"}, "pageNo": 1, "pageSize": 1000},
+    )
+    fields = kingdee_supplier_group_api_upgrade_fields()
+    assert fields["request_body"]["data"]["number"] == "*"
+    assert fields["request_body"]["data"]["name"] == "*"
+
+
+def test_customer_group_and_address_and_project_upgrades():
+    from core.services.integration.kingdee_cosmic_api_presets import (
+        address_query_preset_needs_upgrade,
+        customer_group_preset_needs_upgrade,
+        kingdee_address_query_api_upgrade_fields,
+        kingdee_customer_group_api_upgrade_fields,
+        kingdee_project_getlist_api_upgrade_fields,
+        project_getlist_preset_needs_upgrade,
+    )
+
+    cg = "kapi/v2/basedata/bd_customergroup/query"
+    assert customer_group_preset_needs_upgrade(
+        cg, "POST", {"data": {"id": "", "number": ""}, "pageNo": 1, "pageSize": 100}
+    )
+    assert not customer_group_preset_needs_upgrade(
+        cg, "POST", {"data": {"number": "*", "name": "*"}, "pageNo": 1, "pageSize": 100}
+    )
+    assert kingdee_customer_group_api_upgrade_fields()["request_body"]["data"]["number"] == "*"
+
+    addr = "kapi/v2/basedata/bd_address/query"
+    assert address_query_preset_needs_upgrade(addr, "POST", {"data": {}, "pageNo": 1, "pageSize": 100})
+    assert not address_query_preset_needs_upgrade(
+        "kapi/v2/basedata/bd_address/queryAddress", "POST", {"data": {}}
+    )
+    assert kingdee_address_query_api_upgrade_fields()["request_body"]["data"]["supplierid"] == "*"
+
+    proj = "kapi/v2/basedata/bd_project/getList"
+    assert project_getlist_preset_needs_upgrade(proj, "POST", {"data": {}})
+    assert kingdee_project_getlist_api_upgrade_fields()["request_body"]["data"]["useorg_number"] == "*"
+
+
+def test_strip_blank_filters_from_v2_query_data():
+    strip = _mod.strip_blank_filters_from_v2_query_data
+    url = "https://x/kapi/v2/basedata/bd_multimeasureunit/batchQuery"
+    out = strip(
+        url,
+        {
+            "data": {"id": "", "materialid_id": "", "status": "C", "tags": []},
+            "pageNo": 1,
+            "pageSize": 5,
+        },
+    )
+    assert out["data"] == {"status": "C"}
+    # 写操作不剥
+    write_url = "https://x/kapi/v2/basedata/bd_material/batchAdd"
+    body = {"data": [{"id": ""}]}
+    assert strip(write_url, body)["data"] == [{"id": ""}]
+
+
 def test_strip_invalid_base_url_suffix():
     strip = _mod.strip_invalid_kingdee_cosmic_base_url_suffix
     assert (
