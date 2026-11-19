@@ -292,7 +292,7 @@ riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/purchase_order_sync
 riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/purchase_receipt_sync_service.py	6ac18d356950eda845ce311f7ca7df171e7154fa	tracked	seed from 4bd853a94f
 riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/sales_order_sync_service.py	df2f47d8c33aa4565abbdf263e1517cff62010be	tracked	seed from 31efc2b64c
 riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/storage_location_sync_service.py	0401b620a73471fe87185eb5a45b2778ebabf747	tracked	seed from 57a37e2749
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/supplier_sync_service.py	4cd9f195a26240036832eac503810a814e6874b3	applied	org-scope 集成 hunk 已适配落地；供应商 bulk-write 重构（apply_mapped_scalar_fields 族）仍缓置
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/supplier_sync_service.py	4cd9f195a26240036832eac503810a814e6874b3	applied	org-scope+bulk-write(a0b353ce7e版)已适配落apps/master_data；tip增量(schedule窗口/force_rewrite/sync_record_needs_update/expand_legacy_settlement/short_name入STRING)随所属簇缓置
 riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/sync_binding_sources.py	a4dfcf6d31a8de9edd31d28b52e3c0aa2875c117	tracked	seed from 994bc9a312
 riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/warehouse_sync_service.py	4fd5734e32c56512233f4de5994a488e0d6f5c6b	tracked	seed from 905787348a
 riveredge-backend/src/apps/kuaiems/manifest.json	5ef0dd94364e247a47c958f326329cc8c22cad0d	tracked	seed from 46508115c7

@@ -1,8 +1,9 @@
 """供应商从数据接口/数据集同步。"""
 from __future__ import annotations
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.master_data.models.master_data_sync_binding import SupplierSyncBinding
 from apps.master_data.models.supplier import Supplier
 from apps.master_data.schemas.master_data_sync import (
@@ -11,9 +12,12 @@ from apps.master_data.schemas.master_data_sync import (
     MasterDataSyncFromSourceOut,
     MasterDataSyncFromSourceRequest,
 )
-from apps.master_data.schemas.supply_chain_schemas import SupplierCreate, SupplierUpdate
 from apps.master_data.services.master_data_sync_common import (
-    apply_sync_extras_after_write,
+    apply_mapped_custom_field_values,
+    apply_mapped_scalar_fields,
+    cell_optional_bool,
+    cell_optional_decimal,
+    cell_optional_int,
     cell_str,
     fetch_sync_rows,
     filter_kingdee_approved_active_master_rows,
@@ -21,9 +25,9 @@ from apps.master_data.services.master_data_sync_common import (
     map_sync_rows,
     mark_binding_failure,
     mark_binding_success,
-    mark_external_sync_record,
     normalize_schedule_interval,
     normalize_sync_mode,
+    record_fields_unchanged,
     resolve_incremental_since,
     resolve_sync_sources,
     serialize_binding_row,
@@ -31,7 +35,9 @@ from apps.master_data.services.master_data_sync_common import (
     upsert_sync_binding,
 )
 from core.services.data.sync_binding_sources import fetch_mapped_rows_from_sources
+from apps.master_data.services.supply_chain_service import _normalize_partner_name
 from core.services.data.sync_progress import emit_sync_progress
+from core.utils.timezone_utils import resolve_business_datetime
 
 SUPPLIER_CUSTOM_FIELD_TABLE = "master_data_suppliers"
 SUPPLIER_SYNC_STRING_FIELDS = frozenset({
@@ -54,7 +60,22 @@ _PAYMENT_ACCOUNT_COLUMN = {
     "payment_bank_name": "bank_name",
     "payment_bank_account": "bank_account",
 }
-from apps.master_data.services.supply_chain_service import SupplyChainService
+
+SUPPLIER_BULK_UPDATE_FIELDS = sorted(
+    {
+        "name",
+        "short_name",
+        "external_sync_at",
+        "updated_at",
+        "updated_by",
+        "updated_by_name",
+        "settlement_accounts",
+        *SUPPLIER_SYNC_STRING_FIELDS,
+        *SUPPLIER_SYNC_BOOL_FIELDS,
+        *SUPPLIER_SYNC_DECIMAL_FIELDS,
+        *SUPPLIER_SYNC_INT_FIELDS,
+    }
+)
 
 
 def apply_supplier_payment_account_sync(record: Supplier, mapped_row: Dict[str, Any]) -> bool:
@@ -86,6 +107,53 @@ def apply_supplier_payment_account_sync(record: Supplier, mapped_row: Dict[str, 
         kept[0]["is_default"] = True
     record.settlement_accounts = kept
     return True
+
+
+def _supplier_sync_has_custom_mapping(mapped_row: Dict[str, Any]) -> bool:
+    return any(str(key).startswith("custom:") for key in mapped_row)
+
+
+def _supplier_sync_proposed_core(
+    name: str,
+    mapped_row: Dict[str, Any],
+) -> Dict[str, Any]:
+    proposed: Dict[str, Any] = {
+        "name": _normalize_partner_name(name),
+        "short_name": cell_str(mapped_row.get("short_name")) or None,
+    }
+    for field_name in SUPPLIER_SYNC_STRING_FIELDS:
+        if field_name in mapped_row:
+            proposed[field_name] = cell_str(mapped_row.get(field_name)) or None
+    for field_name in SUPPLIER_SYNC_BOOL_FIELDS:
+        if field_name in mapped_row:
+            coerced = cell_optional_bool(mapped_row.get(field_name))
+            if coerced is not None:
+                proposed[field_name] = coerced
+    for field_name in SUPPLIER_SYNC_DECIMAL_FIELDS:
+        if field_name in mapped_row:
+            coerced = cell_optional_decimal(mapped_row.get(field_name))
+            if coerced is not None:
+                proposed[field_name] = coerced
+    for field_name in SUPPLIER_SYNC_INT_FIELDS:
+        if field_name in mapped_row:
+            coerced = cell_optional_int(mapped_row.get(field_name))
+            if coerced is not None:
+                proposed[field_name] = coerced
+    return proposed
+
+
+def _apply_supplier_mapped_fields(record: Supplier, mapped_row: Dict[str, Any]) -> List[str]:
+    touched = apply_mapped_scalar_fields(
+        record,
+        mapped_row,
+        string_fields=SUPPLIER_SYNC_STRING_FIELDS,
+        bool_fields=SUPPLIER_SYNC_BOOL_FIELDS,
+        decimal_fields=SUPPLIER_SYNC_DECIMAL_FIELDS,
+        int_fields=SUPPLIER_SYNC_INT_FIELDS,
+    )
+    if apply_supplier_payment_account_sync(record, mapped_row):
+        touched.append("settlement_accounts")
+    return touched
 
 
 class SupplierSyncService:
@@ -290,16 +358,17 @@ class SupplierSyncService:
         skipped = 0
         failed = 0
         errors: List[str] = []
+        sync_at = resolve_business_datetime()
         custom_fields_by_code = await load_custom_fields_by_code(
             tenant_id, SUPPLIER_CUSTOM_FIELD_TABLE
         )
-        total = len(rows)
-        if total:
-            await emit_sync_progress(f"开始写入供应商，共 {total} 条…")
-        for index, row in enumerate(rows, start=1):
-            if total and (index == 1 or index % 50 == 0 or index == total):
-                await emit_sync_progress(f"正在写入供应商 {index}/{total}…")
-            code = cell_str(row.get(match_key if match_key == "code" else "code") or row.get(match_key))
+
+        PendingRow = Tuple[str, str, Dict[str, Any]]
+        pending_rows: List[PendingRow] = []
+        for row in rows:
+            code = cell_str(
+                row.get(match_key if match_key == "code" else "code") or row.get(match_key)
+            )
             name = cell_str(row.get("name"))
             if not code:
                 skipped += 1
@@ -309,72 +378,175 @@ class SupplierSyncService:
                 skipped += 1
                 errors.append(f"供应商 {code} 缺少名称，已跳过")
                 continue
+            pending_rows.append((code.upper(), name, row))
+
+        if not pending_rows:
+            return MasterDataSyncFromSourceOut(
+                created=created,
+                updated=updated,
+                skipped=skipped,
+                failed=failed,
+                errors=errors[:20],
+            )
+
+        total = len(pending_rows)
+        await emit_sync_progress(f"正在预加载本地供应商，准备写入 {total} 条…")
+
+        from apps.master_data.services.supplier_governance import (
+            QUALIFICATION_APPROVED,
+            QUALIFICATION_POTENTIAL,
+            is_supplier_qualification_required,
+        )
+
+        qualification_required = await is_supplier_qualification_required(tenant_id)
+        create_qualification_status = (
+            QUALIFICATION_POTENTIAL if qualification_required else QUALIFICATION_APPROVED
+        )
+
+        codes = [item[0] for item in pending_rows]
+        existing_by_code: Dict[str, Supplier] = {}
+        lookup_chunk = 2000
+        for offset in range(0, len(codes), lookup_chunk):
+            chunk_codes = codes[offset : offset + lookup_chunk]
+            existing_rows = await Supplier.filter(
+                tenant_id=tenant_id,
+                code__in=chunk_codes,
+                deleted_at__isnull=True,
+            ).all()
+            for item in existing_rows:
+                existing_by_code[item.code.upper()] = item
+
+        to_update: List[Supplier] = []
+        to_create: List[Supplier] = []
+        custom_payload_by_code: Dict[str, Dict[str, Any]] = {}
+
+        for index, (code_key, name, mapped_row) in enumerate(pending_rows, start=1):
+            if index == 1 or index == total or index % 500 == 0:
+                await emit_sync_progress(f"正在解析供应商 {index}/{total}：{code_key}")
             try:
-                existing = await Supplier.filter(
-                    tenant_id=tenant_id,
-                    code=code.upper(),
-                    deleted_at__isnull=True,
-                ).first()
+                custom_payload_by_code[code_key] = mapped_row
+                existing = existing_by_code.get(code_key)
                 if existing:
-                    update_data = SupplierUpdate(
-                        name=name,
-                        short_name=cell_str(row.get("short_name")) or None,
+                    proposed = _supplier_sync_proposed_core(name, mapped_row)
+                    has_custom = _supplier_sync_has_custom_mapping(mapped_row)
+                    has_payment = any(
+                        key in mapped_row for key in SUPPLIER_PAYMENT_ACCOUNT_SYNC_FIELDS
                     )
-                    await SupplyChainService.update_supplier(
-                        tenant_id,
-                        existing.uuid,
-                        update_data,
-                        current_user,
-                    )
-                    await existing.refresh_from_db()
-                    await apply_sync_extras_after_write(
-                        tenant_id=tenant_id,
-                        record=existing,
-                        mapped_row=row,
-                        record_table=SUPPLIER_CUSTOM_FIELD_TABLE,
-                        fields_by_code=custom_fields_by_code,
-                        string_fields=SUPPLIER_SYNC_STRING_FIELDS,
-                        bool_fields=SUPPLIER_SYNC_BOOL_FIELDS,
-                        decimal_fields=SUPPLIER_SYNC_DECIMAL_FIELDS,
-                        int_fields=SUPPLIER_SYNC_INT_FIELDS,
-                    )
-                    if apply_supplier_payment_account_sync(existing, row):
-                        await existing.save(update_fields=["settlement_accounts", "updated_at"])
-                    await mark_external_sync_record(existing)
-                    updated += 1
+                    if (
+                        not has_custom
+                        and not has_payment
+                        and record_fields_unchanged(existing, proposed)
+                    ):
+                        skipped += 1
+                        continue
+                    existing.name = proposed["name"]
+                    existing.short_name = proposed.get("short_name")
+                    existing.external_sync_at = sync_at
+                    existing.updated_at = sync_at
+                    _apply_supplier_mapped_fields(existing, mapped_row)
+                    if current_user is not None:
+                        apply_update_audit(existing, current_user)
+                    to_update.append(existing)
                 else:
-                    create_data = SupplierCreate(
-                        code=code,
-                        name=name,
-                        short_name=cell_str(row.get("short_name")) or None,
-                    )
-                    created_supplier = await SupplyChainService.create_supplier(
-                        tenant_id, create_data, current_user
-                    )
-                    supplier_row = await Supplier.filter(
-                        tenant_id=tenant_id,
-                        uuid=created_supplier.uuid,
-                        deleted_at__isnull=True,
-                    ).first()
-                    if supplier_row:
-                        await apply_sync_extras_after_write(
-                            tenant_id=tenant_id,
-                            record=supplier_row,
-                            mapped_row=row,
-                            record_table=SUPPLIER_CUSTOM_FIELD_TABLE,
-                            fields_by_code=custom_fields_by_code,
-                            string_fields=SUPPLIER_SYNC_STRING_FIELDS,
-                            bool_fields=SUPPLIER_SYNC_BOOL_FIELDS,
-                            decimal_fields=SUPPLIER_SYNC_DECIMAL_FIELDS,
-                            int_fields=SUPPLIER_SYNC_INT_FIELDS,
-                        )
-                        if apply_supplier_payment_account_sync(supplier_row, row):
-                            await supplier_row.save(update_fields=["settlement_accounts", "updated_at"])
-                        await mark_external_sync_record(supplier_row)
-                    created += 1
+                    payload: Dict[str, Any] = {
+                        "tenant_id": tenant_id,
+                        "code": code_key,
+                        "name": _normalize_partner_name(name),
+                        "short_name": cell_str(mapped_row.get("short_name")) or None,
+                        "is_active": True,
+                        "qualification_status": create_qualification_status,
+                        "qualifications": [],
+                        "external_sync_at": sync_at,
+                    }
+                    if current_user is not None:
+                        apply_create_audit(payload, current_user)
+                    supplier = Supplier(**payload)
+                    _apply_supplier_mapped_fields(supplier, mapped_row)
+                    to_create.append(supplier)
             except Exception as exc:
                 failed += 1
-                errors.append(f"供应商 {code}：{exc}")
+                errors.append(f"供应商 {code_key}：{exc}")
+
+        write_batch = 500
+
+        async def _write_custom_fields_for_suppliers(suppliers: List[Supplier]) -> None:
+            if not custom_fields_by_code or not suppliers:
+                return
+            for supplier in suppliers:
+                mapped = custom_payload_by_code.get(supplier.code.upper())
+                if not mapped:
+                    continue
+                try:
+                    await apply_mapped_custom_field_values(
+                        tenant_id=tenant_id,
+                        record_table=SUPPLIER_CUSTOM_FIELD_TABLE,
+                        record_id=int(supplier.id),
+                        mapped_row=mapped,
+                        fields_by_code=custom_fields_by_code,
+                    )
+                except Exception as cf_exc:
+                    errors.append(f"供应商 {supplier.code} 自定义字段：{cf_exc}")
+
+        async def _flush_updates(batch: List[Supplier], start_index: int) -> None:
+            nonlocal updated, failed
+            if not batch:
+                return
+            end_index = start_index + len(batch) - 1
+            await emit_sync_progress(
+                f"正在批量更新供应商 {start_index}-{end_index}/{len(to_update)}…"
+            )
+            try:
+                await Supplier.bulk_update(
+                    batch, fields=SUPPLIER_BULK_UPDATE_FIELDS, batch_size=write_batch
+                )
+                updated += len(batch)
+                await _write_custom_fields_for_suppliers(batch)
+            except Exception:
+                for supplier in batch:
+                    try:
+                        await supplier.save(update_fields=SUPPLIER_BULK_UPDATE_FIELDS)
+                        updated += 1
+                        await _write_custom_fields_for_suppliers([supplier])
+                    except Exception as row_exc:
+                        failed += 1
+                        errors.append(f"供应商 {supplier.code}：{row_exc}")
+
+        async def _flush_creates(batch: List[Supplier], start_index: int) -> None:
+            nonlocal created, failed
+            if not batch:
+                return
+            end_index = start_index + len(batch) - 1
+            await emit_sync_progress(
+                f"正在批量新建供应商 {start_index}-{end_index}/{len(to_create)}…"
+            )
+            try:
+                await Supplier.bulk_create(batch, batch_size=write_batch)
+                created += len(batch)
+                codes_created = [item.code for item in batch]
+                persisted = await Supplier.filter(
+                    tenant_id=tenant_id,
+                    code__in=codes_created,
+                    deleted_at__isnull=True,
+                ).all()
+                await _write_custom_fields_for_suppliers(persisted)
+            except Exception:
+                for supplier in batch:
+                    try:
+                        await supplier.save()
+                        created += 1
+                        await _write_custom_fields_for_suppliers([supplier])
+                    except Exception as row_exc:
+                        failed += 1
+                        errors.append(f"供应商 {supplier.code}：{row_exc}")
+
+        for offset in range(0, len(to_update), write_batch):
+            await _flush_updates(to_update[offset : offset + write_batch], offset + 1)
+        for offset in range(0, len(to_create), write_batch):
+            await _flush_creates(to_create[offset : offset + write_batch], offset + 1)
+
+        await emit_sync_progress(
+            f"供应商写入完成：新建 {created}，更新 {updated}，跳过 {skipped}，失败 {failed}"
+        )
         return MasterDataSyncFromSourceOut(
             created=created,
             updated=updated,
