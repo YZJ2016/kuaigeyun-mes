@@ -12,6 +12,12 @@ from loguru import logger
 from apps.kuaizhizao.models.document_relation import DocumentRelation
 from apps.kuaizhizao.models.other_inbound import OtherInbound
 from apps.kuaizhizao.models.other_inbound_item import OtherInboundItem
+from apps.kuaizhizao.services.kingdee_im_batch_update_service import (
+    kingdee_im_batch_update_linked_bill,
+)
+from apps.kuaizhizao.services.kingdee_im_warehouse_revoke_service import (
+    OTHER_INBOUND_REVOKE_SPEC,
+)
 from apps.kuaizhizao.services.kingdee_warehouse_billentry_dual_qty import (
     apply_billentry_dual_qty_fields,
     log_billentry_dual_qty,
@@ -499,7 +505,39 @@ class KingdeeOtherInboundPushService:
         warehouse = (biz_config.get("parameters", {}) or {}).get("warehouse", {}) or {}
         return merge_warehouse_kingdee_push_config(warehouse, "kingdee_other_inbound_push")
 
-    async def _push_now(
+    async def batch_update_linked_kingdee_bill(
+        self,
+        *,
+        tenant_id: int,
+        inbound: OtherInbound,
+        items: List[OtherInboundItem],
+        acting_user_id: int,
+        relation: DocumentRelation,
+        config: Dict[str, Any],
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        async def _prepare(merged: Dict[str, Any]) -> tuple[Dict[str, Any], str, Dict[str, Any]]:
+            return await self._prepare_kingdee_push_model(
+                tenant_id=tenant_id,
+                inbound=inbound,
+                items=items,
+                acting_user_id=acting_user_id,
+                config=merged,
+                dry_run=dry_run,
+            )
+
+        return await kingdee_im_batch_update_linked_bill(
+            tenant_id=tenant_id,
+            spec=OTHER_INBOUND_REVOKE_SPEC,
+            source_id=int(inbound.id),
+            source_type=SOURCE_TYPE,
+            relation=relation,
+            base_config=config,
+            prepare_model=_prepare,
+            dry_run=dry_run,
+        )
+
+    async def _prepare_kingdee_push_model(
         self,
         *,
         tenant_id: int,
@@ -508,7 +546,7 @@ class KingdeeOtherInboundPushService:
         acting_user_id: int,
         config: Dict[str, Any],
         dry_run: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> tuple[Dict[str, Any], str, Dict[str, Any]]:
         config = await enrich_kingdee_warehouse_push_config(tenant_id, config)
         config = await enrich_other_inbound_header_config(
             tenant_id, inbound, acting_user_id, config
@@ -598,6 +636,26 @@ class KingdeeOtherInboundPushService:
         )
         if not (model.get("billentry") or []) and not dry_run:
             raise BusinessLogicError("其他入库单无有效明细数量，无法推送")
+        return config, form_id, model
+
+    async def _push_now(
+        self,
+        *,
+        tenant_id: int,
+        inbound: OtherInbound,
+        items: List[OtherInboundItem],
+        acting_user_id: int,
+        config: Dict[str, Any],
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        config, form_id, model = await self._prepare_kingdee_push_model(
+            tenant_id=tenant_id,
+            inbound=inbound,
+            items=items,
+            acting_user_id=acting_user_id,
+            config=config,
+            dry_run=dry_run,
+        )
 
         request = DocumentPushRequest(
             source_type=SOURCE_TYPE,

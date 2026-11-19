@@ -2417,7 +2417,16 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                             tenant_id=tenant_id, id=item.id
                         ).update(**item_updates)
 
-            return await self.get_production_picking_by_id(tenant_id, picking_id)
+            result = await self.get_production_picking_by_id(tenant_id, picking_id)
+
+        from apps.kuaizhizao.services.kingdee_im_batch_update_sync import (
+            sync_production_picking_kingdee_after_update,
+        )
+
+        await sync_production_picking_kingdee_after_update(
+            tenant_id, picking_id, acting_user_id=updated_by
+        )
+        return result
 
     async def get_material_prep_reminders(
         self,
@@ -7644,7 +7653,16 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     **header_updates
                 )
 
-            return await self.get_sales_delivery_by_id(tenant_id, delivery_id)
+            result = await self.get_sales_delivery_by_id(tenant_id, delivery_id)
+
+        from apps.kuaizhizao.services.kingdee_im_batch_update_sync import (
+            sync_sales_delivery_kingdee_after_update,
+        )
+
+        await sync_sales_delivery_kingdee_after_update(
+            tenant_id, delivery_id, acting_user_id=updated_by
+        )
+        return result
 
     @serialize_stock_document("sales_delivery", "delivery_id")
     async def delete_sales_delivery(self, tenant_id: int, delivery_id: int) -> None:
@@ -11625,9 +11643,18 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
 
             await sync_purchase_receipt_header_amounts(tenant_id, receipt_id)
 
-            return PurchaseReceiptResponse.model_validate(
+            result = PurchaseReceiptResponse.model_validate(
                 await PurchaseReceipt.get(tenant_id=tenant_id, id=receipt_id)
             )
+
+        from apps.kuaizhizao.services.kingdee_im_batch_update_sync import (
+            sync_purchase_receipt_kingdee_after_update,
+        )
+
+        await sync_purchase_receipt_kingdee_after_update(
+            tenant_id, receipt_id, acting_user_id=updated_by
+        )
+        return result
 
     async def list_purchase_receipts(
         self, tenant_id: int, skip: int = 0, limit: int = 20, **filters
@@ -17927,9 +17954,18 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                     total_amount=total_amount,
                 )
 
-            return OtherInboundResponse.model_validate(
+            result = OtherInboundResponse.model_validate(
                 await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
             )
+
+        from apps.kuaizhizao.services.kingdee_im_batch_update_sync import (
+            sync_other_inbound_kingdee_after_update,
+        )
+
+        await sync_other_inbound_kingdee_after_update(
+            tenant_id, inbound_id, acting_user_id=updated_by
+        )
+        return result
 
     @serialize_stock_document("other_inbound", "inbound_id")
     async def delete_other_inbound(self, tenant_id: int, inbound_id: int) -> bool:
@@ -18673,7 +18709,15 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
             result = OtherOutboundResponse.model_validate(
                 await OtherOutbound.get(tenant_id=tenant_id, id=outbound_id)
             )
-            return result
+
+        from apps.kuaizhizao.services.kingdee_im_batch_update_sync import (
+            sync_other_outbound_kingdee_after_update,
+        )
+
+        await sync_other_outbound_kingdee_after_update(
+            tenant_id, outbound_id, acting_user_id=updated_by
+        )
+        return result
 
     async def delete_other_outbound(self, tenant_id: int, outbound_id: int) -> bool:
         """删除其他出库单（未审核/待出库未过审/已取消可删；审核通过后须先撤销审核）。"""

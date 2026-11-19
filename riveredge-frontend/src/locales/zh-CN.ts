@@ -4202,6 +4202,10 @@ export default {
   'app.kuaizhizao.documentDetail.stockLoading': '加载库存…',
   'app.kuaizhizao.documentDetail.stockEmpty': '无在库',
   'app.kuaizhizao.documentDetail.warehouseStock': '各仓在库',
+  'pages.dashboard.updateLog.entries.kingdee-im-batch-update-after-edit-r01.title':
+    '编辑已推送金蝶的仓储单据会回写金蝶',
+  'pages.dashboard.updateLog.entries.kingdee-im-batch-update-after-edit-r01.description':
+    '生产领料、销售出库、采购入库、其他入库和其他出库保存成功后，若该单已关联金蝶且仍可编辑，会把当前明细回写到金蝶。尚未推送或推送未开启时，保存流程与原来一样。',
   'pages.dashboard.updateLog.entries.kingdee-billentry-dual-qty-r01.title':
     '金蝶出入库推送带上库存单位和辅助数量',
   'pages.dashboard.updateLog.entries.kingdee-billentry-dual-qty-r01.description':

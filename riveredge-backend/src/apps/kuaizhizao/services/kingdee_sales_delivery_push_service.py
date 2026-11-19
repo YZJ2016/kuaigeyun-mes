@@ -12,6 +12,12 @@ from loguru import logger
 from apps.kuaizhizao.models.document_relation import DocumentRelation
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
+from apps.kuaizhizao.services.kingdee_im_batch_update_service import (
+    kingdee_im_batch_update_linked_bill,
+)
+from apps.kuaizhizao.services.kingdee_im_warehouse_revoke_service import (
+    SALES_DELIVERY_REVOKE_SPEC,
+)
 from apps.kuaizhizao.services.kingdee_warehouse_billentry_dual_qty import (
     apply_billentry_dual_qty_fields,
     log_billentry_dual_qty,
@@ -401,7 +407,39 @@ class KingdeeSalesDeliveryPushService:
         raw = warehouse.get("kingdee_sales_delivery_push") or {}
         return dict(raw) if isinstance(raw, dict) else {}
 
-    async def _push_now(
+    async def batch_update_linked_kingdee_bill(
+        self,
+        *,
+        tenant_id: int,
+        delivery: SalesDelivery,
+        items: List[SalesDeliveryItem],
+        acting_user_id: int,
+        relation: DocumentRelation,
+        config: Dict[str, Any],
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        async def _prepare(merged: Dict[str, Any]) -> tuple[Dict[str, Any], str, Dict[str, Any]]:
+            return await self._prepare_kingdee_push_model(
+                tenant_id=tenant_id,
+                delivery=delivery,
+                items=items,
+                acting_user_id=acting_user_id,
+                config=merged,
+                dry_run=dry_run,
+            )
+
+        return await kingdee_im_batch_update_linked_bill(
+            tenant_id=tenant_id,
+            spec=SALES_DELIVERY_REVOKE_SPEC,
+            source_id=int(delivery.id),
+            source_type=SOURCE_TYPE,
+            relation=relation,
+            base_config=config,
+            prepare_model=_prepare,
+            dry_run=dry_run,
+        )
+
+    async def _prepare_kingdee_push_model(
         self,
         *,
         tenant_id: int,
@@ -410,7 +448,7 @@ class KingdeeSalesDeliveryPushService:
         acting_user_id: int,
         config: Dict[str, Any],
         dry_run: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> tuple[Dict[str, Any], str, Dict[str, Any]]:
         form_id = str(config.get("form_id") or DEFAULT_FORM_ID).strip() or DEFAULT_FORM_ID
         save_path = str(config.get("save_path") or DEFAULT_SAVE_PATH).strip() or DEFAULT_SAVE_PATH
 
@@ -502,6 +540,26 @@ class KingdeeSalesDeliveryPushService:
         )
         if not (model.get("billentry") or []) and not dry_run:
             raise BusinessLogicError("销售出库单无有效明细数量，无法推送")
+        return config, form_id, model
+
+    async def _push_now(
+        self,
+        *,
+        tenant_id: int,
+        delivery: SalesDelivery,
+        items: List[SalesDeliveryItem],
+        acting_user_id: int,
+        config: Dict[str, Any],
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        config, form_id, model = await self._prepare_kingdee_push_model(
+            tenant_id=tenant_id,
+            delivery=delivery,
+            items=items,
+            acting_user_id=acting_user_id,
+            config=config,
+            dry_run=dry_run,
+        )
 
         request = DocumentPushRequest(
             source_type=SOURCE_TYPE,

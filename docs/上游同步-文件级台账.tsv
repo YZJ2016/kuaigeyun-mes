@@ -267,17 +267,18 @@ riveredge-backend/src/apps/kuaiconnect/services/__init__.py	eb7ddb73bf264f62d5da
 riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_reconcile_service.py	64f4b85988079693fef9ae174a6c1ac19e51e839	tracked	seed from 959f65b743
 riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py	c2066ad59fa00c30093c78a19d0d695cb5adeccc	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_finished_goods_receipt_push_service.py	a2c8f72f545305d0e3043b43356af6974bf2846b	tracked	seed from 154977d948
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_im_batch_update_sync.py	0815decab304082f0dec90c82a8b055af4fec6ff	applied	ported to kuaizhizao; five warehouse update hooks; finished-goods update method absent locally
 riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_im_warehouse_revoke_service.py	437c5823c96fdaa3d225beebce4dc4fd6c5dc442	tracked	seed from 6abba1dbd5
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_other_inbound_push_service.py	3bd8bb8f81b5e7f206148e9a6ff44180260dd2cf	applied	dual-qty wiring adapted into local kuaizhizao push service; price/tax/header kept
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_other_outbound_push_service.py	88c896240c4b6e74f1f9b8195f1b6a937adfda56	applied	dual-qty wiring adapted into local kuaizhizao push service; price/tax/header kept
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_other_inbound_push_service.py	3bd8bb8f81b5e7f206148e9a6ff44180260dd2cf	applied	local kuaizhizao service: dual-qty billentry fields plus batch_update_linked_kingdee_bill
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_other_outbound_push_service.py	88c896240c4b6e74f1f9b8195f1b6a937adfda56	applied	local kuaizhizao service: dual-qty billentry fields plus batch_update_linked_kingdee_bill
 riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_outbound_avb_precheck_service.py	ed76775773ecf982622833efb97fd4ee08f3a935	applied	三确认共用金蝶可用量预检，仅无感外推会跑时执行；报价改删与四页钉住仍缓置，billentry 与 im 批量更新仍缺依赖
 riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_outbound_invtype_resolve.py	8f92fb01f66382947de22e2059fd57ce551a22df	tracked	seed from 1eb300325a
 riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_production_order_push_service.py	ea1a2d595eccff3f5fca2752a6b47867fbbc139d	tracked	seed from 1eb300325a
 riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_production_picking_push_service.py	dedfcd1d3f92c3fb07c5d13b8492d93307bedfbd	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_purchase_order_push_service.py	fec4e54d7a35b202dd32b021dd293d897dcf28be	tracked	seed from 1eb300325a
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_purchase_receipt_push_service.py	06babeff6dfbfb2aaba463b8011c667cddb79004	applied	dual-qty wiring adapted into local kuaizhizao push service; price/tax/header kept
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_purchase_receipt_push_service.py	06babeff6dfbfb2aaba463b8011c667cddb79004	applied	local kuaizhizao service: dual-qty billentry fields plus batch_update_linked_kingdee_bill
 riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_purchase_receipt_revoke_service.py	89bfe157abfabd97bcd82ebfadae3843bc203399	tracked	seed from 6abba1dbd5
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_sales_delivery_push_service.py	3fa9cd3835626864d1396426ea9b75a2587516fa	applied	dual-qty wiring adapted into local kuaizhizao push service; price/tax/header kept
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_sales_delivery_push_service.py	3fa9cd3835626864d1396426ea9b75a2587516fa	applied	local kuaizhizao service: dual-qty billentry fields plus batch_update_linked_kingdee_bill
 riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_sales_order_push_service.py	f765e192e2da888d88ad2a3097ec1138f12c5794	tracked	seed from 1eb300325a
 riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_stocktaking_deficit_push_service.py	d7514904b21345789ef3f4b6cc568dc231a062e6	tracked	seed from 2e8ecad990
 riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_stocktaking_surplus_push_service.py	ed0e03c80b9f63d7fe7d1f9918556808229c17d6	tracked	seed from 2e8ecad990
@@ -926,7 +927,7 @@ riveredge-backend/src/apps/kuaizhizao/services/supplier_evaluation_service.py	44
 riveredge-backend/src/apps/kuaizhizao/services/tool_ops_service.py	0651b6bfd2a14a16198676d37a28ea022819e2f0	tracked	seed from 5f085a19c9
 riveredge-backend/src/apps/kuaizhizao/services/tool_service.py	6732e768d2c81363d7c2d9e82bead63dbe392d98	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/services/warehouse_kingdee_alignment.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
-riveredge-backend/src/apps/kuaizhizao/services/warehouse_service.py	7874c70a81eb9a4ed7f6514c7970d803d6c16d33	applied	959f65b743 header totals + 1pct tax option
+riveredge-backend/src/apps/kuaizhizao/services/warehouse_service.py	7874c70a81eb9a4ed7f6514c7970d803d6c16d33	applied	five update methods call sync after commit; no local update_finished_goods_receipt
 riveredge-backend/src/apps/kuaizhizao/services/warehouse_wo_outsource_pull_service.py	222c4850eafc6d7bc69db6297febf357bd87bf83	tracked	seed from 5b1b9828e4
 riveredge-backend/src/apps/kuaizhizao/services/work_order_bom_line_service.py	dbebd0ad922e1fff09f2c878f662654aa16c16c1	tracked	seed from 5b1b9828e4
 riveredge-backend/src/apps/kuaizhizao/services/work_order_service.py	f5df2d43d9e2564c39ffcede05cbb475e40d157e	tracked	seed from 154977d948
