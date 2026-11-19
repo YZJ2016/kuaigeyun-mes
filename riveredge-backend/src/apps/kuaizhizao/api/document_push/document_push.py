@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 
 from apps.kuaizhizao.api._kuaizhizao_document_gate import (
+    resolve_external_push_permission,
     resolve_hub_history_permission_codes,
 )
 from apps.kuaizhizao.services.document_push_service import DocumentPushService
@@ -206,6 +207,85 @@ async def list_document_push_run_history(
         data=[DocumentPushRunHistoryItem.model_validate(row) for row in rows],
         total=total,
         success=True,
+    )
+
+
+class DocumentPushReconcileBody(BaseModel):
+    source_type: str = Field(..., description="Hub source_type，如 purchase_receipt")
+    source_ids: List[int] = Field(
+        ...,
+        min_length=1,
+        description="当前页或勾选的本地单据 ID（最多 50）",
+    )
+
+
+class DocumentPushReconcileRow(BaseSchema):
+    source_id: int
+    local_code: str = ""
+    local_status: str = ""
+    local_qty: Optional[str] = None
+    remote_billno: Optional[str] = None
+    remote_status: Optional[str] = None
+    remote_qty: Optional[str] = None
+    result: str = "not_pushed"
+    mismatch_fields: List[str] = Field(default_factory=list)
+    message: Optional[str] = None
+
+
+class DocumentPushReconcileResponse(BaseSchema):
+    success: bool = True
+    source_type: str
+    target_type: str = ""
+    form_id: str = ""
+    doc_label: str = ""
+    total: int = 0
+    summary: Dict[str, int] = Field(default_factory=dict)
+    rows: List[DocumentPushReconcileRow] = Field(default_factory=list)
+
+
+@router.post(
+    "/reconcile",
+    summary="Reconcile local documents vs Kingdee IM bills",
+)
+async def reconcile_document_push(
+    body: DocumentPushReconcileBody,
+    request: Request,
+    auth: AuthContext = Depends(get_auth_context),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> DocumentPushReconcileResponse:
+    """组件级同步对账：按 DocumentRelation.billno 查金蝶，对比本地状态/数量。"""
+    _ = current_user
+    push_code = resolve_external_push_permission(body.source_type)
+    await ensure_permission_codes(
+        auth,
+        tenant_id,
+        request,
+        [push_code],
+        require_all=True,
+        check_abac=False,
+    )
+    from apps.kuaizhizao.services.document_push_reconcile_service import (
+        reconcile_documents,
+    )
+
+    try:
+        payload = await reconcile_documents(
+            tenant_id,
+            source_type=body.source_type,
+            source_ids=body.source_ids,
+        )
+    except ValidationError as exc:
+        raise BusinessLogicError(str(exc)) from exc
+    return DocumentPushReconcileResponse(
+        success=bool(payload.get("success", True)),
+        source_type=str(payload.get("source_type") or body.source_type),
+        target_type=str(payload.get("target_type") or ""),
+        form_id=str(payload.get("form_id") or ""),
+        doc_label=str(payload.get("doc_label") or ""),
+        total=int(payload.get("total") or 0),
+        summary=dict(payload.get("summary") or {}),
+        rows=[DocumentPushReconcileRow(**row) for row in (payload.get("rows") or [])],
     )
 
 

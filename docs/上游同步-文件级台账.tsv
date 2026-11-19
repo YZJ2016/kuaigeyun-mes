@@ -328,7 +328,7 @@ riveredge-backend/src/apps/kuaizhizao/api/dashboards/dashboards.py	74025f3710afc
 riveredge-backend/src/apps/kuaizhizao/api/delivery_notices/delivery_notices.py	176ddd762eb09ca4346e4b2ef50688ab2887a822	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/api/demand_computations/demand_computations.py	ebb3cfdbc968b0e5693d23ed5b25975342e8af93	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/kuaizhizao/api/demands/demands.py	aefe7da59fdec9088a66e476bde74e61c2636f64	tracked	seed from 154977d948
-riveredge-backend/src/apps/kuaizhizao/api/document_push/document_push.py	ddf0c03fd7c13d1a556ae768fb5b4b37f150399b	tracked	seed from 905787348a
+riveredge-backend/src/apps/kuaizhizao/api/document_push/document_push.py	ddf0c03fd7c13d1a556ae768fb5b4b37f150399b	applied	959f65b743 reconcile本体
 riveredge-backend/src/apps/kuaizhizao/api/document_relations/document_relations.py	051aa7b2ebaf6eddb1d1a5c474e5d3c8c13f73f5	tracked	seed from a60f3e9039
 riveredge-backend/src/apps/kuaizhizao/api/equipment/equipment.py	ec46b43dfb3bee6d32e70e8ded8e3c39d19f1b5f	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/api/equipment_faults/equipment_faults.py	70ec8623666a2f31285ac078c48ea10c96e68117	tracked	seed from d81b4b70bf
@@ -760,6 +760,7 @@ riveredge-backend/src/apps/kuaizhizao/services/document_line_material_attachment
 riveredge-backend/src/apps/kuaizhizao/services/document_push_mapping.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/services/document_push_pipeline.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/services/document_push_pull_service.py	754f1ac113d6e8d1f948744274169de661d19a13	tracked	seed from 57a37e2749
+riveredge-backend/src/apps/kuaizhizao/services/document_push_reconcile_service.py	DELETED	applied	959f65b743 reconcile本体
 riveredge-backend/src/apps/kuaizhizao/services/document_push_service.py	0df2c796bd8e28d0095b037067a53ef1a3801fa0	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/services/document_push_silent.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/services/document_recognition.py	86054a2cdf8719c6c97fc95330630b64251cdae8	tracked	seed from 13ac1e63d9
