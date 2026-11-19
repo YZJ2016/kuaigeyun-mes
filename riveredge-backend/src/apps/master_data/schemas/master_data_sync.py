@@ -8,7 +8,9 @@ from pydantic import Field
 from core.schemas.base import BaseSchema
 from core.schemas.sync_binding_contract import SyncSourceItem
 
-VALID_SYNC_MODES = frozenset({"manual_full", "scheduled_full", "scheduled_incremental"})
+VALID_SYNC_MODES = frozenset(
+    {"manual_full", "manual_force", "scheduled_full", "scheduled_incremental"}
+)
 VALID_SYNC_DIRECTIONS = frozenset({"pull", "push", "bidirectional"})
 
 

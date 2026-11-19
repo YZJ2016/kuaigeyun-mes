@@ -44,6 +44,22 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'other-outbound-header-totals-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.other-outbound-header-totals-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.other-outbound-header-totals-r01.description',
+  },
+  {
+    id: 'material-tax-1-sync-manual-force-r01',
+    date: '2026-11-19',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.material-tax-1-sync-manual-force-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-tax-1-sync-manual-force-r01.description',
+  },
+  {
     id: 'doc-flow-create-tab-query-remount-r01',
     date: '2026-11-19',
     type: 'fix',

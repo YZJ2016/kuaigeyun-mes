@@ -18603,21 +18603,8 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                             **item_updates
                         )
 
-                all_items = await OtherOutboundItem.filter(
-                    tenant_id=tenant_id,
-                    outbound_id=outbound_id,
-                ).all()
-                total_quantity = sum(
-                    (Decimal(str(it.outbound_quantity or 0)) for it in all_items),
-                    Decimal("0"),
-                )
-                total_amount = sum(
-                    (Decimal(str(it.total_amount or 0)) for it in all_items),
-                    Decimal("0"),
-                )
+                await self._sync_other_outbound_header_totals(tenant_id, outbound_id)
                 await OtherOutbound.filter(tenant_id=tenant_id, id=outbound_id).update(
-                    total_quantity=total_quantity,
-                    total_amount=total_amount,
                     updated_by=updated_by,
                     updated_by_name=user_info["name"],
                 )
@@ -18746,6 +18733,29 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                 await OtherOutboundItem.filter(
                     tenant_id=tenant_id, id=item_data.item_id, outbound_id=outbound_id
                 ).update(**item_update)
+
+    async def _sync_other_outbound_header_totals(
+        self,
+        tenant_id: int,
+        outbound_id: int,
+    ) -> tuple[Decimal, Decimal]:
+        """用明细出库数量与金额重算并写回头表（列表总数量真源）。"""
+        items = await OtherOutboundItem.filter(
+            tenant_id=tenant_id, outbound_id=outbound_id
+        ).all()
+        total_quantity = sum(
+            (Decimal(str(it.outbound_quantity or 0)) for it in items),
+            Decimal("0"),
+        )
+        total_amount = sum(
+            (Decimal(str(it.total_amount or 0)) for it in items),
+            Decimal("0"),
+        )
+        await OtherOutbound.filter(tenant_id=tenant_id, id=outbound_id).update(
+            total_quantity=total_quantity,
+            total_amount=total_amount,
+        )
+        return total_quantity, total_amount
 
     async def confirm_outbound(
         self,
@@ -18911,6 +18921,9 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                 # spec 142：会计事件与库存同一成败——事务内抛出即整单回滚
                 logger.error("其他出库确认-会计事件失败: %s", ev_e)
                 raise
+
+            # 确认体可改主数量并按批拆行；须重算头表，避免列表总数量与明细不一致
+            await self._sync_other_outbound_header_totals(tenant_id, outbound_id)
 
             result = OtherOutboundResponse.model_validate(
                 await OtherOutbound.get(tenant_id=tenant_id, id=outbound_id)

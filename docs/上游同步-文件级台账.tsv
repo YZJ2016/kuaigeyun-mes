@@ -926,7 +926,7 @@ riveredge-backend/src/apps/kuaizhizao/services/supplier_evaluation_service.py	44
 riveredge-backend/src/apps/kuaizhizao/services/tool_ops_service.py	0651b6bfd2a14a16198676d37a28ea022819e2f0	tracked	seed from 5f085a19c9
 riveredge-backend/src/apps/kuaizhizao/services/tool_service.py	6732e768d2c81363d7c2d9e82bead63dbe392d98	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/services/warehouse_kingdee_alignment.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
-riveredge-backend/src/apps/kuaizhizao/services/warehouse_service.py	7874c70a81eb9a4ed7f6514c7970d803d6c16d33	applied	13be286f11联调修复簇
+riveredge-backend/src/apps/kuaizhizao/services/warehouse_service.py	7874c70a81eb9a4ed7f6514c7970d803d6c16d33	applied	959f65b743 header totals + 1pct tax option
 riveredge-backend/src/apps/kuaizhizao/services/warehouse_wo_outsource_pull_service.py	222c4850eafc6d7bc69db6297febf357bd87bf83	tracked	seed from 5b1b9828e4
 riveredge-backend/src/apps/kuaizhizao/services/work_order_bom_line_service.py	dbebd0ad922e1fff09f2c878f662654aa16c16c1	tracked	seed from 5b1b9828e4
 riveredge-backend/src/apps/kuaizhizao/services/work_order_service.py	f5df2d43d9e2564c39ffcede05cbb475e40d157e	tracked	seed from 154977d948
@@ -984,23 +984,24 @@ riveredge-backend/src/apps/master_data/models/supplier.py	21827cfbce874c9aa48812
 riveredge-backend/src/apps/master_data/models/warehouse.py	de9b8952c00caf43b7a2e8f7a79ef531a293b817	tracked	seed from 57a37e2749
 riveredge-backend/src/apps/master_data/orm_models.py	fc55b30914847af176b541833322603aca438c85	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/master_data/reference_display/setup.py	c543252066d3231e96e323140198237125e1188a	tracked	seed from e451b48dc2
-riveredge-backend/src/apps/master_data/schemas/master_data_sync.py	f8d44f93b55ec2ed2f2cf8e293d2db24b9b2517d	applied	f40f54e336调度窗+价税簇
+riveredge-backend/src/apps/master_data/schemas/master_data_sync.py	f8d44f93b55ec2ed2f2cf8e293d2db24b9b2517d	applied	manual_force skip bypass only
 riveredge-backend/src/apps/master_data/schemas/material_product_process_schemas.py	437f0aa722cc35529ffe1bb8ae714a8929630b01	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/master_data/schemas/material_schemas.py	c66976bc9584feccbeb2c8fcfc9a1d09bab24c72	applied	13be286f11续:前端+财务适配+迁移
 riveredge-backend/src/apps/master_data/schemas/partner_price_book_schemas.py	a7a3a212677ffc71724d1c3213a7cc7a675cc7b0	tracked	seed from 154977d948
 riveredge-backend/src/apps/master_data/schemas/supply_chain_schemas.py	6ea2a20c8ae26e135e01401a4360eb7e0113b43b	tracked	seed from 37409d3b29
 riveredge-backend/src/apps/master_data/schemas/warehouse_schemas.py	8c3118d5a14076e8f8ab5a899e7b0bdffcc911e1	tracked	seed from 57a37e2749
-riveredge-backend/src/apps/master_data/services/customer_sync_service.py	950fb32773daf4b6539582f70b43b59355d54752	tracked	seed from b12cc66e71
+riveredge-backend/src/apps/master_data/services/customer_sync_service.py	950fb32773daf4b6539582f70b43b59355d54752	applied	manual_force skip bypass only
 riveredge-backend/src/apps/master_data/services/drawing_distribution_service.py	3cc51f798cc292c40dd5e97e07eb6d750a1e8b38	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/master_data/services/drawing_loan_service.py	f6c5eb6f909838a9337e1f1e6cccfb1fb92eedcb	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/master_data/services/drawing_service.py	3bdd6c7a5023b3c95314865664a79302d742cb7d	tracked	seed from 31efc2b64c
+riveredge-backend/src/apps/master_data/services/master_data_sync_common.py	8d8dd26e4adeadfd697aabab0b55d7d672c822d3	applied	manual_force skip bypass only
 riveredge-backend/src/apps/master_data/services/material_code_service.py	9c1443b165a9752d1f16d6f9def4e6a391598c64	applied	13be286f11联调修复簇
 riveredge-backend/src/apps/master_data/services/material_defaults_pricing.py	17ba077653d5545d7692a058cd4ebf838ea6df09	tracked	seed from a60f3e9039
 riveredge-backend/src/apps/master_data/services/material_field_mask_service.py	e7336202b970fb5eb54d108e72474756071f3206	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/master_data/services/material_group_sync_service.py	59273dedeec546f80e105ce376b2f2124a32ef86	tracked	seed from d025413d18
 riveredge-backend/src/apps/master_data/services/material_product_process_service.py	15fbc6f6b20f0611b63f160baf95ba3c71082234	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/master_data/services/material_service.py	d28bfcb4cbd236c00b69507dc8a80fdfe35bf1e7	applied	13be286f11联调修复簇
-riveredge-backend/src/apps/master_data/services/material_sync_service.py	069b3a60e190b38464e1fd57295b745d5e95a7da	tracked	seed from b12cc66e71
+riveredge-backend/src/apps/master_data/services/material_sync_service.py	069b3a60e190b38464e1fd57295b745d5e95a7da	applied	manual_force skip bypass only
 riveredge-backend/src/apps/master_data/services/partner_material_price_defaults.py	9f7f7af799d712d80e4eedf1fe1be6cc793eb9d3	applied	13be286f11联调修复簇
 riveredge-backend/src/apps/master_data/services/partner_material_price_resolver.py	749bd4c0eacb67d7030be0447bd6ce5f6dc63081	tracked	seed from 154977d948
 riveredge-backend/src/apps/master_data/services/partner_price_book_service.py	fd8d15eb4f45110e355de5ae5b6b4d443dda46f0	tracked	seed from 93b3cb5998
@@ -1009,9 +1010,10 @@ riveredge-backend/src/apps/master_data/services/partner_price_tier_utils.py	fbfe
 riveredge-backend/src/apps/master_data/services/process_service.py	953e36f6dd57ec69db98ae32d326b55f8af669c4	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/master_data/services/reset_data_service.py	ec59127719c6c8a00abdc5b8fad0820faa809346	tracked	seed from 57a37e2749
 riveredge-backend/src/apps/master_data/services/storage_location_sync_service.py	68bab227c7143fde460e3a6ce49de634ca990bd5	tracked	seed from 57a37e2749
-riveredge-backend/src/apps/master_data/services/supplier_sync_service.py	6d81877e2586081adaeb00d4e09ea29d6c7b56f2	tracked	seed from b12cc66e71
+riveredge-backend/src/apps/master_data/services/supplier_sync_service.py	6d81877e2586081adaeb00d4e09ea29d6c7b56f2	applied	manual_force skip bypass only
 riveredge-backend/src/apps/master_data/services/supply_chain_service.py	0fcdf1d51a7c8fdf04c7d044af028e24682c1cf7	tracked	seed from 37409d3b29
 riveredge-backend/src/apps/master_data/services/warehouse_service.py	6131c150b252ee18add1c8fdec054071db7da5a7	tracked	seed from 57a37e2749
+riveredge-backend/src/apps/master_data/services/warehouse_sync_service.py	157aed3671f505e5e671fde3644a4cbea1cbda1e	applied	manual_force skip bypass only
 riveredge-backend/src/apps/master_data/utils/kingdee_location_number.py	95c989113d63320c797cd284fed65f35a439fbea	applied	D依赖簇续:支撑件+前端
 riveredge-backend/src/core/ai/kuaiai_conversation_service.py	11b0981c0abc8d240ef65a03787526e45921c662	tracked	seed from 3050130eb5
 riveredge-backend/src/core/ai/schemas/kuaiai_conversation.py	b92b67f3bddb255e9d9b713d68dca39091a9b75a	tracked	seed from 3050130eb5
@@ -14044,7 +14046,7 @@ riveredge-frontend/src/apps/master-data/components/CustomerFormModal.tsx	3d79229
 riveredge-frontend/src/apps/master-data/components/CustomerSelectDropdown.tsx	598418d2201704ecec57776f2730d38f26d26a20	tracked	seed from 88b0c140f1
 riveredge-frontend/src/apps/master-data/components/DrawingFormModal.tsx	f1ef8e90e94b90a63fdc364c445e92eb4564403a	tracked	seed from df7d635797
 riveredge-frontend/src/apps/master-data/components/InspectionStagesEditor.tsx	9bdacd0b614cdbaa0877bff6ad418f8fcf768567	tracked	seed from 1eb300325a
-riveredge-frontend/src/apps/master-data/components/MaterialForm.tsx	169eb5a8c94a0eb18d287d70059ed3345a7a64e4	applied	13be286f11续:前端+财务适配+迁移
+riveredge-frontend/src/apps/master-data/components/MaterialForm.tsx	169eb5a8c94a0eb18d287d70059ed3345a7a64e4	applied	959f65b743 header totals + 1pct tax option
 riveredge-frontend/src/apps/master-data/components/MaterialGroupFormModal.tsx	fd174c0d47a6dc731918a5ea9b9c196f8d22971e	tracked	seed from 1eb300325a
 riveredge-frontend/src/apps/master-data/components/MaterialUnitQuickSelect.tsx	1cf9463c7dda94d5d349e0579f63ad3e9678a640	tracked	seed from 6abba1dbd5
 riveredge-frontend/src/apps/master-data/components/OperationFormModal.tsx	ea23037a3dbefeb88c22377e55d64cc368eb9f6b	tracked	seed from 1eb300325a
@@ -14069,7 +14071,7 @@ riveredge-frontend/src/apps/master-data/materialSyncConfig.ts	7adb4f4c199bf10eb3
 riveredge-frontend/src/apps/master-data/operationSyncConfig.ts	01819195ba96ab1d643c5a2799dffedb0de5a6f5	tracked	seed from a0b353ce7e
 riveredge-frontend/src/apps/master-data/pages/materials/bom/designer.tsx	abd1bc253f07ff7a7895c8e967845d1cd8a71e6a	tracked	seed from df7d635797
 riveredge-frontend/src/apps/master-data/pages/materials/bom/index.tsx	b78e7737b581016331686d83354147a20b01c294	tracked	seed from 905787348a
-riveredge-frontend/src/apps/master-data/pages/materials/management.tsx	3362efb2240af30f3691cf83dd7e0373a3190ca7	tracked	seed from 905787348a
+riveredge-frontend/src/apps/master-data/pages/materials/management.tsx	3362efb2240af30f3691cf83dd7e0373a3190ca7	applied	959f65b743 header totals + 1pct tax option
 riveredge-frontend/src/apps/master-data/pages/process/drawings/DrawingIntegratedPanels.tsx	33afd2a078e3e3c09561ce3a6c5fe747199822b1	tracked	seed from b12cc66e71
 riveredge-frontend/src/apps/master-data/pages/process/drawings/index.tsx	86560f95bb84d9bb401721fee93581e908a58680	tracked	seed from 31efc2b64c
 riveredge-frontend/src/apps/master-data/pages/process/operations/index.tsx	239dfc8c12690a0949ed4ec4081a4231cffda592	tracked	seed from 905787348a
@@ -14174,7 +14176,7 @@ riveredge-frontend/src/components/quantity-with-unit/MaterialUnitRoleBadge.tsx	a
 riveredge-frontend/src/components/quantity-with-unit/buildDocumentLineDualQuantityFormColumns.tsx	db0680913fa64877e2e1ce75acbc35ecacbef6ec	tracked	seed from 37409d3b29
 riveredge-frontend/src/components/quantity-with-unit/documentLineDualQuantityColumn.tsx	164626e22bb1cfcbc3834f46f3b4c49de24f401b	tracked	seed from a0b353ce7e
 riveredge-frontend/src/components/quantity-with-unit/index.tsx	1ada2ed6c957443f47ec88e2e5e01e696742b5f5	tracked	seed from a0b353ce7e
-riveredge-frontend/src/components/sync-from-source-modal/index.tsx	3507b257102475950ba5c677b9e7d9f1abad0240	applied	f40f54e336调度窗+价税簇
+riveredge-frontend/src/components/sync-from-source-modal/index.tsx	3507b257102475950ba5c677b9e7d9f1abad0240	applied	manual_force skip bypass only
 riveredge-frontend/src/components/sync-from-source-modal/syncRunHistory.ts	067739314a94242e04c6c335530e9e3d3bad021a	tracked	seed from a0b353ce7e
 riveredge-frontend/src/components/sync-from-source-modal/syncSourceUtils.ts	16e30cee28aa75b392b25970addb3cc7aeba9e3d	tracked	seed from 7fa73e053a
 riveredge-frontend/src/components/sync-from-source-modal/types.ts	072e341576492c2265449c55812c012261d7f5f9	applied	f40f54e336调度窗+价税簇

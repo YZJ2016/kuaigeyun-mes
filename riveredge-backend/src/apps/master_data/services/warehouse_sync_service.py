@@ -18,6 +18,7 @@ from apps.master_data.services.master_data_sync_common import (
     cell_str,
     collect_mapped_scalar_proposed,
     fetch_sync_rows,
+    is_force_rewrite_sync_mode,
     load_custom_fields_by_code,
     map_sync_rows,
     mark_binding_failure,
@@ -132,7 +133,13 @@ class WarehouseSyncService:
                 since=since,
                 active_only=req.active_only,
             )
-            result = await self._upsert_warehouses(tenant_id, current_user, rows, match_key)
+            result = await self._upsert_warehouses(
+                tenant_id,
+                current_user,
+                rows,
+                match_key,
+                force_rewrite=is_force_rewrite_sync_mode(sync_mode),
+            )
             if source_errors:
                 result.errors = (source_errors + list(result.errors))[:20]
             attach_sync_fetch_meta(result, fetched=fetched, since=since, truncated=False)
@@ -152,6 +159,8 @@ class WarehouseSyncService:
         current_user: User,
         rows: List[Dict[str, Any]],
         match_key: str,
+        *,
+        force_rewrite: bool = False,
     ) -> MasterDataSyncFromSourceOut:
         created = 0
         updated = 0
@@ -194,7 +203,9 @@ class WarehouseSyncService:
                     has_custom = any(
                         str(k).startswith("custom:") for k in row.keys()
                     )
-                    if not has_custom and not sync_record_needs_update(existing, proposed):
+                    if not has_custom and not sync_record_needs_update(
+                        existing, proposed, force=force_rewrite
+                    ):
                         skipped += 1
                         continue
                     update_data = WarehouseUpdate(name=name, is_active=is_active)

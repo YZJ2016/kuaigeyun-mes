@@ -21,6 +21,7 @@ from apps.master_data.services.master_data_sync_common import (
     collect_mapped_scalar_proposed,
     fetch_sync_rows,
     filter_kingdee_approved_active_master_rows,
+    is_force_rewrite_sync_mode,
     load_custom_fields_by_code,
     map_sync_rows,
     mark_binding_failure,
@@ -387,7 +388,13 @@ class SupplierSyncService:
                     f"已排除无效供应商 {invalid_skipped} 条，剩余 {len(rows)} 条…"
                 )
             await emit_sync_progress(f"字段映射完成，准备写入 {len(rows)} 条供应商…")
-            result = await self._upsert_suppliers(tenant_id, current_user, rows, match_key)
+            result = await self._upsert_suppliers(
+                tenant_id,
+                current_user,
+                rows,
+                match_key,
+                force_rewrite=is_force_rewrite_sync_mode(sync_mode),
+            )
             if source_errors:
                 result.errors = (source_errors + list(result.errors))[:20]
             attach_sync_fetch_meta(result, fetched=raw_fetched, since=since)
@@ -432,6 +439,8 @@ class SupplierSyncService:
         current_user: User,
         rows: List[Dict[str, Any]],
         match_key: str,
+        *,
+        force_rewrite: bool = False,
     ) -> MasterDataSyncFromSourceOut:
         created = 0
         updated = 0
@@ -515,7 +524,9 @@ class SupplierSyncService:
                     if (
                         not has_custom
                         and not has_payment
-                        and not sync_record_needs_update(existing, proposed)
+                        and not sync_record_needs_update(
+                            existing, proposed, force=force_rewrite
+                        )
                     ):
                         skipped += 1
                         continue

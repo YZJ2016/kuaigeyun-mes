@@ -42,7 +42,7 @@ def normalize_sync_mode(value: Optional[str]) -> str:
     mode = (value or "manual_full").strip() or "manual_full"
     if mode not in VALID_SYNC_MODES:
         raise ValidationError(
-            "同步模式须为 manual_full、scheduled_full 或 scheduled_incremental"
+            "同步模式须为 manual_full、manual_force、scheduled_full 或 scheduled_incremental"
         )
     return mode
 

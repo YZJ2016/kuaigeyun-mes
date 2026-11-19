@@ -4206,6 +4206,14 @@ export default {
     '物料编号映射可保存多条供应商编码',
   'pages.dashboard.updateLog.entries.material-multi-supplier-code-mapping-r01.description':
     '编辑物料时增加多条供应商编号映射后保存，此前可能只留下一行：表单被父级重渲染冲掉未保存行，或后端吞掉别名冲突。现编号映射只在打开物料时灌入一次，客商编号按供应商区分唯一，冲突会明确报错且整段回滚。',
+  'pages.dashboard.updateLog.entries.other-outbound-header-totals-r01.title':
+    '其他出库确认后列表总数量与明细一致',
+  'pages.dashboard.updateLog.entries.other-outbound-header-totals-r01.description':
+    '确认出库时若改了主数量或按批拆行，表头总数量与金额此前不重算，列表与明细对不上。现确认成功后按明细回写表头。',
+  'pages.dashboard.updateLog.entries.material-tax-1-sync-manual-force-r01.title':
+    '物料可选 1% 税率，同步可强制重写已有行',
+  'pages.dashboard.updateLog.entries.material-tax-1-sync-manual-force-r01.description':
+    '物料默认税率与批量改税率增加 1%。同步方式增加「手动全量（强制）」：仍只写映射字段，但已有行不再因字段未变而跳过。默认同步方式不变；定时任务不跑该模式。',
   'pages.dashboard.updateLog.entries.doc-flow-create-tab-query-remount-r01.title':
     '转单新建页多选明细不再只剩一行',
   'pages.dashboard.updateLog.entries.doc-flow-create-tab-query-remount-r01.description':

@@ -3569,6 +3569,7 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
                 placeholder={t('app.master-data.defaults.defaultTaxRatePlaceholder')}
                 options={[
                   { label: t('app.master-data.defaults.taxRate0'), value: 0 },
+                  { label: t('app.master-data.defaults.taxRate1'), value: 1 },
                   { label: t('app.master-data.defaults.taxRate3'), value: 3 },
                   { label: t('app.master-data.defaults.taxRate6'), value: 6 },
                   { label: t('app.master-data.defaults.taxRate9'), value: 9 },

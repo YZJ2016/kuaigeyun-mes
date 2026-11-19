@@ -1027,6 +1027,10 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
                   label: t('components.syncFromSource.syncMode.manualFull'),
                 },
                 {
+                  value: 'manual_force',
+                  label: t('components.syncFromSource.syncMode.manualForce'),
+                },
+                {
                   value: 'scheduled_incremental',
                   label: t('components.syncFromSource.syncMode.scheduledIncremental'),
                 },
@@ -1036,7 +1040,7 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
                 },
               ]}
             />
-            {syncMode !== 'manual_full' ? (
+            {syncMode === 'scheduled_incremental' || syncMode === 'scheduled_full' ? (
               <>
                 <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap' }}>
                   {t('components.syncFromSource.scheduleInterval')}
@@ -1084,7 +1088,9 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
             {t(
               syncMode === 'scheduled_incremental'
                 ? 'components.syncFromSource.syncMode.incrementalHint'
-                : 'components.syncFromSource.syncMode.fullHint',
+                : syncMode === 'manual_force'
+                  ? 'components.syncFromSource.syncMode.manualForceHint'
+                  : 'components.syncFromSource.syncMode.fullHint',
             )}
             {syncMode === 'scheduled_incremental' || syncMode === 'scheduled_full'
               ? ` ${t('components.syncFromSource.scheduleWindowHint')}`

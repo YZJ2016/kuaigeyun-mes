@@ -29,10 +29,11 @@ from apps.master_data.services.master_data_sync_common import (
     map_sync_rows,
     mark_binding_failure,
     mark_binding_success,
+    is_force_rewrite_sync_mode,
     normalize_schedule_interval,
     normalize_sync_mode,
-    record_fields_unchanged,
     resolve_incremental_since,
+    sync_record_needs_update,
     resolve_sync_sources,
     serialize_binding_row,
     sources_from_upsert_body,
@@ -488,6 +489,7 @@ class MaterialSyncService:
                     match_key,
                     conversion_entries=conversion_entries,
                     source_field_names=source_field_names,
+                    force_rewrite=is_force_rewrite_sync_mode(sync_mode),
                 )
                 result.created += one.created
                 result.updated += one.updated
@@ -549,6 +551,7 @@ class MaterialSyncService:
         *,
         conversion_entries: Optional[List[Dict[str, Any]]] = None,
         source_field_names: Optional[set[str]] = None,
+        force_rewrite: bool = False,
     ) -> MasterDataSyncFromSourceOut:
         created = 0
         updated = 0
@@ -754,7 +757,9 @@ class MaterialSyncService:
                     has_custom_mapping = any(
                         str(key).startswith("custom:") for key in mapped_row.keys()
                     )
-                    if not has_custom_mapping and record_fields_unchanged(existing, proposed):
+                    if not has_custom_mapping and not sync_record_needs_update(
+                        existing, proposed, force=force_rewrite
+                    ):
                         skipped += 1
                         continue
                     existing.name = name
