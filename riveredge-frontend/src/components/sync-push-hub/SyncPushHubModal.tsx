@@ -1,5 +1,5 @@
 /**
- * 同步/推送组合弹窗：页内 Tabs 分别为「入站方向」与「出站方向」内容区。
+ * 同步/推送组合弹窗：页内 Tabs 为「入站方向」「出站方向」「同步记录」。
  *
  * 面板内容故意放在 Tabs 外：antd Tabs 的 items 每次父级重渲染都会换新引用，
  * 若把 DocumentPushBatchPanel / SyncFromSource 放进 items[].children，
@@ -8,8 +8,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, Tabs } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { SyncRunHistoryPanel } from './SyncRunHistoryPanel';
 
-export type SyncPushHubTabKey = 'sync' | 'push';
+export type SyncPushHubTabKey = 'sync' | 'push' | 'history';
 
 export interface SyncPushHubPanelContext {
   active: boolean;
@@ -21,16 +22,23 @@ export interface SyncPushHubModalProps {
   onClose: () => void;
   syncEnabled?: boolean;
   pushEnabled?: boolean;
+  /** 传入 sourceType 即展示「同步记录」Tab（内置 SyncRunHistoryPanel） */
+  historySourceType?: string;
+  historyTargetProfiles?: string[];
+  historyEnabled?: boolean;
   syncTitle?: React.ReactNode;
   pushTitle?: React.ReactNode;
+  historyTitle?: React.ReactNode;
   title?: React.ReactNode;
   width?: number | string;
   zIndex?: number;
   defaultTab?: SyncPushHubTabKey;
   renderSyncPanel?: (ctx: SyncPushHubPanelContext) => React.ReactNode;
   renderPushPanel?: (ctx: SyncPushHubPanelContext) => React.ReactNode;
+  renderHistoryPanel?: (ctx: SyncPushHubPanelContext) => React.ReactNode;
   syncPanel?: React.ReactNode;
   pushPanel?: React.ReactNode;
+  historyPanel?: React.ReactNode;
 }
 
 export const SyncPushHubModal: React.FC<SyncPushHubModalProps> = ({
@@ -38,28 +46,41 @@ export const SyncPushHubModal: React.FC<SyncPushHubModalProps> = ({
   onClose,
   syncEnabled = true,
   pushEnabled = true,
+  historySourceType,
+  historyTargetProfiles,
+  historyEnabled = true,
   syncTitle,
   pushTitle,
+  historyTitle,
   title,
   width = 1100,
   zIndex,
   defaultTab,
   renderSyncPanel,
   renderPushPanel,
+  renderHistoryPanel,
   syncPanel,
   pushPanel,
+  historyPanel,
 }) => {
   const { t } = useTranslation();
   // 无面板内容时不展示对应 Tab，避免配置误开 push 后出现空页
   const showSync = Boolean(syncEnabled) && Boolean(renderSyncPanel || syncPanel);
   const showPush = Boolean(pushEnabled) && Boolean(renderPushPanel || pushPanel);
+  const historySource = String(historySourceType || '').trim();
+  const builtInHistory = Boolean(historyEnabled) && Boolean(historySource);
+  const showHistory =
+    Boolean(historyEnabled) &&
+    Boolean(renderHistoryPanel || historyPanel || builtInHistory);
 
   const initialTab = useMemo<SyncPushHubTabKey>(() => {
     if (defaultTab === 'sync' && showSync) return 'sync';
     if (defaultTab === 'push' && showPush) return 'push';
+    if (defaultTab === 'history' && showHistory) return 'history';
     if (showSync) return 'sync';
-    return 'push';
-  }, [defaultTab, showPush, showSync]);
+    if (showPush) return 'push';
+    return 'history';
+  }, [defaultTab, showHistory, showPush, showSync]);
 
   const [activeKey, setActiveKey] = useState<SyncPushHubTabKey>(initialTab);
   // 默认 false：配合 Button「仅 open 时挂载 Modal」，首开帧 openingEdge=true，避免沿用错误 Tab
@@ -78,9 +99,14 @@ export const SyncPushHubModal: React.FC<SyncPushHubModalProps> = ({
 
   useEffect(() => {
     if (!open) return;
-    if (activeKey === 'sync' && !showSync && showPush) setActiveKey('push');
-    if (activeKey === 'push' && !showPush && showSync) setActiveKey('sync');
-  }, [activeKey, open, showPush, showSync]);
+    if (activeKey === 'sync' && !showSync) {
+      setActiveKey(showPush ? 'push' : 'history');
+    } else if (activeKey === 'push' && !showPush) {
+      setActiveKey(showSync ? 'sync' : 'history');
+    } else if (activeKey === 'history' && !showHistory) {
+      setActiveKey(showSync ? 'sync' : 'push');
+    }
+  }, [activeKey, open, showHistory, showPush, showSync]);
 
   const tabItems = useMemo(
     () =>
@@ -98,12 +124,18 @@ export const SyncPushHubModal: React.FC<SyncPushHubModalProps> = ({
                 label: pushTitle ?? t('components.syncPushHub.tabPush'),
               }
             : null,
+          showHistory
+            ? {
+                key: 'history' as const,
+                label: historyTitle ?? t('components.syncPushHub.tabHistory'),
+              }
+            : null,
         ] as Array<{ key: SyncPushHubTabKey; label: React.ReactNode } | null>
       ).filter(Boolean) as Array<{ key: SyncPushHubTabKey; label: React.ReactNode }>,
-    [pushTitle, showPush, showSync, syncTitle, t],
+    [historyTitle, pushTitle, showHistory, showPush, showSync, syncTitle, t],
   );
 
-  if (!showSync && !showPush) return null;
+  if (!showSync && !showPush && !showHistory) return null;
 
   const close = () => {
     onClose();
@@ -113,6 +145,7 @@ export const SyncPushHubModal: React.FC<SyncPushHubModalProps> = ({
   const panelTab: SyncPushHubTabKey = openingEdge ? initialTab : activeKey;
   const syncActive = open && panelTab === 'sync';
   const pushActive = open && panelTab === 'push';
+  const historyActive = open && panelTab === 'history';
 
   return (
     <Modal
@@ -144,6 +177,21 @@ export const SyncPushHubModal: React.FC<SyncPushHubModalProps> = ({
               ? renderPushPanel
                 ? renderPushPanel({ active: pushActive, close })
                 : pushPanel
+              : null}
+            {historyActive
+              ? renderHistoryPanel
+                ? renderHistoryPanel({ active: historyActive, close })
+                : historyPanel
+                  ? historyPanel
+                  : builtInHistory
+                    ? (
+                        <SyncRunHistoryPanel
+                          active={historyActive}
+                          sourceType={historySource}
+                          targetProfiles={historyTargetProfiles}
+                        />
+                      )
+                    : null
               : null}
           </div>
         </>

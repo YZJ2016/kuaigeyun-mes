@@ -176,3 +176,61 @@ export async function pushDocumentExternal(
     timeoutMs: 120_000,
   });
 }
+
+/** SyncPushHub「同步记录」：入站 + 外推运行历史（core_sync_run_logs） */
+export interface DocumentPushRunHistoryItem {
+  id: number;
+  entity_type: string;
+  mode: string;
+  status: string;
+  created: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  fetched: number;
+  truncated: boolean;
+  duration_ms: number;
+  error_summary?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  created_at?: string | null;
+  category?: string | null;
+  connector_type?: string | null;
+  target_profile?: string | null;
+}
+
+export interface DocumentPushRunHistoryListResponse {
+  data: DocumentPushRunHistoryItem[];
+  total: number;
+  success: boolean;
+}
+
+export type ListSyncRunHistoryFn = (params: {
+  sourceType: string;
+  targetProfiles?: string[];
+  skip?: number;
+  limit?: number;
+}) => Promise<DocumentPushRunHistoryListResponse>;
+
+export async function listDocumentPushRunHistory(params: {
+  sourceType: string;
+  targetProfiles?: string[];
+  skip?: number;
+  limit?: number;
+}): Promise<DocumentPushRunHistoryListResponse> {
+  const query: Record<string, string | number> = {
+    source_type: params.sourceType,
+    skip: params.skip ?? 0,
+    limit: params.limit ?? 20,
+  };
+  const profiles = (params.targetProfiles || [])
+    .map((p) => String(p || '').trim())
+    .filter(Boolean);
+  if (profiles.length) {
+    query.target_profiles = profiles.join(',');
+  }
+  return apiRequest<DocumentPushRunHistoryListResponse>(
+    '/apps/kuaizhizao/document-push/run-history',
+    { params: query },
+  );
+}

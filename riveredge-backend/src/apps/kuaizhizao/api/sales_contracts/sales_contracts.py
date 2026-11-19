@@ -54,9 +54,11 @@ async def create_contract(
         return await service.create_contract(tenant_id, data, current_user.id, auto_submit=auto_submit)
     except ValidationError as e:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        logger.error("创建销售合同失败: %s", e)
-        raise HTTPException(status_code=500, detail="创建销售合同失败")
+        logger.exception("创建销售合同失败: {}", e)
+        raise HTTPException(status_code=500, detail=f"创建销售合同失败: {e}")
 
 
 @router.get("", response_model=SalesContractListResponse, summary="List sales contracts")

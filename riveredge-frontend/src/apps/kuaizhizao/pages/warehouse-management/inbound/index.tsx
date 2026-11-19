@@ -2652,6 +2652,8 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
                 <SyncPushHubButton
                   syncEnabled={false}
                   pushEnabled={toolbarSyncPush.pushEnabled}
+                  historySourceType="purchase_receipt"
+                  historyTargetProfiles={['kingdee_im_purinbill']}
                   size="medium"
                   renderPushPanel={({ active, close }) => (
                     <PurchaseReceiptDocumentPushPanel

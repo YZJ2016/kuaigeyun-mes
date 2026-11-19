@@ -639,6 +639,7 @@ async def record_sync_run_log(
         mode = getattr(result, "mode", "full") or "full" if result is not None else "full"
     else:
         mode = mode or "full"
+    mode = str(mode)[:20]
     if truncated is None:
         truncated = bool(getattr(result, "truncated", False)) if result is not None else False
     else:
@@ -682,10 +683,13 @@ async def record_sync_run_log(
             started_at=started_at,
             finished_at=now,
         )
-    except Exception:
-        logger.warning(
-            "记录同步运行日志失败（tenant_id=%s, entity_type=%s）",
+    except Exception as exc:
+        logger.error(
+            "记录同步运行日志失败 tenant_id=%s entity_type=%s",
             tenant_id,
             entity_type,
             exc_info=True,
         )
+        raise ValidationError(
+            f"同步运行记录写入失败（{entity_type}），请确认已执行数据库迁移 core_sync_run_logs：{exc}"
+        ) from exc

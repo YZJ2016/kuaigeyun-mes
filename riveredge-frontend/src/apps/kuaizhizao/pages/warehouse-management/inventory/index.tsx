@@ -583,6 +583,8 @@ const InventoryPage: React.FC = () => {
                 <SyncPushHubButton
                   syncEnabled={toolbarSyncPush.syncEnabled}
                   pushEnabled={toolbarSyncPush.pushEnabled}
+                  historySourceType="material_batch"
+                  historyTargetProfiles={['kingdee_stk_miscellaneous']}
                   size="medium"
                   wrapButton={(hubButton) => (
                     <SyncFreshnessBadge

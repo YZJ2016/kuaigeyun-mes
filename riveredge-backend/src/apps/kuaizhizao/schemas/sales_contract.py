@@ -70,7 +70,7 @@ class SalesContractMilestoneResponse(SalesContractMilestoneCreate):
 
 class SalesContractCreate(BaseModel):
     contract_code: Optional[str] = Field(None, max_length=50, description="合同编码（自动生成，可手工填写）")
-    contract_type: str = Field(default="single", description="single / framework")
+    contract_type: str = Field(default="framework", description="framework（销售合同仅框架合同）")
     enter_line_items: bool = Field(
         True,
         description="是否录入明细：true=数量框架，false=金额总框",

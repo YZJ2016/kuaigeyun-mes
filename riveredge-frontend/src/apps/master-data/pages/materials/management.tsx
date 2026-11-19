@@ -4693,6 +4693,8 @@ const MaterialsManagementPage: React.FC = () => {
                         <SyncPushHubButton
                           syncEnabled={toolbarSyncPush.syncEnabled}
                           pushEnabled={toolbarSyncPush.pushEnabled}
+                          historySourceType="material"
+                          historyTargetProfiles={['kingdee_bd_material']}
                           size="medium"
                           wrapButton={(hubButton) => (
                             <SyncFreshnessBadge

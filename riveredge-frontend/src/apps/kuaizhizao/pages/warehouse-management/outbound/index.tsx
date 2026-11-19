@@ -1601,6 +1601,8 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
                 <SyncPushHubButton
                   syncEnabled={false}
                   pushEnabled={toolbarSyncPush.pushEnabled}
+                  historySourceType="sales_delivery"
+                  historyTargetProfiles={['kingdee_im_saloutbill']}
                   size="medium"
                   renderPushPanel={({ active, close }) => (
                     <SalesDeliveryDocumentPushPanel

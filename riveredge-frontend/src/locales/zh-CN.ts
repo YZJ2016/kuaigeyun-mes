@@ -38113,6 +38113,10 @@ export default {
     '凡带同步按钮的列表（销售/采购/工单/报工/物料/BOM/工序/库存/出入库/盘点等）数据互通弹窗均含「同步记录」页签，可查入站与外推运行历史。',
   'pages.dashboard.updateLog.entries.app-conn-load-api-presets-overflow-r01.title':
     '应用连接器「加载常用接口」收入更多',
+  'pages.dashboard.updateLog.entries.sales-contract-create-staticmethod-r01.title':
+    '修复新建销售合同失败',
+  'pages.dashboard.updateLog.entries.sales-contract-create-staticmethod-r01.description':
+    '框架合同创建时服务层静态方法签名错误导致 500，已纠正明细汇总与落库方法，新建数量框架与金额总框可正常提交。',
   'pages.dashboard.updateLog.entries.app-conn-load-api-presets-overflow-r01.description':
     '金蝶连接器列表行操作不再把「加载常用接口」钉在主行，与删除等一并收入「更多」，主行保留详情、测试连接、编辑。',
   'pages.dashboard.updateLog.entries.kuaioa-reward-performance-score-r01.title':

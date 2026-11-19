@@ -14,6 +14,7 @@ from apps.master_data.schemas.master_data_sync import (
 from apps.master_data.schemas.warehouse_schemas import WarehouseCreate, WarehouseUpdate
 from apps.master_data.services.master_data_sync_common import (
     apply_sync_extras_after_write,
+    attach_sync_fetch_meta,
     cell_str,
     fetch_sync_rows,
     load_custom_fields_by_code,
@@ -113,7 +114,7 @@ class WarehouseSyncService:
             request_incremental=req.incremental,
         )
         try:
-            rows, source_errors, _fetched = await fetch_mapped_rows_from_sources(
+            rows, source_errors, fetched = await fetch_mapped_rows_from_sources(
                 tenant_id,
                 sources,
                 since=since,
@@ -122,6 +123,7 @@ class WarehouseSyncService:
             result = await self._upsert_warehouses(tenant_id, current_user, rows, match_key)
             if source_errors:
                 result.errors = (source_errors + list(result.errors))[:20]
+            attach_sync_fetch_meta(result, fetched=fetched, since=since, truncated=False)
             if binding:
                 if result.failed and not (result.created or result.updated):
                     await mark_binding_failure(binding, "; ".join(result.errors) or "仓库同步失败")

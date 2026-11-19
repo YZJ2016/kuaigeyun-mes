@@ -101,6 +101,47 @@ async def put_warehouse_sync_binding(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 
+@router.get(
+    "/warehouses/sync-run-history",
+    summary="仓库入站同步运行历史（core_sync_run_logs）",
+)
+async def list_warehouse_sync_run_history(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+):
+    from apps.kuaizhizao.api.document_push.document_push import (
+        DocumentPushRunHistoryItem,
+        DocumentPushRunHistoryListResponse,
+    )
+    from tortoise import Tortoise
+
+    conn = Tortoise.get_connection("default")
+    count_rows = await conn.execute_query_dict(
+        "SELECT COUNT(*) AS total FROM core_sync_run_logs WHERE tenant_id = $1 AND entity_type = 'warehouse'",
+        [tenant_id],
+    )
+    rows = await conn.execute_query_dict(
+        """
+        SELECT
+            id, entity_type, mode, status, created, updated, skipped, failed,
+            fetched, truncated, duration_ms, error_summary, started_at, finished_at,
+            created_at
+        FROM core_sync_run_logs
+        WHERE tenant_id = $1 AND entity_type = 'warehouse'
+        ORDER BY created_at DESC
+        OFFSET $2 LIMIT $3
+        """,
+        [tenant_id, skip, limit],
+    )
+    total = int(count_rows[0]["total"]) if count_rows else 0
+    return DocumentPushRunHistoryListResponse(
+        data=[DocumentPushRunHistoryItem.model_validate(row) for row in rows],
+        total=total,
+        success=True,
+    )
+
+
 @router.post(
     "/warehouses/sync-from-source",
     response_model=MasterDataSyncFromSourceOut,
@@ -111,10 +152,35 @@ async def sync_warehouses_from_source(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
 ):
+    from apps.master_data.models.master_data_sync_binding import WarehouseSyncBinding
+    from apps.master_data.services.master_data_sync_common import record_sync_run_log
+    from core.utils.timezone_utils import resolve_business_datetime
+
+    started_at = resolve_business_datetime()
+    binding = await WarehouseSyncBinding.filter(tenant_id=tenant_id).first()
     try:
-        return await _warehouse_sync_service().sync_from_source(tenant_id, current_user, body)
+        result = await _warehouse_sync_service().sync_from_source(tenant_id, current_user, body)
+        await record_sync_run_log(
+            tenant_id=tenant_id,
+            binding=binding,
+            entity_type="warehouse",
+            result=result,
+            started_at=started_at,
+            truncated=False,
+        )
+        return result
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception as exc:
+        await record_sync_run_log(
+            tenant_id=tenant_id,
+            binding=binding,
+            entity_type="warehouse",
+            result=None,
+            started_at=started_at,
+            error=str(exc),
+        )
+        raise
 
 
 @router.post("/warehouses", response_model=WarehouseResponse, response_model_by_alias=True, summary="Create warehouse")

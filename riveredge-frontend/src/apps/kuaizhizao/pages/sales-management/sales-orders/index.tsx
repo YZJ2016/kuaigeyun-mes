@@ -6105,6 +6105,8 @@ const SalesOrdersPage: React.FC = () => {
                   <SyncPushHubButton
                     syncEnabled={toolbarSyncPush.syncEnabled}
                     pushEnabled={toolbarSyncPush.pushEnabled}
+                    historySourceType="sales_order"
+                    historyTargetProfiles={['kingdee_sal_saleorder']}
                     size="medium"
                     wrapButton={(hubButton) => (
                       <SyncFreshnessBadge

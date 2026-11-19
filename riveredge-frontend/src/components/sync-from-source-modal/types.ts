@@ -163,6 +163,10 @@ export interface SyncFromSourceConfig {
    * 禁止只靠后缀在两套产品间猜默认项。
    */
   preferredApiCodeSuffixes?: string[];
+  /** 与 SyncRunLog entity_type 一致；设置后弹窗展示「同步记录」Tab */
+  historySourceType?: string;
+  /** 主数据页走 master-data sync-run-history 等；缺省走 document-push/run-history */
+  listSyncRunHistory?: import('../../apps/kuaizhizao/services/document-push').ListSyncRunHistoryFn;
   /**
    * path 子串优先序（越前越优先）。例：物料页 `['executebillquery', 'bd_material/batchquery']`
    * 先星空 ExecuteBillQuery，再苍穹 batchQuery。

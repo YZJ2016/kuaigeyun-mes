@@ -1005,6 +1005,8 @@ const StocktakingPage: React.FC = () => {
                 <SyncPushHubButton
                   syncEnabled={false}
                   pushEnabled={toolbarSyncPush.pushEnabled}
+                  historySourceType="stocktaking"
+                  historyTargetProfiles={['kingdee_im_surplusbill', 'kingdee_im_deficitbill']}
                   size="medium"
                   renderPushPanel={({ active, close }) => (
                     <StocktakingSurplusDocumentPushPanel

@@ -15,6 +15,7 @@ import {
   buildDocumentDetailPartnerMaterialFormColumns,
   buildDocumentDetailSpecModelFormColumns,
 } from '../shared/materialLineFormDetail';
+import { buildDocumentLineDualQuantityFormColumns } from '../../../../../components/quantity-with-unit';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import {
   DOCUMENT_DETAIL_AMOUNT_STYLE,
@@ -406,6 +407,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                         </Form.Item>
                       ),
                     },
+                    ...buildDocumentDetailPartnerMaterialFormColumns(t, 'customer'),
                     {
                       title: t('common.remark'),
                       dataIndex: 'notes',

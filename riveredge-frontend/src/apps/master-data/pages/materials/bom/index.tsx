@@ -3753,6 +3753,8 @@ const BOMPage: React.FC = () => {
                 <SyncPushHubButton
                   syncEnabled={toolbarSyncPush.syncEnabled}
                   pushEnabled={toolbarSyncPush.pushEnabled}
+                  historySourceType="engineering_bom"
+                  historyTargetProfiles={['kingdee_eng_bom']}
                   size="medium"
                   wrapButton={(hubButton) => (
                     <SyncFreshnessBadge

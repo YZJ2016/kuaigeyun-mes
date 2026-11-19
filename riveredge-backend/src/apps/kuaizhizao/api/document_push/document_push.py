@@ -6,13 +6,19 @@ P2：支持 target_profiles 多目标 fan-out；target_profile=* 读业务配置
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 
+from apps.kuaizhizao.api._kuaizhizao_document_gate import (
+    resolve_hub_history_permission_codes,
+)
 from apps.kuaizhizao.services.document_push_service import DocumentPushService
 from core.api.deps import get_current_tenant, get_current_user
+from core.api.deps.access import AuthContext, ensure_permission_codes, get_auth_context
+from core.schemas.base import BaseSchema
 from infra.exceptions.exceptions import BusinessLogicError, ValidationError
 from infra.models.user import User
 
@@ -51,6 +57,35 @@ class DocumentPushBody(BaseModel):
 class DocumentPushProfileOut(BaseModel):
     source_type: str
     target_profile: str
+
+
+class DocumentPushRunHistoryItem(BaseSchema):
+    """同步/外推运行历史（core_sync_run_logs，只读）。"""
+
+    id: int
+    entity_type: str = "document_push"
+    mode: str = "push"
+    status: str = "success"
+    created: int = 0
+    updated: int = 0
+    skipped: int = 0
+    failed: int = 0
+    fetched: int = 0
+    truncated: bool = False
+    duration_ms: int = 0
+    error_summary: Optional[str] = None
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    category: Optional[str] = None
+    connector_type: Optional[str] = None
+    target_profile: Optional[str] = None
+
+
+class DocumentPushRunHistoryListResponse(BaseSchema):
+    data: List[DocumentPushRunHistoryItem] = Field(default_factory=list)
+    total: int = 0
+    success: bool = True
 
 
 @router.get("/slo", summary="Document push SLO by category×connector×profile")
@@ -122,6 +157,56 @@ async def list_document_push_profiles(
 ) -> List[DocumentPushProfileOut]:
     _ = current_user, tenant_id
     return [DocumentPushProfileOut(**item) for item in DocumentPushService().list_profiles()]
+
+
+@router.get(
+    "/run-history",
+    summary="List sync/push run history for a Hub source_type",
+)
+async def list_document_push_run_history(
+    request: Request,
+    source_type: str = Query(..., min_length=1, description="业务源类型（Hub historySourceType）"),
+    target_profiles: Optional[str] = Query(
+        None,
+        description="逗号分隔；仅过滤 entity_type=document_push 的 target_profile",
+    ),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    auth: AuthContext = Depends(get_auth_context),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> DocumentPushRunHistoryListResponse:
+    """只读：入站 SyncRunLog + 外推（document_push 且摘要前缀匹配）。"""
+    _ = current_user
+    st = str(source_type or "").strip()
+    await ensure_permission_codes(
+        auth,
+        tenant_id,
+        request,
+        list(resolve_hub_history_permission_codes(st)),
+        require_all=False,
+        check_abac=False,
+    )
+
+    from core.services.data.sync_run_history_service import list_sync_run_history_rows
+
+    profiles = [
+        p.strip()
+        for p in str(target_profiles or "").split(",")
+        if p and str(p).strip()
+    ]
+    rows, total = await list_sync_run_history_rows(
+        tenant_id,
+        st,
+        target_profiles=profiles,
+        skip=skip,
+        limit=limit,
+    )
+    return DocumentPushRunHistoryListResponse(
+        data=[DocumentPushRunHistoryItem.model_validate(row) for row in rows],
+        total=total,
+        success=True,
+    )
 
 
 @router.post("", summary="Push document to external system")

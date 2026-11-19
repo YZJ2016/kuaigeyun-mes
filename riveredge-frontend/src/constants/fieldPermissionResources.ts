@@ -11,6 +11,9 @@ export const KUAIZHIZAO_PURCHASE_REQUISITION_FIELD_RESOURCE = 'kuaizhizao:purcha
 export const KUAIZHIZAO_DEMAND_FIELD_RESOURCE = 'kuaizhizao:demand';
 export const KUAIZHIZAO_WAREHOUSE_INVENTORY_FIELD_RESOURCE = 'kuaizhizao:warehouse-management-inventory';
 
+/** master-data */
+export const MASTER_DATA_MATERIAL_FIELD_RESOURCE = 'master-data:material';
+
 /** kuaicaiwu */
 export const KUAICAIWU_RECEIVABLE_FIELD_RESOURCE = 'kuaicaiwu:receivable';
 export const KUAICAIWU_PAYABLE_FIELD_RESOURCE = 'kuaicaiwu:payable';

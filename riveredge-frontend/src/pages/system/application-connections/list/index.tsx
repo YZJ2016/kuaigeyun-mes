@@ -1765,7 +1765,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
             (record.type === 'kingdee_galaxy' || isKingdeeCosmicOpenApiType(record.type)) &&
             canLoadApiPresets ? (
               <Button
-                {...rowActionKind('skip')}
+                {...rowActionKind('execute')}
                 {...rowActionLabelKeep()}
                 key="load-api-presets"
                 loading={loadingApiPresetsUuid === record.uuid}
@@ -1856,7 +1856,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
         <UniTable<ApplicationConnection>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.applicationConnections')}
-          columnPersistenceId="pages.system.application-connections.list-v4"
+          columnPersistenceId="pages.system.application-connections.list-v5"
           actionRef={actionRef}
           columns={columns}
           request={async (params, _sort, _filter, searchFormValues) => {

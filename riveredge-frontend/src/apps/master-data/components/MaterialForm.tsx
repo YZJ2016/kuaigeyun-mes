@@ -19,6 +19,9 @@ import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Co
 import { UniTableStackedPrimaryCell } from '../../../components/uni-table/stackedPrimaryColumn';
 import type { CustomField } from '../../../services/customField';
 import { useCustomFields } from '../../../hooks/useCustomFields';
+import { useUserFieldMasks } from '../../../hooks/useUserFieldMasks';
+import { resolveFieldMaskLevel } from '../../../utils/fieldMaskPermission';
+import { MASTER_DATA_MATERIAL_FIELD_RESOURCE } from '../../../constants/fieldPermissionResources';
 import { CustomFieldsFormSection } from '../../../components/custom-fields';
 import { MaterialDedupCreateGuard } from './MaterialDedupAssistant';
 import { FormModalTemplate, DocumentFormPageLayout, DocumentFormPageHeaderActions, DetailDrawerSection, useStackedOverlayZIndex } from '../../../components/layout-templates';
@@ -254,6 +257,11 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
     saveCustomFieldValues,
     resetFieldValues,
   } = useCustomFields({ tableName: 'master_data_materials', loadWhenOpen: true, open });
+
+  const fieldMasks = useUserFieldMasks();
+  const hideDefaultSupplierField =
+    resolveFieldMaskLevel(fieldMasks, MASTER_DATA_MATERIAL_FIELD_RESOURCE, 'default_supplier_id') ===
+    'hidden';
 
   const processRoutePerms = useResourcePermissions('master-data:process:route');
   const processOperationPerms = useResourcePermissions('master-data:process:operation');
@@ -1037,6 +1045,10 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       // 按全部已选来源类型保留字段（自制+委外等可同时落库）
       const allowedFields = new Set(collectAllowedSourceConfigFields(sourceTypes));
       if (allowedFields.has('default_supplier_id')) allowedFields.add('default_supplier_name');
+      if (hideDefaultSupplierField) {
+        allowedFields.delete('default_supplier_id');
+        allowedFields.delete('default_supplier_name');
+      }
       if (allowedFields.has('outsource_supplier_id')) allowedFields.add('outsource_supplier_name');
       const filteredSourceConfig: Record<string, any> = {};
       for (const key of Object.keys(sourceConfig)) {
@@ -1197,7 +1209,11 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       }
 
       // 将 ID 数组转换为对象数组
-      if (formDefaults.defaultSupplierIds && Array.isArray(formDefaults.defaultSupplierIds)) {
+      if (
+        !hideDefaultSupplierField &&
+        formDefaults.defaultSupplierIds &&
+        Array.isArray(formDefaults.defaultSupplierIds)
+      ) {
         processedDefaults.defaultSuppliers = formDefaults.defaultSupplierIds.map((id: number, index: number) => {
           const supplier = suppliers.find(s => s.id === id);
           return {
@@ -1207,6 +1223,9 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
             priority: index + 1,
           };
         });
+        delete processedDefaults.defaultSupplierIds;
+      } else if (hideDefaultSupplierField) {
+        processedDefaults.defaultSuppliers = existingDefaults.defaultSuppliers;
         delete processedDefaults.defaultSupplierIds;
       }
       
@@ -1652,6 +1671,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
                   canReadSuppliers={supplierPerms.canRead}
                   canCreateSuppliers={supplierPerms.canCreate}
                   canUpdateEngineeringBom={engineeringBomPerms.canUpdate}
+                  hideDefaultSupplierField={hideDefaultSupplierField}
                   sourceTypeOptions={sourceTypeOptions}
                   suspendedModalReturnPath={pageSuspendPath}
                   materialUuid={isEdit && material ? material.uuid : undefined}
@@ -1749,6 +1769,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
                 customersLoading={customersLoading}
                 suppliersLoading={suppliersLoading}
                 warehousesLoading={warehousesLoading}
+                hideDefaultSupplierField={hideDefaultSupplierField}
               />
             ),
           },
@@ -3411,6 +3432,7 @@ interface DefaultsTabProps {
   customersLoading: boolean;
   suppliersLoading: boolean;
   warehousesLoading: boolean;
+  hideDefaultSupplierField: boolean;
 }
 
 function useMaterialDefaultField<T>(name: string): T | undefined {
@@ -3490,6 +3512,7 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
   customersLoading,
   suppliersLoading,
   warehousesLoading,
+  hideDefaultSupplierField,
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -3868,21 +3891,23 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
                 </Row>
               </Form.Item>
             </Col>
-            <Col span={12}>
-              <ProFormSelect
-                name="defaults.defaultSupplierIds"
-                label={t('app.master-data.defaults.defaultSuppliers')}
-                placeholder={t('app.master-data.defaults.selectSuppliers')}
-                options={suppliers.map((s) => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
-                fieldProps={{
-                  mode: 'multiple',
-                  loading: suppliersLoading,
-                  showSearch: true,
-                  filterOption: (input: string, option: any) =>
-                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-                }}
-              />
-            </Col>
+            {!hideDefaultSupplierField ? (
+              <Col span={12}>
+                <ProFormSelect
+                  name="defaults.defaultSupplierIds"
+                  label={t('app.master-data.defaults.defaultSuppliers')}
+                  placeholder={t('app.master-data.defaults.selectSuppliers')}
+                  options={suppliers.map((s) => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
+                  fieldProps={{
+                    mode: 'multiple',
+                    loading: suppliersLoading,
+                    showSearch: true,
+                    filterOption: (input: string, option: any) =>
+                      (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                  }}
+                />
+              </Col>
+            ) : null}
             <Col span={12}>
               <ProFormDependency name={['baseUnit', 'units']}>
                 {({ baseUnit, units }) => {
@@ -4056,6 +4081,7 @@ interface MaterialSourceTabProps {
   canReadSuppliers: boolean;
   canCreateSuppliers: boolean;
   canUpdateEngineeringBom: boolean;
+  hideDefaultSupplierField: boolean;
   sourceTypeOptions: Array<{ label: string; value: string }>;
   suspendedModalReturnPath?: string;
   materialUuid?: string;
@@ -4081,6 +4107,7 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
   canReadSuppliers,
   canCreateSuppliers,
   canUpdateEngineeringBom,
+  hideDefaultSupplierField,
   sourceTypeOptions,
   suspendedModalReturnPath,
   materialUuid,
@@ -4493,31 +4520,33 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
                 <>
                   {sectionTitle('Buy')}
                   <Row gutter={16} style={{ marginTop: 0 }}>
-                    <Col span={12}>
-                      <ProFormItem
-                        name="sourceConfig.default_supplier_id"
-                        label={t('app.master-data.source.defaultSupplier')}
-                      >
-                        <UniDropdown
-                          placeholder={t('app.master-data.source.selectDefaultSupplier')}
-                          options={suppliers.map((s) => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
-                          loading={suppliersLoading}
-                          showSearch={canReadSuppliers}
-                          allowClear={canReadSuppliers}
-                          disabled={!canReadSuppliers}
-                          style={{ width: '100%' }}
-                          optionFilterProp="label"
-                          quickCreate={
-                            onQuickAddSupplier && canCreateSuppliers
-                              ? {
-                                  label: t('app.master-data.materialForm.quickAddSupplier'),
-                                  onClick: () => onQuickAddSupplier(),
-                                }
-                              : undefined
-                          }
-                        />
-                      </ProFormItem>
-                    </Col>
+                    {!hideDefaultSupplierField ? (
+                      <Col span={12}>
+                        <ProFormItem
+                          name="sourceConfig.default_supplier_id"
+                          label={t('app.master-data.source.defaultSupplier')}
+                        >
+                          <UniDropdown
+                            placeholder={t('app.master-data.source.selectDefaultSupplier')}
+                            options={suppliers.map((s) => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
+                            loading={suppliersLoading}
+                            showSearch={canReadSuppliers}
+                            allowClear={canReadSuppliers}
+                            disabled={!canReadSuppliers}
+                            style={{ width: '100%' }}
+                            optionFilterProp="label"
+                            quickCreate={
+                              onQuickAddSupplier && canCreateSuppliers
+                                ? {
+                                    label: t('app.master-data.materialForm.quickAddSupplier'),
+                                    onClick: () => onQuickAddSupplier(),
+                                  }
+                                : undefined
+                            }
+                          />
+                        </ProFormItem>
+                      </Col>
+                    ) : null}
                     <Col span={4}>
                       <ProFormDigit
                         name="sourceConfig.purchase_lead_time"

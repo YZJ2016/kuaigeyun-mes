@@ -6,6 +6,8 @@ export type {
   SyncPushHubPanelContext,
   SyncPushHubTabKey,
 } from './SyncPushHubModal';
+export { SyncRunHistoryPanel } from './SyncRunHistoryPanel';
+export type { SyncRunHistoryPanelProps } from './SyncRunHistoryPanel';
 export { DocumentPushUnavailablePanel } from './DocumentPushUnavailablePanel';
 export type { DocumentPushUnavailablePanelProps } from './DocumentPushUnavailablePanel';
 export { ConnectorCategoryConfigLayer } from './ConnectorCategoryConfigLayer';

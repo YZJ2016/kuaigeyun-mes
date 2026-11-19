@@ -891,6 +891,8 @@ const OperationsPage: React.FC = () => {
                 <SyncPushHubButton
                   syncEnabled={toolbarSyncPush.syncEnabled}
                   pushEnabled={toolbarSyncPush.pushEnabled}
+                  historySourceType="process_operation"
+                  historyTargetProfiles={['kingdee_eng_process']}
                   size="medium"
                   wrapButton={(hubButton) => (
                     <SyncFreshnessBadge

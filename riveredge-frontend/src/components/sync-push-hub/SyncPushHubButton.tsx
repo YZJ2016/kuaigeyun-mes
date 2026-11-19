@@ -29,16 +29,22 @@ export interface SyncPushHubButtonProps
 export const SyncPushHubButton: React.FC<SyncPushHubButtonProps> = ({
   syncEnabled = true,
   pushEnabled = true,
+  historySourceType,
+  historyTargetProfiles,
+  historyEnabled = true,
   syncTitle,
   pushTitle,
+  historyTitle,
   title,
   width,
   zIndex,
   defaultTab,
   renderSyncPanel,
   renderPushPanel,
+  renderHistoryPanel,
   syncPanel,
   pushPanel,
+  historyPanel,
   buttonText,
   iconOnly = false,
   wrapButton,
@@ -53,7 +59,11 @@ export const SyncPushHubButton: React.FC<SyncPushHubButtonProps> = ({
 
   const showSync = Boolean(syncEnabled) && Boolean(renderSyncPanel || syncPanel);
   const showPush = Boolean(pushEnabled) && Boolean(renderPushPanel || pushPanel);
-  if (!showSync && !showPush) return null;
+  const historySource = String(historySourceType || '').trim();
+  const showHistory =
+    Boolean(historyEnabled) &&
+    Boolean(renderHistoryPanel || historyPanel || historySource);
+  if (!showSync && !showPush && !showHistory) return null;
 
   const label = buttonText ?? t('components.syncPushHub.button');
   const ariaLabel = typeof label === 'string' ? label : t('components.syncPushHub.button');
@@ -86,16 +96,22 @@ export const SyncPushHubButton: React.FC<SyncPushHubButtonProps> = ({
           onClose={() => setOpen(false)}
           syncEnabled={showSync}
           pushEnabled={showPush}
+          historyEnabled={showHistory}
+          historySourceType={historySourceType}
+          historyTargetProfiles={historyTargetProfiles}
           syncTitle={syncTitle}
           pushTitle={pushTitle}
+          historyTitle={historyTitle}
           title={title}
           width={width}
           zIndex={zIndex}
           defaultTab={defaultTab}
           renderSyncPanel={renderSyncPanel}
           renderPushPanel={renderPushPanel}
+          renderHistoryPanel={renderHistoryPanel}
           syncPanel={syncPanel}
           pushPanel={pushPanel}
+          historyPanel={historyPanel}
         />
       ) : null}
     </>

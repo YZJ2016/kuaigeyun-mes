@@ -8557,6 +8557,8 @@ const WorkOrdersPage: React.FC = () => {
                     <SyncPushHubButton
                       syncEnabled={toolbarSyncPush.syncEnabled}
                       pushEnabled={toolbarSyncPush.pushEnabled}
+                      historySourceType="work_order"
+                      historyTargetProfiles={['kingdee_prd_mo']}
                       size="medium"
                       wrapButton={(hubButton) => (
                         <SyncFreshnessBadge

@@ -44,6 +44,62 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'warehouse-sync-run-history-api-r01',
+    date: '2026-10-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-sync-run-history-api-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.warehouse-sync-run-history-api-r01.description',
+  },
+  {
+    id: 'warehouse-sync-run-history-tab-r01',
+    date: '2026-10-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-sync-run-history-tab-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.warehouse-sync-run-history-tab-r01.description',
+  },
+  {
+    id: 'document-push-pending-preview-ready-r01',
+    date: '2026-10-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.document-push-pending-preview-ready-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.document-push-pending-preview-ready-r01.description',
+  },
+  {
+    id: 'document-push-hint-no-vendor-r01',
+    date: '2026-10-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-push-hint-no-vendor-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.document-push-hint-no-vendor-r01.description',
+  },
+  {
+    id: 'sync-push-hub-run-history-tab-r01',
+    date: '2026-10-26',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-push-hub-run-history-tab-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sync-push-hub-run-history-tab-r01.description',
+  },
+  {
+    id: 'app-conn-load-api-presets-overflow-r01',
+    date: '2026-10-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.app-conn-load-api-presets-overflow-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.app-conn-load-api-presets-overflow-r01.description',
+  },
+  {
+    id: 'sales-contract-create-staticmethod-r01',
+    date: '2026-10-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-contract-create-staticmethod-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-contract-create-staticmethod-r01.description',
+  },
+  {
     id: 'purchase-receipt-kingdee-doc-fields-r01',
     date: '2026-10-26',
     type: 'feature',

@@ -5,6 +5,7 @@
  */
 
 import { api, apiRequest } from '../../../services/api';
+import type { DocumentPushRunHistoryListResponse } from '../../kuaizhizao/services/document-push';
 import {
   normalizeMasterBatchDeleteResponse,
   type MasterBatchDeleteResult,
@@ -252,6 +253,21 @@ export type WarehouseSyncFromSourceResult = {
 
 export async function getWarehouseSyncBinding(): Promise<WarehouseSyncBinding> {
   return api.get('/apps/master-data/warehouse/warehouses/sync-binding');
+}
+
+export async function listWarehouseSyncRunHistory(params: {
+  skip?: number;
+  limit?: number;
+}): Promise<DocumentPushRunHistoryListResponse> {
+  return apiRequest(
+    '/apps/master-data/warehouse/warehouses/sync-run-history',
+    {
+      params: {
+        skip: params.skip ?? 0,
+        limit: params.limit ?? 20,
+      },
+    },
+  );
 }
 
 export async function syncWarehousesFromSource(payload: {

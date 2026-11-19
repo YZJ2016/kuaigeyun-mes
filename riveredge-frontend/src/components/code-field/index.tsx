@@ -63,6 +63,8 @@ interface CodeFieldProps {
   formRef?: React.RefObject<ProFormInstance | undefined | null>;
   /** 新建会话令牌（每次打开新建弹窗递增），触发重新拉取规则并预览下一个编号 */
   generateSessionKey?: string | number;
+  /** 这些 context 键变化时强制重算编号（新建态；已有编号也覆盖） */
+  regenerateWhenContextKeys?: string[];
 }
 
 const CodeField: React.FC<CodeFieldProps> = ({
@@ -83,6 +85,7 @@ const CodeField: React.FC<CodeFieldProps> = ({
   fieldProps = {},
   formRef: externalFormRef,
   generateSessionKey,
+  regenerateWhenContextKeys,
 }) => {
   const { t } = useTranslation();
   const { message } = App.useApp();
@@ -271,11 +274,21 @@ const CodeField: React.FC<CodeFieldProps> = ({
     };
   }, [pageCode, autoGenerateOnCreate, generateSessionKey, value, generateCodeWithContext]);
 
+  const shouldRegenerateOnContext = React.useMemo(() => {
+    if (!regenerateWhenContextKeys?.length) {
+      return false;
+    }
+    return regenerateWhenContextKeys.some((key) => {
+      const v = context?.[key];
+      return v !== undefined && v !== null && String(v).trim() !== '';
+    });
+  }, [context, regenerateWhenContextKeys]);
+
   useEffect(() => {
     if (!autoGenerateOnCreate || !pageConfig?.autoGenerate || !pageConfig?.ruleCode) {
       return;
     }
-    if (value) {
+    if (value && !shouldRegenerateOnContext) {
       return;
     }
     if (!context || Object.keys(context).length === 0) {
@@ -285,7 +298,7 @@ const CodeField: React.FC<CodeFieldProps> = ({
       generateCodeWithContext(pageConfig, context);
     }, 300);
     return () => clearTimeout(timer);
-  }, [context, pageConfig, autoGenerateOnCreate, value, generateCodeWithContext]);
+  }, [context, pageConfig, autoGenerateOnCreate, value, generateCodeWithContext, shouldRegenerateOnContext]);
 
   const fieldLabel = label || pageConfig?.codeFieldLabel || t('components.codeField.defaultLabel');
   const lockedExtra = codeEditLocked && effectiveLockedReason

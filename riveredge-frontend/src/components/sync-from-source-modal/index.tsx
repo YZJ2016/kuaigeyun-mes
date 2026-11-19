@@ -17,9 +17,11 @@ import {
   Steps,
   Switch,
   Table,
+  Tabs,
   Tooltip,
   Typography,
 } from 'antd';
+import { SyncRunHistoryPanel } from '../sync-push-hub/SyncRunHistoryPanel';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { loadAllActiveApis } from '../../utils/activeApiSelectOptions';
 import { getCustomFieldsByTable } from '../../services/customField';
@@ -219,6 +221,24 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
   const [syncProgress, setSyncProgress] = useState<SyncProgressItem[]>([]);
   /** 异步加载的可选字段（含自定义字段） */
   const [loadedAvailableFields, setLoadedAvailableFields] = useState<SyncTargetField[]>([]);
+  const historySource = String(config.historySourceType || '').trim();
+  const showHistoryTab = Boolean(historySource);
+  type SyncFromSourceTabKey = 'sync' | 'history';
+  const [activeTab, setActiveTab] = useState<SyncFromSourceTabKey>('sync');
+  const [lastOpen, setLastOpen] = useState(false);
+  const openingEdge = open && !lastOpen;
+
+  if (open !== lastOpen) {
+    setLastOpen(open);
+    if (open) {
+      setActiveTab('sync');
+    }
+  }
+
+  const panelTab: SyncFromSourceTabKey = openingEdge ? 'sync' : activeTab;
+  const syncTabActive = open && panelTab === 'sync';
+  const historyTabActive = open && panelTab === 'history';
+  const [historyRefreshNonce, setHistoryRefreshNonce] = useState(0);
 
   useEffect(() => {
     if (!syncing) {
@@ -695,6 +715,7 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
       });
 
       onComplete?.(result);
+      setHistoryRefreshNonce((n) => n + 1);
       if (result.failed > 0) {
         messageApi.warning(
           t(config.completePartialKey, {
@@ -1118,11 +1139,37 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
       />
     ) : null;
 
+  const modalBody = showHistoryTab ? (
+    <>
+      <Tabs
+        activeKey={panelTab}
+        onChange={(key) => setActiveTab(key as SyncFromSourceTabKey)}
+        items={[
+          { key: 'sync', label: t('components.syncFromSource.tabSync') },
+          { key: 'history', label: t('components.syncPushHub.tabHistory') },
+        ]}
+      />
+      <div style={{ marginTop: 4 }}>
+        {syncTabActive ? body : null}
+        {historyTabActive ? (
+          <SyncRunHistoryPanel
+            active={historyTabActive}
+            sourceType={historySource}
+            listHistory={config.listSyncRunHistory}
+            refreshNonce={historyRefreshNonce}
+          />
+        ) : null}
+      </div>
+    </>
+  ) : (
+    body
+  );
+
   if (contentOnly) {
     if (!open) return null;
     return (
       <div>
-        {body}
+        {modalBody}
         <div
           style={{
             display: 'flex',
@@ -1149,11 +1196,11 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
           onClose();
         }}
         zIndex={zIndex}
-        width={960}
+        width={showHistoryTab ? 1100 : 960}
         destroyOnHidden
-        footer={footerButtons}
+        footer={syncTabActive || !showHistoryTab ? footerButtons : null}
       >
-        {body}
+        {modalBody}
       </Modal>
       {settingModal}
     </>

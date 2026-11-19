@@ -23,7 +23,6 @@ import {
   App,
   Button,
   Tag,
-  Space,
   Modal,
   Card,
   Row,
@@ -44,7 +43,6 @@ import {
   DeleteOutlined,
   WarningOutlined,
   EyeOutlined,
-  HistoryOutlined,
 } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
@@ -54,7 +52,6 @@ import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-m
 import { useToolbarSyncPushFlags } from '../../../../../hooks/useToolbarSyncPushFlags';
 import ReportingPushBatchModal from './ReportingPushBatchModal';
 import ReportingSyncFromSourceModal from './ReportingSyncFromSourceModal';
-import ReportingSyncHistoryModal from './ReportingSyncHistoryModal';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import {
@@ -357,7 +354,6 @@ const ReportingPage: React.FC = () => {
   const [reportingDetail, setReportingDetail] = useState<ReportingRecord | null>(null);
   const [detailMaterialBindings, setDetailMaterialBindings] = useState<any[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [syncHistoryVisible, setSyncHistoryVisible] = useState(false);
   const [syncFreshnessKey, setSyncFreshnessKey] = useState(0);
   const loadReportingSyncBinding = useCallback(() => getReportingSyncBinding(), []);
 
@@ -1911,51 +1907,44 @@ const ReportingPage: React.FC = () => {
         syncToolbarExtra={
           toolbarSyncPush.hubVisible
             ? () => (
-                <Space>
-                  <SyncPushHubButton
-                    syncEnabled={toolbarSyncPush.syncEnabled}
-                    pushEnabled={toolbarSyncPush.pushEnabled}
-                    size="medium"
-                    wrapButton={(hubButton) => (
-                      <SyncFreshnessBadge
-                        getBinding={loadReportingSyncBinding}
-                        refreshKey={syncFreshnessKey}
-                      >
-                        {hubButton}
-                      </SyncFreshnessBadge>
-                    )}
-                    renderSyncPanel={({ active, close }) => (
-                      <ReportingSyncFromSourceModal
-                        contentOnly
-                        open={active}
-                        onClose={close}
-                        onComplete={() => {
-                          handleSyncComplete();
-                          close();
-                        }}
-                      />
-                    )}
-                    renderPushPanel={({ active, close }) => (
-                      <ReportingPushBatchModal
-                        embedded
-                        open={active}
-                        onClose={close}
-                        reportingIds={selectedReportingIds}
-                        onComplete={() => {
-                          handleSyncComplete();
-                          close();
-                        }}
-                      />
-                    )}
-                  />
-                  <Button
-                    size="medium"
-                    icon={<HistoryOutlined />}
-                    onClick={() => setSyncHistoryVisible(true)}
-                  >
-                    {t('app.kuaizhizao.workReporting.syncHistoryOpen')}
-                  </Button>
-                </Space>
+                <SyncPushHubButton
+                  syncEnabled={toolbarSyncPush.syncEnabled}
+                  pushEnabled={toolbarSyncPush.pushEnabled}
+                  historySourceType="reporting_record"
+                  historyTargetProfiles={['kingdee_prd_morpt']}
+                  size="medium"
+                  wrapButton={(hubButton) => (
+                    <SyncFreshnessBadge
+                      getBinding={loadReportingSyncBinding}
+                      refreshKey={syncFreshnessKey}
+                    >
+                      {hubButton}
+                    </SyncFreshnessBadge>
+                  )}
+                  renderSyncPanel={({ active, close }) => (
+                    <ReportingSyncFromSourceModal
+                      contentOnly
+                      open={active}
+                      onClose={close}
+                      onComplete={() => {
+                        handleSyncComplete();
+                        close();
+                      }}
+                    />
+                  )}
+                  renderPushPanel={({ active, close }) => (
+                    <ReportingPushBatchModal
+                      embedded
+                      open={active}
+                      onClose={close}
+                      reportingIds={selectedReportingIds}
+                      onComplete={() => {
+                        handleSyncComplete();
+                        close();
+                      }}
+                    />
+                  )}
+                />
               )
             : undefined
         }
@@ -1996,11 +1985,6 @@ const ReportingPage: React.FC = () => {
             toolBarButtonSize="medium"
           />,
         ]}
-      />
-
-      <ReportingSyncHistoryModal
-        open={syncHistoryVisible}
-        onClose={() => setSyncHistoryVisible(false)}
       />
 
       <FormModalTemplate

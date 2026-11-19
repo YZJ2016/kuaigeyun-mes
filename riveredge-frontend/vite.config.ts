@@ -248,6 +248,8 @@ export default defineConfig({
     },
     // 单块告警阈值（KB），拆分后各块仍可能较大
     chunkSizeWarningLimit: 800,
+    // 关闭构建末尾对每个 chunk 再算 gzip/brotli 体积（大仓可省数十秒；体积仍可看 visualizer）
+    reportCompressedSize: false,
     // 生产环境配置
     sourcemap: process.env.NODE_ENV === 'production' ? false : true, // 生产环境关闭sourcemap，减小体积
     minify: process.env.NODE_ENV === 'production' ? 'esbuild' : false, // 生产环境使用esbuild压缩，速度更快
@@ -436,18 +438,23 @@ export default defineConfig({
       jsxRuntime: 'automatic', // 使用自动JSX运行时，不需要显式导入React
     }),
     // P5-1：本地/CI 构建仍生成 .gz/.br；不提交 Git。生产 update 由 precompress_web_dist 补齐。
-    viteCompression({
-      algorithm: 'gzip',
-      ext: '.gz',
-      threshold: 10240,
-      deleteOriginFile: false,
-    }),
-    viteCompression({
-      algorithm: 'brotliCompress',
-      ext: '.br',
-      threshold: 10240,
-      deleteOriginFile: false,
-    }),
+    // BUILD_WEB_SKIP_PRECOMPRESS=1 可跳过（发版热路径加速；Caddy 仍有 encode gzip/zstd）。
+    ...(process.env.BUILD_WEB_SKIP_PRECOMPRESS === '1'
+      ? []
+      : [
+          viteCompression({
+            algorithm: 'gzip',
+            ext: '.gz',
+            threshold: 10240,
+            deleteOriginFile: false,
+          }),
+          viteCompression({
+            algorithm: 'brotliCompress',
+            ext: '.br',
+            threshold: 10240,
+            deleteOriginFile: false,
+          }),
+        ]),
     // P5-8：ANALYZE=1 npm run build:analyze 出 dist/stats.html
     process.env.ANALYZE === '1' &&
       visualizer({

@@ -371,7 +371,6 @@ class SalesContractService(AppBaseService[SalesContract]):
 
     @staticmethod
     async def _persist_contract_items(
-        self,
         tenant_id: int,
         contract_id: int,
         customer_id: Optional[int],
@@ -409,6 +408,7 @@ class SalesContractService(AppBaseService[SalesContract]):
                 **snapshot_kwargs_for_orm(row),
             )
 
+    @staticmethod
     def _sum_items(items: List[SalesContractItemCreate]) -> tuple[Decimal, Decimal]:
         total_qty = Decimal("0")
         total_amt = Decimal("0")
