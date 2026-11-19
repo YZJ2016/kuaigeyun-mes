@@ -95,6 +95,12 @@ def save_ledger(rows: dict[str, list[str]]) -> None:
     LEDGER.write_text(HEADER + body, encoding="utf-8")
 
 
+def is_excluded_artifact(path: str) -> bool:
+    """构建产物/依赖目录不入台账（上游 dist 已移出主仓，入册只会产生噪声行）。"""
+    p = path.strip().strip('"')
+    return "/dist/" in f"/{p}" or p.endswith((".gz", ".br")) or "node_modules/" in p
+
+
 def changed_paths(frm: str, to: str) -> list[tuple[str, str]]:
     """from..to 的 name-status；返回 (status, to侧路径)。rename 取新路径。"""
     out = git("diff", "--name-status", "-M", frm, to, "--").stdout
@@ -104,13 +110,14 @@ def changed_paths(frm: str, to: str) -> list[tuple[str, str]]:
         if not cols[0]:
             continue
         status = cols[0][0]
-        items.append((status, cols[-1]))
+        if not is_excluded_artifact(cols[-1]):
+            items.append((status, cols[-1]))
     return items
 
 
 def files_touched_by(commit: str) -> list[str]:
     out = git("show", "--format=", "--name-only", "-M", commit).stdout
-    return [l for l in out.splitlines() if l.strip()]
+    return [l for l in out.splitlines() if l.strip() and not is_excluded_artifact(l)]
 
 
 def cmd_audit(args: argparse.Namespace) -> int:
