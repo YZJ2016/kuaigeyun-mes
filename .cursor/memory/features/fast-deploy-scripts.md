@@ -24,7 +24,7 @@ standard: dist 不入库；推送只有源码 commit+push；PC 前端由部署�
 
 - 日期：2026-10-03；分流澄清：2026-10-10；**dist 出库重构：2026-11-19**
 - 状态：已交付（文档化，供后续构建一律走脚本）
-- ⚠️ 2026-11-19 起：`riveredge-frontend/dist` 不再入库，`build.web.sh`/`build_web_git.sh` 已删除，历史不再被 filter-repo 改写
+- ⚠️ 2026-11-19 起：`riveredge-frontend/dist` 不再入库。`build.web.sh` 保留但加总开关 `BUILD_WEB_PUBLISH=1`——未开时直接跳过（exit 0），开启才走旧「构建+提交 dist+剥离历史+推送」流程；日常勿开，历史不再被 filter-repo 周期改写
 
 ## 目标
 
@@ -73,7 +73,7 @@ standard: dist 不入库；推送只有源码 commit+push；PC 前端由部署�
 2. 部署机：`git pull` → `deploy.sh update` → `cmd_ensure_frontend_dist` 每次执行 `npm run build`（`NODE_BUILD_MEM` 默认 4096MB）→ `precompress_web_dist` 现生成 `.gz/.br`
 3. 本机调试/验证：`deploy.sh build` 或 `npm run build`，产物留在 `riveredge-frontend/dist`（已 gitignore）
 
-历史包袱：`build.web.sh` 曾用 git-filter-repo 剥离历史 dist 并 force-push，导致 develop 周期性整条链哈希改写（新旧链分叉）。该流程已随 dist 出库一并移除。
+历史包袱：`build.web.sh` 用 git-filter-repo 剥离历史 dist 并 force-push，导致 develop 周期性整条链哈希改写（新旧链分叉）。现已默认停用（`BUILD_WEB_PUBLISH=1` 才执行），应急保留。
 
 ## 扩展点
 

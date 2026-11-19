@@ -60,6 +60,7 @@ alwaysApply: true
 
 - 把 `riveredge-frontend/dist` 提交进 git（已 gitignore）
 - 本机 `npm run build` 后手写 commit/push dist
+- 擅自开 `BUILD_WEB_PUBLISH=1` 跑 `build.web.sh`（会重写历史并 force-push，须用户明确要求）
 - 索引仍有未维护 missing/stale（非 skipped）就推送
 - 只交业务、故意不 maintain / 不提正式 `aoci*.txt`
 - 用「构建后再补索引」跳过顺序
