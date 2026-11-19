@@ -29,7 +29,7 @@ export interface PurchaseReceiptDocumentPushPanelProps {
 
 const PR_DEFAULT_PROFILES: string[] = [];
 const PR_KINGDEE_PROFILES = ['kingdee_im_purinbill'];
-const PR_SAVE_API_HINTS = ['purinbill', '采购入库', 'im_purinbill', 'add_im_purinbill'];
+const PR_SAVE_API_HINTS = ['purinbill', '采购入库', 'im_purinbill', 'add_im_purinbill', 'add2_im_purinbill'];
 
 const PUSHABLE_STATUSES = new Set(['已入库', '已完成', 'processed', 'COMPLETED', 'POSTED']);
 
@@ -43,7 +43,13 @@ function isKingdeeImPurinbillAddApi(
   const path = String(api.path || '').toLowerCase();
   const name = String(api.name || '').toLowerCase();
   const hay = `${code} ${path} ${name}`;
-  if (code.includes('add_im_purinbill') || code.includes('push_im_purinbill')) return true;
+  if (
+    code.includes('add2_im_purinbill') ||
+    code.includes('add_im_purinbill') ||
+    code.includes('push_im_purinbill')
+  ) {
+    return true;
+  }
   const isAdd = path.includes('/add') || hay.includes('add');
   const isPurIn =
     hay.includes('purinbill') ||
@@ -54,6 +60,9 @@ function isKingdeeImPurinbillAddApi(
 
 function preferPurinbillApiUuid(items: API[]): string | undefined {
   const preferred =
+    items.find((api) => String(api.code || '').toLowerCase().includes('add2_im_purinbill')) ||
+    items.find((api) => String(api.path || '').toLowerCase().includes('/add2')) ||
+    items.find((api) => String(api.name || '').includes('【自定义】')) ||
     items.find((api) => String(api.code || '').toLowerCase().includes('add_im_purinbill')) ||
     items.find((api) => String(api.code || '').toLowerCase().includes('push_im_purinbill')) ||
     items.find((api) => String(api.path || '').toLowerCase().includes('im_purinbill')) ||
@@ -121,6 +130,16 @@ export const PurchaseReceiptDocumentPushPanel: React.FC<PurchaseReceiptDocumentP
     [t],
   );
 
+  const bindActionOptions = useMemo(
+    () => [
+      {
+        label: t('app.kuaizhizao.warehouseInbound.action.confirmInbound'),
+        value: 'confirm',
+      },
+    ],
+    [t],
+  );
+
   const loadCandidates = useCallback(
     async ({
       keyword,
@@ -155,6 +174,13 @@ export const PurchaseReceiptDocumentPushPanel: React.FC<PurchaseReceiptDocumentP
     [],
   );
 
+  const loadBinding = useCallback(() => warehouseApi.purchaseReceipt.getPushBinding(), []);
+  const saveBinding = useCallback(
+    (payload: Parameters<typeof warehouseApi.purchaseReceipt.savePushBinding>[0]) =>
+      warehouseApi.purchaseReceipt.savePushBinding(payload),
+    [],
+  );
+
   if (!open) return null;
 
   return (
@@ -179,6 +205,9 @@ export const PurchaseReceiptDocumentPushPanel: React.FC<PurchaseReceiptDocumentP
       matchSaveApi={isKingdeeImPurinbillAddApi}
       preferSaveApi={preferPurinbillApiUuid}
       saveApiSearchHints={PR_SAVE_API_HINTS}
+      loadBinding={loadBinding}
+      saveBinding={saveBinding}
+      bindActionOptions={bindActionOptions}
       showScheduleControls={false}
       successCountKey="app.kuaizhizao.documentPush.batch.success"
       partialCountKey="app.kuaizhizao.documentPush.batch.partial"

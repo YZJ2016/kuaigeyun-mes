@@ -980,13 +980,8 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         orders = await query.offset(skip).limit(limit).order_by(order_clause, "-id")
 
         # 不能直接 model_validate(order)：order.items 是 ReverseRelation，会导致 Pydantic 校验失败
+        # 列表禁止读侧 sync 回写已到货数：确认入库/退货/撤回等写路径已 sync；读侧批量 update 易拖垮列表致网关 504
         order_ids = [order.id for order in orders]
-        if order_ids:
-            from apps.kuaizhizao.services.warehouse_service import (
-                sync_purchase_order_receipt_quantities_batch,
-            )
-
-            await sync_purchase_order_receipt_quantities_batch(tenant_id, order_ids)
         totals_by_order = await self._batch_order_receipt_totals(tenant_id, order_ids)
         downstream_totals_by_order = await self._batch_order_downstream_totals(tenant_id, order_ids)
 

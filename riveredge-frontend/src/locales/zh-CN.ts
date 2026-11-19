@@ -53453,5 +53453,33 @@ export default {
     '采购申请恢复填写申请名称',
   'pages.dashboard.updateLog.entries.purchase-requisition-name-field-restore-r01.description':
     '新建与编辑页基本信息区恢复申请名称；留空保存仍按申请编号生成默认名称，填写则按用户输入落库。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-doc-fields-r01.title':
+    '采购入库单补齐金蝶外推单据字段',
+  'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-doc-fields-r01.description':
+    '空白新建可填供应商、采购员与工号、验收人、付款方式、税率、币别；外推优先读单据字段（工号/付款方式/税率/验收人），组织与单据类型等仍在业务配置。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-blank-create-po-fk-r01.title':
+    '空白新建采购入库单保存外键报错',
+  'pages.dashboard.updateLog.entries.purchase-receipt-blank-create-po-fk-r01.description':
+    '无采购订单来源的入库单不再写入 purchase_order_id=0（违反外键）；改为可空 NULL，写路径将 0/缺省规范为空。',
+  'pages.dashboard.updateLog.entries.purchase-center-overdue-count-504-r01.title':
+    '采购管理页超时「正在维护」排查修复',
+  'pages.dashboard.updateLog.entries.purchase-center-overdue-count-504-r01.description':
+    '采购中心汇总与菜单角标逾期计数曾按「百万条预警列表」全量装配（含行影响溯源），叠加订单列表读侧回写已到货数量，易触发网关 504。现改为库内条件计数、预警等级下推过滤、本页再解析影响，并去掉列表读侧 sync。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-auto-push-binding-r01.title':
+    '采购入库单接入自动推送',
+  'pages.dashboard.updateLog.entries.purchase-receipt-auto-push-binding-r01.description':
+    '入库管理「数据互通」可记住出站目标与「确认入库」触发动作；确认入库成功后按绑定配置无感外推金蝶云苍穹采购入库单（默认优先【自定义】add2 含验收人接口）。',
+  'pages.dashboard.updateLog.entries.cosmic-purinbill-add2-acceptor-r01.title':
+    '苍穹采购入库自定义接口（含验收人）',
+  'pages.dashboard.updateLog.entries.cosmic-purinbill-add2-acceptor-r01.description':
+    '接口库保留标品「采购入库单新增」，并新增带【自定义】标识的「采购入库单新增(含验收人)」（add2，字段 fd81_yanshou）。需验收人时请加载该自定义接口，并将推送配置的 save_path / save_api_uuid 与 acceptor_field 指向它。',
+  'pages.dashboard.updateLog.entries.cosmic-outbound-api-sync-direction-r01.title':
+    '苍穹单据新增接口标为出站同步',
+  'pages.dashboard.updateLog.entries.cosmic-outbound-api-sync-direction-r01.description':
+    '采购入库、销售出库、其他出库、盘盈、盘亏等新增/批量新增接口在接口管理中正确显示为出站同步；重新加载金蝶AI苍穹常用接口即可纠正已有条目。',
+  'pages.dashboard.updateLog.entries.cosmic-inventory-balance-inbound-r01.title':
+    '金蝶苍穹库存余额入站接口',
+  'pages.dashboard.updateLog.entries.cosmic-inventory-balance-inbound-r01.description':
+    '接口库「金蝶AI苍穹」新增库存余额（getInventoryAvbQty）与即时库存明细（getInventoryDetail）查询预设，可对接即时库存从数据接口同步；请将请求体中的库存组织编码改为本环境组织，或在连接器填写组织编码。',
   'pages.system.applications.resetModPlanHint': '需求计划、需求运算、生产计划与滚动排程',
 };

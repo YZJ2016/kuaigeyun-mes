@@ -10148,9 +10148,20 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             })
 
             from apps.kuaizhizao.models.purchase_order import PurchaseOrder
-            po_id = getattr(receipt_data, "purchase_order_id", None) or receipt_dict.get("purchase_order_id")
+            # 空白建单：0/缺省 → NULL（FK 不接受占位 0）
+            po_id_raw = receipt_dict.get("purchase_order_id")
+            if po_id_raw is None:
+                po_id_raw = getattr(receipt_data, "purchase_order_id", None)
+            po_id = int(po_id_raw or 0)
+            if po_id <= 0:
+                receipt_dict["purchase_order_id"] = None
+                if not str(receipt_dict.get("purchase_order_code") or "").strip():
+                    receipt_dict["purchase_order_code"] = ""
+                po_id = 0
+            else:
+                receipt_dict["purchase_order_id"] = po_id
             po_upstream = None
-            if po_id and int(po_id) > 0:
+            if po_id > 0:
                 po_upstream = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=po_id)
 
             from apps.kuaizhizao.constants.purchase_order_type import (
@@ -10364,6 +10375,9 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 item_dict["qualified_quantity"] = resolved_qualified_qty
                 item_dict["unqualified_quantity"] = resolved_unqualified_qty
                 item_dict["quality_status"] = resolved_quality_status
+                # 空白建单明细：0 → NULL（FK 不接受占位 0）
+                poi_id = int(item_dict.get("purchase_order_item_id") or 0)
+                item_dict["purchase_order_item_id"] = poi_id if poi_id > 0 else None
 
                 # 写路径快照：规格/型号 + 供应商料号（与成品入库一致）
                 snap_obj = line_snapshots.get(int(item_data.material_id or 0))
@@ -10396,8 +10410,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             response = PurchaseReceiptResponse.model_validate(receipt)
 
         # 单据关联放在建单事务外：避免历史 Nested 回滚误毁入库单，且不拖长序号锁
-        purchase_order_id = getattr(receipt_data, "purchase_order_id", None)
-        if created_receipt_id is not None and purchase_order_id:
+        purchase_order_id = int(getattr(receipt_data, "purchase_order_id", None) or 0)
+        if created_receipt_id is not None and purchase_order_id > 0:
             try:
                 from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
                 from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
@@ -10990,6 +11004,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 )
             if not receipt_items or header_wh_id is None:
                 continue
+            po_tax = getattr(primary, "tax_rate", None)
             created = await self.create_purchase_receipt(
                 tenant_id=tenant_id,
                 receipt_data=PurchaseReceiptCreate(
@@ -10997,6 +11012,11 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     purchase_order_code=str(primary.purchase_order_code or ""),
                     supplier_id=primary.supplier_id,
                     supplier_name=primary.supplier_name,
+                    buyer_id=getattr(primary, "buyer_id", None),
+                    buyer_name=getattr(primary, "buyer_name", None),
+                    tax_rate=float(po_tax) if po_tax is not None else None,
+                    currency=str(getattr(primary, "currency", None) or "CNY").strip() or "CNY",
+                    pay_mode="CREDIT",
                     warehouse_id=header_wh_id,
                     warehouse_name=header_wh_name or await _resolve_warehouse_name_by_id(
                         tenant_id, header_wh_id
@@ -11402,6 +11422,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     item_dict["quality_status"] = resolved_quality_status
                     if auto_batch_no is not None:
                         item_dict["batch_number"] = auto_batch_no
+                    poi_id = int(item_dict.get("purchase_order_item_id") or 0)
+                    item_dict["purchase_order_item_id"] = poi_id if poi_id > 0 else None
 
                     snap_obj = line_snapshots.get(
                         int(getattr(item_data, "material_id", None) or 0)
@@ -11811,6 +11833,15 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             run_id="post-fix",
         )
         # #endregion
+        from core.services.integration.document_push_silent import maybe_silent_push_after_audit
+
+        await maybe_silent_push_after_audit(
+            tenant_id=tenant_id,
+            user_id=confirmed_by,
+            entity_type="purchase_receipt",
+            entity_id=receipt_id,
+            action="confirm",
+        )
         return updated_receipt
 
     @serialize_stock_document("purchase_receipt", "receipt_id")

@@ -45,12 +45,15 @@ def _build_kingdee_cosmic_pack() -> ApiLibraryPackDefinition:
         "pack_id": "kingdee_cosmic",
         "name": "金蝶AI苍穹 OpenAPI",
         "description": (
-            "金蝶AI苍穹开放平台常用接口：入站含物料、单位、分组、供应商、客户、仓库、采购订单等标准业务对象 query；"
-            "出站含采购入库单新增（im_purinbill/add）、销售出库单批量新增（im_saloutbill/batchAdd）、"
+            "金蝶AI苍穹开放平台常用接口：入站含物料、单位、分组、供应商、客户、仓库、库存余额"
+            "（getInventoryAvbQty）、即时库存明细（getInventoryDetail）、采购订单等标准业务对象 query；"
+            "出站含采购入库单新增（标品 im_purinbill/add）、"
+            "【自定义】含验收人新增（fd81/im_purinbill/add2）、"
+            "销售出库单批量新增（im_saloutbill/batchAdd）、"
             "其他出库单批量新增（im_otheroutbill/batchAdd）、盘盈单批量新增（im_surplusbill/batchAdd）、"
             "盘亏单批量新增（im_deficitbill/batchAdd）。"
             "加载前请先在应用连接器中配置并测通「金蝶AI苍穹 OpenAPI」，并在开放服务云完成 API 初始化与授权。"
-            "select/filter 可按现场字段在接口管理中微调。"
+            "select/filter 可按现场字段在接口管理中微调；库存余额请将 params.org 改为本环境库存组织编码。"
         ),
         "connector_type": "kingdee_cosmic",
         "category_name": "金蝶AI苍穹",

@@ -88,6 +88,13 @@ def test_v2_inventory_params_body_not_wrapped_as_data():
     ensure = _mod.ensure_kingdee_v2_request_body
     body = {"params": {"org": "100"}, "pageNo": 1, "pageSize": 100}
     assert ensure("https://x/kapi/v2/im/getInventoryDetail", body) == body
+    assert ensure(
+        "https://x/kapi/v2/im/getInventoryAvbQty", {"params": {"org": "100"}}
+    ) == {
+        "params": {"org": "100"},
+        "pageNo": 1,
+        "pageSize": 100,
+    }
     assert ensure("https://x/kapi/v2/im/getInventorySum", {"params": {"org": "100"}}) == {
         "params": {"org": "100"},
         "pageNo": 1,
@@ -98,6 +105,25 @@ def test_v2_inventory_params_body_not_wrapped_as_data():
         "https://x/kapi/v2/im/getInventoryDetail",
         {"data": {"params": {"org": "100"}}, "pageNo": 1, "pageSize": 100},
     ) == {"params": {"org": "100"}, "pageNo": 1, "pageSize": 100}
+
+
+def test_inventory_avb_qty_fills_params_org_from_connector_when_placeholder():
+    prepare = _mod.prepare_kingdee_cosmic_outbound
+    method, url, params, body = prepare(
+        {"org_number": "ORG-88"},
+        "https://x/kapi/v2/im/getInventoryAvbQty",
+        "POST",
+        {},
+        {
+            "params": {"org": "<库存组织编码，如 100>"},
+            "pageNo": 1,
+            "pageSize": 200,
+        },
+    )
+    assert method == "POST"
+    assert url.endswith("/im/getInventoryAvbQty")
+    assert body["params"]["org"] == "ORG-88"
+    assert body["pageSize"] == 200
 
 
 def test_warehouse_list_query_rewrites_to_getlist_and_injects_org():

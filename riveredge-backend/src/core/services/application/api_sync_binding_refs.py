@@ -24,6 +24,7 @@ def _iter_binding_specs() -> Sequence[Tuple[str, Type[Any], Tuple[str, ...]]]:
     )
     from apps.kuaizhizao.models.inventory_sync_binding import InventorySyncBinding
     from apps.kuaizhizao.models.purchase_order_sync_binding import PurchaseOrderSyncBinding
+    from apps.kuaizhizao.models.purchase_receipt_sync_binding import PurchaseReceiptSyncBinding
     from apps.kuaizhizao.models.reporting_sync_binding import ReportingSyncBinding
     from apps.kuaizhizao.models.sales_order_sync_binding import SalesOrderSyncBinding
     from apps.kuaizhizao.models.work_order_sync_binding import WorkOrderSyncBinding
@@ -39,6 +40,7 @@ def _iter_binding_specs() -> Sequence[Tuple[str, Type[Any], Tuple[str, ...]]]:
         ("工序同步", OperationSyncBinding, ("api_uuid",)),
         ("销售订单同步", SalesOrderSyncBinding, ("api_uuid",)),
         ("采购订单同步", PurchaseOrderSyncBinding, ("api_uuid",)),
+        ("采购入库同步", PurchaseReceiptSyncBinding, ("api_uuid",)),
         ("工单同步", WorkOrderSyncBinding, ("api_uuid", "push_save_api_uuid")),
         ("报工同步", ReportingSyncBinding, ("api_uuid",)),
         ("库存同步", InventorySyncBinding, ("api_uuid",)),

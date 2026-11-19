@@ -232,23 +232,29 @@ class DocumentPushPipeline:
         fallback = str(request.source_code or request.source_id or "")
         target_id, bill_no = adapter.parse_bill_ref(response, fallback=fallback)
 
-        # Submit/Audit 仅 supports_submit_audit() 为 True 的 Adapter（金蝶）
-        if adapter.supports_submit_audit():
-            if bool(config.get("submit_after_save", False)):
+        # Submit/Audit：Adapter 声明支持，或业务配置显式给出 submit_path/audit_path（苍穹）
+        submit_path = str(
+            config.get("submit_path") or getattr(adapter, "submit_path", "") or ""
+        ).strip()
+        audit_path = str(
+            config.get("audit_path") or getattr(adapter, "audit_path", "") or ""
+        ).strip()
+        if adapter.supports_submit_audit() or submit_path or audit_path:
+            if bool(config.get("submit_after_save", False)) and submit_path:
                 await self._submit_or_audit(
                     adapter,
                     connection,
-                    adapter.submit_path,
+                    submit_path,
                     form_id,
                     bill_id=target_id,
                     bill_no=bill_no,
                     timeout=timeout,
                 )
-            if bool(config.get("audit_after_save", False)):
+            if bool(config.get("audit_after_save", False)) and audit_path:
                 await self._submit_or_audit(
                     adapter,
                     connection,
-                    adapter.audit_path,
+                    audit_path,
                     form_id,
                     bill_id=target_id,
                     bill_no=bill_no,

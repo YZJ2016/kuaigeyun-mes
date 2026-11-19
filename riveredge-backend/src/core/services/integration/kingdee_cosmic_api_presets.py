@@ -127,6 +127,8 @@ IM_GET_INVENTORY_DETAIL_PRESET_CODE_SUFFIX = "query_inventory_detail"
 # 兼容旧常量名（曾误用 getInventorySum 作余额）
 IM_GET_INVENTORY_SUM_PATH = IM_GET_INVENTORY_AVB_QTY_PATH
 IM_GET_INVENTORY_SUM_PRESET_CODE_SUFFIX = IM_GET_INVENTORY_AVB_QTY_PRESET_CODE_SUFFIX
+INVENTORY_BALANCE_PRESET_CODE_SUFFIX = IM_GET_INVENTORY_AVB_QTY_PRESET_CODE_SUFFIX
+INVENTORY_DETAIL_PRESET_CODE_SUFFIX = IM_GET_INVENTORY_DETAIL_PRESET_CODE_SUFFIX
 # 仓库 / 仓位列表：开放平台已发布 sbd/getList。basedata query/batchQuery 实调常 404。
 WAREHOUSE_GET_LIST_PATH = f"kapi/v2/sbd/{BIZ_BD_WAREHOUSE}/getList"
 LOCATION_GET_LIST_PATH = f"kapi/v2/sbd/{BIZ_BD_LOCATION}/getList"
@@ -217,6 +219,72 @@ def build_warehouse_get_list_preset() -> KingdeeCosmicApiPreset:
     }
 
 
+def build_inventory_balance_query_preset_body(
+    *,
+    org_number: str = "BU-00000",
+    page_no: int = 1,
+    page_size: int = 200,
+) -> Dict[str, Any]:
+    """
+    库存余额 getInventoryAvbQty：请求体为顶层 params + pageNo/pageSize（勿包 data）。
+    params.org 为库存组织编码（必填）；还可传 material/warehouse/location/lotnum（多选逗号分隔）。
+    """
+    return {
+        "params": {"org": str(org_number or "BU-00000").strip() or "BU-00000"},
+        "pageNo": int(page_no or 1),
+        "pageSize": int(page_size or 200),
+    }
+
+
+def build_inventory_balance_query_preset() -> KingdeeCosmicApiPreset:
+    return {
+        "code_suffix": INVENTORY_BALANCE_PRESET_CODE_SUFFIX,
+        "name": "苍穹查询库存余额",
+        "description": (
+            "库存管理「库存查询接口API」（API 编码 getInventoryAvbQty）。"
+            f"请求地址 /{IM_GET_INVENTORY_AVB_QTY_PATH}。"
+            "请求体为顶层 params、pageNo、pageSize（勿包进 data）；"
+            "params.org 为库存组织编码（必填，默认示例 BU-00000，请按本环境修改）；"
+            "可选 material / warehouse / location / lotnum（多选逗号分隔）。"
+            "返回行含可用量等字段，供即时库存入站同步映射（数量优先 avbqty）。"
+            "开放平台说明亦可改用即时库存明细 getInventoryDetail（本包另有预设）。"
+        ),
+        "path": IM_GET_INVENTORY_AVB_QTY_PATH,
+        "method": "POST",
+        "request_body": build_inventory_balance_query_preset_body(),
+    }
+
+
+def build_inventory_detail_query_preset_body(
+    *,
+    org_number: str = "BU-00000",
+    page_no: int = 1,
+    page_size: int = 200,
+) -> Dict[str, Any]:
+    """即时库存明细 getInventoryDetail：体形与汇总相同，行上常含批号 lotnum。"""
+    return build_inventory_balance_query_preset_body(
+        org_number=org_number,
+        page_no=page_no,
+        page_size=page_size,
+    )
+
+
+def build_inventory_detail_query_preset() -> KingdeeCosmicApiPreset:
+    return {
+        "code_suffix": INVENTORY_DETAIL_PRESET_CODE_SUFFIX,
+        "name": "苍穹查询即时库存明细",
+        "description": (
+            "库存管理「即时库存明细查询」（API 编码 getInventoryDetail）。"
+            f"请求地址 /{IM_GET_INVENTORY_DETAIL_PATH}。"
+            "请求体同库存余额：顶层 params.org（库存组织编码）+ pageNo/pageSize；"
+            "明细行通常含 lotnum 批号，适合按批次同步即时库存。"
+        ),
+        "path": IM_GET_INVENTORY_DETAIL_PATH,
+        "method": "POST",
+        "request_body": build_inventory_detail_query_preset_body(),
+    }
+
+
 def build_supplier_query_preset_body(
     *,
     createorg_numbers: Optional[List[str]] = None,
@@ -302,6 +370,41 @@ def supplier_preset_needs_upgrade(
 def kingdee_supplier_api_upgrade_fields() -> Dict[str, Any]:
     """供接口库升级写入，与 build_supplier_query_preset 一致。"""
     preset = build_supplier_query_preset()
+    return {
+        "path": preset["path"],
+        "method": preset["method"],
+        "name": preset["name"],
+        "description": preset["description"],
+        "request_params": preset.get("request_params"),
+        "request_body": preset.get("request_body") or {},
+    }
+
+
+def inventory_balance_preset_needs_upgrade(
+    path: Any,
+    request_body: Any = None,
+    method: Any = None,
+) -> bool:
+    """须为 POST …/im/getInventoryAvbQty，且 body 为顶层 params + 分页（勿包 data）。"""
+    if str(method or "").upper() not in ("", "POST"):
+        return True
+    lower = str(path or "").lower().replace("\\", "/")
+    if "getinventoryavbqty" not in lower:
+        return True
+    if not isinstance(request_body, dict):
+        return True
+    if request_body.get("pageNo") in (None, "") or request_body.get("pageSize") in (None, ""):
+        return True
+    params = request_body.get("params")
+    if not isinstance(params, dict):
+        return True
+    if request_body.get("data") not in (None, {}, []):
+        return True
+    return False
+
+
+def kingdee_inventory_balance_api_upgrade_fields() -> Dict[str, Any]:
+    preset = build_inventory_balance_query_preset()
     return {
         "path": preset["path"],
         "method": preset["method"],
@@ -1961,6 +2064,8 @@ def list_kingdee_cosmic_api_presets() -> List[KingdeeCosmicApiPreset]:
         build_im_otherinbill_finished_goods_batch_delete_preset(),
         build_im_surplusbill_batch_add_preset(),
         build_im_deficitbill_batch_add_preset(),
+        build_inventory_balance_query_preset(),
+        build_inventory_detail_query_preset(),
         build_warehouse_get_list_preset(),
         {
             "code_suffix": "query_purchase_order",

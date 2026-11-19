@@ -44,6 +44,62 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'purchase-receipt-kingdee-doc-fields-r01',
+    date: '2026-10-26',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-doc-fields-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-doc-fields-r01.description',
+  },
+  {
+    id: 'purchase-receipt-blank-create-po-fk-r01',
+    date: '2026-10-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-blank-create-po-fk-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-blank-create-po-fk-r01.description',
+  },
+  {
+    id: 'purchase-center-overdue-count-504-r01',
+    date: '2026-10-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-center-overdue-count-504-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-center-overdue-count-504-r01.description',
+  },
+  {
+    id: 'purchase-receipt-auto-push-binding-r01',
+    date: '2026-10-26',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-auto-push-binding-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-auto-push-binding-r01.description',
+  },
+  {
+    id: 'cosmic-purinbill-add2-acceptor-r01',
+    date: '2026-10-26',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.cosmic-purinbill-add2-acceptor-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.cosmic-purinbill-add2-acceptor-r01.description',
+  },
+  {
+    id: 'cosmic-outbound-api-sync-direction-r01',
+    date: '2026-10-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.cosmic-outbound-api-sync-direction-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.cosmic-outbound-api-sync-direction-r01.description',
+  },
+  {
+    id: 'cosmic-inventory-balance-inbound-r01',
+    date: '2026-10-26',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.cosmic-inventory-balance-inbound-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.cosmic-inventory-balance-inbound-r01.description',
+  },
+  {
     id: 'stocktaking-deficit-kingdee-cosmic-push-r01',
     date: '2026-10-25',
     type: 'feature',

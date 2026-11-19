@@ -985,6 +985,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "kingdee_purchase_receipt_push": {
             "enabled": False,
             "form_id": "im_purinbill",
+            # 默认标品 add；需验收人时改为自定义 add2 并设 acceptor_field=fd81_yanshou
             "save_path": "kapi/v2/im/im_purinbill/add",
             "body_wrap": "data",
             "use_local_bill_no": True,
@@ -997,6 +998,20 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
             "invstatus_number": "",
             "invtype_number": "",
             "linetype_number": "",
+            # 采购员=供应链业务员（编码）；验收人仅自定义 add2（acceptor_field）；库管员非必填
+            "bizoperator_operatornumber": "",
+            "bizoperatorgroup_number": "",
+            "acceptor_field": "",
+            "acceptor_text": "",
+            "location_number": "",
+            "taxrate": 13,
+            "taxrateid_number": "V13",
+            "istax": True,
+            "default_price": 1,
+            "submit_path": "kapi/v2/im/im_purinbill/batchSubmit",
+            "audit_path": "kapi/v2/im/im_purinbill/batchAudit",
+            "submit_after_save": False,
+            "audit_after_save": False,
             "fail_on_error": False,
         },
         "kingdee_sales_delivery_push": {

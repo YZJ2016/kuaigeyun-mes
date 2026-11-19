@@ -54,6 +54,7 @@ from apps.kuaizhizao.services.receipt_notice_service import ReceiptNoticeService
 from apps.kuaizhizao.services.warehouse_wo_outsource_pull_service import (
     WarehouseWoOutsourcePullService,
 )
+from apps.kuaizhizao.services.purchase_receipt_sync_service import purchase_receipt_sync_service
 
 # 初始化服务实例
 batching_order_service = BatchingOrderService()
@@ -132,6 +133,10 @@ from apps.kuaizhizao.schemas.warehouse import (
     InboundConfirmationRequest,
     OutboundConfirmationRequest,
     OutboundConfirmationItem,
+)
+from apps.kuaizhizao.schemas.purchase_receipt_sync import (
+    PurchaseReceiptPushBindingOut,
+    PurchaseReceiptPushBindingUpsert,
 )
 from apps.kuaizhizao.schemas.replenishment_suggestion import (
     ReplenishmentSuggestionResponse,
@@ -4832,6 +4837,35 @@ async def delete_sales_return(
 
 
 # ============ 采购入库管理 API ============
+
+@router.get(
+    "/purchase-receipts/push-binding",
+    response_model=PurchaseReceiptPushBindingOut,
+    summary="采购入库单出站目标",
+)
+async def get_purchase_receipt_push_binding(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:inbound:read")),
+):
+    _ = current_user
+    return await purchase_receipt_sync_service.get_push_binding(tenant_id)
+
+
+@router.put(
+    "/purchase-receipts/push-binding",
+    response_model=PurchaseReceiptPushBindingOut,
+    summary="保存采购入库单出站目标",
+)
+async def put_purchase_receipt_push_binding(
+    body: PurchaseReceiptPushBindingUpsert,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:inbound:update")),
+):
+    _ = current_user
+    return await purchase_receipt_sync_service.upsert_push_binding(tenant_id, body)
+
 
 @router.post("/purchase-receipts", response_model=PurchaseReceiptResponse, summary="Create purchase receipt")
 async def create_purchase_receipt(

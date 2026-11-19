@@ -1,4 +1,4 @@
-"""业务适配：采购入库单 → 金蝶云苍穹采购入库单新增（im_purinbill/add）。"""
+"""业务适配：采购入库单 → 金蝶云苍穹采购入库单新增（默认标品 add；自定义 add2 含验收人）。"""
 
 from __future__ import annotations
 
@@ -38,6 +38,7 @@ from infra.exceptions.exceptions import BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
 
 DEFAULT_FORM_ID = BIZ_IM_PURINBILL
+# 默认标品 add；自定义含验收人时在配置改 save_path=…/add2 且 acceptor_field=fd81_yanshou
 DEFAULT_SAVE_PATH = IM_PURINBILL_ADD_PATH
 TARGET_TYPE = "kingdee_im_purinbill"
 TARGET_PROFILE = "kingdee_im_purinbill"
@@ -191,8 +192,14 @@ def build_kingdee_purchase_receipt_model(
         }
         if line_wh:
             entry["warehouse_number"] = line_wh
-        if item.location_code:
-            entry["location_number"] = str(item.location_code).strip()
+        location_number = str(
+            item.location_code
+            or config.get("location_number")
+            or config.get("location_code")
+            or ""
+        ).strip()
+        if location_number:
+            entry["location_number"] = location_number
         if item.batch_number:
             entry["lotnumber"] = str(item.batch_number).strip()
         if item.manufacturing_date:
@@ -201,10 +208,30 @@ def build_kingdee_purchase_receipt_model(
             entry["expirydate"] = _date_string(item.expiry_date)
         if item.notes:
             entry["entrycomment"] = str(item.notes)
+        # 提交/审核要求明细金额、税率；单据头税率优先，其次配置缺省
         price = _to_float(item.unit_price)
-        if price:
-            entry["price"] = price
-            entry["amount"] = _to_float(item.total_amount) or price * qty
+        if price <= 0:
+            price = _to_float(config.get("default_price"))
+        if price <= 0:
+            price = 1.0
+        amount = _to_float(item.total_amount) or round(price * qty, 4)
+        taxrate = _to_float(getattr(receipt, "tax_rate", None))
+        if taxrate <= 0:
+            taxrate = _to_float(config.get("taxrate"))
+        if taxrate <= 0:
+            taxrate = 13.0
+        taxrateid = str(config.get("taxrateid_number") or "").strip()
+        if not taxrateid:
+            taxrateid = f"V{int(taxrate)}" if float(taxrate).is_integer() else "V13"
+        taxrateid = taxrateid or "V13"
+        priceandtax = round(price * (1 + taxrate / 100.0), 6)
+        amountandtax = round(amount * (1 + taxrate / 100.0), 4)
+        entry["price"] = price
+        entry["amount"] = amount
+        entry["taxrate"] = taxrate
+        entry["taxrateid_number"] = taxrateid
+        entry["priceandtax"] = priceandtax
+        entry["amountandtax"] = amountandtax
         # 去掉空必填占位，避免把空串推给金蝶（配置缺失时由业务层报错）
         for key in ("invstatus_number", "invtype_number", "linetype_number"):
             if not entry.get(key):
@@ -220,6 +247,7 @@ def build_kingdee_purchase_receipt_model(
         "exratedate": "exratedate",
         "bookdate": "bookdate",
         "paymode": "paymode",
+        "istax": "istax",
         "org_number": "org_number",
         "bizorg_number": "bizorg_number",
         "billtype_number": "billtype_number",
@@ -237,7 +265,16 @@ def build_kingdee_purchase_receipt_model(
         if key in {"biztime", "exratedate", "bookdate"}:
             return bill_date
         if key == "paymode":
-            return config.get("paymode") or "CREDIT"
+            return (
+                str(getattr(receipt, "pay_mode", None) or "").strip()
+                or config.get("paymode")
+                or "CREDIT"
+            )
+        if key == "istax":
+            raw = config.get("istax")
+            if raw is None:
+                return True
+            return bool(raw)
         if key == "org_number":
             return org_number
         if key == "bizorg_number":
@@ -259,6 +296,43 @@ def build_kingdee_purchase_receipt_model(
         return getattr(receipt, key, None)
 
     apply_field_map(model, dict(default_field_map), local_value)
+
+    # 采购员：供应链业务员（传工号/编码；单据 buyer_operator_number 优先于租户配置）
+    buyer = str(
+        getattr(receipt, "buyer_operator_number", None)
+        or config.get("bizoperator_operatornumber")
+        or config.get("buyer_operatornumber")
+        or ""
+    ).strip()
+    if buyer:
+        model["bizoperator_operatornumber"] = buyer
+    buyer_group = str(
+        config.get("bizoperatorgroup_number") or config.get("buyer_group_number") or ""
+    ).strip()
+    if buyer_group:
+        model["bizoperatorgroup_number"] = buyer_group
+
+    # 验收人：仅自定义 add2 时配置 acceptor_field（如 fd81_yanshou）才写入；单据 receiver_name 优先
+    acceptor_field = str(config.get("acceptor_field") or "").strip()
+    acceptor_text = str(
+        getattr(receipt, "receiver_name", None)
+        or config.get("acceptor_text")
+        or config.get("acceptor")
+        or getattr(receipt, "inspector_name", None)
+        or getattr(receipt, "accepted_by_name", None)
+        or ""
+    ).strip()
+    if acceptor_field and acceptor_text:
+        model[acceptor_field] = acceptor_text
+    elif acceptor_field and not acceptor_text:
+        logger.warning(
+            "采购入库推送缺少验收人文本 tenant=%s receipt=%s field=%s",
+            getattr(receipt, "tenant_id", None),
+            getattr(receipt, "receipt_code", None),
+            acceptor_field,
+        )
+
+    # 库管员（operator_*）非必填：不主动写入，避免缺库管组导致保存失败
 
     fixed_values = config.get("fixed_values")
     if isinstance(fixed_values, dict):

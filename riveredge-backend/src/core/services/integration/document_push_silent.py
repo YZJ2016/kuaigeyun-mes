@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 _ENTITY_SOURCE_TYPE: Dict[str, str] = {
     "sales_order": "sales_order",
     "purchase_order": "purchase_order",
+    "purchase_receipt": "purchase_receipt",
     "work_order": "work_order",
     "reporting_record": "reporting_record",
     "material_batch": "material_batch",
@@ -28,6 +29,10 @@ async def _load_binding_row(entity_type: str, tenant_id: int) -> Optional[Any]:
         from apps.kuaizhizao.models.purchase_order_sync_binding import PurchaseOrderSyncBinding
 
         return await PurchaseOrderSyncBinding.filter(tenant_id=tenant_id).first()
+    if source_type == "purchase_receipt":
+        from apps.kuaizhizao.models.purchase_receipt_sync_binding import PurchaseReceiptSyncBinding
+
+        return await PurchaseReceiptSyncBinding.filter(tenant_id=tenant_id).first()
     if source_type == "work_order":
         from apps.kuaizhizao.models.work_order_sync_binding import WorkOrderSyncBinding
 
@@ -68,15 +73,25 @@ async def maybe_silent_push_after_audit(
     if act not in triggers:
         return
     raw_targets = getattr(row, "push_targets", None)
-    if entity_type == "purchase_order" and isinstance(raw_targets, list):
+    if entity_type in ("purchase_order", "purchase_receipt") and isinstance(raw_targets, list):
         kept = [item for item in raw_targets if isinstance(item, dict) and item.get("user_saved") is True]
         if len(kept) != len(raw_targets):
-            from apps.kuaizhizao.models.purchase_order_sync_binding import PurchaseOrderSyncBinding
+            if entity_type == "purchase_order":
+                from apps.kuaizhizao.models.purchase_order_sync_binding import PurchaseOrderSyncBinding
 
-            await PurchaseOrderSyncBinding.filter(id=row.id).update(
-                push_targets=kept,
-                trigger_actions=triggers if kept else [],
-            )
+                await PurchaseOrderSyncBinding.filter(id=row.id).update(
+                    push_targets=kept,
+                    trigger_actions=triggers if kept else [],
+                )
+            else:
+                from apps.kuaizhizao.models.purchase_receipt_sync_binding import (
+                    PurchaseReceiptSyncBinding,
+                )
+
+                await PurchaseReceiptSyncBinding.filter(id=row.id).update(
+                    push_targets=kept,
+                    trigger_actions=triggers if kept else [],
+                )
         from core.services.data.sync_binding_sources import normalize_push_targets_json
 
         targets = normalize_push_targets_json(kept)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -18,6 +18,7 @@ from apps.kuaizhizao.models.purchase_arrival_delay_report import PurchaseArrival
 from apps.kuaizhizao.utils.purchase_arrival_warning import (
     DEFAULT_ARRIVAL_IMMINENT_DAYS,
     PO_TERMINAL_STATUSES,
+    WARNING_LEVEL_IMMINENT,
     WARNING_LEVEL_OVERDUE,
     compute_warning_level,
     enrich_line_warning_fields,
@@ -170,12 +171,25 @@ class PurchaseArrivalWarningService(AppBaseService[PurchaseOrder]):
             tenant_id=tenant_id,
             order_id__in=po_ids,
             deleted_at__isnull=True,
+            outstanding_quantity__gt=0,
         )
         if material_keyword:
             kw = material_keyword.strip()
             item_q = item_q.filter(
                 Q(material_code__icontains=kw) | Q(material_name__icontains=kw)
             )
+        # 预警等级可下推到库：避免先拉全量明细再在 Python 过滤（角标/中心页易拖成 504）
+        if warning_level == WARNING_LEVEL_OVERDUE:
+            item_q = item_q.filter(required_date__lt=site_today)
+        elif warning_level == WARNING_LEVEL_IMMINENT:
+            imminent_end = site_today + timedelta(days=max(0, int(imminent_days)))
+            item_q = item_q.filter(
+                required_date__gte=site_today,
+                required_date__lte=imminent_end,
+            )
+        elif warning_level == "normal":
+            normal_start = site_today + timedelta(days=max(0, int(imminent_days)) + 1)
+            item_q = item_q.filter(required_date__gte=normal_start)
 
         items = await item_q.order_by("required_date", "id").all()
         heads = await PurchaseOrder.filter(id__in=po_ids).values(
@@ -202,13 +216,6 @@ class PurchaseArrivalWarningService(AppBaseService[PurchaseOrder]):
             }
         )
         change_status_map = await self._change_status_by_id(tenant_id, change_ids)
-
-        from apps.kuaizhizao.services.purchase_po_line_impact_service import (
-            PurchasePoLineImpactService,
-        )
-
-        impact_svc = PurchasePoLineImpactService()
-        impact_map = await impact_svc.batch_resolve_impact_summaries(tenant_id, items)
 
         rows: List[dict] = []
 
@@ -251,7 +258,8 @@ class PurchaseArrivalWarningService(AppBaseService[PurchaseOrder]):
             row["delay_report_id"] = delay.id if delay else None
             row["delay_report_code"] = delay.report_code if delay else None
             row["purchase_order_change_id"] = delay.purchase_order_change_id if delay else None
-            row["impacted_assembly"] = impact_map.get(int(item.id)) or (
+            # 影响总成先占位，仅对本页行再批量解析，避免全量明细做溯源
+            row["impacted_assembly"] = (
                 delay.impacted_assembly_summary if delay else None
             ) or ""
 
@@ -272,10 +280,59 @@ class PurchaseArrivalWarningService(AppBaseService[PurchaseOrder]):
 
         total = len(rows)
         page = rows[skip : skip + limit]
+        if page:
+            from apps.kuaizhizao.services.purchase_po_line_impact_service import (
+                PurchasePoLineImpactService,
+            )
+
+            page_item_ids = {int(r["purchase_order_item_id"]) for r in page}
+            page_items = [item for item in items if int(item.id) in page_item_ids]
+            impact_map = await PurchasePoLineImpactService().batch_resolve_impact_summaries(
+                tenant_id, page_items
+            )
+            for row in page:
+                iid = int(row["purchase_order_item_id"])
+                if impact_map.get(iid):
+                    row["impacted_assembly"] = impact_map[iid]
         return {"data": page, "total": total, "success": True, "summary": summary}
 
     def _empty_summary(self) -> dict:
         return {"normal": 0, "imminent": 0, "overdue": 0, "total_open_lines": 0}
+
+    async def _count_open_lines_by_warning_level(
+        self,
+        tenant_id: int,
+        *,
+        warning_level: str,
+        current_user: Optional[CurrentUser] = None,
+    ) -> int:
+        """角标/汇总专用计数：只做范围 PO + 明细条件 count，禁止走 list_warnings 全量装配。"""
+        imminent_days = await self.get_arrival_imminent_days(tenant_id)
+        site_today = to_site_date(resolve_business_datetime())
+        po_q = await self._scoped_po_query(tenant_id, current_user)
+        po_ids = list(await po_q.values_list("id", flat=True))
+        if not po_ids:
+            return 0
+
+        item_q = PurchaseOrderItem.filter(
+            tenant_id=tenant_id,
+            order_id__in=po_ids,
+            deleted_at__isnull=True,
+            outstanding_quantity__gt=0,
+            required_date__isnull=False,
+        )
+        level = str(warning_level or "").strip().lower()
+        if level == WARNING_LEVEL_OVERDUE:
+            item_q = item_q.filter(required_date__lt=site_today)
+        elif level == WARNING_LEVEL_IMMINENT:
+            imminent_end = site_today + timedelta(days=max(0, int(imminent_days)))
+            item_q = item_q.filter(
+                required_date__gte=site_today,
+                required_date__lte=imminent_end,
+            )
+        else:
+            return 0
+        return int(await item_q.count())
 
     async def count_overdue_open_lines(
         self,
@@ -283,14 +340,11 @@ class PurchaseArrivalWarningService(AppBaseService[PurchaseOrder]):
         *,
         current_user: Optional[CurrentUser] = None,
     ) -> int:
-        result = await self.list_warnings(
+        return await self._count_open_lines_by_warning_level(
             tenant_id,
-            skip=0,
-            limit=1_000_000,
-            warning_level="overdue",
+            warning_level=WARNING_LEVEL_OVERDUE,
             current_user=current_user,
         )
-        return int(result.get("total") or 0)
 
     async def count_imminent_open_lines(
         self,
@@ -298,14 +352,11 @@ class PurchaseArrivalWarningService(AppBaseService[PurchaseOrder]):
         *,
         current_user: Optional[CurrentUser] = None,
     ) -> int:
-        result = await self.list_warnings(
+        return await self._count_open_lines_by_warning_level(
             tenant_id,
-            skip=0,
-            limit=1_000_000,
-            warning_level="imminent",
+            warning_level=WARNING_LEVEL_IMMINENT,
             current_user=current_user,
         )
-        return int(result.get("total") or 0)
 
     async def batch_po_has_arrival_overdue(
         self, tenant_id: int, po_ids: List[int]

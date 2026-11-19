@@ -1117,6 +1117,48 @@ export const warehouseApi = {
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-receipts/${id}`, { method: 'GET' }),
     confirm: async (id: string, data?: any) => apiRequest(`/apps/kuaizhizao/purchase-receipts/${id}/confirm`, { method: 'POST', data }),
     withdraw: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-receipts/${id}/withdraw`, { method: 'POST' }),
+    getPushBinding: async () =>
+      apiRequest<{
+        targets?: Array<{
+          target_profile: string;
+          connection_code?: string;
+          save_api_uuid?: string;
+          push_mode?: 'auto' | 'manual';
+          trigger_actions?: string[];
+          destination_kind?: 'api' | 'data_source';
+          data_source_uuid?: string;
+          dataset_uuid?: string;
+          user_saved?: boolean;
+        }>;
+        trigger_actions?: string[];
+        connection_code?: string;
+        save_api_uuid?: string;
+        sync_mode?: string;
+        schedule_interval_minutes?: number;
+        targets_configured?: boolean;
+      }>('/apps/kuaizhizao/purchase-receipts/push-binding'),
+    savePushBinding: async (payload: {
+      targets: Array<{
+        target_profile: string;
+        connection_code?: string;
+        save_api_uuid?: string;
+        push_mode?: 'auto' | 'manual';
+        trigger_actions?: string[];
+        destination_kind?: 'api' | 'data_source';
+        data_source_uuid?: string;
+        dataset_uuid?: string;
+        user_saved?: boolean;
+      }>;
+      trigger_actions?: string[];
+      connection_code?: string;
+      save_api_uuid?: string;
+      sync_mode?: string;
+      schedule_interval_minutes?: number;
+    }) =>
+      apiRequest('/apps/kuaizhizao/purchase-receipts/push-binding', {
+        method: 'PUT',
+        data: payload,
+      }),
     import: async (data: any[][]) =>
       apiRequest('/apps/kuaizhizao/purchase-receipts/import', { method: 'POST', data: { data } }),
     export: async (params?: any) =>

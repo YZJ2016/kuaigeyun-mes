@@ -324,7 +324,7 @@ class InitialDataService:
                         tenant_id=tenant_id,
                         uuid=str(uuid.uuid4()),
                         receipt_code=receipt_code,
-                        purchase_order_id=0,  # 期初库存没有关联采购订单
+                        purchase_order_id=None,  # 期初库存没有关联采购订单
                         purchase_order_code="期初库存",
                         supplier_id=0,
                         supplier_name="期初库存导入",
@@ -345,7 +345,7 @@ class InitialDataService:
                         await PurchaseReceiptItem.create(
                             tenant_id=tenant_id,
                             receipt_id=receipt.id,
-                            purchase_order_item_id=0,  # 期初库存没有关联采购订单明细
+                            purchase_order_item_id=None,  # 期初库存没有关联采购订单明细
                             material_id=item['material'].id,
                             material_code=item['material'].code,
                             material_name=item['material'].name,

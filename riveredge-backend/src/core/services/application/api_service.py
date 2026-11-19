@@ -426,6 +426,7 @@ class APIService:
     ) -> Dict[str, Any]:
         """加载金蝶云苍穹 OpenAPI 常用 / 制造链路接口预设。"""
         from core.services.integration.kingdee_cosmic_api_presets import (
+            INVENTORY_BALANCE_PRESET_CODE_SUFFIX,
             LEGACY_SUPPLIER_LIST_PRESET_CODE_SUFFIX,
             MATERIAL_GROUP_PRESET_CODE_SUFFIX,
             MATERIAL_PRESET_CODE_SUFFIX,
@@ -433,6 +434,10 @@ class APIService:
             SUPPLIER_PRESET_CODE_SUFFIX,
             WAREHOUSE_PRESET_CODE_SUFFIX,
             build_material_group_goods_class_preset,
+            IM_PURINBILL_ADD2_PRESET_CODE_SUFFIX,
+            inventory_balance_preset_needs_upgrade,
+            im_purinbill_add2_preset_needs_upgrade,
+            kingdee_inventory_balance_api_upgrade_fields,
             kingdee_material_group_api_upgrade_fields,
             kingdee_supplier_api_upgrade_fields,
             kingdee_warehouse_api_upgrade_fields,
@@ -440,7 +445,9 @@ class APIService:
             material_group_preset_needs_upgrade,
             material_preset_needs_upgrade,
             measureunits_preset_needs_upgrade,
+            outbound_preset_sync_direction_needs_upgrade,
             resolve_preset_api_code,
+            resolve_preset_sync_direction,
             supplier_preset_needs_upgrade,
             warehouse_preset_needs_upgrade,
         )
@@ -500,6 +507,63 @@ class APIService:
                             "description",
                             "method",
                             "request_params",
+                            "request_body",
+                            "updated_at",
+                        ]
+                    )
+                    upgraded.append(code)
+                elif (
+                    code_suffix == INVENTORY_BALANCE_PRESET_CODE_SUFFIX
+                    and inventory_balance_preset_needs_upgrade(
+                        existing.path,
+                        existing.request_body,
+                        existing.method,
+                    )
+                ):
+                    fields = kingdee_inventory_balance_api_upgrade_fields()
+                    existing.path = fields["path"]
+                    existing.name = fields["name"]
+                    existing.description = fields["description"]
+                    existing.method = fields.get("method") or existing.method or "POST"
+                    existing.request_params = fields.get("request_params")
+                    existing.request_body = fields.get("request_body") or {}
+                    await existing.save(
+                        update_fields=[
+                            "path",
+                            "name",
+                            "description",
+                            "method",
+                            "request_params",
+                            "request_body",
+                            "updated_at",
+                        ]
+                    )
+                    upgraded.append(code)
+                elif outbound_preset_sync_direction_needs_upgrade(
+                    code_suffix,
+                    getattr(existing, "sync_direction", None),
+                    existing.path,
+                ):
+                    existing.sync_direction = "push"
+                    await existing.save(update_fields=["sync_direction", "updated_at"])
+                    upgraded.append(code)
+                elif (
+                    code_suffix == IM_PURINBILL_ADD2_PRESET_CODE_SUFFIX
+                    and im_purinbill_add2_preset_needs_upgrade(existing.name, existing.path)
+                ):
+                    existing.name = preset["name"]
+                    existing.description = preset["description"]
+                    existing.path = preset["path"]
+                    existing.method = preset.get("method") or existing.method or "POST"
+                    existing.sync_direction = "push"
+                    existing.request_body = preset.get("request_body") or existing.request_body
+                    await existing.save(
+                        update_fields=[
+                            "name",
+                            "description",
+                            "path",
+                            "method",
+                            "sync_direction",
                             "request_body",
                             "updated_at",
                         ]
@@ -653,6 +717,7 @@ class APIService:
                 description=preset["description"],
                 path=preset["path"],
                 method=preset["method"],
+                sync_direction=resolve_preset_sync_direction(preset),
                 request_headers={"Content-Type": "application/json"},
                 request_params=request_params if request_params else None,
                 request_body=preset.get("request_body") or {},

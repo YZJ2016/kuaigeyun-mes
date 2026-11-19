@@ -203,7 +203,7 @@ class DataCompensationService:
                         tenant_id=tenant_id,
                         uuid=str(uuid.uuid4()),
                         receipt_code=receipt_code,
-                        purchase_order_id=0,
+                        purchase_order_id=None,
                         purchase_order_code="动态补偿",
                         supplier_id=0,
                         supplier_name="动态数据补偿",
@@ -223,7 +223,7 @@ class DataCompensationService:
                     await PurchaseReceiptItem.create(
                         tenant_id=tenant_id,
                         receipt_id=receipt.id,
-                        purchase_order_item_id=0,
+                        purchase_order_item_id=None,
                         material_id=material.id,
                         material_code=material.code,
                         material_name=material.name,

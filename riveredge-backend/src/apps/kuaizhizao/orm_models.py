@@ -107,6 +107,7 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaizhizao.models.purchase_order_sync_binding",
     "apps.kuaizhizao.models.purchase_receipt",
     "apps.kuaizhizao.models.purchase_receipt_item",
+    "apps.kuaizhizao.models.purchase_receipt_sync_binding",
     "apps.kuaizhizao.models.purchase_requisition",
     "apps.kuaizhizao.models.payment_application",
     "apps.kuaizhizao.models.purchase_return",

@@ -1962,7 +1962,6 @@ async def _count_purchase_orders_with_open_receipt(
     from apps.kuaizhizao.models.purchase_order import (
         PurchaseOrder,
         PurchaseOrderItem,
-        effective_po_item_outstanding,
     )
 
     order_q = PurchaseOrder.filter(
@@ -1975,17 +1974,14 @@ async def _count_purchase_orders_with_open_receipt(
     order_ids = list(await order_q.values_list("id", flat=True))
     if not order_ids:
         return 0
-    items = await PurchaseOrderItem.filter(
+    # 用库内 outstanding>0 去重计数，禁止拉全量明细到 Python
+    open_ids = await PurchaseOrderItem.filter(
         tenant_id=tenant_id,
         order_id__in=order_ids,
         deleted_at__isnull=True,
-    ).all()
-    open_ids = {
-        int(item.order_id)
-        for item in items
-        if effective_po_item_outstanding(item) > 0
-    }
-    return len(open_ids)
+        outstanding_quantity__gt=0,
+    ).distinct().values_list("order_id", flat=True)
+    return len(list(open_ids))
 
 
 async def _compute_purchase_arrival_rate(
