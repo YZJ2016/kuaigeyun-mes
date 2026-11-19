@@ -52,6 +52,7 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaizhizao.models.finished_goods_receipt_sync_binding",
     "apps.kuaizhizao.models.incoming_inspection",
     "apps.kuaizhizao.models.inspection_plan",
+    "apps.kuaizhizao.models.inspection_sampling_transfer",
     "apps.kuaizhizao.models.install_execution_cost",
     "apps.kuaizhizao.models.install_execution_job",
     "apps.kuaizhizao.models.install_execution_stage",

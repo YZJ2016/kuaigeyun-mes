@@ -44,6 +44,22 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'inspection-plan-gb2828-sampling-r01',
+    date: '2026-10-26',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.inspection-plan-gb2828-sampling-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inspection-plan-gb2828-sampling-r01.description',
+  },
+  {
+    id: 'inspection-plan-code-by-type-r01',
+    date: '2026-10-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inspection-plan-code-by-type-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inspection-plan-code-by-type-r01.description',
+  },
+  {
     id: 'sales-doc-header-totals-sync-r01',
     date: '2026-11-14',
     type: 'fix',

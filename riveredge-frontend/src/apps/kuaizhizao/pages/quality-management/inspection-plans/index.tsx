@@ -41,7 +41,7 @@ import {
 import { inspectionPlanApi } from '../../../services/production';
 import { InspectionPlanStepEditor, type InspectionPlanStepItem } from '../../../components/InspectionPlanStepEditor';
 import { InspectionSamplingTypeTag, InspectionValueTypeTag } from '../../../components/inspectionStepTableBadges';
-import { formatAcceptanceCriteriaPreview, normalizeValueType, bumpPlanVersion, stepsFingerprint } from '../../../types/inspectionStepSpec';
+import { formatStepCriteriaDisplay, normalizeValueType, bumpPlanVersion, stepsFingerprint } from '../../../types/inspectionStepSpec';
 import { valueTypeOptions } from '../../../components/InspectionStepValueSpecFields';
 import { useTranslation } from 'react-i18next';
 import { getQualityPlanTypeFallback, getQualityTypeText } from '../components/qualityMeta';
@@ -802,10 +802,8 @@ const InspectionPlansPage: React.FC = () => {
                       dataIndex: 'acceptance_criteria',
                       width: 150,
                       ellipsis: true,
-                      render: (v: string, row: InspectionPlanStepItem) =>
-                        v ||
-                        formatAcceptanceCriteriaPreview(row.value_type || 'boolean', row.value_spec, t) ||
-                        '-',
+                      render: (_v: string, row: InspectionPlanStepItem) =>
+                        formatStepCriteriaDisplay(row, t) || '-',
                     },
                     {
                       title: t('app.kuaizhizao.quality.plans.step.samplingType'),

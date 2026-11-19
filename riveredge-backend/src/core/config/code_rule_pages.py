@@ -1154,7 +1154,13 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
                 "field_name": "plan_type",
                 "field_label": "方案类型",
                 "field_type": "string",
-                "description": "方案类型（incoming/process/finished）"
+                "description": "方案类型内部枚举（incoming/outsource/process/finished/outbound/patrol）"
+            },
+            {
+                "field_name": "plan_type_code",
+                "field_label": "方案类型短码",
+                "field_type": "string",
+                "description": "编号段推荐字段：IQC/OSQC/IPQC/FQC/OQC/PATROL（与 plan_type 成对注入，勿与 plan_type 混用）"
             },
             {
                 "field_name": "material_code",

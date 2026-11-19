@@ -8,7 +8,10 @@ import { useTranslation } from 'react-i18next';
 import { Button, Table, Empty, Modal, Form, Input, Select, message, theme, Space, Tag, Row, Col } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined, HolderOutlined } from '@ant-design/icons';
 import { SequenceIndexCell, StepDragHandleContext, getSequenceIndexBadgeStyle } from '../../../components/sequence-index-cell';
-import { MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../components/layout-templates/constants';
+import {
+  MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET,
+  MODAL_NESTED_ABOVE_PARENT_OFFSET,
+} from '../../../components/layout-templates/constants';
 import { MODAL_ISOLATE_POINTER_PROPS } from '../../../utils/modalEventIsolation';
 import {
   DndContext,
@@ -27,8 +30,10 @@ import { CSS } from '@dnd-kit/utilities';
 import {
   applySamplingToValueSpec,
   defaultValueSpec,
+  appendCriteriaSupplement,
   formatAcceptanceCriteriaPreview,
   formatSamplingCriteriaPreview,
+  formatStepCriteriaDisplay,
   getSamplingSpec,
   normalizeSamplingSpec,
   normalizeValueType,
@@ -125,10 +130,13 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
 }) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
+  // 无父层 zIndex 时也要比业务抬升 Modal（base+100）再高一层，避免嵌套快速新建时步骤窗被挡住
   const stepModalZIndex =
     parentModalZIndex != null
       ? parentModalZIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET
-      : token.zIndexPopupBase + 100;
+      : token.zIndexPopupBase +
+        MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET +
+        MODAL_NESTED_ABOVE_PARENT_OFFSET;
   const [steps, setSteps] = useState<InspectionPlanStepItem[]>(value);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
@@ -224,7 +232,10 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
     stepForm.setFieldsValue({
       inspection_item: step.inspection_item,
       inspection_method: step.inspection_method,
-      acceptance_criteria: step.acceptance_criteria,
+      criteria_supplement:
+        typeof step.value_spec?.criteria_supplement === 'string'
+          ? step.value_spec.criteria_supplement
+          : undefined,
       value_type: vt,
       value_spec: { ...defaultValueSpec(vt, t), ...(step.value_spec || {}) },
       sampling_type: step.sampling_type || 'full',
@@ -242,11 +253,16 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
       samplingType,
       vals.sampling_spec as SamplingSpec | undefined,
     );
+    const supplementRaw = (vals.criteria_supplement as string)?.trim();
+    if (supplementRaw) {
+      spec.criteria_supplement = supplementRaw;
+    } else {
+      delete spec.criteria_supplement;
+    }
     const typeCriteria = formatAcceptanceCriteriaPreview(vt, spec, t);
     const samplingCriteria = formatSamplingCriteriaPreview(samplingType, spec, t);
     const autoCriteria = [typeCriteria, samplingCriteria].filter(Boolean).join(' / ');
-    // 结构化规格始终以 value_spec 重算合格标准，避免手工文案与判定口径漂移
-    const criteria = autoCriteria || (vals.acceptance_criteria as string)?.trim() || undefined;
+    const criteria = appendCriteriaSupplement(autoCriteria, spec) || undefined;
     return {
       sequence: existing?.sequence ?? steps.length,
       step_key: existing?.step_key || newStepKey(),
@@ -332,7 +348,14 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
       ),
     },
     { title: t('app.kuaizhizao.quality.plans.step.inspectionMethod'), dataIndex: 'inspection_method', key: 'inspection_method', width: 100, ellipsis: true },
-    { title: t('app.kuaizhizao.quality.plans.step.acceptanceCriteria'), dataIndex: 'acceptance_criteria', key: 'acceptance_criteria', width: 140, ellipsis: true },
+    {
+      title: t('app.kuaizhizao.quality.plans.step.acceptanceCriteria'),
+      dataIndex: 'acceptance_criteria',
+      key: 'acceptance_criteria',
+      width: 140,
+      ellipsis: true,
+      render: (_: string, row: InspectionPlanStepItem) => formatStepCriteriaDisplay(row, t) || '-',
+    },
     {
       title: t('app.kuaizhizao.quality.plans.step.samplingType'),
       dataIndex: 'sampling_type',
@@ -559,8 +582,15 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
           <Form.Item name="inspection_method" label={t('app.kuaizhizao.quality.plans.step.inspectionMethod')}>
             <Input placeholder={t('app.kuaizhizao.quality.plans.stepEditor.placeholder.inspectionMethod')} />
           </Form.Item>
-          <Form.Item name="acceptance_criteria" label={t('app.kuaizhizao.quality.plans.step.acceptanceCriteria')}>
-            <Input.TextArea rows={2} placeholder={t('app.kuaizhizao.quality.plans.stepEditor.placeholder.acceptanceCriteriaAuto')} />
+          <Form.Item
+            name="criteria_supplement"
+            label={t('app.kuaizhizao.quality.plans.stepSpec.criteriaSupplement')}
+            extra={t('app.kuaizhizao.quality.plans.stepSpec.criteriaSupplementExtra')}
+          >
+            <Input.TextArea
+              rows={2}
+              placeholder={t('app.kuaizhizao.quality.plans.stepEditor.placeholder.criteriaSupplement')}
+            />
           </Form.Item>
           <Form.Item name="sampling_type" label={t('app.kuaizhizao.quality.plans.step.samplingType')}>
             <Select

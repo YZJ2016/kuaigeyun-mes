@@ -918,6 +918,49 @@ async def _apply_explicit_inspection_plan_to_inspection_row(
     await row.save()
 
 
+async def _enrich_inspection_template_sampling_fields(
+    tenant_id: int,
+    inspection_row: Any,
+    payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    from apps.kuaizhizao.services.inspection_sampling_transfer_service import (
+        enrich_template_payload_resolved_sampling,
+    )
+
+    material_id = getattr(inspection_row, "material_id", None)
+    lot_qty = getattr(inspection_row, "inspection_quantity", None)
+    out = dict(payload)
+    if out.get("other_checks") is not None:
+        out["other_checks"] = await enrich_template_payload_resolved_sampling(
+            tenant_id, material_id, out["other_checks"], lot_qty
+        )
+    if out.get("quality_characteristics") is not None:
+        out["quality_characteristics"] = await enrich_template_payload_resolved_sampling(
+            tenant_id, material_id, out["quality_characteristics"], lot_qty
+        )
+    return out
+
+
+async def _apply_sampling_transfer_after_conduct(
+    tenant_id: int,
+    inspection_row: Any,
+    *,
+    lot_accepted: bool,
+    template_attr: str,
+) -> None:
+    from apps.kuaizhizao.services.inspection_sampling_transfer_service import (
+        apply_sampling_transfers_for_template,
+    )
+
+    template = getattr(inspection_row, template_attr, None)
+    await apply_sampling_transfers_for_template(
+        tenant_id,
+        getattr(inspection_row, "material_id", None),
+        template,
+        lot_accepted=lot_accepted,
+    )
+
+
 def _validate_inspection_template_conduct(
     template_json: Any,
     conduct_data: Dict[str, Any],
@@ -1167,6 +1210,13 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         
         milestones = await get_document_milestones(tenant_id, "incoming_inspection", inspection_id)
         resp = IncomingInspectionResponse.model_validate(inspection)
+        enriched = await _enrich_inspection_template_sampling_fields(
+            tenant_id,
+            inspection,
+            {"other_checks": resp.other_checks},
+        )
+        if enriched.get("other_checks") is not None:
+            resp = resp.model_copy(update={"other_checks": enriched["other_checks"]})
         resp = resp.model_copy(update={"lifecycle": get_incoming_inspection_lifecycle(inspection, milestones=milestones)})
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             enrich_quality_inspection_capabilities_on_response,
@@ -1446,6 +1496,13 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             if "review_time" in conduct_update and conduct_update["review_time"] is not None:
                 conduct_update["review_time"] = resolve_business_datetime()
             await IncomingInspection.filter(tenant_id=tenant_id, id=inspection_id).update(**conduct_update)
+            inspection_model = await IncomingInspection.get(tenant_id=tenant_id, id=inspection_id)
+            await _apply_sampling_transfer_after_conduct(
+                tenant_id,
+                inspection_model,
+                lot_accepted=quality_status == "合格",
+                template_attr="other_checks",
+            )
 
             updated_inspection = await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
             approval_instance = await _start_quality_inspection_approval_after_conduct(
@@ -4318,6 +4375,13 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
         
         milestones = await get_document_milestones(tenant_id, "process_inspection", inspection_id)
         resp = ProcessInspectionResponse.model_validate(inspection)
+        enriched = await _enrich_inspection_template_sampling_fields(
+            tenant_id,
+            inspection,
+            {"quality_characteristics": resp.quality_characteristics},
+        )
+        if enriched.get("quality_characteristics") is not None:
+            resp = resp.model_copy(update={"quality_characteristics": enriched["quality_characteristics"]})
         resp = resp.model_copy(update={"lifecycle": get_process_inspection_lifecycle(inspection, milestones=milestones)})
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             enrich_quality_inspection_capabilities_on_response,
@@ -4539,6 +4603,13 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 conduct_update["review_time"] = resolve_business_datetime()
             await ProcessInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
                 **conduct_update
+            )
+            inspection_model = await ProcessInspection.get(tenant_id=tenant_id, id=inspection_id)
+            await _apply_sampling_transfer_after_conduct(
+                tenant_id,
+                inspection_model,
+                lot_accepted=quality_status == "合格",
+                template_attr="quality_characteristics",
             )
             work_order_id = inspection_model.work_order_id
             operation_id = inspection_model.operation_id
@@ -6024,6 +6095,13 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         
         milestones = await get_document_milestones(tenant_id, "finished_goods_inspection", inspection_id)
         resp = FinishedGoodsInspectionResponse.model_validate(inspection)
+        enriched = await _enrich_inspection_template_sampling_fields(
+            tenant_id,
+            inspection,
+            {"other_checks": resp.other_checks},
+        )
+        if enriched.get("other_checks") is not None:
+            resp = resp.model_copy(update={"other_checks": enriched["other_checks"]})
         resp = resp.model_copy(update={"lifecycle": get_finished_goods_inspection_lifecycle(inspection, milestones=milestones)})
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             enrich_quality_inspection_capabilities_on_response,
@@ -6237,6 +6315,13 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 conduct_update["review_time"] = resolve_business_datetime()
             await FinishedGoodsInspection.filter(tenant_id=tenant_id, id=inspection_id).update(
                 **conduct_update
+            )
+            inspection_model = await FinishedGoodsInspection.get(tenant_id=tenant_id, id=inspection_id)
+            await _apply_sampling_transfer_after_conduct(
+                tenant_id,
+                inspection_model,
+                lot_accepted=quality_status == "合格",
+                template_attr="other_checks",
             )
 
             updated_inspection = await self.get_finished_goods_inspection_by_id(tenant_id, inspection_id)

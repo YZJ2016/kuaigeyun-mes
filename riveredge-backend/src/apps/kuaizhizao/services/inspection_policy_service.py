@@ -58,6 +58,23 @@ PLAN_TYPE_DISPLAY_LABELS: Dict[str, str] = {
     "patrol": "质量巡检",
 }
 
+# 编号规则 form_field「方案类型短码」；plan_type 仍传原始枚举 incoming/process/…
+PLAN_TYPE_SHORT_CODES: Dict[str, str] = {
+    "incoming": "IQC",
+    "outsource": "OSQC",
+    "process": "IPQC",
+    "finished": "FQC",
+    "outbound": "OQC",
+    "patrol": "PATROL",
+}
+
+
+def plan_type_short_code(plan_type: Optional[str]) -> str:
+    key = str(plan_type or "").strip()
+    if key not in INSPECTION_PLAN_TYPES_SET:
+        return ""
+    return PLAN_TYPE_SHORT_CODES[key]
+
 STAGE_MODULE_KEY: Dict[str, Optional[str]] = {
     "iqc": "incoming",
     "osqc": "outsource",

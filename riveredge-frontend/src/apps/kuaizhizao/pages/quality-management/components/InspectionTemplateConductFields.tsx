@@ -12,6 +12,7 @@ import {
   evaluateDerivedFormula,
   formatAcceptanceCriteriaPreview,
   formatSamplingCriteriaPreview,
+  getCriteriaSupplement,
   getStepConductKey,
   normalizeValueType,
   resolveStepJudgmentClient,
@@ -152,14 +153,76 @@ const DerivedNumericValue: React.FC<{
   );
 };
 
+const STEP_META_LABEL_STYLE: React.CSSProperties = {
+  display: 'inline',
+  fontSize: 13,
+  lineHeight: 1.55,
+  color: 'rgba(0, 0, 0, 0.65)',
+};
+
+const STEP_META_VALUE_STYLE: React.CSSProperties = {
+  fontSize: 13,
+  lineHeight: 1.55,
+  color: 'rgba(0, 0, 0, 0.88)',
+  whiteSpace: 'pre-wrap',
+};
+
+const StepCriteriaBlocks: React.FC<{
+  inspectionMethod?: string;
+  acceptanceCriteria?: string;
+  criteriaSupplement?: string;
+}> = ({ inspectionMethod, acceptanceCriteria, criteriaSupplement }) => {
+  const { t } = useTranslation();
+  if (!inspectionMethod && !acceptanceCriteria && !criteriaSupplement) return null;
+  return (
+    <div style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {inspectionMethod ? (
+        <div>
+          <Text style={STEP_META_LABEL_STYLE}>
+            {t('app.kuaizhizao.quality.plans.step.inspectionMethod')}：
+          </Text>
+          <Text style={STEP_META_VALUE_STYLE}>{inspectionMethod}</Text>
+        </div>
+      ) : null}
+      {acceptanceCriteria ? (
+        <div>
+          <Text style={STEP_META_LABEL_STYLE}>
+            {t('app.kuaizhizao.quality.plans.step.acceptanceCriteria')}：
+          </Text>
+          <Text style={STEP_META_VALUE_STYLE}>{acceptanceCriteria}</Text>
+        </div>
+      ) : null}
+      {criteriaSupplement ? (
+        <div>
+          <Text style={STEP_META_LABEL_STYLE}>
+            {t('app.kuaizhizao.quality.plans.stepSpec.criteriaSupplement')}：
+          </Text>
+          <Text style={STEP_META_VALUE_STYLE}>{criteriaSupplement}</Text>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 const TypedStepFields: React.FC<{
   step: InspectionTemplateStepItem;
   stepKey: string;
   label: string;
-  hint?: string;
+  inspectionMethod?: string;
+  acceptanceCriteria?: string;
+  criteriaSupplement?: string;
   photoCategory?: string;
   stepPhotoRequired?: boolean;
-}> = ({ step, stepKey, label, hint, photoCategory, stepPhotoRequired = true }) => {
+}> = ({
+  step,
+  stepKey,
+  label,
+  inspectionMethod,
+  acceptanceCriteria,
+  criteriaSupplement,
+  photoCategory,
+  stepPhotoRequired = true,
+}) => {
   const { t } = useTranslation();
   const vt = normalizeValueType(step.value_type);
   const spec = { ...defaultValueSpec(vt, t), ...(step.value_spec || {}) };
@@ -232,11 +295,11 @@ const TypedStepFields: React.FC<{
   if (!isTypedInspectionStep(step)) {
     return (
       <Card size="small" type="inner" style={{ marginBottom: 8 }} title={stepTitle} extra={stepExtra}>
-        {hint ? (
-          <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
-            {hint}
-          </Text>
-        ) : null}
+        <StepCriteriaBlocks
+          inspectionMethod={inspectionMethod}
+          acceptanceCriteria={acceptanceCriteria}
+          criteriaSupplement={criteriaSupplement}
+        />
         <Form.Item
           name={['item_results', stepKey]}
           initialValue="pass"
@@ -263,11 +326,11 @@ const TypedStepFields: React.FC<{
 
   return (
     <Card size="small" type="inner" style={{ marginBottom: 8 }} title={stepTitle} extra={stepExtra}>
-      {hint ? (
-        <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
-          {hint}
-        </Text>
-      ) : null}
+      <StepCriteriaBlocks
+        inspectionMethod={inspectionMethod}
+        acceptanceCriteria={acceptanceCriteria}
+        criteriaSupplement={criteriaSupplement}
+      />
 
       {vt === 'boolean' ? (
         <Form.Item
@@ -400,14 +463,12 @@ const InspectionTemplateConductFields: React.FC<InspectionTemplateConductFieldsP
   const template = getInspectionTemplateSource(inspection);
   const steps = useMemo(() => getTemplateStepItems(template), [template]);
 
-  if (!template) return null;
-
-  const planCode = template.plan_code as string | undefined;
-  const planVersion = template.plan_version as string | undefined;
+  const planCode = template?.plan_code as string | undefined;
+  const planVersion = template?.plan_version as string | undefined;
   const planName =
     planCode && planVersion
       ? `${planCode} v${planVersion}`
-      : planCode || (template.standard_id ? t('app.kuaizhizao.quality.template.qualityStandard') : null);
+      : planCode || (template?.standard_id ? t('app.kuaizhizao.quality.template.qualityStandard') : null);
   const passLabel = t('app.kuaizhizao.quality.common.result.qualified');
   const failLabel = t('app.kuaizhizao.quality.common.result.unqualified');
 
@@ -426,7 +487,7 @@ const InspectionTemplateConductFields: React.FC<InspectionTemplateConductFieldsP
       <Text type="secondary">{planName}</Text>
     ) : null;
 
-  if (hasInspectionPlanSteps(template)) {
+  if (template && hasInspectionPlanSteps(template)) {
     return (
       <Col span={24}>
         <Card
@@ -442,14 +503,25 @@ const InspectionTemplateConductFields: React.FC<InspectionTemplateConductFieldsP
           {steps.map((step, idx) => {
             const stepKey = getStepConductKey(step, idx);
             const label = step.inspection_item || t('app.kuaizhizao.quality.template.inspectionItemFallback', { index: idx + 1 });
-            const typeHint = formatAcceptanceCriteriaPreview(step.value_type || 'boolean', step.value_spec, t);
-            const samplingHint = formatSamplingCriteriaPreview(step.sampling_type, step.value_spec, t);
+            const lotQty = Number(inspection?.inspection_quantity);
+            const lotQuantity = Number.isFinite(lotQty) && lotQty > 0 ? lotQty : undefined;
+            const samplingHint = formatSamplingCriteriaPreview(
+              step.sampling_type,
+              step.value_spec,
+              t,
+              lotQuantity,
+              (step as { resolved_sampling?: { label?: string } }).resolved_sampling,
+            );
+            const criteriaSupplement = getCriteriaSupplement(step.value_spec);
+            const typeCriteria = formatAcceptanceCriteriaPreview(
+              step.value_type || 'boolean',
+              step.value_spec,
+              t,
+            );
+            const acceptanceCriteria =
+              typeCriteria.trim() || String(step.acceptance_criteria || '').trim() || undefined;
             const method = String(step.inspection_method || '').trim();
-            const hint = [
-              method && method !== label ? method : null,
-              typeHint || step.acceptance_criteria,
-              samplingHint,
-            ]
+            const inspectionMethod = [method && method !== label ? method : null, samplingHint]
               .filter(Boolean)
               .join(' / ');
             return (
@@ -458,7 +530,9 @@ const InspectionTemplateConductFields: React.FC<InspectionTemplateConductFieldsP
                 step={step}
                 stepKey={stepKey}
                 label={label}
-                hint={hint || undefined}
+                inspectionMethod={inspectionMethod || undefined}
+                acceptanceCriteria={acceptanceCriteria}
+                criteriaSupplement={criteriaSupplement || undefined}
                 photoCategory={photoCategory}
                 stepPhotoRequired={stepPhotoRequired}
               />
@@ -469,45 +543,65 @@ const InspectionTemplateConductFields: React.FC<InspectionTemplateConductFieldsP
     );
   }
 
-  const criteria = template.acceptance_criteria as string | undefined;
-  const standardItems = template.inspection_items;
-  if (!criteria && !standardItems) return null;
-
-  return (
-    <Col span={24}>
-      <Card
-        size="small"
-        title={t('app.kuaizhizao.quality.template.standardTitle')}
-        extra={planCardExtra}
-        style={{ marginBottom: 8 }}
-      >
-        {criteria ? (
-          <Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
-            {t('app.kuaizhizao.quality.template.acceptanceCriteria', { criteria })}
-          </Text>
-        ) : null}
-        {standardItems ? (
-          <Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
-            {t('app.kuaizhizao.quality.template.inspectionItems', {
-              items: typeof standardItems === 'string' ? standardItems : JSON.stringify(standardItems),
-            })}
-          </Text>
-        ) : null}
-        <Form.Item
-          name={['item_results', '0']}
-          initialValue="pass"
-          rules={[{ required: true, message: t('app.kuaizhizao.quality.template.overallJudgmentRequired') }]}
+  const criteria = template?.acceptance_criteria as string | undefined;
+  const standardItems = template?.inspection_items;
+  if (criteria || standardItems) {
+    return (
+      <Col span={24}>
+        <Card
+          size="small"
+          title={t('app.kuaizhizao.quality.template.standardTitle')}
+          extra={planCardExtra}
+          style={{ marginBottom: 8 }}
         >
-          <ThemedSegmented
-            options={[
-              { label: passLabel, value: 'pass' },
-              { label: failLabel, value: 'fail' },
-            ]}
-          />
-        </Form.Item>
-      </Card>
-    </Col>
-  );
+          {criteria ? (
+            <Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
+              {t('app.kuaizhizao.quality.template.acceptanceCriteria', { criteria })}
+            </Text>
+          ) : null}
+          {standardItems ? (
+            <Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
+              {t('app.kuaizhizao.quality.template.inspectionItems', {
+                items: typeof standardItems === 'string' ? standardItems : JSON.stringify(standardItems),
+              })}
+            </Text>
+          ) : null}
+          <Form.Item
+            name={['item_results', '0']}
+            initialValue="pass"
+            rules={[{ required: true, message: t('app.kuaizhizao.quality.template.overallJudgmentRequired') }]}
+          >
+            <ThemedSegmented
+              options={[
+                { label: passLabel, value: 'pass' },
+                { label: failLabel, value: 'fail' },
+              ]}
+            />
+          </Form.Item>
+        </Card>
+      </Col>
+    );
+  }
+
+  // 简易质检且无标准项时，原先整块不渲染，切换方案入口也被藏掉；有 planSwitch 时仍露出切换条
+  if (planCardExtra) {
+    return (
+      <Col span={24}>
+        <Card
+          size="small"
+          title={t('app.kuaizhizao.quality.common.inspectionKind.simple')}
+          extra={planCardExtra}
+          style={{ marginBottom: 8 }}
+        >
+          <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
+            {t('app.kuaizhizao.quality.template.simpleSwitchPlanHint')}
+          </Text>
+        </Card>
+      </Col>
+    );
+  }
+
+  return null;
 };
 
 export default InspectionTemplateConductFields;

@@ -12,24 +12,144 @@ export type InspectionStepValueType = (typeof INSPECTION_STEP_VALUE_TYPES)[numbe
 
 export type InspectionStepValueSpec = Record<string, unknown>;
 
+export type SamplingMode = 'fixed' | 'lot_ratio' | 'gb2828_single';
+
+export type Gb2828Strictness = 'normal' | 'tightened' | 'reduced';
+
+export type Gb2828InspectionLevel = 'S-1' | 'S-2' | 'S-3' | 'S-4' | 'I' | 'II' | 'III';
+
 export interface SamplingSpec {
+  mode?: SamplingMode;
   sample_size: number;
   accept_num: number;
   reject_num: number;
+  /** 按批量比例抽检时的百分比（1–100） */
+  lot_sample_ratio?: number;
+  level?: Gb2828InspectionLevel;
+  aql?: number;
+  strictness?: Gb2828Strictness;
+  transfer_enabled?: boolean;
 }
 
+export type ResolvedSampling = {
+  mode?: string;
+  sample_size?: number;
+  accept_num?: number;
+  reject_num?: number;
+  strictness?: string;
+  level?: string;
+  aql?: number;
+  transfer_enabled?: boolean;
+  label?: string;
+  gb2828?: Record<string, unknown>;
+};
+
 export function normalizeSamplingSpec(raw?: unknown): SamplingSpec {
-  const base = { sample_size: 1, accept_num: 0, reject_num: 1 };
+  const base: SamplingSpec = {
+    mode: 'fixed',
+    sample_size: 1,
+    accept_num: 0,
+    reject_num: 1,
+    lot_sample_ratio: 10,
+  };
   if (!raw || typeof raw !== 'object') return base;
   const src = raw as Record<string, unknown>;
   const out = { ...base };
+  const modeRaw = String(src.mode || 'fixed').trim();
+  if (modeRaw === 'gb2828_single') {
+    out.mode = 'gb2828_single';
+    if (src.level != null) out.level = String(src.level) as Gb2828InspectionLevel;
+    if (src.aql != null) {
+      const aql = Number(src.aql);
+      if (!Number.isNaN(aql)) out.aql = aql;
+    }
+    if (src.strictness != null) out.strictness = String(src.strictness) as Gb2828Strictness;
+    if (src.transfer_enabled != null) out.transfer_enabled = Boolean(src.transfer_enabled);
+    if (out.level == null) out.level = 'II';
+    if (out.aql == null) out.aql = 2.5;
+    if (out.strictness == null) out.strictness = 'normal';
+    if (out.transfer_enabled == null) out.transfer_enabled = false;
+    return out;
+  }
+  out.mode = modeRaw === 'lot_ratio' ? 'lot_ratio' : 'fixed';
   for (const key of ['sample_size', 'accept_num', 'reject_num'] as const) {
     if (src[key] == null) continue;
     const n = Number(src[key]);
     if (!Number.isNaN(n)) out[key] = Math.max(0, Math.floor(n));
   }
+  if (src.lot_sample_ratio != null) {
+    const ratio = Number(src.lot_sample_ratio);
+    if (!Number.isNaN(ratio)) {
+      out.lot_sample_ratio = Math.min(100, Math.max(0.01, ratio));
+    }
+  }
   if (out.sample_size < 1) out.sample_size = 1;
   return out;
+}
+
+/** 执行检验时按报检数量解析有效 n（固定 n 或批量比例） */
+export function resolveEffectiveSamplingSpec(
+  spec: SamplingSpec,
+  lotQuantity?: number,
+): SamplingSpec {
+  const normalized = normalizeSamplingSpec(spec);
+  if (normalized.mode !== 'lot_ratio') return normalized;
+  const lot = Number(lotQuantity);
+  if (!Number.isFinite(lot) || lot <= 0) return normalized;
+  const ratio = normalized.lot_sample_ratio ?? 10;
+  const n = Math.max(1, Math.ceil((lot * ratio) / 100));
+  return { ...normalized, sample_size: n };
+}
+
+export function getCriteriaSupplement(valueSpec?: InspectionStepValueSpec): string {
+  return typeof valueSpec?.criteria_supplement === 'string'
+    ? valueSpec.criteria_supplement.trim()
+    : '';
+}
+
+export function appendCriteriaSupplement(
+  autoCriteria: string,
+  valueSpec?: InspectionStepValueSpec,
+): string {
+  const sup = getCriteriaSupplement(valueSpec);
+  if (!sup) return autoCriteria;
+  return autoCriteria ? `${autoCriteria} / ${sup}` : sup;
+}
+
+/** 仅类型规格 + 抽检（不含补充说明；执行页补充说明单独成块展示） */
+export function formatStepAutoCriteriaDisplay(
+  step: Pick<InspectionPlanStepItem, 'value_type' | 'value_spec' | 'sampling_type'>,
+  t?: TFunction,
+  lotQuantity?: number,
+  resolvedSampling?: ResolvedSampling,
+): string {
+  const typeHint = formatAcceptanceCriteriaPreview(
+    step.value_type || 'boolean',
+    step.value_spec,
+    t,
+  );
+  const samplingHint = formatSamplingCriteriaPreview(
+    step.sampling_type,
+    step.value_spec,
+    t,
+    lotQuantity,
+    resolvedSampling,
+  );
+  return [typeHint, samplingHint].filter(Boolean).join(' / ');
+}
+
+/** 方案列表：类型规格 + 抽检 + 合格标准补充说明 */
+export function formatStepCriteriaDisplay(
+  step: Pick<
+    InspectionPlanStepItem,
+    'value_type' | 'value_spec' | 'sampling_type' | 'acceptance_criteria'
+  >,
+  t?: TFunction,
+  lotQuantity?: number,
+  resolvedSampling?: ResolvedSampling,
+): string {
+  const auto = formatStepAutoCriteriaDisplay(step, t, lotQuantity, resolvedSampling);
+  return appendCriteriaSupplement(auto, step.value_spec) || step.acceptance_criteria || '';
 }
 
 export function getSamplingSpec(
@@ -44,9 +164,45 @@ export function formatSamplingCriteriaPreview(
   samplingType: string | undefined,
   valueSpec: InspectionStepValueSpec | undefined,
   t?: TFunction,
+  lotQuantity?: number,
+  resolvedSampling?: ResolvedSampling,
 ): string {
   if (samplingType !== 'sampling') return '';
-  const s = normalizeSamplingSpec(valueSpec?.sampling);
+  if (resolvedSampling?.label) {
+    return resolvedSampling.label;
+  }
+  const normalized = normalizeSamplingSpec(valueSpec?.sampling);
+  if (normalized.mode === 'gb2828_single') {
+    if (!t) {
+      return `GB/T 2828.1 水平 ${normalized.level}，${normalized.strictness}，AQL ${normalized.aql}（报检批量查表）`;
+    }
+    return t('app.kuaizhizao.quality.plans.stepSpec.samplingCriteriaGb2828Pending', {
+      level: normalized.level,
+      strictness: normalized.strictness,
+      aql: normalized.aql,
+    });
+  }
+  const s = resolveEffectiveSamplingSpec(normalized, lotQuantity);
+  if (s.mode === 'lot_ratio') {
+    const ratio = s.lot_sample_ratio ?? 10;
+    if (!t) {
+      const lotHint =
+        lotQuantity != null && Number(lotQuantity) > 0
+          ? `，n=${s.sample_size}（批量 ${lotQuantity}）`
+          : '';
+      return `抽检 批量 ${ratio}%${lotHint}，Ac=${s.accept_num}，Re=${s.reject_num}`;
+    }
+    const lotHint =
+      lotQuantity != null && Number(lotQuantity) > 0
+        ? `，n=${s.sample_size}（批量 ${lotQuantity}）`
+        : '';
+    return t('app.kuaizhizao.quality.plans.stepSpec.samplingCriteriaLotRatio', {
+      ratio,
+      lotHint,
+      ac: s.accept_num,
+      re: s.reject_num,
+    });
+  }
   if (!t) {
     return `抽检 n=${s.sample_size}，Ac=${s.accept_num}，Re=${s.reject_num}`;
   }

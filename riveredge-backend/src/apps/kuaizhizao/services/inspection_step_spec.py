@@ -7,6 +7,7 @@ value_type: boolean | single_select | multi_select | text | numeric
 from __future__ import annotations
 
 import ast
+import math
 import operator
 import re
 import uuid
@@ -231,14 +232,35 @@ def normalize_value_spec(value_type: str, raw: Any) -> Dict[str, Any]:
     spec["allow_na"] = _coerce_bool(spec.get("allow_na", False))
     spec["critical"] = _coerce_bool(spec.get("critical", False))
     spec["require_photo"] = _coerce_bool(spec.get("require_photo", False))
+    supplement = spec.get("criteria_supplement")
+    if supplement is not None:
+        text = str(supplement).strip()
+        if text:
+            spec["criteria_supplement"] = text
+        else:
+            spec.pop("criteria_supplement", None)
     return spec
 
 
 def normalize_sampling_spec(raw: Any) -> Dict[str, Any]:
-    base = {"sample_size": 1, "accept_num": 0, "reject_num": 1}
+    from apps.kuaizhizao.services.gb2828_sampling import normalize_gb2828_sampling_fields
+
+    base = {
+        "mode": "fixed",
+        "sample_size": 1,
+        "accept_num": 0,
+        "reject_num": 1,
+        "lot_sample_ratio": 10.0,
+    }
     if not isinstance(raw, dict):
         return base
     out = dict(base)
+    mode_raw = str(raw.get("mode") or "fixed").strip()
+    if mode_raw == "gb2828_single":
+        out["mode"] = "gb2828_single"
+        out.update(normalize_gb2828_sampling_fields(raw))
+        return out
+    out["mode"] = "lot_ratio" if mode_raw == "lot_ratio" else "fixed"
     for key in ("sample_size", "accept_num", "reject_num"):
         if raw.get(key) is None:
             continue
@@ -246,18 +268,103 @@ def normalize_sampling_spec(raw: Any) -> Dict[str, Any]:
             out[key] = max(0, int(raw[key]))
         except (TypeError, ValueError):
             pass
+    if raw.get("lot_sample_ratio") is not None:
+        try:
+            ratio = float(raw["lot_sample_ratio"])
+            out["lot_sample_ratio"] = min(100.0, max(0.01, ratio))
+        except (TypeError, ValueError):
+            pass
     if out["sample_size"] < 1:
         out["sample_size"] = 1
     return out
 
 
-def format_sampling_criteria(spec: Dict[str, Any]) -> Optional[str]:
+def resolve_effective_sampling_spec(
+    sampling: Dict[str, Any],
+    lot_quantity: Optional[Any] = None,
+    *,
+    strictness_override: Optional[str] = None,
+) -> Dict[str, Any]:
+    from apps.kuaizhizao.services.gb2828_sampling import (
+        format_gb2828_sampling_label,
+        resolve_single_sampling_plan,
+    )
+
+    normalized = normalize_sampling_spec(sampling)
+    if normalized.get("mode") == "gb2828_single":
+        try:
+            lot = int(float(lot_quantity))
+        except (TypeError, ValueError):
+            lot = 0
+        if lot < 1:
+            return normalized
+        strictness = strictness_override or normalized.get("strictness") or "normal"
+        resolved = resolve_single_sampling_plan(
+            lot_size=lot,
+            level=str(normalized.get("level") or "II"),
+            aql=normalized.get("aql"),
+            strictness=str(strictness),
+        )
+        out = dict(normalized)
+        out["sample_size"] = resolved["sample_size"]
+        out["accept_num"] = resolved["accept_num"]
+        out["reject_num"] = resolved["reject_num"]
+        out["resolved_gb2828"] = resolved
+        out["resolved_label"] = format_gb2828_sampling_label(resolved, lot)
+        return out
+    if normalized.get("mode") != "lot_ratio":
+        return normalized
+    try:
+        lot = float(lot_quantity)
+    except (TypeError, ValueError):
+        return normalized
+    if lot <= 0:
+        return normalized
+    ratio = float(normalized.get("lot_sample_ratio") or 10)
+    n = max(1, int(math.ceil(lot * ratio / 100.0)))
+    out = dict(normalized)
+    out["sample_size"] = n
+    return out
+
+
+def _append_criteria_supplement(auto: str, value_spec: Any) -> str:
+    if not auto:
+        auto = ""
+    if not isinstance(value_spec, dict):
+        return auto
+    supplement = value_spec.get("criteria_supplement")
+    if isinstance(supplement, str) and supplement.strip():
+        extra = supplement.strip()
+        return " / ".join(x for x in [auto, extra] if x)
+    return auto
+
+
+def format_sampling_criteria(
+    spec: Dict[str, Any],
+    lot_quantity: Optional[Any] = None,
+) -> Optional[str]:
     sampling = spec.get("sampling") if isinstance(spec.get("sampling"), dict) else None
     if not sampling:
         return None
-    n = sampling.get("sample_size", 1)
-    a = sampling.get("accept_num", 0)
-    r = sampling.get("reject_num", 1)
+    resolved = resolve_effective_sampling_spec(sampling, lot_quantity)
+    n = resolved.get("sample_size", 1)
+    a = resolved.get("accept_num", 0)
+    r = resolved.get("reject_num", 1)
+    if resolved.get("mode") == "gb2828_single":
+        label = resolved.get("resolved_label")
+        if isinstance(label, str) and label.strip():
+            return label.strip()
+        return f"抽检 n={n}，Ac={a}，Re={r}"
+    if resolved.get("mode") == "lot_ratio":
+        ratio = resolved.get("lot_sample_ratio", 10)
+        lot_hint = ""
+        try:
+            lot_f = float(lot_quantity)
+            if lot_f > 0:
+                lot_hint = f"，n={n}（批量 {lot_f:g}）"
+        except (TypeError, ValueError):
+            pass
+        return f"抽检 批量 {ratio:g}%{lot_hint}，Ac={a}，Re={r}"
     return f"抽检 n={n}，Ac={a}，Re={r}"
 
 
@@ -348,7 +455,7 @@ def prepare_plan_step_dict(step_dict: Dict[str, Any]) -> Dict[str, Any]:
         sampling_text = format_sampling_criteria(out["value_spec"])
         auto = " / ".join(x for x in [auto, sampling_text] if x)
     if auto:
-        out["acceptance_criteria"] = auto
+        out["acceptance_criteria"] = _append_criteria_supplement(auto, out.get("value_spec"))
     return out
 
 
@@ -377,7 +484,16 @@ def validate_plan_step_dict(step_dict: Dict[str, Any]) -> None:
             if isinstance(step_dict.get("value_spec"), dict)
             else None
         )
-        if sampling.get("sample_size", 0) < 1:
+        if sampling.get("mode") == "gb2828_single":
+            pass
+        elif sampling.get("mode") == "lot_ratio":
+            try:
+                ratio = float(sampling.get("lot_sample_ratio") or 0)
+            except (TypeError, ValueError):
+                ratio = 0
+            if ratio <= 0 or ratio > 100:
+                raise ValidationError(f"检验项「{name}」批量抽检比例须在 0–100 之间")
+        elif sampling.get("sample_size", 0) < 1:
             raise ValidationError(f"检验项「{name}」抽检样本量须 ≥ 1")
 
 
@@ -509,6 +625,7 @@ def plan_step_to_snapshot_item(step: Any) -> Dict[str, Any]:
     if sampling_type == "sampling":
         sampling_text = format_sampling_criteria(spec)
         ac = " / ".join(x for x in [ac, sampling_text] if x)
+    ac = _append_criteria_supplement(ac, spec)
     return {
         "step_key": step_key,
         "sequence": getattr(step, "sequence", 0),

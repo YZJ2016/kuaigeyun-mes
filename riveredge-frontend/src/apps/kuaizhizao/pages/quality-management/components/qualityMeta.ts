@@ -89,6 +89,21 @@ export const QUALITY_PLAN_TYPE_I18N: Record<string, string> = {
   patrol: 'app.kuaizhizao.quality.common.type.patrol',
 };
 
+/** 与后端 PLAN_TYPE_SHORT_CODES 一致，供编号规则 plan_type_code 段 */
+export const QUALITY_PLAN_TYPE_SHORT_CODE: Record<string, string> = {
+  incoming: 'IQC',
+  outsource: 'OSQC',
+  process: 'IPQC',
+  finished: 'FQC',
+  outbound: 'OQC',
+  patrol: 'PATROL',
+};
+
+export function resolveQualityPlanTypeShortCode(planType?: string | null): string {
+  const key = String(planType || '').trim();
+  return QUALITY_PLAN_TYPE_SHORT_CODE[key] ?? '';
+}
+
 export const QUALITY_DEFECT_TYPE_I18N: Record<string, string> = {
   dimension: 'app.kuaizhizao.quality.common.defectType.dimension',
   appearance: 'app.kuaizhizao.quality.common.defectType.appearance',

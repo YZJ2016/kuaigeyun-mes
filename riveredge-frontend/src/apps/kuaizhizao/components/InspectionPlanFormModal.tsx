@@ -2,6 +2,10 @@
  * 质检方案新建/编辑弹窗（可复用）
  *
  * 供质检方案管理页、工序表单内「快速新增质检方案」等场景使用。
+ *
+ * 编号真源（对齐 BOM）：规则含 form_field「plan_type_code」时，须等方案类型有值才自动生成。
+ * 用 CodeField 的 autoGenerateOnCreate + generateSessionKey（会话+短码）在类型就绪后拉取预览，
+ * 禁止空 context 先写出 [FIELD:plan_type_code]。
  */
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
@@ -12,9 +16,8 @@ import {
   ProFormTextArea,
   ProFormItem,
   ProFormSwitch,
-  ProFormDependency,
 } from '@ant-design/pro-components';
-import { App, Row, Col } from 'antd';
+import { App, Form, Row, Col } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
 import CodeField from '../../../components/code-field';
@@ -25,8 +28,10 @@ import { bumpPlanVersion, stepsFingerprint } from '../types/inspectionStepSpec';
 import {
   getQualityPlanTypeFallback,
   QUALITY_PLAN_TYPE_I18N,
+  resolveQualityPlanTypeShortCode,
 } from '../pages/quality-management/components/qualityMeta';
 import { getAntdModal } from '../../../utils/antdAppApis';
+
 export interface InspectionPlanRecord {
   id?: number;
   uuid?: string;
@@ -58,6 +63,64 @@ export interface InspectionPlanFormModalProps {
   zIndex?: number;
 }
 
+/** ProForm 子树内：watch 方案类型 → 短码就绪后才打开 CodeField 自动生成 */
+const InspectionPlanCodeFields: React.FC<{
+  isEdit: boolean;
+  currentPlanId?: number;
+  formRef: React.RefObject<ProFormInstance | undefined>;
+  createCodeSession: number;
+  resolvedDefaultPlanType?: string;
+}> = ({ isEdit, currentPlanId, formRef, createCodeSession, resolvedDefaultPlanType }) => {
+  const { t } = useTranslation();
+  const planType = Form.useWatch('plan_type');
+  const effectiveType = String(planType || resolvedDefaultPlanType || '');
+  const planTypeCode = resolveQualityPlanTypeShortCode(effectiveType);
+  const codeContext = useMemo(
+    () => ({
+      plan_type: effectiveType,
+      plan_type_code: planTypeCode,
+    }),
+    [effectiveType, planTypeCode],
+  );
+  // 短码未就绪：不自动生成；就绪后 sessionKey 含短码，类型切换会重拉预览
+  const canAutoGenerate = !isEdit && Boolean(planTypeCode);
+  const generateSessionKey = canAutoGenerate
+    ? `${createCodeSession}:${planTypeCode}`
+    : undefined;
+
+  return (
+    <>
+      <Col span={12}>
+        <CodeField
+          pageCode="kuaizhizao-quality-inspection-plan"
+          name="plan_code"
+          label={t('app.kuaizhizao.quality.plans.form.planCode')}
+          required
+          autoGenerateOnCreate={canAutoGenerate}
+          showGenerateButton={false}
+          documentId={isEdit ? currentPlanId : undefined}
+          formRef={formRef}
+          generateSessionKey={generateSessionKey}
+          context={codeContext}
+        />
+      </Col>
+      <Col span={12}>
+        <ProFormText
+          name="plan_name"
+          label={t('app.kuaizhizao.quality.plans.form.planName')}
+          rules={[
+            {
+              required: true,
+              message: t('app.kuaizhizao.quality.plans.validation.requiredPlanName'),
+            },
+          ]}
+          placeholder={t('app.kuaizhizao.quality.plans.placeholder.enterPlanName')}
+        />
+      </Col>
+    </>
+  );
+};
+
 export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = ({
   open,
   onClose,
@@ -77,6 +140,7 @@ export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = (
   const [steps, setSteps] = useState<InspectionPlanStepItem[]>([]);
   const [stepsBaseline, setStepsBaseline] = useState('');
   const [currentPlan, setCurrentPlan] = useState<InspectionPlanRecord | null>(null);
+  const [createCodeSession, setCreateCodeSession] = useState(0);
   const planTypeOptions = useMemo(() => getQualityPlanTypeFallback(t), [t]);
   const isEdit = editId != null && editId !== '';
   const resolvedDefaultPlanType = useMemo(() => {
@@ -117,6 +181,7 @@ export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = (
   useEffect(() => {
     if (!open) return;
     if (!isEdit) {
+      setCreateCodeSession((k) => k + 1);
       applyCreateDefaults();
       return;
     }
@@ -253,34 +318,6 @@ export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = (
         <input type="hidden" />
       </ProFormItem>
       <Row gutter={16}>
-        <ProFormDependency name={['plan_type']}>
-          {({ plan_type }) => (
-            <Col span={12}>
-              <CodeField
-                pageCode="kuaizhizao-quality-inspection-plan"
-                name="plan_code"
-                label={t('app.kuaizhizao.quality.plans.form.planCode')}
-                required
-                autoGenerateOnCreate={!isEdit}
-                showGenerateButton={false}
-                documentId={isEdit ? currentPlan?.id : undefined}
-                context={{
-                  plan_type: plan_type || resolvedDefaultPlanType || '',
-                }}
-              />
-            </Col>
-          )}
-        </ProFormDependency>
-        <Col span={12}>
-          <ProFormText
-            name="plan_name"
-            label={t('app.kuaizhizao.quality.plans.form.planName')}
-            rules={[{ required: true, message: t('app.kuaizhizao.quality.plans.validation.requiredPlanName') }]}
-            placeholder={t('app.kuaizhizao.quality.plans.placeholder.enterPlanName')}
-          />
-        </Col>
-      </Row>
-      <Row gutter={16}>
         <Col span={12}>
           <ProFormItem
             name="plan_type"
@@ -306,6 +343,15 @@ export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = (
             extra={t('app.kuaizhizao.quality.plans.form.versionHint')}
           />
         </Col>
+      </Row>
+      <Row gutter={16}>
+        <InspectionPlanCodeFields
+          isEdit={isEdit}
+          currentPlanId={currentPlan?.id}
+          formRef={formRef}
+          createCodeSession={createCodeSession}
+          resolvedDefaultPlanType={resolvedDefaultPlanType}
+        />
       </Row>
 
       <ProFormItem label={t('app.kuaizhizao.quality.plans.form.steps')} style={{ width: '100%' }} required={requireSteps}>

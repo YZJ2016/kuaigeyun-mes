@@ -76,10 +76,13 @@ class InspectionPlanService(AppBaseService[InspectionPlan]):
         """创建质检方案（含步骤）"""
         async with in_transaction():
             if not plan_data.plan_code:
+                from apps.kuaizhizao.services.inspection_policy_service import plan_type_short_code
+
                 plan_code = await self.generate_code(
                     tenant_id=tenant_id,
                     code_type="INSPECTION_PLAN_CODE",
                     plan_type=plan_data.plan_type,
+                    plan_type_code=plan_type_short_code(plan_data.plan_type),
                     material_code=plan_data.material_code or "",
                 )
             else:
