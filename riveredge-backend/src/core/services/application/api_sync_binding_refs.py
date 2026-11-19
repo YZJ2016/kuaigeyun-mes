@@ -22,12 +22,19 @@ def _iter_binding_specs() -> Sequence[Tuple[str, Type[Any], Tuple[str, ...]]]:
         SupplierSyncBinding,
         WarehouseSyncBinding,
     )
+    from apps.kuaizhizao.models.finished_goods_receipt_sync_binding import (
+        FinishedGoodsReceiptSyncBinding,
+    )
     from apps.kuaizhizao.models.inventory_sync_binding import InventorySyncBinding
     from apps.kuaizhizao.models.other_inbound_sync_binding import OtherInboundSyncBinding
     from apps.kuaizhizao.models.other_outbound_sync_binding import OtherOutboundSyncBinding
+    from apps.kuaizhizao.models.production_picking_sync_binding import (
+        ProductionPickingSyncBinding,
+    )
     from apps.kuaizhizao.models.purchase_order_sync_binding import PurchaseOrderSyncBinding
     from apps.kuaizhizao.models.purchase_receipt_sync_binding import PurchaseReceiptSyncBinding
     from apps.kuaizhizao.models.reporting_sync_binding import ReportingSyncBinding
+    from apps.kuaizhizao.models.sales_delivery_sync_binding import SalesDeliverySyncBinding
     from apps.kuaizhizao.models.sales_order_sync_binding import SalesOrderSyncBinding
     from apps.kuaizhizao.models.work_order_sync_binding import WorkOrderSyncBinding
 
@@ -43,6 +50,9 @@ def _iter_binding_specs() -> Sequence[Tuple[str, Type[Any], Tuple[str, ...]]]:
         ("销售订单同步", SalesOrderSyncBinding, ("api_uuid",)),
         ("采购订单同步", PurchaseOrderSyncBinding, ("api_uuid",)),
         ("采购入库同步", PurchaseReceiptSyncBinding, ("api_uuid",)),
+        ("销售出库同步", SalesDeliverySyncBinding, ("api_uuid",)),
+        ("生产领料同步", ProductionPickingSyncBinding, ("api_uuid",)),
+        ("成品入库同步", FinishedGoodsReceiptSyncBinding, ("api_uuid",)),
         ("其他入库同步", OtherInboundSyncBinding, ("api_uuid",)),
         ("其他出库同步", OtherOutboundSyncBinding, ("api_uuid",)),
         ("工单同步", WorkOrderSyncBinding, ("api_uuid", "push_save_api_uuid")),

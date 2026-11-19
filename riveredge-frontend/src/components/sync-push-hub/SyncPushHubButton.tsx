@@ -1,21 +1,29 @@
 /**
  * 工具栏「同步/推送」统一入口按钮 + Hub 弹窗。
+ * 仓储出站绑定存在时，旁挂「暂停」：停自动无感外推，金蝶不通不撤回本地过账。
  */
-import React, { useState } from 'react';
-import { Button, Tooltip } from 'antd';
+import React, { useCallback, useEffect, useState } from 'react';
+import { App, Button, Space, Tooltip } from 'antd';
 import type { ButtonProps } from 'antd';
-import { SyncOutlined } from '@ant-design/icons';
+import { PauseCircleOutlined, PlayCircleOutlined, SyncOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import {
   SyncPushHubModal,
   type SyncPushHubModalProps,
   type SyncPushHubTabKey,
 } from './SyncPushHubModal';
+import {
+  isPushBindingPaused,
+  resolvePushBindingPauseApi,
+  setPushBindingPaused,
+} from './pushBindingPause';
+import { supportsDocumentPushReconcile } from './reconcileSourceTypes';
 import { useUniTableDataActionIconOnly } from '../uni-table/dataActionIconOnlyContext';
+import { getApiErrorMessage } from '../../utils/errorHandler';
 
 export interface SyncPushHubButtonProps
   extends Omit<SyncPushHubModalProps, 'open' | 'onClose'>,
-    Omit<ButtonProps, 'onClick' | 'children' | 'icon'> {
+    Omit<ButtonProps, 'onClick' | 'children' | 'icon' | 'title'> {
   /** 覆盖默认按钮文案 */
   buttonText?: React.ReactNode;
   /** 仅图标（窄屏） */
@@ -32,8 +40,11 @@ export const SyncPushHubButton: React.FC<SyncPushHubButtonProps> = ({
   historySourceType,
   historyTargetProfiles,
   historyEnabled = true,
+  getReconcileDocumentIds,
+  reconcileEnabled = true,
   syncTitle,
   pushTitle,
+  reconcileTitle,
   historyTitle,
   title,
   width,
@@ -41,9 +52,11 @@ export const SyncPushHubButton: React.FC<SyncPushHubButtonProps> = ({
   defaultTab,
   renderSyncPanel,
   renderPushPanel,
+  renderReconcilePanel,
   renderHistoryPanel,
   syncPanel,
   pushPanel,
+  reconcilePanel,
   historyPanel,
   buttonText,
   iconOnly = false,
@@ -53,7 +66,10 @@ export const SyncPushHubButton: React.FC<SyncPushHubButtonProps> = ({
   ...buttonRest
 }) => {
   const { t } = useTranslation();
+  const { message } = App.useApp();
   const [open, setOpen] = useState(false);
+  const [autoPushPaused, setAutoPushPaused] = useState(false);
+  const [pauseLoading, setPauseLoading] = useState(false);
   const toolbarIconOnly = useUniTableDataActionIconOnly();
   const effectiveIconOnly = iconOnly || toolbarIconOnly;
 
@@ -63,11 +79,37 @@ export const SyncPushHubButton: React.FC<SyncPushHubButtonProps> = ({
   const showHistory =
     Boolean(historyEnabled) &&
     Boolean(renderHistoryPanel || historyPanel || historySource);
-  if (!showSync && !showPush && !showHistory) return null;
+  const showReconcile =
+    Boolean(reconcileEnabled) &&
+    Boolean(
+      renderReconcilePanel ||
+        reconcilePanel ||
+        supportsDocumentPushReconcile(historySource),
+    );
+  const pauseApi = showPush ? resolvePushBindingPauseApi(historySource) : null;
+
+  const reloadPauseState = useCallback(async () => {
+    if (!pauseApi) {
+      setAutoPushPaused(false);
+      return;
+    }
+    try {
+      const binding = await pauseApi.load();
+      setAutoPushPaused(isPushBindingPaused(binding?.targets));
+    } catch {
+      setAutoPushPaused(false);
+    }
+  }, [pauseApi]);
+
+  useEffect(() => {
+    void reloadPauseState();
+  }, [reloadPauseState]);
+
+  if (!showSync && !showPush && !showReconcile && !showHistory) return null;
 
   const label = buttonText ?? t('components.syncPushHub.button');
   const ariaLabel = typeof label === 'string' ? label : t('components.syncPushHub.button');
-  const btn = (
+  const syncBtn = (
     <Button
       type={type}
       size={size}
@@ -80,27 +122,96 @@ export const SyncPushHubButton: React.FC<SyncPushHubButtonProps> = ({
     </Button>
   );
 
-  const wrapped = wrapButton
-    ? wrapButton(btn)
-    : effectiveIconOnly
-      ? <Tooltip title={ariaLabel}>{btn}</Tooltip>
-      : btn;
+  const onTogglePause = async () => {
+    if (!pauseApi) return;
+    setPauseLoading(true);
+    try {
+      const nextPaused = !autoPushPaused;
+      await setPushBindingPaused(pauseApi, nextPaused);
+      setAutoPushPaused(nextPaused);
+      message.success(
+        nextPaused
+          ? t('components.syncPushHub.autoPushPaused')
+          : t('components.syncPushHub.autoPushResumed'),
+      );
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message === 'NO_TARGETS') {
+        message.warning(t('components.syncPushHub.autoPushPauseNeedTargets'));
+      } else {
+        message.error(
+          getApiErrorMessage(error, t('components.syncPushHub.autoPushPauseFailed')),
+        );
+      }
+    } finally {
+      setPauseLoading(false);
+    }
+  };
+
+  const pauseBtn = pauseApi ? (
+    <Tooltip
+      title={
+        autoPushPaused
+          ? t('components.syncPushHub.autoPushResumeHint')
+          : t('components.syncPushHub.autoPushPauseHint')
+      }
+    >
+      <Button
+        type={autoPushPaused ? 'primary' : 'default'}
+        danger={autoPushPaused}
+        size={size}
+        loading={pauseLoading}
+        icon={autoPushPaused ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
+        aria-label={
+          autoPushPaused
+            ? t('components.syncPushHub.autoPushResume')
+            : t('components.syncPushHub.autoPushPause')
+        }
+        onClick={() => {
+          void onTogglePause();
+        }}
+      >
+        {effectiveIconOnly
+          ? null
+          : autoPushPaused
+            ? t('components.syncPushHub.autoPushResume')
+            : t('components.syncPushHub.autoPushPause')}
+      </Button>
+    </Tooltip>
+  ) : null;
+
+  const group = pauseBtn ? (
+    <Space.Compact size={size}>
+      {effectiveIconOnly ? <Tooltip title={ariaLabel}>{syncBtn}</Tooltip> : syncBtn}
+      {pauseBtn}
+    </Space.Compact>
+  ) : effectiveIconOnly ? (
+    <Tooltip title={ariaLabel}>{syncBtn}</Tooltip>
+  ) : (
+    syncBtn
+  );
+
+  const wrapped = wrapButton ? wrapButton(group as React.ReactElement) : group;
 
   return (
     <>
       {wrapped}
-      {/* 未打开不挂载 Hub：避免列表页就执行 renderPushPanel → profiles/apis */}
       {open ? (
         <SyncPushHubModal
           open={open}
-          onClose={() => setOpen(false)}
+          onClose={() => {
+            setOpen(false);
+            void reloadPauseState();
+          }}
           syncEnabled={showSync}
           pushEnabled={showPush}
           historyEnabled={showHistory}
           historySourceType={historySourceType}
           historyTargetProfiles={historyTargetProfiles}
+          getReconcileDocumentIds={getReconcileDocumentIds}
+          reconcileEnabled={showReconcile}
           syncTitle={syncTitle}
           pushTitle={pushTitle}
+          reconcileTitle={reconcileTitle}
           historyTitle={historyTitle}
           title={title}
           width={width}
@@ -108,9 +219,11 @@ export const SyncPushHubButton: React.FC<SyncPushHubButtonProps> = ({
           defaultTab={defaultTab}
           renderSyncPanel={renderSyncPanel}
           renderPushPanel={renderPushPanel}
+          renderReconcilePanel={renderReconcilePanel}
           renderHistoryPanel={renderHistoryPanel}
           syncPanel={syncPanel}
           pushPanel={pushPanel}
+          reconcilePanel={reconcilePanel}
           historyPanel={historyPanel}
         />
       ) : null}

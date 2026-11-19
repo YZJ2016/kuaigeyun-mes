@@ -26,7 +26,7 @@ export interface DocumentPushPayload {
   connection_code?: string;
   save_api_uuid?: string;
   dry_run?: boolean;
-  /** 已推过仍强制再推（重推覆盖） */
+  /** 强制重新推送（已有外推关联时仍新建外部单并记录二次推送） */
   force?: boolean;
 }
 
@@ -199,6 +199,9 @@ export interface DocumentPushRunHistoryItem {
   category?: string | null;
   connector_type?: string | null;
   target_profile?: string | null;
+  trigger_kind?: string;
+  /** 外推动作：push / submit_audit / withdraw / unsubmit / delete */
+  action?: string | null;
 }
 
 export interface DocumentPushRunHistoryListResponse {
@@ -234,5 +237,55 @@ export async function listDocumentPushRunHistory(params: {
   return apiRequest<DocumentPushRunHistoryListResponse>(
     '/apps/kuaizhizao/document-push/run-history',
     { params: query },
+  );
+}
+
+/** SyncPushHub「同步对账」：本地单据 vs 金蝶 IM */
+export type DocumentPushReconcileResult =
+  | 'matched'
+  | 'mismatch'
+  | 'not_pushed'
+  | 'remote_missing'
+  | 'local_missing'
+  | 'error';
+
+export interface DocumentPushReconcileRow {
+  source_id: number;
+  local_code: string;
+  local_status: string;
+  local_qty?: string | null;
+  remote_billno?: string | null;
+  remote_status?: string | null;
+  remote_qty?: string | null;
+  result: DocumentPushReconcileResult | string;
+  mismatch_fields?: string[];
+  message?: string | null;
+}
+
+export interface DocumentPushReconcileResponse {
+  success: boolean;
+  source_type: string;
+  target_type: string;
+  form_id: string;
+  doc_label: string;
+  total: number;
+  summary: Record<string, number>;
+  rows: DocumentPushReconcileRow[];
+}
+
+export async function reconcileDocumentPush(params: {
+  sourceType: string;
+  sourceIds: number[];
+}): Promise<DocumentPushReconcileResponse> {
+  return apiRequest<DocumentPushReconcileResponse>(
+    '/apps/kuaizhizao/document-push/reconcile',
+    {
+      method: 'POST',
+      data: {
+        source_type: params.sourceType,
+        source_ids: params.sourceIds,
+      },
+      timeoutMs: 120_000,
+    },
   );
 }

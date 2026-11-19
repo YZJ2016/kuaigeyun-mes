@@ -16,6 +16,8 @@ _EXTERNAL_PUSH_BY_SOURCE: dict[str, str] = {
     "sales_order": "kuaizhizao:sales-order:push",
     "purchase_order": "kuaizhizao:purchase-order:push",
     "purchase_receipt": "kuaizhizao:inbound:push",
+    "finished_goods_receipt": "kuaizhizao:inbound:push",
+    "production_picking": "kuaizhizao:outbound:push",
     "sales_delivery": "kuaizhizao:outbound:push",
     "other_outbound": "kuaizhizao:other-outbound:push",
     "other_inbound": "kuaizhizao:other-inbound:push",

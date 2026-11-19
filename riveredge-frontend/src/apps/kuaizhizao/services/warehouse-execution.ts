@@ -309,6 +309,52 @@ export const warehouseApi = {
       apiRequest(`/apps/kuaizhizao/production-pickings/${id}/confirm`, { method: 'POST', data: data ?? {} }),
     withdraw: async (id: string) =>
       apiRequest(`/apps/kuaizhizao/production-pickings/${id}/withdraw`, { method: 'POST' }),
+    getPushBinding: async () =>
+      apiRequest<{
+        targets?: Array<{
+          target_profile: string;
+          connection_code?: string;
+          save_api_uuid?: string;
+          push_mode?: 'auto' | 'manual';
+          trigger_actions?: string[];
+          action_apis?: Record<string, string>;
+          destination_kind?: 'api' | 'data_source';
+          data_source_uuid?: string;
+          dataset_uuid?: string;
+          user_saved?: boolean;
+          push_enabled?: boolean;
+        }>;
+        trigger_actions?: string[];
+        connection_code?: string;
+        save_api_uuid?: string;
+        sync_mode?: string;
+        schedule_interval_minutes?: number;
+        targets_configured?: boolean;
+      }>('/apps/kuaizhizao/production-pickings/push-binding'),
+    savePushBinding: async (payload: {
+      targets?: Array<{
+        target_profile: string;
+        connection_code?: string;
+        save_api_uuid?: string;
+        push_mode?: 'auto' | 'manual';
+        trigger_actions?: string[];
+        action_apis?: Record<string, string>;
+        destination_kind?: 'api' | 'data_source';
+        data_source_uuid?: string;
+        dataset_uuid?: string;
+        user_saved?: boolean;
+        push_enabled?: boolean;
+      }>;
+      trigger_actions?: string[];
+      connection_code?: string;
+      save_api_uuid?: string;
+      sync_mode?: string;
+      schedule_interval_minutes?: number;
+    }) =>
+      apiRequest('/apps/kuaizhizao/production-pickings/push-binding', {
+        method: 'PUT',
+        data: payload,
+      }),
     quickPick: async (workOrderId: string) =>
       apiRequest('/apps/kuaizhizao/production-pickings/quick-pick', { method: 'POST', params: { work_order_id: workOrderId } }),
     /** 批量领料：从多个工单下推创建生产领料单 */
@@ -454,10 +500,12 @@ export const warehouseApi = {
           save_api_uuid?: string;
           push_mode?: 'auto' | 'manual';
           trigger_actions?: string[];
+          action_apis?: Record<string, string>;
           destination_kind?: 'api' | 'data_source';
           data_source_uuid?: string;
           dataset_uuid?: string;
           user_saved?: boolean;
+          push_enabled?: boolean;
         }>;
         trigger_actions?: string[];
         connection_code?: string;
@@ -467,16 +515,18 @@ export const warehouseApi = {
         targets_configured?: boolean;
       }>('/apps/kuaizhizao/other-inbounds/push-binding'),
     savePushBinding: async (payload: {
-      targets: Array<{
+      targets?: Array<{
         target_profile: string;
         connection_code?: string;
         save_api_uuid?: string;
         push_mode?: 'auto' | 'manual';
         trigger_actions?: string[];
+        action_apis?: Record<string, string>;
         destination_kind?: 'api' | 'data_source';
         data_source_uuid?: string;
         dataset_uuid?: string;
         user_saved?: boolean;
+        push_enabled?: boolean;
       }>;
       trigger_actions?: string[];
       connection_code?: string;
@@ -512,10 +562,12 @@ export const warehouseApi = {
           save_api_uuid?: string;
           push_mode?: 'auto' | 'manual';
           trigger_actions?: string[];
+          action_apis?: Record<string, string>;
           destination_kind?: 'api' | 'data_source';
           data_source_uuid?: string;
           dataset_uuid?: string;
           user_saved?: boolean;
+          push_enabled?: boolean;
         }>;
         trigger_actions?: string[];
         connection_code?: string;
@@ -525,16 +577,18 @@ export const warehouseApi = {
         targets_configured?: boolean;
       }>('/apps/kuaizhizao/other-outbounds/push-binding'),
     savePushBinding: async (payload: {
-      targets: Array<{
+      targets?: Array<{
         target_profile: string;
         connection_code?: string;
         save_api_uuid?: string;
         push_mode?: 'auto' | 'manual';
         trigger_actions?: string[];
+        action_apis?: Record<string, string>;
         destination_kind?: 'api' | 'data_source';
         data_source_uuid?: string;
         dataset_uuid?: string;
         user_saved?: boolean;
+        push_enabled?: boolean;
       }>;
       trigger_actions?: string[];
       connection_code?: string;
@@ -593,6 +647,52 @@ export const warehouseApi = {
     confirm: async (id: string, data?: any) => apiRequest(`/apps/kuaizhizao/finished-goods-receipts/${id}/confirm`, { method: 'POST', data }),
     withdraw: async (id: string) =>
       apiRequest(`/apps/kuaizhizao/finished-goods-receipts/${id}/withdraw`, { method: 'POST' }),
+    getPushBinding: async () =>
+      apiRequest<{
+        targets?: Array<{
+          target_profile: string;
+          connection_code?: string;
+          save_api_uuid?: string;
+          push_mode?: 'auto' | 'manual';
+          trigger_actions?: string[];
+          action_apis?: Record<string, string>;
+          destination_kind?: 'api' | 'data_source';
+          data_source_uuid?: string;
+          dataset_uuid?: string;
+          user_saved?: boolean;
+          push_enabled?: boolean;
+        }>;
+        trigger_actions?: string[];
+        connection_code?: string;
+        save_api_uuid?: string;
+        sync_mode?: string;
+        schedule_interval_minutes?: number;
+        targets_configured?: boolean;
+      }>('/apps/kuaizhizao/finished-goods-receipts/push-binding'),
+    savePushBinding: async (payload: {
+      targets?: Array<{
+        target_profile: string;
+        connection_code?: string;
+        save_api_uuid?: string;
+        push_mode?: 'auto' | 'manual';
+        trigger_actions?: string[];
+        action_apis?: Record<string, string>;
+        destination_kind?: 'api' | 'data_source';
+        data_source_uuid?: string;
+        dataset_uuid?: string;
+        user_saved?: boolean;
+        push_enabled?: boolean;
+      }>;
+      trigger_actions?: string[];
+      connection_code?: string;
+      save_api_uuid?: string;
+      sync_mode?: string;
+      schedule_interval_minutes?: number;
+    }) =>
+      apiRequest('/apps/kuaizhizao/finished-goods-receipts/push-binding', {
+        method: 'PUT',
+        data: payload,
+      }),
     /** 批量入库：从多个工单下推创建成品入库单 */
     batchReceipt: async (params: {
       work_order_ids: number[];
@@ -671,6 +771,52 @@ export const warehouseApi = {
       },
     ) => apiRequest(`/apps/kuaizhizao/sales-deliveries/${id}/confirm`, { method: 'POST', data: data ?? {} }),
     withdraw: async (id: string) => apiRequest(`/apps/kuaizhizao/sales-deliveries/${id}/withdraw`, { method: 'POST' }),
+    getPushBinding: async () =>
+      apiRequest<{
+        targets?: Array<{
+          target_profile: string;
+          connection_code?: string;
+          save_api_uuid?: string;
+          push_mode?: 'auto' | 'manual';
+          trigger_actions?: string[];
+          action_apis?: Record<string, string>;
+          destination_kind?: 'api' | 'data_source';
+          data_source_uuid?: string;
+          dataset_uuid?: string;
+          user_saved?: boolean;
+          push_enabled?: boolean;
+        }>;
+        trigger_actions?: string[];
+        connection_code?: string;
+        save_api_uuid?: string;
+        sync_mode?: string;
+        schedule_interval_minutes?: number;
+        targets_configured?: boolean;
+      }>('/apps/kuaizhizao/sales-deliveries/push-binding'),
+    savePushBinding: async (payload: {
+      targets?: Array<{
+        target_profile: string;
+        connection_code?: string;
+        save_api_uuid?: string;
+        push_mode?: 'auto' | 'manual';
+        trigger_actions?: string[];
+        action_apis?: Record<string, string>;
+        destination_kind?: 'api' | 'data_source';
+        data_source_uuid?: string;
+        dataset_uuid?: string;
+        user_saved?: boolean;
+        push_enabled?: boolean;
+      }>;
+      trigger_actions?: string[];
+      connection_code?: string;
+      save_api_uuid?: string;
+      sync_mode?: string;
+      schedule_interval_minutes?: number;
+    }) =>
+      apiRequest('/apps/kuaizhizao/sales-deliveries/push-binding', {
+        method: 'PUT',
+        data: payload,
+      }),
     import: async (data: any[][]) => apiRequest('/apps/kuaizhizao/sales-deliveries/import', { method: 'POST', data: { data } }),
     export: async (params?: any) =>
       apiRequest('/apps/kuaizhizao/sales-deliveries/export', { method: 'GET', params, responseType: 'blob' }),
@@ -1125,10 +1271,12 @@ export const warehouseApi = {
           save_api_uuid?: string;
           push_mode?: 'auto' | 'manual';
           trigger_actions?: string[];
+          action_apis?: Record<string, string>;
           destination_kind?: 'api' | 'data_source';
           data_source_uuid?: string;
           dataset_uuid?: string;
           user_saved?: boolean;
+          push_enabled?: boolean;
         }>;
         trigger_actions?: string[];
         connection_code?: string;
@@ -1138,16 +1286,18 @@ export const warehouseApi = {
         targets_configured?: boolean;
       }>('/apps/kuaizhizao/purchase-receipts/push-binding'),
     savePushBinding: async (payload: {
-      targets: Array<{
+      targets?: Array<{
         target_profile: string;
         connection_code?: string;
         save_api_uuid?: string;
         push_mode?: 'auto' | 'manual';
         trigger_actions?: string[];
+        action_apis?: Record<string, string>;
         destination_kind?: 'api' | 'data_source';
         data_source_uuid?: string;
         dataset_uuid?: string;
         user_saved?: boolean;
+        push_enabled?: boolean;
       }>;
       trigger_actions?: string[];
       connection_code?: string;

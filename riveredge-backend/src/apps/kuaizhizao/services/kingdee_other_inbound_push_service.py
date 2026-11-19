@@ -105,6 +105,83 @@ def _config_text(config: Dict[str, Any], *keys: str) -> str:
     return ""
 
 
+def normalize_other_inbound_header_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    """库管部门/库管员：与采购入库 bizoperator、bizdept 及开放平台 Operator 写键对齐。"""
+    out = dict(config)
+    keeper_group = _config_text(
+        out, "operatorgroup_number", "bizoperatorgroup_number"
+    )
+    operator = _config_text(
+        out,
+        "operator_operatornumber",
+        "bizoperator_operatornumber",
+        "operator_number",
+    )
+    # 与采购入库一致：无库管组时不写库管员，避免苍穹报「没有对应可用的库管组」
+    if operator and keeper_group:
+        out["operator_operatornumber"] = operator
+        out["bizoperator_operatornumber"] = operator
+        out["operatorgroup_number"] = keeper_group
+    else:
+        for key in (
+            "operator_operatornumber",
+            "bizoperator_operatornumber",
+            "operator_number",
+            "operatorgroup_number",
+        ):
+            out.pop(key, None)
+    dept = _config_text(out, "bizdept_number", "dept_number")
+    if dept:
+        out["bizdept_number"] = dept
+        if not _config_text(out, "dept_number"):
+            out["dept_number"] = dept
+    return out
+
+
+def apply_kingdee_other_inbill_entry_line_fields(
+    entry: Dict[str, Any],
+    *,
+    config: Dict[str, Any],
+    org_number: str,
+) -> None:
+    """im_otherinbill 明细：入库 inv* + 开放平台文档中的 outinv*（与其他出库对称）。"""
+    invstatus = str(config.get("invstatus_number") or "").strip()
+    invtype = str(config.get("invtype_number") or "").strip()
+    if invstatus:
+        entry["invstatus_number"] = invstatus
+    if invtype:
+        entry["invtype_number"] = invtype
+    # 苍穹其他入库明细同样校验「出库库存类型/状态」；未单独配置时与入库 inv* 同源（与其他出库对称）
+    out_invstatus = str(config.get("outinvstatus_number") or invstatus or "").strip()
+    out_invtype = str(config.get("outinvtype_number") or invtype or "").strip()
+    if out_invstatus:
+        entry["outinvstatus_number"] = out_invstatus
+    if out_invtype:
+        entry["outinvtype_number"] = out_invtype
+
+    owner_type = str(config.get("ownertype") or "bos_org").strip() or "bos_org"
+    keeper_type = str(config.get("keepertype") or "bos_org").strip() or "bos_org"
+    owner_number = str(config.get("owner_number") or org_number).strip()
+    keeper_number = str(config.get("keeper_number") or org_number).strip()
+    entry["ownertype"] = owner_type
+    entry["keepertype"] = keeper_type
+    if owner_number:
+        entry["owner_number"] = owner_number
+    if keeper_number:
+        entry["keeper_number"] = keeper_number
+
+    if str(config.get("outownertype") or "").strip():
+        entry["outownertype"] = str(config.get("outownertype")).strip()
+    if str(config.get("outkeepertype") or "").strip():
+        entry["outkeepertype"] = str(config.get("outkeepertype")).strip()
+    out_owner_number = str(config.get("outowner_number") or "").strip()
+    out_keeper_number = str(config.get("outkeeper_number") or "").strip()
+    if out_owner_number:
+        entry["outowner_number"] = out_owner_number
+    if out_keeper_number:
+        entry["outkeeper_number"] = out_keeper_number
+
+
 async def _resolve_user_department_code(tenant_id: int, user_id: int) -> Optional[str]:
     uid = int(user_id or 0)
     if uid <= 0:
@@ -139,7 +216,7 @@ async def enrich_other_inbound_header_config(
     acting_user_id: int,
     config: Dict[str, Any],
 ) -> Dict[str, Any]:
-    out = dict(config)
+    out = normalize_other_inbound_header_config(config)
     if not _config_text(out, "bizdept_number", "dept_number"):
         actor_id = int(inbound.receiver_id or acting_user_id or 0)
         dept_code = await _resolve_user_department_code(tenant_id, actor_id)

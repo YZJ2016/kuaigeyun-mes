@@ -2,7 +2,41 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Mapping
+from typing import Any, Callable, Dict, Mapping, Optional
+
+
+def resolve_kingdee_local_bill_no(
+    *,
+    config: Mapping[str, Any] | None = None,
+    local_code: Any,
+    org_number: Any = None,
+) -> Optional[str]:
+    """本地单号写入金蝶 billno / trdbillno / FBillNo。
+
+    多租户共用同一连接时裸本地单号会撞候选键；有组织编码时写成「组织-本地单号」。
+    ``use_local_bill_no=False`` 时返回 None（交金蝶自动编号）。
+    """
+    cfg = config or {}
+    if not bool(cfg.get("use_local_bill_no", True)):
+        return None
+    code = str(local_code or "").strip()
+    if not code:
+        return None
+    org = str(org_number or "").strip()
+    if not org:
+        for key in (
+            "org_number",
+            "bizorg_number",
+            "createorg_number",
+            "purchase_org_number",
+            "sale_org_number",
+            "prd_org_number",
+            "stock_org_number",
+        ):
+            org = str(cfg.get(key) or "").strip()
+            if org:
+                break
+    return f"{org}-{code}" if org else code
 
 
 def set_path(target: Dict[str, Any], dotted_path: str, value: Any) -> None:

@@ -27,6 +27,8 @@ from core.services.integration.document_push_pipeline import (
 from core.services.integration.kingdee_cosmic_api_presets import (
     BIZ_IM_PURINBILL,
     IM_PURINBILL_ADD_PATH,
+    IM_PURINBILL_BATCH_AUDIT_PATH,
+    IM_PURINBILL_BATCH_SUBMIT_PATH,
 )
 from core.utils.timezone_utils import (
     resolve_business_datetime,
@@ -40,6 +42,8 @@ from infra.services.business_config_service import BusinessConfigService
 DEFAULT_FORM_ID = BIZ_IM_PURINBILL
 # 默认标品 add；自定义含验收人时在配置改 save_path=…/add2 且 acceptor_field=fd81_yanshou
 DEFAULT_SAVE_PATH = IM_PURINBILL_ADD_PATH
+DEFAULT_SUBMIT_PATH = IM_PURINBILL_BATCH_SUBMIT_PATH
+DEFAULT_AUDIT_PATH = IM_PURINBILL_BATCH_AUDIT_PATH
 TARGET_TYPE = "kingdee_im_purinbill"
 TARGET_PROFILE = "kingdee_im_purinbill"
 SOURCE_TYPE = "purchase_receipt"

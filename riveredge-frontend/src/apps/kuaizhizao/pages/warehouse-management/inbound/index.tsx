@@ -44,6 +44,7 @@ import { useGlobalStore } from '../../../../../stores';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { InboundDetailDrawer } from './components/InboundDetailDrawer';
 import PurchaseReceiptDocumentPushPanel from './PurchaseReceiptDocumentPushPanel';
+import FinishedGoodsReceiptDocumentPushPanel from './FinishedGoodsReceiptDocumentPushPanel';
 import { WarehouseTraceBriefPrimaryActions } from '../WarehouseTraceBriefFooter';
 import {
   warehouseApi,
@@ -166,6 +167,7 @@ import {
   filterInboundPullCreateMenuSpecs,
   resolveDefaultInboundQuickPullKey,
   isProductionInboundHubScope,
+  resolveInboundDocumentPushMode,
 } from './inboundHubTypes';
 import { toApiBusinessDocumentDateTime } from '../../../../../utils/formDate';
 import { inboundReceiptTypeMarkerValueEnum, renderInboundReceiptTypeMarkerTag } from '../shared/warehouseMarkerTags';
@@ -1922,6 +1924,47 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
     [selectedInboundForBatch],
   );
 
+  const selectedFinishedGoodsReceiptIds = useMemo(
+    () =>
+      selectedInboundForBatch
+        .filter((row) => row.receipt_type === 'finished_goods' && Number(row.id) > 0)
+        .map((row) => Number(row.id)),
+    [selectedInboundForBatch],
+  );
+
+  const inboundDocumentPushMode = useMemo(
+    () =>
+      resolveInboundDocumentPushMode({
+        fixedReceiptType,
+        scopedReceiptTypes: hubScopedReceiptTypes,
+        receiptTypeFilter,
+        selectedReceiptTypes: selectedInboundForBatch.map((row) => row.receipt_type),
+      }),
+    [fixedReceiptType, hubScopedReceiptTypes, receiptTypeFilter, selectedInboundForBatch],
+  );
+
+  /** 同步对账：有勾选用勾选，否则用当前列表页对应类型单据 */
+  const getInboundReconcileDocumentIds = useCallback(() => {
+    if (inboundDocumentPushMode === 'finished_goods') {
+      if (selectedFinishedGoodsReceiptIds.length) {
+        return selectedFinishedGoodsReceiptIds;
+      }
+      return [...listRowsRef.current.values()]
+        .filter((row) => row.receipt_type === 'finished_goods' && Number(row.id) > 0)
+        .map((row) => Number(row.id));
+    }
+    if (selectedPurchaseReceiptIds.length) {
+      return selectedPurchaseReceiptIds;
+    }
+    return [...listRowsRef.current.values()]
+      .filter((row) => row.receipt_type === 'purchase' && Number(row.id) > 0)
+      .map((row) => Number(row.id));
+  }, [
+    inboundDocumentPushMode,
+    selectedFinishedGoodsReceiptIds,
+    selectedPurchaseReceiptIds,
+  ]);
+
   const canToolbarPrint =
     selectedRowKeys.length === 1 &&
     !!selectedInboundForBatch[0] &&
@@ -2657,21 +2700,43 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
                 <SyncPushHubButton
                   syncEnabled={false}
                   pushEnabled={toolbarSyncPush.pushEnabled}
-                  historySourceType="purchase_receipt"
-                  historyTargetProfiles={['kingdee_im_purinbill']}
+                  historySourceType={
+                    inboundDocumentPushMode === 'finished_goods'
+                      ? 'finished_goods_receipt'
+                      : 'purchase_receipt'
+                  }
+                  historyTargetProfiles={
+                    inboundDocumentPushMode === 'finished_goods'
+                      ? ['kingdee_im_otherinbill']
+                      : ['kingdee_im_purinbill']
+                  }
+                  getReconcileDocumentIds={getInboundReconcileDocumentIds}
                   size="medium"
-                  renderPushPanel={({ active, close }) => (
-                    <PurchaseReceiptDocumentPushPanel
-                      embedded
-                      open={active}
-                      onClose={close}
-                      receiptIds={selectedPurchaseReceiptIds}
-                      onComplete={() => {
-                        actionRef.current?.reload?.();
-                        close();
-                      }}
-                    />
-                  )}
+                  renderPushPanel={({ active, close }) =>
+                    inboundDocumentPushMode === 'finished_goods' ? (
+                      <FinishedGoodsReceiptDocumentPushPanel
+                        embedded
+                        open={active}
+                        onClose={close}
+                        receiptIds={selectedFinishedGoodsReceiptIds}
+                        onComplete={() => {
+                          actionRef.current?.reload?.();
+                          close();
+                        }}
+                      />
+                    ) : (
+                      <PurchaseReceiptDocumentPushPanel
+                        embedded
+                        open={active}
+                        onClose={close}
+                        receiptIds={selectedPurchaseReceiptIds}
+                        onComplete={() => {
+                          actionRef.current?.reload?.();
+                          close();
+                        }}
+                      />
+                    )
+                  }
                 />
               )
             : undefined

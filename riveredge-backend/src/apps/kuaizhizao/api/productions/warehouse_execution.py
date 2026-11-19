@@ -57,6 +57,13 @@ from apps.kuaizhizao.services.warehouse_wo_outsource_pull_service import (
 from apps.kuaizhizao.services.purchase_receipt_sync_service import purchase_receipt_sync_service
 from apps.kuaizhizao.services.other_inbound_sync_service import other_inbound_sync_service
 from apps.kuaizhizao.services.other_outbound_sync_service import other_outbound_sync_service
+from apps.kuaizhizao.services.finished_goods_receipt_sync_service import (
+    finished_goods_receipt_sync_service,
+)
+from apps.kuaizhizao.services.production_picking_sync_service import (
+    production_picking_sync_service,
+)
+from apps.kuaizhizao.services.sales_delivery_sync_service import sales_delivery_sync_service
 
 # 初始化服务实例
 batching_order_service = BatchingOrderService()
@@ -147,6 +154,18 @@ from apps.kuaizhizao.schemas.other_inbound_sync import (
 from apps.kuaizhizao.schemas.other_outbound_sync import (
     OtherOutboundPushBindingOut,
     OtherOutboundPushBindingUpsert,
+)
+from apps.kuaizhizao.schemas.finished_goods_receipt_sync import (
+    FinishedGoodsReceiptPushBindingOut,
+    FinishedGoodsReceiptPushBindingUpsert,
+)
+from apps.kuaizhizao.schemas.production_picking_sync import (
+    ProductionPickingPushBindingOut,
+    ProductionPickingPushBindingUpsert,
+)
+from apps.kuaizhizao.schemas.sales_delivery_sync import (
+    SalesDeliveryPushBindingOut,
+    SalesDeliveryPushBindingUpsert,
 )
 from apps.kuaizhizao.schemas.replenishment_suggestion import (
     ReplenishmentSuggestionResponse,
@@ -856,6 +875,36 @@ async def list_production_pickings(
         updated_end_date=updated_end_date,
     )
     return {"items": items, "total": total, "skip": skip, "limit": limit}
+
+
+# push-binding 须在 {picking_id} 之前注册，否则 GET …/push-binding 会被当成详情 id
+@router.get(
+    "/production-pickings/push-binding",
+    response_model=ProductionPickingPushBindingOut,
+    summary="生产领料单出站目标",
+)
+async def get_production_picking_push_binding(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:inbound:read")),
+):
+    _ = current_user
+    return await production_picking_sync_service.get_push_binding(tenant_id)
+
+
+@router.put(
+    "/production-pickings/push-binding",
+    response_model=ProductionPickingPushBindingOut,
+    summary="保存生产领料单出站目标",
+)
+async def put_production_picking_push_binding(
+    body: ProductionPickingPushBindingUpsert,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:inbound:update")),
+):
+    _ = current_user
+    return await production_picking_sync_service.upsert_push_binding(tenant_id, body)
 
 
 @router.get("/production-pickings/{picking_id}", response_model=ProductionPickingWithItemsResponse, summary="Get production picking")
@@ -2266,6 +2315,36 @@ async def list_finished_goods_receipts(
         updated_end_date=updated_end_date,
     )
     return {"items": items, "total": total, "skip": skip, "limit": limit}
+
+
+# push-binding 须在 {receipt_id} 之前注册，否则 GET …/push-binding 会被当成详情 id
+@router.get(
+    "/finished-goods-receipts/push-binding",
+    response_model=FinishedGoodsReceiptPushBindingOut,
+    summary="成品入库单出站目标",
+)
+async def get_finished_goods_receipt_push_binding(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:inbound:read")),
+):
+    _ = current_user
+    return await finished_goods_receipt_sync_service.get_push_binding(tenant_id)
+
+
+@router.put(
+    "/finished-goods-receipts/push-binding",
+    response_model=FinishedGoodsReceiptPushBindingOut,
+    summary="保存成品入库单出站目标",
+)
+async def put_finished_goods_receipt_push_binding(
+    body: FinishedGoodsReceiptPushBindingUpsert,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:inbound:update")),
+):
+    _ = current_user
+    return await finished_goods_receipt_sync_service.upsert_push_binding(tenant_id, body)
 
 
 @router.get("/finished-goods-receipts/{receipt_id}", response_model=FinishedGoodsReceiptWithItemsResponse, summary="Get finished goods receipt")
@@ -3715,6 +3794,35 @@ async def cancel_customer_material_registration(
 
 
 # ============ 销售出库管理 API ============
+
+@router.get(
+    "/sales-deliveries/push-binding",
+    response_model=SalesDeliveryPushBindingOut,
+    summary="销售出库单出站目标",
+)
+async def get_sales_delivery_push_binding(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:outbound:read")),
+):
+    _ = current_user
+    return await sales_delivery_sync_service.get_push_binding(tenant_id)
+
+
+@router.put(
+    "/sales-deliveries/push-binding",
+    response_model=SalesDeliveryPushBindingOut,
+    summary="保存销售出库单出站目标",
+)
+async def put_sales_delivery_push_binding(
+    body: SalesDeliveryPushBindingUpsert,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:outbound:update")),
+):
+    _ = current_user
+    return await sales_delivery_sync_service.upsert_push_binding(tenant_id, body)
+
 
 @router.post("/sales-deliveries", response_model=SalesDeliveryResponse, summary="Create sales delivery")
 async def create_sales_delivery(

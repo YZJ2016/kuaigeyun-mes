@@ -5,7 +5,14 @@ import React, { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ApplicationConnection } from '../../../../../services/applicationConnection';
 import type { API } from '../../../../../services/apiManagement';
-import { DocumentPushBatchPanel } from '../../../components/DocumentPushBatchPanel';
+import {
+  DocumentPushBatchPanel,
+  type DocumentPushBindActionOption,
+} from '../../../components/DocumentPushBatchPanel';
+import {
+  createResolveActionApiUuid,
+  matchImWarehouseBindingApi,
+} from '../shared/imKingdeeWarehousePushBinding';
 import { warehouseApi } from '../../../services/production';
 import { normalizeWarehouseListResponse } from '../../../utils/warehouseListCore';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
@@ -30,7 +37,17 @@ export interface SalesDeliveryDocumentPushPanelProps {
 
 const SD_DEFAULT_PROFILES: string[] = [];
 const SD_KINGDEE_PROFILES = ['kingdee_im_saloutbill'];
-const SD_SAVE_API_HINTS = ['saloutbill', '销售出库', 'im_saloutbill', 'batch_add_im_saloutbill'];
+const SD_FORM_TOKENS = ['saloutbill', 'im_saloutbill', '销售出库'];
+const SD_SAVE_API_HINTS = [
+  'saloutbill',
+  '销售出库',
+  'im_saloutbill',
+  'batch_add_im_saloutbill',
+  'batchUpdate',
+  'batchUnaudit',
+  'batchUnsubmit',
+  'batchDelete',
+];
 
 const PUSHABLE_STATUSES = new Set(['已出库', '已完成', 'processed', 'COMPLETED', 'POSTED']);
 
@@ -51,6 +68,20 @@ function isKingdeeImSaloutbillBatchAddApi(
     hay.includes('im_saloutbill') ||
     name.includes('销售出库');
   return isBatchAdd && isSalOut;
+}
+
+function matchSaloutbillBindingApi(
+  slot: string,
+  api: API,
+  connection: ApplicationConnection | undefined,
+): boolean {
+  return matchImWarehouseBindingApi(
+    slot,
+    api,
+    connection,
+    SD_FORM_TOKENS,
+    isKingdeeImSaloutbillBatchAddApi,
+  );
 }
 
 function preferSaloutbillApiUuid(items: API[]): string | undefined {
@@ -122,6 +153,53 @@ export const SalesDeliveryDocumentPushPanel: React.FC<SalesDeliveryDocumentPushP
     [t],
   );
 
+  const bindActionOptions = useMemo<DocumentPushBindActionOption[]>(
+    () => [
+      {
+        label: t('app.kuaizhizao.warehouseOutbound.action.confirmOutbound'),
+        value: 'confirm',
+        apiKeys: ['confirm'],
+      },
+      {
+        label: t('app.kuaizhizao.documentPush.batch.bindAction.update'),
+        value: 'update',
+        apiKeys: ['update'],
+      },
+      {
+        label: t('app.kuaizhizao.warehouseOutbound.action.withdraw'),
+        value: 'withdraw',
+        apiKeys: ['withdraw', 'unsubmit'],
+      },
+      {
+        label: t('common.delete'),
+        value: 'delete',
+        apiKeys: ['delete'],
+      },
+    ],
+    [t],
+  );
+
+  const resolveActionApiUuid = useCallback(
+    createResolveActionApiUuid(
+      {
+        confirm: SD_SAVE_API_HINTS,
+        update: ['batchUpdate', 'batch_update', 'im_saloutbill'],
+        withdraw: ['batchUnaudit', 'unaudit', 'im_saloutbill'],
+        unsubmit: ['batchUnsubmit', 'unsubmit', 'im_saloutbill'],
+        delete: ['batchDelete', 'delete', 'im_saloutbill'],
+      },
+      preferSaloutbillApiUuid,
+    ),
+    [],
+  );
+
+  const loadBinding = useCallback(() => warehouseApi.salesDelivery.getPushBinding(), []);
+  const saveBinding = useCallback(
+    (payload: Parameters<typeof warehouseApi.salesDelivery.savePushBinding>[0]) =>
+      warehouseApi.salesDelivery.savePushBinding(payload),
+    [],
+  );
+
   const loadCandidates = useCallback(
     async ({
       keyword,
@@ -179,8 +257,14 @@ export const SalesDeliveryDocumentPushPanel: React.FC<SalesDeliveryDocumentPushP
       getRowLabel={(row) => row.delivery_code || String(row.id)}
       loadCandidates={loadCandidates}
       matchSaveApi={isKingdeeImSaloutbillBatchAddApi}
+      matchBindingApi={matchSaloutbillBindingApi}
       preferSaveApi={preferSaloutbillApiUuid}
       saveApiSearchHints={SD_SAVE_API_HINTS}
+      loadBinding={loadBinding}
+      saveBinding={saveBinding}
+      bindActionOptions={bindActionOptions}
+      multiApiTargetRows
+      resolveActionApiUuid={resolveActionApiUuid}
       showScheduleControls={false}
       successCountKey="app.kuaizhizao.documentPush.batch.success"
       partialCountKey="app.kuaizhizao.documentPush.batch.partial"

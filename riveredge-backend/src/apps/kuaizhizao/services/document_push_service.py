@@ -55,6 +55,14 @@ from apps.kuaizhizao.services.kingdee_other_inbound_push_service import (
     TARGET_PROFILE as OI_KD_PROFILE,
     KingdeeOtherInboundPushService,
 )
+from apps.kuaizhizao.services.kingdee_finished_goods_receipt_push_service import (
+    TARGET_PROFILE as FG_KD_PROFILE,
+    KingdeeFinishedGoodsReceiptPushService,
+)
+from apps.kuaizhizao.services.kingdee_production_picking_push_service import (
+    TARGET_PROFILE as PP_KD_PROFILE,
+    KingdeeProductionPickingPushService,
+)
 from apps.kuaizhizao.services.kingdee_stocktaking_surplus_push_service import (
     TARGET_PROFILE as ST_SURPLUS_KD_PROFILE,
     KingdeeStocktakingSurplusPushService,
@@ -91,6 +99,8 @@ SUPPORTED_PROFILES: Set[Tuple[str, str]] = {
     ("sales_delivery", SD_KD_PROFILE),
     ("other_outbound", OO_KD_PROFILE),
     ("other_inbound", OI_KD_PROFILE),
+    ("finished_goods_receipt", FG_KD_PROFILE),
+    ("production_picking", PP_KD_PROFILE),
     ("stocktaking", ST_SURPLUS_KD_PROFILE),
     ("stocktaking", ST_DEFICIT_KD_PROFILE),
     ("material_batch", INV_KD_PROFILE),
@@ -109,6 +119,8 @@ _SOURCE_CONFIG_CATEGORY: Dict[str, str] = {
     "sales_delivery": "warehouse",
     "other_outbound": "warehouse",
     "other_inbound": "warehouse",
+    "finished_goods_receipt": "warehouse",
+    "production_picking": "warehouse",
     "stocktaking": "warehouse",
     "material_batch": "warehouse",
     "material": "master_data",
@@ -425,6 +437,62 @@ async def _handle_other_inbound_kingdee(
     return result
 
 
+async def _handle_finished_goods_receipt_kingdee(
+    *,
+    tenant_id: int,
+    acting_user_id: int,
+    source_id: int,
+    connection_code: Optional[str],
+    save_api_uuid: Optional[str],
+    dry_run: bool,
+    **_: Any,
+) -> Dict[str, Any]:
+    result = await KingdeeFinishedGoodsReceiptPushService().push_finished_goods_receipt(
+        tenant_id=tenant_id,
+        finished_goods_receipt_id=int(source_id),
+        acting_user_id=acting_user_id,
+        connection_code=connection_code,
+        save_api_uuid=save_api_uuid,
+        dry_run=dry_run,
+    )
+    if result is None:
+        return _disabled_result(
+            source_type="finished_goods_receipt",
+            source_id=source_id,
+            target_profile=FG_KD_PROFILE,
+            message="金蝶成品入库推送未启用或入库单不存在",
+        )
+    return result
+
+
+async def _handle_production_picking_kingdee(
+    *,
+    tenant_id: int,
+    acting_user_id: int,
+    source_id: int,
+    connection_code: Optional[str],
+    save_api_uuid: Optional[str],
+    dry_run: bool,
+    **_: Any,
+) -> Dict[str, Any]:
+    result = await KingdeeProductionPickingPushService().push_production_picking(
+        tenant_id=tenant_id,
+        production_picking_id=int(source_id),
+        acting_user_id=acting_user_id,
+        connection_code=connection_code,
+        save_api_uuid=save_api_uuid,
+        dry_run=dry_run,
+    )
+    if result is None:
+        return _disabled_result(
+            source_type="production_picking",
+            source_id=source_id,
+            target_profile=PP_KD_PROFILE,
+            message="金蝶生产领料推送未启用或领料单不存在",
+        )
+    return result
+
+
 async def _handle_stocktaking_surplus_kingdee(
     *,
     tenant_id: int,
@@ -607,6 +675,10 @@ def ensure_default_push_handlers_registered() -> None:
     register_push_handler("sales_delivery", SD_KD_PROFILE, _handle_sales_delivery_kingdee)
     register_push_handler("other_outbound", OO_KD_PROFILE, _handle_other_outbound_kingdee)
     register_push_handler("other_inbound", OI_KD_PROFILE, _handle_other_inbound_kingdee)
+    register_push_handler(
+        "finished_goods_receipt", FG_KD_PROFILE, _handle_finished_goods_receipt_kingdee
+    )
+    register_push_handler("production_picking", PP_KD_PROFILE, _handle_production_picking_kingdee)
     register_push_handler("stocktaking", ST_SURPLUS_KD_PROFILE, _handle_stocktaking_surplus_kingdee)
     register_push_handler("stocktaking", ST_DEFICIT_KD_PROFILE, _handle_stocktaking_deficit_kingdee)
     register_push_handler("material_batch", INV_KD_PROFILE, _handle_material_batch_kingdee)

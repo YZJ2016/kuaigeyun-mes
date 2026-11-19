@@ -1,5 +1,5 @@
 /**
- * 同步/推送组合弹窗：页内 Tabs 为「入站方向」「出站方向」「同步记录」。
+ * 同步/推送组合弹窗：页内 Tabs 为「入站方向」「出站方向」「同步对比」「同步记录」。
  *
  * 面板内容故意放在 Tabs 外：antd Tabs 的 items 每次父级重渲染都会换新引用，
  * 若把 DocumentPushBatchPanel / SyncFromSource 放进 items[].children，
@@ -9,8 +9,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, Tabs } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { SyncRunHistoryPanel } from './SyncRunHistoryPanel';
+import { SyncReconcilePanel } from './SyncReconcilePanel';
+import { supportsDocumentPushReconcile } from './reconcileSourceTypes';
 
-export type SyncPushHubTabKey = 'sync' | 'push' | 'history';
+export type SyncPushHubTabKey = 'sync' | 'push' | 'reconcile' | 'history';
 
 export interface SyncPushHubPanelContext {
   active: boolean;
@@ -26,8 +28,15 @@ export interface SyncPushHubModalProps {
   historySourceType?: string;
   historyTargetProfiles?: string[];
   historyEnabled?: boolean;
+  /**
+   * 同步对比：返回当前页或勾选的本地单据 ID。
+   * 页签是否出现由 historySourceType 是否支持组件级对比决定；本函数只负责供数。
+   */
+  getReconcileDocumentIds?: () => number[];
+  reconcileEnabled?: boolean;
   syncTitle?: React.ReactNode;
   pushTitle?: React.ReactNode;
+  reconcileTitle?: React.ReactNode;
   historyTitle?: React.ReactNode;
   title?: React.ReactNode;
   width?: number | string;
@@ -35,9 +44,11 @@ export interface SyncPushHubModalProps {
   defaultTab?: SyncPushHubTabKey;
   renderSyncPanel?: (ctx: SyncPushHubPanelContext) => React.ReactNode;
   renderPushPanel?: (ctx: SyncPushHubPanelContext) => React.ReactNode;
+  renderReconcilePanel?: (ctx: SyncPushHubPanelContext) => React.ReactNode;
   renderHistoryPanel?: (ctx: SyncPushHubPanelContext) => React.ReactNode;
   syncPanel?: React.ReactNode;
   pushPanel?: React.ReactNode;
+  reconcilePanel?: React.ReactNode;
   historyPanel?: React.ReactNode;
 }
 
@@ -49,8 +60,11 @@ export const SyncPushHubModal: React.FC<SyncPushHubModalProps> = ({
   historySourceType,
   historyTargetProfiles,
   historyEnabled = true,
+  getReconcileDocumentIds,
+  reconcileEnabled = true,
   syncTitle,
   pushTitle,
+  reconcileTitle,
   historyTitle,
   title,
   width = 1100,
@@ -58,9 +72,11 @@ export const SyncPushHubModal: React.FC<SyncPushHubModalProps> = ({
   defaultTab,
   renderSyncPanel,
   renderPushPanel,
+  renderReconcilePanel,
   renderHistoryPanel,
   syncPanel,
   pushPanel,
+  reconcilePanel,
   historyPanel,
 }) => {
   const { t } = useTranslation();
@@ -72,15 +88,26 @@ export const SyncPushHubModal: React.FC<SyncPushHubModalProps> = ({
   const showHistory =
     Boolean(historyEnabled) &&
     Boolean(renderHistoryPanel || historyPanel || builtInHistory);
+  const builtInReconcile =
+    Boolean(reconcileEnabled) && supportsDocumentPushReconcile(historySource);
+  const showReconcile =
+    Boolean(reconcileEnabled) &&
+    Boolean(renderReconcilePanel || reconcilePanel || builtInReconcile);
+  const resolveReconcileIds =
+    typeof getReconcileDocumentIds === 'function'
+      ? getReconcileDocumentIds
+      : () => [] as number[];
 
   const initialTab = useMemo<SyncPushHubTabKey>(() => {
     if (defaultTab === 'sync' && showSync) return 'sync';
     if (defaultTab === 'push' && showPush) return 'push';
+    if (defaultTab === 'reconcile' && showReconcile) return 'reconcile';
     if (defaultTab === 'history' && showHistory) return 'history';
     if (showSync) return 'sync';
     if (showPush) return 'push';
+    if (showReconcile) return 'reconcile';
     return 'history';
-  }, [defaultTab, showHistory, showPush, showSync]);
+  }, [defaultTab, showHistory, showPush, showReconcile, showSync]);
 
   const [activeKey, setActiveKey] = useState<SyncPushHubTabKey>(initialTab);
   // 默认 false：配合 Button「仅 open 时挂载 Modal」，首开帧 openingEdge=true，避免沿用错误 Tab
@@ -100,13 +127,15 @@ export const SyncPushHubModal: React.FC<SyncPushHubModalProps> = ({
   useEffect(() => {
     if (!open) return;
     if (activeKey === 'sync' && !showSync) {
-      setActiveKey(showPush ? 'push' : 'history');
+      setActiveKey(showPush ? 'push' : showReconcile ? 'reconcile' : 'history');
     } else if (activeKey === 'push' && !showPush) {
-      setActiveKey(showSync ? 'sync' : 'history');
+      setActiveKey(showSync ? 'sync' : showReconcile ? 'reconcile' : 'history');
+    } else if (activeKey === 'reconcile' && !showReconcile) {
+      setActiveKey(showSync ? 'sync' : showPush ? 'push' : 'history');
     } else if (activeKey === 'history' && !showHistory) {
-      setActiveKey(showSync ? 'sync' : 'push');
+      setActiveKey(showSync ? 'sync' : showPush ? 'push' : 'reconcile');
     }
-  }, [activeKey, open, showHistory, showPush, showSync]);
+  }, [activeKey, open, showHistory, showPush, showReconcile, showSync]);
 
   const tabItems = useMemo(
     () =>
@@ -124,6 +153,12 @@ export const SyncPushHubModal: React.FC<SyncPushHubModalProps> = ({
                 label: pushTitle ?? t('components.syncPushHub.tabPush'),
               }
             : null,
+          showReconcile
+            ? {
+                key: 'reconcile' as const,
+                label: reconcileTitle ?? t('components.syncPushHub.tabReconcile'),
+              }
+            : null,
           showHistory
             ? {
                 key: 'history' as const,
@@ -132,10 +167,20 @@ export const SyncPushHubModal: React.FC<SyncPushHubModalProps> = ({
             : null,
         ] as Array<{ key: SyncPushHubTabKey; label: React.ReactNode } | null>
       ).filter(Boolean) as Array<{ key: SyncPushHubTabKey; label: React.ReactNode }>,
-    [historyTitle, pushTitle, showHistory, showPush, showSync, syncTitle, t],
+    [
+      historyTitle,
+      pushTitle,
+      reconcileTitle,
+      showHistory,
+      showPush,
+      showReconcile,
+      showSync,
+      syncTitle,
+      t,
+    ],
   );
 
-  if (!showSync && !showPush && !showHistory) return null;
+  if (!showSync && !showPush && !showReconcile && !showHistory) return null;
 
   const close = () => {
     onClose();
@@ -145,6 +190,7 @@ export const SyncPushHubModal: React.FC<SyncPushHubModalProps> = ({
   const panelTab: SyncPushHubTabKey = openingEdge ? initialTab : activeKey;
   const syncActive = open && panelTab === 'sync';
   const pushActive = open && panelTab === 'push';
+  const reconcileActive = open && panelTab === 'reconcile';
   const historyActive = open && panelTab === 'history';
 
   return (
@@ -177,6 +223,21 @@ export const SyncPushHubModal: React.FC<SyncPushHubModalProps> = ({
               ? renderPushPanel
                 ? renderPushPanel({ active: pushActive, close })
                 : pushPanel
+              : null}
+            {reconcileActive
+              ? renderReconcilePanel
+                ? renderReconcilePanel({ active: reconcileActive, close })
+                : reconcilePanel
+                  ? reconcilePanel
+                  : builtInReconcile
+                    ? (
+                        <SyncReconcilePanel
+                          active={reconcileActive}
+                          sourceType={historySource}
+                          getDocumentIds={resolveReconcileIds}
+                        />
+                      )
+                    : null
               : null}
             {historyActive
               ? renderHistoryPanel

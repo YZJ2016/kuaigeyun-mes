@@ -16,6 +16,7 @@ import {
 } from '../../../../../hooks/useToolbarSyncPushFlags';
 import { SyncPushHubButton } from '../../../../../components/sync-push-hub';
 import SalesDeliveryDocumentPushPanel from './SalesDeliveryDocumentPushPanel';
+import ProductionPickingDocumentPushPanel from './ProductionPickingDocumentPushPanel';
 import { ActionType, ProColumns, type ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Tooltip, Typography, Spin, Empty, Select, theme as AntdTheme } from 'antd';
 import { CheckCircleOutlined, PlayCircleOutlined, PlusOutlined, RollbackOutlined } from '@ant-design/icons';
@@ -846,6 +847,51 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
     [selectedOutboundForBatch],
   );
 
+  const selectedProductionPickingIdsForDocumentPush = useMemo(
+    () =>
+      selectedOutboundForBatch
+        .filter((row) => row.outbound_type === 'production_picking' && Number(row.id) > 0)
+        .map((row) => Number(row.id)),
+    [selectedOutboundForBatch],
+  );
+
+  const outboundDocumentPushMode = useMemo(() => {
+    if (fixedOutboundType === 'production_picking') return 'production_picking';
+    if (fixedOutboundType === 'sales_delivery') return 'sales_delivery';
+    if (outboundTypeFilter === 'production_picking') return 'production_picking';
+    if (outboundTypeFilter === 'sales_delivery') return 'sales_delivery';
+    const types = new Set(
+      selectedOutboundForBatch.map((row) => row.outbound_type).filter(Boolean),
+    );
+    if (types.size === 1) {
+      const only = [...types][0];
+      if (only === 'production_picking' || only === 'sales_delivery') return only;
+    }
+    return 'sales_delivery';
+  }, [fixedOutboundType, outboundTypeFilter, selectedOutboundForBatch]);
+
+  /** 同步对账：有勾选用勾选，否则用当前列表页对应类型单据 */
+  const getOutboundReconcileDocumentIds = useCallback(() => {
+    if (outboundDocumentPushMode === 'production_picking') {
+      if (selectedProductionPickingIdsForDocumentPush.length) {
+        return selectedProductionPickingIdsForDocumentPush;
+      }
+      return [...listRowsRef.current.values()]
+        .filter((row) => row.outbound_type === 'production_picking' && Number(row.id) > 0)
+        .map((row) => Number(row.id));
+    }
+    if (selectedSalesDeliveryIdsForDocumentPush.length) {
+      return selectedSalesDeliveryIdsForDocumentPush;
+    }
+    return [...listRowsRef.current.values()]
+      .filter((row) => row.outbound_type === 'sales_delivery' && Number(row.id) > 0)
+      .map((row) => Number(row.id));
+  }, [
+    outboundDocumentPushMode,
+    selectedProductionPickingIdsForDocumentPush,
+    selectedSalesDeliveryIdsForDocumentPush,
+  ]);
+
   const handlePushToDeliveryNotice = useCallback(
     async (record: OutboundOrder) => {
       const salesDeliveryId = Number(record.id);
@@ -1612,21 +1658,43 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
                 <SyncPushHubButton
                   syncEnabled={false}
                   pushEnabled={toolbarSyncPush.pushEnabled}
-                  historySourceType="sales_delivery"
-                  historyTargetProfiles={['kingdee_im_saloutbill']}
+                  historySourceType={
+                    outboundDocumentPushMode === 'production_picking'
+                      ? 'production_picking'
+                      : 'sales_delivery'
+                  }
+                  historyTargetProfiles={
+                    outboundDocumentPushMode === 'production_picking'
+                      ? ['kingdee_im_otheroutbill']
+                      : ['kingdee_im_saloutbill']
+                  }
+                  getReconcileDocumentIds={getOutboundReconcileDocumentIds}
                   size="medium"
-                  renderPushPanel={({ active, close }) => (
-                    <SalesDeliveryDocumentPushPanel
-                      embedded
-                      open={active}
-                      onClose={close}
-                      deliveryIds={selectedSalesDeliveryIdsForDocumentPush}
-                      onComplete={() => {
-                        actionRef.current?.reload?.();
-                        close();
-                      }}
-                    />
-                  )}
+                  renderPushPanel={({ active, close }) =>
+                    outboundDocumentPushMode === 'production_picking' ? (
+                      <ProductionPickingDocumentPushPanel
+                        embedded
+                        open={active}
+                        onClose={close}
+                        pickingIds={selectedProductionPickingIdsForDocumentPush}
+                        onComplete={() => {
+                          actionRef.current?.reload?.();
+                          close();
+                        }}
+                      />
+                    ) : (
+                      <SalesDeliveryDocumentPushPanel
+                        embedded
+                        open={active}
+                        onClose={close}
+                        deliveryIds={selectedSalesDeliveryIdsForDocumentPush}
+                        onComplete={() => {
+                          actionRef.current?.reload?.();
+                          close();
+                        }}
+                      />
+                    )
+                  }
                 />
               )
             : undefined

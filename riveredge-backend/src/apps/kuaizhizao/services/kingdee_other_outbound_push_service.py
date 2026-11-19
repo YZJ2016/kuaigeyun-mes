@@ -110,17 +110,25 @@ def normalize_other_outbound_pick_header_config(config: Dict[str, Any]) -> Dict[
     out = dict(config)
     picker = _config_text(
         out,
+        "pickeroperator_operatornumber",
         "pickeroperator_number",
         "picker_number",
         "bizoperator_operatornumber",
     )
     if picker:
+        # 苍穹 Operator 类型写键为 *_operatornumber（与采购入库 bizoperator 一致）；
+        # *_number 会被开放平台忽略。领用部门同理：真源是 bizdept_number。
+        out["pickeroperator_operatornumber"] = picker
         out["pickeroperator_number"] = picker
         if not _config_text(out, "picker_number"):
             out["picker_number"] = picker
     pickdept = _config_text(out, "pickdept_number", "bizdept_number", "dept_number")
     if pickdept:
+        # 苍穹实测：领用部门校验走 bizdept_number（表单标签可显示为「领用部门」）；
+        # 仅写 pickdept_number 会被忽略，提交仍报「请填写领用部门」
         out["pickdept_number"] = pickdept
+        if not _config_text(out, "bizdept_number"):
+            out["bizdept_number"] = pickdept
     customer = _config_text(out, "customer_number", "consumer_number")
     if customer:
         out["customer_number"] = customer
@@ -156,34 +164,98 @@ async def _resolve_user_department_code(tenant_id: int, user_id: Optional[int]) 
         return None
 
 
-async def enrich_other_outbound_pick_header_config(
+async def enrich_pick_header_config(
     tenant_id: int,
-    outbound: OtherOutbound,
+    *,
     acting_user_id: int,
+    picker_user_id: Optional[int],
     config: Dict[str, Any],
+    doc_picker_operator: Optional[str] = None,
+    doc_pickdept: Optional[str] = None,
+    doc_customer_number: Optional[str] = None,
 ) -> Dict[str, Any]:
     out = normalize_other_outbound_pick_header_config(config)
-    doc_pickdept = str(getattr(outbound, "pick_department_code", None) or "").strip()
-    if doc_pickdept:
-        out["pickdept_number"] = doc_pickdept
+    pickdept = str(doc_pickdept or "").strip()
+    if pickdept:
+        out["pickdept_number"] = pickdept
         if not _config_text(out, "bizdept_number"):
-            out["bizdept_number"] = doc_pickdept
-    doc_picker = str(getattr(outbound, "picker_operator_number", None) or "").strip()
-    if doc_picker:
-        out["pickeroperator_number"] = doc_picker
-        if not _config_text(out, "picker_number"):
-            out["picker_number"] = doc_picker
-    doc_customer = str(getattr(outbound, "customer_number", None) or "").strip()
-    if doc_customer:
-        out["customer_number"] = doc_customer
-    if not _config_text(out, "pickdept_number"):
-        actor_id = int(outbound.picker_id or outbound.deliverer_id or acting_user_id or 0)
+            out["bizdept_number"] = pickdept
+    picker = str(doc_picker_operator or "").strip()
+    if picker:
+        out["pickeroperator_operatornumber"] = picker
+        out["pickeroperator_number"] = picker
+        out["picker_number"] = picker
+        # add3 保存链优先读 bizuser_number，须与领用人真源同步覆盖连接默认
+        out["bizuser_number"] = picker
+    customer = str(doc_customer_number or "").strip()
+    if customer:
+        out["customer_number"] = customer
+        out["consumer_number"] = customer
+    actor_id = int(picker_user_id or acting_user_id or 0)
+    if not _config_text(out, "pickdept_number", "bizdept_number", "dept_number"):
         dept_code = await _resolve_user_department_code(tenant_id, actor_id)
         if dept_code:
             out["pickdept_number"] = dept_code
             if not _config_text(out, "bizdept_number"):
                 out["bizdept_number"] = dept_code
     return out
+
+
+def apply_kingdee_other_outbill_picker_header(
+    model: Dict[str, Any],
+    config: Dict[str, Any],
+    *,
+    doc_picker_operator: Optional[str] = None,
+) -> None:
+    """保存报文写入领用人。
+
+    - 标品 batchAdd：pickeroperator_operatornumber（多数环境未发布，会被静默丢弃）
+    - 自定义 add3：bizuser_number=人员工号（苍穹自定义保存链读 bizuser_number）
+    """
+    picker = str(doc_picker_operator or "").strip()
+    if not picker:
+        picker = _config_text(
+            config,
+            "bizuser_number",
+            "pickeroperator_operatornumber",
+            "pickeroperator_number",
+            "picker_number",
+            "bizoperator_operatornumber",
+        )
+    if not picker:
+        return
+    model["pickeroperator_operatornumber"] = picker
+    model["pickeroperator_number"] = picker
+    model["picker_number"] = picker
+    # 自定义 add3 等：开放平台对象属性 bizuser.* → 参数 bizuser_number
+    model["bizuser_number"] = picker
+    picker_name = _config_text(config, "bizuser_name", "picker_name", "pickeroperator_name")
+    if picker_name:
+        model["bizuser_name"] = picker_name
+    raw_id = config.get("bizuser_id")
+    if raw_id is not None and str(raw_id).strip() != "":
+        try:
+            model["bizuser_id"] = int(raw_id)
+        except (TypeError, ValueError):
+            pass
+
+
+async def enrich_other_outbound_pick_header_config(
+    tenant_id: int,
+    outbound: OtherOutbound,
+    acting_user_id: int,
+    config: Dict[str, Any],
+) -> Dict[str, Any]:
+    return await enrich_pick_header_config(
+        tenant_id,
+        acting_user_id=acting_user_id,
+        picker_user_id=int(outbound.picker_id or outbound.deliverer_id or 0) or None,
+        config=config,
+        doc_picker_operator=str(getattr(outbound, "picker_operator_number", None) or "").strip()
+        or None,
+        doc_pickdept=str(getattr(outbound, "pick_department_code", None) or "").strip() or None,
+        doc_customer_number=str(getattr(outbound, "customer_number", None) or "").strip() or None,
+    )
 
 
 def validate_kingdee_other_outbound_header(model: Dict[str, Any]) -> None:

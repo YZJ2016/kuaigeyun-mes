@@ -57,6 +57,11 @@ class SyncRunLog(LogBaseModel):
     # 外推源单据维度（spec 142）：推送失败须可按单据查到「未推送/失败」态
     source_type = fields.CharField(max_length=50, null=True, description="外推源单据类型")
     source_id = fields.IntField(null=True, description="外推源单据ID")
+    trigger_kind = fields.CharField(
+        max_length=20,
+        default="manual",
+        description="manual | trigger | scheduled",
+    )
 
     class Meta:
         table = "core_sync_run_logs"
