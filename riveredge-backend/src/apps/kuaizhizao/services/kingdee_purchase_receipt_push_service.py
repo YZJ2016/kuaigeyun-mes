@@ -12,6 +12,12 @@ from loguru import logger
 from apps.kuaizhizao.models.document_relation import DocumentRelation
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+from apps.kuaizhizao.services.kingdee_warehouse_billentry_dual_qty import (
+    apply_billentry_dual_qty_fields,
+    log_billentry_dual_qty,
+    resolve_warehouse_bill_line_unit_qty,
+    restate_entry_prices_for_inventory_qty,
+)
 from core.services.integration.document_push_codes import (
     DEFAULT_UNIT_NUMBER,
     apply_unit_code_map,
@@ -155,6 +161,7 @@ def build_kingdee_purchase_receipt_model(
     cfg: Optional[Dict[str, Any]] = None,
     supplier_number: Optional[str] = None,
     warehouse_numbers: Optional[Dict[int, Optional[str]]] = None,
+    line_unit_qty_by_item_id: Optional[Dict[int, Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     config = cfg or {}
     template = config.get("model_template")
@@ -175,17 +182,22 @@ def build_kingdee_purchase_receipt_model(
         if isinstance(config.get("api_unit_code_map"), dict)
         else None
     )
+    line_plan = line_unit_qty_by_item_id or {}
     for item in items:
-        qty = _to_float(item.receipt_quantity)
+        doc_qty = _to_float(item.receipt_quantity)
+        planned = line_plan.get(int(getattr(item, "id", 0) or 0)) or {}
+        qty = _to_float(planned["qty"]) if "qty" in planned else doc_qty
         if qty <= 0:
             continue
+        money_qty = doc_qty if doc_qty > 0 else qty
         unit_raw = str(item.material_unit or "").strip()
         unit_number = (
-            apply_unit_code_map(unit_raw, unit_map)
+            str(planned.get("unit_number") or "").strip()
+            or apply_unit_code_map(unit_raw, unit_map)
             or str(config.get("unit_number") or DEFAULT_UNIT_NUMBER).strip()
             or DEFAULT_UNIT_NUMBER
         )
-        line_wh = wh_map.get(int(item.id or 0)) or wh_map.get(0)
+        line_wh = wh_map.get(int(getattr(item, "id", 0) or 0)) or wh_map.get(0)
         entry: Dict[str, Any] = {
             "material_number": str(item.material_code or "").strip(),
             "qty": qty,
@@ -194,6 +206,7 @@ def build_kingdee_purchase_receipt_model(
             "invtype_number": str(config.get("invtype_number") or "").strip(),
             "linetype_number": str(config.get("linetype_number") or "").strip(),
         }
+        apply_billentry_dual_qty_fields(entry, planned)
         if line_wh:
             entry["warehouse_number"] = line_wh
         location_number = str(
@@ -218,7 +231,7 @@ def build_kingdee_purchase_receipt_model(
             price = _to_float(config.get("default_price"))
         if price <= 0:
             price = 1.0
-        amount = _to_float(item.total_amount) or round(price * qty, 4)
+        amount = _to_float(item.total_amount) or round(price * money_qty, 4)
         taxrate = _to_float(getattr(receipt, "tax_rate", None))
         if taxrate <= 0:
             taxrate = _to_float(config.get("taxrate"))
@@ -236,6 +249,13 @@ def build_kingdee_purchase_receipt_model(
         entry["taxrateid_number"] = taxrateid
         entry["priceandtax"] = priceandtax
         entry["amountandtax"] = amountandtax
+        restate_entry_prices_for_inventory_qty(
+            entry,
+            document_qty=money_qty,
+            unit_price=price,
+            amount=amount,
+            amount_and_tax=amountandtax,
+        )
         # 去掉空必填占位，避免把空串推给金蝶（配置缺失时由业务层报错）
         for key in ("invstatus_number", "invtype_number", "linetype_number"):
             if not entry.get(key):
@@ -515,12 +535,26 @@ class KingdeePurchaseReceiptPushService:
             "save_path": save_path,
         }
 
+        line_unit_qty_by_item_id = await resolve_warehouse_bill_line_unit_qty(
+            tenant_id,
+            items,
+            quantity_field="receipt_quantity",
+            scene_label="采购入库",
+            unit_code_map=unit_code_map,
+            config_unit_number=str(config.get("unit_number") or "").strip() or None,
+        )
         model = build_kingdee_purchase_receipt_model(
             receipt=receipt,
             items=items,
             cfg=config,
             supplier_number=supplier_number,
             warehouse_numbers=wh_map,
+            line_unit_qty_by_item_id=line_unit_qty_by_item_id,
+        )
+        log_billentry_dual_qty(
+            doc_label="采购入库",
+            doc_code=receipt.receipt_code,
+            entries=model.get("billentry") or [],
         )
         if not (model.get("billentry") or []) and not dry_run:
             raise BusinessLogicError("采购入库单无有效明细数量，无法推送")

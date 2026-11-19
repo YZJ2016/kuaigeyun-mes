@@ -12,6 +12,12 @@ from loguru import logger
 from apps.kuaizhizao.models.document_relation import DocumentRelation
 from apps.kuaizhizao.models.other_outbound import OtherOutbound
 from apps.kuaizhizao.models.other_outbound_item import OtherOutboundItem
+from apps.kuaizhizao.services.kingdee_warehouse_billentry_dual_qty import (
+    apply_billentry_dual_qty_fields,
+    log_billentry_dual_qty,
+    resolve_warehouse_bill_line_unit_qty,
+    restate_entry_prices_for_inventory_qty,
+)
 from core.services.integration.document_push_codes import (
     DEFAULT_UNIT_NUMBER,
     apply_unit_code_map,
@@ -307,6 +313,7 @@ def build_kingdee_other_outbound_model(
     items: List[OtherOutboundItem],
     cfg: Optional[Dict[str, Any]] = None,
     warehouse_number: Optional[str] = None,
+    line_unit_qty_by_item_id: Optional[Dict[int, Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     config = cfg or {}
     template = config.get("model_template")
@@ -326,13 +333,17 @@ def build_kingdee_other_outbound_model(
         if isinstance(config.get("api_unit_code_map"), dict)
         else None
     )
+    line_plan = line_unit_qty_by_item_id or {}
     for item in items:
-        qty = _to_float(item.outbound_quantity)
+        doc_qty = _to_float(item.outbound_quantity)
+        planned = line_plan.get(int(getattr(item, "id", 0) or 0)) or {}
+        qty = _to_float(planned["qty"]) if "qty" in planned else doc_qty
         if qty <= 0:
             continue
         unit_raw = str(item.material_unit or "").strip()
         unit_number = (
-            apply_unit_code_map(unit_raw, unit_map)
+            str(planned.get("unit_number") or "").strip()
+            or apply_unit_code_map(unit_raw, unit_map)
             or str(config.get("unit_number") or DEFAULT_UNIT_NUMBER).strip()
             or DEFAULT_UNIT_NUMBER
         )
@@ -343,6 +354,7 @@ def build_kingdee_other_outbound_model(
             "unit_number": unit_number,
             "linetype_number": str(config.get("linetype_number") or "").strip(),
         }
+        apply_billentry_dual_qty_fields(entry, planned)
         if warehouse_number:
             entry["warehouse_number"] = warehouse_number
         location_number = str(
@@ -382,6 +394,11 @@ def build_kingdee_other_outbound_model(
         price = _to_float(item.unit_price)
         if price:
             entry["price"] = price
+        restate_entry_prices_for_inventory_qty(
+            entry,
+            document_qty=doc_qty if doc_qty > 0 else qty,
+            unit_price=price,
+        )
         if not entry.get("linetype_number"):
             entry.pop("linetype_number", None)
         if not entry.get("materialname"):
@@ -662,11 +679,25 @@ class KingdeeOtherOutboundPushService:
             "body_wrap": str(config.get("body_wrap") or "data_list").strip() or "data_list",
         }
 
+        line_unit_qty_by_item_id = await resolve_warehouse_bill_line_unit_qty(
+            tenant_id,
+            items,
+            quantity_field="outbound_quantity",
+            scene_label="其他出库",
+            unit_code_map=unit_code_map,
+            config_unit_number=str(config.get("unit_number") or "").strip() or None,
+        )
         model = build_kingdee_other_outbound_model(
             outbound=outbound,
             items=items,
             cfg=config,
             warehouse_number=warehouse_number,
+            line_unit_qty_by_item_id=line_unit_qty_by_item_id,
+        )
+        log_billentry_dual_qty(
+            doc_label="其他出库",
+            doc_code=outbound.outbound_code,
+            entries=model.get("billentry") or [],
         )
         if not (model.get("billentry") or []) and not dry_run:
             raise BusinessLogicError("其他出库单无有效明细数量，无法推送")

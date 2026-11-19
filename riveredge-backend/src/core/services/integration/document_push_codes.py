@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterable, Optional, Sequence
 
 from loguru import logger
 
@@ -85,13 +85,51 @@ async def load_save_api_unit_code_map(
         return {}
 
 
+def _map_lookup(raw: str, mapping: Dict[str, Any]) -> Optional[str]:
+    if raw in mapping:
+        val = str(mapping.get(raw) or "").strip()
+        return val or None
+    lowered = {str(k).strip().lower(): v for k, v in mapping.items() if str(k).strip()}
+    hit = lowered.get(raw.lower())
+    if hit is None:
+        return None
+    val = str(hit or "").strip()
+    return val or None
+
+
+def _iter_unit_refs(*refs: Any) -> Iterable[str]:
+    seen: set[str] = set()
+    for ref in refs:
+        text = str(ref or "").strip()
+        if not text:
+            continue
+        key = text.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        yield text
+
+
 def apply_unit_code_map(
-    unit: str, unit_code_map: Optional[Dict[str, Any]] = None
+    unit: str,
+    unit_code_map: Optional[Dict[str, Any]] = None,
+    *,
+    use_builtin_aliases: bool = True,
 ) -> str:
-    """接口单位 map + 内置别名 → 目标系统单位编码。不再读取 BusinessConfig。"""
+    """接口单位 map + 内置别名 → 目标系统单位编码。不再读取 BusinessConfig。
+
+    use_builtin_aliases=True 时与原实现相同（内置别名可被接口 map 覆盖）。
+    分录双单位解析传 False，避免目录未命中时把字面量单位改写成内置编码。
+    """
     raw = str(unit or "").strip()
     if not raw:
         return ""
+    if not use_builtin_aliases:
+        if isinstance(unit_code_map, dict) and unit_code_map:
+            api_hit = _map_lookup(raw, unit_code_map)
+            if api_hit:
+                return api_hit
+        return raw
     mapping: Dict[str, Any] = dict(BUILTIN_UNIT_ALIASES)
     if isinstance(unit_code_map, dict) and unit_code_map:
         mapping.update(unit_code_map)
@@ -156,6 +194,57 @@ async def resolve_material_base_unit(tenant_id: int, product_code: Optional[str]
     except Exception as exc:
         logger.warning("resolve material unit failed code={} err={}", code, exc)
     return None
+
+
+async def lookup_unit_catalog_code(tenant_id: int, unit_ref: str) -> Optional[str]:
+    """单位编码或名称 → 目录 code；未命中返回 None（不回落原串）。"""
+    raw = str(unit_ref or "").strip()
+    if not raw:
+        return None
+    try:
+        from apps.master_data.models.unit import MaterialUnit
+
+        unit = await MaterialUnit.filter(
+            tenant_id=tenant_id, code=raw, deleted_at__isnull=True
+        ).first()
+        if unit:
+            return str(unit.code).strip() or None
+        unit = await MaterialUnit.filter(
+            tenant_id=tenant_id, name=raw, deleted_at__isnull=True
+        ).first()
+        if unit:
+            return str(unit.code).strip() or None
+    except Exception as exc:
+        logger.warning("lookup unit catalog code failed ref={} err={}", raw, exc)
+    return None
+
+
+async def resolve_push_unit_number(
+    tenant_id: int,
+    *,
+    unit_refs: Sequence[Any],
+    unit_code_map: Optional[Dict[str, Any]] = None,
+    allow_builtin_aliases: bool = True,
+) -> str:
+    """按优先级解析推送单位编码。
+
+    目录命中用目录 code。未命中再走接口 map，最后才是可选内置别名或原串。
+    不改 resolve_unit_for_push：已有推送仍走原函数。
+    """
+    refs = list(_iter_unit_refs(*unit_refs))
+    for ref in refs:
+        hit = await lookup_unit_catalog_code(tenant_id, ref)
+        if hit:
+            return hit
+    for ref in refs:
+        mapped = apply_unit_code_map(
+            ref,
+            unit_code_map,
+            use_builtin_aliases=allow_builtin_aliases,
+        )
+        if mapped:
+            return mapped
+    return DEFAULT_UNIT_NUMBER
 
 
 async def resolve_unit_for_push(

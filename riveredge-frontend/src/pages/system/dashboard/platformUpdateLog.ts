@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'kingdee-billentry-dual-qty-r01',
+    date: '2026-11-19',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-billentry-dual-qty-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-billentry-dual-qty-r01.description',
+  },
+  {
     id: 'outbound-kingdee-avb-precheck-r01',
     date: '2026-11-19',
     type: 'feature',

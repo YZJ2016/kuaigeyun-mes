@@ -268,20 +268,20 @@ riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_reco
 riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py	c2066ad59fa00c30093c78a19d0d695cb5adeccc	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_finished_goods_receipt_push_service.py	a2c8f72f545305d0e3043b43356af6974bf2846b	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_im_warehouse_revoke_service.py	437c5823c96fdaa3d225beebce4dc4fd6c5dc442	tracked	seed from 6abba1dbd5
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_other_inbound_push_service.py	3bd8bb8f81b5e7f206148e9a6ff44180260dd2cf	applied	摘 a0b353ce7e D子集→本地 kuaizhizao/services，commit ce342d8182
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_other_outbound_push_service.py	88c896240c4b6e74f1f9b8195f1b6a937adfda56	tracked	seed from 2e8ecad990
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_other_inbound_push_service.py	3bd8bb8f81b5e7f206148e9a6ff44180260dd2cf	applied	dual-qty wiring adapted into local kuaizhizao push service; price/tax/header kept
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_other_outbound_push_service.py	88c896240c4b6e74f1f9b8195f1b6a937adfda56	applied	dual-qty wiring adapted into local kuaizhizao push service; price/tax/header kept
 riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_outbound_avb_precheck_service.py	ed76775773ecf982622833efb97fd4ee08f3a935	applied	三确认共用金蝶可用量预检，仅无感外推会跑时执行；报价改删与四页钉住仍缓置，billentry 与 im 批量更新仍缺依赖
 riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_outbound_invtype_resolve.py	8f92fb01f66382947de22e2059fd57ce551a22df	tracked	seed from 1eb300325a
 riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_production_order_push_service.py	ea1a2d595eccff3f5fca2752a6b47867fbbc139d	tracked	seed from 1eb300325a
 riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_production_picking_push_service.py	dedfcd1d3f92c3fb07c5d13b8492d93307bedfbd	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_purchase_order_push_service.py	fec4e54d7a35b202dd32b021dd293d897dcf28be	tracked	seed from 1eb300325a
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_purchase_receipt_push_service.py	06babeff6dfbfb2aaba463b8011c667cddb79004	tracked	seed from 2c945a39fb
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_purchase_receipt_push_service.py	06babeff6dfbfb2aaba463b8011c667cddb79004	applied	dual-qty wiring adapted into local kuaizhizao push service; price/tax/header kept
 riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_purchase_receipt_revoke_service.py	89bfe157abfabd97bcd82ebfadae3843bc203399	tracked	seed from 6abba1dbd5
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_sales_delivery_push_service.py	3fa9cd3835626864d1396426ea9b75a2587516fa	tracked	seed from 2e8ecad990
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_sales_delivery_push_service.py	3fa9cd3835626864d1396426ea9b75a2587516fa	applied	dual-qty wiring adapted into local kuaizhizao push service; price/tax/header kept
 riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_sales_order_push_service.py	f765e192e2da888d88ad2a3097ec1138f12c5794	tracked	seed from 1eb300325a
 riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_stocktaking_deficit_push_service.py	d7514904b21345789ef3f4b6cc568dc231a062e6	tracked	seed from 2e8ecad990
 riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_stocktaking_surplus_push_service.py	ed0e03c80b9f63d7fe7d1f9918556808229c17d6	tracked	seed from 2e8ecad990
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_warehouse_billentry_dual_qty.py	37d00ccf8a18edca89d9499118894ffbc34e84f5	tracked	seed from d32d1e031d
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_warehouse_billentry_dual_qty.py	37d00ccf8a18edca89d9499118894ffbc34e84f5	applied	ported to apps/kuaizhizao/services; four warehouse push services append billentry dual-qty fields
 riveredge-backend/src/apps/kuaiconnect/services/document_push/warehouse_kingdee_alignment.py	8a2eb7299f4070ba927650ceb4d2edb8bfd148a6	tracked	seed from 6abba1dbd5
 riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/__init__.py	091357b9b3d862025c805fca904b320cb3e3fedd	tracked	seed from 31efc2b64c
 riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/customer_sync_service.py	2be4ff735a6d3f277d46711c488f90c942be80fa	applied	4ba2d15ae8契约簇;force_rewrite/expand未接调用点随调度窗簇
@@ -936,13 +936,13 @@ riveredge-backend/src/apps/kuaizhizao/utils/document_line_amounts.py	d54a784663f
 riveredge-backend/src/apps/kuaizhizao/utils/document_line_material_snapshot.py	8618d1de2b9ac9360380eeff881bb23fa6fc9575	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/kuaizhizao/utils/document_source_types.py	f661ef74621f646586b7439d77643d6784a3149d	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/utils/inventory_helper.py	5bd6066c523377679ce3f8595fd6a5403a7c2c72	tracked	seed from 432bd5f7fd
-riveredge-backend/src/apps/kuaizhizao/utils/inventory_posting_utils.py	f47f5f30d69f06ef05cef16c503b28893b0bf6c6	tracked	seed from 52b1abf2e3
+riveredge-backend/src/apps/kuaizhizao/utils/inventory_posting_utils.py	f47f5f30d69f06ef05cef16c503b28893b0bf6c6	applied	full file landed; used by billentry dual qty
 riveredge-backend/src/apps/kuaizhizao/utils/kingdee_warehouse_operator_utils.py	a282c1c52d107b0abe22a3b470d5effdc2fe647c	applied	D依赖簇续:支撑件+前端
-riveredge-backend/src/apps/kuaizhizao/utils/ledger_dual_quantity_utils.py	a53e4405654bf1e078cad74ed164946c9611ac61	tracked	seed from 52b1abf2e3
+riveredge-backend/src/apps/kuaizhizao/utils/ledger_dual_quantity_utils.py	a53e4405654bf1e078cad74ed164946c9611ac61	applied	only aux-unit resolvers for push; omitted batch sync, confirmation pair, inventory row writers
 riveredge-backend/src/apps/kuaizhizao/utils/list_item_material_keyword.py	21ae6c05b1d50aa8098755d77b08160b97d9c607	tracked	seed from 37409d3b29
 riveredge-backend/src/apps/kuaizhizao/utils/material_dual_quantity_utils.py	b9bd4692a923a0d4eff0162a3be4ccd5c194f60c	tracked	seed from 899307f4d6
 riveredge-backend/src/apps/kuaizhizao/utils/material_source_helper.py	1ea792d1ac3a3438c6d98042cdfebaba601c3aa5	tracked	seed from 0b8630adfd
-riveredge-backend/src/apps/kuaizhizao/utils/material_unit_utils.py	4d66cb6ef994d5ab6937500c13db0e0b94004c0a	tracked	seed from a0ea4efd00
+riveredge-backend/src/apps/kuaizhizao/utils/material_unit_utils.py	4d66cb6ef994d5ab6937500c13db0e0b94004c0a	applied	added resolve_material_inventory_unit only; inventory scenario and price factor unchanged
 riveredge-backend/src/apps/kuaizhizao/utils/mrp_bom_snapshot.py	330b777fbea99e85ac7d48ea686dd8a6502e766f	tracked	seed from 18c0e4ce1a
 riveredge-backend/src/apps/kuaizhizao/utils/mrp_scheduling_helper.py	9c107b0904d0671f57bf8f5c0e3bce23af960d44	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/kuaizhizao/utils/picking_posting.py	37bdf8ff2678b378dfa59d60ad12edc7f8bf6524	tracked	seed from 3050130eb5
@@ -1114,6 +1114,7 @@ riveredge-backend/src/core/services/integration/connector_request.py	9cbad9a480f
 riveredge-backend/src/core/services/integration/dingtalk_integration.py	969c9e38996f15448f722c59919b543a07bf36c7	tracked	seed from a67b4ad1a7
 riveredge-backend/src/core/services/integration/dingtalk_oauth_service.py	be7f7005a9c327a69c82fd3cfd43fc3bcfcffea3	tracked	seed from a67b4ad1a7
 riveredge-backend/src/core/services/integration/document_push_adapter.py	12ead7165d5a623fab437b78dd81541e271bfcc2	tracked	seed from 2c945a39fb
+riveredge-backend/src/core/services/integration/document_push_codes.py	b00eab21b9690fca86df0acc06eff98720d29197	applied	added resolve_push_unit_number; resolve_unit_for_push body unchanged
 riveredge-backend/src/core/services/integration/document_push_pipeline.py	a8f3f807929087bc3f87f40184dee72400a52a2a	tracked	seed from 2c945a39fb
 riveredge-backend/src/core/services/integration/document_push_readiness.py	df2e15352d7a9ba679eb6fe0bde09457ed3a76dd	tracked	seed from 2c945a39fb
 riveredge-backend/src/core/services/integration/document_push_silent.py	578fa73c5e6a6f6cb1a7d6b2fdb9e22c12fafbdf	tracked	seed from 4bd853a94f

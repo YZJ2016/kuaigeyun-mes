@@ -4202,6 +4202,10 @@ export default {
   'app.kuaizhizao.documentDetail.stockLoading': '加载库存…',
   'app.kuaizhizao.documentDetail.stockEmpty': '无在库',
   'app.kuaizhizao.documentDetail.warehouseStock': '各仓在库',
+  'pages.dashboard.updateLog.entries.kingdee-billentry-dual-qty-r01.title':
+    '金蝶出入库推送带上库存单位和辅助数量',
+  'pages.dashboard.updateLog.entries.kingdee-billentry-dual-qty-r01.description':
+    '其他入库、其他出库、采购入库、销售出库推送金蝶时，按物料库存单位填写数量；物料启用辅助单位时同时带上辅助数量。单据金额和税率仍按原单据数量计算，库存数量不同时只反推单价。',
   'pages.dashboard.updateLog.entries.material-multi-supplier-code-mapping-r01.title':
     '物料编号映射可保存多条供应商编码',
   'pages.dashboard.updateLog.entries.material-multi-supplier-code-mapping-r01.description':

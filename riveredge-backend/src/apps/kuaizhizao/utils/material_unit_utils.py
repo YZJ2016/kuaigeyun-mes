@@ -36,6 +36,36 @@ def _parse_material_units_cfg(units_cfg: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
+def resolve_material_inventory_unit(material: Any) -> str:
+    """库存单位（金蝶 FStockUnit）；缺省等于基础单位。
+
+    不改 resolve_material_scenario_unit("inventory")：本地过账仍按基础单位。
+    本函数只给金蝶分录解析库存单位。
+    """
+    if material is None:
+        return ""
+    base_unit = str(getattr(material, "base_unit", None) or "").strip()
+    inv = str(getattr(material, "inventory_unit", None) or "").strip()
+    if inv:
+        return inv
+    units_cfg = _parse_material_units_cfg(getattr(material, "units", None))
+    if units_cfg:
+        scenarios = units_cfg.get("scenarios") or {}
+        if isinstance(scenarios, dict):
+            mapped = scenarios.get("inventory")
+            if mapped is not None and str(mapped).strip():
+                unit = str(mapped).strip()
+                allowed = {base_unit} if base_unit else set()
+                for row in units_cfg.get("units") or []:
+                    if isinstance(row, dict):
+                        name = str(row.get("unit") or "").strip()
+                        if name:
+                            allowed.add(name)
+                if unit in allowed:
+                    return unit
+    return base_unit
+
+
 def resolve_material_scenario_unit(material: Any, scenario: MaterialScenario) -> str:
     """解析物料在指定场景下的单位；未配置或映射已失效时回退基础单位。"""
     base_unit = str(getattr(material, "base_unit", None) or "").strip()
