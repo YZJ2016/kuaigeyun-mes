@@ -264,6 +264,7 @@ class MaterialSyncService:
                 }
                 conversion_entries = None
                 api_uuid = str(src.get("api_uuid") or "").strip() or None
+                org_allowed = None
                 if api_uuid:
                     api_obj = await API.filter(
                         tenant_id=tenant_id,
@@ -282,11 +283,74 @@ class MaterialSyncService:
                         conversion_entries = [{"field_name": "source_type", "mapping": conv}]
                     if api_obj:
                         last_source_api_path = str(getattr(api_obj, "path", "") or "").lower()
+                    path_norm = last_source_api_path.replace("\\", "/")
+                    if api_obj and "/bd_material/batchquery" in path_norm:
+                        from core.services.integration.kingdee_cosmic_api_presets import (
+                            MATERIAL_SYNC_SELECT,
+                        )
+
+                        src = {
+                            **src,
+                            "request_body": {
+                                **(src.get("request_body") or {}),
+                                "select": MATERIAL_SYNC_SELECT,
+                            },
+                            "request_params": {
+                                **(src.get("request_params") or {}),
+                                "select": MATERIAL_SYNC_SELECT,
+                            },
+                        }
+                        await api_obj.fetch_related("integration_config")
+                        conn = getattr(api_obj, "integration_config", None)
+                        conn_type = str(getattr(conn, "type", "") or "").strip()
+                        if conn and conn_type in (
+                            "kingdee_cosmic",
+                            "kingdee_xinghan",
+                            "kingdee_ai_suite",
+                        ):
+                            from core.services.integration.kingdee_cosmic_material_org_scope import (
+                                fetch_cosmic_material_org_allowed_numbers,
+                                resolve_connector_org_for_material_scope,
+                            )
+
+                            org = resolve_connector_org_for_material_scope(conn.get_config())
+                            if org and org.upper() != "BU-00000":
+                                await emit_sync_progress(
+                                    f"拉取管理组织 {org} 的物料使用范围（bd_materialcommon）…"
+                                )
+                                org_allowed = await fetch_cosmic_material_org_allowed_numbers(
+                                    tenant_id,
+                                    connection_uuid=conn.uuid,
+                                    org_number=org,
+                                    active_only=req.active_only,
+                                )
+                                await emit_sync_progress(
+                                    f"管理组织物料使用范围 {len(org_allowed)} 个编码"
+                                )
+
+                def transform_raw(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+                    path_for_active = last_source_api_path.replace("\\", "/")
+                    out = rows
+                    if req.active_only and "/bd_material/batchquery" in path_for_active:
+                        from core.services.integration.kingdee_cosmic_material_active import (
+                            filter_cosmic_material_rows_active,
+                        )
+
+                        out = filter_cosmic_material_rows_active(out)
+                    if org_allowed is not None:
+                        from core.services.integration.kingdee_cosmic_material_org_scope import (
+                            filter_cosmic_material_rows_by_org_numbers,
+                        )
+
+                        out = filter_cosmic_material_rows_by_org_numbers(out, org_allowed)
+                    return out
+
                 rows, source_errors, fetched = await fetch_mapped_rows_from_sources(
                     tenant_id,
                     [src],
                     since=since,
                     active_only=req.active_only,
+                    transform_raw_rows=transform_raw,
                 )
                 if source_errors:
                     fetch_had_source_errors = True

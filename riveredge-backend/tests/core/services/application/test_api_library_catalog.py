@@ -112,6 +112,37 @@ def test_supplier_preset_needs_upgrade_detects_legacy_get_and_warehouse_body():
     )
 
 
+def test_supplier_getsupplier_preset_not_forced_to_query():
+    from core.services.integration.kingdee_cosmic_api_presets import (
+        SUPPLIER_GETSUPPLIER_PATH,
+        SUPPLIER_GETSUPPLIER_PRESET_CODE_SUFFIX,
+        list_kingdee_cosmic_api_presets,
+        supplier_getsupplier_preset_needs_upgrade,
+        supplier_preset_needs_upgrade,
+    )
+
+    presets = list_kingdee_cosmic_api_presets()
+    getsupplier = next(
+        p for p in presets if p["code_suffix"] == SUPPLIER_GETSUPPLIER_PRESET_CODE_SUFFIX
+    )
+    assert getsupplier["path"] == SUPPLIER_GETSUPPLIER_PATH
+    assert getsupplier["method"] == "POST"
+    assert not supplier_preset_needs_upgrade(
+        "kapi/v2/fd81/basedata/bd_supplier/getsupplier",
+        "POST",
+        {"data": {}, "pageNo": 1, "pageSize": 500},
+        code="kingdee_getsupplier_bd_supplier",
+    )
+    assert supplier_getsupplier_preset_needs_upgrade(
+        "kapi/v2/basedata/bd_supplier/query",
+        "kingdee_getsupplier_bd_supplier",
+    )
+    assert not supplier_getsupplier_preset_needs_upgrade(
+        SUPPLIER_GETSUPPLIER_PATH,
+        "kingdee_getsupplier_bd_supplier",
+    )
+
+
 def test_measureunits_preset_needs_upgrade_detects_legacy_path():
     from core.services.integration.kingdee_cosmic_api_presets import (
         measureunits_preset_needs_upgrade,

@@ -156,14 +156,101 @@ class SupplierSyncService:
             request_incremental=req.incremental,
         )
         try:
+            from core.models.api import API
+
             invalid_skipped_holder = {"n": 0}
+            org_allowed = None
+            management_org: Optional[str] = None
+            use_getsupplier_org_rows = False
+            last_source_api_path = ""
+            for src in sources:
+                api_uuid = str(src.get("api_uuid") or "").strip() or None
+                if not api_uuid:
+                    continue
+                api_obj = await API.filter(tenant_id=tenant_id, uuid=api_uuid).first()
+                if not api_obj:
+                    continue
+                path_lower = str(getattr(api_obj, "path", "") or "").lower().replace("\\", "/")
+                last_source_api_path = path_lower
+                from core.services.integration.kingdee_cosmic_supplier_org_scope import (
+                    fetch_cosmic_supplier_org_allowed_numbers,
+                    is_cosmic_supplier_getsupplier_api,
+                    resolve_connector_org_for_supplier_scope,
+                )
+
+                api_code = str(getattr(api_obj, "code", "") or "").strip()
+                is_getsupplier = is_cosmic_supplier_getsupplier_api(
+                    path=path_lower,
+                    code=api_code,
+                )
+                is_query = "/bd_supplier/query" in path_lower and not is_getsupplier
+                if not is_query and not is_getsupplier:
+                    continue
+                await api_obj.fetch_related("integration_config")
+                conn = getattr(api_obj, "integration_config", None)
+                conn_type = str(getattr(conn, "type", "") or "").strip()
+                if conn and conn_type in (
+                    "kingdee_cosmic",
+                    "kingdee_xinghan",
+                    "kingdee_ai_suite",
+                ):
+                    org = resolve_connector_org_for_supplier_scope(conn.get_config())
+                    if org and org.upper() != "BU-00000":
+                        if is_getsupplier:
+                            use_getsupplier_org_rows = True
+                            management_org = org
+                            await emit_sync_progress(
+                                f"按使用组织 {org} 过滤自定义 getsupplier 返回行…"
+                            )
+                        elif is_query:
+                            await emit_sync_progress(
+                                f"拉取管理组织 {org} 的供应商使用范围（bd_suppliercommon）…"
+                            )
+                            org_allowed = await fetch_cosmic_supplier_org_allowed_numbers(
+                                tenant_id,
+                                connection_uuid=conn.uuid,
+                                org_number=org,
+                                active_only=req.active_only,
+                            )
+                            await emit_sync_progress(
+                                f"管理组织供应商使用范围 {len(org_allowed)} 个编码"
+                            )
+                break
 
             def _filter_raw(raw_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-                if not req.active_only:
-                    return raw_rows
-                kept, skipped = filter_kingdee_approved_active_master_rows(raw_rows)
-                invalid_skipped_holder["n"] += skipped
-                return kept
+                out = raw_rows
+                if req.active_only:
+                    kept, skipped = filter_kingdee_approved_active_master_rows(out)
+                    invalid_skipped_holder["n"] += skipped
+                    out = kept
+                    from core.services.integration.kingdee_cosmic_supplier_org_scope import (
+                        filter_cosmic_supplier_rows_active,
+                    )
+
+                    before = len(out)
+                    out = filter_cosmic_supplier_rows_active(
+                        out, path=last_source_api_path
+                    )
+                    invalid_skipped_holder["n"] += before - len(out)
+                if use_getsupplier_org_rows and management_org:
+                    from core.services.integration.kingdee_cosmic_supplier_org_scope import (
+                        filter_cosmic_supplier_rows_by_management_org_number,
+                    )
+
+                    before = len(out)
+                    out = filter_cosmic_supplier_rows_by_management_org_number(
+                        out, management_org
+                    )
+                    invalid_skipped_holder["n"] += before - len(out)
+                elif org_allowed is not None:
+                    from core.services.integration.kingdee_cosmic_supplier_org_scope import (
+                        filter_cosmic_supplier_rows_by_org_numbers,
+                    )
+
+                    before = len(out)
+                    out = filter_cosmic_supplier_rows_by_org_numbers(out, org_allowed)
+                    invalid_skipped_holder["n"] += before - len(out)
+                return out
 
             rows, source_errors, _fetched = await fetch_mapped_rows_from_sources(
                 tenant_id,
@@ -178,6 +265,9 @@ class SupplierSyncService:
                 result.errors = (source_errors + list(result.errors))[:20]
             if invalid_skipped:
                 result.skipped = int(getattr(result, "skipped", 0) or 0) + invalid_skipped
+                await emit_sync_progress(
+                    f"已排除无效供应商 {invalid_skipped} 条，剩余 {len(rows)} 条…"
+                )
             if binding:
                 if result.failed and not (result.created or result.updated):
                     await mark_binding_failure(binding, "; ".join(result.errors) or "供应商同步失败")

@@ -152,6 +152,9 @@ class KingdeeCosmicApiPreset(TypedDict, total=False):
 
 WAREHOUSE_PRESET_CODE_SUFFIX = "query_warehouse"
 SUPPLIER_PRESET_CODE_SUFFIX = "query_supplier"
+SUPPLIER_GETSUPPLIER_PATH = "kapi/v2/fd81/basedata/bd_supplier/getsupplier"
+SUPPLIER_GETSUPPLIER_PRESET_CODE_SUFFIX = "getsupplier_bd_supplier"
+SUPPLIER_GETSUPPLIER_PRESET_NAME = "【自定义】苍穹按组织获取供应商"
 # 单据写入类：接口管理须标「出站同步」
 KINGDEE_COSMIC_OUTBOUND_PRESET_CODE_SUFFIXES = frozenset(
     {
@@ -182,7 +185,7 @@ MATERIAL_GROUP_PRESET_CODE_SUFFIX = "query_material_group"
 UNIT_SYNC_MATERIAL_SELECT = "number,name,baseunit.number,baseunit.name"
 # 物料同步：编码/名称/规格/基础单位/分组（字段以本环境模型为准，可微调）
 MATERIAL_SYNC_SELECT = (
-    "number,name,modelnum,baseunit.number,baseunit.name,group.number,group.name"
+    "number,name,modelnum,baseunit.number,baseunit.name,group.number,group.name,status,enable"
 )
 GOODS_CLASS_QUERY_PATH = "kapi/v2/gmc/mdr_goodsclass/getMalGoodsClass"
 
@@ -350,11 +353,18 @@ def supplier_preset_needs_upgrade(
     method: Any = None,
     request_body: Any = None,
     request_params: Any = None,
+    *,
+    code: Any = None,
 ) -> bool:
     """POST …/bd_supplier/query；合法空 data 分页不升级，占位 WANG 模板须清掉。"""
     if str(method or "").upper() not in ("", "POST"):
         return True
     lower = str(path or "").lower().replace("\\", "/")
+    if "/bd_supplier/getsupplier" in lower.rstrip("/"):
+        return False
+    code_lower = str(code or "").strip().lower()
+    if "getsupplier" in code_lower and "bd_supplier" in code_lower:
+        return False
     if not lower or lower.endswith("/basedata/b") or lower.endswith("/basedata/bd"):
         return True
     if f"/{BIZ_BD_SUPPLIER}/batchquery" in lower:
@@ -567,12 +577,49 @@ def build_supplier_query_preset() -> KingdeeCosmicApiPreset:
             "POST /v2/basedata/bd_supplier/query。"
             "请求体 data 内 createorg_number、number、status 等为数组（均可选）；"
             "pageNo、pageSize 与 data 同级。"
-            "默认与物料一致：data 为空仅分页；需筛组织/状态再在 data 内加数组。"
+            "默认与物料一致：data 为空仅分页；勿用 createorg_number 当子公司范围。"
+            "连接器有组织时，同步会拉 bd_suppliercommon/batchQuery 与主档按编码交集。"
             "按编码查可在 data.number 传 [\"编码\"]。勿使用未发布的 …/batchQuery。"
         ),
         "path": f"kapi/v2/basedata/{BIZ_BD_SUPPLIER}/query",
         "method": "POST",
         "request_body": build_supplier_query_preset_body(),
+    }
+
+
+def build_supplier_getsupplier_preset_body() -> Dict[str, Any]:
+    return {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 500,
+    }
+
+
+def supplier_getsupplier_preset_needs_upgrade(path: Any, code: Any = None) -> bool:
+    """自定义 getsupplier 须指向 fd81/…/getsupplier，不得仍为标品 …/query。"""
+    lower = str(path or "").lower().replace("\\", "/").split("?", 1)[0].rstrip("/")
+    if lower.endswith("/bd_supplier/getsupplier"):
+        return False
+    code_lower = str(code or "").strip().lower()
+    if "getsupplier" in code_lower:
+        return True
+    return False
+
+
+def build_supplier_getsupplier_preset() -> KingdeeCosmicApiPreset:
+    return {
+        "code_suffix": SUPPLIER_GETSUPPLIER_PRESET_CODE_SUFFIX,
+        "name": SUPPLIER_GETSUPPLIER_PRESET_NAME,
+        "description": (
+            "【自定义】按组织获取供应商（API 编码 getsupplier；非标品 query）。"
+            f"请求地址 /{SUPPLIER_GETSUPPLIER_PATH}。"
+            "返回行含 org_number（使用组织），供应商同步会按连接器管理组织过滤行，"
+            "不用 createorg_number。data.org_number 出站时由连接器组织填充；"
+            "仍支持 pageNo/pageSize 分页。"
+        ),
+        "path": SUPPLIER_GETSUPPLIER_PATH,
+        "method": "POST",
+        "request_body": build_supplier_getsupplier_preset_body(),
     }
 
 
@@ -2020,6 +2067,7 @@ def list_kingdee_cosmic_api_presets() -> List[KingdeeCosmicApiPreset]:
         build_material_group_batch_query_preset(),
         build_material_group_goods_class_preset(),
         build_supplier_query_preset(),
+        build_supplier_getsupplier_preset(),
         _basedata_batch_query_preset(
             code_suffix="query_customer",
             name="苍穹查询客户",

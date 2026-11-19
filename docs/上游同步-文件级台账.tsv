@@ -285,14 +285,14 @@ riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/external_sync_sched
 riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/inventory_sync_service.py	2cbfd756e227825c7f8248cac582d3c071bd64dd	tracked	seed from 57a37e2749
 riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/master_data_sync_common.py	fa347ad1325fc6c89b4734c1fc5f0676aac99585	tracked	seed from 905787348a
 riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/material_group_sync_service.py	143ca957ba4ab330305ebedf0264da6c94769ed4	tracked	seed from 093512788c
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/material_sync_service.py	035493558e7908ade68ea2c2c099aa0ea68eabc6	tracked	seed from 093512788c
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/material_sync_service.py	035493558e7908ade68ea2c2c099aa0ea68eabc6	applied	org-scope 集成 hunk 已适配落地；供应商 bulk-write 重构（apply_mapped_scalar_fields 族）仍缓置
 riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/other_inbound_sync_service.py	1b587b9d361d962436ef3d278d72cc049a78af04	tracked	seed from a0b353ce7e
 riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/other_outbound_sync_service.py	eb350535d2108227f913609cd212e3ba2a754ed1	tracked	seed from a0b353ce7e
 riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/purchase_order_sync_service.py	37d89d80fff8d1d4770c007cb77ff17bcfa1d621	tracked	seed from 9ec209fab8
 riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/purchase_receipt_sync_service.py	6ac18d356950eda845ce311f7ca7df171e7154fa	tracked	seed from 4bd853a94f
 riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/sales_order_sync_service.py	df2f47d8c33aa4565abbdf263e1517cff62010be	tracked	seed from 31efc2b64c
 riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/storage_location_sync_service.py	0401b620a73471fe87185eb5a45b2778ebabf747	tracked	seed from 57a37e2749
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/supplier_sync_service.py	4cd9f195a26240036832eac503810a814e6874b3	tracked	seed from a0b353ce7e
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/supplier_sync_service.py	4cd9f195a26240036832eac503810a814e6874b3	applied	org-scope 集成 hunk 已适配落地；供应商 bulk-write 重构（apply_mapped_scalar_fields 族）仍缓置
 riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/sync_binding_sources.py	a4dfcf6d31a8de9edd31d28b52e3c0aa2875c117	tracked	seed from 994bc9a312
 riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/warehouse_sync_service.py	4fd5734e32c56512233f4de5994a488e0d6f5c6b	tracked	seed from 905787348a
 riveredge-backend/src/apps/kuaiems/manifest.json	5ef0dd94364e247a47c958f326329cc8c22cad0d	tracked	seed from 46508115c7
@@ -1010,7 +1010,7 @@ riveredge-backend/src/core/schemas/position.py	fdb1a27e0f051f86123cfce708a818db2
 riveredge-backend/src/core/schemas/sync_binding_contract.py	778592163879a2e3d200776fd3265de753ab5cee	tracked	seed from 4a9d6d3e63
 riveredge-backend/src/core/schemas/user.py	f998bc89a7fb655413fb4d4958f9d66cff81a15a	tracked	seed from 46508115c7
 riveredge-backend/src/core/services/application/api_library_catalog.py	7ee3ef0600bc214ca6b72db129f792435e89608e	tracked	seed from 2c945a39fb
-riveredge-backend/src/core/services/application/api_service.py	d9a7516bf271bc6879748f9c4db10a15f53d9578	tracked	seed from 2c945a39fb
+riveredge-backend/src/core/services/application/api_service.py	d9a7516bf271bc6879748f9c4db10a15f53d9578	applied	org-scope 集成 hunk 已适配落地；供应商 bulk-write 重构（apply_mapped_scalar_fields 族）仍缓置
 riveredge-backend/src/core/services/application/api_sync_binding_refs.py	7e37f2cbec72865dfbc3413b9d7168cc3afe8da5	tracked	seed from df7d635797
 riveredge-backend/src/core/services/application/application_service.py	457d18ca82987094707a7a14ce1b5dc7083c8b11	tracked	seed from 91ce38417a
 riveredge-backend/src/core/services/application/enabled_apps.py	72d8708bc5bad87d094da0b77124d8280b044283	tracked	seed from 2c76a942c2
@@ -1069,14 +1069,14 @@ riveredge-backend/src/core/services/integration/feishu_integration.py	613150492c
 riveredge-backend/src/core/services/integration/feishu_oauth_service.py	cc67accffff535c56cddd39495ec99297ded52bb	tracked	seed from a67b4ad1a7
 riveredge-backend/src/core/services/integration/http_webhook_push_adapter.py	413f8fca1c428610ae8ab2095193f388aaaf346c	tracked	seed from a0b353ce7e
 riveredge-backend/src/core/services/integration/integration_config_service.py	0f51fb4b3d598445a740a7fbd235f9bec9111dae	tracked	seed from 7fa73e053a
-riveredge-backend/src/core/services/integration/kingdee_cosmic_api_presets.py	671ad99a99459fb16d826e4d3c17e85033b666e4	tracked	seed from 093512788c
+riveredge-backend/src/core/services/integration/kingdee_cosmic_api_presets.py	671ad99a99459fb16d826e4d3c17e85033b666e4	applied	org-scope 集成 hunk 已适配落地；供应商 bulk-write 重构（apply_mapped_scalar_fields 族）仍缓置
 riveredge-backend/src/core/services/integration/kingdee_cosmic_customer_org_scope.py	600987bd54144f4b3ffa9792a68c9d1e69560f48	tracked	seed from 57a37e2749
-riveredge-backend/src/core/services/integration/kingdee_cosmic_material_active.py	03a08a284e5e09576f0f28762074a9882efb0150	tracked	seed from a0b353ce7e
-riveredge-backend/src/core/services/integration/kingdee_cosmic_material_org_scope.py	3921523cf6eb375617b9bf3d003f9efb71cd03b6	tracked	seed from a0b353ce7e
+riveredge-backend/src/core/services/integration/kingdee_cosmic_material_active.py	03a08a284e5e09576f0f28762074a9882efb0150	applied	org-scope 簇 tip 版整取
+riveredge-backend/src/core/services/integration/kingdee_cosmic_material_org_scope.py	3921523cf6eb375617b9bf3d003f9efb71cd03b6	applied	org-scope 簇 tip 版整取
 riveredge-backend/src/core/services/integration/kingdee_cosmic_paths.py	36ce99c4a5d0284874b2f0e229c052d2f6661d0c	tracked	seed from 093512788c
 riveredge-backend/src/core/services/integration/kingdee_cosmic_push_adapter.py	3389c5a2038edd1e0a4d54e148696b8bc75b4d70	tracked	seed from 2c945a39fb
 riveredge-backend/src/core/services/integration/kingdee_cosmic_since_filter.py	44b1296a75a2dcfb4993a85614d70f152f0b714c	tracked	seed from d025413d18
-riveredge-backend/src/core/services/integration/kingdee_cosmic_supplier_org_scope.py	e1684eb01c4b46317075bc7eb0d18ce344377210	tracked	seed from a0b353ce7e
+riveredge-backend/src/core/services/integration/kingdee_cosmic_supplier_org_scope.py	e1684eb01c4b46317075bc7eb0d18ce344377210	applied	org-scope 簇 tip 版整取
 riveredge-backend/src/core/services/integration/kingdee_execute_bill_query_catalog.py	93110e367620c02680b238f10f38a47ecfa31d95	tracked	seed from 7fa73e053a
 riveredge-backend/src/core/services/integration/kingdee_galaxy_api_presets.py	8c738c870de5478a073df89155a7846be7edc179	tracked	seed from 7fa73e053a
 riveredge-backend/src/core/services/integration/kingdee_galaxy_push_adapter.py	21a95e69e478345bcb5eed91ef7e0e80b11a6777	tracked	seed from a0b353ce7e
@@ -1225,11 +1225,11 @@ riveredge-backend/tests/core/services/data/test_sync_source_rows.py	a38200985d9e
 riveredge-backend/tests/core/services/integration/test_connector_request.py	016ccdff3eab01fa7adcf8ac698e74012cf477da	tracked	seed from d025413d18
 riveredge-backend/tests/core/services/integration/test_kingdee_cosmic_batch_operate_parse.py	5abbd83022dc74113338bf69a63a88b08bb644bd	tracked	seed from 6abba1dbd5
 riveredge-backend/tests/core/services/integration/test_kingdee_cosmic_customer_org_scope.py	508450f5b178cea7106a168a46fec49604f4e55b	tracked	seed from 57a37e2749
-riveredge-backend/tests/core/services/integration/test_kingdee_cosmic_material_active.py	93ca20f54311c2129e6502e90e8baa08b21c94a0	tracked	seed from a0b353ce7e
-riveredge-backend/tests/core/services/integration/test_kingdee_cosmic_material_org_scope.py	c640bcc2cbb8890c99f10e4b4189e8f06d588af9	tracked	seed from a0b353ce7e
+riveredge-backend/tests/core/services/integration/test_kingdee_cosmic_material_active.py	93ca20f54311c2129e6502e90e8baa08b21c94a0	applied	org-scope 簇 tip 版整取
+riveredge-backend/tests/core/services/integration/test_kingdee_cosmic_material_org_scope.py	c640bcc2cbb8890c99f10e4b4189e8f06d588af9	applied	org-scope 簇 tip 版整取
 riveredge-backend/tests/core/services/integration/test_kingdee_cosmic_paths.py	7612a74a5101f45cea826a45f241b90ead216482	tracked	seed from 093512788c
 riveredge-backend/tests/core/services/integration/test_kingdee_cosmic_since_filter.py	c9cc2a3b9555b7498ee082ae838a50777ad8b535	tracked	seed from d025413d18
-riveredge-backend/tests/core/services/integration/test_kingdee_cosmic_supplier_org_scope.py	d44236614fb763011751f1bf2e7d7b46ac7b1b6e	tracked	seed from a0b353ce7e
+riveredge-backend/tests/core/services/integration/test_kingdee_cosmic_supplier_org_scope.py	d44236614fb763011751f1bf2e7d7b46ac7b1b6e	applied	org-scope 簇 tip 版整取
 riveredge-backend/tests/core/services/integration/test_wecom_connector_unique.py	3e69293a0fa578fe22fb0e1b0482e2ba2bd1b7fc	tracked	seed from d84fe20715
 riveredge-backend/tests/core/services/integration/test_wecom_tenant_resolve.py	c57724bb7aee7726382f0c88fa66a587b22be9ea	tracked	seed from d84fe20715
 riveredge-backend/tests/core/services/messaging/test_approval_wecom_card_service.py	234f76c060b0112070eacc7e91d2f83431a7cd82	tracked	seed from 3958bb1524
