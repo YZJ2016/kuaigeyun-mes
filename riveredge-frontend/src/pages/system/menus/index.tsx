@@ -119,6 +119,18 @@ function findMenuInTree(uuid: string | undefined | null, nodes: MenuTree[]): Men
   return undefined;
 }
 
+function omitMenuSubtree(nodes: MenuTree[], excludeUuid: string): MenuTree[] {
+  const out: MenuTree[] = [];
+  for (const node of nodes) {
+    if (node.uuid === excludeUuid) continue;
+    out.push({
+      ...node,
+      children: node.children?.length ? omitMenuSubtree(node.children, excludeUuid) : node.children,
+    });
+  }
+  return out;
+}
+
 /** 叶子节点去掉空 children，避免表格把 [] 当成可展开而画出加号 */
 function stripEmptyMenuChildren(nodes: MenuTree[]): MenuTree[] {
   return nodes.map((node) => {
@@ -235,6 +247,11 @@ const MenuListPage: React.FC = () => {
     () => mapMenuTreeWithTranslatedLabels(menuTreeData, t),
     [menuTreeData, t, i18n.language],
   );
+  const parentMenuTreeSelectData = useMemo(() => {
+    const base =
+      isEdit && currentMenuUuid ? omitMenuSubtree(menuTreeData, currentMenuUuid) : menuTreeData;
+    return mapMenuTreeWithTranslatedLabels(base, t);
+  }, [menuTreeData, t, i18n.language, isEdit, currentMenuUuid]);
   // 应用列表
   const [applications, setApplications] = useState<Array<{ label: string; value: string }>>([]);
 
@@ -1158,7 +1175,7 @@ const MenuListPage: React.FC = () => {
                     : undefined
                 }
                 fieldProps={{
-                    treeData: parentMenuTreeData,
+                    treeData: parentMenuTreeSelectData,
                     fieldNames: { label: 'name', value: 'uuid', children: 'children' },
                     showSearch: true,
                     allowClear: !editingMenuMeta.isManifestMenu,

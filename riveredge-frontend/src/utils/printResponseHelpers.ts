@@ -84,6 +84,48 @@ export function withPrintPreviewScreenPadding(
   return `${html}${style}`;
 }
 
+function extractHtmlHeadInner(html: string): string {
+  const m = html.match(/<head\b[^>]*>([\s\S]*?)<\/head>/i);
+  return m?.[1]?.trim() ?? '';
+}
+
+function extractHtmlBodyInner(html: string): string {
+  const m = html.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i);
+  if (m?.[1] != null) return m[1];
+  return html;
+}
+
+/**
+ * 多张单据打印 HTML 拼接：各自成页（page-break），预览区上下分开展示。
+ * 单张原样返回。
+ */
+export function joinPrintHtmlDocuments(htmlList: string[]): string {
+  const parts = htmlList.map((h) => String(h || '').trim()).filter(Boolean);
+  if (parts.length === 0) return '';
+  if (parts.length === 1) return parts[0];
+  const head = parts.map(extractHtmlHeadInner).filter(Boolean).join('\n');
+  const sections = parts
+    .map((html, index) => {
+      const body = extractHtmlBodyInner(html);
+      const breakEl =
+        index < parts.length - 1
+          ? '<div class="uni-print-doc-break" style="page-break-after:always;break-after:page;"></div>'
+          : '';
+      return `<div class="uni-print-doc">${body}</div>${breakEl}`;
+    })
+    .join('\n');
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/>${head}
+<style id="uni-print-multi-doc">
+@media print {
+  .uni-print-doc-break { page-break-after: always; break-after: page; }
+}
+@media screen {
+  .uni-print-doc-break { height: 16px; background: #e2e8f0; }
+}
+</style>
+</head><body>${sections}</body></html>`;
+}
+
 /** 将 HTML 写入新窗口并触发打印（模板未配置时的兜底；可传入整页 HTML 或仅 body 片段） */
 export function openPrintHtmlWindow(html: string, title = '打印'): Window | null {
   const w = window.open('', '_blank');

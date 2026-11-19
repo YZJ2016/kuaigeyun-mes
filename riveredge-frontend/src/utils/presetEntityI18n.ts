@@ -31,7 +31,19 @@ function resolvePresetField(
   return translateOrFallback(t, presetEntityKey(entity, code, field), fallback);
 }
 
+/**
+ * 部门名称以库内真源为准（租户可改）。
+ * 预设目录预览请用 `resolvePresetDepartmentCatalogName`。
+ */
 export function resolvePresetDepartmentName(
+  record: { code?: string; name?: string | null },
+  _t?: TFunction,
+): string {
+  return record.name ?? '';
+}
+
+/** 预设部门目录预览：按 code 走 i18n，库内业务部门勿用 */
+export function resolvePresetDepartmentCatalogName(
   record: { code?: string; name?: string | null },
   t: TFunction,
 ): string {
@@ -67,7 +79,7 @@ export function localizedPresetFormFields(
 ): { name: string; description?: string } {
   const name =
     entity === 'department'
-      ? resolvePresetDepartmentName(record, t)
+      ? (record.name ?? '')
       : entity === 'position'
         ? resolvePresetPositionName(record, t)
         : resolvePresetRoleName(record, t);
@@ -85,6 +97,7 @@ export function omitPresetLocalizedPayloadFields(
   values: Record<string, unknown>,
 ): Record<string, unknown> {
   if (!isPresetEntityCode(entity, code)) return values;
+  if (entity === 'department') return values;
   const next = { ...values };
   delete next.name;
   if (entity === 'role') {
