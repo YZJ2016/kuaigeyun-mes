@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Type, TypeVar
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple, Type, TypeVar
 
 from infra.exceptions.exceptions import ValidationError
 
@@ -23,6 +23,12 @@ from core.services.data.sync_binding_sources import (
     validate_sources_for_match_key,
 )
 from core.services.data.sync_from_source_fetch import fetch_rows_from_api, fetch_rows_from_dataset
+from core.utils.sync_schedule_window import (
+    is_within_schedule_window,
+    normalize_schedule_window,
+    resolve_schedule_window_for_sync_request,
+    resolve_schedule_window_for_upsert,
+)
 from core.utils.timezone_utils import resolve_business_datetime
 
 logger = logging.getLogger(__name__)
@@ -65,6 +71,17 @@ def normalize_schedule_interval(value: Optional[int]) -> int:
     return minutes
 
 
+async def resolve_upsert_schedule_from_body(
+    binding_model: Type[TBinding],
+    tenant_id: int,
+    body: Any,
+) -> Tuple[int, Optional[str], Optional[str]]:
+    existing = await binding_model.filter(tenant_id=tenant_id).first()
+    interval = normalize_schedule_interval(getattr(body, "schedule_interval_minutes", None))
+    window = resolve_schedule_window_for_upsert(body, existing)
+    return interval, window[0], window[1]
+
+
 def serialize_binding_row(
     row: Optional[Any],
     *,
@@ -81,6 +98,8 @@ def serialize_binding_row(
             "sync_mode": "manual_full",
             "sync_direction": "pull",
             "schedule_interval_minutes": DEFAULT_SCHEDULE_INTERVAL_MINUTES,
+            "schedule_window_start": None,
+            "schedule_window_end": None,
             "last_success_at": None,
             "last_attempt_at": None,
             "last_error": None,
@@ -103,6 +122,8 @@ def serialize_binding_row(
         "schedule_interval_minutes": int(
             getattr(row, "schedule_interval_minutes", None) or DEFAULT_SCHEDULE_INTERVAL_MINUTES
         ),
+        "schedule_window_start": getattr(row, "schedule_window_start", None),
+        "schedule_window_end": getattr(row, "schedule_window_end", None),
         "last_success_at": getattr(row, "last_success_at", None),
         "last_attempt_at": getattr(row, "last_attempt_at", None),
         "last_error": getattr(row, "last_error", None),
@@ -118,6 +139,8 @@ async def upsert_sync_binding(
     sync_mode: str = "manual_full",
     sync_direction: str = "pull",
     schedule_interval_minutes: Optional[int] = None,
+    schedule_window_start: Optional[str] = None,
+    schedule_window_end: Optional[str] = None,
 ) -> TBinding:
     normalized = sources_for_persist(normalize_sources_json(sources))
     validate_sources_for_match_key(normalized, match_key_field)
@@ -125,6 +148,10 @@ async def upsert_sync_binding(
     mode = normalize_sync_mode(sync_mode)
     direction = normalize_sync_direction(sync_direction)
     interval = normalize_schedule_interval(schedule_interval_minutes)
+    window_start, window_end = normalize_schedule_window(
+        schedule_window_start,
+        schedule_window_end,
+    )
 
     first = normalized[0]
     source_type = str(first.get("kind") or "")
@@ -171,6 +198,8 @@ async def upsert_sync_binding(
         sync_mode=mode,
         sync_direction=direction,
         schedule_interval_minutes=interval,
+        schedule_window_start=window_start,
+        schedule_window_end=window_end,
         **preserve,
         **push_preserve,
     )

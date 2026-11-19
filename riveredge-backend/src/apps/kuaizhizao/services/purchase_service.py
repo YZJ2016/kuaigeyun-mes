@@ -683,6 +683,13 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         if not order:
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
+        from apps.kuaicaiwu.services.purchase_settlement import (
+            sync_purchase_order_header_amounts,
+        )
+
+        await sync_purchase_order_header_amounts(tenant_id, order_id, order=order)
+        await order.refresh_from_db()
+
         import asyncio
         from apps.kuaizhizao.services.warehouse_service import sync_purchase_order_receipt_quantities
         from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_order_lifecycle
@@ -1493,6 +1500,10 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                         )
 
             # 更新订单头
+            from apps.kuaicaiwu.services.purchase_settlement import (
+                PURCHASE_ORDER_COMPUTED_HEADER_FIELDS,
+            )
+
             update_dict = order_data.model_dump(
                 exclude_unset=True,
                 exclude={
@@ -1502,6 +1513,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     'audit',
                     'prepayment_unsettled_balance',
                     'estimated_payable_after_prepayment',
+                    *PURCHASE_ORDER_COMPUTED_HEADER_FIELDS,
                 },
             )
             from core.services.document_code_service import pop_and_apply_code_change_from_update_dict
@@ -1698,6 +1710,12 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 await PurchaseOrderTermsService().replace_order_milestones(
                     tenant_id, order_id, order_data.payment_milestones
                 )
+
+            from apps.kuaicaiwu.services.purchase_settlement import (
+                sync_purchase_order_header_amounts,
+            )
+
+            await sync_purchase_order_header_amounts(tenant_id, order_id)
 
             return await self.get_purchase_order_by_id(tenant_id, order_id)
 

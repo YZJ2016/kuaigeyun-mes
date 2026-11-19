@@ -38,8 +38,10 @@ from apps.master_data.services.master_data_sync_common import (
     serialize_binding_row,
     sources_from_upsert_body,
     upsert_sync_binding,
+    resolve_upsert_schedule_from_body,
     apply_mapped_custom_field_values,
     load_custom_fields_by_code,
+    resolve_schedule_window_for_sync_request,
 )
 from core.services.data.sync_binding_sources import fetch_mapped_rows_from_sources
 WORK_ORDER_CUSTOM_FIELD_TABLE = "apps_kuaizhizao_work_orders"
@@ -86,7 +88,9 @@ class WorkOrderSyncService:
         sources = sources_from_upsert_body(body)
         match_key = (body.match_key_field or "code").strip() or "code"
         sync_mode = normalize_sync_mode(body.sync_mode)
-        interval = normalize_schedule_interval(body.schedule_interval_minutes)
+        interval, w_start, w_end = await resolve_upsert_schedule_from_body(
+            WorkOrderSyncBinding, tenant_id, body
+        )
         row = await upsert_sync_binding(
             WorkOrderSyncBinding,
             tenant_id,
@@ -94,6 +98,8 @@ class WorkOrderSyncService:
             match_key_field=match_key,
             sync_mode=sync_mode,
             schedule_interval_minutes=interval,
+            schedule_window_start=w_start,
+            schedule_window_end=w_end,
         )
         return self.serialize_binding(row)
 
@@ -262,6 +268,7 @@ class WorkOrderSyncService:
             if req.schedule_interval_minutes is not None
             else (binding.schedule_interval_minutes if binding else None)
         )
+        w_start, w_end = resolve_schedule_window_for_sync_request(req, binding)
         if req.save_binding:
             await self.upsert_binding(
                 tenant_id,
@@ -270,6 +277,8 @@ class WorkOrderSyncService:
                     match_key_field=match_key,
                     sync_mode=sync_mode,
                     schedule_interval_minutes=interval,
+                    schedule_window_start=w_start,
+                    schedule_window_end=w_end,
                 ),
             )
             binding = await WorkOrderSyncBinding.filter(tenant_id=tenant_id).first()

@@ -21,6 +21,8 @@ class MasterDataSyncBindingOut(BaseSchema):
     match_key_field: str = "code"
     sync_mode: str = "manual_full"
     schedule_interval_minutes: int = 15
+    schedule_window_start: Optional[str] = None
+    schedule_window_end: Optional[str] = None
     last_success_at: Optional[datetime] = None
     last_attempt_at: Optional[datetime] = None
     last_error: Optional[str] = None
@@ -35,6 +37,8 @@ class MasterDataSyncBindingUpsert(BaseSchema):
     match_key_field: Optional[str] = None
     sync_mode: Optional[str] = None
     schedule_interval_minutes: Optional[int] = None
+    schedule_window_start: Optional[str] = None
+    schedule_window_end: Optional[str] = None
 
 
 class MasterDataSyncFromSourceRequest(BaseSchema):
@@ -47,6 +51,8 @@ class MasterDataSyncFromSourceRequest(BaseSchema):
     skip_prerequisite_syncs: bool = False
     sync_mode: Optional[str] = None
     schedule_interval_minutes: Optional[int] = None
+    schedule_window_start: Optional[str] = None
+    schedule_window_end: Optional[str] = None
     incremental: Optional[bool] = None
     """仅同步有效主数据（已审核未禁用）或未完成单据（已审核未关闭）。默认开启。"""
     active_only: bool = True

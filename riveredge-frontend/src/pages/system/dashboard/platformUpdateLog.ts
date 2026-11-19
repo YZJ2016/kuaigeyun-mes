@@ -44,6 +44,46 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'sales-doc-header-totals-sync-r01',
+    date: '2026-11-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-doc-header-totals-sync-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-doc-header-totals-sync-r01.description',
+  },
+  {
+    id: 'purchase-receipt-detail-line-finance-r01',
+    date: '2026-11-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-detail-line-finance-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-detail-line-finance-r01.description',
+  },
+  {
+    id: 'purchase-tax-header-sync-po-pr-r01',
+    date: '2026-11-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-tax-header-sync-po-pr-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-tax-header-sync-po-pr-r01.description',
+  },
+  {
+    id: 'sync-inbound-schedule-window-r01',
+    date: '2026-11-14',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-inbound-schedule-window-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sync-inbound-schedule-window-r01.description',
+  },
+  {
+    id: 'sync-run-history-stats-summary-r01',
+    date: '2026-11-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sync-run-history-stats-summary-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sync-run-history-stats-summary-r01.description',
+  },
+  {
     id: 'inbound-sync-mapped-field-update-r01',
     date: '2026-11-14',
     type: 'fix',

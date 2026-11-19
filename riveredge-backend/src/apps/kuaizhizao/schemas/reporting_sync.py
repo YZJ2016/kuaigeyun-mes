@@ -19,6 +19,8 @@ class ReportingSyncBindingOut(BaseSchema):
     sync_mode: str = "manual_full"
     sync_direction: str = "pull"
     schedule_interval_minutes: int = 15
+    schedule_window_start: Optional[str] = None
+    schedule_window_end: Optional[str] = None
     last_success_at: Optional[datetime] = None
     last_attempt_at: Optional[datetime] = None
     last_error: Optional[str] = None
@@ -34,6 +36,8 @@ class ReportingSyncBindingUpsert(BaseSchema):
     sync_mode: Optional[str] = None
     sync_direction: Optional[str] = None
     schedule_interval_minutes: Optional[int] = None
+    schedule_window_start: Optional[str] = None
+    schedule_window_end: Optional[str] = None
 
 
 class ReportingSyncFromSourceRequest(BaseSchema):
@@ -47,6 +51,8 @@ class ReportingSyncFromSourceRequest(BaseSchema):
     sync_mode: Optional[str] = None
     sync_direction: Optional[str] = None
     schedule_interval_minutes: Optional[int] = None
+    schedule_window_start: Optional[str] = None
+    schedule_window_end: Optional[str] = None
     incremental: Optional[bool] = None
     active_only: bool = True
 

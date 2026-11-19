@@ -92,7 +92,7 @@ export type BuildInboundHubDetailLineColumnsOptions = {
   renderLineQuantity?: (qty: unknown, unit?: string) => React.ReactNode;
 };
 
-function buildPurchaseReceiptDetailFinanceColumns(
+export function buildPurchaseReceiptDetailFinanceColumns(
   t: TFunction,
   headerTaxRate?: number | null,
 ): ColumnsType<InboundHubDetailLineRow> {

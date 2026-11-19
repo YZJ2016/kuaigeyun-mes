@@ -33,6 +33,8 @@ from apps.master_data.services.master_data_sync_common import (
     sources_from_upsert_body,
     sync_record_needs_update,
     upsert_sync_binding,
+    resolve_schedule_window_for_sync_request,
+    resolve_upsert_schedule_from_body,
 )
 from core.services.data.sync_binding_sources import fetch_mapped_rows_from_sources
 from apps.master_data.services.supply_chain_service import _normalize_partner_name
@@ -158,7 +160,9 @@ class SupplierSyncService:
         sources = sources_from_upsert_body(body)
         match_key = (body.match_key_field or self.MATCH_KEY).strip() or self.MATCH_KEY
         sync_mode = normalize_sync_mode(body.sync_mode)
-        interval = normalize_schedule_interval(body.schedule_interval_minutes)
+        interval, w_start, w_end = await resolve_upsert_schedule_from_body(
+            SupplierSyncBinding, tenant_id, body
+        )
         row = await upsert_sync_binding(
             SupplierSyncBinding,
             tenant_id,
@@ -166,6 +170,8 @@ class SupplierSyncService:
             match_key_field=match_key,
             sync_mode=sync_mode,
             schedule_interval_minutes=interval,
+            schedule_window_start=w_start,
+            schedule_window_end=w_end,
         )
         return self.serialize_binding(row)
     async def get_binding(self, tenant_id: int) -> MasterDataSyncBindingOut:
@@ -193,6 +199,8 @@ class SupplierSyncService:
             if req.schedule_interval_minutes is not None
             else (binding.schedule_interval_minutes if binding else None)
         )
+        w_start, w_end = resolve_schedule_window_for_sync_request(req, binding)
+
         if req.save_binding:
             await self.upsert_binding(
                 tenant_id,
@@ -201,6 +209,8 @@ class SupplierSyncService:
                     match_key_field=match_key,
                     sync_mode=sync_mode,
                     schedule_interval_minutes=interval,
+                    schedule_window_start=w_start,
+                    schedule_window_end=w_end,
                 ),
             )
             binding = await SupplierSyncBinding.filter(tenant_id=tenant_id).first()

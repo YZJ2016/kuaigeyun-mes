@@ -89,6 +89,8 @@ _SALES_ORDER_PERSIST_EXCLUDE = frozenset({
     "document_flow_source_id",
     "document_flow_source_item_ids",
     "document_flow_release_lines",
+    "total_quantity",
+    "total_amount",
 })
 
 
@@ -520,6 +522,28 @@ class SalesOrderService:
         ship = Decimal(str(shipped_qty or 0))
         p_ship = float(min(Decimal("100"), (ship / total_qty) * Decimal("100"))) if ship > 0 else 0.0
         return round(max(p_line, p_ship), 1)
+
+    async def _sync_sales_order_header_from_items(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+    ) -> None:
+        """头表数量/金额唯一直源于明细行汇总（整单覆盖金额仅在改明细时按比例分摊到行）。"""
+        items = await SalesOrderItem.filter(
+            tenant_id=tenant_id, sales_order_id=sales_order_id
+        ).order_by("id")
+        total_qty = sum(
+            (Decimal(str(getattr(it, "order_quantity", 0) or 0)) for it in items),
+            start=Decimal("0"),
+        )
+        total_amt = sum(
+            (Decimal(str(getattr(it, "total_amount", 0) or 0)) for it in items),
+            start=Decimal("0"),
+        )
+        await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
+            total_quantity=total_qty,
+            total_amount=self._money(total_amt),
+        )
 
     async def _shipped_qty_by_sales_order(
         self,
@@ -2292,6 +2316,9 @@ class SalesOrderService:
             await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(review_status=ReviewStatus.APPROVED)
             order = await SalesOrder.get(tenant_id=tenant_id, id=sales_order_id)
 
+        await self._sync_sales_order_header_from_items(tenant_id, sales_order_id)
+        order = await SalesOrder.get(tenant_id=tenant_id, id=sales_order_id)
+
         items = None
         material_code_fallback: Dict[int, str] = {}
         material_fallback: Dict[int, Dict[str, Any]] = {}
@@ -3546,6 +3573,8 @@ class SalesOrderService:
                 await terms_svc.replace_order_milestones(
                     tenant_id, sales_order_id, sales_order_data.payment_milestones
                 )
+
+            await self._sync_sales_order_header_from_items(tenant_id, sales_order_id)
 
         # 保存回包只需状态/明细摘要，勿走完整 capabilities/账款/可发货（会拖慢每次保存）
         result = await self.get_sales_order_by_id(

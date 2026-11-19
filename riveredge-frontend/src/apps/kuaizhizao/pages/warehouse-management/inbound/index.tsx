@@ -169,6 +169,7 @@ import {
 } from './inboundHubTypes';
 import { toApiBusinessDocumentDateTime } from '../../../../../utils/formDate';
 import { inboundReceiptTypeMarkerValueEnum, renderInboundReceiptTypeMarkerTag } from '../shared/warehouseMarkerTags';
+import { buildPurchaseReceiptDetailFinanceColumns } from '../shared/warehouseLineDetailColumns';
 import {
   normalizeInboundHubDetail,
   resolveInboundHubDetailItems,
@@ -422,7 +423,7 @@ async function fetchStorageLocationsForWarehouse(
   }
 }
 
-const INBOUND_DETAIL_ITEMS_MIN_WIDTH = 1480;
+const INBOUND_DETAIL_ITEMS_MIN_WIDTH = 2080;
 
 /** 详情明细：物料编码/名称后接规格、型号（与库存即时查询列一致） */
 function buildInboundDetailMaterialCols(t: (key: string) => string) {
@@ -2527,6 +2528,10 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
             width: 72,
             render: (_: unknown, row: InboundOrderItem) => renderInboundDetailUnitCell(row),
           },
+          ...buildPurchaseReceiptDetailFinanceColumns(
+            t,
+            (currentOrder as { tax_rate?: number }).tax_rate ?? null,
+          ),
           { title: t('app.kuaizhizao.warehouseInbound.col.locationCode'), dataIndex: 'location_code', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
           { title: t('app.kuaizhizao.warehouseInbound.col.batchNumber'), dataIndex: 'batch_number', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
           {

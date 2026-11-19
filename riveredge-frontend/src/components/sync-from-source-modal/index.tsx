@@ -18,9 +18,11 @@ import {
   Switch,
   Table,
   Tabs,
+  TimePicker,
   Tooltip,
   Typography,
 } from 'antd';
+import dayjs, { type Dayjs } from 'dayjs';
 import { SyncRunHistoryPanel } from '../sync-push-hub/SyncRunHistoryPanel';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { loadAllActiveApis } from '../../utils/activeApiSelectOptions';
@@ -68,6 +70,19 @@ function resolveDraftDisplayName(
 
 function countMappedFields(draft: SyncSourceDraft): number {
   return Object.values(draft.targetToSource).filter(Boolean).length;
+}
+
+function buildScheduleWindowFields(window: [Dayjs, Dayjs] | null): {
+  schedule_window_start: string | null;
+  schedule_window_end: string | null;
+} {
+  if (!window) {
+    return { schedule_window_start: null, schedule_window_end: null };
+  }
+  return {
+    schedule_window_start: window[0].format('HH:mm'),
+    schedule_window_end: window[1].format('HH:mm'),
+  };
 }
 
 function mappingPairLines(
@@ -215,6 +230,7 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
   const [inferParentByCode, setInferParentByCode] = useState(false);
   const [syncMode, setSyncMode] = useState<string>('manual_full');
   const [scheduleIntervalMinutes, setScheduleIntervalMinutes] = useState<number>(15);
+  const [scheduleWindow, setScheduleWindow] = useState<[Dayjs, Dayjs] | null>(null);
   const [bindingMeta, setBindingMeta] = useState<Pick<
     SyncBinding,
     'last_success_at' | 'last_attempt_at' | 'last_error'
@@ -527,6 +543,14 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
         if (binding.schedule_interval_minutes) {
           setScheduleIntervalMinutes(binding.schedule_interval_minutes);
         }
+        if (binding.schedule_window_start && binding.schedule_window_end) {
+          setScheduleWindow([
+            dayjs(binding.schedule_window_start, 'HH:mm'),
+            dayjs(binding.schedule_window_end, 'HH:mm'),
+          ]);
+        } else {
+          setScheduleWindow(null);
+        }
         setBindingMeta({
           last_success_at: binding.last_success_at,
           last_attempt_at: binding.last_attempt_at,
@@ -696,6 +720,7 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
           skip_prerequisite_syncs: config.skipBackendPrerequisites ?? prerequisiteSteps.length > 0,
           sync_mode: syncMode,
           schedule_interval_minutes: scheduleIntervalMinutes,
+          ...buildScheduleWindowFields(scheduleWindow),
           // 与「同步方式」一致：定时增量时按 last_success_at 水位拉变更，勿硬编码全量
           incremental: syncMode === 'scheduled_incremental',
           active_only: activeOnly,
@@ -1031,6 +1056,29 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
             ) : null}
           </div>
 
+          {syncMode === 'scheduled_incremental' || syncMode === 'scheduled_full' ? (
+            <>
+              <Typography.Text type="secondary" style={SYNC_FIELD_LABEL_STYLE}>
+                {t('components.syncFromSource.scheduleWindow')}
+              </Typography.Text>
+              <div style={SYNC_FIELD_CONTROL_STYLE}>
+                <TimePicker.RangePicker
+                  format="HH:mm"
+                  order={false}
+                  allowClear
+                  value={scheduleWindow}
+                  onChange={(values) => {
+                    if (!values || !values[0] || !values[1]) {
+                      setScheduleWindow(null);
+                      return;
+                    }
+                    setScheduleWindow([values[0], values[1]]);
+                  }}
+                />
+              </div>
+            </>
+          ) : null}
+
           <span />
           <Typography.Text type="secondary" style={{ fontSize: 12, lineHeight: 1.5 }}>
             {t(
@@ -1038,6 +1086,9 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
                 ? 'components.syncFromSource.syncMode.incrementalHint'
                 : 'components.syncFromSource.syncMode.fullHint',
             )}
+            {syncMode === 'scheduled_incremental' || syncMode === 'scheduled_full'
+              ? ` ${t('components.syncFromSource.scheduleWindowHint')}`
+              : ''}
           </Typography.Text>
         </div>
 

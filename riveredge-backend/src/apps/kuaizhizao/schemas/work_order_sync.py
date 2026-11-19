@@ -18,6 +18,8 @@ class WorkOrderSyncBindingOut(BaseSchema):
     match_key_field: str = "code"
     sync_mode: str = "manual_full"
     schedule_interval_minutes: int = 15
+    schedule_window_start: Optional[str] = None
+    schedule_window_end: Optional[str] = None
     last_success_at: Optional[datetime] = None
     last_attempt_at: Optional[datetime] = None
     last_error: Optional[str] = None
@@ -32,6 +34,8 @@ class WorkOrderSyncBindingUpsert(BaseSchema):
     match_key_field: Optional[str] = None
     sync_mode: Optional[str] = None
     schedule_interval_minutes: Optional[int] = None
+    schedule_window_start: Optional[str] = None
+    schedule_window_end: Optional[str] = None
 
 
 class WorkOrderSyncFromSourceRequest(BaseSchema):
@@ -43,6 +47,8 @@ class WorkOrderSyncFromSourceRequest(BaseSchema):
     save_binding: bool = False
     sync_mode: Optional[str] = None
     schedule_interval_minutes: Optional[int] = None
+    schedule_window_start: Optional[str] = None
+    schedule_window_end: Optional[str] = None
     incremental: Optional[bool] = None
     skip_prerequisite_syncs: bool = False
     """仅同步有效主数据或未完成单据。默认开启。"""

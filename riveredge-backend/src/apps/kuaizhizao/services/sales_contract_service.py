@@ -785,6 +785,12 @@ class SalesContractService(AppBaseService[SalesContract]):
             tenant_id, contract_id, current_user=current_user
         )
         await self._normalize_contract_release_after_downstream_removed(contract)
+        enter_line = self._normalize_enter_line_items(
+            getattr(contract, "enter_line_items", True),
+            default=True,
+        )
+        if not self._is_amount_framework(enter_line):
+            await self._refresh_contract_totals(tenant_id, contract_id)
         contract = await SalesContract.get(tenant_id=tenant_id, id=contract_id)
         items = None
         milestones = None
@@ -870,6 +876,7 @@ class SalesContractService(AppBaseService[SalesContract]):
                     "customer_contact",
                     "customer_phone",
                     "total_amount",
+                    "total_quantity",
                 },
             )
             if "enter_line_items" in update_fields and not is_draft:
@@ -931,6 +938,12 @@ class SalesContractService(AppBaseService[SalesContract]):
                     tenant_id,
                     contract_id,
                     data.discount_amount,
+                )
+            elif not self._is_amount_framework(enter_line_items):
+                await self._refresh_contract_totals(
+                    tenant_id,
+                    contract_id,
+                    getattr(data, "discount_amount", None),
                 )
             if (
                 not self._is_amount_framework(enter_line_items)

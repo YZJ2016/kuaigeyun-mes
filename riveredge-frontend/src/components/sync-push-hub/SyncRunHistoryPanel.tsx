@@ -35,6 +35,25 @@ function statusMarkerColor(status: string): 'success' | 'warning' | 'error' | 'd
   return 'default';
 }
 
+function formatInboundSyncRunStats(
+  record: DocumentPushRunHistoryItem,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  const parts = [
+    t('components.syncPushHub.historyStatsFetched', { n: record.fetched ?? 0 }),
+    t('components.syncPushHub.historyStatsCreated', { n: record.created ?? 0 }),
+    t('components.syncPushHub.historyStatsUpdated', { n: record.updated ?? 0 }),
+    t('components.syncPushHub.historyStatsSkipped', { n: record.skipped ?? 0 }),
+  ];
+  if ((record.failed ?? 0) > 0) {
+    parts.push(t('components.syncPushHub.historyStatsFailed', { n: record.failed ?? 0 }));
+  }
+  if (record.truncated) {
+    parts.push(t('components.syncPushHub.historyStatsTruncated'));
+  }
+  return parts.join(' ');
+}
+
 export const SyncRunHistoryPanel: React.FC<SyncRunHistoryPanelProps> = ({
   active,
   sourceType,
@@ -151,13 +170,18 @@ export const SyncRunHistoryPanel: React.FC<SyncRunHistoryPanelProps> = ({
         key: 'error_summary',
         ellipsis: true,
         render: (value?: string | null, record?: DocumentPushRunHistoryItem) => {
-          if (!value) return '-';
-          const text = value.length > 96 ? `${value.slice(0, 96)}…` : value;
-          const danger = record?.status === 'failed' || record?.status === 'partial';
+          if (!record) return '-';
+          const isPush = record.entity_type === 'document_push' || record.mode === 'push';
+          const stats = isPush ? '' : formatInboundSyncRunStats(record, t);
+          const detail = (value || '').trim();
+          const text = detail ? (stats ? `${stats} ${detail}` : detail) : stats;
+          if (!text) return '-';
+          const shown = text.length > 96 ? `${text.slice(0, 96)}…` : text;
+          const danger = record.status === 'failed' || record.status === 'partial';
           return (
-            <Tooltip title={value}>
+            <Tooltip title={text}>
               <Typography.Text type={danger ? 'danger' : undefined} style={{ fontSize: 12 }}>
-                {text}
+                {shown}
               </Typography.Text>
             </Tooltip>
           );

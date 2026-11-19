@@ -68,6 +68,8 @@ from apps.master_data.services.unit_sync_service import MaterialUnitSyncService
 
 from apps.master_data.services.warehouse_sync_service import WarehouseSyncService
 
+from core.utils.sync_schedule_window import is_within_schedule_window
+
 from core.utils.timezone_utils import resolve_business_datetime
 
 
@@ -87,6 +89,10 @@ def _due(binding: Any) -> bool:
         return False
 
     if not (getattr(binding, "source_type", None) or "").strip():
+
+        return False
+
+    if not is_within_schedule_window(binding):
 
         return False
 

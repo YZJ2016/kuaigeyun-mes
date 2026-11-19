@@ -50,6 +50,8 @@ export interface SyncBinding {
   match_key_field?: string;
   sync_mode?: string;
   schedule_interval_minutes?: number;
+  schedule_window_start?: string | null;
+  schedule_window_end?: string | null;
   last_success_at?: string | null;
   last_attempt_at?: string | null;
   last_error?: string | null;
@@ -65,6 +67,8 @@ export interface SyncFromSourcePayload {
   skip_prerequisite_syncs?: boolean;
   sync_mode?: string;
   schedule_interval_minutes?: number;
+  schedule_window_start?: string | null;
+  schedule_window_end?: string | null;
   incremental?: boolean;
   /** 仅同步有效主数据或未完成单据，默认 true */
   active_only?: boolean;

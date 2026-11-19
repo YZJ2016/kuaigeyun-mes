@@ -55,6 +55,8 @@ from apps.master_data.services.master_data_sync_common import (
     serialize_binding_row,
     sources_from_upsert_body,
     upsert_sync_binding,
+    resolve_upsert_schedule_from_body,
+    resolve_schedule_window_for_sync_request,
 )
 from apps.master_data.config.partner_settlement_codes import partner_settlement_terms_for_pricing
 from apps.master_data.models.material import Material
@@ -129,7 +131,9 @@ class PurchaseOrderSyncService:
         sources = sources_from_upsert_body(body)
         match_key = (body.match_key_field or "order_code").strip() or "order_code"
         sync_mode = normalize_sync_mode(body.sync_mode)
-        interval = normalize_schedule_interval(body.schedule_interval_minutes)
+        interval, w_start, w_end = await resolve_upsert_schedule_from_body(
+            PurchaseOrderSyncBinding, tenant_id, body
+        )
         row = await upsert_sync_binding(
             PurchaseOrderSyncBinding,
             tenant_id,
@@ -137,6 +141,8 @@ class PurchaseOrderSyncService:
             match_key_field=match_key,
             sync_mode=sync_mode,
             schedule_interval_minutes=interval,
+            schedule_window_start=w_start,
+            schedule_window_end=w_end,
         )
         return self.serialize_binding(row)
 
@@ -220,6 +226,8 @@ class PurchaseOrderSyncService:
             if req.schedule_interval_minutes is not None
             else (binding.schedule_interval_minutes if binding else None)
         )
+        w_start, w_end = resolve_schedule_window_for_sync_request(req, binding)
+
         if req.save_binding:
             await self.upsert_binding(
                 tenant_id,
@@ -228,6 +236,8 @@ class PurchaseOrderSyncService:
                     match_key_field=match_key,
                     sync_mode=sync_mode,
                     schedule_interval_minutes=interval,
+                    schedule_window_start=w_start,
+                    schedule_window_end=w_end,
                 ),
             )
             binding = await PurchaseOrderSyncBinding.filter(tenant_id=tenant_id).first()

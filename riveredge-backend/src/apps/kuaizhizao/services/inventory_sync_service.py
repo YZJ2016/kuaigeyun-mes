@@ -39,6 +39,8 @@ from apps.master_data.services.master_data_sync_common import (
     resolve_sync_sources,
     sources_from_upsert_body,
     upsert_sync_binding,
+    resolve_schedule_window_for_sync_request,
+    resolve_upsert_schedule_from_body,
 )
 from core.services.data.sync_binding_sources import fetch_mapped_rows_from_sources
 from core.services.data.sync_progress import emit_sync_progress
@@ -147,7 +149,9 @@ class InventorySyncService:
         match_key = (body.match_key_field or self.MATCH_KEY).strip() or self.MATCH_KEY
         sync_mode = normalize_sync_mode(body.sync_mode)
         sync_direction = normalize_sync_direction(body.sync_direction)
-        interval = normalize_schedule_interval(body.schedule_interval_minutes)
+        interval, w_start, w_end = await resolve_upsert_schedule_from_body(
+            InventorySyncBinding, tenant_id, body
+        )
         row = await upsert_sync_binding(
             InventorySyncBinding,
             tenant_id,
@@ -156,6 +160,8 @@ class InventorySyncService:
             sync_mode=sync_mode,
             sync_direction=sync_direction,
             schedule_interval_minutes=interval,
+            schedule_window_start=w_start,
+            schedule_window_end=w_end,
         )
         return self.serialize_binding(row)
 
@@ -192,6 +198,8 @@ class InventorySyncService:
             else (binding.schedule_interval_minutes if binding else None)
         )
 
+        w_start, w_end = resolve_schedule_window_for_sync_request(req, binding)
+
         if req.save_binding:
             await self.upsert_binding(
                 tenant_id,
@@ -201,6 +209,8 @@ class InventorySyncService:
                     sync_mode=sync_mode,
                     sync_direction=sync_direction,
                     schedule_interval_minutes=interval,
+                    schedule_window_start=w_start,
+                    schedule_window_end=w_end,
                 ),
             )
             binding = await InventorySyncBinding.filter(tenant_id=tenant_id).first()
@@ -558,6 +568,8 @@ class InventorySyncService:
             "last_success_at": existing.last_success_at if existing else None,
             "last_attempt_at": existing.last_attempt_at if existing else None,
             "last_error": existing.last_error if existing else None,
+            "schedule_window_start": getattr(existing, "schedule_window_start", None) if existing else None,
+            "schedule_window_end": getattr(existing, "schedule_window_end", None) if existing else None,
         }
         await InventorySyncBinding.filter(tenant_id=tenant_id).delete()
         return await InventorySyncBinding.create(

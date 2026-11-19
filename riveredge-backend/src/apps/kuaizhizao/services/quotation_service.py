@@ -689,7 +689,13 @@ class QuotationService:
                 total_quantity=getattr(quotation_data, "total_quantity", None),
                 total_amount=getattr(quotation_data, "total_amount", None),
             )
-            q_dict = quotation_data.model_dump(exclude={"items"})
+            from apps.kuaizhizao.services.document_header_amount_contract import (
+                SALES_GOODS_DERIVED_HEADER_FIELDS,
+            )
+
+            q_dict = quotation_data.model_dump(
+                exclude={"items", *SALES_GOODS_DERIVED_HEADER_FIELDS}
+            )
             from apps.common.base_service import AppBaseService
 
             operator_name = await AppBaseService().get_user_name(created_by)
@@ -1292,6 +1298,11 @@ class QuotationService:
             if not quotation:
                 raise NotFoundError(f"报价单不存在: {quotation_id}")
 
+        await self._refresh_quotation_totals(tenant_id, quotation_id)
+        quotation = await Quotation.get(
+            tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
+        )
+
         items = None
         if include_items:
             items = await QuotationItem.filter(
@@ -1833,7 +1844,13 @@ class QuotationService:
                 total_quantity=getattr(quotation_data, "total_quantity", None),
                 total_amount=getattr(quotation_data, "total_amount", None),
             )
-            upd = quotation_data.model_dump(exclude_unset=True, exclude={"items"})
+            from apps.kuaizhizao.services.document_header_amount_contract import (
+                SALES_GOODS_DERIVED_HEADER_FIELDS,
+            )
+
+            upd = quotation_data.model_dump(
+                exclude_unset=True, exclude={"items", *SALES_GOODS_DERIVED_HEADER_FIELDS}
+            )
             upd["updated_by"] = updated_by
             if upd:
                 await Quotation.filter(id=quotation_id).update(**upd)
@@ -1890,6 +1907,8 @@ class QuotationService:
                     quotation_id,
                     quotation_data.discount_amount,
                 )
+            else:
+                await self._refresh_quotation_totals(tenant_id, quotation_id)
 
         return await self.get_quotation_by_id(tenant_id, quotation_id, include_items=True)
 

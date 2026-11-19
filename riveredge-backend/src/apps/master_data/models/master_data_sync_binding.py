@@ -27,6 +27,8 @@ class CustomerSyncBinding(BaseModel):
         description="manual_full | scheduled_full | scheduled_incremental",
     )
     schedule_interval_minutes = fields.IntField(default=15, description="定时同步间隔（分钟）")
+    schedule_window_start = fields.CharField(max_length=5, null=True, description="定时同步允许时段开始 HH:mm")
+    schedule_window_end = fields.CharField(max_length=5, null=True, description="定时同步允许时段结束 HH:mm")
     last_success_at = fields.DatetimeField(null=True, description="最近一次成功同步时间")
     last_attempt_at = fields.DatetimeField(null=True, description="最近一次尝试同步时间")
     last_error = fields.TextField(null=True, description="最近一次同步错误")
@@ -54,6 +56,8 @@ class SupplierSyncBinding(BaseModel):
         description="manual_full | scheduled_full | scheduled_incremental",
     )
     schedule_interval_minutes = fields.IntField(default=15, description="定时同步间隔（分钟）")
+    schedule_window_start = fields.CharField(max_length=5, null=True, description="定时同步允许时段开始 HH:mm")
+    schedule_window_end = fields.CharField(max_length=5, null=True, description="定时同步允许时段结束 HH:mm")
     last_success_at = fields.DatetimeField(null=True, description="最近一次成功同步时间")
     last_attempt_at = fields.DatetimeField(null=True, description="最近一次尝试同步时间")
     last_error = fields.TextField(null=True, description="最近一次同步错误")
@@ -81,6 +85,8 @@ class WarehouseSyncBinding(BaseModel):
         description="manual_full | scheduled_full | scheduled_incremental",
     )
     schedule_interval_minutes = fields.IntField(default=15, description="定时同步间隔（分钟）")
+    schedule_window_start = fields.CharField(max_length=5, null=True, description="定时同步允许时段开始 HH:mm")
+    schedule_window_end = fields.CharField(max_length=5, null=True, description="定时同步允许时段结束 HH:mm")
     last_success_at = fields.DatetimeField(null=True, description="最近一次成功同步时间")
     last_attempt_at = fields.DatetimeField(null=True, description="最近一次尝试同步时间")
     last_error = fields.TextField(null=True, description="最近一次同步错误")
@@ -108,6 +114,8 @@ class MaterialSyncBinding(BaseModel):
         description="manual_full | scheduled_full | scheduled_incremental",
     )
     schedule_interval_minutes = fields.IntField(default=15, description="定时同步间隔（分钟）")
+    schedule_window_start = fields.CharField(max_length=5, null=True, description="定时同步允许时段开始 HH:mm")
+    schedule_window_end = fields.CharField(max_length=5, null=True, description="定时同步允许时段结束 HH:mm")
     last_success_at = fields.DatetimeField(null=True, description="最近一次成功同步时间")
     last_attempt_at = fields.DatetimeField(null=True, description="最近一次尝试同步时间")
     last_error = fields.TextField(null=True, description="最近一次同步错误")
@@ -135,6 +143,8 @@ class MaterialUnitSyncBinding(BaseModel):
         description="manual_full | scheduled_full | scheduled_incremental",
     )
     schedule_interval_minutes = fields.IntField(default=15, description="定时同步间隔（分钟）")
+    schedule_window_start = fields.CharField(max_length=5, null=True, description="定时同步允许时段开始 HH:mm")
+    schedule_window_end = fields.CharField(max_length=5, null=True, description="定时同步允许时段结束 HH:mm")
     last_success_at = fields.DatetimeField(null=True, description="最近一次成功同步时间")
     last_attempt_at = fields.DatetimeField(null=True, description="最近一次尝试同步时间")
     last_error = fields.TextField(null=True, description="最近一次同步错误")
@@ -162,6 +172,8 @@ class MaterialGroupSyncBinding(BaseModel):
         description="manual_full | scheduled_full | scheduled_incremental",
     )
     schedule_interval_minutes = fields.IntField(default=15, description="定时同步间隔（分钟）")
+    schedule_window_start = fields.CharField(max_length=5, null=True, description="定时同步允许时段开始 HH:mm")
+    schedule_window_end = fields.CharField(max_length=5, null=True, description="定时同步允许时段结束 HH:mm")
     last_success_at = fields.DatetimeField(null=True, description="最近一次成功同步时间")
     last_attempt_at = fields.DatetimeField(null=True, description="最近一次尝试同步时间")
     last_error = fields.TextField(null=True, description="最近一次同步错误")
@@ -193,6 +205,8 @@ class EngineeringBomSyncBinding(BaseModel):
         description="manual_full | scheduled_full | scheduled_incremental",
     )
     schedule_interval_minutes = fields.IntField(default=15, description="定时同步间隔（分钟）")
+    schedule_window_start = fields.CharField(max_length=5, null=True, description="定时同步允许时段开始 HH:mm")
+    schedule_window_end = fields.CharField(max_length=5, null=True, description="定时同步允许时段结束 HH:mm")
     last_success_at = fields.DatetimeField(null=True, description="最近一次成功同步时间")
     last_attempt_at = fields.DatetimeField(null=True, description="最近一次尝试同步时间")
     last_error = fields.TextField(null=True, description="最近一次同步错误")
@@ -220,6 +234,8 @@ class OperationSyncBinding(BaseModel):
         description="manual_full | scheduled_full | scheduled_incremental",
     )
     schedule_interval_minutes = fields.IntField(default=15, description="定时同步间隔（分钟）")
+    schedule_window_start = fields.CharField(max_length=5, null=True, description="定时同步允许时段开始 HH:mm")
+    schedule_window_end = fields.CharField(max_length=5, null=True, description="定时同步允许时段结束 HH:mm")
     last_success_at = fields.DatetimeField(null=True, description="最近一次成功同步时间")
     last_attempt_at = fields.DatetimeField(null=True, description="最近一次尝试同步时间")
     last_error = fields.TextField(null=True, description="最近一次同步错误")

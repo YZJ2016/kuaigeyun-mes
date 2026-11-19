@@ -31,6 +31,7 @@ import { partnerDefaultPaymentMethodLabel } from '../../../../../master-data/uti
 import { payableLedgerRecognitionLabel } from '../../../../../../utils/documentLedgerRecognition';
 import { getInboundLifecycle } from '../../../../utils/inboundLifecycle';
 import { renderInboundReceiptTypeMarkerTag } from '../../shared/warehouseMarkerTags';
+import { buildPurchaseReceiptDetailFinanceColumns } from '../../shared/warehouseLineDetailColumns';
 import {
   inboundDocumentTrackingType,
   resolveInboundHubOperator,
@@ -358,7 +359,7 @@ export const InboundDetailDrawer: React.FC<InboundDetailDrawerProps> = ({
           size="small"
           rowKey={(r, idx) => String(r.id ?? r.material_id ?? idx)}
           pagination={false}
-          scroll={{ x: 900 }}
+          scroll={{ x: effective.receipt_type === 'purchase' ? 1420 : 900 }}
           dataSource={items}
           columns={[
             {
@@ -407,6 +408,12 @@ export const InboundDetailDrawer: React.FC<InboundDetailDrawerProps> = ({
               width: 100,
               render: (v) => (v != null && String(v).trim() ? String(v) : '—'),
             },
+            ...(effective.receipt_type === 'purchase'
+              ? buildPurchaseReceiptDetailFinanceColumns(
+                  t,
+                  (effective as { tax_rate?: number }).tax_rate ?? null,
+                )
+              : []),
             ...(effective.receipt_type === 'purchase'
               ? [
                   buildDocumentLineAttachmentsDrawerColumn(

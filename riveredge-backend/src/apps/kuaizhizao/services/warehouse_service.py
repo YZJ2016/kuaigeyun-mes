@@ -10139,7 +10139,19 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         # 让步接收等外层事务内创建：复用外层，避免 NestedTransaction 提前独立提交
         async with reuse_or_begin_transaction():
             # 创建入库单头
-            receipt_dict = receipt_data.model_dump(exclude_unset=True, exclude={'items', 'created_by', 'receipt_code'})
+            from apps.kuaicaiwu.services.purchase_settlement import (
+                PURCHASE_RECEIPT_COMPUTED_HEADER_FIELDS,
+            )
+
+            receipt_dict = receipt_data.model_dump(
+                exclude_unset=True,
+                exclude={
+                    "items",
+                    "created_by",
+                    "receipt_code",
+                    *PURCHASE_RECEIPT_COMPUTED_HEADER_FIELDS,
+                },
+            )
             receipt_dict.update({
                 'tenant_id': tenant_id,
                 'receipt_code': code,  # 使用生成的编码
@@ -11213,7 +11225,18 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
 
             # 更新入库单头
             user_info = await self.get_user_info(updated_by)
-            receipt_dict = receipt_data.model_dump(exclude_unset=True, exclude={"items", "receipt_code"})
+            from apps.kuaicaiwu.services.purchase_settlement import (
+                PURCHASE_RECEIPT_COMPUTED_HEADER_FIELDS,
+            )
+
+            receipt_dict = receipt_data.model_dump(
+                exclude_unset=True,
+                exclude={
+                    "items",
+                    "receipt_code",
+                    *PURCHASE_RECEIPT_COMPUTED_HEADER_FIELDS,
+                },
+            )
             if not int(receipt_dict.get("purchase_order_id") or 0):
                 receipt_dict.pop("purchase_order_id", None)
             if not str(receipt_dict.get("purchase_order_code") or "").strip():

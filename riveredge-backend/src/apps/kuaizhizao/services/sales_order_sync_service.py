@@ -40,6 +40,8 @@ from apps.master_data.services.master_data_sync_common import (
     resolve_sync_sources,
     sources_from_upsert_body,
     upsert_sync_binding,
+    resolve_upsert_schedule_from_body,
+    resolve_schedule_window_for_sync_request,
 )
 from apps.master_data.services.sync_association_service import (
     run_sales_order_prerequisite_syncs,
@@ -80,7 +82,9 @@ class SalesOrderSyncService:
         sources = sources_from_upsert_body(body)
         match_key = (body.match_key_field or "order_code").strip() or "order_code"
         sync_mode = normalize_sync_mode(body.sync_mode)
-        interval = normalize_schedule_interval(body.schedule_interval_minutes)
+        interval, w_start, w_end = await resolve_upsert_schedule_from_body(
+            SalesOrderSyncBinding, tenant_id, body
+        )
         row = await upsert_sync_binding(
             SalesOrderSyncBinding,
             tenant_id,
@@ -88,6 +92,8 @@ class SalesOrderSyncService:
             match_key_field=match_key,
             sync_mode=sync_mode,
             schedule_interval_minutes=interval,
+            schedule_window_start=w_start,
+            schedule_window_end=w_end,
         )
         return self.serialize_binding(row)
 
@@ -119,6 +125,8 @@ class SalesOrderSyncService:
             else (binding.schedule_interval_minutes if binding else None)
         )
 
+        w_start, w_end = resolve_schedule_window_for_sync_request(req, binding)
+
         if req.save_binding:
             await self.upsert_binding(
                 tenant_id,
@@ -127,6 +135,8 @@ class SalesOrderSyncService:
                     match_key_field=match_key,
                     sync_mode=sync_mode,
                     schedule_interval_minutes=interval,
+                    schedule_window_start=w_start,
+                    schedule_window_end=w_end,
                 ),
             )
             binding = await SalesOrderSyncBinding.filter(tenant_id=tenant_id).first()
