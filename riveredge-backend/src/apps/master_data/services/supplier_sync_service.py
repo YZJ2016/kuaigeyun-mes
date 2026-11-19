@@ -285,21 +285,52 @@ class SupplierSyncService:
                             )
                 break
 
+            # pbdfl 等扩展源：上面 loop 可能 continue 掉，补抓 path
+            if not last_source_api_path:
+                for src in sources:
+                    api_uuid = str(src.get("api_uuid") or "").strip() or None
+                    if not api_uuid:
+                        continue
+                    api_obj = await API.filter(tenant_id=tenant_id, uuid=api_uuid).first()
+                    if api_obj:
+                        last_source_api_path = str(
+                            getattr(api_obj, "path", "") or ""
+                        ).lower().replace("\\", "/")
+                        break
+
             def _filter_raw(raw_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+                from core.services.integration.kingdee_galaxy_material_active import (
+                    filter_galaxy_material_rows_active,
+                    is_galaxy_execute_bill_query_path,
+                    is_galaxy_material_row_active,
+                )
+                from core.services.integration.kingdee_cosmic_supplier_org_scope import (
+                    is_cosmic_supplier_row_active,
+                )
+
+                path_for_active = last_source_api_path
+                is_galaxy = is_galaxy_execute_bill_query_path(path_for_active)
+
                 out = raw_rows
                 if req.active_only:
-                    kept, skipped = filter_kingdee_approved_active_master_rows(out)
-                    invalid_skipped_holder["n"] += skipped
-                    out = kept
-                    from core.services.integration.kingdee_cosmic_supplier_org_scope import (
-                        filter_cosmic_supplier_rows_active,
-                    )
+                    if is_galaxy:
+                        before = len(out)
+                        out = filter_galaxy_material_rows_active(out)
+                        invalid_skipped_holder["n"] += before - len(out)
+                    else:
+                        # 星空列（FDocumentStatus）无则原样放行；苍穹再按 path 分支
+                        kept, skipped = filter_kingdee_approved_active_master_rows(out)
+                        invalid_skipped_holder["n"] += skipped
+                        out = kept
+                        from core.services.integration.kingdee_cosmic_supplier_org_scope import (
+                            filter_cosmic_supplier_rows_active,
+                        )
 
-                    before = len(out)
-                    out = filter_cosmic_supplier_rows_active(
-                        out, path=last_source_api_path
-                    )
-                    invalid_skipped_holder["n"] += before - len(out)
+                        before = len(out)
+                        out = filter_cosmic_supplier_rows_active(
+                            out, path=path_for_active
+                        )
+                        invalid_skipped_holder["n"] += before - len(out)
                 if use_getsupplier_org_rows and management_org:
                     from core.services.integration.kingdee_cosmic_supplier_org_scope import (
                         filter_cosmic_supplier_rows_by_management_org_number,
@@ -318,11 +349,32 @@ class SupplierSyncService:
                     before = len(out)
                     out = filter_cosmic_supplier_rows_by_org_numbers(out, org_allowed)
                     invalid_skipped_holder["n"] += before - len(out)
-                return out
+                # 写入 is_active：含不启用时停用行也要落库，不能一律 True
+                stamped: List[Dict[str, Any]] = []
+                for row in out:
+                    if not isinstance(row, dict):
+                        continue
+                    item = dict(row)
+                    if is_galaxy:
+                        item["sync_is_active"] = is_galaxy_material_row_active(item)
+                    else:
+                        item["sync_is_active"] = is_cosmic_supplier_row_active(
+                            item, path=path_for_active
+                        )
+                    stamped.append(item)
+                return stamped
+
+            sources_for_fetch: List[Dict[str, Any]] = []
+            for src in sources:
+                src_for_fetch = dict(src)
+                mapping = dict(src_for_fetch.get("field_mapping") or {})
+                mapping["sync_is_active"] = "is_active"
+                src_for_fetch["field_mapping"] = mapping
+                sources_for_fetch.append(src_for_fetch)
 
             rows, source_errors, _fetched = await fetch_mapped_rows_from_sources(
                 tenant_id,
-                sources,
+                sources_for_fetch,
                 since=since,
                 active_only=req.active_only,
                 transform_raw_rows=_filter_raw,

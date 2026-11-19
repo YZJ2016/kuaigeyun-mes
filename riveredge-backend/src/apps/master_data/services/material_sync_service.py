@@ -104,6 +104,28 @@ MATERIAL_SYNC_DECIMAL_FIELDS = frozenset(
 )
 MATERIAL_SYNC_INT_FIELDS = frozenset({"shelf_life_days"})
 
+# 批号/序列号：映射为空或绑错列时仍从金蝶主档开关列回填
+MATERIAL_SYNC_MAP_EMPTY_FALLBACKS: Dict[str, List[str]] = {
+    "batch_managed": ["enablelot", "enableLot", "FIsBatchManage"],
+    "serial_managed": ["enableserial", "enableSerial", "FIsSNManage"],
+}
+
+
+def _merge_material_sync_field_mapping(field_mapping: Dict[str, Any]) -> Dict[str, str]:
+    """合并同步映射：启用状态 + 批号/序列号主档列（不被错误 batch_managed 映射挡住）。"""
+    mapping = {str(k): str(v) for k, v in (field_mapping or {}).items() if str(k).strip() and str(v).strip()}
+    mapping["sync_is_active"] = "is_active"
+    if "FIsBatchManage" not in mapping:
+        mapping["FIsBatchManage"] = "batch_managed"
+    if "FIsSNManage" not in mapping:
+        mapping["FIsSNManage"] = "serial_managed"
+    # 苍穹 enablelot 优先于星空 FIsBatchManage（同 dict 内后写覆盖）
+    if "enablelot" not in mapping:
+        mapping["enablelot"] = "batch_managed"
+    if "enableserial" not in mapping:
+        mapping["enableserial"] = "serial_managed"
+    return mapping
+
 
 def _coerce_material_extra_value(
     field_name: str,
@@ -255,6 +277,7 @@ class MaterialSyncService:
             fetched_total = 0
             fetch_had_source_errors = False
             last_source_api_path = ""
+            inventory_tracking_by_number: Dict[str, Dict[str, Any]] = {}
             for src in sources:
                 field_mapping = src.get("field_mapping") or {}
                 source_field_names = {
@@ -300,6 +323,35 @@ class MaterialSyncService:
                                 "select": MATERIAL_SYNC_SELECT,
                             },
                         }
+                    elif api_obj and "executebillquery" in path_norm:
+                        from core.services.integration.kingdee_galaxy_api_presets import (
+                            MATERIAL_QUERY_FIELD_KEYS,
+                            _parse_execute_bill_query,
+                        )
+
+                        base_body = _parse_execute_bill_query(
+                            getattr(api_obj, "request_body", None)
+                        ) or {}
+                        form_id = str(
+                            base_body.get("FormId") or base_body.get("formId") or ""
+                        ).strip()
+                        if form_id.upper() == "BD_MATERIAL":
+                            merged_keys = str(
+                                base_body.get("FieldKeys")
+                                or base_body.get("fieldKeys")
+                                or ""
+                            ).strip()
+                            for part in MATERIAL_QUERY_FIELD_KEYS.split(","):
+                                key = part.strip()
+                                if key and key not in merged_keys:
+                                    merged_keys = (
+                                        f"{merged_keys},{key}" if merged_keys else key
+                                    )
+                            src = {
+                                **src,
+                                "request_body": {**base_body, "FieldKeys": merged_keys},
+                            }
+                    if api_obj and "/bd_material/batchquery" in path_norm:
                         await api_obj.fetch_related("integration_config")
                         conn = getattr(api_obj, "integration_config", None)
                         conn_type = str(getattr(conn, "type", "") or "").strip()
@@ -327,30 +379,94 @@ class MaterialSyncService:
                                 await emit_sync_progress(
                                     f"管理组织物料使用范围 {len(org_allowed)} 个编码"
                                 )
+                            try:
+                                from core.services.integration.kingdee_cosmic_material_inventory_info import (
+                                    fetch_cosmic_material_inventory_tracking_by_number,
+                                )
+
+                                await emit_sync_progress(
+                                    "拉取物料库存信息（批号/序列号开关）…"
+                                )
+                                inventory_tracking_by_number = (
+                                    await fetch_cosmic_material_inventory_tracking_by_number(
+                                        tenant_id,
+                                        connection_uuid=conn.uuid,
+                                        org_number=org or None,
+                                        active_only=req.active_only,
+                                    )
+                                )
+                                await emit_sync_progress(
+                                    f"库存信息批号/序列号 {len(inventory_tracking_by_number)} 个物料编码"
+                                )
+                            except ValidationError as inv_exc:
+                                fetch_had_source_errors = True
+                                result.errors = (
+                                    [str(inv_exc)]
+                                    + list(getattr(result, "errors", None) or [])
+                                )[:20]
 
                 def transform_raw(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-                    path_for_active = last_source_api_path.replace("\\", "/")
-                    out = rows
-                    if req.active_only and "/bd_material/batchquery" in path_for_active:
-                        from core.services.integration.kingdee_cosmic_material_active import (
-                            filter_cosmic_material_rows_active,
-                        )
+                    from core.services.integration.kingdee_cosmic_material_active import (
+                        filter_cosmic_material_rows_active,
+                        is_cosmic_material_row_active,
+                    )
+                    from core.services.integration.kingdee_cosmic_material_inventory_info import (
+                        apply_inventory_tracking_to_material_rows,
+                    )
+                    from core.services.integration.kingdee_galaxy_material_active import (
+                        filter_galaxy_material_rows_active,
+                        is_galaxy_execute_bill_query_path,
+                        is_galaxy_material_row_active,
+                    )
 
-                        out = filter_cosmic_material_rows_active(out)
+                    path_for_active = last_source_api_path.replace("\\", "/")
+                    is_cosmic_material = "/bd_material/batchquery" in path_for_active
+                    is_galaxy_material = is_galaxy_execute_bill_query_path(path_for_active)
+
+                    out = rows
+                    # 苍穹看 status/enable；星空看 FDocumentStatus/FForbidStatus。
+                    # 禁止对星空行套用苍穹过滤器，否则「仅有效」会把全部行滤成 fetched=0。
+                    if req.active_only:
+                        if is_cosmic_material:
+                            out = filter_cosmic_material_rows_active(out)
+                        elif is_galaxy_material:
+                            out = filter_galaxy_material_rows_active(out)
                     if org_allowed is not None:
                         from core.services.integration.kingdee_cosmic_material_org_scope import (
                             filter_cosmic_material_rows_by_org_numbers,
                         )
 
                         out = filter_cosmic_material_rows_by_org_numbers(out, org_allowed)
-                    return out
+                    out = apply_inventory_tracking_to_material_rows(
+                        out, inventory_tracking_by_number
+                    )
+                    # 写入 is_active：映射目标列，避免「仅有效」关掉后仍全量标启用
+                    stamped: List[Dict[str, Any]] = []
+                    for row in out:
+                        if not isinstance(row, dict):
+                            continue
+                        item = dict(row)
+                        if is_cosmic_material:
+                            item["sync_is_active"] = is_cosmic_material_row_active(item)
+                        elif is_galaxy_material:
+                            item["sync_is_active"] = is_galaxy_material_row_active(item)
+                        else:
+                            item["sync_is_active"] = True
+                        stamped.append(item)
+                    return stamped
+
+                src_for_fetch = dict(src)
+                src_for_fetch["field_mapping"] = _merge_material_sync_field_mapping(
+                    src_for_fetch.get("field_mapping") or {}
+                )
 
                 rows, source_errors, fetched = await fetch_mapped_rows_from_sources(
                     tenant_id,
-                    [src],
+                    [src_for_fetch],
                     since=since,
                     active_only=req.active_only,
                     transform_raw_rows=transform_raw,
+                    empty_fallbacks=MATERIAL_SYNC_MAP_EMPTY_FALLBACKS,
                 )
                 if source_errors:
                     fetch_had_source_errors = True
