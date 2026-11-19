@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from apps.kuaizhizao.services.over_report_rules import (
     OVER_REPORT_NONE,
+    clamp_over_report_value_for_mode,
     max_completed_quantity_for_plan,
     remaining_completed_headroom,
 )
@@ -55,3 +56,7 @@ def test_first_operation_material_incoming_none_stays_plan():
 
     op = SimpleNamespace(over_report_mode="none", over_report_value=Decimal("1000"))
     assert first_operation_material_incoming(Decimal("1000"), op) == Decimal("1000")
+
+
+def test_clamp_percent_caps_misentered_10000():
+    assert clamp_over_report_value_for_mode("percent", Decimal("10000")) == Decimal("100")
