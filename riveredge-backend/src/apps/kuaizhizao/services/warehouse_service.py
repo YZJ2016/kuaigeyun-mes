@@ -2929,6 +2929,39 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         confirmation_data: Optional[OutboundConfirmationRequest] = None,
     ) -> ProductionPickingResponse:
         """确认领料"""
+        from apps.kuaizhizao.services.kingdee_outbound_avb_precheck_service import (
+            OutboundAvbDemandLine,
+            assert_kingdee_avb_before_outbound_confirm,
+        )
+
+        picking_items_pre = await ProductionPickingItem.filter(
+            tenant_id=tenant_id, picking_id=picking_id
+        ).all()
+        avb_lines: List[OutboundAvbDemandLine] = []
+        for it in picking_items_pre:
+            qty = (
+                it.picked_quantity
+                if it.picked_quantity and it.picked_quantity > 0
+                else (it.required_quantity or Decimal(0))
+            )
+            if qty <= 0:
+                continue
+            wh_id = it.warehouse_id if getattr(it, "warehouse_id", None) else None
+            avb_lines.append(
+                OutboundAvbDemandLine(
+                    material_id=int(it.material_id),
+                    material_code=str(it.material_code or ""),
+                    material_name=getattr(it, "material_name", None),
+                    warehouse_id=int(wh_id) if wh_id else None,
+                    location_code=str(getattr(it, "location_code", None) or "") or None,
+                    batch_no=str(getattr(it, "batch_number", None) or "") or None,
+                    quantity=Decimal(str(qty)),
+                )
+            )
+        await assert_kingdee_avb_before_outbound_confirm(
+            tenant_id, "production_picking", avb_lines
+        )
+
         async with in_transaction():
             await self._assert_can_confirm_picking(tenant_id=tenant_id, user_id=confirmed_by)
             picking = await self.get_production_picking_by_id(tenant_id, picking_id)
@@ -9498,6 +9531,34 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         item_batches: Optional[List[SalesDeliveryConfirmItemBatch]] = None,
     ) -> SalesDeliveryResponse:
         """确认出库写路径（已在锁外完成 OQC/授信预校验）。"""
+        from apps.kuaizhizao.services.kingdee_outbound_avb_precheck_service import (
+            OutboundAvbDemandLine,
+            assert_kingdee_avb_before_outbound_confirm,
+        )
+
+        delivery_for_avb = await self.get_sales_delivery_by_id(tenant_id, delivery_id)
+        avb_lines: List[OutboundAvbDemandLine] = []
+        header_wh = delivery_for_avb.warehouse_id
+        for it in delivery_for_avb.items or []:
+            qty = it.delivery_quantity or Decimal(0)
+            if qty <= 0:
+                continue
+            line_wh = getattr(it, "warehouse_id", None) or header_wh
+            avb_lines.append(
+                OutboundAvbDemandLine(
+                    material_id=int(it.material_id),
+                    material_code=str(it.material_code or ""),
+                    material_name=getattr(it, "material_name", None),
+                    warehouse_id=int(line_wh) if line_wh else None,
+                    location_code=str(getattr(it, "location_code", None) or "") or None,
+                    batch_no=str(getattr(it, "batch_number", None) or "") or None,
+                    quantity=Decimal(str(qty)),
+                )
+            )
+        await assert_kingdee_avb_before_outbound_confirm(
+            tenant_id, "sales_delivery", avb_lines
+        )
+
         async with reuse_or_begin_transaction():
             delivery = await self.get_sales_delivery_by_id(tenant_id, delivery_id)
 
@@ -18765,6 +18826,33 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
         confirmation_data: Optional[OutboundConfirmationRequest] = None,
     ) -> OtherOutboundResponse:
         """确认出库"""
+        from apps.kuaizhizao.services.kingdee_outbound_avb_precheck_service import (
+            OutboundAvbDemandLine,
+            assert_kingdee_avb_before_outbound_confirm,
+        )
+
+        outbound_pre = await self.get_other_outbound_by_id(tenant_id, outbound_id)
+        avb_lines: List[OutboundAvbDemandLine] = []
+        for it in outbound_pre.items or []:
+            qty = it.outbound_quantity or Decimal(0)
+            if qty <= 0:
+                continue
+            wh = getattr(it, "warehouse_id", None) or outbound_pre.warehouse_id
+            avb_lines.append(
+                OutboundAvbDemandLine(
+                    material_id=int(it.material_id),
+                    material_code=str(it.material_code or ""),
+                    material_name=getattr(it, "material_name", None),
+                    warehouse_id=int(wh) if wh else None,
+                    location_code=str(getattr(it, "location_code", None) or "") or None,
+                    batch_no=str(getattr(it, "batch_number", None) or "") or None,
+                    quantity=Decimal(str(qty)),
+                )
+            )
+        await assert_kingdee_avb_before_outbound_confirm(
+            tenant_id, "other_outbound", avb_lines
+        )
+
         async with in_transaction(), stock_document_guard("other_outbound", tenant_id, outbound_id):
             outbound = await self.get_other_outbound_by_id(tenant_id, outbound_id)
 

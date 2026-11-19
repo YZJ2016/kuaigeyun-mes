@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'outbound-kingdee-avb-precheck-r01',
+    date: '2026-11-19',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-kingdee-avb-precheck-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-kingdee-avb-precheck-r01.description',
+  },
+  {
     id: 'other-outbound-header-totals-r01',
     date: '2026-11-19',
     type: 'fix',

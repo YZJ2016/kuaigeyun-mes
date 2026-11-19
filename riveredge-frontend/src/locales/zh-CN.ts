@@ -4206,6 +4206,10 @@ export default {
     '物料编号映射可保存多条供应商编码',
   'pages.dashboard.updateLog.entries.material-multi-supplier-code-mapping-r01.description':
     '编辑物料时增加多条供应商编号映射后保存，此前可能只留下一行：表单被父级重渲染冲掉未保存行，或后端吞掉别名冲突。现编号映射只在打开物料时灌入一次，客商编号按供应商区分唯一，冲突会明确报错且整段回滚。',
+  'pages.dashboard.updateLog.entries.outbound-kingdee-avb-precheck-r01.title':
+    '出库确认前核对金蝶可用量',
+  'pages.dashboard.updateLog.entries.outbound-kingdee-avb-precheck-r01.description':
+    '生产领料、销售出库、其他出库在确认后会自动推送金蝶时，确认前先核对金蝶可用量。不足或查询失败会中止确认，不会先过账再撤回。未配置即时库存接口时仍按原确认流程。',
   'pages.dashboard.updateLog.entries.other-outbound-header-totals-r01.title':
     '其他出库确认后列表总数量与明细一致',
   'pages.dashboard.updateLog.entries.other-outbound-header-totals-r01.description':
