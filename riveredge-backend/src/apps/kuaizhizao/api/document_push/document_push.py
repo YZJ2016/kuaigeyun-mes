@@ -53,6 +53,10 @@ class DocumentPushBody(BaseModel):
     connection_code: Optional[str] = Field(None, description="覆盖应用连接器 code")
     save_api_uuid: Optional[str] = Field(None, description="覆盖接口管理 Save UUID")
     dry_run: bool = Field(False, description="只组装报文不落库不调用")
+    force: bool = Field(
+        False,
+        description="强制重新推送：已有 DocumentRelation 时仍新建外部单并记录二次推送关联（静默自动推送勿传）",
+    )
 
 
 class DocumentPushProfileOut(BaseModel):
@@ -310,6 +314,7 @@ async def push_document_external(
             connection_code=body.connection_code,
             save_api_uuid=body.save_api_uuid,
             dry_run=bool(body.dry_run),
+            force=bool(body.force),
         )
     except ValidationError as exc:
         raise BusinessLogicError(str(exc)) from exc

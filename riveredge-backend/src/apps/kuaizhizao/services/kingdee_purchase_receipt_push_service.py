@@ -358,6 +358,7 @@ class KingdeePurchaseReceiptPushService:
         connection_code: Optional[str] = None,
         save_api_uuid: Optional[str] = None,
         dry_run: bool = False,
+        force: bool = False,
     ) -> Optional[Dict[str, Any]]:
         config = await self.get_push_config(tenant_id)
         code = str(connection_code or "").strip()
@@ -386,15 +387,17 @@ class KingdeePurchaseReceiptPushService:
             deleted_at__isnull=True,
         ).order_by("id")
 
-        already_pushed = await DocumentRelation.filter(
+        prior_push_count = await DocumentRelation.filter(
             tenant_id=tenant_id,
             source_type=SOURCE_TYPE,
             source_id=purchase_receipt_id,
             target_type=TARGET_TYPE,
-        ).exists()
+        ).count()
+        already_pushed = prior_push_count > 0
+        # force=True：人工重新推送，跳过「已推送」拦截；静默自动推送勿传 force
         skip_reason = purchase_receipt_push_skip_reason(
             receipt,
-            already_pushed=already_pushed,
+            already_pushed=already_pushed and not force,
             items=list(items),
         )
         if skip_reason:
@@ -408,6 +411,7 @@ class KingdeePurchaseReceiptPushService:
                 acting_user_id=acting_user_id,
                 config=config,
                 dry_run=dry_run,
+                prior_push_count=prior_push_count,
             )
         except Exception as exc:
             logger.warning(
@@ -435,6 +439,7 @@ class KingdeePurchaseReceiptPushService:
         acting_user_id: int,
         config: Dict[str, Any],
         dry_run: bool = False,
+        prior_push_count: int = 0,
     ) -> Dict[str, Any]:
         form_id = str(config.get("form_id") or DEFAULT_FORM_ID).strip() or DEFAULT_FORM_ID
         save_path = str(config.get("save_path") or DEFAULT_SAVE_PATH).strip() or DEFAULT_SAVE_PATH
@@ -520,6 +525,14 @@ class KingdeePurchaseReceiptPushService:
         if not (model.get("billentry") or []) and not dry_run:
             raise BusinessLogicError("采购入库单无有效明细数量，无法推送")
 
+        push_seq = int(prior_push_count or 0) + 1
+        is_repush = push_seq > 1
+        relation_desc = (
+            f"采购入库二次推送金蝶苍穹采购入库单（第{push_seq}次）"
+            if is_repush
+            else "采购入库推送金蝶苍穹采购入库单"
+        )
+
         request = DocumentPushRequest(
             source_type=SOURCE_TYPE,
             source_id=int(receipt.id),
@@ -535,7 +548,7 @@ class KingdeePurchaseReceiptPushService:
             model=model,
             target_type=TARGET_TYPE,
             target_name="金蝶苍穹采购入库单",
-            relation_desc="采购入库推送金蝶苍穹采购入库单",
+            relation_desc=relation_desc,
             connector_type="kingdee_cosmic",
             config=config,
         )
@@ -553,9 +566,7 @@ class KingdeePurchaseReceiptPushService:
                 target_name=str(result.get("target_name") or "金蝶苍穹采购入库单"),
                 relation_type="source",
                 relation_mode="push",
-                relation_desc=str(
-                    result.get("relation_desc") or "采购入库推送金蝶苍穹采购入库单"
-                ),
+                relation_desc=str(result.get("relation_desc") or relation_desc),
                 notes=to_api_isoformat(resolve_business_datetime()),
                 created_by=acting_user_id,
             )

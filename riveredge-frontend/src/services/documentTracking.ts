@@ -24,6 +24,10 @@ export interface DocumentTrackingTimelineItem {
   is_auto_approve?: boolean;
   /** 是否由系统自动生成（如下推关系自动产生） */
   is_auto_created?: boolean;
+  /** DocumentRelation.relation_desc */
+  relation_desc?: string;
+  /** 是否为强制重新推送产生的二次关联 */
+  is_repush?: boolean;
   result?: string;
   comment?: string;
   changed_fields?: string[];

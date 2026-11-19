@@ -333,6 +333,7 @@ async def _handle_purchase_receipt_kingdee(
     connection_code: Optional[str],
     save_api_uuid: Optional[str],
     dry_run: bool,
+    force: bool = False,
     **_: Any,
 ) -> Dict[str, Any]:
     result = await KingdeePurchaseReceiptPushService().push_purchase_receipt(
@@ -342,6 +343,7 @@ async def _handle_purchase_receipt_kingdee(
         connection_code=connection_code,
         save_api_uuid=save_api_uuid,
         dry_run=dry_run,
+        force=bool(force),
     )
     if result is None:
         return _disabled_result(
@@ -780,6 +782,7 @@ class DocumentPushService:
         connection_code: Optional[str] = None,
         save_api_uuid: Optional[str] = None,
         dry_run: bool = False,
+        force: bool = False,
     ) -> Dict[str, Any]:
         source_type = str(source_type or "").strip()
         if int(source_id or 0) <= 0:
@@ -813,6 +816,7 @@ class DocumentPushService:
                         connection_code=item.get("connection_code") or connection_code,
                         save_api_uuid=item.get("save_api_uuid") or save_api_uuid,
                         dry_run=dry_run,
+                        force=force,
                     )
                 except Exception as exc:
                     one = {
@@ -826,6 +830,15 @@ class DocumentPushService:
             ok_count = sum(1 for r in results if r.get("success") and not r.get("skipped"))
             skip_count = sum(1 for r in results if r.get("skipped"))
             fail_count = sum(1 for r in results if r.get("success") is False)
+            detail_msgs = [
+                str(r.get("message") or "").strip()
+                for r in results
+                if str(r.get("message") or "").strip()
+                and (r.get("skipped") or r.get("success") is False)
+            ]
+            summary = f"多目标推送：成功 {ok_count}，跳过 {skip_count}，失败 {fail_count}"
+            if detail_msgs:
+                summary = f"{summary}（{'；'.join(detail_msgs[:3])}）"
             return {
                 "success": fail_count == 0,
                 "multi": True,
@@ -836,7 +849,7 @@ class DocumentPushService:
                 "skipped": skip_count,
                 "failed": fail_count,
                 "results": results,
-                "message": f"多目标推送：成功 {ok_count}，跳过 {skip_count}，失败 {fail_count}",
+                "message": summary,
                 "dry_run": dry_run,
                 "model": next((r.get("model") for r in results if r.get("model")), None),
                 "body": next((r.get("body") for r in results if r.get("body")), None),
@@ -859,6 +872,7 @@ class DocumentPushService:
                 connection_code=connection_code,
                 save_api_uuid=save_api_uuid,
                 dry_run=dry_run,
+                force=force,
             )
 
         # 多目标 fan-out：各目标独立成败，汇总 results
@@ -874,6 +888,7 @@ class DocumentPushService:
                     connection_code=connection_code,
                     save_api_uuid=save_api_uuid,
                     dry_run=dry_run,
+                    force=force,
                 )
             except Exception as exc:
                 one = {
@@ -889,6 +904,15 @@ class DocumentPushService:
         skip_count = sum(1 for r in results if r.get("skipped"))
         fail_count = sum(1 for r in results if r.get("success") is False)
         all_ok = fail_count == 0
+        detail_msgs = [
+            str(r.get("message") or "").strip()
+            for r in results
+            if str(r.get("message") or "").strip()
+            and (r.get("skipped") or r.get("success") is False)
+        ]
+        summary = f"多目标推送：成功 {ok_count}，跳过 {skip_count}，失败 {fail_count}"
+        if detail_msgs:
+            summary = f"{summary}（{'；'.join(detail_msgs[:3])}）"
         return {
             "success": all_ok,
             "multi": True,
@@ -899,7 +923,7 @@ class DocumentPushService:
             "skipped": skip_count,
             "failed": fail_count,
             "results": results,
-            "message": f"多目标推送：成功 {ok_count}，跳过 {skip_count}，失败 {fail_count}",
+            "message": summary,
             "dry_run": dry_run,
             # 兼容单目标预览：取首个 dry_run model
             "model": next((r.get("model") for r in results if r.get("model")), None),
@@ -991,6 +1015,7 @@ class DocumentPushService:
         connection_code: Optional[str],
         save_api_uuid: Optional[str],
         dry_run: bool,
+        force: bool = False,
     ) -> Dict[str, Any]:
         ensure_default_push_handlers_registered()
 
@@ -1049,6 +1074,7 @@ class DocumentPushService:
                     connection_code=connection_code,
                     save_api_uuid=save_api_uuid,
                     dry_run=dry_run,
+                    force=bool(force),
                 )
             except Exception:
                 document_push_guard.record_outcome(

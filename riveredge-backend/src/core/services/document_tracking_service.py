@@ -597,6 +597,8 @@ class DocumentTrackingService:
                     "at": to_api_isoformat(rel.created_at) if rel.created_at else None,
                     "detail": f"下推了{tgt_label}（{tgt_code}）",
                     "is_auto_created": self._is_auto_relation(rel.relation_mode, rel.relation_desc),
+                    "relation_desc": rel.relation_desc,
+                    "is_repush": "二次推送" in str(rel.relation_desc or ""),
                     "target_type": rel.target_type,
                     "target_id": rel.target_id,
                     "target_code": rel.target_code,

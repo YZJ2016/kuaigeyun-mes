@@ -133,6 +133,7 @@ import {
 } from './inboundHubDeepLink';
 import { fetchPurchaseReceiptIqcEnsure } from './inboundPurchaseIqcGate';
 import { pullPaymentApplicationFromPurchaseReceipt } from '../../../services/payment-application';
+import { pushDocumentExternal } from '../../../services/document-push';
 import { PurchaseReceiptIqcReviewModal } from './PurchaseReceiptIqcReviewModal';
 import FinishedGoodsReceiptCreateModal from './FinishedGoodsReceiptCreateModal';
 import PurchaseReceiptCreateModal from './PurchaseReceiptCreateModal';
@@ -1896,6 +1897,194 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
   const listRowsRef = useRef<Map<string, InboundOrder>>(new Map());
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const toolbarSyncPush = useToolbarSyncPushFlags('kuaizhizao:inbound');
+  const [purchaseExternalPushingId, setPurchaseExternalPushingId] = useState<number | null>(null);
+  /** 目标设置「是否推送」：关闭后隐藏列表/详情推送入口（缺省开启） */
+  const [purchasePushTargetEnabled, setPurchasePushTargetEnabled] = useState(true);
+  const reloadPurchasePushTargetEnabled = useCallback(async () => {
+    if (!toolbarSyncPush.pushEnabled) {
+      setPurchasePushTargetEnabled(false);
+      return;
+    }
+    try {
+      const binding = await warehouseApi.purchaseReceipt.getPushBinding();
+      const rows = (binding.targets || []).filter(
+        (row) =>
+          row.user_saved !== false &&
+          String(row.target_profile || '').trim() === 'kingdee_im_purinbill',
+      );
+      if (!rows.length) {
+        // 尚未配置目标时仍显示推送入口（点后提示去配置）
+        setPurchasePushTargetEnabled(true);
+        return;
+      }
+      setPurchasePushTargetEnabled(rows.some((row) => row.push_enabled !== false));
+    } catch {
+      setPurchasePushTargetEnabled(true);
+    }
+  }, [toolbarSyncPush.pushEnabled]);
+
+  useEffect(() => {
+    void reloadPurchasePushTargetEnabled();
+  }, [reloadPurchasePushTargetEnabled]);
+
+  const purchaseExternalPushVisible =
+    toolbarSyncPush.pushEnabled && purchasePushTargetEnabled;
+
+  const runPurchaseExternalPush = useCallback(
+    async (receiptId: number, force: boolean) => {
+      const binding = await warehouseApi.purchaseReceipt.getPushBinding();
+      const savedTargets = (binding.targets || []).filter(
+        (row) =>
+          row.user_saved !== false &&
+          String(row.target_profile || '').trim() &&
+          (row.destination_kind ?? 'api') === 'api',
+      );
+      const purinTargets = savedTargets.filter(
+        (row) => String(row.target_profile || '').trim() === 'kingdee_im_purinbill',
+      );
+      const useTargets = purinTargets.length ? purinTargets : savedTargets;
+      const fallbackConn = String(binding.connection_code || '').trim();
+      const fallbackApi = String(binding.save_api_uuid || '').trim();
+      const payloadTargets =
+        useTargets.length > 0
+          ? useTargets.map((row) => ({
+              target_profile: String(row.target_profile || '').trim(),
+              connection_code: String(row.connection_code || fallbackConn || '').trim() || undefined,
+              save_api_uuid: String(row.save_api_uuid || fallbackApi || '').trim() || undefined,
+            }))
+          : fallbackConn || fallbackApi
+            ? [
+                {
+                  target_profile: 'kingdee_im_purinbill',
+                  connection_code: fallbackConn || undefined,
+                  save_api_uuid: fallbackApi || undefined,
+                },
+              ]
+            : [];
+      if (!payloadTargets.length) {
+        messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.externalPushNeedTarget'));
+        return;
+      }
+      const enabledTargets = payloadTargets.filter((row) => {
+        const full = useTargets.find(
+          (item) => String(item.target_profile || '').trim() === row.target_profile,
+        );
+        return full?.push_enabled !== false;
+      });
+      if (!enabledTargets.length) {
+        messageApi.warning(t('app.kuaizhizao.documentPush.batch.pushEnabledOffHint'));
+        return;
+      }
+      const result = await pushDocumentExternal({
+        source_type: 'purchase_receipt',
+        source_id: receiptId,
+        targets: enabledTargets,
+        dry_run: false,
+        force,
+      });
+      const collectMessages = (kind: 'error' | 'skip'): string[] => {
+        const out: string[] = [];
+        if (result.multi && Array.isArray(result.results)) {
+          for (const one of result.results) {
+            const msg = String(one?.message || '').trim();
+            if (!msg) continue;
+            if (kind === 'error' && one?.success === false) out.push(msg);
+            if (kind === 'skip' && one?.skipped) out.push(msg);
+          }
+        } else {
+          const msg = String(result.message || '').trim();
+          if (kind === 'error' && result.success === false && msg) out.push(msg);
+          if (kind === 'skip' && result.skipped && msg) out.push(msg);
+        }
+        return out;
+      };
+      const errors = collectMessages('error');
+      if (errors.length) {
+        getAntdModal().warning({
+          title: t('app.kuaizhizao.warehouseInbound.msg.externalPushFailedTitle'),
+          content: errors.join('\n'),
+        });
+        return;
+      }
+      const skippedCount = Number(result.skipped || 0);
+      const createdCount = Number(result.created || 0);
+      if (!force && (result.skipped === true || (skippedCount > 0 && createdCount <= 0))) {
+        const skipReasons = collectMessages('skip');
+        const reason = skipReasons.join('；') || String(result.message || '-');
+        const alreadyPushed = reason.includes('已推送');
+        if (alreadyPushed) {
+          getAntdModal().confirm({
+            title: t('app.kuaizhizao.warehouseInbound.msg.externalPushRepushTitle'),
+            content: t('app.kuaizhizao.warehouseInbound.msg.externalPushRepushConfirm', { reason }),
+            okText: t('app.kuaizhizao.warehouseInbound.action.repush'),
+            onOk: async () => {
+              setPurchaseExternalPushingId(receiptId);
+              try {
+                await runPurchaseExternalPush(receiptId, true);
+              } catch (error: unknown) {
+                const err = error as {
+                  response?: { data?: { detail?: unknown } };
+                  message?: string;
+                };
+                const failReason =
+                  formatApiErrorDetail(err?.response?.data?.detail) ||
+                  err?.message ||
+                  t('app.kuaizhizao.documentPush.pushFailed');
+                getAntdModal().warning({
+                  title: t('app.kuaizhizao.warehouseInbound.msg.externalPushFailedTitle'),
+                  content: t('app.kuaizhizao.warehouseInbound.msg.externalPushFailed', {
+                    reason: failReason,
+                  }),
+                });
+              } finally {
+                setPurchaseExternalPushingId(null);
+              }
+            },
+          });
+          return;
+        }
+        messageApi.info(
+          t('app.kuaizhizao.warehouseInbound.msg.externalPushSkipped', { reason }),
+        );
+        return;
+      }
+      if (createdCount > 0 || result.success) {
+        messageApi.success(
+          force
+            ? t('app.kuaizhizao.warehouseInbound.msg.externalPushRepushSuccess')
+            : t('app.kuaizhizao.warehouseInbound.msg.externalPushSuccess'),
+        );
+        actionRef.current?.reload?.();
+        setInboundTrackingRefreshKey((k) => k + 1);
+      }
+    },
+    [messageApi, t],
+  );
+
+  const handlePurchaseExternalPush = useCallback(
+    async (record: InboundOrder) => {
+      const receiptId = Number(record.id);
+      if (!Number.isFinite(receiptId) || receiptId <= 0) return;
+      if (record.receipt_type !== 'purchase' || !isInboundStockPosted(record)) return;
+      setPurchaseExternalPushingId(receiptId);
+      try {
+        await runPurchaseExternalPush(receiptId, false);
+      } catch (error: unknown) {
+        const err = error as { response?: { data?: { detail?: unknown } }; message?: string };
+        const reason =
+          formatApiErrorDetail(err?.response?.data?.detail) ||
+          err?.message ||
+          t('app.kuaizhizao.documentPush.pushFailed');
+        getAntdModal().warning({
+          title: t('app.kuaizhizao.warehouseInbound.msg.externalPushFailedTitle'),
+          content: t('app.kuaizhizao.warehouseInbound.msg.externalPushFailed', { reason }),
+        });
+      } finally {
+        setPurchaseExternalPushingId(null);
+      }
+    },
+    [runPurchaseExternalPush, t],
+  );
 
   const inboundRowKey = (record: InboundOrder) => `${record.receipt_type}::${record.id}`;
 
@@ -2296,6 +2485,31 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
             </Button>
           );
         }
+        if (record.receipt_type === 'purchase' && record.id && purchaseExternalPushVisible) {
+          const rid = Number(record.id);
+          nodes.push(
+            <Button
+              {...rowActionKind('execute')}
+              {...rowActionLabelKeep()}
+              key="external-push"
+              loading={purchaseExternalPushingId === rid}
+              disabled={!posted}
+              title={
+                posted
+                  ? undefined
+                  : t('app.kuaizhizao.warehouseInbound.msg.externalPushNeedConfirmFirst')
+              }
+              data-row-action-visible-when-disabled
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!posted) return;
+                void handlePurchaseExternalPush(record);
+              }}
+            >
+              {t('app.kuaizhizao.warehouseInbound.action.pushExternal')}
+            </Button>,
+          );
+        }
         if (inboundPerms.canDelete && isInboundDeletable(record)) {
           nodes.push(
             <ActionConfirmPopconfirm title={t('app.kuaizhizao.warehouseInbound.confirm.delete.title', { type: typeLabel })} description={t('app.kuaizhizao.warehouseInbound.confirm.delete.content', { code: code || '-' })} okType="danger" onConfirm={() => executeDelete(record)}>
@@ -2365,6 +2579,9 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
     inboundPerms,
     packingBindingPerms.canRead,
     showAmount,
+    purchaseExternalPushVisible,
+    purchaseExternalPushingId,
+    handlePurchaseExternalPush,
   ],
   );
 
@@ -2728,10 +2945,14 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
                       <PurchaseReceiptDocumentPushPanel
                         embedded
                         open={active}
-                        onClose={close}
+                        onClose={() => {
+                          void reloadPurchasePushTargetEnabled();
+                          close();
+                        }}
                         receiptIds={selectedPurchaseReceiptIds}
                         onComplete={() => {
                           actionRef.current?.reload?.();
+                          void reloadPurchasePushTargetEnabled();
                           close();
                         }}
                       />
@@ -3314,6 +3535,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
           if (record) void handleDetail(record);
         }}
         trackingRefreshKey={inboundTrackingRefreshKey}
+        showExternalPushRecords={purchaseExternalPushVisible}
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentOrder(null);
@@ -3386,6 +3608,25 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
                     : t('app.kuaizhizao.warehouseInbound.action.withdrawInbound')}
                 </Button>
               )}
+              {currentOrder.receipt_type === 'purchase' &&
+              currentOrder.id &&
+              purchaseExternalPushVisible ? (
+                <Button
+                  loading={purchaseExternalPushingId === Number(currentOrder.id)}
+                  disabled={!isInboundStockPosted(currentOrder)}
+                  title={
+                    isInboundStockPosted(currentOrder)
+                      ? undefined
+                      : t('app.kuaizhizao.warehouseInbound.msg.externalPushNeedConfirmFirst')
+                  }
+                  onClick={() => {
+                    if (!isInboundStockPosted(currentOrder)) return;
+                    void handlePurchaseExternalPush(currentOrder);
+                  }}
+                >
+                  {t('app.kuaizhizao.warehouseInbound.action.pushExternal')}
+                </Button>
+              ) : null}
             </Space>
           ) : null
         }
