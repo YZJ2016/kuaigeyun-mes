@@ -19,6 +19,8 @@ export interface InspectionCenterSummary {
   pending_process: number;
   pending_finished: number;
   pending_oqc?: number;
+  pending_outsource?: number;
+  pending_patrol?: number;
   total_inspected_today: number;
   today_qualified_rate: number;
   month_qualified_rate: number;

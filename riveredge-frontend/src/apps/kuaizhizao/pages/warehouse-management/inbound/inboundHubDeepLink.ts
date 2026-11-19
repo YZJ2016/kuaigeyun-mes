@@ -4,6 +4,8 @@ export type InboundHubDeepLinkFilter = {
   receiptType: InboundReceiptType;
   id?: number;
   uuid?: string;
+  /** detail=详情抽屉（默认）；edit=编辑弹窗（采购/其他入库 Hub） */
+  action?: 'detail' | 'edit';
 };
 
 const DOCUMENT_TYPE_TO_RECEIPT_TYPE: Record<string, InboundReceiptType> = {
@@ -31,32 +33,38 @@ export function parseInboundHubDeepLink(searchParams: URLSearchParams): InboundH
   const receiptId = parsePositiveInt(searchParams.get('receipt_id'));
   const semiReceiptId = parsePositiveInt(searchParams.get('semi_receipt_id'));
   const highlightId = parsePositiveInt(searchParams.get('highlight'));
+  const actionRaw = searchParams.get('action')?.trim().toLowerCase();
+  const action: 'detail' | 'edit' | undefined =
+    actionRaw === 'edit' ? 'edit' : actionRaw === 'detail' ? 'detail' : undefined;
 
   const receiptTypeFromDoc =
     (documentType && DOCUMENT_TYPE_TO_RECEIPT_TYPE[documentType]) ||
     (receiptTypeParam as InboundReceiptType | undefined);
 
+  const withAction = (base: InboundHubDeepLinkFilter): InboundHubDeepLinkFilter =>
+    action ? { ...base, action } : base;
+
   if (uuid && receiptTypeFromDoc) {
-    return { receiptType: receiptTypeFromDoc, uuid };
+    return withAction({ receiptType: receiptTypeFromDoc, uuid });
   }
 
   if (semiReceiptId) {
-    return { receiptType: 'semi_finished_goods', id: semiReceiptId };
+    return withAction({ receiptType: 'semi_finished_goods', id: semiReceiptId });
   }
 
   if (receiptTypeFromDoc && receiptId) {
-    return { receiptType: receiptTypeFromDoc, id: receiptId };
+    return withAction({ receiptType: receiptTypeFromDoc, id: receiptId });
   }
 
   if (receiptId) {
     if (documentType === 'finished_goods_receipt') {
-      return { receiptType: 'finished_goods', id: receiptId };
+      return withAction({ receiptType: 'finished_goods', id: receiptId });
     }
-    return { receiptType: 'purchase', id: receiptId };
+    return withAction({ receiptType: 'purchase', id: receiptId });
   }
 
   if (highlightId) {
-    return { receiptType: 'purchase', id: highlightId };
+    return withAction({ receiptType: 'purchase', id: highlightId });
   }
 
   return null;

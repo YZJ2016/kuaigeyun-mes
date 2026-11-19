@@ -13,7 +13,7 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { useDocumentHighlightDeepLink } from '../../../../../hooks/useDocumentHighlightDeepLink';
 import { useRegisterAiContext } from '../../../../../hooks/useRegisterAiContext';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormDigit, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormDependency } from '@ant-design/pro-components';
-import { App, Button, Space, Popconfirm, Typography, Row, Col, Descriptions, Tooltip } from 'antd';
+import { App, Button, Space, Typography, Row, Col, Descriptions, Tooltip } from 'antd';
 import { CheckOutlined, WarningOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -430,15 +430,17 @@ const InventoryAlertPage: React.FC = () => {
     }
   };
 
-  /**
-   * 处理删除预警规则
-   */
-  const handleDeleteRule = async (record: InventoryAlertRule) => {
-    try {
-      await inventoryAlertApi.deleteRule(record.id!.toString());
-      messageApi.success(t('app.kuaizhizao.inventoryAlert.msgRuleDeleteSuccess'));
-      invalidateMenuBadgeCounts();
+  const [selectedRuleRowKeys, setSelectedRuleRowKeys] = useState<React.Key[]>([]);
 
+  const handleBatchDeleteRules = async (keys: React.Key[]) => {
+    if (!keys.length) return;
+    try {
+      for (const key of keys) {
+        await inventoryAlertApi.deleteRule(String(key));
+      }
+      messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteSuccess', { count: keys.length }));
+      setSelectedRuleRowKeys([]);
+      invalidateMenuBadgeCounts();
       ruleActionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || t('app.kuaizhizao.inventoryAlert.msgDeleteRuleFailed'));
@@ -795,16 +797,6 @@ const InventoryAlertPage: React.FC = () => {
                 {alertPerms.canUpdate && (
                   <Button {...rowActionKind('update')} onClick={() => handleEditRule(record)} />
                 )}
-                {alertPerms.canDelete && (
-                  <Popconfirm
-                    title={t('app.kuaizhizao.inventoryAlert.deleteRuleConfirm')}
-                    onConfirm={() => handleDeleteRule(record)}
-                    okText={t('common.confirm')}
-                    cancelText={t('common.cancel')}
-                  >
-                    <Button {...rowActionKind('delete')} />
-                  </Popconfirm>
-                )}
               </Space>
             ),
           },
@@ -999,12 +991,24 @@ const InventoryAlertPage: React.FC = () => {
                 actionRef={ruleActionRef}
                 rowKey="id"
                 columns={ruleColumns}
-                columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-alert-rules-width-v3"
+                columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-alert-rules-width-v4"
                 showAdvancedSearch
                 skipFuzzyPinyinClientFilter
                 showCreateButton
                 createButtonText={createRuleButtonLabel}
                 onCreate={handleCreateRule}
+                enableRowSelection={alertPerms.canDelete}
+                selectedRowKeys={selectedRuleRowKeys}
+                onRowSelectionChange={setSelectedRuleRowKeys}
+                showDeleteButton={alertPerms.canDelete}
+                deleteButtonText={t('common.delete')}
+                onDelete={handleBatchDeleteRules}
+                deleteConfirmTitle={(count) =>
+                  t('app.kuaizhizao.warehouseCommon.batchDeleteConfirm', {
+                    count,
+                    noun: t('app.kuaizhizao.inventoryAlert.tabRules'),
+                  })
+                }
                 request={async (params, sort, _filter, searchFormValues) => {
                   try {
                     const pageSize = params.pageSize || 20;

@@ -18,6 +18,8 @@ type Props = {
   onCreate?: () => void
   onOpenDetail?: (request: MaterialCenterDetailRequest) => void
   canRead?: boolean
+  /** 父级新建/取单成功后递增，驱动右栏备料单列表重载 */
+  listReloadKey?: number
   onRefreshBatchingList?: () => void
 }
 
@@ -41,6 +43,7 @@ const LineSidePrepSplitView: React.FC<Props> = ({
   onCreate,
   onOpenDetail,
   canRead = true,
+  listReloadKey: parentListReloadKey = 0,
   onRefreshBatchingList,
 }) => {
   const { t } = useTranslation()
@@ -56,7 +59,8 @@ const LineSidePrepSplitView: React.FC<Props> = ({
   const [generatingKey, setGeneratingKey] = useState<string | null>(null)
   const [suggestions, setSuggestions] = useState<BatchingTaskRow[]>([])
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
-  const [listReloadKey, setListReloadKey] = useState(0)
+  const [localListReloadKey, setLocalListReloadKey] = useState(0)
+  const listReloadKey = parentListReloadKey + localListReloadKey
 
   const loadSuggestions = useCallback(
     async (searchKeyword = '') => {
@@ -98,7 +102,7 @@ const LineSidePrepSplitView: React.FC<Props> = ({
 
   const refreshAll = useCallback(async () => {
     await loadSuggestions(keyword)
-    setListReloadKey((k) => k + 1)
+    setLocalListReloadKey((k) => k + 1)
     onRefreshBatchingList?.()
   }, [keyword, loadSuggestions, onRefreshBatchingList])
 

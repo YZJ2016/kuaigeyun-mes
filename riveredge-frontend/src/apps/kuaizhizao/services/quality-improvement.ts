@@ -143,6 +143,7 @@ export interface DefectLedgerItem {
   purchase_return_id?: number;
   rework_order_id?: number;
   scrap_record_id?: number;
+  reporting_record_id?: number;
   incoming_inspection_id?: number;
   incoming_inspection_code?: string;
   process_inspection_id?: number;

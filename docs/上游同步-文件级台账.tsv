@@ -2247,3 +2247,15 @@ riveredge-backend/tests/apps/kuaizhizao/api/test_kuaizhizao_route_access_quality
 riveredge-backend/tests/apps/kuaizhizao/services/test_inventory_report_movement_quantities.py	9fc03de3ed	deferred	R2-测试: 出库正量归集+doc标签待摘
 riveredge-backend/tests/apps/master_data/services/test_material_batch_expiry.py	520cde9e49	deferred	R2-测试: effective_expiry_date待摘
 riveredge-backend/tests/apps/kuaizhizao/utils/test_outsource_work_order_state.py	11e8cb33be	deferred	R2-测试: 委外receipt_reopen状态机待摘
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/assembly-templates/AssemblyTemplatesTab.tsx	c53c7695d1	applied	R2-前端增量簇: 行删收敛批量删+persistenceId升版
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inventory-alert/index.tsx	c53c7695d1	applied	R2-前端增量簇: 行删收敛批量删+persistenceId升版
+riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/drawing-balloon-sheets/index.tsx	c53c7695d1	applied	R2-前端增量簇: 行删收敛批量删+persistenceId升版
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/delivery-notes/components/DeliveryNoticeDetailDrawer.tsx	9d94441ae0	applied	R2-前端增量簇
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/batching-center/LineSidePrepSplitView.tsx	2c67aabdda	applied	R2-前端增量簇
+riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/nonconforming-ledger/ncLedgerSource.tsx	050638b809	applied	R2-前端增量簇
+riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/inspection-center/index.tsx	9d94441ae0	applied	R2-前端增量簇
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/shared/warehouseDocListFieldRank.ts	eda3c9f86a	applied	R2-前端增量簇
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundHubDeepLink.ts	282f15a0fd	applied	R2-前端增量簇
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundHubRunConfirm.ts	41c3a02f72	applied	R2-前端增量簇
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/outboundHubWithdraw.ts	05d001dd6d	applied	R2-前端增量簇
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/outboundListAggregate.ts	eda3c9f86a	applied	R2-前端增量簇

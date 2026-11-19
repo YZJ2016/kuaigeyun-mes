@@ -93,6 +93,8 @@ export async function fetchOutboundHubList(
     warehouse_name: params.warehouse_name,
     customer_name: params.customer_name,
     total_quantity: params.total_quantity,
+    delivery_start_date: params.delivery_start_date,
+    delivery_end_date: params.delivery_end_date,
     created_start_date: params.created_start_date,
     created_end_date: params.created_end_date,
     updated_start_date: params.updated_start_date,

@@ -6,6 +6,8 @@ import type { TFunction } from 'i18next';
 
 import type { DefectLedgerItem } from '../../../services/quality-improvement';
 
+import { ROUTES } from '../../../constants/routes';
+
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 
 
@@ -17,6 +19,8 @@ export const SOURCE_INSPECTION_TYPE_I18N = {
   process: 'app.kuaizhizao.quality.nc.sourceInspection.type.process',
 
   finished: 'app.kuaizhizao.quality.nc.sourceInspection.type.finished',
+
+  reporting: 'app.kuaizhizao.quality.nc.sourceInspection.type.reporting',
 
 } as const;
 
@@ -100,6 +104,24 @@ function pickSource(
 
   }
 
+  // 报工登记不良：无检验单，以来源报工记录标识（勿显示「暂无数据」造成误解）
+
+  if (row.reporting_record_id) {
+
+    const wo = String(row.work_order_code || '').trim();
+
+    return {
+
+      kind: 'reporting',
+
+      id: Number(row.reporting_record_id),
+
+      code: wo || `#${row.reporting_record_id}`,
+
+    };
+
+  }
+
   return null;
 
 }
@@ -124,7 +146,27 @@ export function sourceInspectionPath(row: DefectLedgerItem): string | null {
 
   }
 
-  return `/apps/kuaizhizao/quality-management/finished-goods-inspection?finished_goods_inspection_id=${source.id}`;
+  if (source.kind === 'finished') {
+
+    return `/apps/kuaizhizao/quality-management/finished-goods-inspection?finished_goods_inspection_id=${source.id}`;
+
+  }
+
+  if (source.kind === 'reporting') {
+
+    const wo = String(row.work_order_code || '').trim();
+
+    if (wo) {
+
+      return `${ROUTES.REPORTING}?work_order_code=${encodeURIComponent(wo)}`;
+
+    }
+
+    return ROUTES.REPORTING;
+
+  }
+
+  return null;
 
 }
 
@@ -160,7 +202,7 @@ export function sourceInspectionTypeText(
 
 
 
-/** 不良处理列表「源检验单」堆叠单元格（类型 + 单号） */
+/** 不良处理列表「来源单据」堆叠单元格（类型 + 单号/工单） */
 
 export function renderNcSourceInspectionStackedCell(
 

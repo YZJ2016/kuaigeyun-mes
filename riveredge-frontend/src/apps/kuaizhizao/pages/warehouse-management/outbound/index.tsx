@@ -698,8 +698,12 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
 
   const executeWithdraw = async (record: OutboundOrder) => {
     try {
-          await withdrawOutboundDocument(record);
-          messageApi.success(t('app.kuaizhizao.warehouseOutbound.msg.withdrawSuccess'));
+          const withdrawMsg = await withdrawOutboundDocument(record);
+          if (withdrawMsg) {
+            messageApi.warning(withdrawMsg);
+          } else {
+            messageApi.success(t('app.kuaizhizao.warehouseOutbound.msg.withdrawSuccess'));
+          }
           invalidateMenuBadgeCounts();
           await refreshOrderAfterConfirm(record);
         } catch (e: unknown) {

@@ -43,13 +43,19 @@ export const WAREHOUSE_DOC_LIST_FIELD_RANK: Record<string, number> = {
   mapped_material_name: 23,
 
   // 数量 / 种类数 / 金额
-  /** 明细物料名预览（替代入库品种数，余量列） */
+  /** 明细物料名预览（替代入库品种数，余量列；规格型号在明细列 Hover 查看） */
   line_materials: 29.5,
   total_quantity: 30,
   quantity: 30,
   requested_quantity: 30,
   delivered_quantity: 31,
   batch_no: 28,
+  production_date: 28.1,
+  shelf_life_days: 28.2,
+  expiry_date: 28.3,
+  supplier_batch_no: 62,
+  /** 批次库存行状态（在库/无库存/已过期），置于列表末列 */
+  batch_stock_status: 94,
   /** 可用 → 库存 → 预留（线边仓等拆列后同序） */
   available_quantity: 29.7,
   reserved_quantity: 31,
@@ -65,6 +71,8 @@ export const WAREHOUSE_DOC_LIST_FIELD_RANK: Record<string, number> = {
   kitting_rate: 41,
   fulfillment_progress: 41,
   receipt_progress: 41,
+  /** 审核状态（固定右侧，紧挨执行状态 lifecycle 之前） */
+  audit_phase: 87.5,
   lifecycle_stage: 88,
 
   // 状态（表内流程状态用 key=lifecycle→91；此处 status 仅兜底）
@@ -102,6 +110,7 @@ export const WAREHOUSE_DOC_LIST_FIELD_RANK: Record<string, number> = {
   receipt_date: 69,
   receipt_time: 69,
   delivery_date: 69,
+  pick_date: 68,
   delivery_time: 69,
   return_time: 69,
   borrow_time: 69,
@@ -136,7 +145,15 @@ export const WAREHOUSE_DOC_LIST_FIELD_RANK: Record<string, number> = {
   brand: 25,
   texture: 26,
   material_unit: 27,
-  location_code: 29.5,
+  inventory_unit: 27.1,
+  base_unit: 27.2,
+  primary_unit: 29.2,
+  primary_quantity: 29.4,
+  secondary_unit: 29.6,
+  secondary_quantity: 29.8,
+  base_quantity: 30.1,
+  location_code: 32.1,
+  location_name: 32,
   product_material_name: 22,
   in_transit_quantity: 31,
 

@@ -165,28 +165,7 @@ export const DeliveryNoticeDetailDrawer: React.FC<DeliveryNoticeDetailDrawerProp
     );
   }, [collaborationOverride, notice, t]);
 
-  if (showError) {
-    return (
-      <DetailDrawerTemplate
-        title={t('app.kuaizhizao.deliveryNote.detailTitle')}
-        open={open}
-        onClose={onClose}
-        size={DRAWER_CONFIG.HALF_WIDTH}
-        zIndex={zIndex}
-        plainBody={
-          <Result
-            status="error"
-            title={error}
-            extra={
-              onRetry ? (
-                <Typography.Link onClick={onRetry}>{t('common.retry')}</Typography.Link>
-              ) : null
-            }
-          />
-        }
-      />
-    );
-  }
+  if (!open) return null;
 
   return (
     <DetailDrawerTemplate
@@ -196,17 +175,32 @@ export const DeliveryNoticeDetailDrawer: React.FC<DeliveryNoticeDetailDrawerProp
       onClose={onClose}
       size={DRAWER_CONFIG.HALF_WIDTH}
       zIndex={zIndex}
-      extra={extra}
-      basic={
-        notice ? (
-          <Descriptions column={detailDrawerBasicColumn(false)} size="small" items={basicItems} />
+      extra={contentReady ? extra : null}
+      plainBody={
+        showError ? (
+          <Result
+            status="error"
+            title={error}
+            extra={
+              onRetry ? (
+                <Typography.Link onClick={onRetry}>{t('common.retry')}</Typography.Link>
+              ) : null
+            }
+          />
         ) : undefined
       }
-      collaboration={collaboration}
+      basic={
+        contentReady && notice ? (
+          <Descriptions column={detailDrawerBasicColumn(false)} size="small" items={basicItems} />
+        ) : showError ? null : (
+          <div style={{ minHeight: 80 }} />
+        )
+      }
+      collaboration={contentReady ? collaboration : undefined}
       supplementary={contentReady ? supplementary : undefined}
       linesTitle={t('app.kuaizhizao.deliveryNote.section.lineDetails')}
       lines={
-        notice?.items && notice.items.length > 0 ? (
+        contentReady && notice?.items && notice.items.length > 0 ? (
           <>
             <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
             <Table
@@ -220,12 +214,12 @@ export const DeliveryNoticeDetailDrawer: React.FC<DeliveryNoticeDetailDrawerProp
               pagination={false}
             />
           </>
-        ) : notice ? (
+        ) : contentReady && notice ? (
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.deliveryNote.msg.noLineDetails')} />
         ) : undefined
       }
       timeline={
-        notice?.id != null ? (
+        contentReady && notice?.id != null ? (
           <>
             {deliveryTracking.loading && (
               <div style={{ textAlign: 'center', padding: 24 }}>
@@ -245,7 +239,7 @@ export const DeliveryNoticeDetailDrawer: React.FC<DeliveryNoticeDetailDrawerProp
         ) : undefined
       }
       traceDocument={
-        notice?.id != null
+        contentReady && notice?.id != null
           ? {
               documentType: 'delivery_notice',
               documentId: notice.id,

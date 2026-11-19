@@ -189,20 +189,6 @@ export const AssemblyTemplatesTab: React.FC = () => {
     }
   };
 
-  const executeconfirmDeleteTemplate = async (record: AssemblyTemplate) => {
-    try {
-          await assemblyTemplateApi.delete(String(record.id));
-          messageApi.success(t('app.kuaizhizao.assemblyTemplate.deleteSuccess'));
-          if (currentTemplate?.id === record.id) {
-            setDrawerVisible(false);
-            setCurrentTemplate(null);
-          }
-          reloadList();
-        } catch (error: any) {
-          messageApi.error(error?.message || t('app.kuaizhizao.assemblyTemplate.deleteFailed'));
-        }
-  };
-
   const openItemModal = (template: AssemblyTemplate, item?: TemplateItem) => {
     setCurrentTemplate(template);
     setEditingItem(item ?? null);
@@ -401,14 +387,11 @@ export const AssemblyTemplatesTab: React.FC = () => {
                 {t('app.kuaizhizao.assemblyTemplate.previewBom')}
               </Button>
             )}
-            {canDelete && <ActionConfirmPopconfirm title={t('app.kuaizhizao.assemblyTemplate.deleteTitle')} description={t('app.kuaizhizao.assemblyTemplate.deleteConfirm', { code: record.template_code })} onConfirm={() => executeconfirmDeleteTemplate(record)}>
-              <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
-            </ActionConfirmPopconfirm>}
           </Space>
         ),
       },
     ], WAREHOUSE_DOC_LIST_FIELD_RANK),
-    [t, sourceTypeMap, canUpdate, canDelete],
+    [t, sourceTypeMap, canUpdate],
   );
 
   const detailColumns: ProDescriptionsItemProps<AssemblyTemplate>[] = useMemo(
@@ -543,7 +526,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
     <ListPageTemplate>
       <UniTable<AssemblyTemplate>
         headerTitle={t('app.kuaizhizao.assemblyTemplate.headerTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.assembly-templates-width-v4"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.assembly-templates-width-v5"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -553,6 +536,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
         onCreate={openCreateModal}
         enableRowSelection={canDelete}
         showDeleteButton={canDelete}
+        deleteButtonText={t('common.delete')}
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => assemblyTemplateApi.delete(String(key))));
           messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));

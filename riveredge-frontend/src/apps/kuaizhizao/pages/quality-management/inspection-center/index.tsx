@@ -13,6 +13,8 @@ import {
   LineChartOutlined,
   NodeIndexOutlined,
   RightOutlined,
+  DeploymentUnitOutlined,
+  CompassOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -52,6 +54,8 @@ const INSPECTION_LIST_PATH: Record<string, string> = {
   process: '/apps/kuaizhizao/quality-management/process-inspection',
   finished: '/apps/kuaizhizao/quality-management/finished-goods-inspection',
   oqc: '/apps/kuaizhizao/quality-management/oqc-inspection',
+  outsource: '/apps/kuaizhizao/quality-management/outsource-inspection',
+  patrol: '/apps/kuaizhizao/quality-management/quality-patrol',
 };
 
 const INSPECTION_TYPE_KEY: Record<string, string> = {
@@ -59,6 +63,8 @@ const INSPECTION_TYPE_KEY: Record<string, string> = {
   process: 'app.kuaizhizao.quality.common.type.process',
   finished: 'app.kuaizhizao.quality.common.type.finished',
   oqc: 'app.kuaizhizao.quality.common.type.oqc',
+  outsource: 'app.kuaizhizao.menu.quality-management.outsource-inspection',
+  patrol: 'app.kuaizhizao.menu.quality-management.quality-patrol',
 };
 
 function anomalySeverity(a: QualityAnomalyItem): 'high' | 'medium' | 'low' {
@@ -134,7 +140,9 @@ const InspectionCenter: React.FC = () => {
     (summary?.pending_incoming || 0) +
     (summary?.pending_process || 0) +
     (summary?.pending_finished || 0) +
-    (summary?.pending_oqc || 0);
+    (summary?.pending_oqc || 0) +
+    (summary?.pending_outsource || 0) +
+    (summary?.pending_patrol || 0);
 
   const pendingByType = useMemo(
     () => [
@@ -142,6 +150,8 @@ const InspectionCenter: React.FC = () => {
       { key: 'process', count: summary?.pending_process || 0 },
       { key: 'finished', count: summary?.pending_finished || 0 },
       { key: 'oqc', count: summary?.pending_oqc || 0 },
+      { key: 'outsource', count: summary?.pending_outsource || 0 },
+      { key: 'patrol', count: summary?.pending_patrol || 0 },
     ],
     [summary],
   );
@@ -164,6 +174,10 @@ const InspectionCenter: React.FC = () => {
           {
             label: t('app.kuaizhizao.quality.inspectionCenter.kpi.finishedOqc'),
             value: `${summary?.pending_finished || 0} / ${summary?.pending_oqc || 0}`,
+          },
+          {
+            label: t('app.kuaizhizao.quality.inspectionCenter.kpi.outsourcePatrol'),
+            value: `${summary?.pending_outsource || 0} / ${summary?.pending_patrol || 0}`,
           },
         ],
       },
@@ -242,6 +256,18 @@ const InspectionCenter: React.FC = () => {
         title: t('app.kuaizhizao.menu.quality-management.oqc-inspection'),
         icon: <ExportOutlined style={{ fontSize: 20, color: '#13c2c2' }} />,
         path: '/apps/kuaizhizao/quality-management/oqc-inspection',
+      },
+      {
+        key: 'outsource',
+        title: t('app.kuaizhizao.menu.quality-management.outsource-inspection'),
+        icon: <DeploymentUnitOutlined style={{ fontSize: 20, color: '#fa8c16' }} />,
+        path: '/apps/kuaizhizao/quality-management/outsource-inspection',
+      },
+      {
+        key: 'patrol',
+        title: t('app.kuaizhizao.menu.quality-management.quality-patrol'),
+        icon: <CompassOutlined style={{ fontSize: 20, color: '#2f54eb' }} />,
+        path: '/apps/kuaizhizao/quality-management/quality-patrol',
       },
       {
         key: 'nc',

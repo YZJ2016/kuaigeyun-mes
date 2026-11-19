@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Result, Spin } from 'antd';
-import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { EditOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import CodeField from '../../../../../components/code-field';
@@ -153,33 +153,12 @@ const DrawingBalloonSheetsPage: React.FC = () => {
                 {t('common.edit')}
               </Button>
             ) : null,
-            canDelete && editable ? (
-              <Button
-                {...rowActionKind('delete')}
-                key="delete"
-                type="link"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={async () => {
-                  try {
-                    await drawingBalloonSheetApi.delete(row.id);
-                    messageApi.success(t('common.deleteSuccess'));
-                    actionRef.current?.reload?.();
-                  } catch (e: any) {
-                    messageApi.error(e?.message || t('common.deleteFailed'));
-                  }
-                }}
-              >
-                {t('common.delete')}
-              </Button>
-            ) : null,
           ];
         },
       },
     ];
     return alignProColumns(base, GLOBAL_DOC_LIST_FIELD_RANK);
-  }, [canDelete, canRead, canUpdate, messageApi, openEditor, t]);
+  }, [canRead, canUpdate, openEditor, t]);
 
   const createLabel = t('app.kuaizhizao.quality.drawingBalloon.createButton');
 
@@ -228,6 +207,7 @@ const DrawingBalloonSheetsPage: React.FC = () => {
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton={!!canDelete}
+          deleteButtonText={t('common.delete')}
           onDelete={async () => {
             const deletable = resolveSelectedRows().filter((row) => row.status === 'draft');
             if (!deletable.length) {
