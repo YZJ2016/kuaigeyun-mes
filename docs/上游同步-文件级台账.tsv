@@ -392,7 +392,7 @@ riveredge-backend/src/apps/kuaizhizao/finance/api/document_reconciliation.py	84e
 riveredge-backend/src/apps/kuaizhizao/finance/api/exchange_rates.py	63f31fc75899b7650c7a1b361530157ffe7b559a	tracked	seed from 2c76a942c2
 riveredge-backend/src/apps/kuaizhizao/finance/api/finance/__init__.py	13c923a4ab82047f0771f56b67aaa6cde523e660	tracked	seed from 2c76a942c2
 riveredge-backend/src/apps/kuaizhizao/finance/api/finance/fund_transfers.py	e17a55b74b416ff7b122b9d9c1e127d1f45de070	tracked	seed from 1efec0da1d
-riveredge-backend/src/apps/kuaizhizao/finance/api/finance/partner_statements.py	7d7e4fb281e0d0b25a24d3283601739b7a334976	tracked	seed from 154977d948
+riveredge-backend/src/apps/kuaizhizao/finance/api/finance/partner_statements.py	7d7e4fb281e0d0b25a24d3283601739b7a334976	superset	本地partner_statement_service已具confirm/post_ledger/发票门禁等价
 riveredge-backend/src/apps/kuaizhizao/finance/api/finance/payables.py	49a4b3398d802ac3a504f900a7f28c165c48f615	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaizhizao/finance/api/finance/payment_refunds.py	cab68845ae4388e45cf8e9fbe2781d7f4dbbd1c0	tracked	seed from 2c76a942c2
 riveredge-backend/src/apps/kuaizhizao/finance/api/finance/payments.py	3822270be788694b2372431aa456074eafcf91a4	tracked	seed from 1d968cd27b
@@ -402,7 +402,7 @@ riveredge-backend/src/apps/kuaizhizao/finance/api/finance/receipt_refunds.py	c64
 riveredge-backend/src/apps/kuaizhizao/finance/api/finance/receipts.py	922d2f21e96f5f978a6e82fb9b188b572f63bd3c	tracked	seed from 2c76a942c2
 riveredge-backend/src/apps/kuaizhizao/finance/api/finance/receivables.py	1f4f6ac95450470fec6c3d4648444b5a1309cce5	tracked	seed from 4bd853a94f
 riveredge-backend/src/apps/kuaizhizao/finance/api/finance/sales_invoices.py	4da512a3519d42472e953637663f3018e2df05da	tracked	seed from 1d968cd27b
-riveredge-backend/src/apps/kuaizhizao/finance/api/finance_management_router.py	164cbc7777dc06ff98f0a7e59ed189a2a4eba75f	tracked	seed from 1efec0da1d
+riveredge-backend/src/apps/kuaizhizao/finance/api/finance_management_router.py	164cbc7777dc06ff98f0a7e59ed189a2a4eba75f	domain-out	宿主财务路由,kuaicaiwu权威
 riveredge-backend/src/apps/kuaizhizao/finance/api/finance_notes.py	129cd5656dc7abafe4746b3b2d65a42b13ef4f64	tracked	seed from 2c76a942c2
 riveredge-backend/src/apps/kuaizhizao/finance/api/finance_settlement.py	3ab8ce6cb6966034f8c65a71fa87989cfb867481	tracked	seed from 2c76a942c2
 riveredge-backend/src/apps/kuaizhizao/finance/api/fixed_assets.py	5c91746f0a04cdd418259b0dc8f23fc2fff1cd3c	tracked	seed from 2c76a942c2
@@ -523,12 +523,12 @@ riveredge-backend/src/apps/kuaizhizao/finance/services/invoice_concurrent_settle
 riveredge-backend/src/apps/kuaizhizao/finance/services/invoice_merge_allocation_repair.py	490f34b74c71899ae203fc1903a153b45b6088bb	tracked	seed from 2c76a942c2
 riveredge-backend/src/apps/kuaizhizao/finance/services/invoice_service.py	12fcf88225da77e008370325cc9ab928cc5f5e90	tracked	seed from 2c76a942c2
 riveredge-backend/src/apps/kuaizhizao/finance/services/invoice_source_allocation.py	b8a3720958ddcc6f9927638545330304cd8704ec	tracked	seed from 2c76a942c2
-riveredge-backend/src/apps/kuaizhizao/finance/services/management_report_service.py	dd02ebe6ace8675412b26b5ca2b06bda322c632a	tracked	seed from 2c76a942c2
+riveredge-backend/src/apps/kuaizhizao/finance/services/management_report_service.py	dd02ebe6ace8675412b26b5ca2b06bda322c632a	superset	本地partner_statement_service已具confirm/post_ledger/发票门禁等价
 riveredge-backend/src/apps/kuaizhizao/finance/services/merge_settlement_service.py	693cc9022957560e28e700d6af5f19ac39ee2387	tracked	seed from 2c76a942c2
 riveredge-backend/src/apps/kuaizhizao/finance/services/notes_payable_audit_service.py	9313c012c83757c222152dcd17d0f8585b9bded3	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/finance/services/notes_receivable_audit_service.py	a35b99f69e81fcadd515640866535345c7df9ce9	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/finance/services/partner_statement_invoice_pull.py	42d65c1c96affe04ee82bd6f420286949f1f1b0d	tracked	seed from 93b3cb5998
-riveredge-backend/src/apps/kuaizhizao/finance/services/partner_statement_service.py	a22133583638aa2c7b293016860b38425526b454	tracked	seed from e451b48dc2
+riveredge-backend/src/apps/kuaizhizao/finance/services/partner_statement_service.py	a22133583638aa2c7b293016860b38425526b454	superset	本地partner_statement_service已具confirm/post_ledger/发票门禁等价
 riveredge-backend/src/apps/kuaizhizao/finance/services/payable_prepayment_apply_service.py	27f054eed9257ba8832e9d463f9e869b00aa2cbf	tracked	seed from 4bd853a94f
 riveredge-backend/src/apps/kuaizhizao/finance/services/payable_pull_service.py	5002a2db7498d933c0af9bc477887baf3657129e	tracked	seed from 2c76a942c2
 riveredge-backend/src/apps/kuaizhizao/finance/services/payment_advance_service.py	a82f510154ae1e0e6f949346e2f9a15221348da4	tracked	seed from e75380e080
@@ -552,7 +552,7 @@ riveredge-backend/src/apps/kuaizhizao/finance/services/receipt_audit_service.py	
 riveredge-backend/src/apps/kuaizhizao/finance/services/receipt_pull_service.py	37c914af0376acae7a9ffb735416a234349c88ca	tracked	seed from 2c76a942c2
 riveredge-backend/src/apps/kuaizhizao/finance/services/receipt_refund_audit_service.py	3eb7e696553d633794968570cef76cc07bbd14be	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/finance/services/receipt_refund_service.py	5829e932ec3966aa7874c3d3f01c9ee2e9b01409	tracked	seed from 2c76a942c2
-riveredge-backend/src/apps/kuaizhizao/finance/services/receivable_pull_service.py	187556a3d9fb7460e7248f1ba4449bd1b74f25da	tracked	seed from 4bd853a94f
+riveredge-backend/src/apps/kuaizhizao/finance/services/receivable_pull_service.py	187556a3d9fb7460e7248f1ba4449bd1b74f25da	superset	本地kuaicaiwu receivable_pull_service等价更全;死键已接线
 riveredge-backend/src/apps/kuaizhizao/finance/services/return_open_balance_offset_service.py	c2c639549c9628ab5933dab38f28fa4f755f568f	tracked	seed from 2c76a942c2
 riveredge-backend/src/apps/kuaizhizao/finance/services/return_refund_bridge_service.py	1e8a82b59bf84a8e6e7f5cc9356a0bf68dc091e2	tracked	seed from 2c76a942c2
 riveredge-backend/src/apps/kuaizhizao/finance/services/sales_invoice_audit_service.py	86efaad3a373c8c548e1ecb08d5471a6825e79e6	tracked	seed from 93b3cb5998

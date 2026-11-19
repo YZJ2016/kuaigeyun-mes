@@ -9776,7 +9776,9 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 logger.error("创建销售出库→应收单 单据关联/会计事件失败: %s", rel_e)
                 raise
             prepaid_apply = Decimal(str(pull_plan.get("prepaid_apply") or 0))
-            if prepaid_apply > 0:
+            if prepaid_apply > 0 and await BusinessConfigService().get_finance_auto_apply_customer_prepayment_to_receivable(
+                tenant_id
+            ):
                 try:
                     await receivable_pull_service.apply_prepayment_to_receivable(
                         tenant_id,
