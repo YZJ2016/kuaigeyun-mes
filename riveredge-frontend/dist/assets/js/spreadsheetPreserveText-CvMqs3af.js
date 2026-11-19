@@ -1,0 +1,1 @@
+const t=/^-?\d{1,3}(,\d{3})+(\.\d+)?([eE][+-]?\d+)?$/;function n(r){const e=String(r??"").trim();return e?e.includes(",")&&t.test(e)?e.replace(/,/g,""):e:""}function i(r){return String(r??"").trim().replace(/,/g,"")}export{i as a,n as s};

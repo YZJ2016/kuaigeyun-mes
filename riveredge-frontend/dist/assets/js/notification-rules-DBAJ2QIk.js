@@ -1,0 +1,1 @@
+import{a as i}from"./clientRelease-BIOroJJr.js";import"./vendor-CYKOW_ZJ.js";function e(){return i("/apps/kuaiiot/config/notification-rules/load-presets",{method:"POST"})}export{e as loadKuaiiotNotificationRulePresets};

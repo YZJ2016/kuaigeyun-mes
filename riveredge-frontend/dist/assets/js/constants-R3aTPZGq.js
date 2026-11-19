@@ -1,0 +1,1 @@
+const i={agents:["kuaiai","options","agents"],knowledgeBases:["kuaiai","options","knowledge-bases"],mcpServers:["kuaiai","options","mcp-servers"],tools:["kuaiai","options","tools"]},t=["kuaiai","options"];function n(o,s,a){return a<s?(o-1)*s+a:o*s+1}export{t as K,i as a,n as b};
