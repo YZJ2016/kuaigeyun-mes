@@ -1,1 +1,0 @@
-function o(t){const e=t.keyword.trim();return{skip:(t.page-1)*t.pageSize,limit:t.pageSize,...e?{keyword:e}:{},...t.dateFrom?{date_from:t.dateFrom}:{},...t.dateTo?{date_to:t.dateTo}:{}}}export{o as t};

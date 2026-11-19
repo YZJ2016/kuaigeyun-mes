@@ -1,1 +1,0 @@
-import{e as i,bn as n}from"./clientRelease-BIOroJJr.js";function s(){return i({queryKey:["businessConfigAuditRequiredMap"],queryFn:n,staleTime:5*60*1e3})}function o(e,u=!1){const{data:t}=s();if(!e)return u;const r=t?.[e];return typeof r=="boolean"?r:u}export{o as u};

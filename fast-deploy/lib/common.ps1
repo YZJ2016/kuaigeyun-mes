@@ -78,7 +78,6 @@ function Load-DeployEnv {
         $script:CADDY_EXTRA_PROXIES_FILE = Join-Path $script:FastDeployDir 'config\caddy-extra-proxies.list'
     }
     if (-not $script:NODE_BUILD_MEM) { $script:NODE_BUILD_MEM = 4096 }
-    if (-not $script:ALLOW_SERVER_BUILD) { $script:ALLOW_SERVER_BUILD = '0' }
     if (-not $script:SERVER_IP) { $script:SERVER_IP = '' }
     if (-not $script:TASKIQ_WORKERS) {
         if ($script:DeployMode -eq 'prod') { $script:TASKIQ_WORKERS = 1 } else { $script:TASKIQ_WORKERS = 2 }
@@ -1831,23 +1830,9 @@ function Invoke-Build {
 }
 
 function Ensure-FrontendDist {
+    # dist 不再入库，部署机每次 update 现构建；需 Node 与约 NODE_BUILD_MEM MB 内存。
     Load-DeployEnv
-    $index = Join-Path $script:FrontendDir 'dist\index.html'
-    $login = Join-Path $script:FrontendDir 'dist\login.html'
-    if ($script:ALLOW_SERVER_BUILD -eq '1') {
-        Write-LogWarn 'ALLOW_SERVER_BUILD=1，执行服务器构建（内存占用高，不推荐）...'
-        Invoke-Build
-        return
-    }
-    if (Test-Path $index) {
-        if (-not (Test-Path $login)) {
-            throw '缺少 dist/login.html（登录 MPA）。请重新执行 fast-deploy/build.web.sh 并推送'
-        }
-        Write-LogOk '已检测到 Web dist（含 login.html），跳过服务器构建（Caddy 直接代理 Git 中的 dist）'
-        Precompress-WebDist (Join-Path $script:FrontendDir 'dist')
-        return
-    }
-    throw '缺少 dist/index.html。请在本地 fast-deploy/build.web.sh 构建并推送，或设置 ALLOW_SERVER_BUILD=1'
+    Invoke-Build
 }
 
 function Sync-ProdAppUrls {

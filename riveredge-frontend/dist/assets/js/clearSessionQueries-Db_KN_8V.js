@@ -1,1 +1,0 @@
-const t=["currentUser","siteSetting","userPreference","languageListActive","navigationMenuTree","menuCustomLayout","applicationMenus","dashboard-menu-tree","businessConfig","tenantBackendHome","chatIntegrationStatus"];function o(e){for(const n of t)e.removeQueries({queryKey:[n]})}export{o as clearSessionScopedQueries};

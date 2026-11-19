@@ -1,1 +1,0 @@
-import"./vendor-CYKOW_ZJ.js";import{F as o}from"./main-DspWV8Zy.js";import"./clientRelease-BIOroJJr.js";const s={grid:!0,rowProps:{gutter:o.GRID_GUTTER}},t={span:12},a={span:24},e={precision:2,prefix:"¥",style:{width:"100%"}};export{s as a,a as b,e as c,t as f};

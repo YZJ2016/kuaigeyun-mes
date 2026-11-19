@@ -6,43 +6,43 @@ domain: deploy
 when: 构建前端 dist、本机起停、生产更新、H5、compose 专业包、要不要编前端
 keywords:
   - fast-deploy
-  - build.web.sh
-  - BUILD_WEB_SKIP_HISTORY_REWRITE
+  - deploy.sh
+  - dist不入库
+  - 部署机构建
   - deploy.sh
   - launch.dev.sh
   - cmd_ensure_frontend_dist
-  - build:16g
+  - npm run build
   - 没改前端
   - install-service
   - 开机自启
   - SERVICE_USER
-standard: 先按 code-push-routing 分流；有 PC 前端改动才 build.web；禁止平行 npm run build 后手写 commit/push
+standard: dist 不入库；推送只有源码 commit+push；PC 前端由部署机 deploy.sh update 时现构建；本机验证用 deploy.sh build
 ---
 
 # fast-deploy 脚本入口（构建 / 部署）
 
-- 日期：2026-10-03；分流澄清：2026-10-10
+- 日期：2026-10-03；分流澄清：2026-10-10；**dist 出库重构：2026-11-19**
 - 状态：已交付（文档化，供后续构建一律走脚本）
+- ⚠️ 2026-11-19 起：`riveredge-frontend/dist` 不再入库，`build.web.sh`/`build_web_git.sh` 已删除，历史不再被 filter-repo 改写
 
 ## 目标
 
-主仓所有「构建前端、发 dist、本机起停、生产更新」只走 `fast-deploy/` 现有脚本。  
-**源码-only 推送**（后端 / deploy / 记忆库）不走本篇的 `build.web.sh`，见 `principles/code-push-routing.md`。
+主仓所有「构建前端、本机起停、生产更新」只走 `fast-deploy/` 现有脚本。  
+`riveredge-frontend/dist` **不入库**：任何推送只有源码；PC 前端在部署机 `deploy.sh update/start` 时 `npm run build` 现构建。
 
 ## 何时读 / 禁止另起
 
-- 何时读：已确认需要编 PC dist / 部署机更新 / H5 / pro-apps / 本机起停
-- 禁止：没改前端却跑 `build.web.sh`；平行 `npm run build` 后手写 commit/push；对 develop 擅自 `--force`；新步骤另起顶层脚本
+- 何时读：本机/部署机构建 PC dist、部署机更新、H5、pro-apps、本机起停
+- 禁止：把 `riveredge-frontend/dist` 提交进 git；平行 `npm run build` 后手写 commit/push dist；对 develop 擅自 `--force`；新步骤另起顶层脚本
 
 ## 标准入口
 
 | 场景 | 命令 | 说明 |
 |------|------|------|
-| 仅后端/deploy/记忆库 | `git push`（生产再 `deploy.sh update`） | **不**跑 `build.web.sh` |
-| Web 构建并推送 dist | `BUILD_WEB_SKIP_HISTORY_REWRITE=1 ./fast-deploy/build.web.sh`（Windows 用 Git Bash） | **仅** PC 前端源有关变更后；只提交 `riveredge-frontend/dist` |
-| Web 历史瘦身 + 推送 | `./fast-deploy/build.web.sh` | 需 `git-filter-repo`，`force-with-lease` |
-| 部署机消费 dist | `./fast-deploy/deploy.sh update`（prod） | `cmd_ensure_frontend_dist`：有 Git dist 则不在服务器构建 |
-| 部署机强制本机构建 | `ALLOW_SERVER_BUILD=1` + `deploy.sh build` | 弱机不推荐；`npm run build`（非 `build:16g`） |
+| 任何源码推送（含 PC 前端） | `git push` | dist 不入库，无构建步骤 |
+| 部署机构建 dist | `./fast-deploy/deploy.sh update`（prod） | `cmd_ensure_frontend_dist` → `cmd_build`：`npm run build` 现构建 + 预压缩 |
+| 本机构建/验证 dist | `./fast-deploy/deploy.sh build` 或 `cd riveredge-frontend && npm run build` | 产物留在工作区，**勿提交** |
 | 移动端 H5 本地构建 | `./fast-deploy/build.mobile.web.sh` | `riveredge-app/mobile` → `web-dist`，默认不进主仓 |
 | 部署机装 H5 | `./fast-deploy/deploy.sh install-h5` | 拉 `kuaigeyun-client`，Caddy `/mobile` |
 | 统一部署向导 | `./fast-deploy/deploy.sh` / `dev` / `wizard` | check/install/configure/migrate/build/start/stop/status/update |
@@ -58,10 +58,8 @@ standard: 先按 code-push-routing 分流；有 PC 前端改动才 build.web；�
 | 角色 | 路径 |
 |------|------|
 | 入口说明 | `fast-deploy/README.md` |
-| Web 发版脚本 | `fast-deploy/build.web.sh` |
-| Git 历史/脏检查/push | `fast-deploy/lib/build_web_git.sh` |
 | 部署总入口 | `fast-deploy/deploy.sh` → `lib/common.sh` `fd_dispatch` |
-| 服务器构建 / 跳过构建 | `cmd_build` / `cmd_ensure_frontend_dist`（`common.sh`） |
+| 部署机构建 dist | `cmd_ensure_frontend_dist` → `cmd_build`（`common.sh`，每次 update 现构建） |
 | PS 对等实现 | `lib/common.ps1` `Invoke-Build` / `Ensure-FrontendDist` |
 | 蓝绿 | `lib/blue_green.sh` / `blue_green.ps1` |
 | 向导 | `lib/wizard.sh` |
@@ -69,20 +67,19 @@ standard: 先按 code-push-routing 分流；有 PC 前端改动才 build.web；�
 | 配置样例 | `fast-deploy/config/deploy.env.example` |
 | Caddy 模板 | `fast-deploy/templates/Caddyfile.template` |
 
-## 构建链路（仅 Web 产物需要时）
+## 构建链路（PC Web）
 
-1. 确认改动含 PC 前端（见 `principles/code-push-routing.md`）；否则只源码 push
-2. 发版机 develop：前端相关源码稳定 → AOCI 对齐并提交 → 源码 commit（不含 dist）→ `BUILD_WEB_SKIP_HISTORY_REWRITE=1 ./fast-deploy/build.web.sh`
-3. 生产机：`git pull` 得 tip 里 dist → `deploy.sh update` → 有 `index.html`+`login.html` 即跳过 npm
-4. `deploy.sh build` 只给「允许服务器构建」或调试；不是 Gitee 发版入口
+1. 源码照常 AOCI 对齐 → commit → `git push`（无 dist、无构建步骤）
+2. 部署机：`git pull` → `deploy.sh update` → `cmd_ensure_frontend_dist` 每次执行 `npm run build`（`NODE_BUILD_MEM` 默认 4096MB）→ `precompress_web_dist` 现生成 `.gz/.br`
+3. 本机调试/验证：`deploy.sh build` 或 `npm run build`，产物留在 `riveredge-frontend/dist`（已 gitignore）
 
-日常 Windows 必须带 `BUILD_WEB_SKIP_HISTORY_REWRITE=1`，否则会跑 filter-repo 并 `force-with-lease`。
+历史包袱：`build.web.sh` 曾用 git-filter-repo 剥离历史 dist 并 force-push，导致 develop 周期性整条链哈希改写（新旧链分叉）。该流程已随 dist 出库一并移除。
 
 ## 扩展点
 
 - 新部署步骤：挂 `fd_dispatch` / `KNOWN_CMDS`
 - 新前端产物检查：与 `cmd_ensure_frontend_dist`（须含 `login.html`）对齐
-- H5 / 专业包：分别走 `install-h5` 与 `compose.py`，不要写进 `build.web.sh`
+- H5 / 专业包：分别走 `install-h5` 与 `compose.py`
 
 ## 开机自启（Linux systemd）
 
@@ -98,10 +95,10 @@ standard: 先按 code-push-routing 分流；有 PC 前端改动才 build.web；�
 - `journalctl` 报 `status=203/EXEC` + `Permission denied`：包装脚本无 +x 或含 `\r`（Windows 检出）。先 `./fast-deploy/deploy.sh check`，再 `install-service` / `start`（会自动 `ensure_systemd_exec_scripts_ready`）。
 - PowerShell 执行 `.\fast-deploy\launch.dev.sh`：Windows 把 `.sh` 关联到 `git-bash.exe`，Cursor 终端无日志、exit 0，手机端未起。改用 `.\fast-deploy\launch.dev.ps1 withh5` 或 Git Bash。
 - 手机 H5 开发口默认 **8098**，不是 8081（Hyper-V 保留段）。
-- 工作区除 dist（及蓝绿槽、`.perf`）外必须干净，否则 `build_web_assert_source_tree_committed` 失败；**正式 AOCI 资产**（`aoci.txt` / `aoci.*.txt` / 放行的 `.aoci/config.json` 等）应已提交，勿故意排除——未跟踪的正式索引会挡住脚本；`.aoci` 下 lock/ledger/batch 助手文件仍勿提交（见 `.cursor/rules/aoci-git-commit.mdc`）
+- **正式 AOCI 资产**（`aoci.txt` / `aoci.*.txt` / 放行的 `.aoci/config.json` 等）应随业务变更提交，勿故意排除；`.aoci` 下 lock/ledger/batch 助手文件仍勿提交（见 `.cursor/rules/aoci-git-commit.mdc`）
 - 跟踪远程以 `@{upstream}` 为准，勿写死 origin
 - 推送 HTTPS 用组织令牌 `oauth2:<token>`
-- `cmd_build` 用 `npm run build`；发版脚本用 `build:16g`
+- `cmd_build` 用 `npm run build`
 - 阿里云 PyPI 偶发对 `uv.lock` hash 路径 `.whl.metadata` 404（如 `python-dotenv`）：`uv_sync_backend_with_fallback` 回退清华/官方，**成功源须写回父进程 `UV_INDEX_URL`**（勿在子 shell 里 export）；迁移用 `uv run --no-sync aerich upgrade` 禁止二次拉包。仍可显式 `UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple/`
 
 ## 关联

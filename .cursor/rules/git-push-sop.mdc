@@ -25,7 +25,7 @@ git rev-list --count origin/develop..HEAD
 ```
 
 - 条数应约等于 **本次自己的提交数**（通常 1～3 条）。
-- 若出现十几条别人的 `chore: build-web sync`、`fix(mobile)` 等：说明本地历史和远程分叉了，**禁止直接 Push**。
+- 若出现十几条别人的提交：说明本地历史和远程分叉了，**禁止直接 Push**。
 
 ## 分叉时整理（禁止把旧克隆历史推上去）
 
@@ -41,28 +41,13 @@ git cherry-pick <自己的提交哈希，从旧到新>
 3. 空 cherry-pick（`语言包` 已包含在前序提交里）用 `git cherry-pick --skip`
 4. 再确认 `origin/develop..HEAD` 只有自己的提交后才允许推
 
-## 推送前必须构建前端
+## 前端 dist 不入库（推送不再构建）
 
-开发环境 **`develop` 推送前必须构建前端** 并带上 `riveredge-frontend/dist`。生产机靠 Git 里的 dist 部署，不在服务器构建。
+`riveredge-frontend/dist` 已移出 Git 管理。推送前端改动**只需源码提交后 `git push`**，不再要求先跑 `build.web.sh` 或提交 dist。
 
-顺序：源码先 commit 且历史已干净 → 再构建 → 由构建脚本推送。不要先 `git push` 再构建。
-
-官方入口（仓库根目录、**Git Bash**）：
-
-```bash
-./fast-deploy/build.web.sh
-```
-
-脚本会：落后则 `pull --no-rebase` → 校验除 dist 外工作区干净 → `npm run sync:libredwg` + `npm run build:16g` → 只提交 `riveredge-frontend/dist`（`chore: build-web sync`）→ 再合一次上游 → 推送。
-
-硬性要求：
-
-- 除 `riveredge-frontend/dist` 外必须已 commit，否则 filter-repo 会冲掉本地源码
-- 不要手写 `git push --force`；构建脚本内部的 lease 推送才允许
-- 构建失败或 dist 无 `index.html` / `login.html` 时禁止推送
-- 用户只说「推送」且有前端改动（含 locales、tsx、前端配置）时，助手必须先走本脚本，不能只 push 源码
-
-应急才允许：`BUILD_WEB_SKIP_HISTORY_REWRITE=1`（须用户明确同意）
+- 生产机部署时由 `deploy.sh update/start` 在服务器执行 `npm run build` 现构建（内存需求见 `deploy.env` 的 `NODE_BUILD_MEM`）。
+- 本机需要验证构建时跑 `cd riveredge-frontend && npm run build` 或 `./fast-deploy/deploy.sh build`，产物留在本地工作区即可，不要提交。
+- `dist` 已被 `.gitignore` 忽略；若 `git status` 出现 dist 文件说明它被重新跟踪了，先查明原因再提交。
 
 ## 推送后核对
 
@@ -75,4 +60,4 @@ git cherry-pick <自己的提交哈希，从旧到新>
 
 ## 助手约束
 
-用户说「推送 / 提交并推送」时：先跑本 SOP 检查历史，条数异常则整理；源码提交后再执行 `./fast-deploy/build.web.sh`，并说明将推哪些源码提交 + 一条 build-web。
+用户说「推送 / 提交并推送」时：先跑本 SOP 检查历史，条数异常则整理；随后直接 `git push`，并说明将推哪些提交。

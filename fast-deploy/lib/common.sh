@@ -358,7 +358,6 @@ load_deploy_env() {
     CADDY_EXTRA_PROXIES="${CADDY_EXTRA_PROXIES:-}"
     CADDY_EXTRA_PROXIES_FILE="${CADDY_EXTRA_PROXIES_FILE:-$FAST_DEPLOY_DIR/config/caddy-extra-proxies.list}"
     NODE_BUILD_MEM="${NODE_BUILD_MEM:-4096}"
-    ALLOW_SERVER_BUILD="${ALLOW_SERVER_BUILD:-0}"
     SERVER_IP="${SERVER_IP:-}"
     # Taskiq 子进程数：生产默认 1（CLI 内置默认为 2，每子进程约 +200MB RSS）
     if [ -z "${TASKIQ_WORKERS:-}" ]; then
@@ -4151,32 +4150,11 @@ cmd_build() {
     log_ok "前端构建完成"
 }
 
-# 生产 update/start 前确保 dist 可用：默认使用 Git 中的 dist，跳过服务器构建（弱机友好）。
-# 显式 ALLOW_SERVER_BUILD=1 时强制 npm build；dist 缺失且无该开关则报错退出。
-# Git 中的 dist 不含 .gz/.br，随后 precompress_web_dist 按需生成。
+# 生产 update/start 前构建前端 dist：dist 不再入库，部署机每次 update 现构建。
+# 需要 Node 与约 NODE_BUILD_MEM MB 内存；.gz/.br 随后由 precompress_web_dist 现生成。
 cmd_ensure_frontend_dist() {
     load_deploy_env
-    local frontend_index="$FRONTEND_DIR/dist/index.html"
-
-    if [ "${ALLOW_SERVER_BUILD:-0}" = "1" ]; then
-        log_warn "ALLOW_SERVER_BUILD=1，执行服务器构建（内存占用高，不推荐）..."
-        cmd_build
-        return
-    fi
-
-    if [ -f "$frontend_index" ]; then
-        if [ ! -f "$FRONTEND_DIR/dist/login.html" ]; then
-            log_error "缺少 $FRONTEND_DIR/dist/login.html（登录 MPA）。请重新执行 fast-deploy/build.web.sh 并推送"
-            exit 1
-        fi
-        log_ok "已检测到 Web dist（含 login.html），跳过服务器构建（Caddy 直接代理 Git 中的 dist）"
-        precompress_web_dist "$FRONTEND_DIR/dist"
-        return 0
-    fi
-
-    log_error "缺少 ${frontend_index}"
-    log_error "请在本地执行 fast-deploy/build.web.sh 构建并推送 dist，或设置 ALLOW_SERVER_BUILD=1 后在服务器构建"
-    exit 1
+    cmd_build
 }
 
 # 已部署的是占位页（标题句），还不是 HBuilderX 发行结果。
@@ -4595,18 +4573,18 @@ gen_caddyfile() {
         backend_addr="127.0.0.1:$(bg_active_port)"
         frontend_root="$(bg_get_frontend_root_for_caddy)"
         [ -f "$(bg_frontend_live_link)/index.html" ] || [ -f "$FRONTEND_DIR/dist/index.html" ] || {
-            log_error "缺少前端 dist，请先 build"
+            log_error "缺少前端 dist，请先执行 ./fast-deploy/deploy.sh build"
             exit 1
         }
         [ -f "$(bg_frontend_live_link)/login.html" ] || [ -f "$FRONTEND_DIR/dist/login.html" ] || {
-            log_error "缺少 login.html（登录 MPA），请先 build.web"
+            log_error "缺少 login.html（登录 MPA），请先执行 ./fast-deploy/deploy.sh build"
             exit 1
         }
     else
         backend_addr="127.0.0.1:${BACKEND_PORT}"
         frontend_root="$(caddy_native_path "$FRONTEND_DIR/dist")"
-        [ -f "$FRONTEND_DIR/dist/index.html" ] || { log_error "缺少 $FRONTEND_DIR/dist/index.html，请先 build"; exit 1; }
-        [ -f "$FRONTEND_DIR/dist/login.html" ] || { log_error "缺少 $FRONTEND_DIR/dist/login.html（登录 MPA），请先 build.web"; exit 1; }
+        [ -f "$FRONTEND_DIR/dist/index.html" ] || { log_error "缺少 $FRONTEND_DIR/dist/index.html，请先执行 ./fast-deploy/deploy.sh build"; exit 1; }
+        [ -f "$FRONTEND_DIR/dist/login.html" ] || { log_error "缺少 $FRONTEND_DIR/dist/login.html（登录 MPA），请先执行 ./fast-deploy/deploy.sh build"; exit 1; }
     fi
     ensure_mobile_web_dist
     mobile_web_root="$(caddy_native_path "$MOBILE_WEB_DIR")"
@@ -5065,7 +5043,7 @@ cmd_start_prod() {
     ensure_logs_dir
     load_deploy_env
     ensure_production_swap || true
-    [ -f "$FRONTEND_DIR/dist/index.html" ] || { log_error "缺少前端 dist，请先运行 build"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
+    [ -f "$FRONTEND_DIR/dist/index.html" ] || { log_error "缺少前端 dist，请先执行 ./fast-deploy/deploy.sh build"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
     if [ "${RIVEREDGE_SYSTEMD:-0}" = "1" ]; then
         wait_for_local_postgres_ready 120 || { DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
         ensure_logs_dir_writable "$(id -un)" || { DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }

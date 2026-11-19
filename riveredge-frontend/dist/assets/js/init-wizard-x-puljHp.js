@@ -1,1 +1,0 @@
-import{a as s}from"./clientRelease-BIOroJJr.js";import"./vendor-CYKOW_ZJ.js";async function p(t,r){return s(`/infra/init/steps?tenant_id=${t}`,{method:"GET",suppressErrorToast:r?.suppressErrorToast})}export{p as getInitSteps};
