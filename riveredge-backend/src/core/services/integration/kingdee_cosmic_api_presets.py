@@ -155,6 +155,9 @@ SUPPLIER_PRESET_CODE_SUFFIX = "query_supplier"
 SUPPLIER_GETSUPPLIER_PATH = "kapi/v2/fd81/basedata/bd_supplier/getsupplier"
 SUPPLIER_GETSUPPLIER_PRESET_CODE_SUFFIX = "getsupplier_bd_supplier"
 SUPPLIER_GETSUPPLIER_PRESET_NAME = "【自定义】苍穹按组织获取供应商"
+CUSTOMER_GETCUSTOMER_PATH = "kapi/v2/fd81/basedata/bd_customer/getcustomer"
+CUSTOMER_GETCUSTOMER_PRESET_CODE_SUFFIX = "getcustomer_bd_customer"
+CUSTOMER_GETCUSTOMER_PRESET_NAME = "【自定义】苍穹按组织获取客户"
 # 单据写入类：接口管理须标「出站同步」
 KINGDEE_COSMIC_OUTBOUND_PRESET_CODE_SUFFIXES = frozenset(
     {
@@ -620,6 +623,42 @@ def build_supplier_getsupplier_preset() -> KingdeeCosmicApiPreset:
         "path": SUPPLIER_GETSUPPLIER_PATH,
         "method": "POST",
         "request_body": build_supplier_getsupplier_preset_body(),
+    }
+
+
+def build_customer_getcustomer_preset_body() -> Dict[str, Any]:
+    return {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 500,
+    }
+
+
+def customer_getcustomer_preset_needs_upgrade(path: Any, code: Any = None) -> bool:
+    """自定义 getcustomer 须指向 fd81/…/getcustomer，不得仍为标品 …/batchQuery 或 …/query。"""
+    lower = str(path or "").lower().replace("\\", "/").split("?", 1)[0].rstrip("/")
+    if lower.endswith("/bd_customer/getcustomer"):
+        return False
+    code_lower = str(code or "").strip().lower()
+    if "getcustomer" in code_lower:
+        return True
+    return False
+
+
+def build_customer_getcustomer_preset() -> KingdeeCosmicApiPreset:
+    return {
+        "code_suffix": CUSTOMER_GETCUSTOMER_PRESET_CODE_SUFFIX,
+        "name": CUSTOMER_GETCUSTOMER_PRESET_NAME,
+        "description": (
+            "【自定义】按组织获取客户（API 编码 getcustomer；非标品 query/batchQuery）。"
+            f"请求地址 /{CUSTOMER_GETCUSTOMER_PATH}。"
+            "返回行含 org_number（使用组织），客户同步会按连接器管理组织过滤行，"
+            "不用 createorg_number。data.org_number 出站时由连接器组织填充；"
+            "仍支持 pageNo/pageSize 分页。"
+        ),
+        "path": CUSTOMER_GETCUSTOMER_PATH,
+        "method": "POST",
+        "request_body": build_customer_getcustomer_preset_body(),
     }
 
 
@@ -2074,6 +2113,7 @@ def list_kingdee_cosmic_api_presets() -> List[KingdeeCosmicApiPreset]:
             biz_object=BIZ_BD_CUSTOMER,
             usage="客户",
         ),
+        build_customer_getcustomer_preset(),
         build_im_purinbill_add_preset(),
         build_im_purinbill_add2_preset(),
         build_im_purinbill_batch_update_preset(),

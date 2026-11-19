@@ -49,6 +49,8 @@ def _build_kingdee_cosmic_pack() -> ApiLibraryPackDefinition:
             "（getInventoryAvbQty）、即时库存明细（getInventoryDetail）、采购订单等标准业务对象 query；"
             "出站含采购入库单新增（标品 im_purinbill/add）、"
             "【自定义】含验收人新增（fd81/im_purinbill/add2）、"
+            "按组织获取供应商（fd81/bd_supplier/getsupplier）、"
+            "按组织获取客户（fd81/bd_customer/getcustomer）、"
             "销售出库单批量新增（im_saloutbill/batchAdd）、"
             "其他出库单批量新增（im_otheroutbill/batchAdd）、盘盈单批量新增（im_surplusbill/batchAdd）、"
             "盘亏单批量新增（im_deficitbill/batchAdd）。"

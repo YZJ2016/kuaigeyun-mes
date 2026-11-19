@@ -251,3 +251,28 @@ def test_kingdee_cosmic_mfg_presets_include_production_aux_basedata():
     assert len([p for p in presets if "/basedata/" in p["path"]]) >= 12
     multi = next(p for p in presets if p["path"].endswith("bd_multimeasureunit/batchQuery"))
     assert "计量单位" in (multi.get("description") or "")
+
+
+def test_customer_getcustomer_preset_in_catalog_and_upgrade():
+    from core.services.integration.kingdee_cosmic_api_presets import (
+        CUSTOMER_GETCUSTOMER_PATH,
+        CUSTOMER_GETCUSTOMER_PRESET_CODE_SUFFIX,
+        customer_getcustomer_preset_needs_upgrade,
+        list_kingdee_cosmic_api_presets,
+    )
+
+    presets = list_kingdee_cosmic_api_presets()
+    getcustomer = next(
+        p for p in presets if p["code_suffix"] == CUSTOMER_GETCUSTOMER_PRESET_CODE_SUFFIX
+    )
+    assert getcustomer["path"] == CUSTOMER_GETCUSTOMER_PATH
+    assert getcustomer["method"] == "POST"
+    assert (getcustomer.get("request_body") or {}).get("pageSize") == 500
+    assert customer_getcustomer_preset_needs_upgrade(
+        "kapi/v2/basedata/bd_customer/batchQuery",
+        "kingdee_getcustomer_bd_customer",
+    )
+    assert not customer_getcustomer_preset_needs_upgrade(
+        CUSTOMER_GETCUSTOMER_PATH,
+        "kingdee_getcustomer_bd_customer",
+    )

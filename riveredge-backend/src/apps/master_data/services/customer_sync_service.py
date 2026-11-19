@@ -149,17 +149,84 @@ class CustomerSyncService:
         try:
             await emit_sync_progress("开始同步客户…")
             invalid_skipped_holder = {"n": 0}
+            management_org: Optional[str] = None
+            use_getcustomer_org_rows = False
+
+            # 对齐供应商 getsupplier：自定义 getcustomer 按连接器组织过滤返回行
+            from core.models.api import API
+            from core.services.integration.kingdee_cosmic_customer_org_scope import (
+                is_cosmic_customer_getcustomer_api,
+                resolve_connector_org_for_customer_scope,
+            )
+
+            for src in sources:
+                api_uuid = str(src.get("api_uuid") or "").strip() or None
+                if not api_uuid:
+                    continue
+                api_obj = await API.filter(tenant_id=tenant_id, uuid=api_uuid).first()
+                if not api_obj:
+                    continue
+                path_lower = str(getattr(api_obj, "path", "") or "").lower().replace("\\", "/")
+                api_code = str(getattr(api_obj, "code", "") or "").strip()
+                if not is_cosmic_customer_getcustomer_api(path=path_lower, code=api_code):
+                    continue
+                await api_obj.fetch_related("integration_config")
+                conn = getattr(api_obj, "integration_config", None)
+                conn_type = str(getattr(conn, "type", "") or "").strip()
+                if conn and conn_type in (
+                    "kingdee_cosmic",
+                    "kingdee_xinghan",
+                    "kingdee_ai_suite",
+                ):
+                    org = resolve_connector_org_for_customer_scope(conn.get_config())
+                    if org and org.upper() != "BU-00000":
+                        use_getcustomer_org_rows = True
+                        management_org = org
+                        await emit_sync_progress(
+                            f"按使用组织 {org} 过滤自定义 getcustomer 返回行…"
+                        )
+                break
 
             def _filter_raw(raw_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-                if not req.active_only:
-                    return raw_rows
-                kept, skipped = filter_kingdee_approved_active_master_rows(raw_rows)
-                invalid_skipped_holder["n"] += skipped
-                return kept
+                from core.services.integration.kingdee_cosmic_material_active import (
+                    is_cosmic_material_row_active,
+                )
+
+                out = raw_rows
+                if req.active_only:
+                    kept, skipped = filter_kingdee_approved_active_master_rows(out)
+                    invalid_skipped_holder["n"] += skipped
+                    out = kept
+                if use_getcustomer_org_rows and management_org:
+                    from core.services.integration.kingdee_cosmic_customer_org_scope import (
+                        filter_cosmic_customer_rows_by_management_org_number,
+                    )
+
+                    before = len(out)
+                    out = filter_cosmic_customer_rows_by_management_org_number(
+                        out, management_org
+                    )
+                    invalid_skipped_holder["n"] += before - len(out)
+                stamped: List[Dict[str, Any]] = []
+                for row in out:
+                    if not isinstance(row, dict):
+                        continue
+                    item = dict(row)
+                    item["sync_is_active"] = is_cosmic_material_row_active(item)
+                    stamped.append(item)
+                return stamped
+
+            sources_for_fetch: List[Dict[str, Any]] = []
+            for src in sources:
+                src_for_fetch = dict(src)
+                mapping = dict(src_for_fetch.get("field_mapping") or {})
+                mapping["sync_is_active"] = "is_active"
+                src_for_fetch["field_mapping"] = mapping
+                sources_for_fetch.append(src_for_fetch)
 
             rows, source_errors, fetched = await fetch_mapped_rows_from_sources(
                 tenant_id,
-                sources,
+                sources_for_fetch,
                 since=since,
                 active_only=req.active_only,
                 transform_raw_rows=_filter_raw,

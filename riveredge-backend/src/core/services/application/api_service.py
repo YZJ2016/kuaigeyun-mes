@@ -430,6 +430,7 @@ class APIService:
             LEGACY_SUPPLIER_LIST_PRESET_CODE_SUFFIX,
             MATERIAL_GROUP_PRESET_CODE_SUFFIX,
             MATERIAL_PRESET_CODE_SUFFIX,
+            CUSTOMER_GETCUSTOMER_PRESET_CODE_SUFFIX,
             MEASUREUNITS_PRESET_CODE_SUFFIX,
             SUPPLIER_GETSUPPLIER_PRESET_CODE_SUFFIX,
             SUPPLIER_PRESET_CODE_SUFFIX,
@@ -447,6 +448,7 @@ class APIService:
             material_preset_needs_upgrade,
             measureunits_preset_needs_upgrade,
             outbound_preset_sync_direction_needs_upgrade,
+            customer_getcustomer_preset_needs_upgrade,
             resolve_preset_api_code,
             resolve_preset_sync_direction,
             supplier_getsupplier_preset_needs_upgrade,
@@ -708,6 +710,28 @@ class APIService:
                 elif (
                     code_suffix == SUPPLIER_GETSUPPLIER_PRESET_CODE_SUFFIX
                     and supplier_getsupplier_preset_needs_upgrade(
+                        existing.path, existing.code
+                    )
+                ):
+                    existing.path = preset["path"]
+                    existing.name = preset["name"]
+                    existing.description = preset["description"]
+                    existing.method = preset.get("method") or existing.method or "POST"
+                    existing.request_body = preset.get("request_body") or existing.request_body
+                    await existing.save(
+                        update_fields=[
+                            "path",
+                            "name",
+                            "description",
+                            "method",
+                            "request_body",
+                            "updated_at",
+                        ]
+                    )
+                    upgraded.append(code)
+                elif (
+                    code_suffix == CUSTOMER_GETCUSTOMER_PRESET_CODE_SUFFIX
+                    and customer_getcustomer_preset_needs_upgrade(
                         existing.path, existing.code
                     )
                 ):
@@ -1455,6 +1479,9 @@ class APIService:
                 call_request_body = {}
             call_request_body.update(copy.deepcopy(test_request.body))
 
+        from core.services.integration.kingdee_cosmic_customer_org_scope import (
+            is_cosmic_customer_getcustomer_api,
+        )
         from core.services.integration.kingdee_cosmic_supplier_org_scope import (
             is_cosmic_supplier_getsupplier_api,
         )
@@ -1470,6 +1497,19 @@ class APIService:
             # 只升级本次出站副本，不写回接口管理定义
             if supplier_getsupplier_preset_needs_upgrade(api_path, api.code):
                 preset = build_supplier_getsupplier_preset()
+                api_path = str(preset.get("path") or "").strip()
+                call_request_body = preset.get("request_body") or call_request_body
+        elif conn_type in ("kingdee_cosmic", "kingdee_xinghan", "kingdee_ai_suite") and (
+            is_cosmic_customer_getcustomer_api(path=api_path, code=str(api.code or ""))
+        ):
+            from core.services.integration.kingdee_cosmic_api_presets import (
+                build_customer_getcustomer_preset,
+                customer_getcustomer_preset_needs_upgrade,
+            )
+
+            # 与供应商 getsupplier 一致：只升级本次出站副本，不写回接口管理定义
+            if customer_getcustomer_preset_needs_upgrade(api_path, api.code):
+                preset = build_customer_getcustomer_preset()
                 api_path = str(preset.get("path") or "").strip()
                 call_request_body = preset.get("request_body") or call_request_body
         elif conn_type in ("kingdee_cosmic", "kingdee_xinghan", "kingdee_ai_suite") and (
