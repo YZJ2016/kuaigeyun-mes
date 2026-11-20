@@ -4202,7 +4202,83 @@ export default {
   'app.kuaizhizao.documentDetail.stockLoading': '加载库存…',
   'app.kuaizhizao.documentDetail.stockEmpty': '无在库',
   'app.kuaizhizao.documentDetail.warehouseStock': '各仓在库',
-  'pages.dashboard.updateLog.entries.kingdee-im-batch-update-after-edit-r01.title':
+    'pages.dashboard.updateLog.entries.warehouse-outbound-field-mask-amount-r01.title':
+    '出库入库列表字段脱敏生效',
+  'pages.dashboard.updateLog.entries.warehouse-outbound-field-mask-amount-r01.description':
+    '仓储出库、入库 Hub 列表与明细金额与客户名称改为走角色字段权限（AmountDisplay / PartyNameDisplay），配置脱敏后不再明文显示。需更新 Web 端。',
+  'pages.dashboard.updateLog.entries.sales-order-revoke-orphan-mrp-r01.title':
+    '销售订单工单删净后仍可反审核',
+  'pages.dashboard.updateLog.entries.sales-order-revoke-orphan-mrp-r01.description':
+    '工单/采购单等下游已删但需求计算头单仍在时，下推进度可为 0% 却误拦反审核；门控改为不将孤立需求计算头算作有效下游，反审核会先撤回计算。需重启后端。',
+  'pages.dashboard.updateLog.entries.warehouse-detail-party-mask-r01.title':
+    '仓储出入库详情客户供应商脱敏对齐列表',
+  'pages.dashboard.updateLog.entries.warehouse-detail-party-mask-r01.description':
+    '出库、入库详情抽屉基本信息中的客户、供应商名称改为 PartyNameDisplay，与列表字段权限（脱敏/隐藏）一致，配置脱敏后详情不再明文展示。',
+  'pages.dashboard.updateLog.entries.mrp-push-pr-handoff-blank-form-r01.title':
+    '需求计算下推采购申请录入页空白修复',
+  'pages.dashboard.updateLog.entries.mrp-push-pr-handoff-blank-form-r01.description':
+    '从 MRP 打开「新建采购申请」时，若该页标签曾常驻打开或 URL 去掉 flow 参数后会误再跑空表单初始化，导致整页空白；已先灌入下推草稿再清 URL，并在带 flow 的下推时强制重新加载。',
+  'pages.dashboard.updateLog.entries.mrp-push-purchase-order-preview-material-r01.title':
+    'MRP 创建下游单据采购单预览报错修复',
+  'pages.dashboard.updateLog.entries.mrp-push-purchase-order-preview-material-r01.description':
+    '需求计算下推采购单路径预览时，读取默认供应商前未先解析物料对象会触发 Python 未赋值变量错误；已调整赋值顺序，创建下游单据弹窗可正常打开预览。',
+  'pages.dashboard.updateLog.entries.field-permission-full-registry-r01.title':
+    '角色字段权限补全财务仓储物流单据',
+  'pages.dashboard.updateLog.entries.field-permission-full-registry-r01.description':
+    '补全其他费用、运费单、调拨盘点、往来对账等资源的字段策略注册；扫描覆盖 reference 与 audit 清单。角色页搜索支持生产入库等与采购入库共用的 inbound 别名，仅回显资源不再出现在字段权限。需重启后端并更新 Web。',
+  'pages.dashboard.updateLog.entries.field-permission-display-only-exclude-r01.title':
+    '仅回显授权不再出现在字段权限',
+  'pages.dashboard.updateLog.entries.field-permission-display-only-exclude-r01.description':
+    '功能权限仅勾选「回显」的资源（如计划中心引用需求）不再生成字段策略，避免与宿主页回显用途混淆。需重启后端。',
+  'pages.dashboard.updateLog.entries.field-permission-registry-expand-r01.title':
+    '角色字段权限补全送货单等资源',
+  'pages.dashboard.updateLog.entries.field-permission-registry-expand-r01.description':
+    '字段权限仅在注册表声明的资源下生成策略。已补全送货单、发货通知、收货通知、其它出入库及常见单据资源；角色已勾选功能权限后可在字段权限配置金额与客户供应商名称。需重启后端。',
+  'pages.dashboard.updateLog.entries.production-picking-toolbar-audit-r01.title':
+    '生产领料列表补全审核功能区',
+  'pages.dashboard.updateLog.entries.production-picking-toolbar-audit-r01.description':
+    '生产领料固定列表与销售出库对齐，工具栏增加提交与审核批量菜单（提交审核、审核、撤回审核、反审核），并按单据 capabilities 门禁。需更新 Web 端并重启后端。',
+  'pages.dashboard.updateLog.entries.other-expense-purchase-receipt-pull-detail-r01.title':
+    '其他费用选入库单展示明细',
+  'pages.dashboard.updateLog.entries.other-expense-purchase-receipt-pull-detail-r01.description':
+    '新建其他费用支出关联采购入库单时，取单列表增加产品明细、采购订单与入库数量列，并支持按物料关键字搜索，便于同供应商多张入库单区分。需更新 Web 端并重启后端。',
+  'pages.dashboard.updateLog.entries.other-expense-purchase-receipt-excl-r01.title':
+    '其他费用选入库单未税金额对齐',
+  'pages.dashboard.updateLog.entries.other-expense-purchase-receipt-excl-r01.description':
+    '新建其他费用支出关联采购入库单时，列表未税金额按入库明细与采购结算同源公式汇总，避免头表未及时同步时出现 0.01 级尾差；列名改为未税金额。需重启后端。',
+  'pages.dashboard.updateLog.entries.outsource-order-create-open-edit-r01.title':
+    '工序委外保存后进入编辑',
+  'pages.dashboard.updateLog.entries.outsource-order-create-open-edit-r01.description':
+    '新建工序委外单保存成功后自动打开编辑弹窗，便于补充附件、自定义字段等信息，不再只回到列表。',
+  'pages.dashboard.updateLog.entries.outsource-order-create-prefill-op-r01.title':
+    '工序委外新建带入工序信息',
+  'pages.dashboard.updateLog.entries.outsource-order-create-prefill-op-r01.description':
+    '从工单工序加载源后，若工序已维护默认供应商、计划起止与可委外量，新建弹窗自动预填。',
+  'pages.dashboard.updateLog.entries.outsource-order-create-form-grid-r01.title':
+    '工序委外新建弹窗双栏排版',
+  'pages.dashboard.updateLog.entries.outsource-order-create-form-grid-r01.description':
+    '新建工序委外单三列栅格对齐：UniDropdown 供应商走 FormModalGridBlock 进 Col，可下推量改标签说明避免 extra 撑歪同行控件。',
+  'pages.dashboard.updateLog.entries.warehouse-outbound-stacked-primary-r01.title':
+    '出库管理列表恢复加载',
+  'pages.dashboard.updateLog.entries.warehouse-outbound-stacked-primary-r01.description':
+    '出库列表客商名叠列误将组件传入主文案字段导致 primary.trim 报错；改为字符串主文案并走客商脱敏展示槽位。',
+  'pages.dashboard.updateLog.entries.outsource-order-wo-pull-lines-r05.title':
+    '工序委外取单去掉 N+1 查询',
+  'pages.dashboard.updateLog.entries.outsource-order-wo-pull-lines-r05.description':
+    '取单可委外量改为批量预载工单工序、委外单、过程检验与报废后再算量，避免按工单×工序反复查库导致超时。',
+  'pages.dashboard.updateLog.entries.outsource-order-wo-pull-lines-r04.title':
+    '工序委外取单计算并行加速',
+  'pages.dashboard.updateLog.entries.outsource-order-wo-pull-lines-r04.description':
+    '服务端对执行中工单可委外量并行计算，缩短首屏加载时间；有数据时不再因全量串行算量被前端超时误判为空。',
+  'pages.dashboard.updateLog.entries.outsource-order-wo-pull-lines-r03.title':
+    '工序委外取单接口路径修正',
+  'pages.dashboard.updateLog.entries.outsource-order-wo-pull-lines-r03.description':
+    '取单改为工单路径，避免被委外单详情路由把路径段当成 outsource_order_id 而报错无法加载。',
+  'pages.dashboard.updateLog.entries.outsource-order-wo-pull-lines-r01.title':
+    '工序委外取单加载加速',
+  'pages.dashboard.updateLog.entries.outsource-order-wo-pull-lines-r01.description':
+    '选择加载源（工单工序）改为服务端分页取单，避免对每张执行中工单逐条请求可委外量接口导致弹窗长时间无响应。',
+'pages.dashboard.updateLog.entries.kingdee-im-batch-update-after-edit-r01.title':
     '编辑已推送金蝶的仓储单据会回写金蝶',
   'pages.dashboard.updateLog.entries.kingdee-im-batch-update-after-edit-r01.description':
     '生产领料、销售出库、采购入库、其他入库和其他出库保存成功后，若该单已关联金蝶且仍可编辑，会把当前明细回写到金蝶。尚未推送或推送未开启时，保存流程与原来一样。',

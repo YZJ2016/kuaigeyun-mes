@@ -43,6 +43,165 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  * titleKey / descriptionKey 对应 pages.dashboard.updateLog.entries.{id}.*
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
+  {
+    id: 'field-permission-full-registry-r01',
+    date: '2026-11-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.field-permission-full-registry-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.field-permission-full-registry-r01.description',
+  },
+  {
+    id: 'field-permission-display-only-exclude-r01',
+    date: '2026-11-20',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.field-permission-display-only-exclude-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.field-permission-display-only-exclude-r01.description',
+  },
+  {
+    id: 'field-permission-registry-expand-r01',
+    date: '2026-11-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.field-permission-registry-expand-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.field-permission-registry-expand-r01.description',
+  },
+  {
+    id: 'production-picking-toolbar-audit-r01',
+    date: '2026-11-20',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.production-picking-toolbar-audit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.production-picking-toolbar-audit-r01.description',
+  },
+  {
+    id: 'other-expense-purchase-receipt-pull-detail-r01',
+    date: '2026-11-20',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.other-expense-purchase-receipt-pull-detail-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.other-expense-purchase-receipt-pull-detail-r01.description',
+  },
+  {
+    id: 'other-expense-purchase-receipt-excl-r01',
+    date: '2026-11-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.other-expense-purchase-receipt-excl-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.other-expense-purchase-receipt-excl-r01.description',
+  },
+  {
+    id: 'sales-order-revoke-orphan-mrp-r01',
+    date: '2026-11-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-revoke-orphan-mrp-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sales-order-revoke-orphan-mrp-r01.description',
+  },
+  {
+    id: 'warehouse-detail-party-mask-r01',
+    date: '2026-11-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-detail-party-mask-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.warehouse-detail-party-mask-r01.description',
+  },
+  {
+    id: 'mrp-push-pr-handoff-blank-form-r01',
+    date: '2026-11-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mrp-push-pr-handoff-blank-form-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mrp-push-pr-handoff-blank-form-r01.description',
+  },
+  {
+    id: 'mrp-push-purchase-order-preview-material-r01',
+    date: '2026-11-20',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.mrp-push-purchase-order-preview-material-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mrp-push-purchase-order-preview-material-r01.description',
+  },
+  {
+    id: 'outsource-order-create-open-edit-r01',
+    date: '2026-11-20',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.outsource-order-create-open-edit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outsource-order-create-open-edit-r01.description',
+  },
+  {
+    id: 'outsource-order-create-prefill-op-r01',
+    date: '2026-11-20',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.outsource-order-create-prefill-op-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outsource-order-create-prefill-op-r01.description',
+  },
+  {
+    id: 'outsource-order-create-form-grid-r01',
+    date: '2026-11-20',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.outsource-order-create-form-grid-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outsource-order-create-form-grid-r01.description',
+  },
+  {
+    id: 'warehouse-outbound-stacked-primary-r01',
+    date: '2026-11-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-outbound-stacked-primary-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.warehouse-outbound-stacked-primary-r01.description',
+  },
+  {
+    id: 'outsource-order-wo-pull-lines-r05',
+    date: '2026-11-20',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.outsource-order-wo-pull-lines-r05.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outsource-order-wo-pull-lines-r05.description',
+  },
+  {
+    id: 'outsource-order-wo-pull-lines-r04',
+    date: '2026-11-20',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.outsource-order-wo-pull-lines-r04.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outsource-order-wo-pull-lines-r04.description',
+  },
+  {
+    id: 'outsource-order-wo-pull-lines-r03',
+    date: '2026-11-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.outsource-order-wo-pull-lines-r03.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outsource-order-wo-pull-lines-r03.description',
+  },
+  {
+    id: 'outsource-order-wo-pull-lines-r01',
+    date: '2026-11-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.outsource-order-wo-pull-lines-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outsource-order-wo-pull-lines-r01.description',
+  },
+  {
+    id: 'warehouse-outbound-field-mask-r01',
+    date: '2026-11-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-outbound-field-mask-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.warehouse-outbound-field-mask-r01.description',
+  },
+  {
+    id: 'warehouse-outbound-field-mask-amount-r01',
+    date: '2026-11-20',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.warehouse-outbound-field-mask-amount-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.warehouse-outbound-field-mask-amount-r01.description',
+  },
 {
     id: 'payment-application-detail-line-preview-ref-r01',
     date: '2026-11-20',
