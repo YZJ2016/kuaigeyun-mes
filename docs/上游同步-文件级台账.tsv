@@ -1721,8 +1721,8 @@ riveredge-frontend/src/apps/kuaiconnect/pages/data-sources/DatabaseBrandIcon.tsx
 riveredge-frontend/src/apps/kuaiconnect/pages/data-sources/databaseBrandColors.ts	1ee34f2f9beedaabe54efe306d1380c72e62e4aa	deferred	R2:kuaiconnect页import路径需适配(src/components深度)且依赖apiManagement服务未落
 riveredge-frontend/src/apps/kuaiconnect/pages/datasets/list/index.tsx	a113157c300391b96a337d1000b8f1dc4e24cec1	deferred	R2:kuaiconnect页import路径需适配(src/components深度)且依赖apiManagement服务未落
 riveredge-frontend/src/apps/kuaiems/manifest.json	5ef0dd94364e247a47c958f326329cc8c22cad0d	tracked	seed from 46508115c7
-riveredge-frontend/src/apps/kuaiplm/components/SystemArchiveCapabilitiesTags.tsx	DELETED	deferred	kuaiplm星研发深度分叉,随域评估
-riveredge-frontend/src/apps/kuaiplm/manifest.json	DELETED	deferred	kuaiplm星研发深度分叉,随域评估
+riveredge-frontend/src/apps/kuaiplm/components/SystemArchiveCapabilitiesTags.tsx	DELETED	superset	本地独有（上游tip无此路径），无上游可比版本
+riveredge-frontend/src/apps/kuaiplm/manifest.json	DELETED	superset	本地独有（上游tip无此路径），无上游可比版本
 riveredge-frontend/src/apps/kuaiqms/manifest.json	2870e2477b6a7711c5ba2c467283f65050c555f3	tracked	seed from 2c76a942c2
 riveredge-frontend/src/apps/kuaizhizao/components/AcceptanceBillLinkFields.tsx	27bf89d36cb46769eba8a0f8370942fd3f8006cb	tracked	seed from e75380e080
 riveredge-frontend/src/apps/kuaizhizao/components/AfterSalesTicketFormModal.tsx	8f2a8451da4504de646368d072c107234035457f	applied	R2：与上游tip blob一致，本地已同步
