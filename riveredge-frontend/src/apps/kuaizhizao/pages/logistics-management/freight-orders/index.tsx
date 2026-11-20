@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import type { ActionType, ProColumns } from '@ant-design/pro-components';
+import type { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 import {
   App,
   Button,
@@ -21,9 +21,12 @@ import {
   ListPageTemplate,
   MODAL_CONFIG,
 } from '../../../../../components/layout-templates';
+import { CustomFieldsFormSection } from '../../../../../components/custom-fields';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { FreightOrderDetailDrawer } from './components/FreightOrderDetailDrawer';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS,
@@ -80,6 +83,9 @@ function canEditFreightOrder(status?: string | null): boolean {
   return status === 'draft' || status === 'scheduled';
 }
 
+const FREIGHT_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_freight_orders';
+const FREIGHT_ORDER_HOST_RESOURCE = 'kuaizhizao:freight-order';
+
 function freightOrderPartnerName(row: FreightOrder): string {
   const names = [...new Set(
     (row.sources ?? [])
@@ -93,8 +99,9 @@ const FreightOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
-  const perms = useResourcePermissions('kuaizhizao:freight-order');
+  const perms = useResourcePermissions(FREIGHT_ORDER_HOST_RESOURCE);
   const actionRef = useRef<ActionType>();
+  const formRef = useRef<ProFormInstance>();
   const [createOpen, setCreateOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<FreightOrder | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -105,12 +112,38 @@ const FreightOrdersPage: React.FC = () => {
   const [selectedSources, setSelectedSources] = useState<FreightPullCandidate[]>([]);
   const pendingCreateSourcesRef = useRef<FreightPullCandidate[] | null>(null);
   const [signForm] = Form.useForm();
+  const {
+    customFields: formCustomFields,
+    customFieldValues: formCustomFieldValues,
+    loadFieldValues: loadFormCustomFieldValues,
+    extractFormValues: extractCustomFormValues,
+    saveCustomFieldValues,
+    resetFieldValues: resetFormCustomFieldValues,
+  } = useCustomFields({
+    tableName: FREIGHT_ORDER_CUSTOM_FIELD_TABLE,
+    hostResource: FREIGHT_ORDER_HOST_RESOURCE,
+    loadWhenOpen: true,
+    open: createOpen,
+  });
+  const {
+    customFields: listCustomFields,
+    customFieldValues: detailCustomFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<FreightOrder>({
+    tableName: FREIGHT_ORDER_CUSTOM_FIELD_TABLE,
+    hostResource: FREIGHT_ORDER_HOST_RESOURCE,
+  });
+  const customFieldColumns = generateCustomFieldColumns();
 
   const openCreateFromSources = useCallback(async (rows: FreightPullCandidate[]) => {
     setEditingOrder(null);
+    resetFormCustomFieldValues();
     setSelectedSources(rows);
     setCreateOpen(true);
-  }, []);
+  }, [resetFormCustomFieldValues]);
 
   const createInitialValues = useMemo(
     () => ({
@@ -187,8 +220,10 @@ const FreightOrdersPage: React.FC = () => {
   const loadDetail = useCallback(async (id: number) => {
     setDetailLoading(true);
     setDetailError(null);
+    resetDetailFieldValues();
     try {
       setDetail(await getFreightOrder(id));
+      await loadFieldValuesForDetail(id);
     } catch (error) {
       const msg = getApiErrorMessage(error, t('app.kuaizhizao.logistics.message.loadDetailFailed'));
       setDetail(null);
@@ -196,7 +231,7 @@ const FreightOrdersPage: React.FC = () => {
     } finally {
       setDetailLoading(false);
     }
-  }, [t]);
+  }, [loadFieldValuesForDetail, resetDetailFieldValues, t]);
 
   const openDetail = (row: FreightOrder) => {
     detailRetryIdRef.current = row.id;
@@ -210,6 +245,7 @@ const FreightOrdersPage: React.FC = () => {
     setCreateOpen(false);
     setEditingOrder(null);
     setSelectedSources([]);
+    resetFormCustomFieldValues();
   };
 
   const openEdit = useCallback(
@@ -232,32 +268,37 @@ const FreightOrdersPage: React.FC = () => {
           })),
         );
         setCreateOpen(true);
+        const cfValues = await loadFormCustomFieldValues(full.id);
+        formRef.current?.setFieldsValue(cfValues);
       } catch (error) {
         messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.logistics.message.loadDetailFailed')));
       }
     },
-    [messageApi, t],
+    [loadFormCustomFieldValues, messageApi, t],
   );
 
   const handleSubmit = async (values: Record<string, unknown>) => {
+    const { customData, standardValues } = extractCustomFormValues(values, formRef.current);
     if (editingOrder) {
       try {
         const next = await updateFreightOrder(editingOrder.id, {
-          transport_mode: values.transport_mode,
-          carrier_id: values.carrier_id,
-          vehicle_id: values.vehicle_id,
-          driver_id: values.driver_id,
-          tracking_number: values.tracking_number,
-          sender_phone: values.sender_phone,
-          recipient_phone: values.recipient_phone,
-          origin_address: values.origin_address,
-          destination_address: values.destination_address,
+          transport_mode: standardValues.transport_mode,
+          carrier_id: standardValues.carrier_id,
+          vehicle_id: standardValues.vehicle_id,
+          driver_id: standardValues.driver_id,
+          tracking_number: standardValues.tracking_number,
+          sender_phone: standardValues.sender_phone,
+          recipient_phone: standardValues.recipient_phone,
+          origin_address: standardValues.origin_address,
+          destination_address: standardValues.destination_address,
         });
+        await saveCustomFieldValues(next.id, customData);
         messageApi.success(t('common.updateSuccess'));
         closeFormModal();
-    actionRef.current?.reload();
+        actionRef.current?.reload();
         if (detail?.id === next.id) {
           setDetail(next);
+          await loadFieldValuesForDetail(next.id);
         }
       } catch (error) {
         messageApi.error(getApiErrorMessage(error, t('common.updateFailed')));
@@ -270,8 +311,8 @@ const FreightOrdersPage: React.FC = () => {
       throw new Error(t('app.kuaizhizao.logistics.message.selectSource'));
     }
     try {
-      await createFreightOrder({
-        ...values,
+      const created = await createFreightOrder({
+        ...standardValues,
         sources: selectedSources.map((item) => ({
           source_type: item.source_type,
           source_id: item.source_id,
@@ -279,6 +320,9 @@ const FreightOrdersPage: React.FC = () => {
           partner_name: item.partner_name,
         })),
       });
+      if (created.id != null) {
+        await saveCustomFieldValues(created.id, customData);
+      }
       messageApi.success(t('common.createSuccess'));
       closeFormModal();
       actionRef.current?.reload();
@@ -485,6 +529,7 @@ const FreightOrdersPage: React.FC = () => {
           hideInSearch: true,
           render: (_, row) => renderFreightOrderStatusTag(t, row.status),
         },
+        ...customFieldColumns,
         {
           title: t('common.action'),
           key: 'option',
@@ -510,7 +555,7 @@ const FreightOrdersPage: React.FC = () => {
           },
         },
       ]),
-    [openEdit, perms.canRead, perms.canUpdate, t],
+    [customFieldColumns, openEdit, perms.canRead, perms.canUpdate, t],
   );
 
   return (
@@ -520,23 +565,28 @@ const FreightOrdersPage: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.freightOrder)}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-orders-width-v7"
+        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-orders-width-v8-cf"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         rowKey="id"
-        request={async (params, _sort, _filter, searchFormValues) => {
+        request={async (params, _sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           const res = await listFreightOrders({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize,
             keyword: pickListSearchKeyword(searchFormValues),
           });
-          return { data: res.items, total: res.total, success: true };
+          const items =
+            meta?.purpose === 'prefetch'
+              ? res.items
+              : await enrichRecordsWithCustomFields(res.items);
+          return { data: items, total: res.total, success: true };
         }}
         showCreateButton={perms.canCreate}
         createButtonText={t('app.kuaizhizao.logistics.action.createFreightOrder')}
         onCreate={pullFromSourceQuery.openModal}
         enableRowSelection={perms.canDelete}
         showDeleteButton={perms.canDelete}
+        deleteButtonText={t('common.delete')}
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => deleteFreightOrder(Number(key))));
     messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
@@ -594,6 +644,7 @@ const FreightOrdersPage: React.FC = () => {
         grid={false}
         key={editingOrder ? `edit-${editingOrder.id}` : 'create'}
         width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={formRef as React.RefObject<ProFormInstance>}
         initialValues={formInitialValues}
         onClose={closeFormModal}
         onFinish={handleSubmit}
@@ -671,6 +722,11 @@ const FreightOrdersPage: React.FC = () => {
             </Form.Item>
           </Col>
         </Row>
+        <CustomFieldsFormSection
+          customFields={formCustomFields}
+          customFieldValues={formCustomFieldValues}
+          gridColumns={2}
+        />
       </FormModalTemplate>
 
       <FreightOrderDetailDrawer
@@ -679,10 +735,13 @@ const FreightOrdersPage: React.FC = () => {
           setDetailOpen(false);
           setDetail(null);
           setDetailError(null);
+          resetDetailFieldValues();
         }}
         order={detail}
         loading={detailLoading}
         error={detailError}
+        customFields={listCustomFields}
+        customFieldValues={detailCustomFieldValues}
         onRetry={() => {
           const id = detailRetryIdRef.current;
           if (id != null) void loadDetail(id);

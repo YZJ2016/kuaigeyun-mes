@@ -3,12 +3,17 @@ import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Input, Modal } from 'antd';
 import { CheckOutlined, CloseOutlined, SendOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { DetailDrawerActions, ListPageTemplate } from '../../../../../components/layout-templates';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { hasReviewPermission } from '../../../../../utils/permissionContract';
 import { serviceSettlementApi, type ServiceSettlement } from '../../../services/after-sales-service';
 import { ServiceSettlementDetailDrawer } from './components/ServiceSettlementDetailDrawer';
@@ -28,6 +33,13 @@ import {
 } from '../shared/afterSalesListPresentation';
 
 const RESOURCE = 'kuaizhizao:service-settlement';
+const CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_service_settlements';
+
+type DetailActionKey = 'submit' | 'audit' | 'reject';
+
+const canEditStatus = (status?: string) => status === '草稿';
+const canSubmitStatus = (status?: string) => status === '草稿';
+const canReviewStatus = (status?: string) => status === '待审核';
 
 const ServiceSettlementsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -44,20 +56,40 @@ const ServiceSettlementsPage: React.FC = () => {
   const [detailError, setDetailError] = useState<string | null>(null);
   const detailRetryIdRef = useRef<number | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectTargetId, setRejectTargetId] = useState<number | null>(null);
   const [rejectRemarks, setRejectRemarks] = useState('');
+  const [detailActionLoading, setDetailActionLoading] = useState<DetailActionKey | null>(null);
+  const {
+    customFields: listCustomFields,
+    customFieldValues: detailCustomFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<ServiceSettlement>({
+    tableName: CUSTOM_FIELD_TABLE,
+    hostResource: RESOURCE,
+  });
+  const customFieldColumns = generateCustomFieldColumns();
+  const showDetailCustomFields = hasCustomFieldsDetailContent(
+    listCustomFields,
+    detailCustomFieldValues,
+  );
 
   const loadDetail = useCallback(async (id: number) => {
     setDetailLoading(true);
     setDetailError(null);
+    resetDetailFieldValues();
     try {
       setDetail(await serviceSettlementApi.get(id));
+      await loadFieldValuesForDetail(id);
     } catch (error) {
       setDetail(null);
       setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.detail.loadFailed')));
     } finally {
       setDetailLoading(false);
     }
-  }, [t]);
+  }, [loadFieldValuesForDetail, resetDetailFieldValues, t]);
 
   const openDetail = (row: ServiceSettlement) => {
     detailRetryIdRef.current = row.id;
@@ -67,25 +99,89 @@ const ServiceSettlementsPage: React.FC = () => {
     void loadDetail(row.id);
   };
 
-  const refreshDetail = async (id: number) => {
+  const refreshDetail = useCallback(async (id: number) => {
     setDetail(await serviceSettlementApi.get(id));
     actionRef.current?.reload();
-  };
+  }, []);
 
   const openEdit = async (row: ServiceSettlement) => {
     setEditing(await serviceSettlementApi.get(row.id));
     setModalOpen(true);
   };
 
-  const executeconfirmDelete = async (row: ServiceSettlement) => {
-    await serviceSettlementApi.delete(row.id);
-        messageApi.success(t('common.deleteSuccess'));
-        if (detail?.id === row.id) {
-          setDetailOpen(false);
-          setDetail(null);
+  const openReject = useCallback((id: number) => {
+    setRejectTargetId(id);
+    setRejectRemarks('');
+    setRejectOpen(true);
+  }, []);
+
+  const executeSubmit = useCallback(
+    async (id: number) => {
+      setDetailActionLoading('submit');
+      try {
+        await serviceSettlementApi.submit(id);
+        await refreshDetail(id);
+        messageApi.success(t('app.kuaizhizao.afterSalesService.serviceSettlement.submitSuccess'));
+      } catch (error) {
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.serviceSettlement.actionFailed')),
+        );
+        throw error;
+      } finally {
+        setDetailActionLoading(null);
+      }
+    },
+    [messageApi, refreshDetail, t],
+  );
+
+  const executeAudit = useCallback(
+    async (id: number) => {
+      setDetailActionLoading('audit');
+      try {
+        await serviceSettlementApi.audit(id);
+        await refreshDetail(id);
+        messageApi.success(t('app.kuaizhizao.afterSalesService.serviceSettlement.auditSuccess'));
+      } catch (error) {
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.serviceSettlement.actionFailed')),
+        );
+        throw error;
+      } finally {
+        setDetailActionLoading(null);
+      }
+    },
+    [messageApi, refreshDetail, t],
+  );
+
+  const executeReject = useCallback(
+    async (id: number, reviewRemarks: string) => {
+      const remarks = reviewRemarks.trim();
+      if (!remarks) {
+        messageApi.error(t('app.kuaizhizao.afterSalesService.serviceSettlement.rejectRemarksRequired'));
+        throw new Error('reject_remarks_required');
+      }
+      setDetailActionLoading('reject');
+      try {
+        await serviceSettlementApi.reject(id, { review_remarks: remarks });
+        setRejectOpen(false);
+        setRejectTargetId(null);
+        setRejectRemarks('');
+        await refreshDetail(id);
+        messageApi.success(t('app.kuaizhizao.afterSalesService.serviceSettlement.rejectSuccess'));
+      } catch (error) {
+        if (error instanceof Error && error.message === 'reject_remarks_required') {
+          throw error;
         }
-    actionRef.current?.reload();
-  };
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.serviceSettlement.actionFailed')),
+        );
+        throw error;
+      } finally {
+        setDetailActionLoading(null);
+      }
+    },
+    [messageApi, refreshDetail, t],
+  );
 
   const columns: ProColumns<ServiceSettlement>[] = useMemo(
     () =>
@@ -135,68 +231,111 @@ const ServiceSettlementsPage: React.FC = () => {
             render: (_, row) =>
               renderAfterSalesStatusTag(row.status, AFTER_SALES_REVIEW_STATUS_COLOR),
           },
+          ...customFieldColumns,
           {
             title: t('common.actions'),
             key: 'action',
             fixed: 'right',
             hideInSearch: true,
-            render: (_, row) => [
-              <Button {...rowActionKind('read')} key="read" onClick={() => openDetail(row)} />,
-              perms.canUpdate && row.status === '草稿' ? (
-                <Button
-                  {...rowActionKind('update')}
-                  key="edit"
-                  onClick={() => void openEdit(row)}
-                />
-              ) : null,
-              perms.canAction?.('submit') && row.status === '草稿' ? (
-                <Button
-                  key="submit"
-                  {...rowActionKind('submit')}
-                  onClick={async () => {
-                    await serviceSettlementApi.submit(row.id);
-                    messageApi.success(t('app.kuaizhizao.afterSalesService.serviceSettlement.submitSuccess'));
-    actionRef.current?.reload();
-                  }}
-                />
-              ) : null,
-              perms.canDelete && row.status === '草稿' ? (
-                <ActionConfirmPopconfirm title={t('common.confirmDelete')} onConfirm={() => executeconfirmDelete(row)}>
-              <Button
-                  {...rowActionKind('delete')}
-                  key="delete"
-                  onClick={(e) => e.stopPropagation()}
-                />
-            </ActionConfirmPopconfirm>
-              ) : null,
-            ],
+            render: (_, row) => {
+              const parts: React.ReactNode[] = [
+                <Button {...rowActionKind('read')} key="read" onClick={() => openDetail(row)} />,
+              ];
+              if (perms.canUpdate && canEditStatus(row.status)) {
+                parts.push(
+                  <Button
+                    {...rowActionKind('update')}
+                    key="edit"
+                    onClick={() => void openEdit(row)}
+                  />,
+                );
+              }
+              if (perms.canAction?.('submit') && canSubmitStatus(row.status)) {
+                parts.push(
+                  <ActionConfirmPopconfirm
+                    key="submit"
+                    title={t('components.uniAction.submit')}
+                    description={t(
+                      'app.kuaizhizao.afterSalesService.serviceSettlement.submitConfirm',
+                      { code: row.settlement_code },
+                    )}
+                    onConfirm={() => executeSubmit(row.id)}
+                  >
+                    <Button
+                      {...rowActionKind('submit')}
+                      {...rowActionLabelKeep()}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {t('components.uniAction.submit')}
+                    </Button>
+                  </ActionConfirmPopconfirm>,
+                );
+              }
+              if (canReview && canReviewStatus(row.status)) {
+                parts.push(
+                  <ActionConfirmPopconfirm
+                    key="audit"
+                    title={t('components.uniAction.audit')}
+                    description={t(
+                      'app.kuaizhizao.afterSalesService.serviceSettlement.auditConfirm',
+                      { code: row.settlement_code },
+                    )}
+                    onConfirm={() => executeAudit(row.id)}
+                  >
+                    <Button
+                      {...rowActionKind('audit')}
+                      {...rowActionLabelKeep()}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {t('components.uniAction.audit')}
+                    </Button>
+                  </ActionConfirmPopconfirm>,
+                  <Button
+                    key="reject"
+                    {...rowActionKind('reject')}
+                    {...rowActionLabelKeep()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openReject(row.id);
+                    }}
+                  >
+                    {t('components.uniAction.reject')}
+                  </Button>,
+                );
+              }
+              return parts;
+            },
           },
         ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [messageApi, perms, t],
+    [canReview, customFieldColumns, executeAudit, executeSubmit, openReject, perms, t],
   );
 
   return (
     <ListPageTemplate>
       <UniTable<ServiceSettlement>
         viewTypes={['table', 'help']}
-          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesSettlement)}
+        helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesSettlement)}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.service-settlements.v7"
+        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.service-settlements.v9-row-review"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.after-sales-service.service-settlements')}
-        request={async (params, _sort, _filter, searchFormValues) => {
+        request={async (params, _sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           const res = await serviceSettlementApi.list({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize,
             keyword: pickListSearchKeyword(searchFormValues),
             status: pickSearchString(searchFormValues, 'status'),
           });
-          return { data: res.items, total: res.total, success: true };
+          const data =
+            meta?.purpose === 'prefetch'
+              ? res.items
+              : await enrichRecordsWithCustomFields(res.items);
+          return { data, total: res.total, success: true };
         }}
         showCreateButton={perms.canCreate}
         createButtonText={t('app.kuaizhizao.afterSalesService.serviceSettlement.createTitle')}
@@ -206,10 +345,11 @@ const ServiceSettlementsPage: React.FC = () => {
         }}
         enableRowSelection={perms.canDelete}
         showDeleteButton={perms.canDelete}
+        deleteButtonText={t('common.delete')}
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => serviceSettlementApi.delete(Number(key))));
-    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
-    actionRef.current?.reload();
+          messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+          actionRef.current?.reload();
         }}
       />
 
@@ -221,7 +361,7 @@ const ServiceSettlementsPage: React.FC = () => {
           setEditing(null);
         }}
         onSuccess={() => {
-    actionRef.current?.reload();
+          actionRef.current?.reload();
           if (editing && detail?.id === editing.id) {
             void refreshDetail(editing.id);
           }
@@ -234,6 +374,7 @@ const ServiceSettlementsPage: React.FC = () => {
           setDetailOpen(false);
           setDetail(null);
           setDetailError(null);
+          resetDetailFieldValues();
         }}
         record={detail}
         loading={detailLoading}
@@ -242,12 +383,25 @@ const ServiceSettlementsPage: React.FC = () => {
           const id = detailRetryIdRef.current;
           if (id != null) void loadDetail(id);
         }}
+        supplementaryTitle={
+          showDetailCustomFields
+            ? t('app.master-data.customFields', { defaultValue: '自定义字段' })
+            : undefined
+        }
+        supplementary={
+          showDetailCustomFields ? (
+            <CustomFieldsDetailSection
+              customFields={listCustomFields}
+              customFieldValues={detailCustomFieldValues}
+            />
+          ) : undefined
+        }
         extra={
           <DetailDrawerActions
             items={[
               {
                 key: 'edit',
-                visible: Boolean(detail && perms.canUpdate && detail.status === '草稿'),
+                visible: Boolean(detail && perms.canUpdate && canEditStatus(detail.status)),
                 render: (
                   <Button
                     onClick={() => {
@@ -261,53 +415,64 @@ const ServiceSettlementsPage: React.FC = () => {
               },
               {
                 key: 'submit',
-                visible: Boolean(detail && perms.canAction?.('submit') && detail.status === '草稿'),
+                visible: Boolean(
+                  detail && perms.canAction?.('submit') && canSubmitStatus(detail.status),
+                ),
                 render: (
-                  <Button
-                    icon={<SendOutlined />}
-                    onClick={async () => {
-                      if (!detail) return;
-                      await serviceSettlementApi.submit(detail.id);
-                      await refreshDetail(detail.id);
-                      messageApi.success(
-                        t('app.kuaizhizao.afterSalesService.serviceSettlement.submitSuccess'),
-                      );
-                    }}
+                  <ActionConfirmPopconfirm
+                    title={t('components.uniAction.submit')}
+                    description={t(
+                      'app.kuaizhizao.afterSalesService.serviceSettlement.submitConfirm',
+                      { code: detail?.settlement_code },
+                    )}
+                    onConfirm={() => executeSubmit(detail!.id)}
                   >
-                    {t('components.uniAction.submit')}
-                  </Button>
+                    <Button
+                      icon={<SendOutlined />}
+                      loading={detailActionLoading === 'submit'}
+                      disabled={detailActionLoading != null}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {t('components.uniAction.submit')}
+                    </Button>
+                  </ActionConfirmPopconfirm>
                 ),
               },
               {
                 key: 'audit',
-                visible: Boolean(detail && detail.status === '待审核' && canReview),
+                visible: Boolean(detail && canReviewStatus(detail.status) && canReview),
                 render: (
-                  <Button
-                    type="primary"
-                    icon={<CheckOutlined />}
-                    onClick={async () => {
-                      if (!detail) return;
-                      await serviceSettlementApi.audit(detail.id);
-                      await refreshDetail(detail.id);
-                      messageApi.success(
-                        t('app.kuaizhizao.afterSalesService.serviceSettlement.auditSuccess'),
-                      );
-                    }}
+                  <ActionConfirmPopconfirm
+                    title={t('components.uniAction.audit')}
+                    description={t(
+                      'app.kuaizhizao.afterSalesService.serviceSettlement.auditConfirm',
+                      { code: detail?.settlement_code },
+                    )}
+                    onConfirm={() => executeAudit(detail!.id)}
                   >
-                    {t('components.uniAction.audit')}
-                  </Button>
+                    <Button
+                      type="primary"
+                      icon={<CheckOutlined />}
+                      loading={detailActionLoading === 'audit'}
+                      disabled={detailActionLoading != null}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {t('components.uniAction.audit')}
+                    </Button>
+                  </ActionConfirmPopconfirm>
                 ),
               },
               {
                 key: 'reject',
-                visible: Boolean(detail && detail.status === '待审核' && canReview),
+                visible: Boolean(detail && canReviewStatus(detail.status) && canReview),
                 render: (
                   <Button
                     danger
                     icon={<CloseOutlined />}
+                    disabled={detailActionLoading != null}
                     onClick={() => {
-                      setRejectRemarks('');
-                      setRejectOpen(true);
+                      if (!detail) return;
+                      openReject(detail.id);
                     }}
                   >
                     {t('components.uniAction.reject')}
@@ -322,18 +487,15 @@ const ServiceSettlementsPage: React.FC = () => {
       <Modal
         open={rejectOpen}
         title={t('app.kuaizhizao.afterSalesService.serviceSettlement.rejectTitle')}
-        onCancel={() => setRejectOpen(false)}
-        destroyOnHidden
-        onOk={async () => {
-          if (!detail) return;
-          if (!rejectRemarks.trim()) {
-            messageApi.warning(t('app.kuaizhizao.afterSalesService.serviceSettlement.rejectPlaceholder'));
-            return;
-          }
-          await serviceSettlementApi.reject(detail.id, { review_remarks: rejectRemarks });
+        onCancel={() => {
           setRejectOpen(false);
-          await refreshDetail(detail.id);
-          messageApi.success(t('app.kuaizhizao.afterSalesService.serviceSettlement.rejectSuccess'));
+          setRejectTargetId(null);
+        }}
+        destroyOnHidden
+        confirmLoading={detailActionLoading === 'reject'}
+        onOk={async () => {
+          if (rejectTargetId == null) return;
+          await executeReject(rejectTargetId, rejectRemarks);
         }}
       >
         <Input.TextArea

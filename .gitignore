@@ -204,3 +204,6 @@ riveredge-frontend/dist-live/
 # AOCI agent host integration (machine-bound; do not commit)
 .codex/config.toml
 .codex/config.toml.backup.*
+
+# sync working scratch (session-local)
+.sync_tmp/

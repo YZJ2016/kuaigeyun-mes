@@ -14,6 +14,11 @@ import {
 } from '../../shared/afterSalesListPresentation';
 import { LinkedDocumentCode } from '../../../../../../components/linked-document-code';
 import { AfterSalesDocDetailDrawer } from '../../shared/AfterSalesDocDetailDrawer';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../../components/custom-fields';
+import type { CustomField } from '../../../../../../services/customField';
 
 const PLACEHOLDER: AfterSalesTicket = {
   id: 0,
@@ -36,6 +41,8 @@ export type AfterSalesTicketDetailDrawerProps = {
   extra?: React.ReactNode;
   footer?: React.ReactNode;
   zIndex?: number;
+  customFields?: CustomField[];
+  customFieldValues?: Record<string, unknown>;
 };
 
 export const AfterSalesTicketDetailDrawer: React.FC<AfterSalesTicketDetailDrawerProps> = ({
@@ -48,8 +55,11 @@ export const AfterSalesTicketDetailDrawer: React.FC<AfterSalesTicketDetailDrawer
   extra,
   footer,
   zIndex,
+  customFields = [],
+  customFieldValues = {},
 }) => {
   const { t } = useTranslation();
+  const showCustomFields = hasCustomFieldsDetailContent(customFields, customFieldValues);
 
   const columns = useMemo(
     () =>
@@ -160,6 +170,17 @@ export const AfterSalesTicketDetailDrawer: React.FC<AfterSalesTicketDetailDrawer
       footer={footer}
       zIndex={zIndex}
       traceDocumentType="after_sales_ticket"
+      supplementaryTitle={
+        showCustomFields ? t('app.master-data.customFields', { defaultValue: '自定义字段' }) : undefined
+      }
+      supplementary={
+        showCustomFields ? (
+          <CustomFieldsDetailSection
+            customFields={customFields}
+            customFieldValues={customFieldValues}
+          />
+        ) : undefined
+      }
       linesTitle={t('app.kuaizhizao.afterSalesTicket.itemsTitle')}
       lines={
         <Table

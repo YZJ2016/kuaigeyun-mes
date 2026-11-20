@@ -14,6 +14,11 @@ import {
   detailDrawerBasicColumn,
   useDetailDrawerDescriptionItems,
 } from '../../../../../../components/layout-templates';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../../components/custom-fields';
+import type { CustomField } from '../../../../../../services/customField';
 import { alignDescriptionColumns } from '../../../sales-management/shared/documentFieldAlignment';
 import type { FreightBill, FreightBillItem } from '../../../../services/logistics';
 import { renderFreightBillReviewStatusTag } from '../../shared/logisticsListPresentation';
@@ -38,6 +43,8 @@ export type FreightBillDetailDrawerProps = {
   onRetry?: () => void;
   zIndex?: number;
   extra?: React.ReactNode;
+  customFields?: CustomField[];
+  customFieldValues?: Record<string, unknown>;
 };
 
 export const FreightBillDetailDrawer: React.FC<FreightBillDetailDrawerProps> = ({
@@ -49,8 +56,11 @@ export const FreightBillDetailDrawer: React.FC<FreightBillDetailDrawerProps> = (
   onRetry,
   zIndex,
   extra,
+  customFields = [],
+  customFieldValues = {},
 }) => {
   const { t } = useTranslation();
+  const showCustomFields = hasCustomFieldsDetailContent(customFields, customFieldValues);
 
   const contentReady = Boolean(bill);
   const showError = Boolean(error) && !contentReady && !loading;
@@ -146,6 +156,17 @@ export const FreightBillDetailDrawer: React.FC<FreightBillDetailDrawerProps> = (
         ) : (
           <div style={{ minHeight: 120 }} />
         )
+      }
+      supplementaryTitle={
+        showCustomFields ? t('app.master-data.customFields', { defaultValue: '自定义字段' }) : undefined
+      }
+      supplementary={
+        showCustomFields ? (
+          <CustomFieldsDetailSection
+            customFields={customFields}
+            customFieldValues={customFieldValues}
+          />
+        ) : undefined
       }
       linesTitle={t('app.kuaizhizao.logistics.section.billItems')}
       lines={

@@ -11,6 +11,11 @@ import {
   DRAWER_CONFIG,
   useDetailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
+import type { CustomField } from '../../../../../services/customField';
 
 type LogisticsMasterDetailDrawerProps<T extends object> = {
   open: boolean;
@@ -19,6 +24,8 @@ type LogisticsMasterDetailDrawerProps<T extends object> = {
   title: string;
   extra?: React.ReactNode;
   basicColumns: ProDescriptionsItemProps<T>[];
+  customFields?: CustomField[];
+  customFieldValues?: Record<string, unknown>;
 };
 
 export function LogisticsMasterDetailDrawer<T extends object>({
@@ -28,8 +35,11 @@ export function LogisticsMasterDetailDrawer<T extends object>({
   title,
   extra,
   basicColumns,
+  customFields = [],
+  customFieldValues = {},
 }: LogisticsMasterDetailDrawerProps<T>) {
   const contentReady = Boolean(record);
+  const showCustomFields = hasCustomFieldsDetailContent(customFields, customFieldValues);
 
   const timeconfigBasicItems = useDetailDrawerDescriptionItems(
     basicColumns as ProDescriptionsItemProps<Record<string, unknown>>[],
@@ -47,11 +57,21 @@ export function LogisticsMasterDetailDrawer<T extends object>({
       extra={contentReady ? extra ?? null : null}
       basic={
         contentReady && record ? (
-          <Descriptions
-            column={2}
-            size="small"
-            items={timeconfigBasicItems}
-          />
+          <>
+            <Descriptions
+              column={2}
+              size="small"
+              items={timeconfigBasicItems}
+            />
+            {showCustomFields ? (
+              <div style={{ marginTop: 16 }}>
+                <CustomFieldsDetailSection
+                  customFields={customFields}
+                  customFieldValues={customFieldValues}
+                />
+              </div>
+            ) : null}
+          </>
         ) : (
           <div style={{ minHeight: 80 }} />
         )

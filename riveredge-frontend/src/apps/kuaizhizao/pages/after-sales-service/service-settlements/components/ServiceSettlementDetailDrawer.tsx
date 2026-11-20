@@ -30,6 +30,8 @@ export type ServiceSettlementDetailDrawerProps = {
   onRetry?: () => void;
   extra?: React.ReactNode;
   zIndex?: number;
+  supplementary?: React.ReactNode;
+  supplementaryTitle?: React.ReactNode;
 };
 
 export const ServiceSettlementDetailDrawer: React.FC<ServiceSettlementDetailDrawerProps> = ({
@@ -41,6 +43,8 @@ export const ServiceSettlementDetailDrawer: React.FC<ServiceSettlementDetailDraw
   onRetry,
   extra,
   zIndex,
+  supplementary,
+  supplementaryTitle,
 }) => {
   const { t } = useTranslation();
 
@@ -112,6 +116,8 @@ export const ServiceSettlementDetailDrawer: React.FC<ServiceSettlementDetailDraw
       onRetry={onRetry}
       extra={extra}
       zIndex={zIndex}
+      supplementary={supplementary}
+      supplementaryTitle={supplementaryTitle}
       traceDocumentType="service_settlement"
       linesTitle={t('app.kuaizhizao.afterSalesService.common.itemsTitle')}
       lines={

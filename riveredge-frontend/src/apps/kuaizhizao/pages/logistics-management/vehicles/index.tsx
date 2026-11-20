@@ -9,9 +9,10 @@ import { Button, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
 import {
   alignDescriptionColumns,
@@ -40,6 +41,18 @@ const VehiclesPage: React.FC = () => {
   const [editing, setEditing] = useState<Vehicle | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<Vehicle | null>(null);
+  const {
+    customFields: listCustomFields,
+    customFieldValues: detailCustomFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<Vehicle>({
+    tableName: 'apps_kuaizhizao_vehicles',
+    hostResource: 'kuaizhizao:vehicle',
+  });
+  const customFieldColumns = generateCustomFieldColumns();
 
   const openCreate = () => {
     setEditing(null);
@@ -54,6 +67,10 @@ const VehiclesPage: React.FC = () => {
   const openDetail = (row: Vehicle) => {
     setDetail(row);
     setDetailOpen(true);
+    resetDetailFieldValues();
+    if (row.id != null) {
+      void loadFieldValuesForDetail(row.id);
+    }
   };
 
   const basicColumns = useMemo(
@@ -141,6 +158,7 @@ const VehiclesPage: React.FC = () => {
           hideInSearch: true,
           render: (_, row) => renderLogisticsEnabledTag(t, row.is_enabled),
         },
+        ...customFieldColumns,
         {
           title: t('common.status'),
           key: 'lifecycle',
@@ -166,24 +184,11 @@ const VehiclesPage: React.FC = () => {
                 <Button key="edit" {...rowActionKind('update')} onClick={() => openEdit(row)} />,
               );
             }
-            if (perms.canDelete) {
-              nodes.push(
-                <Button
-                  key="delete"
-                  {...rowActionKind('delete')}
-                  onClick={async () => {
-                    await deleteVehicle(row.id);
-                    message.success(t('common.deleteSuccess'));
-    actionRef.current?.reload();
-                  }}
-                />,
-              );
-            }
             return nodes;
           },
         },
       ]),
-    [perms.canDelete, perms.canRead, perms.canUpdate, t],
+    [customFieldColumns, perms.canDelete, perms.canRead, perms.canUpdate, t],
   );
 
   return (
@@ -193,23 +198,28 @@ const VehiclesPage: React.FC = () => {
         helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.vehicles')}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.vehicles.v8"
+        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.vehicles.v9-cf"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         rowKey="id"
-        request={async (params, _sort, _filter, searchFormValues) => {
+        request={async (params, _sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           const res = await listVehicles({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize,
             keyword: pickListSearchKeyword(searchFormValues),
           });
-          return { data: res.items, total: res.total, success: true };
+          const items =
+            meta?.purpose === 'prefetch'
+              ? res.items
+              : await enrichRecordsWithCustomFields(res.items);
+          return { data: items, total: res.total, success: true };
         }}
         showCreateButton={perms.canCreate}
         createButtonText={t('app.kuaizhizao.logistics.action.createVehicle')}
         onCreate={openCreate}
         enableRowSelection={perms.canDelete}
         showDeleteButton={perms.canDelete}
+        deleteButtonText={t('common.delete')}
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => deleteVehicle(Number(key))));
           message.success(t('common.batchDeleteSuccess', { count: keys.length }));
@@ -222,6 +232,7 @@ const VehiclesPage: React.FC = () => {
         onClose={() => {
           setDetailOpen(false);
           setDetail(null);
+          resetDetailFieldValues();
         }}
         record={detail}
         title={`${t('app.kuaizhizao.logistics.detail.vehicleTitle')}${
@@ -231,6 +242,8 @@ const VehiclesPage: React.FC = () => {
           if (detail) openEdit(detail);
         })}
         basicColumns={basicColumns}
+        customFields={listCustomFields}
+        customFieldValues={detailCustomFieldValues}
       />
       <VehicleFormModal
         open={open}

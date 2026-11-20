@@ -2,17 +2,22 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { DetailDrawerActions, ListPageTemplate } from '../../../../../components/layout-templates';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import {
   buildUniPushMenuItems,
   buildUniPushToolbarDisabledReason,
   UniPushToolbarButton,
 } from '../../../../../components/uni-push';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { formatDateTime } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
@@ -30,6 +35,7 @@ import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 const RESOURCE = 'kuaizhizao:repair-order';
+const CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_repair_orders';
 
 function repairPushReason(
   reason: string | null | undefined,
@@ -58,19 +64,37 @@ const RepairOrdersPage: React.FC = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const detailRetryIdRef = useRef<number | null>(null);
+  const {
+    customFields: listCustomFields,
+    customFieldValues: detailCustomFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<RepairOrder>({
+    tableName: CUSTOM_FIELD_TABLE,
+    hostResource: RESOURCE,
+  });
+  const customFieldColumns = generateCustomFieldColumns();
+  const showDetailCustomFields = hasCustomFieldsDetailContent(
+    listCustomFields,
+    detailCustomFieldValues,
+  );
 
   const loadDetail = useCallback(async (id: number) => {
     setDetailLoading(true);
     setDetailError(null);
+    resetDetailFieldValues();
     try {
       setDetail(await repairOrderApi.get(id));
+      await loadFieldValuesForDetail(id);
     } catch (error) {
       setDetail(null);
       setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.detail.loadFailed')));
     } finally {
       setDetailLoading(false);
     }
-  }, [t]);
+  }, [loadFieldValuesForDetail, resetDetailFieldValues, t]);
 
   const openDetail = (row: RepairOrder) => {
     detailRetryIdRef.current = row.id;
@@ -85,21 +109,72 @@ const RepairOrdersPage: React.FC = () => {
     setModalOpen(true);
   };
 
-  const executeconfirmDelete = async (row: RepairOrder) => {
-    await repairOrderApi.delete(row.id);
-    messageApi.success(t('common.deleteSuccess'));
-    if (detail?.id === row.id) {
-      setDetailOpen(false);
-      setDetail(null);
-    }
-    actionRef.current?.reload();
-  };
-
   const selectedRepairForToolbar = useMemo(() => {
     if (selectedRowKeys.length !== 1) return null;
     const id = Number(selectedRowKeys[0]);
     return listRowsRef.current.find((row) => row.id === id) ?? null;
   }, [selectedRowKeys]);
+
+  const canClose = perms.canAction?.('close') ?? false;
+
+  const refreshOpenDetail = useCallback(
+    async (id: number) => {
+      if (detail?.id !== id) return;
+      setDetail(await repairOrderApi.get(id));
+    },
+    [detail?.id],
+  );
+
+  const pushDispatchDisabledReason = useCallback(
+    (record: RepairOrder | null | undefined): string | undefined => {
+      if (!record) return undefined;
+      if (!dispatchPerms.canCreate) {
+        return t('app.kuaizhizao.afterSalesService.repairOrder.push.dispatchNoPermission');
+      }
+      if (record.capabilities?.push_dispatch?.allowed !== true) {
+        return (
+          repairPushReason(record.capabilities?.push_dispatch?.reason, t) ||
+          t('app.kuaizhizao.afterSalesService.repairOrder.pushFailed')
+        );
+      }
+      return undefined;
+    },
+    [dispatchPerms.canCreate, t],
+  );
+
+  const pushSettlementDisabledReason = useCallback(
+    (record: RepairOrder | null | undefined): string | undefined => {
+      if (!record) return undefined;
+      if (!settlementPerms.canCreate) {
+        return t('app.kuaizhizao.afterSalesService.repairOrder.push.settlementNoPermission');
+      }
+      if (record.capabilities?.push_settlement?.allowed !== true) {
+        return (
+          repairPushReason(record.capabilities?.push_settlement?.reason, t) ||
+          t('app.kuaizhizao.afterSalesService.repairOrder.pushFailed')
+        );
+      }
+      return undefined;
+    },
+    [settlementPerms.canCreate, t],
+  );
+
+  const pushReturnVisitDisabledReason = useCallback(
+    (record: RepairOrder | null | undefined): string | undefined => {
+      if (!record) return undefined;
+      if (!visitPerms.canCreate) {
+        return t('app.kuaizhizao.afterSalesService.repairOrder.push.visitNoPermission');
+      }
+      if (record.capabilities?.push_return_visit?.allowed !== true) {
+        return (
+          repairPushReason(record.capabilities?.push_return_visit?.reason, t) ||
+          t('app.kuaizhizao.afterSalesService.repairOrder.pushFailed')
+        );
+      }
+      return undefined;
+    },
+    [t, visitPerms.canCreate],
+  );
 
   const pushDispatch = useCallback(
     async (record: RepairOrder) => {
@@ -113,13 +188,15 @@ const RepairOrdersPage: React.FC = () => {
         );
         setSelectedRowKeys([]);
         actionRef.current?.reload();
+        await refreshOpenDetail(record.id);
       } catch (error) {
         messageApi.error(
           getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.repairOrder.pushFailed')),
         );
+        throw error;
       }
     },
-    [messageApi, t],
+    [messageApi, refreshOpenDetail, t],
   );
 
   const pushSettlement = useCallback(
@@ -134,13 +211,15 @@ const RepairOrdersPage: React.FC = () => {
         );
         setSelectedRowKeys([]);
         actionRef.current?.reload();
+        await refreshOpenDetail(record.id);
       } catch (error) {
         messageApi.error(
           getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.repairOrder.pushFailed')),
         );
+        throw error;
       }
     },
-    [messageApi, t],
+    [messageApi, refreshOpenDetail, t],
   );
 
   const pushReturnVisit = useCallback(
@@ -155,45 +234,32 @@ const RepairOrdersPage: React.FC = () => {
         );
         setSelectedRowKeys([]);
         actionRef.current?.reload();
+        await refreshOpenDetail(record.id);
       } catch (error) {
         messageApi.error(
           getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.repairOrder.pushFailed')),
         );
+        throw error;
       }
     },
-    [messageApi, t],
+    [messageApi, refreshOpenDetail, t],
   );
 
-  const confirmPush = useCallback(
-    (title: string, onOk: () => void) => {
-      getAntdModal().confirm({
-        title,
-        onOk,
-      });
+  const executeClose = useCallback(
+    async (record: RepairOrder) => {
+      await repairOrderApi.close(record.id);
+      messageApi.success(t('app.kuaizhizao.afterSalesService.repairOrder.closeSuccess'));
+      actionRef.current?.reload();
+      await refreshOpenDetail(record.id);
     },
-    [],
+    [messageApi, refreshOpenDetail, t],
   );
 
   const toolbarPushMenuItems = useMemo(() => {
     const record = selectedRepairForToolbar;
-    const dispatchBlocked =
-      !dispatchPerms.canCreate
-        ? t('app.kuaizhizao.afterSalesService.repairOrder.push.dispatchNoPermission')
-        : record && record.capabilities?.push_dispatch?.allowed !== true
-          ? repairPushReason(record.capabilities?.push_dispatch?.reason, t)
-          : undefined;
-    const settlementBlocked =
-      !settlementPerms.canCreate
-        ? t('app.kuaizhizao.afterSalesService.repairOrder.push.settlementNoPermission')
-        : record && record.capabilities?.push_settlement?.allowed !== true
-          ? repairPushReason(record.capabilities?.push_settlement?.reason, t)
-          : undefined;
-    const visitBlocked =
-      !visitPerms.canCreate
-        ? t('app.kuaizhizao.afterSalesService.repairOrder.push.visitNoPermission')
-        : record && record.capabilities?.push_return_visit?.allowed !== true
-          ? repairPushReason(record.capabilities?.push_return_visit?.reason, t)
-          : undefined;
+    const dispatchBlocked = pushDispatchDisabledReason(record);
+    const settlementBlocked = pushSettlementDisabledReason(record);
+    const visitBlocked = pushReturnVisitDisabledReason(record);
 
     return buildUniPushMenuItems([
       {
@@ -203,8 +269,12 @@ const RepairOrdersPage: React.FC = () => {
         title: dispatchBlocked,
         onClick: () => {
           if (!record || dispatchBlocked) return;
-          confirmPush(t('app.kuaizhizao.afterSalesService.repairOrder.actionPushDispatch'), () => {
-            void pushDispatch(record);
+          getAntdModal().confirm({
+            title: t('app.kuaizhizao.afterSalesService.repairOrder.actionPushDispatch'),
+            content: t('app.kuaizhizao.afterSalesService.repairOrder.pushDispatchConfirm', {
+              code: record.order_code,
+            }),
+            onOk: () => pushDispatch(record),
           });
         },
         targetDocumentType: 'service_dispatch',
@@ -216,8 +286,12 @@ const RepairOrdersPage: React.FC = () => {
         title: settlementBlocked,
         onClick: () => {
           if (!record || settlementBlocked) return;
-          confirmPush(t('app.kuaizhizao.afterSalesService.repairOrder.actionPushSettlement'), () => {
-            void pushSettlement(record);
+          getAntdModal().confirm({
+            title: t('app.kuaizhizao.afterSalesService.repairOrder.actionPushSettlement'),
+            content: t('app.kuaizhizao.afterSalesService.repairOrder.pushSettlementConfirm', {
+              code: record.order_code,
+            }),
+            onOk: () => pushSettlement(record),
           });
         },
         targetDocumentType: 'service_settlement',
@@ -229,23 +303,26 @@ const RepairOrdersPage: React.FC = () => {
         title: visitBlocked,
         onClick: () => {
           if (!record || visitBlocked) return;
-          confirmPush(t('app.kuaizhizao.afterSalesService.repairOrder.actionPushReturnVisit'), () => {
-            void pushReturnVisit(record);
+          getAntdModal().confirm({
+            title: t('app.kuaizhizao.afterSalesService.repairOrder.actionPushReturnVisit'),
+            content: t('app.kuaizhizao.afterSalesService.repairOrder.pushVisitConfirm', {
+              code: record.order_code,
+            }),
+            onOk: () => pushReturnVisit(record),
           });
         },
         targetDocumentType: 'customer_return_visit',
       },
     ]);
   }, [
-    confirmPush,
-    dispatchPerms.canCreate,
     pushDispatch,
+    pushDispatchDisabledReason,
     pushReturnVisit,
+    pushReturnVisitDisabledReason,
     pushSettlement,
+    pushSettlementDisabledReason,
     selectedRepairForToolbar,
-    settlementPerms.canCreate,
     t,
-    visitPerms.canCreate,
   ]);
 
   const toolbarPushDisabledReason = useMemo(
@@ -301,6 +378,7 @@ const RepairOrdersPage: React.FC = () => {
             resizable: false,
             render: (_, row) => (row.reported_at ? formatDateTime(row.reported_at) : '-'),
           },
+          ...customFieldColumns,
           {
             title: t('common.status'),
             key: 'lifecycle',
@@ -315,41 +393,125 @@ const RepairOrdersPage: React.FC = () => {
             key: 'action',
             fixed: 'right',
             hideInSearch: true,
-            valueType: 'option',
-            render: (_, row) => [
-              <Button
-                {...rowActionKind('read')}
-                key="read"
-                onClick={() => openDetail(row)}
-              />,
-              perms.canUpdate && row.status !== '已关闭' ? (
+            render: (_, row) => {
+              const parts: React.ReactNode[] = [
                 <Button
-                  {...rowActionKind('update')}
-                  key="edit"
-                  onClick={() => {
-                    void openEdit(row);
-                  }}
-                />
-              ) : null,
-              perms.canDelete && row.status === '待派工' ? (
-                <ActionConfirmPopconfirm
-                  key="delete"
-                  title={t('common.confirmDelete')}
-                  onConfirm={() => executeconfirmDelete(row)}
-                >
+                  {...rowActionKind('read')}
+                  key="read"
+                  onClick={() => openDetail(row)}
+                />,
+              ];
+              if (perms.canUpdate && row.status !== '已关闭') {
+                parts.push(
                   <Button
-                    {...rowActionKind('delete')}
-                    key="delete"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </ActionConfirmPopconfirm>
-              ) : null,
-            ],
+                    {...rowActionKind('update')}
+                    key="edit"
+                    onClick={() => {
+                      void openEdit(row);
+                    }}
+                  />,
+                );
+              }
+              if (!pushDispatchDisabledReason(row)) {
+                parts.push(
+                  <ActionConfirmPopconfirm
+                    key="push-dispatch"
+                    title={t('app.kuaizhizao.afterSalesService.repairOrder.actionPushDispatch')}
+                    description={t(
+                      'app.kuaizhizao.afterSalesService.repairOrder.pushDispatchConfirm',
+                      { code: row.order_code },
+                    )}
+                    onConfirm={() => pushDispatch(row)}
+                  >
+                    <Button
+                      {...rowActionKind('execute')}
+                      {...rowActionLabelKeep()}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {t('app.kuaizhizao.afterSalesService.repairOrder.actionPushDispatch')}
+                    </Button>
+                  </ActionConfirmPopconfirm>,
+                );
+              }
+              if (!pushSettlementDisabledReason(row)) {
+                parts.push(
+                  <ActionConfirmPopconfirm
+                    key="push-settlement"
+                    title={t('app.kuaizhizao.afterSalesService.repairOrder.actionPushSettlement')}
+                    description={t(
+                      'app.kuaizhizao.afterSalesService.repairOrder.pushSettlementConfirm',
+                      { code: row.order_code },
+                    )}
+                    onConfirm={() => pushSettlement(row)}
+                  >
+                    <Button
+                      {...rowActionKind('execute')}
+                      {...rowActionLabelKeep()}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {t('app.kuaizhizao.afterSalesService.repairOrder.actionPushSettlement')}
+                    </Button>
+                  </ActionConfirmPopconfirm>,
+                );
+              }
+              if (!pushReturnVisitDisabledReason(row)) {
+                parts.push(
+                  <ActionConfirmPopconfirm
+                    key="push-return-visit"
+                    title={t('app.kuaizhizao.afterSalesService.repairOrder.actionPushReturnVisit')}
+                    description={t(
+                      'app.kuaizhizao.afterSalesService.repairOrder.pushVisitConfirm',
+                      { code: row.order_code },
+                    )}
+                    onConfirm={() => pushReturnVisit(row)}
+                  >
+                    <Button
+                      {...rowActionKind('execute')}
+                      {...rowActionLabelKeep()}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {t('app.kuaizhizao.afterSalesService.repairOrder.actionPushReturnVisit')}
+                    </Button>
+                  </ActionConfirmPopconfirm>,
+                );
+              }
+              if (canClose && row.capabilities?.close?.allowed !== false && row.status !== '已关闭') {
+                parts.push(
+                  <ActionConfirmPopconfirm
+                    key="close"
+                    title={t('app.kuaizhizao.afterSalesService.repairOrder.closeConfirmTitle')}
+                    description={t(
+                      'app.kuaizhizao.afterSalesService.repairOrder.closeConfirmContent',
+                      { code: row.order_code },
+                    )}
+                    onConfirm={() => executeClose(row)}
+                  >
+                    <Button
+                      {...rowActionKind('close')}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </ActionConfirmPopconfirm>,
+                );
+              }
+              return parts;
+            },
           },
         ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [perms.canDelete, perms.canUpdate, t],
+    [
+      canClose,
+      customFieldColumns,
+      executeClose,
+      perms.canUpdate,
+      pushDispatch,
+      pushDispatchDisabledReason,
+      pushReturnVisit,
+      pushReturnVisitDisabledReason,
+      pushSettlement,
+      pushSettlementDisabledReason,
+      t,
+    ],
   );
 
   return (
@@ -359,19 +521,23 @@ const RepairOrdersPage: React.FC = () => {
         helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesRepair)}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.repair-orders.v9"
+        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.repair-orders.v10-row-push"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.after-sales-service.repair-orders')}
-        request={async (params, _sort, _filter, searchFormValues) => {
+        request={async (params, _sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           const res = await repairOrderApi.list({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize,
             keyword: pickListSearchKeyword(searchFormValues),
             status: pickSearchString(searchFormValues, 'status'),
           });
-          return { data: res.items, total: res.total, success: true };
+          const data =
+            meta?.purpose === 'prefetch'
+              ? res.items
+              : await enrichRecordsWithCustomFields(res.items);
+          return { data, total: res.total, success: true };
         }}
         onTableDataChange={(rows) => {
           listRowsRef.current = rows;
@@ -409,6 +575,7 @@ const RepairOrdersPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         showDeleteButton={perms.canDelete}
+        deleteButtonText={t('common.delete')}
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => repairOrderApi.delete(Number(key))));
           messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
@@ -424,14 +591,7 @@ const RepairOrdersPage: React.FC = () => {
           setModalOpen(false);
           setEditing(null);
         }}
-        onSubmit={async (payload) => {
-          if (editing) {
-            await repairOrderApi.update(editing.id, payload);
-            messageApi.success(t('common.saveSuccess'));
-          } else {
-            await repairOrderApi.create(payload);
-            messageApi.success(t('common.createSuccess'));
-          }
+        onSuccess={() => {
           actionRef.current?.reload();
         }}
       />
@@ -442,6 +602,7 @@ const RepairOrdersPage: React.FC = () => {
           setDetailOpen(false);
           setDetail(null);
           setDetailError(null);
+          resetDetailFieldValues();
         }}
         record={detail}
         loading={detailLoading}
@@ -450,6 +611,19 @@ const RepairOrdersPage: React.FC = () => {
           const id = detailRetryIdRef.current;
           if (id != null) void loadDetail(id);
         }}
+        supplementaryTitle={
+          showDetailCustomFields
+            ? t('app.master-data.customFields', { defaultValue: '自定义字段' })
+            : undefined
+        }
+        supplementary={
+          showDetailCustomFields ? (
+            <CustomFieldsDetailSection
+              customFields={listCustomFields}
+              customFieldValues={detailCustomFieldValues}
+            />
+          ) : undefined
+        }
         extra={
           <DetailDrawerActions
             items={[
@@ -468,21 +642,80 @@ const RepairOrdersPage: React.FC = () => {
                 ),
               },
               {
-                key: 'close',
-                visible: Boolean(detail && perms.canAction?.('close') && detail.status !== '已关闭'),
+                key: 'push-dispatch',
+                visible: Boolean(detail && !pushDispatchDisabledReason(detail)),
                 render: (
-                  <Button
-                    type="primary"
-                    onClick={async () => {
-                      if (!detail) return;
-                      await repairOrderApi.close(detail.id);
-                      setDetail(await repairOrderApi.get(detail.id));
-                      actionRef.current?.reload();
-                      messageApi.success(t('app.kuaizhizao.afterSalesService.repairOrder.closeSuccess'));
-                    }}
+                  <ActionConfirmPopconfirm
+                    title={t('app.kuaizhizao.afterSalesService.repairOrder.actionPushDispatch')}
+                    description={t(
+                      'app.kuaizhizao.afterSalesService.repairOrder.pushDispatchConfirm',
+                      { code: detail?.order_code },
+                    )}
+                    onConfirm={() => pushDispatch(detail!)}
                   >
-                    {t('common.close')}
-                  </Button>
+                    <Button onClick={(e) => e.stopPropagation()}>
+                      {t('app.kuaizhizao.afterSalesService.repairOrder.actionPushDispatch')}
+                    </Button>
+                  </ActionConfirmPopconfirm>
+                ),
+              },
+              {
+                key: 'push-settlement',
+                visible: Boolean(detail && !pushSettlementDisabledReason(detail)),
+                render: (
+                  <ActionConfirmPopconfirm
+                    title={t('app.kuaizhizao.afterSalesService.repairOrder.actionPushSettlement')}
+                    description={t(
+                      'app.kuaizhizao.afterSalesService.repairOrder.pushSettlementConfirm',
+                      { code: detail?.order_code },
+                    )}
+                    onConfirm={() => pushSettlement(detail!)}
+                  >
+                    <Button onClick={(e) => e.stopPropagation()}>
+                      {t('app.kuaizhizao.afterSalesService.repairOrder.actionPushSettlement')}
+                    </Button>
+                  </ActionConfirmPopconfirm>
+                ),
+              },
+              {
+                key: 'push-return-visit',
+                visible: Boolean(detail && !pushReturnVisitDisabledReason(detail)),
+                render: (
+                  <ActionConfirmPopconfirm
+                    title={t('app.kuaizhizao.afterSalesService.repairOrder.actionPushReturnVisit')}
+                    description={t(
+                      'app.kuaizhizao.afterSalesService.repairOrder.pushVisitConfirm',
+                      { code: detail?.order_code },
+                    )}
+                    onConfirm={() => pushReturnVisit(detail!)}
+                  >
+                    <Button onClick={(e) => e.stopPropagation()}>
+                      {t('app.kuaizhizao.afterSalesService.repairOrder.actionPushReturnVisit')}
+                    </Button>
+                  </ActionConfirmPopconfirm>
+                ),
+              },
+              {
+                key: 'close',
+                visible: Boolean(
+                  detail &&
+                    canClose &&
+                    detail.capabilities?.close?.allowed !== false &&
+                    detail.status !== '已关闭',
+                ),
+                render: (
+                  <ActionConfirmPopconfirm
+                    title={t('app.kuaizhizao.afterSalesService.repairOrder.closeConfirmTitle')}
+                    description={t(
+                      'app.kuaizhizao.afterSalesService.repairOrder.closeConfirmContent',
+                      { code: detail?.order_code },
+                    )}
+                    onConfirm={() => executeClose(detail!)}
+                  >
+                    <Button type="primary" onClick={(e) => e.stopPropagation()}>
+                      {t('common.close')}
+                    </Button>
+                  </ActionConfirmPopconfirm>
                 ),
               },
             ]}

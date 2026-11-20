@@ -32,6 +32,8 @@ export type DispatchOrderDetailDrawerProps = {
   onRetry?: () => void;
   extra?: React.ReactNode;
   zIndex?: number;
+  supplementary?: React.ReactNode;
+  supplementaryTitle?: React.ReactNode;
 };
 
 export const DispatchOrderDetailDrawer: React.FC<DispatchOrderDetailDrawerProps> = ({
@@ -43,6 +45,8 @@ export const DispatchOrderDetailDrawer: React.FC<DispatchOrderDetailDrawerProps>
   onRetry,
   extra,
   zIndex,
+  supplementary,
+  supplementaryTitle,
 }) => {
   const { t } = useTranslation();
 
@@ -128,6 +132,8 @@ export const DispatchOrderDetailDrawer: React.FC<DispatchOrderDetailDrawerProps>
       onRetry={onRetry}
       extra={extra}
       zIndex={zIndex}
+      supplementary={supplementary}
+      supplementaryTitle={supplementaryTitle}
       traceDocumentType="service_dispatch"
       timeFieldDocumentType="dispatch_order"
     />

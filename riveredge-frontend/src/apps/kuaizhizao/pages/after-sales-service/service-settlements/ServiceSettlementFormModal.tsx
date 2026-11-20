@@ -3,7 +3,9 @@ import { App, Col, Form, Input, InputNumber, Row, Select } from 'antd';
 import type { ProFormInstance } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { CustomFieldsFormSection } from '../../../../../components/custom-fields';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
 import type { Customer } from '../../../../master-data/types/supply-chain';
 import { formatApiErrorDetail } from '../../../../../services/api';
@@ -12,6 +14,9 @@ import {
   type ServiceSettlement,
   type ServiceSettlementPayload,
 } from '../../../services/after-sales-service';
+
+const CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_service_settlements';
+const HOST_RESOURCE = 'kuaizhizao:service-settlement';
 import {
   loadAfterSalesSourceOptions,
   type AfterSalesSourceKind,
@@ -36,7 +41,8 @@ type LineForm = {
 
 function customerDisplayName(c: Customer | null | undefined): string {
   if (!c) return '';
-  return String(c.name ?? ('customer_name' in c ? c.customer_name : '') ?? '').trim();
+  const row = c as Record<string, unknown>;
+  return String(row.name ?? row.customer_name ?? '').trim();
 }
 
 const SettlementLineSourceSelect: React.FC<{
@@ -109,11 +115,31 @@ const ServiceSettlementFormModal: React.FC<ServiceSettlementFormModalProps> = ({
   const formRef = useRef<ProFormInstance>();
   const [submitting, setSubmitting] = useState(false);
   const [customerId, setCustomerId] = useState<number | undefined>();
+  const {
+    customFields: formCustomFields,
+    customFieldValues: formCustomFieldValues,
+    loadFieldValues: loadFormCustomFieldValues,
+    extractFormValues: extractCustomFormValues,
+    saveCustomFieldValues,
+    resetFieldValues: resetFormCustomFieldValues,
+  } = useCustomFields({
+    tableName: CUSTOM_FIELD_TABLE,
+    hostResource: HOST_RESOURCE,
+    loadWhenOpen: true,
+    open,
+  });
 
   useEffect(() => {
     if (!open) return;
     setCustomerId(editing?.customer_id);
-  }, [editing?.customer_id, open]);
+    if (editing?.id != null) {
+      void loadFormCustomFieldValues(editing.id).then((cfValues) => {
+        formRef.current?.setFieldsValue(cfValues);
+      });
+      return;
+    }
+    resetFormCustomFieldValues();
+  }, [editing?.customer_id, editing?.id, loadFormCustomFieldValues, open, resetFormCustomFieldValues]);
 
   const initialValues = useMemo(() => {
     if (editing) {
@@ -138,7 +164,8 @@ const ServiceSettlementFormModal: React.FC<ServiceSettlementFormModalProps> = ({
   }, [editing]);
 
   const handleFinish = async (values: Record<string, unknown>) => {
-    const items = ((values.items as LineForm[]) || []).filter(
+    const { customData, standardValues } = extractCustomFormValues(values, formRef.current);
+    const items = ((standardValues.items as LineForm[]) || []).filter(
       (row) => row.source_type && row.source_id != null,
     );
     if (!items.length) {
@@ -146,9 +173,9 @@ const ServiceSettlementFormModal: React.FC<ServiceSettlementFormModalProps> = ({
       return;
     }
     const payload: ServiceSettlementPayload = {
-      customer_id: Number(values.customer_id),
-      customer_name: String(values.customer_name || ''),
-      notes: (values.notes as string) || undefined,
+      customer_id: Number(standardValues.customer_id),
+      customer_name: String(standardValues.customer_name || ''),
+      notes: (standardValues.notes as string) || undefined,
       items: items.map((row) => ({
         source_type: String(row.source_type),
         source_id: Number(row.source_id),
@@ -160,6 +187,7 @@ const ServiceSettlementFormModal: React.FC<ServiceSettlementFormModalProps> = ({
     };
     setSubmitting(true);
     try {
+      let savedId = editing?.id;
       if (editing) {
         await serviceSettlementApi.update(editing.id, {
           notes: payload.notes,
@@ -167,9 +195,14 @@ const ServiceSettlementFormModal: React.FC<ServiceSettlementFormModalProps> = ({
         });
         messageApi.success(t('common.saveSuccess'));
       } else {
-        await serviceSettlementApi.create(payload);
+        const created = await serviceSettlementApi.create(payload);
+        savedId = created.id;
         messageApi.success(t('common.createSuccess'));
       }
+      if (savedId != null) {
+        await saveCustomFieldValues(savedId, customData);
+      }
+      resetFormCustomFieldValues();
       onSuccess();
       onClose();
     } catch (error) {
@@ -184,7 +217,10 @@ const ServiceSettlementFormModal: React.FC<ServiceSettlementFormModalProps> = ({
       key={editing?.id ?? 'create'}
       formRef={formRef}
       open={open}
-      onClose={onClose}
+      onClose={() => {
+        resetFormCustomFieldValues();
+        onClose();
+      }}
       title={
         editing
           ? t('app.kuaizhizao.afterSalesService.serviceSettlement.editTitle')
@@ -314,6 +350,12 @@ const ServiceSettlementFormModal: React.FC<ServiceSettlementFormModalProps> = ({
             ),
           },
         ]}
+      />
+
+      <CustomFieldsFormSection
+        fields={formCustomFields}
+        values={formCustomFieldValues}
+        colProps={{ span: 12 }}
       />
     </FormModalTemplate>
   );

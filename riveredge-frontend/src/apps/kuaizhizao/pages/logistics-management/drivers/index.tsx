@@ -4,8 +4,9 @@ import { Button, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
 import {
   alignDescriptionColumns,
@@ -31,6 +32,18 @@ const DriversPage: React.FC = () => {
   const [editing, setEditing] = useState<Driver | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<Driver | null>(null);
+  const {
+    customFields: listCustomFields,
+    customFieldValues: detailCustomFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<Driver>({
+    tableName: 'apps_kuaizhizao_drivers',
+    hostResource: 'kuaizhizao:driver',
+  });
+  const customFieldColumns = generateCustomFieldColumns();
 
   const openCreate = () => {
     setEditing(null);
@@ -45,6 +58,10 @@ const DriversPage: React.FC = () => {
   const openDetail = (row: Driver) => {
     setDetail(row);
     setDetailOpen(true);
+    resetDetailFieldValues();
+    if (row.id != null) {
+      void loadFieldValuesForDetail(row.id);
+    }
   };
 
   const basicColumns = useMemo(
@@ -116,6 +133,7 @@ const DriversPage: React.FC = () => {
           hideInSearch: true,
           render: (_, row) => renderLogisticsEnabledTag(t, row.is_enabled),
         },
+        ...customFieldColumns,
         {
           title: t('common.action'),
           key: 'option',
@@ -133,24 +151,11 @@ const DriversPage: React.FC = () => {
                 <Button key="edit" {...rowActionKind('update')} onClick={() => openEdit(row)} />,
               );
             }
-            if (perms.canDelete) {
-              nodes.push(
-                <Button
-                  key="delete"
-                  {...rowActionKind('delete')}
-                  onClick={async () => {
-                    await deleteDriver(row.id);
-                    message.success(t('common.deleteSuccess'));
-    actionRef.current?.reload();
-                  }}
-                />,
-              );
-            }
             return nodes;
           },
         },
       ]),
-    [perms.canDelete, perms.canRead, perms.canUpdate, t],
+    [customFieldColumns, perms.canDelete, perms.canRead, perms.canUpdate, t],
   );
 
   return (
@@ -160,23 +165,28 @@ const DriversPage: React.FC = () => {
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.drivers')}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.drivers.v4"
+        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.drivers.v5-cf"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         rowKey="id"
-        request={async (params, _sort, _filter, searchFormValues) => {
+        request={async (params, _sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           const res = await listDrivers({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize,
             keyword: pickListSearchKeyword(searchFormValues),
           });
-          return { data: res.items, total: res.total, success: true };
+          const items =
+            meta?.purpose === 'prefetch'
+              ? res.items
+              : await enrichRecordsWithCustomFields(res.items);
+          return { data: items, total: res.total, success: true };
         }}
         showCreateButton={perms.canCreate}
         createButtonText={t('app.kuaizhizao.logistics.action.createDriver')}
         onCreate={openCreate}
         enableRowSelection={perms.canDelete}
         showDeleteButton={perms.canDelete}
+        deleteButtonText={t('common.delete')}
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => deleteDriver(Number(key))));
           message.success(t('common.batchDeleteSuccess', { count: keys.length }));
@@ -188,6 +198,7 @@ const DriversPage: React.FC = () => {
         onClose={() => {
           setDetailOpen(false);
           setDetail(null);
+          resetDetailFieldValues();
         }}
         record={detail}
         title={`${t('app.kuaizhizao.logistics.detail.driverTitle')}${detail?.name ? ` - ${detail.name}` : ''}`}
@@ -195,6 +206,8 @@ const DriversPage: React.FC = () => {
           if (detail) openEdit(detail);
         })}
         basicColumns={basicColumns}
+        customFields={listCustomFields}
+        customFieldValues={detailCustomFieldValues}
       />
       <DriverFormModal
         open={open}

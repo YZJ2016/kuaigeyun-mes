@@ -3,13 +3,18 @@ import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Input, Modal } from 'antd';
 import { CheckOutlined, CloseOutlined, SendOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { DetailDrawerActions, ListPageTemplate } from '../../../../../components/layout-templates';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { SourceDocumentCode } from '../../../../../components/linked-document-code/SourceDocumentCode';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { hasReviewPermission } from '../../../../../utils/permissionContract';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
@@ -31,8 +36,13 @@ import SparePartRequisitionFormModal from './SparePartRequisitionFormModal';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const RESOURCE = 'kuaizhizao:after-sales-spare-part-requisition';
+const CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_after_sales_spare_part_requisitions';
 
 type DetailActionKey = 'submit' | 'audit' | 'reject';
+
+const canEditStatus = (status?: string) => status === '草稿' || status === '已驳回';
+const canSubmitStatus = (status?: string) => status === '草稿' || status === '已驳回';
+const canReviewStatus = (status?: string) => status === '待审核';
 
 const AfterSalesSparePartRequisitionsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -49,21 +59,40 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
   const [detailError, setDetailError] = useState<string | null>(null);
   const detailRetryIdRef = useRef<number | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectTargetId, setRejectTargetId] = useState<number | null>(null);
   const [rejectRemarks, setRejectRemarks] = useState('');
   const [detailActionLoading, setDetailActionLoading] = useState<DetailActionKey | null>(null);
+  const {
+    customFields: listCustomFields,
+    customFieldValues: detailCustomFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<AfterSalesSparePartRequisition>({
+    tableName: CUSTOM_FIELD_TABLE,
+    hostResource: RESOURCE,
+  });
+  const customFieldColumns = generateCustomFieldColumns();
+  const showDetailCustomFields = hasCustomFieldsDetailContent(
+    listCustomFields,
+    detailCustomFieldValues,
+  );
 
   const loadDetail = useCallback(async (id: number) => {
     setDetailLoading(true);
     setDetailError(null);
+    resetDetailFieldValues();
     try {
       setDetail(await afterSalesSparePartRequisitionApi.get(id));
+      await loadFieldValuesForDetail(id);
     } catch (error) {
       setDetail(null);
       setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.detail.loadFailed')));
     } finally {
       setDetailLoading(false);
     }
-  }, [t]);
+  }, [loadFieldValuesForDetail, resetDetailFieldValues, t]);
 
   const openDetail = (row: AfterSalesSparePartRequisition) => {
     detailRetryIdRef.current = row.id;
@@ -89,6 +118,7 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
         messageApi.error(
           getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.sparePartRequisition.submitFailed')),
         );
+        throw error;
       } finally {
         setDetailActionLoading(null);
       }
@@ -107,6 +137,7 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
         messageApi.error(
           getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.sparePartRequisition.auditFailed')),
         );
+        throw error;
       } finally {
         setDetailActionLoading(null);
       }
@@ -125,6 +156,7 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
       try {
         await afterSalesSparePartRequisitionApi.reject(id, { review_remarks: remarks });
         setRejectOpen(false);
+        setRejectTargetId(null);
         setRejectRemarks('');
         await refreshDetail(id);
         messageApi.success(t('app.kuaizhizao.afterSalesService.sparePartRequisition.rejectSuccess'));
@@ -148,17 +180,11 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
     setModalOpen(true);
   };
 
-  const executeconfirmDelete = async (row: AfterSalesSparePartRequisition) => {
-    await afterSalesSparePartRequisitionApi.delete(row.id);
-        messageApi.success(t('common.deleteSuccess'));
-        if (detail?.id === row.id) {
-          setDetailOpen(false);
-          setDetail(null);
-        }
-    actionRef.current?.reload();
-  };
-
-  const canEditRow = (status?: string) => status === '草稿' || status === '已驳回';
+  const openReject = useCallback((id: number) => {
+    setRejectTargetId(id);
+    setRejectRemarks('');
+    setRejectOpen(true);
+  }, []);
 
   const columns: ProColumns<AfterSalesSparePartRequisition>[] = useMemo(
     () =>
@@ -213,42 +239,85 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
             render: (_, row) =>
               renderAfterSalesStatusTag(row.status, AFTER_SALES_REVIEW_STATUS_COLOR),
           },
+          ...customFieldColumns,
           {
             title: t('common.actions'),
             key: 'action',
             fixed: 'right',
             hideInSearch: true,
-            render: (_, row) => [
-              <Button {...rowActionKind('read')} key="read" onClick={() => openDetail(row)} />,
-              perms.canUpdate && canEditRow(row.status) ? (
-                <Button
-                  {...rowActionKind('update')}
-                  key="edit"
-                  onClick={() => void openEdit(row)}
-                />
-              ) : null,
-              perms.canAction?.('submit') && row.status === '草稿' ? (
-                <Button
-                  key="submit"
-                  {...rowActionKind('submit')}
-                  onClick={() => void executeSubmit(row.id)}
-                />
-              ) : null,
-              perms.canDelete && canEditRow(row.status) ? (
-                <ActionConfirmPopconfirm title={t('common.confirmDelete')} onConfirm={() => executeconfirmDelete(row)}>
-              <Button
-                  {...rowActionKind('delete')}
-                  key="delete"
-                  onClick={(e) => e.stopPropagation()}
-                />
-            </ActionConfirmPopconfirm>
-              ) : null,
-            ],
+            render: (_, row) => {
+              const parts: React.ReactNode[] = [
+                <Button {...rowActionKind('read')} key="read" onClick={() => openDetail(row)} />,
+              ];
+              if (perms.canUpdate && canEditStatus(row.status)) {
+                parts.push(
+                  <Button
+                    {...rowActionKind('update')}
+                    key="edit"
+                    onClick={() => void openEdit(row)}
+                  />,
+                );
+              }
+              if (perms.canAction?.('submit') && canSubmitStatus(row.status)) {
+                parts.push(
+                  <ActionConfirmPopconfirm
+                    key="submit"
+                    title={t('components.uniAction.submit')}
+                    description={t(
+                      'app.kuaizhizao.afterSalesService.sparePartRequisition.submitConfirm',
+                      { code: row.requisition_code },
+                    )}
+                    onConfirm={() => executeSubmit(row.id)}
+                  >
+                    <Button
+                      {...rowActionKind('submit')}
+                      {...rowActionLabelKeep()}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {t('components.uniAction.submit')}
+                    </Button>
+                  </ActionConfirmPopconfirm>,
+                );
+              }
+              if (canReview && canReviewStatus(row.status)) {
+                parts.push(
+                  <ActionConfirmPopconfirm
+                    key="audit"
+                    title={t('components.uniAction.audit')}
+                    description={t(
+                      'app.kuaizhizao.afterSalesService.sparePartRequisition.auditConfirm',
+                      { code: row.requisition_code },
+                    )}
+                    onConfirm={() => executeAudit(row.id)}
+                  >
+                    <Button
+                      {...rowActionKind('audit')}
+                      {...rowActionLabelKeep()}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {t('components.uniAction.audit')}
+                    </Button>
+                  </ActionConfirmPopconfirm>,
+                  <Button
+                    key="reject"
+                    {...rowActionKind('reject')}
+                    {...rowActionLabelKeep()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openReject(row.id);
+                    }}
+                  >
+                    {t('components.uniAction.reject')}
+                  </Button>,
+                );
+              }
+              return parts;
+            },
           },
         ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [executeSubmit, perms, t],
+    [canReview, customFieldColumns, executeAudit, executeSubmit, openReject, perms, t],
   );
 
   return (
@@ -258,19 +327,23 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesSpareRequisition)}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.spare-part-requisitions.v7"
+        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.spare-part-requisitions.v9-row-review"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.after-sales-service.spare-part-requisitions')}
-        request={async (params, _sort, _filter, searchFormValues) => {
+        request={async (params, _sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           const res = await afterSalesSparePartRequisitionApi.list({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize,
             keyword: pickListSearchKeyword(searchFormValues),
             status: pickSearchString(searchFormValues, 'status'),
           });
-          return { data: res.items, total: res.total, success: true };
+          const data =
+            meta?.purpose === 'prefetch'
+              ? res.items
+              : await enrichRecordsWithCustomFields(res.items);
+          return { data, total: res.total, success: true };
         }}
         showCreateButton={perms.canCreate}
         createButtonText={t('app.kuaizhizao.afterSalesService.sparePartRequisition.createTitle')}
@@ -280,6 +353,7 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
         }}
         enableRowSelection={perms.canDelete}
         showDeleteButton={perms.canDelete}
+        deleteButtonText={t('common.delete')}
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => afterSalesSparePartRequisitionApi.delete(Number(key))));
     messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
@@ -295,7 +369,10 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
           setEditing(null);
         }}
         onSuccess={() => {
-    actionRef.current?.reload();
+          actionRef.current?.reload();
+          if (editing && detail?.id === editing.id) {
+            void loadDetail(editing.id);
+          }
         }}
       />
 
@@ -305,6 +382,7 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
           setDetailOpen(false);
           setDetail(null);
           setDetailError(null);
+          resetDetailFieldValues();
         }}
         record={detail}
         loading={detailLoading}
@@ -313,12 +391,25 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
           const id = detailRetryIdRef.current;
           if (id != null) void loadDetail(id);
         }}
+        supplementaryTitle={
+          showDetailCustomFields
+            ? t('app.master-data.customFields', { defaultValue: '自定义字段' })
+            : undefined
+        }
+        supplementary={
+          showDetailCustomFields ? (
+            <CustomFieldsDetailSection
+              customFields={listCustomFields}
+              customFieldValues={detailCustomFieldValues}
+            />
+          ) : undefined
+        }
         extra={
           <DetailDrawerActions
             items={[
               {
                 key: 'edit',
-                visible: Boolean(detail && perms.canUpdate && canEditRow(detail.status)),
+                visible: Boolean(detail && perms.canUpdate && canEditStatus(detail.status)),
                 render: (
                   <Button
                     onClick={() => {
@@ -332,50 +423,64 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
               },
               {
                 key: 'submit',
-                visible: Boolean(detail && perms.canAction?.('submit') && detail.status === '草稿'),
+                visible: Boolean(
+                  detail && perms.canAction?.('submit') && canSubmitStatus(detail.status),
+                ),
                 render: (
-                  <Button
-                    icon={<SendOutlined />}
-                    loading={detailActionLoading === 'submit'}
-                    disabled={detailActionLoading != null}
-                    onClick={() => {
-                      if (!detail) return;
-                      void executeSubmit(detail.id);
-                    }}
+                  <ActionConfirmPopconfirm
+                    title={t('components.uniAction.submit')}
+                    description={t(
+                      'app.kuaizhizao.afterSalesService.sparePartRequisition.submitConfirm',
+                      { code: detail?.requisition_code },
+                    )}
+                    onConfirm={() => executeSubmit(detail!.id)}
                   >
-                    {t('components.uniAction.submit')}
-                  </Button>
+                    <Button
+                      icon={<SendOutlined />}
+                      loading={detailActionLoading === 'submit'}
+                      disabled={detailActionLoading != null}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {t('components.uniAction.submit')}
+                    </Button>
+                  </ActionConfirmPopconfirm>
                 ),
               },
               {
                 key: 'audit',
-                visible: Boolean(detail && detail.status === '待审核' && canReview),
+                visible: Boolean(detail && canReviewStatus(detail.status) && canReview),
                 render: (
-                  <Button
-                    type="primary"
-                    icon={<CheckOutlined />}
-                    loading={detailActionLoading === 'audit'}
-                    disabled={detailActionLoading != null}
-                    onClick={() => {
-                      if (!detail) return;
-                      void executeAudit(detail.id);
-                    }}
+                  <ActionConfirmPopconfirm
+                    title={t('components.uniAction.audit')}
+                    description={t(
+                      'app.kuaizhizao.afterSalesService.sparePartRequisition.auditConfirm',
+                      { code: detail?.requisition_code },
+                    )}
+                    onConfirm={() => executeAudit(detail!.id)}
                   >
-                    {t('components.uniAction.audit')}
-                  </Button>
+                    <Button
+                      type="primary"
+                      icon={<CheckOutlined />}
+                      loading={detailActionLoading === 'audit'}
+                      disabled={detailActionLoading != null}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {t('components.uniAction.audit')}
+                    </Button>
+                  </ActionConfirmPopconfirm>
                 ),
               },
               {
                 key: 'reject',
-                visible: Boolean(detail && detail.status === '待审核' && canReview),
+                visible: Boolean(detail && canReviewStatus(detail.status) && canReview),
                 render: (
                   <Button
                     danger
                     icon={<CloseOutlined />}
                     disabled={detailActionLoading != null}
                     onClick={() => {
-                      setRejectRemarks('');
-                      setRejectOpen(true);
+                      if (!detail) return;
+                      openReject(detail.id);
                     }}
                   >
                     {t('components.uniAction.reject')}
@@ -390,12 +495,15 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
       <Modal
         open={rejectOpen}
         title={t('app.kuaizhizao.afterSalesService.sparePartRequisition.rejectTitle')}
-        onCancel={() => setRejectOpen(false)}
+        onCancel={() => {
+          setRejectOpen(false);
+          setRejectTargetId(null);
+        }}
         destroyOnHidden
         confirmLoading={detailActionLoading === 'reject'}
         onOk={async () => {
-          if (!detail) return;
-          await executeReject(detail.id, rejectRemarks);
+          if (rejectTargetId == null) return;
+          await executeReject(rejectTargetId, rejectRemarks);
         }}
       >
         <Input.TextArea

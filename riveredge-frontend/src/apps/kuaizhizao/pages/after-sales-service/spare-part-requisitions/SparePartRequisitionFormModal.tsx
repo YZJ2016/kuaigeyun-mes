@@ -1,11 +1,13 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { App, Col, Form, Input, InputNumber, Row } from 'antd';
 import type { ProFormInstance } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { CustomFieldsFormSection } from '../../../../../components/custom-fields';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { formatApiErrorDetail } from '../../../../../services/api';
 import {
   afterSalesSparePartRequisitionApi,
@@ -13,6 +15,9 @@ import {
   type AfterSalesSparePartRequisitionPayload,
 } from '../../../services/after-sales-service';
 import { AfterSalesSourceDocumentSelect } from '../shared/AfterSalesSourceDocumentSelect';
+
+const CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_after_sales_spare_part_requisitions';
+const HOST_RESOURCE = 'kuaizhizao:after-sales-spare-part-requisition';
 
 export type SparePartRequisitionFormModalProps = {
   open: boolean;
@@ -43,6 +48,30 @@ const SparePartRequisitionFormModal: React.FC<SparePartRequisitionFormModalProps
   const formRef = useRef<ProFormInstance>();
   const [submitting, setSubmitting] = useState(false);
   const sourceLocked = Boolean(editing);
+  const {
+    customFields: formCustomFields,
+    customFieldValues: formCustomFieldValues,
+    loadFieldValues: loadFormCustomFieldValues,
+    extractFormValues: extractCustomFormValues,
+    saveCustomFieldValues,
+    resetFieldValues: resetFormCustomFieldValues,
+  } = useCustomFields({
+    tableName: CUSTOM_FIELD_TABLE,
+    hostResource: HOST_RESOURCE,
+    loadWhenOpen: true,
+    open,
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    if (editing?.id != null) {
+      void loadFormCustomFieldValues(editing.id).then((cfValues) => {
+        formRef.current?.setFieldsValue(cfValues);
+      });
+      return;
+    }
+    resetFormCustomFieldValues();
+  }, [editing?.id, loadFormCustomFieldValues, open, resetFormCustomFieldValues]);
 
   const initialValues = useMemo(() => {
     if (editing) {
@@ -71,7 +100,8 @@ const SparePartRequisitionFormModal: React.FC<SparePartRequisitionFormModalProps
   }, [editing]);
 
   const handleFinish = async (values: Record<string, unknown>) => {
-    const items = ((values.items as LineForm[]) || []).filter(
+    const { customData, standardValues } = extractCustomFormValues(values, formRef.current);
+    const items = ((standardValues.items as LineForm[]) || []).filter(
       (row) => row.material_id && Number(row.quantity) > 0,
     );
     if (!items.length) {
@@ -79,12 +109,12 @@ const SparePartRequisitionFormModal: React.FC<SparePartRequisitionFormModalProps
       return;
     }
     const payload: AfterSalesSparePartRequisitionPayload = {
-      source_type: String(values.source_type),
-      source_id: Number(values.source_id),
-      source_code: String(values.source_code || ''),
-      warehouse_id: values.warehouse_id != null ? Number(values.warehouse_id) : undefined,
-      warehouse_name: (values.warehouse_name as string) || undefined,
-      notes: (values.notes as string) || undefined,
+      source_type: String(standardValues.source_type),
+      source_id: Number(standardValues.source_id),
+      source_code: String(standardValues.source_code || ''),
+      warehouse_id: standardValues.warehouse_id != null ? Number(standardValues.warehouse_id) : undefined,
+      warehouse_name: (standardValues.warehouse_name as string) || undefined,
+      notes: (standardValues.notes as string) || undefined,
       items: items.map((row) => ({
         material_id: Number(row.material_id),
         material_code: row.material_code,
@@ -96,6 +126,7 @@ const SparePartRequisitionFormModal: React.FC<SparePartRequisitionFormModalProps
     };
     setSubmitting(true);
     try {
+      let savedId = editing?.id;
       if (editing) {
         await afterSalesSparePartRequisitionApi.update(editing.id, {
           warehouse_id: payload.warehouse_id,
@@ -105,9 +136,14 @@ const SparePartRequisitionFormModal: React.FC<SparePartRequisitionFormModalProps
         });
         messageApi.success(t('common.saveSuccess'));
       } else {
-        await afterSalesSparePartRequisitionApi.create(payload);
+        const created = await afterSalesSparePartRequisitionApi.create(payload);
+        savedId = created.id;
         messageApi.success(t('common.createSuccess'));
       }
+      if (savedId != null) {
+        await saveCustomFieldValues(savedId, customData);
+      }
+      resetFormCustomFieldValues();
       onSuccess();
       onClose();
     } catch (error) {
@@ -122,7 +158,10 @@ const SparePartRequisitionFormModal: React.FC<SparePartRequisitionFormModalProps
       key={editing?.id ?? 'create'}
       formRef={formRef}
       open={open}
-      onClose={onClose}
+      onClose={() => {
+        resetFormCustomFieldValues();
+        onClose();
+      }}
       title={
         editing
           ? t('app.kuaizhizao.afterSalesService.sparePartRequisition.editTitle')
@@ -173,14 +212,6 @@ const SparePartRequisitionFormModal: React.FC<SparePartRequisitionFormModalProps
               });
             }}
           />
-        </Col>
-        <Col span={12}>
-          <Form.Item
-            name="notes"
-            label={t('common.remark')}
-          >
-            <Input.TextArea rows={1} />
-          </Form.Item>
         </Col>
       </Row>
 
@@ -244,6 +275,20 @@ const SparePartRequisitionFormModal: React.FC<SparePartRequisitionFormModalProps
           },
         ]}
       />
+
+      <CustomFieldsFormSection
+        fields={formCustomFields}
+        values={formCustomFieldValues}
+        colProps={{ span: 12 }}
+      />
+
+      <Row gutter={16}>
+        <Col span={24}>
+          <Form.Item name="notes" label={t('common.remark')}>
+            <Input.TextArea rows={1} />
+          </Form.Item>
+        </Col>
+      </Row>
     </FormModalTemplate>
   );
 };

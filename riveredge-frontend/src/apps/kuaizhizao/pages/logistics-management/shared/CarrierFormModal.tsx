@@ -3,9 +3,14 @@ import { App } from 'antd';
 import { ProForm, ProFormSelect, ProFormSwitch, ProFormText, ProFormTextArea, type ProFormInstance } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { CustomFieldsFormSection } from '../../../../../components/custom-fields';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { SupplierSelectDropdown } from '../../../../master-data/components/SupplierSelectDropdown';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { createCarrier, updateCarrier, type LogisticsCarrier } from '../../../services/logistics';
+
+const CARRIER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_logistics_carriers';
+const CARRIER_HOST_RESOURCE = 'kuaizhizao:logistics-carrier';
 
 export const LOGISTICS_SETTLEMENT_METHOD_OPTIONS: Array<{ value: string; labelKey: string }> = [
   { value: 'cash', labelKey: 'field.partner.settlementMethod.cash' },
@@ -37,23 +42,46 @@ export const CarrierFormModal: React.FC<CarrierFormModalProps> = ({
   const formRef = useRef<ProFormInstance>();
   const [submitting, setSubmitting] = useState(false);
   const isEdit = Boolean(editing?.id);
+  const {
+    customFields,
+    customFieldValues,
+    loadFieldValues,
+    extractFormValues,
+    saveCustomFieldValues,
+    resetFieldValues,
+  } = useCustomFields({
+    tableName: CARRIER_CUSTOM_FIELD_TABLE,
+    hostResource: CARRIER_HOST_RESOURCE,
+    loadWhenOpen: true,
+    open,
+  });
 
   useEffect(() => {
     if (!open) return;
     if (editing) {
       formRef.current?.setFieldsValue(editing);
+      if (editing.id != null) {
+        void loadFieldValues(editing.id).then((cfValues) => {
+          formRef.current?.setFieldsValue(cfValues);
+        });
+      }
       return;
     }
     formRef.current?.resetFields();
+    resetFieldValues();
     formRef.current?.setFieldsValue({ carrier_type: 'express', is_enabled: true });
-  }, [open, editing]);
+  }, [open, editing, loadFieldValues, resetFieldValues]);
 
   const handleFinish = async (values: Partial<LogisticsCarrier>) => {
     setSubmitting(true);
     try {
+      const { customData, standardValues } = extractFormValues(values, formRef.current);
       const record = editing
-        ? await updateCarrier(editing.id, values)
-        : await createCarrier(values);
+        ? await updateCarrier(editing.id, standardValues)
+        : await createCarrier(standardValues);
+      if (record.id != null) {
+        await saveCustomFieldValues(record.id, customData);
+      }
       messageApi.success(editing ? t('common.updateSuccess') : t('common.createSuccess'));
       onSuccess(record);
       onClose();
@@ -125,6 +153,11 @@ export const CarrierFormModal: React.FC<CarrierFormModalProps> = ({
           value: item.value,
           label: t(item.labelKey),
         }))}
+      />
+      <CustomFieldsFormSection
+        customFields={customFields}
+        customFieldValues={customFieldValues}
+        gridColumns={1}
       />
       <ProFormTextArea name="remark" label={t('common.remark')} fieldProps={{ rows: 2 }} />
       <ProFormSwitch name="is_enabled" label={t('common.enabled')} />

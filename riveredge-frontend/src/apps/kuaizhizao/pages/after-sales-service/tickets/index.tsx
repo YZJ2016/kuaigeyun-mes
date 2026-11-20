@@ -20,10 +20,10 @@ import {
   ToolOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { DetailDrawerActions, ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
@@ -43,6 +43,7 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { afterSalesTicketCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
   AFTER_SALES_REQUEST_TYPES,
   AFTER_SALES_TICKET_STATUSES,
@@ -87,6 +88,7 @@ import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const AFTER_SALES_TICKET_RESOURCE = 'kuaizhizao:after-sales-ticket';
+const AFTER_SALES_TICKET_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_after_sales_tickets';
 const SALES_RETURN_RESOURCE = 'kuaizhizao:sales-return';
 const REPAIR_ORDER_RESOURCE = 'kuaizhizao:repair-order';
 const RETURN_VISIT_RESOURCE = 'kuaizhizao:customer-return-visit';
@@ -140,6 +142,18 @@ const AfterSalesTicketsPage: React.FC = () => {
   const [detailRecord, setDetailRecord] = useState<AfterSalesTicket | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const {
+    customFields: listCustomFields,
+    customFieldValues: detailCustomFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<AfterSalesTicket>({
+    tableName: AFTER_SALES_TICKET_CUSTOM_FIELD_TABLE,
+    hostResource: AFTER_SALES_TICKET_RESOURCE,
+  });
+  const customFieldColumns = generateCustomFieldColumns();
 
   const [pushOpen, setPushOpen] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
@@ -194,15 +208,17 @@ const AfterSalesTicketsPage: React.FC = () => {
   const loadDetail = useCallback(async (id: number) => {
     setDetailLoading(true);
     setDetailError(null);
+    resetDetailFieldValues();
     try {
       setDetailRecord(await afterSalesTicketApi.get(id));
+      await loadFieldValuesForDetail(id);
     } catch (error) {
       setDetailRecord(null);
       setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.afterSalesTicket.loadFailed')));
     } finally {
       setDetailLoading(false);
     }
-  }, [t]);
+  }, [loadFieldValuesForDetail, resetDetailFieldValues, t]);
 
   const refreshOpenDetail = useCallback(() => {
     const id = detailIdRef.current;
@@ -246,6 +262,7 @@ const AfterSalesTicketsPage: React.FC = () => {
     detailIdRef.current = null;
     setDetailRecord(null);
     setDetailError(null);
+    resetDetailFieldValues();
   };
 
   const executeDelete = async (record: AfterSalesTicket, opts?: { closeDrawer?: boolean }) => {
@@ -329,11 +346,6 @@ const AfterSalesTicketsPage: React.FC = () => {
     [permDeniedTitle, perms.canUpdate, salesReturnPerms.canCreate, t],
   );
 
-  const canPushSalesReturn = useCallback(
-    (record: AfterSalesTicket) => !pushSalesReturnDisabledReason(record),
-    [pushSalesReturnDisabledReason],
-  );
-
   const pushRepairDisabledReason = useCallback(
     (record: AfterSalesTicket | null | undefined): string | undefined => {
       if (!record) return undefined;
@@ -359,19 +371,19 @@ const AfterSalesTicketsPage: React.FC = () => {
 
   const executePushRepair = useCallback(async (record: AfterSalesTicket) => {
     try {
-            const res = await afterSalesTicketApi.pushToRepairOrder(record.id);
-            message.success(
-              res?.repair_order_code
-                ? `${t('app.kuaizhizao.afterSalesTicket.pushRepairSuccess')}：${res.repair_order_code}`
-                : t('app.kuaizhizao.afterSalesTicket.pushRepairSuccess'),
-            );
-            reloadTable();
-            refreshOpenDetail();
-          } catch (e: any) {
-            message.error(e?.message || t('app.kuaizhizao.afterSalesTicket.pushRepairFailed'));
-            throw e;
-          }
-  }, [message, pushRepairDisabledReason, refreshOpenDetail, t]);
+      const res = await afterSalesTicketApi.pushToRepairOrder(record.id);
+      message.success(
+        res?.repair_order_code
+          ? `${t('app.kuaizhizao.afterSalesTicket.pushRepairSuccess')}：${res.repair_order_code}`
+          : t('app.kuaizhizao.afterSalesTicket.pushRepairSuccess'),
+      );
+      reloadTable();
+      refreshOpenDetail();
+    } catch (e: any) {
+      message.error(e?.message || t('app.kuaizhizao.afterSalesTicket.pushRepairFailed'));
+      throw e;
+    }
+  }, [message, refreshOpenDetail, t]);
 
   const handlePushRepair = useCallback(
     (record: AfterSalesTicket) => {
@@ -605,7 +617,7 @@ const AfterSalesTicketsPage: React.FC = () => {
 
   const pullFromSalesOrderQuery = useUniPullQuery<PullSalesOrderCandidate>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     loadData: async ({ keyword, page, pageSize }) => {
       try {
         const [res, ticketRes] = await Promise.all([
@@ -650,13 +662,15 @@ const AfterSalesTicketsPage: React.FC = () => {
       }
     },
     onConfirm: async (keys) => {
-      const selectedId = Number(keys[0]);
-      if (!selectedId || selectedId <= 0) {
+      const selectedIds = keys.map((k) => Number(k)).filter((id) => id > 0);
+      if (!selectedIds.length) {
         message.warning(t('app.kuaizhizao.afterSalesTicket.selectSalesOrder'));
         return;
       }
       try {
-        await afterSalesTicketApi.pullFromSalesOrder({ sales_order_id: selectedId });
+        for (const selectedId of selectedIds) {
+          await afterSalesTicketApi.pullFromSalesOrder({ sales_order_id: selectedId });
+        }
         message.success(t('app.kuaizhizao.afterSalesTicket.pullSuccess'));
         pullFromSalesOrderQuery.closeModal();
         reloadTable();
@@ -668,7 +682,7 @@ const AfterSalesTicketsPage: React.FC = () => {
 
   const pullFromSalesDeliveryQuery = useUniPullQuery<PullSalesDeliveryCandidate>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     loadData: async ({ keyword, page, pageSize }) => {
       try {
         const [res, ticketRes] = await Promise.all([
@@ -712,13 +726,15 @@ const AfterSalesTicketsPage: React.FC = () => {
       }
     },
     onConfirm: async (keys) => {
-      const selectedId = Number(keys[0]);
-      if (!selectedId || selectedId <= 0) {
+      const selectedIds = keys.map((k) => Number(k)).filter((id) => id > 0);
+      if (!selectedIds.length) {
         message.warning(t('app.kuaizhizao.afterSalesTicket.selectSalesDelivery'));
         return;
       }
       try {
-        await afterSalesTicketApi.pullFromSalesDelivery({ sales_delivery_id: selectedId });
+        for (const selectedId of selectedIds) {
+          await afterSalesTicketApi.pullFromSalesDelivery({ sales_delivery_id: selectedId });
+        }
         message.success(t('app.kuaizhizao.afterSalesTicket.pullSuccess'));
         pullFromSalesDeliveryQuery.closeModal();
         reloadTable();
@@ -1034,6 +1050,7 @@ const AfterSalesTicketsPage: React.FC = () => {
         formItemProps: formDateRangeFormItemProps,
       },
       ...buildDocumentAuditColumns<AfterSalesTicket>(t),
+      ...customFieldColumns,
       {
         title: t('common.status'),
         key: 'lifecycle',
@@ -1056,6 +1073,7 @@ const AfterSalesTicketsPage: React.FC = () => {
         key: 'action',
         fixed: 'right',
         hideInSearch: true,
+        valueType: 'option',
         render: (_, record) => {
           const parts: React.ReactNode[] = [
             <Button {...rowActionKind('read')} key="d" onClick={() => handleDetail(record.id)} />,
@@ -1065,6 +1083,78 @@ const AfterSalesTicketsPage: React.FC = () => {
               <Button {...rowActionKind('update')} key="e" onClick={() => void openEdit(record)} />,
             );
           }
+          const repairBlocked = pushRepairDisabledReason(record);
+          if (!repairBlocked) {
+            parts.push(
+              <ActionConfirmPopconfirm
+                key="push-repair"
+                title={t('app.kuaizhizao.afterSalesTicket.actionPushRepairOrder')}
+                description={t('app.kuaizhizao.afterSalesTicket.pushRepairConfirm', {
+                  code: record.ticket_code,
+                })}
+                onConfirm={() => executePushRepair(record)}
+              >
+                <Button
+                  {...rowActionKind('execute')}
+                  {...rowActionLabelKeep()}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {t('app.kuaizhizao.afterSalesTicket.actionPushRepairOrder')}
+                </Button>
+              </ActionConfirmPopconfirm>,
+            );
+          }
+          const returnBlocked = pushSalesReturnDisabledReason(record);
+          if (!returnBlocked) {
+            parts.push(
+              <Button
+                key="push-sales-return"
+                {...rowActionKind('execute')}
+                {...rowActionLabelKeep()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void openPushSalesReturn(record);
+                }}
+              >
+                {t('app.kuaizhizao.afterSalesTicket.actionPushSalesReturn')}
+              </Button>,
+            );
+          }
+          const visitBlocked = pushReturnVisitDisabledReason(record);
+          if (!visitBlocked) {
+            parts.push(
+              <ActionConfirmPopconfirm
+                key="push-return-visit"
+                title={t('app.kuaizhizao.afterSalesTicket.actionPushReturnVisit')}
+                description={t('app.kuaizhizao.afterSalesTicket.pushVisitConfirm', {
+                  code: record.ticket_code,
+                })}
+                onConfirm={async () => {
+                  try {
+                    const res = await afterSalesTicketApi.pushToReturnVisit(record.id);
+                    message.success(
+                      res?.visit_code
+                        ? `${t('app.kuaizhizao.afterSalesTicket.pushVisitSuccess')}：${res.visit_code}`
+                        : t('app.kuaizhizao.afterSalesTicket.pushVisitSuccess'),
+                    );
+                    reloadTable();
+                    refreshOpenDetail();
+                  } catch (e: any) {
+                    message.error(e?.message || t('app.kuaizhizao.afterSalesTicket.pushVisitFailed'));
+                    throw e;
+                  }
+                }}
+              >
+                <Button
+                  {...rowActionKind('execute')}
+                  {...rowActionLabelKeep()}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {t('app.kuaizhizao.afterSalesTicket.actionPushReturnVisit')}
+                </Button>
+              </ActionConfirmPopconfirm>,
+            );
+          }
           if (perms.canAction?.('close') && record.status !== '已关闭') {
             parts.push(
               <Button
@@ -1072,13 +1162,6 @@ const AfterSalesTicketsPage: React.FC = () => {
                 {...rowActionKind('close')}
                 onClick={() => handleCloseTicket(record)}
               />,
-            );
-          }
-          if (perms.canDelete) {
-            parts.push(
-              <ActionConfirmPopconfirm title={t('app.kuaizhizao.afterSalesTicket.deleteConfirm')} onConfirm={() => executeDelete(record)}>
-              <Button {...rowActionKind('delete')} key="del" onClick={(e) => e.stopPropagation()} />
-            </ActionConfirmPopconfirm>,
             );
           }
           return parts;
@@ -1092,7 +1175,7 @@ const AfterSalesTicketsPage: React.FC = () => {
     <>
       <ListPageTemplate style={{ padding: 0 }}>
         <UniTable<AfterSalesTicket>
-          columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.tickets.v7"
+          columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.tickets.v9-row-push"
           onTableDataChange={(rows) => {
             setTableTickets(rows);
           }}
@@ -1161,9 +1244,10 @@ const AfterSalesTicketsPage: React.FC = () => {
             return items;
           }}
           showDeleteButton={perms.canDelete}
+          deleteButtonText={t('common.delete')}
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('common.confirmBatchDeleteContent', { count })}
-          request={async (params, sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             const { from: registeredFrom, to: registeredTo } = pickSearchDateTimeRange(
               searchFormValues,
               'registered_from',
@@ -1188,8 +1272,12 @@ const AfterSalesTicketsPage: React.FC = () => {
                 order_by: orderBy,
               });
               const rows = res.items || [];
+              const data =
+                meta?.purpose === 'prefetch'
+                  ? rows
+                  : await enrichRecordsWithCustomFields(rows);
               return {
-                data: rows,
+                data,
                 success: true,
                 total: res.total ?? 0,
               };
@@ -1207,6 +1295,8 @@ const AfterSalesTicketsPage: React.FC = () => {
         record={detailRecord}
         loading={detailLoading}
         error={detailError}
+        customFields={listCustomFields}
+        customFieldValues={detailCustomFieldValues}
         onRetry={() => {
           const id = detailIdRef.current;
           if (id != null) void loadDetail(id);
@@ -1225,24 +1315,67 @@ const AfterSalesTicketsPage: React.FC = () => {
               },
               {
                 key: 'push-repair',
-                visible: Boolean(
-                  detailRecord &&
-                    detailRecord.request_type === '维修' &&
-                    detailRecord.status !== '已关闭',
-                ),
+                visible: Boolean(detailRecord && !pushRepairDisabledReason(detailRecord)),
                 render: () => (
-                  <ActionConfirmPopconfirm title={t('app.kuaizhizao.afterSalesTicket.actionPushRepairOrder')} description={t('app.kuaizhizao.afterSalesTicket.pushRepairConfirm', {
-          code: detailRecord?.ticket_code,
-        })} onConfirm={() => executePushRepair(detailRecord!)}>
-              <Button
-                    icon={<ToolOutlined />}
-                    disabled={Boolean(pushRepairDisabledReason(detailRecord))}
-                    title={pushRepairDisabledReason(detailRecord)}
-                    onClick={(e) => e.stopPropagation()}
+                  <ActionConfirmPopconfirm
+                    title={t('app.kuaizhizao.afterSalesTicket.actionPushRepairOrder')}
+                    description={t('app.kuaizhizao.afterSalesTicket.pushRepairConfirm', {
+                      code: detailRecord?.ticket_code,
+                    })}
+                    onConfirm={() => executePushRepair(detailRecord!)}
                   >
-                    {t('app.kuaizhizao.afterSalesTicket.actionPushRepairOrder')}
+                    <Button
+                      icon={<ToolOutlined />}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {t('app.kuaizhizao.afterSalesTicket.actionPushRepairOrder')}
+                    </Button>
+                  </ActionConfirmPopconfirm>
+                ),
+              },
+              {
+                key: 'push-sales-return',
+                visible: Boolean(detailRecord && !pushSalesReturnDisabledReason(detailRecord)),
+                render: () => (
+                  <Button
+                    icon={<ExportOutlined />}
+                    onClick={() => void openPushSalesReturn(detailRecord!)}
+                  >
+                    {t('app.kuaizhizao.afterSalesTicket.actionPushSalesReturn')}
                   </Button>
-            </ActionConfirmPopconfirm>
+                ),
+              },
+              {
+                key: 'push-return-visit',
+                visible: Boolean(detailRecord && !pushReturnVisitDisabledReason(detailRecord)),
+                render: () => (
+                  <ActionConfirmPopconfirm
+                    title={t('app.kuaizhizao.afterSalesTicket.actionPushReturnVisit')}
+                    description={t('app.kuaizhizao.afterSalesTicket.pushVisitConfirm', {
+                      code: detailRecord?.ticket_code,
+                    })}
+                    onConfirm={async () => {
+                      try {
+                        const res = await afterSalesTicketApi.pushToReturnVisit(detailRecord!.id);
+                        message.success(
+                          res?.visit_code
+                            ? `${t('app.kuaizhizao.afterSalesTicket.pushVisitSuccess')}：${res.visit_code}`
+                            : t('app.kuaizhizao.afterSalesTicket.pushVisitSuccess'),
+                        );
+                        reloadTable();
+                        refreshOpenDetail();
+                      } catch (e: any) {
+                        message.error(
+                          e?.message || t('app.kuaizhizao.afterSalesTicket.pushVisitFailed'),
+                        );
+                        throw e;
+                      }
+                    }}
+                  >
+                    <Button onClick={(e) => e.stopPropagation()}>
+                      {t('app.kuaizhizao.afterSalesTicket.actionPushReturnVisit')}
+                    </Button>
+                  </ActionConfirmPopconfirm>
                 ),
               },
               {
@@ -1278,17 +1411,6 @@ const AfterSalesTicketsPage: React.FC = () => {
               },
             ]}
           />
-        }
-        footer={
-          detailRecord && canPushSalesReturn(detailRecord) ? (
-            <Button
-              type="primary"
-              icon={<ExportOutlined />}
-              onClick={() => void openPushSalesReturn(detailRecord)}
-            >
-              {t('app.kuaizhizao.afterSalesTicket.actionPushSalesReturn')}
-            </Button>
-          ) : undefined
         }
       />
 

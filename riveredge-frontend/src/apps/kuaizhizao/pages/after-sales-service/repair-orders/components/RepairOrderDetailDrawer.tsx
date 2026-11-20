@@ -32,6 +32,8 @@ export type RepairOrderDetailDrawerProps = {
   error?: string | null;
   onRetry?: () => void;
   extra?: React.ReactNode;
+  supplementary?: React.ReactNode;
+  supplementaryTitle?: React.ReactNode;
   zIndex?: number;
 };
 
@@ -43,6 +45,8 @@ export const RepairOrderDetailDrawer: React.FC<RepairOrderDetailDrawerProps> = (
   error,
   onRetry,
   extra,
+  supplementary,
+  supplementaryTitle,
   zIndex,
 }) => {
   const { t } = useTranslation();
@@ -145,6 +149,8 @@ export const RepairOrderDetailDrawer: React.FC<RepairOrderDetailDrawerProps> = (
       error={error}
       onRetry={onRetry}
       extra={extra}
+      supplementary={supplementary}
+      supplementaryTitle={supplementaryTitle}
       zIndex={zIndex}
       traceDocumentType="repair_order"
       linesTitle={t('app.kuaizhizao.afterSalesService.common.itemsTitle')}

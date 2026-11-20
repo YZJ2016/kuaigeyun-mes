@@ -4,9 +4,10 @@ import { App, Button, Modal, Table, Typography, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
 import {
@@ -46,6 +47,18 @@ const CarriersPage: React.FC = () => {
   const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
   const [presetList, setPresetList] = useState<CarrierPresetItem[]>([]);
   const [selectedPresetCodes, setSelectedPresetCodes] = useState<string[]>([]);
+  const {
+    customFields: listCustomFields,
+    customFieldValues: detailCustomFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<LogisticsCarrier>({
+    tableName: 'apps_kuaizhizao_logistics_carriers',
+    hostResource: 'kuaizhizao:logistics-carrier',
+  });
+  const customFieldColumns = generateCustomFieldColumns();
 
   const openCreate = () => {
     setEditing(null);
@@ -60,6 +73,10 @@ const CarriersPage: React.FC = () => {
   const openDetail = (row: LogisticsCarrier) => {
     setDetail(row);
     setDetailOpen(true);
+    resetDetailFieldValues();
+    if (row.id != null) {
+      void loadFieldValuesForDetail(row.id);
+    }
   };
 
   const openLoadCommonCarriers = async () => {
@@ -202,6 +219,7 @@ const CarriersPage: React.FC = () => {
           hideInSearch: true,
           render: (_, row) => renderLogisticsEnabledTag(t, row.is_enabled),
         },
+        ...customFieldColumns,
         {
           title: t('common.action'),
           key: 'option',
@@ -219,24 +237,11 @@ const CarriersPage: React.FC = () => {
                 <Button key="edit" {...rowActionKind('update')} onClick={() => openEdit(row)} />,
               );
             }
-            if (perms.canDelete) {
-              nodes.push(
-                <Button
-                  key="delete"
-                  {...rowActionKind('delete')}
-                  onClick={async () => {
-                    await deleteCarrier(row.id);
-                    message.success(t('common.deleteSuccess'));
-    actionRef.current?.reload();
-                  }}
-                />,
-              );
-            }
             return nodes;
           },
         },
       ]),
-    [perms.canDelete, perms.canRead, perms.canUpdate, t],
+    [customFieldColumns, perms.canDelete, perms.canRead, perms.canUpdate, t],
   );
 
   return (
@@ -246,23 +251,28 @@ const CarriersPage: React.FC = () => {
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.carriers')}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.carriers.v5"
+        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.carriers.v6-cf"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         rowKey="id"
-        request={async (params, _sort, _filter, searchFormValues) => {
+        request={async (params, _sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           const res = await listCarriers({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize,
             keyword: pickListSearchKeyword(searchFormValues),
           });
-          return { data: res.items, total: res.total, success: true };
+          const items =
+            meta?.purpose === 'prefetch'
+              ? res.items
+              : await enrichRecordsWithCustomFields(res.items);
+          return { data: items, total: res.total, success: true };
         }}
         showCreateButton={perms.canCreate}
         createButtonText={t('app.kuaizhizao.logistics.action.createCarrier')}
         onCreate={openCreate}
         enableRowSelection={perms.canDelete}
         showDeleteButton={perms.canDelete}
+        deleteButtonText={t('common.delete')}
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => deleteCarrier(Number(key))));
           message.success(t('common.batchDeleteSuccess', { count: keys.length }));
@@ -283,6 +293,7 @@ const CarriersPage: React.FC = () => {
         onClose={() => {
           setDetailOpen(false);
           setDetail(null);
+          resetDetailFieldValues();
         }}
         record={detail}
         title={`${t('app.kuaizhizao.logistics.detail.carrierTitle')}${detail?.name ? ` - ${detail.name}` : ''}`}
@@ -290,6 +301,8 @@ const CarriersPage: React.FC = () => {
           if (detail) openEdit(detail);
         })}
         basicColumns={basicColumns}
+        customFields={listCustomFields}
+        customFieldValues={detailCustomFieldValues}
       />
       <CarrierFormModal
         open={open}

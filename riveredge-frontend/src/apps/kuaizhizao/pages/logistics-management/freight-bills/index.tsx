@@ -1,10 +1,11 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 import { ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Col, Form, Input, InputNumber, Modal, Popconfirm, Row, theme } from 'antd';
+import { App, Button, Col, Form, Input, InputNumber, Modal, Row, theme } from 'antd';
 import { CheckOutlined, CloseOutlined, SendOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import {
   DetailDrawerActions,
   FormModalTemplate,
@@ -12,11 +13,14 @@ import {
   MultiTabListPageTemplate,
 } from '../../../../../components/layout-templates';
 import { MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../../components/layout-templates/constants';
-import { rowActionKind } from '../../../../../components/uni-action';
-import { UniTable } from '../../../../../components/uni-table';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { CustomFieldsFormSection } from '../../../../../components/custom-fields';
+import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { hasReviewPermission } from '../../../../../utils/permissionContract';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
@@ -44,6 +48,7 @@ import { FreightBillDetailDrawer } from './components/FreightBillDetailDrawer';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const RESOURCE = 'kuaizhizao:freight-bill';
+const CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_freight_bills';
 
 type FreightBillFormItem = {
   freight_order_id: number;
@@ -58,6 +63,10 @@ function BillItemReadonlyText({ value }: { value?: string }) {
 
 function canEditFreightBill(reviewStatus?: string | null) {
   return reviewStatus === 'draft' || reviewStatus === 'rejected';
+}
+
+function canReviewFreightBill(reviewStatus?: string | null) {
+  return reviewStatus === 'pending';
 }
 
 const FreightBillsPage: React.FC = () => {
@@ -79,8 +88,37 @@ const FreightBillsPage: React.FC = () => {
   const [detailError, setDetailError] = useState<string | null>(null);
   const detailRetryIdRef = useRef<number | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectTargetId, setRejectTargetId] = useState<number | null>(null);
   const [rejectRemarks, setRejectRemarks] = useState('');
+  const [detailActionLoading, setDetailActionLoading] = useState<'submit' | 'audit' | 'reject' | null>(
+    null,
+  );
   const pullModalZIndex = token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET;
+  const {
+    customFields: formCustomFields,
+    customFieldValues: formCustomFieldValues,
+    loadFieldValues: loadFormCustomFieldValues,
+    extractFormValues: extractCustomFormValues,
+    saveCustomFieldValues,
+    resetFieldValues: resetFormCustomFieldValues,
+  } = useCustomFields({
+    tableName: CUSTOM_FIELD_TABLE,
+    hostResource: RESOURCE,
+    loadWhenOpen: true,
+    open: formOpen,
+  });
+  const {
+    customFields: listCustomFields,
+    customFieldValues: detailCustomFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<FreightBill>({
+    tableName: CUSTOM_FIELD_TABLE,
+    hostResource: RESOURCE,
+  });
+  const customFieldColumns = generateCustomFieldColumns();
 
   const selectedOrderIds = () => {
     const items = (formRef.current?.getFieldValue('items') ?? []) as FreightBillFormItem[];
@@ -128,8 +166,10 @@ const FreightBillsPage: React.FC = () => {
     async (id: number) => {
       setDetailLoading(true);
       setDetailError(null);
+      resetDetailFieldValues();
       try {
         setDetail(await getFreightBill(id));
+        await loadFieldValuesForDetail(id);
       } catch (error) {
         setDetail(null);
         setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.logistics.message.loadBillDetailFailed')));
@@ -137,7 +177,7 @@ const FreightBillsPage: React.FC = () => {
         setDetailLoading(false);
       }
     },
-    [t],
+    [loadFieldValuesForDetail, resetDetailFieldValues, t],
   );
 
   const openDetail = (row: FreightBill) => {
@@ -148,13 +188,78 @@ const FreightBillsPage: React.FC = () => {
     void loadDetail(row.id);
   };
 
-  const refreshDetail = async (id: number) => {
-    setDetail(await getFreightBill(id));
-    billsActionRef.current?.reload();
-  };
+  const refreshDetail = useCallback(
+    async (id: number) => {
+      setDetail(await getFreightBill(id));
+      await loadFieldValuesForDetail(id);
+      billsActionRef.current?.reload();
+    },
+    [loadFieldValuesForDetail],
+  );
+
+  const openReject = useCallback((id: number) => {
+    setRejectTargetId(id);
+    setRejectRemarks('');
+    setRejectOpen(true);
+  }, []);
+
+  const executeSubmit = useCallback(
+    async (id: number) => {
+      setDetailActionLoading('submit');
+      try {
+        await submitFreightBill(id);
+        await refreshDetail(id);
+        messageApi.success(t('app.kuaizhizao.logistics.message.submitBillSuccess'));
+      } catch (error) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.logistics.message.submitBillFailed')));
+        throw error;
+      } finally {
+        setDetailActionLoading(null);
+      }
+    },
+    [messageApi, refreshDetail, t],
+  );
+
+  const executeAudit = useCallback(
+    async (id: number) => {
+      setDetailActionLoading('audit');
+      try {
+        await auditFreightBill(id);
+        await refreshDetail(id);
+        messageApi.success(t('app.kuaizhizao.logistics.message.auditBillSuccess'));
+      } catch (error) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.logistics.message.auditBillFailed')));
+        throw error;
+      } finally {
+        setDetailActionLoading(null);
+      }
+    },
+    [messageApi, refreshDetail, t],
+  );
+
+  const executeReject = useCallback(
+    async (id: number, reason: string) => {
+      setDetailActionLoading('reject');
+      try {
+        await rejectFreightBill(id, reason.trim() || undefined);
+        setRejectOpen(false);
+        setRejectTargetId(null);
+        setRejectRemarks('');
+        await refreshDetail(id);
+        messageApi.success(t('app.kuaizhizao.logistics.message.rejectBillSuccess'));
+      } catch (error) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.logistics.message.rejectBillFailed')));
+        throw error;
+      } finally {
+        setDetailActionLoading(null);
+      }
+    },
+    [messageApi, refreshDetail, t],
+  );
 
   const openCreate = () => {
     setEditing(null);
+    resetFormCustomFieldValues();
     setFormOpen(true);
   };
 
@@ -163,6 +268,8 @@ const FreightBillsPage: React.FC = () => {
       const full = await getFreightBill(row.id);
       setEditing(full);
       setFormOpen(true);
+      const cfValues = await loadFormCustomFieldValues(full.id);
+      formRef.current?.setFieldsValue(cfValues);
     } catch (error) {
       messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.logistics.message.loadBillDetailFailed')));
     }
@@ -171,6 +278,7 @@ const FreightBillsPage: React.FC = () => {
   const closeForm = () => {
     setFormOpen(false);
     setEditing(null);
+    resetFormCustomFieldValues();
   };
 
   const openPull = () => {
@@ -187,27 +295,35 @@ const FreightBillsPage: React.FC = () => {
     remark?: string;
     items?: FreightBillFormItem[];
   }) => {
-    const items = (values.items ?? []).filter((item) => Number(item.amount) > 0);
+    const { customData, standardValues } = extractCustomFormValues(values, formRef.current);
+    const items = ((standardValues.items ?? values.items) as FreightBillFormItem[] | undefined ?? []).filter(
+      (item) => Number(item.freight_order_id) > 0 && Number(item.amount) > 0,
+    );
     if (!items.length) {
       messageApi.warning(t('app.kuaizhizao.logistics.message.billItemRequired'));
       return;
     }
     const payload = {
-      carrier_id: values.carrier_id,
-      remark: values.remark,
+      carrier_id: standardValues.carrier_id ?? values.carrier_id,
+      remark: standardValues.remark ?? values.remark,
       items: items.map((item) => ({
-        freight_order_id: item.freight_order_id,
+        freight_order_id: Number(item.freight_order_id),
         fee_type: 'base',
         amount: item.amount,
       })),
     };
     try {
-      if (editing) {
-        await updateFreightBill(editing.id, payload);
+      let savedId = editing?.id;
+      if (savedId != null) {
+        await updateFreightBill(savedId, payload);
         messageApi.success(t('common.saveSuccess'));
       } else {
-        await createFreightBill(payload);
+        const created = await createFreightBill(payload);
+        savedId = created.id;
         messageApi.success(t('common.createSuccess'));
+      }
+      if (savedId != null) {
+        await saveCustomFieldValues(savedId, customData);
       }
       closeForm();
       billsActionRef.current?.reload();
@@ -270,6 +386,7 @@ const FreightBillsPage: React.FC = () => {
           hideInSearch: true,
           render: (_, row) => renderFreightBillReviewStatusTag(t, row.review_status),
         },
+        ...customFieldColumns,
         {
           title: t('common.action'),
           key: 'option',
@@ -286,43 +403,60 @@ const FreightBillsPage: React.FC = () => {
             }
             if (perms.canAction?.('submit') && canEditFreightBill(row.review_status)) {
               nodes.push(
-                <Button
+                <ActionConfirmPopconfirm
                   key="submit"
-                  {...rowActionKind('submit')}
-                  onClick={async () => {
-                    try {
-                      await submitFreightBill(row.id);
-                      messageApi.success(t('app.kuaizhizao.logistics.message.submitBillSuccess'));
-                      billsActionRef.current?.reload();
-                    } catch (error) {
-                      messageApi.error(getApiErrorMessage(error, t('common.saveFailed')));
-                    }
-                  }}
-                />,
+                  title={t('components.uniAction.submit')}
+                  description={t('app.kuaizhizao.logistics.message.submitBillConfirm', {
+                    code: row.bill_code,
+                  })}
+                  onConfirm={() => executeSubmit(row.id)}
+                >
+                  <Button
+                    {...rowActionKind('submit')}
+                    {...rowActionLabelKeep()}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {t('components.uniAction.submit')}
+                  </Button>
+                </ActionConfirmPopconfirm>,
               );
             }
-            if (perms.canDelete && canEditFreightBill(row.review_status)) {
+            if (canReview && canReviewFreightBill(row.review_status)) {
               nodes.push(
-                <Popconfirm
-                  key="delete"
-                  title={t('common.confirmDelete')}
-                  onConfirm={async (e) => {
-                    e?.stopPropagation();
-                    await deleteFreightBill(row.id);
-                    messageApi.success(t('common.deleteSuccess'));
-                    billsActionRef.current?.reload();
-                  }}
-                  onCancel={(e) => e?.stopPropagation()}
+                <ActionConfirmPopconfirm
+                  key="audit"
+                  title={t('components.uniAction.audit')}
+                  description={t('app.kuaizhizao.logistics.message.auditBillConfirm', {
+                    code: row.bill_code,
+                  })}
+                  onConfirm={() => executeAudit(row.id)}
                 >
-                  <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
-                </Popconfirm>,
+                  <Button
+                    {...rowActionKind('audit')}
+                    {...rowActionLabelKeep()}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {t('components.uniAction.audit')}
+                  </Button>
+                </ActionConfirmPopconfirm>,
+                <Button
+                  key="reject"
+                  {...rowActionKind('reject')}
+                  {...rowActionLabelKeep()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openReject(row.id);
+                  }}
+                >
+                  {t('components.uniAction.reject')}
+                </Button>,
               );
             }
             return nodes;
           },
         },
       ]),
-    [messageApi, perms, t],
+    [canReview, customFieldColumns, executeAudit, executeSubmit, openReject, perms, t],
   );
 
   const pendingColumns: ProColumns<FreightOrder>[] = useMemo(
@@ -402,9 +536,15 @@ const FreightBillsPage: React.FC = () => {
         width: 168,
         ellipsis: true,
         render: (_: unknown, __: unknown, index: number) => (
-          <Form.Item name={[index, 'freight_order_code']} noStyle>
-            <BillItemReadonlyText />
-          </Form.Item>
+          <>
+            {/* Form.List 只保留有 Form.Item 的字段；缺登记会导致提交丢掉 freight_order_id */}
+            <Form.Item name={[index, 'freight_order_id']} hidden>
+              <Input />
+            </Form.Item>
+            <Form.Item name={[index, 'freight_order_code']} noStyle>
+              <BillItemReadonlyText />
+            </Form.Item>
+          </>
         ),
       },
       {
@@ -459,23 +599,28 @@ const FreightBillsPage: React.FC = () => {
               <UniTable<FreightBill>
                 actionRef={billsActionRef}
                 columns={billColumns}
-                columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-bills.v6"
+                columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-bills.v8-row-review"
                 showAdvancedSearch
                 skipFuzzyPinyinClientFilter
                 rowKey="id"
-                request={async (params, _sort, _filter, searchFormValues) => {
+                request={async (params, _sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
                   const res = await listFreightBills({
                     skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                     limit: params.pageSize,
                     keyword: pickListSearchKeyword(searchFormValues),
                   });
-                  return { data: res.items, total: res.total, success: true };
+                  const items =
+                    meta?.purpose === 'prefetch'
+                      ? res.items
+                      : await enrichRecordsWithCustomFields(res.items);
+                  return { data: items, total: res.total, success: true };
                 }}
                 showCreateButton={perms.canCreate}
                 createButtonText={t('app.kuaizhizao.logistics.action.createFreightBill')}
                 onCreate={openCreate}
                 enableRowSelection={perms.canDelete}
                 showDeleteButton={perms.canDelete}
+                deleteButtonText={t('common.delete')}
                 onDelete={async (keys) => {
                   await Promise.all(keys.map((key) => deleteFreightBill(Number(key))));
     messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
@@ -554,6 +699,11 @@ const FreightBillsPage: React.FC = () => {
             style: { width: '100%', margin: 0 },
           }}
         />
+        <CustomFieldsFormSection
+          customFields={formCustomFields}
+          customFieldValues={formCustomFieldValues}
+          gridColumns={2}
+        />
         <Row gutter={16}>
           <Col span={24}>
             <ProFormTextArea name="remark" label={t('common.remark')} fieldProps={{ rows: 2 }} />
@@ -567,10 +717,13 @@ const FreightBillsPage: React.FC = () => {
           setDetailOpen(false);
           setDetail(null);
           setDetailError(null);
+          resetDetailFieldValues();
         }}
         bill={detail}
         loading={detailLoading}
         error={detailError}
+        customFields={listCustomFields}
+        customFieldValues={detailCustomFieldValues}
         onRetry={() => {
           const id = detailRetryIdRef.current;
           if (id != null) void loadDetail(id);
@@ -583,6 +736,7 @@ const FreightBillsPage: React.FC = () => {
                 visible: Boolean(detail && perms.canUpdate && canEditFreightBill(detail.review_status)),
                 render: (
                   <Button
+                    disabled={detailActionLoading != null}
                     onClick={() => {
                       if (!detail) return;
                       void openEdit(detail);
@@ -594,49 +748,62 @@ const FreightBillsPage: React.FC = () => {
               },
               {
                 key: 'submit',
-                visible: Boolean(detail && perms.canAction?.('submit') && canEditFreightBill(detail.review_status)),
+                visible: Boolean(
+                  detail && perms.canAction?.('submit') && canEditFreightBill(detail.review_status),
+                ),
                 render: (
-                  <Button
-                    icon={<SendOutlined />}
-                    onClick={async () => {
-                      if (!detail) return;
-                      await submitFreightBill(detail.id);
-                      await refreshDetail(detail.id);
-                      messageApi.success(t('app.kuaizhizao.logistics.message.submitBillSuccess'));
-                    }}
+                  <ActionConfirmPopconfirm
+                    title={t('components.uniAction.submit')}
+                    description={t('app.kuaizhizao.logistics.message.submitBillConfirm', {
+                      code: detail?.bill_code,
+                    })}
+                    onConfirm={() => executeSubmit(detail!.id)}
                   >
-                    {t('components.uniAction.submit')}
-                  </Button>
+                    <Button
+                      icon={<SendOutlined />}
+                      loading={detailActionLoading === 'submit'}
+                      disabled={detailActionLoading != null}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {t('components.uniAction.submit')}
+                    </Button>
+                  </ActionConfirmPopconfirm>
                 ),
               },
               {
                 key: 'audit',
-                visible: Boolean(detail && detail.review_status === 'pending' && canReview),
+                visible: Boolean(detail && canReviewFreightBill(detail.review_status) && canReview),
                 render: (
-                  <Button
-                    type="primary"
-                    icon={<CheckOutlined />}
-                    onClick={async () => {
-                      if (!detail) return;
-                      await auditFreightBill(detail.id);
-                      await refreshDetail(detail.id);
-                      messageApi.success(t('app.kuaizhizao.logistics.message.auditBillSuccess'));
-                    }}
+                  <ActionConfirmPopconfirm
+                    title={t('components.uniAction.audit')}
+                    description={t('app.kuaizhizao.logistics.message.auditBillConfirm', {
+                      code: detail?.bill_code,
+                    })}
+                    onConfirm={() => executeAudit(detail!.id)}
                   >
-                    {t('components.uniAction.audit')}
-                  </Button>
+                    <Button
+                      type="primary"
+                      icon={<CheckOutlined />}
+                      loading={detailActionLoading === 'audit'}
+                      disabled={detailActionLoading != null}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {t('components.uniAction.audit')}
+                    </Button>
+                  </ActionConfirmPopconfirm>
                 ),
               },
               {
                 key: 'reject',
-                visible: Boolean(detail && detail.review_status === 'pending' && canReview),
+                visible: Boolean(detail && canReviewFreightBill(detail.review_status) && canReview),
                 render: (
                   <Button
                     danger
                     icon={<CloseOutlined />}
+                    disabled={detailActionLoading != null}
                     onClick={() => {
-                      setRejectRemarks('');
-                      setRejectOpen(true);
+                      if (!detail) return;
+                      openReject(detail.id);
                     }}
                   >
                     {t('components.uniAction.reject')}
@@ -651,13 +818,15 @@ const FreightBillsPage: React.FC = () => {
       <Modal
         open={rejectOpen}
         title={t('app.kuaizhizao.logistics.action.rejectFreightBill')}
-        onCancel={() => setRejectOpen(false)}
-        onOk={async () => {
-          if (!detail) return;
-          await rejectFreightBill(detail.id, rejectRemarks);
+        confirmLoading={detailActionLoading === 'reject'}
+        onCancel={() => {
+          if (detailActionLoading === 'reject') return;
           setRejectOpen(false);
-          await refreshDetail(detail.id);
-          messageApi.success(t('app.kuaizhizao.logistics.message.rejectBillSuccess'));
+          setRejectTargetId(null);
+        }}
+        onOk={async () => {
+          if (rejectTargetId == null) return;
+          await executeReject(rejectTargetId, rejectRemarks);
         }}
         destroyOnHidden
       >

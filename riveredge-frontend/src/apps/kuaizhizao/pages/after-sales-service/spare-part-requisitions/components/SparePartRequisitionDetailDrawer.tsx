@@ -34,6 +34,8 @@ export type SparePartRequisitionDetailDrawerProps = {
   onRetry?: () => void;
   extra?: React.ReactNode;
   zIndex?: number;
+  supplementary?: React.ReactNode;
+  supplementaryTitle?: React.ReactNode;
 };
 
 export const SparePartRequisitionDetailDrawer: React.FC<SparePartRequisitionDetailDrawerProps> = ({
@@ -45,6 +47,8 @@ export const SparePartRequisitionDetailDrawer: React.FC<SparePartRequisitionDeta
   onRetry,
   extra,
   zIndex,
+  supplementary,
+  supplementaryTitle,
 }) => {
   const { t } = useTranslation();
 
@@ -116,6 +120,8 @@ export const SparePartRequisitionDetailDrawer: React.FC<SparePartRequisitionDeta
       onRetry={onRetry}
       extra={extra}
       zIndex={zIndex}
+      supplementary={supplementary}
+      supplementaryTitle={supplementaryTitle}
       traceDocumentType="spare_part_requisition"
       linesTitle={t('app.kuaizhizao.afterSalesService.common.itemsTitle')}
       lines={

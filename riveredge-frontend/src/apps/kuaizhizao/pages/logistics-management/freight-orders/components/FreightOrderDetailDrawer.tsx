@@ -13,7 +13,12 @@ import {
   detailDrawerBasicColumn,
   useDetailDrawerDescriptionItems,
 } from '../../../../../../components/layout-templates';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../../components/custom-fields';
 import { SourceDocumentCode } from '../../../../../../components/linked-document-code/SourceDocumentCode';
+import type { CustomField } from '../../../../../../services/customField';
 import { alignDescriptionColumns } from '../../../sales-management/shared/documentFieldAlignment';
 import { formatDateTimeBySiteSetting } from '../../../../../../utils/format';
 import type { FreightOrder, FreightOrderSource, FreightTrackingEvent } from '../../../../services/logistics';
@@ -43,6 +48,8 @@ export type FreightOrderDetailDrawerProps = {
   onRetry?: () => void;
   zIndex?: number;
   extra?: React.ReactNode;
+  customFields?: CustomField[];
+  customFieldValues?: Record<string, unknown>;
 };
 
 export const FreightOrderDetailDrawer: React.FC<FreightOrderDetailDrawerProps> = ({
@@ -54,8 +61,11 @@ export const FreightOrderDetailDrawer: React.FC<FreightOrderDetailDrawerProps> =
   onRetry,
   zIndex,
   extra,
+  customFields = [],
+  customFieldValues = {},
 }) => {
   const { t } = useTranslation();
+  const showCustomFields = hasCustomFieldsDetailContent(customFields, customFieldValues);
 
   const contentReady = Boolean(order);
   const showError = Boolean(error) && !contentReady && !loading;
@@ -192,6 +202,17 @@ export const FreightOrderDetailDrawer: React.FC<FreightOrderDetailDrawerProps> =
         ) : showError ? null : (
           <div style={{ minHeight: 80 }} />
         )
+      }
+      supplementaryTitle={
+        showCustomFields ? t('app.master-data.customFields', { defaultValue: '自定义字段' }) : undefined
+      }
+      supplementary={
+        showCustomFields ? (
+          <CustomFieldsDetailSection
+            customFields={customFields}
+            customFieldValues={customFieldValues}
+          />
+        ) : undefined
       }
       linesTitle={t('app.kuaizhizao.logistics.section.sources')}
       lines={

@@ -7,7 +7,10 @@ import { Rate } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import type { CustomerReturnVisit } from '../../../../services/after-sales-service';
-import { renderAfterSalesTypeMarker } from '../../shared/afterSalesListPresentation';
+import {
+  renderAfterSalesStatusTag,
+  renderAfterSalesTypeMarker,
+} from '../../shared/afterSalesListPresentation';
 import { SourceDocumentCode } from '../../../../../../components/linked-document-code/SourceDocumentCode';
 import { AfterSalesDocDetailDrawer } from '../../shared/AfterSalesDocDetailDrawer';
 
@@ -20,6 +23,7 @@ const PLACEHOLDER: CustomerReturnVisit = {
   source_id: 0,
   source_code: '',
   visited_at: '',
+  status: '待登记',
 };
 
 export type CustomerReturnVisitDetailDrawerProps = {
@@ -30,6 +34,8 @@ export type CustomerReturnVisitDetailDrawerProps = {
   error?: string | null;
   onRetry?: () => void;
   extra?: React.ReactNode;
+  supplementary?: React.ReactNode;
+  supplementaryTitle?: React.ReactNode;
   zIndex?: number;
 };
 
@@ -41,6 +47,8 @@ export const CustomerReturnVisitDetailDrawer: React.FC<CustomerReturnVisitDetail
   error,
   onRetry,
   extra,
+  supplementary,
+  supplementaryTitle,
   zIndex,
 }) => {
   const { t } = useTranslation();
@@ -65,6 +73,11 @@ export const CustomerReturnVisitDetailDrawer: React.FC<CustomerReturnVisitDetail
           title: t('app.kuaizhizao.afterSalesService.returnVisit.field.visitMethod'),
           dataIndex: 'visit_method',
           render: (_, row) => renderAfterSalesTypeMarker(row.visit_method),
+        },
+        {
+          title: t('common.status'),
+          dataIndex: 'status',
+          render: (_, row) => renderAfterSalesStatusTag(row.status),
         },
         {
           title: t('app.kuaizhizao.afterSalesService.returnVisit.field.satisfactionScore'),
@@ -111,6 +124,8 @@ export const CustomerReturnVisitDetailDrawer: React.FC<CustomerReturnVisitDetail
       error={error}
       onRetry={onRetry}
       extra={extra}
+      supplementary={supplementary}
+      supplementaryTitle={supplementaryTitle}
       zIndex={zIndex}
       traceDocumentType="customer_return_visit"
     />

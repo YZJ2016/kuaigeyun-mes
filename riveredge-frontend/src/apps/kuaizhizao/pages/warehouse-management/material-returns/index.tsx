@@ -7,12 +7,14 @@
  * @date 2026-02-19
  */
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { isInboundEditable, type InboundHubOrder } from '../inbound/inboundHubTypes';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Col, Descriptions, Form, InputNumber, Modal, Row, Table, Tag, Typography } from 'antd';
+import { App, Button, Col, Descriptions, Form, InputNumber, Modal, Row, Select, Table, Tag, Typography } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
@@ -30,6 +32,8 @@ import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { formatDateTime, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
+import { buildDocumentLineAuxQuantityDetailColumn } from '../../../../../components/quantity-with-unit';
+import { buildDocumentDetailSerialReadonlyColumn } from '../../../components/documentDetailSerialNumberColumn';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import {
   enrichStandaloneDocsWithDetail,
@@ -57,6 +61,28 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
 import { ROUTES } from '../../../constants/routes';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { fetchMaterialForUnitSelectCache } from '../../../../../components/material-unit-select';
+import { getPopupContainerInModal } from '../../../../../utils/modalEventIsolation';
+import {
+  filterWarehouseTrackingColumns,
+  isMaterialBatchEntryEnabled,
+  isMaterialSerialEntryEnabled,
+  useWarehouseTrackingFlags,
+} from '../shared/warehouseTrackingFlags';
+import OutboundSerialPickerField from '../outbound/OutboundSerialPickerField';
+import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
+import { runInboundHubConfirmFromRecord } from '../inbound/inboundHubRunConfirm';
+import { formatApiErrorDetail } from '../../../../../services/api';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
+
+const MATERIAL_RETURN_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_material_returns';
+
 interface MaterialReturn {
   id?: number;
   tenant_id?: number;
@@ -84,11 +110,15 @@ interface MaterialReturnDetail extends MaterialReturn {
 
 interface MaterialReturnItem {
   id?: number;
+  borrow_item_id?: number;
   material_id?: number;
   material_code?: string;
   material_name?: string;
   material_unit?: string;
   return_quantity?: number;
+  location_id?: number;
+  location_code?: string;
+  batch_number?: string;
   status?: string;
 }
 
@@ -102,16 +132,34 @@ interface BorrowItemForReturn {
   returned_quantity: number;
   warehouse_id: number;
   warehouse_name: string;
+  location_id?: number;
+  location_code?: string;
+  batch_number?: string;
+  batch_managed?: boolean;
+  serial_managed?: boolean;
+  available_serial_numbers?: string[];
 }
+
+type ReturnLineTrackingDraft = {
+  location_code?: string;
+  location_id?: number;
+  batch_number?: string;
+  batch_managed?: boolean;
+  serial_managed?: boolean;
+};
 
 const MaterialReturnsPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
+  const returnPerms = useResourcePermissions('kuaizhizao:material-return');
+  const canUpdateReturn = returnPerms.canUpdate ?? false;
+  const [editReturnId, setEditReturnId] = useState<number | null>(null);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [returnDetail, setReturnDetail] = useState<MaterialReturnDetail | null>(null);
@@ -123,6 +171,38 @@ const MaterialReturnsPage: React.FC = () => {
   const [borrowLoading, setBorrowLoading] = useState(false);
   const [selectedBorrowDetail, setSelectedBorrowDetail] = useState<{ borrow_id: number; borrow_code: string; warehouse_id: number; warehouse_name: string; items: BorrowItemForReturn[] } | null>(null);
   const [returnQuantities, setReturnQuantities] = useState<Record<number, number>>({});
+  const [returnLineSerial, setReturnLineSerial] = useState<Record<number, string[]>>({});
+  const [returnLineTracking, setReturnLineTracking] = useState<Record<number, ReturnLineTrackingDraft>>({});
+  const trackingFlags = useWarehouseTrackingFlags();
+  const {
+    locationOptions,
+    updateSelectedWarehouseId,
+    resetSelectedWarehouseId,
+  } = useWarehouseLocationOptions();
+
+  const {
+    customFields: materialReturnFormCustomFields,
+    customFieldValues: materialReturnFormCustomFieldValues,
+    loadFieldValues: loadMaterialReturnFormFieldValues,
+    extractFormValues: extractMaterialReturnFormValues,
+    saveCustomFieldValues: saveMaterialReturnCustomFieldValues,
+    resetFieldValues: resetMaterialReturnFormFieldValues,
+  } = useCustomFields({
+    tableName: MATERIAL_RETURN_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open: createModalVisible,
+  });
+
+  const {
+    customFields: materialReturnListCustomFields,
+    generateCustomFieldColumns: generateMaterialReturnCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichMaterialReturnRecordsWithCustomFields,
+    customFieldValues: materialReturnDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadMaterialReturnFieldValuesForDetail,
+    resetDetailFieldValues: resetMaterialReturnDetailFieldValues,
+  } = useCustomFieldsForList<MaterialReturn>({ tableName: MATERIAL_RETURN_CUSTOM_FIELD_TABLE });
+
+  const materialReturnCustomFieldColumns = generateMaterialReturnCustomFieldColumns();
 
   useEffect(() => {
     const load = async () => {
@@ -151,42 +231,99 @@ const MaterialReturnsPage: React.FC = () => {
     load();
   }, [createModalVisible]);
 
+  const resolveBorrowItemBatchManaged = useCallback(
+    async (materialId: number) => {
+      const m = await fetchMaterialForUnitSelectCache(materialId);
+      return isMaterialBatchEntryEnabled(trackingFlags, m?.batchManaged);
+    },
+    [trackingFlags],
+  );
+
+  const resolveBorrowItemSerialManaged = useCallback(
+    async (materialId: number) => {
+      const m = await fetchMaterialForUnitSelectCache(materialId);
+      return isMaterialSerialEntryEnabled(trackingFlags, m?.serialManaged);
+    },
+    [trackingFlags],
+  );
+
   const onBorrowSelect = async (borrowId: number) => {
     if (!borrowId) {
       setSelectedBorrowDetail(null);
       setReturnQuantities({});
+      setReturnLineSerial({});
+      setReturnLineTracking({});
+      resetSelectedWarehouseId();
       return;
     }
     try {
       const detail = await warehouseApi.materialBorrow.get(borrowId.toString());
       const items = (detail as any).items || [];
-      const borrowItems: BorrowItemForReturn[] = items.map((it: any) => ({
-        id: it.id,
-        material_id: it.material_id,
-        material_code: it.material_code,
-        material_name: it.material_name,
-        material_unit: it.material_unit,
-        borrow_quantity: it.borrow_quantity ?? 0,
-        returned_quantity: it.returned_quantity ?? 0,
-        warehouse_id: it.warehouse_id ?? (detail as any).warehouse_id,
-        warehouse_name: it.warehouse_name ?? (detail as any).warehouse_name,
-      }));
+      const whId = (detail as any).warehouse_id;
+      updateSelectedWarehouseId(whId);
+      const borrowItems: BorrowItemForReturn[] = await Promise.all(
+        items.map(async (it: any) => {
+          const materialId = Number(it.material_id);
+          const batchManaged = await resolveBorrowItemBatchManaged(materialId);
+          const serialManaged = await resolveBorrowItemSerialManaged(materialId);
+          const available = Array.isArray(it.available_serial_numbers)
+            ? it.available_serial_numbers.map((s: unknown) => String(s ?? '').trim()).filter(Boolean)
+            : Array.isArray(it.serial_numbers)
+              ? it.serial_numbers.map((s: unknown) => String(s ?? '').trim()).filter(Boolean)
+              : [];
+          return {
+            id: it.id,
+            material_id: it.material_id,
+            material_code: it.material_code,
+            material_name: it.material_name,
+            material_unit: it.material_unit,
+            borrow_quantity: it.borrow_quantity ?? 0,
+            returned_quantity: it.returned_quantity ?? 0,
+            warehouse_id: it.warehouse_id ?? whId,
+            warehouse_name: it.warehouse_name ?? (detail as any).warehouse_name,
+            location_id: it.location_id ?? undefined,
+            location_code: it.location_code ?? undefined,
+            batch_number: it.batch_number ?? undefined,
+            batch_managed: batchManaged,
+            serial_managed: serialManaged,
+            available_serial_numbers: available,
+          };
+        }),
+      );
       setSelectedBorrowDetail({
         borrow_id: (detail as any).id,
         borrow_code: (detail as any).borrow_code,
-        warehouse_id: (detail as any).warehouse_id,
+        warehouse_id: whId,
         warehouse_name: (detail as any).warehouse_name,
         items: borrowItems,
       });
       const qtyMap: Record<number, number> = {};
+      const serialMap: Record<number, string[]> = {};
+      const trackMap: Record<number, ReturnLineTrackingDraft> = {};
       borrowItems.forEach((it) => {
         const maxRet = Math.max(0, it.borrow_quantity - it.returned_quantity);
-        qtyMap[it.id] = maxRet > 0 ? maxRet : 0;
+        const qty = maxRet > 0 ? maxRet : 0;
+        qtyMap[it.id] = qty;
+        trackMap[it.id] = {
+          location_id: it.location_id,
+          location_code: it.location_code,
+          batch_number: it.batch_number,
+          batch_managed: it.batch_managed,
+          serial_managed: it.serial_managed,
+        };
+        const pool = it.available_serial_numbers ?? [];
+        if (isMaterialSerialEntryEnabled(trackingFlags, it.serial_managed) && qty > 0 && pool.length) {
+          serialMap[it.id] = pool.slice(0, Math.min(Math.round(qty), pool.length));
+        }
       });
       setReturnQuantities(qtyMap);
+      setReturnLineSerial(serialMap);
+      setReturnLineTracking(trackMap);
     } catch {
       messageApi.error(t('app.kuaizhizao.warehouseMaterialReturn.msg.loadBorrowDetailFailed'));
       setSelectedBorrowDetail(null);
+      setReturnLineTracking({});
+      resetSelectedWarehouseId();
     }
   };
 
@@ -194,9 +331,13 @@ const MaterialReturnsPage: React.FC = () => {
     setDetailDrawerVisible(true);
     setDetailLoading(true);
     setReturnDetail(null);
+    resetMaterialReturnDetailFieldValues();
     try {
       const detail = await warehouseApi.materialReturn.get(record.id!.toString());
       setReturnDetail(detail as MaterialReturnDetail);
+      if (record.id != null) {
+        await loadMaterialReturnFieldValuesForDetail(record.id);
+      }
     } catch {
       messageApi.error(t('app.kuaizhizao.warehouseMaterialReturn.msg.loadDetailFailed'));
       setDetailDrawerVisible(false);
@@ -206,25 +347,27 @@ const MaterialReturnsPage: React.FC = () => {
   };
 
   const executeConfirm = async (record: MaterialReturn) => {
+    if (record.id == null) return;
     try {
-          await warehouseApi.materialReturn.confirm(record.id!.toString());
-          messageApi.success(t('app.kuaizhizao.warehouseMaterialReturn.msg.confirmSuccess'));
-          invalidateMenuBadgeCounts();
-    actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('app.kuaizhizao.warehouseMaterialReturn.msg.confirmFailed'));
-        }
-  };
-
-  const executeDelete = async (record: MaterialReturn) => {
-    try {
-          await warehouseApi.materialReturn.delete(record.id!.toString());
-          messageApi.success(t('common.deleteSuccess'));
-          invalidateMenuBadgeCounts();
-    actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('common.deleteFailed'));
-        }
+      const confirmResult = await runInboundHubConfirmFromRecord({
+        t,
+        record: { id: record.id, receipt_type: 'material_return' },
+        trackingFlags,
+      });
+      messageApi.success(t('app.kuaizhizao.warehouseMaterialReturn.msg.confirmSuccess'));
+      if (confirmResult.externalPushMessage) {
+        messageApi.warning(confirmResult.externalPushMessage);
+      }
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: unknown) {
+      const err = error as { message?: string; response?: { data?: { detail?: unknown } } };
+      messageApi.error(
+        formatApiErrorDetail(err?.response?.data?.detail) ||
+          err?.message ||
+          t('app.kuaizhizao.warehouseMaterialReturn.msg.confirmFailed'),
+      );
+    }
   };
 
   const listRowsRef = useRef<Map<string, MaterialReturn>>(new Map());
@@ -272,10 +415,81 @@ const MaterialReturnsPage: React.FC = () => {
   };
 
   const handleCreate = () => {
+    setEditReturnId(null);
+    resetMaterialReturnFormFieldValues();
     setCreateModalVisible(true);
     setSelectedBorrowDetail(null);
     setReturnQuantities({});
+    setReturnLineTracking({});
+    resetSelectedWarehouseId();
   };
+
+  const openEditReturn = async (record: MaterialReturn) => {
+    if (record.id == null) return;
+    setEditReturnId(record.id);
+    setCreateModalVisible(true);
+    setSelectedBorrowDetail(null);
+    setReturnQuantities({});
+    setReturnLineTracking({});
+    resetSelectedWarehouseId();
+    try {
+      const detail = (await warehouseApi.materialReturn.get(String(record.id))) as MaterialReturnDetail;
+      if (detail.status !== '待归还') {
+        messageApi.warning(t('app.kuaizhizao.warehouseMaterialReturn.msg.editPendingOnly'));
+        setCreateModalVisible(false);
+        setEditReturnId(null);
+        return;
+      }
+      await onBorrowSelect(Number(detail.borrow_id));
+      const qtyMap: Record<number, number> = {};
+      const trackMap: Record<number, ReturnLineTrackingDraft> = {};
+      for (const line of detail.items ?? []) {
+        const borrowItemId = line.borrow_item_id;
+        if (borrowItemId == null) continue;
+        qtyMap[borrowItemId] = Number(line.return_quantity ?? 0);
+        trackMap[borrowItemId] = {
+          location_id: line.location_id,
+          location_code: line.location_code,
+          batch_number: line.batch_number,
+        };
+      }
+      setReturnQuantities(qtyMap);
+      setReturnLineTracking(trackMap);
+      formRef.current?.setFieldsValue({
+        return_code: detail.return_code,
+        borrow_id: detail.borrow_id,
+        returner_id: detail.returner_id,
+        returner_name: detail.returner_name,
+        notes: detail.notes,
+        attachments: detail.attachments,
+      });
+      window.setTimeout(() => {
+        void loadMaterialReturnFormFieldValues(record.id!).then((fieldFormValues) => {
+          formRef.current?.setFieldsValue(fieldFormValues);
+        });
+      }, 100);
+    } catch {
+      messageApi.error(t('app.kuaizhizao.warehouseMaterialReturn.msg.loadDetailFailed'));
+      setCreateModalVisible(false);
+      setEditReturnId(null);
+    }
+  };
+
+  const handledDeepLinkEditIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const rawEditId = searchParams.get('editId');
+    if (!rawEditId || handledDeepLinkEditIdRef.current === rawEditId) return;
+    const editId = Number(rawEditId);
+    if (!Number.isFinite(editId) || editId <= 0) return;
+    handledDeepLinkEditIdRef.current = rawEditId;
+    void openEditReturn({ id: editId });
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('editId');
+      return next;
+    }, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   useNewShortcut(handleCreate);
   const createButtonLabel = useMemo(
     () => withSingleNewShortcutHint(t('app.kuaizhizao.warehouseMaterialReturn.create')),
@@ -289,51 +503,107 @@ const MaterialReturnsPage: React.FC = () => {
     }
     const validItems = selectedBorrowDetail.items
       .filter((it) => (returnQuantities[it.id] ?? 0) > 0)
-      .map((it) => ({
-        borrow_item_id: it.id,
-        material_id: it.material_id,
-        material_code: it.material_code,
-        material_name: it.material_name,
-        material_unit: it.material_unit,
-        return_quantity: returnQuantities[it.id],
-        warehouse_id: selectedBorrowDetail.warehouse_id,
-        warehouse_name: selectedBorrowDetail.warehouse_name,
-      }));
+      .map((it) => {
+        const track = returnLineTracking[it.id] ?? {};
+        const locationCode = String(track.location_code ?? it.location_code ?? '').trim();
+        if (!locationCode) {
+          const msg = t('app.kuaizhizao.warehouseOutbound.msg.selectLocationForMaterial', {
+            material: it.material_code || it.material_name || '-',
+          });
+          messageApi.error(msg);
+          throw new Error(msg);
+        }
+        const batch = String(track.batch_number ?? it.batch_number ?? '').trim();
+        if (track.batch_managed && !batch) {
+          const msg = t('app.kuaizhizao.warehouseOutbound.confirm.batchRequired', {
+            material: it.material_code || it.material_name || '-',
+            batches: '—',
+          });
+          messageApi.error(msg);
+          throw new Error(msg);
+        }
+        const returnQty = Number(returnQuantities[it.id] ?? 0);
+        const materialLabel = it.material_code || it.material_name || '-';
+        let serialPayload: string[] | undefined;
+        if (isMaterialSerialEntryEnabled(trackingFlags, track.serial_managed ?? it.serial_managed)) {
+          const serials = (returnLineSerial[it.id] ?? [])
+            .map((s) => String(s ?? '').trim())
+            .filter(Boolean);
+          const required = Math.round(returnQty);
+          if (serials.length !== required) {
+            const msg = t('app.kuaizhizao.warehouseOutbound.entry.serialCountMismatch', {
+              material: materialLabel,
+              required,
+              actual: serials.length,
+            });
+            messageApi.error(msg);
+            throw new Error(msg);
+          }
+          serialPayload = serials;
+        }
+        return {
+          borrow_item_id: it.id,
+          material_id: it.material_id,
+          material_code: it.material_code,
+          material_name: it.material_name,
+          material_unit: it.material_unit,
+          return_quantity: returnQty,
+          warehouse_id: selectedBorrowDetail.warehouse_id,
+          warehouse_name: selectedBorrowDetail.warehouse_name,
+          location_id: track.location_id ?? it.location_id,
+          location_code: locationCode,
+          batch_number: batch || undefined,
+          ...(serialPayload?.length ? { serial_numbers: serialPayload } : {}),
+        };
+      });
     if (!validItems.length) {
       messageApi.error(t('app.kuaizhizao.warehouseMaterialReturn.msg.needValidReturnQty'));
       throw new Error(t('app.kuaizhizao.warehouseMaterialReturn.msg.needValidReturnQty'));
     }
     setCreateSubmitting(true);
     try {
-      await warehouseApi.materialReturn.create(
-        {
-          return_code: values.return_code,
-          borrow_id: selectedBorrowDetail.borrow_id,
-          borrow_code: selectedBorrowDetail.borrow_code,
-          warehouse_id: selectedBorrowDetail.warehouse_id,
-          warehouse_name: selectedBorrowDetail.warehouse_name,
-          returner_id: values.returner_id != null ? Number(values.returner_id) : undefined,
-          returner_name: values.returner_name,
-          notes: values.notes,
-          attachments: normalizeDocumentAttachments(values.attachments),
-          items: validItems,
-        },
-        { autoConfirm: andConfirm },
-      );
-      messageApi.success(
-        andConfirm
-          ? t('app.kuaizhizao.warehouseMaterialReturn.msg.createAndConfirmSuccess')
-          : t('app.kuaizhizao.warehouseMaterialReturn.msg.createSuccess'),
-      );
+      const { standardValues, customData } = extractMaterialReturnFormValues(values);
+      const payload = {
+        return_code: standardValues.return_code,
+        borrow_id: selectedBorrowDetail.borrow_id,
+        borrow_code: selectedBorrowDetail.borrow_code,
+        warehouse_id: selectedBorrowDetail.warehouse_id,
+        warehouse_name: selectedBorrowDetail.warehouse_name,
+        returner_id: standardValues.returner_id != null ? Number(standardValues.returner_id) : undefined,
+        returner_name: standardValues.returner_name,
+        notes: standardValues.notes,
+        attachments: normalizeDocumentAttachments(standardValues.attachments),
+        items: validItems,
+      };
+      let recordId = editReturnId ?? 0;
+      if (editReturnId != null) {
+        await warehouseApi.materialReturn.update(String(editReturnId), payload);
+        messageApi.success(t('common.saveSuccess'));
+      } else {
+        const created = await warehouseApi.materialReturn.create(payload, { autoConfirm: andConfirm });
+        recordId = Number((created as { id?: number })?.id ?? 0);
+        messageApi.success(
+          andConfirm
+            ? t('app.kuaizhizao.warehouseMaterialReturn.msg.createAndConfirmSuccess')
+            : t('app.kuaizhizao.warehouseMaterialReturn.msg.createSuccess'),
+        );
+      }
+      if (recordId > 0) {
+        await saveMaterialReturnCustomFieldValues(recordId, customData);
+      }
+      resetMaterialReturnFormFieldValues();
       setCreateModalVisible(false);
+      setEditReturnId(null);
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(
         error.message
-          || (andConfirm
-            ? t('app.kuaizhizao.warehouseMaterialReturn.msg.createAndConfirmFailed')
-            : t('common.createFailed')),
+          || (editReturnId != null
+            ? t('common.saveFailed')
+            : andConfirm
+              ? t('app.kuaizhizao.warehouseMaterialReturn.msg.createAndConfirmFailed')
+              : t('common.createFailed')),
       );
       throw error;
     } finally {
@@ -510,6 +780,7 @@ const MaterialReturnsPage: React.FC = () => {
           );
         },
       },
+      ...materialReturnCustomFieldColumns,
       {
         title: t('common.actions'),
         key: 'option',
@@ -519,6 +790,19 @@ const MaterialReturnsPage: React.FC = () => {
           const actions: React.ReactNode[] = [
             <Button {...rowActionKind('read')} key="detail" onClick={() => handleDetail(record)} />,
           ];
+          const hubRecord: InboundHubOrder = { ...record, receipt_type: 'material_return' };
+          if (canUpdateReturn && isInboundEditable(hubRecord)) {
+            actions.push(
+              <Button
+                {...rowActionKind('update')}
+                key="edit"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void openEditReturn(record);
+                }}
+              />,
+            );
+          }
           if (record.status === '待归还') {
             actions.push(
               <ActionConfirmPopconfirm title={t('app.kuaizhizao.warehouseMaterialReturn.confirm.title')} description={t('app.kuaizhizao.warehouseMaterialReturn.confirm.content', { code: record.return_code })} onConfirm={() => executeConfirm(record)}>
@@ -531,16 +815,13 @@ const MaterialReturnsPage: React.FC = () => {
                 {t('app.kuaizhizao.warehouseMaterialReturn.action.confirmInbound')}
               </Button>
             </ActionConfirmPopconfirm>,
-              <ActionConfirmPopconfirm title={t('app.kuaizhizao.warehouseMaterialReturn.confirm.deleteTitle')} description={t('app.kuaizhizao.warehouseMaterialReturn.confirm.deleteContent', { code: record.return_code })} onConfirm={() => executeDelete(record)}>
-              <Button {...rowActionKind('delete')} key="delete" onClick={(e) => e.stopPropagation()} />
-            </ActionConfirmPopconfirm>,
             );
           }
           return actions;
         },
       },
     ], WAREHOUSE_DOC_LIST_FIELD_RANK),
-    [t, materialReturnStatusValueEnum, navigate],
+    [t, materialReturnCustomFieldColumns, materialReturnStatusValueEnum, navigate, canUpdateReturn],
   );
 
   const detailColumns = useMemo(
@@ -569,14 +850,47 @@ const MaterialReturnsPage: React.FC = () => {
   );
 
   const detailItemColumns = useMemo(
-    () => [
-      { title: t('app.kuaizhizao.warehouseMaterialReturn.col.materialCode'), dataIndex: 'material_code', width: 120 },
-      { title: t('app.kuaizhizao.warehouseMaterialReturn.col.materialName'), dataIndex: 'material_name', width: 150 },
-      { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
-      { title: t('app.kuaizhizao.warehouseMaterialReturn.col.returnQty'), dataIndex: 'return_quantity', width: 100, align: 'right' as const , render: formatQuantity },
-      { title: t('common.status'), dataIndex: 'status', width: 80 },
-    ],
-    [t],
+    () =>
+      filterWarehouseTrackingColumns(
+        [
+          {
+            title: t('app.kuaizhizao.warehouseMaterialReturn.col.materialCode'),
+            dataIndex: 'material_code',
+            width: 120,
+          },
+          {
+            title: t('app.kuaizhizao.warehouseMaterialReturn.col.materialName'),
+            dataIndex: 'material_name',
+            width: 150,
+          },
+          { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
+          {
+            title: t('app.kuaizhizao.warehouseOutbound.col.location'),
+            dataIndex: 'location_code',
+            width: 100,
+            render: (v) => v || '-',
+          },
+          {
+            title: t('app.kuaizhizao.warehouseOutbound.col.batchNo'),
+            key: 'batch',
+            dataIndex: 'batch_number',
+            width: 100,
+            render: (v) => (v ? String(v) : '-'),
+          },
+          buildDocumentDetailSerialReadonlyColumn(t),
+          {
+            title: t('app.kuaizhizao.warehouseMaterialReturn.col.returnQty'),
+            dataIndex: 'return_quantity',
+            width: 100,
+            align: 'right' as const,
+            render: formatQuantity,
+          },
+          buildDocumentLineAuxQuantityDetailColumn({ t, width: 120 }),
+          { title: t('common.status'), dataIndex: 'status', width: 80 },
+        ],
+        trackingFlags,
+      ),
+    [t, trackingFlags],
   );
 
   const detailCollaboration = useMemo(() => {
@@ -595,36 +909,148 @@ const MaterialReturnsPage: React.FC = () => {
   }, [returnDetail, t]);
 
   const createFormItemColumns = useMemo(
-    () => [
-      { title: t('app.kuaizhizao.warehouseMaterialReturn.col.materialCode'), dataIndex: 'material_code', width: 120 },
-      { title: t('app.kuaizhizao.warehouseMaterialReturn.col.materialName'), dataIndex: 'material_name', width: 150 },
-      { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
-      { title: t('app.kuaizhizao.warehouseMaterialReturn.col.borrowQty'), dataIndex: 'borrow_quantity', width: 90, align: 'right' as const },
-      { title: t('app.kuaizhizao.warehouseMaterialReturn.col.returnedQty'), dataIndex: 'returned_quantity', width: 90, align: 'right' as const },
-      {
-        title: t('app.kuaizhizao.warehouseMaterialReturn.col.thisReturnQty'),
-        width: 120,
-        render: (_: unknown, record: BorrowItemForReturn) => {
-          const maxRet = Math.max(0, record.borrow_quantity - record.returned_quantity);
-          return (
-            <InputNumber
-              min={0}
-              max={maxRet}
-              value={returnQuantities[record.id] ?? 0}
-              onChange={(v) => setReturnQuantities((prev) => ({ ...prev, [record.id]: v ?? 0 }))}
-              style={{ width: '100%' }}
-            />
-          );
-        },
-      },
-    ],
-    [t, returnQuantities],
+    () =>
+      filterWarehouseTrackingColumns(
+        [
+          {
+            title: t('app.kuaizhizao.warehouseMaterialReturn.col.materialCode'),
+            dataIndex: 'material_code',
+            width: 120,
+          },
+          {
+            title: t('app.kuaizhizao.warehouseMaterialReturn.col.materialName'),
+            dataIndex: 'material_name',
+            width: 150,
+          },
+          { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
+          {
+            title: t('app.kuaizhizao.warehouseOutbound.col.location'),
+            key: 'location',
+            width: 130,
+            render: (_: unknown, record: BorrowItemForReturn) => (
+              <Select
+                size="small"
+                style={{ width: '100%' }}
+                showSearch
+                optionFilterProp="label"
+                options={locationOptions}
+                value={returnLineTracking[record.id]?.location_code ?? record.location_code}
+                placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectLocation')}
+                getPopupContainer={getPopupContainerInModal}
+                onChange={(code) => {
+                  setReturnLineTracking((prev) => ({
+                    ...prev,
+                    [record.id]: {
+                      ...prev[record.id],
+                      location_code: code,
+                      location_id: prev[record.id]?.location_id ?? record.location_id,
+                      batch_number: prev[record.id]?.batch_number ?? record.batch_number,
+                      batch_managed: prev[record.id]?.batch_managed ?? record.batch_managed,
+                    },
+                  }));
+                }}
+              />
+            ),
+          },
+          {
+            title: t('app.kuaizhizao.warehouseOutbound.col.batchNo'),
+            key: 'batch',
+            width: 110,
+            render: (_: unknown, record: BorrowItemForReturn) => {
+              const batch =
+                returnLineTracking[record.id]?.batch_number ?? record.batch_number ?? '';
+              if (!record.batch_managed) return '—';
+              return batch ? String(batch) : '—';
+            },
+          },
+          {
+            title: t('app.kuaizhizao.warehouseOutbound.col.serialNo'),
+            key: 'serial_numbers',
+            width: 160,
+            render: (_: unknown, record: BorrowItemForReturn) => {
+              if (!isMaterialSerialEntryEnabled(trackingFlags, record.serial_managed)) {
+                return <span>—</span>;
+              }
+              const qty = Number(returnQuantities[record.id] ?? 0);
+              const options = (record.available_serial_numbers ?? []).map((sn) => ({
+                label: sn,
+                value: sn,
+              }));
+              const value = returnLineSerial[record.id] ?? [];
+              return (
+                <OutboundSerialPickerField
+                  value={value}
+                  onChange={(next) =>
+                    setReturnLineSerial((prev) => ({ ...prev, [record.id]: next }))
+                  }
+                  options={options}
+                  maxCount={qty > 0 ? Math.round(qty) : undefined}
+                  disabled={qty <= 0}
+                  materialLabel={String(record.material_code || record.material_name || '')}
+                />
+              );
+            },
+          },
+          {
+            title: t('app.kuaizhizao.warehouseMaterialReturn.col.borrowQty'),
+            dataIndex: 'borrow_quantity',
+            width: 90,
+            align: 'right' as const,
+          },
+          {
+            title: t('app.kuaizhizao.warehouseMaterialReturn.col.returnedQty'),
+            dataIndex: 'returned_quantity',
+            width: 90,
+            align: 'right' as const,
+          },
+          {
+            title: t('app.kuaizhizao.warehouseMaterialReturn.col.thisReturnQty'),
+            width: 120,
+            render: (_: unknown, record: BorrowItemForReturn) => {
+              const maxRet = Math.max(0, record.borrow_quantity - record.returned_quantity);
+              return (
+                <InputNumber
+                  min={0}
+                  max={maxRet}
+                  value={returnQuantities[record.id] ?? 0}
+                  onChange={(v) => {
+                    const nextQty = Number(v ?? 0);
+                    setReturnQuantities((prev) => ({ ...prev, [record.id]: nextQty }));
+                    setReturnLineSerial((prev) => {
+                      const current = prev[record.id] ?? [];
+                      const max = nextQty > 0 ? Math.round(nextQty) : 0;
+                      if (current.length <= max) return prev;
+                      return { ...prev, [record.id]: current.slice(0, max) };
+                    });
+                  }}
+                  style={{ width: '100%' }}
+                />
+              );
+            },
+          },
+        ],
+        trackingFlags,
+      ),
+    [locationOptions, returnLineSerial, returnLineTracking, returnQuantities, t, trackingFlags],
   );
 
   const timeconfigBasicItems = useDetailDrawerDescriptionItems(
     detailColumns, returnDetail,
     'material_return',
   );
+
+  const detailSupplementary = useMemo(() => {
+    if (!returnDetail) return undefined;
+    if (!hasCustomFieldsDetailContent(materialReturnListCustomFields, materialReturnDetailCustomFieldValues)) {
+      return undefined;
+    }
+    return (
+      <CustomFieldsDetailSection
+        customFields={materialReturnListCustomFields}
+        customFieldValues={materialReturnDetailCustomFieldValues}
+      />
+    );
+  }, [materialReturnDetailCustomFieldValues, materialReturnListCustomFields, returnDetail]);
 
   return (
     <>
@@ -636,7 +1062,7 @@ const MaterialReturnsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.material-returns-width-v3"
+          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.material-returns-width-v5"
           showAdvancedSearch
           pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter
@@ -654,6 +1080,7 @@ const MaterialReturnsPage: React.FC = () => {
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
+          deleteButtonText={t('common.delete')}
           rowSelectionGetCheckboxProps={(record) => ({
             disabled: !isMaterialReturnDeletable(record) && !isMaterialReturnPrintable(record),
           })}
@@ -674,7 +1101,7 @@ const MaterialReturnsPage: React.FC = () => {
                 const rows = await fetchAllListItems((p) =>
                   warehouseApi.materialReturn.list({ ...listParams, ...p }),
                 );
-                return rows;
+                return enrichMaterialReturnRecordsWithCustomFields(rows);
               };
               const headers = await resolveWarehouseListExportHeaders(
                 type,
@@ -725,7 +1152,10 @@ const MaterialReturnsPage: React.FC = () => {
                 limit: params.pageSize || 20,
                 ...listParams,
               });
-              const { data, total } = normalizeWarehouseListResponse(response);
+              const { data: raw, total } = normalizeWarehouseListResponse(response);
+              const data = meta?.purpose === 'prefetch'
+                ? raw
+                : await enrichMaterialReturnRecordsWithCustomFields(raw);
               return { data, success: true, total };
             } catch {
               messageApi.error(t('app.kuaizhizao.warehouseMaterialReturn.msg.loadListFailed'));
@@ -746,7 +1176,11 @@ const MaterialReturnsPage: React.FC = () => {
         title={`${t('app.kuaizhizao.warehouseMaterialReturn.detailTitle')}${returnDetail?.return_code ? ` - ${returnDetail.return_code}` : ''}`}
         open={detailDrawerVisible}
         loading={detailLoading}
-        onClose={() => { setDetailDrawerVisible(false); setReturnDetail(null); }}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setReturnDetail(null);
+          resetMaterialReturnDetailFieldValues();
+        }}
         size={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           returnDetail ? (
@@ -754,6 +1188,7 @@ const MaterialReturnsPage: React.FC = () => {
           ) : undefined
         }
         collaboration={detailCollaboration}
+        supplementary={detailSupplementary}
         linesTitle={t('app.kuaizhizao.warehouseMaterialReturn.field.returnDetails')}
         lines={
           returnDetail?.items && returnDetail.items.length > 0 ? (
@@ -773,9 +1208,17 @@ const MaterialReturnsPage: React.FC = () => {
       />
 
       <FormModalTemplate
-        title={t('app.kuaizhizao.warehouseMaterialReturn.createModal')}
+        title={
+          editReturnId != null
+            ? t('app.kuaizhizao.warehouseMaterialReturn.editModal')
+            : t('app.kuaizhizao.warehouseMaterialReturn.createModal')
+        }
         open={createModalVisible}
-        onClose={() => setCreateModalVisible(false)}
+        onClose={() => {
+          setCreateModalVisible(false);
+          setEditReturnId(null);
+          resetMaterialReturnFormFieldValues();
+        }}
         formRef={formRef}
         onFinish={handleCreateSubmit}
         loading={createSubmitting}
@@ -796,9 +1239,11 @@ const MaterialReturnsPage: React.FC = () => {
           </Button>
         }
         extraFooterAfter={
-          <Button type="primary" loading={createSubmitting} onClick={() => void handleCreateAndConfirm()}>
-            {t('app.kuaizhizao.warehouseMaterialReturn.action.saveAndConfirm')}
-          </Button>
+          editReturnId == null ? (
+            <Button type="primary" loading={createSubmitting} onClick={() => void handleCreateAndConfirm()}>
+              {t('app.kuaizhizao.warehouseMaterialReturn.action.saveAndConfirm')}
+            </Button>
+          ) : null
         }
         width={MODAL_CONFIG.LARGE_WIDTH}
         grid={false}
@@ -809,7 +1254,7 @@ const MaterialReturnsPage: React.FC = () => {
               pageCode="kuaizhizao-warehouse-material-return"
               name="return_code"
               label={t('app.kuaizhizao.warehouseMaterialReturn.field.returnCode')}
-              autoGenerateOnCreate={true}
+              autoGenerateOnCreate={editReturnId == null}
               showGenerateButton={false}
               context={{}}
             />
@@ -824,6 +1269,7 @@ const MaterialReturnsPage: React.FC = () => {
                 placeholder={t('app.kuaizhizao.warehouseMaterialReturn.field.selectBorrowPlaceholder')}
                 showSearch
                 allowClear
+                disabled={editReturnId != null}
                 loading={borrowLoading}
                 style={{ width: '100%' }}
                 options={borrowList.map((b: any) => ({
@@ -872,6 +1318,11 @@ const MaterialReturnsPage: React.FC = () => {
           </Col>
           <Col span={12} />
         </Row>
+        <CustomFieldsFormSection
+          customFields={materialReturnFormCustomFields}
+          customFieldValues={materialReturnFormCustomFieldValues}
+          gridColumns={2}
+        />
         <DocumentAttachmentsField category="material_return_attachments" />
         <ProFormTextArea
           name="notes"

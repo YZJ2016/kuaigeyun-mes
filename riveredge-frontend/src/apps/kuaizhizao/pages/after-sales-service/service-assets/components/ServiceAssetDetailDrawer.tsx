@@ -28,6 +28,8 @@ export type ServiceAssetDetailDrawerProps = {
   error?: string | null;
   onRetry?: () => void;
   extra?: React.ReactNode;
+  supplementary?: React.ReactNode;
+  supplementaryTitle?: React.ReactNode;
   zIndex?: number;
 };
 
@@ -39,6 +41,8 @@ export const ServiceAssetDetailDrawer: React.FC<ServiceAssetDetailDrawerProps> =
   error,
   onRetry,
   extra,
+  supplementary,
+  supplementaryTitle,
   zIndex,
 }) => {
   const { t } = useTranslation();
@@ -136,6 +140,8 @@ export const ServiceAssetDetailDrawer: React.FC<ServiceAssetDetailDrawerProps> =
       error={error}
       onRetry={onRetry}
       extra={extra}
+      supplementary={supplementary}
+      supplementaryTitle={supplementaryTitle}
       zIndex={zIndex}
       traceDocumentType="service_asset"
     />

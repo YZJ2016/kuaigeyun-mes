@@ -4,7 +4,7 @@
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal } from 'antd';
+import { App, Button, Modal, Space } from 'antd';
 import { EditOutlined, CheckOutlined, DeleteOutlined, PlusOutlined, StopOutlined } from '@ant-design/icons';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
@@ -31,6 +31,7 @@ import {
 } from '../../../../../components/uni-push';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
+import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
 import { DetailDrawerActions, ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
@@ -48,6 +49,7 @@ import {
   InstallExecutionFormModal,
   formatInstallStageLabel,
 } from '../../../components/InstallExecutionFormModal';
+import InstallExecutionStageSteps from '../../../components/InstallExecutionStageSteps';
 import InstallExecutionTaskFormModal from '../../../components/InstallExecutionTaskFormModal';
 import InstallExecutionAdvanceStageModal from '../../../components/InstallExecutionAdvanceStageModal';
 import InstallExecutionCostFormModal from '../../../components/InstallExecutionCostFormModal';
@@ -70,6 +72,9 @@ import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const RESOURCE = 'kuaizhizao:after-sales-install';
+
+type InstallPageMode = 'list' | 'workbench';
+type InstallWorkbenchScope = 'open' | '待派工' | '进行中' | '待验收';
 
 type PullSalesOrderCandidate = {
   id: number;
@@ -118,6 +123,9 @@ const InstallExecutionPage: React.FC = () => {
   const [costJob, setCostJob] = useState<InstallExecution | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const tableRowsRef = useRef<InstallExecution[]>([]);
+  const [pageMode, setPageMode] = useState<InstallPageMode>('list');
+  const [workbenchScope, setWorkbenchScope] = useState<InstallWorkbenchScope>('open');
+  const isWorkbench = pageMode === 'workbench';
 
   const selectedRecordsForBatch = useMemo(
     () =>
@@ -134,6 +142,40 @@ const InstallExecutionPage: React.FC = () => {
     return selectedRecordsForBatch[0] ?? null;
   }, [selectedRecordsForBatch, selectedRowKeys.length]);
 
+  const pushDispatchDisabledReason = useCallback(
+    (record: InstallExecution | null | undefined): string | undefined => {
+      if (!record) return undefined;
+      if (!dispatchPerms.canCreate) {
+        return t('app.kuaizhizao.installExecution.push.dispatchNoPermission');
+      }
+      if (record.capabilities?.push_dispatch?.allowed !== true) {
+        return (
+          record.capabilities?.push_dispatch?.reason ||
+          t('app.kuaizhizao.installExecution.push.dispatchBlocked')
+        );
+      }
+      return undefined;
+    },
+    [dispatchPerms.canCreate, t],
+  );
+
+  const pushSettlementDisabledReason = useCallback(
+    (record: InstallExecution | null | undefined): string | undefined => {
+      if (!record) return undefined;
+      if (!settlementPerms.canCreate) {
+        return t('app.kuaizhizao.installExecution.push.settlementNoPermission');
+      }
+      if (record.capabilities?.push_settlement?.allowed !== true) {
+        return (
+          record.capabilities?.push_settlement?.reason ||
+          t('app.kuaizhizao.installExecution.push.settlementBlocked')
+        );
+      }
+      return undefined;
+    },
+    [settlementPerms.canCreate, t],
+  );
+
   const pushInstallDispatch = useCallback(
     async (record: InstallExecution) => {
       try {
@@ -144,13 +186,17 @@ const InstallExecutionPage: React.FC = () => {
         );
         setSelectedRowKeys([]);
         actionRef.current?.reload();
+        if (detailRow?.id === record.id) {
+          setDetailRow(await installExecutionApi.get(record.id));
+        }
       } catch (error) {
         messageApi.error(
           getApiErrorMessage(error, t('app.kuaizhizao.installExecution.pushFailed')),
         );
+        throw error;
       }
     },
-    [messageApi, t],
+    [detailRow?.id, messageApi, t],
   );
 
   const pushInstallSettlement = useCallback(
@@ -165,31 +211,23 @@ const InstallExecutionPage: React.FC = () => {
         );
         setSelectedRowKeys([]);
         actionRef.current?.reload();
+        if (detailRow?.id === record.id) {
+          setDetailRow(await installExecutionApi.get(record.id));
+        }
       } catch (error) {
         messageApi.error(
           getApiErrorMessage(error, t('app.kuaizhizao.installExecution.pushFailed')),
         );
+        throw error;
       }
     },
-    [messageApi, t],
+    [detailRow?.id, messageApi, t],
   );
 
   const installToolbarPushMenuItems = useMemo(() => {
     const record = selectedInstallForToolbar;
-    const dispatchBlocked =
-      !dispatchPerms.canCreate
-        ? t('app.kuaizhizao.installExecution.push.dispatchNoPermission')
-        : record && record.capabilities?.push_dispatch?.allowed !== true
-          ? record.capabilities?.push_dispatch?.reason ||
-            t('app.kuaizhizao.installExecution.push.dispatchBlocked')
-          : undefined;
-    const settlementBlocked =
-      !settlementPerms.canCreate
-        ? t('app.kuaizhizao.installExecution.push.settlementNoPermission')
-        : record && record.capabilities?.push_settlement?.allowed !== true
-          ? record.capabilities?.push_settlement?.reason ||
-            t('app.kuaizhizao.installExecution.push.settlementBlocked')
-          : undefined;
+    const dispatchBlocked = pushDispatchDisabledReason(record);
+    const settlementBlocked = pushSettlementDisabledReason(record);
     return buildUniPushMenuItems([
       {
         key: 'push-dispatch',
@@ -200,6 +238,9 @@ const InstallExecutionPage: React.FC = () => {
           if (!record || dispatchBlocked) return;
           getAntdModal().confirm({
             title: t('app.kuaizhizao.installExecution.actionPushDispatch'),
+            content: t('app.kuaizhizao.installExecution.pushDispatchConfirm', {
+              code: record.job_code,
+            }),
             onOk: () => pushInstallDispatch(record),
           });
         },
@@ -214,6 +255,9 @@ const InstallExecutionPage: React.FC = () => {
           if (!record || settlementBlocked) return;
           getAntdModal().confirm({
             title: t('app.kuaizhizao.installExecution.actionPushSettlement'),
+            content: t('app.kuaizhizao.installExecution.pushSettlementConfirm', {
+              code: record.job_code,
+            }),
             onOk: () => pushInstallSettlement(record),
           });
         },
@@ -221,11 +265,11 @@ const InstallExecutionPage: React.FC = () => {
       },
     ]);
   }, [
-    dispatchPerms.canCreate,
+    pushDispatchDisabledReason,
     pushInstallDispatch,
     pushInstallSettlement,
+    pushSettlementDisabledReason,
     selectedInstallForToolbar,
-    settlementPerms.canCreate,
     t,
   ]);
 
@@ -258,7 +302,7 @@ const InstallExecutionPage: React.FC = () => {
 
   const pullFromSalesOrderQuery = useUniPullQuery<PullSalesOrderCandidate>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     loadData: async ({ keyword, page, pageSize }) => {
       try {
         const res = await listSalesOrders({
@@ -291,13 +335,15 @@ const InstallExecutionPage: React.FC = () => {
       }
     },
     onConfirm: async (keys) => {
-      const selectedId = Number(keys[0]);
-      if (!selectedId || selectedId <= 0) {
+      const selectedIds = keys.map((k) => Number(k)).filter((id) => id > 0);
+      if (!selectedIds.length) {
         messageApi.warning(t('app.kuaizhizao.afterSalesTicket.selectSalesOrder'));
         return;
       }
       try {
-        await installExecutionApi.pullFromSalesOrder({ sales_order_id: selectedId });
+        for (const selectedId of selectedIds) {
+          await installExecutionApi.pullFromSalesOrder({ sales_order_id: selectedId });
+        }
         messageApi.success(t('app.kuaizhizao.installExecution.pullSuccess'));
         pullFromSalesOrderQuery.closeModal();
         reload();
@@ -309,7 +355,7 @@ const InstallExecutionPage: React.FC = () => {
 
   const pullFromSalesDeliveryQuery = useUniPullQuery<PullSalesDeliveryCandidate>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     loadData: async ({ keyword, page, pageSize }) => {
       try {
         const res = await warehouseApi.salesDelivery.list({
@@ -341,13 +387,15 @@ const InstallExecutionPage: React.FC = () => {
       }
     },
     onConfirm: async (keys) => {
-      const selectedId = Number(keys[0]);
-      if (!selectedId || selectedId <= 0) {
+      const selectedIds = keys.map((k) => Number(k)).filter((id) => id > 0);
+      if (!selectedIds.length) {
         messageApi.warning(t('app.kuaizhizao.afterSalesTicket.selectSalesDelivery'));
         return;
       }
       try {
-        await installExecutionApi.pullFromSalesDelivery({ sales_delivery_id: selectedId });
+        for (const selectedId of selectedIds) {
+          await installExecutionApi.pullFromSalesDelivery({ sales_delivery_id: selectedId });
+        }
         messageApi.success(t('app.kuaizhizao.installExecution.pullSuccess'));
         pullFromSalesDeliveryQuery.closeModal();
         reload();
@@ -553,6 +601,51 @@ const InstallExecutionPage: React.FC = () => {
     return nodes;
   };
 
+  const renderPushActions = (row: InstallExecution, keyPrefix: string) => {
+    const nodes: React.ReactNode[] = [];
+    if (!pushDispatchDisabledReason(row)) {
+      nodes.push(
+        <ActionConfirmPopconfirm
+          key={`${keyPrefix}-push-dispatch`}
+          title={t('app.kuaizhizao.installExecution.actionPushDispatch')}
+          description={t('app.kuaizhizao.installExecution.pushDispatchConfirm', {
+            code: row.job_code,
+          })}
+          onConfirm={() => pushInstallDispatch(row)}
+        >
+          <Button
+            {...rowActionKind('execute')}
+            {...rowActionLabelKeep()}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {t('app.kuaizhizao.installExecution.actionPushDispatch')}
+          </Button>
+        </ActionConfirmPopconfirm>,
+      );
+    }
+    if (!pushSettlementDisabledReason(row)) {
+      nodes.push(
+        <ActionConfirmPopconfirm
+          key={`${keyPrefix}-push-settlement`}
+          title={t('app.kuaizhizao.installExecution.actionPushSettlement')}
+          description={t('app.kuaizhizao.installExecution.pushSettlementConfirm', {
+            code: row.job_code,
+          })}
+          onConfirm={() => pushInstallSettlement(row)}
+        >
+          <Button
+            {...rowActionKind('execute')}
+            {...rowActionLabelKeep()}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {t('app.kuaizhizao.installExecution.actionPushSettlement')}
+          </Button>
+        </ActionConfirmPopconfirm>,
+      );
+    }
+    return nodes;
+  };
+
   const loadDetail = useCallback(async (id: number) => {
     setDetailLoading(true);
     setDetailError(null);
@@ -594,165 +687,267 @@ const InstallExecutionPage: React.FC = () => {
   const columns: ProColumns<InstallExecution>[] = useMemo(
     () =>
       alignProColumns<InstallExecution>(
-        [
-          {
-            title: t('app.kuaizhizao.installExecution.field.jobCode'),
-            dataIndex: 'job_code',
-            width: 188,
-            minWidth: 188,
-            uniTableKeepWidth: true,
-            resizable: false,
-            fixed: 'left',
-            copyable: true,
-          },
-          {
-            title: t('app.kuaizhizao.installExecution.field.customerName'),
-            dataIndex: 'customer_name',
-            ...AFTER_SALES_CUSTOMER_NAME_COLUMN_DEFAULTS,
-          },
-          {
-            title: t('app.kuaizhizao.installExecution.field.supplySource'),
-            dataIndex: 'supply_source',
-            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
-            valueType: 'select',
-            valueEnum: Object.fromEntries(
-              INSTALL_SUPPLY_SOURCES.map((s) => [s, { text: s }]),
-            ),
-            hideInSearch: true,
-            render: (_, row) => renderAfterSalesTypeMarker(row.supply_source),
-          },
-          {
-            title: t('components.uniLifecycle.listColumnTitle'),
-            dataIndex: 'current_stage_key',
-            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
-            hideInSearch: true,
-            render: (_, row) => {
-              const stage = row.stages?.find((s) => s.stage_key === row.current_stage_key);
-              return renderAfterSalesTypeMarker(
-                formatInstallStageLabel(row.current_stage_key, stage?.stage_name),
-              );
-            },
-          },
-          {
-            title: t('app.kuaizhizao.installExecution.field.salesOrder'),
-            dataIndex: 'sales_order_code',
-            width: 148,
-            minWidth: 148,
-            uniTableKeepWidth: true,
-            resizable: false,
-            hideInSearch: true,
-            render: (_, row) => (
-              <LinkedDocumentCode
-                documentType="sales_order"
-                documentId={row.sales_order_id}
-                code={row.sales_order_code}
-              />
-            ),
-          },
-          {
-            // 现场地址长短不一：唯一 RemainderFlex，避免全 KeepWidth 在右固定前留空白
-            title: t('app.kuaizhizao.installExecution.field.siteAddress'),
-            dataIndex: 'site_address',
-            minWidth: 160,
-            uniTableRemainderFlex: true,
-            uniTablePrimaryFlex: true,
-            resizable: false,
-            ellipsis: true,
-            hideInSearch: true,
-          },
-          {
-            title: t('common.status'),
-            dataIndex: 'status',
-            hideInTable: true,
-            valueType: 'select',
-            valueEnum: Object.fromEntries(
-              INSTALL_JOB_STATUSES.map((s) => [s, { text: s }]),
-            ),
-          },
-          ...buildDocumentAuditColumns<InstallExecution>(t),
-          {
-            title: t('common.status'),
-            key: 'lifecycle',
-            dataIndex: 'status',
-            fixed: 'right',
-            hideInSearch: true,
-            render: (_, row) =>
-              renderAfterSalesStatusTag(row.status, AFTER_SALES_INSTALL_STATUS_COLOR),
-          },
-          {
-            title: t('common.actions'),
-            key: 'action',
-            fixed: 'right',
-            hideInSearch: true,
-            render: (_, row) => {
-              const caps = row.capabilities;
-              const parts: React.ReactNode[] = [
-                <Button
-                  {...rowActionKind('read')}
-                  key="detail"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openDetail(row);
-                  }}
-                />,
-                ...renderBusinessActions(row, 'row'),
-              ];
-              if (caps?.update?.allowed !== false && perms.canUpdate) {
-                parts.push(
-                  <Button
-                    {...rowActionKind('update')}
-                    key="edit"
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      const full = await installExecutionApi.get(row.id);
-                      setEditing(full);
-                      setFormOpen(true);
-                    }}
-                  />,
-                );
-              }
-              if (
-                caps?.close?.allowed !== false &&
-                perms.canUpdate &&
-                row.status !== '已关闭'
-              ) {
-                parts.push(
-                  <ActionConfirmPopconfirm
-                    title={t('app.kuaizhizao.installExecution.closeConfirmTitle')}
-                    description={t('app.kuaizhizao.installExecution.closeConfirmContent', { code: row.job_code })}
-                    onConfirm={() => executeClose(row)}
-                  >
+        isWorkbench
+          ? [
+              {
+                title: t('app.kuaizhizao.installExecution.field.jobCode'),
+                dataIndex: 'job_code',
+                width: 188,
+                minWidth: 188,
+                uniTableKeepWidth: true,
+                resizable: false,
+                fixed: 'left',
+                copyable: true,
+              },
+              {
+                title: t('app.kuaizhizao.installExecution.field.customerName'),
+                dataIndex: 'customer_name',
+                ...AFTER_SALES_CUSTOMER_NAME_COLUMN_DEFAULTS,
+              },
+              {
+                title: t('app.kuaizhizao.installExecution.colStageProgress'),
+                key: 'stage_progress',
+                dataIndex: 'current_stage_key',
+                minWidth: 320,
+                uniTableRemainderFlex: true,
+                uniTablePrimaryFlex: true,
+                resizable: false,
+                hideInSearch: true,
+                render: (_: unknown, row: InstallExecution) => (
+                  <InstallExecutionStageSteps stages={row.stages} />
+                ),
+              },
+              {
+                title: t('app.kuaizhizao.installExecution.field.ownerName'),
+                dataIndex: 'owner_name',
+                width: 100,
+                minWidth: 100,
+                uniTableKeepWidth: true,
+                resizable: false,
+                hideInSearch: true,
+                render: (_: unknown, row: InstallExecution) => {
+                  const name = String(row.owner_name ?? '').trim();
+                  return name || '—';
+                },
+              },
+              {
+                title: t('app.kuaizhizao.installExecution.field.siteAddress'),
+                dataIndex: 'site_address',
+                width: 160,
+                minWidth: 160,
+                uniTableKeepWidth: true,
+                resizable: false,
+                ellipsis: true,
+                hideInSearch: true,
+              },
+              {
+                title: t('common.status'),
+                key: 'lifecycle',
+                dataIndex: 'status',
+                fixed: 'right',
+                hideInSearch: true,
+                render: (_: unknown, row: InstallExecution) =>
+                  renderAfterSalesStatusTag(row.status, AFTER_SALES_INSTALL_STATUS_COLOR),
+              },
+              {
+                title: t('common.actions'),
+                key: 'action',
+                fixed: 'right',
+                hideInSearch: true,
+                render: (_: unknown, row: InstallExecution) => {
+                  const caps = row.capabilities;
+                  const parts: React.ReactNode[] = [
                     <Button
-                      {...rowActionKind('close')}
-                      key="close"
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </ActionConfirmPopconfirm>,
-                );
-              }
-              if (caps?.delete?.allowed !== false && perms.canDelete) {
-                parts.push(
-                  <ActionConfirmPopconfirm
-                    title={t('app.kuaizhizao.installExecution.deleteConfirmTitle')}
-                    description={t('app.kuaizhizao.installExecution.deleteConfirmContent', { code: row.job_code })}
-                    okType="danger"
-                    onConfirm={() => executeDelete(row)}
-                  >
+                      {...rowActionKind('read')}
+                      key="detail"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openDetail(row);
+                      }}
+                    />,
+                    ...renderBusinessActions(row, 'row'),
+                    ...renderPushActions(row, 'row'),
+                  ];
+                  if (
+                    caps?.close?.allowed !== false &&
+                    canBatchClose &&
+                    row.status !== '已关闭'
+                  ) {
+                    parts.push(
+                      <ActionConfirmPopconfirm
+                        key="close"
+                        title={t('app.kuaizhizao.installExecution.closeConfirmTitle')}
+                        description={t('app.kuaizhizao.installExecution.closeConfirmContent', {
+                          code: row.job_code,
+                        })}
+                        onConfirm={() => executeClose(row)}
+                      >
+                        <Button
+                          {...rowActionKind('close')}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </ActionConfirmPopconfirm>,
+                    );
+                  }
+                  return parts;
+                },
+              },
+            ]
+          : [
+              {
+                title: t('app.kuaizhizao.installExecution.field.jobCode'),
+                dataIndex: 'job_code',
+                width: 188,
+                minWidth: 188,
+                uniTableKeepWidth: true,
+                resizable: false,
+                fixed: 'left',
+                copyable: true,
+              },
+              {
+                title: t('app.kuaizhizao.installExecution.field.customerName'),
+                dataIndex: 'customer_name',
+                ...AFTER_SALES_CUSTOMER_NAME_COLUMN_DEFAULTS,
+              },
+              {
+                title: t('app.kuaizhizao.installExecution.field.supplySource'),
+                dataIndex: 'supply_source',
+                ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+                valueType: 'select',
+                valueEnum: Object.fromEntries(
+                  INSTALL_SUPPLY_SOURCES.map((s) => [s, { text: s }]),
+                ),
+                hideInSearch: true,
+                render: (_: unknown, row: InstallExecution) =>
+                  renderAfterSalesTypeMarker(row.supply_source),
+              },
+              {
+                title: t('components.uniLifecycle.listColumnTitle'),
+                dataIndex: 'current_stage_key',
+                ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+                hideInSearch: true,
+                render: (_: unknown, row: InstallExecution) => {
+                  const stage = row.stages?.find((s) => s.stage_key === row.current_stage_key);
+                  return renderAfterSalesTypeMarker(
+                    formatInstallStageLabel(row.current_stage_key, stage?.stage_name),
+                  );
+                },
+              },
+              {
+                title: t('app.kuaizhizao.installExecution.field.salesOrder'),
+                dataIndex: 'sales_order_code',
+                width: 148,
+                minWidth: 148,
+                uniTableKeepWidth: true,
+                resizable: false,
+                hideInSearch: true,
+                render: (_: unknown, row: InstallExecution) => (
+                  <LinkedDocumentCode
+                    documentType="sales_order"
+                    documentId={row.sales_order_id}
+                    code={row.sales_order_code}
+                  />
+                ),
+              },
+              {
+                title: t('app.kuaizhizao.installExecution.field.siteAddress'),
+                dataIndex: 'site_address',
+                minWidth: 160,
+                uniTableRemainderFlex: true,
+                uniTablePrimaryFlex: true,
+                resizable: false,
+                ellipsis: true,
+                hideInSearch: true,
+              },
+              {
+                title: t('common.status'),
+                dataIndex: 'status',
+                hideInTable: true,
+                valueType: 'select',
+                valueEnum: Object.fromEntries(
+                  INSTALL_JOB_STATUSES.map((s) => [s, { text: s }]),
+                ),
+              },
+              ...buildDocumentAuditColumns<InstallExecution>(t),
+              {
+                title: t('common.status'),
+                key: 'lifecycle',
+                dataIndex: 'status',
+                fixed: 'right',
+                hideInSearch: true,
+                render: (_: unknown, row: InstallExecution) =>
+                  renderAfterSalesStatusTag(row.status, AFTER_SALES_INSTALL_STATUS_COLOR),
+              },
+              {
+                title: t('common.actions'),
+                key: 'action',
+                fixed: 'right',
+                hideInSearch: true,
+                render: (_: unknown, row: InstallExecution) => {
+                  const caps = row.capabilities;
+                  const parts: React.ReactNode[] = [
                     <Button
-                      {...rowActionKind('delete')}
-                      key="delete"
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </ActionConfirmPopconfirm>,
-                );
-              }
-              return parts;
-            },
-          },
-        ],
+                      {...rowActionKind('read')}
+                      key="detail"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openDetail(row);
+                      }}
+                    />,
+                    ...renderBusinessActions(row, 'row'),
+                    ...renderPushActions(row, 'row'),
+                  ];
+                  if (caps?.update?.allowed !== false && perms.canUpdate) {
+                    parts.push(
+                      <Button
+                        {...rowActionKind('update')}
+                        key="edit"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const full = await installExecutionApi.get(row.id);
+                          setEditing(full);
+                          setFormOpen(true);
+                        }}
+                      />,
+                    );
+                  }
+                  if (
+                    caps?.close?.allowed !== false &&
+                    canBatchClose &&
+                    row.status !== '已关闭'
+                  ) {
+                    parts.push(
+                      <ActionConfirmPopconfirm
+                        key="close"
+                        title={t('app.kuaizhizao.installExecution.closeConfirmTitle')}
+                        description={t('app.kuaizhizao.installExecution.closeConfirmContent', {
+                          code: row.job_code,
+                        })}
+                        onConfirm={() => executeClose(row)}
+                      >
+                        <Button
+                          {...rowActionKind('close')}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </ActionConfirmPopconfirm>,
+                    );
+                  }
+                  return parts;
+                },
+              },
+            ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [t, perms, messageApi],
+    [
+      canBatchClose,
+      isWorkbench,
+      perms.canUpdate,
+      pushDispatchDisabledReason,
+      pushInstallDispatch,
+      pushInstallSettlement,
+      pushSettlementDisabledReason,
+      t,
+    ],
   );
 
   return (
@@ -764,11 +959,65 @@ const InstallExecutionPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesInstall)}
           permissionResource={RESOURCE}
-          columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.install-execution.v4"
-          showAdvancedSearch
+          columnPersistenceId={
+            isWorkbench
+              ? 'apps.kuaizhizao.pages.after-sales-service.install-execution.workbench.v1'
+              : 'apps.kuaizhizao.pages.after-sales-service.install-execution.v5-row-push'
+          }
+          showAdvancedSearch={!isWorkbench}
           skipFuzzyPinyinClientFilter
-          headerTitle={t('app.kuaizhizao.menu.after-sales-service.install-execution')}
+          headerTitle={
+            isWorkbench
+              ? t('app.kuaizhizao.installExecution.workbenchTitle')
+              : t('app.kuaizhizao.menu.after-sales-service.install-execution')
+          }
           columns={columns}
+          params={{ pageMode, workbenchScope }}
+          beforeSearchButtons={
+            <Space size={8} wrap>
+              <ThemedSegmented
+                key="install-page-mode"
+                surfaceBackground
+                size="medium"
+                value={pageMode}
+                onChange={(v) => {
+                  setPageMode(v as InstallPageMode);
+                  setSelectedRowKeys([]);
+                }}
+                options={[
+                  {
+                    label: t('app.kuaizhizao.installExecution.pageModeList'),
+                    value: 'list',
+                  },
+                  {
+                    label: t('app.kuaizhizao.installExecution.pageModeWorkbench'),
+                    value: 'workbench',
+                  },
+                ]}
+              />
+              {isWorkbench ? (
+                <ThemedSegmented
+                  key="install-workbench-scope"
+                  surfaceBackground
+                  size="medium"
+                  value={workbenchScope}
+                  onChange={(v) => {
+                    setWorkbenchScope(v as InstallWorkbenchScope);
+                    setSelectedRowKeys([]);
+                  }}
+                  options={[
+                    {
+                      label: t('app.kuaizhizao.installExecution.workbenchScopeOpen'),
+                      value: 'open',
+                    },
+                    { label: '待派工', value: '待派工' },
+                    { label: '进行中', value: '进行中' },
+                    { label: '待验收', value: '待验收' },
+                  ]}
+                />
+              ) : null}
+            </Space>
+          }
           enableRowSelection={
             perms.canDelete || canBatchClose || dispatchPerms.canCreate || settlementPerms.canCreate
           }
@@ -779,27 +1028,8 @@ const InstallExecutionPage: React.FC = () => {
           }}
           showCreateButton={false}
           toolBarActionsBeforeCreate={
-            perms.canCreate
+            isWorkbench
               ? [
-                  <UniPullCreateToolbar
-                    key="create-install-execution-with-pull"
-                    compactKey="create-install-execution-with-pull"
-                    createIcon={<PlusOutlined />}
-                    createLabel={t('app.kuaizhizao.installExecution.create') + NEW_SHORTCUT_HINT}
-                    onCreate={openCreate}
-                    menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
-                      {
-                        key: 'pull-from-sales-order',
-                        actionKey: 'install_execution.pull_from_sales_order',
-                        onClick: () => pullFromSalesOrderQuery.openModal(),
-                      },
-                      {
-                        key: 'pull-from-sales-delivery',
-                        actionKey: 'install_execution.pull_from_sales_delivery',
-                        onClick: () => pullFromSalesDeliveryQuery.openModal(),
-                      },
-                    ])}
-                  />,
                   <UniPushToolbarButton
                     key={`install-push-${selectedInstallForToolbar?.id ?? 'none'}`}
                     menuItems={installToolbarPushMenuItems}
@@ -816,66 +1046,123 @@ const InstallExecutionPage: React.FC = () => {
                     }}
                   />,
                 ]
-              : [
-                  <UniPushToolbarButton
-                    key={`install-push-${selectedInstallForToolbar?.id ?? 'none'}`}
-                    menuItems={installToolbarPushMenuItems}
-                    disabled={selectedRowKeys.length !== 1 || !selectedInstallForToolbar}
-                    disabledReason={installToolbarPushDisabledReason}
-                    sourceDocument={
-                      selectedInstallForToolbar?.id
-                        ? { type: 'install_execution', id: Number(selectedInstallForToolbar.id) }
-                        : null
-                    }
-                    pushTargets={{
-                      'push-dispatch': 'service_dispatch',
-                      'push-settlement': 'service_settlement',
-                    }}
-                  />,
-                ]
+              : perms.canCreate
+                ? [
+                    <UniPullCreateToolbar
+                      key="create-install-execution-with-pull"
+                      compactKey="create-install-execution-with-pull"
+                      createIcon={<PlusOutlined />}
+                      createLabel={t('app.kuaizhizao.installExecution.create') + NEW_SHORTCUT_HINT}
+                      onCreate={openCreate}
+                      menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
+                        {
+                          key: 'pull-from-sales-order',
+                          actionKey: 'install_execution.pull_from_sales_order',
+                          onClick: () => pullFromSalesOrderQuery.openModal(),
+                        },
+                        {
+                          key: 'pull-from-sales-delivery',
+                          actionKey: 'install_execution.pull_from_sales_delivery',
+                          onClick: () => pullFromSalesDeliveryQuery.openModal(),
+                        },
+                      ])}
+                    />,
+                    <UniPushToolbarButton
+                      key={`install-push-${selectedInstallForToolbar?.id ?? 'none'}`}
+                      menuItems={installToolbarPushMenuItems}
+                      disabled={selectedRowKeys.length !== 1 || !selectedInstallForToolbar}
+                      disabledReason={installToolbarPushDisabledReason}
+                      sourceDocument={
+                        selectedInstallForToolbar?.id
+                          ? { type: 'install_execution', id: Number(selectedInstallForToolbar.id) }
+                          : null
+                      }
+                      pushTargets={{
+                        'push-dispatch': 'service_dispatch',
+                        'push-settlement': 'service_settlement',
+                      }}
+                    />,
+                  ]
+                : [
+                    <UniPushToolbarButton
+                      key={`install-push-${selectedInstallForToolbar?.id ?? 'none'}`}
+                      menuItems={installToolbarPushMenuItems}
+                      disabled={selectedRowKeys.length !== 1 || !selectedInstallForToolbar}
+                      disabledReason={installToolbarPushDisabledReason}
+                      sourceDocument={
+                        selectedInstallForToolbar?.id
+                          ? { type: 'install_execution', id: Number(selectedInstallForToolbar.id) }
+                          : null
+                      }
+                      pushTargets={{
+                        'push-dispatch': 'service_dispatch',
+                        'push-settlement': 'service_settlement',
+                      }}
+                    />,
+                  ]
           }
-          showDeleteButton={perms.canDelete}
+          showDeleteButton={!isWorkbench && perms.canDelete}
+          deleteButtonText={t('common.delete')}
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('common.confirmBatchDeleteContent', { count })}
-          toolBarActionsAfterDelete={[
-            <UniCapabilityBatchButton
-              key="install-execution-batch-close"
-              selectedRowKeys={selectedRowKeys}
-              selectedRecords={selectedRecordsForBatch}
-              capabilityKey="close"
-              permAllowed={canBatchClose}
-              batchAllowed={(records, perm) => installExecutionBatchCloseAllowed(records, perm)}
-              onRun={(id) => installExecutionApi.close(id)}
-              onSuccess={() => {
-                handleBatchSuccess();
-                if (detailRow?.id != null && selectedRowKeys.map(Number).includes(detailRow.id)) {
-                  void installExecutionApi.get(detailRow.id).then(setDetailRow);
-                }
-              }}
-              notAllowedMessage={t('app.kuaizhizao.installExecution.batchCloseNotAllowed')}
-              requireConfirm
-              labels={{
-                single: t('app.kuaizhizao.installExecution.batchClose'),
-                batch: t('app.kuaizhizao.installExecution.batchClose'),
-                batchConfirmTitle: t('app.kuaizhizao.installExecution.batchCloseConfirmTitle'),
-                batchConfirmDescription: (count) =>
-                  t('app.kuaizhizao.installExecution.batchCloseConfirmDescription', { count }),
-              }}
-              icon={<StopOutlined />}
-              size="medium"
-            />,
-          ]}
+          toolBarActionsAfterDelete={
+            canBatchClose
+              ? [
+                  <UniCapabilityBatchButton
+                    key="install-execution-batch-close"
+                    selectedRowKeys={selectedRowKeys}
+                    selectedRecords={selectedRecordsForBatch}
+                    capabilityKey="close"
+                    permAllowed={canBatchClose}
+                    batchAllowed={(records, perm) =>
+                      installExecutionBatchCloseAllowed(records, perm)
+                    }
+                    onRun={(id) => installExecutionApi.close(id)}
+                    onSuccess={() => {
+                      handleBatchSuccess();
+                      if (
+                        detailRow?.id != null &&
+                        selectedRowKeys.map(Number).includes(detailRow.id)
+                      ) {
+                        void installExecutionApi.get(detailRow.id).then(setDetailRow);
+                      }
+                    }}
+                    notAllowedMessage={t('app.kuaizhizao.installExecution.batchCloseNotAllowed')}
+                    requireConfirm
+                    labels={{
+                      single: t('app.kuaizhizao.installExecution.batchClose'),
+                      batch: t('app.kuaizhizao.installExecution.batchClose'),
+                      batchConfirmTitle: t('app.kuaizhizao.installExecution.batchCloseConfirmTitle'),
+                      batchConfirmDescription: (count) =>
+                        t('app.kuaizhizao.installExecution.batchCloseConfirmDescription', {
+                          count,
+                        }),
+                    }}
+                    icon={<StopOutlined />}
+                    size="medium"
+                  />,
+                ]
+              : []
+          }
           request={async (params, sort, _filter, searchFormValues) => {
             const { current = 1, pageSize = 20 } = params;
             const { sortBy, sortOrder } = extractProTableSort(sort);
             const orderBy =
               sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+            const listStatus = isWorkbench
+              ? workbenchScope === 'open'
+                ? undefined
+                : workbenchScope
+              : pickSearchString(searchFormValues, 'status');
             const res = await installExecutionApi.list({
               skip: (current - 1) * pageSize,
               limit: pageSize,
               keyword: pickListSearchKeyword(searchFormValues),
-              status: pickSearchString(searchFormValues, 'status'),
-              sales_order_code: pickSearchString(searchFormValues, 'sales_order_code'),
+              status: listStatus,
+              exclude_closed: isWorkbench && workbenchScope === 'open' ? true : undefined,
+              sales_order_code: isWorkbench
+                ? undefined
+                : pickSearchString(searchFormValues, 'sales_order_code'),
               order_by: orderBy,
             });
             return { data: res.data ?? [], total: res.total ?? 0, success: true };
@@ -918,6 +1205,15 @@ const InstallExecutionPage: React.FC = () => {
                 render: () => (
                   <>{detailRow ? renderBusinessActions(detailRow, 'detail', { gatePermission: true }) : null}</>
                 ),
+              },
+              {
+                key: 'push',
+                visible: Boolean(
+                  detailRow &&
+                    (!pushDispatchDisabledReason(detailRow) ||
+                      !pushSettlementDisabledReason(detailRow)),
+                ),
+                render: () => <>{detailRow ? renderPushActions(detailRow, 'detail') : null}</>,
               },
               {
                 key: 'edit',

@@ -3,8 +3,13 @@ import { App } from 'antd';
 import { ProFormDigit, ProFormSelect, ProFormSwitch, ProFormText, type ProFormInstance } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { CustomFieldsFormSection } from '../../../../../components/custom-fields';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { createVehicle, updateVehicle, type Vehicle } from '../../../services/logistics';
+
+const VEHICLE_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_vehicles';
+const VEHICLE_HOST_RESOURCE = 'kuaizhizao:vehicle';
 
 export type VehicleFormModalProps = {
   open: boolean;
@@ -26,23 +31,46 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
   const formRef = useRef<ProFormInstance>();
   const [submitting, setSubmitting] = useState(false);
   const isEdit = Boolean(editing?.id);
+  const {
+    customFields,
+    customFieldValues,
+    loadFieldValues,
+    extractFormValues,
+    saveCustomFieldValues,
+    resetFieldValues,
+  } = useCustomFields({
+    tableName: VEHICLE_CUSTOM_FIELD_TABLE,
+    hostResource: VEHICLE_HOST_RESOURCE,
+    loadWhenOpen: true,
+    open,
+  });
 
   useEffect(() => {
     if (!open) return;
     if (editing) {
       formRef.current?.setFieldsValue(editing);
+      if (editing.id != null) {
+        void loadFieldValues(editing.id).then((cfValues) => {
+          formRef.current?.setFieldsValue(cfValues);
+        });
+      }
       return;
     }
     formRef.current?.resetFields();
+    resetFieldValues();
     formRef.current?.setFieldsValue({ ownership: 'internal', status: 'idle', is_enabled: true });
-  }, [open, editing]);
+  }, [open, editing, loadFieldValues, resetFieldValues]);
 
   const handleFinish = async (values: Partial<Vehicle>) => {
     setSubmitting(true);
     try {
+      const { customData, standardValues } = extractFormValues(values, formRef.current);
       const record = editing
-        ? await updateVehicle(editing.id, values)
-        : await createVehicle(values);
+        ? await updateVehicle(editing.id, standardValues)
+        : await createVehicle(standardValues);
+      if (record.id != null) {
+        await saveCustomFieldValues(record.id, customData);
+      }
       messageApi.success(editing ? t('common.updateSuccess') : t('common.createSuccess'));
       onSuccess(record);
       onClose();
@@ -112,6 +140,11 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
           { label: t('app.kuaizhizao.logistics.option.vehicleStatus.maintenance'), value: 'maintenance' },
           { label: t('app.kuaizhizao.logistics.option.vehicleStatus.disabled'), value: 'disabled' },
         ]}
+      />
+      <CustomFieldsFormSection
+        customFields={customFields}
+        customFieldValues={customFieldValues}
+        gridColumns={1}
       />
       <ProFormSwitch name="is_enabled" label={t('common.enabled')} />
     </FormModalTemplate>

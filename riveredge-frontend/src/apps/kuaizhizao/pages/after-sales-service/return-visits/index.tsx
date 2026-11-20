@@ -1,29 +1,36 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ActionType, ProColumns } from '@ant-design/pro-components';
+import type { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
+import { ProForm } from '@ant-design/pro-components';
 import { App, Button, DatePicker, Form, Input, Modal, Rate, Select } from 'antd';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
-import { rowActionKind } from '../../../../../components/uni-action';
-import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
-import { ListPageTemplate } from '../../../../../components/layout-templates';
-import { UniTable } from '../../../../../components/uni-table';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { DetailDrawerActions, ListPageTemplate } from '../../../../../components/layout-templates';
+import {
+  CustomFieldsDetailSection,
+  CustomFieldsFormSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
+import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { SourceDocumentCode } from '../../../../../components/linked-document-code/SourceDocumentCode';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { formDateFormItemProps } from '../../../../../utils/formDate';
 import { formatDateTime } from '../../../../../utils/format';
 import { formatApiErrorDetail } from '../../../../../services/api';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
-import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
 import type { Customer } from '../../../../master-data/types/supply-chain';
 import {
   AFTER_SALES_CUSTOMER_NAME_COLUMN_DEFAULTS,
+  renderAfterSalesStatusTag,
   renderAfterSalesTypeMarker,
 } from '../shared/afterSalesListPresentation';
 import { AfterSalesSourceDocumentSelect } from '../shared/AfterSalesSourceDocumentSelect';
-import { pickListSearchKeyword } from '../../../../../utils/tableQueryKey';
+import { pickListSearchKeyword, pickSearchString } from '../../../../../utils/tableQueryKey';
 import {
   customerReturnVisitApi,
   type CustomerReturnVisit,
@@ -32,12 +39,17 @@ import {
 import { CustomerReturnVisitDetailDrawer } from './components/CustomerReturnVisitDetailDrawer';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
+const canEditStatus = (status?: string) => status !== '已完成';
+const canCompleteStatus = (status?: string) => status === '待登记' || !status;
+
 function customerDisplayName(c: Customer | null | undefined): string {
   if (!c) return '';
-  return String(c.name ?? ('customer_name' in c ? c.customer_name : '') ?? '').trim();
+  const row = c as Record<string, unknown>;
+  return String(row.name ?? row.customer_name ?? '').trim();
 }
 
 const RESOURCE = 'kuaizhizao:customer-return-visit';
+const CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_customer_return_visits';
 
 const VISIT_METHODS = ['电话', '现场', '在线'];
 
@@ -46,6 +58,7 @@ const ReturnVisitsPage: React.FC = () => {
   const { message } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
   const actionRef = useRef<ActionType>();
+  const cfFormRef = useRef<ProFormInstance>();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<CustomerReturnVisit | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -54,10 +67,49 @@ const ReturnVisitsPage: React.FC = () => {
   const [detailError, setDetailError] = useState<string | null>(null);
   const detailRetryIdRef = useRef<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [completeOpen, setCompleteOpen] = useState(false);
+  const [completeTarget, setCompleteTarget] = useState<CustomerReturnVisit | null>(null);
+  const [completeSubmitting, setCompleteSubmitting] = useState(false);
+  const [completeForm] = Form.useForm<{
+    visit_method?: string;
+    satisfaction_score?: number;
+    feedback?: string;
+    visited_at_picker?: dayjs.Dayjs;
+    notes?: string;
+  }>();
   const [form] = Form.useForm<CustomerReturnVisitPayload & { visited_at_picker?: dayjs.Dayjs }>();
   const customerId = Form.useWatch('customer_id', form);
   const sourceType = Form.useWatch('source_type', form) as string | undefined;
   const [blockedSources, setBlockedSources] = useState<Record<number, { disabled: boolean; reason: string }>>({});
+  const {
+    customFields: formCustomFields,
+    customFieldValues: formCustomFieldValues,
+    loadFieldValues: loadFormCustomFieldValues,
+    extractFormValues: extractCustomFormValues,
+    saveCustomFieldValues,
+    resetFieldValues: resetFormCustomFieldValues,
+  } = useCustomFields({
+    tableName: CUSTOM_FIELD_TABLE,
+    hostResource: RESOURCE,
+    loadWhenOpen: true,
+    open: modalOpen,
+  });
+  const {
+    customFields: listCustomFields,
+    customFieldValues: detailCustomFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<CustomerReturnVisit>({
+    tableName: CUSTOM_FIELD_TABLE,
+    hostResource: RESOURCE,
+  });
+  const customFieldColumns = generateCustomFieldColumns();
+  const showDetailCustomFields = hasCustomFieldsDetailContent(
+    listCustomFields,
+    detailCustomFieldValues,
+  );
 
   useEffect(() => {
     if (!modalOpen) return;
@@ -90,6 +142,7 @@ const ReturnVisitsPage: React.FC = () => {
   const openCreate = () => {
     setEditing(null);
     form.resetFields();
+    resetFormCustomFieldValues();
     form.setFieldsValue({ visit_method: '电话', visited_at_picker: dayjs() });
     setModalOpen(true);
   };
@@ -97,15 +150,17 @@ const ReturnVisitsPage: React.FC = () => {
   const loadDetail = useCallback(async (id: number) => {
     setDetailLoading(true);
     setDetailError(null);
+    resetDetailFieldValues();
     try {
       setDetail(await customerReturnVisitApi.get(id));
+      await loadFieldValuesForDetail(id);
     } catch (error) {
       setDetail(null);
       setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.detail.loadFailed')));
     } finally {
       setDetailLoading(false);
     }
-  }, [t]);
+  }, [loadFieldValuesForDetail, resetDetailFieldValues, t]);
 
   const openDetail = (row: CustomerReturnVisit) => {
     detailRetryIdRef.current = row.id;
@@ -123,17 +178,57 @@ const ReturnVisitsPage: React.FC = () => {
       visited_at_picker: full.visited_at ? dayjs(full.visited_at) : undefined,
     });
     setModalOpen(true);
+    const cfValues = await loadFormCustomFieldValues(full.id);
+    cfFormRef.current?.setFieldsValue(cfValues);
   };
 
-  const executeconfirmDelete = async (row: CustomerReturnVisit) => {
-    await customerReturnVisitApi.delete(row.id);
-        message.success(t('common.deleteSuccess'));
-        if (detail?.id === row.id) {
-          setDetailOpen(false);
-          setDetail(null);
-        }
-    actionRef.current?.reload();
-  };
+  const openComplete = useCallback((row: CustomerReturnVisit) => {
+    setCompleteTarget(row);
+    completeForm.setFieldsValue({
+      visit_method: row.visit_method || '电话',
+      satisfaction_score: row.satisfaction_score ?? undefined,
+      feedback: row.feedback ?? undefined,
+      visited_at_picker: row.visited_at ? dayjs(row.visited_at) : dayjs(),
+      notes: row.notes ?? undefined,
+    });
+    setCompleteOpen(true);
+  }, [completeForm]);
+
+  const refreshOpenDetail = useCallback(
+    async (id: number) => {
+      actionRef.current?.reload();
+      if (detail?.id === id) {
+        setDetail(await customerReturnVisitApi.get(id));
+      }
+    },
+    [detail?.id],
+  );
+
+  const executeComplete = useCallback(async () => {
+    if (!completeTarget) return;
+    const values = await completeForm.validateFields();
+    setCompleteSubmitting(true);
+    try {
+      await customerReturnVisitApi.complete(completeTarget.id, {
+        satisfaction_score: Number(values.satisfaction_score),
+        visit_method: values.visit_method,
+        feedback: values.feedback,
+        visited_at: values.visited_at_picker?.format('YYYY-MM-DD HH:mm:ss'),
+        notes: values.notes,
+      });
+      message.success(t('app.kuaizhizao.afterSalesService.returnVisit.completeSuccess'));
+      setCompleteOpen(false);
+      setCompleteTarget(null);
+      await refreshOpenDetail(completeTarget.id);
+    } catch (error) {
+      message.error(
+        getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.returnVisit.actionFailed')),
+      );
+      throw error;
+    } finally {
+      setCompleteSubmitting(false);
+    }
+  }, [completeForm, completeTarget, message, refreshOpenDetail, t]);
 
   const columns: ProColumns<CustomerReturnVisit>[] = useMemo(
     () =>
@@ -215,30 +310,62 @@ const ReturnVisitsPage: React.FC = () => {
             render: (_, row) => (row.visited_at ? formatDateTime(row.visited_at) : '-'),
           },
           {
+            title: t('common.status'),
+            key: 'lifecycle',
+            dataIndex: 'status',
+            fixed: 'right',
+            valueType: 'select',
+            valueEnum: {
+              待登记: { text: '待登记' },
+              已完成: { text: '已完成' },
+            },
+            render: (_, row) => renderAfterSalesStatusTag(row.status),
+          },
+          ...customFieldColumns,
+          {
             title: t('common.actions'),
             key: 'action',
             fixed: 'right',
             hideInSearch: true,
-            render: (_, row) => [
-              <Button
-                {...rowActionKind('read')}
-                key="read"
-                onClick={() => openDetail(row)}
-              />,
-              perms.canUpdate ? (
-                <Button {...rowActionKind('update')} key="edit" onClick={() => void openEdit(row)} />
-              ) : null,
-              perms.canDelete ? (
-                <ActionConfirmPopconfirm title={t('common.confirmDelete')} onConfirm={() => executeconfirmDelete(row)}>
-              <Button {...rowActionKind('delete')} key="delete" onClick={(e) => e.stopPropagation()} />
-            </ActionConfirmPopconfirm>
-              ) : null,
-            ],
+            render: (_, row) => {
+              const parts: React.ReactNode[] = [
+                <Button
+                  {...rowActionKind('read')}
+                  key="read"
+                  onClick={() => openDetail(row)}
+                />,
+              ];
+              if (perms.canUpdate && canEditStatus(row.status)) {
+                parts.push(
+                  <Button
+                    {...rowActionKind('update')}
+                    key="edit"
+                    onClick={() => void openEdit(row)}
+                  />,
+                );
+              }
+              if (perms.canUpdate && canCompleteStatus(row.status)) {
+                parts.push(
+                  <Button
+                    key="complete"
+                    {...rowActionKind('complete')}
+                    {...rowActionLabelKeep()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openComplete(row);
+                    }}
+                  >
+                    {t('app.kuaizhizao.afterSalesService.returnVisit.actionComplete')}
+                  </Button>,
+                );
+              }
+              return parts;
+            },
           },
         ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [perms.canDelete, perms.canUpdate, t],
+    [customFieldColumns, openComplete, perms.canUpdate, t],
   );
 
   return (
@@ -248,24 +375,30 @@ const ReturnVisitsPage: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesReturnVisit)}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.return-visits.v8"
+        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.return-visits.v9-complete"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.after-sales-service.return-visits')}
-        request={async (params, _sort, _filter, searchFormValues) => {
+        request={async (params, _sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           const res = await customerReturnVisitApi.list({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize,
             keyword: pickListSearchKeyword(searchFormValues),
+            status: pickSearchString(searchFormValues, 'status'),
           });
-          return { data: res.items, total: res.total, success: true };
+          const data =
+            meta?.purpose === 'prefetch'
+              ? res.items
+              : await enrichRecordsWithCustomFields(res.items);
+          return { data, total: res.total, success: true };
         }}
         showCreateButton={perms.canCreate}
         createButtonText={t('app.kuaizhizao.afterSalesService.returnVisit.createTitle')}
         onCreate={openCreate}
         enableRowSelection={perms.canDelete}
         showDeleteButton={perms.canDelete}
+        deleteButtonText={t('common.delete')}
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => customerReturnVisitApi.delete(Number(key))));
           message.success(t('common.batchDeleteSuccess', { count: keys.length }));
@@ -280,7 +413,10 @@ const ReturnVisitsPage: React.FC = () => {
             ? t('app.kuaizhizao.afterSalesService.returnVisit.editTitle')
             : t('app.kuaizhizao.afterSalesService.returnVisit.createTitle')
         }
-        onCancel={() => setModalOpen(false)}
+        onCancel={() => {
+          resetFormCustomFieldValues();
+          setModalOpen(false);
+        }}
         confirmLoading={submitting}
         onOk={async () => {
           try {
@@ -290,16 +426,24 @@ const ReturnVisitsPage: React.FC = () => {
               ...rest,
               visited_at: visited_at_picker?.format('YYYY-MM-DD HH:mm:ss') ?? '',
             };
+            const cfValues = cfFormRef.current?.getFieldsValue?.(true) ?? {};
+            const { customData } = extractCustomFormValues(cfValues, cfFormRef.current);
             setSubmitting(true);
+            let savedId = editing?.id;
             if (editing) {
               await customerReturnVisitApi.update(editing.id, payload);
               message.success(t('common.saveSuccess'));
             } else {
-              await customerReturnVisitApi.create(payload);
+              const created = await customerReturnVisitApi.create(payload);
+              savedId = created.id;
               message.success(t('common.createSuccess'));
             }
+            if (savedId != null) {
+              await saveCustomFieldValues(savedId, customData);
+            }
+            resetFormCustomFieldValues();
             setModalOpen(false);
-    actionRef.current?.reload();
+            actionRef.current?.reload();
           } catch (error: unknown) {
             if (error && typeof error === 'object' && 'errorFields' in error) {
               return;
@@ -361,6 +505,15 @@ const ReturnVisitsPage: React.FC = () => {
           <Form.Item name="feedback" label={t('app.kuaizhizao.afterSalesService.returnVisit.field.feedback')}>
             <Input.TextArea rows={3} />
           </Form.Item>
+          {formCustomFields.length > 0 ? (
+            <ProForm formRef={cfFormRef} submitter={false} grid={false}>
+              <CustomFieldsFormSection
+                customFields={formCustomFields}
+                customFieldValues={formCustomFieldValues}
+                gridColumns={1}
+              />
+            </ProForm>
+          ) : null}
           <Form.Item name="notes" label={t('common.remark')}>
             <Input.TextArea rows={2} />
           </Form.Item>
@@ -373,6 +526,7 @@ const ReturnVisitsPage: React.FC = () => {
           setDetailOpen(false);
           setDetail(null);
           setDetailError(null);
+          resetDetailFieldValues();
         }}
         record={detail}
         loading={detailLoading}
@@ -381,11 +535,99 @@ const ReturnVisitsPage: React.FC = () => {
           const id = detailRetryIdRef.current;
           if (id != null) void loadDetail(id);
         }}
-        extra={buildDetailDrawerEditExtra(t, Boolean(detail && perms.canUpdate), () => {
-          if (!detail) return;
-          void openEdit(detail);
-        })}
+        supplementaryTitle={
+          showDetailCustomFields
+            ? t('app.master-data.customFields', { defaultValue: '自定义字段' })
+            : undefined
+        }
+        supplementary={
+          showDetailCustomFields ? (
+            <CustomFieldsDetailSection
+              customFields={listCustomFields}
+              customFieldValues={detailCustomFieldValues}
+            />
+          ) : undefined
+        }
+        extra={
+          <DetailDrawerActions
+            items={[
+              {
+                key: 'edit',
+                visible: Boolean(detail && perms.canUpdate && canEditStatus(detail.status)),
+                render: (
+                  <Button
+                    onClick={() => {
+                      if (!detail) return;
+                      void openEdit(detail);
+                    }}
+                  >
+                    {t('common.edit')}
+                  </Button>
+                ),
+              },
+              {
+                key: 'complete',
+                visible: Boolean(detail && perms.canUpdate && canCompleteStatus(detail.status)),
+                render: (
+                  <Button
+                    type="primary"
+                    onClick={() => {
+                      if (!detail) return;
+                      openComplete(detail);
+                    }}
+                  >
+                    {t('app.kuaizhizao.afterSalesService.returnVisit.actionComplete')}
+                  </Button>
+                ),
+              },
+            ]}
+          />
+        }
       />
+
+      <Modal
+        open={completeOpen}
+        title={t('app.kuaizhizao.afterSalesService.returnVisit.completeTitle')}
+        onCancel={() => {
+          setCompleteOpen(false);
+          setCompleteTarget(null);
+        }}
+        confirmLoading={completeSubmitting}
+        onOk={() => executeComplete()}
+        destroyOnHidden
+        width={520}
+      >
+        <Form form={completeForm} layout="vertical">
+          <Form.Item
+            name="visit_method"
+            label={t('app.kuaizhizao.afterSalesService.returnVisit.field.visitMethod')}
+            rules={[{ required: true, message: t('common.required') }]}
+          >
+            <Select options={VISIT_METHODS.map((value) => ({ value, label: value }))} />
+          </Form.Item>
+          <Form.Item
+            name="satisfaction_score"
+            label={t('app.kuaizhizao.afterSalesService.returnVisit.field.satisfactionScore')}
+            rules={[{ required: true, message: t('app.kuaizhizao.afterSalesService.returnVisit.scoreRequired') }]}
+          >
+            <Rate count={5} />
+          </Form.Item>
+          <Form.Item
+            name="visited_at_picker"
+            label={t('app.kuaizhizao.afterSalesService.returnVisit.field.visitedAt')}
+            rules={[{ required: true, message: t('common.required') }]}
+            {...formDateFormItemProps}
+          >
+            <DatePicker showTime style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="feedback" label={t('app.kuaizhizao.afterSalesService.returnVisit.field.feedback')}>
+            <Input.TextArea rows={3} />
+          </Form.Item>
+          <Form.Item name="notes" label={t('common.remark')}>
+            <Input.TextArea rows={2} />
+          </Form.Item>
+        </Form>
+      </Modal>
     </ListPageTemplate>
   );
 };
