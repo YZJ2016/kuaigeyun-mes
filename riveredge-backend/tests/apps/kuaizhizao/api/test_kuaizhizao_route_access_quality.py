@@ -47,6 +47,22 @@ def test_revoke_conduct_maps_to_update() -> None:
     assert action == "update"
 
 
+def test_notify_warehouse_maps_to_submit() -> None:
+    """收货通知「通知仓库」与前端 UniWorkflow submit 对齐。"""
+    action = resolve_kuaizhizao_module_action(
+        "POST",
+        "/api/v1/apps/kuaizhizao/receipt-notices/1/notify",
+        module_code="receipt-notice",
+    )
+    assert action == "submit"
+    withdraw = resolve_kuaizhizao_module_action(
+        "POST",
+        "/api/v1/apps/kuaizhizao/receipt-notices/1/withdraw",
+        module_code="receipt-notice",
+    )
+    assert withdraw == "revoke"
+
+
 def test_ensure_for_purchase_receipt_defaults_to_create_action() -> None:
     """路径本身仍解析为 create；路由依赖另放行 inbound:execute（见 require_kuaizhizao_quality_execution_access）。"""
     action = resolve_kuaizhizao_module_action(

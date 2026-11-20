@@ -37,6 +37,33 @@ _BATCH_ORDER_ENFORCEMENT_EXEMPT_SOURCE_TYPES = frozenset({
     "purchase_return",
 })
 
+# 入库确认撤回：冲减原过账台账。原单无批号时落 DEFAULT；中途启用批号后不得按「出库须指定批号」拦截
+_INBOUND_REVOKE_ALLOW_DEFAULT_BATCH_SOURCE_TYPES = frozenset({
+    "purchase_receipt_revoke",
+    "finished_goods_receipt_revoke",
+    "semi_finished_goods_receipt_revoke",
+    "other_inbound_revoke",
+    "customer_material_inbound_revoke",
+    "production_return_revoke",
+})
+
+
+def resolve_managed_decrease_batch_no(
+    batch_no: Optional[str],
+    source_type: Optional[str],
+) -> Optional[str]:
+    """批号管理物料扣减用批号。
+
+    返回非空批号；返回 None 表示调用方应报「出库必须指定批号」。
+    入库撤回且原单无批号时回落 DEFAULT（与入库过账对称）。
+    """
+    raw = str(batch_no or "").strip()
+    if raw:
+        return raw
+    if str(source_type or "").strip() in _INBOUND_REVOKE_ALLOW_DEFAULT_BATCH_SOURCE_TYPES:
+        return "DEFAULT"
+    return None
+
 # 再确认放行映射（spec 141 review）：撤回曾冲减数量但未回冲序列号台账的存量单据，
 # 再确认入库时序列号仍停在 in_stock → 凭同单已存在的撤回流水放行，对齐台账。
 # 键 = 正向入库 source_type；值 = 对应撤回流水的 source_type。
@@ -1305,21 +1332,31 @@ class InventoryService:
                     and material
                     and getattr(material, "batch_managed", False)
                 )
-                raw_batch = str(batch_no or "").strip()
-                if is_batch_managed and not raw_batch:
-                    material_code = getattr(material, "main_code", None) or getattr(material, "code", "")
-                    raise BusinessLogicError(
-                        f"物料 {material.name}（{material_code}）启用了批号管理，出库必须指定批号"
-                    )
+                src_type = str(source_type or "").strip()
+                if is_batch_managed:
+                    resolved_batch = resolve_managed_decrease_batch_no(batch_no, source_type)
+                    if resolved_batch is None:
+                        material_code = getattr(material, "main_code", None) or getattr(
+                            material, "code", ""
+                        )
+                        raise BusinessLogicError(
+                            f"物料 {material.name}（{material_code}）启用了批号管理，出库必须指定批号"
+                        )
+                    raw_batch = resolved_batch
+                else:
+                    raw_batch = str(batch_no or "").strip()
 
                 own = InventoryService._ownership_filter(ownership_type, customer_id)
                 main_wh_id = InventoryService._normalize_main_warehouse_id(warehouse_id)
                 stock_qs_filter = {"quality_status": stock_quality_status}
                 # 非批号管理物料：空批号或 DEFAULT 表示未指定，按 FIFO/LIFO 跨批扣减。
                 # 禁止把 DEFAULT 当成真实批号去查（前端曾把空串 normalize 成 DEFAULT 导致误报库存不足）。
+                # 入库撤回允许显式 DEFAULT：中途启用批号后仍须冲掉原无批号台账。
                 ledger_bn = InventoryService._normalize_batch_no_for_ledger(raw_batch) if raw_batch else ""
                 use_specific_batch = bool(raw_batch) and (
-                    is_batch_managed or ledger_bn != "DEFAULT"
+                    is_batch_managed
+                    or ledger_bn != "DEFAULT"
+                    or src_type in _INBOUND_REVOKE_ALLOW_DEFAULT_BATCH_SOURCE_TYPES
                 )
                 if use_specific_batch:
                     batch = await InventoryService._find_in_stock_material_batch(

@@ -27,6 +27,14 @@ _PURCHASE_ORDER_REFERENCE_GET_RE = re.compile(
     r")(?:/|$)",
     re.IGNORECASE,
 )
+_SALES_ORDER_REFERENCE_GET_RE = re.compile(
+    r"/sales-orders/(?:"
+    r"work-order-pull-lines|"
+    r"mrp-pull-lines|"
+    r"shipment-notice-pull-lines"
+    r")(?:/|$)",
+    re.IGNORECASE,
+)
 
 # 仅声明 :audit（无 :approve/:reject）的模块：/approve、/reject 均走 audit
 _AUDIT_ONLY_REVIEW_MODULES = frozenset({
@@ -65,6 +73,9 @@ def resolve_kuaizhizao_module_action(
     if module_code == "freight-order" and "/tracking-events" in p:
         return "update"
     if "/release" in p:
+        return "submit"
+    # 收货/发货通知「通知仓库」与前端 UniWorkflow submit 对齐
+    if "/notify" in p:
         return "submit"
     if "/freeze" in p or "/unfreeze" in p:
         return "revoke"
@@ -147,7 +158,10 @@ def resolve_kuaizhizao_module_action(
             return "submit"
         if any(k in p for k in ("/revoke", "/cancel", "/withdraw")):
             return "revoke"
-        if any(k in p for k in ("/execute", "/confirm", "/checkin", "/checkout", "/apply")):
+        if any(
+            k in p
+            for k in ("/execute", "/confirm", "/checkin", "/checkout", "/unapply", "/apply")
+        ):
             return "execute"
         return "create"
     raise ValueError(f"Kuaizhizao: unsupported HTTP method {method!r} for path {path!r}")
@@ -350,6 +364,16 @@ def require_kuaizhizao_sales_order_access(
             and action == "create"
         ):
             required = list(collection_create_permissions)
+        elif (
+            action == "read"
+            and _SALES_ORDER_REFERENCE_GET_RE.search(request.url.path or "")
+        ):
+            required = [
+                build_permission_code("kuaizhizao", "sales-order", "read"),
+                build_permission_code("kuaizhizao", "sales-order", "display"),
+                build_permission_code("kuaizhizao", "work-order", "create"),
+                build_permission_code("kuaizhizao", "work-order", "read"),
+            ]
         else:
             required = [build_permission_code("kuaizhizao", "sales-order", action)]
         required = await _apply_station_terminal_required(request, auth, tenant_id, required)
