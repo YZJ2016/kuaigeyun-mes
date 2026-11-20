@@ -28,6 +28,10 @@ export type OutboundConfirmationItemPayload = {
   batch_no?: string;
   batch_allocations?: OutboundConfirmationBatchAllocation[];
   serial_numbers?: string[];
+  /** 台账主数量（库存单位），与即时库存 primary_quantity 一致 */
+  primary_quantity?: number;
+  /** 台账副数量（固定辅助单位），与即时库存 secondary_quantity 一致 */
+  secondary_quantity?: number;
 };
 
 export type OutboundConfirmationPayload = {
@@ -62,9 +66,9 @@ export function buildOutboundConfirmPayloadFromForm(
       if (!Number.isFinite(lineId) || lineId <= 0) return null;
       const allocRaw = formValues[`batch_alloc_${lineId}`];
       const allocs = Array.isArray(allocRaw)
-        ? (allocRaw as Array<{ batchNo?: string; quantity?: number }>)
+        ? (allocRaw as Array<{ batchNo?: string; batch_number?: string; quantity?: number }>)
             .map((a) => ({
-              batch_number: String(a?.batchNo ?? '').trim(),
+              batch_number: String(a?.batchNo ?? a?.batch_number ?? '').trim(),
               quantity: Number(a?.quantity ?? 0),
             }))
             .filter((a) => a.batch_number && a.quantity > 0)
@@ -76,20 +80,34 @@ export function buildOutboundConfirmPayloadFromForm(
       const locId = formValues[`location_${lineId}`];
       const locCode = formValues[`location_code_${lineId}`] ?? it.location_code;
       const serials = formValues[`serial_${lineId}`] ?? it.serial_numbers;
-      const lineWhId = Number(it.warehouse_id);
-      const lineWhName = String(it.warehouse_name ?? '').trim();
+      const formWhId = Number(formValues[`warehouse_${lineId}`]);
+      const formWhName = String(formValues[`warehouse_name_${lineId}`] ?? '').trim();
+      const lineWhId = Number.isFinite(formWhId) && formWhId > 0 ? formWhId : Number(it.warehouse_id);
+      const lineWhName =
+        formWhName || String(it.warehouse_name ?? '').trim();
+      const resolvedWhId =
+        Number.isFinite(lineWhId) && lineWhId > 0 ? lineWhId : warehouseId;
+      const primaryQty = Number(
+        it.delivery_quantity ?? it.picked_quantity ?? it.outbound_quantity ?? it.borrow_quantity ?? 0,
+      );
+      const secondaryRaw = it.secondary_quantity ?? it.aux_quantity;
+      const secondaryQty =
+        secondaryRaw != null && secondaryRaw !== '' ? Number(secondaryRaw) : undefined;
       return {
         item_id: lineId,
-        warehouse_id: Number.isFinite(lineWhId) && lineWhId > 0 ? lineWhId : warehouseId,
+        warehouse_id: resolvedWhId,
         warehouse_name:
           lineWhName ||
-          (Number.isFinite(lineWhId) && lineWhId > 0 ? warehouseName : undefined),
+          (resolvedWhId != null && resolvedWhId > 0 ? warehouseName : undefined),
         location_id: locId != null && locId !== '' ? Number(locId) : undefined,
         location_code: locCode != null && String(locCode).trim() ? String(locCode).trim() : undefined,
         batch_number: batch || undefined,
         batch_no: batch || undefined,
         batch_allocations: allocs.length > 0 ? allocs : undefined,
         serial_numbers: Array.isArray(serials) ? (serials as string[]) : undefined,
+        primary_quantity: primaryQty > 0 ? primaryQty : undefined,
+        secondary_quantity:
+          secondaryQty != null && Number.isFinite(secondaryQty) ? secondaryQty : undefined,
       };
     })
     .filter(Boolean) as OutboundConfirmationItemPayload[];

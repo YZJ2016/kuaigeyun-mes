@@ -46,7 +46,12 @@ interface InventoryItem {
   texture?: string | null;
   model?: string | null;
   material_unit?: string | null;
-  quantity: number;
+  primary_unit?: string | null;
+  secondary_unit?: string | null;
+  primary_quantity: number;
+  ledger_is_dual_unit?: boolean;
+  ledger_has_auxiliary_unit?: boolean;
+  secondary_quantity?: number | null;
   in_transit_quantity?: number;
   in_transit_breakdown?: InTransitBreakdown | null;
   alert_status?: string | null;
@@ -63,11 +68,24 @@ interface InventoryItem {
 
 interface InventorySummary {
   total_records: number;
-  total_quantity: number;
+  total_primary_quantity: number;
   in_stock_count: number;
   zero_stock_count: number;
   expired_count: number;
   near_expiry_count: number;
+}
+
+/** 当前行是否应在列表展示台账副单位/副数量列 */
+function inventoryRowShowsLedgerSecondary(row: InventoryItem): boolean {
+  if (row.ledger_is_dual_unit === true) {
+    return true;
+  }
+  if (row.ledger_has_auxiliary_unit === true) {
+    return true;
+  }
+  const primary = (row.primary_unit ?? row.material_unit ?? '').trim();
+  const secondary = (row.secondary_unit ?? '').trim();
+  return Boolean(secondary && primary && secondary !== primary);
 }
 
 interface WarehouseOption {
@@ -176,7 +194,7 @@ const InventoryPage: React.FC = () => {
   const inventoryToolbarFilterMountedRef = useRef(false);
   const [summary, setSummary] = useState<InventorySummary | undefined>({
     total_records: 0,
-    total_quantity: 0,
+    total_primary_quantity: 0,
     in_stock_count: 0,
     zero_stock_count: 0,
     expired_count: 0,
@@ -237,8 +255,8 @@ const InventoryPage: React.FC = () => {
       t('app.master-data.materials.model'),
       t('app.kuaizhizao.warehouseInventory.colBrand'),
       t('app.kuaizhizao.warehouseInventory.colTexture'),
-      t('common.unit'),
-      t('app.kuaizhizao.warehouseReports.colStockQty'),
+      t('app.kuaizhizao.warehouseInventory.colPrimaryUnit'),
+      t('app.kuaizhizao.warehouseInventory.colPrimaryQuantity'),
       t('app.kuaizhizao.warehouseInventory.colLocation'),
       t('app.kuaizhizao.warehouseInventory.colInTransit'),
       t('app.kuaizhizao.warehouseInventory.colAlert'),
@@ -253,8 +271,8 @@ const InventoryPage: React.FC = () => {
         r.model,
         r.brand,
         r.texture,
-        r.material_unit,
-        r.quantity,
+        r.primary_unit ?? r.material_unit,
+        r.primary_quantity,
         formatInventoryLocationDisplay(r) || '-',
         r.in_transit_quantity ?? 0,
         r.alert_label,
@@ -381,20 +399,25 @@ const InventoryPage: React.FC = () => {
             render: (_, r) => renderCell(r.texture),
           },
           {
-            title: t('common.unit'),
-            dataIndex: 'material_unit',
-            width: 96,
-            minWidth: 96,
+            title: t('app.kuaizhizao.warehouseInventory.colPrimaryUnit'),
+            dataIndex: 'primary_unit',
+            key: 'primary_unit',
+            width: 88,
+            minWidth: 88,
             uniTableKeepWidth: true,
             resizable: false,
-            align: 'left',
+            align: 'right',
             hideInSearch: true,
-            // 单位只在本列展示；库存数量列只出数字，避免长短单位把右对齐数量顶歪
-            render: (_, r) => <MaterialUnitLabel value={r.material_unit} />,
+            render: (_, r) => (
+              <div style={{ textAlign: 'right' }}>
+                <MaterialUnitLabel value={r.primary_unit ?? r.material_unit} />
+              </div>
+            ),
           },
           {
-            title: t('app.kuaizhizao.warehouseReports.colStockQty'),
-            dataIndex: 'quantity',
+            title: t('app.kuaizhizao.warehouseInventory.colPrimaryQuantity'),
+            dataIndex: 'primary_quantity',
+            key: 'primary_quantity',
             width: 110,
             minWidth: 110,
             uniTableKeepWidth: true,
@@ -403,7 +426,56 @@ const InventoryPage: React.FC = () => {
             valueType: 'digit',
             sorter: true,
             render: (_, record) => {
-              const qty = Number(record.quantity || 0);
+              const qty = Number(record.primary_quantity || 0);
+              return (
+                <span style={{ color: qty <= 0 ? '#ff4d4f' : undefined }}>
+                  {formatQuantity(qty)}
+                </span>
+              );
+            },
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInventory.colSecondaryUnit'),
+            dataIndex: 'secondary_unit',
+            key: 'secondary_unit',
+            width: 88,
+            minWidth: 88,
+            uniTableKeepWidth: true,
+            resizable: false,
+            align: 'right',
+            hideInSearch: true,
+            render: (_, r) => {
+              if (!inventoryRowShowsLedgerSecondary(r)) {
+                return <span style={{ textAlign: 'right' }}>—</span>;
+              }
+              return (
+                <div style={{ textAlign: 'right' }}>
+                  <MaterialUnitLabel value={r.secondary_unit} />
+                </div>
+              );
+            },
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInventory.colSecondaryQuantity'),
+            dataIndex: 'secondary_quantity',
+            key: 'secondary_quantity',
+            width: 110,
+            minWidth: 110,
+            uniTableKeepWidth: true,
+            resizable: false,
+            align: 'right',
+            hideInSearch: true,
+            render: (_, record) => {
+              if (!inventoryRowShowsLedgerSecondary(record)) {
+                return <span>—</span>;
+              }
+              if (
+                record.secondary_quantity === null ||
+                record.secondary_quantity === undefined
+              ) {
+                return <span>—</span>;
+              }
+              const qty = Number(record.secondary_quantity);
               return (
                 <span style={{ color: qty <= 0 ? '#ff4d4f' : undefined }}>
                   {formatQuantity(qty)}
@@ -545,7 +617,7 @@ const InventoryPage: React.FC = () => {
       { title: t('app.kuaizhizao.warehouseCommon.statRecords'), value: summary?.total_records ?? '-' },
       {
         title: t('app.kuaizhizao.warehouseCommon.statTotalQty'),
-        value: summary?.total_quantity ?? '-',
+        value: summary?.total_primary_quantity ?? '-',
         precision: summary == null ? undefined : 2,
       },
       { title: t('app.kuaizhizao.warehouseCommon.statInStock'), value: summary?.in_stock_count ?? '-' },
@@ -565,7 +637,7 @@ const InventoryPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.inventory')}
         headerActions={tableHeaderActions}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-width-v9"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-width-v13-row-secondary-blank"
         actionRef={actionRef}
         columns={columns}
         request={fetchInventory}

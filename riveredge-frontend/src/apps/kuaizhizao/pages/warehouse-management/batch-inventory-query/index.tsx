@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { ListPageTemplate, type StatCard } from '../../../../../components/layout-templates';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { UniTable } from '../../../../../components/uni-table';
+import { MaterialUnitLabel } from '../../../../../components/material-unit-label';
 import {
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
@@ -39,10 +40,16 @@ interface BatchInventoryItem {
   texture?: string | null;
   model?: string | null;
   material_unit?: string | null;
+  primary_unit?: string | null;
+  secondary_unit?: string | null;
+  primary_quantity: number;
+  ledger_is_dual_unit?: boolean;
+  ledger_has_auxiliary_unit?: boolean;
+  secondary_quantity?: number | null;
   batch_no: string;
   production_date: string | null;
+  shelf_life_days?: number | null;
   expiry_date: string | null;
-  quantity: number;
   in_transit_quantity?: number;
   in_transit_breakdown?: InTransitBreakdown | null;
   alert_status?: string | null;
@@ -56,6 +63,19 @@ interface BatchInventoryItem {
   storage_area_name?: string | null;
   location_name?: string | null;
   location_code?: string | null;
+}
+
+/** 与即时库存一致：台账副单位/副数量是否展示 */
+function inventoryRowShowsLedgerSecondary(row: BatchInventoryItem): boolean {
+  if (row.ledger_is_dual_unit === true) {
+    return true;
+  }
+  if (row.ledger_has_auxiliary_unit === true) {
+    return true;
+  }
+  const primary = (row.primary_unit ?? row.material_unit ?? '').trim();
+  const secondary = (row.secondary_unit ?? '').trim();
+  return Boolean(secondary && primary && secondary !== primary);
 }
 
 interface WarehouseOption {
@@ -169,7 +189,7 @@ const BatchInventoryQuery: React.FC = () => {
   const actionRef = useRef<any>(null);
   const [summary, setSummary] = useState({
     total_records: 0,
-    total_quantity: 0,
+    total_primary_quantity: 0,
     in_stock_count: 0,
     zero_stock_count: 0,
     expired_count: 0,
@@ -352,14 +372,20 @@ const BatchInventoryQuery: React.FC = () => {
         render: (_, r) => renderCell(r.texture),
       },
       {
-        title: t('common.unit'),
-        dataIndex: 'material_unit',
-        width: 72,
-        minWidth: 72,
+        title: t('app.kuaizhizao.warehouseInventory.colPrimaryUnit'),
+        dataIndex: 'primary_unit',
+        key: 'primary_unit',
+        width: 88,
+        minWidth: 88,
         uniTableKeepWidth: true,
         resizable: false,
+        align: 'right',
         hideInSearch: true,
-        render: (_, r) => renderCell(r.material_unit),
+        render: (_, r) => (
+          <div style={{ textAlign: 'right' }}>
+            <MaterialUnitLabel value={r.primary_unit ?? r.material_unit} />
+          </div>
+        ),
       },
       {
         title: t('app.kuaizhizao.batchInventoryQuery.colBatchNo'),
@@ -391,6 +417,22 @@ const BatchInventoryQuery: React.FC = () => {
         render: (_, record) => record.production_date || '-',
       },
       {
+        title: t('app.kuaizhizao.batchInventoryQuery.colShelfLifeDays'),
+        dataIndex: 'shelf_life_days',
+        key: 'shelf_life_days',
+        width: 88,
+        minWidth: 88,
+        uniTableKeepWidth: true,
+        resizable: false,
+        align: 'right',
+        hideInSearch: true,
+        render: (_, record) => {
+          const days = record.shelf_life_days;
+          if (days == null || days < 1) return '—';
+          return `${days}${t('app.master-data.materialForm.shelfLifeDayUnit')}`;
+        },
+      },
+      {
         title: t('app.kuaizhizao.batchInventoryQuery.colExpiryDate'),
         dataIndex: 'expiry_date',
         width: 132,
@@ -414,17 +456,65 @@ const BatchInventoryQuery: React.FC = () => {
         },
       },
       {
-        title: t('app.kuaizhizao.warehouseReports.colStockQty'),
-        dataIndex: 'quantity',
-        width: 100,
-        minWidth: 100,
+        title: t('app.kuaizhizao.warehouseInventory.colPrimaryQuantity'),
+        dataIndex: 'primary_quantity',
+        key: 'primary_quantity',
+        width: 110,
+        minWidth: 110,
         uniTableKeepWidth: true,
         resizable: false,
         align: 'right',
         valueType: 'digit',
         sorter: true,
         render: (_, record) => {
-          const qty = Number(record.quantity || 0);
+          const qty = Number(record.primary_quantity || 0);
+          return (
+            <span style={{ color: qty <= 0 ? '#ff4d4f' : undefined }}>{formatQuantity(qty)}</span>
+          );
+        },
+      },
+      {
+        title: t('app.kuaizhizao.warehouseInventory.colSecondaryUnit'),
+        dataIndex: 'secondary_unit',
+        key: 'secondary_unit',
+        width: 88,
+        minWidth: 88,
+        uniTableKeepWidth: true,
+        resizable: false,
+        align: 'right',
+        hideInSearch: true,
+        render: (_, r) => {
+          if (!inventoryRowShowsLedgerSecondary(r)) {
+            return <span style={{ textAlign: 'right' }}>—</span>;
+          }
+          return (
+            <div style={{ textAlign: 'right' }}>
+              <MaterialUnitLabel value={r.secondary_unit} />
+            </div>
+          );
+        },
+      },
+      {
+        title: t('app.kuaizhizao.warehouseInventory.colSecondaryQuantity'),
+        dataIndex: 'secondary_quantity',
+        key: 'secondary_quantity',
+        width: 110,
+        minWidth: 110,
+        uniTableKeepWidth: true,
+        resizable: false,
+        align: 'right',
+        hideInSearch: true,
+        render: (_, record) => {
+          if (!inventoryRowShowsLedgerSecondary(record)) {
+            return <span>—</span>;
+          }
+          if (
+            record.secondary_quantity === null ||
+            record.secondary_quantity === undefined
+          ) {
+            return <span>—</span>;
+          }
+          const qty = Number(record.secondary_quantity);
           return (
             <span style={{ color: qty <= 0 ? '#ff4d4f' : undefined }}>{formatQuantity(qty)}</span>
           );
@@ -589,11 +679,14 @@ const BatchInventoryQuery: React.FC = () => {
         t('app.master-data.materials.model'),
         t('app.kuaizhizao.warehouseInventory.colBrand'),
         t('app.kuaizhizao.warehouseInventory.colTexture'),
-        t('common.unit'),
+        t('app.kuaizhizao.warehouseInventory.colPrimaryUnit'),
         t('app.kuaizhizao.batchInventoryQuery.colBatchNo'),
         t('app.kuaizhizao.batchInventoryQuery.colProductionDate'),
+        t('app.kuaizhizao.batchInventoryQuery.colShelfLifeDays'),
         t('app.kuaizhizao.batchInventoryQuery.colExpiryDate'),
-        t('app.kuaizhizao.warehouseReports.colStockQty'),
+        t('app.kuaizhizao.warehouseInventory.colPrimaryQuantity'),
+        t('app.kuaizhizao.warehouseInventory.colSecondaryUnit'),
+        t('app.kuaizhizao.warehouseInventory.colSecondaryQuantity'),
         t('app.kuaizhizao.warehouseInventory.colLocation'),
         t('app.kuaizhizao.warehouseInventory.colInTransit'),
         t('app.kuaizhizao.warehouseInventory.colAlert'),
@@ -609,11 +702,20 @@ const BatchInventoryQuery: React.FC = () => {
           r.model,
           r.brand,
           r.texture,
-          r.material_unit,
+          r.primary_unit ?? r.material_unit,
           formatBatchNoForDisplay(r.batch_no) || '—',
           r.production_date,
+          r.shelf_life_days != null && r.shelf_life_days >= 1
+            ? `${r.shelf_life_days}${t('app.master-data.materialForm.shelfLifeDayUnit')}`
+            : '—',
           r.expiry_date,
-          r.quantity,
+          r.primary_quantity,
+          inventoryRowShowsLedgerSecondary(r) ? r.secondary_unit ?? '' : '—',
+          inventoryRowShowsLedgerSecondary(r) &&
+          r.secondary_quantity !== null &&
+          r.secondary_quantity !== undefined
+            ? r.secondary_quantity
+            : '—',
           formatInventoryLocationDisplay(r) || '-',
           r.in_transit_quantity ?? 0,
           r.alert_label,
@@ -643,7 +745,7 @@ const BatchInventoryQuery: React.FC = () => {
       { title: t('app.kuaizhizao.warehouseCommon.statRecords'), value: summary.total_records },
       {
         title: t('app.kuaizhizao.warehouseCommon.statTotalQty'),
-        value: summary.total_quantity,
+        value: summary.total_primary_quantity,
         precision: 2,
       },
       { title: t('app.kuaizhizao.warehouseCommon.statInStock'), value: summary.in_stock_count },
