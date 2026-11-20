@@ -106,8 +106,16 @@ async def get_mobile_pending_approvals(
 async def get_mobile_home_bootstrap(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     user: Annotated[User, Depends(get_current_user)],
+    refresh: Annotated[
+        bool,
+        Query(description="下拉刷新时传 true，跳过菜单徽章进程内缓存"),
+    ] = False,
 ) -> MobileHomeBootstrapOut:
-    payload = await fetch_mobile_home_bootstrap(tenant_id=tenant_id, user=user)
+    payload = await fetch_mobile_home_bootstrap(
+        tenant_id=tenant_id,
+        user=user,
+        refresh_badges=refresh,
+    )
     return MobileHomeBootstrapOut.model_validate(payload)
 
 

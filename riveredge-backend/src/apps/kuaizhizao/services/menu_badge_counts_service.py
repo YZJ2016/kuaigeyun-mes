@@ -883,6 +883,7 @@ async def fetch_menu_badge_counts(
     user: User,
     *,
     sections: list[str] | None = None,
+    bypass_section_cache: bool = False,
 ) -> dict:
     from core.services.authorization.effective_access_service import EffectiveAccessService
     from core.services.authorization.permission_version_service import PermissionVersionService
@@ -918,6 +919,7 @@ async def fetch_menu_badge_counts(
             permission_version=permission_version,
             section_key=section_key,
             compute=compute,
+            bypass_cache=bypass_section_cache,
         )
 
     if not keys:

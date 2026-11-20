@@ -17,6 +17,13 @@ from infra.models.user import User
 
 _MANIFEST_PATH = ApplicationService._get_plugins_directory() / "kuaizhizao" / "manifest.json"
 
+# 手机入口角标只计待审/逾期，不计「已审核待转单」等进行中（与审批待办语义一致）
+MOBILE_WORKBENCH_BADGE_PENDING_ONLY_KEYS: frozenset[str] = frozenset(
+    {
+        "purchase_requisition",
+    }
+)
+
 # 手机工作台首屏分区 scope 顺序（与 riveredge-app/mobile workbenchService 一致）
 MOBILE_WORKBENCH_HOME_SCOPES: tuple[str, ...] = (
     "workshop",
@@ -126,7 +133,7 @@ def _filter_scope_sections(
             icon_group = (entry.get("icon_group") or "").strip()
             if icon_group:
                 item["icon_group"] = icon_group
-            if entry.get("solo_row"):
+            if entry.get("solo_row") and (entry.get("key") or "").strip() != "today-tasks":
                 item["solo_row"] = True
             badge_keys = _entry_badge_keys(entry)
             if badge_keys:
@@ -154,7 +161,7 @@ def _entry_badge_keys(entry: dict[str, Any]) -> list[str]:
     return []
 
 
-def _open_badge_count(triple: Any) -> int:
+def _open_badge_count(triple: Any, *, pending_only: bool = False) -> int:
     if isinstance(triple, (int, float)):
         n = int(triple)
         return n if n > 0 else 0
@@ -162,7 +169,7 @@ def _open_badge_count(triple: Any) -> int:
         return 0
     overdue = int(triple.get("overdue") or 0)
     pending = int(triple.get("pending") or 0)
-    in_progress = int(triple.get("in_progress") or 0)
+    in_progress = 0 if pending_only else int(triple.get("in_progress") or 0)
     n = overdue + pending + in_progress
     return n if n > 0 else 0
 
@@ -170,14 +177,20 @@ def _open_badge_count(triple: Any) -> int:
 def apply_workbench_badge_counts(
     sections: list[dict[str, Any]],
     counts: dict[str, Any],
+    *,
+    pending_only_keys: frozenset[str] | None = None,
 ) -> list[dict[str, Any]]:
     """把 menu-badge-counts 的待办数挂到入口上。无 badge_key 的入口为 0。"""
+    pending_only_keys = pending_only_keys or frozenset()
     for section in sections:
         for entry in section.get("entries") or []:
             keys = entry.pop("_badge_keys", None) or []
             total = 0
             for key in keys:
-                total += _open_badge_count(counts.get(key))
+                total += _open_badge_count(
+                    counts.get(key),
+                    pending_only=key in pending_only_keys,
+                )
             entry["badge_count"] = total
     return sections
 
@@ -214,6 +227,7 @@ async def attach_workbench_badge_counts(
     *,
     tenant_id: int,
     user: User,
+    bypass_section_cache: bool = False,
 ) -> list[dict[str, Any]]:
     needed: set[str] = set()
     for section in sections:
@@ -226,8 +240,19 @@ async def attach_workbench_badge_counts(
                 entry.pop("_badge_keys", None)
                 entry["badge_count"] = 0
         return sections
-    counts = await _shared_menu_badge_counts(tenant_id=tenant_id, user=user)
-    return apply_workbench_badge_counts(sections, counts)
+    if bypass_section_cache:
+        counts = await fetch_menu_badge_counts(
+            tenant_id,
+            user,
+            bypass_section_cache=True,
+        )
+    else:
+        counts = await _shared_menu_badge_counts(tenant_id=tenant_id, user=user)
+    return apply_workbench_badge_counts(
+        sections,
+        counts,
+        pending_only_keys=MOBILE_WORKBENCH_BADGE_PENDING_ONLY_KEYS,
+    )
 
 
 async def resolve_mobile_workbench_home(
@@ -235,6 +260,7 @@ async def resolve_mobile_workbench_home(
     tenant_id: int,
     user: User,
     access: EffectiveUserAccess | None = None,
+    bypass_section_cache: bool = False,
 ) -> list[dict[str, Any]]:
     cfg = _load_mobile_workbench_config()
     scopes = cfg.get("scopes")
@@ -267,7 +293,10 @@ async def resolve_mobile_workbench_home(
             seen.add(dedupe_key)
             merged.append(section)
     return await attach_workbench_badge_counts(
-        merged, tenant_id=tenant_id, user=user
+        merged,
+        tenant_id=tenant_id,
+        user=user,
+        bypass_section_cache=bypass_section_cache,
     )
 
 
@@ -276,10 +305,15 @@ async def resolve_mobile_workbench(
     tenant_id: int,
     user: User,
     scope: str,
+    bypass_section_cache: bool = False,
 ) -> list[dict[str, Any]]:
     scope_key = (scope or "").strip()
     if scope_key == "home":
-        return await resolve_mobile_workbench_home(tenant_id=tenant_id, user=user)
+        return await resolve_mobile_workbench_home(
+            tenant_id=tenant_id,
+            user=user,
+            bypass_section_cache=bypass_section_cache,
+        )
 
     cfg = _load_mobile_workbench_config()
     scopes = cfg.get("scopes")
@@ -302,4 +336,5 @@ async def resolve_mobile_workbench(
         ),
         tenant_id=tenant_id,
         user=user,
+        bypass_section_cache=bypass_section_cache,
     )
