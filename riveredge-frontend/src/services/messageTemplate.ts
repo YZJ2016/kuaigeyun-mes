@@ -18,6 +18,8 @@ export interface MessageTemplate {
   content: string;
   variables?: Record<string, any>;
   is_active: boolean;
+  category_uuid?: string | null;
+  category_name?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -28,6 +30,8 @@ export interface MessageTemplateListParams {
   type?: string;
   is_active?: boolean;
   keyword?: string;
+  category_uuid?: string;
+  no_category?: boolean;
 }
 
 export interface CreateMessageTemplateData {
@@ -39,6 +43,7 @@ export interface CreateMessageTemplateData {
   content: string;
   variables?: Record<string, any>;
   is_active?: boolean;
+  category_uuid?: string;
 }
 
 export interface UpdateMessageTemplateData {
@@ -48,6 +53,7 @@ export interface UpdateMessageTemplateData {
   content?: string;
   variables?: Record<string, any>;
   is_active?: boolean;
+  category_uuid?: string | null;
 }
 
 /**

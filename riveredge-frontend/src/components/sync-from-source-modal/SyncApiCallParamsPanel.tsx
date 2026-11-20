@@ -1,5 +1,6 @@
 /**
- * 来源设置内嵌：编辑本次调用参数 + 按 pageSize 批量填入本系统物料编码
+ * 来源设置内嵌：编辑本次调用参数 + 按本系统编码分批填入
+ * （物料编码，或仓库仓位关系的仓库编码）
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -8,12 +9,16 @@ import { App, Button, Checkbox, Input, Pagination, Select, Space, Spin, Switch, 
 import { CustomFieldJsonEditor } from '../custom-fields/CustomFieldJsonEditor';
 import { getAPIByUuid } from '../../services/apiManagement';
 import { materialApi } from '../../apps/master-data/services/material';
+import { warehouseApi } from '../../apps/master-data/services/warehouse';
 import {
   asJsonObject,
   collectLeafPaths,
-  resolveCallPageSize,
+  ensureCosmicListRequestData,
+  isWarehouseLocationReferenceApi,
+  resolveBatchFillChunkSize,
   setByPath,
   suggestMaterialFillPath,
+  suggestWarehouseFillPath,
 } from './syncCallParams';
 
 export interface SyncApiCallParamsPanelProps {
@@ -23,6 +28,7 @@ export interface SyncApiCallParamsPanelProps {
   persistOverride: boolean;
   batchFillPath?: string;
   batchFillValues?: string[];
+  localCodesLoader?: 'material' | 'warehouse';
   onChange: (next: {
     request_body?: Record<string, unknown>;
     request_params?: Record<string, unknown>;
@@ -32,7 +38,7 @@ export interface SyncApiCallParamsPanelProps {
   }) => void;
 }
 
-type MaterialFillStash = {
+type BatchFillStash = {
   path?: string;
   values?: string[];
 };
@@ -47,9 +53,28 @@ async function fetchAllLocalMaterialCodes(): Promise<string[]> {
   let skip = 0;
   const limit = 2000;
   for (let page = 0; page < 50; page += 1) {
-    const res = await materialApi.list({ skip, limit, isActive: true });
+    const res = await materialApi.list({ skip, limit, is_active: true });
     for (const item of res.items) {
       const code = materialCodeOf(item);
+      if (!code || seen.has(code)) continue;
+      seen.add(code);
+      codes.push(code);
+    }
+    if (res.items.length < limit || (res.total > 0 && codes.length >= res.total)) break;
+    skip += res.items.length;
+  }
+  return codes;
+}
+
+async function fetchAllLocalWarehouseCodes(): Promise<string[]> {
+  const codes: string[] = [];
+  const seen = new Set<string>();
+  let skip = 0;
+  const limit = 1000;
+  for (let page = 0; page < 50; page += 1) {
+    const res = await warehouseApi.list({ skip, limit, is_active: true });
+    for (const item of res.items) {
+      const code = String(item.code ?? '').trim();
       if (!code || seen.has(code)) continue;
       seen.add(code);
       codes.push(code);
@@ -67,6 +92,7 @@ export const SyncApiCallParamsPanel: React.FC<SyncApiCallParamsPanelProps> = ({
   persistOverride,
   batchFillPath,
   batchFillValues,
+  localCodesLoader = 'material',
   onChange,
 }) => {
   const { t } = useTranslation();
@@ -78,21 +104,25 @@ export const SyncApiCallParamsPanel: React.FC<SyncApiCallParamsPanelProps> = ({
   const [showParams, setShowParams] = useState(false);
   const [codeFilter, setCodeFilter] = useState('');
   const [codePage, setCodePage] = useState(1);
-  const [materialFillEnabled, setMaterialFillEnabled] = useState(
+  const [apiPathHint, setApiPathHint] = useState('');
+  // 仓位关系接口即使父级未传 warehouse loader，也不得展示/走物料编码填充
+  const isWarehouseFill =
+    localCodesLoader === 'warehouse' || isWarehouseLocationReferenceApi(apiPathHint);
+  const [batchFillEnabled, setBatchFillEnabled] = useState(
     () => Boolean(batchFillPath || batchFillValues?.length),
   );
-  const materialFillStashRef = useRef<MaterialFillStash>({
+  const batchFillStashRef = useRef<BatchFillStash>({
     path: batchFillPath,
     values: batchFillValues,
   });
   const codePageSize = 20;
   const codes = batchFillValues ?? [];
 
-  // 外部带回填充配置时打开开关；关闭由用户开关控制，避免空 stash 时被 props 回拨关掉
+  // 外部带回填充配置时打开开关；关闭由用户开关控制，避免空 stash 时被 props 回弹关掉
   useEffect(() => {
     if (!(batchFillPath || batchFillValues?.length)) return;
-    setMaterialFillEnabled(true);
-    materialFillStashRef.current = {
+    setBatchFillEnabled(true);
+    batchFillStashRef.current = {
       path: batchFillPath,
       values: batchFillValues,
     };
@@ -118,17 +148,17 @@ export const SyncApiCallParamsPanel: React.FC<SyncApiCallParamsPanelProps> = ({
     [onChange, requestBody, requestParams, persistOverride, batchFillPath, batchFillValues],
   );
 
-  const handleMaterialFillEnabledChange = (enabled: boolean) => {
-    setMaterialFillEnabled(enabled);
+  const handleBatchFillEnabledChange = (enabled: boolean) => {
+    setBatchFillEnabled(enabled);
     if (enabled) {
-      const stash = materialFillStashRef.current;
+      const stash = batchFillStashRef.current;
       emit({
         batch_fill_path: stash.path,
         batch_fill_values: stash.values,
       });
       return;
     }
-    materialFillStashRef.current = {
+    batchFillStashRef.current = {
       path: batchFillPath,
       values: batchFillValues,
     };
@@ -139,23 +169,41 @@ export const SyncApiCallParamsPanel: React.FC<SyncApiCallParamsPanelProps> = ({
   };
 
   useEffect(() => {
-    if (!apiUuid) return;
+    if (!apiUuid) {
+      setApiPathHint('');
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     void getAPIByUuid(apiUuid)
       .then((api) => {
         if (cancelled) return;
-        const apiBody = asJsonObject(api.request_body);
+        const apiMeta = {
+          path: String(api.path || ''),
+          code: String(api.code || ''),
+        };
+        setApiPathHint(`${apiMeta.path} ${apiMeta.code}`);
+        const apiBody = ensureCosmicListRequestData(asJsonObject(api.request_body), apiMeta);
         const apiParams = asJsonObject(api.request_params);
         setDefaultBody(apiBody);
         setDefaultParams(apiParams);
         setShowParams(Object.keys(apiParams).length > 0 || Boolean(requestParams));
         if (!requestBody) {
           emit({ request_body: apiBody, request_params: Object.keys(apiParams).length ? apiParams : undefined });
+        } else {
+          // 历史「记住调用参数」可能缺 data；与接口模板对齐同一契约，不另起源设定
+          const healed = ensureCosmicListRequestData(requestBody, apiMeta);
+          if (JSON.stringify(healed) !== JSON.stringify(requestBody)) {
+            emit({
+              request_body: healed,
+              request_params: requestParams,
+            });
+          }
         }
       })
       .catch((error: unknown) => {
         if (cancelled) return;
+        setApiPathHint('');
         messageApi.error(
           error instanceof Error ? error.message : t('components.syncFromSource.loadApiParamsFailed'),
         );
@@ -172,9 +220,11 @@ export const SyncApiCallParamsPanel: React.FC<SyncApiCallParamsPanelProps> = ({
 
   const workingBody = requestBody ?? defaultBody;
   const leafPaths = useMemo(() => collectLeafPaths(workingBody), [workingBody]);
-  const fillPath = batchFillPath || suggestMaterialFillPath(leafPaths);
-  const pageSize = resolveCallPageSize(workingBody);
-  const batchCount = codes.length === 0 ? 0 : Math.ceil(codes.length / pageSize);
+  const fillPath =
+    batchFillPath ||
+    (isWarehouseFill ? suggestWarehouseFillPath(leafPaths) : suggestMaterialFillPath(leafPaths));
+  const fillChunkSize = resolveBatchFillChunkSize(workingBody, fillPath, apiPathHint);
+  const batchCount = codes.length === 0 ? 0 : Math.ceil(codes.length / fillChunkSize);
 
   const filteredCodes = useMemo(() => {
     const keyword = codeFilter.trim().toLowerCase();
@@ -186,7 +236,7 @@ export const SyncApiCallParamsPanel: React.FC<SyncApiCallParamsPanelProps> = ({
 
   const handleReset = () => {
     emit({
-      request_body: asJsonObject(defaultBody),
+      request_body: ensureCosmicListRequestData(defaultBody),
       request_params: Object.keys(defaultParams).length ? asJsonObject(defaultParams) : undefined,
       batch_fill_path: undefined,
       batch_fill_values: undefined,
@@ -198,30 +248,52 @@ export const SyncApiCallParamsPanel: React.FC<SyncApiCallParamsPanelProps> = ({
   const handleLoadCodes = async () => {
     setCodesLoading(true);
     try {
-      const next = await fetchAllLocalMaterialCodes();
+      const next = isWarehouseFill
+        ? await fetchAllLocalWarehouseCodes()
+        : await fetchAllLocalMaterialCodes();
       if (next.length === 0) {
-        messageApi.warning(t('components.syncFromSource.materialCodesEmpty'));
+        messageApi.warning(
+          t(
+            isWarehouseFill
+              ? 'components.syncFromSource.warehouseCodesEmpty'
+              : 'components.syncFromSource.materialCodesEmpty',
+          ),
+        );
         return;
       }
-      const path = fillPath || suggestMaterialFillPath(leafPaths);
+      const path =
+        fillPath ||
+        (isWarehouseFill ? suggestWarehouseFillPath(leafPaths) : suggestMaterialFillPath(leafPaths));
+      const chunkSize = resolveBatchFillChunkSize(workingBody, path, apiPathHint);
+      const previewVal =
+        chunkSize === 1 ? next[0] : next.slice(0, chunkSize).join(',');
       emit({
         batch_fill_path: path,
         batch_fill_values: next,
-        request_body: path
-          ? setByPath(workingBody, path, next.slice(0, pageSize).join(','))
-          : workingBody,
+        request_body: path ? setByPath(workingBody, path, previewVal) : workingBody,
       });
       setCodePage(1);
       messageApi.success(
-        t('components.syncFromSource.materialCodesLoaded', {
-          count: next.length,
-          pageSize,
-          batches: Math.ceil(next.length / pageSize),
-        }),
+        t(
+          isWarehouseFill
+            ? 'components.syncFromSource.warehouseCodesLoaded'
+            : 'components.syncFromSource.materialCodesLoaded',
+          {
+            count: next.length,
+            pageSize: chunkSize,
+            batches: Math.ceil(next.length / chunkSize),
+          },
+        ),
       );
     } catch (error: unknown) {
       messageApi.error(
-        error instanceof Error ? error.message : t('components.syncFromSource.materialCodesLoadFailed'),
+        error instanceof Error
+          ? error.message
+          : t(
+              isWarehouseFill
+                ? 'components.syncFromSource.warehouseCodesLoadFailed'
+                : 'components.syncFromSource.materialCodesLoadFailed',
+            ),
       );
     } finally {
       setCodesLoading(false);
@@ -231,11 +303,16 @@ export const SyncApiCallParamsPanel: React.FC<SyncApiCallParamsPanelProps> = ({
   const handleRemoveCode = (code: string) => {
     const next = codes.filter((item) => item !== code);
     const path = fillPath;
+    const chunkSize = resolveBatchFillChunkSize(workingBody, path, apiPathHint);
+    const previewVal =
+      path && next.length > 0
+        ? chunkSize === 1
+          ? next[0]
+          : next.slice(0, chunkSize).join(',')
+        : undefined;
     emit({
       batch_fill_values: next,
-      request_body: path
-        ? setByPath(workingBody, path, next.slice(0, pageSize).join(','))
-        : workingBody,
+      request_body: previewVal !== undefined && path ? setByPath(workingBody, path, previewVal) : workingBody,
     });
   };
 
@@ -243,22 +320,32 @@ export const SyncApiCallParamsPanel: React.FC<SyncApiCallParamsPanelProps> = ({
     const drop = new Set(filteredCodes);
     const next = codes.filter((item) => !drop.has(item));
     const path = fillPath;
+    const chunkSize = resolveBatchFillChunkSize(workingBody, path, apiPathHint);
+    const previewVal =
+      path && next.length > 0
+        ? chunkSize === 1
+          ? next[0]
+          : next.slice(0, chunkSize).join(',')
+        : undefined;
     emit({
       batch_fill_values: next,
-      request_body: path
-        ? setByPath(workingBody, path, next.slice(0, pageSize).join(','))
-        : workingBody,
+      request_body: previewVal !== undefined && path ? setByPath(workingBody, path, previewVal) : workingBody,
     });
     setCodePage(1);
   };
 
   const handleFillPathChange = (path: string) => {
+    const chunkSize = resolveBatchFillChunkSize(workingBody, path, apiPathHint);
+    const previewVal =
+      path && codes.length > 0
+        ? chunkSize === 1
+          ? codes[0]
+          : codes.slice(0, chunkSize).join(',')
+        : undefined;
     emit({
       batch_fill_path: path,
       request_body:
-        path && codes.length > 0
-          ? setByPath(workingBody, path, codes.slice(0, pageSize).join(','))
-          : workingBody,
+        previewVal !== undefined ? setByPath(workingBody, path, previewVal) : workingBody,
     });
   };
 
@@ -299,26 +386,47 @@ export const SyncApiCallParamsPanel: React.FC<SyncApiCallParamsPanelProps> = ({
 
           <Space align="center" style={{ width: '100%', justifyContent: 'space-between' }}>
             <Typography.Title level={5} style={{ margin: 0 }}>
-              {t('components.syncFromSource.materialFillTitle')}
+              {t(
+                isWarehouseFill
+                  ? 'components.syncFromSource.warehouseFillTitle'
+                  : 'components.syncFromSource.materialFillTitle',
+              )}
             </Typography.Title>
             <Space size="small">
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {t('components.syncFromSource.materialFillEnable')}
+                {t(
+                  isWarehouseFill
+                    ? 'components.syncFromSource.warehouseFillEnable'
+                    : 'components.syncFromSource.materialFillEnable',
+                )}
               </Typography.Text>
-              <Switch checked={materialFillEnabled} onChange={handleMaterialFillEnabledChange} />
+              <Switch checked={batchFillEnabled} onChange={handleBatchFillEnabledChange} />
             </Space>
           </Space>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {materialFillEnabled
-              ? t('components.syncFromSource.materialFillHint', { pageSize })
-              : t('components.syncFromSource.materialFillEnableHint')}
+            {batchFillEnabled
+              ? t(
+                  isWarehouseFill
+                    ? 'components.syncFromSource.warehouseFillHint'
+                    : 'components.syncFromSource.materialFillHint',
+                  { pageSize: fillChunkSize },
+                )
+              : t(
+                  isWarehouseFill
+                    ? 'components.syncFromSource.warehouseFillEnableHint'
+                    : 'components.syncFromSource.materialFillEnableHint',
+                )}
           </Typography.Text>
-          {materialFillEnabled ? (
+          {batchFillEnabled ? (
             <>
               <Space wrap style={{ width: '100%' }}>
                 <Select
                   style={{ minWidth: 240, flex: 1 }}
-                  placeholder={t('components.syncFromSource.materialFillPathPlaceholder')}
+                  placeholder={t(
+                    isWarehouseFill
+                      ? 'components.syncFromSource.warehouseFillPathPlaceholder'
+                      : 'components.syncFromSource.materialFillPathPlaceholder',
+                  )}
                   options={leafPaths.map((item) => ({ label: item.label, value: item.path }))}
                   value={fillPath}
                   onChange={handleFillPathChange}
@@ -326,24 +434,37 @@ export const SyncApiCallParamsPanel: React.FC<SyncApiCallParamsPanelProps> = ({
                   optionFilterProp="label"
                 />
                 <Button loading={codesLoading} onClick={() => void handleLoadCodes()}>
-                  {t('components.syncFromSource.loadMaterialCodes')}
+                  {t(
+                    isWarehouseFill
+                      ? 'components.syncFromSource.loadWarehouseCodes'
+                      : 'components.syncFromSource.loadMaterialCodes',
+                  )}
                 </Button>
               </Space>
               {codes.length > 0 ? (
                 <>
                   <Typography.Text>
-                    {t('components.syncFromSource.materialCodesSummary', {
-                      count: codes.length,
-                      pageSize,
-                      batches: batchCount,
-                      shown: Math.min(pageSize, codes.length),
-                    })}
+                    {t(
+                      isWarehouseFill
+                        ? 'components.syncFromSource.warehouseCodesSummary'
+                        : 'components.syncFromSource.materialCodesSummary',
+                      {
+                        count: codes.length,
+                        pageSize: fillChunkSize,
+                        batches: batchCount,
+                        shown: Math.min(fillChunkSize, codes.length),
+                      },
+                    )}
                   </Typography.Text>
                   <Space wrap style={{ width: '100%' }}>
                     <Input
                       allowClear
                       style={{ maxWidth: 280 }}
-                      placeholder={t('components.syncFromSource.materialCodeFilter')}
+                      placeholder={t(
+                        isWarehouseFill
+                          ? 'components.syncFromSource.warehouseCodeFilter'
+                          : 'components.syncFromSource.materialCodeFilter',
+                      )}
                       value={codeFilter}
                       onChange={(event) => {
                         setCodeFilter(event.target.value);
@@ -354,9 +475,17 @@ export const SyncApiCallParamsPanel: React.FC<SyncApiCallParamsPanelProps> = ({
                       {t('components.syncFromSource.removeFilteredCodes')}
                     </Button>
                   </Space>
-                  <div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                      gap: 8,
+                      marginBlock: '8px 12px',
+                    }}
+                  >
                     {pagedCodes.map((code) => (
-                      <Tag key={code} closable onClose={() => handleRemoveCode(code)} style={{ marginBottom: 6 }}>
+                      <Tag key={code} variant="filled" closable onClose={() => handleRemoveCode(code)}>
                         {code}
                       </Tag>
                     ))}

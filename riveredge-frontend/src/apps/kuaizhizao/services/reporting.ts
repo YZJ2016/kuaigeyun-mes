@@ -74,12 +74,17 @@ export interface ReportingRecord {
   reported_quantity?: number;
   qualified_quantity?: number;
   unqualified_quantity?: number;
+  /** 待登记不合格剩余（已返修/已登记/已直开报废后扣减） */
+  unqualified_remaining?: number;
   work_hours?: number;
   work_start_time?: string;
   work_end_time?: string;
   status?: string;
+  review_status?: string;
   reported_at?: string;
   created_at?: string;
+  capabilities?: Record<string, { allowed?: boolean; reason?: string | null }>;
+
   post_action_notices?: Array<{
     level?: 'info' | 'warning' | 'success';
     code?: string;
@@ -180,6 +185,17 @@ export const reportingApi = {
     apiRequest(`/apps/kuaizhizao/reporting/${id}/revoke`, { method: 'POST' }),
   batchRevoke: async (ids: string[]) =>
     apiRequest('/apps/kuaizhizao/reporting/batch-revoke', { method: 'POST', data: { record_ids: ids.map(Number) } }),
+  commit: async (id: number) =>
+    apiRequest(`/core/uni-audit/reporting_record/${id}/submit`, { method: 'POST' }),
+  submitForReview: async (id: number) =>
+    apiRequest(`/core/uni-audit/reporting_record/${id}/submit_review`, { method: 'POST' }),
+  withdrawSubmit: async (id: number) =>
+    apiRequest(`/core/uni-audit/reporting_record/${id}/withdraw`, { method: 'POST' }),
+  revokeApproval: async (id: number) =>
+    apiRequest(`/core/uni-audit/reporting_record/${id}/revoke`, { method: 'POST' }),
+  approveViaAudit: async (id: number) =>
+    apiRequest(`/core/uni-audit/reporting_record/${id}/approve`, { method: 'POST' }),
+
   getStatistics: async (params?: any) =>
     apiRequest<ReportingDetailedStatistics>('/apps/kuaizhizao/reporting/statistics', { method: 'GET', params }),
   recordScrap: async (recordId: string, data: any, options?: { stationOperatorSession?: boolean }) =>

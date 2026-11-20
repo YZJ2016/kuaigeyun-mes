@@ -23,8 +23,10 @@ import { useTranslation } from 'react-i18next';
 import { useNumericPrecision } from '../../../hooks/useNumericPrecision';
 import dayjs from 'dayjs';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
+import { CustomFieldsFormSection } from '../../../components/custom-fields';
 import { UniDropdown } from '../../../components/uni-dropdown';
 import { UniTableDetail } from '../../../components/uni-table-detail';
+import { useCustomFields } from '../../../hooks/useCustomFields';
 import {
   DOCUMENT_DETAIL_COL_WIDTH,
   DOCUMENT_DETAIL_CONTROL_SIZE,
@@ -135,6 +137,9 @@ export interface AfterSalesTicketFormModalProps {
   preset?: AfterSalesTicketPreset | null;
 }
 
+const TICKET_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_after_sales_tickets';
+const TICKET_HOST_RESOURCE = 'kuaizhizao:after-sales-ticket';
+
 export const AfterSalesTicketFormModal: React.FC<AfterSalesTicketFormModalProps> = ({
   open,
   onClose,
@@ -159,6 +164,19 @@ export const AfterSalesTicketFormModal: React.FC<AfterSalesTicketFormModalProps>
   const [itemPickerLoading, setItemPickerLoading] = useState(false);
   const [sourceOrderItems, setSourceOrderItems] = useState<SalesOrderItem[]>([]);
   const [selectedSourceItemKeys, setSelectedSourceItemKeys] = useState<React.Key[]>([]);
+  const {
+    customFields,
+    customFieldValues,
+    loadFieldValues,
+    extractFormValues,
+    saveCustomFieldValues,
+    resetFieldValues,
+  } = useCustomFields({
+    tableName: TICKET_CUSTOM_FIELD_TABLE,
+    hostResource: TICKET_HOST_RESOURCE,
+    loadWhenOpen: true,
+    open,
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -204,8 +222,14 @@ export const AfterSalesTicketFormModal: React.FC<AfterSalesTicketFormModalProps>
           notes: it.notes ?? undefined,
         })),
       });
+      if (editing.id != null) {
+        void loadFieldValues(editing.id).then((cfValues) => {
+          form.setFieldsValue(cfValues);
+        });
+      }
       return;
     }
+    resetFieldValues();
     const presetSoId =
       preset?.sales_order_id != null && Number(preset.sales_order_id) > 0
         ? Number(preset.sales_order_id)
@@ -221,7 +245,7 @@ export const AfterSalesTicketFormModal: React.FC<AfterSalesTicketFormModalProps>
       sales_order_id: preset?.sales_order_id,
       items: [],
     });
-  }, [open, form, editing, preset]);
+  }, [open, form, editing, preset, loadFieldValues, resetFieldValues]);
 
   useEffect(() => {
     if (!open || !salesOrderDropdownOpen || modalCustomerId == null) {
@@ -510,21 +534,23 @@ export const AfterSalesTicketFormModal: React.FC<AfterSalesTicketFormModalProps>
       message.error(t('app.kuaizhizao.afterSalesTicket.closedCannotEdit'));
       throw new Error('closed_cannot_edit');
     }
+    const { customData, standardValues } = extractFormValues(v, form);
     const payload = {
-      request_type: v.request_type,
-      content: String(v.content ?? '').trim(),
+      request_type: standardValues.request_type ?? v.request_type,
+      content: String(standardValues.content ?? v.content ?? '').trim(),
       registered_at: registered,
       sales_order_id: salesOrderId,
-      resolution: v.resolution?.trim() || null,
-      status: v.status,
+      resolution: String(standardValues.resolution ?? v.resolution ?? '').trim() || null,
+      status: standardValues.status ?? v.status,
       items,
     };
     try {
+      let savedId = editing?.id;
       if (editing) {
         await afterSalesTicketApi.update(editing.id, payload);
         message.success(t('common.saveSuccess'));
       } else {
-        await afterSalesTicketApi.create({
+        const created = await afterSalesTicketApi.create({
           customer_id: customerId,
           request_type: payload.request_type,
           content: payload.content,
@@ -532,7 +558,11 @@ export const AfterSalesTicketFormModal: React.FC<AfterSalesTicketFormModalProps>
           sales_order_id: payload.sales_order_id,
           items: payload.items,
         });
+        savedId = created?.id;
         message.success(t('common.createSuccess'));
+      }
+      if (savedId != null) {
+        await saveCustomFieldValues(savedId, customData);
       }
     } catch (e: any) {
       message.error(
@@ -673,6 +703,11 @@ export const AfterSalesTicketFormModal: React.FC<AfterSalesTicketFormModalProps>
             </Col>
           ) : null}
         </Row>
+        <CustomFieldsFormSection
+          customFields={customFields}
+          customFieldValues={customFieldValues}
+          gridColumns={2}
+        />
       </FormModalTemplate>
 
       <Modal

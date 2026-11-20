@@ -7,6 +7,8 @@
 
 import { apiRequest } from './api';
 
+export type ApiInterfaceType = 'standard' | 'custom';
+
 export interface API {
   uuid: string;
   tenant_id: number;
@@ -32,10 +34,28 @@ export interface API {
     field_name: string;
     mapping: Record<string, string>;
   }> | null;
+  /** 出站字段映射：本地字段 → 对方字段 */
+  outbound_field_mappings?: Array<{
+    enabled?: boolean;
+    level?: 'header' | 'entry';
+    source_table?: string;
+    local_field?: string;
+    remote_field?: string;
+    default_value?: string | number | boolean | null;
+  }> | null;
   is_active: boolean;
   is_system: boolean;
+  /** 关联 MES 单据 source_type（可选） */
+  related_document_code?: string | null;
+  /** standard 标准API / custom 自定义API */
+  api_interface_type?: ApiInterfaceType;
   created_at: string;
   updated_at: string;
+}
+
+export interface APIRelatedDocumentOption {
+  code: string;
+  label: string;
 }
 
 export type ApiSyncDirection = 'pull' | 'push' | 'bidirectional';
@@ -51,6 +71,8 @@ export interface APIListParams {
   sort_order?: 'asc' | 'desc';
   category_uuid?: string;
   no_category?: boolean;
+  related_document_code?: string;
+  no_related_document?: boolean;
 }
 
 export interface APIListResponse {
@@ -78,8 +100,18 @@ export interface CreateAPIData {
     field_name: string;
     mapping: Record<string, string>;
   }> | null;
+  outbound_field_mappings?: Array<{
+    enabled?: boolean;
+    level?: 'header' | 'entry';
+    source_table?: string;
+    local_field?: string;
+    remote_field?: string;
+    default_value?: string | number | boolean | null;
+  }> | null;
   is_active?: boolean;
   is_system?: boolean;
+  related_document_code?: string | null;
+  api_interface_type?: ApiInterfaceType;
 }
 
 export interface UpdateAPIData {
@@ -100,7 +132,39 @@ export interface UpdateAPIData {
     field_name: string;
     mapping: Record<string, string>;
   }> | null;
+  outbound_field_mappings?: Array<{
+    enabled?: boolean;
+    level?: 'header' | 'entry';
+    source_table?: string;
+    local_field?: string;
+    remote_field?: string;
+    default_value?: string | number | boolean | null;
+  }> | null;
   is_active?: boolean;
+  related_document_code?: string | null;
+  api_interface_type?: ApiInterfaceType;
+}
+
+export async function getAPIRelatedDocumentOptions(): Promise<APIRelatedDocumentOption[]> {
+  const res = await apiRequest<{ items: APIRelatedDocumentOption[] }>(
+    '/api/v1/core/apis/related-document-options',
+    { method: 'GET' },
+  );
+  return res.items ?? [];
+}
+
+export interface APIRelatedDocumentGroupCount {
+  category_uuid?: string | null;
+  related_document_code?: string | null;
+  count: number;
+}
+
+export async function getAPIRelatedDocumentGroupCounts(): Promise<APIRelatedDocumentGroupCount[]> {
+  const res = await apiRequest<{ items: APIRelatedDocumentGroupCount[] }>(
+    '/api/v1/core/apis/related-document-group-counts',
+    { method: 'GET' },
+  );
+  return res.items ?? [];
 }
 
 export interface APITestRequest {
@@ -171,6 +235,9 @@ export interface SubmitOfficialApiLibraryResult {
   status: string;
 }
 
+/** 与后端 `apis.list_apis` 的 Query le= 一致，超出会被截断或 422 */
+export const API_LIST_MAX_PAGE_SIZE = 100;
+
 /**
  * 获取接口列表
  * 
@@ -183,6 +250,27 @@ export async function getAPIList(params?: APIListParams): Promise<APIListRespons
   return apiRequest<APIListResponse>('/core/apis', {
     params,
   });
+}
+
+/**
+ * 分页拉取全部匹配接口（含 request_body 等完整字段，用于备份导出）。
+ */
+export async function getAPIListAllMatching(
+  params?: Omit<APIListParams, 'page' | 'page_size'>,
+): Promise<API[]> {
+  const page_size = API_LIST_MAX_PAGE_SIZE;
+  let page = 1;
+  const out: API[] = [];
+  for (;;) {
+    const res = await getAPIList({ ...params, page, page_size });
+    out.push(...res.items);
+    if (res.items.length === 0 || res.items.length < page_size || out.length >= res.total) {
+      break;
+    }
+    page += 1;
+    if (page > 500) break;
+  }
+  return out;
 }
 
 /**
@@ -210,6 +298,47 @@ export async function createAPI(data: CreateAPIData): Promise<API> {
     method: 'POST',
     data,
   });
+}
+
+export interface APIBulkUpsertFailedItem {
+  index: number;
+  code?: string | null;
+  reason: string;
+}
+
+export interface APIBulkUpsertResponse {
+  created_count: number;
+  updated_count: number;
+  failed_count: number;
+  requested_count: number;
+  failed_items: APIBulkUpsertFailedItem[];
+}
+
+/** 单次最多 200 条；按 code 存在则更新、否则新建。 */
+export async function bulkUpsertAPIs(
+  items: CreateAPIData[],
+): Promise<APIBulkUpsertResponse> {
+  const raw = (await apiRequest<Record<string, unknown>>('/core/apis/actions/bulk-upsert', {
+    method: 'POST',
+    data: { items },
+  })) as Record<string, unknown>;
+  const failedRaw = Array.isArray(raw?.failed_items)
+    ? (raw.failed_items as Array<Record<string, unknown>>)
+    : Array.isArray(raw?.failedItems)
+      ? (raw.failedItems as Array<Record<string, unknown>>)
+      : [];
+  return {
+    created_count: Number(raw?.created_count ?? raw?.createdCount ?? 0) || 0,
+    updated_count: Number(raw?.updated_count ?? raw?.updatedCount ?? 0) || 0,
+    failed_count: Number(raw?.failed_count ?? raw?.failedCount ?? 0) || 0,
+    requested_count:
+      Number(raw?.requested_count ?? raw?.requestedCount ?? items.length) || items.length,
+    failed_items: failedRaw.map(f => ({
+      index: Number(f.index ?? 0) || 0,
+      code: f.code != null ? String(f.code) : undefined,
+      reason: String(f.reason ?? ''),
+    })),
+  };
 }
 
 /**
@@ -302,6 +431,35 @@ export async function getKingdeeExecuteBillQueryCatalog(): Promise<KingdeeExecut
     '/core/apis/integrations/kingdee-galaxy/execute-bill-query/catalog',
   );
   return res.items ?? [];
+}
+
+export interface OutboundSourceFieldOption {
+  field: string;
+  label: string;
+}
+
+export interface OutboundSourceTableItem {
+  profile_code?: string | null;
+  profile_name?: string | null;
+  table: string;
+  label: string;
+  level: 'header' | 'entry';
+  fields: OutboundSourceFieldOption[];
+}
+
+export interface OutboundSourceCatalogResponse {
+  profiles: Array<{ code: string; name: string; match_paths: string[] }>;
+  tables: OutboundSourceTableItem[];
+  /** 按接口路径推荐的本地单据/实体 code */
+  recommended_profile?: string | null;
+}
+
+/** 出站映射：本地表/字段目录（先选表再选字段） */
+export async function getOutboundSourceCatalog(
+  path?: string,
+): Promise<OutboundSourceCatalogResponse> {
+  const q = path ? `?path=${encodeURIComponent(path)}` : '';
+  return apiRequest<OutboundSourceCatalogResponse>(`/core/apis/outbound-source-catalog${q}`);
 }
 
 /**

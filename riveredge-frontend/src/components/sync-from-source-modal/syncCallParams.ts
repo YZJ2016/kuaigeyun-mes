@@ -7,6 +7,60 @@ export function asJsonObject(value: unknown): Record<string, unknown> {
   return {};
 }
 
+/**
+ * 苍穹 getList / batchQuery 等列表契约：顶层须有 data（可为空对象）。
+ * 与仓库/仓位同一源设定；修复生产「记住调用参数」里被误删的空 data。
+ * 库存 getInventory* 等 params 体不补 data。
+ */
+export function ensureCosmicListRequestData(
+  body: Record<string, unknown> | undefined | null,
+  meta?: string | { path?: string; code?: string },
+): Record<string, unknown> {
+  const next = asJsonObject(body);
+  const hint =
+    typeof meta === 'string'
+      ? meta.toLowerCase()
+      : `${meta?.path || ''} ${meta?.code || ''}`.toLowerCase().replace(/\\/g, '/');
+  if (
+    hint.includes('getinventory') ||
+    hint.includes('getinvacc') ||
+    hint.includes('/imrealbal') ||
+    hint.includes('getmalgoodsclass')
+  ) {
+    return next;
+  }
+  // 库存式：有 params、无 data → 勿补
+  if ('params' in next && !('data' in next)) {
+    return next;
+  }
+  const looksLikeList =
+    hint.includes('getlist') ||
+    hint.includes('batchquery') ||
+    hint.includes('bd_location') ||
+    hint.includes('bd_warehouse') ||
+    hint.includes('bd_warelocareference') ||
+    hint.includes('query_location') ||
+    hint.includes('query_warehouse') ||
+    hint.includes('query_warelocareference') ||
+    'pageNo' in next ||
+    'pageSize' in next ||
+    'page_no' in next ||
+    'page_size' in next ||
+    'data' in next;
+  if (!looksLikeList) {
+    return next;
+  }
+  if (
+    !('data' in next) ||
+    next.data === null ||
+    typeof next.data !== 'object' ||
+    Array.isArray(next.data)
+  ) {
+    next.data = {};
+  }
+  return next;
+}
+
 export function collectLeafPaths(
   value: unknown,
   prefix = '',
@@ -54,6 +108,46 @@ export function resolveCallPageSize(body: Record<string, unknown> | undefined, f
   const size = Number(raw);
   if (!Number.isFinite(size) || size <= 0) return fallback;
   return Math.min(Math.trunc(size), 5000);
+}
+
+/** 苍穹仓库仓位关系 query：须按仓库编码分批，禁止走物料编码填充。 */
+export function isWarehouseLocationReferenceApi(
+  apiMeta?: string | { path?: string; code?: string },
+): boolean {
+  const hint =
+    typeof apiMeta === 'string'
+      ? apiMeta.toLowerCase()
+      : `${apiMeta?.path || ''} ${apiMeta?.code || ''}`.toLowerCase().replace(/\\/g, '/');
+  return (
+    hint.includes('bd_warelocareference') ||
+    hint.includes('query_warelocareference') ||
+    hint.includes('warelocareference')
+  );
+}
+
+/** 批量填入请求体时，每批写入的编码个数（仓库仓位关系须单仓调用） */
+export function resolveBatchFillChunkSize(
+  body: Record<string, unknown> | undefined,
+  fillPath: string | undefined,
+  apiMeta?: string | { path?: string; code?: string },
+): number {
+  const path = String(fillPath || '').toLowerCase();
+  const hint =
+    typeof apiMeta === 'string'
+      ? apiMeta.toLowerCase()
+      : `${apiMeta?.path || ''} ${apiMeta?.code || ''}`.toLowerCase();
+  if (
+    path.includes('warehouse_number') &&
+    (hint.includes('bd_warelocareference') || isWarehouseLocationReferenceApi(apiMeta))
+  ) {
+    return 1;
+  }
+  return resolveCallPageSize(body);
+}
+
+export function suggestWarehouseFillPath(paths: { path: string }[]): string | undefined {
+  const hit = paths.find((item) => /(^|\.)warehouse_number$/i.test(item.path));
+  return hit?.path ?? 'data.warehouse_number';
 }
 
 export function chunkValues<T>(values: T[], size: number): T[][] {

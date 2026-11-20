@@ -248,107 +248,147 @@ export function exportToCSV(
   getAntdMessage().success(`导出成功，共 ${data.length} 条数据`);
 }
 
+export type BatchProcessResult = {
+  successCount: number;
+  failureCount: number;
+  errors: Array<{ index: number; error: string }>;
+};
+
+export type BatchProcessOptions = {
+  /** 进度弹窗标题（如「删除中」） */
+  title: string;
+  /** 并发数；删除类建议 1，保证进度文案与完成顺序一致 */
+  concurrency?: number;
+  /** 开始前文案 */
+  preparingText?: (total: number) => React.ReactNode;
+  /** 进行中文案 */
+  progressText?: (
+    current: number,
+    total: number,
+    success: number,
+    fail: number,
+  ) => React.ReactNode;
+  /**
+   * 是否由工具函数弹出成功/部分失败提示。
+   * 默认 false：由调用方根据业务文案展示「删除完成」与失败明细。
+   */
+  showResultToast?: boolean;
+  /** showResultToast 时的成功文案 */
+  successMessage?: (successCount: number) => string;
+  /** showResultToast 时部分失败标题 */
+  partialTitle?: string;
+  /** showResultToast 时部分失败正文；未传则只展示成功/失败条数 */
+  partialContent?: (result: BatchProcessResult) => React.ReactNode;
+};
+
 /**
- * 批量处理数据（支持批量删除、批量更新等）
- * 
- * @param items - 待处理的数据项列表
- * @param processFn - 处理函数
- * @param title - 标题
- * @param concurrency - 并发数（默认5）
- * @returns 处理结果
+ * 批量处理（删除/更新等）：进度弹窗 + 并发池；错误文案走 getApiErrorMessage。
+ * 结果提示默认交给调用方（便于 i18n「删除中 / 删除完成」与失败明细）。
  */
 export async function batchProcess<T = any>(
   items: T[],
   processFn: (item: T, index: number) => Promise<any>,
-  title: string = '正在处理',
-  concurrency: number = 5
-): Promise<{ successCount: number; failureCount: number; errors: Array<{ index: number; error: string }> }> {
-  const result = {
+  options: BatchProcessOptions,
+): Promise<BatchProcessResult> {
+  const {
+    title,
+    concurrency = 1,
+    preparingText,
+    progressText,
+    showResultToast = false,
+    successMessage,
+    partialTitle,
+    partialContent,
+  } = options;
+
+  const result: BatchProcessResult = {
     successCount: 0,
     failureCount: 0,
-    errors: [] as Array<{ index: number; error: string }>,
+    errors: [],
   };
 
-  // 显示进度 Modal
+  if (items.length === 0) {
+    return result;
+  }
+
+  const renderProgress = (
+    current: number,
+    total: number,
+    success: number,
+    fail: number,
+  ) => (
+    <div>
+      <Progress
+        percent={total > 0 ? Math.round((current / total) * 100) : 0}
+        status="active"
+      />
+      <p style={{ marginTop: 16 }}>
+        {current === 0
+          ? (preparingText?.(total) ?? `准备处理 ${total} 条数据...`)
+          : (progressText?.(current, total, success, fail) ??
+            `正在处理第 ${current} / ${total} 条数据...`)}
+      </p>
+      {current > 0 ? (
+        <p style={{ marginTop: 8, color: '#52c41a' }}>
+          成功：{success} 条 | 失败：{fail} 条
+        </p>
+      ) : null}
+    </div>
+  );
+
   const progressModal = getAntdModal().info({
     title,
     width: 600,
-    content: (
-      <div>
-        <Progress percent={0} status="active" />
-        <p style={{ marginTop: 16 }}>准备处理 {items.length} 条数据...</p>
-      </div>
-    ),
+    content: renderProgress(0, items.length, 0, 0),
     okButtonProps: { style: { display: 'none' } },
   });
 
-  // 并发处理
-  const semaphore = Array(concurrency).fill(null).map(() => Promise.resolve());
-
-  const tasks = items.map(async (item, index) => {
-    const semaphoreIndex = index % concurrency;
-    await semaphore[semaphoreIndex];
-    
-    semaphore[semaphoreIndex] = processFn(item, index)
-      .then(() => {
-        result.successCount++;
-        
-        // 更新进度
-        const percent = Math.round(((index + 1) / items.length) * 100);
-        progressModal.update({
-          content: (
-            <div>
-              <Progress percent={percent} status="active" />
-              <p style={{ marginTop: 16 }}>
-                正在处理第 {index + 1} / {items.length} 条数据...
-              </p>
-              <p style={{ marginTop: 8, color: '#52c41a' }}>
-                成功：{result.successCount} 条 | 失败：{result.failureCount} 条
-              </p>
-            </div>
-          ),
-        });
-      })
-      .catch((error: any) => {
-        result.failureCount++;
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.max(1, concurrency) }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      const item = items[index];
+      try {
+        await processFn(item, index);
+        result.successCount += 1;
+      } catch (error: unknown) {
+        result.failureCount += 1;
         result.errors.push({
           index,
-          error: error?.message || error?.detail || '未知错误',
+          error: getApiErrorMessage(error, '操作失败'),
         });
-        
-        // 更新进度
-        const percent = Math.round(((index + 1) / items.length) * 100);
-        progressModal.update({
-          content: (
-            <div>
-              <Progress percent={percent} status="active" />
-              <p style={{ marginTop: 16 }}>
-                正在处理第 {index + 1} / {items.length} 条数据...
-              </p>
-              <p style={{ marginTop: 8, color: '#52c41a' }}>
-                成功：{result.successCount} 条 | 失败：{result.failureCount} 条
-              </p>
-            </div>
-          ),
-        });
+      }
+      const done = result.successCount + result.failureCount;
+      progressModal.update({
+        content: renderProgress(
+          done,
+          items.length,
+          result.successCount,
+          result.failureCount,
+        ),
       });
-    
-    return semaphore[semaphoreIndex];
+    }
   });
 
-  await Promise.all(tasks);
-
-  // 关闭进度 Modal
+  await Promise.all(workers);
   progressModal.destroy();
 
-  // 显示处理结果
-  if (result.failureCount > 0) {
-    getAntdModal().warning({
-      title: `${title}（部分失败）`,
-      content: `成功处理 ${result.successCount} 条，失败 ${result.failureCount} 条`,
-    });
-  } else {
-    getAntdMessage().success(`成功处理 ${result.successCount} 条数据`);
+  if (showResultToast) {
+    if (result.failureCount > 0) {
+      getAntdModal().warning({
+        title: partialTitle ?? `${title}（部分失败）`,
+        width: 640,
+        content:
+          partialContent?.(result) ??
+          `成功处理 ${result.successCount} 条，失败 ${result.failureCount} 条`,
+      });
+    } else if (result.successCount > 0) {
+      getAntdMessage().success(
+        successMessage?.(result.successCount) ??
+          `成功处理 ${result.successCount} 条数据`,
+      );
+    }
   }
 
   return result;

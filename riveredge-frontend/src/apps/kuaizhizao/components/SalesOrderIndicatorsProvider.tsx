@@ -9,6 +9,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { apiRequest } from '../../../services/api';
+import { parseMaterialTotalsPrimary, type MaterialTotalBucket } from '../../../utils/inventoryLedgerApi';
 
 export interface SalesOrderIndicatorsContextValue {
   inventoryMap: Record<number, number>;
@@ -24,7 +25,7 @@ const DEBOUNCE_MS = 50;
 async function fetchBatchInventory(materialIds: number[]): Promise<Record<number, number>> {
   if (materialIds.length === 0) return {};
   try {
-    const res = await apiRequest<{ material_totals?: Record<string, number> }>(
+    const res = await apiRequest<{ material_totals?: Record<string, number | MaterialTotalBucket> }>(
       '/apps/kuaizhizao/reports/inventory/batch-query',
       {
         method: 'GET',
@@ -35,13 +36,7 @@ async function fetchBatchInventory(materialIds: number[]): Promise<Record<number
         },
       }
     );
-    const totals = res?.material_totals ?? {};
-    const result: Record<number, number> = {};
-    for (const [k, v] of Object.entries(totals)) {
-      const id = parseInt(k, 10);
-      if (!Number.isNaN(id)) result[id] = Number(v) || 0;
-    }
-    return result;
+    return parseMaterialTotalsPrimary(res?.material_totals);
   } catch {
     return {};
   }

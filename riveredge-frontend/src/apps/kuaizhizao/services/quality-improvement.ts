@@ -153,6 +153,7 @@ export interface DefectLedgerItem {
   attachments?: Array<{ uid?: string; name?: string; url?: string; status?: string }>;
   capabilities?: {
     update_disposition?: { allowed?: boolean; reason?: string };
+    revoke_disposition?: { allowed?: boolean; reason?: string };
     start_8d?: { allowed?: boolean; reason?: string };
   };
 }
@@ -336,6 +337,8 @@ export const qualityImprovementApi = {
         stock_warehouse_id?: number;
         downgrade_material_id?: number;
         downgrade_warehouse_id?: number;
+        location_id?: number;
+        location_code?: string;
         remarks?: string;
         attachments?: Array<{ uid?: string; name?: string; url?: string; status?: string }>;
       }
@@ -343,6 +346,10 @@ export const qualityImprovementApi = {
       apiRequest(`/apps/kuaizhizao/nonconforming-ledger/${id}/disposition`, {
         method: 'PUT',
         data,
+      }),
+    revokeDisposition: async (id: number) =>
+      apiRequest<DefectLedgerItem>(`/apps/kuaizhizao/nonconforming-ledger/${id}/revoke-disposition`, {
+        method: 'POST',
       }),
     start8d: async (defectId: number, title: string) =>
       apiRequest<Quality8DReport>(`/apps/kuaizhizao/nonconforming-ledger/${defectId}/start-8d`, {

@@ -23,6 +23,9 @@ export type OutsourceReceiptLine = {
   processWasteQty?: number;
   materialWasteQty?: number;
   nonconformanceReason?: string;
+  location_id?: number;
+  location_code?: string;
+  batch_number?: string;
 };
 
 export type OutsourceReceiptWorkOrderBrief = {

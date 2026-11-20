@@ -164,6 +164,30 @@ export async function updateDepartmentOrder(
 }
 
 /**
+ * 批量启用或停用部门（对齐账户 batch/status）。
+ */
+export async function batchUpdateDepartmentsStatus(
+  departmentUuids: string[],
+  isActive: boolean,
+): Promise<{
+  success_count: number;
+  failure_count: number;
+  errors: Array<{ uuid: string; message: string }>;
+}> {
+  return apiRequest<{
+    success_count: number;
+    failure_count: number;
+    errors: Array<{ uuid: string; message: string }>;
+  }>('/core/departments/batch/status', {
+    method: 'POST',
+    data: {
+      department_uuids: departmentUuids,
+      is_active: isActive,
+    },
+  });
+}
+
+/**
  * 批量导入部门
  * 
  * @param data - 二维数组数据（第一行为表头，第二行为示例数据，从第三行开始为实际数据）

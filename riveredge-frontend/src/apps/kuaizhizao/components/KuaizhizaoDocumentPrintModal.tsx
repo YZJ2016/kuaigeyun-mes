@@ -15,6 +15,7 @@ import { useStackedOverlayZIndex } from '../../../components/layout-templates/us
 import { handleError } from '../../../utils/errorHandler';
 import {
   downloadPrintPdfFromApiResult,
+  joinPrintHtmlDocuments,
   type DocumentPrintApiResult,
   withPrintPreviewScreenPadding,
 } from '../../../utils/printResponseHelpers';
@@ -61,6 +62,8 @@ interface KuaizhizaoDocumentPrintModalProps {
   onClose: () => void;
   documentType: string;
   documentId?: number | null;
+  /** 多单分别预览/打印；有值时优先于单 documentId */
+  documentIds?: number[];
   /** 不传则按 documentType + documentId 从 kuaizhizaoPrintConfig 解析 */
   printApiPath?: string;
   /** 额外 query，与 template_uuid / output_format 等一并传给打印接口 */
@@ -79,6 +82,7 @@ const KuaizhizaoDocumentPrintModal: React.FC<KuaizhizaoDocumentPrintModalProps> 
   onClose,
   documentType,
   documentId,
+  documentIds,
   printApiPath: printApiPathProp,
   printApiParams,
   title = '打印预览',
@@ -99,14 +103,27 @@ const KuaizhizaoDocumentPrintModal: React.FC<KuaizhizaoDocumentPrintModalProps> 
   const [pdfLoading, setPdfLoading] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>();
   const [previewHtml, setPreviewHtml] = useState('');
-  const latestRef = useRef<{ templateId?: string; docId?: number }>({});
+  const latestRef = useRef<{ templateId?: string; docKey?: string }>({});
   const previewIframeRef = useRef<HTMLIFrameElement>(null);
 
-  const effectiveId = documentId ?? undefined;
+  const printDocIds = useMemo(() => {
+    const fromBatch = (documentIds ?? [])
+      .map((id) => Number(id))
+      .filter((id) => Number.isFinite(id) && id > 0);
+    if (fromBatch.length > 0) return Array.from(new Set(fromBatch));
+    const single = Number(documentId ?? 0);
+    return Number.isFinite(single) && single > 0 ? [single] : [];
+  }, [documentId, documentIds]);
+  const effectiveId = printDocIds[0];
+  const isMultiDoc = printDocIds.length > 1;
+  const docKey = printDocIds.join(',');
+  /** 单接口批量（如设备卡 uuids）仍走传入的 printApiPath；多付款单则按 id 逐张取 */
   const resolvedPrintApiPath =
     printApiPathProp ||
-    (effectiveId && documentType ? buildKuaizhizaoPrintApiPath(documentType, effectiveId) : '');
-  latestRef.current = { templateId: selectedTemplateId, docId: effectiveId };
+    (effectiveId && documentType && !isMultiDoc
+      ? buildKuaizhizaoPrintApiPath(documentType, effectiveId)
+      : '');
+  latestRef.current = { templateId: selectedTemplateId, docKey };
 
   useEffect(() => {
     if (!open) return;
@@ -154,39 +171,87 @@ const KuaizhizaoDocumentPrintModal: React.FC<KuaizhizaoDocumentPrintModalProps> 
   }, [open, documentType]);
 
   useEffect(() => {
-    if (!open || !effectiveId || !selectedTemplateId || !resolvedPrintApiPath) {
+    if (!open || printDocIds.length === 0 || !selectedTemplateId) {
+      setPreviewHtml('');
+      return;
+    }
+    if (!isMultiDoc && !resolvedPrintApiPath) {
+      setPreviewHtml('');
+      return;
+    }
+    if (isMultiDoc && !documentType) {
       setPreviewHtml('');
       return;
     }
     setPrintLoading(true);
+    const requestKey = docKey;
     void (async () => {
       try {
-        const result = await apiRequest<{ content?: string }>(resolvedPrintApiPath, {
-          method: 'GET',
-          params: {
-            ...printApiParams,
-            template_uuid: selectedTemplateId,
-            output_format: 'html',
-            response_format: 'json',
-          },
-        });
-        if (latestRef.current.templateId !== selectedTemplateId || latestRef.current.docId !== effectiveId) return;
-        setPreviewHtml(result?.content ?? '');
+        let content = '';
+        if (isMultiDoc) {
+          const htmlParts: string[] = [];
+          for (const id of printDocIds) {
+            const path = buildKuaizhizaoPrintApiPath(documentType, id);
+            const result = await apiRequest<{ content?: string }>(path, {
+              method: 'GET',
+              params: {
+                template_uuid: selectedTemplateId,
+                output_format: 'html',
+                response_format: 'json',
+              },
+            });
+            if (result?.content) htmlParts.push(result.content);
+          }
+          content = joinPrintHtmlDocuments(htmlParts);
+        } else {
+          const result = await apiRequest<{ content?: string }>(resolvedPrintApiPath, {
+            method: 'GET',
+            params: {
+              ...printApiParams,
+              template_uuid: selectedTemplateId,
+              output_format: 'html',
+              response_format: 'json',
+            },
+          });
+          content = result?.content ?? '';
+        }
+        if (
+          latestRef.current.templateId !== selectedTemplateId ||
+          latestRef.current.docKey !== requestKey
+        ) {
+          return;
+        }
+        setPreviewHtml(content);
       } catch (e) {
-        if (latestRef.current.templateId === selectedTemplateId && latestRef.current.docId === effectiveId) {
+        if (
+          latestRef.current.templateId === selectedTemplateId &&
+          latestRef.current.docKey === requestKey
+        ) {
           handleError(e as Error, '打印预览失败');
           setPreviewHtml('');
         }
       } finally {
-        if (latestRef.current.templateId === selectedTemplateId && latestRef.current.docId === effectiveId) {
+        if (
+          latestRef.current.templateId === selectedTemplateId &&
+          latestRef.current.docKey === requestKey
+        ) {
           setPrintLoading(false);
         }
       }
     })();
-  }, [open, effectiveId, selectedTemplateId, resolvedPrintApiPath, printApiParams]);
+  }, [
+    open,
+    printDocIds,
+    docKey,
+    isMultiDoc,
+    documentType,
+    selectedTemplateId,
+    resolvedPrintApiPath,
+    printApiParams,
+  ]);
 
   const handlePrint = async () => {
-    if (!effectiveId) {
+    if (printDocIds.length === 0) {
       messageApi.warning('缺少单据 ID');
       return;
     }
@@ -233,7 +298,7 @@ const KuaizhizaoDocumentPrintModal: React.FC<KuaizhizaoDocumentPrintModalProps> 
   };
 
   const handleSavePdf = async () => {
-    if (!effectiveId) {
+    if (printDocIds.length === 0) {
       messageApi.warning('缺少单据 ID');
       return;
     }
@@ -241,29 +306,52 @@ const KuaizhizaoDocumentPrintModal: React.FC<KuaizhizaoDocumentPrintModalProps> 
       messageApi.warning('请先选择打印模板');
       return;
     }
-    if (!resolvedPrintApiPath) {
+    if (!isMultiDoc && !resolvedPrintApiPath) {
       messageApi.warning('无法解析打印接口');
       return;
     }
     setPdfLoading(true);
     try {
-      const result = await apiRequest<DocumentPrintApiResult>(resolvedPrintApiPath, {
-        method: 'GET',
-        params: {
-          ...printApiParams,
-          template_uuid: selectedTemplateId,
-          output_format: 'pdf',
-          response_format: 'json',
-        },
-      });
-      if (!result?.content) {
-        messageApi.warning('PDF 内容为空');
-        return;
+      if (isMultiDoc) {
+        let saved = 0;
+        for (const id of printDocIds) {
+          const path = buildKuaizhizaoPrintApiPath(documentType, id);
+          const result = await apiRequest<DocumentPrintApiResult>(path, {
+            method: 'GET',
+            params: {
+              template_uuid: selectedTemplateId,
+              output_format: 'pdf',
+              response_format: 'json',
+            },
+          });
+          if (!result?.content) continue;
+          downloadPrintPdfFromApiResult(result, `${documentType}-${id}.pdf`);
+          saved += 1;
+        }
+        if (saved === 0) {
+          messageApi.warning('PDF 内容为空');
+          return;
+        }
+        messageApi.success(`已分别保存 ${saved} 份 PDF`);
+      } else {
+        const result = await apiRequest<DocumentPrintApiResult>(resolvedPrintApiPath, {
+          method: 'GET',
+          params: {
+            ...printApiParams,
+            template_uuid: selectedTemplateId,
+            output_format: 'pdf',
+            response_format: 'json',
+          },
+        });
+        if (!result?.content) {
+          messageApi.warning('PDF 内容为空');
+          return;
+        }
+        const filename =
+          pdfDownloadFilename?.trim() || `${documentType}-${effectiveId}.pdf`;
+        downloadPrintPdfFromApiResult(result, filename);
+        messageApi.success('PDF 已保存');
       }
-      const filename =
-        pdfDownloadFilename?.trim() || `${documentType}-${effectiveId}.pdf`;
-      downloadPrintPdfFromApiResult(result, filename);
-      messageApi.success('PDF 已保存');
       if (onAfterPrint) {
         await onAfterPrint();
       }

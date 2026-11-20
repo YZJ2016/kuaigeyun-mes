@@ -36,3 +36,33 @@ export function swallowRequestCancellation(error: unknown): void {
   if (isRequestCancellation(error)) return;
   throw error;
 }
+
+/**
+ * apiRequest 在途 AbortController 注册表。
+ *
+ * React Query 的 cancelQueries 不会自动 abort 未接 signal 的 fetch；
+ * 切换组织前必须真正中断旧 HTTP，否则旧菜单徽章/导航树等仍占后端连接池，
+ * 叠加新租户壳层请求易打满池并被网关打成 502。
+ */
+const inflightApiAbortControllers = new Set<AbortController>();
+
+export function trackInflightApiAbortController(controller: AbortController): () => void {
+  inflightApiAbortControllers.add(controller);
+  return () => {
+    inflightApiAbortControllers.delete(controller);
+  };
+}
+
+export function abortAllInflightApiRequests(reason?: unknown): void {
+  const abortReason =
+    reason ??
+    new DOMException('Aborted due to tenant switch', 'AbortError');
+  for (const controller of [...inflightApiAbortControllers]) {
+    try {
+      controller.abort(abortReason);
+    } catch {
+      // 已结束的 controller 忽略
+    }
+  }
+  inflightApiAbortControllers.clear();
+}

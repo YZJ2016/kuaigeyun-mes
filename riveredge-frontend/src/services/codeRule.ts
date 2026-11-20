@@ -232,10 +232,14 @@ export async function generateCode(request: CodeGenerationRequest): Promise<Code
  * @param request - 编号生成请求数据
  * @returns 生成的编号（测试用）
  */
-export async function testGenerateCode(request: CodeGenerationRequest): Promise<CodeGenerationResponse> {
+export async function testGenerateCode(
+  request: CodeGenerationRequest,
+  options?: { signal?: AbortSignal },
+): Promise<CodeGenerationResponse> {
   return apiRequest<CodeGenerationResponse>('/core/code-rules/test-generate', {
     method: 'POST',
     data: request,
+    signal: options?.signal,
   });
 }
 

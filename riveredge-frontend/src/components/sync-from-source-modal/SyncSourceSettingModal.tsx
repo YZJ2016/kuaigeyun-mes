@@ -2,7 +2,7 @@
  * 单个同步来源：接口/数据集选择与字段映射（嵌套弹窗）
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   App,
@@ -15,7 +15,14 @@ import {
   Table,
   Typography,
 } from 'antd';
-import { DeleteOutlined, EditOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
+import {
+  DeleteOutlined,
+  DownloadOutlined,
+  EditOutlined,
+  PlusOutlined,
+  SyncOutlined,
+  UploadOutlined,
+} from '@ant-design/icons';
 import { SyncApiCallParamsPanel } from './SyncApiCallParamsPanel';
 import { ThemedSegmented } from '../themed-segmented/ThemedSegmented';
 import { getAPIByUuid, testAPI } from '../../services/apiManagement';
@@ -29,12 +36,19 @@ import {
   isInactiveSyncSourceError,
   mergeSuggestedMapping,
   normalizeApiBodyToRows,
+  normalizeImportedTargetToSource,
+  resolveImportSourceColumn,
   suggestTargetToSourceMapping,
   SYNC_PREVIEW_ROW_LIMIT,
   withKingdeePreviewLimit,
 } from './syncSourceUtils';
 import { executeDatasetQuery } from '../../services/dataset';
-import { resolveCallPageSize, setByPath } from './syncCallParams';
+import {
+  ensureCosmicListRequestData,
+  resolveBatchFillChunkSize,
+  setByPath,
+} from './syncCallParams';
+import { prepareJsonRequestBody } from '../custom-fields/jsonFieldDateShortcuts';
 import type { SyncFromSourceConfig, SyncSourceType, SyncTargetField } from './types';
 import type { SyncSourceDraft } from './syncSourcesDraft';
 
@@ -105,7 +119,10 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
   const [datasetUuid, setDatasetUuid] = useState<string | undefined>(draft.dataset_uuid);
   const [targetToSource, setTargetToSource] = useState<Record<string, string>>(draft.targetToSource);
   const [previewRows, setPreviewRows] = useState<Record<string, unknown>[]>([]);
+  /** 预览表展示列（可按 preferredKeys 收窄） */
   const [previewColumns, setPreviewColumns] = useState<string[]>([]);
+  /** 映射下拉 / 自动匹配用的完整来源列（不得被预览表收窄裁掉） */
+  const [sourceColumns, setSourceColumns] = useState<string[]>([]);
   const [executing, setExecuting] = useState(false);
   const [addedTargetKeys, setAddedTargetKeys] = useState<string[]>([]);
   const [pendingAddTargetKeys, setPendingAddTargetKeys] = useState<string[]>([]);
@@ -121,6 +138,7 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
   const [batchFillPath, setBatchFillPath] = useState<string | undefined>(draft.batch_fill_path);
   const [batchFillValues, setBatchFillValues] = useState<string[] | undefined>(draft.batch_fill_values);
   const [editingCallParams, setEditingCallParams] = useState(false);
+  const mappingFileInputRef = useRef<React.ElementRef<'input'> | null>(null);
 
   const defaultTargetFieldValues = useMemo(
     () => new Set(config.targetFields.map((field) => field.value)),
@@ -196,6 +214,7 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
   const resetPreview = useCallback(() => {
     setPreviewRows([]);
     setPreviewColumns([]);
+    setSourceColumns([]);
   }, []);
 
   useEffect(() => {
@@ -215,6 +234,7 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
     setEditingCallParams(false);
     setPreviewRows([]);
     setPreviewColumns([]);
+    setSourceColumns([]);
     setPendingAddTargetKeys([]);
     const extras = Object.keys(mapping).filter(
       (key) => !defaultTargetFieldValues.has(key),
@@ -238,25 +258,60 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
       let rows: Record<string, unknown>[] = [];
       if (kind === 'api' && apiUuid) {
         const apiDetail = await getAPIByUuid(apiUuid);
-        const apiBody =
+        const apiMeta = {
+          path: String(apiDetail.path || ''),
+          code: String(apiDetail.code || ''),
+        };
+        const apiBody = ensureCosmicListRequestData(
           apiDetail.request_body &&
-          typeof apiDetail.request_body === 'object' &&
-          !Array.isArray(apiDetail.request_body)
+            typeof apiDetail.request_body === 'object' &&
+            !Array.isArray(apiDetail.request_body)
             ? (apiDetail.request_body as Record<string, unknown>)
-            : {};
-        let baseBody = { ...apiBody, ...(requestBody ?? {}) };
+            : {},
+          apiMeta,
+        );
+        // 合并后来源覆盖优先；发送前解析 __NOW__ 并去掉空日期（避免苍穹 DateTime NumberFormatException）
+        // 保留空 data{}：与本地/生产同一苍穹 getList 源设定
+        let baseBody = ensureCosmicListRequestData(
+          prepareJsonRequestBody({
+            ...apiBody,
+            ...(requestBody ?? {}),
+          }) as Record<string, unknown>,
+          apiMeta,
+        );
+        const dataObj = baseBody.data;
+        const warehouseNumberInBody =
+          dataObj &&
+          typeof dataObj === 'object' &&
+          !Array.isArray(dataObj) &&
+          typeof (dataObj as Record<string, unknown>).warehouse_number === 'string'
+            ? String((dataObj as Record<string, unknown>).warehouse_number).trim()
+            : '';
+        const needsWarehouseNumber =
+          apiMeta.path.toLowerCase().includes('bd_warelocareference') ||
+          apiMeta.code.toLowerCase().includes('query_warelocareference');
+        if (
+          needsWarehouseNumber &&
+          !batchFillValues?.length &&
+          !warehouseNumberInBody
+        ) {
+          messageApi.warning(t('components.syncFromSource.warehouseNumberRequiredForPreview'));
+          setExecuting(false);
+          return;
+        }
         if (batchFillPath && batchFillValues?.length) {
-          const pageSize = resolveCallPageSize(baseBody);
-          baseBody = setByPath(
-            baseBody,
-            batchFillPath,
-            batchFillValues.slice(0, pageSize).join(','),
-          );
+          const chunkSize = resolveBatchFillChunkSize(baseBody, batchFillPath, apiMeta);
+          const slice = batchFillValues.slice(0, chunkSize);
+          const fillScalar = chunkSize === 1 ? slice[0] : slice.join(',');
+          baseBody = setByPath(baseBody, batchFillPath, fillScalar);
         }
         const previewBody = withKingdeePreviewLimit(baseBody, SYNC_PREVIEW_ROW_LIMIT);
+        const preparedParams = requestParams
+          ? (prepareJsonRequestBody(requestParams) as Record<string, unknown>)
+          : undefined;
         const result = await testAPI(apiUuid, {
           ...(previewBody ? { body: previewBody } : {}),
-          ...(requestParams ? { params: requestParams } : {}),
+          ...(preparedParams ? { params: preparedParams } : {}),
         });
         if (result.status_code < 200 || result.status_code >= 300) {
           const detail =
@@ -284,33 +339,39 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
       rows = rows.slice(0, SYNC_PREVIEW_ROW_LIMIT);
 
       const allColumns = collectRowColumnKeys(rows);
-      const columns = filterPreviewColumns(
+      const displayColumns = filterPreviewColumns(
         allColumns,
         config.previewPreferredSourceKeys,
         Object.values(targetToSource),
       );
       const previewData =
-        columns.length && columns.length < allColumns.length
+        displayColumns.length && displayColumns.length < allColumns.length
           ? rows.map((row) => {
               const slim: Record<string, unknown> = {};
-              for (const key of columns) {
+              for (const key of displayColumns) {
                 if (key in row) slim[key] = row[key];
               }
               return slim;
             })
           : rows;
       setPreviewRows(previewData);
-      setPreviewColumns(columns);
+      setPreviewColumns(displayColumns);
+      // 映射候选必须用全量列：收窄后税率/行备注等未映射列会从自动匹配与下拉里消失
+      setSourceColumns(allColumns);
 
-      const merged = mergeSuggestedMapping(
-        columns,
-        targetFieldValues,
-        targetToSource,
-        config.targetAliases,
-      );
-      mergeAddedKeysFromMapping(merged);
-      setTargetToSource(merged);
-      messageApi.success(t('components.syncFromSource.previewOk', { count: rows.length }));
+      if (rows.length === 0 || allColumns.length === 0) {
+        messageApi.warning(t('components.syncFromSource.previewEmptyRows'));
+      } else {
+        const merged = mergeSuggestedMapping(
+          allColumns,
+          targetFieldValues,
+          targetToSource,
+          config.targetAliases,
+        );
+        mergeAddedKeysFromMapping(merged);
+        setTargetToSource(merged);
+        messageApi.success(t('components.syncFromSource.previewOk', { count: rows.length }));
+      }
     } catch (error: unknown) {
       const detail = formatSyncErrorMessage(error, t('components.syncFromSource.queryFailed'));
       if (isInactiveSyncSourceError(error)) {
@@ -323,12 +384,154 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
     }
   };
 
-  const validateAndSave = () => {
+  const handleAutoMatch = useCallback(() => {
+    // 预览列 + 当前行键并集，避免 sourceColumns 异常偏少时整表只命中 1 列
+    const columnsForMatch = Array.from(
+      new Set([...sourceColumns, ...collectRowColumnKeys(previewRows)]),
+    );
+    if (columnsForMatch.length === 0) {
+      messageApi.warning(t('components.syncFromSource.autoMatchNeedPreview'));
+      return;
+    }
+    // 整表重算：只保留本次建议命中；旧映射全部丢掉，配不上的清空
+    const suggested = suggestTargetToSourceMapping(
+      columnsForMatch,
+      targetFieldValues,
+      config.targetAliases,
+    );
+    mergeAddedKeysFromMapping(suggested);
+    setTargetToSource(suggested);
+    const hitCount = Object.keys(suggested).length;
+    if (hitCount <= 1) {
+      // 列很少或只有 status 等壳字段：多半是预览没拉到业务 rows
+      const looksSparse =
+        columnsForMatch.length <= 8 ||
+        columnsForMatch.every((col) =>
+          /^(status|success|error|errorcode|message|msg|code|data_)/i.test(col),
+        );
+      messageApi.warning(
+        looksSparse
+          ? t('components.syncFromSource.autoMatchSparsePreview')
+          : t('components.syncFromSource.autoMatchAliasMiss', {
+              columns: columnsForMatch.length,
+            }),
+      );
+    } else {
+      messageApi.success(t('components.syncFromSource.autoMatchDone', { count: hitCount }));
+    }
+  }, [
+    config.targetAliases,
+    mergeAddedKeysFromMapping,
+    messageApi,
+    previewRows,
+    sourceColumns,
+    t,
+    targetFieldValues,
+  ]);
+
+  const handleExportMapping = useCallback(() => {
+    if (Object.keys(targetToSource).length === 0) {
+      messageApi.warning(t('components.syncFromSource.mappingExportEmpty'));
+      return;
+    }
+    const payload = {
+      version: 1,
+      type: 'riveredge-sync-field-mapping',
+      orientation: 'target_to_source',
+      exported_at: new Date().toISOString(),
+      mapping: targetToSource,
+    };
+    const blob = new window.Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    const fileName =
+      (config.mappingExportFileName || '').trim() || 'sync-field-mapping.json';
+    anchor.download = fileName.endsWith('.json') ? fileName : `${fileName}.json`;
+    anchor.click();
+    window.URL.revokeObjectURL(url);
+    messageApi.success(t('components.syncFromSource.mappingExportSuccess'));
+  }, [config.mappingExportFileName, messageApi, t, targetToSource]);
+
+  const handleImportMapping = useCallback(
+    async (event: React.ChangeEvent<React.ElementRef<'input'>>) => {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file) return;
+      try {
+        const parsed: unknown = JSON.parse(await file.text());
+        const rawMapping =
+          parsed && typeof parsed === 'object' && 'mapping' in parsed
+            ? (parsed as { mapping?: unknown }).mapping
+            : parsed;
+        if (!rawMapping || typeof rawMapping !== 'object' || Array.isArray(rawMapping)) {
+          throw new Error('invalid');
+        }
+        const rawEntries = Object.fromEntries(
+          Object.entries(rawMapping as Record<string, unknown>).filter(
+            ([key, value]) =>
+              typeof key === 'string' &&
+              key.trim() &&
+              typeof value === 'string' &&
+              String(value).trim(),
+          ),
+        ) as Record<string, string>;
+        if (Object.keys(rawEntries).length === 0) throw new Error('empty');
+
+        const imported = normalizeImportedTargetToSource(rawEntries, targetFieldValues);
+        if (Object.keys(imported).length === 0) throw new Error('empty');
+
+        // 有预览列时宽松对齐列名；无预览则原样导入（保存后下次拉取仍可用）
+        const usable: Record<string, string> = {};
+        for (const [target, source] of Object.entries(imported)) {
+          const resolved = resolveImportSourceColumn(source, sourceColumns);
+          if (resolved) usable[target] = resolved;
+        }
+        if (Object.keys(usable).length === 0) throw new Error('unmatched');
+        mergeAddedKeysFromMapping(usable);
+        setTargetToSource((prev) => ({ ...prev, ...usable }));
+        messageApi.success(
+          t('components.syncFromSource.mappingImportSuccess', { count: Object.keys(usable).length }),
+        );
+      } catch {
+        messageApi.error(t('components.syncFromSource.mappingImportFailed'));
+      }
+    },
+    [mergeAddedKeysFromMapping, messageApi, sourceColumns, t, targetFieldValues],
+  );
+
+  const validateAndSave = async () => {
+    const mapping = config.sanitizeMapping
+      ? config.sanitizeMapping({ ...targetToSource })
+      : targetToSource;
+    if (mapping !== targetToSource) {
+      setTargetToSource(mapping);
+    }
+    let validateCtx:
+      | { connectionType?: string | null; apiPath?: string | null; apiCode?: string | null }
+      | undefined;
+    if (kind === 'api' && apiUuid && config.validateMapping) {
+      try {
+        const apiDetail = await getAPIByUuid(apiUuid);
+        validateCtx = {
+          connectionType: apiDetail.connection_type,
+          apiPath: apiDetail.path,
+          apiCode: apiDetail.code,
+        };
+      } catch (e: unknown) {
+        const detail =
+          e && typeof e === 'object' && 'message' in e
+            ? String((e as { message?: unknown }).message || '')
+            : '';
+        messageApi.error(detail || t('components.syncFromSource.loadApiMetaFailed'));
+        return;
+      }
+    }
     const mappingError = config.validateMapping
-      ? config.validateMapping(targetToSource, t)
+      ? config.validateMapping(mapping, t, validateCtx)
       : (() => {
           for (const required of config.requiredTargets) {
-            if (!targetToSource[required]) {
+            if (!mapping[required]) {
               const field =
                 fieldCatalogByValue.get(required) ||
                 config.targetFields.find((item) => item.value === required);
@@ -356,9 +559,7 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
       kind,
       api_uuid: kind === 'api' ? apiUuid : undefined,
       dataset_uuid: kind === 'dataset' ? datasetUuid : undefined,
-      targetToSource: config.sanitizeMapping
-        ? config.sanitizeMapping(targetToSource)
-        : targetToSource,
+      targetToSource: mapping,
       request_body: kind === 'api' ? requestBody : undefined,
       request_params: kind === 'api' ? requestParams : undefined,
       persist_request_override: kind === 'api' ? persistRequestOverride : undefined,
@@ -383,10 +584,10 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
       pendingAddTargetKeys.forEach((key) => next.add(key));
       return [...next];
     });
-    if (previewColumns.length > 0) {
+    if (sourceColumns.length > 0) {
       setTargetToSource((prev) => ({
         ...suggestTargetToSourceMapping(
-          previewColumns,
+          sourceColumns,
           pendingAddTargetKeys,
           config.targetAliases,
         ),
@@ -558,6 +759,7 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
             persistOverride={persistRequestOverride}
             batchFillPath={batchFillPath}
             batchFillValues={batchFillValues}
+            localCodesLoader={config.syncCallParamsLocalCodes}
             onChange={(next) => {
               setRequestBody(next.request_body);
               setRequestParams(next.request_params);
@@ -577,9 +779,51 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
 
         {!executing && previewRows.length > 0 ? (
           <>
-            <Typography.Title level={5} style={{ margin: 0 }}>
-              {t('components.syncFromSource.fieldMapping')}
-            </Typography.Title>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 8,
+              }}
+            >
+              <Typography.Title level={5} style={{ margin: 0 }}>
+                {t('components.syncFromSource.fieldMapping')}
+              </Typography.Title>
+              <Space wrap>
+                <Button
+                  size="small"
+                  icon={<SyncOutlined />}
+                  onClick={handleAutoMatch}
+                  disabled={sourceColumns.length === 0 && previewRows.length === 0}
+                >
+                  {t('components.syncFromSource.autoMatch')}
+                </Button>
+                <Button
+                  size="small"
+                  icon={<UploadOutlined />}
+                  onClick={() => mappingFileInputRef.current?.click()}
+                >
+                  {t('components.syncFromSource.mappingImport')}
+                </Button>
+                <input
+                  ref={mappingFileInputRef}
+                  type="file"
+                  accept=".json,application/json"
+                  style={{ display: 'none' }}
+                  onChange={(event) => void handleImportMapping(event)}
+                />
+                <Button
+                  size="small"
+                  icon={<DownloadOutlined />}
+                  onClick={handleExportMapping}
+                  disabled={Object.keys(targetToSource).length === 0}
+                >
+                  {t('components.syncFromSource.mappingExport')}
+                </Button>
+              </Space>
+            </div>
             <Table
               size="small"
               pagination={false}
@@ -605,14 +849,12 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
                       allowClear
                       showSearch
                       placeholder={t('components.syncFromSource.sourceColumnPlaceholder')}
-                      options={previewColumns.map((col) => ({ label: col, value: col }))}
+                      options={sourceColumns.map((col) => ({ label: col, value: col }))}
                       value={targetToSource[target]}
                       onChange={(value) => {
                         setTargetToSource((prev) => {
                           const next = { ...prev };
-                          for (const [key, src] of Object.entries(next)) {
-                            if (src === value && key !== target) delete next[key];
-                          }
+                          // 允许同一来源列映多个目标（如 bizdate→订单日期+交货日期）
                           if (value) next[target] = value;
                           else delete next[target];
                           return next;

@@ -168,3 +168,16 @@ export async function loadPresetPositions(codes?: string[]): Promise<{ created: 
   });
 }
 
+export interface PositionImportResult {
+  success_count: number;
+  failure_count: number;
+  errors: Array<{ row: number; message?: string; error?: string }>;
+}
+
+export async function importPositionsFromData(data: unknown[][]): Promise<PositionImportResult> {
+  return apiRequest<PositionImportResult>('/core/positions/batch-import', {
+    method: 'POST',
+    data: { data },
+  });
+}
+

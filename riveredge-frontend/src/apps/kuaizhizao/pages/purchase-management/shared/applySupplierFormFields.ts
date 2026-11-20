@@ -12,6 +12,7 @@ import {
   resolvePaymentTermsDaysFromCustomer,
   resolveSettlementTermsFromCustomer,
 } from '../../sales-management/shared/applyCustomerFormFields';
+import { resolveSupplierContactFieldsFromPartner } from './partnerSupplierFormSnapshot';
 
 export type SupplierLike = Record<string, unknown>;
 
@@ -28,12 +29,22 @@ export function resolveFullSupplierFromList(
   return { ...found, ...supplier };
 }
 
+function normalizeDocumentCurrencyCode(raw: unknown, fallback = 'CNY'): string {
+  if (typeof raw === 'string' && raw.trim()) {
+    return raw.trim().toUpperCase();
+  }
+  return fallback.trim().toUpperCase() || 'CNY';
+}
+
 /** 从供应商主数据解析需回填的表单字段 */
 export function resolveSupplierFormFieldValues(
   supplier: SupplierLike,
   users: UserLike[] = [],
   orgPayableDefault = 'on_receipt',
+  /** 供应商未维护默认币种时的单据本币（站点 default_currency，缺省 CNY） */
+  defaultCurrency = 'CNY',
 ): Record<string, unknown> {
+  const documentCurrency = normalizeDocumentCurrencyCode(defaultCurrency);
   const bIdRaw = supplier.buyerId ?? supplier.buyer_id;
   const bId =
     bIdRaw != null && bIdRaw !== '' && Number.isFinite(Number(bIdRaw)) ? Number(bIdRaw) : undefined;
@@ -46,24 +57,22 @@ export function resolveSupplierFormFieldValues(
   const paymentTermsDays = resolvePaymentTermsDaysFromCustomer(supplier);
   const paymentMethod = resolvePaymentMethodFromCustomer(supplier);
   const settlementTerms = resolveSettlementTermsFromCustomer(supplier);
-  const contactFromList =
-    Array.isArray(supplier.contacts) && (supplier.contacts as Array<Record<string, unknown>>)[0]
-      ? ((supplier.contacts as Array<Record<string, unknown>>)[0].contactPerson ??
-        (supplier.contacts as Array<Record<string, unknown>>)[0].contact_person)
-      : undefined;
-  const phoneFromList =
-    Array.isArray(supplier.contacts) && (supplier.contacts as Array<Record<string, unknown>>)[0]
-      ? (supplier.contacts as Array<Record<string, unknown>>)[0].phone
-      : undefined;
+  const currencyRaw =
+    supplier.defaultCurrencyCode ??
+    supplier.default_currency_code ??
+    supplier.currency ??
+    supplier.currency_code;
+  // 客商未维护默认币种 → 单据本币（禁止写 undefined 冲掉表单已有 CNY）
+  const currency = normalizeDocumentCurrencyCode(currencyRaw, documentCurrency);
+  const rateRaw = supplier.defaultExchangeRate ?? supplier.default_exchange_rate;
+  const rateNum = rateRaw != null && rateRaw !== '' ? Number(rateRaw) : undefined;
+  const exchangeRate =
+    rateNum != null && Number.isFinite(rateNum) && rateNum > 0 ? rateNum : 1;
+  const { supplier_contact, supplier_phone } = resolveSupplierContactFieldsFromPartner(supplier);
   return {
     supplier_name: supplier.name ?? supplier.supplier_name,
-    supplier_contact:
-      supplier.contactPerson ??
-      supplier.contact_person ??
-      supplier.contact ??
-      supplier.supplier_contact ??
-      contactFromList,
-    supplier_phone: supplier.phone ?? supplier.supplier_phone ?? phoneFromList,
+    supplier_contact,
+    supplier_phone,
     ...(bId != null ? { buyer_id: bId, buyer_name: bName } : {}),
     ...(paymentMethod != null
       ? { payment_method_code: paymentMethod }
@@ -74,19 +83,26 @@ export function resolveSupplierFormFieldValues(
     ...(paymentTermsDays != null
       ? { payment_terms_days: paymentTermsDays }
       : { payment_terms_days: undefined }),
+    currency,
+    exchange_rate: exchangeRate,
     payable_recognition: resolvePayableRecognitionFromPartner(supplier, orgPayableDefault),
   };
 }
 
-const CLEAR_SUPPLIER_FORM_FIELDS: Record<string, undefined> = {
-  supplier_name: undefined,
-  supplier_contact: undefined,
-  supplier_phone: undefined,
-  payment_method_code: undefined,
-  settlement_terms_code: undefined,
-  payment_terms_days: undefined,
-  payable_recognition: undefined,
-};
+function buildClearSupplierFormFields(defaultCurrency = 'CNY'): Record<string, unknown> {
+  const currency = normalizeDocumentCurrencyCode(defaultCurrency);
+  return {
+    supplier_name: undefined,
+    supplier_contact: undefined,
+    supplier_phone: undefined,
+    payment_method_code: undefined,
+    settlement_terms_code: undefined,
+    payment_terms_days: undefined,
+    currency,
+    exchange_rate: 1,
+    payable_recognition: undefined,
+  };
+}
 
 export function applySupplierFormFields(
   formRef: React.RefObject<ProFormInstance | undefined | null> | { current?: ProFormInstance | null },
@@ -96,11 +112,14 @@ export function applySupplierFormFields(
     supplierList?: SupplierLike[];
     includeSupplierId?: boolean;
     orgPayableDefault?: string;
+    /** 供应商未维护币种时回落；清空供应商时恢复为本币 */
+    defaultCurrency?: string;
   } = {},
 ): void {
+  const defaultCurrency = normalizeDocumentCurrencyCode(options.defaultCurrency);
   if (!supplier) {
     formRef.current?.setFieldsValue({
-      ...CLEAR_SUPPLIER_FORM_FIELDS,
+      ...buildClearSupplierFormFields(defaultCurrency),
       ...(options.includeSupplierId ? { supplier_id: undefined } : {}),
     });
     return;
@@ -112,6 +131,7 @@ export function applySupplierFormFields(
     full,
     options.users,
     options.orgPayableDefault ?? 'on_receipt',
+    defaultCurrency,
   );
   if (next.buyer_id == null) {
     const currentId = formRef.current?.getFieldValue('buyer_id');

@@ -58,6 +58,11 @@ export interface FieldConfig {
   component?: string;
   /** 扩展：fieldProps 透传 */
   fieldProps?: Record<string, any>;
+  /**
+   * number 字段：当指定表单字段值为 `percent` 时，将 max 限制为 100（按比例超报百分数）。
+   * 例如 overReportValue + percentModeField: 'overReportMode'
+   */
+  percentModeField?: string;
   /** 编辑模式下禁用（如语言代码创建后不可改） */
   disabledWhenEdit?: boolean;
   /** 仅新建时展示（编辑弹窗隐藏） */

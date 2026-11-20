@@ -15,6 +15,7 @@
 import React, { useEffect, useState } from 'react';
 import { Tooltip } from 'antd';
 import { apiRequest } from '../../../services/api';
+import { parseMaterialTotalsPrimary, type MaterialTotalBucket } from '../../../utils/inventoryLedgerApi';
 import { useSalesOrderIndicators } from './SalesOrderIndicatorsProvider';
 
 interface MaterialInventoryIndicatorProps {
@@ -26,7 +27,7 @@ interface MaterialInventoryIndicatorProps {
 /** 获取物料可用库存总量（汇总批次库存）- 单物料请求，用于非 Provider 场景 */
 async function fetchMaterialInventory(materialId: number): Promise<number> {
   try {
-    const res = await apiRequest<{ material_totals?: Record<string, number> }>(
+    const res = await apiRequest<{ material_totals?: Record<string, number | MaterialTotalBucket> }>(
       '/apps/kuaizhizao/reports/inventory/batch-query',
       {
         method: 'GET',
@@ -37,8 +38,8 @@ async function fetchMaterialInventory(materialId: number): Promise<number> {
         },
       }
     );
-    const totals = res?.material_totals ?? {};
-    return Number(totals[String(materialId)] ?? 0) || 0;
+    const totals = parseMaterialTotalsPrimary(res?.material_totals);
+    return totals[materialId] ?? 0;
   } catch {
     return 0;
   }

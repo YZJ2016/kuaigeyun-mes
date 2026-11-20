@@ -322,6 +322,34 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
         }
 
         if (field.type === 'number') {
+          if (field.percentModeField) {
+            const modeField = field.percentModeField;
+            return (
+              <ProFormDependency key={field.name} name={[modeField]}>
+                {(deps) => {
+                  const mode = String(deps?.[modeField] ?? '').toLowerCase();
+                  const percentCap = mode === 'percent';
+                  return (
+                    <ProFormDigit
+                      name={field.name}
+                      label={label}
+                      placeholder={placeholder}
+                      colProps={fieldLayout.colProps}
+                      formItemProps={fieldLayout.formItemProps}
+                      rules={rules}
+                      min={field.fieldProps?.min ?? 0}
+                      max={percentCap ? 100 : field.fieldProps?.max}
+                      fieldProps={{
+                        ...field.fieldProps,
+                        ...(percentCap ? { max: 100 } : {}),
+                      }}
+                      extra={extraContent}
+                    />
+                  );
+                }}
+              </ProFormDependency>
+            );
+          }
           return (
             <ProFormDigit
               key={field.name}
@@ -332,6 +360,7 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
               formItemProps={fieldLayout.formItemProps}
               rules={rules}
               fieldProps={field.fieldProps}
+              extra={extraContent}
             />
           );
         }

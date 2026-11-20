@@ -16,12 +16,15 @@ export const defaultQueryOptions = {
     if (error?.response?.status === 401) return false;
     if (error?.response?.status === 400) return false;
     if (error?.response?.status === 500) return false;
+    // 502/503/504：服务已过载或网关失败，RQ 再打只会叠风暴（切换组织尤甚）
+    if ([502, 503, 504].includes(error?.response?.status)) {
+      return false;
+    }
     const isNetworkError =
       error?.message?.includes('fetch') ||
       error?.message?.includes('NetworkError') ||
       error?.message?.includes('Failed to fetch');
-    const isServerError = [502, 503, 504].includes(error?.response?.status);
-    if (isNetworkError || isServerError) {
+    if (isNetworkError) {
       return failureCount < 2;
     }
     return false;

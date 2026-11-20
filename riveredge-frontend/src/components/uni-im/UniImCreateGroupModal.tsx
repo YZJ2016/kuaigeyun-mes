@@ -6,8 +6,12 @@ import { Form, Input, Modal, Select, message as antMessage } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { createGroupImConversation } from '../../services/im';
-import { getInstalledApplicationList } from '../../services/application';
+import {
+  getInstalledApplicationList,
+  installedApplicationsQueryKey,
+} from '../../services/application';
 import { searchUserDisplay, type UserDisplayItem } from '../../services/user';
+import { getTenantId } from '../../utils/auth';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 export type UniImCreateGroupModalProps = {
@@ -32,7 +36,7 @@ export default function UniImCreateGroupModal({
   const [memberKeyword, setMemberKeyword] = useState('');
 
   const { data: apps } = useQuery({
-    queryKey: ['installedApplications', 'im-group'],
+    queryKey: installedApplicationsQueryKey(getTenantId()),
     queryFn: () => getInstalledApplicationList({ is_active: true }),
     enabled: open,
     staleTime: 60_000,

@@ -19,6 +19,8 @@ import {
   updateJsonTreeNode,
   type JsonTreeNode,
 } from './customFieldJsonUtils';
+import { JsonFieldDateValueEditor } from './JsonFieldDateValueEditor';
+import { isJsonDateRangeFieldKey, parseJsonDateRangePair } from './jsonFieldDateShortcuts';
 import './CustomFieldJsonEditor.css';
 
 export type CustomFieldJsonEditorMode = 'kv' | 'source';
@@ -60,6 +62,16 @@ const FIELD_CAPTIONS: Record<string, string> = {
   group: '分组汇总（按批号入库请带上 lotnum）',
   lotnum: '批号',
   warehouse: '仓库编码',
+  start_createtime: '开始创建时间',
+  end_createtime: '结束创建时间',
+  start_modifytime: '开始修改时间',
+  end_modifytime: '结束修改时间',
+  start_auditdate: '审核开始日期',
+  end_auditdate: '审核结束日期',
+  start_bizdate: '开始业务日期',
+  end_bizdate: '结束业务日期',
+  start_billdate: '开始单据日期',
+  end_billdate: '结束单据日期',
 };
 
 const objectFieldHint = (key: string) => {
@@ -85,6 +97,45 @@ interface JsonTreeRowsProps {
   onChange: (nodes: JsonTreeNode[]) => void;
 }
 
+function applySiblingPairValues(
+  nodes: JsonTreeNode[],
+  pair: { startKey: string; endKey: string },
+  startValue: string,
+  endValue: string,
+): JsonTreeNode[] {
+  const startKey = pair.startKey.toLowerCase();
+  const endKey = pair.endKey.toLowerCase();
+  return nodes.map((node) => {
+    const key = node.key.trim().toLowerCase();
+    if (key === startKey && node.kind === 'value') {
+      return { ...node, value: startValue, enabled: true };
+    }
+    if (key === endKey && node.kind === 'value') {
+      return { ...node, value: endValue, enabled: true };
+    }
+    return node;
+  });
+}
+
+function clearSiblingPairValues(
+  nodes: JsonTreeNode[],
+  pair: { startKey: string; endKey: string } | null,
+  fallbackId: string,
+): JsonTreeNode[] {
+  if (!pair) {
+    return nodes.map((node) => (node.id === fallbackId ? { ...node, value: '' } : node));
+  }
+  const startKey = pair.startKey.toLowerCase();
+  const endKey = pair.endKey.toLowerCase();
+  return nodes.map((node) => {
+    const key = node.key.trim().toLowerCase();
+    if ((key === startKey || key === endKey) && node.kind === 'value') {
+      return { ...node, value: '' };
+    }
+    return node;
+  });
+}
+
 const JsonTreeRows: React.FC<JsonTreeRowsProps> = ({ nodes, disabled, onChange }) => {
   const updateNode = (id: string, patch: Partial<JsonTreeNode>) => {
     onChange(updateJsonTreeNode(nodes, id, (node) => ({ ...node, ...patch })));
@@ -95,6 +146,8 @@ const JsonTreeRows: React.FC<JsonTreeRowsProps> = ({ nodes, disabled, onChange }
       {nodes.map((node) => {
         const inputsDisabled = disabled || !node.enabled;
         const caption = FIELD_CAPTIONS[node.key.trim()];
+        const datePair = node.kind === 'value' ? parseJsonDateRangePair(node.key) : null;
+        const useDateEditor = node.kind === 'value' && isJsonDateRangeFieldKey(node.key);
         return (
           <div key={node.id} className="custom-field-json-tree__item">
             <div className="custom-field-json-tree__main">
@@ -117,6 +170,21 @@ const JsonTreeRows: React.FC<JsonTreeRowsProps> = ({ nodes, disabled, onChange }
               <div className="custom-field-json-tree__value-col">
                 {node.kind === 'object' ? (
                   <span className="custom-field-json-tree__hint">{objectFieldHint(node.key)}</span>
+                ) : useDateEditor ? (
+                  <JsonFieldDateValueEditor
+                    fieldKey={node.key}
+                    value={node.value}
+                    disabled={inputsDisabled}
+                    onChange={(next) => updateNode(node.id, { value: next, enabled: true })}
+                    onPairFill={(startValue, endValue) => {
+                      if (!datePair) {
+                        updateNode(node.id, { value: startValue, enabled: true });
+                        return;
+                      }
+                      onChange(applySiblingPairValues(nodes, datePair, startValue, endValue));
+                    }}
+                    onClearPair={() => onChange(clearSiblingPairValues(nodes, datePair, node.id))}
+                  />
                 ) : (
                   <Input
                     placeholder="字段值（空值发送时会自动省略）"
@@ -338,6 +406,9 @@ export const CustomFieldJsonEditor: React.FC<CustomFieldJsonEditorProps> = ({
             >
               添加一行
             </Button>
+            <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
+              勾选表示传参，未勾选保留值但不发送；日期快捷会成对填充 start/end；「此刻」表示每次调用时的当前时间。
+            </Typography.Text>
           </>
         ) : (
           <>

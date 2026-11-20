@@ -43,13 +43,28 @@
 .custom-field-json-tree__value-col {
   flex: 1;
   min-width: 0;
-  height: 32px;
+  min-height: 32px;
   display: flex;
   align-items: center;
 }
 
 .custom-field-json-tree__value-col .ant-input {
   width: 100%;
+}
+
+.custom-field-json-tree__date-value {
+  width: 100%;
+  display: flex;
+}
+
+.custom-field-json-tree__date-value .ant-picker {
+  flex: 1;
+  min-width: 0;
+}
+
+.custom-field-json-tree__date-value .ant-input {
+  flex: 1;
+  min-width: 0;
 }
 
 .custom-field-json-tree__hint {

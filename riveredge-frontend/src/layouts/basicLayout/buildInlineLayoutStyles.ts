@@ -1197,6 +1197,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         /* 图标不做 hover 缩放/位移：42px 矢量图标乘 1.08 再叠系统缩放（如 175%）是非整数倍，
            每帧重算边缘抗锯齿，直边与密集平行线字形（拼图、表格）会肉眼可见地闪。hover 反馈由底色与边框承担 */
         .riveredge-system-settings-item-icon {
+          position: relative;
           width: 44px;
           height: 44px;
           border-radius: ${startMenuPanelRadius}px;
@@ -1209,8 +1210,34 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           padding: 0;
           line-height: 1;
         }
-        .riveredge-system-settings-item-icon .anticon,
-        .riveredge-system-settings-item-icon svg {
+        /* 与 .menu-item-badge-pro 同色（金 PRO 徽标） */
+        .riveredge-system-settings-item-icon-lock {
+          position: absolute;
+          top: -1px;
+          right: -3px;
+          width: 16px;
+          height: 16px;
+          border-radius: 50%;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: #d48806;
+          background: color-mix(in srgb, #d48806 16%, var(--ant-colorBgContainer, #fff));
+          border: 1px solid color-mix(in srgb, #d48806 35%, transparent);
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+          pointer-events: none;
+          z-index: 1;
+        }
+        .riveredge-system-settings-item-icon-lock .anticon,
+        .riveredge-system-settings-item-icon-lock svg {
+          font-size: 10px !important;
+          width: 10px !important;
+          height: 10px !important;
+          line-height: 1;
+          color: #d48806 !important;
+        }
+        .riveredge-system-settings-item-icon > svg,
+        .riveredge-system-settings-item-icon > span:not(.riveredge-system-settings-item-icon-lock) svg {
           font-size: 42px;
           width: 42px;
           height: 42px;
@@ -1229,6 +1256,56 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           white-space: normal;
           overflow-wrap: break-word;
           word-break: normal;
+        }
+        .riveredge-system-settings-item--locked {
+          cursor: help;
+          opacity: 0.72;
+        }
+        .riveredge-kuaiconnect-popover {
+          max-width: 320px;
+        }
+        .riveredge-kuaiconnect-popover-title {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          font-weight: 600;
+        }
+        .riveredge-kuaiconnect-popover-intro {
+          margin-bottom: 10px !important;
+          font-size: 13px;
+          line-height: 1.45;
+        }
+        .riveredge-kuaiconnect-popover-feature {
+          margin-bottom: 10px;
+          border: 1px solid rgba(0, 0, 0, 0.06);
+          border-radius: 6px;
+          background: rgba(0, 0, 0, 0.02);
+          padding: 8px 10px;
+        }
+        .riveredge-kuaiconnect-popover-feature--active {
+          border-color: rgba(212, 136, 6, 0.45);
+          background: rgba(212, 136, 6, 0.06);
+        }
+        .riveredge-kuaiconnect-popover-feature-name {
+          font-size: 13px;
+          font-weight: 600;
+          line-height: 1.35;
+          margin-bottom: 2px;
+        }
+        .riveredge-kuaiconnect-popover-feature-desc {
+          font-size: 12px;
+          line-height: 1.4;
+          color: ${token.colorTextSecondary};
+        }
+        .riveredge-kuaiconnect-popover-foot {
+          display: block;
+          font-size: 12px;
+          line-height: 1.4;
+        }
+        .riveredge-kuaiconnect-popover-actions {
+          margin-top: 12px;
+          padding: 0;
+          height: auto;
         }
         @media (max-width: 900px) {
           .riveredge-system-settings-panel {
@@ -1836,6 +1913,30 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           border-color: transparent !important;
           box-shadow: none !important;
         }
+        /* 顶栏用户下拉：关闭缩放形变，面板按最终几何直接出现 */
+        .riveredge-header-user-dropdown.ant-dropdown,
+        .riveredge-header-user-dropdown.ant-dropdown-placement-bottomRight,
+        .riveredge-header-user-dropdown.ant-dropdown-placement-bottomLeft,
+        .riveredge-header-user-dropdown.ant-slide-up,
+        .riveredge-header-user-dropdown.ant-slide-down,
+        .riveredge-header-user-dropdown.ant-zoom-big,
+        .riveredge-header-user-dropdown.ant-zoom-big-enter,
+        .riveredge-header-user-dropdown.ant-zoom-big-appear,
+        .riveredge-header-user-dropdown.ant-zoom-big-leave,
+        .riveredge-header-user-dropdown.ant-slide-up-enter,
+        .riveredge-header-user-dropdown.ant-slide-up-appear,
+        .riveredge-header-user-dropdown.ant-slide-up-leave,
+        .riveredge-header-user-dropdown.ant-slide-down-enter,
+        .riveredge-header-user-dropdown.ant-slide-down-appear,
+        .riveredge-header-user-dropdown.ant-slide-down-leave {
+          animation: none !important;
+          transition: none !important;
+          transform: none !important;
+        }
+        .riveredge-header-user-dropdown .ant-dropdown-menu {
+          transform: none !important;
+          transform-origin: top right !important;
+        }
         /* 用户头像按钮样式 */
         .ant-pro-layout .ant-pro-layout-header .ant-btn .ant-avatar,
         .ant-pro-layout .ant-pro-layout-header .ant-pro-layout-header-actions .ant-avatar {
@@ -2285,7 +2386,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           line-height: 1.5 !important;
           height: auto !important;
           font-size: 16px !important;
-          color: ${isDarkMode ? 'var(--ant-colorText)' : (isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)')} !important;
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : '#ffffff'} !important;
         }
         /* LOGO 容器内的链接和文字垂直对齐和颜色 - 根据顶栏背景色自动适配，浅色模式深色背景时与深色模式文字颜色一致 */
         .ant-pro-layout .ant-pro-layout-header .ant-pro-global-header-logo a,
@@ -2303,7 +2404,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           vertical-align: middle !important;
           line-height: 1.5 !important;
           flex-shrink: 0 !important; // ⚠️ 防止 LOGO 组被挤压
-          color: ${isDarkMode ? 'var(--ant-colorText)' : (isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)')} !important;
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : '#ffffff'} !important;
         }
         .ant-pro-global-header-logo img {
           flex-shrink: 0 !important; // ⚠️ 防止图片变成椭圆
@@ -2320,7 +2421,7 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         .ant-layout-header .ant-pro-global-header-logo a h1,
         .ant-pro-global-header-logo h1,
         .ant-pro-global-header-logo a h1 {
-          color: ${isDarkMode ? 'var(--ant-colorText)' : (isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)')} !important;
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : '#ffffff'} !important;
           ${isEnglishLocale ? 'letter-spacing: -0.02em !important;' : ''}
         }
         .ant-pro-global-header-logo h1{

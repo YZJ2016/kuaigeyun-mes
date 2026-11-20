@@ -21,10 +21,30 @@ function clampOverReportValue(mode: string, val: number): number {
   return val < 0 ? 0 : val;
 }
 
-export function getMaxReportableQuantityForOperation(operation: any, workOrderQuantity: number): number {
+/**
+ * 本道累计完成上限（含超报）。
+ * 按工序行超报（行 none 时回落工单头）现场计算，不用接口里的 maxReportableQuantity：
+ * 改超报后列表/展开缓存里的 max 常是旧快照，会把可报卡死在旧上限。
+ */
+export function getMaxReportableQuantityForOperation(
+  operation: any,
+  workOrderQuantity: number,
+  workOrder?: any,
+): number {
   const plan = Number(workOrderQuantity) || 0;
-  const mode = operation?.over_report_mode ?? operation?.overReportMode ?? 'none';
-  const rawVal = Number(operation?.over_report_value ?? operation?.overReportValue ?? 0) || 0;
+  let mode = String(operation?.over_report_mode ?? operation?.overReportMode ?? 'none')
+    .trim()
+    .toLowerCase();
+  let rawVal = Number(operation?.over_report_value ?? operation?.overReportValue ?? 0) || 0;
+  if (mode === 'none' || !mode) {
+    const hm = String(workOrder?.over_report_mode ?? workOrder?.overReportMode ?? '')
+      .trim()
+      .toLowerCase();
+    if (hm === 'fixed' || hm === 'percent') {
+      mode = hm;
+      rawVal = Number(workOrder?.over_report_value ?? workOrder?.overReportValue ?? 0) || 0;
+    }
+  }
   const val = clampOverReportValue(mode, rawVal);
   if (mode === 'fixed') {
     return Math.max(0, plan + val);
@@ -107,8 +127,12 @@ export function getTowardPlanQuantity(operation: any): number {
 }
 
 /** 计划可报（剩余）：距「计划+超报」累计完成上限的剩余量 */
-export function getPlanRemainingReportableQuantity(operation: any, workOrderQuantity: number): number {
-  const cap = getMaxReportableQuantityForOperation(operation, workOrderQuantity);
+export function getPlanRemainingReportableQuantity(
+  operation: any,
+  workOrderQuantity: number,
+  workOrder?: any,
+): number {
+  const cap = getMaxReportableQuantityForOperation(operation, workOrderQuantity, workOrder);
   const done = Number(operation?.completed_quantity ?? operation?.completedQuantity ?? 0) || 0;
   return Math.max(0, cap - done);
 }
@@ -134,12 +158,16 @@ export interface ReportableQuantityBreakdown {
 export function getReportableQuantityBreakdown(
   operation: any,
   workOrderQuantity: number,
+  workOrder?: any,
 ): ReportableQuantityBreakdown {
-  const planCap = getMaxReportableQuantityForOperation(operation, workOrderQuantity);
+  const planCap = getMaxReportableQuantityForOperation(operation, workOrderQuantity, workOrder);
   const operationCompleted =
     Number(operation?.completed_quantity ?? operation?.completedQuantity ?? 0) || 0;
-  const planRemaining = getPlanRemainingReportableQuantity(operation, workOrderQuantity);
-  const materialRemaining = getMaterialRemainingReportableQuantity(operation);
+  const planRemaining = getPlanRemainingReportableQuantity(
+    operation,
+    workOrderQuantity,
+    workOrder,
+  );
   // prev = material_remaining + material_consumed；消耗口径与后端一致
   const metrics = getOperationQualityMetrics(operation);
   const qualified = Number(operation?.qualified_quantity ?? operation?.qualifiedQuantity ?? 0) || 0;
@@ -148,6 +176,11 @@ export function getReportableQuantityBreakdown(
   let materialConsumed = isFirstOperation ? qualified : operationCompleted;
   if (metrics.fromInspection && metrics.qualified + metrics.unqualified > 0) {
     materialConsumed = Math.max(0, operationCompleted - metrics.unqualified);
+  }
+  // 首道在制起点 = 计划+超报；接口 material_remaining 会随改超报变旧，须按当前 planCap 重算
+  let materialRemaining = getMaterialRemainingReportableQuantity(operation);
+  if (isFirstOperation) {
+    materialRemaining = Math.max(0, planCap - materialConsumed);
   }
   const prevTransferQty =
     materialRemaining != null ? materialRemaining + materialConsumed : null;
@@ -179,8 +212,13 @@ export function resolveDefaultReportingQuantityFields(
 }
 
 /** 数量报工：本次可报上限（计划可报与物料可报之较小值） */
-export function getRemainingReportableQuantity(operation: any, workOrderQuantity: number): number {
-  return getReportableQuantityBreakdown(operation, workOrderQuantity).effectiveRemaining;
+export function getRemainingReportableQuantity(
+  operation: any,
+  workOrderQuantity: number,
+  workOrder?: any,
+): number {
+  return getReportableQuantityBreakdown(operation, workOrderQuantity, workOrder)
+    .effectiveRemaining;
 }
 
 /** 工序卡片环形进度：方案质检按检验合格数/计划数，其余按报工合格数/计划数 */

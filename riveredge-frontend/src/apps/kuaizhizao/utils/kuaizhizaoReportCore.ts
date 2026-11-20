@@ -270,6 +270,14 @@ export async function fetchKuaizhizaoReport(
   const period_basis =
     pickSearchString({ period_basis: params?.period_basis }, 'period_basis') ??
     pickSearchString(searchFormValues, 'period_basis');
+  const staleDaysRaw =
+    params?.stale_days ??
+    searchFormValues?.stale_days ??
+    pickSearchString(searchFormValues, 'stale_days');
+  const stale_days =
+    staleDaysRaw != null && Number.isFinite(Number(staleDaysRaw))
+      ? Number(staleDaysRaw)
+      : undefined;
   const customerField = options?.customerKeywordField ?? 'customer_name';
   const customer_keyword = pickSearchString(searchFormValues, customerField);
   const formStatus = pickSearchString(searchFormValues, 'status');
@@ -313,6 +321,7 @@ export async function fetchKuaizhizaoReport(
     ...(supplier_id != null && Number.isFinite(supplier_id) ? { supplier_id } : {}),
     ...(work_order_code ? { work_order_code } : {}),
     ...(period_basis ? { period_basis } : {}),
+    ...(stale_days != null ? { stale_days } : {}),
     ...(typeof params?.supplier_id === 'number'
       ? { supplier_id: params.supplier_id }
       : typeof params?.supplier_id === 'string' && String(params.supplier_id).trim()

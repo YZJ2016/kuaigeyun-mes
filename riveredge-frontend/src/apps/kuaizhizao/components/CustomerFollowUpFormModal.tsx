@@ -27,9 +27,13 @@ import { CustomerFormModal } from '../../master-data/components/CustomerFormModa
 import type { Customer } from '../../master-data/types/supply-chain';
 import { formatDateTime } from '../../../utils/format';
 import { getAntdModal } from '../../../utils/antdAppApis';
+import { useCustomFields } from '../../../hooks/useCustomFields';
+import { CustomFieldsFormSection } from '../../../components/custom-fields';
+
 const DICT_CODE = 'SALES_FOLLOW_UP_TYPE';
 const STAGE_DICT_CODE = 'SALES_OPPORTUNITY_STAGE';
 const TERMINAL_STAGES = new Set(['WON', 'LOST']);
+const CUSTOMER_FOLLOW_UP_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_customer_follow_ups';
 
 const getCustomerId = (c: any): number | null => {
   const id = Number(c?.id ?? c?.customer_id);
@@ -107,6 +111,19 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
   const [resolvingOpportunity, setResolvingOpportunity] = useState(false);
   const [attachmentUuids, setAttachmentUuids] = useState<string[]>([]);
   const profileCustomerIdRef = useRef<number | null>(null);
+
+  const {
+    customFields,
+    customFieldValues,
+    loadFieldValues,
+    extractFormValues,
+    saveCustomFieldValues,
+    resetFieldValues,
+  } = useCustomFields({
+    tableName: CUSTOMER_FOLLOW_UP_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open,
+  });
 
   const selectedOpportunity = useMemo(
     () => opportunities[0] ?? null,
@@ -295,11 +312,15 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
           ? editing.attachment_uuids.map(String).filter(Boolean)
           : [],
       );
+      void loadFieldValues(editing.id).then((fieldFormValues) => {
+        form.setFieldsValue(fieldFormValues);
+      });
       setTimeout(() => contentInputRef.current?.focus(), 100);
       return;
     }
     form.resetFields();
     setAttachmentUuids([]);
+    resetFieldValues();
     if (preset) {
       form.setFieldsValue({
         customer_id: preset.customer_id,
@@ -459,6 +480,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
               intent_material_name: String(v.intent_material_name ?? '').trim(),
             }
           : {};
+      const { customData } = extractFormValues(v, form);
       if (editing) {
         await followUpApi.update(editing.id, {
           customer_name: (customer as any).name ?? (customer as any).customer_name ?? '',
@@ -473,9 +495,14 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
           attachment_uuids: attachmentUuids,
           ...profile,
         });
+        try {
+          await saveCustomFieldValues(editing.id, customData);
+        } catch {
+          message.error(t('app.kuaizhizao.quality.common.messages.inspectCustomFieldsSaveFailed'));
+        }
         message.success(t('common.saveSuccess'));
       } else {
-        await followUpApi.create({
+        const created = await followUpApi.create({
           customer_id: customerId,
           activity_type_code: v.activity_type_code,
           content: v.content,
@@ -489,6 +516,11 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
             ? { opportunity_id: opportunityId, stage_code_after: stageAfter }
             : {}),
         });
+        try {
+          await saveCustomFieldValues(created.id, customData);
+        } catch {
+          message.error(t('app.kuaizhizao.quality.common.messages.inspectCustomFieldsSaveFailed'));
+        }
         message.success(t('common.createSuccess'));
       }
       onClose();
@@ -676,6 +708,11 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
                 onChange={setAttachmentUuids}
               />
             </Form.Item>
+            <CustomFieldsFormSection
+              customFields={customFields}
+              customFieldValues={customFieldValues}
+              gridColumns={2}
+            />
             {hasLinkedQuotation ? (
               <Form.Item label={t('app.kuaizhizao.quotationStage.fieldLabel')} style={{ marginBottom: 0 }}>
                 {resolvingOpportunity ? (

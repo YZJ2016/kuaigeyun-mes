@@ -21,6 +21,8 @@ export interface PrintTemplate {
   inngest_function_id?: string;
   usage_count: number;
   last_used_at?: string;
+  category_uuid?: string | null;
+  category_name?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -32,6 +34,8 @@ export interface PrintTemplateListParams {
   is_active?: boolean;
   document_type?: string;
   keyword?: string;
+  category_uuid?: string;
+  no_category?: boolean;
 }
 
 export interface CreatePrintTemplateData {
@@ -43,6 +47,7 @@ export interface CreatePrintTemplateData {
   config?: Record<string, any>;
   is_active?: boolean;
   is_default?: boolean;
+  category_uuid?: string;
 }
 
 export interface UpdatePrintTemplateData {
@@ -52,6 +57,7 @@ export interface UpdatePrintTemplateData {
   config?: Record<string, any>;
   is_active?: boolean;
   is_default?: boolean;
+  category_uuid?: string | null;
 }
 
 export interface RenderPrintTemplateData {

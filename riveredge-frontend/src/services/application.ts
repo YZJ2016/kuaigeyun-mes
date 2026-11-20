@@ -129,6 +129,19 @@ export async function getApplicationList(params?: {
 }
 
 /**
+ * 已启用应用列表的 React Query 真源 key（须含 tenantId，切换组织不可复用）。
+ * 各处须共用此 key，否则会并行打爆 /applications/installed 导致超时。
+ */
+export function installedApplicationsQueryKey(
+  tenantId: string | number | null | undefined,
+): readonly ['installedApplications', { is_active: true; tenantId: string | number | null }] {
+  return ['installedApplications', { is_active: true, tenantId: tenantId ?? null }] as const;
+}
+
+/** 同参 in-flight 合并，防止壳层多 hook 在 query key 未对齐时并发打穿后端 */
+const _installedListInflight = new Map<string, Promise<Application[]>>();
+
+/**
  * 获取已安装的应用列表
  * 
  * @param params - 查询参数
@@ -137,12 +150,22 @@ export async function getApplicationList(params?: {
 export async function getInstalledApplicationList(params?: {
   is_active?: boolean;
 }): Promise<Application[]> {
-  return apiRequest<Application[]>('/core/applications/installed', {
+  const inflightKey = JSON.stringify(params ?? {});
+  const existing = _installedListInflight.get(inflightKey);
+  if (existing) return existing;
+
+  const pending = apiRequest<Application[]>('/core/applications/installed', {
     params,
     // 壳层启动接口：后端 reload 时快速失败并出「重试」，避免空白转圈数分钟
     timeoutMs: 15_000,
     maxRetries: 1,
+  }).finally(() => {
+    if (_installedListInflight.get(inflightKey) === pending) {
+      _installedListInflight.delete(inflightKey);
+    }
   });
+  _installedListInflight.set(inflightKey, pending);
+  return pending;
 }
 
 /**

@@ -13,6 +13,11 @@ import {
 export interface KuaizhizaoPrintTarget {
   documentType: KuaizhizaoPrintDocumentType | string;
   documentId: number;
+  /**
+   * 多单批量打印：预览内按单据分别成页展示。
+   * 有值时以本数组为准；documentId 可填首个 id。
+   */
+  documentIds?: number[];
   title?: string;
   printApiPath?: string;
   /** 合并进打印预览/PDF 请求的额外 query（如设备卡批量 uuids） */
@@ -26,6 +31,17 @@ export function useKuaizhizaoPrintModal(options?: {
   const [target, setTarget] = useState<KuaizhizaoPrintTarget | null>(null);
 
   const openPrint = useCallback((next: KuaizhizaoPrintTarget) => {
+    const batchIds = (next.documentIds ?? [])
+      .map((id) => Number(id))
+      .filter((id) => Number.isFinite(id) && id > 0);
+    if (batchIds.length > 0) {
+      setTarget({
+        ...next,
+        documentId: next.documentId > 0 ? next.documentId : batchIds[0],
+        documentIds: batchIds,
+      });
+      return;
+    }
     if (!next.documentId) return;
     setTarget(next);
   }, []);
@@ -39,6 +55,7 @@ export function useKuaizhizaoPrintModal(options?: {
         onClose={closePrint}
         documentType={target?.documentType ?? ''}
         documentId={target?.documentId ?? null}
+        documentIds={target?.documentIds}
         printApiPath={
           target
             ? target.printApiPath ?? buildKuaizhizaoPrintApiPath(target.documentType, target.documentId)

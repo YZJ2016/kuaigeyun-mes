@@ -19,6 +19,8 @@ export interface ReportableQuantityPanelProps {
   workOrderQuantity: number;
   operations?: any[];
   workOrderId?: number;
+  /** 工单头（行超报为 none 时回落默认超报） */
+  workOrder?: any;
   /** 生产场景展示单位；与基础单位不同时，面板数值按生产单位展示 */
   unitContext?: {
     product_unit?: string;
@@ -35,12 +37,13 @@ const ReportableQuantityPanel: React.FC<ReportableQuantityPanelProps> = ({
   workOrderQuantity,
   operations = [],
   workOrderId,
+  workOrder,
   unitContext,
 }) => {
   const { token } = theme.useToken();
   const { t } = useTranslation();
   const { planRemaining, materialRemaining, effectiveRemaining } =
-    getReportableQuantityBreakdown(operation, workOrderQuantity);
+    getReportableQuantityBreakdown(operation, workOrderQuantity, workOrder ?? unitContext);
 
   const toDisplay = (baseQty: number) =>
     unitContext ? convertBaseQtyToProductionDisplay(baseQty, unitContext) : baseQty;

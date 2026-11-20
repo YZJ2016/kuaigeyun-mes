@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { FORM_LAYOUT, MODAL_CONFIG } from '../../../components/layout-templates/constants';
+import { UniUserSelect } from '../../../components/uni-user-select';
 import { formDateFormItemProps } from '../../../utils/formDate';
 import { buildFutureDateShortcutFieldProps } from '../../../utils/futureDatePickerShortcuts';
 import ReworkPredefinedRouteEditor, { type ReworkRouteOperationRow } from './ReworkPredefinedRouteEditor';
@@ -41,6 +42,8 @@ export type ReworkOrderCreateModalProps = {
   onFinish: (values: Record<string, unknown>) => Promise<void>;
   /** 动态路线起始工序变化时刷新可返工数量（由父组件调 preview API） */
   onStartOperationChange?: (startWorkOrderOperationId?: number) => void;
+  /** 指派人员变化时回填 numeric user id 列表（供父组件提交 API） */
+  onAssigneesChange?: (workers: Array<{ user_id: number; user_name: string }>) => void;
 };
 
 const defaultReworkTypeOptions = (t: TFunction): ReworkTypeOption[] => [
@@ -69,6 +72,7 @@ const ReworkOrderCreateModal: React.FC<ReworkOrderCreateModalProps> = ({
   onClose,
   onFinish,
   onStartOperationChange,
+  onAssigneesChange,
 }) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
@@ -286,6 +290,27 @@ const ReworkOrderCreateModal: React.FC<ReworkOrderCreateModalProps> = ({
         rules={[{ required: true, message: t('app.kuaizhizao.reworkOrder.formReworkReasonRequired') }]}
         fieldProps={{ rows: 2 }}
         colProps={{ span: 24 }}
+      />
+      <UniUserSelect
+        name="assignee_uuids"
+        label={t('app.kuaizhizao.reworkOrder.formAssignees')}
+        mode="multiple"
+        colProps={{ span: 24 }}
+        onChange={(_uuids, users) => {
+          const list = (Array.isArray(users) ? users : users ? [users] : []) as Array<{
+            id?: number;
+            full_name?: string;
+            username?: string;
+          }>;
+          onAssigneesChange?.(
+            list
+              .filter((u) => u?.id)
+              .map((u) => ({
+                user_id: Number(u.id),
+                user_name: u.full_name || u.username || '',
+              })),
+          );
+        }}
       />
       <ProFormDatePicker
         name="planned_start_date"

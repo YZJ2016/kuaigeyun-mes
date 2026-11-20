@@ -4,7 +4,12 @@
 
 import { apiRequest } from './api';
 
-export type ResourceCategoryType = 'api' | 'dataset';
+export type ResourceCategoryType =
+  | 'api'
+  | 'dataset'
+  | 'approval_process'
+  | 'message_template'
+  | 'print_template';
 
 export interface ResourceCategory {
   uuid: string;
@@ -20,10 +25,24 @@ export interface ResourceCategory {
   updated_at: string;
 }
 
+export interface APIRelatedDocumentGroupCount {
+  category_uuid?: string | null;
+  related_document_code?: string | null;
+  count: number;
+}
+
+export interface APIRelatedDocumentOption {
+  code: string;
+  label: string;
+}
+
 export interface ResourceCategoryListResponse {
   items: ResourceCategory[];
   total_count: number;
   uncategorized_count: number;
+  /** 仅接口库：左栏二级「关联单据」分组统计 */
+  related_document_group_counts?: APIRelatedDocumentGroupCount[];
+  related_document_options?: APIRelatedDocumentOption[];
 }
 
 export interface CreateResourceCategoryData {
@@ -51,7 +70,22 @@ export const RESOURCE_CATEGORY_ALL_KEY = 'all';
 export const RESOURCE_CATEGORY_UNCATEGORIZED_KEY = 'uncategorized';
 
 function categoryBasePath(resourceType: ResourceCategoryType): string {
-  return resourceType === 'api' ? '/core/apis/categories' : '/core/datasets/categories';
+  switch (resourceType) {
+    case 'api':
+      return '/core/apis/categories';
+    case 'dataset':
+      return '/core/datasets/categories';
+    case 'approval_process':
+      return '/core/approval-processes/categories';
+    case 'message_template':
+      return '/core/message-templates/categories';
+    case 'print_template':
+      return '/core/print-templates/categories';
+    default: {
+      const _exhaustive: never = resourceType;
+      return _exhaustive;
+    }
+  }
 }
 
 export async function listResourceCategories(
@@ -88,6 +122,30 @@ export async function deleteResourceCategory(
   return apiRequest<void>(`${categoryBasePath(resourceType)}/${categoryUuid}`, {
     method: 'DELETE',
   });
+}
+
+export interface LoadFunctionCategoryPresetsResponse {
+  categories_created: number;
+  items_categorized: number;
+}
+
+const COLLAB_FUNCTION_CATEGORY_TYPES: ResourceCategoryType[] = [
+  'approval_process',
+  'message_template',
+  'print_template',
+];
+
+export function supportsFunctionCategoryPresets(resourceType: ResourceCategoryType): boolean {
+  return COLLAB_FUNCTION_CATEGORY_TYPES.includes(resourceType);
+}
+
+export async function loadFunctionCategoryPresets(
+  resourceType: ResourceCategoryType,
+): Promise<LoadFunctionCategoryPresetsResponse> {
+  return apiRequest<LoadFunctionCategoryPresetsResponse>(
+    `${categoryBasePath(resourceType)}/load-function-presets`,
+    { method: 'POST' },
+  );
 }
 
 export function resolveResourceCategoryListFilter(

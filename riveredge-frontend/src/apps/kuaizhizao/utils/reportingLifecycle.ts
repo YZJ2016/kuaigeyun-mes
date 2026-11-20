@@ -1,5 +1,6 @@
 /**
  * 报工 lifecycle（模式 A）：业务主轴仅「已报工」；审核态由 record.audit + 列表「审核状态」列展示。
+ * 业务 status：draft / approved；已提交写在 review_status。
  */
 
 import { createLifecycleResolver } from './createLifecycleResolver';
@@ -29,22 +30,20 @@ export function reportingRecordUniAuditProps(record: Record<string, unknown> | n
   };
 }
 
-const REPORTING_STATUS_KEYS = ['pending', 'approved', 'rejected'] as const;
+const REPORTING_STATUS_KEYS = ['draft', 'approved'] as const;
 
 const REPORTING_STATUS_I18N: Record<string, string> = {
-  pending: `${P}.statusPending`,
+  draft: `${P}.statusDraft`,
   approved: `${P}.statusApproved`,
-  rejected: `${P}.statusRejected`,
 };
 
-/** 列表审核状态筛选 / 钉住 Tab */
+/** 列表业务状态筛选 / 钉住 Tab */
 export function buildReportingStatusValueEnum(
   t: (key: string) => string,
 ): Record<string, { text: string; status?: 'Default' | 'Processing' | 'Success' | 'Error' }> {
   const statusByKey: Record<string, 'Default' | 'Processing' | 'Success' | 'Error'> = {
-    pending: 'Processing',
+    draft: 'Default',
     approved: 'Success',
-    rejected: 'Error',
   };
   return Object.fromEntries(
     REPORTING_STATUS_KEYS.map((key) => [
@@ -61,6 +60,10 @@ export function resolveReportingListStatusParams(
   if (!status) return {};
   if (REPORTING_STATUS_KEYS.includes(status as (typeof REPORTING_STATUS_KEYS)[number])) {
     return { status };
+  }
+  // 兼容旧筛选项：待审核/已驳回已迁到 review_status，列表业务态按草稿查
+  if (['pending', 'rejected', 'pending_review', 'pending_approval', '待审核', '已驳回'].includes(status)) {
+    return { status: 'draft' };
   }
   return {};
 }

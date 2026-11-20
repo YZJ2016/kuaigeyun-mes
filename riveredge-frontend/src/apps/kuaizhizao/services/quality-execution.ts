@@ -412,13 +412,26 @@ export const qualityApi = {
       ),
     pushToInbound: async (
       id: string,
-      data?: { quantity?: number; warehouse_id?: number },
+      data?: {
+        quantity?: number;
+        warehouse_id?: number;
+        location_id?: number;
+        location_code?: string;
+      },
     ) =>
       apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/push-to-inbound`, {
         method: 'POST',
         data:
-          data?.quantity != null || data?.warehouse_id != null
-            ? { quantity: data?.quantity, warehouse_id: data?.warehouse_id }
+          data?.quantity != null ||
+          data?.warehouse_id != null ||
+          data?.location_id != null ||
+          data?.location_code != null
+            ? {
+                quantity: data?.quantity,
+                warehouse_id: data?.warehouse_id,
+                location_id: data?.location_id,
+                location_code: data?.location_code,
+              }
             : undefined,
       }),
     previewPushToInbound: async (id: string) =>
@@ -437,10 +450,16 @@ export const qualityApi = {
       }),
     certificate: async (id: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/certificate`, { method: 'POST', data }),
-    createFromWorkOrder: async (workOrderId: string) =>
+    createFromWorkOrder: async (workOrderId: string, data?: { inspection_quantity?: number }) =>
       apiRequest(
         `/apps/kuaizhizao/finished-goods-inspections/from-work-order?work_order_id=${workOrderId}`,
-        { method: 'POST' }
+        {
+          method: 'POST',
+          data:
+            data?.inspection_quantity != null
+              ? { inspection_quantity: data.inspection_quantity }
+              : undefined,
+        },
       ),
     ensureForFinishedGoodsReceipt: async (finishedGoodsReceiptId: string) =>
       apiRequest<EnsureFqcForFinishedGoodsReceiptResult>(

@@ -19,6 +19,8 @@ export interface ApprovalProcess {
   version?: number;
   published_version?: number;
   is_active: boolean;
+  category_uuid?: string | null;
+  category_name?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -30,6 +32,8 @@ export interface ApprovalProcessListParams {
   keyword?: string;
   /** 配置中心审核设置：返回全部审核开关流程（不受已安装应用过滤） */
   for_audit_config?: boolean;
+  category_uuid?: string;
+  no_category?: boolean;
 }
 
 export interface CreateApprovalProcessData {
@@ -39,6 +43,7 @@ export interface CreateApprovalProcessData {
   nodes: Record<string, any>;
   config: Record<string, any>;
   is_active?: boolean;
+  category_uuid?: string;
 }
 
 export interface UpdateApprovalProcessData {
@@ -47,6 +52,7 @@ export interface UpdateApprovalProcessData {
   nodes?: Record<string, any>;
   config?: Record<string, any>;
   is_active?: boolean;
+  category_uuid?: string | null;
 }
 
 /**
@@ -77,6 +83,12 @@ export async function createApprovalProcess(data: CreateApprovalProcessData): Pr
 
 export async function getConditionFields(entityType: string): Promise<{ fields: Array<{ field: string; label: string; type: string; operators: string[] }> }> {
   return apiRequest(`/core/approval-processes/condition-fields`, { params: { entity_type: entityType } });
+}
+
+export type EditableFieldOption = { field: string; label: string; type: string };
+
+export async function getEditableFields(entityType: string): Promise<{ fields: EditableFieldOption[] }> {
+  return apiRequest(`/core/approval-processes/editable-fields`, { params: { entity_type: entityType } });
 }
 
 /**
