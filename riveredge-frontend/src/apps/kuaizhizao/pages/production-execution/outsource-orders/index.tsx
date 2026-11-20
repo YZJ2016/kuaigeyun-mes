@@ -93,6 +93,7 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { OutsourceOrderReceiptBatchesSection, type OutsourceOrderReceiptBatchRow } from '../../../components/OutsourceOrderReceiptBatchesSection';
 const OUTSOURCE_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_outsource_orders';
 const OUTSOURCE_ORDER_HOST_RESOURCE = 'kuaizhizao:outsource-order';
 
@@ -127,6 +128,7 @@ interface OutsourceOrder {
   attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_at?: string;
   updated_at?: string;
+  receipt_batches?: OutsourceOrderReceiptBatchRow[] | null;
 }
 
 interface PullOutsourceOperationCandidate {
@@ -1476,7 +1478,7 @@ export const OutsourceOrdersTable: React.FC = () => {
         }
         lines={
           outsourceOrderDetail ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.outsourceOrder.noLineItems')} />
+            <OutsourceOrderReceiptBatchesSection batches={outsourceOrderDetail.receipt_batches} t={t} />
           ) : undefined
         }
         timeline={

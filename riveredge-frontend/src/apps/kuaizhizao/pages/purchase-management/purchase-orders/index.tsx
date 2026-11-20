@@ -3094,7 +3094,29 @@ const PurchaseOrdersPage: React.FC = () => {
       },
       {
         title: t('common.quantity'),
-        dataIndex: 'total_quantity',
+        dataIndex: 'suggested_quantity',
+        width: 100,
+        align: 'right' as const,
+        render: (v: number) => formatQuantity(v),
+      },
+      {
+        title: t('app.kuaizhizao.workOrder.pull.colPushedWorkOrderQty'),
+        dataIndex: 'pushed_work_order_quantity',
+        width: 100,
+        align: 'right' as const,
+        render: (v: number | undefined) => formatQuantity(Number(v ?? 0)),
+      },
+      {
+        title: t('app.kuaizhizao.workOrder.pull.colPushedPurchaseQty'),
+        dataIndex: 'pushed_purchase_quantity',
+        width: 100,
+        align: 'right' as const,
+        render: (v: number | undefined, record: PurchaseOrderSalesOrderPullLine) =>
+          formatQuantity(Number(v ?? record.pushed_quantity ?? 0)),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.colShippableQty'),
+        dataIndex: 'remaining_quantity',
         width: 100,
         align: 'right' as const,
         render: (v: number) => formatQuantity(v),

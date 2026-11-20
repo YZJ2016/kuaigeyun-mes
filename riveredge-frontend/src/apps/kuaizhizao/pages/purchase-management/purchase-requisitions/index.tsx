@@ -77,6 +77,7 @@ import {
 } from '../../../../master-data/utils/resolve-partner-material-price';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
+import { formatApiErrorDetail } from '../../../../../services/api';
 import { downloadFile } from '../../../../../utils';
 import { pickImportExampleValue } from '../../../../../utils/loadImportDictionaryValues';
 import { useImportMaterialUnitOptions } from '../../../../master-data/hooks/useImportMaterialUnitOptions';
@@ -467,6 +468,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null);
+  const [effectiveAllowManualEdit, setEffectiveAllowManualEdit] = useState<boolean | null>(null);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [materialPickSourceType, setMaterialPickSourceType] = useState<string | undefined>();
   const [importModalVisible, setImportModalVisible] = useState(false);
@@ -628,6 +630,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
       setPreviewCode(null);
       setEffectiveRuleCode(null);
       setEffectiveAutoGen(null);
+      setEffectiveAllowManualEdit(null);
       // 先取出草稿，避免回填服务端空价时 onValuesChange 把草稿冲掉
       const draftSnapshot =
         prFormDraftKey ? getDocumentFormDraft<Record<string, unknown>>(prFormDraftKey) : null;
@@ -753,12 +756,21 @@ const PurchaseRequisitionsPage: React.FC = () => {
       const config = await getCodeRulePageConfig('kuaizhizao-purchase-requisition');
       const autoGen = config?.autoGenerate ?? isAutoGenerateEnabled('kuaizhizao-purchase-requisition');
       const ruleCode = config?.ruleCode ?? getPageRuleCode('kuaizhizao-purchase-requisition');
+      const allowManualEdit = config?.allowManualEdit ?? true;
       setEffectiveRuleCode(ruleCode ?? null);
       setEffectiveAutoGen(autoGen);
+      setEffectiveAllowManualEdit(allowManualEdit);
       if (!autoGen || !ruleCode) return;
       const again = String(createFormRef.current?.getFieldValue?.('requisition_code') ?? '').trim();
       if (again) return;
-      const res = await testGenerateCode({ rule_code: ruleCode });
+      const reqDate = createFormRef.current?.getFieldValue?.('requisition_date');
+      const reqDateStr =
+        reqDate?.format?.('YYYY-MM-DD') ??
+        (typeof reqDate === 'string' && reqDate.trim() ? reqDate.trim() : undefined);
+      const res = await testGenerateCode({
+        rule_code: ruleCode,
+        ...(reqDateStr ? { context: { requisition_date: reqDateStr, doc_date: reqDateStr } } : {}),
+      });
       if (!res.code) return;
       const still = String(createFormRef.current?.getFieldValue?.('requisition_code') ?? '').trim();
       if (still) return;
@@ -771,7 +783,50 @@ const PurchaseRequisitionsPage: React.FC = () => {
 
   const initPurchaseRequisitionCreateForm = useCallback(async () => {
     void ensureSupplierList();
-    const draft = prFormDraftKey ? getDocumentFormDraft(prFormDraftKey) : null;
+    const copy = (location.state as { purchaseRequisitionCopy?: Record<string, any> } | null)
+      ?.purchaseRequisitionCopy;
+    if (copy) {
+      lastHeaderDeliveryRef.current = null;
+      setPreviewCode(null);
+      const copiedItems = Array.isArray(copy.items) ? copy.items : [];
+      const copiedValues = {
+        requisition_name: copy.requisition_name,
+        requisition_date: dayjs(),
+        applicant_id: copy.applicant_id,
+        applicant_name: copy.applicant_name,
+        department_id: copy.department_id,
+        department_name: copy.department_name,
+        required_date: copy.required_date ? dayjs(copy.required_date) : undefined,
+        notes: copy.notes,
+        attachments: mapAttachmentsToUploadList(copy.attachments),
+        items: copiedItems.length
+          ? copiedItems.map((it: Record<string, any>) => ({
+              ...it,
+              required_date: it.required_date ? dayjs(it.required_date) : undefined,
+              attachments: mapAttachmentsToUploadList(it.attachments),
+            }))
+          : initialCreateItems,
+      };
+      try {
+        const config = await getCodeRulePageConfig('kuaizhizao-purchase-requisition');
+        const autoGen = config?.autoGenerate ?? isAutoGenerateEnabled('kuaizhizao-purchase-requisition');
+        const ruleCode = config?.ruleCode ?? getPageRuleCode('kuaizhizao-purchase-requisition');
+        setEffectiveRuleCode(ruleCode ?? null);
+        setEffectiveAutoGen(autoGen);
+        setEffectiveAllowManualEdit(config?.allowManualEdit ?? true);
+        if (autoGen && ruleCode) {
+          const res = await testGenerateCode({ rule_code: ruleCode });
+          setPreviewCode(res.code ?? null);
+          applyCreateFormDefaults({ ...copiedValues, requisition_code: res.code ?? '' });
+          return;
+        }
+      } catch (error: unknown) {
+        console.warn('采购申请复制编号预生成失败:', error);
+      }
+      applyCreateFormDefaults(copiedValues);
+      return;
+    }
+    const draft = prFormDraftKey ? getDocumentFormDraft<Record<string, unknown>>(prFormDraftKey) : null;
     if (draft && Object.keys(draft).length > 0) {
       const healed = healPurchaseRequisitionDraft(draft as Record<string, unknown>);
       if (healed.requisition_date == null || healed.requisition_date === '') {
@@ -789,6 +844,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
     setPreviewCode(null);
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
+    setEffectiveAllowManualEdit(null);
     prFormHydratingRef.current = true;
     try {
       createFormRef.current?.resetFields();
@@ -801,9 +857,12 @@ const PurchaseRequisitionsPage: React.FC = () => {
       const ruleCode = config?.ruleCode ?? getPageRuleCode('kuaizhizao-purchase-requisition');
       setEffectiveRuleCode(ruleCode ?? null);
       setEffectiveAutoGen(autoGen);
+      setEffectiveAllowManualEdit(config?.allowManualEdit ?? true);
+      const initReqDate = dayjs().format('YYYY-MM-DD');
+      const codePreviewContext = { context: { requisition_date: initReqDate, doc_date: initReqDate } };
       if (autoGen && ruleCode) {
         try {
-          const res = await testGenerateCode({ rule_code: ruleCode });
+          const res = await testGenerateCode({ rule_code: ruleCode, ...codePreviewContext });
           const preview = res.code;
           setPreviewCode(preview ?? null);
           applyCreateFormDefaults({
@@ -830,9 +889,12 @@ const PurchaseRequisitionsPage: React.FC = () => {
       const ruleCode = getPageRuleCode('kuaizhizao-purchase-requisition');
       setEffectiveRuleCode(ruleCode ?? null);
       setEffectiveAutoGen(isAutoGenerateEnabled('kuaizhizao-purchase-requisition'));
+      setEffectiveAllowManualEdit(true);
+      const initReqDate = dayjs().format('YYYY-MM-DD');
+      const codePreviewContext = { context: { requisition_date: initReqDate, doc_date: initReqDate } };
       if (isAutoGenerateEnabled('kuaizhizao-purchase-requisition') && ruleCode) {
         try {
-          const res = await testGenerateCode({ rule_code: ruleCode });
+          const res = await testGenerateCode({ rule_code: ruleCode, ...codePreviewContext });
           const preview = res.code;
           setPreviewCode(preview ?? null);
           applyCreateFormDefaults({
@@ -1162,12 +1224,22 @@ const PurchaseRequisitionsPage: React.FC = () => {
         messageApi.error(t('app.kuaizhizao.purchaseRequisition.lineRequiredDateMissing', { row: index + 1 }));
         throw new Error(t('app.kuaizhizao.purchaseRequisition.form.lineDeliveryRequired'));
       }
+      const dualQty = pickDocumentLineDualQuantityFields(i as Record<string, unknown>);
+      const rate = Number(dualQty.unit_conversion_rate);
+      if (!Number.isFinite(rate) || rate <= 0) {
+        delete dualQty.unit_conversion_rate;
+      }
+      const auxQty = Number(dualQty.aux_quantity);
+      if (!Number.isFinite(auxQty) || auxQty < 0) {
+        delete dualQty.aux_quantity;
+      }
       return {
         material_id: i.material_id!,
         material_code: i.material_code || '',
         material_name: i.material_name || '',
         material_spec: i.material_spec,
         unit: i.unit || '件',
+        ...dualQty,
         quantity: Number(i.quantity) || 0,
         suggested_unit_price: Number(i.suggested_unit_price) || 0,
         required_date: lineDate,
@@ -1182,6 +1254,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
     if (prFormDraftKey) clearDocumentFormDraft(prFormDraftKey);
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
+    setEffectiveAllowManualEdit(null);
     createFormRef.current?.resetFields();
     invalidateMenuBadgeCounts();
     if (isFormPage) {
@@ -1308,10 +1381,21 @@ const PurchaseRequisitionsPage: React.FC = () => {
         let requisitionCode = values.requisition_code;
         const ruleCode = effectiveRuleCode || getPageRuleCode('kuaizhizao-purchase-requisition');
         const autoGen = effectiveAutoGen ?? isAutoGenerateEnabled('kuaizhizao-purchase-requisition');
-        if (autoGen && ruleCode && (requisitionCode === previewCode || !requisitionCode)) {
+        const allowManualEdit = effectiveAllowManualEdit ?? true;
+        const userCode = String(requisitionCode ?? '').trim();
+        const preview = String(previewCode ?? '').trim();
+        const manualCodeOverride = allowManualEdit && userCode && preview && userCode !== preview;
+        const codeContext = requisitionDate
+          ? { requisition_date: requisitionDate, doc_date: requisitionDate }
+          : undefined;
+        if (autoGen && ruleCode && !manualCodeOverride) {
           try {
-            const res = await generateCode({ rule_code: ruleCode });
+            const res = await generateCode({
+              rule_code: ruleCode,
+              ...(codeContext ? { context: codeContext } : {}),
+            });
             requisitionCode = res.code;
+            createFormRef.current?.setFieldValue('requisition_code', res.code);
           } catch (e: unknown) {
             const err = e as { message?: string };
             messageApi.error(
@@ -1319,6 +1403,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
             );
             return;
           }
+        } else if (manualCodeOverride) {
+          requisitionCode = userCode;
         }
         const created = await createPurchaseRequisition({
           requisition_code: requisitionCode || undefined,
@@ -1363,11 +1449,13 @@ const PurchaseRequisitionsPage: React.FC = () => {
       finalizePurchaseRequisitionForm();
     } catch (e: any) {
       submitAfterSaveRef.current = false;
-      const d = e?.response?.data?.detail;
+      const data = e?.response?.data;
+      const apiMessage =
+        formatApiErrorDetail(data?.detail)
+        || (data?.success === false && data?.error ? formatApiErrorDetail(data.error) : '')
+        || e?.message;
       messageApi.error(
-        typeof d === 'string'
-          ? d
-          : d?.message || (editingId != null ? t('common.saveFailed') : t('common.createFailed')),
+        apiMessage || (editingId != null ? t('common.saveFailed') : t('common.createFailed')),
       );
       throw e;
     } finally {

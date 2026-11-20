@@ -17007,6 +17007,8 @@ export default {
   'app.kuaizhizao.workOrder.pull.salesOrderLinesLoadFailed': '加载销售订单开口行失败',
   'app.kuaizhizao.workOrder.pull.salesForecastLinesLoadFailed': '加载销售预测明细失败',
   'app.kuaizhizao.workOrder.pull.computationListLoadFailed': '加载需求计算取单列表失败',
+  'app.kuaizhizao.workOrder.pull.colPushedWorkOrderQty': '已转工单',
+  'app.kuaizhizao.workOrder.pull.colPushedPurchaseQty': '已转采购',
   'app.kuaizhizao.workOrder.push.selectSplitChild': '已拆分主工单不可下推，请勾选拆分子工单',
   'app.kuaizhizao.workOrder.push.outboundStatusBlocked': '仅「已下达 / 执行中」工单可下推领料出库',
   'app.kuaizhizao.workOrder.push.inboundStatusBlocked': '仅「执行中 / 已完成」工单可下推成品入库',

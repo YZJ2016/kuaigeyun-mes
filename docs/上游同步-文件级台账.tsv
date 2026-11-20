@@ -1747,7 +1747,7 @@ riveredge-frontend/src/apps/kuaizhizao/components/MaterialInventoryIndicator.tsx
 riveredge-frontend/src/apps/kuaizhizao/components/MergeFinanceDocsModal.tsx	cbae0209734741e9da2d79419e0db775da2d4aa7	tracked	seed from c588744e04
 riveredge-frontend/src/apps/kuaizhizao/components/OutsourceIssueFormContent.tsx	cf9fb75f737d85a5beb0f398b10a940e9e6aecb0	tracked	seed from 5b1b9828e4
 riveredge-frontend/src/apps/kuaizhizao/components/OutsourceOrderProgressKit.tsx	6c18b1f583fb86d7239dbb2c9dc9c5fa0a3a12a4	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
-riveredge-frontend/src/apps/kuaizhizao/components/OutsourceOrderReceiptBatchesSection.tsx	fb790fd4d89fcfb27fc11482a9ccc2349ad7b28b	deferred	R2:新组件仅被上游版页面/hook消费，随对应MERGE簇整体落地
+riveredge-frontend/src/apps/kuaizhizao/components/OutsourceOrderReceiptBatchesSection.tsx	fb790fd4d89fcfb27fc11482a9ccc2349ad7b28b	applied	R2:MERGE已三方合并-委外单入库批次列段(ReceiptBatchesSection新组件+receipt_batches字段+详情替换Empty);本地未启用ProgressKit/linked-detail故未取其import
 riveredge-frontend/src/apps/kuaizhizao/components/OutsourceReceiptFormContent.tsx	1c9bd1e66c5a243131fda0131f2a56c7f0573f45	applied	R2:与上游tip一致
 riveredge-frontend/src/apps/kuaizhizao/components/ReportableQuantityPanel.tsx	5ed14cdabf94ce8f25c03684fc0494dcbe5e12a4	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/apps/kuaizhizao/components/ReworkOrderCreateModal.tsx	858e3683ae340a2dba107a37d904b2128a252aaa	applied	R2：与上游tip blob一致，本地已同步
@@ -1907,7 +1907,7 @@ riveredge-frontend/src/apps/kuaizhizao/pages/logistics-management/shared/DriverF
 riveredge-frontend/src/apps/kuaizhizao/pages/logistics-management/shared/LogisticsMasterDetailDrawer.tsx	5cd33b1a6f92adba47b63fea478f599c2555f414	applied	R2 fe_pages簇：自定义字段接入+行删并批量删+物流/售后/退料增量，取上游tip版
 riveredge-frontend/src/apps/kuaizhizao/pages/logistics-management/shared/VehicleFormModal.tsx	7213f43eee6f6cc4c5c3f206f04615a7e1e73d1b	applied	R2 fe_pages簇：自定义字段接入+行删并批量删+物流/售后/退料增量，取上游tip版
 riveredge-frontend/src/apps/kuaizhizao/pages/logistics-management/vehicles/index.tsx	a81a351563e93b68c8cd4f9e2f8a38262dff7fc5	applied	R2 fe_pages簇：自定义字段接入+行删并批量删+物流/售后/退料增量，取上游tip版
-riveredge-frontend/src/apps/kuaizhizao/pages/outsource-management/outsource-orders/index.tsx	3ef7622f47b4badaf59f1015c552d56165bee5c6	deferred	R2:MERGE-须三方合并（本地行缓存/po-compose/IQC门禁/批量分配序列号/uni-audit提交等本地逻辑）
+riveredge-frontend/src/apps/kuaizhizao/pages/outsource-management/outsource-orders/index.tsx	3ef7622f47b4badaf59f1015c552d56165bee5c6	applied	R2:MERGE已三方合并-委外单入库批次列段(ReceiptBatchesSection新组件+receipt_batches字段+详情替换Empty);本地未启用ProgressKit/linked-detail故未取其import
 riveredge-frontend/src/apps/kuaizhizao/pages/outsource-management/outsource-work-orders/index.tsx	3cb21f60a40e394d9fd9c34aa2bff9dbb6d81147	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/outsource-management/settlements/index.tsx	de71d9b0433691d329ce97bebe0073d3134bf417	superset	R2:本地保留行级删除/工位写保护/门禁等超集能力，上游tip为删减版
 riveredge-frontend/src/apps/kuaizhizao/pages/performance/employee-configs/index.tsx	4c50bb4d1ecf142e7c87a4f97705b74aa26a51ab	superset	R2:本地保留行级删除/工位写保护/门禁等超集能力，上游tip为删减版
@@ -1924,7 +1924,7 @@ riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/demand-computation/
 riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/demand-management/index.tsx	a186e3f418da85df43de694c379e602cb28884ff	tracked	seed from 4d124a088e
 riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/production-plans/ProductionControlTower.tsx	2af1e3713cfb58c00228135435ccf0e2ab94d148	tracked	seed from df7d635797
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/components/ProductionExceptionDetailActions.tsx	1f4d676a8524083f52997b0bc1e00ba103cd174c	tracked	seed from a60f3e9039
-riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/outsource-orders/index.tsx	b58de21fcc48c5d28b8f80664b3d48d88f30887c	deferred	R2:MERGE-须三方合并（本地行缓存/po-compose/IQC门禁/批量分配序列号/uni-audit提交等本地逻辑）
+riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/outsource-orders/index.tsx	b58de21fcc48c5d28b8f80664b3d48d88f30887c	applied	R2:MERGE已三方合并-委外单入库批次列段(ReceiptBatchesSection新组件+receipt_batches字段+详情替换Empty);本地未启用ProgressKit/linked-detail故未取其import
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/outsource-work-orders/index.tsx	068ef5f64a33d8c216e4ab834ec1f08f4a85b7d4	tracked	seed from 4d124a088e
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/packing-binding/PackingBindingScanSessionModal.tsx	938f16fd5d5f92c2a79ecc1b8fc067c67e78e16e	tracked	seed from b12cc66e71
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/packing-binding/index.tsx	10b049ba5505f8ff27cf40a7acc19533333b51ef	tracked	seed from b12cc66e71
@@ -1941,7 +1941,7 @@ riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/co
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/components/WorkOrderDetailDrawer.tsx	655287cf1ae03193f8263180729fd9da9b1df8a6	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/components/WorkOrderOperationsEditTable.tsx	17581d9518d4e80f0fb895ac3b433c1575c36bf6	tracked	seed from 93b3cb5998
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/components/WorkOrderReadinessPopover.tsx	706aec31b131df288ed0eb93da6c9b2e4fd3a63b	tracked	seed from 6abba1dbd5
-riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/index.tsx	76b606407e0affdc4092ee932e90b60a52ece546	deferred	R2:MERGE-须三方合并（本地行缓存/po-compose/IQC门禁/批量分配序列号/uni-audit提交等本地逻辑）
+riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/index.tsx	76b606407e0affdc4092ee932e90b60a52ece546	superset	R2:MERGE三方合并后净变更=0-上游唯一增量(pushed_work_order_quantity/pushed_purchase_quantity分列)位于其行级SO→WO拉单Modal;本地为订单级拉单(功能等价路径),行级拉单改造留作后续特性
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/workOrderCreateOperations.ts	92d017ecb9d01fb047d0563724bccf8cc5f2e385	tracked	seed from 93b3cb5998
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/workOrderSyncConfig.ts	cf9f5f52406fe077c9d087e1985be174419a173a	tracked	seed from a0b353ce7e
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/arrival-warnings/index.tsx	7a9924c6d009b8a211d2abbd2190c75358d80a6c	tracked	seed from d81b4b70bf
@@ -1961,14 +1961,14 @@ riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-demand
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-inquiries/index.tsx	1dfd0d348655573d8124db2e3d541470a4d347a0	tracked	seed from e451b48dc2
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-order-changes/index.tsx	d248e197b704c68db85a6f5064fbc75e6ff663b6	tracked	seed from 4d124a088e
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-orders/components/PurchaseOrderDetailDrawer.tsx	33156e12da90a5ac9d6ab5a24561f4ce2e5eabe5	tracked	seed from 154977d948
-riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-orders/index.tsx	5279565df61389ba91d8a224a3127b236d3a3970	deferred	R2:MERGE-须三方合并（本地行缓存/po-compose/IQC门禁/批量分配序列号/uni-audit提交等本地逻辑）
+riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-orders/index.tsx	5279565df61389ba91d8a224a3127b236d3a3970	applied	R2:MERGE已三方合并-取单列拆分(建议/已转工单/已转采购/可发货量)+采购申请复制建单(location.state purchaseRequisitionCopy)+行dualQty字段透传;补zh-CN两条上游引用未定义key
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-orders/purchaseOrderListStatus.ts	307117f2b02eb925b3b0442471dc1bc6055dbc8b	tracked	seed from 37409d3b29
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-orders/purchaseOrderSyncConfig.ts	d4df3d5f96a647a7be0ef3c8f42c6c155d6e5808	tracked	seed from a0b353ce7e
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-orders/purchaseOrderSyncFields.ts	c7cb4aa92e214eb2380d96ef314210a4ae826b07	tracked	seed from 9ec209fab8
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-requisitions/components/PurchaseRequisitionDetailDrawer.tsx	e5a94122b0238182b00cf2a016a82f57cc00196b	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-requisitions/components/PurchaseRequisitionFormFieldSettings.tsx	f9ec6dc7e4be6b65a43d62e310cd90fc7c48160e	tracked	seed from 5f085a19c9
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-requisitions/components/PurchaseRequisitionLineStock.tsx	fb20f4f6313d4efe28e17dc3e37f2460d5b79f87	tracked	seed from 93b3cb5998
-riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-requisitions/index.tsx	f82c88e56d2ede8968c47282959ec3bb524245d6	deferred	R2:MERGE-须三方合并（本地行缓存/po-compose/IQC门禁/批量分配序列号/uni-audit提交等本地逻辑）
+riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-requisitions/index.tsx	f82c88e56d2ede8968c47282959ec3bb524245d6	applied	R2:MERGE已三方合并-取单列拆分(建议/已转工单/已转采购/可发货量)+采购申请复制建单(location.state purchaseRequisitionCopy)+行dualQty字段透传;补zh-CN两条上游引用未定义key
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-requisitions/purchaseRequisitionFormFieldPrefs.ts	9cd5bd613ab946fd683af110e9782bac8b068585	tracked	seed from 5f085a19c9
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-returns/index.tsx	cc6cf042b12fed8ba623f60298949a1a3f90c41b	tracked	seed from 3958bb1524
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/receipt-notices/index.tsx	f03ed85590e91e53416e59378e2daac8e347112c	tracked	seed from 4d124a088e
