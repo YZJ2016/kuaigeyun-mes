@@ -2369,7 +2369,7 @@ riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-orders
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-orders/purchaseOrderSyncFields.ts	c7cb4aa92e214eb2380d96ef314210a4ae826b07	tracked	seed from 9ec209fab8
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-requisitions/components/PurchaseRequisitionDetailDrawer.tsx	e5a94122b0238182b00cf2a016a82f57cc00196b	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-requisitions/components/PurchaseRequisitionFormFieldSettings.tsx	f9ec6dc7e4be6b65a43d62e310cd90fc7c48160e	tracked	seed from 5f085a19c9
-riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-requisitions/components/PurchaseRequisitionLineStock.tsx	fb20f4f6313d4efe28e17dc3e37f2460d5b79f87	tracked	seed from 93b3cb5998
+riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-requisitions/components/PurchaseRequisitionLineStock.tsx	fb20f4f6313d4efe28e17dc3e37f2460d5b79f87	applied	采购申请行库存组件上游弃用改re-export共享DocumentLineTotalStock——shim整取（本地共享组件与上游字节等价，页面引用名不变）
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-requisitions/index.tsx	8fc20e69825695494a64197f0910730341b79bd7	applied	部门字段簇：EquipmentPersonSelect补onUserChange回调(未取idsFieldName/多选)；两页接PurchaseDepartmentFormField+申请人部门自动回填+载荷规范化+拉单部门列
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-requisitions/purchaseRequisitionFormFieldPrefs.ts	9cd5bd613ab946fd683af110e9782bac8b068585	tracked	seed from 5f085a19c9
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-returns/index.tsx	cc6cf042b12fed8ba623f60298949a1a3f90c41b	tracked	seed from 3958bb1524
@@ -2533,7 +2533,7 @@ riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/other-inbound/
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/other-outbound/OtherOutboundDocumentPushPanel.tsx	74eef4b3915319aa33099d7e633ebedd6b49a966	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/other-outbound/index.tsx	703291aa05df147b5986eb5c88237f3cbc186e67	tracked	seed from 2e8ecad990
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/other-outbound/otherOutboundReasonTypeLabels.ts	56bd73968b9a072d1a6b2cc0c8a7ca163ef133fc	tracked	seed from a0b353ce7e
-riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/OutboundBatchAllocationField.tsx	f8c572d14c840bb88b8d1e505d10da21771368b5	tracked	seed from 899307f4d6
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/OutboundBatchAllocationField.tsx	f8c572d14c840bb88b8d1e505d10da21771368b5	superset	本地超集：allowManualWithoutStock负库存手工录批+关键词搜索UI；上游allocateBatchQuantitiesFifo为简化版
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/OutboundConfirmPreviewModal.tsx	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/OutboundHubEditModal.tsx	f63fa660606225a7d60a417fb6660ef8a0587da5	applied	簇W:生产领料审核能力(submit/withdraw/approve/revoke)+仓储金额方名脱敏渲染+叠列fieldResource;保留本地待审可删sales_delivery语义
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/OutboundOutsourcePullEntryPage.tsx	d37fccc2aece5c4c9dc7bf37873ee60b0c8448a4	tracked	seed from 899307f4d6
