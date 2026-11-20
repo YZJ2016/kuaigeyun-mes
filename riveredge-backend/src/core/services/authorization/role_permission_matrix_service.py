@@ -184,8 +184,6 @@ class RolePermissionMatrixService:
             norm = normalize_permission_code(p.code or "")
             if not norm or norm in merged_review_codes:
                 continue
-            if action_key == "display":
-                continue
             actions_out.append(
                 FunctionGrantActionSchema(
                     action=action_key,
@@ -196,8 +194,10 @@ class RolePermissionMatrixService:
                     is_baseline=PermissionRegistryService.is_baseline_permission_code(norm),
                 )
             )
+        _action_priority = {"read": 0, "display": 1}
         actions_out.sort(
             key=lambda a: (
+                _action_priority.get(a.action or "", 50),
                 RolePermissionMatrixService._manifest_order_for_codes(
                     list(a.merged_codes or []) or ([a.code] if a.code else []),
                     code_order,
@@ -400,17 +400,7 @@ class RolePermissionMatrixService:
                 permission_id__in=list(to_remove),
             ).delete()
 
-        if desired_function_ids:
-            assigned_codes = [
-                pool_by_code[c].code
-                for c in normalized_in
-                if c in pool_by_code and pool_by_code[c].code
-            ]
-            if assigned_codes:
-                await MenuService.activate_menus_for_permission_codes(
-                    tenant_id=tenant_id,
-                    permission_codes=assigned_codes,
-                )
+        # 菜单启停只认菜单管理，权限矩阵保存不得批量强制 is_active=True。
 
         await PermissionVersionService.bump(tenant_id=tenant_id, user_id=None)
         await RoleService._bump_role_users_permission_version(
@@ -477,3 +467,53 @@ class RolePermissionMatrixService:
 
         walk(tree)
         return keys
+
+    @staticmethod
+    async def collect_granted_resource_keys_for_role(
+        tenant_id: int, role_uuid: str
+    ) -> Set[str]:
+        """
+        角色数据/字段权限可配置资源的唯一后端真源。
+
+        与 ``get_function_grants`` 同一棵功能矩阵树 + 已授 code，再经
+        ``collect_granted_resource_keys_from_tree`` 推导；不写库、不 ensure 基线行
+        （基线码仅内存合并，与矩阵展示一致）。
+        """
+        role = await Role.filter(
+            uuid=role_uuid,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not role:
+            return set()
+
+        pool = await RolePermissionMatrixService._load_function_permission_pool(tenant_id)
+        pool_by_code = {
+            normalize_permission_code(p.code or ""): p for p in pool if p.code
+        }
+        granted_codes = await RolePermissionMatrixService._granted_function_codes_for_role(
+            tenant_id, role, pool
+        )
+        granted_codes = granted_codes & set(pool_by_code.keys())
+
+        menus = await MenuService.get_menu_tree(
+            tenant_id=tenant_id,
+            is_active=True,
+            use_cache=True,
+            cache_key_suffix="",
+        )
+        visible_granted: Set[str] = set()
+        code_order = await PermissionRegistryService.manifest_permission_order(tenant_id)
+        pool_by_resource = RolePermissionMatrixService._index_pool_by_resource(pool)
+        tree = RolePermissionMatrixService._build_menu_tree_nodes(
+            menus,
+            pool,
+            pool_by_code,
+            granted_codes,
+            visible_granted,
+            code_order,
+            pool_by_resource,
+        )
+        return RolePermissionMatrixService.collect_granted_resource_keys_from_tree(
+            tree, granted_codes
+        )

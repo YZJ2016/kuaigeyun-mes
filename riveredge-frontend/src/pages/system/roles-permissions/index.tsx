@@ -132,12 +132,16 @@ import {
   defaultCustomPayloadForResource,
 } from './components/dataPolicySave';
 import {
+  collectGrantedResourceKeysExcludingDisplayOnly,
   collectGrantedResourceKeysFromGrantTree,
   collectGrantedResourceOptionsFromGrantTree,
   isGenericPolicyResourceCode,
   normalizeResourceKey,
 } from './components/roleGrantedResourceScope';
-import { resolveFieldPermissionLabel } from '../../../utils/fieldPermissionI18n';
+import {
+  FIELD_PERMISSION_KIND_OPTIONS,
+  resolveFieldPermissionLabel,
+} from '../../../utils/fieldPermissionI18n';
 import {
   isBaselinePermissionCode,
   mergeBaselinePermissionCodes,
@@ -162,7 +166,7 @@ const ROLE_FUNCTIONAL_DOMAIN_I18N: Record<string, string> = {
 /** 权限树叶子节点展示名：数据范围走 permission.scope，其余走 permission.action */
 function permissionLeafDisplayLabel(
   permission: Permission,
-  t: (key: string, opts?: { defaultValue?: string; name?: string }) => string
+  t: (key: string, opts?: { defaultValue?: string }) => string
 ): string {
   const code = permission.code || '';
   if (code === KUAIZHIZAO_PRICING_VIEW) {
@@ -200,33 +204,25 @@ function permissionLeafDisplayLabel(
   return resolvePermissionLabel(code, actionSeg, permission.name, t);
 }
 
-const FieldNameInput: React.FC<{
+const FieldKindSelect: React.FC<{
   item: FieldPermissionPolicy;
-  displayLabel: string;
   onChange: (val: string) => void;
-  t: (key: string, opts?: { defaultValue?: string; name?: string }) => string;
-}> = ({ item, displayLabel, onChange, t }) => {
-  const [focused, setFocused] = useState(false);
-  const showLabel = !focused && displayLabel;
-
+  t: (key: string, opts?: { defaultValue?: string }) => string;
+}> = ({ item, onChange, t }) => {
+  const options = FIELD_PERMISSION_KIND_OPTIONS.map((opt) => ({
+    value: opt.value,
+    label: t(opt.labelKey, { defaultValue: opt.defaultLabel }),
+  }));
   return (
-    <Tooltip
-      title={t('pages.system.roles.enFieldName', {
-        name: item.field_name || '-',
-        defaultValue: `英文字段: ${item.field_name || '-'}`,
+    <Select
+      style={{ width: 240 }}
+      value={item.field_name || undefined}
+      placeholder={t('pages.system.roles.fieldKindPlaceholder', {
+        defaultValue: '选择字段类别',
       })}
-    >
-      <Input
-        style={{ width: 240 }}
-        placeholder={t('pages.system.roles.enFieldNamePlaceholder', { defaultValue: '英文字段名' })}
-        value={showLabel ? displayLabel : item.field_name}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        onChange={(e) => {
-          onChange(e.target.value);
-        }}
-      />
-    </Tooltip>
+      options={options}
+      onChange={(val) => onChange(String(val))}
+    />
   );
 };
 const normCache = new Map<string, string>();
@@ -366,10 +362,10 @@ function permissionsForMenu(menu: MenuTree, pool: Permission[]): Permission[] {
     const bb = parseResourceAndAction(b.code || '')?.action || '';
     const order: Record<string, number> = {
       read: 0,
-      create: 1,
-      delete: 2,
-      update: 3,
-      display: 4,
+      display: 1,
+      create: 2,
+      delete: 3,
+      update: 4,
       import: 5,
       export: 6,
       submit: 7,
@@ -601,7 +597,13 @@ const RolesPermissionsPage: React.FC = () => {
   const [fieldFilterTarget, setFieldFilterTarget] = useState<string>('');
   const [fieldSearchKeyword, setFieldSearchKeyword] = useState('');
   const initializedExpandRef = useRef(false);
-  const grantedCodeSet = useMemo(() => new Set(grantedCodes), [grantedCodes]);
+  const grantedCodeSet = useMemo(
+    () =>
+      new Set(
+        grantedCodes.map((c) => String(c ?? '').trim().toLowerCase()).filter(Boolean),
+      ),
+    [grantedCodes],
+  );
   // 角色编辑 Modal 相关状态
   const [roleModalVisible, setRoleModalVisible] = useState(false);
   const [currentEditRole, setCurrentEditRole] = useState<Role | null>(null);
@@ -867,8 +869,12 @@ const RolesPermissionsPage: React.FC = () => {
    */
   const toggleGrantedCodes = useCallback((codes: string[], checked: boolean) => {
     setGrantedCodes((prev) => {
-      const next = new Set(prev);
-      codes.forEach((c) => {
+      const next = new Set(
+        [...prev].map((c) => String(c ?? '').trim().toLowerCase()).filter(Boolean),
+      );
+      codes.forEach((raw) => {
+        const c = String(raw ?? '').trim().toLowerCase();
+        if (!c) return;
         if (checked) next.add(c);
         else if (!isBaselinePermissionCode(c)) next.delete(c);
       });
@@ -952,6 +958,12 @@ const RolesPermissionsPage: React.FC = () => {
 
   const grantedDataResourceKeys = useMemo(
     () => collectGrantedResourceKeysFromGrantTree(functionGrantBaseTree, persistedGrantedCodes),
+    [functionGrantBaseTree, persistedGrantedCodes]
+  );
+
+  const grantedFieldResourceKeys = useMemo(
+    () =>
+      collectGrantedResourceKeysExcludingDisplayOnly(functionGrantBaseTree, persistedGrantedCodes),
     [functionGrantBaseTree, persistedGrantedCodes]
   );
 
@@ -1039,7 +1051,7 @@ const RolesPermissionsPage: React.FC = () => {
     () =>
       filterVisibleFieldPolicyIndexes(
         fieldPolicies,
-        grantedDataResourceKeys,
+        grantedFieldResourceKeys,
         fieldResourceLabelByKey,
         menuTree,
         fieldFilterMode,
@@ -1049,7 +1061,7 @@ const RolesPermissionsPage: React.FC = () => {
       ),
     [
       fieldPolicies,
-      grantedDataResourceKeys,
+      grantedFieldResourceKeys,
       fieldResourceLabelByKey,
       menuTree,
       fieldFilterMode,
@@ -1471,7 +1483,7 @@ const RolesPermissionsPage: React.FC = () => {
           const resource = (x.resource || '').trim();
           const fieldName = (x.field_name || '').trim();
           if (!resource || !fieldName) return;
-          if (!grantedDataResourceKeys.has(normalizeResourceKey(resource))) return;
+          if (!grantedFieldResourceKeys.has(normalizeResourceKey(resource))) return;
           if (x.mask_level === 'full') return;
           const key = `${normalizeResourceKey(resource)}::${fieldName}`;
           dedupMap.set(key, {
@@ -1685,6 +1697,39 @@ const RolesPermissionsPage: React.FC = () => {
     },
     [functionGrantPermissionCodes, messageApi, t, visibleFunctionPermissionCodes]
   );
+
+  /** 当前可见范围内勾选全部「回显」(:display)，不改动其它已勾选操作 */
+  const grantAllVisibleDisplayPermissions = useCallback(() => {
+    if (!visibleFunctionPermissionCodes.length) {
+      messageApi.warning(t('pages.system.roles.selectScopeFirst', { defaultValue: '请先选择筛选范围' }));
+      return;
+    }
+    const displayCodes = visibleFunctionPermissionCodes.filter((code) => {
+      const parts = String(code || '')
+        .trim()
+        .toLowerCase()
+        .split(':')
+        .filter(Boolean);
+      return parts.length >= 3 && parts[parts.length - 1] === 'display';
+    });
+    if (!displayCodes.length) {
+      messageApi.warning(
+        t('pages.system.roles.noDisplayInVisibleScope', {
+          defaultValue: '当前可见范围没有回显权限',
+        }),
+      );
+      return;
+    }
+    setGrantedCodes((prev) =>
+      mergeBaselinePermissionCodes([...prev, ...displayCodes]),
+    );
+    messageApi.success(
+      t('pages.system.roles.displayGrantedToVisible', {
+        defaultValue: '已勾选当前范围内全部回显（{{count}} 项）',
+        count: displayCodes.length,
+      }),
+    );
+  }, [messageApi, t, visibleFunctionPermissionCodes]);
 
   return (
     <>
@@ -2001,6 +2046,9 @@ const RolesPermissionsPage: React.FC = () => {
                     >
                       {t('pages.system.roles.templateManager', { defaultValue: '管理者' })}
                     </Button>
+                    <Button variant="outlined" onClick={grantAllVisibleDisplayPermissions}>
+                      {t('pages.system.roles.grantAllDisplayVisible', { defaultValue: '一键回显' })}
+                    </Button>
                   </Flex>
                   {functionGrants?.tree?.length ? (
                     filteredFunctionGrantTree.length > 0 ? (
@@ -2196,6 +2244,19 @@ const RolesPermissionsPage: React.FC = () => {
               )}
               {permissionLayer === 'field' && (
                 <Space orientation="vertical" style={{ width: '100%' }} size={12}>
+                  {hasUnsavedFunctionGrants ? (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      title={t('pages.system.roles.dataGrantUnsavedFunctionTitle', {
+                        defaultValue: '功能权限尚未保存',
+                      })}
+                      description={t('pages.system.roles.fieldGrantUnsavedFunctionDesc', {
+                        defaultValue:
+                          '字段显示方式仅按已保存的功能权限生效。请先在「功能权限」页签点击「保存权限」，再配置并保存字段权限。',
+                      })}
+                    />
+                  ) : null}
                   <div style={{ color: token.colorTextSecondary, fontSize: 12 }}>
                     {t('pages.system.roles.fieldGrantHint', {
                       defaultValue:
@@ -2307,9 +2368,8 @@ const RolesPermissionsPage: React.FC = () => {
                                 )
                               }
                             />
-                            <FieldNameInput
+                            <FieldKindSelect
                               item={item}
-                              displayLabel={fieldNameDisplayLabel(item)}
                               t={t}
                               onChange={(val) =>
                                 setFieldPolicies((prev) =>
@@ -2352,7 +2412,7 @@ const RolesPermissionsPage: React.FC = () => {
                   ) : (
                     <Empty
                       description={
-                        grantedDataResourceKeys.size === 0
+                        grantedFieldResourceKeys.size === 0
                           ? t('pages.system.roles.fieldGrantNeedFunction', {
                               defaultValue: '请先在「功能权限」中勾选至少一项，再配置字段显示方式',
                             })
@@ -2375,7 +2435,7 @@ const RolesPermissionsPage: React.FC = () => {
                           uuid: `tmp-field-${Date.now()}`,
                           role_uuid: selectedRole.uuid,
                           resource: functionScopedResourceOptions[0]?.value || '',
-                          field_name: '',
+                          field_name: 'amount',
                           mask_level: 'full',
                         },
                       ])

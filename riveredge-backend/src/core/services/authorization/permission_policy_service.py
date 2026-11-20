@@ -8,8 +8,14 @@ from uuid import uuid4
 from typing import Any, Iterable, Sequence
 
 from core.config.field_permission_resource_registry import (
+    FIELD_KIND_AMOUNT,
+    FIELD_KIND_PARTY_NAME,
+    columns_for_kind,
+    columns_for_resource,
     field_names_for_resource,
     is_valid_field_policy,
+    resolve_policy_kind,
+    resources_with_field_policies,
 )
 from core.models.data_permission_policy import DataPermissionPolicy, DataScopeType
 from core.models.field_name_alias import FieldNameAlias
@@ -19,7 +25,12 @@ from core.models.role import Role
 from core.models.role_permission import RolePermission
 from core.models.user_role import UserRole
 from core.services.authorization.data_scope_resource_registry import get_resource_profile
-from core.services.authorization.menu_resource_resolver import is_generic_menu_permission_code
+from core.config.permission_action_spec import canonical_action
+from core.services.authorization.menu_resource_resolver import (
+    is_generic_menu_permission_code,
+    normalize_permission_code,
+    parse_permission_code,
+)
 from core.services.authorization.permission_registry_service import PermissionRegistryService
 from core.schemas.permission_policy import (
     DataPermissionPolicyResponse,
@@ -50,6 +61,9 @@ async def _create_policy_row(model, **values):
 
 
 class PermissionPolicyService:
+    # 角色仅授「回显」时不配置字段权限（宿主引用回显，无完整单据页）。
+    _FIELD_POLICY_SOLE_DISPLAY_ACTIONS = frozenset({"display"})
+
     DATA_SCOPE_TYPES = {
         DataScopeType.ALL,
         DataScopeType.DEPARTMENT,
@@ -78,21 +92,26 @@ class PermissionPolicyService:
         "customer_name": "customer_name",
         "clientname": "customer_name",
         "client_name": "customer_name",
+        "suppliername": "supplier_name",
+        "supplier_name": "supplier_name",
+        "defaultsupplierid": "default_supplier_id",
+        "default_supplier_id": "default_supplier_id",
+        "defaultsuppliername": "default_supplier_name",
+        "default_supplier_name": "default_supplier_name",
+        "defaultsuppliers": "default_suppliers",
+        "partyname": FIELD_KIND_PARTY_NAME,
+        "party_name": FIELD_KIND_PARTY_NAME,
     }
+    # 策略类（角色页可配）+ 展开列（运行时脱敏）
     BUILTIN_MASKED_FIELD_NAMES = {
-        # 金额类（canonical）
-        "amount",
-        "total_amount",
-        "tax_amount",
-        "unit_price",
-        "price",
-        "amount_with_tax",
-        "amount_without_tax",
-        # 客户名称类（canonical）
-        "customer_name",
+        FIELD_KIND_AMOUNT,
+        FIELD_KIND_PARTY_NAME,
+        *columns_for_kind(FIELD_KIND_AMOUNT),
+        *columns_for_kind(FIELD_KIND_PARTY_NAME),
     }
     FIELD_LABEL_MAP = {
-        "amount": "金额",
+        FIELD_KIND_AMOUNT: "金额",
+        FIELD_KIND_PARTY_NAME: "客户/供应商名称",
         "total_amount": "总金额",
         "tax_amount": "税额",
         "untaxed_amount": "未税金额",
@@ -101,22 +120,28 @@ class PermissionPolicyService:
         "unit_price": "单价",
         "price": "价格",
         "customer_name": "客户名称",
+        "supplier_name": "供应商名称",
+        "default_supplier_id": "默认供应商",
+        "default_supplier_name": "默认供应商名称",
     }
 
     @classmethod
     def _masked_fields_for_resource(cls, resource: str) -> frozenset[str]:
-        normalized = cls._normalize_resource(resource)
-        builtin = cls.BUILTIN_MASKED_FIELD_NAMES
-        return frozenset(
-            f for f in field_names_for_resource(normalized) if f in builtin
-        )
+        """角色页 synthetic：仅返回策略类（amount / party_name）。"""
+        return field_names_for_resource(cls._normalize_resource(resource))
 
     @classmethod
     def _is_valid_field_policy_pair(cls, resource: str, field_name: str) -> bool:
-        canonical = cls.canonicalize_field_name(field_name)
-        if not canonical:
+        kind = cls.canonicalize_field_policy_kind(field_name)
+        if not kind:
             return False
-        return is_valid_field_policy(cls._normalize_resource(resource), canonical)
+        return is_valid_field_policy(cls._normalize_resource(resource), kind)
+
+    @classmethod
+    def canonicalize_field_policy_kind(cls, raw: str) -> str:
+        """细字段或策略类 → 策略类键；无法识别返回空串。"""
+        canonical = cls.canonicalize_field_name(raw)
+        return resolve_policy_kind(canonical) or ""
 
     @staticmethod
     def _normalize_resource(raw: str) -> str:
@@ -158,8 +183,10 @@ class PermissionPolicyService:
 
     @classmethod
     def field_name_display_label(cls, field_name: str) -> str:
-        canonical = cls.canonicalize_field_name(field_name)
-        return cls.FIELD_LABEL_MAP.get(canonical, canonical)
+        kind = cls.canonicalize_field_policy_kind(field_name) or cls.canonicalize_field_name(
+            field_name
+        )
+        return cls.FIELD_LABEL_MAP.get(kind, kind)
 
     @classmethod
     def _permission_code_to_resource_key(cls, code: str) -> str | None:
@@ -196,18 +223,42 @@ class PermissionPolicyService:
         return keys
 
     @classmethod
-    async def _collect_role_granted_function_resources(
+    def _granted_actions_by_resource_from_codes(
+        cls, codes: Iterable[str]
+    ) -> dict[str, set[str]]:
+        """功能权限码 → 各 app:resource 已授动作集合。"""
+        by_resource: dict[str, set[str]] = {}
+        for raw in codes:
+            code = normalize_permission_code(raw)
+            if not code or is_generic_menu_permission_code(code):
+                continue
+            parsed = parse_permission_code(code)
+            if not parsed:
+                continue
+            app, resource, action = parsed
+            if not app or not resource or not action:
+                continue
+            key = cls._normalize_resource(f"{app}:{resource}")
+            by_resource.setdefault(key, set()).add(canonical_action(action))
+        return by_resource
+
+    @classmethod
+    def _resource_keys_with_only_display_action(cls, codes: Iterable[str]) -> set[str]:
+        """已授动作仅为 display 的资源（排除字段权限配置与掩码默认范围）。"""
+        by_resource = cls._granted_actions_by_resource_from_codes(codes)
+        return {
+            key
+            for key, actions in by_resource.items()
+            if actions and actions <= cls._FIELD_POLICY_SOLE_DISPLAY_ACTIONS
+        }
+
+    @classmethod
+    async def _collect_role_display_only_field_policy_resources(
         cls, tenant_id: int, role_uuid: str
     ) -> set[str]:
-        """
-        角色已授予功能权限对应的 app:resource（与数据/字段权限页范围一致）。
-
-        由已授功能码直接映射资源键，避免为每次字段脱敏重建整棵功能权限菜单树。
-        """
-        from core.services.authorization.menu_resource_resolver import (
-            normalize_permission_code,
+        from core.services.authorization.role_permission_matrix_service import (
+            RolePermissionMatrixService,
         )
-        from core.services.authorization.role_service import RoleService
 
         role = await Role.filter(
             uuid=role_uuid,
@@ -216,32 +267,32 @@ class PermissionPolicyService:
         ).first()
         if not role:
             return set()
+        pool = await RolePermissionMatrixService._load_function_permission_pool(tenant_id)
+        granted_codes = await RolePermissionMatrixService._granted_function_codes_for_role(
+            tenant_id, role, pool
+        )
+        return cls._resource_keys_with_only_display_action(granted_codes)
+
+    @classmethod
+    async def _collect_role_granted_function_resources(
+        cls, tenant_id: int, role_uuid: str
+    ) -> set[str]:
+        """
+        角色已授予功能权限对应的 app:resource（数据/字段权限页唯一范围）。
+
+        与功能权限矩阵树同一套推导（``RolePermissionMatrixService.collect_granted_resource_keys_for_role``），
+        对齐前端 ``collectGrantedResourceOptionsFromGrantTree``；禁止再扁平扫 RolePermission 旁路树上未勾选的码。
+        """
+        from core.services.authorization.role_permission_matrix_service import (
+            RolePermissionMatrixService,
+        )
 
         defs = await PermissionRegistryService.collect_definitions(tenant_id=tenant_id)
         allowed = cls._resource_keys_from_permission_codes(defs.keys())
-        if RoleService._is_admin_system_role(role):
-            return allowed
-
-        role_permissions = await RolePermission.filter(role_id=role.id).all()
-        permission_ids = [rp.permission_id for rp in role_permissions]
-        if not permission_ids:
-            return set()
-
-        perms = await Permission.filter(
-            id__in=permission_ids,
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            deprecated_at__isnull=True,
-            permission_type=PermissionType.FUNCTION,
-        ).only("code")
-        # 与功能矩阵一致：仅保留 manifest 真源池内的功能码
-        pool_codes = set(defs.keys())
-        granted_codes = {
-            normalize_permission_code(p.code or "")
-            for p in perms
-            if p.code and normalize_permission_code(p.code) in pool_codes
-        }
-        return cls._resource_keys_from_permission_codes(granted_codes) & allowed
+        tree_keys = await RolePermissionMatrixService.collect_granted_resource_keys_for_role(
+            tenant_id, role_uuid
+        )
+        return {cls._normalize_resource(k) for k in tree_keys if k} & allowed
 
     @classmethod
     async def filter_roles_granting_resource(
@@ -541,34 +592,52 @@ class PermissionPolicyService:
             role_uuid=role_uuid,
             deleted_at__isnull=True,
         ).order_by("resource", "field_name")
-        allowed = await cls._collect_allowed_function_resources(tenant_id=tenant_id)
-        role_resources = await cls._collect_role_granted_function_resources(
+        field_policy_resources = await cls._role_field_policy_resource_keys(
             tenant_id, role_uuid
         )
         visible_rows = [
             r
             for r in rows
-            if cls._normalize_resource(r.resource) in role_resources
+            if cls._normalize_resource(r.resource) in field_policy_resources
             and cls._is_valid_field_policy_pair(r.resource, r.field_name)
         ]
+        priority = {
+            FieldMaskLevel.FULL: 0,
+            FieldMaskLevel.MASKED: 1,
+            FieldMaskLevel.HIDDEN: 2,
+        }
         dedup: dict[tuple[str, str], FieldPermissionPolicy] = {}
         for r in visible_rows:
             resource = cls._normalize_resource(r.resource)
-            field_name = cls._canonicalize_field_name_with_aliases(r.field_name, alias_map)
-            if not field_name:
+            kind = cls.canonicalize_field_policy_kind(
+                cls._canonicalize_field_name_with_aliases(r.field_name, alias_map)
+            )
+            if not kind:
                 continue
-            key = (resource, field_name)
+            key = (resource, kind)
             prev = dedup.get(key)
-            if prev is None or (r.updated_at, r.id) > (prev.updated_at, prev.id):
+            if prev is None:
+                dedup[key] = r
+                continue
+            prev_level = priority.get(prev.mask_level, 0)
+            row_level = priority.get(r.mask_level, 0)
+            if row_level > prev_level or (
+                row_level == prev_level and (r.updated_at, r.id) > (prev.updated_at, prev.id)
+            ):
                 dedup[key] = r
         visible_rows = list(dedup.values())
         existing_keys = {
-            (cls._normalize_resource(r.resource), cls._canonicalize_field_name_with_aliases(r.field_name, alias_map))
+            (
+                cls._normalize_resource(r.resource),
+                cls.canonicalize_field_policy_kind(
+                    cls._canonicalize_field_name_with_aliases(r.field_name, alias_map)
+                ),
+            )
             for r in visible_rows
         }
 
         # 与「数据权限」页一致：按功能权限已授权资源生成内置字段策略，而非仅已保存的数据策略。
-        normalized_resources = sorted(await cls._role_field_policy_resource_keys(tenant_id, role_uuid))
+        normalized_resources = sorted(field_policy_resources)
 
         synthetic = cls._build_synthetic_field_policy_responses(
             role_uuid=role_uuid,
@@ -578,13 +647,16 @@ class PermissionPolicyService:
         )
         normalized_existing: list[FieldPermissionPolicyResponse] = []
         for r in visible_rows:
+            kind = cls.canonicalize_field_policy_kind(
+                cls._canonicalize_field_name_with_aliases(r.field_name, alias_map)
+            )
             normalized_existing.append(
                 FieldPermissionPolicyResponse(
                     uuid=r.uuid,
                     role_uuid=r.role_uuid,
                     resource=cls._normalize_resource(r.resource),
-                    field_name=cls._canonicalize_field_name_with_aliases(r.field_name, alias_map),
-                    field_label=cls.field_name_display_label(r.field_name),
+                    field_name=kind,
+                    field_label=cls.field_name_display_label(kind),
                     mask_level=r.mask_level,
                     created_at=r.created_at,
                     updated_at=r.updated_at,
@@ -594,10 +666,17 @@ class PermissionPolicyService:
 
     @classmethod
     async def _role_field_policy_resource_keys(cls, tenant_id: int, role_uuid: str) -> set[str]:
-        """功能权限已授权且 manifest 真源存在的 app:resource（数据/字段权限共用范围）。"""
+        """功能权限已勾选 ∩ 字段权限注册表；排除仅授回显的资源。"""
         allowed = await cls._collect_allowed_function_resources(tenant_id)
         role_resources = await cls._collect_role_granted_function_resources(tenant_id, role_uuid)
-        return role_resources & allowed
+        display_only = await cls._collect_role_display_only_field_policy_resources(
+            tenant_id, role_uuid
+        )
+        return (
+            role_resources
+            & allowed
+            & set(resources_with_field_policies())
+        ) - display_only
 
     @classmethod
     def _build_synthetic_field_policy_responses(
@@ -616,18 +695,22 @@ class PermissionPolicyService:
             if not normalized_resource:
                 continue
             for field_name in sorted(cls._masked_fields_for_resource(normalized_resource)):
-                canonical_field = cls._canonicalize_field_name_with_aliases(field_name, alias_map)
-                key = (normalized_resource, canonical_field)
+                kind = cls.canonicalize_field_policy_kind(
+                    cls._canonicalize_field_name_with_aliases(field_name, alias_map)
+                )
+                if not kind:
+                    continue
+                key = (normalized_resource, kind)
                 if key in existing_keys or key in synthetic_keys:
                     continue
                 synthetic_keys.add(key)
                 synthetic.append(
                     FieldPermissionPolicyResponse(
-                        uuid=f"builtin:{role_uuid}:{normalized_resource}:{canonical_field}",
+                        uuid=f"builtin:{role_uuid}:{normalized_resource}:{kind}",
                         role_uuid=role_uuid,
                         resource=normalized_resource,
-                        field_name=canonical_field,
-                        field_label=cls.field_name_display_label(field_name),
+                        field_name=kind,
+                        field_label=cls.field_name_display_label(kind),
                         mask_level=FieldMaskLevel.FULL,
                         created_at=now,
                         updated_at=now,
@@ -643,10 +726,11 @@ class PermissionPolicyService:
         alias_map: dict[str, str],
     ) -> tuple[str, str] | None:
         normalized_resource = cls._normalize_resource(resource)
-        canonical_field = cls._canonicalize_field_name_with_aliases(field_name, alias_map)
-        if not canonical_field:
+        aliased = cls._canonicalize_field_name_with_aliases(field_name, alias_map)
+        kind = cls.canonicalize_field_policy_kind(aliased)
+        if not kind:
             return None
-        return normalized_resource, canonical_field
+        return normalized_resource, kind
 
     @classmethod
     def _pick_preferred_field_policy_row(
@@ -724,7 +808,7 @@ class PermissionPolicyService:
         items: Iterable[FieldPermissionPolicyUpsert],
     ) -> list[FieldPermissionPolicyResponse]:
         allowed = await cls._collect_allowed_function_resources(tenant_id=tenant_id)
-        role_resources = await cls._collect_role_granted_function_resources(
+        field_policy_resources = await cls._role_field_policy_resource_keys(
             tenant_id, role_uuid
         )
         alias_map = await cls._load_tenant_field_alias_map(tenant_id=tenant_id)
@@ -737,7 +821,7 @@ class PermissionPolicyService:
             resource = cls._normalize_resource(item.resource)
             if resource not in allowed:
                 raise ValidationError(f"无效字段权限资源（非真源资源）: {item.resource}")
-            if resource not in role_resources:
+            if resource not in field_policy_resources:
                 raise ValidationError(
                     f"字段权限资源未在功能权限中勾选: {item.resource}"
                 )
@@ -749,6 +833,7 @@ class PermissionPolicyService:
                     f"字段权限资源/字段不在真源注册表: {item.resource} / {item.field_name}"
                 )
             # 默认字段权限为“明文”：full 不落库，仅在显式收敛(masked/hidden)时保存策略。
+            # field_name 一律落策略类键（amount / party_name）。
             if level != FieldMaskLevel.FULL:
                 explicit[key] = FieldPermissionPolicyUpsert(
                     resource=key[0],
@@ -833,31 +918,67 @@ class PermissionPolicyService:
         if not rows:
             return {"scanned": 0, "updated": 0, "merged_deleted": 0}
 
+        priority = {
+            FieldMaskLevel.FULL: 0,
+            FieldMaskLevel.MASKED: 1,
+            FieldMaskLevel.HIDDEN: 2,
+        }
         grouped: dict[tuple[str, str, str], list[FieldPermissionPolicy]] = {}
         for row in rows:
             resource = cls._normalize_resource(row.resource)
-            field_name = cls._canonicalize_field_name_with_aliases(row.field_name, alias_map)
-            if not field_name:
+            kind = cls.canonicalize_field_policy_kind(
+                cls._canonicalize_field_name_with_aliases(row.field_name, alias_map)
+            )
+            if not kind or not is_valid_field_policy(resource, kind):
                 continue
-            key = (row.role_uuid, resource, field_name)
+            key = (row.role_uuid, resource, kind)
             grouped.setdefault(key, []).append(row)
 
         updated = 0
         merged_deleted = 0
         now = now_utc()
-        for (_role_uuid, resource, field_name), items in grouped.items():
-            keeper = max(items, key=lambda x: (x.updated_at, x.id))
+        for (_role_uuid, resource, kind), items in grouped.items():
+            keeper = max(
+                items,
+                key=lambda x: (priority.get(x.mask_level, 0), x.updated_at, x.id),
+            )
             for row in items:
                 if row.id == keeper.id:
                     continue
                 row.deleted_at = now
                 await row.save(update_fields=["deleted_at", "updated_at"])
                 merged_deleted += 1
-            if keeper.resource != resource or keeper.field_name != field_name:
+            if (
+                keeper.resource != resource
+                or keeper.field_name != kind
+                or keeper.mask_level != max(
+                    (x.mask_level for x in items),
+                    key=lambda lv: priority.get(lv, 0),
+                )
+            ):
                 keeper.resource = resource
-                keeper.field_name = field_name
-                await keeper.save(update_fields=["resource", "field_name", "updated_at"])
+                keeper.field_name = kind
+                keeper.mask_level = max(
+                    (x.mask_level for x in items),
+                    key=lambda lv: priority.get(lv, 0),
+                )
+                await keeper.save(
+                    update_fields=["resource", "field_name", "mask_level", "updated_at"]
+                )
                 updated += 1
+
+        # 无法映射到策略类的历史细字段：软删
+        for row in rows:
+            kind = cls.canonicalize_field_policy_kind(
+                cls._canonicalize_field_name_with_aliases(row.field_name, alias_map)
+            )
+            resource = cls._normalize_resource(row.resource)
+            if kind and is_valid_field_policy(resource, kind):
+                continue
+            if row.deleted_at is None:
+                row.deleted_at = now
+                await row.save(update_fields=["deleted_at", "updated_at"])
+                merged_deleted += 1
 
         return {"scanned": len(rows), "updated": updated, "merged_deleted": merged_deleted}
 
@@ -957,7 +1078,10 @@ class PermissionPolicyService:
         granted = access.granted_resource_keys()
         if ALL_RESOURCES_MARKER in granted or access.is_admin_bypass:
             return set(allowed)
-        return set(granted) & allowed
+        display_only = cls._resource_keys_with_only_display_action(
+            access.permission_codes
+        )
+        return (set(granted) & allowed) - display_only
 
     @classmethod
     def _merge_field_mask_levels(
@@ -983,8 +1107,8 @@ class PermissionPolicyService:
     ) -> dict[str, dict[str, str]]:
         """
         当前用户各业务资源下的有效字段掩码（多角色取最严格级别）。
-        默认可配置字段为 full（与角色字段权限页 synthetic 一致；save 时 full 不落库）；
-        返回形如 {"kuaizhizao:quotation": {"tax_amount": "full", "unit_price": "masked"}}。
+        策略按两大类落库；返回时展开为单据列，便于 AmountDisplay / API 按列名命中。
+        形如 {"kuaizhizao:quotation": {"tax_amount": "full", "unit_price": "masked", "customer_name": "full"}}。
         """
         role_uuids = await cls._collect_user_role_uuids(tenant_id=tenant_id, user_id=user_id)
         if not role_uuids:
@@ -1003,8 +1127,11 @@ class PermissionPolicyService:
 
         nested: dict[str, dict[str, str]] = {}
         for res in user_resources:
-            for field_name in cls._masked_fields_for_resource(res):
-                nested.setdefault(res, {})[field_name] = FieldMaskLevel.FULL
+            for col in columns_for_resource(res):
+                nested.setdefault(res, {})[col] = FieldMaskLevel.FULL
+            # 同时保留策略类键，便于前端按 kind 解析
+            for kind in field_names_for_resource(res):
+                nested.setdefault(res, {})[kind] = FieldMaskLevel.FULL
 
         query = FieldPermissionPolicy.filter(
             tenant_id=tenant_id,
@@ -1018,12 +1145,17 @@ class PermissionPolicyService:
             res = cls._normalize_resource(row.resource)
             if res not in user_resources:
                 continue
-            field = cls._canonicalize_field_name_with_aliases(row.field_name, alias_map)
-            if not field or not cls._is_valid_field_policy_pair(res, field):
+            aliased = cls._canonicalize_field_name_with_aliases(row.field_name, alias_map)
+            kind = cls.canonicalize_field_policy_kind(aliased)
+            if not kind or not cls._is_valid_field_policy_pair(res, kind):
                 continue
             cls._merge_field_mask_levels(
-                nested, resource=res, field=field, level=row.mask_level
+                nested, resource=res, field=kind, level=row.mask_level
             )
+            for col in columns_for_kind(kind):
+                cls._merge_field_mask_levels(
+                    nested, resource=res, field=col, level=row.mask_level
+                )
         return nested
 
     @classmethod
@@ -1085,3 +1217,44 @@ class PermissionPolicyService:
                 out[k] = cls._apply_single_mask(v, level)
             out_list.append(out)
         return out_list
+
+    @classmethod
+    async def apply_material_field_masks_to_dict(
+        cls,
+        tenant_id: int,
+        user_id: int,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """物料响应：默认供应商在 source_config 与 defaults.defaultSuppliers 内脱敏。"""
+        resource = "master-data:material"
+        all_masks = await cls.get_user_effective_field_masks(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            resource=resource,
+        )
+        effective = all_masks.get(resource, {})
+        if not effective:
+            return payload
+        alias_map = await cls._load_tenant_field_alias_map(tenant_id=tenant_id)
+        out = dict(payload)
+        supplier_id_level = effective.get("default_supplier_id")
+        for cfg_key in ("source_config", "sourceConfig"):
+            cfg = out.get(cfg_key)
+            if not isinstance(cfg, dict):
+                continue
+            cfg_out = dict(cfg)
+            for key, value in cfg.items():
+                canonical = cls._canonicalize_field_name_with_aliases(key, alias_map)
+                level = effective.get(canonical)
+                if level:
+                    cfg_out[key] = cls._apply_single_mask(value, level)
+            out[cfg_key] = cfg_out
+        defaults = out.get("defaults")
+        if isinstance(defaults, dict) and supplier_id_level:
+            defs_out = dict(defaults)
+            if "defaultSuppliers" in defs_out:
+                defs_out["defaultSuppliers"] = cls._apply_single_mask(
+                    defs_out["defaultSuppliers"], supplier_id_level
+                )
+            out["defaults"] = defs_out
+        return out

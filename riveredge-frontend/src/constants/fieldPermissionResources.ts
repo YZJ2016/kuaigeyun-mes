@@ -9,6 +9,10 @@ export const KUAIZHIZAO_OUTSOURCE_ORDER_FIELD_RESOURCE = 'kuaizhizao:outsource-o
 export const KUAIZHIZAO_OUTSOURCE_WORK_ORDER_FIELD_RESOURCE = 'kuaizhizao:outsource-work-order';
 export const KUAIZHIZAO_PURCHASE_REQUISITION_FIELD_RESOURCE = 'kuaizhizao:purchase-requisition';
 export const KUAIZHIZAO_DEMAND_FIELD_RESOURCE = 'kuaizhizao:demand';
+export const KUAIZHIZAO_OUTBOUND_FIELD_RESOURCE = 'kuaizhizao:outbound';
+export const KUAIZHIZAO_INBOUND_FIELD_RESOURCE = 'kuaizhizao:inbound';
+export const KUAIZHIZAO_SALES_RETURN_FIELD_RESOURCE = 'kuaizhizao:sales-return';
+export const KUAIZHIZAO_PURCHASE_RETURN_FIELD_RESOURCE = 'kuaizhizao:purchase-return';
 export const KUAIZHIZAO_WAREHOUSE_INVENTORY_FIELD_RESOURCE = 'kuaizhizao:warehouse-management-inventory';
 
 /** master-data */

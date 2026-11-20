@@ -1287,7 +1287,7 @@ riveredge-backend/src/core/config/collab_function_categories.py	2185b24a831825c5
 riveredge-backend/src/core/config/custom_field_config_validate.py	1a0ed3210f42a6c762f6e3bf39aecd88aef7bf19	tracked	seed from 8c111dd65f
 riveredge-backend/src/core/config/custom_field_config_validate_test.py	b8b5d2c94be957d6cde9c3704b7717c3560829a5	tracked	seed from 8c111dd65f
 riveredge-backend/src/core/config/custom_field_pages.py	40a5e8eba611c718351db0a2279eb5bbb9896bb9	superset	R2预审：本地已有等价/更深实现，不摘
-riveredge-backend/src/core/config/field_permission_resource_registry.py	2980cc5b606416d36c6f8ca4d22a6259a634eecc	tracked	seed from 2c945a39fb
+riveredge-backend/src/core/config/field_permission_resource_registry.py	4c57f31fd806bc594c85b7e3dc43b83a47e06012	applied	R3 440ae22ebb+ff403441f2: kind模型整移植(amount/party_name策略类+列展开+40新增资源注册);本地资源全集上游覆盖无丢失
 riveredge-backend/src/core/config/finance_recognition.py	d8d0827841d258dfd1c2254f6af80252734b80d9	tracked	seed from b12cc66e71
 riveredge-backend/src/core/config/kingdee_cosmic_mfg_api_presets.json	e86ad5c5a33970fba98839254cd064c1c2d0f5ff	applied	4ba2d15ae8契约簇;force_rewrite/expand未接调用点随调度窗簇
 riveredge-backend/src/core/config/rework_order_funide_profile.py	3dcb60c3052a1be56d76c4cc6b2faaac645330cf	domain-out	客户品牌行业种子(funide)，通用产品规则不入产品源码；form_profile 回退段已剔除，通用行业配置经 IndustryExtensionRuntimeService 解析
@@ -1357,9 +1357,10 @@ riveredge-backend/src/core/services/approval/uni_audit_service.py	e6be34439716c4
 riveredge-backend/src/core/services/authorization/data_scope_resolver_registry.py	912b6621e9813af7e774b593dc8bff84cb807bea	tracked	seed from ec29267f5b
 riveredge-backend/src/core/services/authorization/data_scope_resolvers.py	f6c4da5fda7d8cd89a4e877374fc0bfa580964b5	tracked	seed from ec29267f5b
 riveredge-backend/src/core/services/authorization/data_scope_service.py	765d1cb33f0d563aaad91b400005dd3f212280be	tracked	seed from ec29267f5b
-riveredge-backend/src/core/services/authorization/permission_policy_service.py	6de264c18c7b0a006bb9e261e1c0d32954b27fda	tracked	seed from 2c945a39fb
+riveredge-backend/src/core/services/authorization/permission_policy_service.py	1bccfd8a1298421af0d29e16444bbb32ad8811fc	applied	R3: kind模型+display-only排除(仅回显资源不进字段策略);保留spec143 with_tenant逐租户治理;授权资源改走矩阵树真源
 riveredge-backend/src/core/services/authorization/position_import_service.py	5d283d36d1cb68f97ce082318d894050843dcd7f	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/core/services/authorization/position_service.py	02fca63d9ed52972f884d5a0a1a674a1d82e44ae	applied	R2：与上游tip blob一致，本地已同步
+riveredge-backend/src/core/services/authorization/role_permission_matrix_service.py	e37c6211dcf81c7a89b443a29cfbe3e0164edb32	applied	R3支撑依赖(范围外文件):collect_granted_resource_keys_for_role+display动作可见+权限矩阵保存不再强制启菜单
 riveredge-backend/src/core/services/authorization/role_service.py	d66c506ed1435a29b7a4c79769523fb6814c8f6e	tracked	seed from 46508115c7
 riveredge-backend/src/core/services/authorization/user_permission_service.py	5c3291fd75d6fedb355625604dfdaff475c29be1	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/core/services/business/business_notification_service.py	438622d971cbc547c98d2bebb6d78e3a42b69e93	tracked	seed from 63395aa98e
@@ -1612,7 +1613,7 @@ riveredge-backend/tests/apps/master_data/utils/test_kingdee_location_number.py	2
 riveredge-backend/tests/core/config/test_affiliate_material_list_document_pick.py	eed9b3fdb18ac435ef9147f42b74660ce6c21b13	applied	上游测试取入 passed
 riveredge-backend/tests/core/config/test_affiliate_storage_location_read.py	ef05d62736	superset	R2-迁移: 本地模型/列已存在等价实现
 riveredge-backend/tests/core/config/test_audit_registry_rework_order.py	3a6403f8c5bec80e4416e5103a92e62fa3d88fd8	tracked	seed from e16f2f2939
-riveredge-backend/tests/core/config/test_field_permission_resource_registry.py	d305a7f08d48b9e298b24decd8ac1f08b43c54ac	tracked	seed from 2c945a39fb
+riveredge-backend/tests/core/config/test_field_permission_resource_registry.py	71ec5a0f9f86a1422954da28b600d7e7bf7dbbf0	applied	R3: kind模型注册表测试整更新
 riveredge-backend/tests/core/services/application/test_api_library_catalog.py	8f7c0f3d4eb3530659ce83c911ca26dcaadccc49	applied	客户org-scope tip整取 落 apps/master_data
 riveredge-backend/tests/core/services/application/test_api_test_request_merge.py	32cf90c8a2	applied	R2-测试回归簇: 被测函数本地已在,纯加回归
 riveredge-backend/tests/core/services/approval/test_advance_condition_not_pinned.py	0c138ef77de39a30a126287927a704fa4bf891d3	applied	R2：与上游tip blob一致，本地已同步
@@ -1662,6 +1663,7 @@ riveredge-backend/tests/core/services/messaging/test_approval_wecom_push_service
 riveredge-backend/tests/core/services/messaging/test_wecom_recipient_resolve.py	e41189e8a12f6e083ef2f21c78c3efceafa9de58	tracked	seed from d84fe20715
 riveredge-backend/tests/core/services/test_approval_nodes_overview_path.py	e54ef8bf2cdcc57d1310e39fce87925688bc1ed4	tracked	seed from 7aab065f41
 riveredge-backend/tests/core/services/test_data_scope_multi_role.py	92f0d99e297624bc8a4e81e16b3e8812abed7772	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
+riveredge-backend/tests/core/services/test_permission_policy_field_masks.py	f652240149e2e632bcac7c1a1905e5ffea319505	applied	R3 NEW: 字段掩码display-only排除与kind展开测试;19 passed
 riveredge-backend/tests/core/services/test_tenant_restore_primary_key_conflicts.py	d8aff40e5a34c89e590efc2eb56b522e06440c28	tracked	seed from 0b8630adfd
 riveredge-backend/tests/core/services/test_user_administrator_management.py	1ecaad806e58f567cf153fd6ce3ef7cd48b70443	tracked	seed from 1dd09b4fce
 riveredge-backend/tests/core/utils/test_content_disposition.py	e9f0b01bfcc363422b9f9b1469a87438d620d5c5	applied	R2簇5 core/sync:摘取上游tip实现
@@ -2437,6 +2439,8 @@ riveredge-frontend/src/components/material-unit-select/index.tsx	06a715483ccfd14
 riveredge-frontend/src/components/menu-morph-icon/MenuMorphIcon.less	9513f761b00cb60e57cb656d7683d33f086d8b11	tracked	seed from 7e553638e1
 riveredge-frontend/src/components/menu-morph-icon/MenuMorphIcon.tsx	c5c09472a133668bf92a94bbd96d55a4224233f9	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/components/menu-sync-prompt/index.tsx	bb32bfd62906080a796d86eed4d0971791d2e891	applied	FE独立增量手工适配：付款申请订单/申请双金额及各自合计、物料分组前移、配置中心隐藏滚动条、菜单同步提示、中文与日志；只中文不扩六语；配套取单引用用既有helper
+riveredge-frontend/src/components/permission/PartyNameDisplay.tsx	c1cfd608de5a8db1510e54bc7a584ab60634d259	applied	R3 NEW: party_name策略类展示组件(hidden/masked/tooltip);配套useUserFieldMasks既有
+riveredge-frontend/src/components/permission/index.ts	8bc09f6199732730cc62fe46adf4ec9be9cd8f1b	applied	R3 NEW: 导出PartyNameDisplay
 riveredge-frontend/src/components/puck-chrome/usePuckChrome.tsx	d947491931b6250293866e9211f8d7d8afc10a78	tracked	seed from 826acd7181
 riveredge-frontend/src/components/quantity-with-unit/DocumentLineDualQuantity.tsx	aba905bf3ed2b0dc414e3e18f5a68a625adff133	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/components/quantity-with-unit/MaterialUnitRoleBadge.tsx	a2f0ad3a2b604613074cb01f38a30bc2728d0e07	tracked	seed from b12cc66e71
@@ -2564,7 +2568,7 @@ riveredge-frontend/src/config/printTemplateSchemas.ts	6debc73a0e365c6acdffb767a7
 riveredge-frontend/src/config/reactQuery.ts	d9ff05f165c379d07e82be34003debf5630fb87c	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/configs/apiLibraryContract.ts	4ad37c01aecfad945153964af780b29346d0657f	applied	R2:与上游tip一致
 riveredge-frontend/src/constants/documentStatusColors.ts	d779610f163a9e40cdeaea9961beec0e7da97e28	tracked	seed from 37409d3b29
-riveredge-frontend/src/constants/fieldPermissionResources.ts	8b37cd082c03f3d756ac3d3a7e7b2f7decc2c2c1	tracked	seed from 2c945a39fb
+riveredge-frontend/src/constants/fieldPermissionResources.ts	8b37cd082c03f3d756ac3d3a7e7b2f7decc2c2c1	applied	R3支撑依赖(范围外文件):outbound/inbound/sales-return/purchase-return资源常量
 riveredge-frontend/src/constants/kuaiaiAssistantTab.ts	1981c901cb9d62764fe535aaba7cb7854285cf84	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/global.less	4351fcdc4b06a28b7929981b8123040caabb8923	applied	FE独立增量手工适配：付款申请订单/申请双金额及各自合计、物料分组前移、配置中心隐藏滚动条、菜单同步提示、中文与日志；只中文不扩六语；配套取单引用用既有helper
 riveredge-frontend/src/hooks/useCustomFields.ts	1f6ef5391b6549e6013a3387bdbbf4ee48f9cd9e	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
@@ -2624,6 +2628,9 @@ riveredge-frontend/src/pages/system/messages/template/index.tsx	ff725fd95d12be7a
 riveredge-frontend/src/pages/system/positions/list/index.tsx	d4d05f2a4a02c4f5568469e816341935fd444362	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/pages/system/print-templates/design/index.tsx	4f0653cf94ea0bda98bb093220ff56764a17ead7	tracked	seed from ec29267f5b
 riveredge-frontend/src/pages/system/print-templates/list/index.tsx	6efbebfce6003bd9fdb17960e3fd7f0534c9ab51	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
+riveredge-frontend/src/pages/system/roles-permissions/components/dataPermissionFilters.ts	3b5dda733a139e325421fdf55a319470ae4f9b79	applied	R3 NEW: 多菜单标题searchLabels别名搜索(生产入库/采购入库→inbound)
+riveredge-frontend/src/pages/system/roles-permissions/components/roleGrantedResourceScope.ts	8cea5b4d5d6e4d81787a626e5f5083f20162dd0b	applied	R3 NEW: display-only资源排除+searchLabels聚合
+riveredge-frontend/src/pages/system/roles-permissions/index.tsx	aedc7432caed590fb2f1456fe5781e7daa23eec5	applied	R3 NEW: FieldKindSelect替代字段名输入+一键回显+未保存功能权限告警+display排序
 riveredge-frontend/src/pages/system/roles/components/RoleFormModal.tsx	3908606e278f0aaa208cb4be1932efc53f595f28	tracked	seed from 4613d982e6
 riveredge-frontend/src/pages/system/shared/useResourceCategoryPanel.tsx	ac8d7ead6415817ead25dd985a093dac0b25f94a	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/pages/system/users/components/UserFormModal.tsx	0caa11b44e59bf94517485796593978738245f70	tracked	seed from ec29267f5b
@@ -2678,8 +2685,8 @@ riveredge-frontend/src/utils/documentFormReferenceLoad.ts	0b3eb649b4e89836bd6dbc
 riveredge-frontend/src/utils/documentLedgerRecognition.ts	69137462fdbd8021723f69c03df500ed74957217	tracked	seed from b12cc66e71
 riveredge-frontend/src/utils/errorRecovery.ts	41d093a4fd70b75273631c183e8b20b8b1a2f428	tracked	seed from 1d968cd27b
 riveredge-frontend/src/utils/exportRecordsXlsx.ts	95951ee18283587efb62284d5f3a8bb27c3f575a	tracked	seed from 8c111dd65f
-riveredge-frontend/src/utils/fieldMaskPermission.ts	286ddcead2a6da93c49f2a561e6378467896f62a	tracked	seed from 2c945a39fb
-riveredge-frontend/src/utils/fieldPermissionI18n.ts	3e261cc74c8cd0103922e14c7a9e943c460ff941	tracked	seed from 2c945a39fb
+riveredge-frontend/src/utils/fieldMaskPermission.ts	286ddcead2a6da93c49f2a561e6378467896f62a	applied	R3支撑依赖(范围外文件):kind/列双键掩码解析resolvePolicyKind+pickStricter
+riveredge-frontend/src/utils/fieldPermissionI18n.ts	3e261cc74c8cd0103922e14c7a9e943c460ff941	applied	R3支撑依赖(范围外文件):FIELD_PERMISSION_KIND_OPTIONS两策略类选项
 riveredge-frontend/src/utils/fileDownload.ts	0faab853bc22b3d508b6978ec6acb70db100e059	applied	R2:与上游tip一致
 riveredge-frontend/src/utils/formListItems.ts	95a60bc0476846a4dcec74dad3b30b06a04d9920	tracked	seed from 3958bb1524
 riveredge-frontend/src/utils/format.ts	c7d956481114b0bededec37ad3323688d8b805e4	tracked	seed from d81b4b70bf

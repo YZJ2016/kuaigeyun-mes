@@ -92,6 +92,56 @@ def test_resource_keys_from_permission_codes():
     assert keys == {"kuaizhizao:sales-order"}
 
 
+def test_resource_keys_with_only_display_action():
+    only = PermissionPolicyService._resource_keys_with_only_display_action(
+        [
+            "kuaizhizao:demand:display",
+            "kuaizhizao:sales-order:read",
+            "kuaizhizao:sales-order:display",
+            "master-data:material:update",
+        ]
+    )
+    assert only == {"kuaizhizao:demand"}
+
+
+def test_collect_user_granted_field_policy_resources_excludes_display_only():
+    async def _run():
+        from core.services.authorization.effective_access_service import (
+            EffectiveUserAccess,
+        )
+
+        access = EffectiveUserAccess(
+            user_id=1,
+            tenant_id=1,
+            roles=(),
+            permission_codes=frozenset(
+                {
+                    "kuaizhizao:demand:display",
+                    "kuaizhizao:sales-order:read",
+                }
+            ),
+            role_resource_keys={"r1": frozenset({"kuaizhizao:demand", "kuaizhizao:sales-order"})},
+            is_admin_bypass=False,
+        )
+        with patch(
+            "core.services.authorization.effective_access_service.EffectiveAccessService.get",
+            new=AsyncMock(return_value=access),
+        ), patch.object(
+            PermissionPolicyService,
+            "_collect_allowed_function_resources",
+            new=AsyncMock(
+                return_value={"kuaizhizao:demand", "kuaizhizao:sales-order"}
+            ),
+        ):
+            return await PermissionPolicyService._collect_user_granted_field_policy_resources(
+                tenant_id=1,
+                user_id=1,
+            )
+
+    resources = asyncio.run(_run())
+    assert resources == {"kuaizhizao:sales-order"}
+
+
 def test_get_user_effective_field_masks_resource_filter_uses_lean_grant_check():
     async def _run():
         collect_all = AsyncMock(return_value={INVENTORY_RESOURCE})

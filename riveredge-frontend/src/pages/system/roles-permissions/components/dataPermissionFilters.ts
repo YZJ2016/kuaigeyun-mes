@@ -19,6 +19,8 @@ export interface DataFilterPickOption {
 export interface ResourceOption {
   value: string;
   label: string;
+  /** 同一 app:resource 下多个菜单标题，供字段权限搜索命中（如生产入库/采购入库 → inbound） */
+  searchLabels?: string[];
 }
 
 function menuNodeTitle(
@@ -148,9 +150,11 @@ export function filterDataResourceOptions(
   if (mode === 'search') {
     const kw = keyword.trim().toLowerCase();
     if (!kw) return [];
-    return options.filter(
-      (o) => o.label.toLowerCase().includes(kw) || o.value.toLowerCase().includes(kw)
-    );
+    return options.filter((o) => {
+      if (o.value.toLowerCase().includes(kw)) return true;
+      if (o.label.toLowerCase().includes(kw)) return true;
+      return (o.searchLabels ?? []).some((l) => l.toLowerCase().includes(kw));
+    });
   }
   return options;
 }
