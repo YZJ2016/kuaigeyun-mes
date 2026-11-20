@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Query, status as http_status, HTTPExcept
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from loguru import logger
+from pydantic import BaseModel
 
 from core.api.deps import get_current_user, get_current_tenant
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_work_order_access
@@ -1942,6 +1943,14 @@ async def submit_rework_order_endpoint(
     )
 
 
+class ReworkSignoffActBody(BaseModel):
+    notes: Optional[str] = None
+    dept_code: Optional[str] = None
+    user_id: Optional[int] = None
+    node_key: Optional[str] = None
+    sub_section_key: Optional[str] = None
+
+
 @router.post(
     "/rework-orders/{rework_order_id}/approve",
     response_model=ReworkOrderResponse,
@@ -1975,6 +1984,82 @@ async def reject_rework_order_endpoint(
         tenant_id=tenant_id,
         rework_order_id=rework_order_id,
         actor_id=current_user.id,
+    )
+
+
+@router.post(
+    "/rework-orders/{rework_order_id}/signoff/complete",
+    response_model=ReworkOrderResponse,
+    summary="Complete current signoff node",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:rework-order:update"))],
+)
+async def complete_rework_signoff_node(
+    rework_order_id: int,
+    body: ReworkSignoffActBody = ReworkSignoffActBody(),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReworkOrderResponse:
+    return await ReworkOrderService().complete_signoff_node(
+        tenant_id, rework_order_id, current_user.id, body.notes
+    )
+
+
+@router.post(
+    "/rework-orders/{rework_order_id}/signoff/return",
+    response_model=ReworkOrderResponse,
+    summary="Return signoff to previous node",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:rework-order:update"))],
+)
+async def return_rework_signoff_node(
+    rework_order_id: int,
+    body: ReworkSignoffActBody,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReworkOrderResponse:
+    return await ReworkOrderService().return_signoff_node(
+        tenant_id, rework_order_id, current_user.id, body.notes or ""
+    )
+
+
+@router.post(
+    "/rework-orders/{rework_order_id}/signoff/assign",
+    response_model=ReworkOrderResponse,
+    summary="Assign signoff node owner",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:rework-order:update"))],
+)
+async def assign_rework_signoff_node(
+    rework_order_id: int,
+    body: ReworkSignoffActBody,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReworkOrderResponse:
+    if not body.dept_code or not body.user_id:
+        raise ValidationError("须指定节点与办理人")
+    return await ReworkOrderService().assign_signoff_node(
+        tenant_id, rework_order_id, body.dept_code, body.user_id, current_user.id
+    )
+
+
+@router.post(
+    "/rework-orders/{rework_order_id}/signoff/save-section",
+    response_model=ReworkOrderResponse,
+    summary="Mark signoff subsection saved",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:rework-order:update"))],
+)
+async def save_rework_signoff_section(
+    rework_order_id: int,
+    body: ReworkSignoffActBody,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReworkOrderResponse:
+    if not body.node_key or not body.sub_section_key:
+        raise ValidationError("须指定节点与分区")
+    return await ReworkOrderService().save_signoff_section(
+        tenant_id,
+        rework_order_id,
+        body.node_key,
+        body.sub_section_key,
+        current_user.id,
     )
 
 
