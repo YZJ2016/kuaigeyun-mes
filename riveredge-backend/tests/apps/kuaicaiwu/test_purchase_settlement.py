@@ -1,3 +1,4 @@
+import pytest
 """采购入库价税 rollup 与立账策略门控（单元）。"""
 
 from decimal import Decimal
@@ -305,3 +306,49 @@ def test_on_purchase_invoice_skips_receipt_payable():
     reason = describe_purchase_receipt_payable_auto_skip("on_purchase_invoice")
     assert reason is not None
     assert "进项发票" in reason
+
+
+@pytest.mark.asyncio
+async def test_purchase_invoice_payable_strategy_prefers_linked_receipt_over_order(monkeypatch):
+    from apps.kuaizhizao.services import document_recognition
+
+    class _Inv:
+        id = 5
+        purchase_order_id = 99
+        payable_id = None
+        supplier_id = 1
+
+    class _Rel:
+        source_id = 200
+
+    class _Receipt:
+        payable_recognition = "on_purchase_invoice"
+
+    class _PO:
+        payable_recognition = "on_receipt"
+
+    class _RelQS:
+        async def all(self):
+            return [_Rel()]
+
+    async def fake_receipt_get(**_kwargs):
+        return _Receipt()
+
+    async def fake_po_get(**_kwargs):
+        return _PO()
+
+    monkeypatch.setattr(
+        "apps.kuaizhizao.models.document_relation.DocumentRelation.filter",
+        lambda **_kw: _RelQS(),
+    )
+    monkeypatch.setattr(
+        "apps.kuaizhizao.models.purchase_receipt.PurchaseReceipt.get_or_none",
+        fake_receipt_get,
+    )
+    monkeypatch.setattr(
+        "apps.kuaizhizao.models.purchase_order.PurchaseOrder.get_or_none",
+        fake_po_get,
+    )
+
+    strat = await document_recognition.resolve_payable_recognition_for_purchase_invoice(1, _Inv())
+    assert strat == "on_purchase_invoice"

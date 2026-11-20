@@ -47,6 +47,9 @@ export interface PartnerStatementPreview {
   existing_period_statement_id?: number | null;
   existing_period_statement_code?: string | null;
   existing_period?: string | null;
+  amount_basis?: PartnerStatementAmountBasis;
+  /** 预览：与详情 GET 同语义，控制是否展示立账方式 */
+  partner_uses_statement_ledger?: boolean | null;
 }
 
 export interface PartnerStatement {
@@ -81,6 +84,21 @@ export interface PartnerStatement {
   updated_at?: string;
   created_by_name?: string;
   updated_by_name?: string;
+  audit?: {
+    phase?: string;
+    enabled?: boolean;
+    allowed_actions?: string[];
+    entity_type?: string;
+  };
+  ledger_posted_at?: string | null;
+  ledger_posting_mode?: string | null;
+  /** 详情 GET 组装：客商是否按月结对账单立账 */
+  partner_uses_statement_ledger?: boolean | null;
+}
+
+export interface PartnerStatementRefreshPreviewResult {
+  warnings: string[];
+  statement: PartnerStatement;
 }
 
 export interface PartnerStatementLineAmountInput {
@@ -137,6 +155,21 @@ export const partnerStatementService = {
     apiRequest<PartnerStatement>(`${API}/${id}/lines`, {
       method: 'PATCH',
       data: { lines },
+    }),
+
+  updateHeader: (
+    id: number,
+    data: { ledger_posting_mode?: 'immediate' | 'by_invoice' },
+  ) =>
+    apiRequest<PartnerStatement>(`${API}/${id}/header`, {
+      method: 'PATCH',
+      data,
+    }),
+
+  refreshPreview: (id: number, data: { amount_basis: PartnerStatementAmountBasis }) =>
+    apiRequest<PartnerStatementRefreshPreviewResult>(`${API}/${id}/refresh-preview`, {
+      method: 'POST',
+      data,
     }),
 
   confirm: (id: number) => apiRequest<PartnerStatement>(`${API}/${id}/confirm`, { method: 'POST' }),

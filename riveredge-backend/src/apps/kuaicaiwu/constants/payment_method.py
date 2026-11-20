@@ -30,6 +30,27 @@ def normalize_payment_method(method: Optional[str]) -> str:
     return str(method or "").strip()
 
 
+def requires_supplier_payee_account(method: Optional[str]) -> bool:
+    """未选付款方式或隐藏收款账户的方式，不要求户名/开户行/账号。"""
+    normalized = normalize_payment_method(method)
+    if not normalized:
+        return False
+    return not hides_supplier_payee_account(normalized)
+
+
+def assert_supplier_payee_account(
+    *,
+    payment_method: Optional[str],
+    account_name: Optional[str],
+    bank_name: Optional[str],
+    bank_account: Optional[str],
+) -> None:
+    if not requires_supplier_payee_account(payment_method):
+        return
+    if not all(str(value or "").strip() for value in (account_name, bank_name, bank_account)):
+        raise ValidationError("请选择完整的收款账户（户名、开户行、账号）")
+
+
 def assert_payment_voucher_payee_fields(
     *,
     payment_method: Optional[str],

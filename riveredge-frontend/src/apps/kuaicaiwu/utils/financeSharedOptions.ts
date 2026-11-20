@@ -45,6 +45,68 @@ export function isPrepaymentOffsetPaymentMethod(method: string | null | undefine
   return String(method || '').trim() === PREPAYMENT_OFFSET_PAYMENT_METHOD;
 }
 
+/**
+ * 付款单列表金额列三态口径（与主流应付一致；不改库存字段，仅展示）：
+ * - 预付款：付款总额=实付；已核销空；预付抵扣金额=原 settled；待核销=预付余额
+ * - 普通付款（银行/现金/预付抵扣等）：付款总额=实付（预付抵扣无出账时为空）；已核销/待核销照旧；预付抵扣金额空
+ */
+export function resolvePaymentListDisplayAmounts(record: {
+  settlement_type?: string | null;
+  payment_method?: string | null;
+  total_amount?: number | null;
+  settled_amount?: number | null;
+  unsettled_amount?: number | null;
+}): {
+  total_amount: number | null;
+  settled_amount: number | null;
+  prepayment_deduction_amount: number | null;
+  unsettled_amount: number | null;
+} {
+  const isPrepay = String(record.settlement_type || 'normal') === 'prepayment';
+  const isOffset = isPrepaymentOffsetPaymentMethod(record.payment_method);
+  const total = Number(record.total_amount ?? 0);
+  const settled = Number(record.settled_amount ?? 0);
+  const unsettled = Number(record.unsettled_amount ?? 0);
+  const finiteOrZero = (n: number) => (Number.isFinite(n) ? n : 0);
+  return {
+    total_amount: isOffset ? null : finiteOrZero(total),
+    settled_amount: isPrepay ? null : finiteOrZero(settled),
+    prepayment_deduction_amount: isPrepay ? finiteOrZero(settled) : null,
+    unsettled_amount: finiteOrZero(unsettled),
+  };
+}
+
+/** 按列表展示口径汇总付款金额（合计行 / 筛选全局合计） */
+export function sumPaymentListDisplayAmountFields(
+  rows: ReadonlyArray<{
+    settlement_type?: string | null;
+    payment_method?: string | null;
+    total_amount?: number | null;
+    settled_amount?: number | null;
+    unsettled_amount?: number | null;
+  }>,
+): Record<
+  'total_amount' | 'settled_amount' | 'prepayment_deduction_amount' | 'unsettled_amount',
+  number
+> {
+  const out = {
+    total_amount: 0,
+    settled_amount: 0,
+    prepayment_deduction_amount: 0,
+    unsettled_amount: 0,
+  };
+  for (const row of rows) {
+    const d = resolvePaymentListDisplayAmounts(row);
+    if (d.total_amount != null) out.total_amount += d.total_amount;
+    if (d.settled_amount != null) out.settled_amount += d.settled_amount;
+    if (d.prepayment_deduction_amount != null) {
+      out.prepayment_deduction_amount += d.prepayment_deduction_amount;
+    }
+    if (d.unsettled_amount != null) out.unsettled_amount += d.unsettled_amount;
+  }
+  return out;
+}
+
 /** 无供应商收款账户信息（预付抵扣/员工垫付） */
 export function hidesSupplierPayeeAccount(method: string | null | undefined): boolean {
   return isEmployeeAdvancePaymentMethod(method) || isPrepaymentOffsetPaymentMethod(method);
@@ -248,6 +310,21 @@ export function getUnifiedInvoiceTypeOptions(t: TFunction) {
     { label: t('app.kuaicaiwu.invoice.invoiceType.vatNormal'), value: 'VAT_NORMAL' },
     { label: t('app.kuaicaiwu.invoice.invoiceType.electronic'), value: 'ELECTRONIC' },
   ];
+}
+
+export function isPartnerStatementReviewApproved(reviewStatus: unknown): boolean {
+  const raw = String(reviewStatus ?? '').trim();
+  return raw === '已审核' || raw.toLowerCase() === 'approved';
+}
+
+/** 详情头徽标：审核通过优先展示「已审核」，否则展示业务状态（如对账定稿）。 */
+export function shouldShowPartnerStatementReviewApprovedBadge(data: {
+  status?: string | null;
+  review_status?: string | null;
+}): boolean {
+  if (!isPartnerStatementReviewApproved(data.review_status)) return false;
+  const status = String(data.status ?? '').trim();
+  return status === 'Confirmed' || status === 'Sent' || status === 'LedgerPosted';
 }
 
 export function buildPartnerStatementStatusEnum(t: TFunction) {

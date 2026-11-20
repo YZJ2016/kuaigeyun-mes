@@ -22,8 +22,9 @@ export type PurchaseInvoicePullDetailLine = {
 };
 
 export type PurchaseInvoicePullPreview = DocumentPushPreview & {
-  source_code?: string;
-  source_type?: 'purchase_order' | 'purchase_receipt' | 'payable';
+  source_type?: 'purchase_order' | 'purchase_receipt' | 'payable' | 'outsource_order_receipt';
+  receipt_ids?: number[];
+  outsource_order_receipt_ids?: number[];
   supplier_id?: number;
   supplier_name?: string;
   purchase_order_id?: number | null;
@@ -35,6 +36,9 @@ export type PurchaseInvoicePullPreview = DocumentPushPreview & {
   /** 多源合并加载时的源单ID列表与可开票合计 */
   source_ids?: number[];
   max_push_total?: number;
+  /** 对账单→发票唯一可开票价税合计上限 */
+  partner_statement_invoice_budget?: number;
+  statement_period_amount?: number;
   /** 源单物料明细，便于确认本次开票对应内容 */
   detail_lines?: PurchaseInvoicePullDetailLine[];
 };
@@ -56,6 +60,7 @@ export type PurchaseInvoicePullCandidate = {
   invoiced_amount?: number;
   payable_ids?: number[];
   receipt_ids?: number[];
+  outsource_order_receipt_ids?: number[];
   ledger_posting_mode?: 'immediate' | 'by_invoice' | string;
   capabilities?: { pull_purchase_invoice?: { allowed?: boolean; reason?: string } };
 };
@@ -128,17 +133,76 @@ export const purchaseInvoiceService = {
       { method: 'GET', notifyOnGatewayError: true },
     ),
 
-  previewPullFromPurchaseReceipt: async (receiptId: number) =>
+  previewPullFromPurchaseReceipt: async (
+    receiptId: number,
+    partnerStatementIds?: number[],
+  ) =>
     apiRequest<PurchaseInvoicePullPreview>(
       `${PURCHASE_INVOICE_API}/from-purchase-receipt/${receiptId}/pull-preview`,
+      {
+        method: 'GET',
+        params: partnerStatementIds?.length
+          ? { partner_statement_ids: partnerStatementIds.join(',') }
+          : undefined,
+        notifyOnGatewayError: true,
+      },
+    ),
+
+  previewPullFromPurchaseReceipts: async (
+    receiptIds: number[],
+    partnerStatementIds?: number[],
+  ) =>
+    apiRequest<PurchaseInvoicePullPreview>(
+      `${PURCHASE_INVOICE_API}/from-purchase-receipts/pull-preview?receipt_ids=${receiptIds.join(',')}${
+        partnerStatementIds?.length ? `&partner_statement_ids=${partnerStatementIds.join(',')}` : ''
+      }`,
       { method: 'GET', notifyOnGatewayError: true },
     ),
 
-  previewPullFromPurchaseReceipts: async (receiptIds: number[]) =>
+  previewPullFromOutsourceOrderReceipt: async (
+    batchId: number,
+    partnerStatementIds?: number[],
+  ) =>
     apiRequest<PurchaseInvoicePullPreview>(
-      `${PURCHASE_INVOICE_API}/from-purchase-receipts/pull-preview?receipt_ids=${receiptIds.join(',')}`,
+      `${PURCHASE_INVOICE_API}/from-outsource-order-receipt/${batchId}/pull-preview`,
+      {
+        method: 'GET',
+        params: partnerStatementIds?.length
+          ? { partner_statement_ids: partnerStatementIds.join(',') }
+          : undefined,
+        notifyOnGatewayError: true,
+      },
+    ),
+
+  previewPullFromOutsourceOrderReceipts: async (
+    batchIds: number[],
+    partnerStatementIds?: number[],
+  ) =>
+    apiRequest<PurchaseInvoicePullPreview>(
+      `${PURCHASE_INVOICE_API}/from-outsource-order-receipts/pull-preview?outsource_order_receipt_ids=${batchIds.join(',')}${
+        partnerStatementIds?.length ? `&partner_statement_ids=${partnerStatementIds.join(',')}` : ''
+      }`,
       { method: 'GET', notifyOnGatewayError: true },
     ),
+
+  previewPullFromPartnerStatementSupplierSources: async (params: {
+    receiptIds?: number[];
+    outsourceOrderReceiptIds?: number[];
+    partnerStatementIds: number[];
+  }) => {
+    const query = new URLSearchParams();
+    query.set('partner_statement_ids', params.partnerStatementIds.join(','));
+    if (params.receiptIds?.length) {
+      query.set('receipt_ids', params.receiptIds.join(','));
+    }
+    if (params.outsourceOrderReceiptIds?.length) {
+      query.set('outsource_order_receipt_ids', params.outsourceOrderReceiptIds.join(','));
+    }
+    return apiRequest<PurchaseInvoicePullPreview>(
+      `${PURCHASE_INVOICE_API}/from-partner-statement-supplier-sources/pull-preview?${query.toString()}`,
+      { method: 'GET', notifyOnGatewayError: true },
+    );
+  },
 
   listPayablePullCandidates: async (params?: FinancePullCandidateListParams) =>
     apiRequest<{ data: PurchaseInvoicePullCandidate[]; total: number; success: boolean }>(

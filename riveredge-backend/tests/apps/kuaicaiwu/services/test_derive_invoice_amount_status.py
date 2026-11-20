@@ -38,10 +38,17 @@ async def test_purchase_invoice_approved_payable_keeps_upstream_early_return(mon
     from apps.kuaicaiwu.services import purchase_invoice_payable_auto as auto
     from apps.kuaicaiwu.services import finance_audit_workflow as workflow
 
+    from apps.kuaicaiwu.services.partner_statement_service import PartnerStatementService
+
     invoice = SimpleNamespace(id=7, payable_id=12, payable_code="AP12", adjust_payable=True)
     monkeypatch.setattr(auto.PurchaseInvoice, "get_or_none", AsyncMock(return_value=invoice))
     monkeypatch.setattr(
         auto.Payable, "get_or_none", AsyncMock(return_value=SimpleNamespace(review_status="已审核"))
+    )
+    monkeypatch.setattr(
+        PartnerStatementService,
+        "try_complete_ledger_after_purchase_invoice_approved",
+        AsyncMock(),
     )
     adjustment = AsyncMock()
     submit = AsyncMock()

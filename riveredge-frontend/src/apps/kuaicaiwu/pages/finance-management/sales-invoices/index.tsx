@@ -165,6 +165,8 @@ const SalesInvoicesPage: React.FC = () => {
   const pullFromReceivableOpenRef = useRef<(() => void) | null>(null);
   const pullFromPartnerStatementCloseRef = useRef<(() => void) | null>(null);
   const pullFromPartnerStatementOpenRef = useRef<(() => void) | null>(null);
+  const pullPartnerStatementIdsRef = useRef<number[]>([]);
+  const pullPartnerStatementCodesRef = useRef<string[]>([]);
   const { token } = theme.useToken();
   const pullQueryModalZIndex = token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET;
   const pullPreviewZIndex = pullQueryModalZIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET;
@@ -264,8 +266,19 @@ const SalesInvoicesPage: React.FC = () => {
   const openPullPreview = async (
     kind: PullPreviewKind,
     sourceIdsInput: number | number[],
-    options?: { closeSourceModal?: () => void; reopenSourceModal?: () => void },
+    options?: {
+      closeSourceModal?: () => void;
+      reopenSourceModal?: () => void;
+      partnerStatementIds?: number[];
+      partnerStatementCodes?: string[];
+    },
   ) => {
+    pullPartnerStatementIdsRef.current = options?.partnerStatementIds?.length
+      ? [...options.partnerStatementIds]
+      : [];
+    pullPartnerStatementCodesRef.current = options?.partnerStatementCodes?.length
+      ? [...options.partnerStatementCodes]
+      : [];
     const sourceIds = (Array.isArray(sourceIdsInput) ? sourceIdsInput : [sourceIdsInput])
       .map((id) => Number(id))
       .filter((id) => Number.isFinite(id) && id > 0);
@@ -288,73 +301,110 @@ const SalesInvoicesPage: React.FC = () => {
     setPullPreviewSourceIds(sourceIds);
     const hideLoading = messageApi.loading(t(`${P}.pullPreviewLoading`), 0);
     try {
-      const fragments: SalesInvoicePullPreview[] = [];
-      for (const id of sourceIds) {
-        fragments.push(
-          kind === 'sales_order'
-            ? await salesInvoiceService.previewPullFromSalesOrder(id)
-            : kind === 'sales_delivery'
-              ? await salesInvoiceService.previewPullFromSalesDelivery(id)
-              : await salesInvoiceService.previewPullFromReceivable(id),
+      let data: Awaited<ReturnType<typeof salesInvoiceService.previewPullFromSalesOrder>>;
+      if (kind === 'sales_order') {
+        if (sourceIds.length > 1) {
+          showPullFlowNotice('warning', t(`${P}.pull.sameCustomerRequired`));
+          resetPullPreview();
+          return;
+        }
+        data = await salesInvoiceService.previewPullFromSalesOrder(sourceIds[0]);
+      } else if (kind === 'sales_delivery') {
+        data =
+          sourceIds.length === 1
+            ? await salesInvoiceService.previewPullFromSalesDelivery(
+                sourceIds[0],
+                pullPartnerStatementIdsRef.current,
+              )
+            : await salesInvoiceService.previewPullFromSalesDeliveries(
+                sourceIds,
+                pullPartnerStatementIdsRef.current,
+              );
+      } else {
+        const fragments = await Promise.all(
+          sourceIds.map((id) => salesInvoiceService.previewPullFromReceivable(id)),
         );
+        const customerKeys = new Set(
+          fragments
+            .map((f) => String(f.customer_id ?? f.customer_name ?? '').trim())
+            .filter(Boolean),
+        );
+        if (customerKeys.size > 1) {
+          showPullFlowNotice('warning', t(`${P}.pull.sameCustomerRequired`));
+          resetPullPreview();
+          return;
+        }
+        const blocking = fragments.find((f) => f.has_blocking_issues);
+        if (blocking) {
+          const blockedText =
+            salesInvoiceCapabilityReasonMessage(blocking.blocking_reason, t)
+            || (blocking.summary ? String(blocking.summary) : '')
+            || t(`${P}.pullPreviewBlocked`);
+          showPullFlowNotice('warning', blockedText, t(`${P}.pullPreviewBlocked`));
+          resetPullPreview();
+          return;
+        }
+        const mergedItems = fragments.flatMap((f) => f.items || []);
+        const maxPush =
+          Number(
+            fragments.reduce(
+              (sum, f) =>
+                sum +
+                Number(
+                  f.max_push_total
+                    ?? (f.items || []).reduce(
+                      (s, row) => s + Number(row.max_push_quantity ?? 0),
+                      0,
+                    ),
+                ),
+              0,
+            ),
+          ) || 0;
+        if (maxPush <= 0) {
+          const noAmtText =
+            (fragments[0]?.summary ? String(fragments[0].summary) : '') ||
+            t(`${P}.pullNoInvoiceableAmount`);
+          showPullFlowNotice('warning', noAmtText, t(`${P}.pullNoInvoiceableAmount`));
+          resetPullPreview();
+          return;
+        }
+        const first = fragments[0];
+        data = {
+          ...first,
+          source_id: sourceId,
+          source_ids: sourceIds,
+          source_code: fragments.map((f) => f.source_code).filter(Boolean).join('、'),
+          items: mergedItems,
+          max_push_total: maxPush,
+          summary:
+            sourceIds.length > 1
+              ? `将从 ${sourceIds.length} 张来源单据创建销售发票（可开票合计 ¥${maxPush.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}）`
+              : first.summary,
+        };
       }
-      const customerKeys = new Set(
-        fragments
-          .map((f) => String(f.customer_id ?? f.customer_name ?? '').trim())
-          .filter(Boolean),
-      );
-      if (customerKeys.size > 1) {
-        showPullFlowNotice('warning', t(`${P}.pull.sameCustomerRequired`));
-        resetPullPreview();
-        return;
-      }
-      const blocking = fragments.find((f) => f.has_blocking_issues);
-      if (blocking) {
+      if (data.has_blocking_issues) {
         const blockedText =
-          salesInvoiceCapabilityReasonMessage(blocking.blocking_reason, t)
-          || (blocking.summary ? String(blocking.summary) : '')
+          salesInvoiceCapabilityReasonMessage(data.blocking_reason, t)
+          || (data.summary ? String(data.summary) : '')
           || t(`${P}.pullPreviewBlocked`);
         showPullFlowNotice('warning', blockedText, t(`${P}.pullPreviewBlocked`));
         resetPullPreview();
         return;
       }
-      const mergedItems = fragments.flatMap((f) => f.items || []);
       const maxPush =
         Number(
-          fragments.reduce(
-            (sum, f) =>
-              sum +
-              Number(
-                f.max_push_total
-                  ?? (f.items || []).reduce(
-                    (s, row) => s + Number(row.max_push_quantity ?? 0),
-                    0,
-                  ),
-              ),
-            0,
-          ),
+          data.max_push_total
+            ?? (data.items || []).reduce(
+              (sum, row) => sum + Number(row.max_push_quantity ?? 0),
+              0,
+            ),
         ) || 0;
       if (maxPush <= 0) {
-        const noAmtText =
-          (fragments[0]?.summary ? String(fragments[0].summary) : '') ||
-          t(`${P}.pullNoInvoiceableAmount`);
+        const noAmtText = (data.summary ? String(data.summary) : '') || t(`${P}.pullNoInvoiceableAmount`);
         showPullFlowNotice('warning', noAmtText, t(`${P}.pullNoInvoiceableAmount`));
         resetPullPreview();
         return;
       }
-      const first = fragments[0];
-      const data = {
-        ...first,
-        source_id: sourceId,
-        source_ids: sourceIds,
-        source_code: fragments.map((f) => f.source_code).filter(Boolean).join('、'),
-        items: mergedItems,
-        max_push_total: maxPush,
-        summary:
-          sourceIds.length > 1
-            ? `将从 ${sourceIds.length} 张来源单据创建销售发票（可开票合计 ¥${maxPush.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}）`
-            : first.summary,
-      };
       options?.closeSourceModal?.();
       setPullPreviewData(data);
       setPullPreviewOpen(true);
@@ -626,6 +676,10 @@ const SalesInvoicesPage: React.FC = () => {
         await openPullPreview('sales_delivery', deliveryIds, {
           closeSourceModal: () => pullFromPartnerStatementCloseRef.current?.(),
           reopenSourceModal: () => pullFromPartnerStatementOpenRef.current?.(),
+          partnerStatementIds: sourceIds,
+          partnerStatementCodes: selected.map((row) =>
+            String(row.statement_code || row.doc_code || '').trim(),
+          ).filter(Boolean),
         });
         return;
       }
@@ -643,6 +697,10 @@ const SalesInvoicesPage: React.FC = () => {
       await openPullPreview('receivable', receivableIds, {
         closeSourceModal: () => pullFromPartnerStatementCloseRef.current?.(),
         reopenSourceModal: () => pullFromPartnerStatementOpenRef.current?.(),
+        partnerStatementIds: sourceIds,
+        partnerStatementCodes: selected.map((row) =>
+          String(row.statement_code || row.doc_code || '').trim(),
+        ).filter(Boolean),
       });
     },
     onConfirmFailed: pullConfirmFailed,
@@ -662,7 +720,14 @@ const SalesInvoicesPage: React.FC = () => {
       );
       return false;
     }
-    const maxPush = Number(pullPreviewData.items?.[0]?.max_push_quantity ?? 0);
+    const maxPush =
+      Number(
+        pullPreviewData.max_push_total
+          ?? (pullPreviewData.items || []).reduce(
+            (sum, row) => sum + Number(row.max_push_quantity ?? 0),
+            0,
+          ),
+      ) || 0;
     const enteredAmount = Number(values.invoice_amount) || 0;
     if (enteredAmount <= 0) {
       messageApi.warning(t(`${P}.amountRequired`));
@@ -724,8 +789,21 @@ const SalesInvoicesPage: React.FC = () => {
           tax_rate: taxRate,
           invoice_amount: invoiceAmount,
           total_amount: estimatedTotal,
-          notes: String(values.notes ?? '').trim() || t(`${P}.pullNotes`, { source: sourceLabel, code: pullPreviewData.source_code }),
+          notes:
+            String(values.notes ?? '').trim() ||
+            (pullPartnerStatementIdsRef.current.length
+              ? t('app.kuaicaiwu.common.createdFromSourceNote', {
+                  source: pullFromPartnerStatementAction.sourceLabel,
+                  code: (pullPartnerStatementCodesRef.current.length
+                    ? pullPartnerStatementCodesRef.current
+                    : pullPartnerStatementIdsRef.current.map(String)
+                  ).join('、'),
+                })
+              : t(`${P}.pullNotes`, { source: sourceLabel, code: pullPreviewData.source_code })),
           attachments: normalizeDocumentAttachments(values.attachments),
+          ...(pullPartnerStatementIdsRef.current.length
+            ? { partner_statement_ids: pullPartnerStatementIdsRef.current }
+            : {}),
           ...(wantReceipt
             ? {
                 concurrent_settlement: {
@@ -1265,7 +1343,14 @@ const SalesInvoicesPage: React.FC = () => {
 
   const pullFormInitialValues = useMemo(() => {
     if (!pullPreviewData || !pullPreviewKind) return undefined;
-    const maxPush = Number(pullPreviewData.items?.[0]?.max_push_quantity ?? 0);
+    const maxPush =
+      Number(
+        pullPreviewData.max_push_total
+          ?? (pullPreviewData.items || []).reduce(
+            (sum, row) => sum + Number(row.max_push_quantity ?? 0),
+            0,
+          ),
+      ) || 0;
     const taxRate = 13;
     const defaultExcl = resolveInvoiceExclFromSourceTotal(
       maxPush,
@@ -1287,7 +1372,16 @@ const SalesInvoicesPage: React.FC = () => {
       tax_rate: taxRate,
       amount_input_mode: 'tax_exclusive' as InvoiceAmountInputMode,
       invoice_amount: defaultExcl,
-      notes: t(`${P}.pullNotes`, { source: sourceLabel, code: pullPreviewData.source_code }),
+      notes:
+        pullPartnerStatementIdsRef.current.length
+          ? t('app.kuaicaiwu.common.createdFromSourceNote', {
+              source: pullFromPartnerStatementAction.sourceLabel,
+              code: (pullPartnerStatementCodesRef.current.length
+                ? pullPartnerStatementCodesRef.current
+                : pullPartnerStatementIdsRef.current.map(String)
+              ).join('、'),
+            })
+          : t(`${P}.pullNotes`, { source: sourceLabel, code: pullPreviewData.source_code }),
       concurrent_receipt_enabled: false,
       settle_amount: maxSettle > 0 ? maxSettle : undefined,
       settle_date: dayjs(),
@@ -1299,6 +1393,7 @@ const SalesInvoicesPage: React.FC = () => {
     pullFromSalesOrderAction.sourceLabel,
     pullFromSalesDeliveryAction.sourceLabel,
     pullFromReceivableAction.sourceLabel,
+    pullFromPartnerStatementAction.sourceLabel,
     t,
   ]);
 

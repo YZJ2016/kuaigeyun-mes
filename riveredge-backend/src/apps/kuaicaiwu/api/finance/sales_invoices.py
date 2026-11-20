@@ -256,6 +256,7 @@ async def create_sales_invoice(
                 source_type=str(data.source_type).strip(),
                 source_id=int(data.source_id),
                 total_amount=total_amount,
+                partner_statement_ids=data.partner_statement_ids,
             )
 
         source_document_code = data.sales_order_code
@@ -469,13 +470,68 @@ async def preview_pull_sales_invoice_from_sales_order(
 )
 async def preview_pull_sales_invoice_from_sales_delivery(
     delivery_id: int = Path(..., description="销售出库单ID"),
+    partner_statement_ids: Optional[str] = Query(
+        None, description="往来对账单ID（逗号分隔），从对账单按发票立账开票时传入"
+    ),
     _auth: object = Depends(require_permission_codes("kuaicaiwu:sales-invoice:read")),
     tenant_id: int = Depends(get_current_tenant),
 ) -> Dict[str, Any]:
+    from apps.kuaicaiwu.services.partner_statement_invoice_pull import (
+        parse_partner_statement_id_csv,
+    )
+
     return await sales_invoice_service.preview_pull_from_sales_delivery(
         tenant_id=tenant_id,
         delivery_id=delivery_id,
+        partner_statement_ids=parse_partner_statement_id_csv(partner_statement_ids),
     )
+
+
+@router.get(
+    "/from-sales-deliveries/pull-preview",
+    summary="Preview merge pull sales invoice from sales deliveries",
+)
+async def preview_pull_sales_invoice_from_sales_deliveries(
+    delivery_ids: str = Query(..., description="销售出库单ID，逗号分隔"),
+    partner_statement_ids: Optional[str] = Query(
+        None, description="往来对账单ID（逗号分隔），从对账单按发票立账开票时传入"
+    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:sales-invoice:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    from infra.exceptions.exceptions import NotFoundError
+
+    from apps.kuaicaiwu.services.partner_statement_invoice_pull import (
+        parse_partner_statement_id_csv,
+    )
+
+    parsed: list[int] = []
+    for part in str(delivery_ids or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            parsed.append(int(part))
+        except ValueError as exc:
+            raise _http_exception_with_trace(
+                422,
+                f"无效的销售出库单ID: {part}",
+                "/sales-invoices/from-sales-deliveries/pull-preview",
+                tenant_id,
+            ) from exc
+    try:
+        return await sales_invoice_service.preview_pull_from_sales_deliveries(
+            tenant_id=tenant_id,
+            delivery_ids=parsed,
+            partner_statement_ids=parse_partner_statement_id_csv(partner_statement_ids),
+        )
+    except (NotFoundError, BusinessLogicError) as exc:
+        raise _http_exception_with_trace(
+            422,
+            str(exc),
+            "/sales-invoices/from-sales-deliveries/pull-preview",
+            tenant_id,
+        ) from exc
 
 
 @router.get(

@@ -225,7 +225,65 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
                     tenant_id, receipt
                 )
             return out
+        if source_type == "outsource_order_receipt":
+            out: Dict[int, Decimal] = {}
+            for sid in source_ids:
+                out[int(sid)] = await self.outsource_order_receipt_settlement_gross(
+                    tenant_id, int(sid)
+                )
+            return out
         return {}
+
+    async def outsource_order_receipt_settlement_gross(
+        self, tenant_id: int, batch_id: int
+    ) -> Decimal:
+        from apps.kuaizhizao.models.outsource_order import OutsourceOrder
+        from apps.kuaizhizao.models.outsource_order_receipt import OutsourceOrderReceipt
+        from apps.kuaizhizao.utils.document_amount_write import line_total_qty_unit_price
+
+        batch = await OutsourceOrderReceipt.get_or_none(
+            tenant_id=tenant_id,
+            id=int(batch_id),
+            deleted_at__isnull=True,
+        )
+        if not batch:
+            return Decimal("0")
+        order = await OutsourceOrder.get_or_none(
+            tenant_id=tenant_id,
+            id=int(batch.outsource_order_id),
+            deleted_at__isnull=True,
+        )
+        if not order:
+            return Decimal("0")
+        unit_price = Decimal(str(order.unit_price or 0))
+        qual = Decimal(str(batch.qualified_quantity or 0))
+        return line_total_qty_unit_price(qual, unit_price)
+
+    async def _build_preview_items_for_outsource_order_receipt(
+        self,
+        tenant_id: int,
+        batch_id: int,
+        *,
+        source_code: str,
+    ) -> List[Dict[str, Any]]:
+        gross = await self.outsource_order_receipt_settlement_gross(tenant_id, int(batch_id))
+        pushed_map = await self._sum_pushed_totals_by_source(
+            tenant_id,
+            "outsource_order_receipt",
+            [int(batch_id)],
+            {int(batch_id): source_code},
+        )
+        pushed = pushed_map.get(int(batch_id), Decimal("0"))
+        remaining = max(Decimal("0"), gross - pushed)
+        if remaining <= 0:
+            return []
+        return [
+            {
+                "item_id": int(batch_id),
+                "source_code": source_code,
+                "max_push_quantity": float(remaining),
+            }
+        ]
 
     @staticmethod
     def _fifo_allocate_amount_by_preview_items(
@@ -717,6 +775,8 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
         self,
         tenant_id: int,
         receipt_id: int,
+        *,
+        partner_statement_ids: Optional[Sequence[int]] = None,
     ) -> Dict[str, Any]:
         from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 
@@ -732,7 +792,23 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
         )
 
         settlement_total = await purchase_receipt_settlement_gross_async(tenant_id, receipt)
-        source_allowed = status in self._PR_ELIGIBLE_STATUSES and settlement_total > 0
+        from apps.kuaizhizao.services.document_recognition import (
+            purchase_receipt_direct_invoice_pull_block_reason,
+        )
+
+        ledger_block = purchase_receipt_direct_invoice_pull_block_reason(receipt)
+        if ledger_block and partner_statement_ids:
+            from apps.kuaicaiwu.services.partner_statement_invoice_pull import (
+                receipts_covered_by_audited_partner_statements,
+            )
+
+            if await receipts_covered_by_audited_partner_statements(
+                tenant_id, partner_statement_ids, [receipt_id]
+            ):
+                ledger_block = None
+        source_allowed = (
+            status in self._PR_ELIGIBLE_STATUSES and settlement_total > 0 and ledger_block is None
+        )
         preview_items = await self._build_preview_items_for_purchase_receipt(tenant_id, receipt)
         allowed, reason = self._derive_pull_capability(
             source_allowed=source_allowed,
@@ -750,7 +826,7 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
         detail_lines = await build_purchase_receipt_finance_detail_lines(
             tenant_id, receipt_id, "invoice"
         )
-        return {
+        preview = {
             "target_type": "purchase_invoice",
             "source_type": "purchase_receipt",
             "source_id": receipt_id,
@@ -771,6 +847,28 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
             "purchase_order_code": receipt.purchase_order_code,
             "max_push_total": pushable,
         }
+        if partner_statement_ids:
+            from apps.kuaicaiwu.services.partner_statement_invoice_pull import (
+                apply_invoice_budget_to_pull_preview,
+                resolve_budget_for_statements,
+            )
+
+            budget = await resolve_budget_for_statements(
+                tenant_id,
+                partner_statement_ids,
+                side="purchase",
+                restrict_source_ids=[receipt_id],
+            )
+            apply_invoice_budget_to_pull_preview(preview, budget)
+            cap_f = float(budget.invoiceable)
+            if preview_items and allowed and not ledger_block and cap_f > 0:
+                preview["has_blocking_issues"] = False
+                preview["summary"] = (
+                    f"将从对账单关联入库 {code} 创建采购发票（可开票 ¥{cap_f:,.2f}）"
+                )
+            elif cap_f <= 0:
+                preview["has_blocking_issues"] = True
+        return preview
 
     @staticmethod
     def _normalize_source_ids(source_ids: Sequence[int]) -> List[int]:
@@ -790,10 +888,16 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
         self,
         tenant_id: int,
         receipt_ids: Sequence[int],
+        *,
+        partner_statement_ids: Optional[Sequence[int]] = None,
     ) -> Dict[str, Any]:
         ids = self._normalize_source_ids(receipt_ids)
         if len(ids) == 1:
-            return await self.preview_pull_from_purchase_receipt(tenant_id, ids[0])
+            return await self.preview_pull_from_purchase_receipt(
+                tenant_id,
+                ids[0],
+                partner_statement_ids=partner_statement_ids,
+            )
 
         merged_items: List[Dict[str, Any]] = []
         merged_detail_lines: List[Dict[str, Any]] = []
@@ -805,7 +909,11 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
         purchase_order_code: Optional[str] = None
 
         for rid in ids:
-            fragment = await self.preview_pull_from_purchase_receipt(tenant_id, rid)
+            fragment = await self.preview_pull_from_purchase_receipt(
+                tenant_id,
+                rid,
+                partner_statement_ids=partner_statement_ids,
+            )
             if supplier_id is None:
                 supplier_id = int(fragment.get("supplier_id") or 0)
                 supplier_name = str(fragment.get("supplier_name") or "")
@@ -838,7 +946,7 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
         )
         allowed = not blocking_reasons and max_push_total > 0
         joined_codes = "、".join(codes)
-        return {
+        preview = {
             "target_type": "purchase_invoice",
             "source_type": "purchase_receipt",
             "source_id": ids[0],
@@ -860,6 +968,313 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
             "purchase_order_code": purchase_order_code,
             "max_push_total": float(max_push_total),
         }
+        if partner_statement_ids:
+            from apps.kuaicaiwu.services.partner_statement_invoice_pull import (
+                apply_invoice_budget_to_pull_preview,
+                resolve_budget_for_statements,
+            )
+
+            budget = await resolve_budget_for_statements(
+                tenant_id,
+                partner_statement_ids,
+                side="purchase",
+                restrict_source_ids=ids,
+            )
+            apply_invoice_budget_to_pull_preview(preview, budget)
+            cap_f = float(budget.invoiceable)
+            if allowed and cap_f > 0:
+                preview["has_blocking_issues"] = False
+                preview["summary"] = (
+                    f"将从对账单关联 {len(ids)} 张入库创建采购发票（可开票合计 ¥{cap_f:,.2f}）"
+                )
+            elif cap_f <= 0:
+                preview["has_blocking_issues"] = True
+        return preview
+
+    async def preview_pull_from_outsource_order_receipt(
+        self,
+        tenant_id: int,
+        batch_id: int,
+        *,
+        partner_statement_ids: Optional[Sequence[int]] = None,
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.models.outsource_order import OutsourceOrder
+        from apps.kuaizhizao.models.outsource_order_receipt import OutsourceOrderReceipt
+
+        batch = await OutsourceOrderReceipt.get_or_none(
+            tenant_id=tenant_id, id=int(batch_id), deleted_at__isnull=True
+        )
+        if not batch:
+            raise NotFoundError(f"工序委外收货批次不存在: {batch_id}")
+        order = await OutsourceOrder.get_or_none(
+            tenant_id=tenant_id,
+            id=int(batch.outsource_order_id),
+            deleted_at__isnull=True,
+        )
+        if not order:
+            raise NotFoundError(f"工序委外单不存在: {batch.outsource_order_id}")
+
+        settlement_total = await self.outsource_order_receipt_settlement_gross(
+            tenant_id, int(batch_id)
+        )
+        code = f"{order.code}-{batch.id}"
+        preview_items = await self._build_preview_items_for_outsource_order_receipt(
+            tenant_id, int(batch_id), source_code=code
+        )
+        source_allowed = settlement_total > 0
+        allowed, reason = self._derive_pull_capability(
+            source_allowed=source_allowed,
+            preview_items=preview_items,
+            not_allowed_reason="purchase_invoice.pull_from_outsource_order_receipt.not_allowed",
+            no_lines_reason="purchase_invoice.pull_from_outsource_order_receipt.no_lines",
+            already_pulled_reason="purchase_invoice.pull_from_outsource_order_receipt.already_pulled",
+        )
+        pushable = float(preview_items[0]["max_push_quantity"]) if preview_items else 0.0
+        preview = {
+            "target_type": "purchase_invoice",
+            "source_type": "outsource_order_receipt",
+            "source_id": int(batch_id),
+            "source_code": code,
+            "summary": (
+                f"将从工序委外收货 {code} 创建采购发票（可开票 ¥{pushable:,.2f}）"
+                if preview_items and allowed
+                else f"工序委外收货 {code} 当前不可加载采购发票"
+            ),
+            "items": preview_items,
+            "detail_lines": [],
+            "has_blocking_issues": not allowed,
+            "blocking_reason": reason,
+            "tip": "价税合计不可超过可开票金额；删除未审核采购发票后，可开票金额自动回退。",
+            "supplier_id": int(order.supplier_id or 0),
+            "supplier_name": str(order.supplier_name or ""),
+            "purchase_order_id": None,
+            "purchase_order_code": None,
+            "max_push_total": pushable,
+        }
+        if partner_statement_ids:
+            from apps.kuaicaiwu.services.partner_statement_invoice_pull import (
+                apply_invoice_budget_to_pull_preview,
+                resolve_budget_for_statements,
+            )
+
+            budget = await resolve_budget_for_statements(
+                tenant_id,
+                partner_statement_ids,
+                side="purchase",
+                restrict_source_ids=[int(batch_id)],
+            )
+            apply_invoice_budget_to_pull_preview(preview, budget)
+            cap_f = float(budget.invoiceable)
+            if preview_items and allowed and cap_f > 0:
+                preview["has_blocking_issues"] = False
+                preview["summary"] = (
+                    f"将从对账单关联工序委外收货 {code} 创建采购发票（可开票 ¥{cap_f:,.2f}）"
+                )
+            elif cap_f <= 0:
+                preview["has_blocking_issues"] = True
+        return preview
+
+    async def preview_pull_from_outsource_order_receipts(
+        self,
+        tenant_id: int,
+        batch_ids: Sequence[int],
+        *,
+        partner_statement_ids: Optional[Sequence[int]] = None,
+    ) -> Dict[str, Any]:
+        ids = self._normalize_source_ids(batch_ids)
+        if len(ids) == 1:
+            return await self.preview_pull_from_outsource_order_receipt(
+                tenant_id,
+                ids[0],
+                partner_statement_ids=partner_statement_ids,
+            )
+
+        merged_items: List[Dict[str, Any]] = []
+        blocking_reasons: List[str] = []
+        supplier_id: Optional[int] = None
+        supplier_name: Optional[str] = None
+        codes: List[str] = []
+        for bid in ids:
+            fragment = await self.preview_pull_from_outsource_order_receipt(
+                tenant_id,
+                bid,
+                partner_statement_ids=partner_statement_ids,
+            )
+            if supplier_id is None:
+                supplier_id = int(fragment.get("supplier_id") or 0)
+                supplier_name = str(fragment.get("supplier_name") or "")
+            elif int(fragment.get("supplier_id") or 0) != int(supplier_id or 0):
+                raise BusinessLogicError("多笔一起加载须为同一供应商")
+            codes.append(str(fragment.get("source_code") or bid))
+            if fragment.get("has_blocking_issues"):
+                reason = str(fragment.get("blocking_reason") or "")
+                if reason:
+                    blocking_reasons.append(reason)
+            merged_items.extend(fragment.get("items") or [])
+
+        max_push_total = sum(
+            Decimal(str(item.get("max_push_quantity") or 0)) for item in merged_items
+        )
+        allowed = not blocking_reasons and max_push_total > 0
+        joined_codes = "、".join(codes)
+        preview = {
+            "target_type": "purchase_invoice",
+            "source_type": "outsource_order_receipt",
+            "source_id": ids[0],
+            "source_ids": ids,
+            "source_code": joined_codes,
+            "summary": (
+                f"将从 {len(ids)} 笔工序委外收货创建采购发票（可开票合计 ¥{float(max_push_total):,.2f}）"
+                if allowed
+                else "所选工序委外收货当前不可一起加载采购发票"
+            ),
+            "items": merged_items,
+            "detail_lines": [],
+            "has_blocking_issues": not allowed,
+            "blocking_reason": blocking_reasons[0] if blocking_reasons else None,
+            "tip": "价税合计不可超过可开票金额；删除未审核采购发票后，可开票金额自动回退。",
+            "supplier_id": supplier_id,
+            "supplier_name": supplier_name,
+            "purchase_order_id": None,
+            "purchase_order_code": None,
+            "max_push_total": float(max_push_total),
+        }
+        if partner_statement_ids:
+            from apps.kuaicaiwu.services.partner_statement_invoice_pull import (
+                apply_invoice_budget_to_pull_preview,
+                resolve_budget_for_statements,
+            )
+
+            budget = await resolve_budget_for_statements(
+                tenant_id,
+                partner_statement_ids,
+                side="purchase",
+                restrict_source_ids=ids,
+            )
+            apply_invoice_budget_to_pull_preview(preview, budget)
+            cap_f = float(budget.invoiceable)
+            if allowed and cap_f > 0:
+                preview["has_blocking_issues"] = False
+                preview["summary"] = (
+                    f"将从对账单关联 {len(ids)} 笔工序委外收货创建采购发票（可开票合计 ¥{cap_f:,.2f}）"
+                )
+            elif cap_f <= 0:
+                preview["has_blocking_issues"] = True
+        return preview
+
+    async def preview_pull_from_partner_statement_supplier_sources(
+        self,
+        tenant_id: int,
+        *,
+        receipt_ids: Sequence[int],
+        outsource_order_receipt_ids: Sequence[int],
+        partner_statement_ids: Sequence[int],
+    ) -> Dict[str, Any]:
+        receipt_list = self._normalize_source_ids(receipt_ids) if receipt_ids else []
+        outsource_list = (
+            self._normalize_source_ids(outsource_order_receipt_ids)
+            if outsource_order_receipt_ids
+            else []
+        )
+        if not receipt_list and not outsource_list:
+            raise BusinessLogicError("请至少选择一笔对账单源单")
+        if receipt_list and not outsource_list:
+            return await self.preview_pull_from_purchase_receipts(
+                tenant_id,
+                receipt_list,
+                partner_statement_ids=partner_statement_ids,
+            )
+        if outsource_list and not receipt_list:
+            return await self.preview_pull_from_outsource_order_receipts(
+                tenant_id,
+                outsource_list,
+                partner_statement_ids=partner_statement_ids,
+            )
+
+        receipt_preview = await self.preview_pull_from_purchase_receipts(
+            tenant_id,
+            receipt_list,
+            partner_statement_ids=partner_statement_ids,
+        )
+        outsource_preview = await self.preview_pull_from_outsource_order_receipts(
+            tenant_id,
+            outsource_list,
+            partner_statement_ids=partner_statement_ids,
+        )
+        if int(receipt_preview.get("supplier_id") or 0) != int(
+            outsource_preview.get("supplier_id") or 0
+        ):
+            raise BusinessLogicError("多笔一起加载须为同一供应商")
+
+        merged_items = (receipt_preview.get("items") or []) + (
+            outsource_preview.get("items") or []
+        )
+        merged_detail = list(receipt_preview.get("detail_lines") or [])
+        blocking = receipt_preview.get("has_blocking_issues") or outsource_preview.get(
+            "has_blocking_issues"
+        )
+        blocking_reason = receipt_preview.get("blocking_reason") or outsource_preview.get(
+            "blocking_reason"
+        )
+        max_push_total = sum(
+            Decimal(str(item.get("max_push_quantity") or 0)) for item in merged_items
+        )
+        all_source_ids = receipt_list + outsource_list
+        preview = {
+            "target_type": "purchase_invoice",
+            "source_type": "purchase_receipt",
+            "source_id": all_source_ids[0],
+            "source_ids": all_source_ids,
+            "receipt_ids": receipt_list,
+            "outsource_order_receipt_ids": outsource_list,
+            "source_code": "、".join(
+                filter(
+                    None,
+                    [
+                        str(receipt_preview.get("source_code") or ""),
+                        str(outsource_preview.get("source_code") or ""),
+                    ],
+                )
+            ),
+            "summary": (
+                f"将从对账单关联入库与工序委外收货创建采购发票（可开票合计 ¥{float(max_push_total):,.2f}）"
+                if not blocking and max_push_total > 0
+                else "所选对账单源单当前不可加载采购发票"
+            ),
+            "items": merged_items,
+            "detail_lines": merged_detail,
+            "has_blocking_issues": bool(blocking),
+            "blocking_reason": blocking_reason,
+            "tip": (
+                "含税合计不可超过对账单可收票金额；"
+                "含采购入库时须与所选入库行合计一致。"
+            ),
+            "supplier_id": receipt_preview.get("supplier_id"),
+            "supplier_name": receipt_preview.get("supplier_name"),
+            "purchase_order_id": receipt_preview.get("purchase_order_id"),
+            "purchase_order_code": receipt_preview.get("purchase_order_code"),
+            "max_push_total": float(max_push_total),
+        }
+        from apps.kuaicaiwu.services.partner_statement_invoice_pull import (
+            apply_invoice_budget_to_pull_preview,
+            resolve_budget_for_statements,
+        )
+
+        budget = await resolve_budget_for_statements(
+            tenant_id,
+            partner_statement_ids,
+            side="purchase",
+            restrict_source_ids=all_source_ids,
+        )
+        apply_invoice_budget_to_pull_preview(preview, budget)
+        cap_f = float(budget.invoiceable)
+        if not preview["has_blocking_issues"] and cap_f > 0:
+            preview["summary"] = (
+                f"将从对账单关联源单创建采购发票（可开票合计 ¥{cap_f:,.2f}）"
+            )
+        elif cap_f <= 0:
+            preview["has_blocking_issues"] = True
+        return preview
 
     async def _validate_pull_receipt_lines_for_receipts(
         self,
@@ -867,6 +1282,8 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
         receipt_ids: Sequence[int],
         pull_receipt_lines: Sequence[Any],
         total_amount: Decimal,
+        *,
+        partner_statement_ids: Optional[Sequence[int]] = None,
     ) -> None:
         from apps.kuaicaiwu.services.purchase_receipt_finance_pull_lines import (
             build_slices_from_pull_receipt_line_selections,
@@ -913,12 +1330,22 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
                 for s in selections
             )
             subtotal += part
+            max_by = None
+            if partner_statement_ids:
+                from apps.kuaicaiwu.services.partner_statement_invoice_pull import (
+                    statement_scaled_receipt_line_caps,
+                )
+
+                max_by = await statement_scaled_receipt_line_caps(
+                    tenant_id, int(rid), header_amount=part
+                )
             await build_slices_from_pull_receipt_line_selections(
                 tenant_id,
                 int(rid),
                 "invoice",
                 selections,
                 header_amount=part,
+                max_push_by_item=max_by,
             )
         if abs(subtotal - Decimal(total_amount)) > Decimal("0.01"):
             raise BusinessLogicError(
@@ -1488,13 +1915,16 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
             compute_statement_invoice_pull_metrics,
             resolve_statement_invoice_source_ids,
             snapshot_ids_for_api,
+            sum_statement_invoice_period_amount,
+            sum_supplier_by_invoice_statement_period,
         )
 
         query = PartnerStatement.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             partner_type="Supplier",
-            status__in=["Confirmed", "Sent"],
+            status__in=["Confirmed", "Sent", "LedgerPosted"],
+            review_status__in=["已审核", "approved", "APPROVED"],
         )
         kw = str(keyword or "").strip()
         if kw:
@@ -1514,11 +1944,24 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
                 ledger_posting_mode=stmt.ledger_posting_mode,
                 transaction_details=stmt.transaction_details,
             )
+            if (
+                snapshot.ledger_posting_mode == "by_invoice"
+                and (snapshot.purchase_receipt_ids or snapshot.outsource_order_receipt_ids)
+            ):
+                period_amt = sum_supplier_by_invoice_statement_period(
+                    stmt.transaction_details
+                )
+            else:
+                period_amt = sum_statement_invoice_period_amount(
+                    stmt.transaction_details, snapshot.doc_type
+                )
             invoiced, remaining, allowed, reason = await compute_statement_invoice_pull_metrics(
                 tenant_id,
                 side="purchase",
                 source_ids=snapshot.source_ids,
                 source_type=snapshot.source_type,
+                statement_period_amount=period_amt,
+                snapshot=snapshot,
             )
             code = str(stmt.statement_code or sid)
             name = str(stmt.partner_name or "").strip()
@@ -1560,6 +2003,7 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
         total_amount: Decimal,
         pull_receipt_lines: Optional[List[Any]] = None,
         source_ids: Optional[Sequence[int]] = None,
+        partner_statement_ids: Optional[Sequence[int]] = None,
     ) -> Dict[str, Any]:
         if source_type == "purchase_order":
             ids = self._normalize_source_ids(source_ids or [source_id])
@@ -1570,17 +2014,70 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
             )
         elif source_type == "purchase_receipt":
             ids = self._normalize_source_ids(source_ids or [source_id])
-            preview = (
-                await self.preview_pull_from_purchase_receipts(tenant_id, ids)
-                if len(ids) > 1
-                else await self.preview_pull_from_purchase_receipt(tenant_id, ids[0])
-            )
+            if partner_statement_ids:
+                from apps.kuaizhizao.models.outsource_order_receipt import OutsourceOrderReceipt
+
+                outsource_ids = [
+                    int(x)
+                    for x in await OutsourceOrderReceipt.filter(
+                        tenant_id=tenant_id,
+                        id__in=ids,
+                        deleted_at__isnull=True,
+                    ).values_list("id", flat=True)
+                ]
+                if outsource_ids:
+                    receipt_ids = [i for i in ids if i not in set(outsource_ids)]
+                    preview = await self.preview_pull_from_partner_statement_supplier_sources(
+                        tenant_id,
+                        receipt_ids=receipt_ids,
+                        outsource_order_receipt_ids=outsource_ids,
+                        partner_statement_ids=partner_statement_ids,
+                    )
+                elif len(ids) > 1:
+                    preview = await self.preview_pull_from_purchase_receipts(
+                        tenant_id,
+                        ids,
+                        partner_statement_ids=partner_statement_ids,
+                    )
+                else:
+                    preview = await self.preview_pull_from_purchase_receipt(
+                        tenant_id,
+                        ids[0],
+                        partner_statement_ids=partner_statement_ids,
+                    )
+            elif len(ids) > 1:
+                preview = await self.preview_pull_from_purchase_receipts(
+                    tenant_id,
+                    ids,
+                    partner_statement_ids=partner_statement_ids,
+                )
+            else:
+                preview = await self.preview_pull_from_purchase_receipt(
+                    tenant_id,
+                    ids[0],
+                    partner_statement_ids=partner_statement_ids,
+                )
         elif source_type == "payable":
             ids = self._normalize_source_ids(source_ids or [source_id])
             preview = (
                 await self.preview_pull_from_payables(tenant_id, ids)
                 if len(ids) > 1
                 else await self.preview_pull_from_payable(tenant_id, ids[0])
+            )
+        elif source_type == "outsource_order_receipt":
+            ids = self._normalize_source_ids(source_ids or [source_id])
+            preview = (
+                await self.preview_pull_from_outsource_order_receipts(
+                    tenant_id,
+                    ids,
+                    partner_statement_ids=partner_statement_ids,
+                )
+                if len(ids) > 1
+                else await self.preview_pull_from_outsource_order_receipt(
+                    tenant_id,
+                    ids[0],
+                    partner_statement_ids=partner_statement_ids,
+                )
             )
         else:
             raise BusinessLogicError(f"不支持的加载源单类型: {source_type}")
@@ -1590,13 +2087,31 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
         items = preview.get("items") or []
         if not items:
             raise BusinessLogicError("无可开票金额")
-        max_push = Decimal(str(preview.get("max_push_total") or 0))
-        if max_push <= 0:
-            max_push = sum(
-                Decimal(str(item.get("max_push_quantity") or 0)) for item in items
+        from apps.kuaicaiwu.services.partner_statement_invoice_pull import (
+            enforce_partner_statement_invoice_total,
+            resolve_pull_preview_invoice_cap,
+            statement_scaled_receipt_line_caps,
+        )
+
+        ids_for_budget = (
+            self._normalize_source_ids(source_ids or [source_id]) if partner_statement_ids else []
+        )
+        if partner_statement_ids and source_type in (
+            "purchase_receipt",
+            "payable",
+            "outsource_order_receipt",
+        ):
+            await enforce_partner_statement_invoice_total(
+                tenant_id,
+                partner_statement_ids,
+                side="purchase",
+                restrict_source_ids=ids_for_budget,
+                total_amount=total_amount,
             )
-        if money_exceeds_max(total_amount, max_push):
-            raise BusinessLogicError(f"价税合计 {total_amount} 超过可开票金额 {max_push}")
+        else:
+            max_push = resolve_pull_preview_invoice_cap(preview)
+            if money_exceeds_max(total_amount, max_push):
+                raise BusinessLogicError(f"价税合计 {total_amount} 超过可开票金额 {max_push}")
         if pull_receipt_lines:
             from apps.kuaicaiwu.services.purchase_receipt_finance_pull_lines import (
                 build_invoice_detail_lines_from_payable,
@@ -1609,15 +2124,27 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
                 receipt_ids = self._normalize_source_ids(source_ids or [source_id])
                 if len(receipt_ids) > 1:
                     await self._validate_pull_receipt_lines_for_receipts(
-                        tenant_id, receipt_ids, pull_receipt_lines, total_amount
+                        tenant_id,
+                        receipt_ids,
+                        pull_receipt_lines,
+                        total_amount,
+                        partner_statement_ids=partner_statement_ids,
                     )
                 else:
+                    max_by = None
+                    if partner_statement_ids:
+                        max_by = await statement_scaled_receipt_line_caps(
+                            tenant_id,
+                            int(receipt_ids[0]),
+                            header_amount=total_amount,
+                        )
                     await build_slices_from_pull_receipt_line_selections(
                         tenant_id,
                         receipt_ids[0],
                         "invoice",
                         pull_receipt_lines,
                         header_amount=total_amount,
+                        max_push_by_item=max_by,
                     )
             elif source_type == "payable":
                 payable = await Payable.get_or_none(
@@ -1636,6 +2163,12 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
                     int(d["purchase_receipt_item_id"]): Decimal(str(d["max_push_amount"]))
                     for d in detail
                 }
+                if partner_statement_ids:
+                    max_by = await statement_scaled_receipt_line_caps(
+                        tenant_id,
+                        int(receipt_id),
+                        header_amount=total_amount,
+                    )
                 allowed_ids = set(max_by.keys())
                 for raw in pull_receipt_lines:
                     item_id = int(

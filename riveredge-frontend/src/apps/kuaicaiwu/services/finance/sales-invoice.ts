@@ -65,9 +65,29 @@ export const salesInvoiceService = {
       notifyOnGatewayError: true,
       timeoutMs: 60_000,
     }),
-  previewPullFromSalesDelivery: async (deliveryId: number) =>
+  previewPullFromSalesDelivery: async (
+    deliveryId: number,
+    partnerStatementIds?: number[],
+  ) =>
     apiRequest<SalesInvoicePullPreview>(
       `/apps/kuaicaiwu/sales-invoices/from-sales-delivery/${deliveryId}/pull-preview`,
+      {
+        method: 'GET',
+        params: partnerStatementIds?.length
+          ? { partner_statement_ids: partnerStatementIds.join(',') }
+          : undefined,
+        notifyOnGatewayError: true,
+        timeoutMs: 60_000,
+      },
+    ),
+  previewPullFromSalesDeliveries: async (
+    deliveryIds: number[],
+    partnerStatementIds?: number[],
+  ) =>
+    apiRequest<SalesInvoicePullPreview>(
+      `/apps/kuaicaiwu/sales-invoices/from-sales-deliveries/pull-preview?delivery_ids=${deliveryIds.join(',')}${
+        partnerStatementIds?.length ? `&partner_statement_ids=${partnerStatementIds.join(',')}` : ''
+      }`,
       { method: 'GET', notifyOnGatewayError: true, timeoutMs: 60_000 },
     ),
   listReceivablePullCandidates: async (params?: FinancePullCandidateListParams) =>

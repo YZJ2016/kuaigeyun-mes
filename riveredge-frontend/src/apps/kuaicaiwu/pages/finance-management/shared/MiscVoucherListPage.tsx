@@ -323,6 +323,223 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
     [service],
   );
 
+  const handleAuditBatchSuccess = useCallback(() => {
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  }, []);
+
+  const miscAuditEntityName = t(menuTitleKey);
+  const {
+    runAction: runMiscAuditBatch,
+    auditModal: miscIncomeAuditModal,
+  } = useAuditBatchRunner<VoucherRow>({
+    permGates: perms,
+    handlers: {
+      approve: (id: number) => service.approve(id),
+      revoke: (id: number) =>
+        service.revoke ? service.revoke(id) : Promise.reject(new Error('revoke unavailable')),
+      withdraw: (id: number) =>
+        service.withdraw ? service.withdraw(id) : Promise.reject(new Error('withdraw unavailable')),
+    },
+    onBatchComplete: handleAuditBatchSuccess,
+    auditEntity: {
+      entityType: auditEntityType,
+      entityName: miscAuditEntityName,
+    },
+  });
+
+  const incomeSaveSubmitSplit = kind === 'income' || kind === 'expense' || isExpenseApplication;
+
+  const incomeToolbarAuditMenus = useMemo(() => {
+    if (!incomeSaveSubmitSplit) {
+      return { submitItems: [] as UniBatchMenuItem[], auditItems: [] as UniBatchMenuItem[] };
+    }
+    const selected = tableRowsRef.current.filter((row) => selectedRowKeys.includes(row.id));
+    const reviewOf = (row: VoucherRow) => incomeReviewRaw(row);
+    const allowed = (row: VoucherRow, key: string) => pickCapability(row, key)?.allowed === true;
+    const run = (
+      records: VoucherRow[],
+      capabilityKey: string,
+      permAllowed: boolean,
+      onRun: (id: number) => Promise<unknown>,
+      notAllowedMessage?: string,
+    ) =>
+      runCapabilityBatchLoop({
+        keys: records.map((row) => Number(row.id)),
+        records,
+        capabilityKey,
+        permAllowed,
+        notAllowedMessage,
+        onRun,
+        onSuccess: () => {
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        },
+        message: messageApi,
+        t,
+      });
+    const submitRows = selected.filter((row) => allowed(row, 'submit'));
+    const canSubmit = Boolean(perms.canAction?.('submit'));
+    const submitDisabled = !selected.some((row) => allowed(row, 'submit'));
+    const onBatchSuccess = () => {
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    };
+    const commitFn = (id: number) => (service.commit ? service.commit(id) : service.submit(id));
+    const submitReviewFn = (id: number) =>
+      service.submitForReview
+        ? service.submitForReview(id)
+        : Promise.reject(new Error('submitForReview unavailable'));
+    const submitItems: UniBatchMenuItem[] = withDocumentSubmitCombinedItem(
+      [
+        {
+          key: 'submit',
+          label: t('common.submit'),
+          disabled: submitDisabled,
+          onClick: () => run(submitRows, 'submit', canSubmit, commitFn),
+        },
+        {
+          key: 'withdraw-submit',
+          label: t(`${i18nPrefix}.toolbar.withdrawSubmit`),
+          disabled: !selected.some((row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'withdraw_submit')),
+          onClick: () =>
+            run(
+              selected.filter((row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'withdraw_submit')),
+              'withdraw_submit',
+              canSubmit,
+              (id) => (service.withdraw ? service.withdraw(id) : Promise.reject(new Error('withdraw unavailable'))),
+            ),
+        },
+        {
+          key: 'submit-review',
+          label: t(`${i18nPrefix}.toolbar.submitReview`),
+          disabled: !selected.some((row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'submit_review')),
+          onClick: () =>
+            run(
+              selected.filter((row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'submit_review')),
+              'submit_review',
+              canSubmit,
+              submitReviewFn,
+              t(`${i18nPrefix}.toolbar.submitReviewNotAllowed`),
+            ),
+        },
+      ],
+      {
+        t,
+        message: messageApi,
+        disabled: submitDisabled,
+        commitRecords: submitRows,
+        permAllowed: canSubmit,
+        commit: commitFn,
+        submitReview: submitReviewFn,
+        onSuccess: onBatchSuccess,
+      },
+    );
+    const approveRows = selected.filter(
+      (row) => reviewOf(row) !== 'SUBMITTED' && isPendingReviewStatus(reviewOf(row)) && allowed(row, 'approve'),
+    );
+    const auditItems: UniBatchMenuItem[] = [
+      {
+        key: 'approve',
+        label: t('components.uniAction.audit'),
+        disabled: !selected.some(
+          (row) => reviewOf(row) !== 'SUBMITTED' && isPendingReviewStatus(reviewOf(row)) && allowed(row, 'approve'),
+        ),
+        onClick: () =>
+          void runMiscAuditBatch(
+            'approve',
+            approveRows.map((row) => Number(row.id)),
+            approveRows,
+            auditEnabled,
+          ),
+      },
+      {
+        key: 'withdraw-review',
+        label: t(`${i18nPrefix}.toolbar.withdrawReview`),
+        disabled: !selected.some(
+          (row) =>
+            reviewOf(row) !== 'SUBMITTED' && isPendingReviewStatus(reviewOf(row)) && allowed(row, 'withdraw_submit'),
+        ),
+        onClick: () =>
+          run(
+            selected.filter(
+              (row) =>
+                reviewOf(row) !== 'SUBMITTED'
+                && isPendingReviewStatus(reviewOf(row))
+                && allowed(row, 'withdraw_submit'),
+            ),
+            'withdraw_submit',
+            Boolean(perms.canAction?.('submit')),
+            (id) => (service.withdraw ? service.withdraw(id) : Promise.reject(new Error('withdraw unavailable'))),
+          ),
+      },
+      {
+        key: 'revoke',
+        label: t(`${i18nPrefix}.toolbar.revoke`),
+        disabled: !selected.some((row) => allowed(row, 'revoke_approval')),
+        onClick: () =>
+          run(
+            selected.filter((row) => allowed(row, 'revoke_approval')),
+            'revoke_approval',
+            Boolean(perms.canAction?.('revoke')),
+            (id) => (service.revoke ? service.revoke(id) : Promise.reject(new Error('revoke unavailable'))),
+          ),
+      },
+    ];
+    return { submitItems, auditItems };
+  }, [
+    incomeSaveSubmitSplit,
+    selectedRowKeys,
+    perms,
+    service,
+    messageApi,
+    t,
+    i18nPrefix,
+    runMiscAuditBatch,
+    auditEnabled,
+  ]);
+
+  const incomeReviewStatusEnum = useMemo(
+    () => ({
+      草稿: { text: t('app.kuaicaiwu.financeLifecycle.voucherDraft') },
+      SUBMITTED: { text: t('common.submitted') },
+      待审核: { text: t('app.kuaicaiwu.financeStatus.review.pending') },
+      已审核: { text: t('app.kuaicaiwu.financeStatus.review.approved') },
+      已驳回: { text: t('app.kuaicaiwu.financeStatus.review.rejected') },
+    }),
+    [t],
+  );
+
+  const miscWorkflowStatuses = useMemo(() => {
+    // 收支拆开审核后：业务 status 仍是 Draft/Confirmed；审核态在 review_status。
+    // UniWorkflowActions 须以 review_status 为 statusField，禁止把业务 Draft 当草稿。
+    if (incomeSaveSubmitSplit) {
+      return {
+        draftStatuses: ['草稿'],
+        pendingStatuses: ['待审核'],
+        approvedStatuses: ['已审核', '审核通过', '已通过', '通过'],
+        rejectedStatuses: ['已驳回', '驳回'],
+      };
+    }
+    return {
+      draftStatuses: ['Draft', '草稿'],
+      pendingStatuses: ['PendingReview', '待审核'],
+      approvedStatuses: ['Approved', 'Confirmed', '已审核', '已确认'],
+      rejectedStatuses: ['Rejected', '已驳回'],
+    };
+  }, [incomeSaveSubmitSplit]);
+  const miscWorkflowStatusField = incomeSaveSubmitSplit ? 'review_status' : 'status';
+
+  const reloadAfterWorkflow = useCallback(
+    (rowId?: number) => {
+      actionRef.current?.reload();
+      if (detailOpen && detailRow?.id != null && (rowId == null || detailRow.id === rowId)) {
+        void service.get(detailRow.id).then(setDetailRow).catch(() => {});
+      }
+    },
+    [detailOpen, detailRow?.id, service],
+  );
+
   const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
   const miscStatusEnum = useMemo(() => buildMiscVoucherStatusEnum(t), [t]);
   const renderMiscStatusTag = useCallback(
@@ -670,26 +887,6 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
     [detailOpen, detailRow, messageApi, service],
   );
 
-  const miscWorkflowStatuses = useMemo(
-    () => ({
-      draftStatuses: ['Draft', '草稿'],
-      pendingStatuses: ['PendingReview', '待审核'],
-      approvedStatuses: ['Approved', 'Confirmed', '已审核', '已确认'],
-      rejectedStatuses: ['Rejected', '已驳回'],
-    }),
-    [],
-  );
-
-  const reloadAfterWorkflow = useCallback(
-    (rowId?: number) => {
-      actionRef.current?.reload();
-      if (detailOpen && detailRow?.id != null && (rowId == null || detailRow.id === rowId)) {
-        void service.get(detailRow.id).then(setDetailRow).catch(() => {});
-      }
-    },
-    [detailOpen, detailRow?.id, service],
-  );
-
   const handleBatchDelete = useCallback(
     async (keys: React.Key[]) => {
       if (!keys.length) return;
@@ -717,11 +914,6 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
     },
     [detailRow?.id, i18nPrefix, messageApi, service, t],
   );
-
-  const handleAuditBatchSuccess = useCallback(() => {
-    setSelectedRowKeys([]);
-    actionRef.current?.reload();
-  }, []);
 
   const columns: ProColumns<VoucherRow>[] = useMemo(
     () =>
@@ -861,27 +1053,20 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
                 kind === 'income' ? t('app.kuaicaiwu.otherIncome.pushReceipt') : t('app.kuaicaiwu.otherExpense.pushPayment');
               if (perms.canAction?.('audit') && capAllowed(row, pushAction)) {
                 nodes.push(
-                  <ActionConfirmPopconfirm
-                    key="push-finance"
-                    title={pushLabel}
-                    description={t(`${i18nPrefix}.confirmPostDesc`, { code })}
-                    onConfirm={() => void runAction(pushLabel, () => service.confirm(row.id))}
-                  >
-                    <Button {...rowActionKind('execute')} onClick={(e) => e.stopPropagation()}>
-                      {pushLabel}
-                    </Button>
-                  </ActionConfirmPopconfirm>,
-                );
-              } else if (perms.canAction?.('audit') && capAllowed(row, 'confirm')) {
-                nodes.push(
-                  <ActionConfirmPopconfirm
-                    key="confirm"
-                    title={t(`${i18nPrefix}.confirmPostTitle`)}
-                    description={t(`${i18nPrefix}.confirmPostDesc`, { code })}
-                    onConfirm={() => void runAction(t(`${i18nPrefix}.confirm`), () => service.confirm(row.id))}
-                  >
-                    <Button {...rowActionKind('audit')} onClick={(e) => e.stopPropagation()} />
-                  </ActionConfirmPopconfirm>,
+                  <span {...rowActionKind('skip')} key="wf">
+                    <UniWorkflowActions
+                      {...rowActionKind('skip')}
+                      record={row}
+                      entityType={auditEntityType}
+                      auditNodeKey={auditEntityType}
+                      resourcePrefix={resource}
+                      workflowAuditEnabled={auditEnabled}
+                      entityName={t(menuTitleKey)}
+                      statusField={miscWorkflowStatusField}
+                      {...miscWorkflowStatuses}
+                      onSuccess={() => reloadAfterWorkflow(row.id)}
+                    />
+                  </span>,
                 );
               }
               if (perms.canAction?.('revoke') && capAllowed(row, 'unconfirm')) {
@@ -935,12 +1120,15 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
       kind,
       menuTitleKey,
       miscStatusEnum,
+      miscWorkflowStatusField,
       miscWorkflowStatuses,
       openDetail,
       openEdit,
       perms,
       reloadAfterWorkflow,
       renderMiscStatusTag,
+      renderMiscDocumentStatus,
+      resource,
       runAction,
       service,
       t,
@@ -1311,18 +1499,40 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
         loading={detailLoading}
         extra={
           detailRow ? (
-            <UniWorkflowActions
-              record={detailRow}
-              entityType={auditEntityType}
-              auditNodeKey={auditEntityType}
-              workflowAuditEnabled={auditEnabled}
-              entityName={t(menuTitleKey)}
-              statusField="status"
-              {...miscWorkflowStatuses}
-              theme="default"
-              size="medium"
-              onSuccess={() => reloadAfterWorkflow(detailRow.id)}
-            />
+            <Space>
+              <UniWorkflowActions
+                record={detailRow}
+                entityType={auditEntityType}
+                auditNodeKey={auditEntityType}
+                resourcePrefix={resource}
+                workflowAuditEnabled={auditEnabled}
+                entityName={t(menuTitleKey)}
+                statusField={miscWorkflowStatusField}
+                {...miscWorkflowStatuses}
+                theme="default"
+                size="middle"
+                onSuccess={() => reloadAfterWorkflow(detailRow.id)}
+              />
+              {isOtherExpenseDoc &&
+              perms.canPrint &&
+              detailRow.capabilities?.print?.allowed !== false ? (
+                <Button
+                  icon={<PrinterOutlined />}
+                  onClick={() =>
+                    openPrint({ documentType: 'other_expense', documentId: detailRow.id })
+                  }
+                >
+                  {t('components.uniAction.print')}
+                </Button>
+              ) : null}
+              {isExpenseApplication &&
+              detailRow.capabilities?.push_other_expense?.allowed &&
+              perms.canAction?.('push') ? (
+                <Button type="primary" onClick={() => void handlePushOtherExpense(detailRow)}>
+                  {t('app.kuaicaiwu.otherExpenseApplication.pushOtherExpense')}
+                </Button>
+              ) : null}
+            </Space>
           ) : null
         }
       >

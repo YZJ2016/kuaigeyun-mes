@@ -21,15 +21,22 @@ import {
 import { ProForm } from '@ant-design/pro-components';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import dayjs, { Dayjs } from 'dayjs';
+import type { Dayjs } from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import {
+  UniBatchMenuButton,
+  pickCapability,
+  runCapabilityBatchLoop,
+  useAuditBatchRunner,
+  type UniBatchMenuItem,
+} from '../../../../../components/uni-batch';
 import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
 import {
   partnerStatementService,
   PartnerStatement,
   PartnerStatementLine,
   PartnerStatementPreview,
+  type PartnerStatementAmountBasis,
 } from '../../../services/finance/partnerStatement';
 import {
   priceSettlementService,
@@ -65,9 +72,15 @@ import {
 import type { PartnerStatementListParams } from '../../../services/finance/partnerStatement';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
-import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { buildReportHelpViewConfig } from '../../../../../components/page-help-wiki';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import {
+  createListAuditPhaseColumn,
+  insertAuditPhaseColumnBeforeLifecycle,
+} from '../../../../kuaizhizao/pages/sales-management/shared/listAuditPhaseColumn';
+import { PartnerStatementPeriodQuickSelect } from './PartnerStatementPeriodQuickSelect';
+import { defaultPartnerStatementPeriodRange } from '../../../utils/partnerStatementPeriodQuick';
+import { PartnerStatementSettingsBar } from './PartnerStatementSettingsBar';
 const money = (v: number | string | undefined) =>
   formatCurrencyAmount(v ?? 0);
 
@@ -92,10 +105,10 @@ const PartnerStatementsPage: React.FC = () => {
   const { cache: previewLineDetailCache, loadLineDetail: loadPreviewLineDetail, clearCache: clearPreviewLineDetailCache } =
     usePartnerStatementInboundDetail();
   const [partnerId, setPartnerId] = useState<number | null>(null);
-  const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>(() => {
-    const month = dayjs().subtract(1, 'month');
-    return [month.startOf('month'), month.endOf('month')];
-  });
+  const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>(() => defaultPartnerStatementPeriodRange());
+  const [createAmountBasis, setCreateAmountBasis] =
+    useState<PartnerStatementAmountBasis>('tax_inclusive');
+  const [createLedgerMode, setCreateLedgerMode] = useState<'immediate' | 'by_invoice'>('immediate');
   const [partnerOptions, setPartnerOptions] = useState<{ label: string; value: number }[]>([]);
   const [createForm] = ProForm.useForm();
   const { message: messageApi } = App.useApp();
@@ -103,6 +116,176 @@ const PartnerStatementsPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { openFinanceVoucherDetail } = useFinanceVoucherDetail();
+  const partnerStatementAuditEnabled = useAuditRequired(PARTNER_STATEMENT_ENTITY, false);
+  const partnerStatementAuditColumn = useMemo(
+    () =>
+      createListAuditPhaseColumn<PartnerStatement>({
+        t,
+        auditEnabled: partnerStatementAuditEnabled,
+      }),
+    [t, partnerStatementAuditEnabled],
+  );
+  const {
+    runAction: runPartnerStatementAuditBatch,
+    auditModal: partnerStatementAuditModal,
+  } = useAuditBatchRunner<PartnerStatement>({
+    permGates: statementPerms,
+    handlers: {
+      approve: (id) => partnerStatementService.approveStatement(id),
+      revoke: (id) => partnerStatementService.revokeStatement(id),
+      withdraw: (id) => partnerStatementService.withdrawStatement(id),
+    },
+    onBatchComplete: () => {
+      setCustomerSelectedRowKeys([]);
+      setSupplierSelectedRowKeys([]);
+      customerActionRef.current?.reload();
+      supplierActionRef.current?.reload();
+    },
+    auditEntity: {
+      entityType: PARTNER_STATEMENT_ENTITY,
+      entityName: t(`${PS}.entityName`),
+    },
+  });
+  const customerSelectedRecordsForBatch = useMemo(
+    () => customerTableRows.filter((row) => row.id != null && customerSelectedRowKeys.includes(row.id)),
+    [customerTableRows, customerSelectedRowKeys],
+  );
+  const supplierSelectedRecordsForBatch = useMemo(
+    () => supplierTableRows.filter((row) => row.id != null && supplierSelectedRowKeys.includes(row.id)),
+    [supplierTableRows, supplierSelectedRowKeys],
+  );
+
+  const buildPartnerStatementToolbarAuditMenus = useCallback(
+    (
+      selectedRecords: PartnerStatement[],
+      onSuccess: () => void,
+    ): { submitItems: UniBatchMenuItem[]; auditItems: UniBatchMenuItem[] } => {
+      const reviewOf = (row: PartnerStatement) => String(row.review_status || '').trim();
+      const allowed = (row: PartnerStatement, key: string) =>
+        pickCapability(row, key)?.allowed === true;
+      const run = (
+        records: PartnerStatement[],
+        capabilityKey: string,
+        permAllowed: boolean,
+        onRun: (id: number) => Promise<unknown>,
+        notAllowedMessage?: string,
+      ) =>
+        runCapabilityBatchLoop({
+          keys: records.map((row) => Number(row.id)),
+          records,
+          capabilityKey,
+          permAllowed,
+          notAllowedMessage,
+          onRun,
+          onSuccess,
+          message: messageApi,
+          t,
+        });
+      const committedRows = selectedRecords.filter((row) => {
+        const st = String(row.status || '').trim();
+        const review = reviewOf(row);
+        if (allowed(row, 'withdraw_submit') && st === 'Confirmed' && (review === '草稿' || review === 'draft' || !review)) {
+          return true;
+        }
+        return review === 'SUBMITTED' && st === 'Draft' && allowed(row, 'withdraw_submit');
+      });
+      const pendingRows = selectedRecords.filter((row) => {
+        const review = reviewOf(row);
+        return (
+          review !== 'SUBMITTED' &&
+          isPendingReviewStatus(review) &&
+          allowed(row, 'withdraw_submit')
+        );
+      });
+      const reviewRows = selectedRecords.filter((row) => allowed(row, 'submit_review'));
+      const approveRows = selectedRecords.filter(
+        (row) =>
+          reviewOf(row) !== 'SUBMITTED' &&
+          isPendingReviewStatus(reviewOf(row)) &&
+          allowed(row, 'approve'),
+      );
+      const revokeRows = selectedRecords.filter((row) => allowed(row, 'revoke_approval'));
+      const canSubmit = statementPerms.canAction?.('submit') ?? false;
+      const canApprove = statementPerms.canAction?.('approve') ?? false;
+      const canRevoke = statementPerms.canAction?.('revoke') ?? false;
+      const hasSelection = selectedRecords.length > 0;
+      const submitItems: UniBatchMenuItem[] = [
+        {
+          key: 'submit-review',
+          label: t(`${PS}.toolbar.submitReview`),
+          disabled: hasSelection && !(canSubmit && reviewRows.length > 0),
+          onClick: () =>
+            run(
+              reviewRows,
+              'submit_review',
+              canSubmit,
+              (id) => partnerStatementService.submitStatementForReview(id),
+              t(`${PS}.toolbar.submitReviewNotAllowed`),
+            ),
+        },
+        {
+          key: 'withdraw-submit',
+          label: t(`${PS}.toolbar.withdrawSubmit`),
+          disabled: hasSelection && committedRows.length === 0,
+          onClick: () =>
+            run(committedRows, 'withdraw_submit', canSubmit, (id) =>
+              partnerStatementService.withdrawStatement(id),
+            ),
+        },
+      ];
+      const auditItems: UniBatchMenuItem[] = [
+        {
+          key: 'approve',
+          label: t('components.uniAction.audit'),
+          disabled: hasSelection && !(canApprove && approveRows.length > 0),
+          onClick: () =>
+            void runPartnerStatementAuditBatch(
+              'approve',
+              approveRows.map((row) => Number(row.id)),
+              approveRows,
+              partnerStatementAuditEnabled,
+            ),
+        },
+        {
+          key: 'withdraw-review',
+          label: t(`${PS}.toolbar.withdrawReview`),
+          disabled: hasSelection && pendingRows.length === 0,
+          onClick: () =>
+            run(pendingRows, 'withdraw_submit', canSubmit, (id) =>
+              partnerStatementService.withdrawStatement(id),
+            ),
+        },
+        {
+          key: 'revoke',
+          label: t(`${PS}.toolbar.revoke`),
+          disabled: hasSelection && !(canRevoke && revokeRows.length > 0),
+          onClick: () =>
+            run(revokeRows, 'revoke_approval', canRevoke, (id) =>
+              partnerStatementService.revokeStatement(id),
+            ),
+        },
+      ];
+      return { submitItems, auditItems };
+    },
+    [messageApi, statementPerms, t, runPartnerStatementAuditBatch, partnerStatementAuditEnabled],
+  );
+
+  const customerToolbarAuditMenus = useMemo(
+    () =>
+      buildPartnerStatementToolbarAuditMenus(customerSelectedRecordsForBatch, () => {
+        setCustomerSelectedRowKeys([]);
+        customerActionRef.current?.reload();
+      }),
+    [buildPartnerStatementToolbarAuditMenus, customerSelectedRecordsForBatch],
+  );
+  const supplierToolbarAuditMenus = useMemo(
+    () =>
+      buildPartnerStatementToolbarAuditMenus(supplierSelectedRecordsForBatch, () => {
+        setSupplierSelectedRowKeys([]);
+        supplierActionRef.current?.reload();
+      }),
+    [buildPartnerStatementToolbarAuditMenus, supplierSelectedRecordsForBatch],
+  );
 
   const handleDocCodeClick = useCallback(
     (line: PartnerStatementLine) => {
@@ -148,12 +331,13 @@ const PartnerStatementsPage: React.FC = () => {
     setPreviewSelectedRowKeys([]);
     setProvisionalSummary(null);
     setPartnerId(null);
-    const month = dayjs().subtract(1, 'month');
-    setDateRange([month.startOf('month'), month.endOf('month')]);
+    setDateRange(defaultPartnerStatementPeriodRange());
+    setCreateAmountBasis('tax_inclusive');
+    setCreateLedgerMode('immediate');
     createForm.resetFields();
   };
 
-  const handlePreview = async () => {
+  const handlePreview = async (basis: PartnerStatementAmountBasis = createAmountBasis) => {
     if (!partnerId) {
       messageApi.warning(t(`${PS}.selectPartner`));
       return;
@@ -167,6 +351,7 @@ const PartnerStatementsPage: React.FC = () => {
         start_date: periodRange.start.format('YYYY-MM-DD'),
         end_date: periodRange.end.format('YYYY-MM-DD'),
       });
+      setCreateAmountBasis(basis);
       setPreview(data);
       const recalc = recalcPartnerStatementLines(data.summary.opening_balance, data.lines || []);
       setPreviewEditableLines(recalc.lines);
@@ -208,6 +393,8 @@ const PartnerStatementsPage: React.FC = () => {
         end_date: periodRange.end.format('YYYY-MM-DD'),
         attachments: normalizeDocumentAttachments(createForm.getFieldValue('attachments')),
         line_amounts: buildLineAmountPayload(selectedLines),
+        ledger_posting_mode: createLedgerMode,
+        amount_basis: createAmountBasis,
       });
       messageApi.success(t(`${PS}.generateSuccess`));
       setCreateOpen(false);
@@ -268,7 +455,8 @@ const PartnerStatementsPage: React.FC = () => {
   const statusEnum = useMemo(() => buildPartnerStatementStatusEnum(t), [t]);
 
   const buildColumns = useMemo(
-    () => (type: 'Customer' | 'Supplier'): ProColumns<PartnerStatement>[] => [
+    () => (type: 'Customer' | 'Supplier'): ProColumns<PartnerStatement>[] => {
+      const cols: ProColumns<PartnerStatement>[] = [
       ...partnerStatementSearchColumns({
         statementCodeLabel: t(`${PS}.col.code`),
         partnerLabel: type === 'Customer' ? t(`${PS}.col.customerName`) : t(`${PS}.col.supplierName`),
@@ -357,9 +545,23 @@ const PartnerStatementsPage: React.FC = () => {
         valueEnum: statusEnum,
       },
       {
+        // 备注长短不一：唯一 RemainderFlex
+        title: t('common.remark'),
+        dataIndex: 'notes',
+        minWidth: 160,
+        uniTableRemainderFlex: true,
+        uniTablePrimaryFlex: true,
+        resizable: false,
+        hideInSearch: true,
+        ellipsis: true,
+        render: (_, r) => r.notes || '—',
+      },
+      ...financeDocCreatedUpdatedColumns<PartnerStatement>(t),
+      {
         title: t('common.status'),
+        key: 'lifecycle',
         dataIndex: 'status',
-        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+        fixed: 'right',
         hideInSearch: true,
         sorter: true,
         valueEnum: statusEnum,
@@ -375,23 +577,11 @@ const PartnerStatementsPage: React.FC = () => {
         },
       },
       {
-        // 备注长短不一：唯一 RemainderFlex
-        title: t('common.remark'),
-        dataIndex: 'notes',
-        minWidth: 160,
-        uniTableRemainderFlex: true,
-        uniTablePrimaryFlex: true,
-        resizable: false,
-        hideInSearch: true,
-        ellipsis: true,
-        render: (_, r) => r.notes || '—',
-      },
-      ...financeDocCreatedUpdatedColumns<PartnerStatement>(t),
-      {
         title: t('common.actions'),
         key: 'action',
         fixed: 'right',
         hideInSearch: true,
+        uniActionRenderOptions: { directMax: 2, minPrimaryVisible: 1 },
         render: (_, record) => {
           const acts: React.ReactNode[] = [
             <Button
@@ -416,8 +606,18 @@ const PartnerStatementsPage: React.FC = () => {
           return acts;
         },
       },
+    ];
+      return insertAuditPhaseColumnBeforeLifecycle(cols, partnerStatementAuditColumn);
+    },
+    [
+      t,
+      navigate,
+      statusEnum,
+      partnerOptions,
+      statementPerms.canDelete,
+      partnerStatementAuditEnabled,
+      partnerStatementAuditColumn,
     ],
-    [t, navigate, statusEnum, partnerOptions, statementPerms.canDelete],
   );
 
   const selectedPreviewLines = useMemo(
@@ -436,17 +636,22 @@ const PartnerStatementsPage: React.FC = () => {
     };
   }, [preview, selectedPreviewLines]);
 
-  const handlePreviewStatementAmountChange = (lineKey: string, amount: number) => {
-    setPreviewEditableLines((prev) => {
-      const next = prev.map((ln, idx) => {
-        const key = previewLineKey(ln, idx);
-        if (key !== lineKey) return ln;
-        return patchLineStatementAmount(ln, amount);
+  const handlePreviewStatementAmountChange = useCallback(
+    (lineKey: string, amount: number) => {
+      setPreviewEditableLines((prev) => {
+        let hit = false;
+        const patched = prev.map((ln, idx) => {
+          if (previewLineKey(ln, idx) !== lineKey) return ln;
+          hit = true;
+          return patchLineStatementAmount(ln, amount);
+        });
+        if (!hit) return prev;
+        const opening = Number(preview?.summary.opening_balance ?? 0);
+        return recalcPartnerStatementLines(opening, patched).lines;
       });
-      const opening = Number(preview?.summary.opening_balance ?? 0);
-      return recalcPartnerStatementLines(opening, next).lines;
-    });
-  };
+    },
+    [preview?.summary.opening_balance],
+  );
 
   const previewLineColumns = usePartnerStatementLineColumns({
     t,
@@ -496,7 +701,7 @@ const PartnerStatementsPage: React.FC = () => {
       selectedRowKeys={customerSelectedRowKeys}
       onRowSelectionChange={setCustomerSelectedRowKeys}
       rowKey="id"
-      columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Customer.list-v4"
+      columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Customer.list-v7"
       showAdvancedSearch
       viewTypes={['table', 'help']}
       helpViewConfig={buildReportHelpViewConfig()}
@@ -543,7 +748,7 @@ const PartnerStatementsPage: React.FC = () => {
       selectedRowKeys={supplierSelectedRowKeys}
       onRowSelectionChange={setSupplierSelectedRowKeys}
       rowKey="id"
-      columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Supplier.list-v4"
+      columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Supplier.list-v8"
       showAdvancedSearch
       viewTypes={['table', 'help']}
       helpViewConfig={buildReportHelpViewConfig()}
@@ -593,7 +798,6 @@ const PartnerStatementsPage: React.FC = () => {
       <MultiTabListPageTemplate
         activeTabKey={activeTab}
         onTabChange={(k) => setActiveTab(k as 'Customer' | 'Supplier' | 'Outsource')}
-        preserveMounted
         tabs={[
           { key: 'Customer', label: t(`${PS}.tabCustomer`), children: customerTable },
           { key: 'Supplier', label: t(`${PS}.tabSupplier`), children: supplierTable },
@@ -605,7 +809,7 @@ const PartnerStatementsPage: React.FC = () => {
                 headerTitle={t(`${PS}.tabOutsource`)}
                 actionRef={supplierActionRef}
                 rowKey="id"
-                columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Outsource.list-v1"
+                columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Outsource.list-v2"
                 request={tableRequest('Outsource')}
                 columns={alignProColumns(buildColumns('Supplier'), SALES_DOC_LIST_FIELD_RANK)}
                 skipFuzzyPinyinClientFilter
@@ -667,24 +871,32 @@ const PartnerStatementsPage: React.FC = () => {
                 String(opt?.label ?? '').toLowerCase().includes(input.toLowerCase())
               }
             />
-            <DatePicker.RangePicker
-              allowClear={false}
+            <PartnerStatementPeriodQuickSelect
               value={dateRange}
-              onChange={(v) => {
-                if (v?.[0] && v?.[1]) {
-                  setDateRange([v[0].startOf('day'), v[1].endOf('day')]);
-                }
+              startPlaceholder={t(`${PS}.startDate`)}
+              endPlaceholder={t(`${PS}.endDate`)}
+              onPeriodCleared={() => {
                 clearPreviewLineDetailCache();
                 setPreview(null);
                 setPreviewEditableLines([]);
                 setPreviewSelectedRowKeys([]);
               }}
-              placeholder={[t(`${PS}.startDate`), t(`${PS}.endDate`)]}
+              onChange={setDateRange}
             />
           </Space>
-
           {preview ? (
             <>
+              <PartnerStatementSettingsBar
+                showLedger={preview.partner_uses_statement_ledger === true}
+                ledgerMode={createLedgerMode}
+                amountBasis={createAmountBasis}
+                headerBusy={previewLoading}
+                onLedgerChange={setCreateLedgerMode}
+                onAmountBasisChange={(next) => {
+                  setCreateAmountBasis(next);
+                  void handlePreview(next);
+                }}
+              />
               {provisionalSummary && provisionalSummary.provisional_line_count > 0 ? (
                 <Alert
                   type="warning"
@@ -745,7 +957,7 @@ const PartnerStatementsPage: React.FC = () => {
                 })}
                 style={{ marginBottom: 8 }}
               />
-              <Descriptions size="small" bordered column={4}>
+              <Descriptions size="small" bordered column={2}>
                 <Descriptions.Item label={t(`${PS}.col.partner`)}>{preview.partner_name}</Descriptions.Item>
                 <Descriptions.Item label={t(`${PS}.col.periodRange`)}>
                   {preview.start_date} ~ {preview.end_date}

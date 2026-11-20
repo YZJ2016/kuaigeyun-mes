@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from tortoise.queryset import Q
 
@@ -521,6 +521,8 @@ class SalesInvoiceService(AppBaseService[Invoice]):
         self,
         tenant_id: int,
         delivery_id: int,
+        *,
+        partner_statement_ids: Optional[Sequence[int]] = None,
     ) -> Dict[str, Any]:
         from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 
@@ -531,9 +533,25 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             raise NotFoundError(f"销售出库单不存在: {delivery_id}")
 
         status = str(getattr(delivery, "status", "") or "").strip()
-        source_allowed = status in self._SD_ELIGIBLE_STATUSES and Decimal(
-            str(delivery.total_amount or 0)
-        ) > 0
+        from apps.kuaizhizao.services.document_recognition import (
+            sales_delivery_direct_invoice_pull_block_reason,
+        )
+
+        ledger_block = sales_delivery_direct_invoice_pull_block_reason(delivery)
+        if ledger_block and partner_statement_ids:
+            from apps.kuaicaiwu.services.partner_statement_invoice_pull import (
+                deliveries_covered_by_audited_partner_statements,
+            )
+
+            if await deliveries_covered_by_audited_partner_statements(
+                tenant_id, partner_statement_ids, [delivery_id]
+            ):
+                ledger_block = None
+        source_allowed = (
+            status in self._SD_ELIGIBLE_STATUSES
+            and Decimal(str(delivery.total_amount or 0)) > 0
+            and ledger_block is None
+        )
         preview_items = await self._build_preview_items_for_sales_delivery(tenant_id, delivery)
         allowed, reason = self._derive_pull_capability(
             source_allowed=source_allowed,
@@ -555,7 +573,7 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             )
             if linked_order is not None:
                 price_type = normalize_price_type(getattr(linked_order, "price_type", None))
-        return {
+        preview: Dict[str, Any] = {
             "target_type": "sales_invoice",
             "source_type": "sales_delivery",
             "source_id": delivery_id,
@@ -574,7 +592,142 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             "sales_order_id": getattr(delivery, "sales_order_id", None),
             "sales_order_code": getattr(delivery, "sales_order_code", None),
             "price_type": price_type,
+            "max_push_total": pushable,
         }
+        if partner_statement_ids:
+            from apps.kuaicaiwu.services.partner_statement_invoice_pull import (
+                apply_invoice_budget_to_pull_preview,
+                resolve_budget_for_statements,
+            )
+
+            budget = await resolve_budget_for_statements(
+                tenant_id,
+                partner_statement_ids,
+                side="sales",
+                restrict_source_ids=[delivery_id],
+            )
+            apply_invoice_budget_to_pull_preview(preview, budget)
+            cap_f = float(budget.invoiceable)
+            if preview_items and allowed and not ledger_block and cap_f > 0:
+                preview["has_blocking_issues"] = False
+                preview["summary"] = (
+                    f"将从对账单关联出库 {code} 创建销售发票（可开票 ¥{cap_f:,.2f}）"
+                )
+            elif cap_f <= 0:
+                preview["has_blocking_issues"] = True
+        return preview
+
+    @staticmethod
+    def _normalize_delivery_source_ids(source_ids: Sequence[int]) -> List[int]:
+        ordered: List[int] = []
+        seen: set[int] = set()
+        for raw in source_ids:
+            sid = int(raw)
+            if sid <= 0 or sid in seen:
+                continue
+            seen.add(sid)
+            ordered.append(sid)
+        if not ordered:
+            raise BusinessLogicError("请至少选择一张源单")
+        return ordered
+
+    async def preview_pull_from_sales_deliveries(
+        self,
+        tenant_id: int,
+        delivery_ids: Sequence[int],
+        *,
+        partner_statement_ids: Optional[Sequence[int]] = None,
+    ) -> Dict[str, Any]:
+        ids = self._normalize_delivery_source_ids(delivery_ids)
+        if len(ids) == 1:
+            return await self.preview_pull_from_sales_delivery(
+                tenant_id,
+                ids[0],
+                partner_statement_ids=partner_statement_ids,
+            )
+
+        merged_items: List[Dict[str, Any]] = []
+        blocking_reasons: List[str] = []
+        customer_id: Optional[int] = None
+        customer_name: Optional[str] = None
+        codes: List[str] = []
+        sales_order_id: Optional[int] = None
+        sales_order_code: Optional[str] = None
+        price_type = DEFAULT_SALES_PRICE_TYPE
+
+        for did in ids:
+            fragment = await self.preview_pull_from_sales_delivery(
+                tenant_id,
+                did,
+                partner_statement_ids=partner_statement_ids,
+            )
+            if customer_id is None:
+                customer_id = int(fragment.get("customer_id") or 0)
+                customer_name = str(fragment.get("customer_name") or "")
+            elif int(fragment.get("customer_id") or 0) != int(customer_id or 0):
+                raise BusinessLogicError("多笔一起加载须为同一客户")
+
+            codes.append(str(fragment.get("source_code") or did))
+            if fragment.get("has_blocking_issues"):
+                reason = str(fragment.get("blocking_reason") or "")
+                if reason:
+                    blocking_reasons.append(reason)
+            merged_items.extend(fragment.get("items") or [])
+            if sales_order_id is None and fragment.get("sales_order_id"):
+                sales_order_id = int(fragment["sales_order_id"])
+                sales_order_code = str(fragment.get("sales_order_code") or "") or None
+            if fragment.get("price_type"):
+                price_type = normalize_price_type(fragment.get("price_type"))
+
+        max_push_total = sum(
+            Decimal(str(item.get("max_push_quantity") or 0)) for item in merged_items
+        )
+        allowed = not blocking_reasons and max_push_total > 0
+        joined_codes = "、".join(codes)
+        preview: Dict[str, Any] = {
+            "target_type": "sales_invoice",
+            "source_type": "sales_delivery",
+            "source_id": ids[0],
+            "source_ids": ids,
+            "source_code": joined_codes,
+            "summary": (
+                f"将从 {len(ids)} 张销售出库单创建销售发票（可开票合计 ¥{float(max_push_total):,.2f}）"
+                if allowed
+                else "所选出库单当前不可一起加载销售发票"
+            ),
+            "items": merged_items,
+            "has_blocking_issues": not allowed,
+            "blocking_reason": blocking_reasons[0] if blocking_reasons else None,
+            "tip": "价税合计不可超过可开票金额；删除未审核销售发票后，可开票金额自动回退。",
+            "customer_id": customer_id,
+            "customer_name": customer_name,
+            "sales_order_id": sales_order_id,
+            "sales_order_code": sales_order_code,
+            "price_type": price_type,
+            "max_push_total": float(max_push_total),
+        }
+        if partner_statement_ids:
+            from apps.kuaicaiwu.services.partner_statement_invoice_pull import (
+                apply_invoice_budget_to_pull_preview,
+                resolve_budget_for_statements,
+            )
+
+            budget = await resolve_budget_for_statements(
+                tenant_id,
+                partner_statement_ids,
+                side="sales",
+                restrict_source_ids=ids,
+            )
+            apply_invoice_budget_to_pull_preview(preview, budget)
+            cap_f = float(budget.invoiceable)
+            if allowed and cap_f > 0:
+                preview["has_blocking_issues"] = False
+                preview["summary"] = (
+                    f"将从对账单关联 {len(ids)} 张出库创建销售发票（可开票合计 ¥{cap_f:,.2f}）"
+                )
+            elif cap_f <= 0:
+                preview["has_blocking_issues"] = True
+        return preview
 
     async def preview_pull_from_receivable(
         self,
@@ -859,7 +1012,8 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             partner_type="Customer",
-            status__in=["Confirmed", "Sent"],
+            status__in=["Confirmed", "Sent", "LedgerPosted"],
+            review_status__in=["已审核", "approved", "APPROVED"],
         )
         kw = str(keyword or "").strip()
         if kw:
@@ -923,11 +1077,16 @@ class SalesInvoiceService(AppBaseService[Invoice]):
         source_type: str,
         source_id: int,
         total_amount: Decimal,
+        partner_statement_ids: Optional[Sequence[int]] = None,
     ) -> Dict[str, Any]:
         if source_type == "sales_order":
             preview = await self.preview_pull_from_sales_order(tenant_id, source_id)
         elif source_type == "sales_delivery":
-            preview = await self.preview_pull_from_sales_delivery(tenant_id, source_id)
+            preview = await self.preview_pull_from_sales_delivery(
+                tenant_id,
+                source_id,
+                partner_statement_ids=partner_statement_ids,
+            )
         elif source_type == "receivable":
             preview = await self.preview_pull_from_receivable(tenant_id, source_id)
         else:
@@ -938,9 +1097,27 @@ class SalesInvoiceService(AppBaseService[Invoice]):
         items = preview.get("items") or []
         if not items:
             raise BusinessLogicError("无可开票金额")
-        max_push = Decimal(str(items[0].get("max_push_quantity") or 0))
-        if money_exceeds_max(total_amount, max_push):
-            raise BusinessLogicError(f"价税合计 {total_amount} 超过可开票金额 {max_push}")
+        from apps.kuaicaiwu.services.partner_statement_invoice_pull import (
+            resolve_pull_preview_invoice_cap,
+        )
+
+        if partner_statement_ids and source_type in ("sales_delivery", "receivable"):
+            from apps.kuaicaiwu.services.partner_statement_invoice_pull import (
+                enforce_partner_statement_invoice_total,
+            )
+
+            restrict_ids = [int(source_id)]
+            await enforce_partner_statement_invoice_total(
+                tenant_id,
+                partner_statement_ids,
+                side="sales",
+                restrict_source_ids=restrict_ids,
+                total_amount=total_amount,
+            )
+        else:
+            max_push = resolve_pull_preview_invoice_cap(preview)
+            if money_exceeds_max(total_amount, max_push):
+                raise BusinessLogicError(f"价税合计 {total_amount} 超过可开票金额 {max_push}")
         return preview
 
     async def create_pull_relation(

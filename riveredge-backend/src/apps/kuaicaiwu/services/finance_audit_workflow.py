@@ -69,7 +69,17 @@ async def _auto_approve_finance(
         "updated_by_name": approver_name,
     }
     if node_key == "purchase_invoice":
-        patch["status"] = "已审核"
+        patch["status"] = "已开票"
+    prior_partner_review: str = ""
+    if node_key == "partner_statement":
+        doc = await model.get_or_none(tenant_id=tenant_id, id=doc_id, deleted_at__isnull=True)
+        prior_partner_review = _norm_review(getattr(doc, "review_status", None))
+        biz_status = str(getattr(doc, "status", "") or "").strip()
+        if biz_status in ("Draft", "Disputed"):
+            patch["status"] = "Confirmed"
+            if getattr(doc, "confirmed_at", None) is None:
+                patch["confirmed_at"] = now
+                patch["confirmed_by"] = updated_by
     await model.filter(tenant_id=tenant_id, id=doc_id).update(**patch)
     if node_key == "purchase_invoice":
         from apps.kuaicaiwu.services.purchase_invoice_payable_auto import (
@@ -81,6 +91,22 @@ async def _auto_approve_finance(
             invoice_id=doc_id,
             user_id=updated_by,
         )
+    elif node_key == "partner_statement":
+        from apps.kuaicaiwu.services.partner_statement_service import (
+            PartnerStatementService,
+        )
+
+        svc = PartnerStatementService()
+        landing = prior_partner_review if prior_partner_review in _PENDING_REVIEW else "草稿"
+        try:
+            await svc._auto_post_ledger_if_immediate_after_review_approve(
+                tenant_id, doc_id, updated_by
+            )
+        except Exception:
+            await svc._rollback_review_after_immediate_post_failure(
+                tenant_id, doc_id, landing_review_status=landing
+            )
+            raise
 
 
 async def submit_finance_review(
@@ -262,4 +288,6 @@ async def revoke_finance_review(
     }
     if node_key == "purchase_invoice":
         patch["status"] = "未审核"
+    if node_key == "partner_statement":
+        patch["status"] = "Confirmed"
     await model.filter(tenant_id=tenant_id, id=doc_id).update(**patch)

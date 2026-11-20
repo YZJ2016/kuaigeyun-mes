@@ -205,6 +205,10 @@ class PurchaseInvoiceCreate(PurchaseInvoiceBase):
     concurrent_settlement: Optional[ConcurrentSettlementCreate] = Field(
         None, description="从应付开票时可选：同时生成付款单"
     )
+    partner_statement_ids: Optional[List[int]] = Field(
+        None,
+        description="从往来对账单（按发票立账）加载入库开票时须传入对账单ID，用于放行月结阻断",
+    )
 
 
 class PurchaseInvoiceUpdate(BaseSchema):
@@ -683,6 +687,10 @@ class SalesInvoiceCreate(SalesInvoiceBase):
     concurrent_settlement: Optional[ConcurrentSettlementCreate] = Field(
         None, description="从应收开票时可选：同时生成收款单"
     )
+    partner_statement_ids: Optional[List[int]] = Field(
+        None,
+        description="从往来对账单（按发票立账）加载出库开票时须传入对账单ID",
+    )
 
 
 class SalesInvoiceUpdate(BaseSchema):
@@ -808,6 +816,21 @@ class PartnerStatementUpdateLinesRequest(BaseSchema):
     lines: List[PartnerStatementLineAmountInput] = Field(..., min_length=1)
 
 
+class PartnerStatementUpdateHeaderRequest(BaseSchema):
+    ledger_posting_mode: Optional[str] = Field(
+        None, description="立账方式 immediate 或 by_invoice"
+    )
+
+
+class PartnerStatementRefreshPreviewRequest(BaseSchema):
+    amount_basis: str = Field(..., description="tax_inclusive 或 tax_exclusive")
+
+
+class PartnerStatementRefreshPreviewResponse(BaseSchema):
+    warnings: List[str] = Field(default_factory=list)
+    statement: "PartnerStatementResponse"
+
+
 class PartnerStatementLineDetailItemResponse(BaseSchema):
     material_code: str
     material_name: str
@@ -861,6 +884,10 @@ class PartnerStatementPreviewResponse(BaseSchema):
     )
     existing_period_statement_code: Optional[str] = None
     existing_period: Optional[str] = None
+    partner_uses_statement_ledger: bool = Field(
+        False,
+        description="是否展示立账方式（客商按月结或明细含月结业务源单）",
+    )
 
 
 class PartnerStatementCreate(BaseSchema):
@@ -916,6 +943,9 @@ class PartnerStatementResponse(BaseSchema):
     ledger_posting_mode: Optional[str] = "immediate"
     ledger_posted_at: Optional[datetime] = None
     ledger_posted_by: Optional[int] = None
+    partner_uses_statement_ledger: Optional[bool] = Field(
+        None, description="往来是否启用按月结对账单立账（仅 API 组装）"
+    )
     created_by: Optional[int] = None
     created_by_name: Optional[str] = None
     updated_by: Optional[int] = None

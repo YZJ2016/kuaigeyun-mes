@@ -231,6 +231,17 @@ async def ensure_payable_after_purchase_invoice_approved(
     payable_id = auto_id or (
         int(invoice.payable_id) if getattr(invoice, "payable_id", None) else None
     )
+
+    from apps.kuaicaiwu.services.partner_statement_service import (
+        PartnerStatementService,
+    )
+
+    await PartnerStatementService().try_complete_ledger_after_purchase_invoice_approved(
+        tenant_id=tenant_id,
+        invoice_id=invoice_id,
+        operator_id=user_id,
+    )
+
     if not payable_id:
         return None
 

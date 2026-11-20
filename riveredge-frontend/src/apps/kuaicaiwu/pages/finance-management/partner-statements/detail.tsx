@@ -2,8 +2,22 @@
  * 往来对账单详情页（快制造财务管理；启用轻财务后由 kuaicaiwu 托管菜单）
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Descriptions, Dropdown, Input, Space, Spin, Table, Tag, Typography, message } from 'antd';
+import {
+  Alert,
+  Button,
+  Descriptions,
+  Dropdown,
+  Input,
+  Space,
+  Spin,
+  Table,
+  Typography,
+  message,
+} from 'antd';
 import { DownOutlined } from '@ant-design/icons';
+import MergeFinanceDocsModal, {
+  type MergeFinanceSourceRow,
+} from '../../../components/MergeFinanceDocsModal';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -14,6 +28,7 @@ import {
 import {
   partnerStatementService,
   PartnerStatement,
+  PartnerStatementAmountBasis,
   PartnerStatementLine,
   downloadBlob,
 } from '../../../services/finance/partnerStatement';
@@ -21,14 +36,13 @@ import {
   partnerStatementExpandableProps,
   usePartnerStatementInboundDetail,
 } from '../../../components/PartnerStatementInboundDetail';
-import MergeFinanceDocsModal, {
-  type MergeFinanceSourceRow,
-} from '../../../components/MergeFinanceDocsModal';
 import {
   buildPartnerStatementStatusEnum,
   formatSentChannel,
-  getSentChannelOptions,
+  shouldShowPartnerStatementReviewApprovedBadge,
 } from '../../../utils/financeSharedOptions';
+import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { formatDateTime, formatCurrencyAmount } from '../../../../../utils/format';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import {
@@ -47,37 +61,64 @@ import {
   collectStatementInvoiceLines,
   invoiceSourceDocTypeForMode,
 } from '../../../utils/partnerStatementInvoicePull';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { PartnerStatementSettingsBar } from './PartnerStatementSettingsBar';
 
 const PS = 'app.kuaicaiwu.partnerStatement';
 const PARTNER_STATEMENT_RESOURCE = 'kuaicaiwu:partner-statement';
 
-function collectPayableStatementLines(lines: PartnerStatementLine[]): PartnerStatementLine[] {
-  return collectStatementInvoiceLines(lines, 'Supplier', 'immediate');
-}
-
-function statementInvoiceEmptyMessageKey(
-  partnerType: string,
-  ledgerPostingMode?: string | null,
-): string {
-  const docType = invoiceSourceDocTypeForMode(partnerType, ledgerPostingMode);
-  if (docType === '销售出库') return `${PS}.detail.pushSelectDelivery`;
-  if (docType === '应收单') return `${PS}.detail.pushSelectReceivable`;
-  if (docType === '采购入库') return `${PS}.detail.pushSelectPurchaseReceipt`;
-  return `${PS}.detail.pushSelectPayable`;
-}
-
-function linePushAmount(ln: PartnerStatementLine): number {
-  return Number(ln.statement_amount ?? ln.remaining_amount ?? ln.doc_amount ?? ln.debit ?? 0);
-}
-
 const money = (v: number | string | undefined) =>
   formatCurrencyAmount(v ?? 0);
+
+function resolveStatementAmountBasis(
+  data: PartnerStatement | null,
+): PartnerStatementAmountBasis {
+  const basis = data?.transaction_details?.amount_basis;
+  return basis === 'tax_exclusive' ? 'tax_exclusive' : 'tax_inclusive';
+}
+
+function resolveStatementLedgerMode(data: PartnerStatement | null): 'immediate' | 'by_invoice' {
+  return data?.ledger_posting_mode === 'by_invoice' ? 'by_invoice' : 'immediate';
+}
+
+function PartnerStatementHeaderControls({
+  data,
+  editable,
+  linesDirty,
+  headerBusy,
+  onLedgerChange,
+  onAmountBasisChange,
+}: {
+  data: PartnerStatement;
+  editable: boolean;
+  linesDirty: boolean;
+  headerBusy: boolean;
+  onLedgerChange: (mode: 'immediate' | 'by_invoice') => void;
+  onAmountBasisChange: (basis: PartnerStatementAmountBasis) => void;
+}) {
+  if (!editable) {
+    return null;
+  }
+  return (
+    <PartnerStatementSettingsBar
+      showLedger={data.partner_uses_statement_ledger === true}
+      ledgerMode={resolveStatementLedgerMode(data)}
+      amountBasis={resolveStatementAmountBasis(data)}
+      headerBusy={headerBusy}
+      blockAmountBasisChange={linesDirty}
+      onLedgerChange={onLedgerChange}
+      onAmountBasisChange={onAmountBasisChange}
+    />
+  );
+}
 
 const PartnerStatementDetailPage: React.FC = () => {
   const { t } = useTranslation();
   const statementPerms = useResourcePermissions(PARTNER_STATEMENT_RESOURCE);
   const paymentApplicationPerms = useResourcePermissions('kuaizhizao:payment-application');
   const purchaseInvoicePerms = useResourcePermissions('kuaicaiwu:purchase-invoice');
+  const partnerStatementAuditEnabled = useAuditRequired(PARTNER_STATEMENT_ENTITY, false);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const printRef = useRef<HTMLDivElement>(null);
@@ -91,46 +132,24 @@ const PartnerStatementDetailPage: React.FC = () => {
     closing_balance?: number;
   } | null>(null);
   const [linesDirty, setLinesDirty] = useState(false);
+  const linesDirtyRef = useRef(false);
+  linesDirtyRef.current = linesDirty;
   const [savingLines, setSavingLines] = useState(false);
   const [exporting, setExporting] = useState<'xlsx' | 'pdf' | null>(null);
   const [pushingPaymentApp, setPushingPaymentApp] = useState(false);
   const [pushingInvoice, setPushingInvoice] = useState(false);
   const [mergeInvoiceOpen, setMergeInvoiceOpen] = useState(false);
   const [mergeInvoiceSources, setMergeInvoiceSources] = useState<MergeFinanceSourceRow[]>([]);
+  const [headerBusy, setHeaderBusy] = useState(false);
   const { cache: lineDetailCache, loadLineDetail, clearCache: clearLineDetailCache } = usePartnerStatementInboundDetail();
 
   const statusEnum = useMemo(() => buildPartnerStatementStatusEnum(t), [t]);
-  const sentChannelOptions = useMemo(() => getSentChannelOptions(t), [t]);
 
-  const load = useCallback(async () => {
-    if (!id) return;
-    setLoading(true);
-    clearLineDetailCache();
-    try {
-      const res = await partnerStatementService.get(Number(id));
-      setData(res);
-    } catch (e: any) {
-      message.error(e?.message || t('common.loadFailed'));
-    } finally {
-      setLoading(false);
-    }
-  }, [clearLineDetailCache, id, t]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
-    if (!data) {
-      setLocalLines([]);
-      setLocalSummary(null);
-      setLinesDirty(false);
-      return;
-    }
+  const hydrateWorkingLinesFromStatement = useCallback((statement: PartnerStatement) => {
     const opening = Number(
-      data.transaction_details?.summary?.opening_balance ?? data.opening_balance ?? 0,
+      statement.transaction_details?.summary?.opening_balance ?? statement.opening_balance ?? 0,
     );
-    const srcLines = data.transaction_details?.lines || [];
+    const srcLines = statement.transaction_details?.lines || [];
     const recalc = recalcPartnerStatementLines(opening, srcLines);
     setLocalLines(recalc.lines);
     setLocalSummary({
@@ -139,37 +158,98 @@ const PartnerStatementDetailPage: React.FC = () => {
       credit_total: recalc.creditTotal,
       closing_balance: recalc.closingBalance,
     });
-    setLinesDirty(false);
-  }, [data]);
+  }, []);
+
+  const load = useCallback(async () => {
+    if (!id) return;
+    setLoading(true);
+    clearLineDetailCache();
+    try {
+      const res = await partnerStatementService.get(Number(id));
+      setData(res);
+      // 工作中副本唯一由 hydrate 写入；有未保存改数时禁止用接口回包覆盖
+      if (!linesDirtyRef.current) {
+        hydrateWorkingLinesFromStatement(res);
+      }
+    } catch (e: any) {
+      message.error(e?.message || t('common.loadFailed'));
+    } finally {
+      setLoading(false);
+    }
+  }, [clearLineDetailCache, hydrateWorkingLinesFromStatement, id, message, t]);
+
+  useEffect(() => {
+    if (!id) {
+      setData(null);
+      setLocalLines([]);
+      setLocalSummary(null);
+      setLinesDirty(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      clearLineDetailCache();
+      try {
+        const res = await partnerStatementService.get(Number(id));
+        if (cancelled) return;
+        setData(res);
+        hydrateWorkingLinesFromStatement(res);
+        setLinesDirty(false);
+      } catch (e: unknown) {
+        if (!cancelled) {
+          const err = e as { message?: string };
+          message.error(err?.message || t('common.loadFailed'));
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [clearLineDetailCache, hydrateWorkingLinesFromStatement, id, message, t]);
 
   const linesEditable =
     !!data &&
-    (data.status === 'Draft' || data.status === 'Disputed') &&
+    (data.status === 'Draft' ||
+      data.status === 'Disputed' ||
+      (data.status === 'Confirmed' && reviewEditable)) &&
+    reviewEditable &&
     statementPerms.canUpdate;
 
   const handleStatementAmountChange = useCallback(
     (lineKey: string, amount: number) => {
+      setLinesDirty(true);
       setLocalLines((prev) => {
-        const next = prev.map((ln, idx) => {
-          const key = `${ln.doc_type}-${ln.doc_id}-${idx}`;
-          if (key !== lineKey) return ln;
+        let hit = false;
+        const patched = prev.map((ln, idx) => {
+          if (previewLineKey(ln, idx) !== lineKey) return ln;
+          hit = true;
           return patchLineStatementAmount(ln, amount);
         });
+        if (!hit) return prev;
         const opening = Number(
-          localSummary?.opening_balance ?? data?.opening_balance ?? 0,
+          localSummary?.opening_balance ??
+            data?.transaction_details?.summary?.opening_balance ??
+            data?.opening_balance ??
+            0,
         );
-        const recalc = recalcPartnerStatementLines(opening, next);
-        setLocalSummary((s) => ({
-          ...s,
+        const recalc = recalcPartnerStatementLines(opening, patched);
+        setLocalSummary({
+          opening_balance: opening,
           debit_total: recalc.debitTotal,
           credit_total: recalc.creditTotal,
           closing_balance: recalc.closingBalance,
-        }));
+        });
         return recalc.lines;
       });
-      setLinesDirty(true);
     },
-    [data?.opening_balance, localSummary?.opening_balance],
+    [
+      data?.opening_balance,
+      data?.transaction_details?.summary?.opening_balance,
+      localSummary?.opening_balance,
+    ],
   );
 
   const lineKeyFn = useCallback(
@@ -213,6 +293,60 @@ const PartnerStatementDetailPage: React.FC = () => {
     onDocCodeClick: handleDocCodeClick,
   });
 
+  const handleLedgerPostingModeChange = useCallback(
+    (mode: 'immediate' | 'by_invoice') => {
+      if (!data) return;
+      if (mode === resolveStatementLedgerMode(data)) {
+        return;
+      }
+      void (async () => {
+        setHeaderBusy(true);
+        try {
+          await partnerStatementService.updateHeader(data.id, { ledger_posting_mode: mode });
+          message.success(t('common.saveSuccess'));
+          await load();
+        } catch (e: unknown) {
+          const err = e as { message?: string };
+          message.error(err.message || t('common.saveFailed'));
+        } finally {
+          setHeaderBusy(false);
+        }
+      })();
+    },
+    [data, load, t],
+  );
+
+  const handleAmountBasisChange = useCallback(
+    (next: PartnerStatementAmountBasis) => {
+      if (!data) return;
+      getAntdModal().confirm({
+        title: t(`${PS}.detail.refreshPreviewTitle`),
+        content: t(`${PS}.detail.refreshPreviewContent`),
+        onOk: async () => {
+          setHeaderBusy(true);
+          try {
+            const res = await partnerStatementService.refreshPreview(data.id, { amount_basis: next });
+            if (res.warnings.length > 0) {
+              message.warning(res.warnings.join('；'));
+            } else {
+              message.success(t('common.saveSuccess'));
+            }
+            setData(res.statement);
+            hydrateWorkingLinesFromStatement(res.statement);
+            setLinesDirty(false);
+          } catch (e: unknown) {
+            const err = e as { message?: string };
+            message.error(err.message || t('common.saveFailed'));
+            throw e;
+          } finally {
+            setHeaderBusy(false);
+          }
+        },
+      });
+    },
+    [data, hydrateWorkingLinesFromStatement, t],
+  );
+
   const handleSaveLines = async () => {
     if (!data) return;
     setSavingLines(true);
@@ -226,61 +360,6 @@ const PartnerStatementDetailPage: React.FC = () => {
     } finally {
       setSavingLines(false);
     }
-  };
-
-  const handleConfirm = () => {
-    if (!data) return;
-    if (linesDirty) {
-      message.warning(t(`${PS}.detail.saveLinesBeforeConfirm`));
-      return;
-    }
-    getAntdModal().confirm({
-      title: t(`${PS}.detail.confirmTitle`),
-      content: t(`${PS}.detail.confirmContent`, { code: data.statement_code }),
-      onOk: async () => {
-        await partnerStatementService.confirm(data.id);
-        message.success(t(`${PS}.detail.confirmed`));
-        load();
-      },
-    });
-  };
-
-  const handleMarkSent = () => {
-    if (!data) return;
-    let channel = 'wechat_manual';
-    let notes = '';
-    getAntdModal().confirm({
-      title: t(`${PS}.detail.markSentTitle`),
-      width: 480,
-      content: (
-        <Space orientation="vertical" style={{ width: '100%', marginTop: 12 }}>
-          <Typography.Text type="secondary">
-            {t(`${PS}.detail.markSentHint`)}
-          </Typography.Text>
-          <div>
-            <Typography.Text>{t(`${PS}.detail.sentChannel`)}</Typography.Text>
-            <select
-              defaultValue={channel}
-              style={{ width: '100%', marginTop: 4, padding: '4px 8px' }}
-              onChange={(e) => { channel = e.target.value; }}
-            >
-              {sentChannelOptions.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <Typography.Text>{t(`${PS}.detail.sentNotes`)}</Typography.Text>
-            <Input.TextArea rows={2} style={{ marginTop: 4 }} onChange={(e) => { notes = e.target.value; }} />
-          </div>
-        </Space>
-      ),
-      onOk: async () => {
-        await partnerStatementService.markSent(data.id, { channel, notes: notes.trim() || undefined });
-        message.success(t(`${PS}.detail.markedSent`));
-        load();
-      },
-    });
   };
 
   const handleDispute = () => {
@@ -463,45 +542,88 @@ const PartnerStatementDetailPage: React.FC = () => {
     Sent: 'success',
     Disputed: 'warning',
   };
+  const ledgerModeLabel =
+    data?.ledger_posting_mode === 'by_invoice'
+      ? t(`${PS}.ledgerPostingMode.byInvoice`)
+      : t(`${PS}.ledgerPostingMode.immediate`);
+  const amountBasisLabel =
+    resolveStatementAmountBasis(data) === 'tax_exclusive'
+      ? t(`${PS}.amountBasis.taxExclusive`)
+      : t(`${PS}.amountBasis.taxInclusive`);
+  const showHeaderSettingReadonly = !linesEditable;
+
+  const headerStatusBadge =
+    data &&
+    (shouldShowPartnerStatementReviewApprovedBadge(data)
+      ? renderDocumentStatusTag(t('reviewStatus.approved'), '已审核')
+      : statusMeta ? (
+          <MarkerTag color={statusColorMap[data.status] || 'default'}>{statusMeta.text}</MarkerTag>
+        ) : null);
 
   const pageActions = data ? (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-      <Space wrap size={8}>
-        <Button onClick={() => navigate('/apps/kuaicaiwu/finance-management/partner-statements')}>{t('common.back')}</Button>
-        {linesEditable ? (
-          <Button loading={savingLines} disabled={!linesDirty} onClick={() => void handleSaveLines()}>
-            {t(`${PS}.detail.saveLines`)}
+    <>
+      {headerStatusBadge}
+      <Button onClick={() => navigate('/apps/kuaicaiwu/finance-management/partner-statements')}>{t('common.back')}</Button>
+      {linesEditable ? (
+        <Button loading={savingLines} disabled={!linesDirty} onClick={() => void handleSaveLines()}>
+          {t(`${PS}.detail.saveLines`)}
+        </Button>
+      ) : null}
+      {linesEditable && linesDirty ? (
+        <Typography.Text type="warning">{t(`${PS}.detail.unsavedLinesHint`)}</Typography.Text>
+      ) : null}
+      <UniWorkflowActions
+        record={data}
+        entityType={PARTNER_STATEMENT_ENTITY}
+        auditNodeKey={PARTNER_STATEMENT_ENTITY}
+        workflowAuditEnabled={partnerStatementAuditEnabled}
+        resourcePrefix={PARTNER_STATEMENT_RESOURCE}
+        entityName={t(`${PS}.entityName`)}
+        statusField="status"
+        reviewStatusField="review_status"
+        draftStatuses={['草稿', 'draft']}
+        pendingStatuses={['待审核']}
+        approvedStatuses={['已审核']}
+        rejectedStatuses={['已驳回', '驳回']}
+        theme="default"
+        size="middle"
+        beforeAction={async (action) => {
+          if (
+            (action === 'submit' || action === 'submit_review') &&
+            linesDirty
+          ) {
+            return t(`${PS}.detail.saveLinesBeforeConfirm`);
+          }
+          return null;
+        }}
+        onSuccess={() => void load()}
+      />
+      {canPushDownstream && pushMenuItems.length > 0 ? (
+        <Dropdown menu={{ items: pushMenuItems }} trigger={['click']}>
+          <Button loading={pushingPaymentApp || pushingInvoice}>
+            {t('components.uniPush.push')} <DownOutlined />
           </Button>
-        ) : null}
-        {data.status === 'Draft' || data.status === 'Disputed' ? (
-          statementPerms.canUpdate ? (
-          <Button type="primary" onClick={handleConfirm}>{t(`${PS}.detail.internalConfirm`)}</Button>
-          ) : null
-        ) : null}
-        {data.status === 'Confirmed' && statementPerms.canUpdate ? (
-          <Button type="primary" onClick={handleMarkSent}>{t(`${PS}.detail.markSent`)}</Button>
-        ) : null}
-        {canPushDownstream && pushMenuItems.length > 0 ? (
-          <Dropdown menu={{ items: pushMenuItems }} trigger={['click']}>
-            <Button loading={pushingPaymentApp || pushingInvoice}>
-              {t('components.uniPush.push')} <DownOutlined />
-            </Button>
-          </Dropdown>
-        ) : null}
-        {(data.status === 'Sent' || data.status === 'Confirmed') && statementPerms.canUpdate ? (
-          <Button danger onClick={handleDispute}>{t(`${PS}.detail.recordDispute`)}</Button>
-        ) : null}
-      </Space>
-      <Space wrap size={8}>
-        {statementPerms.canExport ? (
-          <>
-            <Button loading={exporting === 'xlsx'} onClick={() => void handleExport('xlsx')}>{t(`${PS}.detail.exportExcel`)}</Button>
-            <Button loading={exporting === 'pdf'} onClick={() => void handleExport('pdf')}>{t(`${PS}.detail.exportPdf`)}</Button>
-          </>
-        ) : null}
-        <Button onClick={handlePrint}>{t('common.print')}</Button>
-      </Space>
-    </div>
+        </Dropdown>
+      ) : null}
+      {(data.status === 'Sent' || data.status === 'Confirmed') && statementPerms.canUpdate ? (
+        <Button danger onClick={handleDispute}>{t(`${PS}.detail.recordDispute`)}</Button>
+      ) : null}
+      {data.sent_channel ? (
+        <Typography.Text type="secondary">
+          {t(`${PS}.detail.sentAt`, {
+            channel: formatSentChannel(data.sent_channel, t),
+            time: data.sent_at ? ` - ${formatDateTime(data.sent_at, 'YYYY-MM-DD HH:mm')}` : '',
+          })}
+        </Typography.Text>
+      ) : null}
+      {statementPerms.canExport ? (
+        <>
+          <Button loading={exporting === 'xlsx'} onClick={() => void handleExport('xlsx')}>{t(`${PS}.detail.exportExcel`)}</Button>
+          <Button loading={exporting === 'pdf'} onClick={() => void handleExport('pdf')}>{t(`${PS}.detail.exportPdf`)}</Button>
+        </>
+      ) : null}
+      <Button onClick={handlePrint}>{t('common.print')}</Button>
+    </>
   ) : null;
 
   return (
@@ -518,7 +640,11 @@ const PartnerStatementDetailPage: React.FC = () => {
         <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
           {t(`${PS}.pageTitle`)} {data?.statement_code || ''}
         </Typography.Title>
-        {pageActions}
+        {pageActions ? (
+          <Space wrap size={8} align="center">
+            {pageActions}
+          </Space>
+        ) : null}
       </div>
 
       {loading && !data ? (
@@ -530,17 +656,16 @@ const PartnerStatementDetailPage: React.FC = () => {
           <Typography.Title level={4} style={{ textAlign: 'center', display: 'none' }} className="print-only">
             {t(`${PS}.detail.printTitle`, { company: data.company_name || t(`${PS}.detail.ourCompany`) })}
           </Typography.Title>
-          <Space style={{ marginBottom: 16 }} className="no-print">
-            {statusMeta ? <Tag color={statusColorMap[data.status] || 'default'}>{statusMeta.text}</Tag> : null}
-            {data.sent_channel ? (
-              <Typography.Text type="secondary">
-                {t(`${PS}.detail.sentAt`, {
-                  channel: formatSentChannel(data.sent_channel, t),
-                  time: data.sent_at ? ` - ${formatDateTime(data.sent_at, 'YYYY-MM-DD HH:mm')}` : '',
-                })}
-              </Typography.Text>
-            ) : null}
-          </Space>
+          {data && linesEditable ? (
+            <PartnerStatementHeaderControls
+              data={data}
+              editable={linesEditable}
+              linesDirty={linesDirty}
+              headerBusy={headerBusy}
+              onLedgerChange={handleLedgerPostingModeChange}
+              onAmountBasisChange={handleAmountBasisChange}
+            />
+          ) : null}
 
           <Descriptions bordered size="small" column={2} style={{ marginBottom: 16 }}>
             <Descriptions.Item label={t(`${PS}.col.code`)}>{data.statement_code}</Descriptions.Item>
@@ -553,6 +678,17 @@ const PartnerStatementDetailPage: React.FC = () => {
                 ? t(`${PS}.partnerType.customer`)
                 : t(`${PS}.partnerType.supplier`)}
             </Descriptions.Item>
+            {showHeaderSettingReadonly ? (
+              <Descriptions.Item label={t(`${PS}.ledgerPostingMode`)}>{ledgerModeLabel}</Descriptions.Item>
+            ) : null}
+            {showHeaderSettingReadonly ? (
+              <Descriptions.Item label={t(`${PS}.amountBasis`)}>{amountBasisLabel}</Descriptions.Item>
+            ) : null}
+            {data.ledger_posted_at ? (
+              <Descriptions.Item label={t(`${PS}.detail.ledgerPostedAt`)}>
+                {formatDateTime(data.ledger_posted_at, 'YYYY-MM-DD HH:mm')}
+              </Descriptions.Item>
+            ) : null}
             {(snap as any).finance_contact_name ? (
               <Descriptions.Item label={t(`${PS}.detail.financeContact`)} span={2}>
                 {(snap as any).finance_contact_name} {(snap as any).finance_contact_phone || ''}

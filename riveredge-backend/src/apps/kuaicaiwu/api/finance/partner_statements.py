@@ -17,7 +17,10 @@ from apps.kuaicaiwu.schemas.finance import (
     PartnerStatementListResponse,
     PartnerStatementMarkSentRequest,
     PartnerStatementPreviewResponse,
+    PartnerStatementRefreshPreviewRequest,
+    PartnerStatementRefreshPreviewResponse,
     PartnerStatementResponse,
+    PartnerStatementUpdateHeaderRequest,
     PartnerStatementUpdateLinesRequest,
 )
 from apps.kuaicaiwu.services.partner_statement_service import PartnerStatementService
@@ -53,24 +56,25 @@ def _http_exception_with_trace(
     )
 
 
-async def _to_response(obj) -> PartnerStatementResponse:
+async def _to_response(obj, *, hydrate_lines: bool = True) -> PartnerStatementResponse:
     resp = PartnerStatementResponse.model_validate(obj)
     details = resp.transaction_details
-    if not isinstance(details, dict):
-        return resp
-    lines = details.get("lines")
-    if not isinstance(lines, list) or not lines:
-        return resp
-    hydrated = await service.ensure_statement_line_hierarchy(
-        obj.tenant_id,
-        obj.partner_type,
-        obj.opening_balance,
-        lines,
-    )
-    hydrated = await service.enrich_lines_invoice_dates(obj.tenant_id, hydrated)
-    new_details = dict(details)
-    new_details["lines"] = hydrated
-    return resp.model_copy(update={"transaction_details": new_details})
+    if hydrate_lines and isinstance(details, dict):
+        lines = details.get("lines")
+        if isinstance(lines, list) and lines:
+            hydrated = await service.ensure_statement_line_hierarchy(
+                obj.tenant_id,
+                obj.partner_type,
+                obj.opening_balance,
+                lines,
+            )
+            new_details = dict(details)
+            new_details["lines"] = hydrated
+            resp = resp.model_copy(update={"transaction_details": new_details})
+    # 供前端展示「立账方式」：客商默认按月结，或本单明细已是月结业务源单
+    uses_statement_ledger = await service._statement_supports_ledger_modes(obj)
+    resp = resp.model_copy(update={"partner_uses_statement_ledger": uses_statement_ledger})
+    return await enrich_record(obj.tenant_id, "partner_statement", resp)
 
 
 @router.get("/preview", response_model=PartnerStatementPreviewResponse)
@@ -79,11 +83,14 @@ async def preview_partner_statement(
     partner_type: str = Query(..., description="Customer、Supplier 或 Outsource"),
     start_date: date = Query(...),
     end_date: date = Query(...),
+    amount_basis: str = Query("tax_inclusive", description="tax_inclusive 或 tax_exclusive"),
     _auth: object = Depends(require_permission_codes("kuaicaiwu:partner-statement:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        data = await service.preview_statement(tenant_id, partner_id, partner_type, start_date, end_date)
+        data = await service.preview_statement(
+            tenant_id, partner_id, partner_type, start_date, end_date, amount_basis
+        )
         return PartnerStatementPreviewResponse.model_validate(data)
     except (ValidationError, NotFoundError) as e:
         raise _http_exception_with_trace(400, str(e), "/partner-statements/preview", tenant_id)
@@ -190,6 +197,51 @@ async def get_partner_statement(
         raise _http_exception_with_trace(404, str(e), "/partner-statements/{id}", tenant_id)
 
 
+@router.patch("/{id}/header", response_model=PartnerStatementResponse)
+async def update_partner_statement_header(
+    id: int,
+    body: PartnerStatementUpdateHeaderRequest,
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:partner-statement:update")),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        obj = await service.update_statement_header(
+            tenant_id,
+            id,
+            ledger_posting_mode=body.ledger_posting_mode,
+            user_id=current_user.id,
+        )
+        return await _to_response(obj)
+    except (NotFoundError, BusinessLogicError, ValidationError) as e:
+        code = 404 if isinstance(e, NotFoundError) else 400
+        raise _http_exception_with_trace(code, str(e), "/partner-statements/{id}/header", tenant_id)
+
+
+@router.post("/{id}/refresh-preview", response_model=PartnerStatementRefreshPreviewResponse)
+async def refresh_partner_statement_preview(
+    id: int,
+    body: PartnerStatementRefreshPreviewRequest,
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:partner-statement:update")),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        obj, warnings = await service.refresh_statement_preview(
+            tenant_id, id, body.amount_basis, current_user.id
+        )
+        statement = await _to_response(obj)
+        return PartnerStatementRefreshPreviewResponse(
+            warnings=warnings,
+            statement=statement,
+        )
+    except (NotFoundError, BusinessLogicError, ValidationError) as e:
+        code = 404 if isinstance(e, NotFoundError) else 400
+        raise _http_exception_with_trace(
+            code, str(e), "/partner-statements/{id}/refresh-preview", tenant_id
+        )
+
+
 @router.patch("/{id}/lines", response_model=PartnerStatementResponse)
 async def update_partner_statement_lines(
     id: int,
@@ -218,6 +270,7 @@ async def confirm_partner_statement(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
+    """业务确认对账：status=Confirmed，未送审前 review 为草稿。"""
     try:
         obj = await service.confirm_statement(tenant_id, id, current_user.id)
         return await _to_response(obj)

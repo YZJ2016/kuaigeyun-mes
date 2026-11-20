@@ -4,7 +4,7 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind, rowActionFillInvoiceNumber } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Alert, Spin, Table, Empty, Form, InputNumber, theme } from 'antd';
+import { App, Button, Modal, Typography, Alert, Spin, Table, Empty, Form, Row, Col, InputNumber, theme } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { apiRequest, formatApiErrorDetail } from '../../../../../services/api';
@@ -13,7 +13,10 @@ import {
   type PurchaseInvoicePullCandidate,
   type PurchaseInvoicePullPreview,
 } from '../../../services/finance/purchase-invoice';
-import { PurchaseInvoice, type PurchaseInvoiceCreateData } from '../../../types/finance/purchase-invoice';
+import {
+  PurchaseInvoice,
+  type PurchaseInvoiceCreateData,
+} from '../../../types/finance/purchase-invoice';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
@@ -43,6 +46,7 @@ import {
   ProForm,
   ProFormDatePicker,
   ProFormDigit,
+  ProFormField,
   ProFormMoney,
   ProFormSelect,
   ProFormSwitch,
@@ -54,6 +58,7 @@ import {
   convertInvoiceAmountBetweenModes,
   invoiceExclFromIncl,
   moneyExceedsMax,
+  quantizeMoney,
   recalcEnteredAmountOnTaxRateChange,
   resolveInvoiceAmountsForSubmit,
   type InvoiceAmountInputMode,
@@ -118,7 +123,18 @@ const TAX_RATE_OPTIONS = [
   { label: '0%', value: 0 },
 ];
 
-type PullPreviewKind = 'purchase_order' | 'purchase_receipt' | 'payable';
+type PullPreviewKind = 'purchase_order' | 'purchase_receipt' | 'payable' | 'outsource_order_receipt';
+
+function resolvePullPreviewInvoiceCap(data: PurchaseInvoicePullPreview | null | undefined): number {
+  if (!data) return 0;
+  const budget = Number(data.partner_statement_invoice_budget);
+  if (budget > 0) return budget;
+  const total = Number(data.max_push_total);
+  if (total > 0) return total;
+  return (
+    (data.items || []).reduce((sum, row) => sum + Number(row.max_push_quantity ?? 0), 0) || 0
+  );
+}
 
 const PurchaseInvoiceList: React.FC = () => {
   const actionRef = useRef<ActionType>();
@@ -139,9 +155,12 @@ const PurchaseInvoiceList: React.FC = () => {
   const [pullReceiptLineAmounts, setPullReceiptLineAmounts] = useState<Record<number, number>>({});
   const [pullPreviewKind, setPullPreviewKind] = useState<PullPreviewKind | null>(null);
   const [pullForm] = Form.useForm();
-  const pullAmountModeRef = useRef<InvoiceAmountInputMode>('tax_exclusive');
+  const [createForm] = Form.useForm();
+  const pullAmountModeRef = useRef<InvoiceAmountInputMode>('tax_inclusive');
   const pullTaxRateRef = useRef<number>(13);
-  /** 拉单带入的含税占用金额，票面为带入金额减优惠。 */
+  const createAmountModeRef = useRef<InvoiceAmountInputMode>('tax_inclusive');
+  const createTaxRateRef = useRef<number>(13);
+  /** 拉单带入含税金额 A（优惠前），用于 I=A-D */
   const pullBroughtAmountRef = useRef<number>(0);
   const pullFromPurchaseOrderCloseRef = useRef<(() => void) | null>(null);
   const pullFromPurchaseOrderOpenRef = useRef<(() => void) | null>(null);
@@ -151,6 +170,8 @@ const PurchaseInvoiceList: React.FC = () => {
   const pullFromPayableOpenRef = useRef<(() => void) | null>(null);
   const pullFromPartnerStatementCloseRef = useRef<(() => void) | null>(null);
   const pullFromPartnerStatementOpenRef = useRef<(() => void) | null>(null);
+  const pullPartnerStatementIdsRef = useRef<number[]>([]);
+  const pullPartnerStatementCodesRef = useRef<string[]>([]);
   const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const { message: messageApi } = App.useApp();
@@ -298,18 +319,42 @@ const PurchaseInvoiceList: React.FC = () => {
 
   const handleRegister = async (values: any) => {
     try {
-      const invoiceAmount = Number(values.invoice_amount) || 0;
+      const enteredAmount = Number(values.invoice_amount) || 0;
       const taxRate = Number(values.tax_rate) || 13;
+      const discountAmount = Number(values.discount_amount) || 0;
+      if (enteredAmount <= 0) {
+        messageApi.warning(t(`${P}.amountRequired`));
+        return false;
+      }
+      const amountMode = (values.amount_input_mode || 'tax_inclusive') as InvoiceAmountInputMode;
+      // 录入金额 A（按口径折合含税）− 优惠 D（含税）= 票面开票金额 I
+      const { totalIncl: baseIncl } = resolveInvoiceAmountsForSubmit(
+        enteredAmount,
+        taxRate,
+        amountMode,
+      );
+      const faceIncl = quantizeMoney(baseIncl - discountAmount);
+      if (!(faceIncl > 0)) {
+        messageApi.warning(t(`${P}.form.billingAmountInvalid`));
+        return false;
+      }
+      const { invoiceAmountExcl, totalIncl, taxAmount } = resolveInvoiceAmountsForSubmit(
+        faceIncl,
+        taxRate,
+        'tax_inclusive',
+      );
 
-      const data: any = {
+      const data: PurchaseInvoiceCreateData = {
         supplier_id: values.supplier_id,
         supplier_name: supplierOptions.find((o) => o.value === values.supplier_id)?.label || '',
         invoice_number: values.invoice_number,
         invoice_date: formatDateTime(values.invoice_date || dayjs(), 'YYYY-MM-DD'),
         invoice_type: values.invoice_type || '增值税专用发票',
         tax_rate: taxRate,
-        invoice_amount: invoiceAmount,
-        discount_amount: Number(values.discount_amount) || 0,
+        invoice_amount: invoiceAmountExcl,
+        tax_amount: taxAmount,
+        total_amount: totalIncl,
+        discount_amount: discountAmount,
         notes: values.notes,
         status: '未审核',
         review_status: '草稿',
@@ -357,14 +402,34 @@ const PurchaseInvoiceList: React.FC = () => {
   const openPullPreview = async (
     kind: PullPreviewKind,
     sourceIdsInput: number | number[],
-    options?: { closeSourceModal?: () => void; reopenSourceModal?: () => void },
+    options?: {
+      closeSourceModal?: () => void;
+      reopenSourceModal?: () => void;
+      /** 从往来对账单加载时传入，用于放行月结入库阻断 */
+      partnerStatementIds?: number[];
+      partnerStatementCodes?: string[];
+    },
   ) => {
+    pullPartnerStatementIdsRef.current = options?.partnerStatementIds?.length
+      ? [...options.partnerStatementIds]
+      : [];
+    pullPartnerStatementCodesRef.current = options?.partnerStatementCodes?.length
+      ? [...options.partnerStatementCodes]
+      : [];
     const sourceIds = (Array.isArray(sourceIdsInput) ? sourceIdsInput : [sourceIdsInput])
       .map((id) => Number(id))
       .filter((id) => Number.isFinite(id) && id > 0);
-    if (!sourceIds.length) return;
-    // 先关取单窗再开预览，避免同层 zIndex 下预览被挡住、看起来像「下一步无反应」
-    options?.closeSourceModal?.();
+    if (!sourceIds.length) {
+      const sourceLabel =
+        kind === 'purchase_order'
+          ? pullFromPurchaseOrderAction.sourceLabel
+          : kind === 'purchase_receipt' || kind === 'outsource_order_receipt'
+            ? pullFromPurchaseReceiptAction.sourceLabel
+            : pullFromPayableAction.sourceLabel;
+      showPullFlowNotice('warning', t(`${P}.selectSource`, { label: sourceLabel }));
+      return;
+    }
+    // 预览成功后再关取单窗；失败时保留取单窗并提示，避免关窗后又重开像「按钮无反应」
     setPullPreviewKind(kind);
     setPullPreviewSourceIds(sourceIds);
     setPullPreviewSourceId(sourceIds[0]);
@@ -382,11 +447,44 @@ const PurchaseInvoiceList: React.FC = () => {
             : await purchaseInvoiceService.previewPullFromPurchaseOrders(sourceIds)
           : kind === 'purchase_receipt'
             ? sourceIds.length === 1
-              ? await purchaseInvoiceService.previewPullFromPurchaseReceipt(sourceIds[0])
-              : await purchaseInvoiceService.previewPullFromPurchaseReceipts(sourceIds)
-            : sourceIds.length === 1
-              ? await purchaseInvoiceService.previewPullFromPayable(sourceIds[0])
-              : await purchaseInvoiceService.previewPullFromPayables(sourceIds);
+              ? await purchaseInvoiceService.previewPullFromPurchaseReceipt(
+                  sourceIds[0],
+                  pullPartnerStatementIdsRef.current,
+                )
+              : await purchaseInvoiceService.previewPullFromPurchaseReceipts(
+                  sourceIds,
+                  pullPartnerStatementIdsRef.current,
+                )
+            : kind === 'outsource_order_receipt'
+              ? sourceIds.length === 1
+                ? await purchaseInvoiceService.previewPullFromOutsourceOrderReceipt(
+                    sourceIds[0],
+                    pullPartnerStatementIdsRef.current,
+                  )
+                : await purchaseInvoiceService.previewPullFromOutsourceOrderReceipts(
+                    sourceIds,
+                    pullPartnerStatementIdsRef.current,
+                  )
+              : sourceIds.length === 1
+                ? await purchaseInvoiceService.previewPullFromPayable(sourceIds[0])
+                : await purchaseInvoiceService.previewPullFromPayables(sourceIds);
+      if (data.has_blocking_issues) {
+        const blockedText =
+          purchaseInvoiceCapabilityReasonMessage(data.blocking_reason, t)
+          || (data.summary ? String(data.summary) : '')
+          || t(`${P}.pullPreviewBlocked`);
+        showPullFlowNotice('warning', blockedText, t(`${P}.pullPreviewBlocked`));
+        resetPullPreview();
+        return;
+      }
+      const maxPush = resolvePullPreviewInvoiceCap(data);
+      if (maxPush <= 0) {
+        const noAmtText = (data.summary ? String(data.summary) : '') || t(`${P}.pullNoInvoiceableAmount`);
+        showPullFlowNotice('warning', noAmtText, t(`${P}.pullNoInvoiceableAmount`));
+        resetPullPreview();
+        return;
+      }
+      options?.closeSourceModal?.();
       setPullPreviewData(data);
     } catch (e: unknown) {
       messageApi.error(resolveApiErrorMessage(e, t(`${P}.loadSourceFailed`)));
@@ -620,14 +718,76 @@ const PurchaseInvoiceList: React.FC = () => {
             ),
           ),
         );
-        if (!receiptIds.length) {
-          messageApi.warning(t('app.kuaicaiwu.partnerStatement.detail.pushSelectPurchaseReceipt'));
+        const outsourceReceiptIds = Array.from(
+          new Set(
+            selected.flatMap((row) =>
+              (row.outsource_order_receipt_ids || [])
+                .map((id) => Number(id))
+                .filter((id) => id > 0),
+            ),
+          ),
+        );
+        if (!receiptIds.length && !outsourceReceiptIds.length) {
+          messageApi.warning(t('app.kuaicaiwu.partnerStatement.detail.pushSelectInvoiceSource'));
           return;
         }
-        await openPullPreview('purchase_receipt', receiptIds, {
+        const partnerStatementCodes = selected
+          .map((row) => String(row.statement_code || row.doc_code || '').trim())
+          .filter(Boolean);
+        const openOpts = {
           closeSourceModal: () => pullFromPartnerStatementCloseRef.current?.(),
           reopenSourceModal: () => pullFromPartnerStatementOpenRef.current?.(),
-        });
+          partnerStatementIds: selectedIds,
+          partnerStatementCodes,
+        };
+        if (receiptIds.length && outsourceReceiptIds.length) {
+          setPullPreviewKind('purchase_receipt');
+          setPullPreviewOpen(false);
+          setPullPreviewLoading(true);
+          setPullPreviewData(null);
+          const allIds = [...receiptIds, ...outsourceReceiptIds];
+          setPullPreviewSourceIds(allIds);
+          pullPartnerStatementIdsRef.current = [...selectedIds];
+          pullPartnerStatementCodesRef.current = partnerStatementCodes;
+          const hideLoading = messageApi.loading(t(`${P}.pullPreviewLoading`), 0);
+          try {
+            const data = await purchaseInvoiceService.previewPullFromPartnerStatementSupplierSources({
+              receiptIds,
+              outsourceOrderReceiptIds: outsourceReceiptIds,
+              partnerStatementIds: selectedIds,
+            });
+            if (data.has_blocking_issues) {
+              const blockedText =
+                purchaseInvoiceCapabilityReasonMessage(data.blocking_reason, t)
+                || (data.summary ? String(data.summary) : '')
+                || t(`${P}.pullPreviewBlocked`);
+              showPullFlowNotice('warning', blockedText, t(`${P}.pullPreviewBlocked`));
+              resetPullPreview();
+              return;
+            }
+            const maxPush = resolvePullPreviewInvoiceCap(data);
+            if (maxPush <= 0) {
+              showPullFlowNotice('warning', t(`${P}.pullNoInvoiceableAmount`));
+              resetPullPreview();
+              return;
+            }
+            openOpts.closeSourceModal?.();
+            setPullPreviewData(data);
+            setPullPreviewOpen(true);
+          } catch (e: unknown) {
+            showPullFlowNotice('error', resolveApiErrorMessage(e, t(`${P}.loadSourceFailed`)));
+            resetPullPreview();
+          } finally {
+            hideLoading();
+            setPullPreviewLoading(false);
+          }
+          return;
+        }
+        if (outsourceReceiptIds.length) {
+          await openPullPreview('outsource_order_receipt', outsourceReceiptIds, openOpts);
+          return;
+        }
+        await openPullPreview('purchase_receipt', receiptIds, openOpts);
         return;
       }
       const payableIds = Array.from(
@@ -644,6 +804,10 @@ const PurchaseInvoiceList: React.FC = () => {
       await openPullPreview('payable', payableIds, {
         closeSourceModal: () => pullFromPartnerStatementCloseRef.current?.(),
         reopenSourceModal: () => pullFromPartnerStatementOpenRef.current?.(),
+        partnerStatementIds: selectedIds,
+        partnerStatementCodes: selected.map((row) =>
+          String(row.statement_code || row.doc_code || '').trim(),
+        ).filter(Boolean),
       });
     },
     onConfirmFailed: (error) => {
@@ -665,13 +829,7 @@ const PurchaseInvoiceList: React.FC = () => {
       );
       return false;
     }
-    const maxPush = Number(
-      pullPreviewData.max_push_total ??
-        (pullPreviewData.items || []).reduce(
-          (sum, row) => sum + Number(row.max_push_quantity ?? 0),
-          0,
-        ),
-    );
+    const maxPush = resolvePullPreviewInvoiceCap(pullPreviewData);
     const enteredAmount = Number(values.invoice_amount) || 0;
     if (enteredAmount <= 0) {
       messageApi.warning(t(`${P}.amountRequired`));
@@ -712,13 +870,15 @@ const PurchaseInvoiceList: React.FC = () => {
         messageApi.warning(t(`${P}.pull.lineAmountMismatch`));
         return false;
       }
-      const detailById = new Map(detailLines.map((row) => [row.purchase_receipt_item_id, row]));
-      for (const id of reconciled.selectedItemIds) {
-        const cap = Number(detailById.get(id)?.max_push_amount ?? 0);
-        const amt = Number(reconciled.amounts[id] ?? 0);
-        if (amt <= 0 || amt > cap + 0.009) {
-          messageApi.warning(t(`${P}.pull.lineExceedMax`));
-          return false;
+      if (!pullPartnerStatementIdsRef.current.length) {
+        const detailById = new Map(detailLines.map((row) => [row.purchase_receipt_item_id, row]));
+        for (const id of reconciled.selectedItemIds) {
+          const cap = Number(detailById.get(id)?.max_push_amount ?? 0);
+          const amt = Number(reconciled.amounts[id] ?? 0);
+          if (amt <= 0 || amt > cap + 0.009) {
+            messageApi.warning(t(`${P}.pull.lineExceedMax`));
+            return false;
+          }
         }
       }
       pullReceiptLines = reconciled.payload;
@@ -726,13 +886,13 @@ const PurchaseInvoiceList: React.FC = () => {
     const sourceLabel =
       pullPreviewKind === 'purchase_order'
         ? pullFromPurchaseOrderAction.sourceLabel
-        : pullPreviewKind === 'purchase_receipt'
+        : pullPreviewKind === 'purchase_receipt' || pullPreviewKind === 'outsource_order_receipt'
           ? pullFromPurchaseReceiptAction.sourceLabel
           : pullFromPayableAction.sourceLabel;
     const targetLabel =
       pullPreviewKind === 'purchase_order'
         ? pullFromPurchaseOrderAction.targetLabel
-        : pullPreviewKind === 'purchase_receipt'
+        : pullPreviewKind === 'purchase_receipt' || pullPreviewKind === 'outsource_order_receipt'
           ? pullFromPurchaseReceiptAction.targetLabel
           : pullFromPayableAction.targetLabel;
     const wantPayment = Boolean(values.concurrent_payment_enabled) && pullPreviewKind === 'payable';
@@ -771,7 +931,13 @@ const PurchaseInvoiceList: React.FC = () => {
         source_type: pullPreviewKind,
         source_id: pullPreviewSourceIds[0],
         source_ids:
-          pullPreviewSourceIds.length > 1 ? pullPreviewSourceIds : undefined,
+          (pullPreviewKind === 'payable'
+            || pullPreviewKind === 'purchase_receipt'
+            || pullPreviewKind === 'purchase_order'
+            || pullPreviewKind === 'outsource_order_receipt')
+          && pullPreviewSourceIds.length > 1
+            ? pullPreviewSourceIds
+            : undefined,
         invoice_number: String(values.invoice_number ?? '').trim(),
         invoice_date: formatDateTime(values.invoice_date || dayjs(), 'YYYY-MM-DD'),
         invoice_type: values.invoice_type || '增值税专用发票',
@@ -786,14 +952,25 @@ const PurchaseInvoiceList: React.FC = () => {
           && Boolean(values.adjust_payable),
         notes:
           String(values.notes ?? '').trim() ||
-          t('app.kuaicaiwu.common.createdFromSourceNote', {
-            source: sourceLabel,
-            code: pullPreviewData.source_code,
-          }),
+          (pullPartnerStatementIdsRef.current.length
+            ? t('app.kuaicaiwu.common.createdFromSourceNote', {
+                source: pullFromPartnerStatementAction.sourceLabel,
+                code: (pullPartnerStatementCodesRef.current.length
+                  ? pullPartnerStatementCodesRef.current
+                  : pullPartnerStatementIdsRef.current.map(String)
+                ).join('、'),
+              })
+            : t('app.kuaicaiwu.common.createdFromSourceNote', {
+                source: sourceLabel,
+                code: pullPreviewData.source_code,
+              })),
         status: '未审核',
         review_status: '草稿',
         attachments: normalizeDocumentAttachments(values.attachments),
         pull_receipt_lines: pullReceiptLines,
+        ...(pullPartnerStatementIdsRef.current.length
+          ? { partner_statement_ids: pullPartnerStatementIdsRef.current }
+          : {}),
         ...(wantPayment
           ? {
               concurrent_settlement: {
@@ -890,12 +1067,35 @@ const PurchaseInvoiceList: React.FC = () => {
         sorter: true,
       },
       {
-        title: t(`${P}.col.totalAmount`),
-        dataIndex: 'total_amount',
+        title: t(`${P}.col.taxRate`),
+        dataIndex: 'tax_rate',
+        width: 88,
+        minWidth: 88,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        sorter: true,
+        render: (_, r) => `${r.tax_rate}%`,
+      },
+      {
+        title: t(`${P}.col.exclTax`),
+        dataIndex: 'invoice_amount',
         valueType: 'money',
         align: 'right',
         width: 130,
         minWidth: 130,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t(`${P}.col.taxAmount`),
+        dataIndex: 'tax_amount',
+        valueType: 'money',
+        align: 'right',
+        width: 110,
+        minWidth: 110,
         uniTableKeepWidth: true,
         resizable: false,
         hideInSearch: true,
@@ -908,6 +1108,18 @@ const PurchaseInvoiceList: React.FC = () => {
         align: 'right',
         width: 110,
         minWidth: 110,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: t(`${P}.form.billingAmount`),
+        dataIndex: 'total_amount',
+        valueType: 'money',
+        align: 'right',
+        width: 130,
+        minWidth: 130,
         uniTableKeepWidth: true,
         resizable: false,
         hideInSearch: true,
@@ -1195,14 +1407,7 @@ const PurchaseInvoiceList: React.FC = () => {
     [t],
   );
 
-  const pullPreviewMaxPush =
-    Number(
-      pullPreviewData?.max_push_total ??
-        (pullPreviewData?.items || []).reduce(
-          (sum, row) => sum + Number(row.max_push_quantity ?? 0),
-          0,
-        ),
-    ) || 0;
+  const pullPreviewMaxPush = resolvePullPreviewInvoiceCap(pullPreviewData);
   const formatPullMoney = (v: number) =>
     formatCurrencyAmount(v || 0);
   const pullPreviewTargetLabel =
@@ -1214,7 +1419,7 @@ const PurchaseInvoiceList: React.FC = () => {
 
   const pullFormInitialValues = useMemo(() => {
     if (!pullPreviewData || !pullPreviewKind) return undefined;
-    const maxPush = Number(pullPreviewData.items?.[0]?.max_push_quantity ?? 0);
+    const maxPush = resolvePullPreviewInvoiceCap(pullPreviewData);
     const taxRate = 13;
     // 由可开票含税上限反算不含税，避免默认值正算再超 0.01
     const defaultExcl = maxPush > 0 ? invoiceExclFromIncl(maxPush, taxRate) : undefined;
@@ -1224,6 +1429,19 @@ const PurchaseInvoiceList: React.FC = () => {
         : pullPreviewKind === 'purchase_receipt'
           ? pullFromPurchaseReceiptAction.sourceLabel
           : pullFromPayableAction.sourceLabel;
+    const defaultNote =
+      pullPartnerStatementIdsRef.current.length
+        ? t('app.kuaicaiwu.common.createdFromSourceNote', {
+            source: pullFromPartnerStatementAction.sourceLabel,
+            code: (pullPartnerStatementCodesRef.current.length
+              ? pullPartnerStatementCodesRef.current
+              : pullPartnerStatementIdsRef.current.map(String)
+            ).join('、'),
+          })
+        : t('app.kuaicaiwu.common.createdFromSourceNote', {
+            source: sourceLabel,
+            code: pullPreviewData.source_code,
+          });
     const remainingSettle = Number(pullPreviewData.remaining_settle_amount ?? 0);
     return {
       source_code: pullPreviewData.source_code,
@@ -1231,14 +1449,11 @@ const PurchaseInvoiceList: React.FC = () => {
       invoice_date: dayjs(),
       invoice_type: '增值税专用发票',
       tax_rate: taxRate,
-      amount_input_mode: 'tax_exclusive' as InvoiceAmountInputMode,
-      invoice_amount: defaultExcl,
+      amount_input_mode: 'tax_inclusive' as InvoiceAmountInputMode,
+      invoice_amount: defaultIncl,
+      notes: defaultNote,
       discount_amount: 0,
       adjust_payable: false,
-      notes: t('app.kuaicaiwu.common.createdFromSourceNote', {
-        source: sourceLabel,
-        code: pullPreviewData.source_code,
-      }),
       concurrent_payment_enabled: false,
       settle_amount: remainingSettle > 0 ? remainingSettle : undefined,
       settle_date: dayjs(),
@@ -1253,6 +1468,7 @@ const PurchaseInvoiceList: React.FC = () => {
     pullFromPurchaseOrderAction.sourceLabel,
     pullFromPurchaseReceiptAction.sourceLabel,
     pullFromPayableAction.sourceLabel,
+    pullFromPartnerStatementAction.sourceLabel,
     t,
   ]);
 
@@ -1281,16 +1497,64 @@ const PurchaseInvoiceList: React.FC = () => {
       return;
     }
     const { selectedItemIds, amounts } = initPullReceiptLineSelection(lines);
-    setPullReceiptSelectedIds(selectedItemIds);
-    setPullReceiptLineAmounts(amounts);
-    const sum = sumPullReceiptLineAmounts(selectedItemIds, amounts);
-    syncPullReceiptSumToInvoiceForm(sum);
+    let effectiveIds = selectedItemIds;
+    let effectiveAmounts = amounts;
+    const headerCap = resolvePullPreviewInvoiceCap(pullPreviewData);
+    let sum = sumPullReceiptLineAmounts(selectedItemIds, amounts);
+    if (pullPartnerStatementIdsRef.current.length > 0 && headerCap > sum + 0.009) {
+      const reconciled = reconcilePullReceiptLinesForHeaderAmount(
+        selectedItemIds,
+        lines,
+        headerCap,
+        amounts,
+      );
+      effectiveIds = reconciled.selectedItemIds;
+      effectiveAmounts = reconciled.amounts;
+      sum = reconciled.lineSum;
+    }
+    setPullReceiptSelectedIds(effectiveIds);
+    setPullReceiptLineAmounts(effectiveAmounts);
+    syncPullReceiptSumToInvoiceForm(sum > 0 ? sum : headerCap);
   }, [pullPreviewOpen, pullPreviewKind, pullPreviewData, syncPullReceiptSumToInvoiceForm]);
 
   const pullAmountInputMode = Form.useWatch('amount_input_mode', pullForm) as InvoiceAmountInputMode | undefined;
   const pullTaxRateWatch = Form.useWatch('tax_rate', pullForm);
   const pullInvoiceAmountWatch = Form.useWatch('invoice_amount', pullForm);
   const pullDiscountWatch = Form.useWatch('discount_amount', pullForm);
+
+  const createAmountInputMode = Form.useWatch('amount_input_mode', createForm) as
+    | InvoiceAmountInputMode
+    | undefined;
+  const createTaxRateWatch = Form.useWatch('tax_rate', createForm);
+  const createInvoiceAmountWatch = Form.useWatch('invoice_amount', createForm);
+  const createDiscountWatch = Form.useWatch('discount_amount', createForm);
+
+  const createResolvedAmounts = useMemo(() => {
+    const entered = Number(createInvoiceAmountWatch || 0);
+    const taxRate = Number(createTaxRateWatch) || 13;
+    const discount = Number(createDiscountWatch) || 0;
+    const mode = (createAmountInputMode || 'tax_inclusive') as InvoiceAmountInputMode;
+    if (!(entered > 0)) {
+      return { mode, counterpartHint: '', billingAmount: null as number | null };
+    }
+    const base = resolveInvoiceAmountsForSubmit(entered, taxRate, mode);
+    const counterpartHint =
+      mode === 'tax_inclusive'
+        ? t(`${P}.form.amountHintExcl`, { amount: formatAmount(base.invoiceAmountExcl) })
+        : t(`${P}.form.amountHintIncl`, { amount: formatAmount(base.totalIncl) });
+    // 开票金额始终为含税票面 I = A_incl − D（与录入口径无关）
+    const faceIncl = quantizeMoney(base.totalIncl - discount);
+    if (!(faceIncl > 0)) {
+      return { mode, counterpartHint, billingAmount: null as number | null };
+    }
+    return { mode, counterpartHint, billingAmount: faceIncl };
+  }, [
+    createAmountInputMode,
+    createInvoiceAmountWatch,
+    createTaxRateWatch,
+    createDiscountWatch,
+    t,
+  ]);
 
   useEffect(() => {
     if (!pullPreviewOpen || !(pullBroughtAmountRef.current > 0)) return;
@@ -1315,14 +1579,15 @@ const PurchaseInvoiceList: React.FC = () => {
     const { totalIncl } = resolveInvoiceAmountsForSubmit(entered, taxRate, mode, {
       maxTotalIncl: pullPreviewMaxPush - (Number(pullDiscountWatch) || 0),
     });
-    const occupancyTotal = totalIncl + (Number(pullDiscountWatch) || 0);
+    const discount = Number(pullDiscountWatch) || 0;
+    const occupancyIncl = totalIncl + discount;
     const detailLines = (pullPreviewData.detail_lines ?? []) as PullReceiptFinanceDetailLine[];
     const currentSum = sumPullReceiptLineAmounts(pullReceiptSelectedIds, pullReceiptLineAmounts);
-    if (Math.abs(currentSum - occupancyTotal) <= 0.009) return;
+    if (Math.abs(currentSum - occupancyIncl) <= 0.009) return;
     const reconciled = reconcilePullReceiptLinesForHeaderAmount(
       pullReceiptSelectedIds,
       detailLines,
-      occupancyTotal,
+      occupancyIncl,
     );
     setPullReceiptLineAmounts(reconciled.amounts);
     if (reconciled.selectedItemIds.join(',') !== pullReceiptSelectedIds.join(',')) {
@@ -1338,6 +1603,7 @@ const PurchaseInvoiceList: React.FC = () => {
     pullDiscountWatch,
     pullAmountInputMode,
     pullTaxRateWatch,
+    pullDiscountWatch,
     pullPreviewMaxPush,
     syncPullReceiptSumToInvoiceForm,
   ]);
@@ -1396,7 +1662,7 @@ const PurchaseInvoiceList: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         onTableDataChange={setTableRows}
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.purchase-invoices.list-v4-discount"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.purchase-invoices.list-v7-billing-amount"
         showAdvancedSearch
         request={async (params, sort, _filter, searchFormValues) => {
           const listParams = resolvePurchaseInvoiceListParams(searchFormValues, sort);
@@ -1921,8 +2187,12 @@ const PurchaseInvoiceList: React.FC = () => {
                   name="discount_amount"
                   label={t(`${P}.form.discountAmount`)}
                   tooltip={t(`${P}.form.discountAmountTip`)}
-                  fieldProps={{ precision: 2, style: { width: '100%' } }}
-                  colProps={financeColHalf}
+                  fieldProps={{
+                    precision: 2,
+                    style: { width: '100%' },
+                    // 优惠可正可负（与后端 discount_amount 含税口径一致）
+                    min: Number.NEGATIVE_INFINITY,
+                  }}
                 />
                 {pullPreviewKind === 'payable' && Math.abs(Number(pullDiscountWatch) || 0) > 0.0009 ? (
                   <ProFormSwitch
@@ -2029,10 +2299,24 @@ const PurchaseInvoiceList: React.FC = () => {
       <ModalForm
         title={t(`${P}.createTitle`)}
         open={createModalVisible}
-        onOpenChange={setCreateModalVisible}
+        form={createForm}
+        onOpenChange={(open) => {
+          setCreateModalVisible(open);
+          if (open) {
+            createAmountModeRef.current = 'tax_inclusive';
+            createTaxRateRef.current = 13;
+          }
+        }}
         onFinish={handleRegister}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         modalProps={{ destroyOnHidden: true }}
+        initialValues={{
+          invoice_type: '增值税专用发票',
+          invoice_date: dayjs(),
+          tax_rate: 13,
+          amount_input_mode: 'tax_inclusive' as InvoiceAmountInputMode,
+          discount_amount: 0,
+        }}
         {...financeFormGridProps}
       >
         <FormModalGridBlock>
@@ -2058,7 +2342,6 @@ const PurchaseInvoiceList: React.FC = () => {
           name="invoice_type"
           label={t(`${P}.col.invoiceType`)}
           options={invoiceTypeOptions}
-          initialValue="增值税专用发票"
           rules={[{ required: true, message: t(`${P}.form.invoiceTypeRequired`) }]}
           colProps={financeColHalf}
         />
@@ -2067,24 +2350,75 @@ const PurchaseInvoiceList: React.FC = () => {
           label={t('app.kuaicaiwu.common.invoiceDate')}
           tooltip={t('app.kuaicaiwu.common.invoiceDateTip')}
           rules={[{ required: true, message: t(`${P}.form.invoiceDateRequired`) }]}
-          initialValue={dayjs()}
           fieldProps={{ style: { width: '100%' }, format: 'YYYY-MM-DD' }}
           colProps={financeColHalf}
         />
-        <ProFormItem
+        <ProFormField
           name="tax_rate"
           label={t(`${P}.col.taxRate`)}
-          initialValue={13}
           rules={[{ required: true, message: t(`${P}.form.taxRateRequired`) }]}
           colProps={financeColHalf}
-        >
-          <TaxRatePercentInput />
-        </ProFormItem>
+          renderFormItem={(_, { value, onChange }) => (
+            <TaxRatePercentInput
+              value={value}
+              onChange={(next) => {
+                const prevRate = createTaxRateRef.current;
+                const mode = (createForm.getFieldValue('amount_input_mode')
+                  || 'tax_inclusive') as InvoiceAmountInputMode;
+                const current = Number(createForm.getFieldValue('invoice_amount')) || 0;
+                const nextRate = Number(next) || 0;
+                if (current > 0) {
+                  createForm.setFieldValue(
+                    'invoice_amount',
+                    recalcEnteredAmountOnTaxRateChange(current, prevRate, nextRate, mode),
+                  );
+                }
+                createTaxRateRef.current = nextRate;
+                onChange?.(next);
+              }}
+            />
+          )}
+        />
+        <ProFormField
+          name="amount_input_mode"
+          label={t(`${P}.form.amountInputMode`)}
+          colProps={financeColHalf}
+          renderFormItem={(_, { value, onChange }) => (
+            <ThemedSegmented
+              className="form-field-segmented"
+              style={{ width: 'fit-content', maxWidth: '100%' }}
+              value={value}
+              options={[
+                { label: t(`${P}.form.amountModeExcl`), value: 'tax_exclusive' },
+                { label: t(`${P}.form.amountModeIncl`), value: 'tax_inclusive' },
+              ]}
+              onChange={(next) => {
+                const nextMode = next as InvoiceAmountInputMode;
+                const prevMode = createAmountModeRef.current;
+                const taxRate = Number(createForm.getFieldValue('tax_rate')) || 13;
+                const current = Number(createForm.getFieldValue('invoice_amount')) || 0;
+                if (current > 0 && prevMode && prevMode !== nextMode) {
+                  createForm.setFieldValue(
+                    'invoice_amount',
+                    convertInvoiceAmountBetweenModes(current, taxRate, prevMode, nextMode),
+                  );
+                }
+                createAmountModeRef.current = nextMode;
+                onChange?.(nextMode);
+              }}
+            />
+          )}
+        />
         <ProFormDigit
           name="invoice_amount"
-          label={t(`${P}.col.exclTax`)}
+          label={
+            (createAmountInputMode || 'tax_inclusive') === 'tax_inclusive'
+              ? t(`${P}.form.amountModeIncl`)
+              : t(`${P}.form.amountModeExcl`)
+          }
           min={0}
-          rules={[{ required: true, message: t(`${P}.form.exTaxAmountRequired`) }]}
+          rules={[{ required: true, message: t(`${P}.amountRequired`) }]}
+          extra={createResolvedAmounts.counterpartHint || undefined}
           fieldProps={{ precision: 2, style: { width: '100%' } }}
           colProps={financeColHalf}
         />
@@ -2092,9 +2426,27 @@ const PurchaseInvoiceList: React.FC = () => {
           name="discount_amount"
           label={t(`${P}.form.discountAmount`)}
           tooltip={t(`${P}.form.discountAmountTip`)}
-          initialValue={0}
-          fieldProps={{ precision: 2, style: { width: '100%' } }}
+          fieldProps={{
+            precision: 2,
+            style: { width: '100%' },
+            // 优惠可正可负（与后端 discount_amount 含税口径一致）
+            min: Number.NEGATIVE_INFINITY,
+          }}
           colProps={financeColHalf}
+        />
+        <ProFormField
+          label={t(`${P}.form.billingAmount`)}
+          tooltip={t(`${P}.form.billingAmountTip`)}
+          colProps={financeColHalf}
+          renderFormItem={() => (
+            <InputNumber
+              value={createResolvedAmounts.billingAmount}
+              precision={2}
+              disabled
+              style={{ width: '100%' }}
+              placeholder="—"
+            />
+          )}
         />
         <ProFormTextArea name="notes" label={t('common.remark')} colProps={financeColFull} />
         <DocumentAttachmentsField category="purchase_invoice_attachments" />

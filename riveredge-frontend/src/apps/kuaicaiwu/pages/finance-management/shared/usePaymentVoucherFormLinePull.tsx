@@ -413,22 +413,7 @@ export function usePaymentVoucherFormLinePull({ formRef }: Props) {
   const pullColumns = useMemo(() => buildPaymentPayablePullQueryColumns(t), [t]);
 
   const appColumns = useMemo(
-    () => [
-      { title: t('common.code'), dataIndex: 'code', width: 220, ellipsis: true },
-      {
-        title: t('app.kuaicaiwu.common.supplier'),
-        dataIndex: 'supplier_name',
-        width: 180,
-        ellipsis: true,
-      },
-      {
-        title: t('app.kuaizhizao.paymentApplication.remainingAmount'),
-        dataIndex: 'remaining_amount',
-        width: 120,
-        align: 'right' as const,
-        render: (v: unknown) => formatCurrencyAmount(v ?? 0),
-      },
-    ],
+    () => buildPaymentPayablePullQueryColumns(t, { includeExpectedPaymentDate: true }),
     [t],
   );
 

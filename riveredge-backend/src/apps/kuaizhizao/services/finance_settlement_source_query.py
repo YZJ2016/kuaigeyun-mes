@@ -1,6 +1,9 @@
 """
 只读：按对账单立账策略下，尚未生成应收/应付的业务源单查询。
 供 kuaicaiwu 往来对账单预览与期初调节使用，禁止在此模块写入 kuaizhizao 表。
+
+纳入条件以**单据头** revenue_recognition / payable_recognition == on_partner_statement 为真源，
+禁止只认客商/组织默认策略而漏掉单据已选「按月结对账单」的入库/出库。
 """
 
 from __future__ import annotations
@@ -25,9 +28,17 @@ from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.models.purchase_return import PurchaseReturn
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 from apps.kuaizhizao.models.sales_return import SalesReturn
+from apps.kuaizhizao.services.document_recognition import (
+    payable_recognition_from_doc,
+    revenue_recognition_from_doc,
+)
+from core.utils.timezone_utils import to_site_date
 
 _EXCLUDED_REVIEW = ("待审核", "驳回", "已驳回", "rejected", "审核驳回", "草稿", "PENDING", "DRAFT")
 _MONEY = Decimal("0.01")
+# 与仓储确认态对齐：禁止只认「已入库/已出库」漏掉「已完成」等同义状态
+_PURCHASE_RECEIPT_POSTED_STATUSES = ("已入库", "已完成", "completed", "COMPLETED", "processed", "POSTED")
+_SALES_DELIVERY_POSTED_STATUSES = ("已出库", "已完成", "completed", "COMPLETED", "processed", "POSTED", "done", "DONE")
 
 
 def _q_money(value: Decimal | float | int | str) -> Decimal:
@@ -39,13 +50,42 @@ def _business_date_from_row(dt: Optional[datetime]) -> Optional[date]:
         return None
     if isinstance(dt, date) and not isinstance(dt, datetime):
         return dt
-    return dt.date()
+    return to_site_date(dt)
 
 
-def _in_date_range(biz: Optional[date], start: date, end: date) -> bool:
+def _coerce_sort_date(value: Any) -> date:
+    """排序/区间比较统一为 date，避免 str 与 date 混比。"""
+    if value is None:
+        return date.min
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value).strip()
+    if not text:
+        return date.min
+    return date.fromisoformat(text[:10])
+
+
+def _line_sort_key(ln: Dict[str, Any]) -> Tuple[date, str, int]:
+    raw = ln.get("sort_date")
+    if raw is None:
+        raw = ln.get("date")
+    try:
+        doc_id = int(ln.get("doc_id") or 0)
+    except (TypeError, ValueError):
+        doc_id = 0
+    return (_coerce_sort_date(raw), str(ln.get("doc_type") or ""), doc_id)
+
+
+def _in_date_range(
+    biz: Optional[date | datetime | str],
+    start: date | datetime | str,
+    end: date | datetime | str,
+) -> bool:
     if biz is None:
         return False
-    return start <= biz <= end
+    return _coerce_sort_date(start) <= _coerce_sort_date(biz) <= _coerce_sort_date(end)
 
 
 async def _posted_source_ids(
@@ -104,6 +144,38 @@ async def _posted_payable_source_ids(
     return {int(p.source_id) for p in rows if p.source_id is not None}
 
 
+async def partner_statement_ledger_posted_doc_ids(
+    tenant_id: int,
+    partner_id: int,
+    partner_type: str,
+) -> Set[Tuple[str, int]]:
+    """已对账立账的 (doc_type, doc_id)，含按行旧应付与整单对账立账。"""
+    from apps.kuaicaiwu.models.partner_statement import PartnerStatement
+
+    out: Set[Tuple[str, int]] = set()
+    rows = await PartnerStatement.filter(
+        tenant_id=tenant_id,
+        partner_id=partner_id,
+        partner_type=partner_type,
+        ledger_posted_at__not_isnull=True,
+        deleted_at__isnull=True,
+    ).only("transaction_details").all()
+    for stmt in rows:
+        details = stmt.transaction_details if isinstance(stmt.transaction_details, dict) else {}
+        for ln in details.get("lines") or []:
+            if int(ln.get("tree_level") or 0) > 0:
+                continue
+            dt = str(ln.get("doc_type") or "").strip()
+            did = ln.get("doc_id")
+            if not dt or did is None:
+                continue
+            try:
+                out.add((dt, int(did)))
+            except (TypeError, ValueError):
+                continue
+    return out
+
+
 def _settlement_line(
     *,
     biz_date: date,
@@ -144,13 +216,15 @@ class FinanceSettlementSourceQuery:
         customer_id: int,
         start_date: date,
         end_date: date,
+        *,
+        require_statement_strategy: bool = True,
     ) -> List[Dict[str, Any]]:
         lines: List[Dict[str, Any]] = []
 
         deliveries = await SalesDelivery.filter(
             tenant_id=tenant_id,
             customer_id=customer_id,
-            status="已出库",
+            status__in=list(_SALES_DELIVERY_POSTED_STATUSES),
             deleted_at__isnull=True,
         ).exclude(review_status__in=_EXCLUDED_REVIEW).order_by("delivery_time", "id").all()
 
@@ -158,9 +232,19 @@ class FinanceSettlementSourceQuery:
         posted_del = await _posted_receivable_source_ids(
             tenant_id, RECEIVABLE_SOURCE_SALES_DELIVERY, delivery_ids
         )
+        stmt_covered = await partner_statement_ledger_posted_doc_ids(
+            tenant_id, customer_id, "Customer"
+        )
         for d in deliveries:
+            if (
+                require_statement_strategy
+                and revenue_recognition_from_doc(d) != "on_partner_statement"
+            ):
+                continue
             biz = _business_date_from_row(d.delivery_time) or _business_date_from_row(d.review_time)
             if not _in_date_range(biz, start_date, end_date):
+                continue
+            if ("销售出库", int(d.id)) in stmt_covered:
                 continue
             if int(d.id) in posted_del:
                 continue
@@ -191,8 +275,15 @@ class FinanceSettlementSourceQuery:
             tenant_id, RECEIVABLE_SOURCE_SALES_RETURN, return_ids
         )
         for r in returns:
+            if (
+                require_statement_strategy
+                and revenue_recognition_from_doc(r) != "on_partner_statement"
+            ):
+                continue
             biz = _business_date_from_row(r.return_time) or _business_date_from_row(r.review_time)
             if not _in_date_range(biz, start_date, end_date):
+                continue
+            if ("销售退货", int(r.id)) in stmt_covered:
                 continue
             if int(r.id) in posted_ret:
                 continue
@@ -216,7 +307,7 @@ class FinanceSettlementSourceQuery:
                 )
             )
 
-        lines.sort(key=lambda x: (x["sort_date"], x["doc_type"], x.get("doc_id", 0)))
+        lines.sort(key=_line_sort_key)
         for ln in lines:
             ln.pop("sort_date", None)
         return lines
@@ -227,13 +318,15 @@ class FinanceSettlementSourceQuery:
         supplier_id: int,
         start_date: date,
         end_date: date,
+        *,
+        tax_inclusive: bool = True,
     ) -> List[Dict[str, Any]]:
         lines: List[Dict[str, Any]] = []
 
         receipts = await PurchaseReceipt.filter(
             tenant_id=tenant_id,
             supplier_id=supplier_id,
-            status="已入库",
+            status__in=list(_PURCHASE_RECEIPT_POSTED_STATUSES),
             deleted_at__isnull=True,
         ).exclude(review_status__in=_EXCLUDED_REVIEW).order_by("receipt_time", "id").all()
 
@@ -241,14 +334,27 @@ class FinanceSettlementSourceQuery:
         posted_rc = await _posted_payable_source_ids(
             tenant_id, PAYABLE_SOURCE_PURCHASE_RECEIPT, receipt_ids
         )
+        stmt_covered = await partner_statement_ledger_posted_doc_ids(
+            tenant_id, supplier_id, "Supplier"
+        )
         for p in receipts:
+            if payable_recognition_from_doc(p) != "on_partner_statement":
+                continue
             biz = _business_date_from_row(p.receipt_time) or _business_date_from_row(p.review_time)
             if not _in_date_range(biz, start_date, end_date):
                 continue
+            if ("采购入库", int(p.id)) in stmt_covered:
+                continue
             if int(p.id) in posted_rc:
                 continue
-            amt = _q_money(p.total_amount)
-            if amt <= 0:
+            # total_amount=未税合计，tax_amount=税额，net_amount=价税合计。对账口径只取已保存字段。
+            excl = _q_money(p.total_amount)
+            tax = _q_money(p.tax_amount)
+            incl = _q_money(p.net_amount)
+            if incl <= 0:
+                incl = excl
+            active = incl if tax_inclusive else excl
+            if active <= 0:
                 continue
             lines.append(
                 _settlement_line(
@@ -256,13 +362,16 @@ class FinanceSettlementSourceQuery:
                     doc_type="采购入库",
                     doc_code=p.receipt_code,
                     doc_id=int(p.id),
-                    amount=amt,
+                    amount=active,
                     finance_source_type=PAYABLE_SOURCE_PURCHASE_RECEIPT,
                     is_credit=False,
                     summary=f"采购入库 {p.receipt_code}",
                     extra={
                         "inbound_detail_doc_type": "purchase_receipt",
                         "inbound_detail_doc_id": int(p.id),
+                        "amount_excluding_tax": float(excl),
+                        "tax_amount": float(tax),
+                        "amount_including_tax": float(incl),
                     },
                 )
             )
@@ -278,8 +387,12 @@ class FinanceSettlementSourceQuery:
             tenant_id, PAYABLE_SOURCE_PURCHASE_RETURN, return_ids
         )
         for r in returns:
+            if payable_recognition_from_doc(r) != "on_partner_statement":
+                continue
             biz = _business_date_from_row(r.return_time) or _business_date_from_row(r.review_time)
             if not _in_date_range(biz, start_date, end_date):
+                continue
+            if ("采购退货", int(r.id)) in stmt_covered:
                 continue
             if int(r.id) in posted_ret:
                 continue
@@ -303,7 +416,25 @@ class FinanceSettlementSourceQuery:
                 )
             )
 
-        lines.sort(key=lambda x: (x["sort_date"], x["doc_type"], x.get("doc_id", 0)))
+        outsource_lines = await self.list_outsource_supplier_unposted_lines(
+            tenant_id, supplier_id, start_date, end_date
+        )
+        seen: Set[Tuple[Any, Any]] = {
+            (ln.get("doc_type"), ln.get("doc_id"))
+            for ln in lines
+            if ln.get("doc_id") is not None
+        }
+        for ln in outsource_lines:
+            key = (ln.get("doc_type"), ln.get("doc_id"))
+            if ln.get("doc_id") is not None and key in seen:
+                continue
+            # 委外列表已 pop sort_date，合并前用 date 字符串回填，避免与入库行 date/str 混排
+            if ln.get("sort_date") is None and ln.get("date") is not None:
+                ln["sort_date"] = _coerce_sort_date(ln.get("date"))
+            lines.append(ln)
+            if ln.get("doc_id") is not None:
+                seen.add(key)
+        lines.sort(key=_line_sort_key)
         for ln in lines:
             ln.pop("sort_date", None)
         return lines
@@ -332,12 +463,15 @@ class FinanceSettlementSourceQuery:
                 id__in=list(order_ids),
                 supplier_id=supplier_id,
                 deleted_at__isnull=True,
-                payable_recognition="on_partner_statement",
             ).all()
             order_by_id = {int(o.id): o for o in orders}
             for b in batch_rows:
                 oo = order_by_id.get(int(b.outsource_order_id))
                 if not oo:
+                    continue
+                if payable_recognition_from_doc(b) != "on_partner_statement" and payable_recognition_from_doc(
+                    oo
+                ) != "on_partner_statement":
                     continue
                 biz = _business_date_from_row(b.created_at)
                 if not _in_date_range(biz, start_date, end_date):
@@ -364,13 +498,20 @@ class FinanceSettlementSourceQuery:
                     )
                 )
 
+        # OutsourceMaterialReceipt 无 review_status；门禁用 status=completed（见下方归一）
         receipts = await OutsourceMaterialReceipt.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
-            status="completed",
+            status__in=["completed", "draft"],
         ).order_by("received_at", "id").all()
         if receipts:
             from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
+            from apps.kuaizhizao.services.outsource_material_receipt_service import (
+                OutsourceMaterialReceiptService,
+            )
+
+            await OutsourceMaterialReceiptService()._normalize_legacy_draft_receipts(receipts)
+            receipts = [r for r in receipts if str(r.status or "").strip() == "completed"]
 
             owo_ids = {int(r.outsource_work_order_id) for r in receipts}
             orders = await OutsourceWorkOrder.filter(
@@ -378,16 +519,23 @@ class FinanceSettlementSourceQuery:
                 id__in=list(owo_ids),
                 supplier_id=supplier_id,
                 deleted_at__isnull=True,
-                payable_recognition="on_partner_statement",
             ).all()
             owo_by_id = {int(o.id): o for o in orders}
-            receipt_ids = [int(r.id) for r in receipts if int(r.outsource_work_order_id) in owo_by_id]
+            statement_receipts: List[Any] = []
+            for r in receipts:
+                wo = owo_by_id.get(int(r.outsource_work_order_id))
+                if not wo:
+                    continue
+                if payable_recognition_from_doc(r) != "on_partner_statement" and payable_recognition_from_doc(
+                    wo
+                ) != "on_partner_statement":
+                    continue
+                statement_receipts.append(r)
+            receipt_ids = [int(r.id) for r in statement_receipts]
             posted = await _posted_payable_source_ids(
                 tenant_id, PAYABLE_SOURCE_OUTSOURCE_RECEIPT, receipt_ids
             )
-            for r in receipts:
-                if int(r.outsource_work_order_id) not in owo_by_id:
-                    continue
+            for r in statement_receipts:
                 if int(r.id) in posted:
                     continue
                 biz = _business_date_from_row(r.received_at) or _business_date_from_row(r.created_at)
@@ -413,32 +561,50 @@ class FinanceSettlementSourceQuery:
                     )
                 )
 
-        lines.sort(key=lambda x: (x["sort_date"], x["doc_type"], x.get("doc_id", 0)))
+        lines.sort(key=_line_sort_key)
         for ln in lines:
             ln.pop("sort_date", None)
         return lines
 
     async def sum_customer_unposted_debits_before(
-        self, tenant_id: int, customer_id: int, before_date: date
+        self,
+        tenant_id: int,
+        customer_id: int,
+        before_date: date,
+        *,
+        require_statement_strategy: bool = True,
     ) -> Decimal:
         start = date(1970, 1, 1)
         end = before_date.fromordinal(before_date.toordinal() - 1) if before_date.toordinal() > 1 else before_date
         if end < start:
             return Decimal("0")
-        lines = await self.list_customer_unposted_lines(tenant_id, customer_id, start, end)
+        lines = await self.list_customer_unposted_lines(
+            tenant_id,
+            customer_id,
+            start,
+            end,
+            require_statement_strategy=require_statement_strategy,
+        )
         total = Decimal("0")
         for ln in lines:
             total += _q_money(ln.get("debit", 0)) - _q_money(ln.get("credit", 0))
         return _q_money(total)
 
     async def sum_supplier_unposted_debits_before(
-        self, tenant_id: int, supplier_id: int, before_date: date
+        self,
+        tenant_id: int,
+        supplier_id: int,
+        before_date: date,
+        *,
+        tax_inclusive: bool = True,
     ) -> Decimal:
         start = date(1970, 1, 1)
         end = before_date.fromordinal(before_date.toordinal() - 1) if before_date.toordinal() > 1 else before_date
         if end < start:
             return Decimal("0")
-        lines = await self.list_supplier_unposted_lines(tenant_id, supplier_id, start, end)
+        lines = await self.list_supplier_unposted_lines(
+            tenant_id, supplier_id, start, end, tax_inclusive=tax_inclusive
+        )
         total = Decimal("0")
         for ln in lines:
             total += _q_money(ln.get("debit", 0)) - _q_money(ln.get("credit", 0))

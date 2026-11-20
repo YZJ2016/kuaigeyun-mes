@@ -10,6 +10,8 @@ from typing import List, Optional, Sequence, Tuple
 
 from apps.kuaicaiwu.constants.finance_source_types import (
     PAYABLE_SOURCE_ORDER_MILESTONE,
+    PAYABLE_SOURCE_PARTNER_STATEMENT,
+    PAYABLE_SOURCE_PURCHASE_INVOICE,
     PAYABLE_SOURCE_PURCHASE_RECEIPT,
     is_payable_red_total_source,
 )
@@ -249,6 +251,8 @@ class PayablePrepaymentApplyService:
             return None
         source_type = str(getattr(payable, "source_type", "") or "").strip()
         source_id = getattr(payable, "source_id", None)
+        if source_type == PAYABLE_SOURCE_PARTNER_STATEMENT:
+            return None
         if source_type in _PURCHASE_ORDER_PAYABLE_SOURCE_TYPES and source_id:
             return int(source_id)
         if source_type in _PURCHASE_RECEIPT_PAYABLE_SOURCE_TYPES and source_id:
@@ -269,6 +273,18 @@ class PayablePrepaymentApplyService:
             )
             if milestone and milestone.purchase_order_id:
                 return int(milestone.purchase_order_id)
+        if source_type in (
+            PAYABLE_SOURCE_PURCHASE_INVOICE,
+            "purchase_invoice",
+            "PurchaseInvoice",
+        ) and source_id:
+            from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
+
+            invoice = await PurchaseInvoice.get_or_none(
+                tenant_id=tenant_id, id=int(source_id), deleted_at__isnull=True
+            )
+            po_id = getattr(invoice, "purchase_order_id", None) if invoice else None
+            return int(po_id) if po_id else None
         rel = await DocumentRelation.filter(
             tenant_id=tenant_id,
             source_type="purchase_order",
@@ -277,7 +293,7 @@ class PayablePrepaymentApplyService:
         ).first()
         if rel and rel.source_id:
             return int(rel.source_id)
-        if source_id:
+        if source_type in _PURCHASE_RECEIPT_PAYABLE_SOURCE_TYPES and source_id:
             po_from_receipt_rel = await DocumentRelation.filter(
                 tenant_id=tenant_id,
                 source_type="purchase_order",

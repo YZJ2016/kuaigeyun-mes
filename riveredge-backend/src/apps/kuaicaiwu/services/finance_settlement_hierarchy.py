@@ -5,7 +5,21 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Set, Tuple
+
+
+def _coerce_hierarchy_sort_date(value: Any) -> date:
+    if value is None:
+        return date.min
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value).strip()
+    if not text:
+        return date.min
+    return date.fromisoformat(text[:10])
 
 
 async def order_lines_by_settlement_hierarchy(
@@ -254,11 +268,20 @@ async def order_lines_by_settlement_hierarchy(
             row["tree_level"] = 0
             orphans.append(row)
 
+    def _doc_id_key(ln: Dict[str, Any]) -> int:
+        try:
+            return int(ln.get("doc_id") or 0)
+        except (TypeError, ValueError):
+            return 0
+
     def _line_sort_key(ln: Dict[str, Any]) -> Tuple[Any, ...]:
+        raw = ln.get(sort_date_key)
+        if raw is None:
+            raw = ln.get(date_fallback_key)
         return (
-            ln.get(sort_date_key) or ln.get(date_fallback_key) or "",
-            ln.get("doc_type") or "",
-            ln.get("doc_id") or 0,
+            _coerce_hierarchy_sort_date(raw),
+            str(ln.get("doc_type") or ""),
+            _doc_id_key(ln),
         )
 
     for pid in buckets:
@@ -278,10 +301,14 @@ async def order_lines_by_settlement_hierarchy(
 
     top_items.sort(
         key=lambda item: (
-            item[1].get(sort_date_key) or item[1].get(date_fallback_key) or "",
+            _coerce_hierarchy_sort_date(
+                item[1].get(sort_date_key)
+                if item[1].get(sort_date_key) is not None
+                else item[1].get(date_fallback_key)
+            ),
             0 if item[0] == "parent" else 1,
-            item[1].get("doc_type") or "",
-            item[1].get("doc_id") or 0,
+            str(item[1].get("doc_type") or ""),
+            _doc_id_key(item[1]),
         )
     )
 

@@ -1,8 +1,7 @@
-import React, { useMemo } from 'react';
-import { InputNumber, Typography } from 'antd';
+import React, { useMemo, useState } from 'react';
+import { Input, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { TFunction } from 'i18next';
-import { useNumericPrecisionPlaces } from '../../../hooks/useNumericPrecision';
 import { formatBusinessDateOnly } from '../../../utils/format';
 import type { PartnerStatementLine } from '../services/finance/partnerStatement';
 import { renderFinanceHierarchyDocType } from './partnerStatementLineDisplay';
@@ -20,11 +19,64 @@ export type PartnerStatementLineColumnOptions = {
   onDocCodeClick?: (line: PartnerStatementLine) => void;
 };
 
+function formatAmountSeed(value: number): string {
+  if (!Number.isFinite(value)) return '';
+  return String(value);
+}
+
+/**
+ * 未聚焦：展示值唯一来自 props（行上的 statement_amount）。
+ * 聚焦：仅草稿字符串；失焦交回父级 patch + recalc。禁止 useEffect 从父级回写子 state。
+ */
+function PartnerStatementAmountInput({
+  value,
+  onCommit,
+}: {
+  value: number;
+  onCommit: (amount: number) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  const displayValue = editing ? draft : formatAmountSeed(value);
+
+  const finishEdit = (raw: string) => {
+    setEditing(false);
+    const next = Number(String(raw).replace(/,/g, '').trim());
+    if (!Number.isFinite(next) || next <= 0) {
+      return;
+    }
+    if (Math.abs(next - value) > 1e-9) {
+      onCommit(next);
+    }
+  };
+
+  return (
+    <Input
+      size="small"
+      inputMode="decimal"
+      value={displayValue}
+      style={{ width: '100%', textAlign: 'right' }}
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      onFocus={(e) => {
+        setDraft(formatAmountSeed(value));
+        setEditing(true);
+        e.target.select();
+      }}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={(e) => finishEdit(e.target.value)}
+      onPressEnter={(e) => {
+        (e.target as HTMLInputElement).blur();
+      }}
+    />
+  );
+}
+
 export function usePartnerStatementLineColumns(
   options: PartnerStatementLineColumnOptions,
 ): ColumnsType<PartnerStatementLine> {
   const { t, balanceLabel, editable, onStatementAmountChange, lineKey, onDocCodeClick } = options;
-  const amountDecimals = useNumericPrecisionPlaces('amount');
 
   return useMemo(
     () => [
@@ -35,7 +87,11 @@ export function usePartnerStatementLineColumns(
         width: 120,
         render: (v: string, record: PartnerStatementLine) => renderFinanceHierarchyDocType(v, record),
       },
-      { title: t(`${PS}.col.docCode`), dataIndex: 'doc_code', width: 140, ellipsis: true,
+      {
+        title: t(`${PS}.col.docCode`),
+        dataIndex: 'doc_code',
+        width: 140,
+        ellipsis: true,
         render: (value: string, record: PartnerStatementLine) => {
           if (onDocCodeClick && isPartnerStatementFinanceVoucherLine(record)) {
             return (
@@ -79,27 +135,21 @@ export function usePartnerStatementLineColumns(
       {
         title: t(`${PS}.col.statementAmount`),
         dataIndex: 'statement_amount',
-        width: 130,
+        width: 140,
         align: 'right' as const,
+        onCell: () => ({
+          onClick: (e: React.MouseEvent) => e.stopPropagation(),
+        }),
         render: (_: unknown, row: PartnerStatementLine, index: number) => {
           const value = Number(row.statement_amount ?? row.debit ?? row.credit ?? 0);
-          const max = Number(row.remaining_amount ?? row.doc_amount ?? value);
           if (!editable) {
             return partnerStatementMoney(value);
           }
           const key = lineKey ? lineKey(row, index) : `${row.doc_code}-${index}`;
           return (
-            <InputNumber
-              size="small"
-              min={0.01}
-              max={max > 0 ? max : undefined}
-              precision={amountDecimals}
+            <PartnerStatementAmountInput
               value={value}
-              style={{ width: '100%' }}
-              onChange={(next) => {
-                if (next == null) return;
-                onStatementAmountChange?.(key, Number(next));
-              }}
+              onCommit={(amount) => onStatementAmountChange?.(key, amount)}
             />
           );
         },
@@ -126,6 +176,6 @@ export function usePartnerStatementLineColumns(
         render: (v: unknown) => partnerStatementMoney(v as number),
       },
     ],
-    [balanceLabel, amountDecimals, editable, lineKey, onDocCodeClick, onStatementAmountChange, t],
+    [balanceLabel, editable, lineKey, onDocCodeClick, onStatementAmountChange, t],
   );
 }

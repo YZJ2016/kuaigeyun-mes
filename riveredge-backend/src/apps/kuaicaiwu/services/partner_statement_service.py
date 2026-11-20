@@ -20,8 +20,10 @@ from apps.common.audit_actor import apply_update_audit
 from apps.common.base_service import AppBaseService
 from apps.kuaicaiwu.constants.finance_source_types import (
     PAYABLE_SOURCE_OUTSOURCE_RECEIPT,
+    PAYABLE_SOURCE_PARTNER_STATEMENT,
     PAYABLE_SOURCE_PURCHASE_RECEIPT,
     PAYABLE_SOURCE_PURCHASE_RETURN,
+    RECEIVABLE_SOURCE_PARTNER_STATEMENT,
     RECEIVABLE_SOURCE_SALES_DELIVERY,
     RECEIVABLE_SOURCE_SALES_RETURN,
 )
@@ -86,6 +88,76 @@ def _line_doc_key(doc_type: Any, doc_id: Any) -> Optional[Tuple[str, int]]:
 
 def _abs_money(value: Decimal | float | int | str) -> Decimal:
     return abs(_q_money(value))
+
+
+def _net_statement_ledger_amount(lines: List[Dict[str, Any]]) -> Decimal:
+    """对账立账整单金额：借贷方向合并本次对账金额。"""
+    net = Decimal("0")
+    for ln in lines:
+        stmt_amt = _q_money(ln.get("statement_amount") or ln.get("doc_amount") or 0)
+        if stmt_amt <= 0:
+            continue
+        debit = _q_money(ln.get("debit", 0))
+        credit = _q_money(ln.get("credit", 0))
+        if credit > debit:
+            net -= stmt_amt
+        else:
+            net += stmt_amt
+    return _q_money(net)
+
+
+def _coerce_statement_sort_date(value: Any) -> date:
+    """排序键统一为 date；未立账源单仅带 ISO 字符串 date，须与 ORM date 可比较。"""
+    if value is None:
+        return date.min
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value).strip()
+    if not text:
+        return date.min
+    return date.fromisoformat(text[:10])
+
+
+def _statement_line_sort_key(ln: Dict[str, Any]) -> Tuple[date, str, int]:
+    """对账单明细排序键；未立账源单行可能在查询服务内已去掉 sort_date。"""
+    sd_raw = ln.get("sort_date")
+    if sd_raw is None:
+        sd_raw = ln.get("date")
+    sort_date = _coerce_statement_sort_date(sd_raw)
+    doc_type = str(ln.get("doc_type") or "")
+    try:
+        doc_id = int(ln.get("doc_id") or 0)
+    except (TypeError, ValueError):
+        doc_id = 0
+    return (sort_date, doc_type, doc_id)
+
+
+AMOUNT_BASIS_TAX_INCLUSIVE = "tax_inclusive"
+AMOUNT_BASIS_TAX_EXCLUSIVE = "tax_exclusive"
+
+
+def parse_statement_amount_basis(value: Optional[str]) -> str:
+    basis = str(value or AMOUNT_BASIS_TAX_INCLUSIVE).strip()
+    if basis not in (AMOUNT_BASIS_TAX_INCLUSIVE, AMOUNT_BASIS_TAX_EXCLUSIVE):
+        raise ValidationError("amount_basis 须为 tax_inclusive 或 tax_exclusive")
+    return basis
+
+def _rewrite_line_stored_amount_basis(ln: Dict[str, Any], amount_basis: str) -> None:
+    """单据金额已等于未税或价税合计时，改到本次口径。不改已经部分对账的金额。"""
+    if ln.get("amount_excluding_tax") is None or ln.get("amount_including_tax") is None:
+        return
+    excl = _q_money(ln["amount_excluding_tax"])
+    incl = _q_money(ln["amount_including_tax"])
+    current = _line_doc_amount(ln)
+    if current != excl and current != incl:
+        return
+    target = incl if amount_basis != AMOUNT_BASIS_TAX_EXCLUSIVE else excl
+    is_credit = _q_money(ln.get("credit", 0)) > 0 and _q_money(ln.get("debit", 0)) <= 0
+    ln["doc_amount"] = float(target)
+    ln["debit"] = 0.0 if is_credit else float(target)
+    ln["credit"] = float(target) if is_credit else 0.0
 
 
 def _line_doc_amount(ln: Dict[str, Any]) -> Decimal:
@@ -229,6 +301,18 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             }
         raise ValidationError("partner_type 必须为 Customer、Supplier 或 Outsource")
 
+    # 对账明细中属「按月结对账单立账」业务源单的类型（与预览真源一致）
+    _STATEMENT_LEDGER_LINE_DOC_TYPES = frozenset(
+        {
+            "采购入库",
+            "采购退货",
+            "销售出库",
+            "销售退货",
+            "委外收货",
+            "工序委外收货",
+        }
+    )
+
     async def _partner_uses_statement_ledger(
         self, tenant_id: int, partner_id: int, partner_type: str
     ) -> bool:
@@ -242,6 +326,30 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             return True
         resolved = await cfg.resolve_payable_recognition(tenant_id, partner_id)
         return resolved == "on_partner_statement"
+
+    @classmethod
+    def _lines_support_statement_ledger(cls, lines: Any) -> bool:
+        if not isinstance(lines, list):
+            return False
+        for ln in lines:
+            if not isinstance(ln, dict):
+                continue
+            if int(ln.get("tree_level") or 0) > 0:
+                continue
+            if str(ln.get("doc_type") or "").strip() in cls._STATEMENT_LEDGER_LINE_DOC_TYPES:
+                return True
+        return False
+
+    async def _statement_supports_ledger_modes(self, obj: PartnerStatement) -> bool:
+        """客商默认按月结，或本单明细已是月结业务源单时，允许选立即/按发票立账。"""
+        if await self._partner_uses_statement_ledger(
+            int(obj.tenant_id), int(obj.partner_id), str(obj.partner_type)
+        ):
+            return True
+        details = obj.transaction_details or {}
+        return self._lines_support_statement_ledger(
+            details.get("lines") if isinstance(details, dict) else None
+        )
 
     def _approved_doc_filter(self) -> Q:
         return Q(review_status__in=_APPROVED_REVIEW) | Q(review_status__isnull=True)
@@ -334,27 +442,145 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
 
         return _q_money(total)
 
+    async def _attach_purchase_receipt_amount_parts(
+        self, tenant_id: int, lines: List[Dict[str, Any]]
+    ) -> None:
+        """应付单若来自采购入库，带上入库单已保存的未税、税额、价税合计。不改应付账面金额。"""
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+
+        receipt_ids: List[int] = []
+        for ln in lines:
+            if ln.get("amount_including_tax") is not None and ln.get("amount_excluding_tax") is not None:
+                continue
+            rid = None
+            if ln.get("inbound_detail_doc_type") == "purchase_receipt":
+                rid = ln.get("inbound_detail_doc_id")
+            elif ln.get("doc_type") == "采购入库":
+                rid = ln.get("doc_id")
+            if rid:
+                receipt_ids.append(int(rid))
+        if not receipt_ids:
+            return
+        rows = await PurchaseReceipt.filter(
+            tenant_id=tenant_id, id__in=list(set(receipt_ids)), deleted_at__isnull=True
+        ).all()
+        by_id = {int(p.id): p for p in rows}
+        for ln in lines:
+            if ln.get("amount_including_tax") is not None and ln.get("amount_excluding_tax") is not None:
+                continue
+            rid = None
+            if ln.get("inbound_detail_doc_type") == "purchase_receipt":
+                rid = ln.get("inbound_detail_doc_id")
+            elif ln.get("doc_type") == "采购入库":
+                rid = ln.get("doc_id")
+            if not rid or int(rid) not in by_id:
+                continue
+            receipt = by_id[int(rid)]
+            excl = _q_money(receipt.total_amount)
+            tax = _q_money(receipt.tax_amount)
+            incl = _q_money(receipt.net_amount)
+            if incl <= 0:
+                incl = excl
+            ln["amount_excluding_tax"] = float(excl)
+            ln["tax_amount"] = float(tax)
+            ln["amount_including_tax"] = float(incl)
+
     async def _calc_opening_balance(
-        self, tenant_id: int, partner_id: int, partner_type: str, start_date: date
+        self,
+        tenant_id: int,
+        partner_id: int,
+        partner_type: str,
+        start_date: date,
+        amount_basis: str = AMOUNT_BASIS_TAX_INCLUSIVE,
     ) -> Decimal:
         debits = await self._sum_debits_before(tenant_id, partner_id, partner_type, start_date)
         credits = await self._sum_credits_before(tenant_id, partner_id, partner_type, start_date)
         opening = _q_money(debits - credits)
-        if await self._partner_uses_statement_ledger(tenant_id, partner_id, partner_type):
-            from apps.kuaizhizao.services.finance_settlement_source_query import (
-                FinanceSettlementSourceQuery,
-            )
+        from apps.kuaizhizao.services.finance_settlement_source_query import (
+            FinanceSettlementSourceQuery,
+        )
 
-            q = FinanceSettlementSourceQuery()
-            if partner_type == "Customer":
-                opening += await q.sum_customer_unposted_debits_before(
-                    tenant_id, partner_id, start_date
-                )
-            else:
-                opening += await q.sum_supplier_unposted_debits_before(
-                    tenant_id, partner_id, start_date
-                )
+        q = FinanceSettlementSourceQuery()
+        partner_uses_statement_ledger = await self._partner_uses_statement_ledger(
+            tenant_id, partner_id, partner_type
+        )
+        # 单据头为按月结的未立账源单：无论客商默认是否按月结，都并入期初（单据字段为真源）
+        if partner_type == "Customer":
+            opening += await q.sum_customer_unposted_debits_before(
+                tenant_id,
+                partner_id,
+                start_date,
+                require_statement_strategy=not partner_uses_statement_ledger,
+            )
+        else:
+            opening += await q.sum_supplier_unposted_debits_before(
+                tenant_id,
+                partner_id,
+                start_date,
+                tax_inclusive=amount_basis != AMOUNT_BASIS_TAX_EXCLUSIVE,
+            )
+        if not partner_uses_statement_ledger:
+            opening += await self._purchase_receipt_payable_basis_delta(
+                tenant_id, partner_id, partner_type, start_date, amount_basis
+            )
         return _q_money(opening)
+
+    async def _purchase_receipt_payable_basis_delta(
+        self,
+        tenant_id: int,
+        partner_id: int,
+        partner_type: str,
+        before_date: date,
+        amount_basis: str,
+    ) -> Decimal:
+        """应付账面等于入库未税或价税合计时，期初改到同一口径。"""
+        if partner_type == "Customer":
+            return Decimal("0")
+        rows = await Payable.filter(
+            tenant_id=tenant_id,
+            supplier_id=partner_id,
+            business_date__lt=before_date,
+            deleted_at__isnull=True,
+        ).exclude(review_status__in=_EXCLUDED_REVIEW).all()
+        matched: List[Payable] = []
+        receipt_ids: List[int] = []
+        for payable in rows:
+            src = str(payable.source_type or "").strip()
+            if not payable.source_id:
+                continue
+            if src not in (
+                PAYABLE_SOURCE_PURCHASE_RECEIPT,
+                "purchase_receipt",
+                "PurchaseReceipt",
+            ):
+                continue
+            matched.append(payable)
+            receipt_ids.append(int(payable.source_id))
+        if not matched:
+            return Decimal("0")
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+
+        receipts = await PurchaseReceipt.filter(
+            tenant_id=tenant_id, id__in=list(set(receipt_ids))
+        ).all()
+        by_id = {int(receipt.id): receipt for receipt in receipts}
+        delta = Decimal("0")
+        for payable in matched:
+            receipt = by_id.get(int(payable.source_id))
+            if receipt is None:
+                continue
+            excl = _q_money(receipt.total_amount)
+            incl = _q_money(receipt.net_amount)
+            if incl <= 0:
+                incl = excl
+            signed = _q_money(payable.total_amount)
+            magnitude = _abs_money(signed)
+            if magnitude != excl and magnitude != incl:
+                continue
+            target = incl if amount_basis != AMOUNT_BASIS_TAX_EXCLUSIVE else excl
+            signed_target = target if signed >= 0 else -target
+            delta += signed_target - signed
+        return _q_money(delta)
 
     async def _collect_statement_ledger_period_lines(
         self,
@@ -363,8 +589,12 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         partner_type: str,
         start_date: date,
         end_date: date,
+        amount_basis: str = AMOUNT_BASIS_TAX_INCLUSIVE,
     ) -> List[Dict[str, Any]]:
-        """按对账单立账：借方=未立账出库/入库/退货，贷方=已确认收付款。"""
+        """对账本期明细唯一来源：单据头为按月结对账单的未立账业务源单。
+
+        不含应付单/付款单/应收单/收款单；期初余额仍可由历史收付反映。
+        """
         from apps.kuaizhizao.services.finance_settlement_source_query import (
             FinanceSettlementSourceQuery,
         )
@@ -374,90 +604,35 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         if partner_type == "Customer":
             lines.extend(
                 await q.list_customer_unposted_lines(
-                    tenant_id, partner_id, start_date, end_date
+                    tenant_id,
+                    partner_id,
+                    start_date,
+                    end_date,
+                    require_statement_strategy=True,
                 )
             )
-            receipts = await Receipt.filter(
-                tenant_id=tenant_id,
-                customer_id=partner_id,
-                receipt_date__gte=start_date,
-                receipt_date__lte=end_date,
-                status="Confirmed",
-                deleted_at__isnull=True,
-            ).order_by("receipt_date", "id").all()
-            for r in receipts:
-                amt = _abs_money(r.total_amount)
-                is_refund = _is_refund_voucher(getattr(r, "settlement_type", None), r.total_amount)
-                lines.append({
-                    "date": to_api_isoformat(r.receipt_date),
-                    "sort_date": r.receipt_date,
-                    "doc_type": "收款退款" if is_refund else "收款单",
-                    "doc_code": r.receipt_code,
-                    "summary": r.notes or ("收款退款" if is_refund else "收款"),
-                    "debit": float(amt) if is_refund else 0.0,
-                    "credit": 0.0 if is_refund else float(amt),
-                    "doc_id": r.id,
-                    "doc_amount": float(amt),
-                })
         elif partner_type == "Outsource":
             lines.extend(
                 await q.list_outsource_supplier_unposted_lines(
                     tenant_id, partner_id, start_date, end_date
                 )
             )
-            payments = await Payment.filter(
-                tenant_id=tenant_id,
-                supplier_id=partner_id,
-                payment_date__gte=start_date,
-                payment_date__lte=end_date,
-                status="Confirmed",
-                deleted_at__isnull=True,
-            ).order_by("payment_date", "id").all()
-            for p in payments:
-                amt = _abs_money(p.total_amount)
-                is_refund = _is_refund_voucher(getattr(p, "settlement_type", None), p.total_amount)
-                lines.append({
-                    "date": to_api_isoformat(p.payment_date),
-                    "sort_date": p.payment_date,
-                    "doc_type": "付款退款" if is_refund else "付款单",
-                    "doc_code": p.payment_code,
-                    "summary": p.notes or ("付款退款" if is_refund else "付款"),
-                    "debit": float(amt) if is_refund else 0.0,
-                    "credit": 0.0 if is_refund else float(amt),
-                    "doc_id": p.id,
-                    "doc_amount": float(amt),
-                })
         else:
             lines.extend(
                 await q.list_supplier_unposted_lines(
-                    tenant_id, partner_id, start_date, end_date
+                    tenant_id,
+                    partner_id,
+                    start_date,
+                    end_date,
+                    tax_inclusive=amount_basis != AMOUNT_BASIS_TAX_EXCLUSIVE,
                 )
             )
-            payments = await Payment.filter(
-                tenant_id=tenant_id,
-                supplier_id=partner_id,
-                payment_date__gte=start_date,
-                payment_date__lte=end_date,
-                status="Confirmed",
-                deleted_at__isnull=True,
-            ).order_by("payment_date", "id").all()
-            for p in payments:
-                amt = _abs_money(p.total_amount)
-                is_refund = _is_refund_voucher(getattr(p, "settlement_type", None), p.total_amount)
-                lines.append({
-                    "date": to_api_isoformat(p.payment_date),
-                    "sort_date": p.payment_date,
-                    "doc_type": "付款退款" if is_refund else "付款单",
-                    "doc_code": p.payment_code,
-                    "summary": p.notes or ("付款退款" if is_refund else "付款"),
-                    "debit": float(amt) if is_refund else 0.0,
-                    "credit": 0.0 if is_refund else float(amt),
-                    "doc_id": p.id,
-                    "doc_amount": float(amt),
-                })
-        lines.sort(key=lambda x: (x["sort_date"], x["doc_type"], x.get("doc_id", 0)))
+        lines.sort(key=_statement_line_sort_key)
         for ln in lines:
             ln.pop("sort_date", None)
+        await self._attach_purchase_receipt_amount_parts(tenant_id, lines)
+        for ln in lines:
+            _rewrite_line_stored_amount_basis(ln, amount_basis)
         return lines
 
     async def _collect_period_raw_lines(
@@ -467,139 +642,12 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         partner_type: str,
         start_date: date,
         end_date: date,
+        amount_basis: str = AMOUNT_BASIS_TAX_INCLUSIVE,
     ) -> List[Dict[str, Any]]:
-        if await self._partner_uses_statement_ledger(tenant_id, partner_id, partner_type):
-            return await self._collect_statement_ledger_period_lines(
-                tenant_id, partner_id, partner_type, start_date, end_date
-            )
-        lines: List[Dict[str, Any]] = []
-        if partner_type == "Customer":
-            receivables = await Receivable.filter(
-                tenant_id=tenant_id,
-                customer_id=partner_id,
-                business_date__gte=start_date,
-                business_date__lte=end_date,
-                deleted_at__isnull=True,
-            ).exclude(review_status__in=_EXCLUDED_REVIEW).order_by("business_date", "id").all()
-            receipts = await Receipt.filter(
-                tenant_id=tenant_id,
-                customer_id=partner_id,
-                receipt_date__gte=start_date,
-                receipt_date__lte=end_date,
-                status="Confirmed",
-                deleted_at__isnull=True,
-            ).order_by("receipt_date", "id").all()
-            for r in receivables:
-                amt = _abs_money(r.total_amount)
-                is_return = r.source_type == RECEIVABLE_SOURCE_SALES_RETURN
-                lines.append({
-                    "date": to_api_isoformat(r.business_date),
-                    "sort_date": r.business_date,
-                    "doc_type": "销售退货" if is_return else "应收单",
-                    "doc_code": r.receivable_code,
-                    "summary": r.notes or (
-                        f"销售退货 {r.source_code or ''}".strip()
-                        if is_return
-                        else f"应收 {r.source_code or ''}".strip()
-                    ),
-                    "debit": 0.0 if is_return else float(amt),
-                    "credit": float(amt) if is_return else 0.0,
-                    "doc_id": r.id,
-                    "doc_amount": float(amt),
-                    **(
-                        {"offset_source_id": int(r.source_id)}
-                        if is_return and r.source_id
-                        else {}
-                    ),
-                })
-            for r in receipts:
-                amt = _abs_money(r.total_amount)
-                is_refund = _is_refund_voucher(getattr(r, "settlement_type", None), r.total_amount)
-                lines.append({
-                    "date": to_api_isoformat(r.receipt_date),
-                    "sort_date": r.receipt_date,
-                    "doc_type": "收款退款" if is_refund else "收款单",
-                    "doc_code": r.receipt_code,
-                    "summary": r.notes or ("收款退款" if is_refund else "收款"),
-                    "debit": float(amt) if is_refund else 0.0,
-                    "credit": 0.0 if is_refund else float(amt),
-                    "doc_id": r.id,
-                    "doc_amount": float(amt),
-                })
-        else:
-            payables = await Payable.filter(
-                tenant_id=tenant_id,
-                supplier_id=partner_id,
-                business_date__gte=start_date,
-                business_date__lte=end_date,
-                deleted_at__isnull=True,
-            ).exclude(review_status__in=_EXCLUDED_REVIEW).order_by("business_date", "id").all()
-            payments = await Payment.filter(
-                tenant_id=tenant_id,
-                supplier_id=partner_id,
-                payment_date__gte=start_date,
-                payment_date__lte=end_date,
-                status="Confirmed",
-                deleted_at__isnull=True,
-            ).order_by("payment_date", "id").all()
-            for p in payables:
-                amt = _abs_money(p.total_amount)
-                is_return = p.source_type == PAYABLE_SOURCE_PURCHASE_RETURN
-                line: Dict[str, Any] = {
-                    "date": to_api_isoformat(p.business_date),
-                    "sort_date": p.business_date,
-                    "doc_type": "采购退货" if is_return else "应付单",
-                    "doc_code": p.payable_code,
-                    "summary": p.notes or (
-                        f"采购退货 {p.source_code or ''}".strip()
-                        if is_return
-                        else f"应付 {p.source_code or ''}".strip()
-                    ),
-                    "debit": 0.0 if is_return else float(amt),
-                    "credit": float(amt) if is_return else 0.0,
-                    "doc_id": p.id,
-                    "doc_amount": float(amt),
-                }
-                if is_return and p.source_id:
-                    line["offset_source_id"] = int(p.source_id)
-                # 应付 source_type：库内可能是中文常量，也可能是加载 API 的英文码
-                src = str(p.source_type or "").strip()
-                if p.source_id and src in (
-                    PAYABLE_SOURCE_PURCHASE_RECEIPT,
-                    "purchase_receipt",
-                    "PurchaseReceipt",
-                ):
-                    line["inbound_detail_doc_type"] = "purchase_receipt"
-                    line["inbound_detail_doc_id"] = int(p.source_id)
-                elif p.source_id and src in (
-                    PAYABLE_SOURCE_OUTSOURCE_RECEIPT,
-                    "outsource_material_receipt",
-                    "outsource_receipt",
-                ):
-                    line["inbound_detail_doc_type"] = "outsource_material_receipt"
-                    line["inbound_detail_doc_id"] = int(p.source_id)
-                lines.append(line)
-            for p in payments:
-                amt = _abs_money(p.total_amount)
-                is_refund = _is_refund_voucher(getattr(p, "settlement_type", None), p.total_amount)
-                lines.append({
-                    "date": to_api_isoformat(p.payment_date),
-                    "sort_date": p.payment_date,
-                    "doc_type": "付款退款" if is_refund else "付款单",
-                    "doc_code": p.payment_code,
-                    "summary": p.notes or ("付款退款" if is_refund else "付款"),
-                    "debit": float(amt) if is_refund else 0.0,
-                    "credit": 0.0 if is_refund else float(amt),
-                    "doc_id": p.id,
-                    "doc_amount": float(amt),
-                })
-        lines.sort(key=lambda x: (x["sort_date"], x["doc_type"], x.get("doc_id", 0)))
-        lines = await self._order_lines_by_settlement_hierarchy(
-            tenant_id, partner_type, lines
+        # 对账来源只认月结业务源单，与客商默认立账策略无关；禁止再扫应付/付款等凭证
+        return await self._collect_statement_ledger_period_lines(
+            tenant_id, partner_id, partner_type, start_date, end_date, amount_basis
         )
-        for ln in lines:
-            ln.pop("sort_date", None)
-        return lines
 
     async def _order_lines_by_settlement_hierarchy(
         self,
@@ -790,7 +838,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         amount_overrides: Optional[Dict[Tuple[str, int], Decimal]] = None,
     ) -> Tuple[List[Dict[str, Any]], int, Decimal]:
         """
-        按累计已对金额计算未对余额；默认本次对账金额=未对金额。
+        按累计已对金额计算未对余额；默认本次对账金额=未对金额（用户可改大，不封顶未对金额）。
         已全部对账的行剔除，并将其借贷净额并入期初调节。
         """
         if not lines:
@@ -814,11 +862,9 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
                 statement_amount = _q_money(overrides[key])
             elif row.get("statement_amount") is not None:
                 statement_amount = _q_money(row["statement_amount"])
-            if statement_amount <= 0 or statement_amount > remaining:
+            if statement_amount <= 0:
                 code = row.get("doc_code") or row.get("doc_id")
-                raise ValidationError(
-                    f"单据 {code} 本次对账金额须在 0 与未对金额 {remaining} 之间"
-                )
+                raise ValidationError(f"单据 {code} 本次对账金额须大于 0")
             result.append(
                 _apply_statement_amount_to_line(row, statement_amount, doc_amount, prior, remaining)
             )
@@ -857,11 +903,9 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             if remaining <= 0:
                 continue
             statement_amount = _q_money(overrides[key])
-            if statement_amount <= 0 or statement_amount > remaining:
+            if statement_amount <= 0:
                 code = row.get("doc_code") or row.get("doc_id")
-                raise ValidationError(
-                    f"单据 {code} 本次对账金额须在 0 与未对金额 {remaining} 之间"
-                )
+                raise ValidationError(f"单据 {code} 本次对账金额须大于 0")
             rebuilt.append(
                 _apply_statement_amount_to_line(row, statement_amount, doc_amount, prior, remaining)
             )
@@ -874,13 +918,17 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         partner_type: str,
         start_date: date,
         end_date: date,
+        amount_basis: str = AMOUNT_BASIS_TAX_INCLUSIVE,
     ) -> Dict[str, Any]:
         if end_date < start_date:
             raise ValidationError("结束日期不能早于开始日期")
+        basis = parse_statement_amount_basis(amount_basis)
         partner = await self._load_partner_snapshot(tenant_id, partner_id, partner_type)
-        opening = await self._calc_opening_balance(tenant_id, partner_id, partner_type, start_date)
+        opening = await self._calc_opening_balance(
+            tenant_id, partner_id, partner_type, start_date, basis
+        )
         raw_lines = await self._collect_period_raw_lines(
-            tenant_id, partner_id, partner_type, start_date, end_date
+            tenant_id, partner_id, partner_type, start_date, end_date, basis
         )
         prior_map = await self._load_prior_stated_amounts(tenant_id, partner_id, partner_type)
         before_count = len(raw_lines)
@@ -896,6 +944,12 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         stmt_period = start_date.strftime("%Y-%m")
         existing = await self._get_active_period_statement(
             tenant_id, partner_id, partner_type, stmt_period
+        )
+        partner_default_statement = await self._partner_uses_statement_ledger(
+            tenant_id, partner_id, partner_type
+        )
+        supports_ledger_modes = partner_default_statement or self._lines_support_statement_ledger(
+            lines
         )
         return {
             "partner_id": partner_id,
@@ -918,6 +972,8 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             "existing_period_statement_id": existing.id if existing else None,
             "existing_period_statement_code": existing.statement_code if existing else None,
             "existing_period": stmt_period if existing else None,
+            "amount_basis": basis,
+            "partner_uses_statement_ledger": supports_ledger_modes,
         }
 
     async def _get_active_period_statement(
@@ -970,6 +1026,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         end_date: Optional[date] = None,
         line_amounts: Optional[List[Dict[str, Any]]] = None,
         ledger_posting_mode: Optional[str] = None,
+        amount_basis: str = AMOUNT_BASIS_TAX_INCLUSIVE,
     ) -> PartnerStatement:
         if start_date and end_date:
             if end_date < start_date:
@@ -982,8 +1039,9 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             period_label = period
             stmt_period = period
 
+        basis = parse_statement_amount_basis(amount_basis)
         preview = await self.preview_statement(
-            tenant_id, partner_id, partner_type, start_date, end_date
+            tenant_id, partner_id, partner_type, start_date, end_date, basis
         )
         if not (preview.get("lines") or []):
             existing_code = preview.get("existing_period_statement_code")
@@ -1020,15 +1078,17 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             "partner_snapshot": preview["partner_snapshot"],
             "balance_label": preview["balance_label"],
             "period_label": period_label,
+            "amount_basis": basis,
         }
 
         mode = str(ledger_posting_mode or "immediate").strip()
         if mode not in PARTNER_STATEMENT_LEDGER_MODES:
             raise ValidationError("ledger_posting_mode 须为 immediate 或 by_invoice")
-        if await self._partner_uses_statement_ledger(tenant_id, partner_id, partner_type):
-            if mode not in PARTNER_STATEMENT_LEDGER_MODES:
-                raise ValidationError("按对账单立账客商须选择立账方式")
-        else:
+        # 明细已是月结业务源单，或客商默认按月结：允许立即/按发票；否则强制立即立账
+        allows_ledger_modes = await self._partner_uses_statement_ledger(
+            tenant_id, partner_id, partner_type
+        ) or self._lines_support_statement_ledger(lines)
+        if not allows_ledger_modes:
             mode = "immediate"
 
         user_info = await self.get_user_info(created_by)
@@ -1112,19 +1172,387 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             raise NotFoundError(f"对账单不存在: {statement_id}")
         return obj
 
+    _BIZ_CONFIRM_REVIEWS = frozenset(
+        {"", "草稿", "draft", "驳回", "已驳回", "rejected", "SUBMITTED"}
+    )
+
+    def _statement_content_editable(self, obj: PartnerStatement) -> bool:
+        """草稿/异议，或已业务确认但未送审/已驳回时可改本次对账金额；待审与已审锁定。"""
+        rs = str(obj.review_status or "").strip()
+        if rs in (
+            "待审核",
+            "已审核",
+            "pending_review",
+            "PENDING_REVIEW",
+            "approved",
+            "已提交",
+            "pending",
+        ):
+            return False
+        if obj.status in ("Draft", "Disputed"):
+            return rs in self._BIZ_CONFIRM_REVIEWS or rs in ("草稿", "draft", "驳回", "已驳回", "rejected")
+        # 业务确认后、提交审核前（及反审核回草稿）仍可调整本次对账金额
+        if obj.status == "Confirmed" and rs in (
+            "",
+            "草稿",
+            "draft",
+            "驳回",
+            "已驳回",
+            "rejected",
+        ):
+            return True
+        return False
+
+    async def confirm_business_statement(
+        self, tenant_id: int, statement_id: int, user_id: int
+    ) -> PartnerStatement:
+        """业务确认对账：status=Confirmed，review 归草稿；与提交审核分离。"""
+        from apps.kuaicaiwu.services.finance_audit_workflow import _updated_audit_kwargs
+        from core.utils.timezone_utils import resolve_business_datetime
+
+        obj = await self.get_statement(tenant_id, statement_id)
+        if obj.status not in ("Draft", "Disputed"):
+            raise BusinessLogicError("仅草稿或有异议的对账单可确认对账")
+        if not self._statement_content_editable(obj):
+            raise BusinessLogicError("当前状态不可确认对账，请先撤回审核或处理在途审批")
+        from apps.common.audit_actor import operator_name_from_user
+
+        operator = await User.filter(id=user_id).first()
+        operator_name = operator_name_from_user(operator) if operator else ""
+        now = resolve_business_datetime()
+        await PartnerStatement.filter(tenant_id=tenant_id, id=statement_id).update(
+            status="Confirmed",
+            review_status="草稿",
+            reviewer_id=None,
+            reviewer_name=None,
+            review_time=None,
+            review_remarks=None,
+            confirmed_at=now,
+            confirmed_by=user_id,
+            updated_by=user_id,
+            updated_by_name=operator_name,
+        )
+        return await self.get_statement(tenant_id, statement_id)
+
+    async def commit_statement(
+        self, tenant_id: int, statement_id: int, submitted_by: int
+    ) -> PartnerStatement:
+        """UniAudit「提交」：业务确认对账（不再写 SUBMITTED）。"""
+        return await self.confirm_business_statement(tenant_id, statement_id, submitted_by)
+
+    async def submit_statement_for_review(
+        self, tenant_id: int, statement_id: int, submitted_by: int
+    ) -> PartnerStatement:
+        """提交审核：草稿/异议态在送审前内部落业务确认（与保存对账金额等效，无需单独确认按钮）。"""
+        from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
+
+        obj = await self.get_statement(tenant_id, statement_id)
+        if obj.status in ("Draft", "Disputed"):
+            await self.confirm_business_statement(tenant_id, statement_id, submitted_by)
+            obj = await self.get_statement(tenant_id, statement_id)
+        if obj.status != "Confirmed":
+            raise BusinessLogicError("当前状态不可提交审核")
+        rs = str(obj.review_status or "").strip()
+        if rs in ("待审核", "已审核", "pending_review", "PENDING_REVIEW", "approved"):
+            raise BusinessLogicError("当前审核状态不可再次提交审核")
+        if rs not in ("", "草稿", "draft", "驳回", "已驳回", "rejected"):
+            raise BusinessLogicError("请先保存对账金额后再提交审核")
+        await submit_finance_review(
+            model=PartnerStatement,
+            tenant_id=tenant_id,
+            doc_id=statement_id,
+            updated_by=submitted_by,
+            doc_label="往来对账单",
+            node_key="partner_statement",
+        )
+        return await self.get_statement(tenant_id, statement_id)
+
+    async def submit_statement(
+        self, tenant_id: int, statement_id: int, submitted_by: int
+    ) -> PartnerStatement:
+        """兼容：业务确认后立即提交审核。"""
+        obj = await self.get_statement(tenant_id, statement_id)
+        if obj.status in ("Draft", "Disputed"):
+            await self.confirm_business_statement(tenant_id, statement_id, submitted_by)
+        return await self.submit_statement_for_review(tenant_id, statement_id, submitted_by)
+
+    async def approve_statement(
+        self,
+        tenant_id: int,
+        statement_id: int,
+        approved_by: int,
+        rejection_reason: Optional[str] = None,
+        *,
+        is_auto_approve: bool = False,
+    ) -> PartnerStatement:
+        """审核往来对账单；通过时仅更新 review，业务确认须已在前序步骤完成。"""
+        from apps.kuaicaiwu.services.finance_audit_workflow import (
+            assert_finance_pending_approval_flow,
+            _PENDING_REVIEW,
+            _norm_review,
+        )
+        from apps.common.audit_actor import operator_name_from_user
+        from core.services.approval.uni_audit_service import UniAuditService
+        from core.utils.timezone_utils import resolve_business_datetime
+        from tortoise.transactions import in_transaction
+
+        async def _do_approve() -> PartnerStatement:
+            async with in_transaction():
+                obj = await self.get_statement(tenant_id, statement_id)
+                rs = _norm_review(obj.review_status)
+                if rs not in _PENDING_REVIEW:
+                    raise BusinessLogicError(
+                        f"往来对账单审核状态不是待审核，当前: {obj.review_status!r}"
+                    )
+                if obj.status not in ("Draft", "Disputed", "Confirmed"):
+                    raise BusinessLogicError("当前状态不可审核")
+                user = await User.filter(id=approved_by).first()
+                approver_name = operator_name_from_user(user) if user else ""
+                now = resolve_business_datetime()
+                if rejection_reason:
+                    await PartnerStatement.filter(tenant_id=tenant_id, id=statement_id).update(
+                        reviewer_id=approved_by,
+                        reviewer_name=approver_name,
+                        review_time=now,
+                        review_status="驳回",
+                        review_remarks=rejection_reason,
+                        updated_by=approved_by,
+                        updated_by_name=approver_name,
+                    )
+                else:
+                    approve_patch: Dict[str, Any] = {
+                        "reviewer_id": approved_by,
+                        "reviewer_name": approver_name,
+                        "review_time": now,
+                        "review_status": "已审核",
+                        "review_remarks": None,
+                        "updated_by": approved_by,
+                        "updated_by_name": approver_name,
+                    }
+                    if obj.status in ("Draft", "Disputed"):
+                        approve_patch["status"] = "Confirmed"
+                        if obj.confirmed_at is None:
+                            approve_patch["confirmed_at"] = now
+                            approve_patch["confirmed_by"] = approved_by
+                    await PartnerStatement.filter(
+                        tenant_id=tenant_id, id=statement_id
+                    ).update(**approve_patch)
+                return await self.get_statement(tenant_id, statement_id)
+
+        async def _after_review_approve(
+            stmt: PartnerStatement, *, prior_review_status: str
+        ) -> PartnerStatement:
+            if rejection_reason:
+                return stmt
+            if str(stmt.review_status or "").strip() not in ("已审核", "approved"):
+                return stmt
+            landing = prior_review_status if prior_review_status in _PENDING_REVIEW else "草稿"
+            try:
+                return await self._auto_post_ledger_if_immediate_after_review_approve(
+                    tenant_id, statement_id, approved_by
+                )
+            except Exception:
+                await self._rollback_review_after_immediate_post_failure(
+                    tenant_id, statement_id, landing_review_status=landing
+                )
+                raise
+
+        async def _approve_then_immediate_post(
+            prior_review_status: str,
+        ) -> PartnerStatement:
+            stmt = await _do_approve()
+            return await _after_review_approve(stmt, prior_review_status=prior_review_status)
+
+        if is_auto_approve:
+            obj0 = await self.get_statement(tenant_id, statement_id)
+            return await _approve_then_immediate_post(str(obj0.review_status or "").strip())
+
+        await assert_finance_pending_approval_flow(
+            tenant_id=tenant_id,
+            doc_id=statement_id,
+            node_key="partner_statement",
+            doc_label="往来对账单",
+            verb="驳回" if rejection_reason else "审核",
+        )
+
+        if rejection_reason:
+            result = await UniAuditService.reject_with_flow_fallback(
+                tenant_id=tenant_id,
+                entity_type="partner_statement",
+                entity_id=statement_id,
+                approver_id=approved_by,
+                reason=rejection_reason,
+                flow_reject=lambda _reason=None: _do_approve(),
+            )
+            return result if result is not None else await self.get_statement(tenant_id, statement_id)
+        obj_before = await self.get_statement(tenant_id, statement_id)
+        prior_review = str(obj_before.review_status or "").strip()
+
+        async def _flow_approve() -> PartnerStatement:
+            return await _do_approve()
+
+        result = await UniAuditService.approve_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="partner_statement",
+            entity_id=statement_id,
+            approver_id=approved_by,
+            flow_approve=_flow_approve,
+        )
+        stmt = result if result is not None else await self.get_statement(tenant_id, statement_id)
+        return await _after_review_approve(stmt, prior_review_status=prior_review)
+
+    async def withdraw_statement(
+        self, tenant_id: int, statement_id: int, withdrawn_by: int
+    ) -> PartnerStatement:
+        """撤销提交：已提交→草稿；撤回审核：待审核→已提交。"""
+        from apps.kuaicaiwu.services.finance_audit_workflow import (
+            _PENDING_REVIEW,
+            _norm_review,
+            _updated_audit_kwargs,
+        )
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+        from tortoise.transactions import in_transaction
+
+        obj = await self.get_statement(tenant_id, statement_id)
+        raw = str(obj.review_status or "").strip()
+        if (
+            obj.status == "Draft"
+            and raw == "SUBMITTED"
+        ):
+            await PartnerStatement.filter(tenant_id=tenant_id, id=statement_id).update(
+                review_status="草稿",
+                **(await _updated_audit_kwargs(withdrawn_by)),
+            )
+            return await self.get_statement(tenant_id, statement_id)
+        if obj.status == "Confirmed" and raw in ("", "草稿", "draft", "SUBMITTED"):
+            from apps.common.audit_actor import operator_name_from_user
+
+            operator = await User.filter(id=withdrawn_by).first()
+            operator_name = operator_name_from_user(operator) if operator else ""
+            await PartnerStatement.filter(tenant_id=tenant_id, id=statement_id).update(
+                status="Draft",
+                review_status="草稿",
+                confirmed_at=None,
+                confirmed_by=None,
+                updated_by=withdrawn_by,
+                updated_by_name=operator_name,
+            )
+            return await self.get_statement(tenant_id, statement_id)
+        if _norm_review(raw) in _PENDING_REVIEW:
+            async with in_transaction():
+                cancelled = await ApprovalInstanceService.cancel_approval(
+                    tenant_id=tenant_id,
+                    entity_type="partner_statement",
+                    entity_id=statement_id,
+                    operator_id=withdrawn_by,
+                )
+                if cancelled is False:
+                    raise BusinessLogicError("撤回失败：无法取消审批流程，请重试")
+                await PartnerStatement.filter(tenant_id=tenant_id, id=statement_id).update(
+                    review_status="草稿",
+                    reviewer_id=None,
+                    reviewer_name=None,
+                    review_time=None,
+                    review_remarks=None,
+                    **(await _updated_audit_kwargs(withdrawn_by)),
+                )
+            return await self.get_statement(tenant_id, statement_id)
+        raise BusinessLogicError("当前状态不可撤回")
+
+    async def _unpost_statement_ledger(
+        self, tenant_id: int, obj: PartnerStatement, operator_id: int
+    ) -> None:
+        """撤销审核立账：删除本单生成的未结算应收/应付，状态回到 Confirmed。"""
+        from apps.kuaicaiwu.services.purchase_receipt_line_finance_occupancy_service import (
+            PurchaseReceiptLineFinanceOccupancyService,
+        )
+        from core.utils.timezone_utils import resolve_business_datetime
+
+        stmt_code = str(obj.statement_code or "").strip()
+        if not stmt_code:
+            raise BusinessLogicError("对账单号缺失，无法撤销立账")
+        marker = f"对账单 {stmt_code} 审核立账"
+        now = resolve_business_datetime()
+        stmt_id = int(obj.id)
+
+        payables = await Payable.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).filter(
+            Q(notes__contains=marker)
+            | Q(source_type=PAYABLE_SOURCE_PARTNER_STATEMENT, source_id=stmt_id)
+        ).all()
+        receivables = await Receivable.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).filter(
+            Q(notes__contains=marker)
+            | Q(source_type=RECEIVABLE_SOURCE_PARTNER_STATEMENT, source_id=stmt_id)
+        ).all()
+
+        for p in payables:
+            if Decimal(p.paid_amount or 0) > 0:
+                raise BusinessLogicError(
+                    f"已立账产生的应付单 {p.payable_code} 已有付款，无法反审核；请先处理付款后再试"
+                )
+            if Decimal(getattr(p, "refunded_amount", 0) or 0) > 0:
+                raise BusinessLogicError(
+                    f"已立账产生的应付单 {p.payable_code} 已有退款，无法反审核"
+                )
+        for r in receivables:
+            if Decimal(r.received_amount or 0) > 0:
+                raise BusinessLogicError(
+                    f"已立账产生的应收单 {r.receivable_code} 已有收款，无法反审核；请先处理收款后再试"
+                )
+            if Decimal(getattr(r, "refunded_amount", 0) or 0) > 0:
+                raise BusinessLogicError(
+                    f"已立账产生的应收单 {r.receivable_code} 已有退款，无法反审核"
+                )
+
+        occ_svc = PurchaseReceiptLineFinanceOccupancyService()
+        for p in payables:
+            await occ_svc.soft_delete_by_target(tenant_id, "Payable", int(p.id))
+            await Payable.filter(tenant_id=tenant_id, id=int(p.id)).update(deleted_at=now)
+        for r in receivables:
+            await Receivable.filter(tenant_id=tenant_id, id=int(r.id)).update(deleted_at=now)
+
+        await PartnerStatement.filter(tenant_id=tenant_id, id=int(obj.id)).update(
+            status="Confirmed",
+            ledger_posted_at=None,
+            ledger_posted_by=None,
+            updated_by=operator_id,
+        )
+
+    async def revoke_statement(
+        self, tenant_id: int, statement_id: int, revoked_by: int
+    ) -> PartnerStatement:
+        from apps.kuaicaiwu.services.finance_audit_workflow import revoke_finance_review
+        from tortoise.transactions import in_transaction
+
+        obj = await self.get_statement(tenant_id, statement_id)
+        status = str(obj.status or "").strip()
+        if status == "Sent":
+            raise BusinessLogicError("已发送的对账单不可撤销审核")
+        if status not in ("Confirmed", "LedgerPosted"):
+            raise BusinessLogicError("仅已确认或已立账（且未发送）的对账单可撤销审核")
+        async with in_transaction():
+            if status == "LedgerPosted":
+                await self._unpost_statement_ledger(tenant_id, obj, revoked_by)
+            await revoke_finance_review(
+                model=PartnerStatement,
+                tenant_id=tenant_id,
+                doc_id=statement_id,
+                updated_by=revoked_by,
+                doc_label="往来对账单",
+                node_key="partner_statement",
+            )
+            return await self.get_statement(tenant_id, statement_id)
+
     async def confirm_statement(
         self, tenant_id: int, statement_id: int, user_id: int
     ) -> PartnerStatement:
-        obj = await self.get_statement(tenant_id, statement_id)
-        if obj.status not in ("Draft", "Disputed"):
-            raise BusinessLogicError("仅草稿或异议状态的对账单可确认")
-        obj.status = "Confirmed"
-        obj.confirmed_at = tortoise_timezone.now()
-        obj.confirmed_by = user_id
-        operator = await User.filter(id=user_id).first()
-        apply_update_audit(obj, operator)
-        await obj.save()
-        return obj
+        """业务确认对账。"""
+        return await self.confirm_business_statement(tenant_id, statement_id, user_id)
 
     async def _purchase_receipt_has_approved_invoice(
         self, tenant_id: int, receipt_id: int
@@ -1133,24 +1561,108 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         from apps.kuaicaiwu.models.purchase_receipt_line_finance_occupancy import (
             PurchaseReceiptLineFinanceOccupancy,
         )
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
 
-        occ = await PurchaseReceiptLineFinanceOccupancy.filter(
+        async def _invoice_approved(inv_id: int) -> bool:
+            inv = await PurchaseInvoice.get_or_none(
+                tenant_id=tenant_id,
+                id=int(inv_id),
+                deleted_at__isnull=True,
+            )
+            if not inv:
+                return False
+            rs = str(inv.review_status or "").strip()
+            return rs in ("已审核", "approved")
+
+        occ_rows = await PurchaseReceiptLineFinanceOccupancy.filter(
             tenant_id=tenant_id,
             purchase_receipt_id=receipt_id,
             occupancy_kind="invoice",
             deleted_at__isnull=True,
-        ).first()
-        if not occ:
-            return False
-        inv = await PurchaseInvoice.get_or_none(
+        ).all()
+        for occ in occ_rows:
+            tid = int(getattr(occ, "target_doc_id", 0) or 0)
+            if tid > 0 and await _invoice_approved(tid):
+                return True
+
+        rels = await DocumentRelation.filter(
             tenant_id=tenant_id,
-            id=int(occ.target_doc_id),
+            source_type="purchase_receipt",
+            source_id=int(receipt_id),
+            target_type="purchase_invoice",
+        ).all()
+        for rel in rels:
+            tid = int(getattr(rel, "target_id", 0) or 0)
+            if tid > 0 and await _invoice_approved(tid):
+                return True
+        return False
+
+    async def try_complete_ledger_after_purchase_invoice_approved(
+        self,
+        tenant_id: int,
+        invoice_id: int,
+        operator_id: int,
+    ) -> None:
+        """
+        对账单「根据发票立账」：对账单先审时可能尚无已审发票而无法立账；
+        关联入库的进项发票审核通过后补跑立账。
+        """
+        from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+        invoice = await PurchaseInvoice.get_or_none(
+            tenant_id=tenant_id,
+            id=int(invoice_id),
             deleted_at__isnull=True,
         )
-        if not inv:
-            return False
-        rs = str(inv.review_status or "").strip()
-        return rs in _APPROVED_REVIEW
+        if not invoice:
+            return
+        rels = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="purchase_receipt",
+            target_type="purchase_invoice",
+            target_id=int(invoice_id),
+        ).all()
+        receipt_ids = {
+            int(r.source_id)
+            for r in rels
+            if getattr(r, "source_id", None) is not None and int(r.source_id) > 0
+        }
+        if not receipt_ids:
+            return
+
+        statements = await PartnerStatement.filter(
+            tenant_id=tenant_id,
+            partner_id=int(invoice.supplier_id),
+            partner_type="Supplier",
+            deleted_at__isnull=True,
+        ).all()
+        for stmt in statements:
+            rs = str(getattr(stmt, "review_status", None) or "").strip()
+            if rs not in ("已审核", "approved"):
+                continue
+            if str(stmt.status or "").strip() not in ("Confirmed", "Sent", "LedgerPosted"):
+                continue
+            if stmt.ledger_posted_at is not None and str(stmt.status or "").strip() == "LedgerPosted":
+                continue
+            details = dict(stmt.transaction_details or {})
+            lines = list(details.get("lines") or [])
+            if not any(
+                str(ln.get("doc_type") or "").strip() == "采购入库"
+                and int(ln.get("doc_id") or 0) in receipt_ids
+                for ln in lines
+                if isinstance(ln, dict)
+            ):
+                continue
+            try:
+                await self.post_ledger(tenant_id, int(stmt.id), operator_id)
+            except BusinessLogicError as exc:
+                logger.info(
+                    "进项发票 {} 审核后补立账跳过对账单 {}: {}",
+                    invoice_id,
+                    stmt.id,
+                    exc,
+                )
 
     async def _sales_delivery_has_approved_invoice(
         self, tenant_id: int, delivery_id: int
@@ -1182,10 +1694,42 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         ).exclude(status__in=("DRAFT", "VOID", "void", "作废", "草稿")).first()
         return inv is not None
 
+    async def _auto_post_ledger_if_immediate_after_review_approve(
+        self, tenant_id: int, statement_id: int, operator_id: int
+    ) -> PartnerStatement:
+        """审核通过后自动立账：仅「立即立账」；「根据发票立账」先完成对账审核，待发票审核后补跑。"""
+        obj = await self.get_statement(tenant_id, statement_id)
+        mode = str(obj.ledger_posting_mode or "immediate").strip()
+        if mode == "by_invoice":
+            return obj
+        if obj.ledger_posted_at is not None:
+            return obj
+        if str(obj.review_status or "").strip() not in ("已审核", "approved"):
+            raise BusinessLogicError("须在审核通过后自动立账")
+        if obj.status not in ("Confirmed", "Sent", "LedgerPosted"):
+            raise BusinessLogicError(
+                f"须先确认对账后再审核立账，当前业务状态: {obj.status!r}"
+            )
+        if not await self._statement_supports_ledger_modes(obj):
+            raise BusinessLogicError("当前对账单明细不支持立账，无法完成审核立账")
+        return await self.post_ledger(tenant_id, statement_id, operator_id)
+
+    async def _rollback_review_after_immediate_post_failure(
+        self, tenant_id: int, statement_id: int, *, landing_review_status: str
+    ) -> None:
+        """审核通过自动立账失败时撤销本次审核通过，避免「已审核但未立账」。"""
+        await PartnerStatement.filter(tenant_id=tenant_id, id=statement_id).update(
+            review_status=landing_review_status,
+            reviewer_id=None,
+            reviewer_name=None,
+            review_time=None,
+            review_remarks=None,
+        )
+
     async def post_ledger(
         self, tenant_id: int, statement_id: int, operator_id: int
     ) -> PartnerStatement:
-        """审核立账：按对账金额从未立账源单生成应收/应付。"""
+        """审核立账：按对账明细净额生成一张应收/应付（来源：往来对账单）。"""
         from apps.kuaicaiwu.schemas.finance import PayableCreate, ReceivableCreate
         from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
         from apps.kuaicaiwu.services.finance_service import PayableService, ReceivableService
@@ -1196,6 +1740,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         from apps.kuaizhizao.services.finance_settlement_source_query import (
             _posted_payable_source_ids,
             _posted_receivable_source_ids,
+            partner_statement_ledger_posted_doc_ids,
         )
         from core.utils.timezone_utils import resolve_business_datetime, to_site_date
         from tortoise.transactions import in_transaction
@@ -1205,11 +1750,11 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         if obj.ledger_posted_at is not None and mode == "immediate":
             raise BusinessLogicError("该对账单已完成审核立账")
         if obj.status not in ("Confirmed", "Sent", "LedgerPosted"):
-            raise BusinessLogicError("请先确认对账单后再审核立账")
-        if not await self._partner_uses_statement_ledger(
-            tenant_id, obj.partner_id, obj.partner_type
-        ):
-            raise BusinessLogicError("当前往来单位未启用按对账单立账策略")
+            raise BusinessLogicError("请先审核确认对账单后再审核立账")
+        if str(obj.review_status or "").strip() not in ("已审核", "approved"):
+            raise BusinessLogicError("对账单须已审核通过后才能立账")
+        if not await self._statement_supports_ledger_modes(obj):
+            raise BusinessLogicError("当前对账单无可按月结立账的业务源单，无法审核立账")
 
         details = dict(obj.transaction_details or {})
         lines = list(details.get("lines") or [])
@@ -1218,192 +1763,162 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
 
         payable_svc = PayableService()
         receivable_svc = ReceivableService()
-        posted_count = 0
         skipped_by_invoice = 0
         stmt_code = str(obj.statement_code or "")
+        stmt_covered = await partner_statement_ledger_posted_doc_ids(
+            tenant_id, int(obj.partner_id), str(obj.partner_type)
+        )
+        eligible: List[Dict[str, Any]] = []
+
+        for ln in lines:
+            if int(ln.get("tree_level") or 0) > 0:
+                continue
+            doc_type = str(ln.get("doc_type") or "").strip()
+            if doc_type not in self._STATEMENT_LEDGER_LINE_DOC_TYPES:
+                continue
+            doc_id = ln.get("doc_id")
+            if doc_id is None:
+                continue
+            try:
+                source_id = int(doc_id)
+            except (TypeError, ValueError):
+                continue
+            amount = _q_money(ln.get("statement_amount") or ln.get("doc_amount") or 0)
+            if amount <= 0:
+                continue
+            if (doc_type, source_id) in stmt_covered:
+                continue
+
+            if obj.partner_type == "Supplier":
+                if doc_type == "采购入库":
+                    if mode == "by_invoice":
+                        receipt_id = int(
+                            ln.get("inbound_detail_doc_id")
+                            or ln.get("settlement_source_id")
+                            or source_id
+                        )
+                        if not await self._purchase_receipt_has_approved_invoice(
+                            tenant_id, receipt_id
+                        ):
+                            skipped_by_invoice += 1
+                            continue
+                    posted = await _posted_payable_source_ids(
+                        tenant_id, PAYABLE_SOURCE_PURCHASE_RECEIPT, [source_id]
+                    )
+                    if source_id in posted:
+                        continue
+                    receipt = await PurchaseReceipt.get_or_none(
+                        tenant_id=tenant_id, id=source_id, deleted_at__isnull=True
+                    )
+                    if not receipt:
+                        continue
+                    eligible.append(ln)
+                elif doc_type == "采购退货":
+                    posted = await _posted_payable_source_ids(
+                        tenant_id, PAYABLE_SOURCE_PURCHASE_RETURN, [source_id]
+                    )
+                    if source_id in posted:
+                        continue
+                    ret = await PurchaseReturn.get_or_none(
+                        tenant_id=tenant_id, id=source_id, deleted_at__isnull=True
+                    )
+                    if not ret:
+                        continue
+                    eligible.append(ln)
+            elif obj.partner_type == "Customer":
+                if doc_type == "销售出库":
+                    if mode == "by_invoice":
+                        if not await self._sales_delivery_has_approved_invoice(
+                            tenant_id, source_id
+                        ):
+                            skipped_by_invoice += 1
+                            continue
+                    posted = await _posted_receivable_source_ids(
+                        tenant_id, RECEIVABLE_SOURCE_SALES_DELIVERY, [source_id]
+                    )
+                    if source_id in posted:
+                        continue
+                    delivery = await SalesDelivery.get_or_none(
+                        tenant_id=tenant_id, id=source_id, deleted_at__isnull=True
+                    )
+                    if not delivery:
+                        continue
+                    eligible.append(ln)
+                elif doc_type == "销售退货":
+                    posted = await _posted_receivable_source_ids(
+                        tenant_id, RECEIVABLE_SOURCE_SALES_RETURN, [source_id]
+                    )
+                    if source_id in posted:
+                        continue
+                    ret = await SalesReturn.get_or_none(
+                        tenant_id=tenant_id, id=source_id, deleted_at__isnull=True
+                    )
+                    if not ret:
+                        continue
+                    eligible.append(ln)
+
+        if not eligible:
+            if mode == "by_invoice" and skipped_by_invoice > 0:
+                raise BusinessLogicError(
+                    "根据发票立账模式下，所选行尚无已审核发票，未生成应收/应付"
+                )
+            raise BusinessLogicError("没有可立账的未立账源单行")
+
+        voucher_amount = _net_statement_ledger_amount(eligible)
+        biz_date = obj.end_date
+        due = await resolve_partner_due_date(
+            tenant_id,
+            "supplier" if obj.partner_type == "Supplier" else "customer",
+            int(obj.partner_id),
+            biz_date,
+        )
+        ledger_notes = f"对账单 {stmt_code} 审核立账"
 
         async with in_transaction():
-            for ln in lines:
-                if int(ln.get("tree_level") or 0) > 0:
-                    continue
-                doc_type = str(ln.get("doc_type") or "").strip()
-                doc_id = ln.get("doc_id")
-                if doc_id is None:
-                    continue
-                try:
-                    source_id = int(doc_id)
-                except (TypeError, ValueError):
-                    continue
-                amount = _q_money(ln.get("statement_amount") or ln.get("doc_amount") or 0)
-                if amount <= 0:
-                    continue
-
-                if obj.partner_type == "Supplier":
-                    if doc_type == "采购入库":
-                        if mode == "by_invoice":
-                            receipt_id = int(
-                                ln.get("inbound_detail_doc_id") or ln.get("settlement_source_id") or source_id
-                            )
-                            if not await self._purchase_receipt_has_approved_invoice(
-                                tenant_id, receipt_id
-                            ):
-                                skipped_by_invoice += 1
-                                continue
-                        posted = await _posted_payable_source_ids(
-                            tenant_id, PAYABLE_SOURCE_PURCHASE_RECEIPT, [source_id]
-                        )
-                        if source_id in posted:
-                            continue
-                        receipt = await PurchaseReceipt.get_or_none(
-                            tenant_id=tenant_id, id=source_id, deleted_at__isnull=True
-                        )
-                        if not receipt:
-                            continue
-                        biz_date = to_site_date(receipt.receipt_time or resolve_business_datetime())
-                        due = await resolve_partner_due_date(
-                            tenant_id, "supplier", int(receipt.supplier_id), biz_date
-                        )
-                        await payable_svc.create_payable(
-                            tenant_id=tenant_id,
-                            payable_data=PayableCreate(
-                                source_type=PAYABLE_SOURCE_PURCHASE_RECEIPT,
-                                source_id=source_id,
-                                source_code=receipt.receipt_code,
-                                supplier_id=receipt.supplier_id,
-                                supplier_name=receipt.supplier_name,
-                                total_amount=amount,
-                                paid_amount=Decimal("0"),
-                                remaining_amount=amount,
-                                due_date=due,
-                                business_date=biz_date,
-                                status="未付款",
-                                notes=f"对账单 {stmt_code} 审核立账",
-                            ),
-                            created_by=operator_id,
-                        )
-                        posted_count += 1
-                    elif doc_type == "采购退货":
-                        posted = await _posted_payable_source_ids(
-                            tenant_id, PAYABLE_SOURCE_PURCHASE_RETURN, [source_id]
-                        )
-                        if source_id in posted:
-                            continue
-                        ret = await PurchaseReturn.get_or_none(
-                            tenant_id=tenant_id, id=source_id, deleted_at__isnull=True
-                        )
-                        if not ret:
-                            continue
-                        biz_date = to_site_date(ret.return_time or resolve_business_datetime())
-                        due = await resolve_partner_due_date(
-                            tenant_id, "supplier", int(ret.supplier_id), biz_date
-                        )
-                        await payable_svc.create_payable(
-                            tenant_id=tenant_id,
-                            payable_data=PayableCreate(
-                                source_type=PAYABLE_SOURCE_PURCHASE_RETURN,
-                                source_id=source_id,
-                                source_code=ret.return_code,
-                                supplier_id=ret.supplier_id,
-                                supplier_name=ret.supplier_name,
-                                total_amount=amount,
-                                paid_amount=Decimal("0"),
-                                remaining_amount=amount,
-                                due_date=due,
-                                business_date=biz_date,
-                                status="未付款",
-                                notes=f"对账单 {stmt_code} 审核立账",
-                            ),
-                            created_by=operator_id,
-                        )
-                        posted_count += 1
-                elif obj.partner_type == "Customer":
-                    if doc_type == "销售出库":
-                        if mode == "by_invoice":
-                            if not await self._sales_delivery_has_approved_invoice(
-                                tenant_id, source_id
-                            ):
-                                skipped_by_invoice += 1
-                                continue
-                        posted = await _posted_receivable_source_ids(
-                            tenant_id, RECEIVABLE_SOURCE_SALES_DELIVERY, [source_id]
-                        )
-                        if source_id in posted:
-                            continue
-                        delivery = await SalesDelivery.get_or_none(
-                            tenant_id=tenant_id, id=source_id, deleted_at__isnull=True
-                        )
-                        if not delivery:
-                            continue
-                        from apps.kuaizhizao.services.document_recognition import (
-                            revenue_recognition_from_doc,
-                        )
-
-                        if revenue_recognition_from_doc(delivery) != "on_partner_statement":
-                            continue
-                        biz_date = to_site_date(delivery.delivery_time or resolve_business_datetime())
-                        due = await resolve_partner_due_date(
-                            tenant_id, "customer", int(delivery.customer_id), biz_date
-                        )
-                        await receivable_svc.create_receivable(
-                            tenant_id=tenant_id,
-                            receivable_data=ReceivableCreate(
-                                source_type=RECEIVABLE_SOURCE_SALES_DELIVERY,
-                                source_id=source_id,
-                                source_code=delivery.delivery_code,
-                                customer_id=delivery.customer_id,
-                                customer_name=delivery.customer_name,
-                                total_amount=amount,
-                                received_amount=Decimal("0"),
-                                remaining_amount=amount,
-                                due_date=due,
-                                business_date=biz_date,
-                                status="未收款",
-                                notes=f"对账单 {stmt_code} 审核立账",
-                            ),
-                            created_by=operator_id,
-                        )
-                        posted_count += 1
-                    elif doc_type == "销售退货":
-                        posted = await _posted_receivable_source_ids(
-                            tenant_id, RECEIVABLE_SOURCE_SALES_RETURN, [source_id]
-                        )
-                        if source_id in posted:
-                            continue
-                        ret = await SalesReturn.get_or_none(
-                            tenant_id=tenant_id, id=source_id, deleted_at__isnull=True
-                        )
-                        if not ret:
-                            continue
-                        biz_date = to_site_date(ret.return_time or resolve_business_datetime())
-                        due = await resolve_partner_due_date(
-                            tenant_id, "customer", int(ret.customer_id), biz_date
-                        )
-                        await receivable_svc.create_receivable(
-                            tenant_id=tenant_id,
-                            receivable_data=ReceivableCreate(
-                                source_type=RECEIVABLE_SOURCE_SALES_RETURN,
-                                source_id=source_id,
-                                source_code=ret.return_code,
-                                customer_id=ret.customer_id,
-                                customer_name=ret.customer_name,
-                                total_amount=amount,
-                                received_amount=Decimal("0"),
-                                remaining_amount=amount,
-                                due_date=due,
-                                business_date=biz_date,
-                                status="未收款",
-                                notes=f"对账单 {stmt_code} 审核立账",
-                            ),
-                            created_by=operator_id,
-                        )
-                        posted_count += 1
-
-            if posted_count == 0:
-                if mode == "by_invoice" and skipped_by_invoice > 0:
-                    raise BusinessLogicError(
-                        "根据发票立账模式下，所选行尚无已审核发票，未生成应收/应付"
-                    )
-                raise BusinessLogicError("没有可立账的未立账源单行")
+            if obj.partner_type == "Supplier":
+                if voucher_amount <= 0:
+                    raise BusinessLogicError("本期对账净额不需生成应付单")
+                await payable_svc.create_payable(
+                    tenant_id=tenant_id,
+                    payable_data=PayableCreate(
+                        source_type=PAYABLE_SOURCE_PARTNER_STATEMENT,
+                        source_id=statement_id,
+                        source_code=stmt_code,
+                        supplier_id=int(obj.partner_id),
+                        supplier_name=str(obj.partner_name or ""),
+                        total_amount=voucher_amount,
+                        paid_amount=Decimal("0"),
+                        remaining_amount=voucher_amount,
+                        due_date=due,
+                        business_date=biz_date,
+                        status="未付款",
+                        notes=ledger_notes,
+                    ),
+                    created_by=operator_id,
+                )
+            elif obj.partner_type == "Customer":
+                if voucher_amount <= 0:
+                    raise BusinessLogicError("本期对账净额不需生成应收单")
+                await receivable_svc.create_receivable(
+                    tenant_id=tenant_id,
+                    receivable_data=ReceivableCreate(
+                        source_type=RECEIVABLE_SOURCE_PARTNER_STATEMENT,
+                        source_id=statement_id,
+                        source_code=stmt_code,
+                        customer_id=int(obj.partner_id),
+                        customer_name=str(obj.partner_name or ""),
+                        total_amount=voucher_amount,
+                        received_amount=Decimal("0"),
+                        remaining_amount=voucher_amount,
+                        due_date=due,
+                        business_date=biz_date,
+                        status="未收款",
+                        notes=ledger_notes,
+                    ),
+                    created_by=operator_id,
+                )
+            else:
+                raise BusinessLogicError("当前往来类型不支持审核立账")
 
             now = resolve_business_datetime()
             user = await User.filter(id=operator_id).first()
@@ -1435,7 +1950,9 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
     ) -> PartnerStatement:
         obj = await self.get_statement(tenant_id, statement_id)
         if obj.status != "Confirmed":
-            raise BusinessLogicError("请先内部确认对账单后再标记发送")
+            raise BusinessLogicError("请先确认对账单后再标记发送")
+        if str(obj.review_status or "").strip() not in ("已审核", "approved"):
+            raise BusinessLogicError("请先审核通过对账单后再标记发送")
         allowed = ("export", "print", "wechat_manual", "email_manual", "other")
         if channel not in allowed:
             raise ValidationError(f"发送渠道无效，可选: {', '.join(allowed)}")
@@ -1465,6 +1982,154 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         await obj.save()
         return obj
 
+    def _ensure_statement_content_editable(self, obj: PartnerStatement) -> None:
+        if not self._statement_content_editable(obj):
+            raise BusinessLogicError("当前状态不可修改对账内容，请先撤回审核或撤销确认")
+
+    @staticmethod
+    def _line_amount_inputs_from_stored_lines(
+        lines: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        inputs: List[Dict[str, Any]] = []
+        for ln in lines:
+            if int(ln.get("tree_level") or 0) > 0:
+                continue
+            doc_id = ln.get("doc_id")
+            doc_type = ln.get("doc_type")
+            if doc_id is None or not doc_type:
+                continue
+            raw = ln.get("statement_amount")
+            if raw is None:
+                raw = ln.get("remaining_amount")
+            if raw is None:
+                raw = ln.get("doc_amount")
+            if raw is None:
+                debit = float(ln.get("debit") or 0)
+                credit = float(ln.get("credit") or 0)
+                raw = debit if debit > 0 else credit
+            amount = _q_money(raw)
+            if amount <= 0:
+                continue
+            inputs.append(
+                {
+                    "doc_type": doc_type,
+                    "doc_id": int(doc_id),
+                    "statement_amount": float(amount),
+                }
+            )
+        return inputs
+
+    async def update_statement_header(
+        self,
+        tenant_id: int,
+        statement_id: int,
+        *,
+        ledger_posting_mode: Optional[str] = None,
+        user_id: int,
+    ) -> PartnerStatement:
+        obj = await self.get_statement(tenant_id, statement_id)
+        self._ensure_statement_content_editable(obj)
+        if ledger_posting_mode is None:
+            raise ValidationError("请提供立账方式")
+        mode = str(ledger_posting_mode).strip()
+        if mode not in PARTNER_STATEMENT_LEDGER_MODES:
+            raise ValidationError("ledger_posting_mode 须为 immediate 或 by_invoice")
+        if not await self._statement_supports_ledger_modes(obj):
+            if mode != "immediate":
+                raise ValidationError("当前对账单无可按月结立账的业务源单，立账方式须为立即立账")
+            mode = "immediate"
+        obj.ledger_posting_mode = mode
+        operator = await User.filter(id=user_id).first()
+        apply_update_audit(obj, operator)
+        await obj.save()
+        return obj
+
+    async def refresh_statement_preview(
+        self,
+        tenant_id: int,
+        statement_id: int,
+        amount_basis: str,
+        user_id: int,
+    ) -> Tuple[PartnerStatement, List[str]]:
+        obj = await self.get_statement(tenant_id, statement_id)
+        self._ensure_statement_content_editable(obj)
+        basis = parse_statement_amount_basis(amount_basis)
+        details = dict(obj.transaction_details or {})
+        current_lines = list(details.get("lines") or [])
+        if not current_lines:
+            raise BusinessLogicError("对账单无明细行")
+        line_amounts = self._line_amount_inputs_from_stored_lines(current_lines)
+        if not line_amounts:
+            raise BusinessLogicError("对账单无对账明细，无法刷新")
+
+        prior_keys: set[Tuple[str, int]] = set()
+        doc_code_by_key: Dict[Tuple[str, int], str] = {}
+        for ln in current_lines:
+            if int(ln.get("tree_level") or 0) > 0:
+                continue
+            key = _line_doc_key(ln.get("doc_type"), ln.get("doc_id"))
+            if not key:
+                continue
+            prior_keys.add(key)
+            doc_code_by_key[key] = str(ln.get("doc_code") or ln.get("doc_id") or "")
+
+        preview = await self.preview_statement(
+            tenant_id,
+            obj.partner_id,
+            obj.partner_type,
+            obj.start_date,
+            obj.end_date,
+            basis,
+        )
+        preview_lines = list(preview.get("lines") or [])
+        prior_map = await self._load_prior_stated_amounts(
+            tenant_id,
+            obj.partner_id,
+            obj.partner_type,
+            exclude_statement_id=statement_id,
+        )
+        overrides = self._build_line_amount_override_map(line_amounts)
+        rebuilt = self._apply_line_amount_overrides_to_preview_lines(
+            preview_lines, prior_map, overrides
+        )
+        if not rebuilt:
+            raise BusinessLogicError("刷新后无有效对账明细，请检查期间与勾选")
+
+        new_keys = {
+            k
+            for ln in rebuilt
+            if (k := _line_doc_key(ln.get("doc_type"), ln.get("doc_id")))
+        }
+        warnings: List[str] = []
+        for key in prior_keys:
+            if key not in new_keys:
+                code = doc_code_by_key.get(key) or str(key[1])
+                warnings.append(f"单据 {code} 在新预览中不可再纳入")
+
+        opening = _q_money(preview["summary"]["opening_balance"])
+        rebuilt = await self._order_lines_by_settlement_hierarchy(
+            tenant_id, obj.partner_type, rebuilt
+        )
+        debit_total, credit_total, closing, lines = self._apply_running_balance(opening, rebuilt)
+        summary = {
+            "opening_balance": float(opening),
+            "debit_total": float(debit_total),
+            "credit_total": float(credit_total),
+            "closing_balance": float(closing),
+        }
+        details["lines"] = lines
+        details["summary"] = summary
+        details["amount_basis"] = basis
+        obj.transaction_details = details
+        obj.opening_balance = opening
+        obj.debit_total = debit_total
+        obj.credit_total = credit_total
+        obj.closing_balance = closing
+        operator = await User.filter(id=user_id).first()
+        apply_update_audit(obj, operator)
+        await obj.save()
+        return obj, warnings
+
     async def update_statement_lines(
         self,
         tenant_id: int,
@@ -1473,8 +2138,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         user_id: int,
     ) -> PartnerStatement:
         obj = await self.get_statement(tenant_id, statement_id)
-        if obj.status not in ("Draft", "Disputed"):
-            raise BusinessLogicError("仅草稿或有异议的对账单可修改对账金额")
+        self._ensure_statement_content_editable(obj)
         details = dict(obj.transaction_details or {})
         current_lines = list(details.get("lines") or [])
         if not current_lines:
@@ -1513,7 +2177,9 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         operator = await User.filter(id=user_id).first()
         apply_update_audit(obj, operator)
         await obj.save()
-        return obj
+        if obj.status in ("Draft", "Disputed"):
+            return await self.confirm_business_statement(tenant_id, statement_id, user_id)
+        return await self.get_statement(tenant_id, statement_id)
 
     async def delete_statement(self, tenant_id: int, statement_id: int) -> None:
         obj = await self.get_statement(tenant_id, statement_id)
@@ -1719,7 +2385,14 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             "lines": lines,
             "partner_snapshot": details.get("partner_snapshot") or {},
             "notes": obj.notes,
+            "amount_basis": details.get("amount_basis"),
         }
+
+    @staticmethod
+    def _export_stored_amount(ln: Dict[str, Any], key: str):
+        if ln.get(key) is None:
+            return "—"
+        return float(_q_money(ln[key]))
 
     @staticmethod
     def _export_doc_type_label(ln: Dict[str, Any]) -> str:
@@ -1739,10 +2412,14 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
 
         ws["A1"] = f"{ctx['company_name']} — 往来对账单"
         ws["A1"].font = title_font
-        ws.merge_cells("A1:G1")
+        ws.merge_cells("A1:L1")
         ws["A2"] = f"对账单号：{ctx['statement_code']}"
         ws["A3"] = f"往来单位：{ctx['partner_name']}"
         ws["A4"] = f"对账期间：{ctx['start_date']} 至 {ctx['end_date']}"
+        if ctx.get("amount_basis") == AMOUNT_BASIS_TAX_INCLUSIVE:
+            ws["A6"] = "金额口径：含税"
+        elif ctx.get("amount_basis") == AMOUNT_BASIS_TAX_EXCLUSIVE:
+            ws["A6"] = "金额口径：不含税"
         snap = ctx.get("partner_snapshot") or {}
         if snap.get("finance_contact_name"):
             ws["A5"] = f"财务联系人：{snap.get('finance_contact_name')} {snap.get('finance_contact_phone') or ''}"
@@ -1763,7 +2440,11 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         ws.cell(row, 7, summary["closing_balance"])
 
         row += 2
-        headers = ["日期", "单据类型", "单号", "摘要", "借方", "贷方", ctx["balance_label"]]
+        headers = [
+            "日期", "单据类型", "单号", "摘要", "开票日期",
+            "不含税金额", "税额", "价税合计", "单据金额",
+            "借方", "贷方", ctx["balance_label"],
+        ]
         for col, h in enumerate(headers, 1):
             c = ws.cell(row, col, h)
             c.font = header_font
@@ -1774,9 +2455,14 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             ws.cell(row, 2, self._export_doc_type_label(ln)).font = body_font
             ws.cell(row, 3, ln.get("doc_code", "")).font = body_font
             ws.cell(row, 4, ln.get("summary", "")).font = body_font
-            ws.cell(row, 5, ln.get("debit", 0)).font = body_font
-            ws.cell(row, 6, ln.get("credit", 0)).font = body_font
-            ws.cell(row, 7, ln.get("balance", 0)).font = body_font
+            ws.cell(row, 5, ln.get("invoice_date") or "—").font = body_font
+            ws.cell(row, 6, self._export_stored_amount(ln, "amount_excluding_tax")).font = body_font
+            ws.cell(row, 7, self._export_stored_amount(ln, "tax_amount")).font = body_font
+            ws.cell(row, 8, self._export_stored_amount(ln, "amount_including_tax")).font = body_font
+            ws.cell(row, 9, ln.get("doc_amount") if ln.get("doc_amount") is not None else "—").font = body_font
+            ws.cell(row, 10, ln.get("debit", 0)).font = body_font
+            ws.cell(row, 11, ln.get("credit", 0)).font = body_font
+            ws.cell(row, 12, ln.get("balance", 0)).font = body_font
             row += 1
 
         row += 1
@@ -1786,7 +2472,6 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         wb.save(out)
         out.seek(0)
         return out
-
     async def render_html(self, obj: PartnerStatement) -> str:
         ctx = await self._statement_export_context(obj)
         summary = ctx["summary"]
@@ -1794,15 +2479,31 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         contact = ""
         if snap.get("finance_contact_name"):
             contact = f"<p>财务联系人：{snap['finance_contact_name']} {snap.get('finance_contact_phone') or ''}</p>"
+        basis_label = ""
+        if ctx.get("amount_basis") == AMOUNT_BASIS_TAX_INCLUSIVE:
+            basis_label = "<p>金额口径：含税</p>"
+        elif ctx.get("amount_basis") == AMOUNT_BASIS_TAX_EXCLUSIVE:
+            basis_label = "<p>金额口径：不含税</p>"
+
+        def _html_amount(ln: Dict[str, Any], key: str) -> str:
+            if ln.get(key) is None:
+                return "—"
+            return f"{float(_q_money(ln[key])):,.2f}"
 
         rows_html = ""
         for ln in ctx["lines"]:
+            doc_amount = "—" if ln.get("doc_amount") is None else f"{float(_q_money(ln.get('doc_amount'))):,.2f}"
             rows_html += f"""
             <tr>
               <td>{ln.get('date', '')}</td>
               <td>{self._export_doc_type_label(ln)}</td>
               <td>{ln.get('doc_code', '')}</td>
               <td>{ln.get('summary', '')}</td>
+              <td>{ln.get('invoice_date') or '—'}</td>
+              <td class="num">{_html_amount(ln, 'amount_excluding_tax')}</td>
+              <td class="num">{_html_amount(ln, 'tax_amount')}</td>
+              <td class="num">{_html_amount(ln, 'amount_including_tax')}</td>
+              <td class="num">{doc_amount}</td>
               <td class="num">{ln.get('debit', 0):,.2f}</td>
               <td class="num">{ln.get('credit', 0):,.2f}</td>
               <td class="num">{ln.get('balance', 0):,.2f}</td>

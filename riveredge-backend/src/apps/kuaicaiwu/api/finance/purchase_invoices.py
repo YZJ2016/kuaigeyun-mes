@@ -26,6 +26,9 @@ from apps.kuaicaiwu.models.payable import Payable
 from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
 from core.api.deps.access import AuthContext, ensure_permission_codes, require_permission_codes
 from core.api.deps.deps import get_current_tenant
+from apps.kuaicaiwu.services.partner_statement_invoice_pull import (
+    parse_partner_statement_id_csv,
+)
 from core.utils.timezone_utils import today_site_str
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
@@ -118,6 +121,7 @@ async def create_purchase_invoice(
                 total_amount=occupancy_for_gate,
                 pull_receipt_lines=data.pull_receipt_lines,
                 source_ids=pull_source_ids,
+                partner_statement_ids=data.partner_statement_ids,
             )
             if pull_preview:
                 po_id = pull_preview.get("purchase_order_id")
@@ -186,10 +190,25 @@ async def create_purchase_invoice(
                             occupancy_amt,
                         )
                     )
+                outsource_ids = {
+                    int(x)
+                    for x in (pull_preview.get("outsource_order_receipt_ids") or [])
+                    if int(x) > 0
+                }
+                receipt_only_ids = [
+                    int(sid)
+                    for sid in pull_source_ids
+                    if int(sid) not in outsource_ids
+                ]
                 for sid in pull_source_ids:
+                    rel_type = (
+                        "outsource_order_receipt"
+                        if int(sid) in outsource_ids
+                        else str(data.source_type).strip()
+                    )
                     await purchase_invoice_pull_service.create_pull_relation(
                         tenant_id=tenant_id,
-                        source_type=str(data.source_type).strip(),
+                        source_type=rel_type,
                         source_id=int(sid),
                         source_code=code_by_source.get(int(sid), str(pull_preview.get("source_code") or "")),
                         invoice_id=invoice_id,
@@ -214,10 +233,10 @@ async def create_purchase_invoice(
                             invoice_code=str(invoice.invoice_code),
                             created_by=current_user.id,
                         )
-                if str(data.source_type).strip() == "purchase_receipt":
+                if str(data.source_type).strip() == "purchase_receipt" and receipt_only_ids:
                     await purchase_invoice_pull_service.record_multi_receipt_invoice_occupancy(
                         tenant_id,
-                        pull_source_ids,
+                        receipt_only_ids,
                         int(invoice_id),
                         occupancy_amt,
                         pull_receipt_lines=data.pull_receipt_lines,
@@ -415,12 +434,16 @@ async def preview_pull_purchase_invoice_from_purchase_orders(
 )
 async def preview_pull_purchase_invoice_from_purchase_receipt(
     receipt_id: int = Path(..., description="采购入库单ID"),
+    partner_statement_ids: Optional[str] = Query(
+        None, description="往来对账单ID（逗号分隔），从对账单按发票立账开票时传入"
+    ),
     _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:read")),
     tenant_id: int = Depends(get_current_tenant),
 ) -> Dict[str, Any]:
     return await purchase_invoice_pull_service.preview_pull_from_purchase_receipt(
         tenant_id=tenant_id,
         receipt_id=receipt_id,
+        partner_statement_ids=parse_partner_statement_id_csv(partner_statement_ids),
     )
 
 
@@ -430,6 +453,9 @@ async def preview_pull_purchase_invoice_from_purchase_receipt(
 )
 async def preview_pull_purchase_invoice_from_purchase_receipts(
     receipt_ids: str = Query(..., description="采购入库单ID，逗号分隔"),
+    partner_statement_ids: Optional[str] = Query(
+        None, description="往来对账单ID（逗号分隔），从对账单按发票立账开票时传入"
+    ),
     _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:read")),
     tenant_id: int = Depends(get_current_tenant),
 ) -> Dict[str, Any]:
@@ -453,10 +479,120 @@ async def preview_pull_purchase_invoice_from_purchase_receipts(
         return await purchase_invoice_pull_service.preview_pull_from_purchase_receipts(
             tenant_id=tenant_id,
             receipt_ids=parsed,
+            partner_statement_ids=parse_partner_statement_id_csv(partner_statement_ids),
         )
     except (NotFoundError, BusinessLogicError) as exc:
         raise _http_exception_with_trace(
             422, str(exc), "/purchase-invoices/from-purchase-receipts/pull-preview", tenant_id
+        ) from exc
+
+
+@router.get(
+    "/from-outsource-order-receipt/{batch_id}/pull-preview",
+    summary="Preview pull purchase invoice from outsource order receipt batch",
+)
+async def preview_pull_purchase_invoice_from_outsource_order_receipt(
+    batch_id: int = Path(..., description="工序委外收货批次ID"),
+    partner_statement_ids: Optional[str] = Query(
+        None, description="往来对账单ID（逗号分隔），从对账单按发票立账开票时传入"
+    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await purchase_invoice_pull_service.preview_pull_from_outsource_order_receipt(
+        tenant_id=tenant_id,
+        batch_id=batch_id,
+        partner_statement_ids=parse_partner_statement_id_csv(partner_statement_ids),
+    )
+
+
+@router.get(
+    "/from-outsource-order-receipts/pull-preview",
+    summary="Preview merge pull purchase invoice from outsource order receipt batches",
+)
+async def preview_pull_purchase_invoice_from_outsource_order_receipts(
+    outsource_order_receipt_ids: str = Query(
+        ..., description="工序委外收货批次ID，逗号分隔"
+    ),
+    partner_statement_ids: Optional[str] = Query(
+        None, description="往来对账单ID（逗号分隔），从对账单按发票立账开票时传入"
+    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+
+    parsed: list[int] = []
+    for part in str(outsource_order_receipt_ids or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            parsed.append(int(part))
+        except ValueError as exc:
+            raise _http_exception_with_trace(
+                422,
+                f"无效的工序委外收货批次ID: {part}",
+                "/purchase-invoices/from-outsource-order-receipts/pull-preview",
+                tenant_id,
+            ) from exc
+    try:
+        return await purchase_invoice_pull_service.preview_pull_from_outsource_order_receipts(
+            tenant_id=tenant_id,
+            batch_ids=parsed,
+            partner_statement_ids=parse_partner_statement_id_csv(partner_statement_ids),
+        )
+    except (NotFoundError, BusinessLogicError) as exc:
+        raise _http_exception_with_trace(
+            422, str(exc), "/purchase-invoices/from-outsource-order-receipts/pull-preview", tenant_id
+        ) from exc
+
+
+@router.get(
+    "/from-partner-statement-supplier-sources/pull-preview",
+    summary="Preview pull purchase invoice from partner statement supplier sources",
+)
+async def preview_pull_purchase_invoice_from_partner_statement_supplier_sources(
+    receipt_ids: Optional[str] = Query(None, description="采购入库单ID，逗号分隔"),
+    outsource_order_receipt_ids: Optional[str] = Query(
+        None, description="工序委外收货批次ID，逗号分隔"
+    ),
+    partner_statement_ids: str = Query(..., description="往来对账单ID（逗号分隔）"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+
+    def _parse_csv(raw: Optional[str]) -> list[int]:
+        parsed_ids: list[int] = []
+        for part in str(raw or "").split(","):
+            part = part.strip()
+            if not part:
+                continue
+            parsed_ids.append(int(part))
+        return parsed_ids
+
+    stmt_ids = parse_partner_statement_id_csv(partner_statement_ids)
+    if not stmt_ids:
+        raise _http_exception_with_trace(
+            422,
+            "须指定往来对账单",
+            "/purchase-invoices/from-partner-statement-supplier-sources/pull-preview",
+            tenant_id,
+        )
+    try:
+        return await purchase_invoice_pull_service.preview_pull_from_partner_statement_supplier_sources(
+            tenant_id=tenant_id,
+            receipt_ids=_parse_csv(receipt_ids),
+            outsource_order_receipt_ids=_parse_csv(outsource_order_receipt_ids),
+            partner_statement_ids=stmt_ids,
+        )
+    except (NotFoundError, BusinessLogicError) as exc:
+        raise _http_exception_with_trace(
+            422,
+            str(exc),
+            "/purchase-invoices/from-partner-statement-supplier-sources/pull-preview",
+            tenant_id,
         ) from exc
 
 

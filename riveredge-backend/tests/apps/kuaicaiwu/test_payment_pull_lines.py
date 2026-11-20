@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from apps.kuaicaiwu.constants.payment_method import (
     assert_prepayment_offset_payment_contract,
 )
-from apps.kuaicaiwu.services.payment_pull_service import PaymentPullService
+from apps.kuaicaiwu.services.payment_pull_service import PaymentPullService, prepayment_offset_po_coverage_error
 from apps.kuaicaiwu.services.receipt_pull_service import ReceiptPullService
 from infra.exceptions.exceptions import BusinessLogicError, ValidationError
 
@@ -208,3 +208,50 @@ def test_normal_receipt_requires_settlement_source_flags():
 
     draft = SimpleNamespace(settlement_type="normal", unsettled_amount=Decimal("50"), settled_amount=Decimal("0"))
     assert svc.normal_receipt_requires_settlement_source_before_confirm(draft) is True
+
+
+@pytest.mark.asyncio
+async def test_resolve_purchase_order_skips_partner_statement(monkeypatch):
+    from apps.kuaicaiwu.constants.finance_source_types import (
+        PAYABLE_SOURCE_PARTNER_STATEMENT,
+    )
+    from apps.kuaicaiwu.services.payable_prepayment_apply_service import (
+        PayablePrepaymentApplyService,
+    )
+
+    payable = SimpleNamespace(
+        source_type=PAYABLE_SOURCE_PARTNER_STATEMENT,
+        source_id=6,
+    )
+
+    async def fake_payable_get(**_kwargs):
+        return payable
+
+    async def fail_doc_rel_filter(**_kwargs):
+        raise AssertionError("往来对账单应付不得解析采购订单")
+
+    monkeypatch.setattr(
+        "apps.kuaicaiwu.services.payable_prepayment_apply_service.Payable.get_or_none",
+        fake_payable_get,
+    )
+    monkeypatch.setattr(
+        "apps.kuaicaiwu.services.payable_prepayment_apply_service.DocumentRelation.filter",
+        fail_doc_rel_filter,
+    )
+
+    po_id = await PayablePrepaymentApplyService().resolve_purchase_order_id_for_payable(1, 99)
+    assert po_id is None
+
+
+def test_offset_allows_statement_payable_with_other_po_prep():
+    """对账单级应付无订单：可用同厂商另一订单预付部分抵扣。"""
+    assert (
+        prepayment_offset_po_coverage_error(
+            prep_by_po={3: Decimal("1000")},
+            unlinked_prep=Decimal("0"),
+            payable_by_po={},
+            unlinked_payable=Decimal("1000"),
+            offset_total=Decimal("1000"),
+        )
+        is None
+    )
