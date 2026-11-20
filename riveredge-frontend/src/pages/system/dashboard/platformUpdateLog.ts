@@ -43,6 +43,109 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  * titleKey / descriptionKey 对应 pages.dashboard.updateLog.entries.{id}.*
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
+{
+    id: 'aps-strategy-due-ocr-harden-r01',
+    date: '2026-11-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.aps-strategy-due-ocr-harden-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.aps-strategy-due-ocr-harden-r01.description',
+  },
+{
+    id: 'aps-line-product-bind-gate-r01',
+    date: '2026-11-16',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.aps-line-product-bind-gate-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.aps-line-product-bind-gate-r01.description',
+  },
+{
+    id: 'aps-line-missing-settings-suggest-r01',
+    date: '2026-11-16',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.aps-line-missing-settings-suggest-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.aps-line-missing-settings-suggest-r01.description',
+  },
+{
+    id: 'aps-strategy-wizard-alerts-r01',
+    date: '2026-11-16',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.aps-strategy-wizard-alerts-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.aps-strategy-wizard-alerts-r01.description',
+  },
+{
+    id: 'aps-line-validate-pending-capacity-r01',
+    date: '2026-11-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.aps-line-validate-pending-capacity-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.aps-line-validate-pending-capacity-r01.description',
+  },
+{
+    id: 'aps-line-closed-loop-audit-r01',
+    date: '2026-11-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.aps-line-closed-loop-audit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.aps-line-closed-loop-audit-r01.description',
+  },
+{
+    id: 'aps-clear-scheduling-freeze-window-r01',
+    date: '2026-11-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.aps-clear-scheduling-freeze-window-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.aps-clear-scheduling-freeze-window-r01.description',
+  },
+{
+    id: 'aps-line-unschedule-wo-bar-r01',
+    date: '2026-11-16',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.aps-line-unschedule-wo-bar-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.aps-line-unschedule-wo-bar-r01.description',
+  },
+{
+    id: 'aps-line-drop-takt-prep-slim-r01',
+    date: '2026-11-16',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.aps-line-drop-takt-prep-slim-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.aps-line-drop-takt-prep-slim-r01.description',
+  },
+{
+    id: 'aps-line-auto-reschedule-buttons-r01',
+    date: '2026-11-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.aps-line-auto-reschedule-buttons-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.aps-line-auto-reschedule-buttons-r01.description',
+  },
+{
+    id: 'aps-line-drop-prep-slim-r01',
+    date: '2026-11-16',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.aps-line-drop-prep-slim-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.aps-line-drop-prep-slim-r01.description',
+  },
+{
+    id: 'aps-line-takt-daily-capacity-r01',
+    date: '2026-11-16',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.aps-line-takt-daily-capacity-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.aps-line-takt-daily-capacity-r01.description',
+  },
+{
+    id: 'aps-production-line-resource-rows-r01',
+    date: '2026-11-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.aps-production-line-resource-rows-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.aps-production-line-resource-rows-r01.description',
+  },
   {
     id: 'field-permission-full-registry-r01',
     date: '2026-11-20',

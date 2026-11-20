@@ -24,6 +24,8 @@ export interface ApplySchedulingAiProposalOptions {
   syncDraftPendingCount: () => void;
   setDraftMode: (on: boolean) => void;
   onPoolReorder?: (order: number[]) => void;
+  /** 行业包产线模式：资源 ID 同时写入 assigned_production_line_id */
+  resourceMode?: 'workstation' | 'production_line';
   message: MessageInstance;
   t: TFunction;
 }
@@ -31,9 +33,11 @@ export interface ApplySchedulingAiProposalOptions {
 function applyStationUpdates(
   list: WorkOrderForGantt[],
   updates: Array<{ operation_id: number; assigned_station_id: number }>,
+  options?: { asProductionLine?: boolean },
 ): WorkOrderForGantt[] {
   if (!updates.length) return list;
   const byOp = new Map(updates.map((u) => [u.operation_id, u.assigned_station_id]));
+  const asLine = Boolean(options?.asProductionLine);
   return list.map((wo) => {
     if (!wo.operations?.length) return wo;
     let changed = false;
@@ -42,7 +46,11 @@ function applyStationUpdates(
       const sid = byOp.get(op.id);
       if (sid == null) return op;
       changed = true;
-      return { ...op, assigned_station_id: sid };
+      return {
+        ...op,
+        assigned_station_id: sid,
+        ...(asLine ? { assigned_production_line_id: sid } : {}),
+      };
     });
     return changed ? { ...wo, operations } : wo;
   });
@@ -59,9 +67,11 @@ export function applySchedulingAiProposal(options: ApplySchedulingAiProposalOpti
     syncDraftPendingCount,
     setDraftMode,
     onPoolReorder,
+    resourceMode = 'workstation',
     message,
     t,
   } = options;
+  const asProductionLine = resourceMode === 'production_line';
 
   const woUpdates = (proposal.workOrderAdjustments ?? [])
     .filter((a) => a.workOrderId && a.plannedStartDate && a.plannedEndDate)
@@ -135,7 +145,7 @@ export function applySchedulingAiProposal(options: ApplySchedulingAiProposalOpti
       });
     }
     if (stationUpdates.length) {
-      next = applyStationUpdates(next, stationUpdates);
+      next = applyStationUpdates(next, stationUpdates, { asProductionLine });
     }
     return next;
   });

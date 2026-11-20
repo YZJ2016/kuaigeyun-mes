@@ -24,11 +24,17 @@ from apps.kuaizhizao.schemas.visual_scheduling import (
     SchedulingOperationBackfillResponse,
     SchedulingDueEstimateItem,
     SchedulingDueEstimateResponse,
+    SchedulingStrategyListResponse,
+    SchedulingStrategyItem,
 )
 from apps.kuaizhizao.services.visual_scheduling_service import VisualSchedulingService
 from apps.kuaizhizao.services.scheduling_rate_coverage_service import check_scheduling_rate_coverage
 from apps.kuaizhizao.services.scheduling_engine.registry import get_scheduling_engine
 from apps.kuaizhizao.services.scheduling_engine.base import SchedulingPlanRequest
+from apps.kuaizhizao.services.scheduling_engine.strategies import (
+    STRATEGY_CATALOG,
+    normalize_strategy,
+)
 
 router = APIRouter(prefix="/scheduling", tags=["App - Kuaige Zhizao - Visual Scheduling"])
 
@@ -94,6 +100,9 @@ async def validate_schedule_adjustments(
         work_order_updates=[u.model_dump() for u in body.work_order_updates],
         operation_updates=[u.model_dump() for u in body.operation_updates],
         operation_station_updates=[u.model_dump() for u in body.operation_station_updates],
+        operation_production_line_updates=[
+            u.model_dump() for u in body.operation_production_line_updates
+        ],
     )
     return VisualSchedulingValidateResponse(**raw)
 
@@ -142,6 +151,22 @@ async def backfill_operation_settings(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+
+
+@router.get(
+    "/strategies",
+    response_model=SchedulingStrategyListResponse,
+    summary="List scheduling strategy packages",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-scheduling:read"))],
+)
+async def list_scheduling_strategies(
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+) -> SchedulingStrategyListResponse:
+    del tenant_id, current_user
+    return SchedulingStrategyListResponse(
+        items=[SchedulingStrategyItem(**item) for item in STRATEGY_CATALOG]
+    )
 
 
 @router.get(
@@ -218,6 +243,14 @@ async def auto_reschedule(
     plan_date = None
     if body.plan_date:
         plan_date = date.fromisoformat(str(body.plan_date))
+    from fastapi import HTTPException, status
+
+    try:
+        strategy = normalize_strategy(body.strategy)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from e
     engine = get_scheduling_engine("greedy")
     raw = await engine.plan(
         SchedulingPlanRequest(
@@ -228,6 +261,7 @@ async def auto_reschedule(
             updated_by=int(current_user.id),
             local_window_hours=body.local_window_hours,
             resource_ids=list(body.resource_ids or []),
+            strategy=strategy,
         )
     )
     return SchedulingAutoRescheduleResponse(proposal=raw)

@@ -22,6 +22,8 @@ export interface SchedulingResourceViewStats {
 
 interface SchedulingHeaderBandProps {
   constraints: SchedulingConstraints;
+  /** 按产线时工位视图统计文案改为产线 */
+  resourceMode?: 'workstation' | 'production_line';
   selectedWorkOrderCount: number;
   selectedOperationCount: number;
   ganttTaskLevel: GanttTaskLevel;
@@ -41,6 +43,7 @@ interface SchedulingHeaderBandProps {
 
 const SchedulingHeaderBand: React.FC<SchedulingHeaderBandProps> = ({
   constraints,
+  resourceMode = 'workstation',
   selectedWorkOrderCount,
   selectedOperationCount,
   ganttTaskLevel,
@@ -67,10 +70,15 @@ const SchedulingHeaderBand: React.FC<SchedulingHeaderBandProps> = ({
             workers: resourceViewStats.workerCount,
             operations: resourceViewStats.taskCount,
           })
-        : t('app.kuaizhizao.scheduling.ganttToolbar.stationOpStats', {
-            stations: resourceViewStats.stationCount,
-            operations: resourceViewStats.taskCount,
-          });
+        : resourceMode === 'production_line'
+          ? t('app.kuaizhizao.scheduling.ganttToolbar.productionLineOpStats', {
+              lines: resourceViewStats.stationCount,
+              operations: resourceViewStats.taskCount,
+            })
+          : t('app.kuaizhizao.scheduling.ganttToolbar.stationOpStats', {
+              stations: resourceViewStats.stationCount,
+              operations: resourceViewStats.taskCount,
+            });
 
   return (
     <Card className="aps-delfoi-workspace aps-header-band-compact" size="small" style={{ marginBottom: 0 }}>
@@ -99,9 +107,14 @@ const SchedulingHeaderBand: React.FC<SchedulingHeaderBandProps> = ({
           </Tag>
           {hasMissingSettings ? (
             <Tooltip
-              title={t('app.kuaizhizao.scheduling.alert.missingSettings', {
-                count: missingSettingsCount,
-              })}
+              title={t(
+                resourceMode === 'production_line'
+                  ? 'app.kuaizhizao.scheduling.alert.missingSettingsLine'
+                  : 'app.kuaizhizao.scheduling.alert.missingSettings',
+                {
+                  count: missingSettingsCount,
+                }
+              )}
             >
               <Tag
                 color="orange"

@@ -1,10 +1,94 @@
 {
   "antd": "^6.4.4",
-  "scanned_files": 2808,
-  "pattern_types": 0,
-  "total_hits": 0,
-  "by_severity": {},
-  "rows": [],
-  "top_files": [],
+  "scanned_files": 2885,
+  "pattern_types": 2,
+  "total_hits": 7,
+  "by_severity": {
+    "med": {
+      "hits": 4,
+      "patterns": 1
+    },
+    "high": {
+      "hits": 3,
+      "patterns": 1
+    }
+  },
+  "rows": [
+    {
+      "api": "addonBefore/After → Space.Compact",
+      "component": "InputNumber",
+      "severity": "med",
+      "hits": 4,
+      "files": 2,
+      "samples": [
+        {
+          "file": "src/components/quantity-with-unit/DocumentLineDualQuantity.tsx",
+          "line": 220,
+          "snippet": "addonAfter={primaryUnitLabel || undefined}"
+        },
+        {
+          "file": "src/components/quantity-with-unit/DocumentLineDualQuantity.tsx",
+          "line": 244,
+          "snippet": "addonAfter={baseUnit}"
+        },
+        {
+          "file": "src/components/quantity-with-unit/DocumentLineDualQuantity.tsx",
+          "line": 257,
+          "snippet": "addonAfter={auxEnabled ? auxUnit : undefined}"
+        },
+        {
+          "file": "src/apps/kuaizhizao/components/InspectionSamplingSpecFields.tsx",
+          "line": 135,
+          "snippet": "addonAfter=\"%\""
+        }
+      ]
+    },
+    {
+      "api": "size=\"middle\" → \"medium\"",
+      "component": "size enum",
+      "severity": "high",
+      "hits": 3,
+      "files": 3,
+      "samples": [
+        {
+          "file": "src/apps/kuaicaiwu/pages/finance-management/shared/MiscVoucherListPage.tsx",
+          "line": 1547,
+          "snippet": "size=\"middle\""
+        },
+        {
+          "file": "src/apps/kuaicaiwu/pages/finance-management/partner-statements/PartnerStatementPeriodQuickSelect.tsx",
+          "line": 66,
+          "snippet": "size=\"middle\""
+        },
+        {
+          "file": "src/apps/kuaicaiwu/pages/finance-management/partner-statements/detail.tsx",
+          "line": 589,
+          "snippet": "size=\"middle\""
+        }
+      ]
+    }
+  ],
+  "top_files": [
+    {
+      "file": "src/apps/kuaizhizao/components/InspectionSamplingSpecFields.tsx",
+      "approx_hits": 2
+    },
+    {
+      "file": "src/components/quantity-with-unit/DocumentLineDualQuantity.tsx",
+      "approx_hits": 2
+    },
+    {
+      "file": "src/apps/kuaicaiwu/pages/finance-management/shared/MiscVoucherListPage.tsx",
+      "approx_hits": 1
+    },
+    {
+      "file": "src/apps/kuaicaiwu/pages/finance-management/partner-statements/PartnerStatementPeriodQuickSelect.tsx",
+      "approx_hits": 1
+    },
+    {
+      "file": "src/apps/kuaicaiwu/pages/finance-management/partner-statements/detail.tsx",
+      "approx_hits": 1
+    }
+  ],
   "migration_ref": "https://ant.design/docs/react/migration-v6"
 }

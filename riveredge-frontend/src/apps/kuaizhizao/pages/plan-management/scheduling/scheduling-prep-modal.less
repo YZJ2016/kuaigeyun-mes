@@ -22,6 +22,18 @@
     padding: 6px 8px;
   }
 
+  /* 行业包产线模式：仅工序 + 产线 + 起止，不展示人员/设备/模具 */
+  &--production-line {
+    .scheduling-prep-station-grid__head,
+    .scheduling-prep-station-grid__row {
+      grid-template-columns:
+        88px
+        minmax(160px, 1.2fr)
+        minmax(148px, 1fr)
+        minmax(148px, 1fr);
+    }
+  }
+
   &__head {
     background: var(--ant-color-fill-alter, #fafafa);
     border-bottom: 1px solid var(--ant-color-split, #f0f0f0);

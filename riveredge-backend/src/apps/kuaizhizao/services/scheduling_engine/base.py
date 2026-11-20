@@ -16,6 +16,7 @@ class SchedulingPlanRequest:
     updated_by: Optional[int] = None
     local_window_hours: Optional[float] = None
     resource_ids: List[int] = field(default_factory=list)
+    strategy: str = "due_date"
 
 
 class SchedulingEngine(Protocol):

@@ -208,6 +208,12 @@ function buildStationMergedTask(
     assigned_station_name: name,
     segments: childTasks.map((t) => {
       const operationId = parseOperationIdFromTaskId(t.id);
+      const operationIds =
+        Array.isArray(t.operation_ids) && t.operation_ids.length > 0
+          ? t.operation_ids
+          : operationId != null
+            ? [operationId]
+            : undefined;
       return {
         start: t.start,
         end: t.end,
@@ -226,7 +232,8 @@ function buildStationMergedTask(
           }),
         gantt_primary_label: t.gantt_primary_label,
         gantt_work_order_code: t.gantt_work_order_code,
-        operation_id: operationId ?? undefined,
+        operation_id: operationId ?? operationIds?.[0],
+        operation_ids: operationIds,
         work_order_id: t.work_order_id,
         css: t.css,
         class: t.class,
@@ -254,37 +261,29 @@ function buildStationMergedTask(
 
 
 /**
- * 工位资源甘特任务：每个工位一行；无工序为空闲行，有工序为单行多段（splitTasks）。
+ * 工位/产线资源甘特：每个资源一行；工位模式铺工序条，产线模式按工单聚合为一条。
  */
 
 export function workOrdersToStationResourceGanttTasks(
-
   workOrders: WorkOrderForGantt[] | null | undefined,
-
-  stations: WorkstationResource[] | null | undefined
-
+  stations: WorkstationResource[] | null | undefined,
+  options?: { resourceMode?: 'workstation' | 'production_line' }
 ): GanttTask[] {
-
+  const aggregateByWorkOrder = options?.resourceMode === 'production_line';
   const safeWorkOrders = workOrders ?? [];
-
   const safeStations = stations ?? [];
-
   const stationMeta = new Map<number, WorkstationResource>();
 
   for (const s of safeStations) {
-
     if (s.id > 0) stationMeta.set(s.id, s);
-
   }
 
-
-
-  const opsByStation = new Map<number, Array<{ op: NonNullable<WorkOrderForGantt['operations']>[number]; wo: WorkOrderForGantt }>>();
-
-
+  const opsByStation = new Map<
+    number,
+    Array<{ op: NonNullable<WorkOrderForGantt['operations']>[number]; wo: WorkOrderForGantt }>
+  >();
 
   for (const wo of sortWorkOrdersForGantt(safeWorkOrders)) {
-
     const ops = (wo.operations || []).filter((o) => o.id != null);
 
     for (const op of ops) {
@@ -301,35 +300,33 @@ export function workOrdersToStationResourceGanttTasks(
         opsByStation.get(sid)!.push({ op, wo });
         continue;
       }
-      const sid =
-        op.assigned_station_id != null && Number(op.assigned_station_id) > 0
+      const sid = aggregateByWorkOrder
+        ? op.assigned_production_line_id != null && Number(op.assigned_production_line_id) > 0
+          ? Number(op.assigned_production_line_id)
+          : op.assigned_station_id != null && Number(op.assigned_station_id) > 0
+            ? Number(op.assigned_station_id)
+            : null
+        : op.assigned_station_id != null && Number(op.assigned_station_id) > 0
           ? Number(op.assigned_station_id)
           : null;
       if (sid == null) continue;
 
       if (!stationMeta.has(sid)) {
-
         stationMeta.set(sid, {
-
           id: sid,
-
-          name: (op.assigned_station_name || '').trim() || `工位${sid}`,
-
+          name:
+            (aggregateByWorkOrder
+              ? op.assigned_production_line_name || op.assigned_station_name
+              : op.assigned_station_name || ''
+            ).trim() || (aggregateByWorkOrder ? `产线${sid}` : `工位${sid}`),
           code: String(sid),
-
         });
-
       }
 
       if (!opsByStation.has(sid)) opsByStation.set(sid, []);
-
       opsByStation.get(sid)!.push({ op, wo });
-
     }
-
   }
-
-
 
   const orderedIds: number[] = [];
 
@@ -338,15 +335,11 @@ export function workOrdersToStationResourceGanttTasks(
   }
 
   const sortedMaster = [...safeStations]
-
     .filter((s) => s.id > 0)
-
     .sort((a, b) => String(a.code || a.name).localeCompare(String(b.code || b.name), 'zh-CN'));
 
   for (const s of sortedMaster) {
-
     if (!orderedIds.includes(s.id)) orderedIds.push(s.id);
-
   }
 
   for (const sid of opsByStation.keys()) {
@@ -361,70 +354,114 @@ export function workOrdersToStationResourceGanttTasks(
     const meta =
       sid === OUTSOURCE_RESOURCE_ID
         ? { id: OUTSOURCE_RESOURCE_ID, name: OUTSOURCE_RESOURCE_LABEL, code: 'EXT' }
-        : stationMeta.get(sid) ?? { id: sid, name: `工位${sid}`, code: String(sid) };
-
-
+        : stationMeta.get(sid) ?? {
+            id: sid,
+            name: aggregateByWorkOrder ? `产线${sid}` : `工位${sid}`,
+            code: String(sid),
+          };
 
     const childrenInput = opsByStation.get(sid) ?? [];
+    let childTasks: GanttTask[];
 
-    let childTasks = childrenInput.map(({ op, wo }) => {
+    if (aggregateByWorkOrder && sid !== OUTSOURCE_RESOURCE_ID) {
+      const byWo = new Map<
+        number,
+        { wo: WorkOrderForGantt; ops: NonNullable<WorkOrderForGantt['operations']> }
+      >();
+      for (const { op, wo } of childrenInput) {
+        const bucket = byWo.get(wo.id);
+        if (bucket) {
+          bucket.ops.push(op);
+        } else {
+          byWo.set(wo.id, { wo, ops: [op] });
+        }
+      }
+      childTasks = [...byWo.values()].map(({ wo, ops }) => {
+        const dated = ops.filter((o) => o.planned_start_date && o.planned_end_date);
+        const starts = dated.map((o) => dayjs(o.planned_start_date).toDate().getTime());
+        const ends = dated.map((o) => dayjs(o.planned_end_date).toDate().getTime());
+        let start: Date;
+        let end: Date;
+        if (starts.length > 0) {
+          start = new Date(Math.min(...starts));
+          end = new Date(Math.max(...ends));
+        } else if (wo.planned_start_date && wo.planned_end_date) {
+          start = dayjs(wo.planned_start_date).toDate();
+          end = dayjs(wo.planned_end_date).toDate();
+        } else {
+          const range = defaultDayRange();
+          start = range.start;
+          end = range.end;
+        }
+        const duration = durationDays(start, end);
+        const workOrderCode = (wo.code || String(wo.id)).trim();
+        const productName = (wo.product_name || wo.name || `工单 ${wo.id}`).trim();
+        const frozenPrefix = wo.is_frozen ? '🔒 ' : '';
+        const opIds = ops.map((o) => Number(o.id)).filter((id) => id > 0);
+        const visualBase = operationToGanttTask(ops[0], wo, 'station_child');
+        return {
+          ...visualBase,
+          id: `wo-${wo.id}`,
+          type: 'task' as const,
+          parent: stationResourceId(sid),
+          start,
+          end,
+          duration,
+          gantt_primary_label: `${frozenPrefix}${workOrderCode}`,
+          gantt_work_order_code: productName,
+          text: `${frozenPrefix}${workOrderCode}\n${productName}`,
+          title: buildGanttNodeTooltip({
+            workOrderCode,
+            productName,
+            operationName: aggregateByWorkOrder ? '整单' : undefined,
+            stationName: meta.name,
+            start,
+            end,
+          }),
+          assigned_station_name: meta.name,
+          assigned_station_id: sid,
+          work_order_id: wo.id,
+          operation_ids: opIds,
+        };
+      });
+    } else {
+      childTasks = childrenInput.map(({ op, wo }) => {
+        const task = operationToGanttTask(op, wo, 'station_child');
+        const outsourceCss =
+          sid === OUTSOURCE_RESOURCE_ID ? 'gantt-task-outsource' : undefined;
 
-      const task = operationToGanttTask(op, wo, 'station_child');
-      const outsourceCss =
-        sid === OUTSOURCE_RESOURCE_ID ? 'gantt-task-outsource' : undefined;
+        return {
+          ...task,
+          type: 'task' as const,
+          parent: stationResourceId(sid),
+          assigned_station_name:
+            sid === OUTSOURCE_RESOURCE_ID
+              ? op.default_outsource_supplier_name || OUTSOURCE_RESOURCE_LABEL
+              : meta.name,
+          css: [task.css, outsourceCss].filter(Boolean).join(' '),
+          class: [task.class, outsourceCss].filter(Boolean).join(' '),
+        };
+      });
+    }
 
-      return {
-
-        ...task,
-
-        type: 'task' as const,
-
-        parent: stationResourceId(sid),
-
-        assigned_station_name:
-          sid === OUTSOURCE_RESOURCE_ID
-            ? op.default_outsource_supplier_name || OUTSOURCE_RESOURCE_LABEL
-            : meta.name,
-        css: [task.css, outsourceCss].filter(Boolean).join(' '),
-        class: [task.class, outsourceCss].filter(Boolean).join(' '),
-
-      };
-
-    });
-
-
-
-    childTasks.sort((a, b) => a.start.getTime() - b.start.getTime() || String(a.id).localeCompare(String(b.id)));
-
-
+    childTasks.sort(
+      (a, b) => a.start.getTime() - b.start.getTime() || String(a.id).localeCompare(String(b.id))
+    );
 
     const overlapIds = findOverlappingTaskIds(childTasks);
 
     if (overlapIds.size > 0) {
-
       childTasks = childTasks.map((t) => {
-
         if (!overlapIds.has(String(t.id))) return t;
-
         return {
-
           ...t,
-
           css: 'gantt-task-red gantt-station-conflict',
-
           class: 'gantt-task-red gantt-station-conflict',
-
           color: '#ff4d4f',
-
           textColor: '#ffffff',
-
         };
-
       });
-
     }
-
-
 
     if (childTasks.length === 0) {
       tasks.push(buildEmptyStationResourceRow(sid, meta.name, meta.code));
@@ -432,13 +469,9 @@ export function workOrdersToStationResourceGanttTasks(
     }
 
     tasks.push(buildStationMergedTask(sid, meta.name, meta.code, childTasks, overlapIds.size));
-
   }
 
-
-
   return tasks;
-
 }
 
 

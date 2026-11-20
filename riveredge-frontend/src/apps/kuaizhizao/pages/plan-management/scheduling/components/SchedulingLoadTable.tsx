@@ -5,6 +5,7 @@ import type { TFunction } from 'i18next';
 import type { GanttTaskLevel } from '../../../../components/GanttSchedulingChart/types';
 import {
   buildSchedulingLoadTableRows,
+  type ProductionLineLoadOptions,
   type SchedulingLoadTableRow,
 } from '../schedulingLoadTableUtils';
 import type { VisualSchedulingBoardScan } from '../../../../services/production';
@@ -19,6 +20,7 @@ interface SchedulingLoadTableProps {
   pinnedResourceIds?: number[];
   showPinnedOnly?: boolean;
   loading?: boolean;
+  productionLineOptions?: ProductionLineLoadOptions | null;
 }
 
 export default function SchedulingLoadTable({
@@ -30,13 +32,28 @@ export default function SchedulingLoadTable({
   pinnedResourceIds = [],
   showPinnedOnly = false,
   loading = false,
+  productionLineOptions = null,
 }: SchedulingLoadTableProps) {
   const rows = useMemo(() => {
-    const all = buildSchedulingLoadTableRows(boardScan, taskLevel, horizonDays, workOrders);
+    const all = buildSchedulingLoadTableRows(
+      boardScan,
+      taskLevel,
+      horizonDays,
+      workOrders,
+      productionLineOptions
+    );
     if (!showPinnedOnly || pinnedResourceIds.length === 0) return all;
     const pinned = new Set(pinnedResourceIds);
     return all.filter((row) => pinned.has(row.resourceId));
-  }, [boardScan, horizonDays, pinnedResourceIds, showPinnedOnly, taskLevel, workOrders]);
+  }, [
+    boardScan,
+    horizonDays,
+    pinnedResourceIds,
+    productionLineOptions,
+    showPinnedOnly,
+    taskLevel,
+    workOrders,
+  ]);
 
   const columns: ColumnsType<SchedulingLoadTableRow> = [
     {
@@ -44,6 +61,17 @@ export default function SchedulingLoadTable({
       dataIndex: 'resourceName',
       key: 'resourceName',
       ellipsis: true,
+      render: (name: string, record) =>
+        record.missingTakt ? (
+          <span>
+            {name}{' '}
+            <Tag color="warning" variant="filled">
+              {t('app.kuaizhizao.scheduling.loadTable.missingTakt')}
+            </Tag>
+          </span>
+        ) : (
+          name
+        ),
     },
     {
       title: t('app.kuaizhizao.scheduling.loadTable.columnScheduledHours'),

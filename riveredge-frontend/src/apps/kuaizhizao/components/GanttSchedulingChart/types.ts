@@ -38,6 +38,9 @@ export interface WorkOrderForGantt {
     planned_end_date?: string | null;
     assigned_station_id?: number | null;
     assigned_station_name?: string | null;
+    assigned_production_line_id?: number | null;
+    assigned_production_line_code?: string | null;
+    assigned_production_line_name?: string | null;
     assigned_worker_id?: number | null;
     assigned_worker_name?: string | null;
     assigned_worker_ids?: number[] | null;
@@ -96,6 +99,8 @@ export interface GanttTask {
   level?: GanttTaskLevel;
   /** 工序所属工单 ID（工序级时有值） */
   work_order_id?: number;
+  /** 产线工单条：关联工序 ID（拖拽改期批量写回） */
+  operation_ids?: number[];
   /** 任务条颜色（库支持时生效） */
   color?: string;
   /** 任务条文本色（库支持时生效） */
@@ -126,9 +131,12 @@ export interface GanttTaskSegment {
   end: Date;
   duration?: number;
   text?: string;
+  title?: string;
   gantt_primary_label?: string;
   gantt_work_order_code?: string;
   operation_id?: number;
+  /** 产线工单条：拖拽改期时批量写回的工序 ID */
+  operation_ids?: number[];
   work_order_id?: number;
   css?: string;
   class?: string;

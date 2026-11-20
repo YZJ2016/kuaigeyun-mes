@@ -1,9 +1,14 @@
 import React from 'react';
 import { SCHEDULING_DRAG_WORK_ORDER } from '../schedulingDropUtils';
 
+export type SchedulingBoardDropMeta = {
+  clientX: number;
+  clientY: number;
+};
+
 interface SchedulingBoardDropZoneProps {
   canUpdate?: boolean;
-  onDropWorkOrder: (workOrderId: number) => void;
+  onDropWorkOrder: (workOrderId: number, meta?: SchedulingBoardDropMeta) => void;
   children: React.ReactNode;
 }
 
@@ -32,7 +37,7 @@ const SchedulingBoardDropZone: React.FC<SchedulingBoardDropZoneProps> = ({
     const raw = e.dataTransfer.getData(SCHEDULING_DRAG_WORK_ORDER);
     const workOrderId = Number(raw);
     if (!Number.isInteger(workOrderId) || workOrderId <= 0) return;
-    onDropWorkOrder(workOrderId);
+    onDropWorkOrder(workOrderId, { clientX: e.clientX, clientY: e.clientY });
   };
 
   return (

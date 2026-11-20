@@ -4222,6 +4222,58 @@ export default {
     'MRP 创建下游单据采购单预览报错修复',
   'pages.dashboard.updateLog.entries.mrp-push-purchase-order-preview-material-r01.description':
     '需求计算下推采购单路径预览时，读取默认供应商前未先解析物料对象会触发 Python 未赋值变量错误；已调整赋值顺序，创建下游单据弹窗可正常打开预览。',
+'pages.dashboard.updateLog.entries.aps-strategy-due-ocr-harden-r01.title':
+    '修复排产向导与交期预估：失败可见、禁止冒充'
+'pages.dashboard.updateLog.entries.aps-strategy-due-ocr-harden-r01.description':
+    '策略列表与交期预估加载失败不再静默空结果；未知策略码返回 422；预估交期不再用期望日冒充；换型软依赖与负荷统计去掉吞异常。工位排产路径不变。'
+'pages.dashboard.updateLog.entries.aps-line-product-bind-gate-r01.title':
+    '产线排产：按绑定自制件硬门禁'
+'pages.dashboard.updateLog.entries.aps-line-product-bind-gate-r01.description':
+    '继电器行业包「产线节拍」可绑定可生产自制件；拖入、补齐与自动重排仅允许已配节拍且绑定含本工单产品的产线，未绑定则不可承接。换型矩阵仍只管换型时间。'
+'pages.dashboard.updateLog.entries.aps-line-missing-settings-suggest-r01.title':
+    '产线排产：补齐设置预填推荐产线'
+'pages.dashboard.updateLog.entries.aps-line-missing-settings-suggest-r01.description':
+    '「补齐排产设置」在产线模式下会预填推荐产线：仅一条已配节拍的产线时整单默认该线；同工单已有指派时沿用该线；改一行同步同工单其它工序。多条产线且无同单线索时仍需手选。'
+'pages.dashboard.updateLog.entries.aps-strategy-wizard-alerts-r01.title':
+    '可视排产：策略包向导、交期预估与告警视图'
+'pages.dashboard.updateLog.entries.aps-strategy-wizard-alerts-r01.description':
+    '自动重排改为策略向导（交期优先/换线最少/均衡负荷）并展示执行日志后再载入暂存；支持选中工单只读交期三态；看板新增告警视图汇总冲突缺料未排与超载。'
+'pages.dashboard.updateLog.entries.aps-line-validate-pending-capacity-r01.title':
+    '修复产线排产校验：待指派产线纳入冲突与节拍失败可见'
+'pages.dashboard.updateLog.entries.aps-line-validate-pending-capacity-r01.description':
+    '重叠与换型校验现使用本次待写入的产线，不再只看库内旧指派；日负荷排除已完工/已取消单；节拍接口失败与缺节拍时不再静默当空或回落 8 小时。工位排产路径不变。'
+'pages.dashboard.updateLog.entries.aps-line-closed-loop-audit-r01.title':
+    '修复产线排产闭环：上板判定、补齐落库与工单条改派'
+'pages.dashboard.updateLog.entries.aps-line-closed-loop-audit-r01.description':
+    '「已排上板」改为以工序计划起止为准，避免 MRP 头表日期误拦拖入；补齐弹窗同步写回工单头计划；产线甘特竖直改派扩写整单厂内工序；委外工序不再被盖产线。撤排与工位路径行为不变。'
+'pages.dashboard.updateLog.entries.aps-clear-scheduling-freeze-window-r01.title':
+    '修复撤排被冻结窗误拦'
+'pages.dashboard.updateLog.entries.aps-clear-scheduling-freeze-window-r01.description':
+    '撤排此前把「计划开始落在冻结天数内」也当成不可撤，未人工冻结的近期已排单无法拿回待排池。现仅跳过已人工冻结的工单；冻结窗仍只约束拖拽改期，不拦明确撤排。'
+'pages.dashboard.updateLog.entries.aps-line-unschedule-wo-bar-r01.title':
+    '产线排产：撤排、整单节拍与工单甘特条'
+'pages.dashboard.updateLog.entries.aps-line-unschedule-wo-bar-r01.description':
+    '「按产线」下可选中已排工单一键撤排回待排池；拖入与自动重排按整单数量×节拍占产线一次，不再按工序叠加拉长到月末；产线泳道改为工单级条。工位排产路径不变。'
+'pages.dashboard.updateLog.entries.aps-line-drop-takt-prep-slim-r01.title':
+    '产线排产：拖入泳道按节拍落排，补齐只选产线'
+'pages.dashboard.updateLog.entries.aps-line-drop-takt-prep-slim-r01.description':
+    '行业包「按产线」模式下，工单拖到产线泳道即写入产线并按数量×节拍排程，不再强制工单头计划日；缺产线时的补齐弹窗只保留产线与起止，隐藏人员/设备/模具。工位排产路径不变。'
+'pages.dashboard.updateLog.entries.aps-line-takt-daily-capacity-r01.title':
+    '自动化产线 APS：按节拍与日产能排产'
+'pages.dashboard.updateLog.entries.aps-line-takt-daily-capacity-r01.description':
+    '排程资源为「按产线」时，工序落库产线指派、甘特条长按数量×节拍计算，并按产线日产能件数校验；不再把产线映射成工位。未维护节拍/日产能时拖入与重排会提示先配置行业包「产线节拍」。'
+'pages.dashboard.updateLog.entries.aps-line-auto-reschedule-buttons-r01.title':
+    '修复按产线时自动重排与补齐设置'
+'pages.dashboard.updateLog.entries.aps-line-auto-reschedule-buttons-r01.description':
+    '「按产线」下自动/局部重排前补齐弹窗误按工位工作中心过滤导致产线选不了；应用草稿与 AI 提案未同步产线指派。现已按产线候选补齐、草稿落产线字段，仅一条已配节拍产线时可默认指派。工位路径不变。'
+'pages.dashboard.updateLog.entries.aps-line-drop-prep-slim-r01.title':
+    '按产线排产：拖入泳道即可排程，补齐只选产线'
+'pages.dashboard.updateLog.entries.aps-line-drop-prep-slim-r01.description':
+    '继电器行业包「按产线」路径下，拖入产线泳道即盖产线并按节拍排程，不强制工单头计划日；补齐弹窗只保留产线与起止（无人员/设备/模具）；待排诊断改报缺产线。工位 APS 仍走原路径。'
+'pages.dashboard.updateLog.entries.aps-production-line-resource-rows-r01.title':
+    '可视排产按产线时显示产线泳道'
+'pages.dashboard.updateLog.entries.aps-production-line-resource-rows-r01.description':
+    '继电器行业包或排程配置为「按产线」后，页面未正确读取已解包的默认配置，一直回落「工位」且空态无泳道。现已正确加载 resource_mode，资源切换与空态显示「产线」，并以主数据产线作为空闲泳道。'
   'pages.dashboard.updateLog.entries.field-permission-full-registry-r01.title':
     '角色字段权限补全财务仓储物流单据',
   'pages.dashboard.updateLog.entries.field-permission-full-registry-r01.description':

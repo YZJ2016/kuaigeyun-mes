@@ -15,6 +15,7 @@ import type {
 } from '../schedulingDropUtils';
 import {
   cascadeOperationPrepScheduleFromIndex,
+  durationHoursFromTakt,
   operationPrepEndFieldName,
   operationPrepScheduleDatesToFormValues,
   operationPrepStartFieldName,
@@ -52,6 +53,15 @@ interface SchedulingWorkOrderPrepModalProps {
   workers?: SchedulingResourceOption[];
   equipments?: SchedulingResourceOption[];
   molds?: SchedulingResourceOption[];
+  /** 产线模式：泳道资源为产线；工位模式下为工位（仅 production_line 改行业包路径） */
+  resourceMode?: 'workstation' | 'production_line';
+  /** 产线模式：缺少节拍/日产能配置的产线 ID */
+  linesMissingTakt?: number[];
+  /** 产线模式：已配节拍 ∩ 绑定含本工单自制件的产线 ID */
+  eligibleProductionLineIds?: number[];
+  /** 产线模式：节拍秒，用于自动推算工序时长 */
+  taktSecondsByLineId?: Map<number, number>;
+  lineCapacityPath?: string;
   loading?: boolean;
   onCancel: () => void;
   onSubmit: (values: SchedulingWorkOrderPrepValues) => Promise<void>;
@@ -114,10 +124,32 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
   workers = [],
   equipments = [],
   molds = [],
+  resourceMode = 'workstation',
+  linesMissingTakt = [],
+  eligibleProductionLineIds,
+  taktSecondsByLineId,
+  lineCapacityPath = '/apps/ind-relay/line-capacity',
   loading = false,
   onCancel,
   onSubmit,
 }) => {
+  const isProductionLineMode = resourceMode === 'production_line';
+  const eligibleLineIdSet = useMemo(() => {
+    if (!isProductionLineMode) return null;
+    // 未传入时仍按节拍缺口过滤，避免误显无节拍产线
+    if (eligibleProductionLineIds != null) {
+      return new Set(eligibleProductionLineIds.filter((id) => id > 0));
+    }
+    return new Set(
+      workstations.map((line) => line.id).filter((id) => id > 0 && !linesMissingTakt.includes(id))
+    );
+  }, [
+    eligibleProductionLineIds,
+    isProductionLineMode,
+    linesMissingTakt,
+    workstations,
+  ]);
+  const workOrderQty = Number(workOrder?.quantity ?? 0);
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const formRef = useRef<ProFormInstance>();
@@ -178,11 +210,18 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
             : t('app.kuaizhizao.scheduling.prep.missingHourlyRate')
         );
         setRateWarnings(labels);
-      } catch {
+      } catch (e: unknown) {
         setRateWarnings([]);
+        const detail =
+          e && typeof e === 'object' && 'message' in e
+            ? String((e as { message?: unknown }).message || '')
+            : '';
+        messageApi.warning(
+          detail || t('app.kuaizhizao.scheduling.prep.rateCoverageLoadFailed')
+        );
       }
     },
-    [t, workOrder]
+    [messageApi, t, workOrder]
   );
 
   const initialValues = useMemo(() => {
@@ -192,10 +231,16 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
       ? dayjs(workOrder.planned_end_date)
       : start.add(7, 'day');
     const stationValues = Object.fromEntries(
-      operationsNeedingStation.map((op) => [
-        operationFieldName(op.operationId),
-        op.assignedStationId && op.assignedStationId > 0 ? op.assignedStationId : undefined,
-      ])
+      operationsNeedingStation.map((op) => {
+        const resourceId =
+          resourceMode === 'production_line'
+            ? op.assignedProductionLineId
+            : op.assignedStationId;
+        return [
+          operationFieldName(op.operationId),
+          resourceId && resourceId > 0 ? resourceId : undefined,
+        ];
+      })
     );
     const workerValues = Object.fromEntries(
       operationsNeedingStation.map((op) => [
@@ -215,6 +260,15 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
         op.assignedMoldId && op.assignedMoldId > 0 ? op.assignedMoldId : undefined,
       ])
     );
+    const durationHoursByOperationId = new Map<number, number>();
+    if (isProductionLineMode) {
+      for (const op of operationsNeedingStation) {
+        const lineId = op.assignedProductionLineId;
+        if (lineId == null || lineId <= 0) continue;
+        const hours = durationHoursFromTakt(workOrderQty, taktSecondsByLineId?.get(lineId) ?? 0);
+        if (hours != null) durationHoursByOperationId.set(op.operationId, hours);
+      }
+    }
     const rawDateValues = Object.fromEntries(
       operationsNeedingStation.flatMap((op) => {
         const entries: Array<[string, Dayjs]> = [];
@@ -230,6 +284,9 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
     const normalizedDates = operationPrepScheduleDatesToFormValues(
       resolveOperationPrepScheduleDates(operationsNeedingStation, rawDateValues, {
         workOrderStart: workOrder.planned_start_date,
+        durationHoursByOperationId:
+          durationHoursByOperationId.size > 0 ? durationHoursByOperationId : undefined,
+        sharedWindow: isProductionLineMode,
       })
     );
     return {
@@ -241,7 +298,29 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
       ...moldValues,
       ...normalizedDates,
     };
-  }, [operationsNeedingStation, workOrder]);
+  }, [
+    isProductionLineMode,
+    operationsNeedingStation,
+    resourceMode,
+    taktSecondsByLineId,
+    workOrder,
+    workOrderQty,
+  ]);
+
+  const buildTaktDurationByOperationId = useCallback(
+    (allValues: Record<string, unknown>) => {
+      const map = new Map<number, number>();
+      if (!isProductionLineMode) return map;
+      for (const op of sortedOperations) {
+        const lineId = Number(allValues[operationFieldName(op.operationId)]);
+        if (!(lineId > 0)) continue;
+        const hours = durationHoursFromTakt(workOrderQty, taktSecondsByLineId?.get(lineId) ?? 0);
+        if (hours != null) map.set(op.operationId, hours);
+      }
+      return map;
+    },
+    [isProductionLineMode, sortedOperations, taktSecondsByLineId, workOrderQty]
+  );
 
   const handleAssignmentValuesChange = (changedValues: Record<string, unknown>) => {
     const changedKey = Object.keys(changedValues)[0];
@@ -258,6 +337,7 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
     allValues: Record<string, unknown>
   ) => {
     handleAssignmentValuesChange(changedValues);
+    handleLineTaktCascade(changedValues, allValues);
     handleScheduleValuesChange(changedValues, allValues);
   };
 
@@ -268,6 +348,30 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
     [workOrder?.planned_start_date]
   );
 
+  const handleLineTaktCascade = (
+    changedValues: Record<string, unknown>,
+    allValues: Record<string, unknown>
+  ) => {
+    if (!isProductionLineMode || cascadingRef.current) return;
+    const changedKey = Object.keys(changedValues)[0];
+    if (!changedKey?.startsWith('station_')) return;
+    const durationHoursByOperationId = buildTaktDurationByOperationId(allValues);
+    if (durationHoursByOperationId.size === 0) return;
+    const patches = cascadeOperationPrepScheduleFromIndex(
+      sortedOperations,
+      allValues,
+      0,
+      {
+        ...scheduleCascadeOptions,
+        durationHoursByOperationId,
+        sharedWindow: true,
+      }
+    );
+    cascadingRef.current = true;
+    formRef.current?.setFieldsValue(patches);
+    cascadingRef.current = false;
+  };
+
   const handleScheduleValuesChange = (changedValues: Record<string, unknown>, allValues: Record<string, unknown>) => {
     if (cascadingRef.current) return;
     const changedKey = Object.keys(changedValues)[0];
@@ -277,11 +381,17 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
     const fromIndex = sortedOperations.findIndex((op) => op.operationId === opId);
     if (fromIndex < 0) return;
 
+    const durationHoursByOperationId = buildTaktDurationByOperationId(allValues);
     const patches = cascadeOperationPrepScheduleFromIndex(
       sortedOperations,
       allValues,
       fromIndex,
-      scheduleCascadeOptions
+      {
+        ...scheduleCascadeOptions,
+        durationHoursByOperationId:
+          durationHoursByOperationId.size > 0 ? durationHoursByOperationId : undefined,
+        sharedWindow: isProductionLineMode,
+      }
     );
     const changedPatches = Object.fromEntries(
       Object.entries(patches).filter(([key, value]) => {
@@ -313,6 +423,57 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
       ...(formRef.current?.getFieldsValue(true) ?? {}),
     };
 
+    const operationStations: SchedulingWorkOrderPrepValues['operationStations'] = [];
+    const operationAssignments: SchedulingWorkOrderPrepValues['operationAssignments'] = [];
+    for (const op of operationsNeedingStation) {
+      const stationId = Number(values[operationFieldName(op.operationId)]);
+      if (!Number.isInteger(stationId) || stationId <= 0) {
+        messageApi.error(
+          t(
+            isProductionLineMode
+              ? 'app.kuaizhizao.scheduling.prep.selectProductionLineForOp'
+              : 'app.kuaizhizao.scheduling.prep.selectStationForOp',
+            { name: op.operationName }
+          )
+        );
+        return;
+      }
+      if (isProductionLineMode && linesMissingTakt.includes(stationId)) {
+        messageApi.error(t('app.kuaizhizao.scheduling.prep.missingTaktCapacity'));
+        return;
+      }
+      if (
+        isProductionLineMode &&
+        eligibleLineIdSet != null &&
+        !eligibleLineIdSet.has(stationId)
+      ) {
+        messageApi.error(t('app.kuaizhizao.scheduling.msg.lineProductNotAllowed'));
+        return;
+      }
+      operationStations.push({
+        operation_id: op.operationId,
+        assigned_station_id: stationId,
+      });
+      if (!isProductionLineMode) {
+        const workerId = Number(values[workerFieldName(op.operationId)]);
+        const equipmentId = Number(values[equipmentFieldName(op.operationId)]);
+        const moldId = Number(values[moldFieldName(op.operationId)]);
+        if (
+          (Number.isInteger(workerId) && workerId > 0) ||
+          (Number.isInteger(equipmentId) && equipmentId > 0) ||
+          (Number.isInteger(moldId) && moldId > 0)
+        ) {
+          operationAssignments.push({
+            operation_id: op.operationId,
+            assigned_worker_id: Number.isInteger(workerId) && workerId > 0 ? workerId : null,
+            assigned_equipment_id:
+              Number.isInteger(equipmentId) && equipmentId > 0 ? equipmentId : null,
+            assigned_mold_id: Number.isInteger(moldId) && moldId > 0 ? moldId : null,
+          });
+        }
+      }
+    }
+
     const startRaw = values.planned_start_date as Dayjs | undefined;
     const anchorStart = needsStart
       ? startRaw
@@ -324,9 +485,30 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
       return;
     }
 
+    const durationHoursByOperationId = new Map<number, number>();
+    if (isProductionLineMode) {
+      for (const item of operationStations) {
+        const hours = durationHoursFromTakt(
+          workOrderQty,
+          taktSecondsByLineId?.get(item.assigned_station_id) ?? 0
+        );
+        if (hours == null) {
+          messageApi.error(t('app.kuaizhizao.scheduling.prep.missingTaktCapacity'));
+          return;
+        }
+        durationHoursByOperationId.set(item.operation_id, hours);
+      }
+    }
     const scheduleResult = resolveOperationPrepScheduleDates(operationsNeedingStation, values, {
       workOrderStart: anchorStart ? anchorStart.toISOString() : workOrder.planned_start_date,
+      durationHoursByOperationId:
+        durationHoursByOperationId.size > 0 ? durationHoursByOperationId : undefined,
+      sharedWindow: isProductionLineMode,
     });
+    if (isProductionLineMode && scheduleResult.dates.length === 0) {
+      messageApi.error(t('app.kuaizhizao.scheduling.prep.missingTaktCapacity'));
+      return;
+    }
     if (scheduleResult.adjustedOperationNames.length > 0) {
       formRef.current?.setFieldsValue(operationPrepScheduleDatesToFormValues(scheduleResult));
       messageApi.info(
@@ -334,35 +516,6 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
           names: scheduleResult.adjustedOperationNames.join('、'),
         })
       );
-    }
-
-    const operationStations: SchedulingWorkOrderPrepValues['operationStations'] = [];
-    const operationAssignments: SchedulingWorkOrderPrepValues['operationAssignments'] = [];
-    for (const op of operationsNeedingStation) {
-      const stationId = Number(values[operationFieldName(op.operationId)]);
-      if (!Number.isInteger(stationId) || stationId <= 0) {
-        messageApi.error(t('app.kuaizhizao.scheduling.prep.selectStationForOp', { name: op.operationName }));
-        return;
-      }
-      operationStations.push({
-        operation_id: op.operationId,
-        assigned_station_id: stationId,
-      });
-      const workerId = Number(values[workerFieldName(op.operationId)]);
-      const equipmentId = Number(values[equipmentFieldName(op.operationId)]);
-      const moldId = Number(values[moldFieldName(op.operationId)]);
-      if (
-        (Number.isInteger(workerId) && workerId > 0) ||
-        (Number.isInteger(equipmentId) && equipmentId > 0) ||
-        (Number.isInteger(moldId) && moldId > 0)
-      ) {
-        operationAssignments.push({
-          operation_id: op.operationId,
-          assigned_worker_id: Number.isInteger(workerId) && workerId > 0 ? workerId : null,
-          assigned_equipment_id: Number.isInteger(equipmentId) && equipmentId > 0 ? equipmentId : null,
-          assigned_mold_id: Number.isInteger(moldId) && moldId > 0 ? moldId : null,
-        });
-      }
     }
 
     let planned_start_date: string | undefined;
@@ -380,7 +533,8 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
       )?.toISOString();
     }
 
-    if (!planned_start_date || !planned_end_date) {
+    // 产线模式：工序时间可由节拍生成；不强制头表日期
+    if (!isProductionLineMode && (!planned_start_date || !planned_end_date)) {
       messageApi.error(t('app.kuaizhizao.scheduling.prep.fillDatesRequired'));
       return;
     }
@@ -408,11 +562,16 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
       onFinish={submitPrepForm}
     >
       <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
-        {t('app.kuaizhizao.scheduling.prep.description', {
-          code: workOrder?.code || workOrder?.id,
-        })}
+        {t(
+          isProductionLineMode
+            ? 'app.kuaizhizao.scheduling.prep.descriptionProductionLine'
+            : 'app.kuaizhizao.scheduling.prep.description',
+          {
+            code: workOrder?.code || workOrder?.id,
+          }
+        )}
       </Typography.Paragraph>
-      {rateWarnings.length > 0 ? (
+      {!isProductionLineMode && rateWarnings.length > 0 ? (
         <Alert
           type="warning"
           showIcon
@@ -425,23 +584,55 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
           }
         />
       ) : null}
+      {isProductionLineMode && linesMissingTakt.length > 0 ? (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 12 }}
+          title={t('app.kuaizhizao.scheduling.prep.missingTaktCapacity')}
+          description={
+            <Link to={lineCapacityPath}>{t('app.kuaizhizao.scheduling.prep.gotoLineCapacity')}</Link>
+          }
+        />
+      ) : null}
       {needsStations ? (
         <>
           <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
             {t('app.kuaizhizao.scheduling.prep.operationScheduling')}
           </Typography.Text>
-          <div className="scheduling-prep-station-grid">
+          <div
+            className={`scheduling-prep-station-grid${
+              isProductionLineMode ? ' scheduling-prep-station-grid--production-line' : ''
+            }`}
+          >
             <div className="scheduling-prep-station-grid__head">
               <span>{t('app.kuaizhizao.scheduling.prep.colOperation')}</span>
-              <span>{t('app.kuaizhizao.scheduling.prep.colStation')}</span>
-              <span>{t('app.kuaizhizao.scheduling.prep.colWorker')}</span>
-              <span>{t('app.kuaizhizao.scheduling.prep.colEquipment')}</span>
-              <span>{t('app.kuaizhizao.scheduling.prep.colMold')}</span>
+              <span>
+                {t(
+                  isProductionLineMode
+                    ? 'app.kuaizhizao.scheduling.prep.colProductionLine'
+                    : 'app.kuaizhizao.scheduling.prep.colStation'
+                )}
+              </span>
+              {!isProductionLineMode ? (
+                <>
+                  <span>{t('app.kuaizhizao.scheduling.prep.colWorker')}</span>
+                  <span>{t('app.kuaizhizao.scheduling.prep.colEquipment')}</span>
+                  <span>{t('app.kuaizhizao.scheduling.prep.colMold')}</span>
+                </>
+              ) : null}
               <span>{t('app.kuaizhizao.scheduling.prep.colStart')}</span>
               <span>{t('app.kuaizhizao.scheduling.prep.colEnd')}</span>
             </div>
             {sortedOperations.map((op, index) => {
-              const stationOptions = stationOptionsForOperation(op, workstations, workCenters);
+              const stationOptions = isProductionLineMode
+                ? workstations
+                    .filter((line) => eligibleLineIdSet == null || eligibleLineIdSet.has(line.id))
+                    .map((line) => ({
+                      value: line.id,
+                      label: line.code ? `${line.code} ${line.name}` : line.name,
+                    }))
+                : stationOptionsForOperation(op, workstations, workCenters);
               return (
                 <div key={op.operationId} className="scheduling-prep-station-grid__row">
                   <div className="scheduling-prep-station-grid__op" title={op.operationName}>
@@ -449,7 +640,16 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
                   </div>
                   <ProFormSelect
                     name={operationFieldName(op.operationId)}
-                    rules={[{ required: true, message: t('app.kuaizhizao.scheduling.prep.selectStationRequired') }]}
+                    rules={[
+                      {
+                        required: true,
+                        message: t(
+                          isProductionLineMode
+                            ? 'app.kuaizhizao.scheduling.prep.selectProductionLineRequired'
+                            : 'app.kuaizhizao.scheduling.prep.selectStationRequired'
+                        ),
+                      },
+                    ]}
                     formItemProps={{ style: { marginBottom: 0 } }}
                     options={stationOptions}
                     fieldProps={{
@@ -458,51 +658,63 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
                       optionFilterProp: 'label',
                       placeholder:
                         stationOptions.length > 0
-                          ? t('app.kuaizhizao.scheduling.prep.selectStation')
-                          : t('app.kuaizhizao.scheduling.prep.noStationsAvailable'),
+                          ? t(
+                              isProductionLineMode
+                                ? 'app.kuaizhizao.scheduling.prep.selectProductionLine'
+                                : 'app.kuaizhizao.scheduling.prep.selectStation'
+                            )
+                          : t(
+                              isProductionLineMode
+                                ? 'app.kuaizhizao.scheduling.msg.lineProductNoEligible'
+                                : 'app.kuaizhizao.scheduling.prep.noStationsAvailable'
+                            ),
                       disabled: stationOptions.length === 0 || loading,
                       style: { width: '100%' },
                     }}
                   />
-                  <ProFormSelect
-                    name={workerFieldName(op.operationId)}
-                    formItemProps={{ style: { marginBottom: 0 } }}
-                    options={workerOptions}
-                    fieldProps={{
-                      size: 'small',
-                      allowClear: true,
-                      showSearch: true,
-                      optionFilterProp: 'label',
-                      placeholder: t('app.kuaizhizao.scheduling.prep.selectWorker'),
-                      style: { width: '100%' },
-                    }}
-                  />
-                  <ProFormSelect
-                    name={equipmentFieldName(op.operationId)}
-                    formItemProps={{ style: { marginBottom: 0 } }}
-                    options={equipmentOptions}
-                    fieldProps={{
-                      size: 'small',
-                      allowClear: true,
-                      showSearch: true,
-                      optionFilterProp: 'label',
-                      placeholder: t('app.kuaizhizao.scheduling.prep.selectEquipment'),
-                      style: { width: '100%' },
-                    }}
-                  />
-                  <ProFormSelect
-                    name={moldFieldName(op.operationId)}
-                    formItemProps={{ style: { marginBottom: 0 } }}
-                    options={moldOptions}
-                    fieldProps={{
-                      size: 'small',
-                      allowClear: true,
-                      showSearch: true,
-                      optionFilterProp: 'label',
-                      placeholder: t('app.kuaizhizao.scheduling.prep.selectMold'),
-                      style: { width: '100%' },
-                    }}
-                  />
+                  {!isProductionLineMode ? (
+                    <>
+                      <ProFormSelect
+                        name={workerFieldName(op.operationId)}
+                        formItemProps={{ style: { marginBottom: 0 } }}
+                        options={workerOptions}
+                        fieldProps={{
+                          size: 'small',
+                          allowClear: true,
+                          showSearch: true,
+                          optionFilterProp: 'label',
+                          placeholder: t('app.kuaizhizao.scheduling.prep.selectWorker'),
+                          style: { width: '100%' },
+                        }}
+                      />
+                      <ProFormSelect
+                        name={equipmentFieldName(op.operationId)}
+                        formItemProps={{ style: { marginBottom: 0 } }}
+                        options={equipmentOptions}
+                        fieldProps={{
+                          size: 'small',
+                          allowClear: true,
+                          showSearch: true,
+                          optionFilterProp: 'label',
+                          placeholder: t('app.kuaizhizao.scheduling.prep.selectEquipment'),
+                          style: { width: '100%' },
+                        }}
+                      />
+                      <ProFormSelect
+                        name={moldFieldName(op.operationId)}
+                        formItemProps={{ style: { marginBottom: 0 } }}
+                        options={moldOptions}
+                        fieldProps={{
+                          size: 'small',
+                          allowClear: true,
+                          showSearch: true,
+                          optionFilterProp: 'label',
+                          placeholder: t('app.kuaizhizao.scheduling.prep.selectMold'),
+                          style: { width: '100%' },
+                        }}
+                      />
+                    </>
+                  ) : null}
                   <ProFormDateTimePicker
                     name={operationPrepStartFieldName(op.operationId)}
                     formItemProps={{ style: { marginBottom: 0 } }}
@@ -527,7 +739,9 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
                       format: 'YYYY-MM-DD HH:mm',
                       allowClear: true,
                       style: { width: '100%' },
-                      placeholder: t('app.kuaizhizao.scheduling.prep.placeholderStartPlus8h'),
+                      placeholder: isProductionLineMode
+                        ? t('app.kuaizhizao.scheduling.prep.placeholderTaktDuration')
+                        : t('app.kuaizhizao.scheduling.prep.placeholderStartPlus8h'),
                     }}
                   />
                 </div>
@@ -559,7 +773,7 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
             baseFieldName: 'planned_start_date',
             t,
             fieldProps: { style: { width: '100%' } },
-          })}
+          }) as React.ComponentProps<typeof ProFormDateTimePicker>['fieldProps']}
         />
       ) : null}
     </FormModalTemplate>

@@ -321,6 +321,29 @@ export const workOrderApi = {
       '/apps/kuaizhizao/work-orders/batch-update-operation-stations',
       { method: 'PUT', data: { updates } }
     ),
+  batchUpdateOperationProductionLines: async (
+    updates: Array<{ operation_id: number; assigned_production_line_id: number }>
+  ) =>
+    apiRequest<{ updated: number[]; skipped_frozen: number[]; failed: Array<{ id: number; reason: string }> }>(
+      '/apps/kuaizhizao/work-orders/batch-update-operation-production-lines',
+      { method: 'PUT', data: { updates } }
+    ),
+  /** 从甘特撤排：清空工序计划时间与产线/工位指派 */
+  batchClearOperationScheduling: async (body: {
+    work_order_ids: number[];
+    resource_mode?: 'workstation' | 'production_line';
+    clear_header_dates?: boolean;
+  }) =>
+    apiRequest<{
+      updated: number[];
+      cleared_work_order_ids: number[];
+      skipped_frozen: number[];
+      skipped_freeze_window: number[];
+      failed: Array<{ id: number; reason: string }>;
+    }>('/apps/kuaizhizao/work-orders/batch-clear-operation-scheduling', {
+      method: 'PUT',
+      data: body,
+    }),
   batchUpdateOperationAssignments: async (
     updates: Array<{
       operation_id: number;

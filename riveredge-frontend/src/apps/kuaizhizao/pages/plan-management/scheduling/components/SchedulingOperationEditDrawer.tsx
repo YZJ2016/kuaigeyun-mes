@@ -27,6 +27,8 @@ interface SchedulingOperationEditDrawerProps {
   workers: ResourceOption[];
   equipments: ResourceOption[];
   molds: ResourceOption[];
+  /** 产线模式：workstations 实为产线泳道，保存走产线指派 API */
+  resourceMode?: 'workstation' | 'production_line';
   canUpdate: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -68,10 +70,12 @@ const SchedulingOperationEditDrawer: React.FC<SchedulingOperationEditDrawerProps
   workers,
   equipments,
   molds,
+  resourceMode = 'workstation',
   canUpdate,
   onClose,
   onSaved,
 }) => {
+  const isProductionLineMode = resourceMode === 'production_line';
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [saving, setSaving] = useState(false);
@@ -92,7 +96,9 @@ const SchedulingOperationEditDrawer: React.FC<SchedulingOperationEditDrawerProps
         id: op.id,
         sequence: op.sequence,
         operation_name: op.operation_name,
-        assigned_station_id: toPositiveId(op.assigned_station_id),
+        assigned_station_id: isProductionLineMode
+          ? toPositiveId(op.assigned_production_line_id) ?? toPositiveId(op.assigned_station_id)
+          : toPositiveId(op.assigned_station_id),
         assigned_worker_id: toPositiveId(op.assigned_worker_id),
         assigned_equipment_id: toPositiveId(op.assigned_equipment_id),
         assigned_mold_id: toPositiveId(op.assigned_mold_id),
@@ -102,7 +108,7 @@ const SchedulingOperationEditDrawer: React.FC<SchedulingOperationEditDrawerProps
       }))
     );
     setRateWarnings([]);
-  }, [open, context, operations]);
+  }, [open, context, operations, isProductionLineMode]);
 
   const stationOptions = useMemo(
     () =>
@@ -181,13 +187,27 @@ const SchedulingOperationEditDrawer: React.FC<SchedulingOperationEditDrawerProps
       }));
 
       if (stationUpdates.length) {
-        const validation = await visualSchedulingApi.validateAdjustments({
-          operation_station_updates: stationUpdates,
-        });
-        if (!validation.valid) {
-          throw new Error((validation.conflicts || []).slice(0, 2).map((c) => c.message).join('\n'));
+        if (isProductionLineMode) {
+          const lineUpdates = stationUpdates.map((u) => ({
+            operation_id: u.operation_id,
+            assigned_production_line_id: u.assigned_station_id,
+          }));
+          const validation = await visualSchedulingApi.validateAdjustments({
+            operation_production_line_updates: lineUpdates,
+          });
+          if (!validation.valid) {
+            throw new Error((validation.conflicts || []).slice(0, 2).map((c) => c.message).join('\n'));
+          }
+          await workOrderApi.batchUpdateOperationProductionLines(lineUpdates);
+        } else {
+          const validation = await visualSchedulingApi.validateAdjustments({
+            operation_station_updates: stationUpdates,
+          });
+          if (!validation.valid) {
+            throw new Error((validation.conflicts || []).slice(0, 2).map((c) => c.message).join('\n'));
+          }
+          await workOrderApi.batchUpdateOperationStations(stationUpdates);
         }
-        await workOrderApi.batchUpdateOperationStations(stationUpdates);
       }
       await workOrderApi.batchUpdateOperationAssignments(assignmentUpdates);
       message.success(t('app.kuaizhizao.scheduling.operationEdit.savedWhole'));
@@ -228,7 +248,11 @@ const SchedulingOperationEditDrawer: React.FC<SchedulingOperationEditDrawerProps
       },
     },
     {
-      title: t('app.kuaizhizao.scheduling.prep.colStation'),
+      title: t(
+        isProductionLineMode
+          ? 'app.kuaizhizao.scheduling.prep.colProductionLine'
+          : 'app.kuaizhizao.scheduling.prep.colStation'
+      ),
       dataIndex: 'assigned_station_id',
       key: 'station',
       width: 180,

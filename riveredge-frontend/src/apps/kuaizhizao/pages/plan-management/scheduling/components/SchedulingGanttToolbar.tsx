@@ -27,7 +27,7 @@ export interface SchedulingActionConfirm {
   okText?: string;
 }
 
-export type SchedulingBoardMainView = 'gantt' | 'loadTable' | 'cardView';
+export type SchedulingBoardMainView = 'gantt' | 'loadTable' | 'cardView' | 'alerts';
 
 interface SchedulingGanttToolbarProps {
   t: TFunction;
@@ -35,6 +35,8 @@ interface SchedulingGanttToolbarProps {
   onBoardMainViewChange: (view: SchedulingBoardMainView) => void;
   ganttViewMode: ViewMode;
   ganttTaskLevel: GanttTaskLevel;
+  /** 排程资源维度：按产线时「工位」切换项显示为「产线」 */
+  resourceMode?: 'workstation' | 'production_line';
   onGanttTaskLevelChange: (level: GanttTaskLevel) => void;
   pinnedResourceCount?: number;
   showPinnedOnly?: boolean;
@@ -59,6 +61,9 @@ interface SchedulingGanttToolbarProps {
   onOpenConfig: () => void;
   onBatchFreeze: () => void;
   onBatchUnfreeze: () => void;
+  /** 从甘特撤排：清空计划与资源指派 */
+  onClearScheduling?: () => void;
+  clearSchedulingConfirm?: SchedulingActionConfirm;
   onBatchShift: (days: number) => void;
   onShiftDaysChange: (days: number) => void;
   onViewModeChange: (mode: ViewMode) => void;
@@ -70,6 +75,7 @@ interface SchedulingGanttToolbarProps {
   localRescheduleConfirm?: SchedulingActionConfirm;
   onEditOperation?: () => void;
   canEditOperation?: boolean;
+  onOpenDueEstimate?: () => void;
 }
 
 export interface SchedulingGanttToolbarNodes {
@@ -126,6 +132,7 @@ function buildSchedulingGanttToolbar({
   onBoardMainViewChange,
   ganttViewMode,
   ganttTaskLevel,
+  resourceMode = 'workstation',
   onGanttTaskLevelChange,
   pinnedResourceCount = 0,
   showPinnedOnly = false,
@@ -150,6 +157,8 @@ function buildSchedulingGanttToolbar({
   onOpenConfig,
   onBatchFreeze,
   onBatchUnfreeze,
+  onClearScheduling,
+  clearSchedulingConfirm,
   onBatchShift,
   onShiftDaysChange,
   onViewModeChange,
@@ -157,6 +166,7 @@ function buildSchedulingGanttToolbar({
   onAutoReschedule,
   autoRescheduleConfirm,
   autoRescheduleLoading = false,
+  onOpenDueEstimate,
   onLocalReschedule,
   localRescheduleConfirm,
   onEditOperation,
@@ -237,6 +247,11 @@ function buildSchedulingGanttToolbar({
               {t('app.kuaizhizao.scheduling.ganttToolbar.autoReschedule')}
             </Button>
           )}
+          {onOpenDueEstimate ? (
+            <Button size="small" disabled={selectedWorkOrderCount === 0} onClick={onOpenDueEstimate}>
+              {t('app.kuaizhizao.scheduling.ganttToolbar.dueEstimate')}
+            </Button>
+          ) : null}
           {localRescheduleConfirm ? (
             <ActionConfirmPopconfirm
               title={localRescheduleConfirm.title}
@@ -286,6 +301,36 @@ function buildSchedulingGanttToolbar({
           >
             {t('app.kuaizhizao.scheduling.ganttToolbar.batchUnfreeze')}
           </Button>
+          {onClearScheduling ? (
+            clearSchedulingConfirm ? (
+              <ActionConfirmPopconfirm
+                title={clearSchedulingConfirm.title}
+                description={clearSchedulingConfirm.description}
+                okText={clearSchedulingConfirm.okText}
+                onConfirm={() => void onClearScheduling()}
+              >
+                <Button
+                  size="small"
+                  danger
+                  disabled={selectedWorkOrderCount === 0}
+                  loading={batchActionLoading}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {t('app.kuaizhizao.scheduling.ganttToolbar.clearScheduling')}
+                </Button>
+              </ActionConfirmPopconfirm>
+            ) : (
+              <Button
+                size="small"
+                danger
+                disabled={selectedWorkOrderCount === 0}
+                loading={batchActionLoading}
+                onClick={onClearScheduling}
+              >
+                {t('app.kuaizhizao.scheduling.ganttToolbar.clearScheduling')}
+              </Button>
+            )
+          ) : null}
           <Space.Compact>
             <InputNumber
               size="small"
@@ -347,6 +392,7 @@ function buildSchedulingGanttToolbar({
           { label: t('app.kuaizhizao.scheduling.ganttToolbar.boardViewGantt'), value: 'gantt' },
           { label: t('app.kuaizhizao.scheduling.ganttToolbar.boardViewCard'), value: 'cardView' },
           { label: t('app.kuaizhizao.scheduling.ganttToolbar.boardViewLoadTable'), value: 'loadTable' },
+          { label: t('app.kuaizhizao.scheduling.ganttToolbar.boardViewAlerts'), value: 'alerts' },
         ]}
         onChange={(value) => onBoardMainViewChange(value as SchedulingBoardMainView)}
       />
@@ -356,7 +402,13 @@ function buildSchedulingGanttToolbar({
         surfaceBackground
         value={ganttTaskLevel}
         options={[
-          { label: t('app.kuaizhizao.scheduling.ganttToolbar.resourceStation'), value: 'station' },
+          {
+            label:
+              resourceMode === 'production_line'
+                ? t('app.kuaizhizao.scheduling.ganttToolbar.resourceProductionLine')
+                : t('app.kuaizhizao.scheduling.ganttToolbar.resourceStation'),
+            value: 'station',
+          },
           { label: t('app.kuaizhizao.scheduling.ganttToolbar.resourceEquipment'), value: 'equipment' },
           { label: t('app.kuaizhizao.scheduling.ganttToolbar.resourceWorker'), value: 'worker' },
         ]}
@@ -409,6 +461,10 @@ function buildSchedulingGanttToolbar({
       ) : boardMainView === 'loadTable' ? (
         <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.loadTableHint')}>
           <QuestionCircleOutlined className="scheduling-gantt-toolbar__help-icon" aria-label={t('app.kuaizhizao.scheduling.ganttToolbar.loadTableHint')} />
+        </Tooltip>
+      ) : boardMainView === 'alerts' ? (
+        <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.alertsHint')}>
+          <QuestionCircleOutlined className="scheduling-gantt-toolbar__help-icon" aria-label={t('app.kuaizhizao.scheduling.ganttToolbar.alertsHint')} />
         </Tooltip>
       ) : null}
       {canUpdate ? (

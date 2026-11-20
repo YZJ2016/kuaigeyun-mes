@@ -19,6 +19,7 @@ export interface SchedulingWorkerRoleRef {
 export interface SchedulingWorkerResource extends WorkerResource {
   roles?: SchedulingWorkerRoleRef[];
   roleUuids?: string[];
+  username?: string;
 }
 
 const EQUIPMENT_TYPE_I18N: Record<(typeof SCHEDULING_EQUIPMENT_TYPE_VALUES)[number], string> = {

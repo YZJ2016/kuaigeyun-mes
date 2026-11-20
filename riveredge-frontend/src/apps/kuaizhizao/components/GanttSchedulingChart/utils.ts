@@ -297,6 +297,7 @@ export function workOrdersToGanttTasks(
   resourceFilters?: {
     equipmentType?: string | 'all';
     workerRole?: string | 'all';
+    resourceMode?: 'workstation' | 'production_line';
   }
 ): GanttTask[] {
   const sorted = sortWorkOrdersForGantt(workOrders);
@@ -307,7 +308,9 @@ export function workOrdersToGanttTasks(
     return workOrdersToOperationGanttTasks(sorted);
   }
   if (level === 'station') {
-    return workOrdersToStationResourceGanttTasks(sorted, safeStations);
+    return workOrdersToStationResourceGanttTasks(sorted, safeStations, {
+      resourceMode: resourceFilters?.resourceMode ?? 'workstation',
+    });
   }
   if (level === 'equipment') {
     return workOrdersToEquipmentResourceGanttTasks(sorted, equipments ?? [], equipmentTypeFilter);

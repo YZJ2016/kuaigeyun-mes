@@ -11,7 +11,7 @@ import { App, Button, Tag, Space, Card, Modal, Switch, Spin, Typography, Alert, 
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import type { ThemeConfig } from 'antd';
 import { useRequest } from 'ahooks';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { renderInlineMarkerTagGroup } from '../../../../../components/inline-marker-tag-preview';
@@ -35,11 +35,17 @@ import type {
 import type { GanttOperationAssignmentUpdate } from '../../../components/GanttSchedulingChart';
 import { stationResourceId } from '../../../components/GanttSchedulingChart/stationResourceUtils';
 import { resolveWorkerIdsForOperation } from '../../../components/GanttSchedulingChart/workerResourceUtils';
-import { factoryListItems, workstationApi, workCenterApi } from '../../../../master-data/services/factory';
+import {
+  factoryListItems,
+  productionLineApi,
+  workstationApi,
+  workCenterApi,
+} from '../../../../master-data/services/factory';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { ROUTES } from '../../../constants/routes';
 import dayjs from 'dayjs';
 import {formatDateTime, formatQuantity} from '../../../../../utils/format';
+import { apiRequest } from '../../../../../services/api';
 import SchedulingHeaderBand from './components/SchedulingHeaderBand';
 import SchedulingBoardDropZone from './components/SchedulingBoardDropZone';
 import { collectWorkOrderDiagnosticIssues } from './components/schedulingPoolDiagnostics';
@@ -57,6 +63,11 @@ import SchedulingLoadTable from './components/SchedulingLoadTable';
 import SchedulingCardBoard from './components/SchedulingCardBoard';
 import SchedulingPoolCardGrid from './components/SchedulingPoolCardGrid';
 import SchedulingPinManagerModal from './components/SchedulingPinManagerModal';
+import SchedulingRescheduleWizardModal, {
+  type SchedulingEngineProposalPayload,
+} from './components/SchedulingRescheduleWizardModal';
+import SchedulingAlertsPanel from './components/SchedulingAlertsPanel';
+import SchedulingDueEstimateDrawer from './components/SchedulingDueEstimateDrawer';
 import { buildSchedulingPoolCardItems, type SchedulingCardResourceMove } from './schedulingCardViewUtils';
 import {
   filterSchedulingEquipments,
@@ -81,6 +92,8 @@ import {
   mergeApiWorkOrderWithScheduled,
   mergeScheduledWorkOrderIntoBoard,
   pickFocusOperationTaskId,
+  resolveGanttStationResourceIdFromPoint,
+  stampProductionLineOnWorkOrder,
   workOrderNeedsSchedulingPrep,
   SCHEDULING_DRAG_WORK_ORDER,
   type OperationNeedingStation,
@@ -228,10 +241,12 @@ function applyOperationDateUpdates(
 
 function applyOperationStationUpdates(
   list: WorkOrderForGantt[],
-  updates: Array<{ operation_id: number; assigned_station_id: number }>
+  updates: Array<{ operation_id: number; assigned_station_id: number }>,
+  options?: { asProductionLine?: boolean }
 ): WorkOrderForGantt[] {
   if (updates.length === 0) return list;
   const byOpId = new Map(updates.map((u) => [u.operation_id, u.assigned_station_id]));
+  const asLine = Boolean(options?.asProductionLine);
   return list.map((wo) => {
     if (!wo.operations?.length) return wo;
     let changed = false;
@@ -241,7 +256,11 @@ function applyOperationStationUpdates(
       const stationId = byOpId.get(opId);
       if (stationId == null) return op;
       changed = true;
-      return { ...op, assigned_station_id: stationId };
+      return {
+        ...op,
+        assigned_station_id: stationId,
+        ...(asLine ? { assigned_production_line_id: stationId } : {}),
+      };
     });
     return changed ? { ...wo, operations } : wo;
   });
@@ -300,7 +319,14 @@ const SchedulingPage: React.FC = () => {
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
   const [aiSuggestedPoolOrderIds, setAiSuggestedPoolOrderIds] = useState<number[]>([]);
   const [autoRescheduleLoading, setAutoRescheduleLoading] = useState(false);
+  const [rescheduleWizardOpen, setRescheduleWizardOpen] = useState(false);
+  const [rescheduleWizardIds, setRescheduleWizardIds] = useState<number[]>([]);
+  const [dueEstimateOpen, setDueEstimateOpen] = useState(false);
   const [missingSettingsModalOpen, setMissingSettingsModalOpen] = useState(false);
+  /** 补齐弹窗：来自 boardScan gaps 的 product_id（甘特未加载工单时兜底） */
+  const [missingSettingsProductByWo, setMissingSettingsProductByWo] = useState<Map<number, number>>(
+    () => new Map()
+  );
   const [missingSettingsRows, setMissingSettingsRows] = useState<
     Array<{
       operation_id: number;
@@ -310,6 +336,8 @@ const SchedulingPage: React.FC = () => {
       work_center_id?: number | null;
       needHours: boolean;
       needStation: boolean;
+      /** 产线模式：缺节拍/日产能，不可在本弹窗回写 */
+      needCapacity: boolean;
       setup_time: number | null;
       standard_time: number | null;
       assigned_station_id: number | null;
@@ -359,7 +387,7 @@ const SchedulingPage: React.FC = () => {
   );
 
   const buildWorkOrderParams = useCallback(
-    (query: Record<string, any>, paging?: { skip: number; limit: number }) => ({
+    (query: Record<string, any>, paging?: { skip?: number; limit: number }) => ({
       skip: paging?.skip ?? 0,
       limit: paging?.limit ?? 500,
       status: query.status,
@@ -494,11 +522,18 @@ const SchedulingPage: React.FC = () => {
     for (const wo of ganttWorkOrders) {
       const issues = collectWorkOrderDiagnosticIssues(wo, boardScan, t, {
         materialHardConstraint: Boolean(schedulingConstraints.material_hard_constraint),
+        resourceMode: schedulingConstraints.resource_mode,
       });
       if (issues.length > 0) map.set(wo.id, issues);
     }
     return map;
-  }, [boardScan, ganttWorkOrders, schedulingConstraints.material_hard_constraint, t]);
+  }, [
+    boardScan,
+    ganttWorkOrders,
+    schedulingConstraints.material_hard_constraint,
+    schedulingConstraints.resource_mode,
+    t,
+  ]);
 
   const poolWorkOrderIds = useMemo(
     () => poolWorkOrders.map((wo) => wo.id),
@@ -635,8 +670,8 @@ const SchedulingPage: React.FC = () => {
 
   useRequest(
     async () => {
-      const res = await schedulingConfigApi.getDefault();
-      const config = res?.data;
+      // apiRequest 已解包 { success, data } → 直接得到配置对象
+      const config = await schedulingConfigApi.getDefault();
       if (config?.constraints) {
         setSchedulingConstraints((prev) => ({
           ...prev,
@@ -685,6 +720,114 @@ const SchedulingPage: React.FC = () => {
       .filter((s) => Number.isInteger(s.id) && s.id > 0);
   });
 
+  const { data: productionLineCatalog = [] as WorkstationResource[] } = useRequest(async () => {
+    const res = await productionLineApi.list({ is_active: true, limit: 1000 });
+    return factoryListItems(res)
+      .map((line: { id?: number; name?: string; code?: string }) => ({
+        id: Number(line.id),
+        name: String(line.name || line.code || line.id),
+        code: line.code ? String(line.code) : undefined,
+      }))
+      .filter((line) => Number.isInteger(line.id) && line.id > 0) as WorkstationResource[];
+  });
+
+  type RelayLineCapacityRow = {
+    production_line_id: number;
+    takt_seconds: number;
+    daily_capacity_qty: number;
+    product_ids: number[];
+  };
+
+  const {
+    data: lineCapacities = [] as RelayLineCapacityRow[],
+    error: lineCapacitiesError,
+  } = useRequest(async () => {
+    const rows = await apiRequest<RelayLineCapacityRow[]>('/apps/ind-relay/line-capacities', {
+      method: 'GET',
+    });
+    const list = Array.isArray(rows) ? rows : [];
+    // 旧 API / 未部署行业包字段时禁止把「缺字段」伪装成「空绑定」
+    if (
+      list.length > 0 &&
+      list.every((row) => !Object.prototype.hasOwnProperty.call(row, 'product_ids'))
+    ) {
+      throw new Error('LINE_PRODUCT_IDS_MISSING');
+    }
+    return list.map((row) => ({
+      production_line_id: Number(row.production_line_id || 0),
+      takt_seconds: Number(row.takt_seconds || 0),
+      daily_capacity_qty: Number(row.daily_capacity_qty || 0),
+      product_ids: Array.isArray(row.product_ids)
+        ? row.product_ids.map((x) => Number(x)).filter((x) => x > 0)
+        : [],
+    }));
+  });
+
+  const taktSecondsByLineId = useMemo(() => {
+    const m = new Map<number, number>();
+    lineCapacities.forEach((row) => {
+      if (row.production_line_id > 0 && row.takt_seconds > 0) {
+        m.set(row.production_line_id, row.takt_seconds);
+      }
+    });
+    return m;
+  }, [lineCapacities]);
+
+  const dailyCapacityByLineId = useMemo(() => {
+    const m = new Map<number, number>();
+    lineCapacities.forEach((row) => {
+      if (row.production_line_id > 0 && row.daily_capacity_qty > 0) {
+        m.set(row.production_line_id, row.daily_capacity_qty);
+      }
+    });
+    return m;
+  }, [lineCapacities]);
+
+  const linesMissingTakt = useMemo(
+    () =>
+      productionLineCatalog
+        .filter((line) => {
+          const takt = taktSecondsByLineId.get(line.id) ?? 0;
+          const daily = dailyCapacityByLineId.get(line.id) ?? 0;
+          return takt <= 0 || daily <= 0;
+        })
+        .map((line) => line.id),
+    [dailyCapacityByLineId, productionLineCatalog, taktSecondsByLineId]
+  );
+
+  /** 产线 → 可生产自制件；空绑定 = 不可承接 */
+  const lineAllowedProductIds = useMemo(() => {
+    const m = new Map<number, Set<number>>();
+    lineCapacities.forEach((row) => {
+      if (row.production_line_id > 0) {
+        m.set(row.production_line_id, new Set(row.product_ids));
+      }
+    });
+    return m;
+  }, [lineCapacities]);
+
+  const lineAcceptsProduct = useCallback(
+    (lineId: number, productId: number) => {
+      if (!(lineId > 0) || !(productId > 0)) return false;
+      const allowed = lineAllowedProductIds.get(lineId);
+      return !!allowed && allowed.has(productId);
+    },
+    [lineAllowedProductIds]
+  );
+
+  const eligibleConfiguredLineIdsForProduct = useCallback(
+    (productId: number) => {
+      if (!(productId > 0)) return [] as number[];
+      return productionLineCatalog
+        .filter((line) => {
+          if (linesMissingTakt.includes(line.id)) return false;
+          return lineAcceptsProduct(line.id, productId);
+        })
+        .map((line) => line.id);
+    },
+    [lineAcceptsProduct, linesMissingTakt, productionLineCatalog]
+  );
+
   const workstationResources = useMemo(() => {
     if (schedulingConstraints.resource_mode !== 'production_line') {
       return stationCatalog.map((s) => ({
@@ -693,46 +836,36 @@ const SchedulingPage: React.FC = () => {
         code: s.code,
       })) as WorkstationResource[];
     }
-    const byLine = new Map<number, WorkstationResource>();
-    stationCatalog.forEach((s) => {
-      const lineId = s.production_line_id;
-      if (!lineId) return;
-      if (!byLine.has(lineId)) {
-        byLine.set(lineId, {
-          id: lineId,
-          name: s.production_line_name || `Line#${lineId}`,
-          code: String(lineId),
-        });
-      }
-    });
-    return Array.from(byLine.values());
-  }, [schedulingConstraints.resource_mode, stationCatalog]);
-
-  const stationToLineId = useMemo(() => {
-    const m = new Map<number, number>();
-    stationCatalog.forEach((s) => {
-      if (s.production_line_id > 0) m.set(s.id, s.production_line_id);
-    });
-    return m;
-  }, [stationCatalog]);
+    // 按产线：主数据产线为泳道真源；不依赖工位
+    return productionLineCatalog.map((line) => ({
+      id: line.id,
+      name: line.name,
+      code: line.code,
+    })) as WorkstationResource[];
+  }, [productionLineCatalog, schedulingConstraints.resource_mode, stationCatalog]);
 
   const ganttDisplayWorkOrders = useMemo(() => {
     if (schedulingConstraints.resource_mode !== 'production_line') return ganttWorkOrders;
     return ganttWorkOrders.map((wo) => ({
       ...wo,
       operations: (wo.operations || []).map((op) => {
-        const sid = Number(op.assigned_station_id || 0);
-        const lineId = stationToLineId.get(sid) || 0;
+        const lineId =
+          op.assigned_production_line_id != null && Number(op.assigned_production_line_id) > 0
+            ? Number(op.assigned_production_line_id)
+            : 0;
         if (!lineId) return op;
         return {
           ...op,
+          // 甘特泳道仍按 assigned_station_id 挂资源行；产线模式下写入产线 ID
           assigned_station_id: lineId,
           assigned_station_name:
-            workstationResources.find((r) => r.id === lineId)?.name || op.assigned_station_name,
+            workstationResources.find((r) => r.id === lineId)?.name ||
+            op.assigned_production_line_name ||
+            op.assigned_station_name,
         };
       }),
     }));
-  }, [ganttWorkOrders, schedulingConstraints.resource_mode, stationToLineId, workstationResources]);
+  }, [ganttWorkOrders, schedulingConstraints.resource_mode, workstationResources]);
 
   const ganttBoardDisplayWorkOrders = useMemo(
     () => ganttDisplayWorkOrders.filter((wo) => isWorkOrderScheduledOnBoard(wo)),
@@ -781,6 +914,13 @@ const SchedulingPage: React.FC = () => {
         if (op.assigned_station_id != null && Number(op.assigned_station_id) > 0) {
           stationIdsWithOps.add(Number(op.assigned_station_id));
         }
+        if (
+          schedulingConstraints.resource_mode === 'production_line' &&
+          op.assigned_production_line_id != null &&
+          Number(op.assigned_production_line_id) > 0
+        ) {
+          stationIdsWithOps.add(Number(op.assigned_production_line_id));
+        }
       });
     });
     const ids: Array<number | string> = workstationResources
@@ -790,12 +930,19 @@ const SchedulingPage: React.FC = () => {
       if (!isWorkOrderSchedulingLocked(wo, schedulingConstraints.freeze_horizon_days || 0, freezeAnchor)) {
         return;
       }
+      ids.push(`wo-${wo.id}`);
       (wo.operations || []).forEach((op) => {
         if (op.id != null) ids.push(`op-${op.id}`);
       });
     });
     return ids;
-  }, [freezeAnchor, ganttBoardWorkOrders, schedulingConstraints.freeze_horizon_days, workstationResources]);
+  }, [
+    freezeAnchor,
+    ganttBoardWorkOrders,
+    schedulingConstraints.freeze_horizon_days,
+    schedulingConstraints.resource_mode,
+    workstationResources,
+  ]);
 
   const topLegendMetrics = useMemo(() => {
     const manualFrozenCount = ganttBoardWorkOrders.filter((wo) => Boolean(wo.is_frozen)).length;
@@ -832,6 +979,7 @@ const SchedulingPage: React.FC = () => {
           work_center_id?: number | null;
           needHours: boolean;
           needStation: boolean;
+          needCapacity: boolean;
           setup_time: number | null;
           standard_time: number | null;
           assigned_station_id: number | null;
@@ -846,6 +994,7 @@ const SchedulingPage: React.FC = () => {
           work_center_id: gap.work_center_id,
           needHours: false,
           needStation: false,
+          needCapacity: false,
           setup_time: null as number | null,
           standard_time: null as number | null,
           assigned_station_id: null as number | null,
@@ -861,8 +1010,16 @@ const SchedulingPage: React.FC = () => {
               gap.suggested != null && gap.suggested !== '' ? Number(gap.suggested) : 1;
           }
         }
-        if (gap.field === 'assigned_station_id') {
+        if (gap.field === 'assigned_station_id' || gap.field === 'assigned_production_line_id') {
           existing.needStation = true;
+          const suggestedId =
+            gap.suggested != null && gap.suggested !== '' ? Number(gap.suggested) : 0;
+          if (suggestedId > 0 && !(existing.assigned_station_id != null && existing.assigned_station_id > 0)) {
+            existing.assigned_station_id = suggestedId;
+          }
+        }
+        if (gap.field === 'takt_seconds' || gap.field === 'daily_capacity_qty') {
+          existing.needCapacity = true;
         }
         byOp.set(gap.operation_id, existing);
       }
@@ -871,13 +1028,81 @@ const SchedulingPage: React.FC = () => {
     [],
   );
 
+  const productIdByWorkOrderId = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const wo of ganttWorkOrders) {
+      const pid = Number(wo.product_id || 0);
+      if (pid > 0) m.set(wo.id, pid);
+    }
+    return m;
+  }, [ganttWorkOrders]);
+
   const openMissingSettingsModal = useCallback(
     (gaps: VisualSchedulingMissingSetting[], continueAutoRescheduleIds?: number[]) => {
-      setMissingSettingsRows(buildMissingSettingsRows(gaps));
+      // gap 上的 product_id 补齐甘特未加载工单的自制件映射
+      const productFromGaps = new Map<number, number>();
+      for (const gap of gaps) {
+        const pid = Number(gap.product_id || 0);
+        if (pid > 0 && gap.work_order_id > 0) {
+          productFromGaps.set(gap.work_order_id, pid);
+        }
+      }
+      const resolveProductId = (workOrderId: number) =>
+        productIdByWorkOrderId.get(workOrderId) || productFromGaps.get(workOrderId) || 0;
+
+      let rows = buildMissingSettingsRows(gaps);
+      // 产线模式：预填推荐产线 = 已配节拍 ∩ 绑定含本工单自制件
+      if (schedulingConstraints.resource_mode === 'production_line') {
+        rows = rows.map((row) => {
+          if (!row.needStation) return row;
+          const productId = resolveProductId(row.work_order_id);
+          const eligible = new Set(eligibleConfiguredLineIdsForProduct(productId));
+          if (
+            row.assigned_station_id != null &&
+            row.assigned_station_id > 0 &&
+            !eligible.has(row.assigned_station_id)
+          ) {
+            return { ...row, assigned_station_id: null };
+          }
+          if (row.assigned_station_id != null && row.assigned_station_id > 0) {
+            return row;
+          }
+          if (eligible.size === 1) {
+            return { ...row, assigned_station_id: [...eligible][0] };
+          }
+          return row;
+        });
+        // 同工单已有推荐产线的行，把空行补齐为同一条（整单产线，且须在 eligible）
+        const byWo = new Map<number, number>();
+        for (const row of rows) {
+          if (row.assigned_station_id != null && row.assigned_station_id > 0) {
+            byWo.set(row.work_order_id, row.assigned_station_id);
+          }
+        }
+        if (byWo.size > 0) {
+          rows = rows.map((row) => {
+            if (!row.needStation || (row.assigned_station_id != null && row.assigned_station_id > 0)) {
+              return row;
+            }
+            const shared = byWo.get(row.work_order_id);
+            if (shared == null) return row;
+            const productId = resolveProductId(row.work_order_id);
+            const eligible = new Set(eligibleConfiguredLineIdsForProduct(productId));
+            return eligible.has(shared) ? { ...row, assigned_station_id: shared } : row;
+          });
+        }
+      }
+      setMissingSettingsProductByWo(productFromGaps);
+      setMissingSettingsRows(rows);
       setPendingAutoRescheduleIds(continueAutoRescheduleIds ?? null);
       setMissingSettingsModalOpen(true);
     },
-    [buildMissingSettingsRows],
+    [
+      buildMissingSettingsRows,
+      eligibleConfiguredLineIdsForProduct,
+      productIdByWorkOrderId,
+      schedulingConstraints.resource_mode,
+    ],
   );
 
   const filteredSchedulingEquipments = useMemo(
@@ -1032,9 +1257,12 @@ const SchedulingPage: React.FC = () => {
       return;
     }
     const persistDraft = async () => {
+      const isLineMode = schedulingConstraints.resource_mode === 'production_line';
       const woLabel = t('app.kuaizhizao.scheduling.batch.label.workOrderDates');
       const opLabel = t('app.kuaizhizao.scheduling.batch.label.operationDates');
-      const stationLabel = t('app.kuaizhizao.scheduling.batch.label.operationStations');
+      const stationLabel = isLineMode
+        ? t('app.kuaizhizao.scheduling.batch.label.operationProductionLines')
+        : t('app.kuaizhizao.scheduling.batch.label.operationStations');
       if (woUpdates.length > 0) {
         const woResult = await workOrderApi.batchUpdateDates(woUpdates);
         ensureBatchUpdatesPersisted(woResult, woUpdates.length, woLabel, t);
@@ -1048,14 +1276,32 @@ const SchedulingPage: React.FC = () => {
         mutateGanttWorkOrders((prev) => applyOperationDateUpdates(prev ?? [], opUpdates));
       }
       if (stationUpdates.length > 0) {
-        const result = await workOrderApi.batchUpdateOperationStations(stationUpdates);
-        reportBatchUpdateResult(messageApi, stationLabel, {
-          updated: result.updated,
-          skipped_frozen: result.skipped_frozen,
-          skipped_freeze_window: [],
-          failed: result.failed,
-        }, t);
-        mutateGanttWorkOrders((prev) => applyOperationStationUpdates(prev ?? [], stationUpdates));
+        if (isLineMode) {
+          const lineUpdates = stationUpdates.map((u) => ({
+            operation_id: u.operation_id,
+            assigned_production_line_id: Number(u.assigned_station_id),
+          }));
+          const result = await workOrderApi.batchUpdateOperationProductionLines(lineUpdates);
+          reportBatchUpdateResult(messageApi, stationLabel, {
+            updated: result.updated,
+            skipped_frozen: result.skipped_frozen,
+            skipped_freeze_window: [],
+            failed: result.failed,
+          }, t);
+        } else {
+          const result = await workOrderApi.batchUpdateOperationStations(stationUpdates);
+          reportBatchUpdateResult(messageApi, stationLabel, {
+            updated: result.updated,
+            skipped_frozen: result.skipped_frozen,
+            skipped_freeze_window: [],
+            failed: result.failed,
+          }, t);
+        }
+        mutateGanttWorkOrders((prev) =>
+          applyOperationStationUpdates(prev ?? [], stationUpdates, {
+            asProductionLine: isLineMode,
+          })
+        );
       }
       if (filterPlanDate) {
         const woIds = new Set<number>(woUpdates.map((u) => u.work_order_id));
@@ -1082,10 +1328,18 @@ const SchedulingPage: React.FC = () => {
       refreshPlanReliability();
     };
     try {
+      const isLineMode = schedulingConstraints.resource_mode === 'production_line';
       const validation = await visualSchedulingApi.validateAdjustments({
         work_order_updates: woUpdates,
         operation_updates: opUpdates,
-        operation_station_updates: stationUpdates,
+        ...(isLineMode
+          ? {
+              operation_production_line_updates: stationUpdates.map((u) => ({
+                operation_id: u.operation_id,
+                assigned_production_line_id: Number(u.assigned_station_id),
+              })),
+            }
+          : { operation_station_updates: stationUpdates }),
       });
       if (validation.valid) {
         await persistDraft();
@@ -1135,6 +1389,7 @@ const SchedulingPage: React.FC = () => {
     refreshBoardScan,
     refreshGantt,
     refreshPlanReliability,
+    schedulingConstraints.resource_mode,
     syncDraftPendingCount,
     t,
   ]);
@@ -1275,49 +1530,76 @@ const SchedulingPage: React.FC = () => {
     setFocusTaskId(null);
   }, []);
 
-  const resolvePersistStationId = useCallback(
-    (resourceId: number): number => {
-      if (schedulingConstraints.resource_mode !== 'production_line') return resourceId;
-      const onLine = stationCatalog.filter((s) => s.production_line_id === resourceId);
-      if (onLine.length > 0) return onLine[0].id;
-      return resourceId;
-    },
-    [schedulingConstraints.resource_mode, stationCatalog]
-  );
-
   const handleBatchUpdateOperationStations = useCallback(
     async (updates: Array<{ operation_id: number; assigned_station_id: number }>) => {
       if (!canScheduleUpdate || updates.length === 0) return;
-      const normalized = updates.map((u) => ({
-        ...u,
-        assigned_station_id: resolvePersistStationId(Number(u.assigned_station_id)),
-      }));
+      const isLineMode = schedulingConstraints.resource_mode === 'production_line';
       try {
-        const validation = await visualSchedulingApi.validateAdjustments({
-          operation_station_updates: normalized,
-        });
-        if (!validation.valid) {
-          const preview = (validation.conflicts || []).slice(0, 3).map((c) => c.message).join('\n');
-          messageApi.error(preview || t('app.kuaizhizao.scheduling.msg.stationValidationFailed'));
-          refreshGantt();
-          return;
+        if (isLineMode) {
+          const lineUpdates = updates.map((u) => ({
+            operation_id: u.operation_id,
+            assigned_production_line_id: Number(u.assigned_station_id),
+          }));
+          const validation = await visualSchedulingApi.validateAdjustments({
+            operation_production_line_updates: lineUpdates,
+          });
+          if (!validation.valid) {
+            const preview = (validation.conflicts || []).slice(0, 3).map((c) => c.message).join('\n');
+            messageApi.error(
+              preview || t('app.kuaizhizao.scheduling.msg.productionLineValidationFailed')
+            );
+            refreshGantt();
+            return;
+          }
+          const result = await workOrderApi.batchUpdateOperationProductionLines(lineUpdates);
+          const lineLabel = t('app.kuaizhizao.scheduling.batch.label.operationProductionLines');
+          reportBatchUpdateResult(messageApi, lineLabel, {
+            updated: result.updated,
+            skipped_frozen: result.skipped_frozen,
+            skipped_freeze_window: [],
+            failed: result.failed,
+          }, t);
+        } else {
+          const validation = await visualSchedulingApi.validateAdjustments({
+            operation_station_updates: updates,
+          });
+          if (!validation.valid) {
+            const preview = (validation.conflicts || []).slice(0, 3).map((c) => c.message).join('\n');
+            messageApi.error(preview || t('app.kuaizhizao.scheduling.msg.stationValidationFailed'));
+            refreshGantt();
+            return;
+          }
+          const result = await workOrderApi.batchUpdateOperationStations(updates);
+          const stationLabel = t('app.kuaizhizao.scheduling.batch.label.operationStations');
+          reportBatchUpdateResult(messageApi, stationLabel, {
+            updated: result.updated,
+            skipped_frozen: result.skipped_frozen,
+            skipped_freeze_window: [],
+            failed: result.failed,
+          }, t);
         }
-        const result = await workOrderApi.batchUpdateOperationStations(normalized);
-        const stationLabel = t('app.kuaizhizao.scheduling.batch.label.operationStations');
-        reportBatchUpdateResult(messageApi, stationLabel, {
-          updated: result.updated,
-          skipped_frozen: result.skipped_frozen,
-          skipped_freeze_window: [],
-          failed: result.failed,
-        }, t);
         refreshGantt();
         refreshBoardScan();
       } catch (e: any) {
-        messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.stationReassignFailed'));
+        messageApi.error(
+          e?.message ||
+            t(
+              isLineMode
+                ? 'app.kuaizhizao.scheduling.msg.productionLineReassignFailed'
+                : 'app.kuaizhizao.scheduling.msg.stationReassignFailed'
+            )
+        );
         refreshGantt();
       }
     },
-    [canScheduleUpdate, messageApi, refreshBoardScan, refreshGantt, resolvePersistStationId, t]
+    [
+      canScheduleUpdate,
+      messageApi,
+      refreshBoardScan,
+      refreshGantt,
+      schedulingConstraints.resource_mode,
+      t,
+    ]
   );
 
   const handleBatchUpdateOperationAssignments = useCallback(
@@ -1466,11 +1748,53 @@ const SchedulingPage: React.FC = () => {
     );
   }, [handleSchedulingQuickAction, t]);
 
+  const applyEngineProposalPayloadToDraft = useCallback(
+    async (engineProposal: SchedulingEngineProposalPayload) => {
+      if (!canScheduleUpdate) return false;
+      const proposal = convertEngineProposalToAiProposal(engineProposal);
+      if ((engineProposal.unfreezed?.length ?? 0) > 0) {
+        refreshGantt();
+      }
+      if (proposal.warnings.length > 0) {
+        messageApi.info(proposal.warnings.slice(0, 3).join('；'));
+      }
+      if (proposal.confidenceNotes) {
+        messageApi.info(proposal.confidenceNotes.slice(0, 200));
+      }
+      return applySchedulingAiProposal({
+        proposal,
+        draftWoUpdatesRef,
+        draftOpUpdatesRef,
+        draftStationUpdatesRef,
+        mutateGanttWorkOrders,
+        pushUndoSnapshot,
+        syncDraftPendingCount,
+        setDraftMode,
+        resourceMode: schedulingConstraints.resource_mode,
+        message: messageApi,
+        t,
+      });
+    },
+    [
+      canScheduleUpdate,
+      draftOpUpdatesRef,
+      draftStationUpdatesRef,
+      draftWoUpdatesRef,
+      messageApi,
+      mutateGanttWorkOrders,
+      pushUndoSnapshot,
+      refreshGantt,
+      schedulingConstraints.resource_mode,
+      syncDraftPendingCount,
+      t,
+    ]
+  );
+
   const applyEngineProposalToDraft = useCallback(
     async (
       scope: 'selected' | 'overdue' | 'unscheduled' | 'local',
       workOrderIds: number[],
-      opts?: { local_window_hours?: number }
+      opts?: { local_window_hours?: number; strategy?: string }
     ) => {
       if (!canScheduleUpdate || workOrderIds.length === 0) return false;
       setAutoRescheduleLoading(true);
@@ -1480,29 +1804,9 @@ const SchedulingPage: React.FC = () => {
           scope,
           plan_date: filterPlanDate,
           local_window_hours: opts?.local_window_hours,
+          strategy: opts?.strategy,
         });
-        const proposal = convertEngineProposalToAiProposal(res.proposal);
-        if ((res.proposal.unfreezed?.length ?? 0) > 0) {
-          refreshGantt();
-        }
-        if (proposal.warnings.length > 0) {
-          messageApi.info(proposal.warnings.slice(0, 3).join('；'));
-        }
-        if (proposal.confidenceNotes) {
-          messageApi.info(proposal.confidenceNotes.slice(0, 200));
-        }
-        return applySchedulingAiProposal({
-          proposal,
-          draftWoUpdatesRef,
-          draftOpUpdatesRef,
-          draftStationUpdatesRef,
-          mutateGanttWorkOrders,
-          pushUndoSnapshot,
-          syncDraftPendingCount,
-          setDraftMode,
-          message: messageApi,
-          t,
-        });
+        return applyEngineProposalPayloadToDraft(res.proposal);
       } catch (e: any) {
         messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.autoRescheduleFailed'));
         return false;
@@ -1511,16 +1815,46 @@ const SchedulingPage: React.FC = () => {
       }
     },
     [
+      applyEngineProposalPayloadToDraft,
       canScheduleUpdate,
-      draftOpUpdatesRef,
-      draftStationUpdatesRef,
-      draftWoUpdatesRef,
       filterPlanDate,
       messageApi,
-      mutateGanttWorkOrders,
-      pushUndoSnapshot,
-      refreshGantt,
-      syncDraftPendingCount,
+      t,
+    ]
+  );
+
+  /** 自动/局部/逾期重排前：产线模式不走工位工时补齐；缺产线可补齐，缺节拍硬拦 */
+  const guardEngineRescheduleGaps = useCallback(
+    (ids: number[]): boolean => {
+      const idSet = new Set(ids);
+      const relatedGaps = (boardScan?.missing_settings ?? []).filter((g) =>
+        idSet.has(g.work_order_id)
+      );
+      if (relatedGaps.length === 0) return true;
+      const isLineMode = schedulingConstraints.resource_mode === 'production_line';
+      if (isLineMode) {
+        const capacityGaps = relatedGaps.filter(
+          (g) => g.field === 'takt_seconds' || g.field === 'daily_capacity_qty'
+        );
+        if (capacityGaps.length > 0) {
+          messageApi.error(t('app.kuaizhizao.scheduling.prep.missingTaktCapacity'));
+          return false;
+        }
+        const lineGaps = relatedGaps.filter((g) => g.field === 'assigned_production_line_id');
+        if (lineGaps.length > 0) {
+          openMissingSettingsModal(lineGaps, ids);
+          return false;
+        }
+        return true;
+      }
+      openMissingSettingsModal(relatedGaps, ids);
+      return false;
+    },
+    [
+      boardScan?.missing_settings,
+      messageApi,
+      openMissingSettingsModal,
+      schedulingConstraints.resource_mode,
       t,
     ]
   );
@@ -1528,12 +1862,7 @@ const SchedulingPage: React.FC = () => {
   const handleAutoReschedule = useCallback(async () => {
     const ids = selectedWorkOrderIds.slice(0, 50);
     if (ids.length === 0) return;
-    const idSet = new Set(ids);
-    const relatedGaps = (boardScan?.missing_settings ?? []).filter((g) => idSet.has(g.work_order_id));
-    if (relatedGaps.length > 0) {
-      openMissingSettingsModal(relatedGaps, ids);
-      return;
-    }
+    if (!guardEngineRescheduleGaps(ids)) return;
 
     const { allowedIds, blockedIds, warnIds } = filterWorkOrderIdsByMaterialGate(
       ids,
@@ -1550,6 +1879,11 @@ const SchedulingPage: React.FC = () => {
     const targetIds = [...allowedIds, ...warnIds];
     if (targetIds.length === 0) return;
 
+    const openWizard = () => {
+      setRescheduleWizardIds(targetIds);
+      setRescheduleWizardOpen(true);
+    };
+
     const materialDescription = buildMaterialGateConfirmDescription(
       warnIds.length,
       blockedIds.length,
@@ -1561,20 +1895,18 @@ const SchedulingPage: React.FC = () => {
         content: materialDescription,
         okText: t('app.kuaizhizao.scheduling.common.confirm'),
         cancelText: t('common.cancel'),
-        onOk: async () => {
-          await applyEngineProposalToDraft('selected', targetIds);
+        onOk: () => {
+          openWizard();
         },
       });
       return;
     }
 
-    await applyEngineProposalToDraft('selected', targetIds);
+    openWizard();
   }, [
-    applyEngineProposalToDraft,
-    boardScan?.missing_settings,
     boardScan,
+    guardEngineRescheduleGaps,
     messageApi,
-    openMissingSettingsModal,
     schedulingConstraints,
     selectedWorkOrderIds,
     modal,
@@ -1584,13 +1916,15 @@ const SchedulingPage: React.FC = () => {
   const handleLocalReschedule = useCallback(async () => {
     const ids = selectedWorkOrderIds.slice(0, 50);
     if (ids.length === 0) return;
+    if (!guardEngineRescheduleGaps(ids)) return;
     await applyEngineProposalToDraft('local', ids, { local_window_hours: 24 });
-  }, [applyEngineProposalToDraft, selectedWorkOrderIds]);
+  }, [applyEngineProposalToDraft, guardEngineRescheduleGaps, selectedWorkOrderIds]);
 
   const handleMissingSettingsBackfill = useCallback(async () => {
     if (!canScheduleUpdate) return;
+    const isLineMode = schedulingConstraints.resource_mode === 'production_line';
     for (const row of missingSettingsRows) {
-      if (row.needHours) {
+      if (!isLineMode && row.needHours) {
         const setup = Number(row.setup_time ?? 0);
         const std = Number(row.standard_time ?? 0);
         if (!(setup > 0 || std > 0)) {
@@ -1603,37 +1937,77 @@ const SchedulingPage: React.FC = () => {
           return;
         }
       }
+      if (row.needCapacity) {
+        messageApi.error(t('app.kuaizhizao.scheduling.prep.missingTaktCapacity'));
+        return;
+      }
       if (row.needStation && !(Number(row.assigned_station_id) > 0)) {
         messageApi.warning(
-          t('app.kuaizhizao.scheduling.msg.missingStationRequired', {
-            code: row.work_order_code,
-            op: row.operation_name,
-          }),
+          t(
+            isLineMode
+              ? 'app.kuaizhizao.scheduling.msg.missingProductionLineRequired'
+              : 'app.kuaizhizao.scheduling.msg.missingStationRequired',
+            {
+              code: row.work_order_code,
+              op: row.operation_name,
+            }
+          )
         );
         return;
       }
     }
     setMissingSettingsSaving(true);
     try {
-      const items = missingSettingsRows.map((row) => {
-        const patch: {
-          operation_id: number;
-          setup_time?: number;
-          standard_time?: number;
-          assigned_station_id?: number;
-        } = { operation_id: row.operation_id };
-        if (row.needHours) {
-          patch.setup_time = Number(row.setup_time ?? 0);
-          patch.standard_time = Number(row.standard_time ?? 0);
+      if (isLineMode) {
+        const lineUpdates = missingSettingsRows
+          .filter((row) => row.needStation && Number(row.assigned_station_id) > 0)
+          .map((row) => ({
+            operation_id: row.operation_id,
+            assigned_production_line_id: Number(row.assigned_station_id),
+          }));
+        if (lineUpdates.length > 0) {
+          const lineResult = await workOrderApi.batchUpdateOperationProductionLines(lineUpdates);
+          const lineLabel = t('app.kuaizhizao.scheduling.batch.label.operationProductionLines');
+          ensureBatchUpdatesPersisted(
+            {
+              updated: lineResult.updated,
+              skipped_frozen: lineResult.skipped_frozen,
+              skipped_freeze_window: [],
+              failed: lineResult.failed,
+            },
+            lineUpdates.length,
+            lineLabel,
+            t
+          );
+          reportBatchUpdateResult(messageApi, lineLabel, {
+            updated: lineResult.updated,
+            skipped_frozen: lineResult.skipped_frozen,
+            skipped_freeze_window: [],
+            failed: lineResult.failed,
+          }, t);
         }
-        if (row.needStation && row.assigned_station_id) {
-          patch.assigned_station_id = Number(row.assigned_station_id);
-        }
-        return patch;
-      });
-      await visualSchedulingApi.backfillOperationSettings(items);
+      } else {
+        const items = missingSettingsRows.map((row) => {
+          const patch: {
+            operation_id: number;
+            setup_time?: number;
+            standard_time?: number;
+            assigned_station_id?: number;
+          } = { operation_id: row.operation_id };
+          if (row.needHours) {
+            patch.setup_time = Number(row.setup_time ?? 0);
+            patch.standard_time = Number(row.standard_time ?? 0);
+          }
+          if (row.needStation && row.assigned_station_id) {
+            patch.assigned_station_id = Number(row.assigned_station_id);
+          }
+          return patch;
+        });
+        await visualSchedulingApi.backfillOperationSettings(items);
+      }
       messageApi.success(t('app.kuaizhizao.scheduling.msg.missingBackfillSuccess'));
       setMissingSettingsModalOpen(false);
+      setMissingSettingsProductByWo(new Map());
       refreshGantt();
       refreshBoardScan();
       const continueIds = pendingAutoRescheduleIds;
@@ -1654,14 +2028,16 @@ const SchedulingPage: React.FC = () => {
     pendingAutoRescheduleIds,
     refreshBoardScan,
     refreshGantt,
+    schedulingConstraints.resource_mode,
     t,
   ]);
 
   const handleRescheduleForward = useCallback(async () => {
     const ids = selectedWorkOrderIds.slice(0, 50);
     if (ids.length === 0) return;
+    if (!guardEngineRescheduleGaps(ids)) return;
     await applyEngineProposalToDraft('overdue', ids);
-  }, [applyEngineProposalToDraft, selectedWorkOrderIds]);
+  }, [applyEngineProposalToDraft, guardEngineRescheduleGaps, selectedWorkOrderIds]);
 
   const handleGanttOperationSelect = useCallback(
     (operationId: number, workOrderId: number | null) => {
@@ -1690,36 +2066,71 @@ const SchedulingPage: React.FC = () => {
       operationDateUpdates: Array<{ operation_id: number; planned_start_date: string; planned_end_date: string }>,
       operationStationUpdates: Array<{ operation_id: number; assigned_station_id: number }>
     ) => {
+      const isLineMode = schedulingConstraints.resource_mode === 'production_line';
       if (operationStationUpdates.length > 0) {
-        const validation = await visualSchedulingApi.validateAdjustments({
-          operation_station_updates: operationStationUpdates,
-          operation_updates: operationDateUpdates,
-        });
-        if (!validation.valid) {
-          const preview = (validation.conflicts || []).slice(0, 3).map((c) => c.message).join('\n');
-          throw new Error(preview || t('app.kuaizhizao.scheduling.msg.validationFailed'));
-        }
-        const stationResult = await workOrderApi.batchUpdateOperationStations(operationStationUpdates);
-        const stationLabel = t('app.kuaizhizao.scheduling.batch.label.operationStations');
-        ensureBatchUpdatesPersisted(
-          {
+        if (isLineMode) {
+          const lineUpdates = operationStationUpdates.map((u) => ({
+            operation_id: u.operation_id,
+            assigned_production_line_id: Number(u.assigned_station_id),
+          }));
+          const validation = await visualSchedulingApi.validateAdjustments({
+            operation_production_line_updates: lineUpdates,
+            operation_updates: operationDateUpdates,
+          });
+          if (!validation.valid) {
+            const preview = (validation.conflicts || []).slice(0, 3).map((c) => c.message).join('\n');
+            throw new Error(preview || t('app.kuaizhizao.scheduling.msg.validationFailed'));
+          }
+          const lineResult = await workOrderApi.batchUpdateOperationProductionLines(lineUpdates);
+          const lineLabel = t('app.kuaizhizao.scheduling.batch.label.operationProductionLines');
+          ensureBatchUpdatesPersisted(
+            {
+              updated: lineResult.updated,
+              skipped_frozen: lineResult.skipped_frozen,
+              skipped_freeze_window: [],
+              failed: lineResult.failed,
+            },
+            lineUpdates.length,
+            lineLabel,
+            t
+          );
+          reportBatchUpdateResult(messageApi, lineLabel, {
+            updated: lineResult.updated,
+            skipped_frozen: lineResult.skipped_frozen,
+            skipped_freeze_window: [],
+            failed: lineResult.failed,
+          }, t);
+        } else {
+          const validation = await visualSchedulingApi.validateAdjustments({
+            operation_station_updates: operationStationUpdates,
+            operation_updates: operationDateUpdates,
+          });
+          if (!validation.valid) {
+            const preview = (validation.conflicts || []).slice(0, 3).map((c) => c.message).join('\n');
+            throw new Error(preview || t('app.kuaizhizao.scheduling.msg.validationFailed'));
+          }
+          const stationResult = await workOrderApi.batchUpdateOperationStations(operationStationUpdates);
+          const stationLabel = t('app.kuaizhizao.scheduling.batch.label.operationStations');
+          ensureBatchUpdatesPersisted(
+            {
+              updated: stationResult.updated,
+              skipped_frozen: stationResult.skipped_frozen,
+              skipped_freeze_window: [],
+              failed: stationResult.failed,
+            },
+            operationStationUpdates.length,
+            stationLabel,
+            t
+          );
+          reportBatchUpdateResult(messageApi, stationLabel, {
             updated: stationResult.updated,
             skipped_frozen: stationResult.skipped_frozen,
             skipped_freeze_window: [],
             failed: stationResult.failed,
-          },
-          operationStationUpdates.length,
-          stationLabel,
-          t
-        );
-        reportBatchUpdateResult(messageApi, stationLabel, {
-          updated: stationResult.updated,
-          skipped_frozen: stationResult.skipped_frozen,
-          skipped_freeze_window: [],
-          failed: stationResult.failed,
-        }, t);
+          }, t);
+        }
       }
-      if (operationDateUpdates.length > 0) {
+      if (operationDateUpdates.length > 0 && operationStationUpdates.length === 0) {
         const validation = await visualSchedulingApi.validateAdjustments({
           operation_updates: operationDateUpdates,
         });
@@ -1731,9 +2142,14 @@ const SchedulingPage: React.FC = () => {
         const opResult = await workOrderApi.batchUpdateOperationDates(operationDateUpdates);
         ensureBatchUpdatesPersisted(opResult, operationDateUpdates.length, opLabel, t);
         reportBatchUpdateResult(messageApi, opLabel, opResult, t);
+      } else if (operationDateUpdates.length > 0) {
+        const opLabel = t('app.kuaizhizao.scheduling.batch.label.operationDates');
+        const opResult = await workOrderApi.batchUpdateOperationDates(operationDateUpdates);
+        ensureBatchUpdatesPersisted(opResult, operationDateUpdates.length, opLabel, t);
+        reportBatchUpdateResult(messageApi, opLabel, opResult, t);
       }
     },
-    [messageApi, t]
+    [messageApi, schedulingConstraints.resource_mode, t]
   );
 
   const refreshGanttPreservingWorkOrder = useCallback(
@@ -1750,26 +2166,94 @@ const SchedulingPage: React.FC = () => {
           item.id === scheduledWo.id ? mergeApiWorkOrderWithScheduled(item, scheduledWo) : item
         );
         mutateGanttWorkOrders(merged);
-      } catch {
-        // 保留本地已合并的排产结果
+      } catch (e: unknown) {
+        // 本地已合并结果仍保留；刷新失败须可见，禁止静默丢错
+        const detail =
+          e && typeof e === 'object' && 'message' in e
+            ? String((e as { message?: unknown }).message || '')
+            : '';
+        messageApi.warning(
+          detail || t('app.kuaizhizao.scheduling.msg.ganttRefreshFailedKeepLocal')
+        );
       }
     },
-    [buildWorkOrderParams, filterWorkOrderIds, mutateGanttWorkOrders]
+    [buildWorkOrderParams, filterWorkOrderIds, messageApi, mutateGanttWorkOrders, t]
   );
 
   const completeDropWorkOrderToBoard = useCallback(
-    async (wo: WorkOrderForGantt) => {
+    async (wo: WorkOrderForGantt, options?: { productionLineId?: number | null }) => {
+      const isLineMode = schedulingConstraints.resource_mode === 'production_line';
+      if (isLineMode && lineCapacitiesError) {
+        throw new Error(t('app.kuaizhizao.scheduling.msg.lineCapacityLoadFailed'));
+      }
+      let workingWo = wo;
+      if (isLineMode && options?.productionLineId != null && Number(options.productionLineId) > 0) {
+        const lineId = Number(options.productionLineId);
+        if (linesMissingTakt.includes(lineId)) {
+          throw new Error(t('app.kuaizhizao.scheduling.prep.missingTaktCapacity'));
+        }
+        const productId = Number(wo.product_id || 0);
+        if (!lineAcceptsProduct(lineId, productId)) {
+          throw new Error(t('app.kuaizhizao.scheduling.msg.lineProductNotAllowed'));
+        }
+        const lineName = workstationResources.find((r) => r.id === lineId)?.name;
+        workingWo = stampProductionLineOnWorkOrder(wo, lineId, lineName);
+      }
       const boardOrders = ganttWorkOrders.filter(
-        (item) => isWorkOrderScheduledOnBoard(item) || item.id === wo.id
+        (item) => isWorkOrderScheduledOnBoard(item) || item.id === workingWo.id
       );
-      const mergedBoardOrders = boardOrders.map((item) => (item.id === wo.id ? { ...item, ...wo } : item));
-      const result = buildScheduleWorkOrderDrop(wo, mergedBoardOrders);
+      const mergedBoardOrders = boardOrders.map((item) =>
+        item.id === workingWo.id ? { ...item, ...workingWo } : item
+      );
+      const result = buildScheduleWorkOrderDrop(workingWo, mergedBoardOrders, {
+        resourceMode: schedulingConstraints.resource_mode,
+        taktSecondsByLineId,
+        dailyCapacityByLineId,
+        defaultProductionLineId: options?.productionLineId,
+      });
+      if (result.errorCode === 'daily_capacity_exceeded') {
+        throw new Error(t('app.kuaizhizao.scheduling.msg.dailyCapacityExceeded'));
+      }
+      if (result.errorCode === 'missing_takt') {
+        throw new Error(t('app.kuaizhizao.scheduling.prep.missingTaktCapacity'));
+      }
+      if (isLineMode && result.pendingOperations.length > 0) {
+        const stampedLine =
+          options?.productionLineId != null && Number(options.productionLineId) > 0
+            ? Number(options.productionLineId)
+            : null;
+        const missingTakt =
+          stampedLine != null
+            ? linesMissingTakt.includes(stampedLine)
+            : (workingWo.operations ?? []).some((op) => {
+                const lineId = Number(op.assigned_production_line_id ?? 0);
+                return lineId > 0 && linesMissingTakt.includes(lineId);
+              });
+        throw new Error(
+          t(
+            missingTakt
+              ? 'app.kuaizhizao.scheduling.prep.missingTaktCapacity'
+              : 'app.kuaizhizao.scheduling.prep.selectProductionLineRequired'
+          )
+        );
+      }
       await persistOperationScheduling(result.operationDateUpdates, result.operationStationUpdates);
+      if (result.workOrderDateUpdate) {
+        await workOrderApi.batchUpdateDates([
+          {
+            work_order_id: workingWo.id,
+            planned_start_date: result.workOrderDateUpdate.planned_start_date,
+            planned_end_date: result.workOrderDateUpdate.planned_end_date,
+          },
+        ]);
+      }
 
       const stationNameById = new Map(
         workstationResources.map((station) => [station.id, station.name])
       );
-      const scheduledWo = mergeScheduledWorkOrderIntoBoard(wo, result, stationNameById);
+      const scheduledWo = mergeScheduledWorkOrderIntoBoard(workingWo, result, stationNameById, {
+        asProductionLine: isLineMode,
+      });
 
       setSelectedRowKeys([scheduledWo.id]);
 
@@ -1792,7 +2276,11 @@ const SchedulingPage: React.FC = () => {
         );
       } else if (result.operationDateUpdates.length > 0) {
         messageApi.success(
-          t('app.kuaizhizao.scheduling.msg.savedToGantt', { count: result.operationDateUpdates.length })
+          isLineMode
+            ? t('app.kuaizhizao.scheduling.msg.savedWorkOrderToGantt')
+            : t('app.kuaizhizao.scheduling.msg.savedToGantt', {
+                count: result.operationDateUpdates.length,
+              })
         );
       } else {
         messageApi.success(t('app.kuaizhizao.scheduling.msg.stationsSavedDisplay'));
@@ -1803,11 +2291,17 @@ const SchedulingPage: React.FC = () => {
       await refreshGanttPreservingWorkOrder(scheduledWo);
     },
     [
+      dailyCapacityByLineId,
       ganttWorkOrders,
+      lineAcceptsProduct,
+      lineCapacitiesError,
+      linesMissingTakt,
       messageApi,
       persistOperationScheduling,
       refreshBoardScan,
       refreshGanttPreservingWorkOrder,
+      schedulingConstraints.resource_mode,
+      taktSecondsByLineId,
       workstationResources,
       t,
     ]
@@ -1815,9 +2309,10 @@ const SchedulingPage: React.FC = () => {
 
   const openSchedulingPrepModal = useCallback(
     async (wo: WorkOrderForGantt) => {
+      const resourceMode = schedulingConstraints.resource_mode;
       setPrepModalLoading(true);
       setPrepModalWorkOrder(wo);
-      setPrepModalMissing(getWorkOrderSchedulingPrepContext(wo).missingFields);
+      setPrepModalMissing(getWorkOrderSchedulingPrepContext(wo, resourceMode).missingFields);
       setPrepModalOperationsNeedingStation([]);
       try {
         const fetched = await workOrderApi.getOperations(String(wo.id));
@@ -1826,9 +2321,11 @@ const SchedulingPage: React.FC = () => {
           : ((fetched as { operations?: Record<string, unknown>[] })?.operations ?? []);
         const operations = rawOps.map((op) => mapOperationForGantt(op));
         const woWithOps: WorkOrderForGantt = { ...wo, operations };
+        const ctx = getWorkOrderSchedulingPrepContext(woWithOps, resourceMode);
         setPrepModalWorkOrder(woWithOps);
-        setPrepModalMissing(getWorkOrderSchedulingPrepContext(woWithOps).missingFields);
-        setPrepModalOperationsNeedingStation(getOperationsForStationPrep(woWithOps));
+        setPrepModalMissing(ctx.missingFields);
+        // 产线模式只列厂内工序（委外不占产线）；工位模式列全部待补工序
+        setPrepModalOperationsNeedingStation(getOperationsForStationPrep(woWithOps, resourceMode));
         setPrepModalOpen(true);
       } catch (e: any) {
         messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.loadOperationsFailed'));
@@ -1840,30 +2337,73 @@ const SchedulingPage: React.FC = () => {
         setPrepModalLoading(false);
       }
     },
-    [messageApi, t]
+    [messageApi, schedulingConstraints.resource_mode, t]
   );
 
   const handleDropWorkOrderToBoard = useCallback(
-    async (workOrderId: number) => {
+    async (
+      workOrderId: number,
+      meta?: { clientX: number; clientY: number }
+    ) => {
       if (!canScheduleUpdate) return;
       const wo = ganttWorkOrders.find((item) => item.id === workOrderId);
       if (!wo) {
         messageApi.warning(t('app.kuaizhizao.scheduling.msg.workOrderNotFound'));
         return;
       }
+      const resourceMode = schedulingConstraints.resource_mode;
+      const isLineMode = resourceMode === 'production_line';
+      if (isLineMode && lineCapacitiesError) {
+        messageApi.error(t('app.kuaizhizao.scheduling.msg.lineCapacityLoadFailed'));
+        return;
+      }
+      // 仅工位/产线泳道视图解析落点；设备/人员视图不误读 st-* 为产线（不改工位业务线）
+      const dropLineId =
+        isLineMode && ganttTaskLevel === 'station' && meta
+          ? resolveGanttStationResourceIdFromPoint(meta.clientX, meta.clientY)
+          : null;
+      if (isLineMode && dropLineId != null && dropLineId > 0 && linesMissingTakt.includes(dropLineId)) {
+        messageApi.error(t('app.kuaizhizao.scheduling.prep.missingTaktCapacity'));
+        return;
+      }
+      const woProductId = Number(wo.product_id || 0);
+      if (
+        isLineMode &&
+        dropLineId != null &&
+        dropLineId > 0 &&
+        !lineAcceptsProduct(dropLineId, woProductId)
+      ) {
+        messageApi.error(t('app.kuaizhizao.scheduling.msg.lineProductNotAllowed'));
+        return;
+      }
+      // 行业包产线模式：拖到某条产线泳道则直接盖产线；仅一条兼容且已配节拍的产线时可默认
+      const eligibleLineIds = isLineMode
+        ? eligibleConfiguredLineIdsForProduct(woProductId)
+        : workstationResources.map((l) => l.id).filter((id) => !linesMissingTakt.includes(id));
+      const autoLineId =
+        dropLineId && dropLineId > 0
+          ? dropLineId
+          : isLineMode && eligibleLineIds.length === 1
+            ? eligibleLineIds[0]
+            : null;
+
       const alreadyOnBoard = isWorkOrderScheduledOnBoard(wo);
-      if (alreadyOnBoard && !workOrderNeedsSchedulingPrep(wo)) {
+      const needsPrep =
+        autoLineId != null
+          ? false
+          : workOrderNeedsSchedulingPrep(wo, resourceMode);
+      if (alreadyOnBoard && !needsPrep && autoLineId == null) {
         messageApi.info(t('app.kuaizhizao.scheduling.msg.alreadyOnBoard'));
         return;
       }
 
       const proceedDrop = async () => {
-        if (workOrderNeedsSchedulingPrep(wo)) {
+        if (needsPrep) {
           await openSchedulingPrepModal(wo);
           return;
         }
         try {
-          await completeDropWorkOrderToBoard(wo);
+          await completeDropWorkOrderToBoard(wo, { productionLineId: autoLineId });
         } catch (e: any) {
           messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.dropFailed'));
           refreshGantt();
@@ -1896,13 +2436,19 @@ const SchedulingPage: React.FC = () => {
       boardScan,
       canScheduleUpdate,
       completeDropWorkOrderToBoard,
+      eligibleConfiguredLineIdsForProduct,
+      ganttTaskLevel,
       ganttWorkOrders,
+      lineAcceptsProduct,
+      lineCapacitiesError,
+      linesMissingTakt,
       messageApi,
       modal,
       openSchedulingPrepModal,
       refreshGantt,
       schedulingConstraints,
       t,
+      workstationResources,
     ]
   );
 
@@ -1911,9 +2457,12 @@ const SchedulingPage: React.FC = () => {
       if (!prepModalWorkOrder) return;
       setPrepModalSaving(true);
       try {
+        const isLineMode = schedulingConstraints.resource_mode === 'production_line';
+        // 工位模式：缺头表计划日时先单条 update；产线/工位最终都以工序窗口同步头表（见下方 batchUpdateDates）
         const needsDateUpdate =
-          prepModalMissing.includes('planned_start_date') ||
-          prepModalMissing.includes('planned_end_date');
+          !isLineMode &&
+          (prepModalMissing.includes('planned_start_date') ||
+            prepModalMissing.includes('planned_end_date'));
         if (needsDateUpdate && values.planned_start_date && values.planned_end_date) {
           await workOrderApi.update(String(prepModalWorkOrder.id), {
             planned_start_date: values.planned_start_date,
@@ -1936,11 +2485,20 @@ const SchedulingPage: React.FC = () => {
           const datePatch = dateByOp.get(op.id);
           let next = op;
           if (stationId != null) {
-            next = {
-              ...next,
-              assigned_station_id: stationId,
-              assigned_station_name: stationNameById.get(stationId) ?? op.assigned_station_name,
-            };
+            next = isLineMode
+              ? {
+                  ...next,
+                  assigned_production_line_id: stationId,
+                  assigned_production_line_name:
+                    stationNameById.get(stationId) ?? op.assigned_production_line_name,
+                  assigned_station_id: stationId,
+                  assigned_station_name: stationNameById.get(stationId) ?? op.assigned_station_name,
+                }
+              : {
+                  ...next,
+                  assigned_station_id: stationId,
+                  assigned_station_name: stationNameById.get(stationId) ?? op.assigned_station_name,
+                };
           }
           if (datePatch) {
             next = {
@@ -1964,6 +2522,15 @@ const SchedulingPage: React.FC = () => {
 
         if (values.operationDates.length > 0 || values.operationStations.length > 0) {
           await persistOperationScheduling(values.operationDates, values.operationStations);
+        }
+        if (woPlannedStart && woPlannedEnd) {
+          await workOrderApi.batchUpdateDates([
+            {
+              work_order_id: prepModalWorkOrder.id,
+              planned_start_date: woPlannedStart,
+              planned_end_date: woPlannedEnd,
+            },
+          ]);
         }
         if (values.operationAssignments.length > 0) {
           await workOrderApi.batchUpdateOperationAssignments(values.operationAssignments);
@@ -2035,12 +2602,70 @@ const SchedulingPage: React.FC = () => {
       prepModalWorkOrder,
       refreshBoardScan,
       refreshGanttPreservingWorkOrder,
+      schedulingConstraints.resource_mode,
       schedulingEquipments,
       schedulingMolds,
       schedulingWorkers,
       t,
+      workstationResources,
     ]
   );
+
+  const handleClearScheduling = useCallback(async () => {
+    if (selectedWorkOrderIds.length === 0) return;
+    setBatchActionLoading(true);
+    try {
+      const result = await workOrderApi.batchClearOperationScheduling({
+        work_order_ids: selectedWorkOrderIds.slice(0, 50),
+        resource_mode: schedulingConstraints.resource_mode,
+        clear_header_dates: true,
+      });
+      const cleared = result.cleared_work_order_ids?.length ?? 0;
+      const frozen = result.skipped_frozen?.length ?? 0;
+      const freezeWindow = result.skipped_freeze_window?.length ?? 0;
+      const failed = result.failed?.length ?? 0;
+      if (cleared > 0) {
+        messageApi.success(
+          t('app.kuaizhizao.scheduling.msg.clearSchedulingSuccess', { count: cleared })
+        );
+      }
+      if (frozen > 0) {
+        messageApi.warning(
+          t('app.kuaizhizao.scheduling.msg.clearSchedulingSkippedFrozen', { count: frozen })
+        );
+      }
+      if (freezeWindow > 0) {
+        messageApi.warning(
+          t('app.kuaizhizao.scheduling.msg.clearSchedulingSkippedFreezeWindow', {
+            count: freezeWindow,
+          })
+        );
+      }
+      if (failed > 0) {
+        messageApi.error(
+          t('app.kuaizhizao.scheduling.msg.clearSchedulingFailed', { count: failed })
+        );
+      }
+      if (cleared === 0 && frozen === 0 && freezeWindow === 0 && failed === 0) {
+        messageApi.info(t('app.kuaizhizao.scheduling.msg.clearSchedulingNothing'));
+      }
+      setSelectedRowKeys([]);
+      refreshGantt();
+      refreshBoardScan();
+      actionRef.current?.reload();
+    } catch (e: any) {
+      messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.clearSchedulingError'));
+    } finally {
+      setBatchActionLoading(false);
+    }
+  }, [
+    messageApi,
+    refreshBoardScan,
+    refreshGantt,
+    schedulingConstraints.resource_mode,
+    selectedWorkOrderIds,
+    t,
+  ]);
 
   const handleBatchFreeze = useCallback(async () => {
     if (selectedWorkOrderIds.length === 0) return;
@@ -2326,6 +2951,7 @@ const SchedulingPage: React.FC = () => {
     onBoardMainViewChange: setBoardMainView,
     ganttViewMode,
     ganttTaskLevel,
+    resourceMode: schedulingConstraints.resource_mode,
     onGanttTaskLevelChange: setGanttTaskLevel,
     pinnedResourceCount: pinnedResourceIds.length,
     showPinnedOnly,
@@ -2355,6 +2981,14 @@ const SchedulingPage: React.FC = () => {
     onOpenConfig: () => setConfigDrawerOpen(true),
     onBatchFreeze: handleBatchFreeze,
     onBatchUnfreeze: handleBatchUnfreeze,
+    onClearScheduling: handleClearScheduling,
+    clearSchedulingConfirm: {
+      title: t('app.kuaizhizao.scheduling.msg.clearSchedulingTitle'),
+      description: t('app.kuaizhizao.scheduling.msg.clearSchedulingConfirm', {
+        count: selectedWorkOrderIds.length,
+      }),
+      okText: t('app.kuaizhizao.scheduling.ganttToolbar.clearScheduling'),
+    },
     onBatchShift: handleBatchShift,
     onShiftDaysChange: setShiftDays,
     onViewModeChange: (mode) => {
@@ -2363,11 +2997,7 @@ const SchedulingPage: React.FC = () => {
     },
     onScrollToToday: () => setScrollToTodayToken((n) => n + 1),
     onAutoReschedule: handleAutoReschedule,
-    autoRescheduleConfirm: {
-      title: t('app.kuaizhizao.scheduling.msg.autoRescheduleTitle'),
-      description: t('app.kuaizhizao.scheduling.msg.autoRescheduleConfirm', { count: schedulingActionCount }),
-      okText: schedulingConfirmOkText,
-    },
+    onOpenDueEstimate: () => setDueEstimateOpen(true),
     onLocalReschedule: handleLocalReschedule,
     localRescheduleConfirm: {
       title: t('app.kuaizhizao.scheduling.msg.localRescheduleTitle'),
@@ -2407,6 +3037,7 @@ const SchedulingPage: React.FC = () => {
       />
       <SchedulingHeaderBand
         constraints={schedulingConstraints}
+        resourceMode={schedulingConstraints.resource_mode}
         selectedWorkOrderCount={selectedWorkOrderIds.length}
         selectedOperationCount={selectedOperationCount}
         ganttTaskLevel={ganttTaskLevel}
@@ -2421,6 +3052,24 @@ const SchedulingPage: React.FC = () => {
         onMissingSettingsClick={() => openMissingSettingsModal(boardScan?.missing_settings ?? [])}
         extra={<SchedulingAiAssistantTrigger onOpen={() => setAiDrawerOpen(true)} />}
       />
+      {schedulingConstraints.resource_mode === 'production_line' && lineCapacitiesError ? (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 12 }}
+          title={
+            <span>
+              {String((lineCapacitiesError as { message?: string })?.message || '') ===
+              'LINE_PRODUCT_IDS_MISSING'
+                ? t('app.kuaizhizao.scheduling.msg.lineProductIdsMissing')
+                : t('app.kuaizhizao.scheduling.msg.lineCapacityLoadFailed')}{' '}
+              <Link to="/apps/ind-relay/line-capacity">
+                {t('app.kuaizhizao.scheduling.prep.gotoLineCapacity')}
+              </Link>
+            </span>
+          }
+        />
+      ) : null}
       {filterWorkOrderIds?.length ? (
         <Alert
           type="info"
@@ -2474,6 +3123,25 @@ const SchedulingPage: React.FC = () => {
                   pinnedResourceIds={pinnedResourceIds}
                   showPinnedOnly={showPinnedOnly}
                   loading={ganttLoading}
+                  productionLineOptions={
+                    schedulingConstraints.resource_mode === 'production_line'
+                      ? {
+                          lines: workstationResources,
+                          taktSecondsByLineId,
+                          dailyCapacityByLineId,
+                          horizonDays: schedulingConstraints.rolling_horizon_days || 14,
+                          workOrders: ganttBoardDisplayWorkOrders,
+                        }
+                      : null
+                  }
+                />
+              ) : boardMainView === 'alerts' ? (
+                <SchedulingAlertsPanel
+                  boardScan={boardScan}
+                  onOpenWorkOrder={(workOrderId) => {
+                    setSelectedRowKeys([workOrderId]);
+                    setBoardMainView('gantt');
+                  }}
                 />
               ) : boardMainView === 'cardView' ? (
                 <SchedulingCardBoard
@@ -2510,6 +3178,7 @@ const SchedulingPage: React.FC = () => {
                   loading={ganttLoading}
                   viewMode={ganttViewMode}
                   taskLevel={ganttTaskLevel}
+                  resourceMode={schedulingConstraints.resource_mode}
                   equipmentTypeFilter={equipmentTypeFilter}
                   workerRoleFilter={workerRoleFilter}
                   freezeHorizonDays={schedulingConstraints.freeze_horizon_days}
@@ -2602,7 +3271,12 @@ const SchedulingPage: React.FC = () => {
                   bordered
                   actionRef={actionRef}
                   rowKey="id"
-                  columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
+                  columns={
+                    alignProColumns(
+                      columns as unknown as ProColumns<Record<string, unknown>>[],
+                      SALES_DOC_LIST_FIELD_RANK
+                    ) as unknown as ProColumns<WorkOrderForGantt>[]
+                  }
                   showFuzzySearch={false}
                   showAdvancedSearch={false}
                   viewTypes={['table']}
@@ -2666,6 +3340,14 @@ const SchedulingPage: React.FC = () => {
         workers={schedulingWorkers}
         equipments={schedulingEquipments}
         molds={schedulingMolds}
+        resourceMode={schedulingConstraints.resource_mode}
+        linesMissingTakt={linesMissingTakt}
+        eligibleProductionLineIds={
+          schedulingConstraints.resource_mode === 'production_line'
+            ? eligibleConfiguredLineIdsForProduct(Number(prepModalWorkOrder?.product_id || 0))
+            : undefined
+        }
+        taktSecondsByLineId={taktSecondsByLineId}
         loading={prepModalSaving || prepModalLoading}
         onCancel={() => {
           setPrepModalOpen(false);
@@ -2683,6 +3365,7 @@ const SchedulingPage: React.FC = () => {
         width={960}
         onCancel={() => {
           setMissingSettingsModalOpen(false);
+          setMissingSettingsProductByWo(new Map());
           setPendingAutoRescheduleIds(null);
         }}
         footer={[
@@ -2690,6 +3373,7 @@ const SchedulingPage: React.FC = () => {
             key="cancel"
             onClick={() => {
               setMissingSettingsModalOpen(false);
+              setMissingSettingsProductByWo(new Map());
               setPendingAutoRescheduleIds(null);
             }}
           >
@@ -2712,114 +3396,198 @@ const SchedulingPage: React.FC = () => {
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          title={t('app.kuaizhizao.scheduling.msg.missingSettingsHint')}
+          title={t(
+            schedulingConstraints.resource_mode === 'production_line'
+              ? 'app.kuaizhizao.scheduling.msg.missingSettingsHintLine'
+              : 'app.kuaizhizao.scheduling.msg.missingSettingsHint'
+          )}
         />
+        {schedulingConstraints.resource_mode === 'production_line' &&
+        (missingSettingsRows.some((row) => row.needCapacity) ||
+          (missingSettingsRows.some((row) => row.needStation) &&
+            workstationResources.filter((s) => !linesMissingTakt.includes(s.id)).length === 0)) ? (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 12 }}
+            title={
+              <span>
+                {t('app.kuaizhizao.scheduling.prep.missingTaktCapacity')}{' '}
+                <Link to="/apps/ind-relay/line-capacity">
+                  {t('app.kuaizhizao.scheduling.prep.gotoLineCapacity')}
+                </Link>
+              </span>
+            }
+          />
+        ) : null}
         <Table
           size="small"
           rowKey="operation_id"
           pagination={{ pageSize: 8, hideOnSinglePage: true }}
           dataSource={missingSettingsRows}
-          columns={[
-            {
-              title: t('app.kuaizhizao.scheduling.table.workOrderCode'),
-              dataIndex: 'work_order_code',
-              width: 140,
-            },
-            {
-              title: t('app.kuaizhizao.scheduling.table.operation'),
-              dataIndex: 'operation_name',
-              ellipsis: true,
-            },
-            {
-              title: t('app.kuaizhizao.scheduling.msg.setupHours'),
-              width: 120,
-              render: (_, row) =>
-                row.needHours ? (
-                  <InputNumber
-                    min={0}
-                    step={0.01}
-                    precision={2}
-                    style={{ width: '100%' }}
-                    value={row.setup_time}
-                    onChange={(v) =>
-                      setMissingSettingsRows((prev) =>
-                        prev.map((r) =>
-                          r.operation_id === row.operation_id
-                            ? { ...r, setup_time: v == null ? null : Number(v) }
-                            : r,
-                        ),
-                      )
-                    }
-                  />
-                ) : (
-                  '—'
-                ),
-            },
-            {
-              title: t('app.kuaizhizao.scheduling.msg.standardHours'),
-              width: 120,
-              render: (_, row) =>
-                row.needHours ? (
-                  <InputNumber
-                    min={0}
-                    step={0.01}
-                    precision={2}
-                    style={{ width: '100%' }}
-                    value={row.standard_time}
-                    onChange={(v) =>
-                      setMissingSettingsRows((prev) =>
-                        prev.map((r) =>
-                          r.operation_id === row.operation_id
-                            ? { ...r, standard_time: v == null ? null : Number(v) }
-                            : r,
-                        ),
-                      )
-                    }
-                  />
-                ) : (
-                  '—'
-                ),
-            },
-            {
-              title: t('app.kuaizhizao.scheduling.msg.station'),
-              width: 200,
-              render: (_, row) => {
-                if (!row.needStation) return '—';
-                const wcId =
-                  row.work_center_id != null && Number(row.work_center_id) > 0
-                    ? Number(row.work_center_id)
-                    : null;
-                let candidates = workstationResources;
-                if (wcId != null) {
-                  const wc = schedulingWorkCenters.find((item) => item.id === wcId);
-                  const allowed = new Set((wc?.workstationIds ?? []).filter((id) => id > 0));
-                  if (allowed.size > 0) {
-                    candidates = workstationResources.filter((s) => allowed.has(s.id));
-                  }
-                }
-                return (
-                  <Select
-                    style={{ width: '100%' }}
-                    allowClear
-                    options={candidates.map((s) => ({
-                      value: s.id,
-                      label: s.code ? `${s.code} ${s.name}` : s.name,
-                    }))}
-                    value={row.assigned_station_id ?? undefined}
-                    onChange={(v) =>
-                      setMissingSettingsRows((prev) =>
-                        prev.map((r) =>
-                          r.operation_id === row.operation_id
-                            ? { ...r, assigned_station_id: v == null ? null : Number(v) }
-                            : r,
-                        ),
-                      )
-                    }
-                  />
-                );
-              },
-            },
-          ]}
+          columns={
+            schedulingConstraints.resource_mode === 'production_line'
+              ? [
+                  {
+                    title: t('app.kuaizhizao.scheduling.table.workOrderCode'),
+                    dataIndex: 'work_order_code',
+                    width: 140,
+                  },
+                  {
+                    title: t('app.kuaizhizao.scheduling.table.operation'),
+                    dataIndex: 'operation_name',
+                    ellipsis: true,
+                  },
+                  {
+                    title: t('app.kuaizhizao.scheduling.gantt.col.productionLine'),
+                    width: 240,
+                    render: (_, row) => {
+                      if (row.needCapacity && !row.needStation) {
+                        return t('app.kuaizhizao.scheduling.msg.missingCapacityGoConfig');
+                      }
+                      if (!row.needStation) return '—';
+                      // 产线模式：候选 = 已配节拍 ∩ 绑定含本工单自制件
+                      const productId =
+                        productIdByWorkOrderId.get(row.work_order_id) ||
+                        missingSettingsProductByWo.get(row.work_order_id) ||
+                        0;
+                      const eligibleIds = new Set(eligibleConfiguredLineIdsForProduct(productId));
+                      const candidates = workstationResources.filter((s) => eligibleIds.has(s.id));
+                      return (
+                        <Select
+                          style={{ width: '100%' }}
+                          allowClear
+                          placeholder={
+                            candidates.length === 0
+                              ? t('app.kuaizhizao.scheduling.msg.lineProductNoEligible')
+                              : undefined
+                          }
+                          options={candidates.map((s) => ({
+                            value: s.id,
+                            label: s.code ? `${s.code} ${s.name}` : s.name,
+                          }))}
+                          value={row.assigned_station_id ?? undefined}
+                          onChange={(v) => {
+                            const nextId = v == null ? null : Number(v);
+                            setMissingSettingsRows((prev) =>
+                              prev.map((r) => {
+                                // 产线模式整单共用产线：改一行同步同工单需补齐的其它工序
+                                if (r.work_order_id === row.work_order_id && r.needStation) {
+                                  return { ...r, assigned_station_id: nextId };
+                                }
+                                return r;
+                              })
+                            );
+                          }}
+                        />
+                      );
+                    },
+                  },
+                ]
+              : [
+                  {
+                    title: t('app.kuaizhizao.scheduling.table.workOrderCode'),
+                    dataIndex: 'work_order_code',
+                    width: 140,
+                  },
+                  {
+                    title: t('app.kuaizhizao.scheduling.table.operation'),
+                    dataIndex: 'operation_name',
+                    ellipsis: true,
+                  },
+                  {
+                    title: t('app.kuaizhizao.scheduling.msg.setupHours'),
+                    width: 120,
+                    render: (_, row) =>
+                      row.needHours ? (
+                        <InputNumber
+                          min={0}
+                          step={0.01}
+                          precision={2}
+                          style={{ width: '100%' }}
+                          value={row.setup_time}
+                          onChange={(v) =>
+                            setMissingSettingsRows((prev) =>
+                              prev.map((r) =>
+                                r.operation_id === row.operation_id
+                                  ? { ...r, setup_time: v == null ? null : Number(v) }
+                                  : r
+                              )
+                            )
+                          }
+                        />
+                      ) : (
+                        '—'
+                      ),
+                  },
+                  {
+                    title: t('app.kuaizhizao.scheduling.msg.standardHours'),
+                    width: 120,
+                    render: (_, row) =>
+                      row.needHours ? (
+                        <InputNumber
+                          min={0}
+                          step={0.01}
+                          precision={2}
+                          style={{ width: '100%' }}
+                          value={row.standard_time}
+                          onChange={(v) =>
+                            setMissingSettingsRows((prev) =>
+                              prev.map((r) =>
+                                r.operation_id === row.operation_id
+                                  ? { ...r, standard_time: v == null ? null : Number(v) }
+                                  : r
+                              )
+                            )
+                          }
+                        />
+                      ) : (
+                        '—'
+                      ),
+                  },
+                  {
+                    title: t('app.kuaizhizao.scheduling.msg.station'),
+                    width: 200,
+                    render: (_, row) => {
+                      if (!row.needStation) return '—';
+                      const wcId =
+                        row.work_center_id != null && Number(row.work_center_id) > 0
+                          ? Number(row.work_center_id)
+                          : null;
+                      let candidates = workstationResources;
+                      if (wcId != null) {
+                        const wc = schedulingWorkCenters.find((item) => item.id === wcId);
+                        const allowed = new Set(
+                          (wc?.workstationIds ?? []).filter((id) => id > 0)
+                        );
+                        if (allowed.size > 0) {
+                          candidates = workstationResources.filter((s) => allowed.has(s.id));
+                        }
+                      }
+                      return (
+                        <Select
+                          style={{ width: '100%' }}
+                          allowClear
+                          options={candidates.map((s) => ({
+                            value: s.id,
+                            label: s.code ? `${s.code} ${s.name}` : s.name,
+                          }))}
+                          value={row.assigned_station_id ?? undefined}
+                          onChange={(v) =>
+                            setMissingSettingsRows((prev) =>
+                              prev.map((r) =>
+                                r.operation_id === row.operation_id
+                                  ? { ...r, assigned_station_id: v == null ? null : Number(v) }
+                                  : r
+                              )
+                            )
+                          }
+                        />
+                      );
+                    },
+                  },
+                ]
+          }
         />
       </Modal>
 
@@ -2830,6 +3598,7 @@ const SchedulingPage: React.FC = () => {
         workers={schedulingWorkers}
         equipments={schedulingEquipments}
         molds={schedulingMolds}
+        resourceMode={schedulingConstraints.resource_mode}
         canUpdate={canScheduleUpdate}
         onClose={() => setOperationEditOpen(false)}
         onSaved={() => {
@@ -3023,6 +3792,28 @@ const SchedulingPage: React.FC = () => {
         </div>
       </Modal>
 
+      <SchedulingRescheduleWizardModal
+        open={rescheduleWizardOpen}
+        workOrderIds={rescheduleWizardIds}
+        planDate={filterPlanDate}
+        scope="selected"
+        onCancel={() => setRescheduleWizardOpen(false)}
+        onApply={async (proposal) => {
+          setAutoRescheduleLoading(true);
+          try {
+            return await applyEngineProposalPayloadToDraft(proposal);
+          } finally {
+            setAutoRescheduleLoading(false);
+          }
+        }}
+      />
+
+      <SchedulingDueEstimateDrawer
+        open={dueEstimateOpen}
+        workOrderIds={selectedWorkOrderIds.slice(0, 100)}
+        onClose={() => setDueEstimateOpen(false)}
+      />
+
       <SchedulingPinManagerModal
         open={pinManagerOpen}
         t={t}
@@ -3045,6 +3836,7 @@ const SchedulingPage: React.FC = () => {
         open={aiDrawerOpen}
         onClose={() => setAiDrawerOpen(false)}
         canUpdate={canScheduleUpdate}
+        resourceMode={schedulingConstraints.resource_mode}
         context={{
           poolWorkOrderIds,
           selectedWorkOrderIds,

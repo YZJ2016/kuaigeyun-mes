@@ -130,6 +130,9 @@ class WorkOrderOperation(BaseModel):
     assigned_team_name = fields.CharField(max_length=100, null=True, description="分配的工作小组名称")
     assigned_station_id = fields.IntField(null=True, description="分配的工位ID")
     assigned_station_name = fields.CharField(max_length=200, null=True, description="分配的工位名称")
+    assigned_production_line_id = fields.IntField(null=True, description="分配的产线ID（产线排程模式）")
+    assigned_production_line_code = fields.CharField(max_length=50, null=True, description="分配的产线编码快照")
+    assigned_production_line_name = fields.CharField(max_length=200, null=True, description="分配的产线名称快照")
     assigned_equipment_id = fields.IntField(null=True, description="分配的设备ID（主责/兼容，取 assigned_equipment_ids 首项）")
     assigned_equipment_name = fields.CharField(max_length=500, null=True, description="分配的设备名称（多台以顿号分隔）")
     assigned_equipment_ids = fields.JSONField(

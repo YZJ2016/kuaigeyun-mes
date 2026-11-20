@@ -3,7 +3,7 @@ import type { SchedulingBoardMainView } from './components/SchedulingGanttToolba
 
 const STORAGE_KEY = 'kuaizhizao.scheduling.boardPreferences.v1';
 
-const BOARD_MAIN_VIEWS: SchedulingBoardMainView[] = ['gantt', 'cardView', 'loadTable'];
+const BOARD_MAIN_VIEWS: SchedulingBoardMainView[] = ['gantt', 'cardView', 'loadTable', 'alerts'];
 const RESOURCE_TASK_LEVELS: GanttTaskLevel[] = ['station', 'equipment', 'worker'];
 
 export interface SchedulingBoardPreferences {

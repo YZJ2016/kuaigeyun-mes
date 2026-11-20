@@ -45,7 +45,9 @@ from apps.kuaizhizao.services.outsource_service import OutsourceService, OUTSOUR
 from apps.kuaizhizao.schemas.visual_scheduling import (
     OperationBatchUpdateAssignmentsResult,
     OperationBatchUpdateDatesResult,
+    OperationBatchUpdateProductionLinesResult,
     OperationBatchUpdateStationsResult,
+    WorkOrderBatchClearSchedulingResult,
     WorkOrderBatchUpdateDatesResult,
 )
 from apps.kuaizhizao.schemas.work_order import (
@@ -54,6 +56,8 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderBatchUpdateDatesRequest,
     WorkOrderOperationBatchUpdateDatesRequest,
     WorkOrderOperationBatchUpdateStationsRequest,
+    WorkOrderOperationBatchUpdateProductionLinesRequest,
+    WorkOrderBatchClearSchedulingRequest,
     WorkOrderOperationBatchUpdateAssignmentsRequest,
     WorkOrderSchedulingQuickActionRequest,
     WorkOrderSchedulingQuickActionResult,
@@ -1348,6 +1352,52 @@ async def batch_update_work_order_operation_stations(
         updated_by=current_user.id,
     )
     return OperationBatchUpdateStationsResult(**raw)
+
+
+@router.put(
+    "/work-orders/batch-update-operation-production-lines",
+    response_model=OperationBatchUpdateProductionLinesResult,
+    summary="Batch update operation assigned production lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-scheduling:update"))],
+)
+async def batch_update_work_order_operation_production_lines(
+    request: WorkOrderOperationBatchUpdateProductionLinesRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OperationBatchUpdateProductionLinesResult:
+    """批量更新工序指派产线（自动化产线 APS）。"""
+    raw = await WorkOrderService().batch_update_operation_production_lines(
+        tenant_id=tenant_id,
+        updates=request.updates,
+        updated_by=current_user.id,
+    )
+    return OperationBatchUpdateProductionLinesResult(**raw)
+
+
+@router.put(
+    "/work-orders/batch-clear-operation-scheduling",
+    response_model=WorkOrderBatchClearSchedulingResult,
+    summary="Clear operation scheduling from board (unschedule)",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-scheduling:update"))],
+)
+async def batch_clear_work_order_operation_scheduling(
+    request: WorkOrderBatchClearSchedulingRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderBatchClearSchedulingResult:
+    """从甘特撤排：清空工序计划时间与产线/工位指派，工单回待排池。"""
+    mode = str(request.resource_mode or "workstation").strip().lower()
+    use_line = mode == "production_line"
+    raw = await WorkOrderService().batch_clear_operation_scheduling(
+        tenant_id=tenant_id,
+        work_order_ids=request.work_order_ids,
+        updated_by=current_user.id,
+        # 产线模式：清产线真源，并清展示层工位挂载；工位模式：只清工位
+        clear_production_line=use_line,
+        clear_station=True,
+        clear_work_order_dates=bool(request.clear_header_dates),
+    )
+    return WorkOrderBatchClearSchedulingResult(**raw)
 
 
 @router.put(

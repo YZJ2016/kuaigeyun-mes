@@ -345,11 +345,11 @@ riveredge-backend/migrations/models/1040_20261116120000_other_inbound_item_seria
 riveredge-backend/migrations/models/1041_20261116130000_sales_delivery_customer_contact.py	b01ffb002b8ed2630dca1634c43136627d838466	applied	R2簇2迁移:20261123命名落位(不执行)
 riveredge-backend/migrations/models/1042_20261116140000_other_outbound_borrow_serial_numbers.py	351d3ae5039c45e46f00816caae494603f490758	tracked	seed from 5b1b9828e4
 riveredge-backend/migrations/models/1043_20261116143000_material_return_item_serial_numbers.py	345c9f148f1084151922e917d7806dea1787a497	tracked	seed from 5b1b9828e4
-riveredge-backend/migrations/models/1044_20261116150000_wo_op_assigned_production_line.py	dcc3d3d46c61ebc67249fea94f4a2ff7c2434753	deferred	排产策略目录/交期预估与选线适配簇：前端dueEstimate已断链待整簇移植（含greedy_engine+26KB手工合并）
+riveredge-backend/migrations/models/1044_20261116150000_wo_op_assigned_production_line.py	dcc3d3d46c61ebc67249fea94f4a2ff7c2434753	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
 riveredge-backend/migrations/models/1045_20261116160000_clear_deleted_user_department_links.py	af4df2e43e7fbcff52995f2cf65a06c87c6dc37c	applied	清除已删用户残留部门任职/负责人引用，移植为20261123000037
 riveredge-backend/migrations/models/1046_20261116170000_drawing_upload_size_default_200mb.py	16f89653bbdb55b5152e37058d651135206ca0aa	deferred	特性增量未核验/未落地，随对应域批次复核（预审A包）
 riveredge-backend/migrations/models/1047_20261117001000_outsource_order_receipt_audit_cols.py	098db2a9e5b4a17018606d59b39b34c65dc13c3b	deferred	特性增量未核验/未落地，随对应域批次复核（预审A包）
-riveredge-backend/migrations/models/1048_20261117123000_ind_relay_line_products.py	e352e57bafd5f2dbf9b998cf589091778b6d639f	deferred	排产策略目录/交期预估与选线适配簇：前端dueEstimate已断链待整簇移植（含greedy_engine+26KB手工合并）
+riveredge-backend/migrations/models/1048_20261117123000_ind_relay_line_products.py	e352e57bafd5f2dbf9b998cf589091778b6d639f	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
 riveredge-backend/migrations/models/1048_20261118080000_customer_return_visit_status.py	fb09310230b6cf22f285e1f1ccbc91562bd2e219	deferred	特性增量未核验/未落地，随对应域批次复核（预审A包）
 riveredge-backend/migrations/models/1049_20261118090000_menu_tenant_disabled_meta.py	2d692fb8684eca9e82cfad45ac47c1757c645f26	applied	摘取：menu_takeover_service与上游字节一致（reconcile+is_consumer_effective+5处激活门禁）；config补META_TENANT_DISABLED/meta_blocks_menu_activation；menu_service写入路径+activate_application_menus_preserving_tenant_disabled+application_service三处接线；角色赋权路径exclude(tenant_disabled)；迁移1049→20261123000038
 riveredge-backend/migrations/models/1050_20261118170000_field_permission_two_kinds.py	2d9283512aaab7fdaf0c7105bb1390bea955b147	applied	字段权限kind数据迁移移植为20261123000036（既有按字段策略行收敛为amount/party_name kind行，簇P配套）
@@ -627,7 +627,7 @@ riveredge-backend/src/apps/kuaizhizao/api/productions/quality_improvement.py	6bd
 riveredge-backend/src/apps/kuaizhizao/api/productions/quality_qms.py	b61f09a52429422364bbd55e30831f6018082ea0	tracked	seed from a2473e9b42
 riveredge-backend/src/apps/kuaizhizao/api/productions/reporting.py	8afddebb06b41f72377877d687056034149a9d0e	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaizhizao/api/productions/warehouse_execution.py	1a68bf618bbd0597ddc40daf10ffffc51da45fd0	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
-riveredge-backend/src/apps/kuaizhizao/api/productions/work_orders.py	0f37f1c01d4948b2ad8516186630b9d78185ca42	applied	簇O工序委外：工单工序取单行服务端端点+服务+取单换源新建表单落地（payable_recognition本地不支持已剔除）
+riveredge-backend/src/apps/kuaizhizao/api/productions/work_orders.py	0f37f1c01d4948b2ad8516186630b9d78185ca42	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
 riveredge-backend/src/apps/kuaizhizao/api/pull_query_params.py	e74320fde6bc7966091e33adae8657d3d98b1d64	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/api/purchase_arrival/purchase_arrival.py	8d462ae4155341d70780a50e8eaf2533d857942c	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/api/purchase_demand_parties/purchase_demand_parties.py	b0d80b52bc43ea773e4aa6673c04ebb144396c04	tracked	seed from d892f36d03
@@ -647,7 +647,7 @@ riveredge-backend/src/apps/kuaizhizao/api/sales_reviews/sales_reviews.py	19a3924
 riveredge-backend/src/apps/kuaizhizao/api/shipment_notices/shipment_notices.py	d2632318249ee6c0e209fb0de1e7e6224b8452a8	applied	宽区间补登：上游tip已落地（同文/等价映射/预审A包复核）
 riveredge-backend/src/apps/kuaizhizao/api/tool_ops/documents.py	8564d697bf829e00d58571d760d378afd269465a	tracked	seed from 5f085a19c9
 riveredge-backend/src/apps/kuaizhizao/api/tools/tools.py	0025db9cb899a8d3dd5d4b32b095629ad4d2c368	tracked	seed from 2c945a39fb
-riveredge-backend/src/apps/kuaizhizao/api/visual_scheduling/visual_scheduling.py	585de4b3f271516646d3da04eb0be92c3f83ee32	deferred	部分摘取：due-estimate端点已落（expected_date适配本地demand_item.delivery_date）；策略目录/normalize+产线校验合并仍待摘
+riveredge-backend/src/apps/kuaizhizao/api/visual_scheduling/visual_scheduling.py	585de4b3f271516646d3da04eb0be92c3f83ee32	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
 riveredge-backend/src/apps/kuaizhizao/api/wave_pickings/wave_pickings.py	b9dfffd38138c86012b183aca94c51e1791d7073	applied	本轮积压API快修：复用现有权限解析/依赖，4文件逐个注册smoke与拒绝不执行业务回归通过；未更改权限码/manifest，权限扫描的裸purchase-order为HEAD已有问题
 riveredge-backend/src/apps/kuaizhizao/bootstrap.py	8a7789543321f1a0b6d5219d68d3b2974251d220	tracked	seed from 31efc2b64c
 riveredge-backend/src/apps/kuaizhizao/constants/__init__.py	9b672cedc430953028b342295159b98b2566de35	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
@@ -962,7 +962,7 @@ riveredge-backend/src/apps/kuaizhizao/models/supplier_evaluation.py	2c1c5684f0bd
 riveredge-backend/src/apps/kuaizhizao/models/sync_run_log.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/models/work_order.py	4f7e4d2ffa1b902a1b9c731697daf9c051c8ea5c	tracked	seed from 18c0e4ce1a
 riveredge-backend/src/apps/kuaizhizao/models/work_order_bom_line.py	3f142eea97121a77771e3d32fe61a79c8f0bb794	tracked	seed from 93b3cb5998
-riveredge-backend/src/apps/kuaizhizao/models/work_order_operation.py	d676e314a1fb0e83c1833c2887f72467d2b6e130	tracked	seed from 93b3cb5998
+riveredge-backend/src/apps/kuaizhizao/models/work_order_operation.py	d676e314a1fb0e83c1833c2887f72467d2b6e130	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
 riveredge-backend/src/apps/kuaizhizao/models/work_order_sync_binding.py	0367eda381d2595fbdff676c3e248ce38346d5e6	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/apps/kuaizhizao/orm_models.py	e7e5ee5d5102c284bdd27883df1cf994320a0a6e	tracked	seed from 4bd853a94f
 riveredge-backend/src/apps/kuaizhizao/print/designer_presets.py	7abfc8b52bf2e719cb0e522cd4b22bf3e4df6af3	tracked	seed from 37409d3b29
@@ -1029,9 +1029,9 @@ riveredge-backend/src/apps/kuaizhizao/schemas/shipment_notice.py	f99946b4ac5a6ab
 riveredge-backend/src/apps/kuaizhizao/schemas/supplier_evaluation.py	2643e3ae9a7c80dc6637946cf77ce6f096df1fbb	applied	13be286f11联调修复簇
 riveredge-backend/src/apps/kuaizhizao/schemas/tool.py	dd3a24e78c5bb57a4e820782f002ce546cc63062	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/schemas/tool_ops.py	7caa7df817e0e0ff89de0c463dc1a5d795d3a06e	tracked	seed from 5f085a19c9
-riveredge-backend/src/apps/kuaizhizao/schemas/visual_scheduling.py	834cef5b33d16fd19b2283a0465d72c747f20111	deferred	部分摘取：due-estimate端点已落（expected_date适配本地demand_item.delivery_date）；策略目录/normalize+产线校验合并仍待摘
+riveredge-backend/src/apps/kuaizhizao/schemas/visual_scheduling.py	834cef5b33d16fd19b2283a0465d72c747f20111	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
 riveredge-backend/src/apps/kuaizhizao/schemas/warehouse.py	a745f86c7c7a6439a9f56ae08c15b61e1ba92269	deferred	部分摘取：ProductionPickingBase已对齐（可空+领用部门）；文件其余70+hunk随仓储域批次复核
-riveredge-backend/src/apps/kuaizhizao/schemas/work_order.py	d2e2f3da2ba424b9c44450ac55dbeb8947e47224	tracked	seed from 18c0e4ce1a
+riveredge-backend/src/apps/kuaizhizao/schemas/work_order.py	d2e2f3da2ba424b9c44450ac55dbeb8947e47224	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
 riveredge-backend/src/apps/kuaizhizao/schemas/work_order_sync.py	f04609e2feecdf3e20b53bb2a52087111afe8ad0	applied	f40f54e336调度窗+价税簇
 riveredge-backend/src/apps/kuaizhizao/scripts/__init__.py	DELETED	superset	上游已删/无对应，本地保留独有治理与记忆库资产（.cursor/.aoci/openapi等）
 riveredge-backend/src/apps/kuaizhizao/scripts/sync_equipment_card_print_template.py	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
@@ -1163,8 +1163,8 @@ riveredge-backend/src/apps/kuaizhizao/services/kingdee_stocktaking_deficit_push_
 riveredge-backend/src/apps/kuaizhizao/services/kingdee_stocktaking_surplus_push_service.py	389de6f6dbb7745e724e3d8b67bacc404a1edf0e	tracked	seed from 2e8ecad990
 riveredge-backend/src/apps/kuaizhizao/services/kingdee_warehouse_document_push_config.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/services/kingdee_warehouse_push_routing.py	DELETED	applied	D依赖簇续:支撑件+前端
-riveredge-backend/src/apps/kuaizhizao/services/line_capacity_lookup.py	3f54d77e02d0702d8db84c93c778817c020a1d82	deferred	排产策略目录/交期预估与选线适配簇：前端dueEstimate已断链待整簇移植（含greedy_engine+26KB手工合并）
-riveredge-backend/src/apps/kuaizhizao/services/line_product_lookup.py	9f3b5d2083cea0d18436128ea820f0c28a0cda39	deferred	排产策略目录/交期预估与选线适配簇：前端dueEstimate已断链待整簇移植（含greedy_engine+26KB手工合并）
+riveredge-backend/src/apps/kuaizhizao/services/line_capacity_lookup.py	3f54d77e02d0702d8db84c93c778817c020a1d82	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
+riveredge-backend/src/apps/kuaizhizao/services/line_product_lookup.py	9f3b5d2083cea0d18436128ea820f0c28a0cda39	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
 riveredge-backend/src/apps/kuaizhizao/services/maintenance_plan_service.py	5847ab35698a7ab8cdbf8be8d27704f61b72c555	tracked	seed from 46508115c7
 riveredge-backend/src/apps/kuaizhizao/services/maintenance_reminder_service.py	e0e83382575c4ca75bf2c39e3118f58361f0e01b	tracked	seed from 46508115c7
 riveredge-backend/src/apps/kuaizhizao/services/maintenance_workflow_complete.py	0ff65cf6213b9ef19ecf7530203f19f636c02c3e	tracked	seed from 5f085a19c9
@@ -1275,9 +1275,9 @@ riveredge-backend/src/apps/kuaizhizao/services/sales_order_service.py	9d519975da
 riveredge-backend/src/apps/kuaizhizao/services/sales_order_sync_service.py	62495c7a7959206039ced3056883969bbb3636df	superset	superset:上游区间零增量；本地kuaicaiwu版保持
 riveredge-backend/src/apps/kuaizhizao/services/sales_review_service.py	64db3c82cee80be9b26fa88c66bff43c6f1cc4d9	tracked	seed from 57a37e2749
 riveredge-backend/src/apps/kuaizhizao/services/sales_service.py	700896141993702eb599d97323ada2b07473359d	tracked	seed from 154977d948
-riveredge-backend/src/apps/kuaizhizao/services/scheduling_engine/base.py	90b48f343580d358963568f8c2f381e72639c2eb	deferred	排产策略目录/交期预估与选线适配簇：前端dueEstimate已断链待整簇移植（含greedy_engine+26KB手工合并）
-riveredge-backend/src/apps/kuaizhizao/services/scheduling_engine/greedy_rules_engine.py	45fb4c81e80804f9f1ad63f85bf0a287d216dd4f	deferred	排产策略目录/交期预估与选线适配簇：前端dueEstimate已断链待整簇移植（含greedy_engine+26KB手工合并）
-riveredge-backend/src/apps/kuaizhizao/services/scheduling_engine/strategies.py	be333a2cdf6af2e027c2575a280f7fede175e3b8	deferred	排产策略目录/交期预估与选线适配簇：前端dueEstimate已断链待整簇移植（含greedy_engine+26KB手工合并）
+riveredge-backend/src/apps/kuaizhizao/services/scheduling_engine/base.py	90b48f343580d358963568f8c2f381e72639c2eb	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
+riveredge-backend/src/apps/kuaizhizao/services/scheduling_engine/greedy_rules_engine.py	45fb4c81e80804f9f1ad63f85bf0a287d216dd4f	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
+riveredge-backend/src/apps/kuaizhizao/services/scheduling_engine/strategies.py	be333a2cdf6af2e027c2575a280f7fede175e3b8	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
 riveredge-backend/src/apps/kuaizhizao/services/semi_finished_goods_receipt_service.py	62954ecd7a61ac63aba209640fc3fd364bdd7c24	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
 riveredge-backend/src/apps/kuaizhizao/services/shipment_notice_service.py	c9d7427396022c3b15f663ab0d4462585f38fb51	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaizhizao/services/spare_part_service.py	0a18625c1d89a62b34b263aa1971aa98f9563cce	tracked	seed from b12cc66e71
@@ -1288,13 +1288,13 @@ riveredge-backend/src/apps/kuaizhizao/services/supplier_eval_plan_service.py	e5b
 riveredge-backend/src/apps/kuaizhizao/services/supplier_evaluation_service.py	442405f4a5a7c19d1d73d18f4bdca4f180ae0fc3	applied	13be286f11联调修复簇
 riveredge-backend/src/apps/kuaizhizao/services/tool_ops_service.py	0651b6bfd2a14a16198676d37a28ea022819e2f0	tracked	seed from 5f085a19c9
 riveredge-backend/src/apps/kuaizhizao/services/tool_service.py	6732e768d2c81363d7c2d9e82bead63dbe392d98	tracked	seed from 2c945a39fb
-riveredge-backend/src/apps/kuaizhizao/services/visual_scheduling_service.py	28b9d9a36cc754990957acd475e8f91822d9bff3	deferred	排产策略目录/交期预估与选线适配簇：前端dueEstimate已断链待整簇移植（含greedy_engine+26KB手工合并）
+riveredge-backend/src/apps/kuaizhizao/services/visual_scheduling_service.py	28b9d9a36cc754990957acd475e8f91822d9bff3	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
 riveredge-backend/src/apps/kuaizhizao/services/warehouse_kingdee_alignment.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/services/warehouse_list_core.py	5d3cf9707f2bb73abeedd5be3d19eb25d36684fb	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/warehouse_service.py	cc1d82baa53c41976bb8dc108d82a20d4d292104	applied	三方合并：SO交货拉单行头字段+副量pushable_aux+日期筛选+sync_purchase_orders_after_receipt；保留本地工单状态门禁；kingdee撤回告警(external_withdraw_message)作整体defer
 riveredge-backend/src/apps/kuaizhizao/services/warehouse_wo_outsource_pull_service.py	222c4850eafc6d7bc69db6297febf357bd87bf83	tracked	seed from 5b1b9828e4
 riveredge-backend/src/apps/kuaizhizao/services/work_order_bom_line_service.py	dbebd0ad922e1fff09f2c878f662654aa16c16c1	tracked	seed from 5b1b9828e4
-riveredge-backend/src/apps/kuaizhizao/services/work_order_service.py	5aa526d15bc389346df7abd144d013f23ade77ba	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
+riveredge-backend/src/apps/kuaizhizao/services/work_order_service.py	5aa526d15bc389346df7abd144d013f23ade77ba	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
 riveredge-backend/src/apps/kuaizhizao/services/work_order_sync_service.py	3d91631c613e6d1c87eec14f5f797bb2734e7ec9	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-backend/src/apps/kuaizhizao/services/work_order_tree_service.py	3d3af1b22c66f63219d39d34a0526c6fe3df62c5	applied	宽区间补登：上游tip已落地（同文/等价映射/预审A包复核）
 riveredge-backend/src/apps/kuaizhizao/utils/bom_helper.py	e8cd29b50f57bb1dad200609c75413c3171bd07f	tracked	seed from 18c0e4ce1a
@@ -1912,10 +1912,10 @@ riveredge-frontend/src/apps/kuaizhizao/components/DocumentLineTotalStock.tsx	496
 riveredge-frontend/src/apps/kuaizhizao/components/DocumentPushApiDefaultsModal.tsx	70a1169246a8fb7f6c92146be476f296450f8c14	applied	R2:与上游tip一致
 riveredge-frontend/src/apps/kuaizhizao/components/DocumentPushBatchPanel.tsx	7c2ffc4caad6bd204ea00f4a69f95c32c77b947e	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/apps/kuaizhizao/components/EquipmentPersonSelect.tsx	5b609d42cda89048409fdd2234dd11aa73751650	tracked	seed from 2c945a39fb
-riveredge-frontend/src/apps/kuaizhizao/components/GanttSchedulingChart/index.tsx	4076818ddcd72b38d8fcf9ac86e8842c532e062b	superset	本地私有实现/分叉超集（预审A包复核）
-riveredge-frontend/src/apps/kuaizhizao/components/GanttSchedulingChart/stationResourceUtils.ts	e7e533cb0a5dfd56f79699c58903af6e582b4f06	superset	本地私有实现/分叉超集（预审A包复核）
-riveredge-frontend/src/apps/kuaizhizao/components/GanttSchedulingChart/types.ts	0fb6648315885b0fcf707ec563a15765b65ad0ac	superset	本地私有实现/分叉超集（预审A包复核）
-riveredge-frontend/src/apps/kuaizhizao/components/GanttSchedulingChart/utils.ts	6dab9620932f432d49946847d93a7270a22e1f50	superset	本地私有实现/分叉超集（预审A包复核）
+riveredge-frontend/src/apps/kuaizhizao/components/GanttSchedulingChart/index.tsx	4076818ddcd72b38d8fcf9ac86e8842c532e062b	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/components/GanttSchedulingChart/stationResourceUtils.ts	e7e533cb0a5dfd56f79699c58903af6e582b4f06	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/components/GanttSchedulingChart/types.ts	0fb6648315885b0fcf707ec563a15765b65ad0ac	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/components/GanttSchedulingChart/utils.ts	6dab9620932f432d49946847d93a7270a22e1f50	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
 riveredge-frontend/src/apps/kuaizhizao/components/GanttSchedulingChart/workOrderOperationLinks.ts	f6ff1781cbbf7bbb3f90a9c4c06309bbd4a4f1c3	superset	本地私有实现/分叉超集（预审A包复核）
 riveredge-frontend/src/apps/kuaizhizao/components/InspectionPlanFormModal.tsx	80bbd98f7e1d8507d1e00084035483a869d67ceb	tracked	seed from 905787348a
 riveredge-frontend/src/apps/kuaizhizao/components/InspectionPlanStepEditor.tsx	96b3ffa1be5e02aeb8db8e514d0c148d12d6f456	tracked	seed from 1efec0da1d
@@ -2115,24 +2115,42 @@ riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/computation-history
 riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/demand-computation/index.tsx	07a1e61bb6cfc2c05628f5c05381ac82cf10ba2c	tracked	seed from 57a37e2749
 riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/demand-management/index.tsx	a186e3f418da85df43de694c379e602cb28884ff	tracked	seed from 4d124a088e
 riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/production-plans/ProductionControlTower.tsx	2af1e3713cfb58c00228135435ccf0e2ab94d148	tracked	seed from df7d635797
-riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/applySchedulingAiProposal.ts	c5a0603bd5d42337d560e7fad9530bb7e2393eaa	superset	本地私有实现/分叉超集（预审A包复核）
-riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingAiAssistantDrawer.tsx	55cab81dc39db51bf7c5b509415970ebb757bdd7	superset	本地私有实现/分叉超集（预审A包复核）
-riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingAlertsPanel.tsx	387a5ac008cf270788f6ba266f1a956c5ebb9331	deferred	排产策略目录/交期预估与选线适配簇：前端dueEstimate已断链待整簇移植（含greedy_engine+26KB手工合并）
-riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingBoardDropZone.tsx	d921b432d9dcdc00c8acadaa62adbd28a9b4db6b	superset	本地私有实现/分叉超集（预审A包复核）
-riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingDueEstimateDrawer.tsx	11f60444227a35ef38be25d406a2c6609e1502a1	deferred	排产策略目录/交期预估与选线适配簇：前端dueEstimate已断链待整簇移植（含greedy_engine+26KB手工合并）
-riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingGanttToolbar.tsx	051268e658ae2aec8e7f49eef915963c46ffc2d1	superset	本地私有实现/分叉超集（预审A包复核）
-riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingHeaderBand.tsx	ac62bbdb8d645547f4871b84afff36813d2eeb73	superset	本地私有实现/分叉超集（预审A包复核）
-riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingLoadTable.tsx	13bfb498be1e64172c2229da85cf14384b0c9106	superset	本地私有实现/分叉超集（预审A包复核）
-riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingOperationEditDrawer.tsx	97ed54ab823d4f03f47fb0ceb8092ca4e9ae38c6	superset	本地私有实现/分叉超集（预审A包复核）
-riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingRescheduleWizardModal.tsx	790a547a9c084823cf118ea348ee4fca5a8c11ce	deferred	排产策略目录/交期预估与选线适配簇：前端dueEstimate已断链待整簇移植（含greedy_engine+26KB手工合并）
-riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingWorkOrderPrepModal.tsx	3dafbacce3c19772979d71eebaa2e774503448ff	superset	本地私有实现/分叉超集（预审A包复核）
-riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/schedulingPoolDiagnostics.ts	ce03ad77d61612a17ee70087281de1c00f8f8ef8	superset	本地私有实现/分叉超集（预审A包复核）
-riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/convertEngineProposal.ts	b46ea82c43278b0da26a131c154c749ed5f81d7f	superset	本地私有实现/分叉超集（预审A包复核）
-riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/index.tsx	a03f43b04cc113b87a7064a8fd40de422a287278	deferred	排产策略目录/交期预估与选线适配簇：前端dueEstimate已断链待整簇移植（含greedy_engine+26KB手工合并）
-riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/scheduling-prep-modal.less	215fce700a258addd58c0c00f0dfc99d0ce57364	superset	本地私有实现/分叉超集（预审A包复核）
-riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/schedulingBoardPreferences.ts	bc4d1a8c1777919c180822b4d50183e54dd08880	superset	本地私有实现/分叉超集（预审A包复核）
-riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/schedulingDropUtils.ts	be930360b63c961ba1d8b958595b4391548a9650	superset	本地私有实现/分叉超集（预审A包复核）
-riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/schedulingLoadTableUtils.ts	2197db44a2e3044dde59e2fac30deef3256a94b3	superset	本地私有实现/分叉超集（预审A包复核）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/applySchedulingAiProposal.ts	c5a0603bd5d42337d560e7fad9530bb7e2393eaa	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/batchResultUtils.ts	5fdc8bbbb9c51a3207ccc6ffbb3fba36056e44fa	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingAiAssistantDrawer.less	95125b735752f011af4d7a9e3fe7af27855f91ee	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingAiAssistantDrawer.tsx	55cab81dc39db51bf7c5b509415970ebb757bdd7	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingAiExplainCard.tsx	3883e670f7c2e3b48f35adeb1a321a985ee2edda	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingAiPriorityCard.tsx	61b539eedf278b6dd8b3a865537f57f9902ebdd4	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingAiProposalCard.tsx	78bd1a79e8db0ac837ecce7ef351240b1a9bebaf	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingAlertsPanel.tsx	387a5ac008cf270788f6ba266f1a956c5ebb9331	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingBoardDropZone.tsx	d921b432d9dcdc00c8acadaa62adbd28a9b4db6b	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingCardBoard.tsx	910a80360f88bd745b29fa34c2278bfc6384a597	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingCardLane.tsx	6ec36b9849a98a48fc367b9f2c30bef604c5b338	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingCardTask.tsx	f12a43a9dcb179b9a665475ad46d95bdba6e67e7	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingDueEstimateDrawer.tsx	11f60444227a35ef38be25d406a2c6609e1502a1	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingGanttToolbar.tsx	051268e658ae2aec8e7f49eef915963c46ffc2d1	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingHeaderBand.tsx	ac62bbdb8d645547f4871b84afff36813d2eeb73	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingLoadTable.tsx	13bfb498be1e64172c2229da85cf14384b0c9106	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingOperationEditDrawer.tsx	97ed54ab823d4f03f47fb0ceb8092ca4e9ae38c6	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingPinManagerModal.tsx	a1732dae34eee8bfb24461f7fe7aa90ffe24f0f8	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingPoolCardGrid.tsx	1f6278aca725879463428fbd87f02df3c959bd28	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingPoolToolbar.tsx	09efa6ea4142b8e2ff0128fac8d720bdfc1b15ec	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingRescheduleWizardModal.tsx	790a547a9c084823cf118ea348ee4fca5a8c11ce	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/SchedulingWorkOrderPrepModal.tsx	3dafbacce3c19772979d71eebaa2e774503448ff	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/components/schedulingPoolDiagnostics.ts	ce03ad77d61612a17ee70087281de1c00f8f8ef8	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/convertEngineProposal.ts	b46ea82c43278b0da26a131c154c749ed5f81d7f	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/delfoi-style.less	ff52e64763811a5eef0170816527cd907a87c351	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/freezeUtils.ts	10ea5e81a93238dd1ac20dfb63db98c3006504f7	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/index.tsx	a03f43b04cc113b87a7064a8fd40de422a287278	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/scheduling-prep-modal.less	215fce700a258addd58c0c00f0dfc99d0ce57364	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/schedulingBoardPreferences.ts	bc4d1a8c1777919c180822b4d50183e54dd08880	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/schedulingCardViewUtils.ts	6855d494b0577b5ea0598fbd0f1dfdb640d597dc	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/schedulingDropUtils.ts	be930360b63c961ba1d8b958595b4391548a9650	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/schedulingLoadTableUtils.ts	2197db44a2e3044dde59e2fac30deef3256a94b3	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/schedulingMaterialGate.ts	e26668fab65e4e84a8e49a3d260cd8af522ff283	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/schedulingPinnedResources.ts	27598c2914729172ed74c84125fb1b23a8765fef	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/schedulingPoolUtils.ts	b8bb7122af0565a7cb7237ef54303a583a37adb9	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
+riveredge-frontend/src/apps/kuaizhizao/pages/plan-management/scheduling/schedulingResourceFilters.ts	bd843b8a9617f9313ced0f60c7a3e7d99ab46946	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/components/ProductionExceptionDetailActions.tsx	1f4d676a8524083f52997b0bc1e00ba103cd174c	tracked	seed from a60f3e9039
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/outsource-orders/index.tsx	b4071f9a847dd05c44ddc57510088d14b4c36ab9	applied	簇O:取单行服务端分页端点/服务/换源预填表单落地;OWO发料默认仓库回退;OO桥/模态domain-out
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/outsource-work-orders/index.tsx	068ef5f64a33d8c216e4ab834ec1f08f4a85b7d4	tracked	seed from 4d124a088e
@@ -2447,7 +2465,7 @@ riveredge-frontend/src/apps/kuaizhizao/services/statistics/aging.ts	34a379d80226
 riveredge-frontend/src/apps/kuaizhizao/services/supplier-evaluation.ts	b9a81ac08c18c9c716b516e5fb46f85a81df22c2	applied	宽区间历史补登：与上游tip字节一致
 riveredge-frontend/src/apps/kuaizhizao/services/traceability.ts	2034b45ec5b548050ff562cd00843b93be2aa275	tracked	seed from b74aba704c
 riveredge-frontend/src/apps/kuaizhizao/services/warehouse-execution.ts	f8b97671865eed4e3faaf7f924884ef7dcf1656a	applied	簇W:生产领料审核能力(submit/withdraw/approve/revoke)+仓储金额方名脱敏渲染+叠列fieldResource;保留本地待审可删sales_delivery语义
-riveredge-frontend/src/apps/kuaizhizao/services/work-order.ts	4d236a258226bf0b8d007e494904d78a93a4dc88	tracked	seed from 93b3cb5998
+riveredge-frontend/src/apps/kuaizhizao/services/work-order.ts	4d236a258226bf0b8d007e494904d78a93a4dc88	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
 riveredge-frontend/src/apps/kuaizhizao/types/finance/payable.ts	4d5feb5bb643b940eef5a33050cdd26453293173	tracked	seed from b12cc66e71
 riveredge-frontend/src/apps/kuaizhizao/types/finance/purchase-invoice.ts	dbe407c1039e0c1f51a8455dec1d2056dccae93c	applied	财务A/B适配至kuaicaiwu；保留本地创建自动送审/已审核口径；忠实保留源应付已审核或待审时早退导致优惠调整不生成；迁移20261122000001尚未执行；财务pytest191通过+聚焦9通过，时区0。前端tsc2743存量诊断，浏览器未验。
 riveredge-frontend/src/apps/kuaizhizao/types/finance/receivable.ts	4eeb6c817cd56a40e33124c105c3ae3d79cd5a13	tracked	seed from 57a37e2749
@@ -2675,7 +2693,7 @@ riveredge-frontend/src/components/quantity-with-unit/MaterialUnitRoleBadge.tsx	a
 riveredge-frontend/src/components/quantity-with-unit/buildDocumentLineDualQuantityFormColumns.tsx	db0680913fa64877e2e1ce75acbc35ecacbef6ec	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/components/quantity-with-unit/documentLineDualQuantityColumn.tsx	164626e22bb1cfcbc3834f46f3b4c49de24f401b	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/components/quantity-with-unit/index.tsx	1ada2ed6c957443f47ec88e2e5e01e696742b5f5	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
-riveredge-frontend/src/components/river-gantt/RiverGantt.tsx	e2111bb9229ac32669548a617c3a8a50d3262dfe	superset	本地私有实现/分叉超集（预审A包复核）
+riveredge-frontend/src/components/river-gantt/RiverGantt.tsx	e2111bb9229ac32669548a617c3a8a50d3262dfe	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
 riveredge-frontend/src/components/schema-form/SchemaFormRenderer.tsx	2000cd522887f3e69fdb6ea18019423d34ad095e	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/components/schema-form/form-schemas.ts	93697d441163112e426dcc90a2d8cb8e60623815	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/components/sync-from-source-modal/SyncApiCallParamsPanel.tsx	4d65487f0d5cbb768b641617d65d241b2474719f	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
@@ -2825,7 +2843,7 @@ riveredge-frontend/src/locales/ja-JP.ts	746bc658f57f2884a56575ed8ad187233fdf5157
 riveredge-frontend/src/locales/lo-LA.ts	25e066ea63b8f90825b0b37043fc98cf8142fa2d	superset	本地私有实现/分叉超集（预审A包复核）
 riveredge-frontend/src/locales/vi-VN.ts	3a868d5df0429b1a61d334a0961eea0e6dfca22c	superset	本地私有实现/分叉超集（预审A包复核）
 riveredge-frontend/src/locales/zh-CN.login.ts	db74e76107d87f6bd9f68953bc8a91f8f93d3479	tracked	seed from 57a37e2749
-riveredge-frontend/src/locales/zh-CN.ts	565a112aef82305a6e4c93d6d8c3103d447a924b	applied	簇L:20条已摘域更新日志+zh键;OO模态/编辑栅格deferred条目未摘
+riveredge-frontend/src/locales/zh-CN.ts	565a112aef82305a6e4c93d6d8c3103d447a924b	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
 riveredge-frontend/src/locales/zh-Hant.ts	f14d595526ff79a605a1c744f99838f8b8c16dc2	superset	本地私有实现/分叉超集（预审A包复核）
 riveredge-frontend/src/main.tsx	405b6b630716320f0778bd2c05fa6be0e62364e7	tracked	seed from 66af904bd3
 riveredge-frontend/src/pages/infra/operation/index.tsx	904003c084a70eb933fc63ab32392b2cb8d2f373	applied	ea1f4da58e刷新反馈+读加速+门禁加固
@@ -2856,7 +2874,7 @@ riveredge-frontend/src/pages/system/config-center/index.tsx	11ebb124186d12db2acd
 riveredge-frontend/src/pages/system/custom-fields/list/index.tsx	5d2201d48896ebcbb033484cb26a7fa7a6229ef9	tracked	seed from df7d635797
 riveredge-frontend/src/pages/system/dashboard/DashboardUpdateLogModal.tsx	4d9b745f9c81386a9b4c5a63218249c0f3bacfb1	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/pages/system/dashboard/analysis/BusinessBoardPage.tsx	09aedf0410beeb30cadadf6e5c97c89b292a018c	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
-riveredge-frontend/src/pages/system/dashboard/platformUpdateLog.ts	c348372f6ef719a6a2bd926c71d33b977a8b195d	applied	簇L:20条已摘域更新日志+zh键;OO模态/编辑栅格deferred条目未摘
+riveredge-frontend/src/pages/system/dashboard/platformUpdateLog.ts	c348372f6ef719a6a2bd926c71d33b977a8b195d	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
 riveredge-frontend/src/pages/system/dashboard/platformUpdateLogDedicated.ts	4f12dd8ab6da6abd1720c454a7608760e9729379	applied	宽区间历史补登：上游tip内容已落地（预审B包复核）
 riveredge-frontend/src/pages/system/datasets/list/index.tsx	964b28fb21d716505c6a70609ce8ada98dd40dc7	tracked	seed from 3958bb1524
 riveredge-frontend/src/pages/system/departments/components/DepartmentFormModal.tsx	4699a50adda3187724f4a1a35afefbed9276f827	superset	R2预审：本地已有等价/更深实现，不摘

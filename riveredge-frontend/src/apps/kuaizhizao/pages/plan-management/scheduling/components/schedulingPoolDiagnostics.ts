@@ -43,10 +43,16 @@ export function collectWorkOrderDiagnosticIssues(
   wo: WorkOrderForGantt,
   boardScan: VisualSchedulingBoardScan | null | undefined,
   t: TFunction,
-  options?: { materialHardConstraint?: boolean }
+  options?: {
+    materialHardConstraint?: boolean;
+    /** 行业包产线模式：不报缺工位/头表日期，改报缺产线 */
+    resourceMode?: 'workstation' | 'production_line';
+  }
 ): WorkOrderDiagnosticIssue[] {
   const issues: WorkOrderDiagnosticIssue[] = [];
   const seen = new Set<string>();
+  const resourceMode = options?.resourceMode ?? 'workstation';
+  const isLineMode = resourceMode === 'production_line';
 
   const push = (issue: WorkOrderDiagnosticIssue) => {
     if (seen.has(issue.key)) return;
@@ -54,20 +60,28 @@ export function collectWorkOrderDiagnosticIssues(
     issues.push(issue);
   };
 
-  for (const field of getWorkOrderSchedulingMissingFields(wo)) {
-    push({
-      key: `missing-${field}`,
-      severity: 'warning',
-      label: missingFieldLabel(field, t),
-    });
+  // 工位业务线仍提示头表计划日；产线模式不强制
+  if (!isLineMode) {
+    for (const field of getWorkOrderSchedulingMissingFields(wo)) {
+      push({
+        key: `missing-${field}`,
+        severity: 'warning',
+        label: missingFieldLabel(field, t),
+      });
+    }
   }
 
-  const missingStations = getOperationsNeedingStation(wo);
-  if (missingStations.length > 0) {
+  const missingResources = getOperationsNeedingStation(wo, resourceMode);
+  if (missingResources.length > 0) {
     push({
-      key: 'missing-station',
+      key: isLineMode ? 'missing-production-line' : 'missing-station',
       severity: 'warning',
-      label: t('app.kuaizhizao.scheduling.diagnostics.missingStations', { count: missingStations.length }),
+      label: t(
+        isLineMode
+          ? 'app.kuaizhizao.scheduling.diagnostics.missingProductionLines'
+          : 'app.kuaizhizao.scheduling.diagnostics.missingStations',
+        { count: missingResources.length }
+      ),
     });
   }
 

@@ -3051,6 +3051,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                                 "assigned_team_name": op.assigned_team_name,
                                 "assigned_station_id": op.assigned_station_id,
                                 "assigned_station_name": op.assigned_station_name,
+                                "assigned_production_line_id": op.assigned_production_line_id,
+                                "assigned_production_line_code": op.assigned_production_line_code,
+                                "assigned_production_line_name": op.assigned_production_line_name,
                                 "assigned_equipment_id": op.assigned_equipment_id,
                                 "assigned_equipment_name": op.assigned_equipment_name,
                                 "assigned_mold_name": op.assigned_mold_name,
@@ -3707,6 +3710,173 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 wo.updated_by = updated_by
                 await wo.save(update_fields=["updated_by", "updated_at"])
                 result["updated"].append(int(op_id))
+        return result
+
+    async def batch_update_operation_production_lines(
+        self,
+        tenant_id: int,
+        updates: list,
+        updated_by: int,
+    ) -> Dict[str, Any]:
+        """批量更新工序指派产线（自动化产线 APS，不依赖工位）。"""
+        from apps.master_data.models.factory import ProductionLine
+
+        result: Dict[str, Any] = {
+            "updated": [],
+            "skipped_frozen": [],
+            "failed": [],
+        }
+        if not updates:
+            return result
+        from apps.kuaizhizao.services.line_product_lookup import (
+            line_accepts_product,
+            load_line_allowed_product_ids,
+        )
+        from apps.kuaizhizao.utils.outsource_operation import occupies_factory_capacity
+
+        allow_map = await load_line_allowed_product_ids(tenant_id)
+        async with in_transaction():
+            for item in updates[:50]:
+                op_id = item.operation_id if hasattr(item, "operation_id") else item.get("operation_id")
+                line_id = (
+                    item.assigned_production_line_id
+                    if hasattr(item, "assigned_production_line_id")
+                    else item.get("assigned_production_line_id")
+                )
+                if not op_id or not line_id:
+                    continue
+                op = await WorkOrderOperation.get_or_none(
+                    tenant_id=tenant_id, id=op_id, deleted_at__isnull=True
+                )
+                if not op:
+                    result["failed"].append({"id": int(op_id), "reason": "工序不存在"})
+                    continue
+                wo = await WorkOrder.get_or_none(
+                    tenant_id=tenant_id, id=op.work_order_id, deleted_at__isnull=True
+                )
+                if not wo:
+                    result["failed"].append({"id": int(op_id), "reason": "工单不存在"})
+                    continue
+                if wo.is_frozen:
+                    if int(wo.id) not in result["skipped_frozen"]:
+                        result["skipped_frozen"].append(int(wo.id))
+                    continue
+
+                if not occupies_factory_capacity(op):
+                    result["failed"].append(
+                        {"id": int(op_id), "reason": "委外工序不占本厂产线，不可改派"}
+                    )
+                    continue
+                line = await ProductionLine.get_or_none(
+                    tenant_id=tenant_id, id=int(line_id), deleted_at__isnull=True
+                )
+                if not line:
+                    result["failed"].append({"id": int(op_id), "reason": f"产线不存在: {line_id}"})
+                    continue
+                product_id = int(wo.product_id or 0)
+                if not line_accepts_product(int(line.id), product_id, allow_map):
+                    result["failed"].append(
+                        {
+                            "id": int(op_id),
+                            "reason": (
+                                "工单未指定自制件，不可指派产线"
+                                if product_id <= 0
+                                else f"产线 {line.id} 未绑定本工单自制件"
+                            ),
+                        }
+                    )
+                    continue
+                await WorkOrderOperation.filter(tenant_id=tenant_id, id=op_id).update(
+                    assigned_production_line_id=int(line.id),
+                    assigned_production_line_code=line.code,
+                    assigned_production_line_name=line.name,
+                )
+                wo.updated_by = updated_by
+                await wo.save(update_fields=["updated_by", "updated_at"])
+                result["updated"].append(int(op_id))
+        return result
+
+    async def batch_clear_operation_scheduling(
+        self,
+        tenant_id: int,
+        work_order_ids: list,
+        updated_by: int,
+        *,
+        clear_production_line: bool = True,
+        clear_station: bool = False,
+        clear_work_order_dates: bool = True,
+    ) -> Dict[str, Any]:
+        """从甘特撤排：清空工序计划时间与（可选）产线/工位指派，工单回待排池。
+
+        仅拦人工冻结（is_frozen）。冻结窗只保护拖拽/改期，不拦「明确撤排」——
+        否则默认冻结窗内刚排入的单无法拿回待排池。
+        """
+        result: Dict[str, Any] = {
+            "updated": [],
+            "skipped_frozen": [],
+            "skipped_freeze_window": [],
+            "failed": [],
+            "cleared_work_order_ids": [],
+        }
+        ids = [int(i) for i in (work_order_ids or []) if int(i) > 0][:50]
+        if not ids:
+            return result
+
+        async with in_transaction():
+            for wo_id in ids:
+                wo = await WorkOrder.get_or_none(
+                    tenant_id=tenant_id, id=wo_id, deleted_at__isnull=True
+                )
+                if not wo:
+                    result["failed"].append({"id": wo_id, "reason": "工单不存在"})
+                    continue
+                if wo.is_frozen:
+                    if wo_id not in result["skipped_frozen"]:
+                        result["skipped_frozen"].append(wo_id)
+                    continue
+                if not _is_schedulable_work_order_status(wo.status):
+                    result["failed"].append(
+                        {"id": wo_id, "reason": f"工单状态不可撤排: {wo.status}"}
+                    )
+                    continue
+
+                ops = await WorkOrderOperation.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=wo_id,
+                    deleted_at__isnull=True,
+                ).all()
+                cleared_any = False
+                for op in ops:
+                    if op.status in {"completed", "cancelled"}:
+                        continue
+                    patch: Dict[str, Any] = {
+                        "planned_start_date": None,
+                        "planned_end_date": None,
+                    }
+                    if clear_production_line:
+                        patch["assigned_production_line_id"] = None
+                        patch["assigned_production_line_code"] = None
+                        patch["assigned_production_line_name"] = None
+                    if clear_station:
+                        patch["assigned_station_id"] = None
+                        patch["assigned_station_name"] = None
+                    await WorkOrderOperation.filter(
+                        tenant_id=tenant_id, id=op.id
+                    ).update(**patch)
+                    result["updated"].append(int(op.id))
+                    cleared_any = True
+
+                if clear_work_order_dates and cleared_any:
+                    await WorkOrder.filter(tenant_id=tenant_id, id=wo_id).update(
+                        planned_start_date=None,
+                        planned_end_date=None,
+                        updated_by=updated_by,
+                    )
+                if cleared_any:
+                    result["cleared_work_order_ids"].append(wo_id)
+                    wo.updated_by = updated_by
+                    await wo.save(update_fields=["updated_by", "updated_at"])
+
         return result
 
     async def batch_update_operation_assignments(

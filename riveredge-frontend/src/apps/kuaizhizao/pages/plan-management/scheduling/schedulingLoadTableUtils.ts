@@ -1,5 +1,5 @@
 import type { VisualSchedulingBoardScan } from '../../../services/production';
-import type { GanttTaskLevel, WorkOrderForGantt } from '../../../components/GanttSchedulingChart/types';
+import type { GanttTaskLevel, WorkOrderForGantt, WorkstationResource } from '../../../components/GanttSchedulingChart/types';
 
 export interface SchedulingLoadTableRow {
   resourceId: number;
@@ -10,10 +10,20 @@ export interface SchedulingLoadTableRow {
   overloaded: boolean;
   workOrderCount: number;
   onMachineCount: number;
+  /** 产线模式：缺节拍/日产能 */
+  missingTakt?: boolean;
 }
 
 type LoadStationRow = NonNullable<VisualSchedulingBoardScan['load_by_station']>[number];
 type LoadWorkCenterRow = VisualSchedulingBoardScan['load_by_work_center'][number];
+
+export interface ProductionLineLoadOptions {
+  lines: WorkstationResource[];
+  taktSecondsByLineId: Map<number, number>;
+  dailyCapacityByLineId: Map<number, number>;
+  horizonDays: number;
+  workOrders: WorkOrderForGantt[];
+}
 
 function inferDailyCapacityHours(rows: Array<{ hours: number; rate: number }>): number {
   for (const row of rows) {
@@ -31,6 +41,22 @@ function countWorkOrdersForStation(stationId: number, workOrders: WorkOrderForGa
   for (const wo of workOrders) {
     for (const op of wo.operations ?? []) {
       if (op.assigned_station_id === stationId && wo.id > 0) {
+        ids.add(wo.id);
+      }
+    }
+  }
+  return ids.size;
+}
+
+function countWorkOrdersForProductionLine(lineId: number, workOrders: WorkOrderForGantt[]): number {
+  const ids = new Set<number>();
+  for (const wo of workOrders) {
+    for (const op of wo.operations ?? []) {
+      const assigned =
+        op.assigned_production_line_id != null && Number(op.assigned_production_line_id) > 0
+          ? Number(op.assigned_production_line_id)
+          : Number(op.assigned_station_id || 0);
+      if (assigned === lineId && wo.id > 0) {
         ids.add(wo.id);
       }
     }
@@ -144,12 +170,70 @@ function aggregateWorkCenterRows(
   return result.sort((a, b) => b.loadRate - a.loadRate || a.resourceName.localeCompare(b.resourceName));
 }
 
+/** 产线模式：按节拍×日产能折算可用小时，按已排工序时段计已排小时 */
+export function buildProductionLineLoadTableRows(
+  options: ProductionLineLoadOptions
+): SchedulingLoadTableRow[] {
+  const {
+    lines,
+    taktSecondsByLineId,
+    dailyCapacityByLineId,
+    horizonDays,
+    workOrders,
+  } = options;
+  const dayCount = Math.max(1, horizonDays);
+  const scheduledHoursByLine = new Map<number, number>();
+
+  for (const wo of workOrders) {
+    for (const op of wo.operations ?? []) {
+      const lineId =
+        op.assigned_production_line_id != null && Number(op.assigned_production_line_id) > 0
+          ? Number(op.assigned_production_line_id)
+          : Number(op.assigned_station_id || 0);
+      if (lineId <= 0 || !op.planned_start_date || !op.planned_end_date) continue;
+      const start = Date.parse(String(op.planned_start_date));
+      const end = Date.parse(String(op.planned_end_date));
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
+      const hours = (end - start) / 3600000;
+      scheduledHoursByLine.set(lineId, (scheduledHoursByLine.get(lineId) || 0) + hours);
+    }
+  }
+
+  return lines
+    .map((line) => {
+      const takt = taktSecondsByLineId.get(line.id) ?? 0;
+      const dailyQty = dailyCapacityByLineId.get(line.id) ?? 0;
+      const missingTakt = takt <= 0 || dailyQty <= 0;
+      const dailyHours = missingTakt ? 0 : (dailyQty * takt) / 3600;
+      const availableHours = dailyHours * dayCount;
+      const scheduledHours = scheduledHoursByLine.get(line.id) || 0;
+      const loadRate =
+        availableHours > 0 ? Math.round((scheduledHours / availableHours) * 100) : missingTakt ? 0 : 0;
+      return {
+        resourceId: line.id,
+        resourceName: line.name,
+        scheduledHours: Math.round(scheduledHours * 100) / 100,
+        availableHours: Math.round(availableHours * 100) / 100,
+        loadRate,
+        overloaded: !missingTakt && loadRate > 100,
+        workOrderCount: countWorkOrdersForProductionLine(line.id, workOrders),
+        onMachineCount: 0,
+        missingTakt,
+      } satisfies SchedulingLoadTableRow;
+    })
+    .sort((a, b) => b.loadRate - a.loadRate || a.resourceName.localeCompare(b.resourceName));
+}
+
 export function buildSchedulingLoadTableRows(
   boardScan: VisualSchedulingBoardScan | null | undefined,
   taskLevel: GanttTaskLevel,
   horizonDays: number,
-  workOrders: WorkOrderForGantt[]
+  workOrders: WorkOrderForGantt[],
+  productionLineOptions?: ProductionLineLoadOptions | null
 ): SchedulingLoadTableRow[] {
+  if (productionLineOptions) {
+    return buildProductionLineLoadTableRows(productionLineOptions);
+  }
   if (!boardScan) return [];
   if (taskLevel === 'station') {
     return aggregateStationRows(boardScan.load_by_station ?? [], horizonDays, workOrders);

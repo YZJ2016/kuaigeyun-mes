@@ -758,6 +758,7 @@ const RiverGantt: React.FC<RiverGanttProps> = ({
                     ? ' river-gantt__row--drop-target'
                     : ''
                 }`}
+                data-row-id={String(row.task.id)}
                 style={{ top: rowIndex * cellHeight, height: cellHeight }}
               >
                 {resourceTimeBands

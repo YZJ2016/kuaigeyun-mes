@@ -200,6 +200,31 @@ class WorkOrderOperationBatchUpdateStationsRequest(BaseModel):
     updates: list[WorkOrderOperationBatchUpdateStationsItem] = Field(..., description="更新项列表")
 
 
+class WorkOrderOperationBatchUpdateProductionLinesItem(BaseModel):
+    """批量更新工序指派产线项（产线排程模式）"""
+    operation_id: int = Field(..., description="工序ID")
+    assigned_production_line_id: int = Field(..., description="产线ID")
+
+
+class WorkOrderOperationBatchUpdateProductionLinesRequest(BaseModel):
+    """批量更新工序指派产线请求"""
+    updates: list[WorkOrderOperationBatchUpdateProductionLinesItem] = Field(
+        ..., description="更新项列表"
+    )
+
+
+class WorkOrderBatchClearSchedulingRequest(BaseModel):
+    """从可视排产甘特撤排：清空工序计划时间与资源指派"""
+    work_order_ids: list[int] = Field(
+        ..., min_length=1, max_length=50, description="工单ID列表"
+    )
+    clear_header_dates: bool = Field(True, description="是否同步清空工单头计划起止")
+    resource_mode: str = Field(
+        "workstation",
+        description="workstation|production_line：决定清空工位还是产线指派",
+    )
+
+
 class WorkOrderOperationBatchUpdateAssignmentsItem(BaseModel):
     """批量更新工序派工资源项（人员/设备/模具/工装）"""
     operation_id: int = Field(..., description="工序ID（WorkOrderOperation.id）")
@@ -323,6 +348,9 @@ class WorkOrderOperationMinimalForGantt(BaseSchema):
     planned_end_date: Optional[datetime] = None
     assigned_station_id: Optional[int] = None
     assigned_station_name: Optional[str] = None
+    assigned_production_line_id: Optional[int] = None
+    assigned_production_line_code: Optional[str] = None
+    assigned_production_line_name: Optional[str] = None
     assigned_equipment_id: Optional[int] = None
     assigned_equipment_name: Optional[str] = None
     assigned_mold_name: Optional[str] = None
@@ -675,6 +703,9 @@ class WorkOrderOperationBase(BaseSchema):
     assigned_team_name: Optional[str] = Field(None, description="分配的工作小组名称")
     assigned_station_id: Optional[int] = Field(None, description="分配的工位ID")
     assigned_station_name: Optional[str] = Field(None, description="分配的工位名称")
+    assigned_production_line_id: Optional[int] = Field(None, description="分配的产线ID")
+    assigned_production_line_code: Optional[str] = Field(None, description="分配的产线编码快照")
+    assigned_production_line_name: Optional[str] = Field(None, description="分配的产线名称快照")
     assigned_equipment_id: Optional[int] = Field(None, description="分配的设备ID（主责/兼容，取 assigned_equipment_ids 首项）")
     assigned_equipment_name: Optional[str] = Field(None, description="分配的设备名称（多台以顿号分隔）")
     assigned_equipment_ids: List[int] = Field(default_factory=list, description="分配的设备ID列表")

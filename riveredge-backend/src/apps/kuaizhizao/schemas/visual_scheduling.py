@@ -1,15 +1,9 @@
 """可视排产 API Schema。"""
 
-
-
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-
-
 from pydantic import Field
-
-
 
 from core.schemas.base import BaseSchema
 
@@ -133,6 +127,10 @@ class VisualSchedulingMissingSettingItem(BaseSchema):
 
     work_center_id: Optional[int] = None
 
+    product_id: Optional[int] = Field(
+        None, description="工单自制件物料ID（产线模式补齐候选过滤）"
+    )
+
 
 class VisualSchedulingScanResponse(BaseSchema):
 
@@ -218,7 +216,9 @@ class OperationStationAdjustment(BaseSchema):
     assigned_station_id: int
 
 
-
+class OperationProductionLineAdjustment(BaseSchema):
+    operation_id: int
+    assigned_production_line_id: int
 
 
 class VisualSchedulingValidateRequest(BaseSchema):
@@ -228,6 +228,10 @@ class VisualSchedulingValidateRequest(BaseSchema):
     operation_updates: List[OperationDateAdjustment] = Field(default_factory=list)
 
     operation_station_updates: List[OperationStationAdjustment] = Field(default_factory=list)
+
+    operation_production_line_updates: List[OperationProductionLineAdjustment] = Field(
+        default_factory=list
+    )
 
 
 
@@ -296,7 +300,19 @@ class OperationBatchUpdateStationsResult(BaseSchema):
     failed: List[BatchUpdateFailureItem] = Field(default_factory=list)
 
 
+class OperationBatchUpdateProductionLinesResult(BaseSchema):
+    updated: List[int] = Field(default_factory=list)
+    skipped_frozen: List[int] = Field(default_factory=list)
+    failed: List[BatchUpdateFailureItem] = Field(default_factory=list)
 
+
+class WorkOrderBatchClearSchedulingResult(BaseSchema):
+    """撤排结果：updated 为已清空的工序 ID；cleared_work_order_ids 为已撤排工单"""
+    updated: List[int] = Field(default_factory=list)
+    cleared_work_order_ids: List[int] = Field(default_factory=list)
+    skipped_frozen: List[int] = Field(default_factory=list)
+    skipped_freeze_window: List[int] = Field(default_factory=list)
+    failed: List[BatchUpdateFailureItem] = Field(default_factory=list)
 
 
 class OperationBatchUpdateAssignmentsResult(BaseSchema):
@@ -375,6 +391,46 @@ class SchedulingAutoRescheduleRequest(BaseSchema):
         description="局部重排资源ID（工位或产线），可选",
     )
 
+    strategy: str = Field(
+        "due_date",
+        description="排产策略：due_date/changeover_min/load_balance",
+    )
+
+
+class SchedulingStrategyItem(BaseSchema):
+    code: str
+    name: str
+    description: str = ""
+
+
+class SchedulingStrategyListResponse(BaseSchema):
+    items: List[SchedulingStrategyItem] = Field(default_factory=list)
+
+
+class SchedulingExecutionLogItem(BaseSchema):
+    step: str = Field(..., description="步骤码")
+    message: str = Field(..., description="可读说明")
+    elapsed_ms: Optional[float] = Field(None, description="本步耗时毫秒")
+
+
+class SchedulingDueEstimateItem(BaseSchema):
+    work_order_id: int
+    work_order_code: Optional[str] = None
+    expected_date: Optional[datetime] = Field(None, description="期望交期（需求日）")
+    committed_date: Optional[datetime] = Field(None, description="承诺交期（计划完工）")
+    estimated_date: Optional[datetime] = Field(
+        None, description="预估交期（仅已排计划完工；无计划则空）"
+    )
+    variance_days: Optional[int] = Field(
+        None, description="预估相对期望的天数差；正=延后"
+    )
+    status: Optional[str] = None
+
+
+class SchedulingDueEstimateResponse(BaseSchema):
+    items: List[SchedulingDueEstimateItem] = Field(default_factory=list)
+    generated_at: Optional[datetime] = None
+
 
 
 
@@ -399,10 +455,18 @@ class SchedulingAdjustmentProposal(BaseSchema):
 
     summary: Optional[str] = None
 
+    strategy: Optional[str] = Field(None, description="本次使用的策略码")
+
+    strategy_name: Optional[str] = Field(None, description="策略显示名")
+
     warnings: List[str] = Field(default_factory=list)
 
     reasons: List[SchedulingReasonItem] = Field(
         default_factory=list, description="结构化排程原因"
+    )
+
+    execution_log: List[SchedulingExecutionLogItem] = Field(
+        default_factory=list, description="排产执行日志"
     )
 
     unfreezed: List[int] = Field(default_factory=list, description="自动重排时已解冻的逾期工单 ID")
@@ -412,6 +476,10 @@ class SchedulingAdjustmentProposal(BaseSchema):
     operation_adjustments: List[OperationDateAdjustment] = Field(default_factory=list)
 
     operation_station_adjustments: List[OperationStationAdjustment] = Field(default_factory=list)
+
+    operation_production_line_adjustments: List[OperationProductionLineAdjustment] = Field(
+        default_factory=list
+    )
 
 
 
@@ -431,22 +499,3 @@ class SchedulingDeepLinkMixin(BaseSchema):
 
     scheduling_notice: Optional[str] = Field(None, description="提示文案")
 
-
-
-class SchedulingDueEstimateItem(BaseSchema):
-    work_order_id: int
-    work_order_code: Optional[str] = None
-    expected_date: Optional[datetime] = Field(None, description="期望交期（需求行交货日期）")
-    committed_date: Optional[datetime] = Field(None, description="承诺交期（计划完工）")
-    estimated_date: Optional[datetime] = Field(
-        None, description="预估交期（仅已排计划完工；无计划则空）"
-    )
-    variance_days: Optional[int] = Field(
-        None, description="预估相对期望的天数差；正=延后"
-    )
-    status: Optional[str] = None
-
-
-class SchedulingDueEstimateResponse(BaseSchema):
-    items: List[SchedulingDueEstimateItem] = Field(default_factory=list)
-    generated_at: Optional[datetime] = None

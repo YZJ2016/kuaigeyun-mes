@@ -293,27 +293,43 @@ class VisualSchedulingService(BaseService):
 
         conflicts = self._detect_conflicts(ops, constraints)
 
-        unscheduled = [
-
-            {
-
-                "work_order_id": wo.id,
-
-                "work_order_code": wo.code or str(wo.id),
-
-                "reason": "未设置计划起止时间",
-
+        resource_mode = str(constraints.get("resource_mode") or "workstation").strip().lower()
+        use_line = resource_mode == "production_line"
+        if use_line:
+            # 产线模式：须有计划起止且已指派产线，才算已排
+            scheduled_wo_ids = {
+                int(op.work_order_id)
+                for op in ops
+                if op.work_order_id
+                and op.planned_start_date
+                and op.planned_end_date
+                and int(op.assigned_production_line_id or 0) > 0
             }
-
-            for wo in work_orders
-
-            if not wo.planned_start_date or not wo.planned_end_date
-
-        ]
+            unscheduled = [
+                {
+                    "work_order_id": wo.id,
+                    "work_order_code": wo.code or str(wo.id),
+                    "reason": "工序未排程或未指派产线",
+                }
+                for wo in work_orders
+                if int(wo.id) not in scheduled_wo_ids
+            ]
+        else:
+            unscheduled = [
+                {
+                    "work_order_id": wo.id,
+                    "work_order_code": wo.code or str(wo.id),
+                    "reason": "未设置计划起止时间",
+                }
+                for wo in work_orders
+                if not wo.planned_start_date or not wo.planned_end_date
+            ]
 
         material_issues = self._material_issues(work_orders, constraints)
 
-        missing_settings = await self._collect_missing_settings(tenant_id, work_orders)
+        missing_settings = await self._collect_missing_settings(
+            tenant_id, work_orders, resource_mode=resource_mode
+        )
 
         load_by_work_center = self._aggregate_load_by_work_center(
 
@@ -349,6 +365,8 @@ class VisualSchedulingService(BaseService):
         self,
         tenant_id: int,
         work_orders: List[WorkOrder],
+        *,
+        resource_mode: str = "workstation",
     ) -> List[Dict[str, Any]]:
         from apps.master_data.models.factory import Workstation
         from apps.kuaizhizao.utils.work_order_operation_scheduling import has_operation_hours
@@ -362,7 +380,112 @@ class VisualSchedulingService(BaseService):
             deleted_at__isnull=True,
         ).order_by("work_order_id", "sequence").all()
 
-        # 预取工作中心下可用工位
+        use_line = str(resource_mode or "workstation").strip().lower() == "production_line"
+        gaps: List[Dict[str, Any]] = []
+
+        if use_line:
+            # 行业包产线模式：只查产线指派与节拍/日产能，不要求工位/工序工时
+            from apps.kuaizhizao.services.line_capacity_lookup import load_line_capacity_map
+            from apps.kuaizhizao.services.line_product_lookup import (
+                eligible_line_ids_for_product,
+                line_accepts_product,
+                load_line_allowed_product_ids,
+            )
+
+            line_capacity_map = await load_line_capacity_map(tenant_id)
+            line_allow_map = await load_line_allowed_product_ids(tenant_id)
+            configured_line_ids = {
+                int(lid)
+                for lid, cap in line_capacity_map.items()
+                if float(cap.takt_seconds or 0) > 0 and float(cap.daily_capacity_qty or 0) > 0
+            }
+            # 同工单已有工序指派产线时，整单推荐该线（仅写入仍兼容本工单自制件的线）
+            wo_assigned_line: Dict[int, int] = {}
+            for op in all_ops:
+                lid = int(op.assigned_production_line_id or 0)
+                wid = int(op.work_order_id or 0)
+                if lid <= 0 or wid <= 0:
+                    continue
+                wo_row = wo_map.get(wid)
+                pid = int(wo_row.product_id or 0) if wo_row else 0
+                if line_accepts_product(lid, pid, line_allow_map):
+                    wo_assigned_line[wid] = lid
+
+            for op in all_ops:
+                if op.status in {"completed", "cancelled"}:
+                    continue
+                wo = wo_map.get(int(op.work_order_id))
+                if not wo:
+                    continue
+                wo_code = wo.code or str(wo.id)
+                op_name = op.operation_name or op.operation_code or str(op.id)
+                product_id = int(wo.product_id or 0)
+                eligible = eligible_line_ids_for_product(
+                    product_id,
+                    configured_line_ids=configured_line_ids,
+                    allow_map=line_allow_map,
+                )
+                default_line_suggested = next(iter(sorted(eligible)), None) if len(eligible) == 1 else None
+                line_id = int(op.assigned_production_line_id or 0)
+                # product_id<=0 或未绑定均视为不可承接（line_accepts_product 已统一判据）
+                if line_id <= 0 or not line_accepts_product(line_id, product_id, line_allow_map):
+                    sibling = wo_assigned_line.get(int(wo.id))
+                    suggested_line = None
+                    if sibling and sibling in eligible:
+                        suggested_line = sibling
+                    elif default_line_suggested:
+                        suggested_line = default_line_suggested
+                    gaps.append(
+                        {
+                            "work_order_id": int(wo.id),
+                            "work_order_code": wo_code,
+                            "operation_id": int(op.id),
+                            "operation_name": op_name,
+                            "field": "assigned_production_line_id",
+                            "label": "产线",
+                            "current": line_id if line_id > 0 else None,
+                            "suggested": int(suggested_line) if suggested_line else None,
+                            "work_center_id": int(op.work_center_id) if op.work_center_id else None,
+                            "product_id": product_id if product_id > 0 else None,
+                        }
+                    )
+                    if line_id <= 0:
+                        continue
+                    # 已指派但不兼容：仍继续检查节拍，便于用户一并看到配置缺口
+                cap = line_capacity_map.get(line_id) if line_id > 0 else None
+                if line_id > 0 and (cap is None or float(cap.takt_seconds or 0) <= 0):
+                    gaps.append(
+                        {
+                            "work_order_id": int(wo.id),
+                            "work_order_code": wo_code,
+                            "operation_id": int(op.id),
+                            "operation_name": op_name,
+                            "field": "takt_seconds",
+                            "label": "产线节拍",
+                            "current": float(cap.takt_seconds) if cap else None,
+                            "suggested": None,
+                            "work_center_id": int(op.work_center_id) if op.work_center_id else None,
+                            "product_id": product_id if product_id > 0 else None,
+                        }
+                    )
+                if line_id > 0 and (cap is None or float(cap.daily_capacity_qty or 0) <= 0):
+                    gaps.append(
+                        {
+                            "work_order_id": int(wo.id),
+                            "work_order_code": wo_code,
+                            "operation_id": int(op.id),
+                            "operation_name": op_name,
+                            "field": "daily_capacity_qty",
+                            "label": "产线日产能",
+                            "current": float(cap.daily_capacity_qty) if cap else None,
+                            "suggested": None,
+                            "work_center_id": int(op.work_center_id) if op.work_center_id else None,
+                            "product_id": product_id if product_id > 0 else None,
+                        }
+                    )
+            return gaps
+
+        # 工位业务线：工时 + 工位
         wc_ids = {int(op.work_center_id) for op in all_ops if op.work_center_id}
         stations_by_wc: Dict[int, List[Any]] = defaultdict(list)
         if wc_ids:
@@ -375,7 +498,6 @@ class VisualSchedulingService(BaseService):
             for st in stations:
                 stations_by_wc[int(st.work_center_id)].append(st)
 
-        gaps: List[Dict[str, Any]] = []
         for op in all_ops:
             if op.status in {"completed", "cancelled"}:
                 continue
@@ -518,11 +640,15 @@ class VisualSchedulingService(BaseService):
 
         operation_station_updates: Optional[List[Dict[str, Any]]] = None,
 
+        operation_production_line_updates: Optional[List[Dict[str, Any]]] = None,
+
     ) -> Dict[str, Any]:
 
         constraints = await self._load_constraints(tenant_id)
 
         freeze_days = int(constraints.get("freeze_horizon_days", 0))
+        resource_mode = str(constraints.get("resource_mode") or "workstation").strip().lower()
+        use_line = resource_mode == "production_line"
 
         holiday_dates: list = []
         for item in (operation_updates or []):
@@ -545,6 +671,8 @@ class VisualSchedulingService(BaseService):
 
         station_updates = operation_station_updates or []
 
+        line_updates = operation_production_line_updates or []
+
         pending_by_id = {
 
             int(item.get("operation_id") or 0): item
@@ -553,6 +681,13 @@ class VisualSchedulingService(BaseService):
 
             if int(item.get("operation_id") or 0) > 0
 
+        }
+
+        pending_line_by_id = {
+            int(item.get("operation_id") or 0): int(item.get("assigned_production_line_id") or 0)
+            for item in line_updates
+            if int(item.get("operation_id") or 0) > 0
+            and int(item.get("assigned_production_line_id") or 0) > 0
         }
 
 
@@ -634,9 +769,14 @@ class VisualSchedulingService(BaseService):
 
 
 
-        if op_updates:
+        if op_updates or pending_line_by_id:
 
-            overlap_conflicts = await self._check_operation_overlaps_for_updates(tenant_id, op_updates, constraints)
+            overlap_conflicts = await self._check_operation_overlaps_for_updates(
+                tenant_id,
+                op_updates,
+                constraints,
+                pending_line_by_id=pending_line_by_id,
+            )
 
             conflicts.extend(overlap_conflicts)
 
@@ -696,12 +836,48 @@ class VisualSchedulingService(BaseService):
 
                 )
 
+        for item in line_updates:
+            op_id = int(item.get("operation_id") or 0)
+            if not op_id:
+                continue
+            op = await WorkOrderOperation.get_or_none(
+                tenant_id=tenant_id, id=op_id, deleted_at__isnull=True
+            )
+            if not op:
+                continue
+            wo = await WorkOrder.get_or_none(
+                tenant_id=tenant_id, id=op.work_order_id, deleted_at__isnull=True
+            )
+            if wo and wo.is_frozen:
+                conflicts.append(
+                    _conflict_item(
+                        conflict_type="frozen",
+                        work_order_id=wo.id,
+                        work_order_code=wo.code or str(wo.id),
+                        operation_id=op_id,
+                        message="工单已冻结，禁止改派产线",
+                    )
+                )
 
+        if use_line and (op_updates or line_updates):
+            conflicts.extend(
+                await self._check_production_line_takt_and_daily_capacity(
+                    tenant_id,
+                    op_updates=op_updates,
+                    pending_line_by_id=pending_line_by_id,
+                )
+            )
 
-        if op_updates:
+        if op_updates or pending_line_by_id:
             conflicts.extend(
                 await self._check_changeover_for_updates(
-                    tenant_id, op_updates, constraints, holidays, work_hours, overtime
+                    tenant_id,
+                    op_updates,
+                    constraints,
+                    holidays,
+                    work_hours,
+                    overtime,
+                    pending_line_by_id=pending_line_by_id,
                 )
             )
 
@@ -717,6 +893,211 @@ class VisualSchedulingService(BaseService):
 
 
 
+    async def _check_production_line_takt_and_daily_capacity(
+        self,
+        tenant_id: int,
+        *,
+        op_updates: List[Dict[str, Any]],
+        pending_line_by_id: Dict[int, int],
+    ) -> List[Dict[str, Any]]:
+        """产线模式：校验自制件绑定、节拍时长与按日产能件数闸门。"""
+        from apps.kuaizhizao.services.line_capacity_lookup import (
+            duration_hours_from_takt,
+            load_line_capacity_map,
+        )
+        from apps.kuaizhizao.services.line_product_lookup import (
+            line_accepts_product,
+            load_line_allowed_product_ids,
+        )
+
+        capacity_map = await load_line_capacity_map(tenant_id)
+        line_allow_map = await load_line_allowed_product_ids(tenant_id)
+        if not op_updates and not pending_line_by_id:
+            return []
+
+        update_by_id = {
+            int(u["operation_id"]): u
+            for u in op_updates
+            if int(u.get("operation_id") or 0) > 0
+        }
+        op_ids = list({*update_by_id.keys(), *pending_line_by_id.keys()})
+        if not op_ids:
+            return []
+
+        ops = await WorkOrderOperation.filter(
+            tenant_id=tenant_id, id__in=op_ids, deleted_at__isnull=True
+        ).all()
+        wo_ids = list({int(o.work_order_id) for o in ops if o.work_order_id})
+        wo_by_id: Dict[int, WorkOrder] = {}
+        if wo_ids:
+            for wo in await WorkOrder.filter(
+                tenant_id=tenant_id, id__in=wo_ids, deleted_at__isnull=True
+            ).all():
+                wo_by_id[int(wo.id)] = wo
+
+        # 日负荷：按「计划开始日 + 产线」汇总工单数量（同一工单同日同线只计一次）
+        # 排除已完工/已取消工序与工单；只扫本次涉及产线，避免全租户历史工序
+        day_line_qty: Dict[Tuple[date, int], Dict[int, float]] = defaultdict(dict)
+        line_ids_for_load = {
+            int(pending_line_by_id.get(int(op.id)) or op.assigned_production_line_id or 0)
+            for op in ops
+        }
+        line_ids_for_load = {lid for lid in line_ids_for_load if lid > 0}
+        _op_status_exclude = ["completed", "cancelled", "COMPLETED", "CANCELLED"]
+        if line_ids_for_load:
+            existing = await (
+                WorkOrderOperation.filter(
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                    assigned_production_line_id__in=list(line_ids_for_load),
+                    planned_start_date__isnull=False,
+                )
+                .exclude(status__in=_op_status_exclude)
+                .all()
+            )
+        else:
+            existing = []
+        existing_wo_ids = list({int(o.work_order_id) for o in existing if o.work_order_id})
+        existing_wo_qty: Dict[int, float] = {}
+        closed_wo_ids: set[int] = set()
+        if existing_wo_ids:
+            for row in await WorkOrder.filter(
+                tenant_id=tenant_id, id__in=existing_wo_ids
+            ).values("id", "quantity", "status"):
+                wid = int(row["id"])
+                st = str(row.get("status") or "").strip().upper()
+                if st in {"CANCELLED", "COMPLETED", "CLOSED"}:
+                    closed_wo_ids.add(wid)
+                    continue
+                existing_wo_qty[wid] = float(row.get("quantity") or 0)
+
+        for op in existing:
+            line_id = int(op.assigned_production_line_id or 0)
+            if line_id <= 0 or not op.planned_start_date:
+                continue
+            if int(op.id) in update_by_id or int(op.id) in pending_line_by_id:
+                continue
+            wo_id = int(op.work_order_id or 0)
+            if wo_id in closed_wo_ids:
+                continue
+            day = to_site_date(op.planned_start_date)
+            qty = existing_wo_qty.get(wo_id, 0.0)
+            day_line_qty[(day, line_id)][wo_id] = qty
+
+        conflicts: List[Dict[str, Any]] = []
+        for op in ops:
+            op_id = int(op.id)
+            patch = update_by_id.get(op_id) or {}
+            line_id = pending_line_by_id.get(op_id) or int(
+                op.assigned_production_line_id or 0
+            )
+            wo = wo_by_id.get(int(op.work_order_id or 0))
+            wo_code = wo.code if wo else str(op.work_order_id)
+            qty = float(wo.quantity or 0) if wo else 0.0
+
+            if line_id <= 0:
+                conflicts.append(
+                    _conflict_item(
+                        conflict_type="missing_production_line",
+                        work_order_id=int(op.work_order_id) if op.work_order_id else None,
+                        work_order_code=wo_code,
+                        operation_id=op_id,
+                        message="产线排程模式须指派产线，请先选择产线",
+                    )
+                )
+                continue
+
+            product_id = int(wo.product_id or 0) if wo else 0
+            if not line_accepts_product(line_id, product_id, line_allow_map):
+                conflicts.append(
+                    _conflict_item(
+                        conflict_type="line_product_not_allowed",
+                        work_order_id=int(op.work_order_id) if op.work_order_id else None,
+                        work_order_code=wo_code,
+                        operation_id=op_id,
+                        message=(
+                            "工单未指定自制件或产线未绑定该自制件，请在行业包「产线节拍」"
+                            "绑定可生产自制件后再排入"
+                            if product_id <= 0
+                            else (
+                                f"产线 {line_id} 未绑定本工单自制件，请在行业包「产线节拍」"
+                                "绑定可生产自制件后再排入"
+                            )
+                        ),
+                    )
+                )
+                continue
+
+            cap = capacity_map.get(line_id)
+            if cap is None or float(cap.takt_seconds or 0) <= 0:
+                conflicts.append(
+                    _conflict_item(
+                        conflict_type="missing_takt",
+                        work_order_id=int(op.work_order_id) if op.work_order_id else None,
+                        work_order_code=wo_code,
+                        operation_id=op_id,
+                        message=f"产线 {line_id} 未维护有效节拍，请先在行业包「产线节拍」中配置",
+                    )
+                )
+                continue
+            if float(cap.daily_capacity_qty or 0) <= 0:
+                conflicts.append(
+                    _conflict_item(
+                        conflict_type="missing_daily_capacity",
+                        work_order_id=int(op.work_order_id) if op.work_order_id else None,
+                        work_order_code=wo_code,
+                        operation_id=op_id,
+                        message=f"产线 {line_id} 未维护日产能件数，请先在行业包「产线节拍」中配置",
+                    )
+                )
+                continue
+
+            start_dt = _parse_dt(patch.get("planned_start_date")) or (
+                op.planned_start_date
+            )
+            end_dt = _parse_dt(patch.get("planned_end_date")) or op.planned_end_date
+            if start_dt and end_dt:
+                expected_hours = duration_hours_from_takt(qty, float(cap.takt_seconds))
+                if expected_hours is not None:
+                    actual_hours = max(
+                        (end_dt - start_dt).total_seconds() / 3600.0, 0.0
+                    )
+                    # 允许约 1 分钟偏差；明显短于节拍推算则拒绝
+                    if actual_hours + (1.0 / 60.0) < expected_hours * 0.95:
+                        conflicts.append(
+                            _conflict_item(
+                                conflict_type="takt_duration_mismatch",
+                                work_order_id=int(op.work_order_id) if op.work_order_id else None,
+                                work_order_code=wo_code,
+                                operation_id=op_id,
+                                message=(
+                                    f"产线排程时长须按数量×节拍（约 {expected_hours:.2f}h），"
+                                    f"当前约 {actual_hours:.2f}h"
+                                ),
+                            )
+                        )
+
+            if start_dt:
+                day = to_site_date(start_dt)
+                bucket = day_line_qty[(day, line_id)]
+                bucket[int(op.work_order_id or 0)] = qty
+                day_total = sum(bucket.values())
+                if day_total > float(cap.daily_capacity_qty) + 1e-9:
+                    conflicts.append(
+                        _conflict_item(
+                            conflict_type="daily_capacity_exceeded",
+                            work_order_id=int(op.work_order_id) if op.work_order_id else None,
+                            work_order_code=wo_code,
+                            operation_id=op_id,
+                            message=(
+                                f"产线 {line_id} 在 {day.isoformat()} 已排/拟排 "
+                                f"{day_total:g} 件，超过日产能 {float(cap.daily_capacity_qty):g}"
+                            ),
+                        )
+                    )
+
+        return conflicts
+
     async def _check_changeover_for_updates(
         self,
         tenant_id: int,
@@ -725,10 +1106,12 @@ class VisualSchedulingService(BaseService):
         holidays,
         work_hours,
         overtime,
+        pending_line_by_id: Optional[Dict[int, int]] = None,
     ) -> List[Dict[str, Any]]:
         from apps.kuaizhizao.utils.working_time import add_working_hours
         from apps.master_data.models.factory import Workstation
 
+        pending_line_by_id = pending_line_by_id or {}
         changeover_hours = float(constraints.get("setup_changeover_hours") or 0.0)
         resource_mode = str(constraints.get("resource_mode") or "workstation").strip().lower()
         use_line = resource_mode == "production_line"
@@ -740,7 +1123,7 @@ class VisualSchedulingService(BaseService):
             changeover_ctx = await load_changeover_context(
                 tenant_id, fallback_hours=changeover_hours
             )
-        except Exception:
+        except ImportError:
             changeover_ctx = None
 
         if changeover_hours <= 0 and not (changeover_ctx and changeover_ctx.available):
@@ -751,7 +1134,9 @@ class VisualSchedulingService(BaseService):
             for u in op_updates
             if int(u.get("operation_id") or 0) > 0
         }
-        op_ids = list(update_by_id.keys())
+        op_ids = list({*update_by_id.keys(), *pending_line_by_id.keys()})
+        if not op_ids:
+            return []
         ops = await WorkOrderOperation.filter(
             tenant_id=tenant_id, id__in=op_ids, deleted_at__isnull=True
         ).all()
@@ -770,35 +1155,45 @@ class VisualSchedulingService(BaseService):
             int(op.assigned_station_id or 0) for op in ops if int(op.assigned_station_id or 0) > 0
         }
         station_to_line: Dict[int, int] = {}
-        if station_ids_all:
+        if station_ids_all and not use_line:
             for row in await Workstation.filter(
                 tenant_id=tenant_id, id__in=list(station_ids_all), deleted_at__isnull=True
             ).values("id", "production_line_id"):
                 station_to_line[int(row["id"])] = int(row.get("production_line_id") or 0)
 
         if changeover_ctx is not None and product_by_wo:
-            try:
-                changeover_ctx = await load_changeover_context(
-                    tenant_id,
-                    fallback_hours=changeover_hours,
-                    product_ids={pid for pid, _ in product_by_wo.values() if pid > 0},
-                )
-            except Exception:
-                pass
+            changeover_ctx = await load_changeover_context(
+                tenant_id,
+                fallback_hours=changeover_hours,
+                product_ids={pid for pid, _ in product_by_wo.values() if pid > 0},
+            )
 
         # Build proposed intervals by resource key (station or line)
         by_resource: Dict[int, List[Dict[str, Any]]] = {}
         for op in ops:
             patch = update_by_id.get(op.id) or {}
-            start_dt = _parse_dt(patch.get("planned_start_date"))
-            end_dt = _parse_dt(patch.get("planned_end_date"))
+            start_dt = _parse_dt(patch.get("planned_start_date")) or _parse_dt(
+                op.planned_start_date
+            )
+            end_dt = _parse_dt(patch.get("planned_end_date")) or _parse_dt(
+                op.planned_end_date
+            )
             if not start_dt or not end_dt:
                 continue
-            sid = int(op.assigned_station_id or 0)
-            if sid <= 0:
-                continue
-            line_id = station_to_line.get(sid, 0)
-            rkey = line_id if use_line and line_id > 0 else sid
+            if use_line:
+                line_id = pending_line_by_id.get(int(op.id)) or int(
+                    op.assigned_production_line_id or 0
+                )
+                if line_id <= 0:
+                    continue
+                sid = 0
+                rkey = line_id
+            else:
+                sid = int(op.assigned_station_id or 0)
+                if sid <= 0:
+                    continue
+                line_id = station_to_line.get(sid, 0)
+                rkey = sid
             pid, code = product_by_wo.get(int(op.work_order_id or 0), (0, None))
             by_resource.setdefault(rkey, []).append(
                 {
@@ -813,24 +1208,38 @@ class VisualSchedulingService(BaseService):
                 }
             )
         # Also load neighboring fixed ops on same stations/lines
-        station_ids = list({item["station_id"] for items in by_resource.values() for item in items})
         if use_line:
-            line_ids = list({item["line_id"] for items in by_resource.values() for item in items if item["line_id"] > 0})
+            line_ids = list(
+                {
+                    item["line_id"]
+                    for items in by_resource.values()
+                    for item in items
+                    if item["line_id"] > 0
+                }
+            )
+            others = []
             if line_ids:
-                extra = await Workstation.filter(
+                others = await WorkOrderOperation.filter(
                     tenant_id=tenant_id,
-                    production_line_id__in=line_ids,
+                    assigned_production_line_id__in=line_ids,
                     deleted_at__isnull=True,
-                ).values_list("id", flat=True)
-                station_ids = list({*station_ids, *[int(i) for i in extra]})
-        if station_ids:
-            others = await WorkOrderOperation.filter(
-                tenant_id=tenant_id,
-                assigned_station_id__in=station_ids,
-                deleted_at__isnull=True,
-                planned_start_date__isnull=False,
-                planned_end_date__isnull=False,
-            ).exclude(id__in=op_ids).all()
+                    planned_start_date__isnull=False,
+                    planned_end_date__isnull=False,
+                ).exclude(id__in=op_ids).all()
+        else:
+            station_ids = list(
+                {item["station_id"] for items in by_resource.values() for item in items}
+            )
+            others = []
+            if station_ids:
+                others = await WorkOrderOperation.filter(
+                    tenant_id=tenant_id,
+                    assigned_station_id__in=station_ids,
+                    deleted_at__isnull=True,
+                    planned_start_date__isnull=False,
+                    planned_end_date__isnull=False,
+                ).exclude(id__in=op_ids).all()
+        if others:
             other_wo_ids = list({int(o.work_order_id) for o in others if o.work_order_id})
             if other_wo_ids:
                 for row in await WorkOrder.filter(
@@ -841,14 +1250,21 @@ class VisualSchedulingService(BaseService):
                         (int(row.get("product_id") or 0), row.get("code")),
                     )
             for op in others:
-                sid = int(op.assigned_station_id or 0)
-                if sid not in station_to_line:
-                    st = await Workstation.get_or_none(
-                        tenant_id=tenant_id, id=sid, deleted_at__isnull=True
-                    )
-                    station_to_line[sid] = int(st.production_line_id or 0) if st else 0
-                line_id = station_to_line.get(sid, 0)
-                rkey = line_id if use_line and line_id > 0 else sid
+                if use_line:
+                    line_id = int(op.assigned_production_line_id or 0)
+                    if line_id <= 0:
+                        continue
+                    sid = 0
+                    rkey = line_id
+                else:
+                    sid = int(op.assigned_station_id or 0)
+                    if sid not in station_to_line:
+                        st = await Workstation.get_or_none(
+                            tenant_id=tenant_id, id=sid, deleted_at__isnull=True
+                        )
+                        station_to_line[sid] = int(st.production_line_id or 0) if st else 0
+                    line_id = station_to_line.get(sid, 0)
+                    rkey = sid
                 pid, code = product_by_wo.get(int(op.work_order_id or 0), (0, None))
                 other_start = _parse_dt(op.planned_start_date)
                 other_end = _parse_dt(op.planned_end_date)
@@ -1399,15 +1815,21 @@ class VisualSchedulingService(BaseService):
 
         constraints: Dict[str, Any],
 
+        pending_line_by_id: Optional[Dict[int, int]] = None,
+
     ) -> List[Dict[str, Any]]:
+
+        pending_line_by_id = pending_line_by_id or {}
 
         check_station = bool(constraints.get("consider_human", True))
 
         check_equipment = bool(constraints.get("consider_equipment", True))
 
         check_mold_tool = bool(constraints.get("consider_mold_tool", True))
+        resource_mode = str(constraints.get("resource_mode") or "workstation").strip().lower()
+        use_line = resource_mode == "production_line"
 
-        if not check_station and not check_equipment and not check_mold_tool:
+        if not check_station and not check_equipment and not check_mold_tool and not use_line:
 
             return []
 
@@ -1421,7 +1843,11 @@ class VisualSchedulingService(BaseService):
 
         }
 
-        op_ids = list(update_by_id.keys())
+        op_ids = list({*update_by_id.keys(), *pending_line_by_id.keys()})
+
+        if not op_ids:
+
+            return []
 
         ops = await WorkOrderOperation.filter(tenant_id=tenant_id, id__in=op_ids, deleted_at__isnull=True).all()
 
@@ -1429,23 +1855,37 @@ class VisualSchedulingService(BaseService):
 
         for op in ops:
 
-            patch = update_by_id.get(op.id)
+            patch = update_by_id.get(op.id) or {}
 
-            if not patch:
+            start_dt = _parse_dt(patch.get("planned_start_date")) or _parse_dt(op.planned_start_date)
 
-                continue
-
-            start_dt = _parse_dt(patch.get("planned_start_date"))
-
-            end_dt = _parse_dt(patch.get("planned_end_date"))
+            end_dt = _parse_dt(patch.get("planned_end_date")) or _parse_dt(op.planned_end_date)
 
             if not start_dt or not end_dt:
 
                 continue
 
+            if use_line:
+                line_id = pending_line_by_id.get(int(op.id)) or int(op.assigned_production_line_id or 0)
+                if line_id > 0:
+                    capacity = 1
+                    line_label = op.assigned_production_line_name or f"产线{line_id}"
+                    conflicts.extend(
+                        await self._overlap_conflicts_for_resource(
+                            tenant_id=tenant_id,
+                            op=op,
+                            resource_field="assigned_production_line_id",
+                            resource_id=line_id,
+                            resource_label=line_label,
+                            conflict_type="production_line_overlap",
+                            start_dt=start_dt,
+                            end_dt=end_dt,
+                            update_by_id=update_by_id,
+                            max_parallel=capacity,
+                        )
+                    )
 
-
-            if check_station:
+            if check_station and not use_line:
 
                 station_id = int(op.assigned_station_id or 0)
 

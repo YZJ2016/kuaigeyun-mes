@@ -27,6 +27,10 @@ export interface EngineSchedulingProposal {
     operation_id: number;
     assigned_station_id: number;
   }>;
+  operation_production_line_adjustments?: Array<{
+    operation_id: number;
+    assigned_production_line_id: number;
+  }>;
 }
 
 export function convertEngineProposalToAiProposal(
@@ -57,6 +61,16 @@ export function convertEngineProposalToAiProposal(
       plannedStartDate: prev?.plannedStartDate ?? null,
       plannedEndDate: prev?.plannedEndDate ?? null,
       assignedStationId: item.assigned_station_id,
+    });
+  }
+  // 产线模式：泳道资源 ID 仍走 assignedStationId 字段承载（甘特资源行即产线 ID）
+  for (const item of engineProposal.operation_production_line_adjustments ?? []) {
+    const prev = opMap.get(item.operation_id);
+    opMap.set(item.operation_id, {
+      operationId: item.operation_id,
+      plannedStartDate: prev?.plannedStartDate ?? null,
+      plannedEndDate: prev?.plannedEndDate ?? null,
+      assignedStationId: item.assigned_production_line_id,
     });
   }
 

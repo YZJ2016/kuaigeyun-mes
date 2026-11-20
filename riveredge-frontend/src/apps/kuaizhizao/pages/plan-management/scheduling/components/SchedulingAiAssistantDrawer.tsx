@@ -101,6 +101,8 @@ export interface SchedulingAiAssistantDrawerProps {
   onPoolReorder?: (order: number[]) => void;
   onSelectSuggested?: (order: number[]) => void;
   onSelectOverdue?: () => void;
+  /** 行业包产线模式：提案资源 ID 同步写入 assigned_production_line_id */
+  resourceMode?: 'workstation' | 'production_line';
 }
 
 export function SchedulingAiAssistantTrigger({
@@ -135,6 +137,7 @@ export function SchedulingAiAssistantDrawer({
   onPoolReorder,
   onSelectSuggested,
   onSelectOverdue,
+  resourceMode = 'workstation',
 }: SchedulingAiAssistantDrawerProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
@@ -396,6 +399,7 @@ export function SchedulingAiAssistantDrawer({
           syncDraftPendingCount,
           setDraftMode,
           onPoolReorder,
+          resourceMode,
           message,
           t,
         });
@@ -411,6 +415,7 @@ export function SchedulingAiAssistantDrawer({
       mutateGanttWorkOrders,
       onPoolReorder,
       pushUndoSnapshot,
+      resourceMode,
       setDraftMode,
       syncDraftPendingCount,
       t,
@@ -634,12 +639,13 @@ export function SchedulingAiAssistantDrawer({
                   className="scheduling-ai-chat-prompts"
                   items={promptItems}
                   onItemClick={(item) => {
-                    const key = String(item.data?.key ?? item.key);
+                    const itemAny = item as unknown as { key?: string; label?: string };
+                    const key = String(item.data?.key ?? itemAny.key ?? '');
                     if (key === 'priority') {
                       void submitText(t(`${I18N}.promptPriority`), 'priority');
                       return;
                     }
-                    const label = typeof item.data?.label === 'string' ? item.data.label : String(item.label ?? '');
+                    const label = typeof item.data?.label === 'string' ? item.data.label : String(itemAny.label ?? '');
                     if (label) void submitText(label, 'explain');
                   }}
                 />
