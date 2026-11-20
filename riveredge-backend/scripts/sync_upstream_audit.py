@@ -43,7 +43,7 @@ HEADER = (
 
 def git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
     return subprocess.run(
-        ["git", *args],
+        ["git", "-c", "core.quotepath=false", *args],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,

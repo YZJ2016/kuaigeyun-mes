@@ -370,6 +370,19 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
 
     "parameters.master_data.drawing_max_upload_size_mb": {"type": "number", "min": 1, "max": 100},
     "parameters.master_data.allow_material_quick_create": {"type": "boolean"},
+    "parameters.master_data.material_code_search_mode": {
+        "type": "select",
+        "options": [
+            {
+                "value": "fuzzy",
+                "labelKey": "pages.system.configCenter.param.master_data_material_code_search_mode_opt_fuzzy",
+            },
+            {
+                "value": "prefix",
+                "labelKey": "pages.system.configCenter.param.master_data_material_code_search_mode_opt_prefix",
+            },
+        ],
+    },
     "parameters.warehouse.fifo_mode": {
         "type": "select",
         "options": [
@@ -617,6 +630,7 @@ PARAMETER_KEYS = {
     "parameters.automation.manual_create_auto_submit",
     "parameters.master_data.drawing_max_upload_size_mb",
     "parameters.master_data.allow_material_quick_create",
+    "parameters.master_data.material_code_search_mode",
     "parameters.kuaiplm.lab_request_delegate_dept_uuids",
     "parameters.kuaiplm.lab_request_test_dept_uuids",
     "parameters.supply_chain.partner_price_resolution_order",
@@ -716,6 +730,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.automation.manual_create_auto_submit",
     "parameters.master_data.drawing_max_upload_size_mb",
     "parameters.master_data.allow_material_quick_create",
+    "parameters.master_data.material_code_search_mode",
     "parameters.kuaiplm.lab_request_delegate_dept_uuids",
     "parameters.kuaiplm.lab_request_test_dept_uuids",
     "parameters.supply_chain.partner_price_resolution_order",
@@ -793,6 +808,15 @@ def coerce_drawing_max_upload_size_mb(raw: Any, *, default: int = 100) -> int:
     return max(1, min(global_max_mb, mb))
 
 
+def coerce_material_code_search_mode(raw: Any, *, default: str = "fuzzy") -> str:
+    """物料列表/下拉 keyword 搜索：fuzzy 包含匹配；prefix 仅编码从头匹配。"""
+    from apps.master_data.services.material_code_search_mode import (
+        coerce_material_code_search_mode as _coerce,
+    )
+
+    return _coerce(raw, default=default)  # type: ignore[arg-type]
+
+
 def coerce_allow_material_quick_create(raw: Any, *, default: bool = True) -> bool:
     """单据物料下拉是否允许「快速新增物料」；缺省开启以保持既有行为。"""
     if raw is None:
@@ -816,6 +840,9 @@ def coerce_master_data_parameters(master_data: Dict[str, Any]) -> Dict[str, Any]
     )
     data["allow_material_quick_create"] = coerce_allow_material_quick_create(
         data.get("allow_material_quick_create")
+    )
+    data["material_code_search_mode"] = coerce_material_code_search_mode(
+        data.get("material_code_search_mode")
     )
     return data
 
@@ -1303,6 +1330,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
     "master_data": {
         "drawing_max_upload_size_mb": 100,
         "allow_material_quick_create": True,
+        "material_code_search_mode": "fuzzy",
     },
     "supply_chain": {
         "partner_price_resolution_order": ["recent", "book_standard", "book_tier"],
@@ -2085,6 +2113,13 @@ class BusinessConfigService:
             config["parameters"].get("master_data", {}).get("drawing_max_upload_size_mb")
         )
         return mb * 1024 * 1024
+
+    async def get_material_code_search_mode(self, tenant_id: int) -> str:
+        """物料 keyword 搜索模式：fuzzy | prefix。"""
+        config = await self.get_business_config(tenant_id)
+        return coerce_material_code_search_mode(
+            config["parameters"].get("master_data", {}).get("material_code_search_mode")
+        )
 
     async def get_reporting_default_quantity_mode(self, tenant_id: int) -> str:
         """报工弹窗合格/不合格数量默认值：reportable=本次可报，zero=0。"""
