@@ -23,6 +23,18 @@ def _norm(value: Any) -> str:
     return str(value or "").strip()
 
 
+def has_nonconforming_disposition_downstream(record: Any) -> bool:
+    """退货/返工/报废/入库类下游单据占用，撤回前须先处理。"""
+    return bool(
+        getattr(record, "purchase_return_id", None)
+        or getattr(record, "rework_order_id", None)
+        or getattr(record, "scrap_record_id", None)
+        or getattr(record, "other_inbound_id", None)
+        or getattr(record, "finished_goods_receipt_id", None)
+        or getattr(record, "accept_purchase_receipt_id", None)
+    )
+
+
 def derive_nonconforming_ledger_capabilities(
     record: Any,
     *,
@@ -35,6 +47,13 @@ def derive_nonconforming_ledger_capabilities(
         not is_closed,
         "nonconforming_ledger.update.closed" if is_closed else None,
     )
+
+    if status != "processed":
+        revoke_cap = _cap(False, "nonconforming_ledger.revoke_disposition.not_processed")
+    elif has_nonconforming_disposition_downstream(record):
+        revoke_cap = _cap(False, "nonconforming_ledger.revoke_disposition.has_downstream")
+    else:
+        revoke_cap = _cap(True)
 
     start_8d_allowed = not is_closed and not has_linked_8d_report
     start_8d_cap = _cap(
@@ -50,6 +69,7 @@ def derive_nonconforming_ledger_capabilities(
 
     return NonconformingLedgerCapabilities(
         update_disposition=update_cap,
+        revoke_disposition=revoke_cap,
         start_8d=start_8d_cap,
         print=print_cap,
     )
@@ -67,6 +87,7 @@ def assert_nonconforming_ledger_capability(
     )
     cap_map = {
         "update_disposition": caps.update_disposition,
+        "revoke_disposition": caps.revoke_disposition,
         "start_8d": caps.start_8d,
         "print": caps.print,
     }

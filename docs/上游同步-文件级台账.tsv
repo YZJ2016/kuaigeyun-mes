@@ -252,13 +252,13 @@ docs/apps/master-data/sop.md	DELETED	superset	R2簇4:本地文件,上游tip无�
 docs/core/application-layer-contract.md	0580be82b9093dfbee69abbf8afd00938f5bdac6	superset	本地等价实现：模块/路径/语义已在本地落定（kuaiplm本地app承接engineering_change_audit与plm深链、kuaireport真源、kuaiai路径、类型守卫/a11y/antd6 medium/泛型/uni-report特性/上游bug式差异）
 docs/core/permission-contract.md	5d4b511cc4787160488f32fe3933520db143e4a3	superset	本地等价实现：模块/路径/语义已在本地落定（kuaiplm本地app承接engineering_change_audit与plm深链、kuaireport真源、kuaiai路径、类型守卫/a11y/antd6 medium/泛型/uni-report特性/上游bug式差异）
 docs/core/permission-responsibility.md	6b82014d95fb576b9a7ba4196c937ee752bb8e32	superset	本地等价实现：模块/路径/语义已在本地落定（kuaiplm本地app承接engineering_change_audit与plm深链、kuaireport真源、kuaiai路径、类型守卫/a11y/antd6 medium/泛型/uni-report特性/上游bug式差异）
-docs/core/服务采购做单说明.md	2843e86b71f1306971708709db521a9fe2e1cbcc	deferred	测试/脚本/文档随所属特性域待评或安全可摘但暂登记（预审A包）
-docs/core/质量体系PRD.md	d366f224412d14413d2173a322cce069fca95286	deferred	测试/脚本/文档随所属特性域待评或安全可摘但暂登记（预审A包）
+docs/core/服务采购做单说明.md	2843e86b71f1306971708709db521a9fe2e1cbcc	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
+docs/core/质量体系PRD.md	d366f224412d14413d2173a322cce069fca95286	domain-out	客户商务/品牌文档（福尼特OA/贵司方案/客户对照）不回流产品库
 docs/core/金蝶强一致实施-SOP.md	92f1f17334a9d1d85fa6384ae787990a03e0d6dd	applied	上游tip已落地（恢复被清理的转义行verdict）
 docs/funide-oa/质量体系PRD.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 docs/legal/软件源代码使用与白标授权书.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
-docs/sales/销售交付全流程管理信息化建设方案.md	da0998ba6e04e21ce1d22115d408b21279a9d809	deferred	测试/脚本/文档随所属特性域待评或安全可摘但暂登记（预审A包）
-docs/sales/销售管理软件需求-系统能力对照说明.md	87f937b564f91906cddfa2037d20e1a2a417d406	deferred	测试/脚本/文档随所属特性域待评或安全可摘但暂登记（预审A包）
+docs/sales/销售交付全流程管理信息化建设方案.md	da0998ba6e04e21ce1d22115d408b21279a9d809	domain-out	客户商务/品牌文档（福尼特OA/贵司方案/客户对照）不回流产品库
+docs/sales/销售管理软件需求-系统能力对照说明.md	87f937b564f91906cddfa2037d20e1a2a417d406	domain-out	客户商务/品牌文档（福尼特OA/贵司方案/客户对照）不回流产品库
 docs/screenshots/system/architecture.png	d92632669f670467723a94f0e06866a58144bda1	tracked	seed from c16a17ebba
 docs/screenshots/system/render_architecture.py	734a9d2c0a8e5fab5d9e603a3ff3f26d0e52334b	tracked	seed from c16a17ebba
 docs/screenshots/wechat/wechat.png	4c994615603c9a8655be5ed3bdd3bcc490bcd672	domain-out	本地独立维护域/客户定制域不引入（fast-deploy链/haoligo/自维护截图）
@@ -458,10 +458,10 @@ riveredge-backend/migrations/models/970_20261114110000_partner_addresses_json.py
 riveredge-backend/migrations/models/971_20261101030000_inventory_transfer_item_serial_numbers.py	a4c1c1c00a2ba909a40f2d1b9db055fa4d5b9be6	tracked	seed from a60f3e9039
 riveredge-backend/migrations/models/972_20261101040000_partner_price_book_tier_prices.py	9328101a6c5f5dc65b1caa1e06cb9aab3d083edc	tracked	seed from a60f3e9039
 riveredge-backend/migrations/models/973_20261101050000_document_line_item_attachments.py	5a2aa54bdc396e1595c759be56ea7df6259f4b1f	tracked	seed from a60f3e9039
-riveredge-backend/migrations/models/974_20261101123000_qms_system_document_circulation.py	1ae0d7946e662d4d5434af39aaed310d11dd184a	tracked	seed from a2473e9b42
-riveredge-backend/migrations/models/975_20261101140000_qms_audit_checklist_nc.py	3009d608c1dd91a9131c997938b19d900db540bf	tracked	seed from a2473e9b42
-riveredge-backend/migrations/models/976_20261101160000_qms_corrective_action.py	8565be46d43b1379140ee15f72447003642d274a	tracked	seed from a2473e9b42
-riveredge-backend/migrations/models/977_20261101180000_qms_objectives_legal_external.py	de84449bbc881af6bad26cc1873a1a8176938ec3	tracked	seed from a2473e9b42
+riveredge-backend/migrations/models/974_20261101123000_qms_system_document_circulation.py	1ae0d7946e662d4d5434af39aaed310d11dd184a	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
+riveredge-backend/migrations/models/975_20261101140000_qms_audit_checklist_nc.py	3009d608c1dd91a9131c997938b19d900db540bf	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
+riveredge-backend/migrations/models/976_20261101160000_qms_corrective_action.py	8565be46d43b1379140ee15f72447003642d274a	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
+riveredge-backend/migrations/models/977_20261101180000_qms_objectives_legal_external.py	de84449bbc881af6bad26cc1873a1a8176938ec3	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-backend/migrations/models/977_20261110080000_sync_binding_schedule_window.py	DELETED	applied	f40f54e336调度窗+价税簇
 riveredge-backend/migrations/models/978_20261102100000_resource_categories_approval_message_print.py	522a64fdf84d33f45650bf6a54aefbb499f62337	applied	R2簇2迁移:20261123命名落位(不执行)
 riveredge-backend/migrations/models/978_20261121120000_warehouse_push_sync_bindings_trigger_kind.py	DELETED	applied	D依赖簇续:支撑件+前端
@@ -598,7 +598,7 @@ riveredge-backend/src/apps/kuaiplm/services/mold_sample_order_service.py	DELETED
 riveredge-backend/src/apps/kuaiplm/services/prototype_build_sheet_service.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 riveredge-backend/src/apps/kuaiplm/services/sample_process_service.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 riveredge-backend/src/apps/kuaiplm/services/trial_flow_service.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
-riveredge-backend/src/apps/kuaiqms/manifest.json	2870e2477b6a7711c5ba2c467283f65050c555f3	tracked	seed from a2473e9b42
+riveredge-backend/src/apps/kuaiqms/manifest.json	2870e2477b6a7711c5ba2c467283f65050c555f3	applied	QMS簇配套：后端kuaizhizao manifest 5模块27权限码+reference/code_rule/custom_field登记；kuaiqms双侧菜单补6入口；前端路由+服务+更新日志9条
 riveredge-backend/src/apps/kuaivision/__init__.py	d191dd6ac29bf20993280796f549cb5a1d5803b0	superset	本地品牌星视觉（上游改名快视觉）：名称属本地产品品牌保留不取
 riveredge-backend/src/apps/kuaivision/api/__init__.py	1837143c87a284ecc809af82c792e1100b69b3f9	superset	本地品牌星视觉（上游改名快视觉）：名称属本地产品品牌保留不取
 riveredge-backend/src/apps/kuaivision/api/router.py	1da54308d4b8527f83a1664766dab215ced841ef	superset	本地品牌星视觉（上游改名快视觉）：名称属本地产品品牌保留不取
@@ -648,7 +648,7 @@ riveredge-backend/src/apps/kuaizhizao/api/productions/productions.py	04e6419f480
 riveredge-backend/src/apps/kuaizhizao/api/productions/quality_execution.py	4c99a8d6e7782a519f2b035c8331b54e437400d6	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaizhizao/api/productions/quality_fai.py	e1f20330106ddf68cabb33d961d53ab441250174	tracked	seed from d025413d18
 riveredge-backend/src/apps/kuaizhizao/api/productions/quality_improvement.py	6bdaf44fb24ba44c2c19e6e2cc55c49e0645ee74	tracked	seed from 154977d948
-riveredge-backend/src/apps/kuaizhizao/api/productions/quality_qms.py	b61f09a52429422364bbd55e30831f6018082ea0	tracked	seed from a2473e9b42
+riveredge-backend/src/apps/kuaizhizao/api/productions/quality_qms.py	b61f09a52429422364bbd55e30831f6018082ea0	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-backend/src/apps/kuaizhizao/api/productions/reporting.py	8afddebb06b41f72377877d687056034149a9d0e	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaizhizao/api/productions/warehouse_execution.py	1a68bf618bbd0597ddc40daf10ffffc51da45fd0	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/api/productions/work_orders.py	0f37f1c01d4948b2ad8516186630b9d78185ca42	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
@@ -892,7 +892,7 @@ riveredge-backend/src/apps/kuaizhizao/finance/services/voucher_template_service.
 riveredge-backend/src/apps/kuaizhizao/finance/utils/calendar_date_coerce.py	ef4295a7b6a979f59dea8215a2063cfa94f8a4bb	tracked	seed from 2c76a942c2
 riveredge-backend/src/apps/kuaizhizao/finance/utils/price_settlement_helpers.py	f53252e80f7175411f10cfb99386c23e4f0c330f	tracked	seed from 2c76a942c2
 riveredge-backend/src/apps/kuaizhizao/finance/utils/settlement_db_guard.py	1d57f60725594f931cf23eba0f6896103245e404	tracked	seed from 2c76a942c2
-riveredge-backend/src/apps/kuaizhizao/manifest.json	b783b9e2e62d70c470aa4cee1c3f0a5e6d6eeb7d	tracked	seed from 2c945a39fb
+riveredge-backend/src/apps/kuaizhizao/manifest.json	b783b9e2e62d70c470aa4cee1c3f0a5e6d6eeb7d	applied	QMS簇配套：后端kuaizhizao manifest 5模块27权限码+reference/code_rule/custom_field登记；kuaiqms双侧菜单补6入口；前端路由+服务+更新日志9条
 riveredge-backend/src/apps/kuaizhizao/models/__init__.py	c1c4b6216ab93160e79e826f334022badb25bf30	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/kuaizhizao/models/after_sales_service.py	75fb909f8a7e637c2f6acc616cd7ac124f326ee6	applied	宽区间补登：上游tip已落地（同文/等价映射/预审A包复核）
 riveredge-backend/src/apps/kuaizhizao/models/delivery_notice_item.py	c66c8c506281c72c6387768c9fd68b4ccf16d954	applied	R2：与上游tip blob一致，本地已同步
@@ -954,17 +954,17 @@ riveredge-backend/src/apps/kuaizhizao/models/purchase_receipt_sync_binding.py	46
 riveredge-backend/src/apps/kuaizhizao/models/purchase_requisition.py	e2a6305c00d86abf0a75f22107377dc4beae1708	applied	部门字段簇：ORM补department_id/name列(迁移20261123000002已落库)对接采购单据部门快照
 riveredge-backend/src/apps/kuaizhizao/models/purchase_return.py	210de15f7013114f78cc99ee0ffa7344ed5deef6	applied	部门字段簇：ORM补department_id/name列(迁移20261123000002已落库)对接采购单据部门快照
 riveredge-backend/src/apps/kuaizhizao/models/purchase_return_item.py	2c99c42ec17e78882a315cfbc6a08680a7287cc5	tracked	seed from a62d32cff6
-riveredge-backend/src/apps/kuaizhizao/models/qms_certificate.py	8e1404f75d354b53dbccd1e3a2653d93a74faadc	tracked	seed from a2473e9b42
-riveredge-backend/src/apps/kuaizhizao/models/qms_corrective_action.py	d8018e09b7fca1df7e434d5b0a3c9482f37f5563	tracked	seed from a2473e9b42
-riveredge-backend/src/apps/kuaizhizao/models/qms_external_audit.py	10b3be4ed3b944f7dcb86b7dc7fb3d38a1766722	tracked	seed from a2473e9b42
-riveredge-backend/src/apps/kuaizhizao/models/qms_internal_audit.py	bfbca102331f2caab9310194f7ffa81bb0a3bc58	tracked	seed from a2473e9b42
-riveredge-backend/src/apps/kuaizhizao/models/qms_internal_audit_annual_plan.py	92bc18b275123d78418a9cdd3d136d2f2de2060f	tracked	seed from a2473e9b42
-riveredge-backend/src/apps/kuaizhizao/models/qms_internal_audit_checklist_item.py	69ac80067d43d2a35da806db6048063b01c3370c	tracked	seed from a2473e9b42
-riveredge-backend/src/apps/kuaizhizao/models/qms_legal_regulation.py	a054c7967a304eac1ed450b4b01f0bc8ee256293	tracked	seed from a2473e9b42
-riveredge-backend/src/apps/kuaizhizao/models/qms_management_review_resolution.py	d25ecef02e9e3e4e1dea3310b726cade2476f8b0	tracked	seed from a2473e9b42
-riveredge-backend/src/apps/kuaizhizao/models/qms_nonconformity_report.py	bad8002c4242500f02f99d5aebaaeb2c8f837634	tracked	seed from a2473e9b42
-riveredge-backend/src/apps/kuaizhizao/models/qms_quality_objective.py	00a1d387153c5bc892575129a61857021cd14a49	tracked	seed from a2473e9b42
-riveredge-backend/src/apps/kuaizhizao/models/qms_system_document_circulation.py	ad0bc06373068db1f4528f6fcab73363a94eb70b	tracked	seed from a2473e9b42
+riveredge-backend/src/apps/kuaizhizao/models/qms_certificate.py	8e1404f75d354b53dbccd1e3a2653d93a74faadc	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
+riveredge-backend/src/apps/kuaizhizao/models/qms_corrective_action.py	d8018e09b7fca1df7e434d5b0a3c9482f37f5563	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
+riveredge-backend/src/apps/kuaizhizao/models/qms_external_audit.py	10b3be4ed3b944f7dcb86b7dc7fb3d38a1766722	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
+riveredge-backend/src/apps/kuaizhizao/models/qms_internal_audit.py	bfbca102331f2caab9310194f7ffa81bb0a3bc58	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
+riveredge-backend/src/apps/kuaizhizao/models/qms_internal_audit_annual_plan.py	92bc18b275123d78418a9cdd3d136d2f2de2060f	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
+riveredge-backend/src/apps/kuaizhizao/models/qms_internal_audit_checklist_item.py	69ac80067d43d2a35da806db6048063b01c3370c	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
+riveredge-backend/src/apps/kuaizhizao/models/qms_legal_regulation.py	a054c7967a304eac1ed450b4b01f0bc8ee256293	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
+riveredge-backend/src/apps/kuaizhizao/models/qms_management_review_resolution.py	d25ecef02e9e3e4e1dea3310b726cade2476f8b0	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
+riveredge-backend/src/apps/kuaizhizao/models/qms_nonconformity_report.py	bad8002c4242500f02f99d5aebaaeb2c8f837634	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
+riveredge-backend/src/apps/kuaizhizao/models/qms_quality_objective.py	00a1d387153c5bc892575129a61857021cd14a49	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
+riveredge-backend/src/apps/kuaizhizao/models/qms_system_document_circulation.py	ad0bc06373068db1f4528f6fcab73363a94eb70b	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-backend/src/apps/kuaizhizao/models/quality_patrol.py	752bc357aabd690ff7af7ab2a56e6513bf561601	applied	R2：与上游tip blob一致，本地已同步
 riveredge-backend/src/apps/kuaizhizao/models/quotation_item.py	ecd431cffcc19c0c9523d7b0c5e02d07f89ffa6f	tracked	seed from a60f3e9039
 riveredge-backend/src/apps/kuaizhizao/models/receipt_notice.py	541a95f65dda6480f9466b1f8c3a7c89ca3e1089	applied	部门字段簇：ORM补department_id/name列(迁移20261123000002已落库)对接采购单据部门快照
@@ -995,7 +995,7 @@ riveredge-backend/src/apps/kuaizhizao/models/work_order.py	4f7e4d2ffa1b902a1b9c7
 riveredge-backend/src/apps/kuaizhizao/models/work_order_bom_line.py	3f142eea97121a77771e3d32fe61a79c8f0bb794	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/kuaizhizao/models/work_order_operation.py	d676e314a1fb0e83c1833c2887f72467d2b6e130	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
 riveredge-backend/src/apps/kuaizhizao/models/work_order_sync_binding.py	0367eda381d2595fbdff676c3e248ce38346d5e6	applied	R2簇5 core/sync:摘取上游tip实现
-riveredge-backend/src/apps/kuaizhizao/orm_models.py	e7e5ee5d5102c284bdd27883df1cf994320a0a6e	tracked	seed from 4bd853a94f
+riveredge-backend/src/apps/kuaizhizao/orm_models.py	e7e5ee5d5102c284bdd27883df1cf994320a0a6e	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-backend/src/apps/kuaizhizao/print/designer_presets.py	7abfc8b52bf2e719cb0e522cd4b22bf3e4df6af3	tracked	seed from 37409d3b29
 riveredge-backend/src/apps/kuaizhizao/print/preset_templates.py	3fd474f4ea07087f625c3ed20f6186eff6bd0d2d	tracked	seed from ec29267f5b
 riveredge-backend/src/apps/kuaizhizao/print/purchase_receipt_red_voucher_template.py	f073b61c0252b2b04f2d69b31644a9f9425f50d0	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
@@ -1044,7 +1044,7 @@ riveredge-backend/src/apps/kuaizhizao/schemas/purchase_requisition.py	0c1c3250b6
 riveredge-backend/src/apps/kuaizhizao/schemas/quality.py	29d3857ae8d4a44996b3638a87be338987be209a	tracked	seed from a62d32cff6
 riveredge-backend/src/apps/kuaizhizao/schemas/quality_improvement.py	4f525bc1ea446dc6b9282f1bdeadeecc1a65ba52	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/apps/kuaizhizao/schemas/quality_patrol.py	eafa33db53419ef0095777ec3b8600aa9ccc9dd1	applied	R2：与上游tip blob一致，本地已同步
-riveredge-backend/src/apps/kuaizhizao/schemas/quality_qms.py	be12fa0e312f5d10978fa1a21f218e29170cd914	tracked	seed from a2473e9b42
+riveredge-backend/src/apps/kuaizhizao/schemas/quality_qms.py	be12fa0e312f5d10978fa1a21f218e29170cd914	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-backend/src/apps/kuaizhizao/schemas/quotation.py	017d7b68952f03d8af9d2c7450302a07b3a76f8e	tracked	seed from a60f3e9039
 riveredge-backend/src/apps/kuaizhizao/schemas/receipt_notice.py	759cec52b3442f410ddb35ff584fa4cb5ddd400b	applied	部门字段簇：schema补department_id/name对接采购单据部门快照链
 riveredge-backend/src/apps/kuaizhizao/schemas/reporting_record.py	99b0c38acbe6e76eab4e1bd737f8967d9a064634	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
@@ -1088,7 +1088,7 @@ riveredge-backend/src/apps/kuaizhizao/services/demand_replanning_orchestrator_se
 riveredge-backend/src/apps/kuaizhizao/services/demand_service.py	e3974f02ffd54ff70a20387e45c9325509ceca9a	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/demand.py	e74dbdc26a5ca6374c922ef5c8f54c3c03392839	tracked	seed from 899307f4d6
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/enricher.py	6933c777cebbb887c74a8779af5a857ec410f2d4	applied	簇W:生产领料审核能力(submit/withdraw/approve/revoke)+仓储金额方名脱敏渲染+叠列fieldResource;保留本地待审可删sales_delivery语义
-riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/nonconforming_ledger.py	b0871485adfc98cb16215925a09414572936d48b	applied	宽区间补登：上游tip已落地（同文/等价映射/预审A包复核）
+riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/nonconforming_ledger.py	b0871485adfc98cb16215925a09414572936d48b	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/oqc_inspection.py	8e281d6dad4213c05b040320618aca728b9b949f	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/other_expense.py	87de9f0bdfca5f1bd0e4124312df8e93cf966af6	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/other_expense_application.py	496403495327070461b2abb6a2a59d4ede77ea38	tracked	seed from d81b4b70bf
@@ -1280,12 +1280,12 @@ riveredge-backend/src/apps/kuaizhizao/services/purchase_receipt_sync_service.py	
 riveredge-backend/src/apps/kuaizhizao/services/purchase_requisition_service.py	2fef94ad657c60305ee4fa1ce0ffdcd4a517a0b1	applied	部门字段簇：补部门快照传播链(申请/询价→订单→收货通知/入库/退货/变更单+打印占位符+领料领用部门占位符补漏)；测试双供体用getattr安全取值
 riveredge-backend/src/apps/kuaizhizao/services/purchase_requisition_stock_service.py	e33ffcbc20cceab7c8fa7db247c5dd7d4e865337	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/kuaizhizao/services/purchase_service.py	42e64ea15074d92681cab60a4e8164d46dd35ced	applied	部门字段簇：补部门快照传播链(申请/询价→订单→收货通知/入库/退货/变更单+打印占位符+领料领用部门占位符补漏)；测试双供体用getattr安全取值
-riveredge-backend/src/apps/kuaizhizao/services/qms_audit_nc_service.py	0cda9ffab9f6a1dc2fe7f6f6d73f736b62bed946	tracked	seed from a2473e9b42
+riveredge-backend/src/apps/kuaizhizao/services/qms_audit_nc_service.py	0cda9ffab9f6a1dc2fe7f6f6d73f736b62bed946	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-backend/src/apps/kuaizhizao/services/qms_clause_presets/__init__.py	b3aeb0bb5997d172ba930717797276f9b4cdbdcd	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/qms_clause_presets/ansiesd_s2020.py	a7134d3ebb7d52dd0ac42fd5fdf00d8ad74d735b	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
-riveredge-backend/src/apps/kuaizhizao/services/qms_corrective_action_service.py	7cf4b14f37f72ef09b4d58e217cda2c3ef25159d	tracked	seed from a2473e9b42
-riveredge-backend/src/apps/kuaizhizao/services/qms_iso_clause_service.py	4bdf2b18a3d03429da358b7a01e547e711fb8aa8	superset	R2预审：本地已有等价/更深实现，不摘
-riveredge-backend/src/apps/kuaizhizao/services/qms_phase5_service.py	7f3c897caa640cd4ef3f7176befd285e85a7794d	tracked	seed from a2473e9b42
+riveredge-backend/src/apps/kuaizhizao/services/qms_corrective_action_service.py	7cf4b14f37f72ef09b4d58e217cda2c3ef25159d	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
+riveredge-backend/src/apps/kuaizhizao/services/qms_iso_clause_service.py	4bdf2b18a3d03429da358b7a01e547e711fb8aa8	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
+riveredge-backend/src/apps/kuaizhizao/services/qms_phase5_service.py	7f3c897caa640cd4ef3f7176befd285e85a7794d	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-backend/src/apps/kuaizhizao/services/quality_automation_service.py	b29ae7db413ddc39eb7383bd68d13aa862b2bc17	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/quality_complaint_service.py	2f7f8962e6b7bb819e44b24f5309af101d4e04b4	tracked	seed from a2473e9b42
 riveredge-backend/src/apps/kuaizhizao/services/quality_cost_service.py	9d24e1baf39a00a9d50255b4713d44fb3b2083bf	tracked	seed from 432bd5f7fd
@@ -1293,7 +1293,7 @@ riveredge-backend/src/apps/kuaizhizao/services/quality_improvement_service.py	1d
 riveredge-backend/src/apps/kuaizhizao/services/quality_inspection_helpers.py	e1ca0503d405742d17c6ffac1150b905a6723cac	tracked	seed from 905787348a
 riveredge-backend/src/apps/kuaizhizao/services/quality_inspection_lifecycle.py	1fac537e399f47016dc91b6240a752b33cd2f1d7	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/services/quality_patrol_service.py	34d48ec9140277c6a0c3be3e1d1f222f647462ee	tracked	seed from 154977d948
-riveredge-backend/src/apps/kuaizhizao/services/quality_qms_service.py	6296a251bb59d1de3ec6362e4db0a95c54c43d9e	tracked	seed from a2473e9b42
+riveredge-backend/src/apps/kuaizhizao/services/quality_qms_service.py	6296a251bb59d1de3ec6362e4db0a95c54c43d9e	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-backend/src/apps/kuaizhizao/services/quality_service.py	f37d77b74f50f2c831b943e504b34fd623f2c813	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/quotation_service.py	de05bdcd3edbb75fa36f9df69f8f81c58393d4f2	applied	f40f54e336调度窗+价税簇
 riveredge-backend/src/apps/kuaizhizao/services/receipt_notice_service.py	75f01dc040d1e309482f1d04b22db9979aaa9127	tracked	seed from 1eb300325a
@@ -2052,7 +2052,7 @@ riveredge-frontend/src/apps/kuaiconnect/pages/datasets/list/index.tsx	a113157c30
 riveredge-frontend/src/apps/kuaiems/manifest.json	5ef0dd94364e247a47c958f326329cc8c22cad0d	tracked	seed from 46508115c7
 riveredge-frontend/src/apps/kuaiplm/components/SystemArchiveCapabilitiesTags.tsx	DELETED	superset	本地独有（上游tip无此路径），无上游可比版本
 riveredge-frontend/src/apps/kuaiplm/manifest.json	DELETED	superset	本地独有（上游tip无此路径），无上游可比版本
-riveredge-frontend/src/apps/kuaiqms/manifest.json	2870e2477b6a7711c5ba2c467283f65050c555f3	tracked	seed from 2c76a942c2
+riveredge-frontend/src/apps/kuaiqms/manifest.json	2870e2477b6a7711c5ba2c467283f65050c555f3	applied	QMS簇配套：后端kuaizhizao manifest 5模块27权限码+reference/code_rule/custom_field登记；kuaiqms双侧菜单补6入口；前端路由+服务+更新日志9条
 riveredge-frontend/src/apps/kuaivision/index.tsx	8bc6b0e3f8ade5047be02608b5d55363320ceb94	superset	本地品牌星视觉（上游改名快视觉）：名称属本地产品品牌保留不取
 riveredge-frontend/src/apps/kuaivision/manifest.json	b31e88c74301f48bf22f0e1a90d9d0ae6e02e5e4	superset	本地品牌星视觉（上游改名快视觉）：名称属本地产品品牌保留不取
 riveredge-frontend/src/apps/kuaizhizao/components/AcceptanceBillLinkFields.tsx	27bf89d36cb46769eba8a0f8370942fd3f8006cb	tracked	seed from e75380e080
@@ -2112,9 +2112,9 @@ riveredge-frontend/src/apps/kuaizhizao/constants/routes.ts	14dd97c755b98bf9a6368
 riveredge-frontend/src/apps/kuaizhizao/financeManagementRoutes.tsx	84eb22834ce869b1268f43ad601924b80431cc2a	domain-out	决策:上游finance并入pro包(finance包+finance-management页+对账pull链)，本地kuaicaiwu权威不摘，随架构决策整体排除
 riveredge-frontend/src/apps/kuaizhizao/hooks/useKuaizhizaoPrintModal.tsx	26f20b1d0b5c5dc583e6080817f147d0a9bf7151	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/apps/kuaizhizao/hooks/useWarehouseLocationOptions.ts	8fd45bfed30fdb74838087bd970efcb9fe4ac771	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
-riveredge-frontend/src/apps/kuaizhizao/index.tsx	1fa660a3287d29aac96466ed64460af2f22b1db1	tracked	seed from 4d124a088e
+riveredge-frontend/src/apps/kuaizhizao/index.tsx	1fa660a3287d29aac96466ed64460af2f22b1db1	applied	QMS簇配套：后端kuaizhizao manifest 5模块27权限码+reference/code_rule/custom_field登记；kuaiqms双侧菜单补6入口；前端路由+服务+更新日志9条
 riveredge-frontend/src/apps/kuaizhizao/inventorySyncConfig.ts	8f643b8cc9b875c2e22a3c02b57a749a661eb919	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
-riveredge-frontend/src/apps/kuaizhizao/manifest.json	02b9aebe8d5a130e36dd9184b93e41a1e3703d34	tracked	seed from 2c945a39fb
+riveredge-frontend/src/apps/kuaizhizao/manifest.json	02b9aebe8d5a130e36dd9184b93e41a1e3703d34	applied	QMS簇配套：后端kuaizhizao manifest 5模块27权限码+reference/code_rule/custom_field登记；kuaiqms双侧菜单补6入口；前端路由+服务+更新日志9条
 riveredge-frontend/src/apps/kuaizhizao/pages/after-sales-service/dispatch-orders/DispatchOrderFormModal.tsx	032ad5e144db63f2d74b5a6193f9fe2403e7ac41	applied	R2 fe_pages簇：自定义字段接入+行删并批量删+物流/售后/退料增量，取上游tip版
 riveredge-frontend/src/apps/kuaizhizao/pages/after-sales-service/dispatch-orders/components/DispatchOrderDetailDrawer.tsx	7fa0df6bf34d9422dedfc0315ab198c1feffecb7	applied	R2 fe_pages簇：自定义字段接入+行删并批量删+物流/售后/退料增量，取上游tip版
 riveredge-frontend/src/apps/kuaizhizao/pages/after-sales-service/dispatch-orders/index.tsx	efa3527c50f730d8ee199a36557a3bcc815b8d90	applied	R2 fe_pages簇：自定义字段接入+行删并批量删+物流/售后/退料增量，取上游tip版
@@ -2399,40 +2399,40 @@ riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/components/quali
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/components/qualityMeta.ts	9771084dfa4f10c4ad3d4f890659c79f6108f648	tracked	seed from 905787348a
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/components/qualityRevokeConduct.ts	bfbd4a49e3d94a96d89a88ff66c5277286de2efd	superset	本地私有实现/分叉超集（预审A包复核）
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/components/qualityTableColumns.tsx	7dce7b532467f76573e0031673b9180613d1d103	superset	R2质量簇：buildQualityInspectionListPushProgressColumn本地已在
-riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/corrective-actions/index.tsx	f15db6abd51f2be643e1ce679a3a5d7aa22043ec	deferred	R2质量簇：quality-qms API与后端路由本地全无，待QMS功能包整体落地
+riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/corrective-actions/index.tsx	f15db6abd51f2be643e1ce679a3a5d7aa22043ec	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/drawing-balloon-sheets/index.tsx	12ce1a1625cebc9364759c3df5dfa9245e3ee9af	applied	宽区间历史补登：上游tip内容已落地（预审B包复核）
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/eight-d-reports/index.tsx	d1eab23b1449b7ff5f6d972e15cdbc9b637ec08e	superset	R2:本地保留行级删除/工位写保护/门禁等超集能力，上游tip为删减版
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/eight-d-reports/workbench/EightDWorkbench.tsx	0bf00850e9aae12547a7e12144530b3ee0cb5afe	tracked	seed from 2a5b2caf14
-riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/external-audits/index.tsx	4fe97ac41e20ca0b4e408aeec2e3afc344d20ca8	deferred	R2质量簇：quality-qms API与后端路由本地全无，待QMS功能包整体落地
+riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/external-audits/index.tsx	4fe97ac41e20ca0b4e408aeec2e3afc344d20ca8	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/fai-orders/index.tsx	0724101172925d007f0148de21b21f8fd789b67d	tracked	seed from 93b3cb5998
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/finished-goods-inspection/index.tsx	f4cddb9a392a134f69ffa4347b9135d69754f1d2	tracked	seed from 93b3cb5998
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/incoming-inspection/index.tsx	19faa21f6692f2a77fc58e034755875acf89475d	tracked	seed from 1efec0da1d
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/inspection-center/index.tsx	aef2906ada1d822fb1221f6242da85775129e1bf	applied	宽区间历史补登：上游tip内容已落地（预审B包复核）
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/inspection-plans/index.tsx	11cef1acc44236fd452b36276ba319718c20061b	tracked	seed from 777aa1a468
-riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/internal-audit-annual-plans/index.tsx	2636dc88a5a18b0a7eb324334721534688a1598d	deferred	R2质量簇：quality-qms API与后端路由本地全无，待QMS功能包整体落地
+riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/internal-audit-annual-plans/index.tsx	2636dc88a5a18b0a7eb324334721534688a1598d	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/internal-audits/InternalAuditChecklistPanel.tsx	9b34ce6b7342379b9547a14b8432b540cca6178b	tracked	seed from a2473e9b42
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/internal-audits/index.tsx	087e3e92fb83a92b3ba46146bf999625a3378ee3	tracked	seed from a2473e9b42
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/iso-clauses/index.tsx	86ef8df68ccb491235b2f20d02212f65a423facb	superset	上游增量本地已超集/同义覆盖（明细见预审B包）
-riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/legal-regulations/index.tsx	f42dc4d37f43490c09c38b32da4605a19abb9570	deferred	R2质量簇：quality-qms API与后端路由本地全无，待QMS功能包整体落地
+riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/legal-regulations/index.tsx	f42dc4d37f43490c09c38b32da4605a19abb9570	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/management-reviews/ManagementReviewResolutionsPanel.tsx	4cff4bd05c6ee5bb9b96796d36c0c855477532b2	tracked	seed from a2473e9b42
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/management-reviews/index.tsx	4759d533cedce8c0a0cd9ebcc0370adb91af6b47	tracked	seed from a2473e9b42
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/nonconforming-ledger/components/NonconformingLedgerDetailDrawer.tsx	e44dad81bc8ac122c214731c813ae9bc21674d0a	superset	本地私有实现/分叉超集（预审A包复核）
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/nonconforming-ledger/index.tsx	77c93d4a0ec6ce54b797c7568e2a8d2b4b135305	superset	本地私有实现/分叉超集（预审A包复核）
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/nonconforming-ledger/ncLedgerSource.tsx	027e3f49630674dc9cdcf5cbfbc39a8213e7c21e	applied	宽区间历史补登：上游tip内容已落地（预审B包复核）
-riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/nonconformity-reports/index.tsx	79972abbc2c84c563b3e9bd553decee9d7237f12	deferred	R2质量簇：quality-qms API与后端路由本地全无，待QMS功能包整体落地
+riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/nonconformity-reports/index.tsx	79972abbc2c84c563b3e9bd553decee9d7237f12	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/oqc-inspection/index.tsx	fa2762db8a5cf416add3a4cf88f4c55db4a21328	tracked	seed from 93b3cb5998
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/outsource-inspection/index.tsx	db52b5629166e46fc3833818e897084af271f520	tracked	seed from a62d32cff6
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/process-inspection/index.tsx	b9088e5f2fd937c7e964591f235c6d77d25419bf	tracked	seed from 31efc2b64c
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/qc-sop/index.tsx	fb9c806529191b3eb1297b8596116cefc196f625	superset	上游增量本地已超集/同义覆盖（明细见预审B包）
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/qms/qmsMeta.ts	f38bfeee53c5aefb32b438f3b7b880b28a5d40c4	tracked	seed from a2473e9b42
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/quality-complaints/index.tsx	66ed998878b9e722e8a59d51dfefe96999c1a58e	tracked	seed from 5b1b9828e4
-riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/quality-objectives/index.tsx	21763ee66119927e7f305818f56ab9ecbb2a336e	deferred	R2质量簇：quality-qms API与后端路由本地全无，待QMS功能包整体落地
+riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/quality-objectives/index.tsx	21763ee66119927e7f305818f56ab9ecbb2a336e	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/quality-patrol/index.tsx	640f0dfa73722ed8b84c4e4d78c31c6b330a5340	tracked	seed from a62d32cff6
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/supplier-evaluations/index.tsx	85ca18746021bc3460b6a1ff2254dec3ad17b5a1	superset	本地私有实现/分叉超集（预审A包复核）
-riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/system-documents/SystemDocumentCirculationModal.tsx	bd72b3f6b6000b3323a2b1657674d8309d5f1742	deferred	R2质量簇：quality-qms API与后端路由本地全无，待QMS功能包整体落地
+riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/system-documents/SystemDocumentCirculationModal.tsx	bd72b3f6b6000b3323a2b1657674d8309d5f1742	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/system-documents/SystemDocumentDetailDrawer.tsx	4527636ec2b30a41217237ba5b2af532860d1bf2	applied	R2质量簇：缺陷行库位/处置库位/方案切换器/系统文档导航抽屉取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/system-documents/SystemDocumentNavTree.tsx	76d1b908473aa88f2e450a63e3ac8fc7bea76d67	applied	R2质量簇：缺陷行库位/处置库位/方案切换器/系统文档导航抽屉取上游tip
-riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/system-documents/index.tsx	2f55cdf071bf8ce0635150d0b775f6621a934dab	tracked	seed from a2473e9b42
+riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/system-documents/index.tsx	2f55cdf071bf8ce0635150d0b775f6621a934dab	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/system-documents/systemDocumentNav.ts	7c932c3068628ba9792af4e2ca287c554f713498	applied	R2质量簇：缺陷行库位/处置库位/方案切换器/系统文档导航抽屉取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/quality/InspectionPlanFormModal.tsx	DELETED	applied	E域GB2828簇(源905787348a/1efec0da1d等)
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/customer-follow-ups/index.tsx	1c25dc52930dd895dd3fe1a0b4b9acc1d7eea6cf	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
@@ -2626,7 +2626,7 @@ riveredge-frontend/src/apps/kuaizhizao/services/purchase-return.ts	c853826efcf17
 riveredge-frontend/src/apps/kuaizhizao/services/purchase.ts	7cfb517f3332d0b726d9403a2e1816e6c9cec464	applied	R2:MERGE已三方合并-付款申请取单簇:对账单/其他支出多选批量建单+取单列组件(PO部门/申请人/订单总额)+应付取单列+行物料预览+paymentReason;payable import改指kuaicaiwu;保留本地预付金额口径(prepay-only)
 riveredge-frontend/src/apps/kuaizhizao/services/quality-execution.ts	849a9c232f242b4227ff4deaf835ac6f8d428b19	applied	R2簇3 合并:本地feature保留+上游增量(reporting stationSession/uni-audit端点;quality outsource-pull+location;app inflight+queryKey tenantId宽化)
 riveredge-frontend/src/apps/kuaizhizao/services/quality-improvement.ts	a0a90bf313ce8d1ac9446352379f76c2f96e45f8	applied	R2簇3 合并:本地feature保留+上游增量(reporting stationSession/uni-audit端点;quality outsource-pull+location;app inflight+queryKey tenantId宽化)
-riveredge-frontend/src/apps/kuaizhizao/services/quality-qms.ts	46cc84681fb36d25fabe99ba7f20205db9fb0232	tracked	seed from a2473e9b42
+riveredge-frontend/src/apps/kuaizhizao/services/quality-qms.ts	46cc84681fb36d25fabe99ba7f20205db9fb0232	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-frontend/src/apps/kuaizhizao/services/quotation.ts	142b549164d2ba1c4344f6d676642b4443b97f5a	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/services/receipt-notice.ts	d4a1af2bf961d091482ee3155e953d26c12bc50c	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/services/reporting.ts	a5f405619233cd8bdccc12c7b6dc737a5ccb8684	applied	R2簇3 合并:本地feature保留+上游增量(reporting stationSession/uni-audit端点;quality outsource-pull+location;app inflight+queryKey tenantId宽化)

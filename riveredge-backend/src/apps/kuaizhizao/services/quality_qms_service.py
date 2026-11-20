@@ -23,7 +23,11 @@ from apps.kuaizhizao.schemas.quality_qms import (
     QmsManagementReviewListResponse,
     QmsManagementReviewResponse,
     QmsManagementReviewUpdate,
+    QmsManagementReviewInputDocItem,
     QmsManagementReviewInputSummary,
+    QmsSystemDocumentCirculationCreate,
+    QmsSystemDocumentCirculationListResponse,
+    QmsSystemDocumentCirculationResponse,
     QmsSystemDocumentReviewDueSummary,
     QmsSystemDocumentCreate,
     QmsSystemDocumentListResponse,
@@ -107,6 +111,9 @@ async def _document_response(tenant_id: int, row: QmsSystemDocument) -> QmsSyste
 
 
 async def _audit_response(tenant_id: int, row: QmsInternalAudit) -> QmsInternalAuditResponse:
+    from apps.kuaizhizao.models.qms_internal_audit_annual_plan import QmsInternalAuditAnnualPlan
+    from apps.kuaizhizao.services.qms_audit_nc_service import count_open_nc_for_audit
+
     clause_ids, clause_labels, primary_clause_id, _ = await enrich_clause_fields(
         tenant_id, audit_id=row.id
     )
@@ -114,6 +121,14 @@ async def _audit_response(tenant_id: int, row: QmsInternalAudit) -> QmsInternalA
     payload["clause_ids"] = clause_ids
     payload["clause_labels"] = clause_labels
     payload["primary_clause_id"] = primary_clause_id
+    payload["open_nc_count"] = await count_open_nc_for_audit(tenant_id, row.id)
+    plan_year = None
+    if row.annual_plan_id:
+        plan = await QmsInternalAuditAnnualPlan.filter(
+            tenant_id=tenant_id, id=row.annual_plan_id, deleted_at__isnull=True
+        ).first()
+        plan_year = plan.plan_year if plan else None
+    payload["annual_plan_year"] = plan_year
     return QmsInternalAuditResponse.model_validate(payload)
 
 
@@ -256,9 +271,12 @@ class QmsSystemDocumentService(AppBaseService[QmsSystemDocument], _QmsCrudMixin)
         *,
         keyword: Optional[str] = None,
         status: Optional[str] = None,
+        status_in: Optional[List[str]] = None,
         doc_type: Optional[str] = None,
         standard_id: Optional[int] = None,
+        standard_id_null: bool = False,
         zone: Optional[str] = None,
+        review_due: bool = False,
         current_user_id: Optional[int] = None,
         permission_codes: Optional[List[str]] = None,
         skip: int = 0,
@@ -303,20 +321,36 @@ class QmsSystemDocumentService(AppBaseService[QmsSystemDocument], _QmsCrudMixin)
 
         if keyword:
             query = query.filter(title__icontains=keyword)
-        if status:
+        if status_in:
+            allowed = [s for s in status_in if s in DOC_STATUSES]
+            if allowed:
+                query = query.filter(status__in=allowed)
+        elif status:
             query = query.filter(status=status)
         if doc_type:
             query = query.filter(doc_type=doc_type)
-        if standard_id is not None:
+        if standard_id_null:
+            query = query.filter(standard_id__isnull=True)
+        elif standard_id is not None:
             query = query.filter(standard_id=standard_id)
+        if review_due:
+            now = resolve_business_datetime()
+            query = query.filter(
+                status="effective",
+                next_review_at__isnull=False,
+                next_review_at__lte=now,
+            )
         total = await query.count()
         rows = await query.order_by("-updated_at", "-id").offset(skip).limit(limit)
         items = [await _document_response(tenant_id, r) for r in rows]
+        await self._attach_document_facts(tenant_id, items)
         return QmsSystemDocumentListResponse(items=items, total=total)
 
     async def get_document(self, tenant_id: int, document_id: int) -> QmsSystemDocumentResponse:
         row = await self._get_row(tenant_id, document_id)
-        return await _document_response(tenant_id, row)
+        item = await _document_response(tenant_id, row)
+        await self._attach_document_facts(tenant_id, [item])
+        return item
 
     async def list_versions(
         self,
@@ -725,6 +759,162 @@ class QmsSystemDocumentService(AppBaseService[QmsSystemDocument], _QmsCrudMixin)
         row.deleted_at = resolve_business_datetime()
         await row.save()
 
+    async def _outstanding_copies_map(
+        self,
+        tenant_id: int,
+        document_ids: List[int],
+    ) -> Dict[int, int]:
+        from apps.kuaizhizao.models.qms_system_document_circulation import (
+            QmsSystemDocumentCirculation,
+        )
+
+        totals = {document_id: 0 for document_id in document_ids}
+        if not document_ids:
+            return totals
+        rows = await QmsSystemDocumentCirculation.filter(
+            tenant_id=tenant_id,
+            document_id__in=document_ids,
+            deleted_at__isnull=True,
+            record_type__in=["issue", "recall"],
+        )
+        for row in rows:
+            copies = int(row.copies or 0)
+            if row.record_type == "issue":
+                totals[row.document_id] = totals.get(row.document_id, 0) + copies
+            elif row.record_type == "recall":
+                totals[row.document_id] = totals.get(row.document_id, 0) - copies
+        return totals
+
+    async def _attach_document_facts(
+        self,
+        tenant_id: int,
+        items: List[QmsSystemDocumentResponse],
+    ) -> None:
+        if not items:
+            return
+        now = resolve_business_datetime()
+        outstanding = await self._outstanding_copies_map(tenant_id, [item.id for item in items])
+        for item in items:
+            item.outstanding_copies = outstanding.get(item.id, 0)
+            due_at = item.next_review_at
+            item.review_due = (
+                item.status == "effective"
+                and due_at is not None
+                and due_at <= now
+            )
+
+    async def list_circulations(
+        self,
+        tenant_id: int,
+        document_id: int,
+    ) -> QmsSystemDocumentCirculationListResponse:
+        from apps.kuaizhizao.models.qms_system_document_circulation import (
+            QmsSystemDocumentCirculation,
+        )
+
+        await self._get_row(tenant_id, document_id)
+        rows = await QmsSystemDocumentCirculation.filter(
+            tenant_id=tenant_id,
+            document_id=document_id,
+            deleted_at__isnull=True,
+        ).order_by("-event_on", "-id")
+        outstanding = await self._outstanding_copies_map(tenant_id, [document_id])
+        return QmsSystemDocumentCirculationListResponse(
+            items=[QmsSystemDocumentCirculationResponse.model_validate(row) for row in rows],
+            total=len(rows),
+            outstanding_copies=outstanding.get(document_id, 0),
+        )
+
+    async def create_circulation(
+        self,
+        tenant_id: int,
+        document_id: int,
+        payload: QmsSystemDocumentCirculationCreate,
+        *,
+        actor: Any,
+    ) -> QmsSystemDocumentCirculationResponse:
+        from apps.common.audit_actor import apply_create_audit
+        from apps.kuaizhizao.models.qms_system_document_circulation import (
+            QmsSystemDocumentCirculation,
+        )
+
+        row = await self._get_row(tenant_id, document_id)
+        if row.status != "effective":
+            raise BusinessLogicError("仅生效文件可登记发放、回收和宣贯")
+        record_type = (payload.record_type or "").strip()
+        if record_type not in {"issue", "recall", "briefing"}:
+            raise BusinessLogicError("记录类型须为发放、回收或宣贯")
+        party_name = (payload.party_name or "").strip()
+        if not party_name:
+            raise BusinessLogicError("请填写部门、人员或宣贯对象")
+        copies = payload.copies
+        if record_type in {"issue", "recall"}:
+            if copies is None or int(copies) < 1:
+                raise BusinessLogicError("份数须大于 0")
+            copies = int(copies)
+        else:
+            copies = None
+        if record_type == "issue" and payload.signed_on and payload.signed_on < payload.event_on:
+            raise BusinessLogicError("签收日不能早于发放日")
+        if record_type == "recall":
+            outstanding = (await self._outstanding_copies_map(tenant_id, [document_id])).get(
+                document_id, 0
+            )
+            if copies > outstanding:
+                raise BusinessLogicError("回收份数超过未回收份数")
+        data: Dict[str, Any] = {
+            "tenant_id": tenant_id,
+            "document_id": document_id,
+            "record_type": record_type,
+            "document_version": row.version,
+            "copies": copies,
+            "party_name": party_name,
+            "event_on": payload.event_on,
+            "signer_name": (payload.signer_name or "").strip() or None,
+            "signed_on": payload.signed_on if record_type == "issue" else None,
+            "destroyed": bool(payload.destroyed) if record_type == "recall" else False,
+            "completed": bool(payload.completed) if record_type == "briefing" else False,
+            "training_ref": (payload.training_ref or "").strip() or None
+            if record_type == "briefing"
+            else None,
+            "remarks": (payload.remarks or "").strip() or None,
+        }
+        apply_create_audit(data, actor)
+        created = await QmsSystemDocumentCirculation.create(**data)
+        return QmsSystemDocumentCirculationResponse.model_validate(created)
+
+    async def delete_circulation(
+        self,
+        tenant_id: int,
+        document_id: int,
+        circulation_id: int,
+        *,
+        actor: Any,
+    ) -> None:
+        from apps.common.audit_actor import apply_update_audit
+        from apps.kuaizhizao.models.qms_system_document_circulation import (
+            QmsSystemDocumentCirculation,
+        )
+
+        await self._get_row(tenant_id, document_id)
+        record = await QmsSystemDocumentCirculation.filter(
+            tenant_id=tenant_id,
+            document_id=document_id,
+            id=circulation_id,
+            deleted_at__isnull=True,
+        ).first()
+        if record is None:
+            raise NotFoundError("发放回收宣贯记录不存在")
+        if record.record_type == "issue":
+            outstanding = (await self._outstanding_copies_map(tenant_id, [document_id])).get(
+                document_id, 0
+            )
+            if outstanding - int(record.copies or 0) < 0:
+                raise BusinessLogicError("已有回收记录，不能删除这笔发放")
+        record.deleted_at = resolve_business_datetime()
+        apply_update_audit(record, actor)
+        await record.save()
+
     async def count_review_due_documents(self, tenant_id: int) -> QmsSystemDocumentReviewDueSummary:
         now = resolve_business_datetime()
         due_count = await QmsSystemDocument.filter(
@@ -748,8 +938,21 @@ class QmsInternalAuditService(AppBaseService[QmsInternalAudit], _QmsCrudMixin):
         self.model = QmsInternalAudit
 
     async def create_audit(self, tenant_id: int, payload: QmsInternalAuditCreate) -> QmsInternalAuditResponse:
+        from apps.kuaizhizao.models.qms_internal_audit_annual_plan import QmsInternalAuditAnnualPlan
+
         data = payload.model_dump(exclude_unset=False)
         self._apply_status_guard(data.get("status"))
+        plan_id = data.get("annual_plan_id")
+        if plan_id is None:
+            raise BusinessLogicError("请先选择年度计划后再建单次审核")
+        plan = await QmsInternalAuditAnnualPlan.filter(
+            tenant_id=tenant_id, id=plan_id, deleted_at__isnull=True
+        ).first()
+        if plan is None:
+            raise BusinessLogicError("年度计划不存在")
+        # 新单不得再写入整段检查表/不符合
+        data["checklist"] = None
+        data["findings"] = None
         data["audit_code"] = await self._ensure_code(tenant_id, data.get("audit_code"))
         data["finding_links"] = _normalize_links(data.get("finding_links"))
         data["training_refs"] = _normalize_links(data.get("training_refs"))
@@ -779,6 +982,7 @@ class QmsInternalAuditService(AppBaseService[QmsInternalAudit], _QmsCrudMixin):
         keyword: Optional[str] = None,
         status: Optional[str] = None,
         standard_id: Optional[int] = None,
+        annual_plan_id: Optional[int] = None,
         skip: int = 0,
         limit: int = 50,
     ) -> QmsInternalAuditListResponse:
@@ -789,6 +993,8 @@ class QmsInternalAuditService(AppBaseService[QmsInternalAudit], _QmsCrudMixin):
             query = query.filter(status=status)
         if standard_id is not None:
             query = query.filter(standard_id=standard_id)
+        if annual_plan_id is not None:
+            query = query.filter(annual_plan_id=annual_plan_id)
         total = await query.count()
         rows = await query.order_by("-updated_at", "-id").offset(skip).limit(limit)
         items = [await _audit_response(tenant_id, r) for r in rows]
@@ -800,9 +1006,25 @@ class QmsInternalAuditService(AppBaseService[QmsInternalAudit], _QmsCrudMixin):
     async def update_audit(
         self, tenant_id: int, audit_id: int, payload: QmsInternalAuditUpdate
     ) -> QmsInternalAuditResponse:
+        from apps.kuaizhizao.models.qms_internal_audit_annual_plan import QmsInternalAuditAnnualPlan
+        from apps.kuaizhizao.services.qms_audit_nc_service import count_open_nc_for_audit
+
         row = await self._get_row(tenant_id, audit_id)
         data = payload.model_dump(exclude_unset=True)
         self._apply_status_guard(data.get("status"))
+        # 禁止再写入整段检查表/不符合
+        data.pop("checklist", None)
+        data.pop("findings", None)
+        if "annual_plan_id" in data and data["annual_plan_id"] is not None:
+            plan = await QmsInternalAuditAnnualPlan.filter(
+                tenant_id=tenant_id, id=data["annual_plan_id"], deleted_at__isnull=True
+            ).first()
+            if plan is None:
+                raise BusinessLogicError("年度计划不存在")
+        if data.get("status") == "closed":
+            open_nc = await count_open_nc_for_audit(tenant_id, audit_id)
+            if open_nc > 0:
+                raise BusinessLogicError(f"仍有 {open_nc} 份未关闭的不符合报告，不能关闭内审")
         for key in ("finding_links", "training_refs", "calibration_refs"):
             if key in data:
                 data[key] = _normalize_links(data.get(key))
@@ -894,6 +1116,12 @@ class QmsManagementReviewService(AppBaseService[QmsManagementReview], _QmsCrudMi
         row = await self._get_row(tenant_id, review_id)
         data = payload.model_dump(exclude_unset=True)
         self._apply_status_guard(data.get("status"))
+        if data.get("status") == "closed":
+            from apps.kuaizhizao.services.qms_corrective_action_service import (
+                assert_review_resolutions_ready_to_close,
+            )
+
+            await assert_review_resolutions_ready_to_close(tenant_id, review_id)
         for key in ("input_links", "training_refs", "calibration_refs"):
             if key in data:
                 data[key] = _normalize_links(data.get(key))
@@ -913,6 +1141,8 @@ class QmsManagementReviewService(AppBaseService[QmsManagementReview], _QmsCrudMi
                 raise BusinessLogicError("须选择至少一套管理体系")
             await replace_review_standards(tenant_id, row.id, standard_ids)
         return await _review_response(tenant_id, row)
+
+    async def delete_review(self, tenant_id: int, review_id: int) -> None:
         row = await self._get_row(tenant_id, review_id)
         row.deleted_at = resolve_business_datetime()
         await row.save()
@@ -923,7 +1153,16 @@ class QmsManagementReviewService(AppBaseService[QmsManagementReview], _QmsCrudMi
         *,
         period_start: Optional[datetime] = None,
         period_end: Optional[datetime] = None,
+        current_review_id: Optional[int] = None,
     ) -> QmsManagementReviewInputSummary:
+        from apps.kuaizhizao.models.qms_corrective_action import QmsCorrectiveAction
+        from apps.kuaizhizao.models.qms_management_review_resolution import (
+            QmsManagementReviewResolution,
+        )
+        from apps.kuaizhizao.models.qms_nonconformity_report import QmsNonconformityReport
+        from apps.kuaizhizao.models.quality_complaint import QualityComplaint
+        from apps.kuaizhizao.models.supplier_evaluation import SupplierEvaluation
+
         end = period_end or resolve_business_datetime()
         start = period_start
         if start is None:
@@ -964,6 +1203,120 @@ class QmsManagementReviewService(AppBaseService[QmsManagementReview], _QmsCrudMi
         )
         oqc_pass_rate = round(oqc_pass_count / oqc_total * 100, 2) if oqc_total else None
 
+        documents: List[QmsManagementReviewInputDocItem] = []
+
+        audits = await QmsInternalAudit.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            created_at__gte=start,
+            created_at__lte=end,
+        ).order_by("-id").limit(100)
+        for row in audits:
+            documents.append(
+                QmsManagementReviewInputDocItem(
+                    ref_type="qms_internal_audit",
+                    ref_id=row.id,
+                    ref_code=row.audit_code,
+                    ref_name=row.title,
+                    status=row.status,
+                    note="已关闭" if row.status == "closed" else "未关闭",
+                )
+            )
+
+        nc_reports = await QmsNonconformityReport.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            created_at__gte=start,
+            created_at__lte=end,
+        ).order_by("-id").limit(100)
+        for row in nc_reports:
+            documents.append(
+                QmsManagementReviewInputDocItem(
+                    ref_type="qms_nonconformity_report",
+                    ref_id=row.id,
+                    ref_code=row.report_code,
+                    ref_name=(row.fact or "")[:80] or None,
+                    status=row.status,
+                )
+            )
+
+        capas = await QmsCorrectiveAction.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            created_at__gte=start,
+            created_at__lte=end,
+        ).order_by("-id").limit(100)
+        for row in capas:
+            documents.append(
+                QmsManagementReviewInputDocItem(
+                    ref_type="qms_corrective_action",
+                    ref_id=row.id,
+                    ref_code=row.action_code,
+                    ref_name=(row.problem_summary or "")[:80] or None,
+                    status=row.status,
+                )
+            )
+
+        complaints = await QualityComplaint.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            created_at__gte=start,
+            created_at__lte=end,
+        ).order_by("-id").limit(100)
+        for row in complaints:
+            documents.append(
+                QmsManagementReviewInputDocItem(
+                    ref_type="quality_complaint",
+                    ref_id=row.id,
+                    ref_code=row.code,
+                    ref_name=row.title,
+                    status=row.status,
+                )
+            )
+
+        evaluations = await SupplierEvaluation.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            created_at__gte=start,
+            created_at__lte=end,
+        ).order_by("-id").limit(100)
+        for row in evaluations:
+            documents.append(
+                QmsManagementReviewInputDocItem(
+                    ref_type="supplier_evaluation",
+                    ref_id=row.id,
+                    ref_code=row.code,
+                    ref_name=row.supplier_name or row.template_name,
+                    status=row.status,
+                )
+            )
+
+        open_resolutions_from_last: List[QmsManagementReviewInputDocItem] = []
+        last_review_q = QmsManagementReview.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True
+        ).exclude(status="draft")
+        if current_review_id is not None:
+            last_review_q = last_review_q.exclude(id=current_review_id)
+        last_review = await last_review_q.order_by("-review_date", "-id").first()
+        if last_review is not None:
+            open_res = await QmsManagementReviewResolution.filter(
+                tenant_id=tenant_id,
+                review_id=last_review.id,
+                deleted_at__isnull=True,
+                status="open",
+            ).order_by("sort_order", "id")
+            for row in open_res:
+                open_resolutions_from_last.append(
+                    QmsManagementReviewInputDocItem(
+                        ref_type="qms_review_resolution",
+                        ref_id=row.id,
+                        ref_code=f"{last_review.review_code}-R{row.id}",
+                        ref_name=(row.content or "")[:80] or None,
+                        status=row.status,
+                        note=last_review.review_code,
+                    )
+                )
+
         summary_parts = [
             f"期内不合格台账 {nonconforming_count} 笔",
             f"8D 未关闭 {open_8d_count} 笔",
@@ -976,6 +1329,21 @@ class QmsManagementReviewService(AppBaseService[QmsManagementReview], _QmsCrudMi
             summary_parts.append(f"OQC 合格率 {oqc_pass_rate}%（{oqc_pass_count}/{oqc_total}）")
         else:
             summary_parts.append("OQC 期内无已检验记录")
+        summary_parts.append(f"本周期内审 {len(audits)} 笔")
+        summary_parts.append(f"不符合报告 {len(nc_reports)} 笔")
+        summary_parts.append(f"纠正预防 {len(capas)} 笔")
+        summary_parts.append(f"质量投诉 {len(complaints)} 笔")
+        summary_parts.append(f"供方评价 {len(evaluations)} 笔")
+        if open_resolutions_from_last:
+            summary_parts.append(f"上次未关闭决议 {len(open_resolutions_from_last)} 条")
+
+        from apps.kuaizhizao.services.qms_phase5_service import list_published_unmet_objective_docs
+
+        quality_objectives_unmet = await list_published_unmet_objective_docs(tenant_id)
+        if quality_objectives_unmet:
+            summary_parts.append(f"已发布未达到质量目标 {len(quality_objectives_unmet)} 行")
+        else:
+            summary_parts.append("已发布未达到质量目标 0 行")
 
         return QmsManagementReviewInputSummary(
             period_start=start,
@@ -989,4 +1357,7 @@ class QmsManagementReviewService(AppBaseService[QmsManagementReview], _QmsCrudMi
             oqc_pass_count=oqc_pass_count,
             oqc_pass_rate=oqc_pass_rate,
             summary_text="；".join(summary_parts),
+            documents=documents,
+            open_resolutions_from_last=open_resolutions_from_last,
+            quality_objectives_unmet=quality_objectives_unmet,
         )

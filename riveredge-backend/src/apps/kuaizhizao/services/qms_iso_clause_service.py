@@ -244,7 +244,7 @@ class QmsIsoClauseService(AppBaseService[QmsIsoClause]):
     async def ensure_all_preset_clauses(
         self, tenant_id: int, user: Optional[User] = None
     ) -> None:
-        """确保四套预置标准的条款目录已写入（缺则创建，预置包新增条目则补齐）。"""
+        """确保预置标准的条款目录已写入（缺则创建，预置包新增条目则补齐）。"""
         await qms_standard_service.ensure_preset_standards(tenant_id, user)
         for code in PRESET_REGISTRY:
             await self.load_preset(tenant_id, standard_code=code, user=user)

@@ -1735,6 +1735,61 @@
         "label"
       ],
       "data_scope_key": "kuaizhizao:outsource-settlement"
+    },
+    "quality-management-nonconformity-reports": {
+      "permission_prefix": "kuaizhizao:quality-management-nonconformity-reports",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": null
+    },
+    "quality-management-corrective-actions": {
+      "permission_prefix": "kuaizhizao:quality-management-corrective-actions",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": null
+    },
+    "quality-management-quality-objectives": {
+      "permission_prefix": "kuaizhizao:quality-management-quality-objectives",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": null
+    },
+    "quality-management-legal-regulations": {
+      "permission_prefix": "kuaizhizao:quality-management-legal-regulations",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": null
+    },
+    "quality-management-external-audits": {
+      "permission_prefix": "kuaizhizao:quality-management-external-audits",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": null
     }
   },
   "module_references": {
@@ -3335,6 +3390,33 @@
     "kuaizhizao:quality-management-system-documents:approve",
     "kuaizhizao:quality-management-traceability:read",
     "kuaizhizao:quality-management-traceability:print",
+    "kuaizhizao:quality-management-nonconformity-reports:read",
+    "kuaizhizao:quality-management-nonconformity-reports:create",
+    "kuaizhizao:quality-management-nonconformity-reports:delete",
+    "kuaizhizao:quality-management-nonconformity-reports:update",
+    "kuaizhizao:quality-management-nonconformity-reports:export",
+    "kuaizhizao:quality-management-nonconformity-reports:close",
+    "kuaizhizao:quality-management-corrective-actions:read",
+    "kuaizhizao:quality-management-corrective-actions:create",
+    "kuaizhizao:quality-management-corrective-actions:delete",
+    "kuaizhizao:quality-management-corrective-actions:update",
+    "kuaizhizao:quality-management-corrective-actions:export",
+    "kuaizhizao:quality-management-corrective-actions:close",
+    "kuaizhizao:quality-management-quality-objectives:read",
+    "kuaizhizao:quality-management-quality-objectives:create",
+    "kuaizhizao:quality-management-quality-objectives:delete",
+    "kuaizhizao:quality-management-quality-objectives:update",
+    "kuaizhizao:quality-management-quality-objectives:export",
+    "kuaizhizao:quality-management-legal-regulations:read",
+    "kuaizhizao:quality-management-legal-regulations:create",
+    "kuaizhizao:quality-management-legal-regulations:delete",
+    "kuaizhizao:quality-management-legal-regulations:update",
+    "kuaizhizao:quality-management-legal-regulations:export",
+    "kuaizhizao:quality-management-external-audits:read",
+    "kuaizhizao:quality-management-external-audits:create",
+    "kuaizhizao:quality-management-external-audits:delete",
+    "kuaizhizao:quality-management-external-audits:update",
+    "kuaizhizao:quality-management-external-audits:export",
     "kuaizhizao:quotation:read",
     "kuaizhizao:quotation:create",
     "kuaizhizao:quotation:delete",
@@ -5344,6 +5426,66 @@
       "auto_generate": true,
       "rule_code": "OUTSOURCE_PRODUCT_RETURN_CODE",
       "allow_manual_edit": true
+    },
+    {
+      "page_code": "kuaizhizao-quality-nonconformity-report",
+      "page_name": "不符合报告",
+      "page_path": "/apps/kuaizhizao/quality-management/nonconformity-reports",
+      "code_field": "report_code",
+      "code_field_label": "不符合报告编号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "QMS_NONCONFORMITY_REPORT_CODE",
+      "allow_manual_edit": true
+    },
+    {
+      "page_code": "kuaizhizao-quality-corrective-action",
+      "page_name": "纠正预防",
+      "page_path": "/apps/kuaizhizao/quality-management/corrective-actions",
+      "code_field": "action_code",
+      "code_field_label": "纠正预防编号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "QMS_CORRECTIVE_ACTION_CODE",
+      "allow_manual_edit": true
+    },
+    {
+      "page_code": "kuaizhizao-quality-objective",
+      "page_name": "质量目标",
+      "page_path": "/apps/kuaizhizao/quality-management/quality-objectives",
+      "code_field": "objective_code",
+      "code_field_label": "质量目标编号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "QMS_QUALITY_OBJECTIVE_CODE",
+      "allow_manual_edit": true
+    },
+    {
+      "page_code": "kuaizhizao-quality-external-audit",
+      "page_name": "外审",
+      "page_path": "/apps/kuaizhizao/quality-management/external-audits",
+      "code_field": "audit_code",
+      "code_field_label": "外审编号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "QMS_EXTERNAL_AUDIT_CODE",
+      "allow_manual_edit": true
+    },
+    {
+      "page_code": "kuaizhizao-quality-drawing-balloon-sheet",
+      "page_name": "图纸气泡标注",
+      "page_path": "/apps/kuaizhizao/quality-management/drawing-balloon-sheets",
+      "code_field": "sheet_code",
+      "code_field_label": "标注单编码",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "DRAWING_BALLOON_SHEET_CODE",
+      "allow_manual_edit": true
     }
   ],
   "custom_field_pages": [
@@ -5858,6 +6000,24 @@
       "table_name": "apps_kuaizhizao_disassembly_orders",
       "table_name_label": "拆卸单表",
       "module": "星制造",
+      "module_icon": "tool"
+    },
+    {
+      "page_code": "kuaizhizao-quality-nonconformity-report",
+      "page_name": "不符合报告",
+      "page_path": "/apps/kuaizhizao/quality-management/nonconformity-reports",
+      "table_name": "apps_kuaizhizao_qms_nonconformity_reports",
+      "table_name_label": "不符合报告表",
+      "module": "快制造",
+      "module_icon": "tool"
+    },
+    {
+      "page_code": "kuaizhizao-quality-corrective-action",
+      "page_name": "纠正预防",
+      "page_path": "/apps/kuaizhizao/quality-management/corrective-actions",
+      "table_name": "apps_kuaizhizao_qms_corrective_actions",
+      "table_name_label": "纠正预防表",
+      "module": "快制造",
       "module_icon": "tool"
     }
   ],

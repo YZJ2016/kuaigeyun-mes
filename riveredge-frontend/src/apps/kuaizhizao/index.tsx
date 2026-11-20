@@ -146,6 +146,24 @@ const SPCMonitorPage = lazy(() => import('./pages/quality-management/spc-monitor
 const SystemDocumentsPage = lazy(() => import('./pages/quality-management/system-documents'));
 const QcSopPage = lazy(() => import('./pages/quality-management/qc-sop'));
 const InternalAuditsPage = lazy(() => import('./pages/quality-management/internal-audits'));
+const InternalAuditAnnualPlansPage = lazy(
+  () => import('./pages/quality-management/internal-audit-annual-plans'),
+);
+const NonconformityReportsPage = lazy(
+  () => import('./pages/quality-management/nonconformity-reports'),
+);
+const CorrectiveActionsPage = lazy(
+  () => import('./pages/quality-management/corrective-actions'),
+);
+const QualityObjectivesPage = lazy(
+  () => import('./pages/quality-management/quality-objectives'),
+);
+const LegalRegulationsPage = lazy(
+  () => import('./pages/quality-management/legal-regulations'),
+);
+const ExternalAuditsPage = lazy(
+  () => import('./pages/quality-management/external-audits'),
+);
 const ManagementReviewsPage = lazy(() => import('./pages/quality-management/management-reviews'));
 const ClauseManagementPage = lazy(() => import('./pages/quality-management/clause-management'));
 const FaiOrdersPage = lazy(() => import('./pages/quality-management/fai-orders'));
@@ -579,6 +597,30 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="quality-management/system-documents" element={withPageSuspense(SystemDocumentsPage)} />
       <Route path="quality-management/qc-sop" element={withPageSuspense(QcSopPage)} />
       <Route path="quality-management/internal-audits" element={withPageSuspense(InternalAuditsPage)} />
+      <Route
+        path="quality-management/internal-audit-annual-plans"
+        element={withPageSuspense(InternalAuditAnnualPlansPage)}
+      />
+      <Route
+        path="quality-management/nonconformity-reports"
+        element={withPageSuspense(NonconformityReportsPage)}
+      />
+      <Route
+        path="quality-management/corrective-actions"
+        element={withPageSuspense(CorrectiveActionsPage)}
+      />
+      <Route
+        path="quality-management/quality-objectives"
+        element={withPageSuspense(QualityObjectivesPage)}
+      />
+      <Route
+        path="quality-management/legal-regulations"
+        element={withPageSuspense(LegalRegulationsPage)}
+      />
+      <Route
+        path="quality-management/external-audits"
+        element={withPageSuspense(ExternalAuditsPage)}
+      />
       <Route path="quality-management/management-reviews" element={withPageSuspense(ManagementReviewsPage)} />
       <Route
         path="quality-management/fai-orders/:id/balloon"

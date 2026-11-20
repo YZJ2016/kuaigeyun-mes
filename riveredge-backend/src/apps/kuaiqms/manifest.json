@@ -210,16 +210,52 @@
             "permission": "kuaizhizao:quality-management-system-documents:read"
           },
           {
+            "title": "app.kuaizhizao.menu.quality-management.internal-audit-annual-plans",
+            "path": "/apps/kuaizhizao/quality-management/internal-audit-annual-plans",
+            "sort_order": 2,
+            "permission": "kuaizhizao:quality-management-internal-audits:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.quality-management.internal-audits",
             "path": "/apps/kuaizhizao/quality-management/internal-audits",
             "sort_order": 2,
             "permission": "kuaizhizao:quality-management-internal-audits:read"
           },
           {
+            "title": "app.kuaizhizao.menu.quality-management.nonconformity-reports",
+            "path": "/apps/kuaizhizao/quality-management/nonconformity-reports",
+            "sort_order": 4,
+            "permission": "kuaizhizao:quality-management-nonconformity-reports:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.quality-management.corrective-actions",
+            "path": "/apps/kuaizhizao/quality-management/corrective-actions",
+            "sort_order": 5,
+            "permission": "kuaizhizao:quality-management-corrective-actions:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.quality-management.management-reviews",
             "path": "/apps/kuaizhizao/quality-management/management-reviews",
             "sort_order": 3,
             "permission": "kuaizhizao:quality-management-management-reviews:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.quality-management.quality-objectives",
+            "path": "/apps/kuaizhizao/quality-management/quality-objectives",
+            "sort_order": 7,
+            "permission": "kuaizhizao:quality-management-quality-objectives:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.quality-management.legal-regulations",
+            "path": "/apps/kuaizhizao/quality-management/legal-regulations",
+            "sort_order": 8,
+            "permission": "kuaizhizao:quality-management-legal-regulations:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.quality-management.external-audits",
+            "path": "/apps/kuaizhizao/quality-management/external-audits",
+            "sort_order": 9,
+            "permission": "kuaizhizao:quality-management-external-audits:read"
           }
         ]
       },

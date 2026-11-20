@@ -9,14 +9,19 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Col, Empty, Row, Table, Alert, Modal } from 'antd';
+import { App, Breadcrumb, Button, Col, Empty, Row, Table, Alert, Modal } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import CodeField from '../../../../../components/code-field';
 import { UniTable } from '../../../../../components/uni-table';
-import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
-import { ThemedSegmented } from '../../../../../components/themed-segmented';
-import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import {
+  rowActionDrawingDistribute,
+  rowActionDrawingNewRevision,
+  rowActionKind,
+  rowActionLabelKeep,
+  rowActionViewHistory,
+} from '../../../../../components/uni-action';
+import { FormModalTemplate, MODAL_CONFIG, TwoColumnLayout } from '../../../../../components/layout-templates';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -25,6 +30,7 @@ import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../sales-managem
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { MarkerTag } from '../../../../../constants/statusBadges';
+import { UNI_TABLE_SITE_DATETIME_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { pickListSearchKeyword, pickSearchString } from '../../../../../utils/tableQueryKey';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
@@ -41,13 +47,30 @@ import {
   QMS_DOC_TYPE_OPTIONS,
 } from '../qms/qmsMeta';
 import QmsClauseSelect from '../qms/QmsClauseSelect';
+import SystemDocumentCirculationModal from './SystemDocumentCirculationModal';
+import SystemDocumentDetailDrawer from './SystemDocumentDetailDrawer';
+import SystemDocumentNavTree from './SystemDocumentNavTree';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import {
+  buildLifecycleTreeKey,
+  dimensionLabel,
+  loadStoredSystemDocumentNav,
+  navHidesStatusSearch,
+  navSelectionToListParams,
+  resolveNavNodeTitle,
+  saveStoredSystemDocumentNav,
+  type StoredSystemDocumentNav,
+  type SystemDocumentNavDimension,
+} from './systemDocumentNav';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import { hasDocumentGlobalView } from '../../../../../utils/permissionContract';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import { CustomFieldsFormSection } from '../../../../../components/custom-fields';
 
 const RESOURCE = 'kuaizhizao:quality-management-system-documents';
-
-type CatalogZone = 'formal' | 'pending';
+const SYSTEM_DOCUMENT_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_qms_system_documents';
 
 const SystemDocumentsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -57,12 +80,18 @@ const SystemDocumentsPage: React.FC = () => {
   const tableRowsRef = useRef<QmsSystemDocument[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<QmsSystemDocument | null>(null);
-  const [zone, setZone] = useState<CatalogZone>('formal');
+  const [nav, setNav] = useState<StoredSystemDocumentNav>(() => loadStoredSystemDocumentNav());
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyDoc, setHistoryDoc] = useState<QmsSystemDocument | null>(null);
   const [historyRows, setHistoryRows] = useState<QmsSystemDocumentVersion[]>([]);
   const [historyAudience, setHistoryAudience] = useState('');
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [circulationDoc, setCirculationDoc] = useState<QmsSystemDocument | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailDoc, setDetailDoc] = useState<QmsSystemDocument | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailIdRef = useRef<number | null>(null);
   const { canCreate, canUpdate, canDelete, canAction } = useResourcePermissions(RESOURCE);
   const canPublish = !!canAction?.('publish');
   const canSubmit = !!canAction?.('submit');
@@ -70,6 +99,30 @@ const SystemDocumentsPage: React.FC = () => {
   const canReject = !!canAction?.('reject');
   const currentUser = useCurrentUser();
   const canSeeFullHistoryHint = hasDocumentGlobalView(currentUser);
+
+  const {
+    customFields: systemDocFormCustomFields,
+    customFieldValues: systemDocFormCustomFieldValues,
+    loadFieldValues: loadSystemDocFormFieldValues,
+    extractFormValues: extractSystemDocFormValues,
+    saveCustomFieldValues: saveSystemDocCustomFieldValues,
+    resetFieldValues: resetSystemDocFormFieldValues,
+  } = useCustomFields({
+    tableName: SYSTEM_DOCUMENT_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open,
+  });
+
+  const {
+    customFields: systemDocListCustomFields,
+    generateCustomFieldColumns: generateSystemDocCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichSystemDocRecordsWithCustomFields,
+    customFieldValues: systemDocDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadSystemDocFieldValuesForDetail,
+    resetDetailFieldValues: resetSystemDocDetailFieldValues,
+  } = useCustomFieldsForList<QmsSystemDocument>({
+    tableName: SYSTEM_DOCUMENT_CUSTOM_FIELD_TABLE,
+  });
 
   const statusEnum = useMemo(
     () =>
@@ -85,6 +138,7 @@ const SystemDocumentsPage: React.FC = () => {
 
   const openCreate = useCallback(() => {
     setEditing(null);
+    resetSystemDocFormFieldValues();
     setOpen(true);
     setTimeout(() => {
       formRef.current?.resetFields();
@@ -97,7 +151,22 @@ const SystemDocumentsPage: React.FC = () => {
         attachments: [],
       });
     }, 0);
-  }, []);
+  }, [resetSystemDocFormFieldValues]);
+
+  const fillEditForm = useCallback(
+    async (row: QmsSystemDocument) => {
+      const customFormValues =
+        row.id != null ? await loadSystemDocFormFieldValues(row.id) : {};
+      formRef.current?.setFieldsValue({
+        ...row,
+        evidence_links_text: stringifyEvidenceLinks(row.evidence_links),
+        training_refs_text: stringifyEvidenceLinks(row.training_refs),
+        attachments: mapAttachmentsToUploadList(row.attachments as any),
+        ...customFormValues,
+      });
+    },
+    [loadSystemDocFormFieldValues],
+  );
   useNewShortcut(() => {
     if (canCreate) openCreate();
   });
@@ -117,11 +186,41 @@ const SystemDocumentsPage: React.FC = () => {
     return Object.fromEntries(items.map((s) => [s.id, { text: s.code }]));
   }, [standardsEnvelope?.items]);
 
-  const isReviewDue = useCallback((row: QmsSystemDocument) => {
-    if (row.status !== 'effective' || !row.next_review_at) return false;
-    const due = new Date(row.next_review_at).getTime();
-    return Number.isFinite(due) && due <= Date.now();
+  const standardNavItems = useMemo(
+    () =>
+      (standardsEnvelope?.items ?? []).map((s) => ({
+        id: s.id,
+        code: s.code,
+        name: s.name,
+      })),
+    [standardsEnvelope?.items],
+  );
+
+  const navListParams = useMemo(
+    () => navSelectionToListParams(nav.dimension, nav.selectedKey),
+    [nav.dimension, nav.selectedKey],
+  );
+
+  const updateNav = useCallback((dimension: SystemDocumentNavDimension, selectedKey: string) => {
+    const next = { dimension, selectedKey };
+    setNav(next);
+    saveStoredSystemDocumentNav(next);
   }, []);
+
+  const focusLifecycle = useCallback(
+    (part: string) => {
+      updateNav('lifecycle', buildLifecycleTreeKey(part));
+    },
+    [updateNav],
+  );
+
+  const navBreadcrumbTitle = useMemo(
+    () =>
+      `${dimensionLabel(nav.dimension, t)} / ${resolveNavNodeTitle(nav.dimension, nav.selectedKey, t, standardNavItems)}`,
+    [nav.dimension, nav.selectedKey, standardNavItems, t],
+  );
+
+  const hideStatusInSearch = navHidesStatusSearch(nav.dimension, nav.selectedKey);
 
   const openVersionHistory = useCallback(
     async (row: QmsSystemDocument) => {
@@ -142,21 +241,58 @@ const SystemDocumentsPage: React.FC = () => {
     [messageApi, t],
   );
 
-  const columns: ProColumns<QmsSystemDocument>[] = useMemo(
-    () =>
-      alignProColumns(
+  const loadDetail = useCallback(async (id: number) => {
+    detailIdRef.current = id;
+    setDetailOpen(true);
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const doc = await qualityQmsApi.systemDocuments.get(id);
+      if (detailIdRef.current !== id) return;
+      setDetailDoc(doc);
+      await loadSystemDocFieldValuesForDetail(id);
+    } catch (e) {
+      if (detailIdRef.current !== id) return;
+      setDetailDoc(null);
+      setDetailError(getApiErrorMessage(e, t('common.loadFailed')));
+    } finally {
+      if (detailIdRef.current === id) setDetailLoading(false);
+    }
+  }, [loadSystemDocFieldValuesForDetail, t]);
+
+  const openDetail = useCallback(
+    (row: QmsSystemDocument) => {
+      setDetailDoc(null);
+      void loadDetail(row.id);
+    },
+    [loadDetail],
+  );
+
+  const openEditFromDetail = useCallback((row: QmsSystemDocument) => {
+    setDetailOpen(false);
+    setEditing(row);
+    setOpen(true);
+    setTimeout(() => {
+      void fillEditForm(row);
+    }, 0);
+  }, [fillEditForm]);
+
+  const columns: ProColumns<QmsSystemDocument>[] = useMemo(() => {
+    const customFieldColumns = generateSystemDocCustomFieldColumns();
+    return alignProColumns(
         [
           {
             title: t('app.kuaizhizao.quality.qms.documentCode'),
             dataIndex: 'document_code',
-            width: 140,
-            minWidth: 140,
+            width: 176,
+            minWidth: 176,
             uniTableKeepWidth: true,
             resizable: false,
             copyable: true,
             hideInSearch: true,
           },
           {
+            // 标题长短不一：唯一 RemainderFlex
             title: t('app.kuaizhizao.quality.qms.title'),
             dataIndex: 'title',
             minWidth: 200,
@@ -174,17 +310,23 @@ const SystemDocumentsPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.quality.qms.docTypeLabel'),
             dataIndex: 'doc_type',
-            width: 110,
-            minWidth: 110,
+            key: 'qms_system_doc_type',
+            width: 120,
+            minWidth: 120,
             uniTableKeepWidth: true,
             resizable: false,
             valueEnum: typeEnum,
+            hideInSearch: nav.dimension === 'doc_type',
+            render: (_, row) => {
+              const text = typeEnum[row.doc_type]?.text || row.doc_type;
+              return text ? <MarkerTag color="geekblue">{text}</MarkerTag> : '-';
+            },
           },
           {
             title: t('app.kuaizhizao.quality.qms.version'),
             dataIndex: 'version',
-            width: 72,
-            minWidth: 72,
+            width: 88,
+            minWidth: 88,
             uniTableKeepWidth: true,
             resizable: false,
             hideInSearch: true,
@@ -192,19 +334,22 @@ const SystemDocumentsPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.quality.qms.applicableStandard'),
             dataIndex: 'standard_id',
-            width: 120,
-            minWidth: 120,
+            key: 'qms_system_standard',
+            width: 136,
+            minWidth: 136,
             uniTableKeepWidth: true,
             resizable: false,
             valueEnum: standardValueEnum,
             render: (_, row) =>
               (row.standard_id != null && standardValueEnum[row.standard_id]?.text) || '-',
+            hideInSearch: nav.dimension === 'standard',
           },
           {
             title: t('app.kuaizhizao.quality.qms.clauseLabel'),
             dataIndex: 'clause_labels',
-            width: 140,
-            minWidth: 140,
+            key: 'qms_system_clause_labels',
+            width: 160,
+            minWidth: 160,
             uniTableKeepWidth: true,
             resizable: false,
             hideInSearch: true,
@@ -219,18 +364,26 @@ const SystemDocumentsPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.quality.qms.nextReviewAt'),
             dataIndex: 'next_review_at',
-            width: 140,
-            minWidth: 140,
-            uniTableKeepWidth: true,
-            resizable: false,
-            hideInSearch: true,
+            key: 'qms_system_next_review_at',
+            ...UNI_TABLE_SITE_DATETIME_COLUMN_DEFAULTS,
             render: (_, row) => {
               const text = formatDateTimeBySiteSetting(row.next_review_at) || '-';
-              if (isReviewDue(row)) {
+              if (row.review_due) {
                 return <MarkerTag color="warning">{text}</MarkerTag>;
               }
               return text;
             },
+          },
+          {
+            title: t('app.kuaizhizao.quality.qms.circulation.outstandingColumn'),
+            dataIndex: 'outstanding_copies',
+            key: 'qms_system_outstanding_copies',
+            width: 88,
+            minWidth: 88,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            render: (_, row) => row.outstanding_copies ?? 0,
           },
           {
             title: t('common.status'),
@@ -238,27 +391,35 @@ const SystemDocumentsPage: React.FC = () => {
             dataIndex: 'status',
             fixed: 'right',
             valueEnum: statusEnum,
-            hideInSearch: zone === 'formal',
+            hideInSearch: hideStatusInSearch,
             render: (_, row) =>
               renderDocumentStatusTag(
                 statusEnum[row.status]?.text || row.status || '-',
                 row.status || undefined,
               ),
           },
+          ...customFieldColumns,
           {
             title: t('common.actions'),
-            key: 'option',
+            key: 'action',
             fixed: 'right',
             hideInSearch: true,
             render: (_, row) => [
               <Button
-                key="history"
+                key="view"
                 {...rowActionKind('read')}
-                {...rowActionLabelKeep()}
+                onClick={() => openDetail(row)}
+              />,
+              <Button
+                key="circulation"
+                {...rowActionDrawingDistribute('skip')}
+                onClick={() => setCirculationDoc(row)}
+              />,
+              <Button
+                key="history"
+                {...rowActionViewHistory()}
                 onClick={() => void openVersionHistory(row)}
-              >
-                {t('app.kuaizhizao.quality.qms.actions.versionHistory')}
-              </Button>,
+              />,
               canUpdate ? (
                 <Button
                   key="edit"
@@ -267,12 +428,7 @@ const SystemDocumentsPage: React.FC = () => {
                     setEditing(row);
                     setOpen(true);
                     setTimeout(() => {
-                      formRef.current?.setFieldsValue({
-                        ...row,
-                        evidence_links_text: stringifyEvidenceLinks(row.evidence_links),
-                        training_refs_text: stringifyEvidenceLinks(row.training_refs),
-                        attachments: mapAttachmentsToUploadList(row.attachments as any),
-                      });
+                      void fillEditForm(row);
                     }, 0);
                   }}
                 />
@@ -280,17 +436,14 @@ const SystemDocumentsPage: React.FC = () => {
               canUpdate && row.status === 'effective' ? (
                 <Button
                   key="revise"
-                  {...rowActionKind('update')}
-                  {...rowActionLabelKeep()}
+                  {...rowActionDrawingNewRevision('skip')}
                   onClick={async () => {
                     await qualityQmsApi.systemDocuments.revise(row.id, {});
                     messageApi.success(t('app.kuaizhizao.quality.qms.messages.reviseSuccess'));
-                    setZone('pending');
+                    focusLifecycle('pending');
                     actionRef.current?.reload();
                   }}
-                >
-                  {t('app.kuaizhizao.quality.qms.actions.revise')}
-                </Button>
+                />
               ) : null,
               canSubmit && (row.status === 'draft' || row.status === 'rejected') ? (
                 <Button
@@ -299,12 +452,10 @@ const SystemDocumentsPage: React.FC = () => {
                   onClick={async () => {
                     await qualityQmsApi.systemDocuments.submit(row.id);
                     messageApi.success(t('app.kuaizhizao.quality.qms.messages.submitSuccess'));
-                    setZone('pending');
+                    focusLifecycle('pending');
                     actionRef.current?.reload();
                   }}
-                >
-                  {t('app.kuaizhizao.quality.qms.actions.submit')}
-                </Button>
+                />
               ) : null,
               canPublish && row.status === 'draft' ? (
                 <Button
@@ -314,7 +465,7 @@ const SystemDocumentsPage: React.FC = () => {
                   onClick={async () => {
                     await qualityQmsApi.systemDocuments.publish(row.id);
                     messageApi.success(t('app.kuaizhizao.quality.qms.messages.publishSuccess'));
-                    setZone('formal');
+                    focusLifecycle('formal');
                     actionRef.current?.reload();
                   }}
                 >
@@ -325,15 +476,12 @@ const SystemDocumentsPage: React.FC = () => {
                 <Button
                   key="reject"
                   {...rowActionKind('reject')}
-                  {...rowActionLabelKeep()}
                   onClick={async () => {
                     await qualityQmsApi.systemDocuments.reject(row.id, {});
                     messageApi.success(t('app.kuaizhizao.quality.qms.messages.rejectSuccess'));
                     actionRef.current?.reload();
                   }}
-                >
-                  {t('app.kuaizhizao.quality.qms.actions.reject')}
-                </Button>
+                />
               ) : null,
               canObsolete && row.status === 'effective' ? (
                 <Button
@@ -342,17 +490,7 @@ const SystemDocumentsPage: React.FC = () => {
                   onClick={async () => {
                     await qualityQmsApi.systemDocuments.obsolete(row.id);
                     messageApi.success(t('app.kuaizhizao.quality.qms.messages.obsoleteSuccess'));
-                    actionRef.current?.reload();
-                  }}
-                />
-              ) : null,
-              canDelete && row.status !== 'effective' ? (
-                <Button
-                  key="delete"
-                  {...rowActionKind('delete')}
-                  onClick={async () => {
-                    await qualityQmsApi.systemDocuments.delete(row.id);
-                    messageApi.success(t('common.deleteSuccess'));
+                    focusLifecycle('obsolete');
                     actionRef.current?.reload();
                   }}
                 />
@@ -361,40 +499,71 @@ const SystemDocumentsPage: React.FC = () => {
           },
         ],
         GLOBAL_DOC_LIST_FIELD_RANK,
-      ),
-    [
-      canDelete,
+      );
+  }, [
       canObsolete,
       canPublish,
       canSubmit,
       canReject,
       canUpdate,
-      isReviewDue,
+      fillEditForm,
+      generateSystemDocCustomFieldColumns,
       messageApi,
+      openDetail,
       openVersionHistory,
       statusEnum,
+      systemDocListCustomFields,
       t,
       typeEnum,
-      zone,
+      hideStatusInSearch,
+      nav.dimension,
+      focusLifecycle,
       standardValueEnum,
-    ],
-  );
+    ]);
 
   return (
     <PermissionGuard
       permission="kuaizhizao:quality-management-system-documents:read"
       fallback={<Empty description={t('app.kuaizhizao.quality.qms.noPermission')} style={{ marginTop: 120 }} />}
     >
-      <ListPageTemplate>
-        {reviewDueSummary && reviewDueSummary.due_count > 0 ? (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 16 }}
-            title={t('app.kuaizhizao.quality.qms.reviewDueBanner', { count: reviewDueSummary.due_count })}
-          />
-        ) : null}
-        <UniTable<QmsSystemDocument>
+      <TwoColumnLayout
+        layoutPersistenceId="apps.kuaizhizao.pages.quality-management.system-documents-nav"
+        leftPanel={{
+          width: 280,
+          minWidth: 248,
+          maxWidth: 360,
+          leftContent: (
+            <SystemDocumentNavTree
+              dimension={nav.dimension}
+              selectedKey={nav.selectedKey}
+              standards={standardNavItems}
+              onDimensionChange={(dimension, selectedKey) => updateNav(dimension, selectedKey)}
+              onSelectKey={(selectedKey) => updateNav(nav.dimension, selectedKey)}
+            />
+          ),
+        }}
+        rightPanel={{
+          header: (
+            <Breadcrumb
+              items={[
+                { title: t('app.kuaizhizao.menu.quality-management.system-documents') },
+                { title: navBreadcrumbTitle },
+              ]}
+            />
+          ),
+          content: (
+            <>
+              {reviewDueSummary && reviewDueSummary.due_count > 0 ? (
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                  title={t('app.kuaizhizao.quality.qms.reviewDueBanner', {
+                    count: reviewDueSummary.due_count,
+                  })}
+                />
+              ) : null}
+              <UniTable<QmsSystemDocument>
           viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.systemDocuments')}
           headerTitle={t('app.kuaizhizao.menu.quality-management.system-documents')}
@@ -402,21 +571,9 @@ const SystemDocumentsPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.system-documents-width-v6"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.system-documents-cf-v1"
           skipFuzzyPinyinClientFilter
-          params={{ zone }}
-          beforeSearchButtons={
-            <ThemedSegmented
-              surfaceBackground
-              size="medium"
-              value={zone}
-              onChange={(v) => setZone(v as CatalogZone)}
-              options={[
-                { label: t('app.kuaizhizao.quality.qms.zone.formal'), value: 'formal' },
-                { label: t('app.kuaizhizao.quality.qms.zone.pending'), value: 'pending' },
-              ]}
-            />
-          }
+          params={{ navDimension: nav.dimension, navKey: nav.selectedKey }}
           toolBarRender={() =>
             canCreate
               ? [
@@ -428,6 +585,7 @@ const SystemDocumentsPage: React.FC = () => {
           }
           enableRowSelection={canDelete}
           showDeleteButton={canDelete}
+          deleteButtonText={t('common.delete')}
           onTableDataChange={(rows) => {
             tableRowsRef.current = rows;
           }}
@@ -446,25 +604,40 @@ const SystemDocumentsPage: React.FC = () => {
             messageApi.success(t('common.batchDeleteSuccess', { count: deletable.length }));
             actionRef.current?.reload();
           }}
-          request={async (params, _sort, _filter, searchFormValues) => {
+          request={async (params, _sort, _filter, searchFormValues, meta) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;
             const standardIdRaw = pickSearchString(searchFormValues, 'standard_id');
+            const searchDocType = pickSearchString(searchFormValues, 'doc_type');
+            const searchStatus = pickSearchString(searchFormValues, 'status');
             const res = await qualityQmsApi.systemDocuments.list({
               skip,
               limit: pageSize,
               keyword: pickListSearchKeyword(searchFormValues),
-              status: pickSearchString(searchFormValues, 'status'),
-              doc_type: pickSearchString(searchFormValues, 'doc_type'),
+              status: navListParams.status ?? searchStatus ?? undefined,
+              status_in: navListParams.status_in,
+              doc_type: navListParams.doc_type ?? searchDocType ?? undefined,
               standard_id:
-                standardIdRaw != null && Number.isFinite(Number(standardIdRaw))
+                navListParams.standard_id ??
+                (standardIdRaw != null && Number.isFinite(Number(standardIdRaw))
                   ? Number(standardIdRaw)
-                  : undefined,
-              zone,
+                  : undefined),
+              standard_id_null: navListParams.standard_id_null,
+              zone: navListParams.zone ?? 'all',
+              review_due: navListParams.review_due,
             });
-            return { success: true, data: res.items || [], total: res.total || 0 };
+            const rows = res.items || [];
+            const enriched =
+              meta?.purpose === 'prefetch'
+                ? rows
+                : await enrichSystemDocRecordsWithCustomFields(rows);
+            return { success: true, data: enriched, total: res.total || 0 };
           }}
         />
+            </>
+          ),
+        }}
+      />
 
         <Modal
           title={
@@ -536,6 +709,38 @@ const SystemDocumentsPage: React.FC = () => {
           />
         </Modal>
 
+        <SystemDocumentDetailDrawer
+          open={detailOpen}
+          document={detailDoc}
+          loading={detailLoading}
+          error={detailError}
+          onRetry={() => {
+            if (detailIdRef.current != null) void loadDetail(detailIdRef.current);
+          }}
+          onClose={() => {
+            setDetailOpen(false);
+            setDetailDoc(null);
+            setDetailError(null);
+            detailIdRef.current = null;
+            resetSystemDocDetailFieldValues();
+          }}
+          canUpdate={canUpdate}
+          onEdit={openEditFromDetail}
+          standardLabel={(id) =>
+            id != null && standardValueEnum[id]?.text ? String(standardValueEnum[id].text) : ''
+          }
+          customFields={systemDocListCustomFields}
+          customFieldValues={systemDocDetailCustomFieldValues}
+        />
+
+        <SystemDocumentCirculationModal
+          open={circulationDoc != null}
+          document={circulationDoc}
+          canUpdate={canUpdate}
+          onClose={() => setCirculationDoc(null)}
+          onChanged={() => actionRef.current?.reload()}
+        />
+
         <FormModalTemplate
           title={
             editing
@@ -549,26 +754,33 @@ const SystemDocumentsPage: React.FC = () => {
           onClose={() => {
             setOpen(false);
             setEditing(null);
+            resetSystemDocFormFieldValues();
           }}
           onFinish={async (values) => {
             try {
+              const { customData, standardValues } = extractSystemDocFormValues(values);
               const payload = {
-                ...values,
-                evidence_links: parseEvidenceLinksText(values.evidence_links_text),
-                training_refs: parseEvidenceLinksText(values.training_refs_text),
-                attachments: normalizeDocumentAttachments(values.attachments),
+                ...standardValues,
+                evidence_links: parseEvidenceLinksText(standardValues.evidence_links_text),
+                training_refs: parseEvidenceLinksText(standardValues.training_refs_text),
+                attachments: normalizeDocumentAttachments(standardValues.attachments),
               };
               delete (payload as any).evidence_links_text;
               delete (payload as any).training_refs_text;
               if (editing?.id) {
                 await qualityQmsApi.systemDocuments.update(editing.id, payload);
+                await saveSystemDocCustomFieldValues(editing.id, customData);
               } else {
-                await qualityQmsApi.systemDocuments.create(payload);
-                setZone('pending');
+                const created = await qualityQmsApi.systemDocuments.create(payload);
+                if (created?.id != null) {
+                  await saveSystemDocCustomFieldValues(created.id, customData);
+                }
+                focusLifecycle('pending');
               }
               messageApi.success(t('common.saveSuccess'));
               setOpen(false);
-    actionRef.current?.reload();
+              resetSystemDocFormFieldValues();
+              actionRef.current?.reload();
               return true;
             } catch (e: any) {
               if (e?.message === EVIDENCE_LINKS_PARSE_INVALID_JSON) {
@@ -654,6 +866,12 @@ const SystemDocumentsPage: React.FC = () => {
                 fieldProps={{ rows: 2 }}
               />
             </Col>
+            <CustomFieldsFormSection
+              customFields={systemDocFormCustomFields}
+              customFieldValues={systemDocFormCustomFieldValues}
+              gridColumns={3}
+              embedInParentRow
+            />
             <Col span={24}>
               <ProFormTextArea name="remarks" label={t('common.remark')} fieldProps={{ rows: 2 }} />
             </Col>
@@ -662,7 +880,6 @@ const SystemDocumentsPage: React.FC = () => {
             </Col>
           </Row>
         </FormModalTemplate>
-      </ListPageTemplate>
     </PermissionGuard>
   );
 };
