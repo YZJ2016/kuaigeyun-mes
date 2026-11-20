@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from apps.kuaicaiwu.models.payable import Payable
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.schemas.payment_application import (
     PaymentApplicationCreate,
     PaymentApplicationLineCreate,
@@ -33,6 +34,65 @@ def _department_payload_from_model(model: Any, *, label: str) -> Dict[str, Any]:
     return {"department_id": did, "department_name": dname}
 
 
+async def _department_payload_from_payable(tenant_id: int, payable: Payable) -> Dict[str, Any]:
+    """从应付来源入库单/采购订单解析申请部门。"""
+    src_type = str(payable.source_type or "").strip()
+    src_id = int(payable.source_id or 0)
+    if _is_purchase_receipt_payable_source(src_type) and src_id:
+        receipt = await PurchaseReceipt.get_or_none(
+            tenant_id=tenant_id, id=src_id, deleted_at__isnull=True
+        )
+        if receipt:
+            return _department_payload_from_model(receipt, label="采购入库单")
+    if _is_purchase_order_payable_source(src_type) and src_id:
+        order = await PurchaseOrder.get_or_none(
+            tenant_id=tenant_id, id=src_id, deleted_at__isnull=True
+        )
+        if order:
+            return _department_payload_from_model(order, label="采购订单")
+    code = str(payable.payable_code or payable.id)
+    raise BusinessLogicError(
+        f"应付单 {code} 无法解析申请部门，请从采购入库或采购订单来源下推"
+    )
+
+
+def _payment_reason_for_payables(payable_codes: Sequence[str]) -> str:
+    codes = [str(c or "").strip() for c in payable_codes if str(c or "").strip()]
+    if not codes:
+        return "往来对账应付货款请款"
+    if len(codes) == 1:
+        return f"往来对账应付 {codes[0]} 货款请款"
+    head = "、".join(codes[:5])
+    if len(codes) > 5:
+        return f"往来对账应付 {head} 等{len(codes)}单货款请款"
+    return f"往来对账应付 {head} 货款请款"
+
+
+def _payment_reason_for_purchase_orders(order_codes: Sequence[str]) -> str:
+    """下推付款申请必填付款事由：按源采购订单编码生成草稿说明，保存前可改。"""
+    codes = [str(code or "").strip() for code in order_codes if str(code or "").strip()]
+    if not codes:
+        return "采购订单预付请款"
+    if len(codes) == 1:
+        return f"采购订单 {codes[0]} 预付请款"
+    head = "、".join(codes[:5])
+    if len(codes) > 5:
+        return f"采购订单 {head} 等{len(codes)}单预付请款"
+    return f"采购订单 {head} 预付请款"
+
+
+def _payment_reason_for_purchase_receipts(receipt_codes: Sequence[str]) -> str:
+    codes = [str(code or "").strip() for code in receipt_codes if str(code or "").strip()]
+    if not codes:
+        return "采购入库单货款请款"
+    if len(codes) == 1:
+        return f"采购入库单 {codes[0]} 货款请款"
+    head = "、".join(codes[:5])
+    if len(codes) > 5:
+        return f"采购入库单 {head} 等{len(codes)}单货款请款"
+    return f"采购入库单 {head} 货款请款"
+
+
 def prepayment_application_base_amount(order: Any) -> Decimal:
     """付款申请自采购订单取单：有预付计划用预付额，否则用订单价税合计。"""
     from apps.kuaicaiwu.services.finance_tax import quantize_money
@@ -55,6 +115,76 @@ def prepayment_application_base_amount(order: Any) -> Decimal:
 
 def compute_prepayment_application_remaining(order: Any, reserved: Decimal) -> Decimal:
     return max(Decimal("0"), prepayment_application_base_amount(order) - reserved)
+
+
+def _is_purchase_order_payable_source(source_type: str) -> bool:
+    st = str(source_type or "").strip()
+    sl = st.lower().replace("-", "_")
+    return sl in {"purchase_order", "purchaseorder"} or st == "订单里程碑"
+
+
+def _is_purchase_receipt_payable_source(source_type: str) -> bool:
+    from apps.kuaicaiwu.constants.finance_source_types import (
+        PAYABLE_SOURCE_PURCHASE_RECEIPT,
+    )
+
+    st = str(source_type or "").strip()
+    sl = st.lower().replace("-", "_")
+    return st == PAYABLE_SOURCE_PURCHASE_RECEIPT or sl in {"purchase_receipt", "purchasereceipt"}
+
+
+async def _batch_payable_pull_display_fields(
+    tenant_id: int, payables: Sequence[Payable]
+) -> Dict[int, Dict[str, Optional[str]]]:
+    po_ids: set[int] = set()
+    receipt_ids: set[int] = set()
+    for payable in payables:
+        sid = int(getattr(payable, "source_id", 0) or 0)
+        if sid <= 0:
+            continue
+        st = str(getattr(payable, "source_type", "") or "")
+        if _is_purchase_order_payable_source(st):
+            po_ids.add(sid)
+        elif _is_purchase_receipt_payable_source(st):
+            receipt_ids.add(sid)
+
+    po_by_id: Dict[int, PurchaseOrder] = {}
+    if po_ids:
+        orders = await PurchaseOrder.filter(
+            tenant_id=tenant_id, id__in=list(po_ids), deleted_at__isnull=True
+        )
+        po_by_id = {int(o.id): o for o in orders}
+
+    receipt_by_id: Dict[int, PurchaseReceipt] = {}
+    if receipt_ids:
+        receipts = await PurchaseReceipt.filter(
+            tenant_id=tenant_id, id__in=list(receipt_ids), deleted_at__isnull=True
+        )
+        receipt_by_id = {int(r.id): r for r in receipts}
+
+    out: Dict[int, Dict[str, Optional[str]]] = {}
+    for payable in payables:
+        pid = int(payable.id)
+        dept: Optional[str] = None
+        applicant: Optional[str] = None
+        sid = int(getattr(payable, "source_id", 0) or 0)
+        st = str(getattr(payable, "source_type", "") or "")
+        if sid > 0 and _is_purchase_order_payable_source(st):
+            order = po_by_id.get(sid)
+            if order:
+                dname = str(getattr(order, "department_name", "") or "").strip()
+                dept = dname or None
+                buyer = str(getattr(order, "buyer_name", "") or "").strip()
+                applicant = buyer or None
+        elif sid > 0 and _is_purchase_receipt_payable_source(st):
+            receipt = receipt_by_id.get(sid)
+            if receipt:
+                dname = str(getattr(receipt, "department_name", "") or "").strip()
+                dept = dname or None
+                buyer = str(getattr(receipt, "buyer_name", "") or "").strip()
+                applicant = buyer or None
+        out[pid] = {"department_name": dept, "applicant_name": applicant}
+    return out
 
 
 class PaymentApplicationPullService:
@@ -174,8 +304,8 @@ class PaymentApplicationPullService:
         result: Dict[int, Decimal] = {oid: Decimal("0") for oid in purchase_order_ids}
         if not purchase_order_ids:
             return result
-        from apps.kuaizhizao.finance.models.payment import Payment
-        from apps.kuaizhizao.finance.models.payment_pull_line import PaymentPullLine
+        from apps.kuaicaiwu.models.payment import Payment
+        from apps.kuaicaiwu.models.payment_pull_line import PaymentPullLine
 
         lines = await PaymentPullLine.filter(
             tenant_id=tenant_id,
@@ -305,19 +435,22 @@ class PaymentApplicationPullService:
         order = await PurchaseOrder.get(id=purchase_order_id)
         if not order.supplier_id:
             raise BusinessLogicError("采购订单未指定供应商")
+        from apps.kuaizhizao.services.payment_application_line_materials import (
+            lines_from_purchase_order_items,
+        )
+
+        items = await lines_from_purchase_order_items(
+            tenant_id=tenant_id,
+            order=order,
+            request_amount=amount,
+            line_kind="prepayment",
+        )
         create = PaymentApplicationCreate(
             supplier_id=int(order.supplier_id),
             supplier_name=str(order.supplier_name or ""),
             application_kind="prepayment",
-            items=[
-                PaymentApplicationLineCreate(
-                    source_type="purchase_order",
-                    source_id=purchase_order_id,
-                    source_code=order.order_code,
-                    line_kind="prepayment",
-                    request_amount=amount,
-                )
-            ],
+            items=items,
+            payment_reason=_payment_reason_for_purchase_orders([str(order.order_code or "")]),
             **_department_payload_from_model(order, label="采购订单"),
         )
         return await self._apps.create_application(
@@ -347,6 +480,7 @@ class PaymentApplicationPullService:
         supplier_id: Optional[int] = None
         supplier_name: Optional[str] = None
         merged_items: List[PaymentApplicationLineCreate] = []
+        order_codes: List[str] = []
 
         for oid in ids:
             preview = await self.preview_from_purchase_order(tenant_id, oid)
@@ -369,6 +503,9 @@ class PaymentApplicationPullService:
                 raise BusinessLogicError(f"采购订单 {code} 无可请款额度")
 
             order = await PurchaseOrder.get(id=oid)
+            order_codes.append(
+                str(getattr(order, "order_code", None) or preview.get("source_code") or oid)
+            )
             merged_items.extend(
                 await lines_from_purchase_order_items(
                     tenant_id=tenant_id,
@@ -387,6 +524,7 @@ class PaymentApplicationPullService:
             supplier_name=str(supplier_name or ""),
             application_kind="prepayment",
             items=merged_items,
+            payment_reason=_payment_reason_for_purchase_orders(order_codes),
             **_department_payload_from_model(first_order, label="采购订单"),
         )
         return await self._apps.create_application(
@@ -552,6 +690,7 @@ class PaymentApplicationPullService:
             supplier_name=str(payable.supplier_name or ""),
             application_kind="goods",
             items=items,
+            payment_reason=_payment_reason_for_purchase_receipts([str(receipt.receipt_code or "")]),
             **_department_payload_from_model(receipt, label="采购入库单"),
         )
         return await self._apps.create_application(
@@ -573,6 +712,7 @@ class PaymentApplicationPullService:
         supplier_id: Optional[int] = None
         supplier_name: Optional[str] = None
         merged_items: List[PaymentApplicationLineCreate] = []
+        receipt_codes: List[str] = []
 
         for rid in ids:
             preview = await self.preview_from_purchase_receipt(tenant_id, rid)
@@ -580,6 +720,7 @@ class PaymentApplicationPullService:
                 code = str(preview.get("source_code") or rid)
                 reason = preview.get("blocking_reason") or "不可下推付款申请"
                 raise BusinessLogicError(f"采购入库单 {code}: {reason}")
+            receipt_codes.append(str(preview.get("source_code") or rid))
             sid = int(preview.get("supplier_id") or 0)
             if not sid:
                 raise BusinessLogicError("入库单未指定供应商")
@@ -607,6 +748,7 @@ class PaymentApplicationPullService:
             supplier_name=str(supplier_name or ""),
             application_kind="goods",
             items=merged_items,
+            payment_reason=_payment_reason_for_purchase_receipts(receipt_codes),
             **_department_payload_from_model(first_receipt, label="采购入库单"),
         )
         return await self._apps.create_application(
@@ -621,6 +763,9 @@ class PaymentApplicationPullService:
         created_by: int,
     ):
         lines: List[PaymentApplicationLineCreate] = []
+        payable_codes: List[str] = []
+        dept_payload: Optional[Dict[str, Any]] = None
+        first_payable: Optional[Payable] = None
         for row in items:
             doc_type = str(row.get("doc_type") or "").strip().lower().replace("-", "_")
             doc_id = int(row.get("doc_id") or 0)
@@ -636,32 +781,41 @@ class PaymentApplicationPullService:
                 max_req = await self._open.max_request_for_payable(tenant_id, payable)
                 if amount > max_req:
                     raise ValidationError(f"应付 {payable.payable_code} 超过可请款 {max_req}")
-                lines.append(
-                    PaymentApplicationLineCreate(
+                row_dept = await _department_payload_from_payable(tenant_id, payable)
+                if dept_payload is None:
+                    dept_payload = row_dept
+                    first_payable = payable
+                elif row_dept != dept_payload:
+                    raise BusinessLogicError("所选应付单申请部门不一致，请分拆下推")
+                payable_codes.append(str(payable.payable_code or doc_id))
+                from apps.kuaizhizao.services.payment_application_line_materials import (
+                    lines_for_payable,
+                )
+
+                lines.extend(
+                    await lines_for_payable(
+                        tenant_id=tenant_id,
+                        payable=payable,
+                        request_amount=amount,
                         source_type="document_reconciliation",
                         source_id=doc_id,
                         source_code=payable.payable_code,
-                        payable_id=int(payable.id),
-                        payable_code=payable.payable_code,
                         line_kind="goods",
-                        request_amount=amount,
                     )
                 )
             else:
                 raise ValidationError(f"暂不支持从 {doc_type} 对账下推，请选用应付单")
-        if not lines:
+        if not lines or not first_payable or not dept_payload:
             raise ValidationError("无有效对账行")
-        supplier_name = lines[0].payable_code or ""
-        payable0 = await Payable.get(id=int(lines[0].payable_id))
         create = PaymentApplicationCreate(
             supplier_id=supplier_id,
-            supplier_name=str(payable0.supplier_name or supplier_name),
-            application_kind="mixed" if len(lines) > 1 else "goods",
+            supplier_name=str(first_payable.supplier_name or ""),
+            application_kind="goods",
             items=lines,
+            payment_reason=_payment_reason_for_payables(payable_codes),
+            **dept_payload,
         )
-        return await self._apps.create_application(
-            tenant_id, create, created_by, skip_manual_create_auto_submit=True
-        )
+        return await self._apps.create_application(tenant_id, create, created_by)
 
     async def list_payable_pull_lines(
         self,
@@ -693,18 +847,26 @@ class PaymentApplicationPullService:
 
             query = query.filter(Q(payable_code__icontains=kw))
         payables = await query.offset(skip).limit(limit).order_by("-created_at")
+        display_by_id = await _batch_payable_pull_display_fields(tenant_id, payables)
         rows = []
         for p in payables:
             max_req = await self._open.max_request_for_payable(tenant_id, p)
             if max_req <= 0:
                 continue
+            display = display_by_id.get(int(p.id), {})
             rows.append(
                 {
                     "payable_id": p.id,
                     "payable_code": p.payable_code,
                     "remaining_amount": float(p.remaining_amount or 0),
+                    "total_amount": float(p.total_amount or 0),
                     "max_request_amount": float(max_req),
                     "supplier_name": p.supplier_name,
+                    "business_date": p.business_date.isoformat() if p.business_date else None,
+                    "due_date": p.due_date.isoformat() if p.due_date else None,
+                    "status": str(p.status or ""),
+                    "department_name": display.get("department_name"),
+                    "applicant_name": display.get("applicant_name"),
                 }
             )
         return {"data": rows, "total": len(rows)}

@@ -795,7 +795,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
         response, prepay_pair = await asyncio.gather(_enrich_caps(), _prepay_snapshot())
         if finance_lifecycle:
-            from apps.kuaizhizao.finance.services.purchase_order_finance_lifecycle import (
+            from apps.kuaicaiwu.services.purchase_order_finance_lifecycle import (
                 purchase_order_shows_payment_settlement,
             )
 
@@ -1011,15 +1011,21 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             PurchaseArrivalWarningService,
         )
 
+        from apps.kuaizhizao.services.warehouse_service import (
+            batch_confirmed_purchase_receipt_totals_by_order_ids,
+        )
+
         (
             totals_by_order,
             downstream_totals_by_order,
+            confirmed_received_by_order,
             (items_by_order, material_fallback),
             buyer_name_by_id,
             overdue_by_po,
         ) = await asyncio.gather(
             self._batch_order_receipt_totals(tenant_id, order_ids),
             self._batch_order_downstream_totals(tenant_id, order_ids),
+            batch_confirmed_purchase_receipt_totals_by_order_ids(tenant_id, order_ids),
             _load_list_items(),
             self._batch_buyer_display_names(tenant_id, missing_buyer_ids),
             PurchaseArrivalWarningService().batch_po_has_arrival_overdue(tenant_id, order_ids),
@@ -1032,7 +1038,18 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             items_count = int(totals.get("items_count", 0) or 0)
             ordered_total = Decimal(str(totals.get("ordered_total") or 0))
             received_total = Decimal(str(totals.get("received_total") or 0))
-            outstanding_total = Decimal(str(totals.get("outstanding_total") or 0))
+            confirmed_received = confirmed_received_by_order.get(
+                int(order.id), Decimal("0")
+            )
+            if confirmed_received > received_total:
+                received_total = confirmed_received
+                outstanding_total = (
+                    max(ordered_total - received_total, Decimal("0"))
+                    if ordered_total > 0
+                    else Decimal(str(totals.get("outstanding_total") or 0))
+                )
+            else:
+                outstanding_total = Decimal(str(totals.get("outstanding_total") or 0))
             pushed_notice_total = Decimal(str(downstream_totals.get("notice_total") or 0))
             pushed_receipt_total = Decimal(str(downstream_totals.get("receipt_total") or 0))
             downstream_pushed_total = max(pushed_notice_total, pushed_receipt_total)
@@ -1105,7 +1122,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
         settlement_map: Dict[int, Optional[str]] = {}
         if finance_orm_ready() and orders:
-            from apps.kuaizhizao.finance.services.purchase_order_finance_lifecycle import (
+            from apps.kuaicaiwu.services.purchase_order_finance_lifecycle import (
                 batch_purchase_order_payment_settlement,
             )
 

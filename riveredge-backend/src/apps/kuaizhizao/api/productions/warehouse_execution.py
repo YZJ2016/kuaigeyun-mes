@@ -3906,6 +3906,8 @@ async def list_sales_delivery_sales_order_pull_lines(
     keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
     sales_order_id: Optional[int] = Query(None, description="来源销售订单"),
     pullable_only: bool = Query(True, description="仅剩余可出库量大于 0"),
+    date_from: PullQueryDateFrom = None,
+    date_to: PullQueryDateTo = None,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -3917,6 +3919,8 @@ async def list_sales_delivery_sales_order_pull_lines(
             keyword=keyword,
             sales_order_id=sales_order_id,
             pullable_only=pullable_only,
+            date_from=date_from,
+            date_to=date_to,
         )
     except BusinessLogicError as e:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))

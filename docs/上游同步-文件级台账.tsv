@@ -1074,7 +1074,7 @@ riveredge-backend/src/apps/kuaizhizao/services/packing_profile_service.py	0779cd
 riveredge-backend/src/apps/kuaizhizao/services/partner_material_price_trend_service.py	acee638ad7c0422132deb3a0b06059771835d122	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/kuaizhizao/services/payable_open_amount_service.py	bab1da0e75f8cae9509d24feb5fd9e406c2f522c	applied	13be286f11续:前端+财务适配+迁移
 riveredge-backend/src/apps/kuaizhizao/services/payment_application_line_materials.py	3ae79cde55ddd5e2449139c2a1ce557e503ee631	tracked	seed from 4d124a088e
-riveredge-backend/src/apps/kuaizhizao/services/payment_application_pull_service.py	d61734262fc9ef0972906c13a3c81a84ec021d6c	deferred	R2:依赖未落地的uni-audit簇/副数量aux ORM/上游签名分叉/财务包
+riveredge-backend/src/apps/kuaizhizao/services/payment_application_pull_service.py	d61734262fc9ef0972906c13a3c81a84ec021d6c	applied	三方合并落上游多PO/入库单/应付对账下推+payment_reason+部门一致性校验；finance import改指kuaicaiwu同路径
 riveredge-backend/src/apps/kuaizhizao/services/payment_application_purchase_order_sources.py	67f73660b8e2192e3bab9b9fa9ed9ca4eb731812	tracked	seed from ec29267f5b
 riveredge-backend/src/apps/kuaizhizao/services/payment_application_push_service.py	e908acadb97494abe9979ab0e12d9e7858454e86	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/services/payment_application_service.py	bd9dcbf3e840fc31d6a976a1b30089603b9ecf9d	superset	R2:本地已含适配内容/本地实现超前
@@ -1097,7 +1097,7 @@ riveredge-backend/src/apps/kuaizhizao/services/purchase_order_terms_service.py	7
 riveredge-backend/src/apps/kuaizhizao/services/purchase_receipt_sync_service.py	29a9e262f638fd9d665865fcdd33cafb2c9ddf3f	tracked	seed from 4bd853a94f
 riveredge-backend/src/apps/kuaizhizao/services/purchase_requisition_service.py	2fef94ad657c60305ee4fa1ce0ffdcd4a517a0b1	superset	R2:本地已含适配内容/本地实现超前
 riveredge-backend/src/apps/kuaizhizao/services/purchase_requisition_stock_service.py	e33ffcbc20cceab7c8fa7db247c5dd7d4e865337	tracked	seed from 93b3cb5998
-riveredge-backend/src/apps/kuaizhizao/services/purchase_service.py	42e64ea15074d92681cab60a4e8164d46dd35ced	deferred	R2:依赖未落地的uni-audit簇/副数量aux ORM/上游签名分叉/财务包
+riveredge-backend/src/apps/kuaizhizao/services/purchase_service.py	42e64ea15074d92681cab60a4e8164d46dd35ced	applied	三方合并落上游增量；finance lifecycle import改指kuaicaiwu同路径
 riveredge-backend/src/apps/kuaizhizao/services/qms_audit_nc_service.py	0cda9ffab9f6a1dc2fe7f6f6d73f736b62bed946	tracked	seed from a2473e9b42
 riveredge-backend/src/apps/kuaizhizao/services/qms_clause_presets/__init__.py	b3aeb0bb5997d172ba930717797276f9b4cdbdcd	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/qms_clause_presets/ansiesd_s2020.py	a7134d3ebb7d52dd0ac42fd5fdf00d8ad74d735b	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
@@ -1144,7 +1144,7 @@ riveredge-backend/src/apps/kuaizhizao/services/tool_ops_service.py	0651b6bfd2a14
 riveredge-backend/src/apps/kuaizhizao/services/tool_service.py	6732e768d2c81363d7c2d9e82bead63dbe392d98	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/services/warehouse_kingdee_alignment.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/services/warehouse_list_core.py	5d3cf9707f2bb73abeedd5be3d19eb25d36684fb	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
-riveredge-backend/src/apps/kuaizhizao/services/warehouse_service.py	cc1d82baa53c41976bb8dc108d82a20d4d292104	deferred	R2:依赖未落地的uni-audit簇/副数量aux ORM/上游签名分叉/财务包
+riveredge-backend/src/apps/kuaizhizao/services/warehouse_service.py	cc1d82baa53c41976bb8dc108d82a20d4d292104	applied	三方合并：SO交货拉单行头字段+副量pushable_aux+日期筛选+sync_purchase_orders_after_receipt；保留本地工单状态门禁；kingdee撤回告警(external_withdraw_message)作整体defer
 riveredge-backend/src/apps/kuaizhizao/services/warehouse_wo_outsource_pull_service.py	222c4850eafc6d7bc69db6297febf357bd87bf83	tracked	seed from 5b1b9828e4
 riveredge-backend/src/apps/kuaizhizao/services/work_order_bom_line_service.py	dbebd0ad922e1fff09f2c878f662654aa16c16c1	tracked	seed from 5b1b9828e4
 riveredge-backend/src/apps/kuaizhizao/services/work_order_service.py	5aa526d15bc389346df7abd144d013f23ade77ba	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id

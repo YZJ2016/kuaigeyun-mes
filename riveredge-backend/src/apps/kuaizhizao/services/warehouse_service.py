@@ -1187,6 +1187,159 @@ async def _sum_confirmed_purchase_receipt_qty_by_po_item_ids(
     return result
 
 
+async def _merge_orphan_confirmed_receipt_qty_for_order_items(
+    tenant_id: int,
+    order_items: List[Any],
+    confirmed_by_item: dict[int, Decimal],
+) -> None:
+    """
+    已入库明细未写 purchase_order_item_id 时，按表头采购订单 + 物料归集到订单行。
+    """
+    if not order_items:
+        return
+    order_ids = sorted({int(i.order_id) for i in order_items})
+    po_item_ids = {int(i.id) for i in order_items}
+    material_to_po_item: Dict[tuple[int, int], int] = {}
+    ambiguous: set[tuple[int, int]] = set()
+    for po_item in order_items:
+        oid = int(po_item.order_id)
+        mid = int(getattr(po_item, "material_id", 0) or 0)
+        if mid <= 0:
+            continue
+        key = (oid, mid)
+        if key in material_to_po_item:
+            ambiguous.add(key)
+        else:
+            material_to_po_item[key] = int(po_item.id)
+    for key in ambiguous:
+        material_to_po_item.pop(key, None)
+
+    receipts = await PurchaseReceipt.filter(
+        tenant_id=tenant_id,
+        purchase_order_id__in=order_ids,
+        deleted_at__isnull=True,
+    ).values("id", "status", "purchase_order_id")
+    confirmed_ids: List[int] = []
+    receipt_order: Dict[int, int] = {}
+    for row in receipts:
+        rid = int(row.get("id") or 0)
+        if rid <= 0:
+            continue
+        status = str(row.get("status") or "").strip()
+        if status in _PURCHASE_RECEIPT_VOID_STATUSES:
+            continue
+        if status not in _PURCHASE_RECEIPT_CONFIRMED_STATUSES:
+            continue
+        confirmed_ids.append(rid)
+        receipt_order[rid] = int(row.get("purchase_order_id") or 0)
+
+    if not confirmed_ids:
+        return
+
+    lines = await PurchaseReceiptItem.filter(
+        tenant_id=tenant_id,
+        receipt_id__in=confirmed_ids,
+    ).all()
+    for line in lines:
+        po_item_id = int(line.purchase_order_item_id or 0)
+        if po_item_id in po_item_ids:
+            continue
+        if po_item_id > 0:
+            continue
+        qty = Decimal(str(line.receipt_quantity or 0))
+        if qty <= 0:
+            continue
+        oid = receipt_order.get(int(line.receipt_id), 0)
+        if oid <= 0:
+            continue
+        mid = int(line.material_id or 0)
+        target = material_to_po_item.get((oid, mid))
+        if not target:
+            continue
+        confirmed_by_item[target] = confirmed_by_item.get(target, Decimal("0")) + qty
+
+
+async def batch_confirmed_purchase_receipt_totals_by_order_ids(
+    tenant_id: int,
+    order_ids: List[int],
+) -> Dict[int, Decimal]:
+    """按已入库采购入库单汇总各采购订单已到货主数量（含孤儿明细行归集）。"""
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+    ids = sorted({int(i) for i in order_ids if i})
+    if not ids:
+        return {}
+    order_items = await PurchaseOrderItem.filter(
+        tenant_id=tenant_id,
+        order_id__in=ids,
+    ).all()
+    if not order_items:
+        return {i: Decimal("0") for i in ids}
+    po_item_ids = [int(i.id) for i in order_items]
+    confirmed_by_item = await _sum_confirmed_purchase_receipt_qty_by_po_item_ids(
+        tenant_id,
+        po_item_ids,
+    )
+    await _merge_orphan_confirmed_receipt_qty_for_order_items(
+        tenant_id,
+        order_items,
+        confirmed_by_item,
+    )
+    totals: Dict[int, Decimal] = {i: Decimal("0") for i in ids}
+    for po_item in order_items:
+        oid = int(po_item.order_id)
+        totals[oid] = totals.get(oid, Decimal("0")) + confirmed_by_item.get(
+            int(po_item.id),
+            Decimal("0"),
+        )
+    return totals
+
+
+async def purchase_order_ids_for_receipt_sync(
+    tenant_id: int,
+    receipt_id: int,
+) -> List[int]:
+    """确认/撤回入库后须回写的采购订单（表头或明细链）。"""
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+    receipt = await PurchaseReceipt.get_or_none(
+        tenant_id=tenant_id,
+        id=int(receipt_id),
+        deleted_at__isnull=True,
+    )
+    if not receipt:
+        return []
+    order_ids: set[int] = set()
+    header_po = int(receipt.purchase_order_id or 0)
+    if header_po > 0:
+        order_ids.add(header_po)
+    po_item_ids = [
+        int(x)
+        for x in await PurchaseReceiptItem.filter(
+            tenant_id=tenant_id,
+            receipt_id=int(receipt_id),
+        ).values_list("purchase_order_item_id", flat=True)
+        if x is not None and int(x) > 0
+    ]
+    if po_item_ids:
+        for oid in await PurchaseOrderItem.filter(
+            tenant_id=tenant_id,
+            id__in=po_item_ids,
+        ).values_list("order_id", flat=True):
+            if oid is not None and int(oid) > 0:
+                order_ids.add(int(oid))
+    return sorted(order_ids)
+
+
+async def sync_purchase_orders_after_receipt(
+    tenant_id: int,
+    receipt_id: int,
+) -> None:
+    order_ids = await purchase_order_ids_for_receipt_sync(tenant_id, receipt_id)
+    if order_ids:
+        await sync_purchase_order_receipt_quantities_batch(tenant_id, order_ids)
+
+
 async def _sum_pending_purchase_receipt_qty_for_po_item(
     tenant_id: int,
     purchase_order_item_id: int,
@@ -1646,6 +1799,11 @@ async def sync_purchase_order_receipt_quantities_batch(
     confirmed_by_item = await _sum_confirmed_purchase_receipt_qty_by_po_item_ids(
         tenant_id,
         po_item_ids,
+    )
+    await _merge_orphan_confirmed_receipt_qty_for_order_items(
+        tenant_id,
+        order_items,
+        confirmed_by_item,
     )
     returned_by_item = await confirmed_returned_qty_by_purchase_order_item_ids(
         tenant_id,
@@ -6635,9 +6793,14 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             is_semi_finished_product_by_bom_role,
         )
 
+        from apps.kuaizhizao.services.document_action_policy.work_order import (
+            assert_work_order_capability,
+        )
+
         work_order = await WorkOrder.get_or_none(tenant_id=tenant_id, id=work_order_id)
         if not work_order:
             raise NotFoundError(f"工单不存在: {work_order_id}")
+        assert_work_order_capability(work_order, "push_finished_goods_receipt")
         if await is_semi_finished_product_by_bom_role(tenant_id, work_order.product_id):
             from apps.kuaizhizao.services.semi_finished_goods_receipt_service import (
                 SemiFinishedGoodsReceiptService,
@@ -8357,18 +8520,43 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         keyword: Optional[str] = None,
         sales_order_id: Optional[int] = None,
         pullable_only: bool = True,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
     ) -> Dict[str, Any]:
         """开口销售订单行：可转销售出库的剩余明细。"""
         from apps.kuaizhizao.models.sales_order import SalesOrder
         from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
         from apps.kuaizhizao.services.sales_order_service import SalesOrderService
-        from apps.kuaizhizao.utils.sales_order_push_qty import batch_pushable_qty_by_order_item
+        from apps.kuaizhizao.utils.pull_query_date_filter import apply_pull_query_document_date_filter
+        from apps.kuaizhizao.utils.sales_order_push_qty import (
+            batch_pushable_aux_qty_by_order_item,
+            batch_pushable_qty_by_order_item,
+        )
+        from apps.kuaizhizao.constants.price_type import normalize_price_type
+        from apps.kuaizhizao.utils.sales_price_amount import stored_sales_line_amount
+        from apps.kuaizhizao.utils.pull_open_line_quantity import apply_pull_open_aux_from_pushable_map
 
         so_query = SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if sales_order_id is not None:
             so_query = so_query.filter(id=int(sales_order_id))
+        so_query = apply_pull_query_document_date_filter(
+            so_query, field="order_date", date_from=date_from, date_to=date_to
+        )
         orders = await so_query.only(
-            "id", "order_code", "status", "customer_id", "customer_name"
+            "id",
+            "order_code",
+            "order_date",
+            "status",
+            "customer_id",
+            "customer_name",
+            "customer_contact",
+            "customer_phone",
+            "price_type",
+            "currency_code",
+            "exchange_rate",
+            "revenue_recognition",
+            "shipping_address",
+            "shipping_method",
         )
         order_by_id = {int(o.id): o for o in orders}
         if not order_by_id:
@@ -8399,24 +8587,53 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 haystack = " ".join([material_code, material_name, material_spec]).lower()
                 if kw not in haystack:
                     continue
-            lines.append(
-                {
-                    "id": int(item.id),
-                    "sales_order_id": int(item.sales_order_id),
-                    "order_code": order.order_code,
-                    "customer_id": order.customer_id,
-                    "customer_name": order.customer_name,
-                    "material_id": item.material_id,
-                    "material_code": material_code,
-                    "material_name": material_name,
-                    "material_spec": material_spec or None,
-                    "unit": item.material_unit or "件",
-                    "suggested_quantity": qty,
-                    "pushed_quantity": pushed,
-                    "remaining_quantity": remaining,
-                    "required_date": str(item.delivery_date) if getattr(item, "delivery_date", None) else None,
-                }
+            order_date = getattr(order, "order_date", None)
+            document_date = str(order_date)[:10] if order_date else None
+            aux_rem = pushable_aux.get(int(order.id), {}).get(int(item.id))
+            row: Dict[str, Any] = {
+                "id": int(item.id),
+                "sales_order_id": int(item.sales_order_id),
+                "order_code": order.order_code,
+                "customer_id": order.customer_id,
+                "customer_name": order.customer_name,
+                "customer_contact": getattr(order, "customer_contact", None),
+                "customer_phone": getattr(order, "customer_phone", None),
+                "revenue_recognition": getattr(order, "revenue_recognition", None),
+                "currency_code": getattr(order, "currency_code", None) or "CNY",
+                "exchange_rate": float(getattr(order, "exchange_rate", None) or 1),
+                "shipping_address": getattr(order, "shipping_address", None),
+                "shipping_method": getattr(order, "shipping_method", None),
+                "material_id": item.material_id,
+                "material_code": material_code,
+                "material_name": material_name,
+                "material_spec": material_spec or None,
+                "unit": item.material_unit or "件",
+                "unit_price": float(item.unit_price or 0),
+                "tax_rate": float(getattr(item, "tax_rate", 0) or 0),
+                "price_type": normalize_price_type(getattr(order, "price_type", None)),
+                "line_amount": float(
+                    stored_sales_line_amount(
+                        remaining,
+                        item.unit_price or 0,
+                        getattr(item, "tax_rate", 0) or 0,
+                        getattr(order, "price_type", None),
+                        is_gift=bool(getattr(item, "is_gift", False)),
+                    )
+                ),
+                "document_date": document_date,
+                "order_date": document_date,
+                "required_date": str(item.delivery_date) if getattr(item, "delivery_date", None) else None,
+                "line_notes": line_notes or None,
+            }
+            apply_pull_open_aux_from_pushable_map(
+                row,
+                item,
+                suggested_primary=qty,
+                pushed_primary=pushed,
+                remaining_primary=remaining,
+                pushable_aux=float(aux_rem) if aux_rem is not None else None,
             )
+            lines.append(row)
         lines.sort(
             key=lambda r: (
                 str(r.get("order_code") or ""),
@@ -11991,9 +12208,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             run_id="post-fix",
         )
         # #endregion
-        receipt_po_id = int(getattr(receipt_for_payable, "purchase_order_id", 0) or 0)
-        if receipt_po_id > 0:
-            await sync_purchase_order_receipt_quantities(tenant_id, receipt_po_id)
+        await sync_purchase_orders_after_receipt(tenant_id, receipt_id)
         updated_receipt = await self.get_purchase_receipt_by_id(tenant_id, receipt_id)
         from apps.kuaizhizao.services.document_recognition import (
             describe_purchase_receipt_payable_auto_skip,
@@ -12177,9 +12392,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             # 过账前重载表头，避免仅内存对象与库内表头仓库等不一致
             receipt = await PurchaseReceipt.get(tenant_id=tenant_id, id=receipt_id)
 
-            receipt_po_id = int(getattr(receipt, "purchase_order_id", 0) or 0)
-            if receipt_po_id > 0:
-                await sync_purchase_order_receipt_quantities(tenant_id, receipt_po_id)
+            await sync_purchase_orders_after_receipt(tenant_id, receipt_id)
 
             items_for_tolerance = await PurchaseReceiptItem.filter(
                 tenant_id=tenant_id, receipt_id=receipt_id
@@ -12446,8 +12659,6 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 logger.error("撤回采购入库-库存冲减失败: %s", e)
                 raise BusinessLogicError(f"撤回失败: {str(e)}")
 
-            po_id = int(getattr(receipt, "purchase_order_id", 0) or 0)
-
         from apps.kuaizhizao.services.receipt_notice_service import (
             sync_receipt_notice_status_from_purchase_receipt,
         )
@@ -12457,9 +12668,9 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             receipt_id,
             updated_by=updated_by,
         )
-        if po_id > 0:
-            await sync_purchase_order_receipt_quantities(tenant_id, po_id)
+        await sync_purchase_orders_after_receipt(tenant_id, receipt_id)
         return await self.get_purchase_receipt_by_id(tenant_id, receipt_id)
+        return result
 
     @serialize_stock_document("purchase_receipt", "receipt_id")
     async def delete_purchase_receipt(
