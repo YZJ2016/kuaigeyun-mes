@@ -19,6 +19,7 @@ from core.config.menu_takeover import (
     MENU_TAKEOVER_RULES,
     MenuTakeoverRule,
     merge_menu_meta_for_sync,
+    meta_blocks_menu_activation,
     path_matches_takeover_prefix,
 )
 from core.models.application import Application
@@ -52,6 +53,23 @@ class MenuTakeoverService:
     async def is_consumer_effective(tenant_id: int, consumer_app_code: str) -> bool:
         """接管是否应生效：只认库内 consumer 已安装且已启用。各节点磁盘包不得改同一张 core_menus。"""
         return await MenuTakeoverService.is_consumer_active(tenant_id, consumer_app_code)
+
+    @staticmethod
+    async def reconcile_takeovers_for_tenant(tenant_id: int) -> int:
+        """
+        按当前 consumer 有效状态对齐 source 菜单抑制/恢复（修复禁用快研发后主数据工艺仍不可见）。
+        """
+        from core.services.system.menu_service import MenuService
+
+        total = 0
+        for consumer_code in MENU_TAKEOVER_RULES:
+            if await MenuTakeoverService.is_consumer_effective(tenant_id, consumer_code):
+                total += await MenuTakeoverService.apply_takeover(tenant_id, consumer_code)
+            else:
+                total += await MenuTakeoverService.revert_takeover(tenant_id, consumer_code)
+        if total:
+            await MenuService._clear_menu_cache(tenant_id)
+        return total
 
     @staticmethod
     async def _dedicated_shell_may_apply(tenant_id: int, consumer_app_code: str) -> bool:
@@ -142,7 +160,7 @@ class MenuTakeoverService:
                 or meta.get(META_SUPPRESSED_BY_DEDICATED_SHELL)
             )
             menu.meta = meta or None
-            if not still_suppressed:
+            if not still_suppressed and not meta_blocks_menu_activation(menu.meta):
                 menu.is_active = True
             await menu.save(update_fields=["meta", "is_active", "updated_at"])
             restored += 1
@@ -161,7 +179,9 @@ class MenuTakeoverService:
         for rule in MENU_TAKEOVER_RULES.values():
             if rule.source_app_code != source_app_code:
                 continue
-            if await MenuTakeoverService.is_consumer_active(tenant_id, rule.consumer_app_code):
+            if await MenuTakeoverService.is_consumer_effective(
+                tenant_id, rule.consumer_app_code
+            ):
                 await MenuTakeoverService.apply_takeover(tenant_id, rule.consumer_app_code)
         await MenuTakeoverService.reapply_dedicated_shell_hides_for_source(
             tenant_id, source_app_code
@@ -248,7 +268,7 @@ class MenuTakeoverService:
                 meta.pop(META_SUPPRESSED_BY_DEDICATED_SHELL, None)
                 menu.meta = meta or None
                 changed = True
-            if not menu.is_active:
+            if not menu.is_active and not meta_blocks_menu_activation(menu.meta):
                 menu.is_active = True
                 changed = True
             if changed:
@@ -304,7 +324,7 @@ class MenuTakeoverService:
                 or meta.get(META_SUPPRESSED_BY_INDUSTRY_PACK)
             )
             menu.meta = meta or None
-            if not still_suppressed:
+            if not still_suppressed and not meta_blocks_menu_activation(menu.meta):
                 menu.is_active = True
             await menu.save(update_fields=["meta", "is_active", "updated_at"])
             restored += 1
@@ -355,8 +375,10 @@ class MenuTakeoverService:
             return
 
         if enabled:
-            if has_rule:
+            if has_rule and await MenuTakeoverService.is_consumer_effective(tenant_id, app_code):
                 await MenuTakeoverService.apply_takeover(tenant_id, app_code)
+            elif has_rule:
+                await MenuTakeoverService.revert_takeover(tenant_id, app_code)
             if hides_required:
                 if await MenuTakeoverService._dedicated_shell_may_apply(tenant_id, app_code):
                     await MenuTakeoverService.apply_dedicated_shell_hide(tenant_id, app_code)
@@ -435,7 +457,7 @@ class MenuTakeoverService:
                         or meta.get(META_SUPPRESSED_BY_DEDICATED_SHELL)
                     )
                     menu.meta = meta or None
-                    if not still_suppressed:
+                    if not still_suppressed and not meta_blocks_menu_activation(menu.meta):
                         menu.is_active = True
                     await menu.save(update_fields=["meta", "is_active", "updated_at"])
                     restored += 1
@@ -482,7 +504,7 @@ class MenuTakeoverService:
                     or meta.get(META_SUPPRESSED_BY_DEDICATED_SHELL)
                 )
                 menu.meta = meta or None
-                if not still_suppressed:
+                if not still_suppressed and not meta_blocks_menu_activation(menu.meta):
                     menu.is_active = True
                 await menu.save(update_fields=["meta", "is_active", "updated_at"])
                 restored += 1

@@ -62,6 +62,8 @@ META_SUPPRESSED_BY_INDUSTRY_PACK = "suppressed_by_industry_pack"
 META_SUPPRESSED_BY_DEDICATED_SHELL = "suppressed_by_dedicated_shell"
 # 菜单管理中租户手工改过父级：同步 manifest 时不得冲回默认挂载点
 META_TENANT_PARENT_OVERRIDE = "tenant_parent_override"
+# 菜单管理中租户手工停用：应用启用 / 角色赋权 / 接管恢复均不得自动打开
+META_TENANT_DISABLED = "tenant_disabled"
 RUNTIME_META_KEYS = (
     META_SUPPRESSED_BY_TAKEOVER,
     META_DISPLAY_NAME,
@@ -69,6 +71,7 @@ RUNTIME_META_KEYS = (
     META_SUPPRESSED_BY_INDUSTRY_PACK,
     META_SUPPRESSED_BY_DEDICATED_SHELL,
     META_TENANT_PARENT_OVERRIDE,
+    META_TENANT_DISABLED,
 )
 MENU_DISPLAY_NAME_MAX_LEN = 100
 
@@ -93,6 +96,11 @@ def merge_menu_meta_for_sync(
     return merged or None
 
 
+def meta_blocks_menu_activation(meta: Dict[str, Any] | None) -> bool:
+    """菜单管理停用标记存在时，任何自动启用路径不得打开该菜单。"""
+    return bool((meta or {}).get(META_TENANT_DISABLED))
+
+
 def path_matches_takeover_prefix(path: str | None, rule: MenuTakeoverRule) -> bool:
     if not path:
         return False
@@ -112,8 +120,10 @@ __all__ = [
     "META_SUPPRESSED_BY_INDUSTRY_PACK",
     "META_SUPPRESSED_BY_DEDICATED_SHELL",
     "META_TENANT_PARENT_OVERRIDE",
+    "META_TENANT_DISABLED",
     "RUNTIME_META_KEYS",
     "MENU_DISPLAY_NAME_MAX_LEN",
     "merge_menu_meta_for_sync",
+    "meta_blocks_menu_activation",
     "path_matches_takeover_prefix",
 ]

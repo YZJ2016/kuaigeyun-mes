@@ -31,6 +31,7 @@ from core.services.system.site_setting_service import SiteSettingService
 from core.config.menu_takeover import (
     MENU_DISPLAY_NAME_MAX_LEN,
     META_DISPLAY_NAME,
+    META_TENANT_DISABLED,
     META_TENANT_PARENT_OVERRIDE,
     merge_menu_meta_for_sync,
 )
@@ -1671,6 +1672,15 @@ class MenuService:
             if hasattr(menu, key):
                 setattr(menu, key, value)
 
+        # 菜单启停真源：菜单管理。写入/清除 tenant_disabled，供应用启用与接管恢复识别。
+        if "is_active" in update_data:
+            meta = dict(menu.meta or {})
+            if bool(menu.is_active):
+                meta.pop(META_TENANT_DISABLED, None)
+            else:
+                meta[META_TENANT_DISABLED] = True
+            menu.meta = meta or None
+
         if display_name_provided:
             MenuService._apply_menu_display_name(menu, display_name_value)
 
@@ -1895,14 +1905,58 @@ class MenuService:
         codes = [c.strip() for c in permission_codes if isinstance(c, str) and c.strip()]
         if not codes:
             return 0
-        updated = await Menu.filter(
-            tenant_id=tenant_id,
-            permission_code__in=codes,
-            deleted_at__isnull=True,
-        ).update(is_active=True)
+        # 菜单管理停用标记 tenant_disabled 的行不得被角色赋权批量打开
+        from infra.infrastructure.database.database import get_db_connection
+
+        conn = await get_db_connection()
+        try:
+            result = await conn.execute(
+                """
+                UPDATE core_menus
+                SET is_active = TRUE, updated_at = NOW()
+                WHERE tenant_id = $1
+                  AND permission_code = ANY($2)
+                  AND deleted_at IS NULL
+                  AND COALESCE(meta->>'tenant_disabled', 'false') <> 'true'
+                """,
+                tenant_id,
+                codes,
+            )
+        finally:
+            await conn.close()
+        updated = int(str(result).split()[-1]) if result else 0
         if updated:
             await MenuService._clear_menu_cache(tenant_id)
         return updated
+
+    @staticmethod
+    async def activate_application_menus_preserving_tenant_disabled(
+        tenant_id: int,
+        application_uuid: str,
+    ) -> None:
+        """
+        应用启用时打开该应用菜单树，保留菜单管理中租户手工停用的项。
+
+        判定：``meta.tenant_disabled``（见 ``META_TENANT_DISABLED``）。
+        """
+        from infra.infrastructure.database.database import get_db_connection
+
+        conn = await get_db_connection()
+        try:
+            await conn.execute(
+                """
+                UPDATE core_menus
+                SET is_active = TRUE, updated_at = NOW()
+                WHERE tenant_id = $1
+                  AND application_uuid = $2
+                  AND deleted_at IS NULL
+                  AND COALESCE(meta->>'tenant_disabled', 'false') <> 'true'
+                """,
+                tenant_id,
+                str(application_uuid),
+            )
+        finally:
+            await conn.close()
 
     @staticmethod
     async def _sync_peer_consumer_menus_from_manifest(

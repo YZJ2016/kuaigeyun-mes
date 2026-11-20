@@ -739,12 +739,18 @@ class ApplicationService:
                         skip_permission_sync=skip_permission_sync,
                     )
                 elif is_active_changed:
-                    # 如果只是应用状态变更，只更新菜单的启用状态
-                    await Menu.filter(
-                        tenant_id=tenant_id,
-                        application_uuid=uuid,
-                        deleted_at__isnull=True
-                    ).update(is_active=updated_app.get('is_active', True))
+                    # 应用启用：打开菜单但保留菜单管理中租户停用项；禁用：整树关闭
+                    if updated_app.get('is_active', True):
+                        await MenuService.activate_application_menus_preserving_tenant_disabled(
+                            tenant_id=tenant_id,
+                            application_uuid=str(uuid),
+                        )
+                    else:
+                        await Menu.filter(
+                            tenant_id=tenant_id,
+                            application_uuid=uuid,
+                            deleted_at__isnull=True,
+                        ).update(is_active=False)
                     await MenuService._clear_menu_cache(tenant_id)
 
             # 返回更新后的应用信息
@@ -1119,19 +1125,10 @@ class ApplicationService:
                     preserve_existing_is_active=False,
                 )
             else:
-                conn = await get_db_connection()
-                try:
-                    await conn.execute(
-                        """
-                        UPDATE core_menus
-                        SET is_active = TRUE, updated_at = NOW()
-                        WHERE tenant_id = $1 AND application_uuid = $2 AND deleted_at IS NULL
-                        """,
-                        tenant_id,
-                        str(uuid),
-                    )
-                finally:
-                    await conn.close()
+                await MenuService.activate_application_menus_preserving_tenant_disabled(
+                    tenant_id=tenant_id,
+                    application_uuid=str(uuid),
+                )
                 if app_code:
                     try:
                         await PermissionSyncService.ensure_app_permissions(
@@ -1149,17 +1146,11 @@ class ApplicationService:
         elif not is_industry_module_app_code(app_code) and not is_industry_pack_shell_code(
             app_code
         ):
-            # 无 menu_config：直接更新现有菜单状态
-            conn = await get_db_connection()
-            try:
-                menu_update_query = """
-                    UPDATE core_menus
-                    SET is_active = TRUE, updated_at = NOW()
-                    WHERE tenant_id = $1 AND application_uuid = $2 AND deleted_at IS NULL
-                """
-                await conn.execute(menu_update_query, tenant_id, str(uuid))
-            finally:
-                await conn.close()
+            # 无 menu_config：打开现有菜单，保留菜单管理停用项
+            await MenuService.activate_application_menus_preserving_tenant_disabled(
+                tenant_id=tenant_id,
+                application_uuid=str(uuid),
+            )
 
         from core.services.system.menu_takeover_service import MenuTakeoverService
         await MenuTakeoverService.sync_for_application_lifecycle(
