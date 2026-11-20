@@ -132,6 +132,8 @@ class PurchaseInquiryCreate(BaseModel):
     buyer_id: Optional[int] = None
     buyer_name: Optional[str] = None
     buyer_phone: Optional[str] = None
+    department_id: Optional[int] = None
+    department_name: Optional[str] = None
     currency: Optional[str] = "CNY"
     exchange_rate: Optional[Decimal] = Decimal("1")
     invoice_type: Optional[str] = None
@@ -166,6 +168,8 @@ class PurchaseInquiryUpdate(BaseModel):
     buyer_id: Optional[int] = None
     buyer_name: Optional[str] = None
     buyer_phone: Optional[str] = None
+    department_id: Optional[int] = None
+    department_name: Optional[str] = None
     currency: Optional[str] = None
     exchange_rate: Optional[Decimal] = None
     invoice_type: Optional[str] = None
@@ -193,6 +197,8 @@ class PurchaseInquiryResponse(BaseSchema):
     buyer_id: Optional[int] = None
     buyer_name: Optional[str] = None
     buyer_phone: Optional[str] = None
+    department_id: Optional[int] = None
+    department_name: Optional[str] = None
     currency: Optional[str] = None
     exchange_rate: Optional[Decimal] = None
     invoice_type: Optional[str] = None

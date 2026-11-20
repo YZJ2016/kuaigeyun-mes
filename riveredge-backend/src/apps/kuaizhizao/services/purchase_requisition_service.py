@@ -286,6 +286,8 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 requisition_date=req_date,
                 applicant_id=applicant_id,
                 applicant_name=applicant_name,
+                department_id=getattr(data, "department_id", None),
+                department_name=getattr(data, "department_name", None),
                 required_date=data.required_date,
                 source_type=data.source_type,
                 source_id=data.source_id,
@@ -2027,6 +2029,8 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             "review_status",
             "requisition_date",
             "applicant_name",
+            "department_id",
+            "department_name",
         )
         req_by_id = {int(r.id): r for r in requisitions}
         if not req_by_id:
@@ -2092,8 +2096,11 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             material_code = str(item.material_code or "").strip()
             material_name = str(item.material_name or "").strip()
             material_spec = str(item.material_spec or "").strip()
+            department_name = str(getattr(req, "department_name", None) or "").strip()
             if kw:
-                haystack = " ".join([material_code, material_name, material_spec]).lower()
+                haystack = " ".join(
+                    [material_code, material_name, material_spec, department_name]
+                ).lower()
                 if kw not in haystack:
                     continue
             requisition_date = req.requisition_date.isoformat() if req.requisition_date else None
@@ -2107,6 +2114,8 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                     "document_date": requisition_date,
                     "requisition_date": requisition_date,
                     "applicant_name": (str(req.applicant_name or "").strip() or None),
+                    "department_id": getattr(req, "department_id", None),
+                    "department_name": department_name or None,
                     "material_id": item.material_id,
                     "material_code": material_code,
                     "material_name": material_name,
@@ -2317,6 +2326,8 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             status=DocumentStatus.DRAFT.value,
             source_type="purchase_requisition",
             source_id=primary.id,
+            department_id=getattr(primary, "department_id", None),
+            department_name=getattr(primary, "department_name", None),
             notes=f"由采购申请{source_codes}转单生成",
             items=po_items,
             **_supplier_header_contact_fields(sup),

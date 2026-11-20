@@ -65,6 +65,8 @@ class PurchaseOrderBase(BaseSchema):
     supplier_phone: Optional[str] = Field(None, max_length=20, description="供应商电话")
     buyer_id: Optional[int] = Field(None, description="归属采购员ID")
     buyer_name: Optional[str] = Field(None, max_length=100, description="归属采购员姓名")
+    department_id: Optional[int] = Field(None, description="部门ID")
+    department_name: Optional[str] = Field(None, max_length=100, description="部门名称")
     order_date: date = Field(..., description="订单日期")
     delivery_date: date = Field(..., description="要求到货日期")
     order_type: str = Field("标准采购", max_length=20, description="订单类型")

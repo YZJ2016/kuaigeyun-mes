@@ -30,6 +30,9 @@ class ReceiptNotice(BaseModel):
     supplier_contact = fields.CharField(max_length=100, null=True, description="供应商联系人")
     supplier_phone = fields.CharField(max_length=50, null=True, description="供应商电话")
 
+    department_id = fields.IntField(null=True, description="部门ID")
+    department_name = fields.CharField(max_length=100, null=True, description="部门名称")
+
     # 入库仓库
     warehouse_id = fields.IntField(null=True, description="入库仓库ID")
     warehouse_name = fields.CharField(max_length=100, null=True, description="入库仓库名称")

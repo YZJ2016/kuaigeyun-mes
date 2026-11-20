@@ -30,6 +30,8 @@ class PurchaseRequisition(BaseModel):
     status = fields.CharField(max_length=20, default=DocumentStatus.DRAFT.value, description="状态：草稿/待审核/已驳回/已通过/部分转单/全部转单")
     applicant_id = fields.IntField(null=True, description="申请人ID")
     applicant_name = fields.CharField(max_length=100, null=True, description="申请人姓名")
+    department_id = fields.IntField(null=True, description="申请部门ID")
+    department_name = fields.CharField(max_length=100, null=True, description="申请部门名称")
     requisition_date = fields.DateField(null=True, description="申请日期")
     required_date = fields.DateField(null=True, description="要求到货日期")
 

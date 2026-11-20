@@ -13,6 +13,11 @@ import { ActionConfirmPopconfirm } from '../../../../../components/action-confir
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { inboundPoEntryPath } from '../../warehouse-management/inbound/inboundPaths';
+import {
+  PurchaseDepartmentFormField,
+  resolvePurchaseDepartmentPayload,
+  usePurchaseDepartmentOptions,
+} from '../shared/PurchaseDepartmentFormField';
 import { completeDeliveryNodeDocumentLinkIfPending } from '../../delivery-project/shared/deliveryNodeDocumentLink';
 import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -792,6 +797,11 @@ const PurchaseOrdersPage: React.FC = () => {
   const [bankAccountOptions, setBankAccountOptions] = useState<Array<{ label: string; value: number }>>([]);
   const [users, setUsers] = useState<User[]>([]);
   const currentUser = useCurrentUser();
+  const {
+    options: departmentOptions,
+    loading: departmentOptionsLoading,
+    resolveName: resolveDepartmentName,
+  } = usePurchaseDepartmentOptions();
   const [usersLoading, setUsersLoading] = useState(false);
 
   const [syncModalVisible, setSyncModalVisible] = useState(false);
@@ -2660,6 +2670,10 @@ const PurchaseOrdersPage: React.FC = () => {
           price_type: priceType,
           buyer_id: detail.buyer_id,
           buyer_name: detail.buyer_name,
+          department_id:
+            (detail as { department_id?: number | null }).department_id ?? undefined,
+          department_name:
+            (detail as { department_name?: string | null }).department_name ?? undefined,
           notes: detail.notes,
           attachments: (detail as any).attachments || [],
           fee_details: (detail as any).fee_details || [],
@@ -2949,6 +2963,13 @@ const PurchaseOrdersPage: React.FC = () => {
         title: t('app.kuaizhizao.purchaseOrder.col.applicant'),
         dataIndex: 'applicant_name',
         width: 100,
+        ellipsis: true,
+        render: (v: string | null | undefined) => (v && String(v).trim() ? String(v) : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseRequisition.col.department'),
+        dataIndex: 'department_name',
+        width: 120,
         ellipsis: true,
         render: (v: string | null | undefined) => (v && String(v).trim() ? String(v) : '-'),
       },
@@ -3611,6 +3632,14 @@ const PurchaseOrdersPage: React.FC = () => {
           data.buyer_name = undefined;
         }
       }
+      Object.assign(
+        data,
+        resolvePurchaseDepartmentPayload(
+          data.department_id,
+          resolveDepartmentName,
+          data.department_name,
+        ),
+      );
       // 处理附件
       const formAttachments = data.attachments || [];
       data.attachments = formAttachments.map((f: any) => {
@@ -4285,6 +4314,12 @@ const PurchaseOrdersPage: React.FC = () => {
                 <PurchaseSupplierPhoneFormField
                   label={t('app.kuaizhizao.purchaseOrder.form.phone')}
                   placeholder={t('app.kuaizhizao.purchaseOrder.form.phonePlaceholder')}
+                />
+              </Col>
+              <Col span={6}>
+                <PurchaseDepartmentFormField
+                  options={departmentOptions}
+                  loading={departmentOptionsLoading}
                 />
               </Col>
             </Row>

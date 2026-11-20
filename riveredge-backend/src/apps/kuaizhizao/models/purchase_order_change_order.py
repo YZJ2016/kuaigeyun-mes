@@ -19,6 +19,9 @@ class PurchaseOrderChangeOrder(BaseModel):
     supplier_id = fields.IntField(description="供应商ID")
     supplier_name = fields.CharField(max_length=200, description="供应商名称")
 
+    department_id = fields.IntField(null=True, description="部门ID")
+    department_name = fields.CharField(max_length=100, null=True, description="部门名称")
+
     change_reason = fields.TextField(description="变更原因")
     change_category = fields.CharField(max_length=30, default="MIXED", description="变更类别")
     effective_date = fields.DateField(null=True, description="计划生效日期")

@@ -12,6 +12,8 @@ export interface EquipmentPersonSelectProps {
   placeholder?: string;
   required?: boolean;
   formRef: React.RefObject<ProFormInstance | undefined>;
+  /** 选人后回调（已写入 id/name）；用于联动部门等业务字段 */
+  onUserChange?: (user: User | User[] | undefined) => void;
 }
 
 function pickUser(user: User | User[] | undefined): User | undefined {
@@ -50,6 +52,7 @@ export const EquipmentPersonSelect: React.FC<EquipmentPersonSelectProps> = ({
   placeholder,
   required,
   formRef,
+  onUserChange,
 }) => (
   <>
     <UniUserSelect
@@ -59,7 +62,10 @@ export const EquipmentPersonSelect: React.FC<EquipmentPersonSelectProps> = ({
       required={required}
       pageSize={200}
       loadAllWhenNoKeyword
-      onChange={(_uuid, user) => syncEquipmentPersonFields(formRef, idFieldName, nameFieldName, user)}
+      onChange={(_uuid, user) => {
+        syncEquipmentPersonFields(formRef, idFieldName, nameFieldName, user);
+        onUserChange?.(user);
+      }}
     />
     <Form.Item name={idFieldName} hidden>
       <Input />

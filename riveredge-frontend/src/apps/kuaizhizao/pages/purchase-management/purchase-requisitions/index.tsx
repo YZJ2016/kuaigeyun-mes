@@ -69,6 +69,13 @@ import {
   EquipmentPersonSelect,
   resolveUserUuidById,
 } from '../../../components/EquipmentPersonSelect';
+import {
+  PurchaseDepartmentFormField,
+  resolvePurchaseDepartmentFromApplicant,
+  resolvePurchaseDepartmentPayload,
+  usePurchaseDepartmentOptions,
+} from '../shared/PurchaseDepartmentFormField';
+import type { User } from '../../../../../services/user';
 import type { Material } from '../../../../master-data/types/material';
 import {
   applyPurchaseDocumentLineMaterialPricing,
@@ -319,6 +326,11 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const pushToInquiryAction = resolveKuaizhizaoDocumentAction(t, 'purchase_inquiry.pull_from_requisition');
   const pullFromDemandComputationAction = resolveKuaizhizaoDocumentAction(t, 'purchase_requisition.pull_from_demand_computation');
   const currentUser = useCurrentUser();
+  const {
+    options: departmentOptions,
+    loading: departmentOptionsLoading,
+    resolveName: resolveDepartmentName,
+  } = usePurchaseDepartmentOptions();
   const purchaseRequestAuditEnabled = useAuditRequired('purchase_request', false);
   const userPreferences = useUserPreferenceStore((s) => s.preferences);
   const showRequisitionNameField = useMemo(
@@ -433,6 +445,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const lastHeaderDeliveryRef = useRef<ReturnType<typeof dayjs> | null>(null);
   /** 程序化回填（服务端/草稿）期间禁止 onValuesChange 写草稿，避免空价覆盖手填 */
   const prFormHydratingRef = useRef(false);
+  /** 申请人部门 uuid：部门树晚于选人加载时，用于回填 department_id */
+  const applicantDepartmentUuidRef = useRef<string | undefined>(undefined);
 
   const applyHeaderDeliveryToItemLines = useCallback((delivery: unknown) => {
     const coerced = coerceFormDate(delivery);
@@ -653,6 +667,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
           applicant_uuid: applicantUuid,
           applicant_id: detail.applicant_id,
           applicant_name: detail.applicant_name ?? '',
+          department_id: detail.department_id ?? undefined,
+          department_name: detail.department_name ?? undefined,
           required_date: detail.required_date ? dayjs(detail.required_date) : undefined,
           notes: detail.notes,
           attachments: mapAttachmentsToUploadList(detail.attachments),
@@ -725,14 +741,58 @@ const PurchaseRequisitionsPage: React.FC = () => {
     return 0;
   }, [purchaseRequestAuditEnabled]);
 
+  const applyDepartmentFromApplicantUser = useCallback(
+    (user: User | User[] | undefined) => {
+      const picked = Array.isArray(user) ? user[0] : user;
+      const deptUuid = picked?.department_uuid || picked?.department?.uuid;
+      if (!deptUuid) {
+        applicantDepartmentUuidRef.current = undefined;
+        createFormRef.current?.setFieldsValue({
+          department_id: undefined,
+          department_name: undefined,
+        });
+        return;
+      }
+      applicantDepartmentUuidRef.current = deptUuid;
+      const payload = resolvePurchaseDepartmentFromApplicant(deptUuid, departmentOptions);
+      if (payload.department_id == null) {
+        // 部门树尚未就绪或用户部门不在选项中：清空旧部门，等 options 就绪后再回填
+        createFormRef.current?.setFieldsValue({
+          department_id: undefined,
+          department_name: undefined,
+        });
+        return;
+      }
+      createFormRef.current?.setFieldsValue(payload);
+    },
+    [departmentOptions],
+  );
+
   const defaultApplicantFields = useCallback(() => {
     if (!currentUser) return {};
+    const deptUuid = currentUser.department?.uuid;
+    applicantDepartmentUuidRef.current = deptUuid;
+    const deptPayload = resolvePurchaseDepartmentFromApplicant(deptUuid, departmentOptions);
     return {
       applicant_uuid: currentUser.uuid,
       applicant_id: currentUser.id,
       applicant_name: currentUser.full_name || currentUser.username || '',
+      ...deptPayload,
     };
-  }, [currentUser]);
+  }, [currentUser, departmentOptions]);
+
+  useEffect(() => {
+    if (!departmentOptions.length) return;
+    const pendingUuid = String(applicantDepartmentUuidRef.current ?? '').trim();
+    if (!pendingUuid) return;
+    const form = createFormRef.current;
+    if (!form) return;
+    const existing = form.getFieldValue('department_id');
+    if (existing != null && existing !== '') return;
+    const payload = resolvePurchaseDepartmentFromApplicant(pendingUuid, departmentOptions);
+    if (payload.department_id == null) return;
+    form.setFieldsValue(payload);
+  }, [departmentOptions]);
 
   const applyCreateFormDefaults = useCallback(
     (values: Record<string, unknown>) => {
@@ -1330,6 +1390,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
     required_date?: any;
     applicant_id?: number;
     applicant_name?: string;
+    department_id?: number;
+    department_name?: string;
     notes?: string;
     attachments?: unknown;
     items?: Array<{
@@ -1364,6 +1426,11 @@ const PurchaseRequisitionsPage: React.FC = () => {
     } catch {
       return;
     }
+    const departmentPayload = resolvePurchaseDepartmentPayload(
+      values.department_id,
+      resolveDepartmentName,
+      values.department_name,
+    );
     const shouldSubmit = submitAfterSaveRef.current;
     setFormSubmitting(true);
     try {
@@ -1382,6 +1449,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
           required_date: requiredDate,
           applicant_id: values.applicant_id,
           applicant_name: values.applicant_name,
+          ...departmentPayload,
           notes: values.notes,
           attachments: normalizeDocumentAttachments(values.attachments),
           items: itemsPayload,
@@ -1429,6 +1497,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
           required_date: requiredDate,
           applicant_id: values.applicant_id,
           applicant_name: values.applicant_name,
+          ...departmentPayload,
           notes: values.notes,
           attachments: normalizeDocumentAttachments(values.attachments),
           items: itemsPayload,
@@ -2444,6 +2513,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     label={t('app.kuaizhizao.purchaseRequisition.form.applicant')}
                     formRef={createFormRef}
                     required
+                    onUserChange={applyDepartmentFromApplicantUser}
                   />
                 </Col>
               )}
@@ -2460,6 +2530,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     label={t('app.kuaizhizao.purchaseRequisition.form.applicant')}
                     formRef={createFormRef}
                     required
+                    onUserChange={applyDepartmentFromApplicantUser}
                   />
                 </Col>
               ) : null}
@@ -2508,9 +2579,9 @@ const PurchaseRequisitionsPage: React.FC = () => {
               ) : null}
             </Row>
           </div>
-          {showRequisitionNameField ? (
-            <div className="document-form-untitled-group">
-              <Row gutter={16}>
+          <div className="document-form-untitled-group">
+            <Row gutter={16}>
+              {showRequisitionNameField ? (
                 <Col span={12}>
                   <ProFormDatePicker
                     name="required_date"
@@ -2532,9 +2603,15 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     })}
                   />
                 </Col>
-              </Row>
-            </div>
-          ) : null}
+              ) : null}
+              <Col span={12}>
+                <PurchaseDepartmentFormField
+                  options={departmentOptions}
+                  loading={departmentOptionsLoading}
+                />
+              </Col>
+            </Row>
+          </div>
         </div>
       </DetailDrawerSection>
 

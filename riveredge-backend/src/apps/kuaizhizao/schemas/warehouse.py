@@ -1268,6 +1268,8 @@ class PurchaseReturnBase(BaseSchema):
     return_time: Optional[datetime] = Field(None, description="实际退货时间")
     returner_id: Optional[int] = Field(None, description="退货人ID")
     returner_name: Optional[str] = Field(None, max_length=100, description="退货人姓名")
+    department_id: Optional[int] = Field(None, description="部门ID")
+    department_name: Optional[str] = Field(None, max_length=100, description="部门名称")
     reviewer_id: Optional[int] = Field(None, description="审核人ID")
     reviewer_name: Optional[str] = Field(None, max_length=100, description="审核人姓名")
     review_time: Optional[datetime] = Field(None, description="审核时间")

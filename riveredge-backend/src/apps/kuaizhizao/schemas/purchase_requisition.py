@@ -76,6 +76,8 @@ class PurchaseRequisitionBase(BaseSchema):
     status: str = Field("草稿", max_length=20, description="状态")
     applicant_id: Optional[int] = None
     applicant_name: Optional[str] = None
+    department_id: Optional[int] = Field(None, description="申请部门ID")
+    department_name: Optional[str] = Field(None, max_length=100, description="申请部门名称")
     requisition_date: Optional[date] = None
     required_date: Optional[date] = None
     source_type: Optional[str] = None
@@ -120,6 +122,8 @@ class PurchaseRequisitionCreate(BaseModel):
     required_date: Optional[date] = None
     applicant_id: Optional[int] = Field(None, description="申请人ID，未传则默认当前用户")
     applicant_name: Optional[str] = Field(None, max_length=100, description="申请人姓名")
+    department_id: Optional[int] = Field(None, description="申请部门ID")
+    department_name: Optional[str] = Field(None, max_length=100, description="申请部门名称")
     source_type: Optional[str] = None
     source_id: Optional[int] = None
     source_code: Optional[str] = None
@@ -157,6 +161,8 @@ class PurchaseRequisitionUpdate(BaseModel):
     required_date: Optional[date] = None
     applicant_id: Optional[int] = Field(None, description="申请人ID")
     applicant_name: Optional[str] = Field(None, max_length=100, description="申请人姓名")
+    department_id: Optional[int] = Field(None, description="申请部门ID")
+    department_name: Optional[str] = Field(None, max_length=100, description="申请部门名称")
     notes: Optional[str] = None
     attachments: Optional[list] = None
     items: Optional[List[PurchaseRequisitionItemCreate]] = None

@@ -44,6 +44,9 @@ class PurchaseInquiry(BaseModel):
     buyer_name = fields.CharField(max_length=100, null=True, description="采购负责人姓名")
     buyer_phone = fields.CharField(max_length=50, null=True, description="采购负责人手机")
 
+    department_id = fields.IntField(null=True, description="部门ID")
+    department_name = fields.CharField(max_length=100, null=True, description="部门名称")
+
     currency = fields.CharField(max_length=10, null=True, default="CNY", description="交易币种")
     exchange_rate = fields.DecimalField(
         max_digits=12, decimal_places=6, null=True, default=1, description="汇率"

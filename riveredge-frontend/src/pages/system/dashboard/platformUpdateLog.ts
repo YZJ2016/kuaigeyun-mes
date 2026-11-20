@@ -5566,6 +5566,14 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.po-requisition-handoff-materials-r01.description',
   },
   {
+    id: 'purchase-docs-header-department-r01',
+    date: '2026-10-28',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-docs-header-department-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-docs-header-department-r01.description',
+  },
+  {
     id: 'print-partner-material-fields-r01',
     date: '2026-10-28',
     type: 'improvement',

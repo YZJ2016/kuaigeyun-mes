@@ -47,6 +47,9 @@ class PurchaseReturn(BaseModel):
     returner_id = fields.IntField(null=True, description="退货人ID")
     returner_name = fields.CharField(max_length=100, null=True, description="退货人姓名")
 
+    department_id = fields.IntField(null=True, description="部门ID")
+    department_name = fields.CharField(max_length=100, null=True, description="部门名称")
+
     # 审核信息
     reviewer_id = fields.IntField(null=True, description="审核人ID")
     reviewer_name = fields.CharField(max_length=100, null=True, description="审核人姓名")
