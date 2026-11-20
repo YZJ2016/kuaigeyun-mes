@@ -325,11 +325,11 @@ riveredge-backend/migrations/models/1023_20261110193000_sales_delivery_price_typ
 riveredge-backend/migrations/models/1024_20261110200000_purchase_requisition_order_type.py	54d2bc53ff90dfda7926f8a621da945ceebb1936	tracked	seed from 6abba1dbd5
 riveredge-backend/migrations/models/1025_20261110234000_purchase_receipt_warehouse_nullable.py	26667ed2bcaa6eb2d3a549fd996bdad479e3ff61	tracked	seed from 6abba1dbd5
 riveredge-backend/migrations/models/1026_20261111093000_rework_signoff_partial_unique.py	133c978519df4e269e0b5540bd75ea814b3cab42	tracked	seed from e16f2f2939
-riveredge-backend/migrations/models/1026_20261117120000_link_purchase_receipt_inbound_permissions.py	f4c4516c45e00e7ce225667d489a60b8a80466a4	deferred	特性增量未核验/未落地，随对应域批次复核（预审A包）
+riveredge-backend/migrations/models/1026_20261117120000_link_purchase_receipt_inbound_permissions.py	f4c4516c45e00e7ce225667d489a60b8a80466a4	applied	迁移摘取：1026→20261123000047（入库双菜单权限归并 inbound:read 存量回填）、1027→20261123000046（tax_rate 非空+默认0）、1028→20261123000048（已审核发票回填已开票，本地 finance_audit_workflow 已含该写入）、1047→20261123000049（委外收货表补 updated_by 审计列）、1048→20261123000050（回访 status+回填+索引）、989→20261123000051（采购入库金蝶推送编码5列，模型/schema 早已声明为真实缺口）
 riveredge-backend/migrations/models/1027_20261111095000_rework_order_code_fr_line_year.py	4898f8ef7ed05f7c2ee942eee62bb590f1031ac9	tracked	seed from e16f2f2939
-riveredge-backend/migrations/models/1027_20261117143000_require_document_tax_rates.py	a8c364865e95b2e460bb91bac9f064b7ca3af9f9	deferred	特性增量未核验/未落地，随对应域批次复核（预审A包）
+riveredge-backend/migrations/models/1027_20261117143000_require_document_tax_rates.py	a8c364865e95b2e460bb91bac9f064b7ca3af9f9	applied	迁移摘取：1026→20261123000047（入库双菜单权限归并 inbound:read 存量回填）、1027→20261123000046（tax_rate 非空+默认0）、1028→20261123000048（已审核发票回填已开票，本地 finance_audit_workflow 已含该写入）、1047→20261123000049（委外收货表补 updated_by 审计列）、1048→20261123000050（回访 status+回填+索引）、989→20261123000051（采购入库金蝶推送编码5列，模型/schema 早已声明为真实缺口）
 riveredge-backend/migrations/models/1028_20261112080000_backfill_user_department_assignments_primary.py	1e6c05873280b862c52238490b7833424825a089	tracked	seed from ec29267f5b
-riveredge-backend/migrations/models/1028_20261118123000_purchase_invoice_issued_status.py	8b06cf08c555faee138c36028fb86d34c9e73a8b	deferred	特性增量未核验/未落地，随对应域批次复核（预审A包）
+riveredge-backend/migrations/models/1028_20261118123000_purchase_invoice_issued_status.py	8b06cf08c555faee138c36028fb86d34c9e73a8b	applied	迁移摘取：1026→20261123000047（入库双菜单权限归并 inbound:read 存量回填）、1027→20261123000046（tax_rate 非空+默认0）、1028→20261123000048（已审核发票回填已开票，本地 finance_audit_workflow 已含该写入）、1047→20261123000049（委外收货表补 updated_by 审计列）、1048→20261123000050（回访 status+回填+索引）、989→20261123000051（采购入库金蝶推送编码5列，模型/schema 早已声明为真实缺口）
 riveredge-backend/migrations/models/1029_20261114170000_payroll_line_ot_hour_buckets.py	abe937dce280ec0be7e7dab550629867d3d25e33	domain-out	haoligo薪酬域(上游亦死列)
 riveredge-backend/migrations/models/1030_20261115110000_other_inbound_item_line_warehouse.py	0a6438b263d772edb973e3f95d8a9122fa89047d	tracked	seed from 93b3cb5998
 riveredge-backend/migrations/models/1031_20261115120000_receipt_pull_lines.py	31843631302b521d3389b4698c7595630e2b622e	tracked	seed from 93b3cb5998
@@ -348,9 +348,9 @@ riveredge-backend/migrations/models/1043_20261116143000_material_return_item_ser
 riveredge-backend/migrations/models/1044_20261116150000_wo_op_assigned_production_line.py	dcc3d3d46c61ebc67249fea94f4a2ff7c2434753	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
 riveredge-backend/migrations/models/1045_20261116160000_clear_deleted_user_department_links.py	af4df2e43e7fbcff52995f2cf65a06c87c6dc37c	applied	清除已删用户残留部门任职/负责人引用，移植为20261123000037
 riveredge-backend/migrations/models/1046_20261116170000_drawing_upload_size_default_200mb.py	16f89653bbdb55b5152e37058d651135206ca0aa	applied	图纸域摘取：密级回落读权限internal/文件夹树按allowed_security_levels过滤/tree端点透传current_user/上传上限默认100→200MB(4 hunk)；迁移1046→20261123000045。三服务文件与上游字节一致
-riveredge-backend/migrations/models/1047_20261117001000_outsource_order_receipt_audit_cols.py	098db2a9e5b4a17018606d59b39b34c65dc13c3b	deferred	特性增量未核验/未落地，随对应域批次复核（预审A包）
+riveredge-backend/migrations/models/1047_20261117001000_outsource_order_receipt_audit_cols.py	098db2a9e5b4a17018606d59b39b34c65dc13c3b	applied	迁移摘取：1026→20261123000047（入库双菜单权限归并 inbound:read 存量回填）、1027→20261123000046（tax_rate 非空+默认0）、1028→20261123000048（已审核发票回填已开票，本地 finance_audit_workflow 已含该写入）、1047→20261123000049（委外收货表补 updated_by 审计列）、1048→20261123000050（回访 status+回填+索引）、989→20261123000051（采购入库金蝶推送编码5列，模型/schema 早已声明为真实缺口）
 riveredge-backend/migrations/models/1048_20261117123000_ind_relay_line_products.py	e352e57bafd5f2dbf9b998cf589091778b6d639f	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
-riveredge-backend/migrations/models/1048_20261118080000_customer_return_visit_status.py	fb09310230b6cf22f285e1f1ccbc91562bd2e219	deferred	特性增量未核验/未落地，随对应域批次复核（预审A包）
+riveredge-backend/migrations/models/1048_20261118080000_customer_return_visit_status.py	fb09310230b6cf22f285e1f1ccbc91562bd2e219	applied	迁移摘取：1026→20261123000047（入库双菜单权限归并 inbound:read 存量回填）、1027→20261123000046（tax_rate 非空+默认0）、1028→20261123000048（已审核发票回填已开票，本地 finance_audit_workflow 已含该写入）、1047→20261123000049（委外收货表补 updated_by 审计列）、1048→20261123000050（回访 status+回填+索引）、989→20261123000051（采购入库金蝶推送编码5列，模型/schema 早已声明为真实缺口）
 riveredge-backend/migrations/models/1049_20261118090000_menu_tenant_disabled_meta.py	2d692fb8684eca9e82cfad45ac47c1757c645f26	applied	摘取：menu_takeover_service与上游字节一致（reconcile+is_consumer_effective+5处激活门禁）；config补META_TENANT_DISABLED/meta_blocks_menu_activation；menu_service写入路径+activate_application_menus_preserving_tenant_disabled+application_service三处接线；角色赋权路径exclude(tenant_disabled)；迁移1049→20261123000038
 riveredge-backend/migrations/models/1050_20261118170000_field_permission_two_kinds.py	2d9283512aaab7fdaf0c7105bb1390bea955b147	applied	字段权限kind数据迁移移植为20261123000036（既有按字段策略行收敛为amount/party_name kind行，簇P配套）
 riveredge-backend/migrations/models/1051_20261119110000_material_code_alias_partner_partial_unique.py	c9abf2212e67c77258378f9f02e01169b7ee4ebf	applied	同内容迁移已在本地按重编号落地(980/981)
@@ -472,7 +472,7 @@ riveredge-backend/migrations/models/987_20261103120000_seed_equipment_inspection
 riveredge-backend/migrations/models/988_20261103143000_seed_missing_code_rules_batch.py	0b70f65331417f179e7b3c2564560565bc2bd4b7	applied	R2簇2迁移:20261123命名落位;剔除other_expense_application与haoligo规则(域未落地)
 riveredge-backend/migrations/models/988_20261103150000_api_outbound_field_mappings.py	8879801749735553ea167957fb5f2279b01b240f	applied	摘取：出站字段映射全链落地——model列+迁移988→20261123000039+编辑器/映射工具/表单接线；本地schema/服务/目录此前已在
 riveredge-backend/migrations/models/988_20261103160000_ledger_aux_quantity.py	5d9e5bf7ea9152c63ea8cd888df2c3577346c9d3	applied	R2簇2迁移:20261123命名落位(不执行)
-riveredge-backend/migrations/models/989_20261103150100_purchase_receipt_push_code_fields.py	8ee070103a8fa50c897768d4c21a197d0c602796	deferred	特性增量未核验/未落地，随对应域批次复核（预审A包）
+riveredge-backend/migrations/models/989_20261103150100_purchase_receipt_push_code_fields.py	8ee070103a8fa50c897768d4c21a197d0c602796	applied	迁移摘取：1026→20261123000047（入库双菜单权限归并 inbound:read 存量回填）、1027→20261123000046（tax_rate 非空+默认0）、1028→20261123000048（已审核发票回填已开票，本地 finance_audit_workflow 已含该写入）、1047→20261123000049（委外收货表补 updated_by 审计列）、1048→20261123000050（回访 status+回填+索引）、989→20261123000051（采购入库金蝶推送编码5列，模型/schema 早已声明为真实缺口）
 riveredge-backend/migrations/models/989_20261103152000_rebackfill_material_base_unit_to_name.py	6d61fe3ac3c493b964588d8c0c5c8ffd28ec9f25	applied	R2簇2迁移:20261123命名落位(不执行)
 riveredge-backend/migrations/models/989_20261103213000_material_batch_manage_sync_binding.py	ae34ac56814717231f17dbc8e08d4b2c14ff0a61	applied	R2簇2迁移:20261123命名落位(不执行)
 riveredge-backend/migrations/models/990_20261104070000_user_kingdee_org_fields.py	914fa99c8e25b03ef697a812f4e78be1a236e124	applied	取tip：employee_number已由20261122000002落地（IF NOT EXISTS幂等），本次补supervisor_id/person_category/employment_status列+core_user_department_assignments建表（模型在用缺迁移）
@@ -902,7 +902,7 @@ riveredge-backend/src/apps/kuaizhizao/models/other_outbound_sync_binding.py	fc28
 riveredge-backend/src/apps/kuaizhizao/models/other_voucher.py	6498320e597ed1f9ca348c5a0216a04c424e14a8	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/models/outsource_inspection.py	23eeaa237df62d16ecfcc47e9184f5e7fbda51cc	applied	R2：与上游tip blob一致，本地已同步
 riveredge-backend/src/apps/kuaizhizao/models/outsource_order.py	f5f2480148d3409e513ffe36361762e8c969bab7	tracked	seed from 93b3cb5998
-riveredge-backend/src/apps/kuaizhizao/models/outsource_order_receipt.py	930758955a40ccad0961161bde65372bcd0c79e0	tracked	seed from 93b3cb5998
+riveredge-backend/src/apps/kuaizhizao/models/outsource_order_receipt.py	930758955a40ccad0961161bde65372bcd0c79e0	applied	审计列继承 BaseModel（移除重复声明），迁移1047补齐表列；与上游字节一致
 riveredge-backend/src/apps/kuaizhizao/models/outsource_work_order.py	ef6a983a3e7456fedae48ac9762af87d5e9fe10b	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/kuaizhizao/models/packing_binding.py	9411846a8924a179848f1f7817e452b3ac7c5696	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/models/packing_binding_line.py	95ddd3fdae211849d366a0484d9acae206e8b4e2	tracked	seed from b12cc66e71
@@ -913,13 +913,13 @@ riveredge-backend/src/apps/kuaizhizao/models/production_picking.py	e0ab97316c00a
 riveredge-backend/src/apps/kuaizhizao/models/production_picking_item.py	e5472a90966bbd6a3fb768ccc5a60eb4b217f995	tracked	seed from 6abba1dbd5
 riveredge-backend/src/apps/kuaizhizao/models/production_picking_sync_binding.py	39f97de77eb313817e104b47c7800777683a1405	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/models/purchase_demand_party.py	2e6fbcfe5202f8b620656673900c2dea6beb0f56	tracked	seed from d892f36d03
-riveredge-backend/src/apps/kuaizhizao/models/purchase_inquiry.py	67ca23634d4a5149c64c09a1620fcfd8ea3e3f70	tracked	seed from a62d32cff6
+riveredge-backend/src/apps/kuaizhizao/models/purchase_inquiry.py	67ca23634d4a5149c64c09a1620fcfd8ea3e3f70	deferred	部分摘取：tax_rate 非空+默认0 hunk 已落（配套迁移1027）；DocumentLineDualQuantityMixin 副数量等其余 hunk 属未落地特性域随域复核
 riveredge-backend/src/apps/kuaizhizao/models/purchase_order.py	c7be7805af2f30ddcc3a17e95393b4d8d6f038c7	tracked	seed from 3958bb1524
 riveredge-backend/src/apps/kuaizhizao/models/purchase_order_change_order.py	3c5bf2d4b1c866917cdf1dd295a9f35bfefa93fb	tracked	seed from a62d32cff6
 riveredge-backend/src/apps/kuaizhizao/models/purchase_order_milestone.py	4f41f6a88583bbfc887ffdb5793240113240661a	tracked	seed from 3958bb1524
 riveredge-backend/src/apps/kuaizhizao/models/purchase_order_sync_binding.py	8cdd55908cbe8ad3c460416bee638405d97b8b10	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/apps/kuaizhizao/models/purchase_receipt.py	5da5c65f6e4728360164d949f4c55b5d25ac1c7a	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
-riveredge-backend/src/apps/kuaizhizao/models/purchase_receipt_item.py	b68774e58e8ab2520a8388680d245e32ec70b215	tracked	seed from 4bd853a94f
+riveredge-backend/src/apps/kuaizhizao/models/purchase_receipt_item.py	b68774e58e8ab2520a8388680d245e32ec70b215	deferred	部分摘取：tax_rate 非空+默认0 hunk 已落（配套迁移1027）；DocumentLineDualQuantityMixin 副数量等其余 hunk 属未落地特性域随域复核
 riveredge-backend/src/apps/kuaizhizao/models/purchase_receipt_sync_binding.py	46542f61530dd22c474d350eb2cd3cc227a74422	tracked	seed from 4bd853a94f
 riveredge-backend/src/apps/kuaizhizao/models/purchase_requisition.py	e2a6305c00d86abf0a75f22107377dc4beae1708	tracked	seed from 4ab6cf5ca3
 riveredge-backend/src/apps/kuaizhizao/models/purchase_return.py	210de15f7013114f78cc99ee0ffa7344ed5deef6	tracked	seed from b12cc66e71
@@ -1037,7 +1037,7 @@ riveredge-backend/src/apps/kuaizhizao/scripts/__init__.py	DELETED	superset	上�
 riveredge-backend/src/apps/kuaizhizao/scripts/sync_equipment_card_print_template.py	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
 riveredge-backend/src/apps/kuaizhizao/scripts/sync_mold_card_print_template.py	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
 riveredge-backend/src/apps/kuaizhizao/services/after_sales_spare_part_requisition_service.py	c528b80c410fede6e7f3f467e7ca9e515df89b35	applied	宽区间补登：上游tip已落地（同文/等价映射/预审A包复核）
-riveredge-backend/src/apps/kuaizhizao/services/assembly_template_service.py	56ba6c45586a4856c7e381a49e1daf4ade3dff2c	deferred	特性增量未核验/未落地，随对应域批次复核（预审A包）
+riveredge-backend/src/apps/kuaizhizao/services/assembly_template_service.py	56ba6c45586a4856c7e381a49e1daf4ade3dff2c	applied	装配模板响应修复：_template_response_payload 标量载荷替代 model_validate(ORM) 防 ReverseRelation 误读，_build_response/list 两处接线；配套测试移植 1 passed。service 与上游字节一致
 riveredge-backend/src/apps/kuaizhizao/services/backflush_service.py	467f2ca88b8cd51752efec1f73d401a02c43c1c0	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/batching_center_service.py	1d224c98392cbba3cf2f563eb89351408e5a2a1d	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/batching_order_service.py	ee708f3579a4d0771890bbc2b660c409fe50f90f	tracked	seed from 899307f4d6
@@ -1134,7 +1134,7 @@ riveredge-backend/src/apps/kuaizhizao/services/inspection_sampling_transfer_serv
 riveredge-backend/src/apps/kuaizhizao/services/inspection_step_spec.py	726d3893650a3208f3430a4a42b13f265395105e	tracked	seed from 905787348a
 riveredge-backend/src/apps/kuaizhizao/services/install_execution_service.py	3f3503d7ba8a3fa56f15c6bc8a6de7f6615c0468	applied	宽区间补登：上游tip已落地（同文/等价映射/预审A包复核）
 riveredge-backend/src/apps/kuaizhizao/services/inventory_alert_service.py	cdbd71f4264c4f434b4722af8c258a148f4d9113	tracked	seed from ec29267f5b
-riveredge-backend/src/apps/kuaizhizao/services/inventory_analysis_service.py	d25e39a87a48108c4b20adad6a13c557d66aebd9	deferred	特性增量未核验/未落地，随对应域批次复核（预审A包）
+riveredge-backend/src/apps/kuaizhizao/services/inventory_analysis_service.py	d25e39a87a48108c4b20adad6a13c557d66aebd9	domain-out	上游改为 optional_pro 惰性指向 apps.kuaizhizao.finance.inventory_cost_service（域外 finance 包本地不存在）；本地 apps.kuaicaiwu.InventoryCostService 直连为权威等价实现，不随上游改道
 riveredge-backend/src/apps/kuaizhizao/services/inventory_service.py	18eabdc6fc24720cdfee4891dfaada1f473e8300	tracked	seed from 52b1abf2e3
 riveredge-backend/src/apps/kuaizhizao/services/inventory_sync_service.py	e7764ab683e411eb7759ef18c4f44f0a61a90fa0	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-backend/src/apps/kuaizhizao/services/inventory_transfer_service.py	c0a8128b0becf9cfd1c51a9b58de6b5922728991	applied	R2：与上游tip blob一致，本地已同步
@@ -1691,7 +1691,7 @@ riveredge-backend/tests/apps/kuaizhizao/print/test_purchase_receipt_red_voucher_
 riveredge-backend/tests/apps/kuaizhizao/services/document_action_policy/test_purchase_order_pushable_status.py	6f8937de7b567519d467ff90229c8d0f6f17f82a	tracked	seed from f1c2d18cfb
 riveredge-backend/tests/apps/kuaizhizao/services/document_action_policy/test_purchase_requisition_rejected.py	f7d1561d46093b2d63056bdcd88e24b4524eb6c7	tracked	seed from 872b76152e
 riveredge-backend/tests/apps/kuaizhizao/services/order_change/test_helpers_line_amount.py	2d1d88c46cf0d8d178f6558cf747d883bad36ce3	tracked	seed from 4d124a088e
-riveredge-backend/tests/apps/kuaizhizao/services/test_assembly_template_response.py	b2ea3c9fd4d48ec3b168e8994d5a2e868d7aa656	deferred	测试/脚本/文档随所属特性域待评或安全可摘但暂登记（预审A包）
+riveredge-backend/tests/apps/kuaizhizao/services/test_assembly_template_response.py	b2ea3c9fd4d48ec3b168e8994d5a2e868d7aa656	applied	装配模板响应修复：_template_response_payload 标量载荷替代 model_validate(ORM) 防 ReverseRelation 误读，_build_response/list 两处接线；配套测试移植 1 passed。service 与上游字节一致
 riveredge-backend/tests/apps/kuaizhizao/services/test_demand_computation_push_e2e.py	f66e18a4c80b5a38327168c75ff80247def471a6	tracked	seed from 3050130eb5
 riveredge-backend/tests/apps/kuaizhizao/services/test_document_action_policy_packing_binding.py	339b9a443bd34cb25a6a279de2e7f768bc30f9f8	tracked	seed from b12cc66e71
 riveredge-backend/tests/apps/kuaizhizao/services/test_document_action_policy_quotation.py	01a154f755f08e0fcabd8151f38279bc959784c6	tracked	seed from 93b3cb5998
@@ -2401,7 +2401,7 @@ riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/shared/warehou
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/shared/warehouseTrackingFlags.ts	91b35e7e855a6495503007c9616c022cc743fa27	tracked	seed from 5b1b9828e4
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/stocktaking/StocktakingSurplusDocumentPushPanel.tsx	9841a8497f48c1eedd0ea932b7a1b0092952056f	tracked	seed from 2e8ecad990
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/stocktaking/index.tsx	40a9cc4891728ef4ffb304031c5f6101a268ab5a	tracked	seed from 2e8ecad990
-riveredge-frontend/src/apps/kuaizhizao/services/after-sales-service.ts	68d460cd90cf079813ce8f1baa0076841ba83dca	superset	本地私有实现/分叉超集（预审A包复核）
+riveredge-frontend/src/apps/kuaizhizao/services/after-sales-service.ts	68d460cd90cf079813ce8f1baa0076841ba83dca	applied	superset 误判修正：实为上游版未同步——dispatch accept/checkin/complete/cancel 与回访 complete 方法缺失而页面已在调用（真实断链）；整取上游 tip
 riveredge-frontend/src/apps/kuaizhizao/services/dashboard.ts	5d8c6cbe44d852807176610bad74420854dfc46c	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/services/delivery-notice.ts	5611bd314dc390cb86f78891c00dcb0715db2862	superset	本地私有实现/分叉超集（预审A包复核）
 riveredge-frontend/src/apps/kuaizhizao/services/demand-computation.ts	d91f1bc55d1f5c6ba54611bc731daf256fee6c29	tracked	seed from 5f085a19c9

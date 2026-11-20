@@ -50,7 +50,7 @@ class PurchaseInquiry(BaseModel):
     )
     invoice_type = fields.CharField(max_length=50, null=True, description="发票类型")
     tax_rate = fields.DecimalField(
-        max_digits=8, decimal_places=4, null=True, default=0, description="税率（小数，如 0.13）"
+        max_digits=8, decimal_places=4, default=0, description="税率（小数，如 0.13）"
     )
     payment_method = fields.CharField(max_length=50, null=True, description="付款方式")
     payment_terms = fields.CharField(max_length=100, null=True, description="付款条件")

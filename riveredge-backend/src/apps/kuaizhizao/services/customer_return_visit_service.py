@@ -13,6 +13,7 @@ from apps.kuaizhizao.models.after_sales_ticket import AfterSalesTicket
 from apps.kuaizhizao.schemas.after_sales_service import (
     VISIT_METHODS,
     VISIT_SOURCE_TYPES,
+    CustomerReturnVisitComplete,
     CustomerReturnVisitCreate,
     CustomerReturnVisitListEnvelope,
     CustomerReturnVisitResponse,
@@ -102,6 +103,8 @@ class CustomerReturnVisitService:
         if data.satisfaction_score is not None and not (1 <= data.satisfaction_score <= 5):
             raise ValidationError("满意度评分须在 1 至 5 之间")
 
+        # 下推或未评分 → 待登记；手工建单且已评分 → 已完成
+        initial_status = "已完成" if data.satisfaction_score is not None else "待登记"
         payload = {
             "tenant_id": tenant_id,
             "visit_code": cls._gen_visit_code(),
@@ -116,6 +119,7 @@ class CustomerReturnVisitService:
             "visitor_id": data.visitor_id or current_user.id,
             "visitor_name": (data.visitor_name or current_user.full_name or current_user.username),
             "visited_at": visited_at,
+            "status": initial_status,
             "notes": (data.notes or "").strip() or None,
         }
         apply_create_audit(payload, current_user)
@@ -151,11 +155,14 @@ class CustomerReturnVisitService:
         skip: int = 0,
         limit: int = 50,
         customer_id: Optional[int] = None,
+        status: Optional[str] = None,
         keyword: Optional[str] = None,
     ) -> CustomerReturnVisitListEnvelope:
         query = CustomerReturnVisit.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if customer_id is not None:
             query = query.filter(customer_id=customer_id)
+        if status:
+            query = query.filter(status=status.strip())
         if keyword:
             kw = keyword.strip()
             if kw:
@@ -187,6 +194,8 @@ class CustomerReturnVisitService:
         ).first()
         if not row:
             raise NotFoundError(f"客户回访不存在: {visit_id}")
+        if row.status == "已完成":
+            raise ValidationError("已完成的回访不可编辑，请新建或删除后重录")
 
         dump = data.model_dump(exclude_unset=True)
         if "visit_method" in dump and dump["visit_method"] is not None:
@@ -203,6 +212,39 @@ class CustomerReturnVisitService:
         if dump:
             apply_update_audit(dump, current_user)
             await CustomerReturnVisit.filter(id=visit_id, tenant_id=tenant_id).update(**dump)
+        row = await CustomerReturnVisit.get(id=visit_id, tenant_id=tenant_id)
+        return await cls._to_response(row)
+
+    @classmethod
+    async def complete(
+        cls,
+        tenant_id: int,
+        visit_id: int,
+        data: CustomerReturnVisitComplete,
+        current_user: User,
+    ) -> CustomerReturnVisitResponse:
+        row = await CustomerReturnVisit.filter(
+            id=visit_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not row:
+            raise NotFoundError(f"客户回访不存在: {visit_id}")
+        if row.status != "待登记":
+            raise BusinessLogicError("仅待登记状态可完成回访")
+
+        visit_method = cls._validate_visit_method(data.visit_method or row.visit_method or "电话")
+        dump = {
+            "visit_method": visit_method,
+            "satisfaction_score": int(data.satisfaction_score),
+            "feedback": (data.feedback or "").strip() or None,
+            "visited_at": resolve_business_datetime(data.visited_at or row.visited_at),
+            "status": "已完成",
+        }
+        if data.notes is not None:
+            dump["notes"] = str(data.notes).strip() or None
+        apply_update_audit(dump, current_user)
+        await CustomerReturnVisit.filter(id=visit_id, tenant_id=tenant_id).update(**dump)
         row = await CustomerReturnVisit.get(id=visit_id, tenant_id=tenant_id)
         return await cls._to_response(row)
 

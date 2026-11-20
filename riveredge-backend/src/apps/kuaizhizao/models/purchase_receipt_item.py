@@ -58,7 +58,7 @@ class PurchaseReceiptItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
     tax_rate = fields.DecimalField(
         max_digits=5,
         decimal_places=2,
-        null=True,
+        default=0,
         description="行税率（百分比，与采购订单明细一致）",
     )
 

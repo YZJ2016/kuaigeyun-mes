@@ -1930,6 +1930,105 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.payment-application-po-prepay-no-payable-r01.description',
   },
   {
+    id: 'freight-bill-item-order-id-form-r01',
+    date: '2026-11-18',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.freight-bill-item-order-id-form-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.freight-bill-item-order-id-form-r01.description',
+  },
+  {
+    id: 'customer-return-visit-complete-r01',
+    date: '2026-11-18',
+    type: 'feature',
+    titleKey:
+      'pages.dashboard.updateLog.entries.customer-return-visit-complete-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.customer-return-visit-complete-r01.description',
+  },
+  {
+    id: 'service-settlement-row-review-r01',
+    date: '2026-11-18',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.service-settlement-row-review-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.service-settlement-row-review-r01.description',
+  },
+  {
+    id: 'spare-part-requisition-audit-outbound-warehouse-r01',
+    date: '2026-11-18',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.spare-part-requisition-audit-outbound-warehouse-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.spare-part-requisition-audit-outbound-warehouse-r01.description',
+  },
+  {
+    id: 'spare-part-requisition-row-review-r01',
+    date: '2026-11-18',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.spare-part-requisition-row-review-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.spare-part-requisition-row-review-r01.description',
+  },
+  {
+    id: 'service-dispatch-row-flow-actions-r01',
+    date: '2026-11-18',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.service-dispatch-row-flow-actions-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.service-dispatch-row-flow-actions-r01.description',
+  },
+  {
+    id: 'repair-order-row-push-actions-r01',
+    date: '2026-11-18',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.repair-order-row-push-actions-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.repair-order-row-push-actions-r01.description',
+  },
+  {
+    id: 'install-execution-workbench-r01',
+    date: '2026-11-18',
+    type: 'feature',
+    titleKey:
+      'pages.dashboard.updateLog.entries.install-execution-workbench-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.install-execution-workbench-r01.description',
+  },
+  {
+    id: 'install-execution-row-push-actions-r01',
+    date: '2026-11-18',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.install-execution-row-push-actions-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.install-execution-row-push-actions-r01.description',
+  },
+  {
+    id: 'after-sales-ticket-row-push-actions-r01',
+    date: '2026-11-18',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.after-sales-ticket-row-push-actions-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.after-sales-ticket-row-push-actions-r01.description',
+  },
+  {
+    id: 'after-sales-ticket-detail-record-undef-r01',
+    date: '2026-11-18',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.after-sales-ticket-detail-record-undef-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.after-sales-ticket-detail-record-undef-r01.description',
+  },
+  {
     id: 'finance-fund-transfer-r01',
     date: '2026-11-18',
     type: 'feature',

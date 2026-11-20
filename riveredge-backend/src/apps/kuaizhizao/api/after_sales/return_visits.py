@@ -8,6 +8,7 @@ from loguru import logger
 
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from apps.kuaizhizao.schemas.after_sales_service import (
+    CustomerReturnVisitComplete,
     CustomerReturnVisitCreate,
     CustomerReturnVisitListEnvelope,
     CustomerReturnVisitResponse,
@@ -15,7 +16,7 @@ from apps.kuaizhizao.schemas.after_sales_service import (
 )
 from apps.kuaizhizao.services.customer_return_visit_service import CustomerReturnVisitService
 from core.api.deps import get_current_tenant, get_current_user
-from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
 
 router = APIRouter(
@@ -56,6 +57,7 @@ async def list_visits(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     customer_id: Optional[int] = Query(None),
+    status_filter: Optional[str] = Query(None, alias="status"),
     keyword: Optional[str] = Query(None),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -64,6 +66,7 @@ async def list_visits(
         skip=skip,
         limit=limit,
         customer_id=customer_id,
+        status=status_filter,
         keyword=keyword,
     )
 
@@ -91,6 +94,21 @@ async def update_visit(
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{visit_id}/complete", response_model=CustomerReturnVisitResponse, summary="Complete return visit")
+async def complete_visit(
+    body: CustomerReturnVisitComplete,
+    visit_id: int = Path(..., description="回访单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await _service.complete(tenant_id, visit_id, body, current_user)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (ValidationError, BusinessLogicError) as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 

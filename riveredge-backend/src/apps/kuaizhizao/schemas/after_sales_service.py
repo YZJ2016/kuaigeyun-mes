@@ -445,6 +445,7 @@ class ServiceSettlementListEnvelope(BaseSchema):
 
 VISIT_SOURCE_TYPES = ("after_sales_ticket", "repair_order")
 VISIT_METHODS = ("电话", "现场", "在线", "其他")
+VISIT_STATUSES = ("待登记", "已完成")
 
 
 class CustomerReturnVisitCreate(BaseSchema):
@@ -470,6 +471,14 @@ class CustomerReturnVisitUpdate(BaseSchema):
     notes: Optional[str] = Field(None, description="备注")
 
 
+class CustomerReturnVisitComplete(BaseSchema):
+    visit_method: Optional[str] = Field(None, max_length=30, description="回访方式")
+    satisfaction_score: int = Field(..., ge=1, le=5, description="满意度评分1-5")
+    feedback: Optional[str] = Field(None, description="客户反馈")
+    visited_at: Optional[datetime] = Field(None, description="回访时间")
+    notes: Optional[str] = Field(None, description="备注")
+
+
 class CustomerReturnVisitResponse(BaseSchema):
     id: int = Field(..., description="回访单ID")
     uuid: str = Field(..., max_length=36, description="业务UUID")
@@ -486,6 +495,7 @@ class CustomerReturnVisitResponse(BaseSchema):
     visitor_id: Optional[int] = Field(None, description="回访人ID")
     visitor_name: Optional[str] = Field(None, description="回访人姓名")
     visited_at: datetime = Field(..., description="回访时间")
+    status: str = Field(..., description="状态")
     notes: Optional[str] = Field(None, description="备注")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")

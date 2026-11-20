@@ -250,9 +250,18 @@ export type CustomerReturnVisit = {
   visitor_id?: number | null;
   visitor_name?: string | null;
   visited_at: string;
+  status?: string;
   notes?: string | null;
   created_at?: string;
   updated_at?: string;
+};
+
+export type CustomerReturnVisitCompletePayload = {
+  satisfaction_score: number;
+  visit_method?: string;
+  feedback?: string | null;
+  visited_at?: string;
+  notes?: string | null;
 };
 
 export type CustomerReturnVisitPayload = Partial<
@@ -331,13 +340,43 @@ export const serviceDispatchApi = {
     apiRequest<ServiceDispatchOrder>(`${BASE}/dispatch-orders`, { method: 'POST', body: payload }),
   update: (id: number, payload: Partial<ServiceDispatchPayload>) =>
     apiRequest<ServiceDispatchOrder>(`${BASE}/dispatch-orders/${id}`, { method: 'PUT', body: payload }),
-  assign: (id: number, payload: { engineer_id?: number; engineer_name?: string }) =>
+  assign: (
+    id: number,
+    payload: {
+      engineer_id: number;
+      engineer_name?: string;
+      planned_start_at?: string | null;
+      planned_end_at?: string | null;
+    },
+  ) =>
     apiRequest<ServiceDispatchOrder>(`${BASE}/dispatch-orders/${id}/assign`, {
       method: 'POST',
       body: payload,
     }),
-  close: (id: number) =>
-    apiRequest<ServiceDispatchOrder>(`${BASE}/dispatch-orders/${id}/close`, { method: 'POST' }),
+  accept: (id: number) =>
+    apiRequest<ServiceDispatchOrder>(`${BASE}/dispatch-orders/${id}/accept`, { method: 'POST' }),
+  checkin: (id: number, payload?: { checkin_location?: string; checkin_at?: string | null }) =>
+    apiRequest<ServiceDispatchOrder>(`${BASE}/dispatch-orders/${id}/checkin`, {
+      method: 'POST',
+      body: payload ?? {},
+    }),
+  complete: (
+    id: number,
+    payload?: {
+      completion_notes?: string;
+      actual_end_at?: string | null;
+      attachments?: unknown;
+    },
+  ) =>
+    apiRequest<ServiceDispatchOrder>(`${BASE}/dispatch-orders/${id}/complete`, {
+      method: 'POST',
+      body: payload ?? {},
+    }),
+  cancel: (id: number, payload?: { notes?: string }) =>
+    apiRequest<ServiceDispatchOrder>(`${BASE}/dispatch-orders/${id}/cancel`, {
+      method: 'POST',
+      body: payload ?? {},
+    }),
   delete: (id: number) =>
     apiRequest<void>(`${BASE}/dispatch-orders/${id}`, { method: 'DELETE' }),
 };
@@ -412,6 +451,11 @@ export const customerReturnVisitApi = {
     apiRequest<CustomerReturnVisit>(`${BASE}/return-visits`, { method: 'POST', body: payload }),
   update: (id: number, payload: Partial<CustomerReturnVisitPayload>) =>
     apiRequest<CustomerReturnVisit>(`${BASE}/return-visits/${id}`, { method: 'PUT', body: payload }),
+  complete: (id: number, payload: CustomerReturnVisitCompletePayload) =>
+    apiRequest<CustomerReturnVisit>(`${BASE}/return-visits/${id}/complete`, {
+      method: 'POST',
+      body: payload,
+    }),
   delete: (id: number) =>
     apiRequest<void>(`${BASE}/return-visits/${id}`, { method: 'DELETE' }),
 };

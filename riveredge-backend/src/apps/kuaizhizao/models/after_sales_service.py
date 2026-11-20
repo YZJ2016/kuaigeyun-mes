@@ -301,6 +301,7 @@ class CustomerReturnVisit(BaseModel):
     visitor_id = fields.IntField(null=True, description="回访人ID")
     visitor_name = fields.CharField(max_length=100, null=True, description="回访人姓名")
     visited_at = fields.DatetimeField(description="回访时间")
+    status = fields.CharField(max_length=20, default="待登记", description="状态 待登记/已完成")
     notes = fields.TextField(null=True, description="备注")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 
@@ -310,4 +311,5 @@ class CustomerReturnVisit(BaseModel):
             ("tenant_id", "visit_code"),
             ("tenant_id", "customer_id"),
             ("tenant_id", "source_type", "source_id"),
+            ("tenant_id", "status"),
         ]

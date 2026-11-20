@@ -33,6 +33,28 @@ class AssemblyTemplateService(AppBaseService[AssemblyTemplate]):
     def __init__(self):
         super().__init__(AssemblyTemplate)
 
+    @staticmethod
+    def _template_response_payload(template: AssemblyTemplate) -> dict:
+        """仅提取模板标量字段，避免 Pydantic 读取 ORM ReverseRelation。"""
+        return {
+            "id": template.id,
+            "uuid": str(template.uuid),
+            "template_code": template.template_code,
+            "template_name": template.template_name,
+            "product_material_id": template.product_material_id,
+            "product_material_code": template.product_material_code,
+            "product_material_name": template.product_material_name,
+            "base_quantity": template.base_quantity,
+            "source_type": template.source_type,
+            "is_active": template.is_active,
+            "total_items": template.total_items,
+            "remarks": template.remarks,
+            "created_at": template.created_at,
+            "updated_at": template.updated_at,
+            "created_by": getattr(template, "created_by", None),
+            "created_by_name": getattr(template, "created_by_name", None),
+        }
+
     async def _resolve_bom_lines(
         self,
         tenant_id: int,
@@ -145,10 +167,11 @@ class AssemblyTemplateService(AppBaseService[AssemblyTemplate]):
     async def _build_response(
         self, template: AssemblyTemplate, include_items: bool = True
     ) -> AssemblyTemplateDetailResponse:
-        resp = AssemblyTemplateDetailResponse.model_validate(template)
-        if include_items:
-            resp.items = await self._load_items(template.tenant_id, template.id)
-        return resp
+        items = await self._load_items(template.tenant_id, template.id) if include_items else []
+        return AssemblyTemplateDetailResponse(
+            **self._template_response_payload(template),
+            items=items,
+        )
 
     async def create_template(
         self,
@@ -245,8 +268,9 @@ class AssemblyTemplateService(AppBaseService[AssemblyTemplate]):
         )
         return AssemblyTemplateListResponse(
             items=[
-                AssemblyTemplateResponse.model_validate(r).model_copy(
-                    update={"items": item_previews.get(int(r.id), [])}
+                AssemblyTemplateResponse(
+                    **self._template_response_payload(r),
+                    items=item_previews.get(int(r.id), []),
                 )
                 for r in rows
             ],
