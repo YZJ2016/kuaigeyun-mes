@@ -223,6 +223,8 @@ class NonconformingDispositionUpdate(BaseSchema):
     stock_warehouse_id: Optional[int] = Field(None, description="报废扣减或让步放行仓库ID")
     downgrade_material_id: Optional[int] = Field(None, description="降级回用目标原料物料ID")
     downgrade_warehouse_id: Optional[int] = Field(None, description="降级回用入库仓库ID")
+    location_id: Optional[int] = Field(None, description="处置入库/隔离库位ID")
+    location_code: Optional[str] = Field(None, description="处置入库/隔离库位编码")
     remarks: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
 

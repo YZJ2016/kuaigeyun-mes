@@ -321,7 +321,7 @@ async def resolve_partner_material_line_price(
 async def resolve_partner_material_line_price_batch(
     data: PartnerMaterialLinePriceBatchRequest,
     request: Request,
-    auth: Annotated[AuthContext, Depends(get_current_tenant)],
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
 ):
     await ensure_permission_codes(

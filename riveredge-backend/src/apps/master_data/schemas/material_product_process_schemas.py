@@ -74,6 +74,14 @@ class ProductProcessLineSchema(BaseModel):
         return float(v)
 
 
+class ProductProcessInheritanceGroup(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    material_group_uuid: str = Field(..., alias="materialGroupUuid")
+    material_group_code: Optional[str] = Field(None, alias="materialGroupCode")
+    material_group_name: Optional[str] = Field(None, alias="materialGroupName")
+
+
 class MaterialProductProcessResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -82,6 +90,16 @@ class MaterialProductProcessResponse(BaseModel):
     process_route_uuid: Optional[str] = Field(None, alias="processRouteUuid")
     process_route_id: Optional[int] = Field(None, alias="processRouteId")
     allow_operation_jump: bool = Field(False, alias="allowOperationJump")
+    has_own_record: bool = Field(
+        False,
+        alias="hasOwnRecord",
+        description="是否在物料产品工艺表中有独立配置行",
+    )
+    inherited_from_group: Optional[ProductProcessInheritanceGroup] = Field(
+        None,
+        alias="inheritedFromGroup",
+        description="无独立配置且展示数据来自分组产品工艺时",
+    )
     lines: List[ProductProcessLineSchema] = Field(default_factory=list)
     created_at: Optional[datetime] = Field(None, alias="createdAt")
     updated_at: Optional[datetime] = Field(None, alias="updatedAt")
@@ -128,3 +146,48 @@ class ProductProcessRouteAssignmentListResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     items: List[ProductProcessRouteAssignmentItem] = Field(default_factory=list)
+
+
+class MaterialGroupProductProcessResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    material_group_uuid: str = Field(..., alias="materialGroupUuid")
+    material_group_id: int = Field(..., alias="materialGroupId")
+    process_route_uuid: Optional[str] = Field(None, alias="processRouteUuid")
+    process_route_id: Optional[int] = Field(None, alias="processRouteId")
+    allow_operation_jump: bool = Field(False, alias="allowOperationJump")
+    lines: List[ProductProcessLineSchema] = Field(default_factory=list)
+    created_at: Optional[datetime] = Field(None, alias="createdAt")
+    updated_at: Optional[datetime] = Field(None, alias="updatedAt")
+    created_by: Optional[int] = Field(None, alias="createdBy")
+    created_by_name: Optional[str] = Field(None, alias="createdByName")
+    updated_by: Optional[int] = Field(None, alias="updatedBy")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName")
+
+
+class MaterialGroupProductProcessSave(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    process_route_uuid: Optional[str] = Field(None, alias="processRouteUuid")
+    allow_operation_jump: bool = Field(False, alias="allowOperationJump")
+    lines: List[ProductProcessLineSchema] = Field(default_factory=list)
+    save_as_new_route: bool = Field(
+        False,
+        alias="saveAsNewRoute",
+        description="另存为新工艺路线并同步分组默认路线 FK",
+    )
+    new_route_code: Optional[str] = Field(None, alias="newRouteCode")
+    new_route_name: Optional[str] = Field(None, alias="newRouteName")
+
+
+class ProductProcessGroupRouteAssignmentItem(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    material_group_uuid: str = Field(..., alias="materialGroupUuid")
+    process_route_uuid: str = Field(..., alias="processRouteUuid")
+
+
+class ProductProcessGroupRouteAssignmentListResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    items: List[ProductProcessGroupRouteAssignmentItem] = Field(default_factory=list)

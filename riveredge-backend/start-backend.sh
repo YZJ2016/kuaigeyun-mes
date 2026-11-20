@@ -82,7 +82,7 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd)/src"
 
 # 启动前执行数据库迁移，确保最新表结构可用
 echo "执行数据库迁移..."
-uv run aerich upgrade
+uv run python -m aerich.cli upgrade
 if [ $? -ne 0 ]; then
     echo "错误：数据库迁移失败，已停止启动。"
     exit 1

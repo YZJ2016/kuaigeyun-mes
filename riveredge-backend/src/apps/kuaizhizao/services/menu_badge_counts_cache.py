@@ -32,12 +32,14 @@ async def get_or_compute_section(
     permission_version: int,
     section_key: str,
     compute: Callable[[], Awaitable[SectionFragment]],
+    bypass_cache: bool = False,
 ) -> SectionFragment:
     ck = _cache_key(tenant_id, user_id, permission_version, section_key)
     now = time.monotonic()
-    hit = _store.get(ck)
-    if hit is not None and now - hit[0] < _SECTION_TTL_SEC:
-        return copy.deepcopy(hit[1])
+    if not bypass_cache:
+        hit = _store.get(ck)
+        if hit is not None and now - hit[0] < _SECTION_TTL_SEC:
+            return copy.deepcopy(hit[1])
 
     loop = asyncio.get_running_loop()
     fut: asyncio.Future[SectionFragment] = loop.create_future()
@@ -69,3 +71,8 @@ def invalidate_menu_badge_section_cache(*, tenant_id: int | None = None) -> None
     for key in list(_store.keys()):
         if key[0] == tid:
             _store.pop(key, None)
+
+
+def touch_kuaizhizao_menu_badges_for_tenant(tenant_id: int) -> None:
+    """单据/审批状态变更后立即使菜单与工作台角标缓存失效。"""
+    invalidate_menu_badge_section_cache(tenant_id=int(tenant_id))

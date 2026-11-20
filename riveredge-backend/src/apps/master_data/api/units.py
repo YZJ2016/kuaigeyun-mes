@@ -83,10 +83,13 @@ material_unit_sync_service = None
 
 
 def _material_unit_sync_service():
+    from apps.common.inbound_sync_gate import inbound_sync_service
+
     global material_unit_sync_service
     if material_unit_sync_service is None:
-        from apps.master_data.services.unit_sync_service import MaterialUnitSyncService
-        material_unit_sync_service = MaterialUnitSyncService()
+        material_unit_sync_service = inbound_sync_service(
+            "unit_sync_service", "MaterialUnitSyncService"
+        )
     return material_unit_sync_service
 
 

@@ -39,8 +39,29 @@ class PartnerInvoiceAndExtendedMixin(BaseModel):
         None, max_length=50, description="企业类型编码", alias="enterpriseTypeCode"
     )
     payment_terms_days: Optional[int] = Field(None, ge=0, description="付款账期（天）", alias="paymentTermsDays")
-    settlement_method_code: Optional[str] = Field(
-        None, max_length=50, description="结算方式编码", alias="settlementMethodCode"
+    default_payment_method_code: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="默认付款方式编码",
+        alias="defaultPaymentMethodCode",
+    )
+    settlement_terms_code: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="结算方式编码",
+        alias="settlementTermsCode",
+    )
+    default_currency_code: Optional[str] = Field(
+        None,
+        max_length=10,
+        description="默认币种",
+        alias="defaultCurrencyCode",
+    )
+    default_exchange_rate: Optional[Decimal] = Field(
+        None,
+        description="默认汇率",
+        alias="defaultExchangeRate",
+        gt=0,
     )
     finance_contact_name: Optional[str] = Field(
         None, max_length=100, description="财务联系人", alias="financeContactName"
@@ -60,6 +81,50 @@ class PartnerInvoiceAndExtendedMixin(BaseModel):
     delivery_address: Optional[str] = Field(None, description="收货地址", alias="deliveryAddress")
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @validator("default_payment_method_code", pre=True)
+    def validate_default_payment_method_code(cls, v):
+        from apps.master_data.config.partner_settlement_codes import coerce_partner_payment_method_code
+
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        coerced = coerce_partner_payment_method_code(v)
+        if coerced is None:
+            raise ValueError("无效的默认付款方式")
+        return coerced
+
+    @validator("settlement_terms_code", pre=True)
+    def validate_settlement_terms_code(cls, v):
+        from apps.master_data.config.partner_settlement_codes import (
+            PARTNER_SETTLEMENT_TERMS_CODES,
+            coerce_partner_settlement_terms_code,
+        )
+
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        coerced = coerce_partner_settlement_terms_code(v)
+        if coerced is None:
+            allowed = ", ".join(sorted(PARTNER_SETTLEMENT_TERMS_CODES))
+            raise ValueError(f"无效的结算方式（允许: {allowed}）")
+        return coerced
+
+    @validator("default_currency_code", pre=True)
+    def validate_default_currency_code(cls, v):
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        return str(v).strip().upper()
+
+    @validator("default_exchange_rate", pre=True)
+    def validate_default_exchange_rate(cls, v):
+        if v is None or v == "":
+            return None
+        try:
+            rate = Decimal(str(v))
+        except Exception as exc:
+            raise ValueError("无效的默认汇率") from exc
+        if rate <= 0:
+            raise ValueError("默认汇率须大于 0")
+        return rate
 
 
 class CustomerContactItem(BaseModel):
@@ -148,6 +213,18 @@ class CustomerCreate(PartnerInvoiceAndExtendedMixin):
     follow_status: Optional[str] = Field(
         None, max_length=20, description="跟进状态：pending/followed", alias="followStatus"
     )
+    partner_type: Optional[str] = Field(
+        None,
+        max_length=20,
+        description="伙伴类型（苍穹 type：1–5）",
+        alias="partnerType",
+    )
+    biz_function: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="业务职能（苍穹 bizfunction）",
+        alias="bizFunction",
+    )
     revenue_recognition_override: Optional[str] = Field(
         None,
         max_length=32,
@@ -163,8 +240,13 @@ class CustomerCreate(PartnerInvoiceAndExtendedMixin):
         if v is None or (isinstance(v, str) and not str(v).strip()):
             return None
         s = str(v).strip()
-        if s not in ("on_shipment", "on_invoice", "manual"):
-            raise ValueError("revenueRecognitionOverride 必须为 on_shipment、on_invoice、manual 或空")
+        from core.config.finance_recognition import REVENUE_RECOGNITION_VALUES
+
+        if s not in REVENUE_RECOGNITION_VALUES:
+            raise ValueError(
+                "revenueRecognitionOverride 必须为 on_shipment、on_invoice、on_milestone、mixed、"
+                "manual、on_partner_statement 或空"
+            )
         return s
 
     @validator("market_scope", pre=True)
@@ -249,11 +331,24 @@ class CustomerBase(PartnerInvoiceAndExtendedMixin):
     settlement_accounts: Optional[List[PartnerSettlementAccountItem]] = Field(
         None, description="收付款账户明细", alias="settlementAccounts"
     )
+    addresses: Optional[List[PartnerAddressItem]] = Field(None, description="地址明细")
     industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
     customer_level_code: Optional[str] = Field(None, max_length=50, description="客户级别字典值", alias="customerLevelCode")
     estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购量", alias="estimatedAnnualPurchase")
     lead_source_code: Optional[str] = Field(None, max_length=50, description="来源渠道字典值", alias="leadSourceCode")
     credit_limit: Optional[Decimal] = Field(None, description="信用额度", alias="creditLimit")
+    partner_type: Optional[str] = Field(
+        None,
+        max_length=20,
+        description="伙伴类型（苍穹 type：1法人企业/2非法人企业/3非企业单位/4个人/5个体户）",
+        alias="partnerType",
+    )
+    biz_function: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="业务职能（苍穹 bizfunction：1销售/2结算/3付款/4收货）",
+        alias="bizFunction",
+    )
     revenue_recognition_override: Optional[str] = Field(
         None,
         max_length=32,
@@ -283,7 +378,6 @@ class CustomerUpdate(PartnerInvoiceAndExtendedMixin):
         None, description="收付款账户明细", alias="settlementAccounts"
     )
     addresses: Optional[List[PartnerAddressItem]] = Field(None, description="地址明细")
-    addresses: Optional[List[PartnerAddressItem]] = Field(None, description="地址明细")
     industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
     customer_level_code: Optional[str] = Field(None, max_length=50, description="客户级别字典值", alias="customerLevelCode")
     estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购量", alias="estimatedAnnualPurchase")
@@ -301,6 +395,18 @@ class CustomerUpdate(PartnerInvoiceAndExtendedMixin):
         None, max_length=200, description="所需生产能力", alias="requiredCapacityText"
     )
     follow_status: Optional[str] = Field(None, max_length=20, description="跟进状态", alias="followStatus")
+    partner_type: Optional[str] = Field(
+        None,
+        max_length=20,
+        description="伙伴类型（苍穹 type：1–5）",
+        alias="partnerType",
+    )
+    biz_function: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="业务职能（苍穹 bizfunction）",
+        alias="bizFunction",
+    )
     revenue_recognition_override: Optional[str] = Field(
         None,
         max_length=32,
@@ -316,8 +422,13 @@ class CustomerUpdate(PartnerInvoiceAndExtendedMixin):
         if v is None or (isinstance(v, str) and not str(v).strip()):
             return None
         s = str(v).strip()
-        if s not in ("on_shipment", "on_invoice", "manual"):
-            raise ValueError("revenueRecognitionOverride 必须为 on_shipment、on_invoice、manual 或空")
+        from core.config.finance_recognition import REVENUE_RECOGNITION_VALUES
+
+        if s not in REVENUE_RECOGNITION_VALUES:
+            raise ValueError(
+                "revenueRecognitionOverride 必须为 on_shipment、on_invoice、on_milestone、mixed、"
+                "manual、on_partner_statement 或空"
+            )
         return s
 
     @validator("market_scope", pre=True)
@@ -429,8 +540,13 @@ class SupplierBase(PartnerInvoiceAndExtendedMixin):
         if v is None or (isinstance(v, str) and not str(v).strip()):
             return None
         s = str(v).strip()
-        if s not in ("on_receipt", "on_purchase_invoice", "manual"):
-            raise ValueError("payableRecognitionOverride 必须为 on_receipt、on_purchase_invoice、manual 或空")
+        from core.config.finance_recognition import PAYABLE_RECOGNITION_VALUES
+
+        if s not in PAYABLE_RECOGNITION_VALUES:
+            raise ValueError(
+                "payableRecognitionOverride 必须为 on_receipt、on_purchase_invoice、"
+                "manual、on_partner_statement 或空"
+            )
         return s
 
     @validator("qualification_status", pre=True)
@@ -526,8 +642,13 @@ class SupplierUpdate(PartnerInvoiceAndExtendedMixin):
         if v is None or (isinstance(v, str) and not str(v).strip()):
             return None
         s = str(v).strip()
-        if s not in ("on_receipt", "on_purchase_invoice", "manual"):
-            raise ValueError("payableRecognitionOverride 必须为 on_receipt、on_purchase_invoice、manual 或空")
+        from core.config.finance_recognition import PAYABLE_RECOGNITION_VALUES
+
+        if s not in PAYABLE_RECOGNITION_VALUES:
+            raise ValueError(
+                "payableRecognitionOverride 必须为 on_receipt、on_purchase_invoice、"
+                "manual、on_partner_statement 或空"
+            )
         return s
 
     @validator("qualification_status", pre=True)

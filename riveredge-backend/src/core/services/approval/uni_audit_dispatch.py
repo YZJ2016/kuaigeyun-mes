@@ -20,6 +20,7 @@ from infra.exceptions.exceptions import ValidationError
 
 UNI_AUDIT_ACTIONS = (
     "submit",
+    "submit_review",
     "approve",
     "reject",
     "revoke",
@@ -34,6 +35,7 @@ UNI_AUDIT_ACTIONS = (
 # 动作 → 标准权限 action（withdraw/urge 与提交同权；高级动作走 review）
 _ACTION_PERMISSION = {
     "submit": "submit",
+    "submit_review": "submit",
     "approve": "approve",
     "reject": "reject",
     "revoke": "revoke",
@@ -384,6 +386,43 @@ async def _edit_purchase_inquiry(
     return result
 
 
+async def _edit_kuaioa_leave(
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    payload: Dict[str, Any],
+    comment: Optional[str],
+) -> Any:
+    from apps.kuaioa.schemas.leave import LeaveRequestUpdate
+    from apps.kuaioa.services.leave_service import LeaveRequestService
+    from core.services.approval.approval_edit_guard import ApprovalEditGuard
+    from infra.models.user import User
+
+    edit_ctx = await ApprovalEditGuard.assert_approver_can_edit(
+        tenant_id, "kuaioa_leave", entity_id, user_id
+    )
+    body = dict(payload or {})
+    body.pop("comment", None)
+    user = await User.get_or_none(id=user_id)
+    if not user:
+        raise ValidationError("用户不存在")
+    update_data = LeaveRequestUpdate.model_validate(body)
+    svc = LeaveRequestService()
+    result = await svc.update_request(
+        tenant_id,
+        entity_id,
+        update_data,
+        user,
+        approval_edit_context=edit_ctx,
+        approval_edit_comment=comment,
+    )
+    await ApprovalEditGuard.refresh_instance_context_if_needed(
+        tenant_id, "kuaioa_leave", entity_id, edit_ctx
+    )
+    return result
+
+
 _EDIT_DISPATCH = {
     "sales_order": _edit_sales_order,
     "purchase_order": _edit_purchase_order,
@@ -395,6 +434,7 @@ _EDIT_DISPATCH = {
     "sales_order_change": _edit_sales_order_change,
     "purchase_order_change": _edit_purchase_order_change,
     "purchase_inquiry": _edit_purchase_inquiry,
+    "kuaioa_leave": _edit_kuaioa_leave,
 }
 
 
@@ -407,7 +447,11 @@ async def execute_uni_audit_edit(
     payload: Dict[str, Any],
     comment: Optional[str] = None,
 ) -> Any:
-    entry = entry_by_entity_type(entity_type)
+    from core.services.approval.approval_audit_scope import resolve_audit_entry_for_entity
+
+    entry = await resolve_audit_entry_for_entity(
+        tenant_id, entity_type, entity_id
+    )
     if entry is None:
         raise ValidationError(f"实体 {entity_type} 未在任何 manifest.audit 中声明为可审核")
     handler = _EDIT_DISPATCH.get(entry.entity_type)
@@ -451,23 +495,36 @@ async def execute_uni_audit(
     if act not in UNI_AUDIT_ACTIONS:
         raise ValidationError(f"不支持的审核动作: {action}（仅 {', '.join(UNI_AUDIT_ACTIONS)}）")
 
-    entry = entry_by_entity_type(entity_type)
+    from core.services.approval.approval_audit_scope import resolve_audit_entry_for_entity
+
+    entry = await resolve_audit_entry_for_entity(
+        tenant_id, entity_type, entity_id
+    )
     if entry is None:
         raise ValidationError(f"实体 {entity_type} 未在任何 manifest.audit 中声明为可审核")
 
     body = dict(payload or {})
 
     branch_token = None
-    if act == "submit":
+    hierarchy_token = None
+    if act in ("submit", "submit_review"):
         from core.services.approval.audit_submit_context import (
+            reset_hierarchy_department_uuid,
             reset_submit_branch_by_node,
+            set_hierarchy_department_uuid,
             set_submit_branch_by_node,
         )
-        from core.services.approval.audit_submit_selection import parse_submit_branch_selection
+        from core.services.approval.audit_submit_selection import (
+            parse_hierarchy_department_uuid,
+            parse_submit_branch_selection,
+        )
 
         branches = parse_submit_branch_selection(body)
         if branches:
             branch_token = set_submit_branch_by_node(branches)
+        hierarchy_uuid = parse_hierarchy_department_uuid(body)
+        if hierarchy_uuid:
+            hierarchy_token = set_hierarchy_department_uuid(hierarchy_uuid)
 
     if act == "recall_own":
         from core.services.approval.approval_instance_service import ApprovalInstanceService
@@ -486,6 +543,7 @@ async def execute_uni_audit(
             assert_revoke_allowed_for_viewer,
             assert_submitter_withdraw_allowed,
         )
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
         from core.services.authorization.user_permission_service import UserPermissionService
 
         user = await User.get_or_none(id=user_id)
@@ -493,13 +551,19 @@ async def execute_uni_audit(
         if user:
             admin_bypass = await UserPermissionService.is_admin_bypass(user, tenant_id)
         if act == "withdraw":
-            await assert_submitter_withdraw_allowed(
-                tenant_id=tenant_id,
-                entity_type=entry.entity_type,
-                entity_id=entity_id,
-                operator_id=user_id,
-                admin_bypass=admin_bypass,
+            # 已提交尚未送审时无审批实例；撤销提交由各实体 handler 改回草稿。
+            # 仅待审核（有 pending 实例）才校验发起人撤回门禁。
+            pending = await ApprovalInstanceService.get_instance_by_entity(
+                tenant_id, entry.entity_type, entity_id
             )
+            if pending is not None and str(pending.status or "") == "pending":
+                await assert_submitter_withdraw_allowed(
+                    tenant_id=tenant_id,
+                    entity_type=entry.entity_type,
+                    entity_id=entity_id,
+                    operator_id=user_id,
+                    admin_bypass=admin_bypass,
+                )
         else:
             revoke_code = f"{entry.resource}:revoke"
             has_revoke = await UserPermissionService.has_permission(
@@ -524,6 +588,18 @@ async def execute_uni_audit(
             reason=reason,
             payload=body,
         )
+
+    if act == "approve":
+        doc_updates = body.pop("document_updates", None)
+        if isinstance(doc_updates, dict) and doc_updates:
+            await execute_uni_audit_edit(
+                entity_type=entry.entity_type,
+                entity_id=entity_id,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                payload=doc_updates,
+                comment=reason,
+            )
 
     handler = _DISPATCH.get(entry.entity_type)
     if handler is None:
@@ -555,6 +631,10 @@ async def execute_uni_audit(
             from core.services.approval.audit_submit_context import reset_submit_branch_by_node
 
             reset_submit_branch_by_node(branch_token)
+        if hierarchy_token is not None:
+            from core.services.approval.audit_submit_context import reset_hierarchy_department_uuid
+
+            reset_hierarchy_department_uuid(hierarchy_token)
     from core.services.integration.document_push_silent import maybe_silent_push_after_audit
 
     await maybe_silent_push_after_audit(

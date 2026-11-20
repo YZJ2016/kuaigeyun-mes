@@ -1,5 +1,5 @@
 """
-需求计算业务自动化（Taskiq）：创建后自动执行，完成后自动下推采购。
+需求计算业务自动化（Taskiq）：创建后自动执行，完成后自动下推采购/工单。
 """
 
 from typing import Any, Dict
@@ -8,6 +8,9 @@ from loguru import logger
 
 from apps.kuaizhizao.constants.demand_computation_status import (
     DEMAND_COMPUTATION_STATUS_COMPLETED,
+    DEMAND_COMPUTATION_STATUS_COMPUTING,
+    DEMAND_COMPUTATION_STATUS_FAILED,
+    DEMAND_COMPUTATION_STATUS_PENDING,
 )
 from core.tasks.dispatcher import TaskEvent, dispatch_event
 from core.tasks.event_compat import Event, TriggerEvent
@@ -56,9 +59,40 @@ async def _append_computation_note(
     await row.save(update_fields=["notes", "updated_at"])
 
 
+async def _mark_computation_failed_if_still_pending(
+    tenant_id: int,
+    computation_id: int,
+    error: str,
+) -> None:
+    """自动执行抛错后若仍停在待执行，强制落失败态，避免列表看起来像从未执行。"""
+    from apps.kuaizhizao.models.demand_computation import DemandComputation
+    from core.utils.timezone_utils import resolve_business_datetime
+
+    row = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+    if not row:
+        return
+    status = str(row.computation_status or "").strip()
+    if status not in {
+        DEMAND_COMPUTATION_STATUS_PENDING,
+        DEMAND_COMPUTATION_STATUS_COMPUTING,
+    }:
+        return
+    row.computation_status = DEMAND_COMPUTATION_STATUS_FAILED
+    row.computation_end_time = resolve_business_datetime()
+    row.error_message = (error or "")[:2000]
+    await row.save(
+        update_fields=[
+            "computation_status",
+            "computation_end_time",
+            "error_message",
+            "updated_at",
+        ]
+    )
+
+
 @workflow_client.create_function(
     fn_id="demand-computation-auto-run",
-    name="需求计算自动执行与下推采购",
+    name="需求计算自动执行与下推",
     trigger=TriggerEvent(event=EVENT_NAME),
     retries=2,
 )
@@ -78,8 +112,9 @@ async def demand_computation_auto_run_function(event: Event) -> Dict[str, Any]:
 
     cfg = BusinessConfigService()
     auto_execute = await cfg.auto_execute_computation_on_create(tenant_id)
-    auto_push = await cfg.auto_push_purchase_on_computation_complete(tenant_id)
-    if not auto_execute and not auto_push:
+    auto_push_purchase = await cfg.auto_push_purchase_on_computation_complete(tenant_id)
+    auto_push_work_order = await cfg.auto_push_work_order_on_computation_complete(tenant_id)
+    if not auto_execute and not auto_push_purchase and not auto_push_work_order:
         return {"success": True, "skipped": True, "reason": "automation_off"}
 
     computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
@@ -91,7 +126,8 @@ async def demand_computation_auto_run_function(event: Event) -> Dict[str, Any]:
         "success": True,
         "computation_id": computation_id,
         "executed": False,
-        "pushed": False,
+        "pushed_purchase": False,
+        "pushed_work_order": False,
     }
 
     try:
@@ -105,44 +141,90 @@ async def demand_computation_auto_run_function(event: Event) -> Dict[str, Any]:
                     tenant_id=tenant_id,
                     computation_id=computation_id,
                     operator_id=operator_id,
+                    enqueue_downstream_automation=False,
                 )
                 result["executed"] = True
                 computation = await DemandComputation.get_or_none(
                     tenant_id=tenant_id, id=computation_id
                 )
 
-        if auto_push:
-            status = str(getattr(computation, "computation_status", None) or "").strip()
-            if status != DEMAND_COMPUTATION_STATUS_COMPLETED:
-                msg = f"自动下推采购跳过：计算未完成（当前状态 {status or '空'}）"
+        status = str(getattr(computation, "computation_status", None) or "").strip()
+        if status != DEMAND_COMPUTATION_STATUS_COMPLETED:
+            if auto_push_purchase or auto_push_work_order:
+                msg = f"自动下推跳过：计算未完成（当前状态 {status or '空'}）"
                 await _append_computation_note(tenant_id, computation_id, msg)
                 result["push_skipped"] = msg
-                return result
+            return result
 
+        push_svc = DocumentPushPullService()
+
+        async def _safe_push(*, target_type: str, label: str, result_flag: str) -> None:
+            """下推失败不阻断另一路；无料可推时记跳过而非整单失败。"""
+            try:
+                push_result = await push_svc.push_document(
+                    tenant_id=tenant_id,
+                    source_type="demand_computation",
+                    source_id=computation_id,
+                    target_type=target_type,
+                    created_by=operator_id,
+                )
+                result[result_flag] = True
+                result[f"{result_flag}_result"] = push_result
+            except Exception as push_exc:
+                msg = str(push_exc)
+                empty_skip = any(
+                    token in msg
+                    for token in (
+                        "没有需要采购的物料",
+                        "没有需要生产的物料",
+                        "没有可下推",
+                    )
+                )
+                if empty_skip:
+                    note = f"自动下推{label}跳过：{msg}"
+                    logger.info(
+                        "需求计算自动下推{}跳过 tenant={} computation={}: {}",
+                        label,
+                        tenant_id,
+                        computation_id,
+                        msg,
+                    )
+                    result[f"{result_flag}_skipped"] = msg
+                else:
+                    note = f"自动下推{label}失败：{msg}"
+                    logger.warning(
+                        "需求计算自动下推{}失败 tenant={} computation={}: {}",
+                        label,
+                        tenant_id,
+                        computation_id,
+                        msg,
+                    )
+                    result[f"{result_flag}_error"] = msg
+                await _append_computation_note(tenant_id, computation_id, note)
+
+        if auto_push_work_order:
+            await _safe_push(
+                target_type="work_order",
+                label="工单",
+                result_flag="pushed_work_order",
+            )
+
+        if auto_push_purchase:
             require_pr = await cfg.require_purchase_requisition(tenant_id)
-            push_svc = DocumentPushPullService()
             if require_pr:
-                push_result = await push_svc.push_document(
-                    tenant_id=tenant_id,
-                    source_type="demand_computation",
-                    source_id=computation_id,
+                await _safe_push(
                     target_type="purchase_requisition",
-                    created_by=operator_id,
+                    label="采购申请",
+                    result_flag="pushed_purchase",
                 )
-                result["pushed"] = True
                 result["push_target"] = "purchase_requisition"
-                result["push_result"] = push_result
             else:
-                push_result = await push_svc.push_document(
-                    tenant_id=tenant_id,
-                    source_type="demand_computation",
-                    source_id=computation_id,
+                await _safe_push(
                     target_type="purchase_order",
-                    created_by=operator_id,
+                    label="采购订单",
+                    result_flag="pushed_purchase",
                 )
-                result["pushed"] = True
                 result["push_target"] = "purchase_order"
-                result["push_result"] = push_result
                 # 采购订单自动审核/收货通知由 generate→try_auto_approve_purchase_order 统一处理
 
         return result
@@ -153,9 +235,13 @@ async def demand_computation_auto_run_function(event: Event) -> Dict[str, Any]:
             computation_id,
             exc,
         )
+        err_text = str(exc)
         await _append_computation_note(
             tenant_id,
             computation_id,
-            f"自动执行或下推失败：{exc}",
+            f"自动执行或下推失败：{err_text}",
         )
-        return {"success": False, "computation_id": computation_id, "error": str(exc)}
+        await _mark_computation_failed_if_still_pending(
+            tenant_id, computation_id, err_text
+        )
+        return {"success": False, "computation_id": computation_id, "error": err_text}

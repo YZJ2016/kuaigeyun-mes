@@ -4,6 +4,7 @@
 提供仓库数据的业务逻辑处理（仓库、库区、库位），支持多组织隔离。
 """
 
+from collections import defaultdict
 from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 from tortoise.exceptions import IntegrityError
 from tortoise.models import Q
@@ -225,16 +226,62 @@ class WarehouseService:
         return resp
 
     @staticmethod
+    async def _normalize_storage_location_affiliation(
+        tenant_id: int,
+        *,
+        storage_area_id: Optional[int],
+        warehouse_id: Optional[int],
+    ) -> tuple[Optional[int], Optional[int]]:
+        """
+        库位归属：可挂库区，或直挂仓库；挂库区时 warehouse_id 与库区仓库对齐。
+        二者皆空 = 金蝶式独立仓位。
+        """
+        area_id = int(storage_area_id) if storage_area_id is not None else None
+        wh_id = int(warehouse_id) if warehouse_id is not None else None
+        if area_id is not None:
+            storage_area = await StorageArea.filter(
+                tenant_id=tenant_id,
+                id=area_id,
+                deleted_at__isnull=True,
+            ).first()
+            if not storage_area:
+                raise ValidationError(f"库区 {area_id} 不存在")
+            area_wh = int(storage_area.warehouse_id)
+            if wh_id is not None and wh_id != area_wh:
+                raise ValidationError("所选库区不属于所选仓库")
+            return area_id, area_wh
+        if wh_id is not None:
+            warehouse = await Warehouse.filter(
+                tenant_id=tenant_id,
+                id=wh_id,
+                deleted_at__isnull=True,
+            ).first()
+            if not warehouse:
+                raise ValidationError(f"仓库 {wh_id} 不存在")
+            return None, wh_id
+        return None, None
+
+    @staticmethod
     async def _storage_location_to_response(sl: StorageLocation) -> StorageLocationResponse:
-        """组装库位响应（带出库区编码/名称，避免前端异步字典闪烁）"""
-        await sl.fetch_related("storage_area")
+        """组装库位响应（带出库区/仓库编码名称，避免前端异步字典闪烁）"""
+        await sl.fetch_related("storage_area", "warehouse")
         resp = StorageLocationResponse.model_validate(sl)
+        updates: dict = {}
         area = sl.storage_area
         if area:
-            return resp.model_copy(
-                update={"storage_area_code": area.code, "storage_area_name": area.name}
-            )
-        return resp
+            updates["storage_area_code"] = area.code
+            updates["storage_area_name"] = area.name
+        wh = sl.warehouse
+        if wh:
+            updates["warehouse_code"] = wh.code
+            updates["warehouse_name"] = wh.name
+        elif area:
+            await area.fetch_related("warehouse")
+            if area.warehouse:
+                updates["warehouse_id"] = area.warehouse_id
+                updates["warehouse_code"] = area.warehouse.code
+                updates["warehouse_name"] = area.warehouse.name
+        return resp.model_copy(update=updates) if updates else resp
 
     # ==================== 仓库相关方法 ====================
 
@@ -364,6 +411,61 @@ class WarehouseService:
             raise NotFoundError(f"仓库 {warehouse_uuid} 不存在")
         
         return WarehouseResponse.model_validate(warehouse)
+
+    @staticmethod
+    async def _warehouse_child_counts(
+        tenant_id: int,
+        warehouse_ids: List[int],
+    ) -> Dict[int, Dict[str, int]]:
+        """批量统计仓库下库区数、库位数（与库位列表 warehouse_id 过滤口径一致）。"""
+        if not warehouse_ids:
+            return {}
+        wh_set = {int(i) for i in warehouse_ids if i is not None}
+        area_rows = await StorageArea.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            warehouse_id__in=list(wh_set),
+        ).values("id", "warehouse_id")
+        area_count: Dict[int, int] = defaultdict(int)
+        area_id_to_wh: Dict[int, int] = {}
+        for row in area_rows:
+            wh_id = int(row["warehouse_id"])
+            area_id = int(row["id"])
+            area_count[wh_id] += 1
+            area_id_to_wh[area_id] = wh_id
+
+        loc_count: Dict[int, int] = defaultdict(int)
+        direct_rows = await StorageLocation.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            warehouse_id__in=list(wh_set),
+        ).values("warehouse_id")
+        for row in direct_rows:
+            wh_id = row.get("warehouse_id")
+            if wh_id is not None:
+                loc_count[int(wh_id)] += 1
+
+        if area_id_to_wh:
+            via_area_rows = await StorageLocation.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                storage_area_id__in=list(area_id_to_wh.keys()),
+            ).values("storage_area_id")
+            for row in via_area_rows:
+                area_id = row.get("storage_area_id")
+                if area_id is None:
+                    continue
+                wh_id = area_id_to_wh.get(int(area_id))
+                if wh_id is not None:
+                    loc_count[wh_id] += 1
+
+        out: Dict[int, Dict[str, int]] = {}
+        for wh_id in wh_set:
+            out[wh_id] = {
+                "storage_area_count": area_count.get(wh_id, 0),
+                "storage_location_count": loc_count.get(wh_id, 0),
+            }
+        return out
     
     @staticmethod
     async def list_warehouses(
@@ -420,13 +522,29 @@ class WarehouseService:
             sort_field=sort_field,
             sort_order=sort_order,
             default_sort_col="code",
+            default_sort_order="asc",
         )
 
         total = await query.count()
         warehouses = await query.offset(skip).limit(limit).order_by(order_expr).all()
+        counts = await WarehouseService._warehouse_child_counts(
+            tenant_id, [w.id for w in warehouses]
+        )
+        items: List[WarehouseResponse] = []
+        for warehouse in warehouses:
+            base = WarehouseResponse.model_validate(warehouse)
+            child = counts.get(warehouse.id, {})
+            items.append(
+                base.model_copy(
+                    update={
+                        "storage_area_count": child.get("storage_area_count", 0),
+                        "storage_location_count": child.get("storage_location_count", 0),
+                    }
+                )
+            )
 
         return {
-            "items": [WarehouseResponse.model_validate(w) for w in warehouses],
+            "items": items,
             "total": total
         }
     
@@ -1012,18 +1130,14 @@ class WarehouseService:
             StorageLocationResponse: 创建的库位对象
             
         Raises:
-            ValidationError: 当编码已存在或库区不存在时抛出
+            ValidationError: 当编码已存在或库区/仓库不存在时抛出
         """
-        # 检查库区是否存在
-        storage_area = await StorageArea.filter(
-            tenant_id=tenant_id,
-            id=data.storage_area_id,
-            deleted_at__isnull=True
-        ).first()
-        
-        if not storage_area:
-            raise ValidationError(f"库区 {data.storage_area_id} 不存在")
-        
+        area_id, wh_id = await WarehouseService._normalize_storage_location_affiliation(
+            tenant_id,
+            storage_area_id=data.storage_area_id,
+            warehouse_id=data.warehouse_id,
+        )
+
         # 检查编码是否已存在（包括软删除的记录）
         existing_active = await StorageLocation.filter(
             tenant_id=tenant_id,
@@ -1046,7 +1160,8 @@ class WarehouseService:
             existing_deleted.deleted_at = None
             existing_deleted.name = data.name
             existing_deleted.description = data.description
-            existing_deleted.storage_area_id = data.storage_area_id
+            existing_deleted.storage_area_id = area_id
+            existing_deleted.warehouse_id = wh_id
             existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
             apply_restore_audit(existing_deleted, current_user)
             await existing_deleted.save()
@@ -1054,6 +1169,8 @@ class WarehouseService:
         
         # 创建新库位
         create_data = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
+        create_data["storage_area_id"] = area_id
+        create_data["warehouse_id"] = wh_id
         apply_create_audit(create_data, current_user)
         try:
             storage_location = await StorageLocation.create(
@@ -1076,7 +1193,8 @@ class WarehouseService:
                     existing_deleted_retry.deleted_at = None
                     existing_deleted_retry.name = data.name
                     existing_deleted_retry.description = data.description
-                    existing_deleted_retry.storage_area_id = data.storage_area_id
+                    existing_deleted_retry.storage_area_id = area_id
+                    existing_deleted_retry.warehouse_id = wh_id
                     existing_deleted_retry.is_active = data.is_active if hasattr(data, 'is_active') else True
                     apply_restore_audit(existing_deleted_retry, current_user)
                     await existing_deleted_retry.save()
@@ -1122,6 +1240,7 @@ class WarehouseService:
         skip: int = 0,
         limit: int = 100,
         storage_area_id: Optional[int] = None,
+        warehouse_id: Optional[int] = None,
         is_active: Optional[bool] = None,
         keyword: Optional[str] = None,
         code: Optional[str] = None,
@@ -1141,6 +1260,7 @@ class WarehouseService:
             skip: 跳过数量
             limit: 限制数量
             storage_area_id: 库区ID（可选，用于过滤）
+            warehouse_id: 仓库ID（可选；含直挂本仓 + 挂在本仓库区下的库位）
             is_active: 是否启用（可选）
             keyword: 关键词（编码或名称模糊匹配）
             sort_field: 排序字段（前端 camelCase）
@@ -1156,6 +1276,16 @@ class WarehouseService:
         
         if storage_area_id is not None:
             query = query.filter(storage_area_id=storage_area_id)
+
+        if warehouse_id is not None:
+            area_ids = await StorageArea.filter(
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                deleted_at__isnull=True,
+            ).values_list("id", flat=True)
+            query = query.filter(
+                Q(warehouse_id=warehouse_id) | Q(storage_area_id__in=list(area_ids))
+            )
         
         if is_active is not None:
             query = query.filter(is_active=is_active)
@@ -1217,17 +1347,6 @@ class WarehouseService:
         if not storage_location:
             raise NotFoundError(f"库位 {storage_location_uuid} 不存在")
         
-        # 如果更新库区ID，检查库区是否存在
-        if data.storage_area_id and data.storage_area_id != storage_location.storage_area_id:
-            storage_area = await StorageArea.filter(
-                tenant_id=tenant_id,
-                id=data.storage_area_id,
-                deleted_at__isnull=True
-            ).first()
-            
-            if not storage_area:
-                raise ValidationError(f"库区 {data.storage_area_id} 不存在")
-        
         # 如果更新编码，检查是否已存在
         if data.code and data.code != storage_location.code:
             existing = await StorageLocation.filter(
@@ -1241,6 +1360,25 @@ class WarehouseService:
         
         # 更新字段
         update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
+        affiliation_touched = "storage_area_id" in update_data or "warehouse_id" in update_data
+        if affiliation_touched:
+            next_area = (
+                update_data["storage_area_id"]
+                if "storage_area_id" in update_data
+                else storage_location.storage_area_id
+            )
+            next_wh = (
+                update_data["warehouse_id"]
+                if "warehouse_id" in update_data
+                else storage_location.warehouse_id
+            )
+            area_id, wh_id = await WarehouseService._normalize_storage_location_affiliation(
+                tenant_id,
+                storage_area_id=next_area,
+                warehouse_id=next_wh,
+            )
+            update_data["storage_area_id"] = area_id
+            update_data["warehouse_id"] = wh_id
         for key, value in update_data.items():
             setattr(storage_location, key, value)
         
@@ -1396,18 +1534,23 @@ class WarehouseService:
         if is_active is not None:
             storage_location_query = storage_location_query.filter(is_active=is_active)
         
-        storage_locations = await storage_location_query.prefetch_related("storage_area").order_by("code").all()
+        storage_locations = await storage_location_query.prefetch_related(
+            "storage_area", "warehouse"
+        ).order_by("code").all()
         
-        # 构建库位映射（按库区ID分组）
+        # 按库区分组；直挂仓库（无库区）挂到仓库节点
         storage_location_map: dict[int, List[StorageLocationTreeResponse]] = {}
+        direct_by_warehouse: dict[int, List[StorageLocationTreeResponse]] = {}
         for storage_location in storage_locations:
-            area_id = storage_location.storage_area_id
-            if area_id not in storage_location_map:
-                storage_location_map[area_id] = []
             sl_full = await WarehouseService._storage_location_to_response(storage_location)
-            storage_location_map[area_id].append(
-                StorageLocationTreeResponse.model_validate(sl_full.model_dump(mode="python"))
-            )
+            sl_tree = StorageLocationTreeResponse.model_validate(sl_full.model_dump(mode="python"))
+            area_id = storage_location.storage_area_id
+            if area_id is not None:
+                storage_location_map.setdefault(area_id, []).append(sl_tree)
+                continue
+            wh_id = storage_location.warehouse_id
+            if wh_id is not None:
+                direct_by_warehouse.setdefault(int(wh_id), []).append(sl_tree)
         
         # 构建库区映射（按仓库ID分组）
         storage_area_map: dict[int, List[StorageAreaTreeResponse]] = {}
@@ -1431,10 +1574,11 @@ class WarehouseService:
             # 获取该仓库的库区列表
             warehouse_storage_areas = storage_area_map.get(warehouse.id, [])
             
-            # 创建仓库响应对象（包含库区列表）
+            # 创建仓库响应对象（包含库区列表 + 直挂库位）
             wh_full = WarehouseResponse.model_validate(warehouse)
             warehouse_response = WarehouseTreeResponse.model_validate(wh_full.model_dump(mode="python"))
             warehouse_response.storage_areas = warehouse_storage_areas
+            warehouse_response.storage_locations = direct_by_warehouse.get(int(warehouse.id), [])
             result.append(warehouse_response)
         
         return result

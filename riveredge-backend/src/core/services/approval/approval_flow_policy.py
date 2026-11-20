@@ -325,6 +325,59 @@ async def resolve_final_approval_context(
     return last_node_id, approvers
 
 
+async def resolve_last_final_approver_user_id(
+    tenant_id: int,
+    entity_type: str,
+    entity_id: int,
+) -> Optional[int]:
+    """已通过实例上，终审节点时间序最后通过的审批人（打印「审核人」真源）。"""
+    from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+    entity_instances = await ApprovalInstanceService._list_instances_by_entity(
+        tenant_id, entity_type, int(entity_id)
+    )
+    approved = next((i for i in entity_instances if i.status == "approved"), None)
+    if not approved:
+        return None
+
+    last_node_id = await ApprovalInstanceService._find_last_completed_approval_node_id(
+        tenant_id, approved
+    )
+    if not last_node_id:
+        process = approved.process
+        if not process:
+            await approved.fetch_related("process")
+            process = approved.process
+        if process:
+            last_node_id = graph_last_approval_node_id(
+                normalize_flow_graph(process.nodes or {})
+            )
+    if not last_node_id:
+        return None
+
+    tasks = await ApprovalTask.filter(
+        tenant_id=tenant_id,
+        approval_instance_id=approved.id,
+        node_id=str(last_node_id),
+        status="approved",
+    ).order_by("-action_at", "-id").all()
+    for task in tasks:
+        if task.approver_id is not None:
+            return int(task.approver_id)
+
+    history = await ApprovalHistory.filter(
+        tenant_id=tenant_id,
+        approval_instance_id=approved.id,
+    ).order_by("-action_at", "-id").all()
+    for h in history:
+        if ApprovalInstanceService._normalize_execution_action(h.action) != "approve":
+            continue
+        for candidate in (h.from_node, h.to_node):
+            if str(candidate or "").strip() == str(last_node_id):
+                return int(h.action_by)
+    return None
+
+
 async def resolve_print_reviewer_name(
     tenant_id: int,
     entity_type: str,
@@ -458,7 +511,17 @@ async def viewer_may_recall_own_on_instance(
             approver_id=vid,
             status="approved",
         ).first()
-        if not approved_task or str(instance.current_node or "") == nid:
+        if not approved_task:
+            continue
+        # 本人在该节点仍有待办 → 审批未完成，不能撤本级（勿用 current_node==nid 卡死终审误点）
+        still_pending_mine = await ApprovalTask.filter(
+            tenant_id=tenant_id,
+            approval_instance_id=instance.id,
+            node_id=nid,
+            approver_id=vid,
+            status="pending",
+        ).exists()
+        if still_pending_mine:
             continue
         if await _subsequent_approval_has_human_pass(
             tenant_id, instance, process_nodes, nid

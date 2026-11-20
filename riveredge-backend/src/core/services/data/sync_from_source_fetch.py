@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import copy
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
-from infra.exceptions.exceptions import ValidationError
+from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 from core.services.data.sync_progress import emit_sync_progress
 from core.services.data.sync_source_rows import normalize_api_body_to_rows
@@ -29,6 +30,12 @@ from core.services.integration.kingdee_cosmic_since_filter import (
 )
 from core.services.integration.kingdee_field_keys import extract_kingdee_field_keys
 from core.services.integration.kingdee_active_scope_filter import apply_kingdee_active_scope_filter
+from core.services.integration.kingdee_cosmic_material_active import (
+    apply_cosmic_sbd_getlist_active_data,
+    filter_cosmic_material_rows_active,
+    is_cosmic_sbd_getlist_master_path,
+    strip_cosmic_sbd_getlist_active_data,
+)
 from core.services.integration.kingdee_since_filter import apply_kingdee_since_filter
 
 
@@ -117,6 +124,19 @@ def _resolve_batch_fill_size(request_body: Dict[str, Any], default: int = 100) -
     return min(size, 5000)
 
 
+def _resolve_batch_fill_chunk_size(
+    request_body: Dict[str, Any],
+    fill_path: str,
+    *,
+    api_path: str = "",
+) -> int:
+    """苍穹仓库仓位关系 query：data.warehouse_number 每次仅传一个仓库编码。"""
+    path_hint = f"{fill_path} {api_path}".lower()
+    if "warehouse_number" in path_hint and "bd_warelocareference" in path_hint:
+        return 1
+    return _resolve_batch_fill_size(request_body)
+
+
 async def _fetch_paged_rows(
     *,
     api_service: Any,
@@ -202,7 +222,13 @@ async def fetch_rows_from_api(
     from core.services.application.api_service import APIService
 
     api_service = APIService()
-    api = await api_service.get_api_by_uuid(tenant_id, UUID(api_uuid))
+    try:
+        api = await api_service.get_api_by_uuid(tenant_id, UUID(api_uuid))
+    except NotFoundError as exc:
+        raise ValidationError(
+            f"同步绑定的接口不存在或已删除（api_uuid={api_uuid}）。"
+            "请在对应业务「来源设置」中重新选择接口。"
+        ) from exc
     request_body = _overlay_json_object(
         api.request_body if isinstance(api.request_body, dict) else {},
         request_body_override,
@@ -211,14 +237,23 @@ async def fetch_rows_from_api(
         api.request_params if isinstance(api.request_params, dict) else {},
         request_params_override,
     )
+    api_path = str(getattr(api, "path", None) or "")
     request_body = apply_kingdee_active_scope_filter(request_body, active_only=active_only)
+    if active_only:
+        request_body = apply_cosmic_sbd_getlist_active_data(
+            request_body, path=api_path, active_only=True
+        )
+    else:
+        request_body = strip_cosmic_sbd_getlist_active_data(
+            request_body, path=api_path, active_only=False
+        )
     if since is not None:
         request_body = apply_kingdee_since_filter(request_body, since)
         request_body = apply_cosmic_since_filter(request_body, since)
         request_params = apply_cosmic_since_to_params(
             request_params,
             since,
-            path=str(getattr(api, "path", None) or ""),
+            path=api_path,
         )
         await emit_sync_progress(
             f"已注入增量水位（自 {since.isoformat(sep=' ', timespec='seconds')}）…"
@@ -231,26 +266,54 @@ async def fetch_rows_from_api(
     fill_path = str(batch_fill_path or "").strip()
     fill_values = [str(item).strip() for item in (batch_fill_values or []) if str(item).strip()]
     if fill_path and fill_values:
-        chunk_size = _resolve_batch_fill_size(request_body)
+        chunk_size = _resolve_batch_fill_chunk_size(
+            request_body, fill_path, api_path=api_path
+        )
         total_chunks = (len(fill_values) + chunk_size - 1) // chunk_size
+        fill_label = (
+            "仓库编码"
+            if "warehouse_number" in fill_path.lower()
+            else "物料编码"
+        )
         all_rows: List[Dict[str, Any]] = []
-        for index in range(0, len(fill_values), chunk_size):
-            chunk_vals = fill_values[index : index + chunk_size]
-            chunk_no = index // chunk_size + 1
+
+        async def _fetch_one_fill(value: str, *, index: int, total: int) -> List[Dict[str, Any]]:
             await emit_sync_progress(
-                f"按物料编码第 {chunk_no}/{total_chunks} 批调用（本批 {len(chunk_vals)} 个，pageSize={chunk_size}）…"
+                f"按{fill_label}第 {index}/{total} 批调用（{value}）…"
             )
-            chunk_body = _set_nested_value(request_body, fill_path, ",".join(chunk_vals))
-            all_rows.extend(
-                await _fetch_paged_rows(
-                    api_service=api_service,
-                    tenant_id=tenant_id,
-                    api_uuid=api_uuid,
-                    request_body=chunk_body,
-                    request_params=request_params or None,
-                    timeout=timeout,
+            chunk_body = _set_nested_value(request_body, fill_path, value)
+            return await _fetch_paged_rows(
+                api_service=api_service,
+                tenant_id=tenant_id,
+                api_uuid=api_uuid,
+                request_body=chunk_body,
+                request_params=request_params or None,
+                timeout=timeout,
+            )
+
+        if chunk_size == 1 and len(fill_values) > 1:
+            sem = asyncio.Semaphore(5)
+
+            async def _bounded_fetch(value: str, index: int) -> List[Dict[str, Any]]:
+                async with sem:
+                    return await _fetch_one_fill(value, index=index, total=len(fill_values))
+
+            parts = await asyncio.gather(
+                *[
+                    _bounded_fetch(value, index + 1)
+                    for index, value in enumerate(fill_values)
+                ]
+            )
+            for part in parts:
+                all_rows.extend(part)
+        else:
+            for index in range(0, len(fill_values), chunk_size):
+                chunk_vals = fill_values[index : index + chunk_size]
+                chunk_no = index // chunk_size + 1
+                fill_scalar = chunk_vals[0] if chunk_size == 1 else ",".join(chunk_vals)
+                all_rows.extend(
+                    await _fetch_one_fill(fill_scalar, index=chunk_no, total=total_chunks)
                 )
-            )
     else:
         all_rows = await _fetch_paged_rows(
             api_service=api_service,
@@ -268,6 +331,15 @@ async def fetch_rows_from_api(
         if dropped > 0:
             await emit_sync_progress(
                 f"本地水位过滤：丢弃早于水位 {dropped} 条，保留 {len(all_rows)} 条"
+            )
+
+    if active_only and is_cosmic_sbd_getlist_master_path(api_path):
+        before = len(all_rows)
+        all_rows = filter_cosmic_material_rows_active(all_rows)
+        dropped = before - len(all_rows)
+        if dropped > 0:
+            await emit_sync_progress(
+                f"已跳过未审核或未启用 {dropped} 条（须数据状态已审核且使用状态可用）…"
             )
 
     await emit_sync_progress(f"源端拉取完成，共 {len(all_rows)} 条")

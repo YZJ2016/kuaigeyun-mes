@@ -17,6 +17,7 @@ from core.config.audit_registry import node_keys_for_app, entry_by_node_key
 from core.services.application.application_service import ApplicationService
 
 # 与后端 src/apps/*/manifest.json 的 code 对齐（用于表名前缀与路由 /apps/{code}/）
+# 含核心 PRO 应用，禁用后可按 apps_{code}_ 隐藏自定义字段定义
 KNOWN_MANIFEST_APP_CODES: FrozenSet[str] = frozenset(
     {
         "master-data",
@@ -26,6 +27,11 @@ KNOWN_MANIFEST_APP_CODES: FrozenSet[str] = frozenset(
         "kuaiai",
         "kuaireport",
         "kuaiiot",
+        "kuaioa",
+        "kuaiplm",
+        "kuaipd",
+        "kuaiconnect",
+        "kuaivision",
     }
 )
 
@@ -106,6 +112,7 @@ _SYSTEM_DICTIONARY_REQUIRES_APPS: Dict[str, FrozenSet[str]] = {
     "PAYMENT_TERMS": frozenset({"kuaizhizao"}),
     "TRADE_MODE": frozenset({"kuaizhizao"}),
     "ORDER_TYPE": frozenset({"kuaizhizao"}),
+    "PURCHASE_RECEIPT_BILL_TYPE": frozenset({"kuaizhizao"}),
     "RETURN_REASON": frozenset({"kuaizhizao"}),
     "RETURN_TYPE": frozenset({"kuaizhizao"}),
     "FEE_TYPE": frozenset({"kuaizhizao"}),
@@ -233,6 +240,24 @@ def app_code_from_page_path(page_path: Optional[str]) -> Optional[str]:
 
 def is_page_path_in_installed_apps(page_path: Optional[str], installed: Set[str]) -> bool:
     seg = app_code_from_page_path(page_path)
+    if seg is None:
+        return True
+    return seg in installed
+
+
+def resolve_custom_field_page_app_code(page: Dict[str, object]) -> Optional[str]:
+    """页面归属应用：显式 app_code 优先（菜单接管宿主路径），否则从 page_path 推断。"""
+    explicit = page.get("app_code")
+    if isinstance(explicit, str) and explicit.strip():
+        return explicit.strip()
+    path = page.get("page_path")
+    return app_code_from_page_path(path if isinstance(path, str) else None)
+
+
+def is_custom_field_page_in_installed_apps(
+    page: Dict[str, object], installed: Set[str]
+) -> bool:
+    seg = resolve_custom_field_page_app_code(page)
     if seg is None:
         return True
     return seg in installed

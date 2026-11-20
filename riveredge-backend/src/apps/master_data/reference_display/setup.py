@@ -22,7 +22,7 @@ from core.services.authorization.data_scope_service import DataScopeService
 from core.services.reference.reference_display_provider_registry import register_reference_display_provider
 from core.services.reference.tenant_model_display_provider import make_tenant_model_display_provider
 from core.services.user.user_display_service import UserDisplayService
-from core.utils.search_utils import apply_keyword_icontains
+from core.utils.search_utils import apply_keyword_icontains, page_queryset_by_keyword
 from infra.models.user import User
 
 _registered = False
@@ -61,20 +61,21 @@ def _partner_primary_contact_fields(entity: Any) -> dict[str, Any]:
 
 
 def _customer_display_row(entity: Any) -> dict[str, Any]:
-    """客户下拉回填：首条联系人 + 业务员/地址（供销售订单等表单自动带出）。"""
+    """客户下拉回填：contacts / addresses 明细真源 + 业务员/结算/币种。
+
+    联系人、收货地址分别只读 contacts、addresses；禁止用地址行联系人覆盖主档联系人，
+    禁止再用 legacy 头字段拼第二套明细。
+    """
     from apps.master_data.services.supply_chain_service import (
         _first_partner_address_row,
         _partner_addresses_for_response,
+        _partner_contacts_for_response,
     )
 
     contact = _partner_primary_contact_fields(entity)
     address_rows = _partner_addresses_for_response(entity)
+    contact_rows = _partner_contacts_for_response(entity)
     delivery = _first_partner_address_row(address_rows, "delivery")
-    if delivery:
-        if delivery.get("contact_name"):
-            contact = {**contact, "contact_person": delivery.get("contact_name")}
-        if delivery.get("contact_phone"):
-            contact = {**contact, "phone": delivery.get("contact_phone")}
     shipping_address = None
     if delivery and delivery.get("address"):
         shipping_address = delivery.get("address")
@@ -91,17 +92,33 @@ def _customer_display_row(entity: Any) -> dict[str, Any]:
         contact_person=contact.get("contact_person"),
         phone=contact.get("phone"),
         address=getattr(entity, "address", None),
-        delivery_address=shipping_address or getattr(entity, "delivery_address", None),
+        delivery_address=shipping_address,
         salesman_id=getattr(entity, "salesman_id", None),
         salesman_name=getattr(entity, "salesman_name", None),
         payment_terms_days=getattr(entity, "payment_terms_days", None),
-        settlement_method_code=getattr(entity, "settlement_method_code", None),
+        default_payment_method_code=getattr(entity, "default_payment_method_code", None),
+        settlement_terms_code=getattr(entity, "settlement_terms_code", None),
+        default_currency_code=getattr(entity, "default_currency_code", None),
+        default_exchange_rate=getattr(entity, "default_exchange_rate", None),
+        revenue_recognition_override=getattr(entity, "revenue_recognition_override", None),
+        contacts=contact_rows or None,
+        addresses=address_rows or None,
     )
 
 
 def _supplier_display_row(entity: Any) -> dict[str, Any]:
-    """供应商下拉回填：首条联系人 + 采购员（供采购订单等表单自动带出）。"""
+    """供应商下拉回填：contacts / addresses 明细真源 + 采购员/结算/立账/币种。
+
+    联系人只读 contacts；禁止用头字段冒充第二套明细。
+    """
+    from apps.master_data.services.supply_chain_service import (
+        _partner_addresses_for_response,
+        _partner_contacts_for_response,
+    )
+
     contact = _partner_primary_contact_fields(entity)
+    contact_rows = _partner_contacts_for_response(entity)
+    address_rows = _partner_addresses_for_response(entity)
     return _row(
         id=int(entity.id),
         uuid=_partner_uuid(entity),
@@ -111,6 +128,14 @@ def _supplier_display_row(entity: Any) -> dict[str, Any]:
         phone=contact.get("phone"),
         buyer_id=getattr(entity, "buyer_id", None),
         buyer_name=getattr(entity, "buyer_name", None),
+        payment_terms_days=getattr(entity, "payment_terms_days", None),
+        default_payment_method_code=getattr(entity, "default_payment_method_code", None),
+        settlement_terms_code=getattr(entity, "settlement_terms_code", None),
+        default_currency_code=getattr(entity, "default_currency_code", None),
+        default_exchange_rate=getattr(entity, "default_exchange_rate", None),
+        payable_recognition_override=getattr(entity, "payable_recognition_override", None),
+        contacts=contact_rows or None,
+        addresses=address_rows or None,
     )
 
 
@@ -271,6 +296,8 @@ async def _material_ids_matching_partner_alias_keyword(
     tenant_id: int,
     keyword: str | None,
     extra: dict[str, Any] | None,
+    *,
+    search_mode: str = "fuzzy",
 ) -> list[int]:
     """客户/供应商编号映射：按伙伴料号、品名反查物料 id。"""
     text = (keyword or "").strip()
@@ -308,7 +335,10 @@ async def _material_ids_matching_partner_alias_keyword(
             return []
     else:
         alias_q = alias_q.filter(code_type__in=["CUSTOMER", "SUPPLIER"])
-    alias_q = apply_keyword_icontains(alias_q, text, ("code", "name"))
+    if search_mode == "prefix":
+        alias_q = alias_q.filter(code__istartswith=text)
+    else:
+        alias_q = apply_keyword_icontains(alias_q, text, ("code", "name"))
     raw_ids = await alias_q.values_list("material_id", flat=True)
     return sorted({int(i) for i in raw_ids if i is not None and int(i) > 0})
 
@@ -344,18 +374,21 @@ class _MaterialDisplayProvider:
             source_type = extra.get("source_type") or extra.get("sourceType")
             if source_type:
                 query = query.filter(source_type=str(source_type))
-        if keyword and keyword.strip():
-            kw = keyword.strip()
-            query = query.filter(
-                Q(code__icontains=kw)
-                | Q(main_code__icontains=kw)
-                | Q(name__icontains=kw)
-            )
-        total = await query.count()
-        offset = (page - 1) * page_size
-        rows = await query.order_by("main_code", "code").offset(offset).limit(page_size).all()
+        from apps.master_data.services.material_code_search_mode import page_materials_by_keyword
+        from infra.services.business_config_service import BusinessConfigService
+
+        search_mode = await BusinessConfigService().get_material_code_search_mode(tenant_id)
+        rows, total = await page_materials_by_keyword(
+            query,
+            tenant_id=tenant_id,
+            keyword=keyword,
+            mode=search_mode,  # type: ignore[arg-type]
+            page=page,
+            page_size=page_size,
+            order_by=("main_code", "code"),
+        )
         alias_material_ids = await _material_ids_matching_partner_alias_keyword(
-            tenant_id, keyword, extra
+            tenant_id, keyword, extra, search_mode=search_mode
         )
         if alias_material_ids:
             seen = {int(r.id) for r in rows}
@@ -382,6 +415,9 @@ class _MaterialDisplayProvider:
                     "main_code": r.main_code,
                     "group_id": r.group_id,
                     "images": r.images,
+                    "variant_managed": r.variant_managed,
+                    "variant_attributes": r.variant_attributes,
+                    "is_giftable": bool(getattr(r, "is_giftable", False)),
                 }
                 for r in rows
             ],
@@ -422,6 +458,9 @@ class _MaterialDisplayProvider:
                 "main_code": r.main_code,
                 "group_id": r.group_id,
                 "images": r.images,
+                "variant_managed": r.variant_managed,
+                "variant_attributes": r.variant_attributes,
+                "is_giftable": bool(getattr(r, "is_giftable", False)),
             }
             for r in rows
         ]
@@ -444,12 +483,14 @@ class _WarehouseDisplayProvider:
         query = Warehouse.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if is_active is not None:
             query = query.filter(is_active=is_active)
-        if keyword and keyword.strip():
-            kw = keyword.strip()
-            query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
-        total = await query.count()
-        offset = (page - 1) * page_size
-        rows = await query.order_by("code").offset(offset).limit(page_size).all()
+        rows, total = await page_queryset_by_keyword(
+            query,
+            keyword=keyword,
+            fields=("code", "name"),
+            page=page,
+            page_size=page_size,
+            order_by=("code",),
+        )
         return {
             "items": [_row(id=r.id, uuid=r.uuid, code=r.code, name=r.name) for r in rows],
             "total": total,
@@ -497,12 +538,14 @@ class _WorkshopDisplayProvider:
         query = Workshop.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if is_active is not None:
             query = query.filter(is_active=is_active)
-        if keyword and keyword.strip():
-            kw = keyword.strip()
-            query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
-        total = await query.count()
-        offset = (page - 1) * page_size
-        rows = await query.order_by("code").offset(offset).limit(page_size).all()
+        rows, total = await page_queryset_by_keyword(
+            query,
+            keyword=keyword,
+            fields=("code", "name"),
+            page=page,
+            page_size=page_size,
+            order_by=("code",),
+        )
         return {
             "items": [_row(id=r.id, uuid=r.uuid, code=r.code, name=r.name) for r in rows],
             "total": total,
@@ -566,16 +609,14 @@ class _ProductionLineDisplayProvider:
         query = ProductionLine.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if is_active is not None:
             query = query.filter(is_active=is_active)
-        if keyword and keyword.strip():
-            kw = keyword.strip()
-            query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
-        total = await query.count()
-        offset = (page - 1) * page_size
-        rows = (
-            await query.order_by("code")
-            .offset(offset)
-            .limit(page_size)
-            .prefetch_related("workshop")
+        rows, total = await page_queryset_by_keyword(
+            query,
+            keyword=keyword,
+            fields=("code", "name"),
+            page=page,
+            page_size=page_size,
+            order_by=("code",),
+            prefetch=("workshop",),
         )
         return {
             "items": [self._item(r) for r in rows],
@@ -625,12 +666,14 @@ class _PlantDisplayProvider:
         query = Plant.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if is_active is not None:
             query = query.filter(is_active=is_active)
-        if keyword and keyword.strip():
-            kw = keyword.strip()
-            query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
-        total = await query.count()
-        offset = (page - 1) * page_size
-        rows = await query.order_by("code").offset(offset).limit(page_size).all()
+        rows, total = await page_queryset_by_keyword(
+            query,
+            keyword=keyword,
+            fields=("code", "name"),
+            page=page,
+            page_size=page_size,
+            order_by=("code",),
+        )
         return {
             "items": [_row(id=r.id, uuid=r.uuid, code=r.code, name=r.name) for r in rows],
             "total": total,
@@ -678,12 +721,14 @@ class _WorkCenterDisplayProvider:
         query = WorkCenter.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if is_active is not None:
             query = query.filter(is_active=is_active)
-        if keyword and keyword.strip():
-            kw = keyword.strip()
-            query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
-        total = await query.count()
-        offset = (page - 1) * page_size
-        rows = await query.order_by("code").offset(offset).limit(page_size).all()
+        rows, total = await page_queryset_by_keyword(
+            query,
+            keyword=keyword,
+            fields=("code", "name"),
+            page=page,
+            page_size=page_size,
+            order_by=("code",),
+        )
         return {
             "items": [_row(id=r.id, uuid=r.uuid, code=r.code, name=r.name) for r in rows],
             "total": total,
@@ -731,12 +776,14 @@ class _DepartmentDisplayProvider:
         query = Department.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if is_active is not None:
             query = query.filter(is_active=is_active)
-        if keyword and keyword.strip():
-            kw = keyword.strip()
-            query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
-        total = await query.count()
-        offset = (page - 1) * page_size
-        rows = await query.order_by("code").offset(offset).limit(page_size).all()
+        rows, total = await page_queryset_by_keyword(
+            query,
+            keyword=keyword,
+            fields=("code", "name"),
+            page=page,
+            page_size=page_size,
+            order_by=("code",),
+        )
         items = [await self._map_row(r) for r in rows]
         return {
             "items": items,
@@ -805,12 +852,14 @@ class _PositionDisplayProvider:
         query = Position.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if is_active is not None:
             query = query.filter(is_active=is_active)
-        if keyword and keyword.strip():
-            kw = keyword.strip()
-            query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
-        total = await query.count()
-        offset = (page - 1) * page_size
-        rows = await query.order_by("code").offset(offset).limit(page_size).all()
+        rows, total = await page_queryset_by_keyword(
+            query,
+            keyword=keyword,
+            fields=("code", "name"),
+            page=page,
+            page_size=page_size,
+            order_by=("code",),
+        )
         return {
             "items": [_row(id=r.id, uuid=r.uuid, code=r.code, name=r.name) for r in rows],
             "total": total,

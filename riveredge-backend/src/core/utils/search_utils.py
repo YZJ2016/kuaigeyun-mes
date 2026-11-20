@@ -22,6 +22,7 @@ def apply_keyword_icontains(queryset, keyword: Optional[str], fields: Sequence[s
     列表模糊搜索唯一路径：对指定字段做 OR icontains。
 
     空关键词不改查询。中文必须走数据库 icontains，不得只靠当前页前端过滤。
+    纯字母关键词的拼音首字母匹配不走这里，用 page_queryset_by_keyword。
     """
     text = (keyword or "").strip()
     if not text or not fields:
@@ -30,6 +31,78 @@ def apply_keyword_icontains(queryset, keyword: Optional[str], fields: Sequence[s
     for field in fields[1:]:
         cond |= Q(**{f"{field}__icontains": text})
     return queryset.filter(cond)
+
+
+_COMPACT_TOKEN_RE = re.compile(r"[\s\-_]+")
+
+
+def text_matches_keyword(value: Any, keyword: str, *, pinyin: bool) -> bool:
+    """字段值是否命中关键词：原文包含、去掉分隔符后的编码包含、拼音首字母包含。"""
+    if value is None:
+        return False
+    text = str(value).strip()
+    keyword_text = (keyword or "").strip()
+    if not text or not keyword_text:
+        return False
+    if keyword_text.lower() in text.lower():
+        return True
+    compact_keyword = _COMPACT_TOKEN_RE.sub("", keyword_text)
+    compact_text = _COMPACT_TOKEN_RE.sub("", text)
+    if compact_keyword and compact_keyword.lower() in compact_text.lower():
+        return True
+    if pinyin and match_pinyin_initials(text, keyword_text):
+        return True
+    return False
+
+
+async def page_queryset_by_keyword(
+    queryset: QuerySet,
+    *,
+    keyword: Optional[str],
+    fields: Sequence[str],
+    page: int = 1,
+    page_size: int = 20,
+    offset: Optional[int] = None,
+    order_by: Sequence[str] = (),
+    prefetch: Sequence[str] = (),
+) -> tuple[list, int]:
+    """
+    下拉远程搜索分页。
+
+    中文、含数字或符号的关键词走数据库 icontains。
+    纯字母（1-10 位）同时按原文、去分隔符编码和拼音首字母匹配，例如 xb 命中「箱板」。
+    """
+    text = (keyword or "").strip()
+    search_fields = tuple(dict.fromkeys(field for field in fields if field))
+    start = offset if offset is not None else max(page - 1, 0) * page_size
+    size = page_size if page_size > 0 else 0
+    ordered = queryset.order_by(*order_by) if order_by else queryset
+
+    if not text or not is_pinyin_keyword(text) or not search_fields:
+        filtered = apply_keyword_icontains(ordered, text, search_fields) if text else ordered
+        total = await filtered.count()
+        page_query = filtered.offset(start).limit(size)
+        if prefetch:
+            page_query = page_query.prefetch_related(*prefetch)
+        return list(await page_query.all()), total
+
+    slim_fields = tuple(dict.fromkeys(("id", *search_fields)))
+    slim_rows = await ordered.values(*slim_fields)
+    matched_ids: List[int] = []
+    for row in slim_rows:
+        if any(text_matches_keyword(row.get(field), text, pinyin=True) for field in search_fields):
+            row_id = row.get("id")
+            if row_id is not None:
+                matched_ids.append(int(row_id))
+    total = len(matched_ids)
+    page_ids = matched_ids[start:start + size] if size else []
+    if not page_ids:
+        return [], total
+    fetched = queryset.filter(id__in=page_ids)
+    if prefetch:
+        fetched = fetched.prefetch_related(*prefetch)
+    by_id = {int(item.id): item for item in await fetched.all()}
+    return [by_id[row_id] for row_id in page_ids if row_id in by_id], total
 
 
 def is_pinyin_keyword(keyword: str) -> bool:

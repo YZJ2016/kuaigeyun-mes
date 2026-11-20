@@ -120,8 +120,25 @@ class Customer(BaseModel):
     # 商事主体与结算、联系人扩展
     legal_representative = fields.CharField(max_length=100, null=True, description="法定代表人")
     enterprise_type_code = fields.CharField(max_length=50, null=True, description="企业类型编码")
+    # 苍穹 bd_customer.type：1法人企业/2非法人企业/3非企业单位/4个人/5个体户（与 enterprise_type_code 不同）
+    partner_type = fields.CharField(
+        max_length=20, null=True, description="伙伴类型（苍穹 type：1–5）"
+    )
+    # 苍穹 bd_customer.bizfunction：可含 1销售/2结算/3付款/4收货 等编码串
+    biz_function = fields.CharField(
+        max_length=50, null=True, description="业务职能（苍穹 bizfunction）"
+    )
     payment_terms_days = fields.IntField(null=True, description="付款账期（天）")
-    settlement_method_code = fields.CharField(max_length=50, null=True, description="结算方式编码")
+    default_payment_method_code = fields.CharField(
+        max_length=50, null=True, description="默认付款方式编码"
+    )
+    settlement_terms_code = fields.CharField(max_length=50, null=True, description="结算条款编码")
+    default_currency_code = fields.CharField(
+        max_length=10, null=True, description="默认币种（销售单据表头带出）"
+    )
+    default_exchange_rate = fields.DecimalField(
+        max_digits=18, decimal_places=6, null=True, description="默认汇率（销售单据表头带出）"
+    )
     finance_contact_name = fields.CharField(max_length=100, null=True, description="财务联系人")
     finance_contact_phone = fields.CharField(max_length=30, null=True, description="财务联系电话")
     finance_contact_email = fields.CharField(max_length=100, null=True, description="财务联系邮箱")

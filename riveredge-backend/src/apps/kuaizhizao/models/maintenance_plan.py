@@ -29,7 +29,7 @@ class MaintenancePlan(BaseModel):
         equipment_uuid: 设备UUID
         equipment_name: 设备名称
         plan_type: 计划类型（预防性维护、定期维护、临时维护）
-        maintenance_type: 维护类型（日常保养、小修、中修、大修）
+        maintenance_type: 维护类型（日常保养、月度、季度、半年度、年度；来自保养方案快照）
         cycle_type: 周期类型（按时间、按运行时长、按使用次数）
         cycle_value: 周期值
         cycle_unit: 周期单位（天、小时、次）

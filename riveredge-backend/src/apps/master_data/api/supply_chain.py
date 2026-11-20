@@ -125,10 +125,13 @@ customer_sync_service = None  # lazy below
 
 
 def _customer_sync_service():
-    from apps.master_data.services.customer_sync_service import CustomerSyncService
+    from apps.common.inbound_sync_gate import inbound_sync_service
+
     global customer_sync_service
     if customer_sync_service is None:
-        customer_sync_service = CustomerSyncService()
+        customer_sync_service = inbound_sync_service(
+            "customer_sync_service", "CustomerSyncService"
+        )
     return customer_sync_service
 
 
@@ -347,10 +350,13 @@ supplier_sync_service = None
 
 
 def _supplier_sync_service():
-    from apps.master_data.services.supplier_sync_service import SupplierSyncService
+    from apps.common.inbound_sync_gate import inbound_sync_service
+
     global supplier_sync_service
     if supplier_sync_service is None:
-        supplier_sync_service = SupplierSyncService()
+        supplier_sync_service = inbound_sync_service(
+            "supplier_sync_service", "SupplierSyncService"
+        )
     return supplier_sync_service
 
 

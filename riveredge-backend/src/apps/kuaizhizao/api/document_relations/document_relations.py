@@ -56,11 +56,14 @@ async def list_material_line_attachment_sources(
     tenant_id: int = Depends(get_current_tenant),
 ) -> DocumentLineMaterialAttachmentSourcesResponse:
     service = DocumentLineMaterialAttachmentSourceService()
-    return await service.list_sources_for_material(
-        tenant_id,
-        material_id,
-        current_user=current_user,
-    )
+    try:
+        return await service.list_sources_for_material(
+            tenant_id,
+            material_id,
+            current_user=current_user,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.get("/{document_type}/{document_id}", response_model=DocumentRelationListResponse, summary="List document relations")

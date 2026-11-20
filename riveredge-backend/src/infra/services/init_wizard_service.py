@@ -268,14 +268,14 @@ class InitWizardService:
                 detail="组织不存在"
             )
         
-        # 保存所有步骤数据
-        settings = tenant.settings or {}
-        
+        # 只收集本向导要写入的键；末尾对最新 settings 做合并，避免整包覆盖冲掉引导完成标志
+        settings_patch: Dict[str, Any] = {}
+
         if init_data.step1_organization_info:
-            settings["init_step1"] = init_data.step1_organization_info.model_dump()
-        
+            settings_patch["init_step1"] = init_data.step1_organization_info.model_dump()
+
         if init_data.step2_default_settings:
-            settings["init_step2"] = init_data.step2_default_settings.model_dump()
+            settings_patch["init_step2"] = init_data.step2_default_settings.model_dump()
             # 同步到站点设置（与站点设置格式一致）
             from core.schemas.site_setting import SiteSettingUpdate
             from core.services.system.site_setting_service import SiteSettingService
@@ -287,28 +287,28 @@ class InitWizardService:
                 "date_format": s2.date_format,
             }
             await SiteSettingService.update_settings(tenant_id, SiteSettingUpdate(settings=site_settings))
-        
+
         if init_data.step3_admin_info:
-            settings["init_step3"] = init_data.step3_admin_info.model_dump()
+            settings_patch["init_step3"] = init_data.step3_admin_info.model_dump()
             # 更新管理员信息
             from infra.models.user import User
             admin_user = await User.filter(
                 tenant_id=tenant_id,
                 is_tenant_admin=True
             ).first()
-            
+
             if admin_user:
                 update_data = {}
                 if init_data.step3_admin_info.full_name:
                     update_data["full_name"] = init_data.step3_admin_info.full_name
                 if init_data.step3_admin_info.email:
                     update_data["email"] = init_data.step3_admin_info.email
-                
+
                 if update_data:
                     await User.filter(id=admin_user.id).update(**update_data)
-        
+
         if init_data.step4_template:
-            settings["init_step4"] = init_data.step4_template.model_dump()
+            settings_patch["init_step4"] = init_data.step4_template.model_dump()
             # 如果选择了模板，应用模板
             if init_data.step4_template.template_id:
                 from infra.services.industry_template_service import IndustryTemplateService
@@ -319,7 +319,7 @@ class InitWizardService:
                 except Exception as e:
                     logger.warning(f"应用行业模板失败（不中断流程）: {e}")
                     # 如果应用失败，不中断流程，只记录警告
-        
+
         # 完成向导前，同步已安装应用的菜单到数据库
         try:
             from core.services.system.menu_service import MenuService
@@ -329,20 +329,22 @@ class InitWizardService:
             logger.warning(f"完成向导时菜单同步失败（不中断流程）: {e}")
 
         # 如果还没有创建默认配置，则创建默认编码规则和系统参数
-        if not settings.get("defaults_initialized"):
+        existing_settings = dict(tenant.settings or {})
+        if not existing_settings.get("defaults_initialized"):
             from core.services.default.default_values_service import DefaultValuesService
             try:
                 await DefaultValuesService.initialize_tenant_defaults(tenant_id)
-                settings["defaults_initialized"] = True
+                settings_patch["defaults_initialized"] = True
                 logger.info(f"组织 {tenant_id} 默认配置初始化完成")
             except Exception as e:
                 logger.warning(f"组织 {tenant_id} 默认配置初始化失败（不中断流程）: {e}")
-        
-        # 标记初始化完成
-        settings["init_completed"] = True
-        settings["init_completed_at"] = to_api_isoformat(resolve_business_datetime())
-        
-        await Tenant.filter(id=tenant_id).update(settings=settings)
+
+        settings_patch["init_completed"] = True
+        settings_patch["init_completed_at"] = to_api_isoformat(resolve_business_datetime())
+
+        from core.services.tenant.tenant_init_data_service import TenantInitDataService
+
+        await TenantInitDataService.merge_tenant_settings(tenant_id, settings_patch)
         
         logger.info(f"组织 {tenant_id} 初始化向导完成")
         

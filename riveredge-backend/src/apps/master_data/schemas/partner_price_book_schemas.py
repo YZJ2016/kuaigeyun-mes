@@ -49,8 +49,12 @@ class PartnerPriceBookBase(BaseModel):
     currency_code: Optional[str] = Field(None, alias="currencyCode", description="币种")
     tax_rate: Optional[Decimal] = Field(None, alias="taxRate", description="税率（百分比）")
     unit: Optional[str] = Field(None, description="计价单位")
-    effective_from: Optional[date] = Field(None, alias="effectiveFrom", description="生效起始日")
-    effective_to: Optional[date] = Field(None, alias="effectiveTo", description="生效截止日")
+    effective_from: Optional[date] = Field(
+        None, alias="effectiveFrom", description="生效起始日（空=一直生效）"
+    )
+    effective_to: Optional[date] = Field(
+        None, alias="effectiveTo", description="生效截止日（空=一直生效）"
+    )
     remark: Optional[str] = Field(None, description="备注")
     is_active: Optional[bool] = Field(True, alias="isActive", description="是否启用")
     partner_material_code: Optional[str] = Field(

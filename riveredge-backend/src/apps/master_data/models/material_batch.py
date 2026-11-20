@@ -64,6 +64,7 @@ class MaterialBatch(BaseModel):
                 "customer_id",
                 "warehouse_id",
                 "quality_status",
+                "location_code",
             )
         ]
     
@@ -87,7 +88,11 @@ class MaterialBatch(BaseModel):
     warehouse_id = fields.IntField(default=0, description="主仓仓库ID（0=未归属）")
     warehouse_name = fields.CharField(max_length=200, null=True, description="主仓仓库名称（冗余）")
     location_id = fields.IntField(null=True, description="库位ID（可选）")
-    location_code = fields.CharField(max_length=50, null=True, description="库位编码（可选）")
+    location_code = fields.CharField(
+        max_length=50,
+        default="",
+        description="库位编码（空串=未分库位；与仓库共同构成库存维度）",
+    )
 
     ownership_type = fields.CharField(
         max_length=20,
@@ -99,8 +104,16 @@ class MaterialBatch(BaseModel):
     source_doc_id = fields.IntField(null=True, description="来源单据ID（如代工来料单）")
     source_doc_code = fields.CharField(max_length=50, null=True, description="来源单据编码")
     
-    # 批号数量（当前库存数量）
-    quantity = fields.DecimalField(max_digits=18, decimal_places=4, default=0, description="批号数量（当前库存数量）")
+    # 批号数量（库存单位 / 基本单位双计量）
+    quantity = fields.DecimalField(
+        max_digits=18, decimal_places=4, default=0, description="库存单位数量（当前库存）"
+    )
+    base_quantity = fields.DecimalField(
+        max_digits=18, decimal_places=4, default=0, description="基本单位数量（当前库存）"
+    )
+    aux_quantity = fields.DecimalField(
+        max_digits=18, decimal_places=4, default=0, description="辅助单位数量（台账副数量真源）"
+    )
     
     # 批号状态
     STATUS_CHOICES = [

@@ -16,12 +16,18 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 from apps.common.audit_actor import apply_create_audit, apply_update_audit, audit_response_fields
 from apps.master_data.models.material import Material, MaterialGroup
 from apps.master_data.models.material_product_process import MaterialProductProcess
+from apps.master_data.models.material_group_product_process import MaterialGroupProductProcess
 from apps.master_data.models.process import Operation, ProcessRoute
 from apps.master_data.models.employee_performance import PieceRate
 from apps.master_data.schemas.material_product_process_schemas import (
+    MaterialGroupProductProcessResponse,
+    MaterialGroupProductProcessSave,
     MaterialProductProcessResponse,
     MaterialProductProcessSave,
+    ProductProcessInheritanceGroup,
     ProductProcessLineSchema,
+    ProductProcessGroupRouteAssignmentItem,
+    ProductProcessGroupRouteAssignmentListResponse,
 )
 from infra.models.user import User
 from core.utils.timezone_utils import resolve_business_datetime
@@ -56,19 +62,39 @@ def _route_hours_to_product_process_seconds(hours: Optional[float]) -> Optional[
     return float(hours) * SECONDS_PER_HOUR
 
 
+def _route_row_uses_standard_time_v2(row: Dict[str, Any]) -> bool:
+    return any(
+        row.get(k) is not None
+        for k in (
+            "standard_time_unit",
+            "standardTimeUnit",
+            "standard_time_qty",
+            "standardTimeQty",
+        )
+    )
+
+
 def _convert_route_row_times_to_seconds(row: Dict[str, Any]) -> Dict[str, Any]:
-    """路线 operation_sequence 行（小时）转为产品工艺行时间（秒）。"""
+    """路线 operation_sequence：旧格式 standard_time 为小时；新格式为 qty 件合计秒。"""
     out = dict(row)
     if "standard_time" in out or "standardTime" in out:
-        std = _float_or_none(out.get("standard_time", out.get("standardTime")))
-        if std is not None:
-            sec = _route_hours_to_product_process_seconds(std)
-            out["standard_time"] = sec
-            out["standardTime"] = sec
-        out["standard_time_qty"] = 1
-        out["standardTimeQty"] = 1
-        out.setdefault("standard_time_unit", "m")
-        out.setdefault("standardTimeUnit", "m")
+        if _route_row_uses_standard_time_v2(out):
+            qty = _float_or_none(out.get("standard_time_qty", out.get("standardTimeQty")))
+            out["standard_time_qty"] = int(qty) if qty is not None and qty >= 1 else 1
+            out["standardTimeQty"] = out["standard_time_qty"]
+            unit = out.get("standard_time_unit") or out.get("standardTimeUnit") or "m"
+            out.setdefault("standard_time_unit", unit)
+            out.setdefault("standardTimeUnit", unit)
+        else:
+            std = _float_or_none(out.get("standard_time", out.get("standardTime")))
+            if std is not None:
+                sec = _route_hours_to_product_process_seconds(std)
+                out["standard_time"] = sec
+                out["standardTime"] = sec
+            out["standard_time_qty"] = 1
+            out["standardTimeQty"] = 1
+            out.setdefault("standard_time_unit", "m")
+            out.setdefault("standardTimeUnit", "m")
     if "setup_time" in out or "setupTime" in out:
         setup = _float_or_none(out.get("setup_time", out.get("setupTime")))
         if setup is not None:
@@ -81,18 +107,18 @@ def _convert_route_row_times_to_seconds(row: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _line_to_operation_payload(line: ProductProcessLineSchema, allow_jump: bool) -> Dict[str, Any]:
-    is_node = allow_jump and bool(line.is_node_operation)
-    # 产品工艺开启「允许工序跳转」时：非节点工序落 allow_jump=true，报工不卡紧邻上道
+    # 跳转唯一控制源在头（产品工艺/路线/工单）；行仅镜像头开关，节点工序不再关闸
+    sw = bool(allow_jump)
     row: Dict[str, Any] = {
         "uuid": line.operation_uuid,
         "code": line.code,
         "name": line.name,
         "reporting_type": line.reporting_type or "quantity",
         "reportingType": line.reporting_type or "quantity",
-        "allow_jump": bool(allow_jump) and not is_node,
-        "allowJump": bool(allow_jump) and not is_node,
-        "is_node_operation": is_node,
-        "isNodeOperation": is_node,
+        "allow_jump": sw,
+        "allowJump": sw,
+        "is_node_operation": False,
+        "isNodeOperation": False,
     }
     if line.operation_id is not None:
         row["operation_id"] = line.operation_id
@@ -110,6 +136,10 @@ def _line_to_operation_payload(line: ProductProcessLineSchema, allow_jump: bool)
     setup_hours = _product_process_seconds_to_wo_hours(line.setup_time, 1.0)
     if setup_hours is not None:
         row["setup_time"] = float(setup_hours)
+    if line.piece_rate is not None:
+        pr = float(line.piece_rate)
+        row["piece_rate"] = pr
+        row["pieceRate"] = pr
     ws = line.workshop_ids or []
     if ws:
         row["workshop_ids"] = ws
@@ -241,6 +271,21 @@ def _stored_line_to_dict(ln: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _prefer_product_then_route(
+    stored: Dict[str, Any],
+    route: Dict[str, Any],
+    *keys: str,
+) -> Any:
+    """产品工艺已填优先；未填时用路线模板。"""
+    for key in keys:
+        if key in stored and stored[key] is not None and stored[key] != "":
+            return stored[key]
+    for key in keys:
+        if key in route and route[key] is not None and route[key] != "":
+            return route[key]
+    return None
+
+
 def _merge_stored_lines_with_route(
     stored_lines: List[Any],
     route_row_dicts: List[Dict[str, Any]],
@@ -249,7 +294,7 @@ def _merge_stored_lines_with_route(
     以已存产品工艺行为准合并路线工序模板：
     - 仅返回 stored_lines 中仍保留的工序（用户在产品工艺页删除的不恢复）
     - 顺序优先跟随路线；路线中无对应项的已存行保留在末尾
-    - 已存字段覆盖路线默认值
+    - 已存字段覆盖路线默认值；工时/工价未填时从路线补齐
     """
     stored_by_uuid: Dict[str, Dict[str, Any]] = {}
     for ln in stored_lines:
@@ -268,11 +313,20 @@ def _merge_stored_lines_with_route(
             continue
         seen.add(uid)
         stored = stored_by_uuid[uid]
-        merged.append(
-            _normalize_line_time_fields(
-                {**d, **stored, "uuid": uid, "operation_uuid": uid}
-            )
-        )
+        row = {**d, **stored, "uuid": uid, "operation_uuid": uid}
+        std = _prefer_product_then_route(stored, d, "standard_time", "standardTime")
+        if std is not None:
+            row["standard_time"] = std
+            row["standardTime"] = std
+        setup = _prefer_product_then_route(stored, d, "setup_time", "setupTime")
+        if setup is not None:
+            row["setup_time"] = setup
+            row["setupTime"] = setup
+        pr = _prefer_product_then_route(stored, d, "piece_rate", "pieceRate")
+        if pr is not None:
+            row["piece_rate"] = pr
+            row["pieceRate"] = pr
+        merged.append(_normalize_line_time_fields(row))
 
     for uid, stored in stored_by_uuid.items():
         if uid in seen:
@@ -539,6 +593,52 @@ def _stored_lines_to_schemas(stored_lines: List[Any]) -> List[ProductProcessLine
 
 class MaterialProductProcessService:
     @staticmethod
+    async def _get_material_group(tenant_id: int, group_uuid: str) -> MaterialGroup:
+        group = await MaterialGroup.filter(
+            uuid=group_uuid,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not group:
+            raise NotFoundError(f"物料分组 {group_uuid} 不存在")
+        return group
+
+    @staticmethod
+    async def _group_product_process_record(
+        tenant_id: int,
+        material_group_id: int,
+    ) -> Optional[MaterialGroupProductProcess]:
+        return await MaterialGroupProductProcess.filter(
+            tenant_id=tenant_id,
+            material_group_id=int(material_group_id),
+            deleted_at__isnull=True,
+        ).first()
+
+    @staticmethod
+    async def _resolve_route_for_group(
+        tenant_id: int,
+        route_uuid: Optional[str],
+        group: MaterialGroup,
+    ) -> Optional[ProcessRoute]:
+        if route_uuid:
+            pr = await ProcessRoute.filter(
+                uuid=route_uuid,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).first()
+            if not pr:
+                raise ValidationError("所选工艺路线不存在或已删除")
+            return pr
+        pr_id = getattr(group, "process_route_id", None)
+        if pr_id:
+            return await ProcessRoute.filter(
+                id=int(pr_id),
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).first()
+        return None
+
+    @staticmethod
     async def _get_material(tenant_id: int, material_uuid: str) -> Material:
         material = await Material.filter(
             uuid=material_uuid,
@@ -623,6 +723,49 @@ class MaterialProductProcessService:
         return ProductProcessRouteAssignmentListResponse(items=items)
 
     @staticmethod
+    async def list_product_process_group_route_assignments(tenant_id: int):
+        records = await MaterialGroupProductProcess.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            process_route_id__isnull=False,
+        ).values("material_group_id", "process_route_id")
+        if not records:
+            return ProductProcessGroupRouteAssignmentListResponse(items=[])
+
+        group_ids = sorted({int(row["material_group_id"]) for row in records})
+        route_ids = sorted({int(row["process_route_id"]) for row in records})
+
+        group_rows = await MaterialGroup.filter(
+            id__in=group_ids,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).values("id", "uuid")
+        group_uuid_by_id = {int(row["id"]): str(row["uuid"]) for row in group_rows}
+
+        route_rows = await ProcessRoute.filter(
+            id__in=route_ids,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).values("id", "uuid")
+        route_uuid_by_id = {int(row["id"]): str(row["uuid"]) for row in route_rows}
+
+        items: list[ProductProcessGroupRouteAssignmentItem] = []
+        seen: set[str] = set()
+        for row in records:
+            group_uuid = group_uuid_by_id.get(int(row["material_group_id"]))
+            route_uuid = route_uuid_by_id.get(int(row["process_route_id"]))
+            if not group_uuid or not route_uuid or group_uuid in seen:
+                continue
+            seen.add(group_uuid)
+            items.append(
+                ProductProcessGroupRouteAssignmentItem(
+                    material_group_uuid=group_uuid,
+                    process_route_uuid=route_uuid,
+                )
+            )
+        return ProductProcessGroupRouteAssignmentListResponse(items=items)
+
+    @staticmethod
     async def get_for_material(tenant_id: int, material_uuid: str) -> MaterialProductProcessResponse:
         material = await MaterialProductProcessService._get_material(tenant_id, material_uuid)
         record = await MaterialProductProcess.filter(
@@ -631,12 +774,40 @@ class MaterialProductProcessService:
             deleted_at__isnull=True,
         ).first()
 
-        stored_lines = record.lines if record else None
-        allow_jump = bool(record.allow_operation_jump) if record else False
+        gpp = None
+        inherited_from_group = None
+        if not record and material.group_id:
+            gpp = await MaterialProductProcessService._group_product_process_record(
+                tenant_id,
+                int(material.group_id),
+            )
+            if gpp:
+                group = await MaterialGroup.filter(
+                    id=int(material.group_id),
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                ).first()
+                if group:
+                    inherited_from_group = ProductProcessInheritanceGroup(
+                        material_group_uuid=group.uuid,
+                        material_group_code=group.code,
+                        material_group_name=group.name,
+                    )
+
+        if record:
+            stored_lines = record.lines
+            allow_jump = bool(record.allow_operation_jump)
+        elif gpp:
+            stored_lines = gpp.lines
+            allow_jump = bool(gpp.allow_operation_jump)
+        else:
+            stored_lines = None
+            allow_jump = False
+
         process_route = await MaterialProductProcessService.resolve_process_route_for_material(
             tenant_id, material.id
         )
-        if process_route and not record:
+        if process_route and not record and not gpp:
             allow_jump = bool(getattr(process_route, "allow_operation_jump", False))
 
         lines = await _compose_lines(
@@ -649,6 +820,51 @@ class MaterialProductProcessService:
         return MaterialProductProcessResponse(
             material_uuid=material.uuid,
             material_id=material.id,
+            process_route_uuid=process_route.uuid if process_route else None,
+            process_route_id=process_route.id if process_route else None,
+            allow_operation_jump=allow_jump,
+            has_own_record=bool(record),
+            inherited_from_group=inherited_from_group,
+            lines=lines,
+            created_at=getattr(record, "created_at", None) if record else None,
+            updated_at=getattr(record, "updated_at", None) if record else None,
+            **(audit_response_fields(record) if record else {}),
+        )
+
+    @staticmethod
+    async def get_for_material_group(
+        tenant_id: int,
+        group_uuid: str,
+    ) -> MaterialGroupProductProcessResponse:
+        group = await MaterialProductProcessService._get_material_group(tenant_id, group_uuid)
+        record = await MaterialProductProcessService._group_product_process_record(
+            tenant_id,
+            group.id,
+        )
+
+        stored_lines = record.lines if record else None
+        allow_jump = bool(record.allow_operation_jump) if record else False
+        process_route = None
+        if record and record.process_route_id:
+            process_route = await ProcessRoute.filter(
+                id=int(record.process_route_id),
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).first()
+        elif group.process_route_id:
+            process_route = await ProcessRoute.filter(
+                id=int(group.process_route_id),
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).first()
+        if process_route and not record:
+            allow_jump = bool(getattr(process_route, "allow_operation_jump", False))
+
+        lines = await _compose_lines(tenant_id, 0, process_route, stored_lines)
+
+        return MaterialGroupProductProcessResponse(
+            material_group_uuid=group.uuid,
+            material_group_id=group.id,
             process_route_uuid=process_route.uuid if process_route else None,
             process_route_id=process_route.id if process_route else None,
             allow_operation_jump=allow_jump,
@@ -737,7 +953,7 @@ class MaterialProductProcessService:
     ) -> Optional[ProcessRoute]:
         """
         解析物料生效的工艺路线（唯一优先级）：
-        产品工艺指派 > 物料 FK/defaults > 物料分组 > source_config（历史兜底）。
+        物料产品工艺指派 > 物料 FK/defaults > 分组产品工艺指派 > 分组路线 FK > source_config（历史兜底）。
         """
         record = await MaterialProductProcess.filter(
             tenant_id=tenant_id,
@@ -782,6 +998,16 @@ class MaterialProductProcessService:
             return defaults_route
 
         if material.group_id:
+            gpp = await MaterialProductProcessService._group_product_process_record(
+                tenant_id,
+                int(material.group_id),
+            )
+            if gpp and gpp.process_route_id:
+                route = await _load_route(int(gpp.process_route_id))
+                if route:
+                    return route
+
+        if material.group_id:
             group = await MaterialGroup.filter(
                 id=material.group_id,
                 tenant_id=tenant_id,
@@ -808,7 +1034,7 @@ class MaterialProductProcessService:
         process_route: Optional[ProcessRoute] = None,
     ) -> Tuple[Optional[Any], bool]:
         """
-        工单展开工序：优先产品工艺 lines，否则用已解析路线的模板 operation_sequence。
+        工单展开工序：物料产品工艺 lines > 分组产品工艺 lines > 路线模板。
         """
         record = await MaterialProductProcess.filter(
             tenant_id=tenant_id,
@@ -835,6 +1061,36 @@ class MaterialProductProcessService:
                     bool(record.allow_operation_jump),
                 )
 
+        material = await Material.filter(
+            id=material_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        gpp = None
+        if material and material.group_id:
+            gpp = await MaterialProductProcessService._group_product_process_record(
+                tenant_id,
+                int(material.group_id),
+            )
+        if gpp and gpp.lines:
+            process_route = process_route or await MaterialProductProcessService.resolve_process_route_for_material(
+                tenant_id, material_id
+            )
+            composed = await _compose_lines(
+                tenant_id,
+                material_id,
+                process_route,
+                gpp.lines,
+            )
+            if composed:
+                return (
+                    lines_to_operation_sequence(
+                        composed,
+                        bool(gpp.allow_operation_jump),
+                    ),
+                    bool(gpp.allow_operation_jump),
+                )
+
         if process_route is None:
             process_route = await MaterialProductProcessService.resolve_process_route_for_material(
                 tenant_id, material_id
@@ -844,10 +1100,14 @@ class MaterialProductProcessService:
             allow_jump = bool(getattr(process_route, "allow_operation_jump", False))
             if record:
                 allow_jump = bool(record.allow_operation_jump)
+            elif gpp:
+                allow_jump = bool(gpp.allow_operation_jump)
             return (process_route.operation_sequence, allow_jump)
 
         if record:
             return (None, bool(record.allow_operation_jump))
+        if gpp:
+            return (None, bool(gpp.allow_operation_jump))
         return (None, False)
 
     @staticmethod
@@ -1020,11 +1280,122 @@ class MaterialProductProcessService:
         return await MaterialProductProcessService.get_for_material(tenant_id, material_uuid)
 
     @staticmethod
+    async def save_for_material_group(
+        tenant_id: int,
+        group_uuid: str,
+        data: MaterialGroupProductProcessSave,
+        current_user: Optional[User] = None,
+    ) -> MaterialGroupProductProcessResponse:
+        group = await MaterialProductProcessService._get_material_group(tenant_id, group_uuid)
+
+        if data.save_as_new_route:
+            code = (data.new_route_code or "").strip()
+            name = (data.new_route_name or "").strip()
+            if not code:
+                raise ValidationError("另存为新工艺路线须填写路线编码")
+            if not name:
+                raise ValidationError("另存为新工艺路线须填写路线名称")
+            if not data.lines:
+                raise ValidationError("至少保留一道工序后再另存为新工艺路线")
+        else:
+            process_route_probe = await MaterialProductProcessService._resolve_route_for_group(
+                tenant_id, data.process_route_uuid, group
+            )
+            if data.process_route_uuid and not process_route_probe:
+                raise ValidationError("所选工艺路线不存在或已删除")
+            if process_route_probe and not data.lines:
+                raise ValidationError("已指派工艺路线时至少保留一道工序")
+
+        uuids = [ln.operation_uuid for ln in data.lines if ln.operation_uuid]
+        op_map = await _load_operations_by_uuid(tenant_id, uuids)
+        normalized: List[ProductProcessLineSchema] = []
+        for ln in data.lines:
+            op = op_map.get(ln.operation_uuid)
+            if not op:
+                raise ValidationError(f"工序 {ln.operation_uuid} 不存在或已删除")
+            normalized.append(
+                ln.model_copy(
+                    update={
+                        "operation_id": op.id,
+                        "code": ln.code or op.code,
+                        "name": ln.name or op.name,
+                    }
+                )
+            )
+
+        process_route: Optional[ProcessRoute] = None
+        if data.save_as_new_route:
+            from apps.master_data.schemas.process_schemas import ProcessRouteCreate
+            from apps.master_data.services.process_service import ProcessService
+
+            op_sequence = lines_to_operation_sequence(normalized, data.allow_operation_jump)
+            created_route = await ProcessService.create_process_route(
+                tenant_id,
+                ProcessRouteCreate(
+                    code=(data.new_route_code or "").strip(),
+                    name=(data.new_route_name or "").strip(),
+                    operation_sequence=op_sequence,
+                    allow_operation_jump=data.allow_operation_jump,
+                    is_active=True,
+                ),
+                current_user=current_user,
+            )
+            process_route = await ProcessRoute.filter(
+                tenant_id=tenant_id,
+                uuid=created_route.uuid,
+                deleted_at__isnull=True,
+            ).first()
+            if not process_route:
+                raise ValidationError("新建工艺路线失败，请重试")
+        else:
+            process_route = await MaterialProductProcessService._resolve_route_for_group(
+                tenant_id, data.process_route_uuid, group
+            )
+
+        pr_id = process_route.id if process_route else None
+        lines_json = [ln.model_dump(mode="json", by_alias=True) for ln in normalized]
+
+        record = await MaterialProductProcessService._group_product_process_record(
+            tenant_id,
+            group.id,
+        )
+        if record:
+            record.process_route_id = pr_id
+            record.allow_operation_jump = data.allow_operation_jump
+            record.lines = lines_json
+            apply_update_audit(record, current_user)
+            await record.save(
+                update_fields=[
+                    "process_route_id",
+                    "allow_operation_jump",
+                    "lines",
+                    "updated_at",
+                    "updated_by",
+                    "updated_by_name",
+                ]
+            )
+        else:
+            create_payload = {
+                "tenant_id": tenant_id,
+                "uuid": str(uuid_mod.uuid4()),
+                "material_group_id": group.id,
+                "process_route_id": pr_id,
+                "allow_operation_jump": data.allow_operation_jump,
+                "lines": lines_json,
+            }
+            apply_create_audit(create_payload, current_user)
+            record = await MaterialGroupProductProcess.create(**create_payload)
+
+        await group.update_from_dict({"process_route_id": pr_id}).save()
+
+        return await MaterialProductProcessService.get_for_material_group(tenant_id, group_uuid)
+
+    @staticmethod
     async def get_template_lines_for_route_uuid(
         tenant_id: int,
         route_uuid: str,
     ) -> tuple[bool, List[ProductProcessLineSchema]]:
-        """解析工艺路线工序模板（不含物料计件单价，供产品工艺页导入）。"""
+        """解析工艺路线工序模板（带入路线内嵌工时/工价；不含物料 PieceRate 表，供产品工艺页导入）。"""
         route = await ProcessRoute.filter(
             uuid=route_uuid,
             tenant_id=tenant_id,

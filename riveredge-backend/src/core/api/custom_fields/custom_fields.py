@@ -33,9 +33,12 @@ from core.api.deps.system_module_access import (
 )
 from core.services.system.installed_feature_scope import (
     get_installed_application_codes,
-    is_page_path_in_installed_apps,
+    is_custom_field_page_in_installed_apps,
 )
-from core.services.custom_field.custom_field_page_discovery import apply_manifest_display_overlay
+from core.services.custom_field.custom_field_page_discovery import (
+    apply_manifest_display_overlay,
+    CustomFieldPageDiscoveryService,
+)
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
@@ -124,7 +127,9 @@ async def get_associated_options(
     table: str = Query(..., description="关联表名"),
     display_field: str = Query("name", description="显示字段（id/name/code/title/label/description）"),
     limit: int = Query(500, ge=1, le=1000, description="最大返回数量"),
-    host_resource: Optional[str] = Query(None, description="宿主 {app}:{module}，引用 display 隐式鉴权"),
+    host_resource: Optional[str] = Query(
+        None, description="宿主 {app}:{module}，审计透传；鉴权仅认目标 read|display"
+    ),
     tenant_id: int = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
     _auth: object = Depends(require_custom_field_read),
@@ -269,9 +274,9 @@ async def list_custom_field_pages(
     获取自定义字段功能页面配置列表
     
     返回系统中所有支持自定义字段的功能页面配置，用于在自定义字段页面展示和配置。
-    以 core.config.custom_field_pages 为完整数据源（含 table_name 等技术字段），
-    展示名称（page_name、table_name_label、module）优先与各应用 manifest.custom_field_pages 对齐。
-    仅返回路由归属应用已在当前租户安装并启用的页面。
+    数据源：OSS 硬编码 CUSTOM_FIELD_PAGES ∪ 各应用 manifest.custom_field_pages（PRO 清单只在 manifest）。
+    展示名称（page_name、table_name_label、module）优先与 manifest 对齐。
+    仅返回归属应用（显式 app_code 或 page_path 段）已在当前租户安装并启用的页面。
     
     Returns:
         List[CustomFieldPageConfigResponse]: 功能页面配置列表
@@ -279,10 +284,11 @@ async def list_custom_field_pages(
     from core.config.custom_field_pages import CUSTOM_FIELD_PAGES
 
     installed = await get_installed_application_codes(tenant_id)
+    pages = CustomFieldPageDiscoveryService.merge_with_hardcoded(list(CUSTOM_FIELD_PAGES))
     return [
         CustomFieldPageConfigResponse(**apply_manifest_display_overlay(dict(p)))
-        for p in CUSTOM_FIELD_PAGES
-        if is_page_path_in_installed_apps(p.get("page_path"), installed)
+        for p in pages
+        if is_custom_field_page_in_installed_apps(p, installed)
     ]
 
 

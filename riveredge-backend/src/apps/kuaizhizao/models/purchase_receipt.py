@@ -26,7 +26,7 @@ class PurchaseReceipt(BaseModel):
     order_type = fields.CharField(
         max_length=20,
         default="标准采购",
-        description="采购类型（标准采购/资产采购/服务采购）",
+        description="采购类型（标准采购/资产采购，与采购订单及金蝶单据类型对齐）",
     )
     supplier_id = fields.IntField(description="供应商ID")
     supplier_name = fields.CharField(max_length=200, description="供应商名称")
@@ -83,7 +83,7 @@ class PurchaseReceipt(BaseModel):
     )
     currency = fields.CharField(max_length=10, null=True, default="CNY", description="币别")
 
-    # 入库信息
+    # 入库信息（服务采购不过账，仓库可空；标准/资产采购由服务层要求填写）
     warehouse_id = fields.IntField(null=True, description="入库仓库ID（服务采购可空）")
     warehouse_name = fields.CharField(max_length=100, null=True, description="入库仓库名称（服务采购可空）")
     receipt_time = fields.DatetimeField(null=True, description="实际入库时间")

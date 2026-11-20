@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 
 from infra.models.user import User
 
@@ -14,24 +14,49 @@ def user_audit_display_name(user: User) -> str:
     return (user.username or "").strip() or str(user.id)
 
 
+def _infra_admin_display_name(*, full_name: str | None, username: str | None, admin_id: int) -> str:
+    name = (full_name or "").strip()
+    if name:
+        return name
+    uname = (username or "").strip()
+    if uname:
+        return uname
+    return f"平台超级管理员#{admin_id}"
+
+
 async def resolve_audit_actor(tenant_id: int, user_id: int) -> Tuple[int, str]:
+    """解析写审计字段的操作人。
+
+    优先当前租户内用户；平台超管跨租户操作时回落到
+    ``core_users.is_infra_admin`` 或 ``infra_superadmin``（不要求属于目标租户）。
+    """
     user = await User.filter(
         id=user_id,
         tenant_id=tenant_id,
         deleted_at__isnull=True,
     ).first()
-    if not user:
-        # 平台管理员（tenant_id=None + is_infra_admin）可经租户上下文操作，与
-        # user_administrator_guard 的放行契约一致；其余跨租户命中仍按不存在处理。
-        user = await User.filter(
-            id=user_id,
-            tenant_id__isnull=True,
-            is_infra_admin=True,
-            deleted_at__isnull=True,
-        ).first()
-    if not user:
-        raise ValueError(f"操作用户不存在: id={user_id}, tenant_id={tenant_id}")
-    return user.id, user_audit_display_name(user)
+    if user:
+        return user.id, user_audit_display_name(user)
+
+    platform_user = await User.filter(
+        id=user_id,
+        is_infra_admin=True,
+        deleted_at__isnull=True,
+    ).first()
+    if platform_user:
+        return platform_user.id, user_audit_display_name(platform_user)
+
+    from infra.models.infra_superadmin import InfraSuperAdmin
+
+    admin = await InfraSuperAdmin.filter(id=user_id, is_active=True).first()
+    if admin:
+        return admin.id, _infra_admin_display_name(
+            full_name=admin.full_name,
+            username=admin.username,
+            admin_id=admin.id,
+        )
+
+    raise ValueError(f"操作用户不存在: id={user_id}, tenant_id={tenant_id}")
 
 
 def audit_fields_for_create(user_id: int, display_name: str) -> Dict[str, Any]:

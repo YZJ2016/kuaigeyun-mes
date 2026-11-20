@@ -11,14 +11,21 @@ from core.models.position import Position
 from core.models.role import Role
 from core.models.user_role import UserRole
 from core.schemas.user_display import UserDisplayItem, UserDisplayRoleItem
+from core.utils.search_utils import is_pinyin_keyword, page_queryset_by_keyword
 from infra.models.user import User
 
 
 class UserDisplayService:
     @staticmethod
-    def format_label(*, full_name: Optional[str], username: Optional[str], user_id: int) -> str:
+    def format_label(
+        *,
+        full_name: Optional[str],
+        username: Optional[str],
+        user_id: int,
+        employee_number: Optional[str] = None,
+    ) -> str:
         name = (full_name or "").strip()
-        login = (username or "").strip()
+        login = (employee_number or "").strip() or (username or "").strip()
         if name and login:
             return f"{name} ({login})"
         if name:
@@ -75,10 +82,12 @@ class UserDisplayService:
             uuid=user.uuid,
             username=user.username,
             full_name=user.full_name,
+            employee_number=user.employee_number,
             label=UserDisplayService.format_label(
                 full_name=user.full_name,
                 username=user.username,
                 user_id=user.id,
+                employee_number=user.employee_number,
             ),
             avatar=user.avatar,
             department_uuid=dept_uuid,
@@ -100,10 +109,10 @@ class UserDisplayService:
         is_active: Optional[bool] = True,
     ) -> dict:
         query = Q(tenant_id=tenant_id, deleted_at__isnull=True)
-        if keyword:
-            kw = keyword.strip()
-            if kw:
-                query &= Q(username__icontains=kw) | Q(full_name__icontains=kw)
+        keyword_text = (keyword or "").strip()
+        use_pinyin = is_pinyin_keyword(keyword_text)
+        if keyword_text and not use_pinyin:
+            query &= Q(username__icontains=keyword_text) | Q(full_name__icontains=keyword_text)
         if department_uuid:
             department = await Department.filter(
                 uuid=department_uuid,
@@ -111,7 +120,17 @@ class UserDisplayService:
                 deleted_at__isnull=True,
             ).first()
             if department:
-                query &= Q(department_id=department.id)
+                from core.services.user.user_department_assignment_service import (
+                    UserDepartmentAssignmentService,
+                )
+
+                member_ids = await UserDepartmentAssignmentService.list_users_in_departments(
+                    tenant_id, [int(department.id)]
+                )
+                if member_ids:
+                    query &= Q(id__in=member_ids)
+                else:
+                    query &= Q(id=-1)
         if position_uuid:
             position = await Position.filter(
                 uuid=position_uuid,
@@ -137,16 +156,28 @@ class UserDisplayService:
         if is_active is not None:
             query &= Q(is_active=is_active)
 
-        total = await User.filter(query).count()
-        offset = (page - 1) * page_size
-        users = (
-            await User.filter(query)
-            .order_by("full_name", "username")
-            .offset(offset)
-            .limit(page_size)
-            .prefetch_related("roles")
-            .all()
-        )
+        user_query = User.filter(query)
+        if use_pinyin:
+            users, total = await page_queryset_by_keyword(
+                user_query,
+                keyword=keyword_text,
+                fields=("username", "full_name"),
+                page=page,
+                page_size=page_size,
+                order_by=("full_name", "username"),
+                prefetch=("roles",),
+            )
+        else:
+            total = await user_query.count()
+            offset = (page - 1) * page_size
+            users = (
+                await user_query
+                .order_by("full_name", "username")
+                .offset(offset)
+                .limit(page_size)
+                .prefetch_related("roles")
+                .all()
+            )
         dept_ids = {u.department_id for u in users if u.department_id}
         dept_by_id = await UserDisplayService._department_display_map(tenant_id, dept_ids)
         items = [UserDisplayService._to_item(u, dept_by_id) for u in users]

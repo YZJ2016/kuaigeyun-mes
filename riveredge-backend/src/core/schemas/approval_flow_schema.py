@@ -61,6 +61,7 @@ def normalize_condition_node_data(
                 "value": item.get("value"),
                 "label": item.get("label") or "",
                 "else": bool(item.get("else")),
+                "isDefault": bool(item.get("isDefault") or item.get("is_default")),
             }
         )
     out["conditions"] = normalized_conditions
@@ -83,6 +84,7 @@ def normalize_condition_node_data(
             trimmed.append(
                 {
                     "label": str(item.get("label") or "").strip() or f"分支{i + 1}",
+                    "isDefault": bool(item.get("isDefault")),
                 }
             )
         out["conditions"] = trimmed
@@ -135,6 +137,18 @@ def normalize_node_data(node_type: str, data: Optional[Dict[str, Any]]) -> Dict[
                     out["managerLevel"] = level
                 out.pop("manager_level", None)
             out.setdefault("allowEditDuringApproval", bool(out.get("allowEditDuringApproval", False)))
+            if not out.get("allowEditDuringApproval"):
+                out.pop("editableFields", None)
+            else:
+                raw_editable = out.get("editableFields")
+                if raw_editable == "*" or raw_editable == ["*"]:
+                    out["editableFields"] = "*"
+                elif isinstance(raw_editable, list):
+                    out["editableFields"] = [
+                        str(x).strip() for x in raw_editable if str(x).strip() and str(x) != "*"
+                    ]
+                elif raw_editable is not None:
+                    out.pop("editableFields", None)
             out.setdefault("refreshContextOnEdit", bool(out.get("refreshContextOnEdit", True)))
             out.setdefault("allowTransfer", bool(out.get("allowTransfer", False)))
             out.setdefault("allowAddSign", bool(out.get("allowAddSign", False)))
@@ -316,6 +330,9 @@ def validate_flow_graph(graph: Dict[str, Any]) -> None:
                     f"条件节点「{label}」出边数({len(out_edges)})与分支数({len(conditions)})不一致"
                 )
             if route_mode in ("previous_approver", "initiator"):
+                default_count = sum(1 for c in conditions if c.get("isDefault"))
+                if default_count > 1:
+                    raise ValidationError(f"条件节点「{label}」仅允许一条默认分支")
                 for i, cond in enumerate(conditions):
                     if not str(cond.get("label") or "").strip():
                         raise ValidationError(f"条件节点「{label}」分支 {i + 1} 须填写名称")

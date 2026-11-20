@@ -53,8 +53,8 @@ _REVIEW_REJECTED = {"rejected", "已驳回", "审核驳回", "驳回"}
 _REVIEW_PENDING = {"待审核", "pending_review", "pending_approval", "已提交", "pending"}
 _REVIEW_DRAFT = {"草稿", "draft", ""}
 
-# 提交后仍保持主状态为草稿、仅 review_status 进入待审的单据（如采购询价、生产工单）
-_DRAFT_REVIEW_PENDING_ENTITY_TYPES = frozenset({"purchase_inquiry", "work_order"})
+# 提交后仍保持主状态为草稿、仅 review_status 进入待审的单据（如采购询价、生产工单、报价单已提交）
+_DRAFT_REVIEW_PENDING_ENTITY_TYPES = frozenset({"purchase_inquiry", "work_order", "quotation"})
 # 上述单据「已提交待审」的 review 取值（不含建单默认 PENDING，避免草稿同时露出提交+审核）
 _DRAFT_ENTITY_SUBMITTED_REVIEW = frozenset({
     "pending_review",
@@ -82,16 +82,38 @@ _QUALITY_INSPECTION_APPROVED_MAIN_STATUSES = frozenset({
 
 # 审核已通过、主 status 进入业务履约态（无 review_status 字段的单据）
 _ENTITY_APPROVED_BUSINESS_STATUSES: Dict[str, frozenset[str]] = {
-    "shipment_notice": frozenset({"待发货", "已通知", "已出库", "notified", "shipped"}),
-    "sales_delivery": frozenset({"待出库", "已出库", "completed", "已完成"}),
     "payment_application": frozenset({"已批准", "部分付款", "approved", "audited"}),
 }
-# 业务 status 与 review_status 分离的退货单（主状态待退货/已退货，审核看 review_status）
-_RETURN_REVIEW_ENTITY_TYPES = frozenset({"sales_return", "purchase_return"})
+# 业务 status 与 review_status 分离（退货、采购入库：主状态是执行态，审核看 review_status）
+_RETURN_REVIEW_ENTITY_TYPES = frozenset({
+    "sales_return",
+    "purchase_return",
+    "purchase_receipt",
+    "receipt_notice",
+    "shipment_notice",
+    "sales_delivery",
+})
 # 财务 AR/AP/进项：主 status 为收付款态，审核看 review_status
-_FINANCE_REVIEW_ENTITY_TYPES = frozenset({"receivable", "payable", "purchase_invoice"})
+_FINANCE_REVIEW_ENTITY_TYPES = frozenset({
+    "receivable",
+    "payable",
+    "purchase_invoice",
+    "partner_statement",
+    "receipt",
+    "receipt_refund",
+    "payment",
+    "payment_refund",
+    "sales_invoice",
+    "other_income",
+    "other_expense",
+    "other_expense_application",
+    "notes_receivable",
+    "notes_payable",
+    "fund_transfer",
+})
 _ALLOWED_ACTIONS_BY_PHASE: Dict[str, List[str]] = {
     "draft": ["submit"],
+    "submitted": ["submit_review", "withdraw"],
     "rejected": ["submit"],
     "pending": ["approve", "reject", "withdraw"],
     "approved": ["revoke"],
@@ -119,15 +141,73 @@ def derive_audit_phase(
         review_status: 单据审核状态（可空）。
         enabled: 该单据类型当前是否开启了人工审核（AuditDocumentBinding.is_enabled + 已绑定流程）。
     """
+    raw_status = str(status or "").strip()
     s = _norm(status)
     r = _norm(review_status)
 
     if s in _REJECTED_STATUS or r in _REVIEW_REJECTED:
         phase = "rejected"
+    elif raw_status == "SUBMITTED":
+        phase = "submitted"
     elif entity_type in _RETURN_REVIEW_ENTITY_TYPES | _FINANCE_REVIEW_ENTITY_TYPES:
         raw_review = str(review_status or "").strip()
         pending_review = r in _REVIEW_PENDING or raw_review in _REVIEW_PENDING
-        if pending_review:
+        if entity_type == "partner_statement":
+            biz_n = _norm(status)
+            if biz_n in ("draft", "disputed"):
+                if pending_review:
+                    phase = "pending"
+                elif r in _REVIEW_APPROVED or raw_review in _REVIEW_APPROVED:
+                    phase = "approved"
+                elif r in _REVIEW_REJECTED:
+                    phase = "rejected"
+                else:
+                    phase = "draft"
+            elif biz_n == "confirmed":
+                if pending_review:
+                    phase = "pending"
+                elif r in _REVIEW_APPROVED or raw_review in _REVIEW_APPROVED:
+                    phase = "approved"
+                elif r in _REVIEW_REJECTED:
+                    phase = "rejected"
+                elif r in _REVIEW_DRAFT or raw_review in ("草稿", "draft", ""):
+                    phase = "submitted"
+                else:
+                    phase = "none"
+            elif biz_n in ("sent", "ledgerposted") and (
+                r in _REVIEW_APPROVED or raw_review in _REVIEW_APPROVED
+            ):
+                phase = "approved"
+            else:
+                phase = "none"
+        elif (
+            entity_type in (
+                "purchase_return",
+                "sales_return",
+                "purchase_receipt",
+                "receipt_notice",
+                "shipment_notice",
+                "sales_delivery",
+                "receivable",
+                "payable",
+                "purchase_invoice",
+                "receipt",
+                "receipt_refund",
+                "payment",
+                "payment_refund",
+                "sales_invoice",
+                "other_income",
+                "other_expense",
+                "other_expense_application",
+                "notes_receivable",
+                "notes_payable",
+                "partner_statement",
+                "fund_transfer",
+            )
+            and raw_review == "SUBMITTED"
+        ):
+            phase = "submitted"
+        elif pending_review:
             phase = "draft" if review_submitted is False else "pending"
         elif r in _REVIEW_APPROVED or raw_review in _REVIEW_APPROVED:
             phase = "approved"
@@ -146,9 +226,12 @@ def derive_audit_phase(
         else:
             phase = "none"
     elif s in _DRAFT:
-        # 主状态仍为草稿：已通过 / 已提交待审（采购询价、生产工单）/ 其余草稿
+        # 主状态仍为草稿：已通过 / 已提交未送审（采购询价）/ 已提交待审 / 其余草稿
+        raw_review = str(review_status or "").strip()
         if r in _REVIEW_APPROVED:
             phase = "approved"
+        elif entity_type in ("purchase_inquiry", "work_order", "quotation") and raw_review == "SUBMITTED":
+            phase = "submitted"
         elif (
             entity_type in _DRAFT_REVIEW_PENDING_ENTITY_TYPES
             and r in _DRAFT_ENTITY_SUBMITTED_REVIEW
@@ -190,6 +273,8 @@ def derive_audit_phase(
                 allowed = [a for a in allowed if a == "revoke"]
             else:
                 allowed = []
+        elif phase == "submitted":
+            allowed = ["submit_review", "withdraw"]
         elif phase in ("draft", "rejected"):
             allowed = ["submit"]
         elif phase == "pending":
@@ -198,6 +283,13 @@ def derive_audit_phase(
             allowed = [a for a in allowed if a == "revoke"]
         else:
             allowed = []
+
+    if entity_type == "partner_statement":
+        biz_n = _norm(status)
+        if phase in ("draft", "rejected") and biz_n in ("draft", "disputed", ""):
+            allowed = ["submit_review"]
+        elif phase == "rejected" and biz_n == "confirmed":
+            allowed = ["submit_review"]
 
     return {
         "entity_type": entity_type,

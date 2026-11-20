@@ -113,6 +113,10 @@ class ApprovalDocumentLine(BaseModel):
     title: str = Field(..., description="物料/行标题")
     meta: Optional[str] = Field(None, description="行补充说明")
     qty_text: Optional[str] = Field(None, description="数量与金额")
+    fields: List[ApprovalDocumentField] = Field(
+        default_factory=list,
+        description="行必要字段（编码/规格/交期/单价等，供手机详情结构化展示）",
+    )
 
 
 class ApprovalDocumentView(BaseModel):
@@ -123,6 +127,10 @@ class ApprovalDocumentView(BaseModel):
     status: Optional[str] = Field(None, description="单据业务状态")
     header: List[ApprovalDocumentField] = Field(default_factory=list, description="抬头字段")
     lines: List[ApprovalDocumentLine] = Field(default_factory=list, description="明细行")
+    attachments: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="单据附件（现场照片等；不进 header 文本字段）",
+    )
 
 
 class ApprovalInstanceResponse(ApprovalInstanceBase):

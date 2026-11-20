@@ -14,6 +14,22 @@ from core.services.approval.audit_phase import derive_audit_phase
 RecordLike = Union[Dict[str, Any], Any]
 
 
+def resolve_viewer_id(user_or_id: Any) -> Optional[int]:
+    """从当前用户或显式 id 解析列表「待我审核」所需的 viewer_id。"""
+    if user_or_id is None:
+        return None
+    if isinstance(user_or_id, int):
+        return user_or_id if user_or_id > 0 else None
+    uid = getattr(user_or_id, "id", None)
+    if uid is None:
+        return None
+    try:
+        val = int(uid)
+    except (TypeError, ValueError):
+        return None
+    return val if val > 0 else None
+
+
 def _read_status(
     item: RecordLike,
     status_field: str,
@@ -98,6 +114,9 @@ async def _attach_batch_flow_withdraw_revoke(
             allowed = [a for a in allowed if a != "withdraw"]
         if "revoke" in allowed and not flags.get("viewer_can_revoke"):
             allowed = [a for a in allowed if a != "revoke"]
+        # 实例已通过但单据 phase 仍 pending 时，仍须露出撤销审核（勿与撤回提交混用）
+        if flags.get("viewer_can_revoke") and "revoke" not in allowed:
+            allowed.append("revoke")
         if flags.get("viewer_can_recall_own") and "recall_own" not in allowed:
             allowed.append("recall_own")
         gated_audit = {

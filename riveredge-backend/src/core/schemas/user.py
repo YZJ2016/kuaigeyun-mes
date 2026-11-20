@@ -26,7 +26,15 @@ class UserCreateRequest(BaseModel):
     full_name: Optional[str] = Field(None, max_length=100, description="用户全名（可选）")
     phone: str = Field(..., pattern=r'^1[3-9]\d{9}$', description="手机号（必填）")
     department_uuid: Optional[str] = Field(None, description="所属部门UUID（可选）")
-    position_uuid: Optional[str] = Field(None, description="所属职位UUID（可选）")
+    position_uuid: Optional[str] = Field(None, description="所属岗位UUID（可选）")
+    employee_number: Optional[str] = Field(None, max_length=50, description="金蝶人员工号（可选）")
+    gender: Optional[str] = Field(None, max_length=10, description="性别")
+    supervisor_uuid: Optional[str] = Field(None, description="直接上级用户UUID（可选）")
+    person_category: Optional[str] = Field(None, max_length=32, description="人员类型")
+    employment_status: Optional[str] = Field(None, max_length=32, description="人员使用状态")
+    secondary_department_uuids: Optional[List[str]] = Field(
+        None, description="兼职部门UUID列表（不含主部门）"
+    )
 
     @field_validator('email')
     @classmethod
@@ -58,8 +66,16 @@ class UserCreate(SoilUserCreate):
     用于内部服务调用，包含完整的字段验证。
     """
     department_uuid: Optional[str] = Field(None, description="所属部门UUID（可选）")
-    position_uuid: Optional[str] = Field(None, description="所属职位UUID（可选）")
+    position_uuid: Optional[str] = Field(None, description="所属岗位UUID（可选）")
     role_uuids: Optional[List[str]] = Field(None, description="角色UUID列表（可选）")
+    employee_number: Optional[str] = Field(None, max_length=50, description="金蝶人员工号（可选）")
+    gender: Optional[str] = Field(None, max_length=10, description="性别")
+    supervisor_uuid: Optional[str] = Field(None, description="直接上级用户UUID")
+    person_category: Optional[str] = Field(None, max_length=32, description="人员类型")
+    employment_status: Optional[str] = Field(None, max_length=32, description="人员使用状态")
+    secondary_department_uuids: Optional[List[str]] = Field(
+        None, description="兼职部门UUID列表（不含主部门）"
+    )
 
 
 class UserUpdate(SoilUserUpdate):
@@ -74,8 +90,16 @@ class UserUpdate(SoilUserUpdate):
         role_uuids: 角色UUID列表（可选，可以修改）
     """
     department_uuid: Optional[str] = Field(None, description="所属部门UUID（可选，可以修改）")
-    position_uuid: Optional[str] = Field(None, description="所属职位UUID（可选，可以修改）")
+    position_uuid: Optional[str] = Field(None, description="所属岗位UUID（可选，可以修改）")
     role_uuids: Optional[List[str]] = Field(None, description="角色UUID列表（可选，可以修改）")
+    employee_number: Optional[str] = Field(None, max_length=50, description="金蝶人员工号")
+    gender: Optional[str] = Field(None, max_length=10, description="性别")
+    supervisor_uuid: Optional[str] = Field(None, description="直接上级用户UUID")
+    person_category: Optional[str] = Field(None, max_length=32, description="人员类型")
+    employment_status: Optional[str] = Field(None, max_length=32, description="人员使用状态")
+    secondary_department_uuids: Optional[List[str]] = Field(
+        None, description="兼职部门UUID列表（不含主部门）"
+    )
 
 
 class UserUpdateRequest(UserUpdate):
@@ -112,8 +136,23 @@ class UserResponse(SoilUserResponse):
     position: Optional[dict] = Field(None, description="职位信息（如果关联）")
     roles: Optional[List[dict]] = Field(None, description="角色列表（如果关联）")
     avatar: Optional[str] = Field(None, description="头像文件UUID")
+    employee_number: Optional[str] = Field(None, description="金蝶人员工号")
+    gender: Optional[str] = Field(None, description="性别")
+    supervisor_uuid: Optional[str] = Field(None, description="直接上级用户UUID")
+    supervisor: Optional[dict] = Field(None, description="直接上级摘要")
+    person_category: Optional[str] = Field(None, description="人员类型")
+    employment_status: Optional[str] = Field(None, description="人员使用状态")
+    secondary_departments: Optional[List[dict]] = Field(None, description="兼职部门列表")
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class UserOauthBindings(BaseModel):
+    """用户第三方扫码登录是否已绑定（列表角标用，不含联系方式手填字段）。"""
+
+    wecom: bool = Field(False, description="是否已绑定企业微信")
+    dingtalk: bool = Field(False, description="是否已绑定钉钉")
+    feishu: bool = Field(False, description="是否已绑定飞书")
 
 
 class UserListItem(BaseModel):
@@ -131,6 +170,10 @@ class UserListItem(BaseModel):
     email: Optional[str] = Field(None, description="用户邮箱")
     full_name: Optional[str] = Field(None, description="用户全名")
     phone: Optional[str] = Field(None, description="手机号")
+    employee_number: Optional[str] = Field(None, description="金蝶人员工号")
+    gender: Optional[str] = Field(None, description="性别")
+    person_category: Optional[str] = Field(None, description="人员类型")
+    employment_status: Optional[str] = Field(None, description="人员使用状态")
     is_active: bool = Field(..., description="是否激活")
     is_tenant_admin: bool = Field(..., description="是否为组织管理员")
     department_uuid: Optional[str] = Field(None, description="所属部门UUID（用于显示）")
@@ -138,6 +181,9 @@ class UserListItem(BaseModel):
     position_uuid: Optional[str] = Field(None, description="所属职位UUID（用于显示）")
     position: Optional[dict] = Field(None, description="职位信息（如果关联）")
     roles: Optional[List[dict]] = Field(None, description="角色列表（如果关联）")
+    oauth_bindings: Optional[UserOauthBindings] = Field(
+        None, description="企微/钉钉/飞书扫码登录绑定标志"
+    )
     last_login: Optional[datetime] = Field(None, description="最后登录时间")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")

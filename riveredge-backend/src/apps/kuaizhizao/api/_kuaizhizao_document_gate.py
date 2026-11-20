@@ -61,6 +61,10 @@ _INBOUND_ONLY_HISTORY_PERMISSION: dict[str, tuple[str, ...]] = {
         "master-data:material:read",
         "master-data:material:update",
     ),
+    "material_multi_unit": (
+        "master-data:material:read",
+        "master-data:material:update",
+    ),
     "material_group": (
         "master-data:material:read",
         "master-data:material:update",

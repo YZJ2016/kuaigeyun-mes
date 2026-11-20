@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
 from apps.kuaizhizao.api._kuaizhizao_document_gate import resolve_hub_history_permission_codes
 from apps.kuaizhizao.api.document_push.document_push import (
@@ -14,7 +14,7 @@ from apps.kuaizhizao.api.document_push.document_push import (
 from core.api.deps.access import AuthContext, ensure_permission_codes, get_auth_context
 from core.api.deps.deps import get_current_tenant
 from core.models.sync_run_log import SYNC_ENTITY_TYPES
-from core.services.data.sync_run_history_service import list_sync_run_history_rows
+from core.services.data.sync_run_history_service import list_inbound_entity_sync_run_history_rows
 
 router = APIRouter(prefix="/sync", tags=["App - Master Data - Sync"])
 
@@ -23,8 +23,11 @@ _MASTER_DATA_HISTORY_ENTITIES = frozenset(
         "customer",
         "supplier",
         "warehouse",
+        "storage_location",
         "unit",
         "material",
+        "material_multi_unit",
+        "material_batch_manage",
         "material_group",
         "engineering_bom",
         "process_operation",
@@ -33,8 +36,10 @@ _MASTER_DATA_HISTORY_ENTITIES = frozenset(
 
 
 async def require_master_data_sync_history_read(
+    request: Request,
     entity_type: str = Query(..., description="与 SyncRunLog.entity_type 一致"),
     auth: AuthContext = Depends(get_auth_context),
+    tenant_id: int = Depends(get_current_tenant),
 ) -> None:
     et = str(entity_type or "").strip()
     if et not in _MASTER_DATA_HISTORY_ENTITIES or et not in SYNC_ENTITY_TYPES:
@@ -45,7 +50,14 @@ async def require_master_data_sync_history_read(
             detail=f"不支持的主数据同步历史类型：{et!r}",
         )
     codes = resolve_hub_history_permission_codes(et)
-    ensure_permission_codes(auth, codes, check_abac=False)
+    await ensure_permission_codes(
+        auth,
+        tenant_id,
+        request,
+        list(codes),
+        require_all=False,
+        check_abac=False,
+    )
 
 
 @router.get(
@@ -59,7 +71,7 @@ async def list_master_data_sync_run_history(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
 ):
-    rows, total = await list_sync_run_history_rows(
+    rows, total = await list_inbound_entity_sync_run_history_rows(
         tenant_id,
         entity_type,
         skip=skip,

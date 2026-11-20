@@ -7,7 +7,7 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Sequence
 
-from core.utils.timezone_utils import to_api_isoformat, to_site_timezone
+from core.utils.timezone_utils import to_site_timezone
 
 # 源行上常见的修改时间字段（苍穹 / 星空混用）
 ROW_MODIFY_TIME_KEYS: tuple[str, ...] = (
@@ -31,7 +31,7 @@ _DATA_START_MODIFY_KEYS: tuple[str, ...] = (
 
 
 def _site_since_text(since: datetime) -> str:
-    return to_api_isoformat(since) or ""
+    return to_site_timezone(since).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _cosmic_ge_clause(date_field: str, since: datetime) -> str:
@@ -81,18 +81,59 @@ def cosmic_paged_response_is_last_page(
     chunk_len: int,
     page_size: int,
 ) -> bool:
-    """苍穹 v2 分页：优先认 data.lastPage，避免末页仍满 pageSize 时多打无效请求。"""
+    """
+    苍穹 v2 分页是否末页。
+
+    网关常把请求 pageSize=500 实际裁成 100；若用「本页行数 < 请求 pageSize」判断会
+    在第 1 页就误停（单位同步从物料抽基础单位时表现为「不全」）。
+    优先认 data.lastPage；其次用响应里的 pageSize / totalCount。
+    """
     if chunk_len <= 0:
         return True
-    if chunk_len < page_size:
-        return True
-    if not isinstance(response_body, dict):
-        return False
-    data = response_body.get("data")
-    if isinstance(data, dict):
-        if data.get("lastPage") is True or data.get("last_page") is True:
+
+    effective_page_size = int(page_size) if page_size and int(page_size) > 0 else 100
+    meta: Optional[Dict[str, Any]] = None
+    if isinstance(response_body, dict):
+        data = response_body.get("data")
+        if isinstance(data, dict):
+            meta = data
+        else:
+            meta = response_body
+
+    if isinstance(meta, dict):
+        if meta.get("lastPage") is True or meta.get("last_page") is True:
             return True
-    return False
+        if meta.get("lastPage") is False or meta.get("last_page") is False:
+            # 显式未到末页：即使本页短于请求 pageSize 也继续翻
+            return False
+        for key in ("pageSize", "page_size"):
+            raw = meta.get(key)
+            if raw not in (None, ""):
+                try:
+                    size = int(raw)
+                except (TypeError, ValueError):
+                    size = 0
+                if size > 0:
+                    effective_page_size = size
+                    break
+        total_raw = meta.get("totalCount")
+        if total_raw is None:
+            total_raw = meta.get("total")
+        if total_raw is None:
+            total_raw = meta.get("total_count")
+        page_no_raw = meta.get("pageNo")
+        if page_no_raw is None:
+            page_no_raw = meta.get("page_no")
+        try:
+            if total_raw is not None and page_no_raw is not None and effective_page_size > 0:
+                total = int(total_raw)
+                page_no = int(page_no_raw)
+                if total >= 0 and page_no >= 1:
+                    return (page_no * effective_page_size) >= total
+        except (TypeError, ValueError):
+            pass
+
+    return chunk_len < effective_page_size
 
 
 def with_cosmic_page(
@@ -112,6 +153,15 @@ def with_cosmic_page(
     return body
 
 
+def is_cosmic_basedata_list_path(path: str) -> bool:
+    """basedata 列表查询（batchQuery / query）支持 filter 查询参数。"""
+    lower = str(path or "").lower().replace("\\", "/")
+    if "/basedata/" not in lower:
+        return False
+    stripped = lower.rstrip("/")
+    return stripped.endswith("/batchquery") or stripped.endswith("/query")
+
+
 def apply_cosmic_since_filter(
     request_body: Optional[Dict[str, Any]],
     since: datetime,
@@ -122,7 +172,7 @@ def apply_cosmic_since_filter(
     深拷贝苍穹请求体并注入增量条件：
     - 已有 filter 字符串（顶层或 data.filter）：追加 ``modifytime GE '...'``
     - batchQuery data 已含 start_* 时间字段时：写入 start_modifytime（避免对 basedata 空 data 乱塞未知属性）
-    无法识别时原样返回拷贝，由行级 filter_rows_by_since 兜底。
+    - 分页体且 data 为空：写入**顶层** filter（开放平台允许 URL/体 filter），避免无水位时仍全量翻页拖垮源站
     """
     body = copy.deepcopy(request_body) if isinstance(request_body, dict) else {}
     clause = _cosmic_ge_clause(date_field, since)
@@ -149,7 +199,12 @@ def apply_cosmic_since_filter(
                     touched = True
                     break
 
-    # 无 filter、也无 start_* 时不改 data，避免 basedata 因未知属性 400；由行级水位兜底
+    # 空 data 的 batchQuery：不往 data 塞未知属性；顶层 filter 为开放平台标准增量入口
+    if not touched and is_cosmic_paged_query(body):
+        empty_data = isinstance(data, dict) and len(data) == 0
+        if empty_data or data is None:
+            body["filter"] = _merge_cosmic_filter(body.get("filter"), clause)
+
     return body
 
 
@@ -161,14 +216,14 @@ def apply_cosmic_since_to_params(
     date_field: str = "modifytime",
 ) -> Dict[str, Any]:
     """
-    为苍穹 sys/query 等 Query 参数注入 filter。
-    仅在已有 filter，或路径形如 kapi/sys/.../query 时写入，避免污染 basedata batchQuery。
+    为苍穹 Query 参数注入 filter。
+    覆盖：已有 filter、sys/.../query、basedata/.../batchQuery|query（物料等增量必须进源端，禁止只靠行级兜底全量翻页）。
     """
     params = copy.deepcopy(request_params) if isinstance(request_params, dict) else {}
     clause = _cosmic_ge_clause(date_field, since)
-    lower_path = str(path or "").lower()
+    lower_path = str(path or "").lower().replace("\\", "/")
     is_sys_query = "/sys/" in lower_path and lower_path.rstrip("/").endswith("/query")
-    if "filter" in params or is_sys_query:
+    if "filter" in params or is_sys_query or is_cosmic_basedata_list_path(path):
         params["filter"] = _merge_cosmic_filter(params.get("filter"), clause)
     return params
 

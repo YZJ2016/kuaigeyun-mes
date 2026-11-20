@@ -6,9 +6,15 @@ from typing import Awaitable, Callable, Dict, List, Optional
 
 from loguru import logger
 
+from tortoise.expressions import Q
+
 from core.models.reminder_event import ReminderEvent
-from core.services.business.reminder_event_service import ReminderEventService
+from core.services.business.reminder_event_service import (
+    REMINDER_MAX_ATTEMPTS,
+    ReminderEventService,
+)
 from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
+from infra.models.tenant import Tenant
 
 ReminderHandler = Callable[[int, ReminderEvent], Awaitable[None]]
 ReminderPreparer = Callable[[], Awaitable[None]]
@@ -35,13 +41,13 @@ def _ensure_domain_handlers() -> None:
     global _HANDLERS_LOADED
     if _HANDLERS_LOADED:
         return
-    from apps.common.app_orm import app_orm_ready
+    from apps.common.optional_pro import pro_app_available
 
-    if app_orm_ready("kuaiplm"):
+    if pro_app_available("kuaiplm"):
         from apps.kuaiplm.services import annual_lab_plan_reminder_service  # noqa: F401
         from apps.kuaiplm.services import trial_flow_reminder_service  # noqa: F401
         from apps.kuaiplm.services import plm_pending_approval_reminder_service  # noqa: F401
-    if app_orm_ready("kuaioa"):
+    if pro_app_available("kuaioa"):
         from apps.kuaioa.services import training_reminder_service  # noqa: F401
         from apps.kuaioa.services import license_reminder_service  # noqa: F401
         from apps.kuaioa.services import kuaioa_form_request_reminder_service  # noqa: F401
@@ -80,10 +86,14 @@ class ReminderDispatchService:
     async def process_due_for_tenant(tenant_id: int, *, limit: int = 100) -> dict:
         _ensure_domain_handlers()
         now = resolve_business_datetime()
+        # failed 仅在未达重试上限时再扫，避免永久失败事件每分钟占满 Worker
+        due_q = Q(status="pending") | Q(
+            status="failed", attempt_count__lt=REMINDER_MAX_ATTEMPTS
+        )
         rows = (
             await ReminderEvent.filter(
+                due_q,
                 tenant_id=tenant_id,
-                status__in=["pending", "failed"],
                 planned_at__lte=now,
                 deleted_at__isnull=True,
             )
@@ -140,27 +150,49 @@ class ReminderDispatchService:
         _ensure_domain_handlers()
         await _run_preparers()
         now = resolve_business_datetime()
-        # spec 143：提醒派发 tick 跨组织扫描到期事件——显式 unscoped 内部路径；
-        # 逐租户派发限定在该租户
-        from infra.domain.tenant_context import unscoped, with_tenant
-
-        async with unscoped(reason="提醒派发 tick 跨组织扫描到期事件", resource="ReminderEvent"):
-            tenant_ids = (
-                await ReminderEvent.filter(
-                    status__in=["pending", "failed"],
-                    planned_at__lte=now,
-                    deleted_at__isnull=True,
-                )
-                .distinct()
-                .values_list("tenant_id", flat=True)
+        tenant_ids = (
+            await ReminderEvent.filter(
+                Q(status="pending")
+                | Q(status="failed", attempt_count__lt=REMINDER_MAX_ATTEMPTS),
+                planned_at__lte=now,
+                deleted_at__isnull=True,
             )
+            .distinct()
+            .values_list("tenant_id", flat=True)
+        )
         results = []
         totals = {"sent": 0, "stopped": 0, "failed": 0, "skipped": 0, "checked": 0}
         for tenant_id in tenant_ids:
-            async with with_tenant(int(tenant_id), reason="提醒派发按事件组织执行"):
-                one = await ReminderDispatchService.process_due_for_tenant(
-                    int(tenant_id), limit=limit_per_tenant
+            tid = int(tenant_id)
+            if not await Tenant.filter(id=tid).exists():
+                stopped_n = await ReminderEvent.filter(
+                    tenant_id=tid,
+                    status__in=["pending", "failed", "claimed"],
+                    deleted_at__isnull=True,
+                ).update(
+                    status="stopped",
+                    stopped_reason="组织不存在",
+                    last_error=None,
                 )
+                logger.warning(
+                    "提醒派发跳过不存在组织 tenant={} stopped={}", tid, stopped_n
+                )
+                results.append(
+                    {
+                        "tenant_id": tid,
+                        "checked": 0,
+                        "sent": 0,
+                        "stopped": int(stopped_n or 0),
+                        "failed": 0,
+                        "skipped": 0,
+                        "timestamp": to_api_isoformat(now),
+                    }
+                )
+                totals["stopped"] += int(stopped_n or 0)
+                continue
+            one = await ReminderDispatchService.process_due_for_tenant(
+                tid, limit=limit_per_tenant
+            )
             results.append(one)
             for key in totals:
                 totals[key] += int(one.get(key) or 0)

@@ -99,7 +99,16 @@ class Supplier(BaseModel):
     legal_representative = fields.CharField(max_length=100, null=True, description="法定代表人")
     enterprise_type_code = fields.CharField(max_length=50, null=True, description="企业类型编码")
     payment_terms_days = fields.IntField(null=True, description="付款账期（天）")
-    settlement_method_code = fields.CharField(max_length=50, null=True, description="结算方式编码")
+    default_payment_method_code = fields.CharField(
+        max_length=50, null=True, description="默认付款方式编码"
+    )
+    settlement_terms_code = fields.CharField(max_length=50, null=True, description="结算条款编码")
+    default_currency_code = fields.CharField(
+        max_length=10, null=True, description="默认币种（采购单据表头带出）"
+    )
+    default_exchange_rate = fields.DecimalField(
+        max_digits=18, decimal_places=6, null=True, description="默认汇率（采购单据表头带出）"
+    )
     finance_contact_name = fields.CharField(max_length=100, null=True, description="财务联系人")
     finance_contact_phone = fields.CharField(max_length=30, null=True, description="财务联系电话")
     finance_contact_email = fields.CharField(max_length=100, null=True, description="财务联系邮箱")

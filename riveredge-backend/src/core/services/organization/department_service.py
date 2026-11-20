@@ -71,11 +71,13 @@ class DepartmentService:
             parent_id=department.id,
             deleted_at__isnull=True,
         ).count()
-        user_count = await User.filter(
-            tenant_id=tenant_id,
-            department_id=department.id,
-            deleted_at__isnull=True,
-        ).count()
+        from core.services.user.user_department_assignment_service import (
+            UserDepartmentAssignmentService,
+        )
+
+        user_count = await UserDepartmentAssignmentService.count_users_for_department(
+            tenant_id, int(department.id)
+        )
         position_count = await Position.filter(
             tenant_id=tenant_id,
             department_id=department.id,
@@ -259,9 +261,13 @@ class DepartmentService:
             children_count = await Department.filter(
                 tenant_id=tenant_id, parent_id=dept.id, deleted_at__isnull=True
             ).count()
-            user_count = await User.filter(
-                tenant_id=tenant_id, department_id=dept.id, deleted_at__isnull=True
-            ).count()
+            from core.services.user.user_department_assignment_service import (
+                UserDepartmentAssignmentService,
+            )
+
+            user_count = await UserDepartmentAssignmentService.count_users_for_department(
+                tenant_id, int(dept.id)
+            )
             position_count = await Position.filter(
                 tenant_id=tenant_id, department_id=dept.id, deleted_at__isnull=True
             ).count()
@@ -337,9 +343,13 @@ class DepartmentService:
             children_count = await Department.filter(
                 tenant_id=tenant_id, parent_id=dept.id, deleted_at__isnull=True
             ).count()
-            user_count = await User.filter(
-                tenant_id=tenant_id, department_id=dept.id, deleted_at__isnull=True
-            ).count()
+            from core.services.user.user_department_assignment_service import (
+                UserDepartmentAssignmentService,
+            )
+
+            user_count = await UserDepartmentAssignmentService.count_users_for_department(
+                tenant_id, int(dept.id)
+            )
             position_count = await Position.filter(
                 tenant_id=tenant_id, department_id=dept.id, deleted_at__isnull=True
             ).count()
@@ -491,6 +501,50 @@ class DepartmentService:
         await department.save()
         
         return department
+
+    @staticmethod
+    async def batch_update_departments_status(
+        tenant_id: int,
+        department_uuids: List[str],
+        is_active: bool,
+        current_user_id: int,
+    ) -> Dict[str, Any]:
+        """
+        批量启用或停用部门。
+
+        逐条调用 update_department，单条失败不影响其余条目。
+        """
+        success_count = 0
+        failure_count = 0
+        errors: List[Dict[str, str]] = []
+        seen: set[str] = set()
+        for department_uuid in department_uuids:
+            if not department_uuid or department_uuid in seen:
+                continue
+            seen.add(department_uuid)
+            try:
+                await DepartmentService.update_department(
+                    tenant_id=tenant_id,
+                    department_uuid=department_uuid,
+                    data=DepartmentUpdate(is_active=is_active),
+                    current_user_id=current_user_id,
+                )
+                success_count += 1
+            except (NotFoundError, ValidationError) as e:
+                failure_count += 1
+                errors.append({"uuid": department_uuid, "message": str(e)})
+            except Exception as e:
+                failure_count += 1
+                errors.append({"uuid": department_uuid, "message": str(e)})
+                logger.exception(
+                    "batch_update_departments_status failed for %s",
+                    department_uuid,
+                )
+        return {
+            "success_count": success_count,
+            "failure_count": failure_count,
+            "errors": errors,
+        }
     
     @staticmethod
     async def delete_department(
@@ -533,12 +587,14 @@ class DepartmentService:
         if children_count > 0:
             raise ValidationError(f"部门下存在子部门（{children_count}个），无法删除")
         
-        # 检查是否有关联用户
-        user_count = await User.filter(
-            tenant_id=tenant_id,
-            department_id=department.id,
-            deleted_at__isnull=True
-        ).count()
+        from core.services.user.user_department_assignment_service import (
+            UserDepartmentAssignmentService,
+        )
+
+        # 检查是否有关联用户（主部门或兼职任职）
+        user_count = await UserDepartmentAssignmentService.count_users_for_department(
+            tenant_id, int(department.id)
+        )
         
         if user_count > 0:
             raise ValidationError(

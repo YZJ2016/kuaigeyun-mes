@@ -59,6 +59,16 @@ def manifest_hides_required_app_menus(app_code: str) -> bool:
     return bool(data and data.get("hide_required_app_menus") is True)
 
 
+def manifest_is_dedicated_app(app_code: str) -> bool:
+    """定制应用（整合层）：requires_apps 为宿主 API/表，不阻塞宿主在应用中心单独停用。"""
+    data = read_manifest_data(app_code)
+    if not data:
+        return False
+    if data.get("is_dedicated") is True:
+        return True
+    return str(data.get("market_category") or "").strip().lower() == "dedicated"
+
+
 def hidden_app_codes_for_dedicated_shell(
     *,
     hide: bool,
@@ -114,6 +124,34 @@ def expand_requires_apps(codes: set[str]) -> set[str]:
                     result.add(req)
                     changed = True
     return result
+
+
+# 宿主启用且伴生包已 compose 时，进程须挂载伴生 ORM/API。
+# 不要求伴生在应用中心 is_active；侧栏/已启用列表仍只认库内启用态。
+# 财务管理 API 真源在快制造 apps.kuaizhizao.finance；勿再为财务叠加 kuaicaiwu 伴生。
+# 财务管理 API/ORM 已迁入快制造宿主；轻财务仅承载总账/成本等专业能力。
+RUNTIME_API_COMPANIONS: dict[str, tuple[str, ...]] = {}
+
+
+def apply_runtime_api_companions(enabled: set[str]) -> set[str]:
+    """宿主启用集上叠加已组装的 API/ORM 伴生应用编码。"""
+    from apps.common.optional_pro import pro_app_available
+
+    out = set(enabled)
+    for host, companions in RUNTIME_API_COMPANIONS.items():
+        if host not in out:
+            continue
+        for companion in companions:
+            if companion in out:
+                continue
+            if pro_app_available(companion):
+                out.add(companion)
+    return out
+
+
+def runtime_companions_for_host(host_code: str) -> tuple[str, ...]:
+    """返回宿主启用后应挂载的伴生 app code（仅配置表，不含磁盘探测）。"""
+    return RUNTIME_API_COMPANIONS.get(str(host_code or "").strip(), ())
 
 
 async def resolve_enabled_app_codes(*, tenant_id: int | None = None) -> frozenset[str]:
@@ -176,17 +214,17 @@ async def resolve_enabled_app_codes(*, tenant_id: int | None = None) -> frozense
             "请先在应用中心安装并启用至少一个应用。"
         )
 
-    expanded = expand_requires_apps(codes)
+    expanded = apply_runtime_api_companions(expand_requires_apps(codes))
     if tenant_id is None:
         _CACHE = frozenset(expanded)
         logger.info(
-            "启用应用集（全租户并集，含 requires_apps 闭包）: {}",
+            "启用应用集（全租户并集，含 requires_apps 闭包与 API 伴生）: {}",
             sorted(_CACHE),
         )
         return _CACHE
 
     logger.info(
-        "启用应用集（租户 {}，含 requires_apps 闭包）: {}",
+        "启用应用集（租户 {}，含 requires_apps 闭包与 API 伴生）: {}",
         tenant_id,
         sorted(expanded),
     )
@@ -194,7 +232,11 @@ async def resolve_enabled_app_codes(*, tenant_id: int | None = None) -> frozense
 
 
 async def list_active_dependents(tenant_id: int, app_code: str) -> list[tuple[str, str]]:
-    """返回仍启用且 manifest 声明依赖 app_code 的应用 (code, name)。"""
+    """返回仍启用且 manifest 声明依赖 app_code 的应用 (code, name)。
+
+    定制应用（is_dedicated / market_category=dedicated）不计入：宿主可在应用中心停用，
+    运行时仍由 resolve_enabled_app_codes 的 requires_apps 闭包拉起已安装宿主包。
+    """
     from infra.infrastructure.database.database import get_db_connection
 
     conn = await get_db_connection()
@@ -218,6 +260,8 @@ async def list_active_dependents(tenant_id: int, app_code: str) -> list[tuple[st
     dependents: list[tuple[str, str]] = []
     for row in rows:
         code = str(row["code"])
+        if manifest_is_dedicated_app(code):
+            continue
         reqs = expand_requires_apps({code})
         if app_code in reqs:
             dependents.append((code, str(row["name"] or code)))

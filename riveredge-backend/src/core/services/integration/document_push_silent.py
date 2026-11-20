@@ -156,9 +156,9 @@ async def silent_push_would_run_on_confirm(tenant_id: int, entity_type: str) -> 
     triggers, targets = _normalize_push_targets_readonly(entity_type, row)
     if act not in triggers or not targets:
         return False
-    from apps.common.app_orm import app_orm_ready
+    from apps.common.optional_pro import pro_orm_ready
 
-    if not app_orm_ready("kuaizhizao"):
+    if not pro_orm_ready("kuaiconnect"):
         return False
     for target in targets:
         if _target_would_auto_push_on_action(target, act=act, binding_triggers=triggers):
@@ -264,24 +264,24 @@ async def maybe_silent_push_after_audit(
     if not targets:
         return
 
-    from apps.common.app_orm import app_orm_ready
+    from apps.common.optional_pro import pro_orm_ready
 
-    if not app_orm_ready("kuaizhizao"):
+    if not pro_orm_ready("kuaiconnect"):
         logger.info(
-            "无感外推跳过：快制造未就绪 tenant_id={} entity_type={} entity_id={}",
+            "无感外推跳过：快连接未就绪 tenant_id={} entity_type={} entity_id={}",
             tenant_id,
             entity_type,
             entity_id,
         )
         return
 
-    from apps.kuaizhizao.services.document_push_service import DocumentPushService
+    from apps.common.document_push_gate import document_push_service
     from core.services.data.sync_trigger_kind import (
         SYNC_TRIGGER_KIND_TRIGGER,
         sync_run_trigger_kind,
     )
 
-    svc = DocumentPushService()
+    svc = document_push_service()
     failures: List[str] = []
     with sync_run_trigger_kind(SYNC_TRIGGER_KIND_TRIGGER):
         for target in targets:

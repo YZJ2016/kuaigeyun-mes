@@ -40,6 +40,11 @@ from apps.master_data.services.master_data_list_core import apply_master_crud_li
 from apps.master_data.services.sop_control_service import SopControlService, enrich_sop_response
 from core.services.business.code_generation_service import CodeGenerationService
 from core.utils.timezone_utils import resolve_business_datetime
+from apps.kuaizhizao.services.over_report_rules import (
+    clamp_over_report_value_for_mode,
+    normalize_over_report_mode,
+    validate_over_report_value_for_mode,
+)
 
 
 async def _resolve_default_operator_uuids(tenant_id: int, default_operator_uuids: Optional[List[str]]) -> List[int]:
@@ -154,58 +159,47 @@ async def batch_get_operation_defect_types_via_table(
         return empty
 
 
-async def _operation_to_response_data(op: Operation) -> Dict[str, Any]:
-    """从 Operation ORM 实例构建 OperationResponse 所需的字典，含绑定不良品项与默认生产人员。"""
-    defect_types: List[Dict[str, Any]] = await _get_operation_defect_types_via_table(op.id)
-    default_operator_ids: List[int] = []
+def _parse_operation_id_list_field(raw: object | None) -> List[int]:
+    if not raw:
+        return []
+    try:
+        if isinstance(raw, list):
+            return [int(oid) for oid in raw if oid]
+        if isinstance(raw, str):
+            import json
+
+            parsed = json.loads(raw) if raw else []
+            if isinstance(parsed, list):
+                return [int(oid) for oid in parsed if oid]
+    except Exception:
+        return []
+    return []
+
+
+def _build_operation_response_data(
+    op: Operation,
+    *,
+    defect_types: List[Dict[str, Any]],
+    user_map: Dict[int, object],
+    wg_map: Dict[int, object],
+    plan_by_id: Dict[int, object],
+) -> Dict[str, Any]:
+    """构建工序响应字典（列表批量与详情共用，不含额外 IO）。"""
+    default_operator_ids = _parse_operation_id_list_field(getattr(op, "default_operator_ids", None))
     default_operator_uuids: List[str] = []
     default_operator_names: List[str] = []
-    oids = getattr(op, "default_operator_ids", None)
-    if oids:
-        try:
-            if isinstance(oids, list):
-                default_operator_ids = [int(oid) for oid in oids if oid]
-            elif isinstance(oids, str):
-                import json
-                default_operator_ids = json.loads(oids) if oids else []
-            if default_operator_ids:
-                from infra.models.user import User
-                users = await User.filter(id__in=default_operator_ids, deleted_at__isnull=True).all()
-                user_map = {u.id: u for u in users}
-                for oid in default_operator_ids:
-                    u = user_map.get(oid)
-                    if u:
-                        default_operator_uuids.append(str(u.uuid))
-                        default_operator_names.append(u.full_name or u.username)
-        except Exception:
-            pass
+    for oid in default_operator_ids:
+        u = user_map.get(oid)
+        if u:
+            default_operator_uuids.append(str(getattr(u, "uuid", "")))
+            default_operator_names.append(getattr(u, "full_name", None) or getattr(u, "username", ""))
 
-    default_team_ids: List[int] = []
+    default_team_ids = _parse_operation_id_list_field(getattr(op, "default_team_ids", None))
     default_team_names: List[str] = []
-    tids = getattr(op, "default_team_ids", None)
-    if tids:
-        try:
-            if isinstance(tids, list):
-                default_team_ids = [int(tid) for tid in tids if tid]
-            elif isinstance(tids, str):
-                import json
-                parsed = json.loads(tids) if tids else []
-                default_team_ids = [int(tid) for tid in parsed if tid]
-            if default_team_ids:
-                from apps.master_data.models.factory import WorkGroup
-
-                groups = await WorkGroup.filter(
-                    tenant_id=op.tenant_id,
-                    id__in=default_team_ids,
-                    deleted_at__isnull=True,
-                ).all()
-                wg_map = {g.id: g for g in groups}
-                for tid in default_team_ids:
-                    g = wg_map.get(tid)
-                    if g:
-                        default_team_names.append(g.name)
-        except Exception:
-            pass
+    for tid in default_team_ids:
+        g = wg_map.get(tid)
+        if g:
+            default_team_names.append(str(getattr(g, "name", "")))
 
     plan_id = getattr(op, "default_inspection_plan_id", None)
     # 质检模式字段后加：旧数据库中可能为 NULL/none，但有绑定不良品或默认方案，响应中按关联推断以便前后端一致
@@ -217,6 +211,8 @@ async def _operation_to_response_data(op: Operation) -> Dict[str, Any]:
         _im_s = "plan"
     elif _im_s == "none" and defect_types:
         _im_s = "simple"
+    _orm = normalize_over_report_mode(getattr(op, "over_report_mode", None) or "none")
+    _orv = clamp_over_report_value_for_mode(_orm, getattr(op, "over_report_value", None) or 0)
     result = {
         "id": op.id,
         "uuid": str(op.uuid),
@@ -227,8 +223,8 @@ async def _operation_to_response_data(op: Operation) -> Dict[str, Any]:
         "reporting_type": getattr(op, "reporting_type", "quantity"),
         "allow_jump": getattr(op, "allow_jump", False),
         "is_node_operation": getattr(op, "is_node_operation", False),
-        "over_report_mode": getattr(op, "over_report_mode", None) or "none",
-        "over_report_value": getattr(op, "over_report_value", None) or 0,
+        "over_report_mode": _orm,
+        "over_report_value": _orv,
         "is_active": getattr(op, "is_active", True),
         "created_at": op.created_at,
         "updated_at": op.updated_at,
@@ -266,23 +262,109 @@ async def _operation_to_response_data(op: Operation) -> Dict[str, Any]:
     if plan_ids and not result.get("default_inspection_plan_id"):
         result["default_inspection_plan_id"] = plan_ids[0]
     names: list[str] = []
-    if plan_ids:
-        try:
-            from apps.kuaizhizao.models.inspection_plan import InspectionPlan
-            plans = await InspectionPlan.filter(id__in=plan_ids, deleted_at__isnull=True).all()
-            by_id = {int(x.id): x for x in plans}
-            for pid in plan_ids:
-                plan = by_id.get(int(pid))
-                if plan and getattr(plan, "plan_name", None):
-                    names.append(str(plan.plan_name))
-                else:
-                    names.append("")
-            if names and names[0]:
-                result["default_inspection_plan_name"] = names[0]
-        except Exception:
-            pass
+    for pid in plan_ids:
+        plan = plan_by_id.get(int(pid))
+        if plan and getattr(plan, "plan_name", None):
+            names.append(str(plan.plan_name))
+        else:
+            names.append("")
+    if names and names[0]:
+        result["default_inspection_plan_name"] = names[0]
     result["default_inspection_plan_names"] = names
     return result
+
+
+async def _operations_to_response_data_batch(operations: List[Operation]) -> List[Dict[str, Any]]:
+    """工序列表：批量预取关联，避免逐行 N+1。"""
+    if not operations:
+        return []
+    op_ids = [op.id for op in operations]
+    defect_by_op = await batch_get_operation_defect_types_via_table(op_ids)
+
+    all_user_ids: set[int] = set()
+    all_team_ids: set[int] = set()
+    all_plan_ids: set[int] = set()
+    for op in operations:
+        all_user_ids.update(_parse_operation_id_list_field(getattr(op, "default_operator_ids", None)))
+        all_team_ids.update(_parse_operation_id_list_field(getattr(op, "default_team_ids", None)))
+        pid = getattr(op, "default_inspection_plan_id", None)
+        if pid:
+            try:
+                all_plan_ids.add(int(pid))
+            except (TypeError, ValueError):
+                pass
+        from apps.kuaizhizao.services.inspection_policy_service import normalize_operation_inspection_stages
+
+        _im_raw = getattr(op, "inspection_mode", None)
+        _im_s = (str(_im_raw).strip().lower() if _im_raw is not None and str(_im_raw).strip() else "") or "none"
+        stages = normalize_operation_inspection_stages(
+            getattr(op, "inspection_stages", None),
+            legacy_mode=_im_s if _im_s in ("none", "simple", "plan") else "none",
+            legacy_plan_id=pid,
+        )
+        ipqc = stages.get("ipqc") or {}
+        for raw_pid in list(ipqc.get("plan_ids") or []):
+            try:
+                all_plan_ids.add(int(raw_pid))
+            except (TypeError, ValueError):
+                pass
+        if ipqc.get("plan_id"):
+            try:
+                all_plan_ids.add(int(ipqc["plan_id"]))
+            except (TypeError, ValueError):
+                pass
+
+    user_map: Dict[int, object] = {}
+    if all_user_ids:
+        try:
+            from infra.models.user import User
+
+            users = await User.filter(id__in=list(all_user_ids), deleted_at__isnull=True).all()
+            user_map = {int(u.id): u for u in users}
+        except Exception:
+            user_map = {}
+
+    wg_map: Dict[int, object] = {}
+    if all_team_ids:
+        try:
+            from apps.master_data.models.factory import WorkGroup
+
+            tenant_id = operations[0].tenant_id
+            groups = await WorkGroup.filter(
+                tenant_id=tenant_id,
+                id__in=list(all_team_ids),
+                deleted_at__isnull=True,
+            ).all()
+            wg_map = {int(g.id): g for g in groups}
+        except Exception:
+            wg_map = {}
+
+    plan_by_id: Dict[int, object] = {}
+    if all_plan_ids:
+        try:
+            from apps.kuaizhizao.models.inspection_plan import InspectionPlan
+
+            plans = await InspectionPlan.filter(id__in=list(all_plan_ids), deleted_at__isnull=True).all()
+            plan_by_id = {int(x.id): x for x in plans}
+        except Exception:
+            plan_by_id = {}
+
+    return [
+        _build_operation_response_data(
+            op,
+            defect_types=defect_by_op.get(op.id, []),
+            user_map=user_map,
+            wg_map=wg_map,
+            plan_by_id=plan_by_id,
+        )
+        for op in operations
+    ]
+
+
+async def _operation_to_response_data(op: Operation) -> Dict[str, Any]:
+    """单条工序详情（复用列表批量组装，保持语义一致）。"""
+    rows = await _operations_to_response_data_batch([op])
+    return rows[0]
 
 
 def _sop_code_token(raw: Optional[str], max_len: int = 40) -> str:
@@ -554,6 +636,10 @@ class ProcessService:
         Returns:
             ProcessRouteResponse: 响应对象
         """
+        _route_orm = normalize_over_report_mode(getattr(process_route, "over_report_mode", None) or "none")
+        _route_orv = clamp_over_report_value_for_mode(
+            _route_orm, getattr(process_route, "over_report_value", None) or 0
+        )
         response_data = {
             "id": process_route.id,
             "uuid": process_route.uuid,
@@ -570,8 +656,8 @@ class ProcessService:
             "parent_operation_uuid": process_route.parent_operation_uuid,
             "level": process_route.level or 0,
             "is_active": process_route.is_active,
-            "over_report_mode": getattr(process_route, "over_report_mode", None) or "none",
-            "over_report_value": getattr(process_route, "over_report_value", None) or 0,
+            "over_report_mode": _route_orm,
+            "over_report_value": _route_orv,
             "allow_operation_jump": bool(getattr(process_route, "allow_operation_jump", False)),
             "created_at": process_route.created_at,
             "updated_at": process_route.updated_at,
@@ -1173,11 +1259,10 @@ class ProcessService:
 
         total = await query.count()
 
-        # 不使用 prefetch_related("defect_types")，避免 Tortoise 解析 through 模型失败；不良品列表在 _operation_to_response_data 中通过关联表 SQL 查询
+        # 不使用 prefetch_related("defect_types")；列表走批量预取关联，避免 N+1
         operations = await query.offset(skip).limit(limit).order_by(order_expr).all()
-        out = []
-        for op in operations:
-            out.append(OperationResponse.model_validate(await _operation_to_response_data(op)))
+        rows = await _operations_to_response_data_batch(operations)
+        out = [OperationResponse.model_validate(row) for row in rows]
         return out, total
 
     @staticmethod
@@ -1256,6 +1341,17 @@ class ProcessService:
                     update_data[k] = patch[k]
         update_data.pop("default_inspection_plan_ids", None)
         update_data.pop("default_inspection_plan_names", None)
+        if "over_report_mode" in update_data or "over_report_value" in update_data:
+            final_mode = update_data.get(
+                "over_report_mode", getattr(operation, "over_report_mode", None)
+            ) or "none"
+            final_value = update_data.get(
+                "over_report_value", getattr(operation, "over_report_value", None)
+            )
+            try:
+                validate_over_report_value_for_mode(final_mode, final_value)
+            except ValueError as exc:
+                raise ValidationError(str(exc)) from exc
         # 从 update_data 中移除关系字段，避免 setattr 到 ORM 上；并从 data 上取以保证请求里带了的都能同步
         defect_type_uuids = update_data.pop("defect_type_uuids", None)
         if defect_type_uuids is None:
@@ -1708,6 +1804,17 @@ class ProcessService:
             if hasattr(data, "model_dump")
             else data.dict(exclude_unset=True)
         )
+        if "over_report_mode" in update_data or "over_report_value" in update_data:
+            final_mode = update_data.get(
+                "over_report_mode", getattr(process_route, "over_report_mode", None)
+            ) or "none"
+            final_value = update_data.get(
+                "over_report_value", getattr(process_route, "over_report_value", None)
+            )
+            try:
+                validate_over_report_value_for_mode(final_mode, final_value)
+            except ValueError as exc:
+                raise ValidationError(str(exc)) from exc
         for key, value in update_data.items():
             setattr(process_route, key, value)
         apply_update_audit(process_route, current_user)
@@ -1765,21 +1872,18 @@ class ProcessService:
     @staticmethod
     async def get_process_route_tree(
         tenant_id: int,
-        is_active: Optional[bool] = None,
-        route_ids: Optional[List[int]] = None,
+        is_active: Optional[bool] = None
     ) -> List["ProcessRouteTreeResponse"]:
         """
         获取工艺路线树形结构（工艺路线→工序）
-
+        
         返回完整的工艺路线层级结构，每个工艺路线包含其工序序列中的工序信息。
         用于级联选择等场景。
-
+        
         Args:
             tenant_id: 租户ID
             is_active: 是否只查询启用的数据（可选）
-            route_ids: 只取指定路线 id（可选；提供时工序表也按引用到的
-                工序 id 收窄，避免全租户路线/工序扫描——KU-AI 评审 minor-7）
-
+            
         Returns:
             List[ProcessRouteTreeResponse]: 工艺路线树形列表，每个工艺路线包含工序列表（按序列顺序）
         """
@@ -1788,10 +1892,7 @@ class ProcessService:
             ProcessRouteTreeResponse,
             OperationTreeResponse
         )
-        from apps.master_data.services.validation_service import (
-            DataValidationService,
-        )
-
+        
         # 查询所有工艺路线
         route_query = ProcessRoute.filter(
             tenant_id=tenant_id,
@@ -1799,32 +1900,17 @@ class ProcessService:
         )
         if is_active is not None:
             route_query = route_query.filter(is_active=is_active)
-        if route_ids is not None:
-            route_query = route_query.filter(
-                id__in=[int(i) for i in route_ids]
-            )
-
+        
         process_routes = await route_query.order_by("code").all()
-
-        # 查询所有工序（用于构建映射）；route_ids 收窄时只取被引用的工序
+        
+        # 查询所有工序（用于构建映射）
         operation_query = Operation.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True
         )
         if is_active is not None:
             operation_query = operation_query.filter(is_active=is_active)
-        if route_ids is not None:
-            needed_op_ids: set = set()
-            for route in process_routes:
-                needed_op_ids.update(
-                    DataValidationService._extract_operation_ids_from_sequence(
-                        route.operation_sequence
-                    )
-                )
-            operation_query = operation_query.filter(
-                id__in=list(needed_op_ids)
-            )
-
+        
         operations = await operation_query.all()
         
         # 构建工序映射（按ID）

@@ -335,6 +335,45 @@ async def update_department_order(
         )
 
 
+class DepartmentBatchStatusRequest(BaseModel):
+    """批量启用 / 停用部门"""
+
+    department_uuids: List[str] = Field(..., min_length=1, description="部门 UUID 列表")
+    is_active: bool = Field(..., description="是否启用")
+
+
+class DepartmentBatchUpdateErrorItem(BaseModel):
+    uuid: str
+    message: str
+
+
+class DepartmentBatchUpdateResponse(BaseModel):
+    success_count: int
+    failure_count: int
+    errors: List[DepartmentBatchUpdateErrorItem] = Field(default_factory=list)
+
+
+@router.post("/batch/status", response_model=DepartmentBatchUpdateResponse)
+async def batch_update_departments_status(
+    request: DepartmentBatchStatusRequest,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_update),
+):
+    """批量启用或停用部门（对齐账户 /core/users/batch/status）。"""
+    result = await DepartmentService.batch_update_departments_status(
+        tenant_id=tenant_id,
+        department_uuids=request.department_uuids,
+        is_active=request.is_active,
+        current_user_id=current_user.id,
+    )
+    return DepartmentBatchUpdateResponse(
+        success_count=result["success_count"],
+        failure_count=result["failure_count"],
+        errors=[DepartmentBatchUpdateErrorItem(**item) for item in result["errors"]],
+    )
+
+
 @router.get("/{department_uuid}", response_model=DepartmentResponse)
 async def get_department(
     department_uuid: str,

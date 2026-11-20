@@ -40,9 +40,12 @@ from apps.master_data.schemas.process_route_change_schemas import (
     ProcessRouteChangeListResponse,
 )
 from apps.master_data.schemas.material_product_process_schemas import (
+    MaterialGroupProductProcessResponse,
+    MaterialGroupProductProcessSave,
     MaterialProductProcessResponse,
     MaterialProductProcessSave,
     ProcessRouteOperationTemplateResponse,
+    ProductProcessGroupRouteAssignmentListResponse,
     ProductProcessRouteAssignmentListResponse,
 )
 from apps.master_data.services.material_product_process_service import MaterialProductProcessService
@@ -272,10 +275,13 @@ operation_sync_service = None
 
 
 def _operation_sync_service():
+    from apps.common.inbound_sync_gate import inbound_sync_service
+
     global operation_sync_service
     if operation_sync_service is None:
-        from apps.master_data.services.operation_sync_service import OperationSyncService
-        operation_sync_service = OperationSyncService()
+        operation_sync_service = inbound_sync_service(
+            "operation_sync_service", "OperationSyncService"
+        )
     return operation_sync_service
 
 
@@ -319,20 +325,17 @@ async def sync_operations_from_source(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
 ):
-    from apps.master_data.schemas.master_data_sync import MasterDataSyncFromSourceRequest
     from apps.master_data.api._sync_from_source_run_log import master_data_sync_from_source_with_run_log
     from apps.master_data.models.master_data_sync_binding import OperationSyncBinding
+    from apps.master_data.schemas.master_data_sync import MasterDataSyncFromSourceRequest
 
+    req = MasterDataSyncFromSourceRequest.model_validate(body)
     try:
         return await master_data_sync_from_source_with_run_log(
             tenant_id=tenant_id,
             entity_type="process_operation",
             binding_model=OperationSyncBinding,
-            run_sync=lambda: _operation_sync_service().sync_from_source(
-                tenant_id,
-                current_user,
-                MasterDataSyncFromSourceRequest.model_validate(body),
-            ),
+            run_sync=lambda: _operation_sync_service().sync_from_source(tenant_id, current_user, req),
         )
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
@@ -1094,6 +1097,58 @@ async def list_product_process_route_assignments(
 
 
 @router.get(
+    "/product-process/group-route-assignments",
+    response_model=ProductProcessGroupRouteAssignmentListResponse,
+    summary="List group product-process route assignments for sidebar",
+)
+async def list_product_process_group_route_assignments(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    """产品工艺页（按分组）：返回各分组在产品工艺表中的路线指派。"""
+    return await MaterialProductProcessService.list_product_process_group_route_assignments(tenant_id)
+
+
+@router.get(
+    "/material-groups/{material_group_uuid}/product-process",
+    response_model=MaterialGroupProductProcessResponse,
+    summary="Get material group product process config",
+)
+async def get_material_group_product_process(
+    material_group_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        return await MaterialProductProcessService.get_for_material_group(
+            tenant_id, material_group_uuid
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.put(
+    "/material-groups/{material_group_uuid}/product-process",
+    response_model=MaterialGroupProductProcessResponse,
+    summary="Save material group product process config",
+)
+async def save_material_group_product_process(
+    material_group_uuid: str,
+    data: MaterialGroupProductProcessSave,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        return await MaterialProductProcessService.save_for_material_group(
+            tenant_id, material_group_uuid, data, current_user=current_user
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
     "/materials/{material_uuid}/product-process",
     response_model=MaterialProductProcessResponse,
     summary="Get material product process config",
@@ -1139,7 +1194,7 @@ async def get_process_route_for_material(
     """
     获取物料生效的工艺路线。
 
-    优先级：产品工艺指派 > 物料 FK/defaults > 物料分组 > source_config。
+    优先级：物料产品工艺指派 > 物料 FK/defaults > 分组产品工艺指派 > 分组路线 FK > source_config。
     无绑定返回 null（开单时手工选择路线）。
     """
     try:

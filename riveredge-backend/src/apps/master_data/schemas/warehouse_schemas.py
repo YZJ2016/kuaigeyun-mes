@@ -8,18 +8,8 @@ from pydantic import BaseModel, Field, validator, model_validator, ConfigDict
 from typing import Optional, List, Literal
 from datetime import datetime
 
-# 仓库类型枚举（制造业最佳实践）
-WAREHOUSE_TYPE_CHOICES = (
-    "normal",       # 普通仓
-    "line_side",    # 线边仓
-    "wip",          # 在制品仓
-    "outsourcing",  # 委外仓
-    "consignment",  # 寄售仓
-    "vmi",          # VMI仓
-    "defect",       # 不良品仓
-    "scrap",        # 报废品仓
-    "quarantine",   # 待检仓
-)
+from apps.master_data.constants.warehouse_type import WAREHOUSE_TYPE_CHOICES
+
 WarehouseType = Literal[
     "normal",
     "line_side",
@@ -30,6 +20,7 @@ WarehouseType = Literal[
     "defect",
     "scrap",
     "quarantine",
+    "gift",
 ]
 
 class WarehouseBase(BaseModel):
@@ -154,7 +145,13 @@ class WarehouseResponse(WarehouseBase):
     workshop_name: Optional[str] = Field(None, alias="workshopName", description="关联车间名称")
     workstation_name: Optional[str] = Field(None, alias="workstationName", description="关联工位名称")
     work_center_name: Optional[str] = Field(None, alias="workCenterName", description="关联工作中心名称")
-    
+    storage_area_count: Optional[int] = Field(
+        None, alias="storageAreaCount", description="下属库区数量（列表统计）"
+    )
+    storage_location_count: Optional[int] = Field(
+        None, alias="storageLocationCount", description="下属库位数量（含库区下与直挂本仓）"
+    )
+
     model_config = ConfigDict(
         from_attributes=True,
         populate_by_name=True,
@@ -250,8 +247,21 @@ class StorageLocationBase(BaseModel):
     """库位基础 Schema"""
 
     code: str = Field(..., max_length=50, description="库位编码")
+    source_location_code: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="苍穹仓位号（回写金蝶 location_number）",
+        alias="sourceLocationCode",
+    )
     name: str = Field(..., max_length=200, description="库位名称")
-    storage_area_id: int = Field(..., description="所属库区ID", alias="storageAreaId")
+    storage_area_id: Optional[int] = Field(
+        None, description="所属库区ID（可选）", alias="storageAreaId"
+    )
+    warehouse_id: Optional[int] = Field(
+        None,
+        description="所属仓库ID（可选；未挂库区时可直挂仓库）",
+        alias="warehouseId",
+    )
     description: Optional[str] = Field(None, description="描述")
     is_active: bool = Field(True, description="是否启用", alias="isActive")
     
@@ -263,6 +273,15 @@ class StorageLocationBase(BaseModel):
         if not v or not v.strip():
             raise ValueError("库位编码不能为空")
         return v.strip().upper()
+
+    @validator("source_location_code")
+    def validate_source_location_code(cls, v):
+        if v is None:
+            return None
+        val = str(v).strip()
+        if not val:
+            return None
+        return val.upper()
     
     @validator("name")
     def validate_name(cls, v):
@@ -281,8 +300,17 @@ class StorageLocationUpdate(BaseModel):
     """更新库位 Schema"""
 
     code: Optional[str] = Field(None, max_length=50, description="库位编码")
+    source_location_code: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="苍穹仓位号",
+        alias="sourceLocationCode",
+    )
     name: Optional[str] = Field(None, max_length=200, description="库位名称")
     storage_area_id: Optional[int] = Field(None, description="所属库区ID", alias="storageAreaId")
+    warehouse_id: Optional[int] = Field(
+        None, description="所属仓库ID（可选；未挂库区时可直挂）", alias="warehouseId"
+    )
     description: Optional[str] = Field(None, description="描述")
     is_active: Optional[bool] = Field(None, description="是否启用", alias="isActive")
     
@@ -294,6 +322,15 @@ class StorageLocationUpdate(BaseModel):
         if v is not None and (not v or not v.strip()):
             raise ValueError("库位编码不能为空")
         return v.strip().upper() if v else None
+
+    @validator("source_location_code")
+    def validate_source_location_code(cls, v):
+        if v is None:
+            return None
+        val = str(v).strip()
+        if not val:
+            return None
+        return val.upper()
     
     @validator("name")
     def validate_name(cls, v):
@@ -309,7 +346,12 @@ class StorageLocationResponse(StorageLocationBase):
     id: int = Field(..., description="主键ID")
     uuid: str = Field(..., description="UUID")
     tenant_id: int = Field(..., alias="tenantId", description="租户ID")
-    storage_area_id: int = Field(..., alias="storageAreaId", description="所属库区ID")
+    storage_area_id: Optional[int] = Field(
+        None, alias="storageAreaId", description="所属库区ID（可选）"
+    )
+    warehouse_id: Optional[int] = Field(
+        None, alias="warehouseId", description="所属仓库ID（可选）"
+    )
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
     created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
@@ -321,6 +363,12 @@ class StorageLocationResponse(StorageLocationBase):
     )
     storage_area_name: Optional[str] = Field(
         None, alias="storageAreaName", description="所属库区名称（列表/详情展示）"
+    )
+    warehouse_code: Optional[str] = Field(
+        None, alias="warehouseCode", description="所属仓库编码（列表/详情展示）"
+    )
+    warehouse_name: Optional[str] = Field(
+        None, alias="warehouseName", description="所属仓库名称（列表/详情展示）"
     )
     
     model_config = ConfigDict(
@@ -353,6 +401,11 @@ class WarehouseTreeResponse(WarehouseResponse):
     """仓库树形响应 Schema（用于级联查询）"""
     
     storage_areas: List[StorageAreaTreeResponse] = Field(default_factory=list, alias="storageAreas", description="库区列表")
+    storage_locations: List[StorageLocationTreeResponse] = Field(
+        default_factory=list,
+        alias="storageLocations",
+        description="直挂本仓库的库位（未挂库区）",
+    )
     
     model_config = ConfigDict(
         from_attributes=True,

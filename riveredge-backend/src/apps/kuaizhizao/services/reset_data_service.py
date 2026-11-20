@@ -166,6 +166,9 @@ class ResetDataService:
             "apps_kuaizhizao_semi_finished_goods_receipt_items",
             "apps_kuaizhizao_semi_finished_goods_receipts",
             "apps_kuaizhizao_backflush_records",
+            # 生产异常待办（工作台「待办事项」直读；漏清会残留缺料/延期）
+            "apps_kuaizhizao_material_shortage_exceptions",
+            "apps_kuaizhizao_delivery_delay_exceptions",
         ],
         MOD_OUTSOURCE: [
             "apps_kuaizhizao_outsource_orders",

@@ -185,6 +185,68 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
         "items": [
             {"label": "标准采购", "value": "标准采购", "description": "常规采购订单与标准采购入库", "sort_order": 1},
             {"label": "资产采购", "value": "资产采购", "description": "固定资产类采购订单与资产采购入库", "sort_order": 2},
+            {"label": "服务采购", "value": "服务采购", "description": "服务费用劳务类采购，不入库存、不外推金蝶", "sort_order": 3},
+        ],
+    },
+    {
+        "code": "PURCHASE_RECEIPT_BILL_TYPE",
+        "name": "采购入库单据类型",
+        "description": "采购入库单推送金蝶单据类型编码（可自行新增）",
+        "items": [
+            {
+                "label": "标准采购入库单",
+                "value": "im_PurInBill_STD_BT_S",
+                "description": "标准采购入库",
+                "sort_order": 1,
+            },
+            {
+                "label": "资产采购入库单",
+                "value": "im_PurInBill_Asset_BT_S",
+                "description": "资产采购入库",
+                "sort_order": 2,
+            },
+            {
+                "label": "费用采购入库单",
+                "value": "im_PurInBill_Cost_BT_S",
+                "description": "费用采购入库",
+                "sort_order": 3,
+            },
+            {
+                "label": "服务采购入库单",
+                "value": "im_PurInBill_Serv_BT_S",
+                "description": "服务采购入库",
+                "sort_order": 4,
+            },
+            {
+                "label": "直运采购入库单",
+                "value": "im_PurInBill_ST_BT_S",
+                "description": "直运采购入库",
+                "sort_order": 5,
+            },
+            {
+                "label": "VMI采购入库单",
+                "value": "im_PurInBill_VMI_BT_S",
+                "description": "VMI采购入库",
+                "sort_order": 6,
+            },
+            {
+                "label": "项目服务采购入库单",
+                "value": "im_PurInBill_MPM_BT_S",
+                "description": "项目服务采购入库",
+                "sort_order": 7,
+            },
+            {
+                "label": "农产品采购入库单",
+                "value": "im_PurInBill_FARM_BT_S",
+                "description": "农产品采购入库",
+                "sort_order": 8,
+            },
+            {
+                "label": "委外采购入库单",
+                "value": "im_PurInBill_PSUB_BT_S",
+                "description": "委外采购入库",
+                "sort_order": 9,
+            },
         ],
     },
     {
@@ -644,6 +706,12 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
             {"label": "调拨", "value": "调拨", "description": "调拨入库", "sort_order": 2},
             {"label": "样品", "value": "样品", "description": "样品入库", "sort_order": 3},
             {"label": "报废", "value": "报废", "description": "报废相关入库", "sort_order": 4},
+            {
+                "label": "生产完工入库",
+                "value": "生产完工入库",
+                "description": "生产完工成品或其他物料入库",
+                "sort_order": 5,
+            },
             {"label": "其他", "value": "其他", "description": "其他原因入库", "sort_order": 99},
         ],
     },
@@ -800,6 +868,27 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
             {"label": "图纸包", "value": "drawing", "sort_order": 27},
             {"label": "工艺文件", "value": "process", "sort_order": 28},
             {"label": "测试报告", "value": "test", "sort_order": 29},
+        ],
+    },
+    {
+        "code": "USER_PERSON_CATEGORY",
+        "name": "人员类型",
+        "description": "账户人员类型，对应金蝶人员类型手工维护",
+        "items": [
+            {"label": "正式员工", "value": "formal", "description": "", "sort_order": 1},
+            {"label": "外包人员", "value": "outsource", "description": "", "sort_order": 2},
+            {"label": "实习", "value": "intern", "description": "", "sort_order": 3},
+            {"label": "临时工", "value": "temp", "description": "", "sort_order": 4},
+        ],
+    },
+    {
+        "code": "USER_EMPLOYMENT_STATUS",
+        "name": "人员使用状态",
+        "description": "HR 在册状态，与账户启用（用户禁用）区分",
+        "items": [
+            {"label": "在职", "value": "active", "description": "", "sort_order": 1},
+            {"label": "离职", "value": "left", "description": "", "sort_order": 2},
+            {"label": "停薪留职", "value": "suspended", "description": "", "sort_order": 3},
         ],
     },
 ]

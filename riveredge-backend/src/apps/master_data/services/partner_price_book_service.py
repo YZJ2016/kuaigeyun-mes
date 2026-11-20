@@ -131,21 +131,31 @@ class PartnerPriceBookService:
         price_type: Optional[str],
     ) -> Optional[Decimal]:
         """询价返回不含税单价，与单据行价税口径一致。"""
+        from apps.master_data.services.partner_material_price_defaults import (
+            normalize_stored_unit_price_to_exclusive,
+        )
+
         if unit_price is None:
             return None
         price = Decimal(str(unit_price))
         if price <= 0:
             return None
-        pt = (price_type or "tax_inclusive").strip()
-        if pt == "tax_exclusive":
-            return price
-        rate = Decimal(str(tax_rate or 0))
-        if rate > Decimal("1"):
-            rate = rate / Decimal("100")
-        factor = Decimal("1") + rate
-        if factor <= 0:
-            return price
-        return (price / factor).quantize(Decimal("0.0001"))
+        return normalize_stored_unit_price_to_exclusive(
+            price, Decimal(str(tax_rate or 0)), price_type
+        )
+
+    @staticmethod
+    def _validate_tax_rate_for_price_type(
+        price_type: Optional[str],
+        tax_rate: Optional[Decimal],
+    ) -> None:
+        """含税价本必须填写税率，否则取价无法剥离、单据会再乘税。"""
+        pt = (price_type or "tax_inclusive").strip() or "tax_inclusive"
+        if pt != "tax_inclusive":
+            return
+        rate = Decimal(str(tax_rate)) if tax_rate is not None else Decimal("0")
+        if rate <= 0:
+            raise ValidationError("含税标准价必须填写大于 0 的默认税率")
 
     @classmethod
     def _deserialize_tier_prices(cls, raw: Any) -> Optional[List[Dict[str, Any]]]:
@@ -538,6 +548,7 @@ class PartnerPriceBookService:
             payload["is_active"] = True
         if not payload.get("price_type"):
             payload["price_type"] = "tax_inclusive"
+        cls._validate_tax_rate_for_price_type(payload.get("price_type"), payload.get("tax_rate"))
         if not payload.get("unit") and material.base_unit:
             payload["unit"] = material.base_unit
         payload["variant_prices"] = cls._serialize_variant_prices_for_storage(payload.get("variant_prices"))
@@ -571,6 +582,7 @@ class PartnerPriceBookService:
         effective_from = data.effective_from
         effective_to = data.effective_to
         price_type = (data.price_type or "tax_inclusive").strip() or "tax_inclusive"
+        cls._validate_tax_rate_for_price_type(price_type, data.tax_rate)
         is_active = True if data.is_active is None else bool(data.is_active)
         policy = data.conflict_policy
 
@@ -922,6 +934,9 @@ class PartnerPriceBookService:
             effective_to,
             exclude_id=row.id,
         )
+        next_price_type = payload.get("price_type", row.price_type)
+        next_tax_rate = payload["tax_rate"] if "tax_rate" in payload else row.tax_rate
+        cls._validate_tax_rate_for_price_type(next_price_type, next_tax_rate)
 
         async with in_transaction():
             if "variant_prices" in payload:

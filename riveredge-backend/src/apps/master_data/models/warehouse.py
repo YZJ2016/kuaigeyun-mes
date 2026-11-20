@@ -54,7 +54,7 @@ class Warehouse(BaseModel):
     warehouse_type = fields.CharField(
         max_length=20,
         default="normal",
-        description="仓库类型（normal=普通仓, line_side=线边仓, wip=在制品仓, outsourcing=委外仓, consignment=寄售仓, vmi=VMI仓, defect=不良品仓, scrap=报废品仓, quarantine=待检仓）"
+        description="仓库类型（normal/line_side/wip/outsourcing/consignment/vmi/defect/scrap/quarantine/gift；gift=赠品仓只计数量不计成本）"
     )
     
     # 关联车间（线边仓专用）
@@ -163,7 +163,7 @@ class StorageLocation(BaseModel):
         updated_at: 更新时间（继承自BaseModel）
         deleted_at: 删除时间（软删除）
     """
-
+    
     class Meta:
         """
         模型元数据
@@ -193,7 +193,7 @@ class StorageLocation(BaseModel):
     )
     name = fields.CharField(max_length=200, description="库位名称")
     description = fields.TextField(null=True, description="描述")
-
+    
     # 关联关系（ForeignKeyField 会自动创建 storage_area_id 字段）；可空=独立仓位
     storage_area = fields.ForeignKeyField(
         "models.StorageArea",
@@ -210,10 +210,14 @@ class StorageLocation(BaseModel):
 
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")
-    
+
+    external_sync_at = fields.DatetimeField(
+        null=True, description="最近从外部接口/数据集同步时间"
+    )
+
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
-    
+
     def __str__(self):
         """字符串表示"""
         return f"{self.code} - {self.name}"

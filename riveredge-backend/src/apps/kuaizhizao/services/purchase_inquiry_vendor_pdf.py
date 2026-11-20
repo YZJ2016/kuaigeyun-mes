@@ -363,7 +363,7 @@ async def generate_purchase_inquiry_vendor_attachments(
 ) -> List[Dict[str, Any]]:
     """
     按当前受邀供应商生成系统附件条目（不写库）。
-    失败直接抛错，由发布流程中止。
+    失败直接抛错，由新建/保存/发布流程中止。
     """
     vendors = await PurchaseInquiryVendor.filter(
         tenant_id=tenant_id, inquiry_id=inquiry.id

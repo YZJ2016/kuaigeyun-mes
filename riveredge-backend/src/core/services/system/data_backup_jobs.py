@@ -1294,7 +1294,6 @@ async def _load_unique_id_only_tables(conn, table_names: list[str]) -> set[str]:
         WHERE n.nspname = 'public'
           AND i.indisunique
           AND i.indnkeyatts = 1
-          AND i.indpred IS NULL
           AND a.attname = 'id'
           AND t.relname = ANY($1::text[])
         """,
@@ -1307,6 +1306,38 @@ async def _load_unique_id_only_tables(conn, table_names: list[str]) -> set[str]:
     }
 
 
+def _serial_parent_by_child_table_prefix(
+    child_table: str,
+    column: str,
+    serial_tables: set[str],
+) -> Optional[str]:
+    """无正式 FK 时：子表名挂在父表名后面，且列名 *_id 对应父表词根，则认定父表。
+
+    例：apps_kuaiplm_rd_gate_template_stages.template_id
+    → apps_kuaiplm_rd_gate_templates（UNIQUE(template_id,gate_key) 无 tenant，跨租户必跟偏移）。
+    """
+    if not column.endswith("_id") or column in {"id", "tenant_id"}:
+        return None
+    base = column[:-3]
+    if not base:
+        return None
+    candidates: list[str] = []
+    for parent in serial_tables:
+        if parent == child_table:
+            continue
+        stem = parent[:-1] if parent.endswith("s") else parent
+        if not (
+            child_table.startswith(f"{stem}_") or child_table.startswith(f"{parent}_")
+        ):
+            continue
+        tokens = parent.split("_")
+        if base in tokens or parent.endswith(base) or parent.endswith(f"{base}s"):
+            candidates.append(parent)
+    if len(candidates) == 1:
+        return candidates[0]
+    return None
+
+
 def _fk_columns_to_serial_parents(
     fk_rows: list[dict[str, Any]],
     serial_tables: set[str],
@@ -1315,11 +1346,13 @@ def _fk_columns_to_serial_parents(
     """
     child_table -> { child_column -> parent_table }
 
-    含两类：
+    含三类：
     1. 正式 FK（parent_column=id）
     2. 软引用：同名整型列在库内其它表已有唯一 FK→某 serial 父表，
        但本表未建 FK（常见于历史表 / 多态旁路）。列名对父表必须无歧义，
        否则不猜（如多表各自 parent_id 自引用）。
+    3. 子表名前缀挂靠：列名全局歧义时（如多表 template_id），用子表名是否
+       延展自父表名来消歧（门模板 stages 等）。
     """
     mapping: dict[str, dict[str, str]] = defaultdict(dict)
     col_to_parents: dict[str, set[str]] = defaultdict(set)
@@ -1345,14 +1378,17 @@ def _fk_columns_to_serial_parents(
         for col, parents in col_to_parents.items()
         if len(parents) == 1 and col not in {"id", "tenant_id"}
     }
-    if unambiguous:
-        for table, (columns, _csv) in import_plan.items():
-            for col in columns:
-                if col in mapping.get(table, {}):
-                    continue
-                parent = unambiguous.get(col)
-                if parent:
-                    mapping[table][col] = parent
+    for table, (columns, _csv) in import_plan.items():
+        for col in columns:
+            if col in mapping.get(table, {}):
+                continue
+            parent = unambiguous.get(col)
+            if parent:
+                mapping[table][col] = parent
+                continue
+            parent = _serial_parent_by_child_table_prefix(table, col, serial_tables)
+            if parent:
+                mapping[table][col] = parent
     return dict(mapping)
 
 
@@ -1529,7 +1565,6 @@ async def _load_single_col_unique_columns_async(conn, table_names: list[str]) ->
         WHERE n.nspname = 'public'
           AND i.indisunique
           AND i.indnkeyatts = 1
-          AND i.indpred IS NULL
           AND t.relname = ANY($1::text[])
           AND c.oid IS NULL
         """,
@@ -1953,8 +1988,8 @@ async def _remap_import_plan_global_unique_uuids_if_needed(
     remapped: dict[str, tuple[list[str], str]] = dict(import_plan)
     total_remapped = 0
     for _attempt in range(max(1, int(max_attempts))):
-        # 收集备份中的 uuid 值并探测与库内其它行的冲突（全局唯一索引，跨租户；
-        # 目标租户旧行会在事务内 DELETE，探测时排除，同租户恢复不误判自身）
+        # 收集备份中的 uuid 值并探测与库内其它行的冲突（全局唯一，不分租户；
+        # 目标租户旧行会在事务内 DELETE，仍按全库探测，误删风险为零）
         value_maps: dict[str, dict[str, str]] = {}
         for table, col in uuid_candidate.items():
             _columns, csv_text = remapped[table]
@@ -2327,15 +2362,29 @@ def _append_serial_sequence_resets(
     import_tables: set[str],
     table_pk_map: dict[str, list[str]],
 ) -> None:
+    """COPY 显式 id 后对齐 serial/nextval 序列，避免后续 INSERT 撞主键。
+
+    注意：
+    - ``pg_get_serial_sequence`` 参数是表名文本，不要包一层额外引号，否则恒为 NULL。
+    - 部分历史表 default 为 ``nextval('xxx_id_seq')`` 但未 ``OWNED BY``，
+      ``pg_get_serial_sequence`` 仍为 NULL，须回退到 ``{table}_id_seq``。
+    """
     for table in sorted(import_tables):
         if table_pk_map.get(table) != ["id"]:
             continue
+        # 表名来自 information_schema，仅允许安全标识符
+        if not table.replace("_", "").isalnum():
+            continue
         script_lines.append(
-            f"DO $$ DECLARE seq regclass; BEGIN "
-            f"seq := pg_get_serial_sequence('\"{table}\"', 'id'); "
-            f"IF seq IS NOT NULL THEN "
+            "DO $$ DECLARE seq regclass; BEGIN "
+            f"seq := pg_get_serial_sequence('{table}', 'id'); "
+            "IF seq IS NULL THEN "
+            f"  BEGIN seq := to_regclass('public.{table}_id_seq'); "
+            "  EXCEPTION WHEN OTHERS THEN seq := NULL; END; "
+            "END IF; "
+            "IF seq IS NOT NULL THEN "
             f"PERFORM setval(seq, GREATEST(COALESCE((SELECT MAX(id) FROM \"{table}\"), 1), 1), true); "
-            f"END IF; END $$;"
+            "END IF; END $$;"
         )
 
 
@@ -2560,6 +2609,10 @@ async def restore_tenant_backup_from_dump(
     支持跨系统迁移：CSV 内 tenant_id 会先统一重写为 target_tenant_id 再导入。
     DELETE + COPY 在同一 psql 事务中执行，失败时自动回滚，避免只删不导。
     返回备份 CSV 中推断的源租户 ID（用于 uploads 路径映射）。
+
+    注意：``infra_*``（含 ``infra_tenants.settings`` / 消息提醒规则）不在租户备份内。
+    调用方须在成功后执行 ``heal_tenant_config_after_restore``，按 template_code
+    重绑提醒规则并 ensure 审核绑定，否则会出现整表「模板不存在」。
     """
 
     raw_table_csv_map = _parse_tenant_dump_sections(dump_path)
@@ -2869,10 +2922,9 @@ def _safe_extract_zip_member(
 def _check_zip_restore_budget(zf: zipfile.ZipFile, names: list[str]) -> None:
     if len(names) > _RESTORE_ZIP_MAX_ENTRIES:
         raise ValueError(f"备份 zip 条目过多（{len(names)}），已拒绝恢复以保护磁盘")
-    name_set = set(names)
     total = 0
     for info in zf.infolist():
-        if info.filename in name_set:
+        if info.filename in set(names):
             total += info.file_size
             if total > _RESTORE_ZIP_MAX_TOTAL_BYTES:
                 raise ValueError("备份 zip 解压后体积超过 20GB 上限，已拒绝恢复")

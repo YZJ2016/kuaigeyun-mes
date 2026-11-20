@@ -12,6 +12,9 @@ from core.models.reminder_event import ReminderEvent
 from core.utils.timezone_utils import resolve_business_datetime
 from infra.exceptions.exceptions import ValidationError
 
+# 失败后仍会进入下一轮扫描；超过上限改为 stopped，避免永久占满单 Worker。
+REMINDER_MAX_ATTEMPTS = 5
+
 
 class ReminderEventService:
     """幂等登记与认领提醒事件。"""
@@ -93,6 +96,13 @@ class ReminderEventService:
                 return None
             if event.status in {"sent", "cancelled", "stopped"}:
                 return None
+            if int(event.attempt_count or 0) >= REMINDER_MAX_ATTEMPTS:
+                event.status = "stopped"
+                event.stopped_reason = f"超过最大重试次数({REMINDER_MAX_ATTEMPTS})"
+                await event.save(
+                    update_fields=["status", "stopped_reason", "updated_at"]
+                )
+                return None
             event.status = "claimed"
             event.attempt_count = int(event.attempt_count or 0) + 1
             event.last_error = None
@@ -121,8 +131,20 @@ class ReminderEventService:
         ).first()
         if not event:
             raise ValidationError("提醒事件不存在")
-        event.status = "failed"
         event.last_error = (error or "")[:2000]
+        if int(event.attempt_count or 0) >= REMINDER_MAX_ATTEMPTS:
+            event.status = "stopped"
+            event.stopped_reason = f"超过最大重试次数({REMINDER_MAX_ATTEMPTS})"
+            await event.save(
+                update_fields=[
+                    "status",
+                    "last_error",
+                    "stopped_reason",
+                    "updated_at",
+                ]
+            )
+            return event
+        event.status = "failed"
         await event.save(update_fields=["status", "last_error", "updated_at"])
         return event
 

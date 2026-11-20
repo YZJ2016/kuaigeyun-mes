@@ -144,6 +144,11 @@ class Material(BaseModel):
     name = fields.CharField(max_length=200, description="物料名称")
     specification = fields.CharField(max_length=500, null=True, description="规格")
     base_unit = fields.CharField(max_length=20, description="基础单位")
+    inventory_unit = fields.CharField(
+        max_length=20,
+        null=True,
+        description="库存单位（金蝶库存单位；默认同基础单位）",
+    )
     
     # 兼容字段：保留code字段作为main_code的别名（向后兼容）
     code = fields.CharField(max_length=50, null=True, description="物料编码（已废弃，使用main_code，保留用于向后兼容）")
@@ -294,6 +299,7 @@ class BOM(BaseModel):
         tenant_id: 组织ID（用于多组织数据隔离，继承自BaseModel）
         material_id: 主物料ID（外键，父件）
         component_id: 子物料ID（外键，子件）
+        install_position: 安装位置（重复子件时手工区分）
         quantity: 用量（必填，数字）
         base_quantity: 基准数量（本版本用量对应的成品基数，默认 1）
         unit: 单位（可选，如：个、kg、m等）
@@ -348,6 +354,16 @@ class BOM(BaseModel):
     id = fields.IntField(pk=True, description="主键ID")
     
     # 基本信息
+    install_position = fields.CharField(
+        max_length=100,
+        null=True,
+        description="安装位置（同一子物料多行时手工区分）",
+    )
+    material_warehouse_id = fields.IntField(null=True, description="主物料发料仓库（版本级，各行一致）")
+    manufacturing_department_id = fields.IntField(null=True, description="制造部门（版本级）")
+    attachments = fields.JSONField(null=True, description="BOM版本附件列表")
+    warehouse_id = fields.IntField(null=True, description="子件发料仓库")
+    is_outsource = fields.BooleanField(default=False, description="子件是否委外")
     quantity = fields.DecimalField(max_digits=18, decimal_places=4, description="用量（必填，数字）")
     base_quantity = fields.DecimalField(
         max_digits=18,

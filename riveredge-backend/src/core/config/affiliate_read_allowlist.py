@@ -23,6 +23,9 @@ _UNIT_CATALOG_PATH_RE = re.compile(
     re.IGNORECASE,
 )
 
+# 物料主档列表检索（单据行选料 / 移动端关键字查询，不含子资源）
+_MATERIAL_LIST_SEARCH_RE = re.compile(r"/materials/?(?:\?|$)", re.IGNORECASE)
+
 
 @dataclass(frozen=True)
 class AffiliateReadEntry:
@@ -43,8 +46,11 @@ AFFILIATE_READ_ENTRIES: tuple[AffiliateReadEntry, ...] = (
         permission_codes=(
             build_permission_code(_MASTER_DATA_APP, "material", "read"),
             build_permission_code(_MASTER_DATA_APP, "process:engineering-bom", "read"),
+            build_permission_code("kuaizhizao", "work-order", "read"),
+            build_permission_code("kuaizhizao", "work-order", "create"),
+            build_permission_code("kuaizhizao", "work-order", "update"),
         ),
-        reason="物料编辑回显默认 BOM 版本列表",
+        reason="物料编辑与工单选成品时回显 BOM 版本列表",
     ),
     AffiliateReadEntry(
         id="master_data_unit_catalog_read",
@@ -56,6 +62,39 @@ AFFILIATE_READ_ENTRIES: tuple[AffiliateReadEntry, ...] = (
             build_permission_code(_MASTER_DATA_APP, "material", "read"),
         ),
         reason="物料表单单位下拉与单位目录只读",
+    ),
+    AffiliateReadEntry(
+        id="master_data_material_list_document_line_pick",
+        app_code=_MASTER_DATA_APP,
+        method="GET",
+        path_pattern=_MATERIAL_LIST_SEARCH_RE,
+        permission_codes=(
+            build_permission_code(_MASTER_DATA_APP, "material", "read"),
+            build_permission_code(_MASTER_DATA_APP, "material", "display"),
+            build_permission_code("kuaizhizao", "purchase-requisition", "read"),
+            build_permission_code("kuaizhizao", "purchase-requisition", "create"),
+            build_permission_code("kuaizhizao", "purchase-order", "read"),
+            build_permission_code("kuaizhizao", "purchase-inquiry", "read"),
+            build_permission_code("kuaizhizao", "inbound", "read"),
+            build_permission_code("kuaizhizao", "outbound", "read"),
+            build_permission_code("kuaizhizao", "other-inbound", "read"),
+            build_permission_code("kuaizhizao", "other-outbound", "read"),
+            build_permission_code("kuaizhizao", "quotation", "read"),
+            build_permission_code("kuaizhizao", "sales-order", "read"),
+            build_permission_code("kuaizhizao", "delivery-notice", "read"),
+            build_permission_code(
+                "kuaizhizao",
+                "warehouse-management-inventory-transfer",
+                "read",
+            ),
+            build_permission_code("kuaizhizao", "work-order", "read"),
+            build_permission_code(
+                "kuaizhizao",
+                "quality-management-nonconforming-ledger",
+                "read",
+            ),
+        ),
+        reason="单据行选料与移动端物料检索：宿主单据读或物料展示即可",
     ),
     # 出入库选仓走 warehouse 引用下拉（:read/:display）；库位却直打
     # /storage-locations，缺 storage-location:read 时生产表现为「仓库有、库位暂无数据」。
@@ -84,6 +123,58 @@ AFFILIATE_READ_ENTRIES: tuple[AffiliateReadEntry, ...] = (
         reason="按仓库过滤库位时需库区列表，与仓库读权限对齐",
     ),
     AffiliateReadEntry(
+        id="kuaizhizao_demands_work_order_pull_lines",
+        app_code="kuaizhizao",
+        method="GET",
+        path_pattern=re.compile(r"/demands/work-order-pull-lines(?:/|$)", re.IGNORECASE),
+        permission_codes=(
+            build_permission_code(
+                "kuaizhizao", "plan-management-demand-management", "read"
+            ),
+            build_permission_code(
+                "kuaizhizao", "plan-management-demand-management", "display"
+            ),
+            build_permission_code("kuaizhizao", "work-order", "create"),
+            build_permission_code("kuaizhizao", "work-order", "read"),
+        ),
+        reason="工单从计划生产取开口行：工单新建/查看或计划生产读/展示",
+    ),
+    AffiliateReadEntry(
+        id="kuaizhizao_demand_computations_work_order_pull",
+        app_code="kuaizhizao",
+        method="GET",
+        path_pattern=re.compile(
+            r"/demand-computations/(?:work-order-pull-computations|"
+            r"\d+/push-preview|"
+            r"\d+/push-options)(?:/|$)",
+            re.IGNORECASE,
+        ),
+        permission_codes=(
+            build_permission_code(
+                "kuaizhizao", "plan-management-demand-computation", "read"
+            ),
+            build_permission_code(
+                "kuaizhizao", "plan-management-demand-computation", "display"
+            ),
+            build_permission_code("kuaizhizao", "work-order", "create"),
+            build_permission_code("kuaizhizao", "work-order", "read"),
+        ),
+        reason="工单从需求计算取单及预览：工单新建/查看或需求计算读/展示",
+    ),
+    AffiliateReadEntry(
+        id="kuaizhizao_sales_orders_work_order_pull_lines",
+        app_code="kuaizhizao",
+        method="GET",
+        path_pattern=re.compile(r"/sales-orders/work-order-pull-lines(?:/|$)", re.IGNORECASE),
+        permission_codes=(
+            build_permission_code("kuaizhizao", "sales-order", "read"),
+            build_permission_code("kuaizhizao", "sales-order", "display"),
+            build_permission_code("kuaizhizao", "work-order", "create"),
+            build_permission_code("kuaizhizao", "work-order", "read"),
+        ),
+        reason="工单从销售订单取开口行：工单新建/查看或销售订单读/展示",
+    ),
+    AffiliateReadEntry(
         id="kuaizhizao_document_line_material_attachment_sources",
         app_code="kuaizhizao",
         method="GET",
@@ -100,7 +191,7 @@ AFFILIATE_READ_ENTRIES: tuple[AffiliateReadEntry, ...] = (
             build_permission_code("kuaizhizao", "outbound", "read"),
             build_permission_code(_MASTER_DATA_APP, "material", "read"),
             build_permission_code(_MASTER_DATA_APP, "material", "display"),
-            build_permission_code(_MASTER_DATA_APP, "process:engineering-drawing", "read"),
+            build_permission_code(_MASTER_DATA_APP, "process:drawing", "read"),
         ),
         reason="六类单据行「物料附件」弹窗：宿主单据读或物料/图纸读",
     ),

@@ -810,8 +810,8 @@ class DataDictionaryService:
     @staticmethod
     async def ensure_system_dictionary_exists(tenant_id: int, code: str) -> Optional[DataDictionary]:
         """
-        若 code 在 SYSTEM_DICTIONARIES 中定义但当前租户尚未落库，则同步该字典及预置项。
-        用于业务页按 code 拉取字典（如 CUSTOMER_CATEGORY）时自动修复，无需手工点「初始化系统字典」。
+        若 code 在 SYSTEM_DICTIONARIES 中定义，则创建或复用字典并同步预置项（含新增项）。
+        用于业务页按 code 拉取字典时自动补齐，无需手工点「初始化系统字典」。
         """
         from loguru import logger
         from core.config.system_dictionaries import SYSTEM_DICTIONARIES

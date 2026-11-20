@@ -21,13 +21,18 @@ from apps.kuaizhizao.schemas.maintenance_plan import (
     MaintenanceExecutionResponse,
     MaintenanceExecutionListResponse,
 )
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from apps.kuaizhizao.services.maintenance_plan_service import MaintenancePlanService, MaintenanceExecutionService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/maintenance-plans", tags=["App - Kuaige Zhizao - Maintenance Plans"])
+router = APIRouter(
+    prefix="/maintenance-plans",
+    tags=["App - Kuaige Zhizao - Maintenance Plans"],
+    dependencies=[Depends(require_kuaizhizao_module_access("maintenance-plan", resolve_print=False))],
+)
 
 
 # ========== 维护计划相关端点 ==========
