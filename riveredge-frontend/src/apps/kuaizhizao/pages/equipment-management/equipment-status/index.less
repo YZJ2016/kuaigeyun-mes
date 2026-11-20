@@ -1,0 +1,39 @@
+.kuaizhizao-equipment-status-stat-grid {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  @media (min-width: 576px) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  @media (min-width: 1200px) {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+}
+
+.kuaizhizao-equipment-status-stat-card {
+  .ant-card-body {
+    padding: 12px 8px;
+  }
+}
+
+.kuaizhizao-equipment-status-stat-card__body {
+  text-align: center;
+  min-width: 0;
+}
+
+.kuaizhizao-equipment-status-stat-card__value {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.kuaizhizao-equipment-status-stat-card__label {
+  margin-top: 4px;
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: nowrap;
+}

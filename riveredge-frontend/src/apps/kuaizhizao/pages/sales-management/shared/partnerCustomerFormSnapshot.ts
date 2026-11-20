@@ -1,91 +1,148 @@
 /**
- * 客户主数据 → 销售单据头联系人/收货地址（联系人明细 + 地址明细真源）
+ * 客户主数据 → 销售单据头联系人 / 收货地址。
+ * 真源仅：`contacts` 明细、`addresses` 明细。禁止读头字段 / 地址行联系人 / legacy 拼装。
  */
 
 import type { PartnerAddress, PartnerContact } from '../../../../master-data/types/supply-chain';
 import type { CustomerLike } from './applyCustomerFormFields';
 
-function pickText(row: Record<string, unknown>, ...keys: string[]): string | undefined {
-  for (const key of keys) {
-    const raw = row[key];
-    if (raw == null) continue;
-    const text = String(raw).trim();
-    if (text) return text;
-  }
-  return undefined;
+function asRecord(row: object): Record<string, unknown> {
+  return row as Record<string, unknown>;
 }
 
-function normalizeContactRows(customer: CustomerLike): PartnerContact[] {
+function textOf(row: Record<string, unknown>, key: string): string | undefined {
+  const raw = row[key];
+  if (raw == null) return undefined;
+  const text = String(raw).trim();
+  return text || undefined;
+}
+
+function contactRows(customer: CustomerLike): PartnerContact[] {
   const raw = customer.contacts;
   if (!Array.isArray(raw)) return [];
-  return raw
-    .filter((row) => row && typeof row === 'object')
-    .map((row) => row as PartnerContact);
+  return raw.filter((row): row is PartnerContact => row != null && typeof row === 'object');
 }
 
-function normalizeAddressRows(customer: CustomerLike): PartnerAddress[] {
+function addressRows(customer: CustomerLike): PartnerAddress[] {
   const raw = customer.addresses;
   if (!Array.isArray(raw)) return [];
-  return raw
-    .filter((row) => row && typeof row === 'object')
-    .map((row) => row as PartnerAddress);
+  return raw.filter((row): row is PartnerAddress => row != null && typeof row === 'object');
 }
 
-function pickAddressRow(
-  rows: PartnerAddress[],
-  type: string,
-): PartnerAddress | undefined {
-  return rows.find((row) => {
-    const code = pickText(row as Record<string, unknown>, 'addressType', 'address_type');
-    return code === type;
-  });
+function addressTypeOf(row: PartnerAddress): string {
+  return textOf(asRecord(row), 'addressType') || 'other';
 }
 
+function addressLineOf(row: PartnerAddress): string | undefined {
+  return textOf(asRecord(row), 'address');
+}
+
+/** 引用详情优先；未返回前用列表缓存。禁止把两边明细拼成第三套。 */
+export function preferPartnerCustomerDetail(
+  listCustomer: CustomerLike | null,
+  fetched: CustomerLike | null,
+): CustomerLike | null {
+  return fetched ?? listCustomer;
+}
+
+function contactPickValue(contact: string, phone?: string): string {
+  return `${contact}\u0000${String(phone ?? '').trim()}`;
+}
+
+/** 选客户后默认带出：联系人明细第一条。 */
 export function resolveCustomerContactFieldsFromPartner(
   customer: CustomerLike,
 ): { customer_contact?: string; customer_phone?: string } {
-  const contacts = normalizeContactRows(customer);
-  const deliveryAddress = pickAddressRow(normalizeAddressRows(customer), 'delivery');
-
-  let contact: string | undefined;
-  let phone: string | undefined;
-
-  if (contacts.length > 0) {
-    const first = contacts[0] as Record<string, unknown>;
-    contact = pickText(first, 'contactPerson', 'contact_person');
-    phone = pickText(first, 'phone');
-  }
-
-  if (deliveryAddress) {
-    const row = deliveryAddress as Record<string, unknown>;
-    contact = pickText(row, 'contactName', 'contact_name') ?? contact;
-  phone = pickText(row, 'contactPhone', 'contact_phone') ?? phone;
-  }
-
-  contact =
-    contact ??
-    pickText(customer, 'contactPerson', 'contact_person', 'contact', 'customer_contact');
-  phone = phone ?? pickText(customer, 'phone', 'customer_phone');
-
+  const row = contactRows(customer)[0];
+  if (!row) return {};
+  const r = asRecord(row);
+  const contact = textOf(r, 'contactPerson');
+  const phone = textOf(r, 'phone');
   return {
     ...(contact != null ? { customer_contact: contact } : {}),
     ...(phone != null ? { customer_phone: phone } : {}),
   };
 }
 
+export type CustomerContactPickOption = {
+  value: string;
+  contact: string;
+  label: string;
+  phone?: string;
+};
+
+export type CustomerAddressPickOption = {
+  value: string;
+  label: string;
+  addressType?: string;
+};
+
+/** 下拉选项 = contacts 明细原样。 */
+export function buildCustomerContactPickOptions(customer: CustomerLike): CustomerContactPickOption[] {
+  const out: CustomerContactPickOption[] = [];
+  for (const row of contactRows(customer)) {
+    const r = asRecord(row);
+    const contact = textOf(r, 'contactPerson');
+    if (!contact) continue;
+    const phone = textOf(r, 'phone');
+    out.push({
+      value: contactPickValue(contact, phone),
+      contact,
+      label: phone ? `${contact} ${phone}` : contact,
+      phone,
+    });
+  }
+  return out;
+}
+
+const ADDRESS_TYPE_RANK: Record<string, number> = {
+  delivery: 0,
+  registered: 1,
+  invoice: 2,
+  other: 3,
+};
+
+/** 下拉选项 = addresses 明细原样。 */
+export function buildCustomerShippingAddressPickOptions(
+  customer: CustomerLike,
+  formatTypeLabel?: (type: string) => string,
+): CustomerAddressPickOption[] {
+  const addresses = addressRows(customer).filter((row) => Boolean(addressLineOf(row)));
+  const typeCounts = new Map<string, number>();
+  for (const row of addresses) {
+    const t = addressTypeOf(row);
+    typeCounts.set(t, (typeCounts.get(t) ?? 0) + 1);
+  }
+  const ranked = [...addresses].sort(
+    (a, b) => (ADDRESS_TYPE_RANK[addressTypeOf(a)] ?? 9) - (ADDRESS_TYPE_RANK[addressTypeOf(b)] ?? 9),
+  );
+  return ranked.map((row) => {
+    const line = addressLineOf(row)!;
+    const addressType = addressTypeOf(row);
+    const typeLabel = formatTypeLabel?.(addressType);
+    const contactHint = textOf(asRecord(row), 'contactName');
+    const multiSameType = (typeCounts.get(addressType) ?? 0) > 1;
+    const label = typeLabel
+      ? multiSameType && contactHint
+        ? `${typeLabel}（${contactHint}）：${line}`
+        : `${typeLabel}：${line}`
+      : line;
+    return { value: line, label, addressType };
+  });
+}
+
+/** 选客户后默认收货地址：默认收货行 → 首条收货 → 默认行 → 首条地址。 */
 export function resolveCustomerShippingAddressFromPartner(customer: CustomerLike): string | undefined {
-  const addresses = normalizeAddressRows(customer);
-  if (addresses.length > 0) {
-    const delivery = pickAddressRow(addresses, 'delivery');
-    const defaultRow = addresses.find((row) => Boolean(row.isDefault ?? (row as Record<string, unknown>).is_default));
-    const registered = pickAddressRow(addresses, 'registered');
-    const picked = delivery ?? defaultRow ?? registered ?? addresses[0];
-    const line = pickText(picked as Record<string, unknown>, 'address');
+  const addresses = addressRows(customer);
+  if (!addresses.length) return undefined;
+
+  const deliveries = addresses.filter((row) => addressTypeOf(row) === 'delivery');
+  if (deliveries.length > 0) {
+    const defaultDelivery = deliveries.find((row) => Boolean(row.isDefault));
+    const line = addressLineOf(defaultDelivery ?? deliveries[0]);
     if (line) return line;
   }
 
-  return (
-    pickText(customer, 'deliveryAddress', 'delivery_address', 'address', 'shipping_address') ??
-    undefined
-  );
+  const defaultRow = addresses.find((row) => Boolean(row.isDefault));
+  return addressLineOf(defaultRow ?? addresses[0]);
 }

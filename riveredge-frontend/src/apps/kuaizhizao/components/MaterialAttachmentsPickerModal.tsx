@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { App, Button, Divider, Empty, Modal, Space, Table, Typography } from 'antd';
+import { App, Button, Divider, Empty, Modal, Result, Space, Table, Typography } from 'antd';
+import { formatApiErrorDetail } from '../../../services/api';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import FilePreviewModal from '../../../components/file-preview';
@@ -39,6 +40,7 @@ export const MaterialAttachmentsPickerModal: React.FC<MaterialAttachmentsPickerM
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [rows, setRows] = useState<MaterialLineAttachmentSource[]>([]);
   const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([]);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -52,13 +54,21 @@ export const MaterialAttachmentsPickerModal: React.FC<MaterialAttachmentsPickerM
       return;
     }
     setLoading(true);
+    setLoadError(null);
     try {
       const items = await fetchMaterialLineAttachmentSources(mid);
       setRows(items);
       setSelectedKeys([]);
-    } catch {
-      message.error(t('app.kuaizhizao.documentLineAttachments.materialSourcesLoadFailed'));
+    } catch (err: unknown) {
+      const detail =
+        formatApiErrorDetail(
+          (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail,
+        ) ||
+        (err instanceof Error ? err.message : '') ||
+        t('app.kuaizhizao.documentLineAttachments.materialSourcesLoadFailed');
+      setLoadError(detail);
       setRows([]);
+      message.error(t('app.kuaizhizao.documentLineAttachments.materialSourcesLoadFailed'));
     } finally {
       setLoading(false);
     }
@@ -74,6 +84,20 @@ export const MaterialAttachmentsPickerModal: React.FC<MaterialAttachmentsPickerM
         title: t('app.kuaizhizao.documentLineAttachments.colName'),
         dataIndex: 'name',
         ellipsis: true,
+        render: (name: string, row) => (
+          <Button
+            type="link"
+            size="small"
+            style={{ padding: 0, height: 'auto' }}
+            onClick={() => {
+              setPreviewUuid(row.fileUuid);
+              setPreviewName(row.name || name);
+              setPreviewOpen(true);
+            }}
+          >
+            {name || row.name || row.fileUuid}
+          </Button>
+        ),
       },
       {
         title: t('app.kuaizhizao.documentLineAttachments.colSource'),
@@ -152,6 +176,7 @@ export const MaterialAttachmentsPickerModal: React.FC<MaterialAttachmentsPickerM
                 <DocumentAttachmentsReadonly attachments={lineAttachments} variant="list" showEmpty />
               ) : (
                 <LineAttachmentsUpload
+                  variant="picture-card"
                   value={lineAttachments}
                   onChange={onLineAttachmentsChange}
                   category={uploadCategory!}
@@ -169,6 +194,17 @@ export const MaterialAttachmentsPickerModal: React.FC<MaterialAttachmentsPickerM
               {t('app.kuaizhizao.documentLineAttachments.selectMaterialFirst')}
             </Typography.Text>
           )
+        ) : loadError ? (
+          <Result
+            status="error"
+            title={t('app.kuaizhizao.documentLineAttachments.materialSourcesLoadFailed')}
+            subTitle={loadError}
+            extra={
+              <Button type="primary" onClick={() => void load()}>
+                {t('common.retry')}
+              </Button>
+            }
+          />
         ) : (
           <>
             <Typography.Text strong>

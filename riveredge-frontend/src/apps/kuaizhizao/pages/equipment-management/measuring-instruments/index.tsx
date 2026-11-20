@@ -10,7 +10,8 @@ import {
   ProFormTextArea,
   ProFormSwitch,
 } from '@ant-design/pro-components';
-import { App, Col, Row } from 'antd';
+import { App, Button, Col, Row } from 'antd';
+import { QrcodeOutlined } from '@ant-design/icons';
 import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import {
   buildFactoryImportTemplate,
@@ -59,6 +60,7 @@ import {
   upsertLedgerImportItem,
 } from '../../../utils/ledgerImportUpsert';
 import { buildMeasuringInstrumentDetailPath } from './measuringInstrumentPaths';
+import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 
 interface MeasuringInstrument {
   id?: number;
@@ -77,6 +79,7 @@ interface MeasuringInstrument {
   status?: string;
   is_active?: boolean;
   description?: string;
+  qr_bind_code?: string | null;
 }
 
 const P = 'app.kuaizhizao.measuringInstrument';
@@ -87,12 +90,14 @@ const MeasuringInstrumentsPage: React.FC = () => {
   const location = useLocation();
   const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions('kuaizhizao:equipment-management-equipment');
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [current, setCurrent] = useState<MeasuringInstrument | null>(null);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>();
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const createButtonLabel = useMemo(
     () => withSingleNewShortcutHint(t(`${P}.create`)),
@@ -202,6 +207,7 @@ const MeasuringInstrumentsPage: React.FC = () => {
         status: detail.status,
         is_active: detail.is_active,
         description: detail.description,
+        qr_bind_code: detail.qr_bind_code ?? undefined,
         certificate_attachments: mapAttachmentsToUploadList(detail.attachments),
       });
       setModalVisible(true);
@@ -239,15 +245,36 @@ const MeasuringInstrumentsPage: React.FC = () => {
         await equipmentApi.delete(String(uuid));
       }
       messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+      setSelectedRowKeys([]);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error?.message || t('common.deleteFailed'));
     }
   };
 
+  const handleBatchPrintEquipmentCards = useCallback(() => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning(t('app.kuaizhizao.equipment.selectEquipmentForQrcode'));
+      return;
+    }
+    const uuids = selectedRowKeys.map((key) => String(key)).filter(Boolean);
+    if (uuids.length === 0) {
+      messageApi.error(t('app.kuaizhizao.equipment.getSelectedFailed'));
+      return;
+    }
+    openPrint({
+      documentType: 'equipment_card',
+      documentId: uuids.length,
+      printApiPath: '/apps/kuaizhizao/equipment/print-cards',
+      printApiParams: { uuids },
+      pdfDownloadFilename: 'equipment-cards.pdf',
+    });
+  }, [messageApi, openPrint, selectedRowKeys, t]);
+
   const handleSubmit = async (values: Record<string, any>) => {
     const {
       certificate_attachments: certAttachments,
+      qr_bind_code: qrBindRaw,
       ...rest
     } = values;
     const lastCalibrationDate = toApiDateString(rest.last_calibration_date) ?? null;
@@ -263,6 +290,7 @@ const MeasuringInstrumentsPage: React.FC = () => {
       needs_calibration: true,
       last_calibration_date: lastCalibrationDate,
       next_calibration_date: nextCalibrationDate,
+      qr_bind_code: typeof qrBindRaw === 'string' ? qrBindRaw.trim() || null : null,
       attachments: normalizeDocumentAttachments(certAttachments),
     };
     try {
@@ -486,6 +514,16 @@ const MeasuringInstrumentsPage: React.FC = () => {
     [activeStatusValueEnum, handleDetail, handleDelete, handleEdit, perms, t],
   );
 
+  const equipmentCardToolbar = useMemo(
+    () =>
+      perms.canPrint ? (
+        <Button key="equipment-card-qr" icon={<QrcodeOutlined />} onClick={handleBatchPrintEquipmentCards}>
+          {t('app.kuaizhizao.equipment.printEquipmentCards')}
+        </Button>
+      ) : null,
+    [handleBatchPrintEquipmentCards, perms.canPrint, t],
+  );
+
   return (
     <>
       <ListPageTemplate>
@@ -494,11 +532,13 @@ const MeasuringInstrumentsPage: React.FC = () => {
           rowKey="uuid"
           columns={columns}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.measuring-instruments-v4"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.measuring-instruments-v5"
           permissionResource="kuaizhizao:equipment-management-equipment"
           pinnedTabsField={MASTER_DATA_PINNED_ACTIVE_FIELD}
           showAdvancedSearch
           skipFuzzyPinyinClientFilter
+          toolbar={{ actions: [equipmentCardToolbar] }}
+          onRowSelectionChange={setSelectedRowKeys}
           onRow={(record) => ({
             onClick: () => perms.canRead && handleDetail(record),
             style: { cursor: perms.canRead ? 'pointer' : undefined },
@@ -519,7 +559,7 @@ const MeasuringInstrumentsPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          enableRowSelection={perms.canDelete || perms.canUpdate || perms.canExport}
+          enableRowSelection={perms.canDelete || perms.canUpdate || perms.canExport || perms.canPrint}
           showCreateButton={perms.canCreate}
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
@@ -747,6 +787,30 @@ const MeasuringInstrumentsPage: React.FC = () => {
             />
           </Col>
           <Col span={24}>
+            <ProFormText
+              name="qr_bind_code"
+              label={t('app.kuaizhizao.equipment.fieldQrBindCode')}
+              placeholder={t('app.kuaizhizao.equipment.phQrBindCode')}
+              extra={t('app.kuaizhizao.equipment.fieldQrBindCodeHint')}
+              fieldProps={{
+                addonAfter: (
+                  <Button
+                    type="link"
+                    size="small"
+                    onClick={() => {
+                      const code = formRef.current?.getFieldValue?.('code');
+                      if (code) {
+                        formRef.current?.setFieldsValue?.({ qr_bind_code: String(code) });
+                      }
+                    }}
+                  >
+                    {t('app.kuaizhizao.equipment.fillQrBindFromCode')}
+                  </Button>
+                ),
+              }}
+            />
+          </Col>
+          <Col span={24}>
             <DocumentAttachmentsField
               name="certificate_attachments"
               label={t(`${P}.fieldCertificate`)}
@@ -762,6 +826,8 @@ const MeasuringInstrumentsPage: React.FC = () => {
           </Col>
         </Row>
       </FormModalTemplate>
+
+      {PrintModal}
     </>
   );
 };

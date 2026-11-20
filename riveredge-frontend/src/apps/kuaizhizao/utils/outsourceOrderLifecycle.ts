@@ -51,12 +51,102 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
     else if (idx === curIdx) st = 'active';
     return { key: s.key, label: s.label, status: st };
   });
+  const hasReceipt = Boolean(record?.purchase_receipt_id);
+  const outQty = Number(record?.outsource_quantity ?? 0);
+  const recvQty = Number(record?.received_quantity ?? 0);
+  const receiptOpen = !hasReceipt || (outQty > 0 && recvQty < outQty);
+  let next_step_suggestions: string[] = [];
+  if (stageName === '草稿') {
+    next_step_suggestions = ['下达'];
+  } else if (stageName === '已下达') {
+    next_step_suggestions = [];
+    if (!hasReceipt && recvQty <= 0 && !record?.actual_start_date) {
+      next_step_suggestions.push('撤回下达');
+    }
+    if (receiptOpen) next_step_suggestions.push('委外入库');
+    next_step_suggestions.push('工序发料');
+  } else if (stageName === '执行中') {
+    next_step_suggestions = [];
+    if (receiptOpen) next_step_suggestions.push('委外入库');
+    next_step_suggestions.push('工序发料');
+    if (outQty > 0 && recvQty < outQty) next_step_suggestions.push('登记收货');
+    next_step_suggestions.push('完成');
+  } else if (stageName === '已完成') {
+    next_step_suggestions = ['委外结算'];
+  }
+
   return {
     current_stage_key: key,
     current_stage_name: stageName,
     status: isException ? 'exception' : stageName === '已完成' ? 'success' : stageName === '执行中' ? 'active' : 'normal',
     main_stages: mainStages,
-    next_step_suggestions: stageName === '草稿' ? ['下达'] : stageName === '执行中' ? ['收货', '完成'] : [],
+    next_step_suggestions,
+  };
+}
+
+export type OutsourceOrderProgressFlags = {
+  canRelease: boolean;
+  canRevokeRelease: boolean;
+  canStart: boolean;
+  canGoInbound: boolean;
+  canOpenInboundDoc: boolean;
+  canRegisterReceipt: boolean;
+  canComplete: boolean;
+  canSettlement: boolean;
+};
+
+export function isOutsourceOrderDraftEditable(status: string | undefined): boolean {
+  const s = norm(status);
+  return s === 'draft' || s === '草稿';
+}
+
+type OutsourceOrderIssueCapability = {
+  push_outsource_issue?: { allowed?: boolean; reason?: string };
+};
+
+function resolveProcessIssueAllowed(record: Record<string, unknown>): boolean {
+  const caps = record?.capabilities as OutsourceOrderIssueCapability | undefined;
+  const fromApi = caps?.push_outsource_issue;
+  if (fromApi && typeof fromApi.allowed === 'boolean') {
+    return fromApi.allowed;
+  }
+  const status = norm(record?.status as string);
+  if (status === 'completed' || status === 'cancelled' || status === '已完成' || status === '已取消') {
+    return false;
+  }
+  return (
+    status === 'released'
+    || status === '已下达'
+    || status === 'in_progress'
+    || status === '执行中'
+  );
+}
+
+export function getOutsourceOrderProgressFlags(
+  record: Record<string, unknown> | null | undefined,
+): OutsourceOrderProgressFlags {
+  const status = norm(record?.status as string);
+  const outQty = Number(record?.outsource_quantity ?? 0);
+  const recvQty = Number(record?.received_quantity ?? 0);
+  const terminal = status === 'completed' || status === 'cancelled' || status === '已完成' || status === '已取消';
+  const hasReceipt = Boolean(record?.purchase_receipt_id);
+  const isReleased = status === 'released' || status === '已下达';
+  const canRevokeRelease =
+    isReleased && !hasReceipt && recvQty <= 0 && !record?.actual_start_date;
+  const base = record ?? {};
+  return {
+    canRelease: status === 'draft' || status === '草稿',
+    canRevokeRelease,
+    canStart: !terminal && resolveProcessIssueAllowed(base),
+    canGoInbound: !terminal && !hasReceipt && status !== 'draft' && status !== '草稿',
+    canOpenInboundDoc: !terminal && hasReceipt,
+    canRegisterReceipt:
+      (status === 'released' || status === '已下达' || status === 'in_progress' || status === '执行中') &&
+      outQty > 0 &&
+      recvQty < outQty,
+    canComplete:
+      (status === 'in_progress' || status === '执行中') && outQty > 0 && recvQty >= outQty,
+    canSettlement: status === 'completed' || status === '已完成',
   };
 }
 

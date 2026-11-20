@@ -23,7 +23,13 @@ import { useKuaizhizaoPrintModal } from '../../../../hooks/useKuaizhizaoPrintMod
 import { getSalesForecastLifecycle } from '../../../../utils/salesForecastLifecycle';
 import type { SalesForecast } from '../../../../services/sales-forecast';
 import { alignDescriptionColumns } from '../../shared/documentFieldAlignment';
+import { buildDocumentLineAuxQuantityDetailColumn } from '../../../../../../components/quantity-with-unit';
 import { formatDateBySiteSetting } from '../../../../../../utils/format';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../../components/custom-fields';
+import type { CustomField } from '../../../../../../services/customField';
 
 const SALES_FORECAST_RESOURCE = 'kuaizhizao:sales-forecast';
 
@@ -66,6 +72,8 @@ export type SalesForecastDetailDrawerProps = {
   showReadonlyActions?: boolean;
   onWorkflowSuccess?: () => void;
   renderBriefActions?: (doc: TraceBriefDocument) => React.ReactNode;
+  customFields?: CustomField[];
+  customFieldValues?: Record<string, any>;
 };
 
 export const SalesForecastDetailReadonlyExtra: React.FC<{
@@ -114,6 +122,8 @@ export const SalesForecastDetailDrawer: React.FC<SalesForecastDetailDrawerProps>
   showReadonlyActions = true,
   onWorkflowSuccess,
   renderBriefActions,
+  customFields,
+  customFieldValues,
 }) => {
   const { t } = useTranslation();
   const contentReady = Boolean(forecast);
@@ -204,7 +214,17 @@ export const SalesForecastDetailDrawer: React.FC<SalesForecastDetailDrawerProps>
       collaborationAuditRecord={contentReady ? effective : null}
       basic={
         contentReady ? (
-          <Descriptions column={3} size="small" items={timeconfigBasicItems} />
+          <>
+            <Descriptions column={3} size="small" items={timeconfigBasicItems} />
+            {hasCustomFieldsDetailContent(customFields ?? [], customFieldValues ?? {}) ? (
+              <div style={{ marginTop: 16 }}>
+                <CustomFieldsDetailSection
+                  customFields={customFields!}
+                  customFieldValues={customFieldValues!}
+                />
+              </div>
+            ) : null}
+          </>
         ) : showError ? null : (
           <div style={{ minHeight: 80 }} />
         )
@@ -227,7 +247,7 @@ export const SalesForecastDetailDrawer: React.FC<SalesForecastDetailDrawerProps>
               size="small"
               rowKey="id"
               tableLayout="fixed"
-              style={{ minWidth: 760 }}
+              style={{ minWidth: 880 }}
               dataSource={effective.items || []}
               pagination={false}
               columns={[
@@ -244,6 +264,7 @@ export const SalesForecastDetailDrawer: React.FC<SalesForecastDetailDrawerProps>
                   width: 120,
                   align: 'right',
                 },
+                buildDocumentLineAuxQuantityDetailColumn({ t, width: 120 }),
                 {
                   title: t('app.kuaizhizao.salesForecast.forecastDate'),
                   dataIndex: 'forecast_date',

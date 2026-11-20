@@ -215,17 +215,6 @@ const SkillsPage: React.FC = () => {
             <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
           );
         }
-        if (skillPerms.canDelete) {
-          parts.push(
-            <Popconfirm
-              key="delete"
-              title={t('app.kuaizhizao.performance.skills.messages.deleteConfirm')}
-              onConfirm={() => handleDelete(record)}
-            >
-              <Button {...rowActionKind('delete')} />
-            </Popconfirm>,
-          );
-        }
         return parts;
       },
     },
@@ -239,7 +228,7 @@ const SkillsPage: React.FC = () => {
           headerTitle={t('app.kuaizhizao.performance.skills.pageTitle')}
           actionRef={actionRef}
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.performance.skills.v3"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.skills.v4"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.skills')}
           request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
@@ -272,7 +261,7 @@ const SkillsPage: React.FC = () => {
           showDeleteButton={skillPerms.canDelete}
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('common.confirmBatchDeleteContent', { count })}
-          deleteButtonText={t('common.batchDelete')}
+          deleteButtonText={t('common.delete')}
         />
       </ListPageTemplate>
       <PerformanceConfigDetailDrawer

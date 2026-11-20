@@ -201,33 +201,13 @@ export const ShiftRosterTempAdjustmentPanel: React.FC<ShiftRosterTempAdjustmentP
                     {t('common.edit')}
                   </Button>
                 ) : null}
-                {rosterPerms.canDelete ? (
-                  <Popconfirm
-                    key="delete"
-                    {...rowActionKind('delete')}
-                    title={t('app.kuaizhizao.performance.workCalendar.messages.deleteConfirm')}
-                    onConfirm={async () => {
-                      try {
-                        await rosterTimeAdjustmentApi.delete(row.uuid);
-                        messageApi.success(t('common.deleteSuccess'));
-                        actionRef.current?.reload();
-                      } catch (e: any) {
-                        messageApi.error(e?.message || t('common.deleteFailed'));
-                      }
-                    }}
-                  >
-                    <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                      {t('common.delete')}
-                    </Button>
-                  </Popconfirm>
-                ) : null}
               </Space>
             ),
           },
         ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [messageApi, rosterPerms.canDelete, rosterPerms.canUpdate, t],
+    [rosterPerms.canUpdate, t],
   );
 
   const listEmployeeIds =
@@ -240,7 +220,7 @@ export const ShiftRosterTempAdjustmentPanel: React.FC<ShiftRosterTempAdjustmentP
       </Typography.Paragraph>
       <UniTable<RosterTimeAdjustment>
         headerTitle={t('app.kuaizhizao.performance.rosters.tempAdjust.tableTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.performance.shift-rosters.temp-adjust.v2"
+        columnPersistenceId="apps.kuaizhizao.pages.performance.shift-rosters.temp-adjust.v3"
         permissionResource={ROSTER_RESOURCE}
         actionRef={actionRef}
         columns={columns}
@@ -274,6 +254,7 @@ export const ShiftRosterTempAdjustmentPanel: React.FC<ShiftRosterTempAdjustmentP
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}
         enableRowSelection={rosterPerms.canDelete}
         showDeleteButton={rosterPerms.canDelete}
+        deleteButtonText={t('common.delete')}
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => rosterTimeAdjustmentApi.delete(String(key))));
           messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));

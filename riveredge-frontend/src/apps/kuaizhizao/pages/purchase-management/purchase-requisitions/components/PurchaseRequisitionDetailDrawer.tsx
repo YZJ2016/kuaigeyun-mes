@@ -28,6 +28,7 @@ import {
   DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY,
 } from '../../../../components/documentLineAttachmentsColumns';
 import { SourceDocumentCode } from '../../../../../../components/linked-document-code/SourceDocumentCode';
+import { CustomFieldsDetailSection, hasCustomFieldsDetailContent } from '../../../../../../components/custom-fields';
 import { WarehouseTraceBriefPrimaryActions } from '../../../warehouse-management/WarehouseTraceBriefFooter';
 import { getPurchaseRequisitionLifecycle } from '../../../../utils/purchaseRequisitionLifecycle';
 import { formatPurchaseRequisitionSourceType } from '../../../../utils/purchaseRequisitionSourceType';
@@ -35,10 +36,15 @@ import {
   type PurchaseRequisition,
   type PurchaseRequisitionItem,
 } from '../../../../services/purchase-requisition';
-import { alignDescriptionColumns } from '../../../sales-management/shared/documentFieldAlignment';
+import {
+  alignDescriptionColumns,
+  GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK,
+} from '../../../sales-management/shared/documentFieldAlignment';
+import { resolveSystemDictionaryItemLabel } from '../../../../../../utils/systemDictionaryI18n';
 import { formatDateBySiteSetting, formatCurrencyPrice } from '../../../../../../utils/format';
 import { useAuditRequired } from '../../../../../../hooks/useAuditRequired';
 import type { AuditPhaseRecord } from '../../../../../../components/uni-audit/AuditPhaseBadge';
+import type { CustomField } from '../../../../../../services/customField';
 
 const PURCHASE_REQUISITION_RESOURCE = 'kuaizhizao:purchase-requisition';
 const PLACEHOLDER: PurchaseRequisition = { id: 0 };
@@ -69,6 +75,8 @@ export type PurchaseRequisitionDetailDrawerProps = {
   extra?: React.ReactNode;
   showReadonlyActions?: boolean;
   onWorkflowSuccess?: () => void;
+  customFields?: CustomField[];
+  customFieldValues?: Record<string, unknown>;
 };
 
 export const PurchaseRequisitionDetailReadonlyExtra: React.FC<{
@@ -103,6 +111,8 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
   extra,
   showReadonlyActions = true,
   onWorkflowSuccess,
+  customFields = [],
+  customFieldValues = {},
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -161,6 +171,16 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
             </Space>
           ),
         },
+        {
+          title: t('app.kuaizhizao.purchaseRequisition.form.orderType'),
+          dataIndex: 'order_type',
+          render: (_, record) =>
+            resolveSystemDictionaryItemLabel(
+              'ORDER_TYPE',
+              { value: record.order_type ?? '', label: record.order_type ?? '', is_system_managed: true },
+              t,
+            ) || '—',
+        },
         { title: t('app.kuaizhizao.purchaseRequisition.col.name'), dataIndex: 'requisition_name' },
         {
           title: t('app.kuaizhizao.purchaseRequisition.col.sourceType'),
@@ -189,7 +209,7 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
         { title: t('common.remark'), dataIndex: 'notes', span: 3 },
         { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
         { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
-      ] as ProDescriptionsItemProps<PurchaseRequisition>[]),
+      ] as ProDescriptionsItemProps<PurchaseRequisition>[], GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK),
     [t, handleCopy],
   );
   const basicItems = useDetailDrawerDescriptionItems(
@@ -249,11 +269,21 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
       collaborationAuditRecord={contentReady ? (effective as AuditPhaseRecord) : null}
       basic={
         contentReady ? (
-          <Descriptions
-            column={3}
-            size="small"
-            items={basicItems}
-          />
+          <>
+            <Descriptions
+              column={3}
+              size="small"
+              items={basicItems}
+            />
+            {hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
+              <div style={{ marginTop: 16 }}>
+                <CustomFieldsDetailSection
+                  customFields={customFields}
+                  customFieldValues={customFieldValues}
+                />
+              </div>
+            ) : null}
+          </>
         ) : showError ? null : (
           <div style={{ minHeight: 80 }} />
         )

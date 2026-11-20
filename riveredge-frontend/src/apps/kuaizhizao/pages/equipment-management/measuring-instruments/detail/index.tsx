@@ -1,5 +1,6 @@
 /**
- * 计量器具详情：基本信息 + 校准记录（无点检/巡检/报修/保养）
+ * 计量器具详情：基本信息 + 设备二维码/设备卡 + 点检方案绑定 + 校准记录
+ * 与设备台账共用 Equipment 行（EQ 码）；企微扫码点检/报修走同一解析路径。
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -17,6 +18,7 @@ import {
   Form,
   Input,
   Modal,
+  QRCode,
   Select,
   Space,
   Spin,
@@ -24,15 +26,17 @@ import {
   Typography,
   Upload,
 } from 'antd';
-import { ArrowLeftOutlined, EditOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, EditOutlined, PlusOutlined, QrcodeOutlined, UploadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { equipmentApi } from '../../../../services/equipment';
+import { inspectionSchemesApi, schemeBindingsApi } from '../../../../services/equipmentOps';
 import {
   DOCUMENT_DETAIL_PAGE_HEADER_STYLE,
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
   MultiTabListPageTemplate,
   MODAL_CONFIG,
 } from '../../../../../../components/layout-templates';
+import { QRCodeGenerator } from '../../../../../../components/qrcode';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../../components/document-tracking-panel';
 import { ActionConfirmPopconfirm } from '../../../../../../components/action-confirm';
 import { rowActionKind } from '../../../../../../components/uni-action';
@@ -44,7 +48,9 @@ import { DocumentAttachmentsReadonly } from '../../../../components/DocumentAtta
 import { uploadMultipleFiles } from '../../../../../../services/file';
 import { FutureDatePicker } from '../../../../../../utils/futureDatePickerShortcuts';
 import { useSubmitShortcut } from '../../../../../../hooks/useSubmitShortcut';
+import { useKuaizhizaoPrintModal } from '../../../../hooks/useKuaizhizaoPrintModal';
 import { useLeaveFormTab, navigateClosingTab, uniTabKey } from '../../../../../../components/uni-tabs/navigateClosingTab';
+import { ROUTES } from '../../../../constants/routes';
 import {
   KUAIZHIZAO_MEASURING_INSTRUMENT_LIST_PATH,
   buildMeasuringInstrumentDetailPath,
@@ -71,10 +77,16 @@ interface MeasuringInstrumentDetail {
   status?: string;
   is_active?: boolean;
   description?: string;
+  qr_bind_code?: string | null;
   created_at?: string;
   updated_at?: string;
   created_by_name?: string;
   updated_by_name?: string;
+}
+
+function buildSpotCheckCreatePath(equipmentId: number): string {
+  const q = new URLSearchParams({ create: '1', equipment_id: String(equipmentId) });
+  return `${ROUTES.EQUIPMENT_SPOT_CHECKS}?${q.toString()}`;
 }
 
 interface CalibrationRecord {
@@ -98,6 +110,9 @@ const MeasuringInstrumentDetailPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions('kuaizhizao:equipment-management-equipment');
   const calibPerms = useResourcePermissions('kuaizhizao:measuring-instrument-calibration');
+  const schemePerms = useResourcePermissions('kuaizhizao:equipment-inspection-scheme');
+  const spotCheckPerms = useResourcePermissions('kuaizhizao:equipment-spot-check');
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
 
   const activeTab = resolveMeasuringInstrumentDetailTabKey(searchParams.get('tab'));
   const [loading, setLoading] = useState(true);
@@ -108,10 +123,17 @@ const MeasuringInstrumentDetailPage: React.FC = () => {
   const [editingCalib, setEditingCalib] = useState<CalibrationRecord | null>(null);
   const [calibForm] = Form.useForm();
   const [trackingRefreshKey, setTrackingRefreshKey] = useState(0);
+  const [boundSpotSchemeIds, setBoundSpotSchemeIds] = useState<number[]>([]);
+  const [spotSchemeSelectOptions, setSpotSchemeSelectOptions] = useState<
+    { label: string; value: number }[]
+  >([]);
+  const [schemeBindingsSaving, setSchemeBindingsSaving] = useState(false);
 
   const canCreateCalib = calibPerms.canCreate || perms.canUpdate;
   const canUpdateCalib = calibPerms.canUpdate;
   const canDeleteCalib = calibPerms.canDelete;
+  const canBindSpotSchemes = schemePerms.canUpdate;
+  const canCreateSpotCheck = spotCheckPerms.canCreate;
 
   const tracking = useDocumentTracking(detail?.id ? 'equipment' : undefined, detail?.id, trackingRefreshKey);
 
@@ -127,6 +149,20 @@ const MeasuringInstrumentDetailPage: React.FC = () => {
     }
   }, []);
 
+  const loadSpotSchemeBindings = useCallback(async (equipmentId: number) => {
+    const [spotBindings, spotSchemesRes] = await Promise.all([
+      schemeBindingsApi.list({ equipment_id: equipmentId, scheme_type: 'spot_check' }),
+      inspectionSchemesApi.list({ limit: 1000, is_active: true }),
+    ]);
+    setBoundSpotSchemeIds((spotBindings ?? []).map((b: { scheme_id: number }) => b.scheme_id));
+    setSpotSchemeSelectOptions(
+      (spotSchemesRes.items ?? []).map((s: { id: number; code: string; name: string }) => ({
+        label: `${s.code} - ${s.name}`,
+        value: s.id,
+      })),
+    );
+  }, []);
+
   const loadPage = useCallback(async () => {
     if (!uuid) return;
     setLoading(true);
@@ -135,12 +171,18 @@ const MeasuringInstrumentDetailPage: React.FC = () => {
       setDetail(loaded);
       setTrackingRefreshKey((k) => k + 1);
       await loadCalibrations(uuid);
+      if (loaded?.id != null) {
+        await loadSpotSchemeBindings(loaded.id);
+      } else {
+        setBoundSpotSchemeIds([]);
+        setSpotSchemeSelectOptions([]);
+      }
     } catch {
       messageApi.error(t(`${P}.loadFailed`));
     } finally {
       setLoading(false);
     }
-  }, [loadCalibrations, messageApi, t, uuid]);
+  }, [loadCalibrations, loadSpotSchemeBindings, messageApi, t, uuid]);
 
   useEffect(() => {
     void loadPage();
@@ -283,11 +325,109 @@ const MeasuringInstrumentDetailPage: React.FC = () => {
         children: (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <Card size="small" title={t('app.uniDetail.sectionBasic')}>
-              <ProDescriptions<MeasuringInstrumentDetail>
-                dataSource={detail}
-                column={3}
-                columns={basicColumns}
+              <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <ProDescriptions<MeasuringInstrumentDetail>
+                    dataSource={detail}
+                    column={3}
+                    columns={basicColumns}
+                  />
+                </div>
+                {detail.uuid ? (
+                  <div
+                    style={{
+                      flex: '0 0 168px',
+                      width: 168,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      {detail.qr_bind_code
+                        ? t('app.kuaizhizao.equipment.qrcodeBindCardTitle')
+                        : t('app.kuaizhizao.equipment.qrcodeCardTitle')}
+                    </Typography.Text>
+                    {detail.qr_bind_code ? (
+                      <>
+                        <QRCode value={String(detail.qr_bind_code)} size={148} errorLevel="M" />
+                        <Typography.Text
+                          type="secondary"
+                          copyable={{ text: String(detail.qr_bind_code) }}
+                          style={{ fontSize: 12, maxWidth: 160, textAlign: 'center' }}
+                        >
+                          {detail.qr_bind_code}
+                        </Typography.Text>
+                      </>
+                    ) : (
+                      <QRCodeGenerator
+                        qrcodeType="EQ"
+                        data={{
+                          equipment_uuid: detail.uuid,
+                          equipment_code: detail.code || '',
+                          equipment_name: detail.name || '',
+                        }}
+                        autoGenerate
+                        size={6}
+                        noCard
+                      />
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            </Card>
+            <Card size="small" title={t('app.kuaizhizao.equipmentOps.schemeBindings.title')}>
+              <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+                {t(`${P}.spotCheckBindingHint`)}
+              </Typography.Paragraph>
+              <Typography.Text type="secondary">
+                {t('app.kuaizhizao.equipmentOps.schemeBindings.spotCheck')}
+              </Typography.Text>
+              <Select
+                mode="multiple"
+                style={{ width: '100%', marginTop: 4 }}
+                placeholder={t('app.kuaizhizao.equipmentOps.schemeBindings.selectSchemes')}
+                options={spotSchemeSelectOptions}
+                value={boundSpotSchemeIds}
+                onChange={setBoundSpotSchemeIds}
+                disabled={!canBindSpotSchemes || detail.id == null}
               />
+              <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {canBindSpotSchemes ? (
+                  <Button
+                    type="primary"
+                    loading={schemeBindingsSaving}
+                    disabled={detail.id == null}
+                    onClick={async () => {
+                      if (detail.id == null) return;
+                      setSchemeBindingsSaving(true);
+                      try {
+                        await schemeBindingsApi.bulkReplace({
+                          equipment_id: detail.id,
+                          scheme_type: 'spot_check',
+                          scheme_ids: boundSpotSchemeIds,
+                        });
+                        messageApi.success(
+                          t('app.kuaizhizao.equipmentOps.schemeBindings.saveSuccess'),
+                        );
+                      } catch (error: unknown) {
+                        const err = error as { message?: string };
+                        messageApi.error(err?.message || t('common.operationFailed'));
+                      } finally {
+                        setSchemeBindingsSaving(false);
+                      }
+                    }}
+                  >
+                    {t('common.save')}
+                  </Button>
+                ) : null}
+                {canCreateSpotCheck && detail.id != null ? (
+                  <Button onClick={() => navigate(buildSpotCheckCreatePath(detail.id!))}>
+                    {t(`${P}.goCreateSpotCheck`)}
+                  </Button>
+                ) : null}
+              </div>
             </Card>
             <Card size="small" title={t('app.uniDetail.sectionTimeline')}>
               {tracking.loading ? <Spin /> : null}
@@ -386,15 +526,22 @@ const MeasuringInstrumentDetailPage: React.FC = () => {
     ];
   }, [
     basicColumns,
+    boundSpotSchemeIds,
     calibLoading,
     calibrations,
+    canBindSpotSchemes,
     canCreateCalib,
+    canCreateSpotCheck,
     canDeleteCalib,
     canUpdateCalib,
     detail,
     handleDeleteCalibration,
     handleEditCalibration,
     handleOpenCalibrationModal,
+    messageApi,
+    navigate,
+    schemeBindingsSaving,
+    spotSchemeSelectOptions,
     t,
     tracking.data,
     tracking.error,
@@ -414,13 +561,28 @@ const MeasuringInstrumentDetailPage: React.FC = () => {
       <MultiTabListPageTemplate
         header={
           <div style={DOCUMENT_DETAIL_PAGE_HEADER_STYLE}>
-            <Space>
+            <Space wrap>
               <Button
                 icon={<ArrowLeftOutlined />}
                 onClick={() => navigateClosingTab(navigate, KUAIZHIZAO_MEASURING_INSTRUMENT_LIST_PATH)}
               >
                 {t('common.back')}
               </Button>
+              {perms.canPrint && detail.uuid ? (
+                <Button
+                  icon={<QrcodeOutlined />}
+                  onClick={() =>
+                    openPrint({
+                      documentType: 'equipment_card',
+                      documentId: detail.id ?? 1,
+                      printApiPath: `/apps/kuaizhizao/equipment/${detail.uuid}/print`,
+                      pdfDownloadFilename: `equipment-card-${detail.code || detail.uuid}.pdf`,
+                    })
+                  }
+                >
+                  {t('app.kuaizhizao.equipment.printEquipmentCards')}
+                </Button>
+              ) : null}
               {perms.canUpdate ? (
                 <Button
                   icon={<EditOutlined />}
@@ -510,6 +672,8 @@ const MeasuringInstrumentDetailPage: React.FC = () => {
           </Form.Item>
         </Form>
       </Modal>
+
+      {PrintModal}
     </>
   );
 };

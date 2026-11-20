@@ -22,6 +22,7 @@ import {
   ActionType,
   ProColumns,
   ProDescriptionsItemProps,
+  ProForm,
   ProFormText,
   ProFormSelect,
   ProFormDatePicker,
@@ -38,7 +39,6 @@ import {
   Modal,
   Descriptions,
   Typography,
-  Dropdown,
   Empty,
   Spin,
   Space,
@@ -47,8 +47,10 @@ import {
   theme as AntdTheme,
 } from 'antd';
 import { MarkerTag } from '../../../../../constants/statusBadges';
-import { EditOutlined, EyeOutlined, SendOutlined, StopOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { EditOutlined, EyeOutlined, SendOutlined, StopOutlined, CloseCircleOutlined, PrinterOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import {
   MaterialStackedCell,
   UniTableStackedPrimaryCell,
@@ -76,6 +78,13 @@ import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../.
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { searchReferenceDisplayAll, resolveReferenceDisplay, formatReferenceDisplayLabel } from '../../../../../utils/referenceDisplay';
 import dayjs from 'dayjs';
+import { useQuery } from '@tanstack/react-query';
+import { getBusinessConfig } from '../../../../../services/businessConfig';
+import {
+  buildPayableLedgerRecognitionOptions,
+  orgFinancePayableDefault,
+  resolvePayableRecognitionFromPartner,
+} from '../../../../../utils/documentLedgerRecognition';
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_OUTSOURCE_WORK_ORDER_FIELD_RESOURCE as OO } from '../../../constants/fieldPermissionResources';
 import { useTranslation } from 'react-i18next';
@@ -251,6 +260,19 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   const highlightOpenedRef = useRef(false);
   const { t } = useTranslation();
   const { quantity: quantityDecimals, price: priceDecimals } = useNumericPrecision();
+  const { data: financeBusinessConfig } = useQuery({
+    queryKey: ['businessConfigFinanceRecognition'],
+    queryFn: getBusinessConfig,
+    staleTime: 60_000,
+  });
+  const payableLedgerRecognitionOptions = useMemo(
+    () => buildPayableLedgerRecognitionOptions(t),
+    [t],
+  );
+  const orgPayableDefault = useMemo(
+    () => orgFinancePayableDefault(financeBusinessConfig),
+    [financeBusinessConfig],
+  );
   const pushToInboundAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_outsource_work_order');
   const pushToOutboundAction = resolveKuaizhizaoDocumentAction(t, 'outbound.pull_from_outsource_work_order');
   const { message: messageApi, modal } = App.useApp();
@@ -258,6 +280,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   const outsourceWorkOrderDetailDrawerZIndex = token.zIndexPopupBase;
   const actionRef = useRef<ActionType>(null);
   const tableRowsRef = useRef<OutsourceWorkOrder[]>([]);
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
+  const outsourceWorkOrderPerms = useResourcePermissions(OUTSOURCE_WORK_ORDER_HOST_RESOURCE);
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [statsVersion, setStatsVersion] = useState(0);
@@ -265,6 +289,16 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     { total: number; draft: number; inProgress: number } | undefined
   >({ total: 0, draft: 0, inProgress: 0 });
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const handlePrint = (record: OutsourceWorkOrder) => {
+    if (record.id == null) return;
+    openPrint({ documentType: 'outsource_work_order', documentId: record.id });
+  };
+
+  const canPrintRecord = (record: OutsourceWorkOrder) =>
+    Boolean(outsourceWorkOrderPerms.canPrint) &&
+    record.id != null &&
+    record.capabilities?.print?.allowed !== false;
 
 
   // 产品/供应商列表：仅供新建/编辑弹窗与高级搜索供应商下拉；按需加载，无 master-data 权限时不阻断列表
@@ -1438,6 +1472,23 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         </Button>,
       );
     }
+    if (canPrintRecord(record)) {
+      nodes.push(
+        <Button
+          {...rowActionKind('print')}
+          key="print"
+          type="link"
+          size="small"
+          icon={<PrinterOutlined />}
+          onClick={(e) => {
+            e.stopPropagation();
+            handlePrint(record);
+          }}
+        >
+          {t('components.uniAction.print')}
+        </Button>,
+      );
+    }
     return nodes;
   };
 
@@ -1883,8 +1934,16 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
             />,
           ]}
           showDeleteButton={true}
+          deleteButtonText={t('common.delete')}
           onDelete={handleDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.outsourceWorkOrder.confirmBatchDelete', { count })}
+
+          showPrintButton={outsourceWorkOrderPerms.canPrint}
+          printButtonText={t('components.uniAction.print')}
+          printButtonDisabled={selectedOwoForToolbar?.capabilities?.print?.allowed === false}
+          onPrint={() => {
+            if (selectedOwoForToolbar) handlePrint(selectedOwoForToolbar);
+          }}
         />
       </ListPageTemplate>
 
@@ -1958,7 +2017,25 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
             disabled: isEdit,
             optionFilterProp: 'label',
             style: { width: '100%' },
+            onChange: (value: number) => {
+              const sup = supplierList.find((s) => Number(s.id) === Number(value));
+              if (sup) {
+                formRef.current?.setFieldValue(
+                  'payable_recognition',
+                  resolvePayableRecognitionFromPartner(sup as Record<string, unknown>, orgPayableDefault),
+                );
+              }
+            },
           }}
+        />
+        <ProFormSelect
+          name="payable_recognition"
+          label={t('field.document.ledgerRecognition')}
+          colProps={{ span: 12 }}
+          options={payableLedgerRecognitionOptions}
+          initialValue={orgPayableDefault}
+          rules={[{ required: true, message: t('field.document.ledgerRecognitionRequired') }]}
+          fieldProps={{ style: { width: '100%' } }}
         />
         {selectedMaterialSourceInfo && (
           /* 裸 Col：避免 ProFormItem colProps 与栅格行错位导致左侧裁切 */
@@ -2131,6 +2208,11 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
               {workOrderDetail.capabilities?.close?.allowed === true ? (
                 <Button icon={<StopOutlined />} onClick={() => openCloseModal(workOrderDetail)}>
                   {t('app.kuaizhizao.outsourceWorkOrder.actionClose')}
+                </Button>
+              ) : null}
+              {canPrintRecord(workOrderDetail) ? (
+                <Button icon={<PrinterOutlined />} onClick={() => handlePrint(workOrderDetail)}>
+                  {t('components.uniAction.print')}
                 </Button>
               ) : null}
             </Space>
@@ -2329,6 +2411,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           placeholder={t('app.kuaizhizao.outsourceWorkOrder.closeReasonPlaceholder')}
         />
       </Modal>
+      {PrintModal}
     </>
   );
 };

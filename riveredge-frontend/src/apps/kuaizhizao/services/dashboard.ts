@@ -105,7 +105,12 @@ export const mesDashboardService = {
   },
 
   /** 设备总览/厂区看板指标与滚动异常 */
-  getEquipmentBoard: async (plantId?: number, alertLimit = 30, visitMode = false) => {
+  getEquipmentBoard: async (
+    plantId?: number,
+    alertLimit = 30,
+    visitMode = false,
+    statusRowLimit = 80,
+  ) => {
     return apiRequest<{
       plant: { id: number; uuid: string; code: string; name: string } | null;
       metrics: {
@@ -128,6 +133,19 @@ export const mesDashboardService = {
         reason?: string;
       }[];
       status_breakdown: { status: string; count: number }[];
+      status_rows: {
+        equipment_id: number;
+        code: string;
+        name: string;
+        status: string;
+        is_online: boolean;
+        runtime_hours?: number | null;
+        /** 产量米数（状态监控 other_parameters / 台账 technical_parameters） */
+        production_meters?: number | null;
+        /** 规格，如 Φ0.45mm */
+        specification?: string | null;
+        monitored_at?: string | null;
+      }[];
       alerts: {
         kind: string;
         title: string;
@@ -146,6 +164,7 @@ export const mesDashboardService = {
       params: {
         plant_id: plantId,
         alert_limit: alertLimit,
+        status_row_limit: statusRowLimit,
         visit_mode: visitMode,
       },
     });
@@ -207,6 +226,27 @@ export const mesDashboardService = {
     );
   },
 
+  getEquipmentTodayTasks: async (limit = 50) => {
+    return apiRequest<{
+      items: Array<{
+        id: string;
+        kind: string;
+        priority: string;
+        title: string;
+        description?: string | null;
+        link?: string | null;
+        status: string;
+        due_date?: string | null;
+        created_at: string;
+      }>;
+      total: number;
+      task_date?: string;
+    }>('/apps/kuaizhizao/dashboard/equipment-today-tasks', {
+      method: 'GET',
+      params: { limit },
+    });
+  },
+
   getPurchaseTrend: async () => {
     return apiRequest<{ items: { date: string; amount: number; quantity: number }[] }>(
       '/apps/kuaizhizao/dashboard/purchase-trend',
@@ -221,10 +261,16 @@ export const mesDashboardService = {
     );
   },
 
-  getEquipmentTrend: async () => {
+  getEquipmentTrend: async (dateStart?: string, dateEnd?: string) => {
     return apiRequest<{ items: { date: string; count: number }[] }>(
       '/apps/kuaizhizao/dashboard/equipment-trend',
-      { method: 'GET' },
+      {
+        method: 'GET',
+        params: {
+          date_start: dateStart,
+          date_end: dateEnd,
+        },
+      },
     );
   },
 

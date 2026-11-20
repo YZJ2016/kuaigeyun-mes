@@ -58,6 +58,8 @@ export interface VisualSchedulingMissingSetting {
   current?: unknown;
   suggested?: unknown;
   work_center_id?: number | null;
+  /** 产线模式：工单自制件，用于补齐候选过滤 */
+  product_id?: number | null;
 }
 
 export interface VisualSchedulingBoardScan {
@@ -441,6 +443,44 @@ export const outsourceOrderApi = {
       params: { purchase_receipt_id: purchaseReceiptId },
     });
   },
+
+  release: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-orders/${id}/release`, { method: 'POST' });
+  },
+
+  revokeRelease: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-orders/${id}/revoke-release`, { method: 'POST' });
+  },
+
+  start: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-orders/${id}/start`, { method: 'POST' });
+  },
+
+  issuePreview: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-orders/${id}/issue-preview`, { method: 'GET' });
+  },
+
+  processIssue: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-orders/${id}/process-issue`, { method: 'POST' });
+  },
+
+  issueBatch: async (id: string | number, data: Record<string, unknown>) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-orders/${id}/issue-batch`, { method: 'POST', data });
+  },
+
+  registerReceipt: async (
+    id: string,
+    data: { received_quantity: number; qualified_quantity: number; unqualified_quantity: number },
+  ) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-orders/${id}/register-receipt`, {
+      method: 'POST',
+      data,
+    });
+  },
+
+  complete: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-orders/${id}/complete`, { method: 'POST' });
+  },
 };
 
 // 财务协同相关接口
@@ -693,6 +733,10 @@ export const visualSchedulingApi = {
       planned_end_date: string;
     }>;
     operation_station_updates?: Array<{ operation_id: number; assigned_station_id: number }>;
+    operation_production_line_updates?: Array<{
+      operation_id: number;
+      assigned_production_line_id: number;
+    }>;
   }) => {
     return apiRequest<{ valid: boolean; conflicts: VisualSchedulingConflict[]; conflict_count: number }>(
       '/apps/kuaizhizao/scheduling/validate-adjustments',
@@ -712,16 +756,41 @@ export const visualSchedulingApi = {
       }>;
     }>('/apps/kuaizhizao/scheduling/rate-coverage', { method: 'POST', data: { items } });
   },
+  listStrategies: async () => {
+    return apiRequest<{
+      items: Array<{ code: string; name: string; description: string }>;
+    }>('/apps/kuaizhizao/scheduling/strategies', { method: 'GET' });
+  },
+  dueEstimate: async (workOrderIds: number[]) => {
+    return apiRequest<{
+      items: Array<{
+        work_order_id: number;
+        work_order_code?: string | null;
+        expected_date?: string | null;
+        committed_date?: string | null;
+        estimated_date?: string | null;
+        variance_days?: number | null;
+        status?: string | null;
+      }>;
+      generated_at?: string | null;
+    }>('/apps/kuaizhizao/scheduling/due-estimate', {
+      method: 'GET',
+      params: { work_order_ids: workOrderIds.join(',') },
+    });
+  },
   autoReschedule: async (data: {
     work_order_ids?: number[];
     scope?: 'selected' | 'overdue' | 'unscheduled' | 'local';
     plan_date?: string;
     local_window_hours?: number;
     resource_ids?: number[];
+    strategy?: 'due_date' | 'changeover_min' | 'load_balance' | string;
   }) => {
     return apiRequest<{
       proposal: {
         summary?: string | null;
+        strategy?: string | null;
+        strategy_name?: string | null;
         warnings: string[];
         reasons?: Array<{
           code: string;
@@ -729,6 +798,11 @@ export const visualSchedulingApi = {
           work_order_id?: number | null;
           operation_id?: number | null;
           changeover_hours?: number | null;
+        }>;
+        execution_log?: Array<{
+          step: string;
+          message: string;
+          elapsed_ms?: number | null;
         }>;
         unfreezed?: number[];
         work_order_adjustments: Array<{
@@ -744,6 +818,10 @@ export const visualSchedulingApi = {
         operation_station_adjustments: Array<{
           operation_id: number;
           assigned_station_id: number;
+        }>;
+        operation_production_line_adjustments?: Array<{
+          operation_id: number;
+          assigned_production_line_id: number;
         }>;
       };
     }>('/apps/kuaizhizao/scheduling/auto-reschedule', { method: 'POST', data });

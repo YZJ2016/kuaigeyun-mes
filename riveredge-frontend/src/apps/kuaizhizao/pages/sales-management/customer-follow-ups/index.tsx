@@ -58,7 +58,14 @@ import {
 import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
+
 const DICT_CODE = 'SALES_FOLLOW_UP_TYPE';
+const CUSTOMER_FOLLOW_UP_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_customer_follow_ups';
 
 function followUpPresetFromRecord(record: CustomerFollowUp): CustomerFollowUpPreset {
   const preset: CustomerFollowUpPreset = {
@@ -96,6 +103,17 @@ const CustomerFollowUpsPage: React.FC = () => {
   const [detailRecord, setDetailRecord] = useState<CustomerFollowUp | null>(null);
   const [recentLoading, setRecentLoading] = useState(false);
   const [recentItems, setRecentItems] = useState<CustomerFollowUp[]>([]);
+
+  const {
+    customFields: followUpListCustomFields,
+    generateCustomFieldColumns: generateFollowUpCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichFollowUpRecordsWithCustomFields,
+    customFieldValues: followUpDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadFollowUpFieldValuesForDetail,
+    resetDetailFieldValues: resetFollowUpDetailFieldValues,
+  } = useCustomFieldsForList<CustomerFollowUp>({
+    tableName: CUSTOMER_FOLLOW_UP_CUSTOM_FIELD_TABLE,
+  });
 
   const activityLabelMap = useMemo(() => {
     const m: Record<string, string> = {};
@@ -328,6 +346,7 @@ const CustomerFollowUpsPage: React.FC = () => {
       detailIdRef.current = id;
       setDetailRecord(row);
       setDetailDrawerVisible(true);
+      await loadFollowUpFieldValuesForDetail(id);
     } catch {
       message.error(t('app.kuaizhizao.customerFollowUp.loadFailed'));
     }
@@ -337,6 +356,7 @@ const CustomerFollowUpsPage: React.FC = () => {
     setDetailDrawerVisible(false);
     setDetailRecord(null);
     detailIdRef.current = null;
+    resetFollowUpDetailFieldValues();
   };
 
   const executeDelete = async (record: CustomerFollowUp, options?: { closeDrawer?: boolean }) => {
@@ -584,6 +604,7 @@ const CustomerFollowUpsPage: React.FC = () => {
       render: (_, row) => (String(row.created_by_name ?? '').trim() || '—'),
     },
     ...buildDocumentAuditColumns<CustomerFollowUp>(t),
+    ...generateFollowUpCustomFieldColumns(),
     {
       title: t('common.actions'),
       key: 'action',
@@ -594,9 +615,6 @@ const CustomerFollowUpsPage: React.FC = () => {
           <Button {...rowActionKind('read')} key="d" onClick={() => handleDetail(record.id)} />,
           <Button {...rowActionKind('update')} key="e" onClick={() => openEdit(record)} />,
           <Button {...rowActionAddFollowUpFromDocument('create')} key="nf" onClick={() => openCreateFromRow(record)} />,
-          <ActionConfirmPopconfirm title={t('app.kuaizhizao.customerFollowUp.deleteConfirm')} onConfirm={() => executeDelete(record)}>
-              <Button {...rowActionKind('delete')} key="del" onClick={(e) => e.stopPropagation()} />
-            </ActionConfirmPopconfirm>,
         ];
         return parts;
       },
@@ -662,6 +680,7 @@ const CustomerFollowUpsPage: React.FC = () => {
             </Button>,
           ]}
           showDeleteButton
+          deleteButtonText={t('common.delete')}
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('common.confirmBatchDeleteContent', { count })}
           request={async (params, sort, _filter, searchFormValues) => {
@@ -693,8 +712,9 @@ const CustomerFollowUpsPage: React.FC = () => {
                 pending_only: pendingOnlyFilter || undefined,
                 order_by: orderBy,
               });
+              const items = await enrichFollowUpRecordsWithCustomFields(res.items || []);
               return {
-                data: res.items || [],
+                data: items,
                 success: true,
                 total: res.total ?? 0,
               };
@@ -735,11 +755,21 @@ const CustomerFollowUpsPage: React.FC = () => {
         }
         basic={
           detailRecord ? (
-            <Descriptions
-              column={3}
-              size="small"
-              items={timeconfigBasicItems}
-            />
+            <>
+              <Descriptions
+                column={3}
+                size="small"
+                items={timeconfigBasicItems}
+              />
+              {hasCustomFieldsDetailContent(followUpListCustomFields, followUpDetailCustomFieldValues) ? (
+                <div style={{ marginTop: 16 }}>
+                  <CustomFieldsDetailSection
+                    customFields={followUpListCustomFields}
+                    customFieldValues={followUpDetailCustomFieldValues}
+                  />
+                </div>
+              ) : null}
+            </>
           ) : undefined
         }
         collaborationTitleSuffix={

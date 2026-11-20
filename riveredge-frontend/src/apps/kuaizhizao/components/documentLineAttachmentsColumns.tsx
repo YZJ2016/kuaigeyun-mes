@@ -32,9 +32,16 @@ export function buildDocumentLineAttachmentsFormColumn(
   return {
     title: t('app.kuaizhizao.documentLineAttachments.columnTitle'),
     dataIndex: 'attachments',
-    width: 168,
+    width: 208,
     render: (_: unknown, __: unknown, index: number) => (
-      <Form.Item noStyle shouldUpdate={(p, c) => p.items?.[index] !== c.items?.[index]}>
+      <Form.Item
+        noStyle
+        shouldUpdate={(p, c) => {
+          const pi = p.items?.[index];
+          const ci = c.items?.[index];
+          return pi !== ci || pi?.material_id !== ci?.material_id;
+        }}
+      >
         {({ getFieldValue }) => (
           <Form.Item name={[index, 'attachments']} style={{ margin: 0 }}>
             <DocumentLineAttachmentsCell

@@ -5,7 +5,10 @@
 
 export {
   DOCUMENT_LINE_MATERIALS_KEY,
+  DOCUMENT_LINE_MATERIAL_SPECS_KEY,
   DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  DOCUMENT_LINE_MATERIAL_SPECS_COLUMN_WIDTH_FLAGS,
   renderDocumentLineMaterialsPreview,
+  renderDocumentLineMaterialSpecsPreview,
   type DocumentLineMaterialPreviewItem,
 } from '../../../../../components/document-line-materials-preview';

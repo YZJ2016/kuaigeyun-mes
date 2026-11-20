@@ -15,6 +15,10 @@ export interface ReceiptNoticeCapabilities {
   notify?: ActionCapability;
   withdraw?: ActionCapability;
   print?: ActionCapability;
+  submit?: ActionCapability;
+  withdraw_submit?: ActionCapability;
+  approve?: ActionCapability;
+  revoke_approval?: ActionCapability;
 }
 
 export interface ReceiptNotice {

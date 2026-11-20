@@ -49,6 +49,7 @@ import {
 } from '../../../../../components/layout-templates';
 import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
+import { useDocumentFormCommitAndSubmitReview } from '../../../../../hooks/useDocumentFormCommitAndSubmitReview';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
@@ -154,6 +155,15 @@ const SalesOrderChangesPage: React.FC = () => {
   const isEditPage = editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0;
   const isFormPage = isCreatePage || isEditPage;
   const leaveSalesOrderChangeFormPage = useLeaveFormTab(SALES_ORDER_CHANGE_LIST_PATH);
+
+  const {
+    runAfterPersist: runSalesOrderChangeSaveAndAudit,
+    initiatorModal: salesOrderChangeInitiatorModal,
+  } = useDocumentFormCommitAndSubmitReview({
+    entityType: 'sales_order_change',
+    entityLabel: t('app.kuaizhizao.salesOrderChange.entityName'),
+    commit: submitSalesOrderChange,
+  });
   const formPageInitKeyRef = useRef<string | null>(null);
   const [formPageLoading, setFormPageLoading] = useState(false);
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
@@ -168,7 +178,7 @@ const SalesOrderChangesPage: React.FC = () => {
     invalidateMenuBadge();
     actionRef.current?.reload();
   }, [invalidateMenuBadge]);
-  const auditEnabled = useAuditRequired('sales_order_change', false);
+  const auditEnabled = useAuditRequired('kuaizhizao', 'sales-order-change');
   const changePerms = useResourcePermissions(SALES_ORDER_CHANGE_RESOURCE);
   const permDeniedTitle = t('common.noPermission');
 
@@ -439,7 +449,7 @@ const SalesOrderChangesPage: React.FC = () => {
 
   const pullFromSalesOrderQuery = useUniPullQuery<PullSalesOrderCandidate>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     scopeOptions: pullFromSalesOrderScopeOptions,
     defaultScope: 'pullable',
     isRowDisabled: (record) => !isPullSalesOrderSelectable(record),
@@ -460,18 +470,20 @@ const SalesOrderChangesPage: React.FC = () => {
       }
     },
     onConfirm: async (keys, rows) => {
-      const selectedId = Number(keys[0]);
-      const selected = rows[0];
-      if (!selectedId || selectedId <= 0) {
-        message.warning(t('app.kuaizhizao.salesOrderChange.selectSalesOrder'));
-        return;
-      }
-      if (selected && !isPullSalesOrderSelectable(selected)) {
+      const selectedIds = rows
+        .filter((row) => isPullSalesOrderSelectable(row))
+        .map((row) => Number(row.id))
+        .filter((id) => id > 0);
+      if (!selectedIds.length) {
         message.warning(t('app.kuaizhizao.salesOrderChange.selectSalesOrder'));
         return;
       }
       pullFromSalesOrderQuery.closeModal();
-      navigate(`${SALES_ORDER_CHANGE_CREATE_PATH}?source_order_id=${selectedId}`);
+      // 变更单按源销售订单整单创建；多选时逐张打开第一张，其余可再取
+      navigate(`${SALES_ORDER_CHANGE_CREATE_PATH}?source_order_id=${selectedIds[0]}`);
+      if (selectedIds.length > 1) {
+        message.info(t('app.kuaizhizao.salesOrderChange.pull.multiSelectedFirstOnly'));
+      }
     },
   });
 
@@ -597,11 +609,19 @@ const SalesOrderChangesPage: React.FC = () => {
   const confirmSubmit = async () => {
     const id = pendingSubmitId;
     if (!id) return;
-    await submitSalesOrderChange(id);
-    message.success(t('app.kuaizhizao.salesOrderChange.committed'));
+    try {
+      const { completed } = await runSalesOrderChangeSaveAndAudit(id);
+      if (!completed) {
+        return;
+      }
+    } catch (error: unknown) {
+      message.error(getApiErrorMessage(error, t('common.operationFailed')));
+      return;
+    }
     setImpactOpen(false);
     setPendingSubmitId(null);
     reloadTable();
+    leaveSalesOrderChangeFormPage();
     if (detail?.id === id) {
       setDetail(await getSalesOrderChange(id));
     }
@@ -1175,6 +1195,7 @@ const SalesOrderChangesPage: React.FC = () => {
             </ProForm>
           </Spin>
         </DocumentFormPageLayout>
+        {salesOrderChangeInitiatorModal}
         <OrderChangeImpactModal
           open={impactOpen}
           loading={impactLoading}

@@ -4,7 +4,8 @@
  * 展示全量工装校准记录，支持新建校准记录。
  */
 
-import React, { useRef, useState, useMemo, useCallback } from 'react';
+import React, { useRef, useState, useMemo, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Descriptions, Typography } from 'antd';
@@ -46,6 +47,10 @@ import {
 } from '../../../utils/equipmentListCore';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import {
+  clearOpsOpenCreateParams,
+  openCreateQuerySignature,
+} from '../shared/opsDocumentOpenCreate';
 
 const RESOURCE = 'kuaizhizao:tool-calibration';
 const P = 'app.kuaizhizao.toolCalibration';
@@ -76,7 +81,9 @@ const CALIBRATION_RESULT_LABEL_KEYS: Record<string, string> = {
 const ToolCalibrationsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const [searchParams, setSearchParams] = useSearchParams();
   const perms = useResourcePermissions(RESOURCE);
+  const openCreateHandledRef = useRef<string | null>(null);
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const { open: drawerVisible, loading: detailLoading, detail, openDetail, closeDetail } =
@@ -99,13 +106,39 @@ const ToolCalibrationsPage: React.FC = () => {
       .catch(() => {});
   }, []);
 
-  const handleCreate = () => {
+  const beginCreate = (prefillToolId?: number) => {
     setModalVisible(true);
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ calibration_date: dayjs(), result: '合格' });
+    formRef.current?.setFieldsValue({
+      calibration_date: dayjs(),
+      result: '合格',
+      ...(prefillToolId != null ? { tool_id: prefillToolId } : {}),
+    });
+  };
+
+  const handleCreate = () => {
+    beginCreate();
   };
 
   useNewShortcut(handleCreate);
+
+  useEffect(() => {
+    const sig = openCreateQuerySignature(searchParams);
+    if (!sig || !perms.canCreate) return;
+    if (openCreateHandledRef.current === sig) return;
+    void (async () => {
+      let toolId = Number(searchParams.get('tool_id'));
+      const toolUuid = searchParams.get('tool_uuid');
+      if (!Number.isFinite(toolId) && toolUuid) {
+        const tool = await toolApi.get(toolUuid);
+        toolId = Number(tool.id);
+      }
+      if (!Number.isFinite(toolId)) return;
+      openCreateHandledRef.current = sig;
+      setSearchParams(clearOpsOpenCreateParams(searchParams), { replace: true });
+      beginCreate(toolId);
+    })();
+  }, [searchParams, perms.canCreate, setSearchParams]);
 
   const handleDetail = useCallback(
     (record: ToolCalibration) => {

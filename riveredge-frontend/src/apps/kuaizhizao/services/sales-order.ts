@@ -64,11 +64,22 @@ export interface SalesOrder {
   salesman_name?: string;
   shipping_address?: string;
   shipping_method?: string;
+  /** 付款方式：cash / bank_transfer / bank_acceptance / commercial_acceptance / other */
+  payment_method_code?: string;
+  /** 结算方式：prepaid / net_terms / cod 等（与客商同码表） */
+  settlement_terms_code?: string;
+  /** 付款周期（天），对齐客商付款账期 */
+  payment_terms_days?: number | null;
+  /** @deprecated 历史 PAYMENT_TERMS 码，新单以 payment_terms_days 为准 */
   payment_terms?: string;
   /** 币种代码（默认 CNY） */
   currency_code?: string;
   /** 汇率（1 外币 = N 本位币） */
   exchange_rate?: number;
+  /** 立账策略（应收确认时点） */
+  revenue_recognition?: string;
+  prepayment_amount?: number | null;
+  prepayment_bank_account_id?: number | null;
   pushed_to_computation?: boolean;
   computation_id?: number;
   computation_code?: string;
@@ -130,6 +141,7 @@ export interface ActionCapability {
 
 export interface SalesOrderCapabilities {
   update?: ActionCapability;
+  update_attachments?: ActionCapability;
   delete?: ActionCapability;
   submit?: ActionCapability;
   approve?: ActionCapability;
@@ -435,10 +447,30 @@ export async function updateSalesOrder(id: number, data: Partial<SalesOrder>): P
 }
 
 /**
- * 提交销售订单
+ * 补充销售订单附件（已审核后仍可用）
+ */
+export async function patchSalesOrderAttachments(
+  id: number,
+  attachments: unknown[],
+): Promise<SalesOrder> {
+  return apiRequest<SalesOrder>(`/apps/kuaizhizao/sales-orders/${id}/attachments`, {
+    method: 'PATCH',
+    data: { attachments },
+  });
+}
+
+/**
+ * 提交销售订单（草稿/已驳回 → 已提交）
  */
 export async function submitSalesOrder(id: number): Promise<SalesOrder> {
   return apiRequest<SalesOrder>(`/apps/kuaizhizao/sales-orders/${id}/submit`, {
+    method: 'POST',
+  });
+}
+
+/** 提交审核（已提交 → 待审核，或免审已确认） */
+export async function submitSalesOrderForReview(id: number): Promise<SalesOrder> {
+  return apiRequest<SalesOrder>(`/core/uni-audit/sales_order/${id}/submit_review`, {
     method: 'POST',
   });
 }
@@ -474,9 +506,29 @@ export async function rejectSalesOrder(id: number, rejectionReason: string): Pro
 /**
  * 下推预览响应（通用）
  */
+/**
+ * 下推预览默认本次数量：有 base_push_quantity（不含超发容差）时优先用它，
+ * 仍受 max_push_quantity 上限约束；无 base 时回落 max（工单/请购等）。
+ */
+export function resolveDefaultPushQuantity(row: {
+  base_push_quantity?: number | null;
+  max_push_quantity?: number | null;
+}): number {
+  const maxQty = Number(row.max_push_quantity ?? 0);
+  const base = Number(row.base_push_quantity);
+  if (Number.isFinite(base) && base > 0) {
+    if (Number.isFinite(maxQty) && maxQty > 0) return Math.min(base, maxQty);
+    return base;
+  }
+  return Number.isFinite(maxQty) && maxQty > 0 ? maxQty : 0;
+}
+
 export interface PushPreviewResponse {
   target_type: string;
   summary: string;
+  pending_picking_id?: number;
+  pending_picking_code?: string;
+  pending_picking_warning?: string;
   items: {
     item_id?: number;
     material_id?: number;
@@ -484,7 +536,10 @@ export interface PushPreviewResponse {
     material_name: string;
     quantity: number;
     pushed_quantity?: number;
+    /** 不含超发容差的可下推量（发货通知/销售出库等） */
+    base_push_quantity?: number;
     max_push_quantity?: number;
+    over_issue_tolerance_pct?: number;
     on_hand_quantity?: number;
     available_quantity?: number;
     other_sales_committed_quantity?: number;
@@ -748,12 +803,14 @@ export async function previewPushSalesOrderToSalesReturn(salesOrderId: number): 
 export async function pushSalesOrderToSalesReturn(
   salesOrderId: number,
   data: {
-  warehouse_id: number;
-  warehouse_name?: string;
-  return_quantities?: Record<number, number>;
-  batch_numbers?: Record<number, string>;
-  return_code?: string;
-}): Promise<PushToSalesReturnResponse> {
+    warehouse_id: number;
+    warehouse_name?: string;
+    return_quantities?: Record<number, number>;
+    batch_numbers?: Record<number, string>;
+    serial_numbers?: Record<number, string[]>;
+    return_code?: string;
+  },
+): Promise<PushToSalesReturnResponse> {
   return apiRequest<PushToSalesReturnResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-sales-return`, {
     method: 'POST',
     data,
@@ -834,6 +891,70 @@ export async function withdrawSalesOrder(id: number): Promise<SalesOrder> {
   });
 }
 
+export type SalesOrderWorkOrderPullLine = {
+  id: number;
+  sales_order_id: number;
+  order_code?: string;
+  customer_id?: number;
+  customer_name?: string;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  suggested_quantity?: number;
+  current_stock?: number;
+  /** 工单+采购合计占用 */
+  pushed_quantity?: number;
+  transferred_quantity?: number;
+  pushed_work_order_quantity?: number;
+  pushed_purchase_quantity?: number;
+  remaining_quantity?: number;
+  document_date?: string | null;
+  order_date?: string | null;
+  required_date?: string | null;
+  line_notes?: string | null;
+  capabilities?: {
+    push_work_order?: { allowed?: boolean; reason?: string };
+  };
+};
+
+export type SalesOrderMrpPullLine = SalesOrderWorkOrderPullLine & {
+  analyzed_quantity?: number;
+};
+
+/** 销售订单→MRP 开口行取单 */
+export async function listSalesOrderMrpPullLines(params?: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  sales_order_id?: number;
+  pullable_only?: boolean;
+  date_from?: string;
+  date_to?: string;
+}): Promise<{ data: SalesOrderMrpPullLine[]; total: number }> {
+  return apiRequest<{ data: SalesOrderMrpPullLine[]; total: number }>(
+    '/apps/kuaizhizao/sales-orders/mrp-pull-lines',
+    { method: 'GET', params },
+  );
+}
+
+/** 销售订单→工单开口行取单 */
+export async function listSalesOrderWorkOrderPullLines(params?: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  sales_order_id?: number;
+  pullable_only?: boolean;
+  date_from?: string;
+  date_to?: string;
+}): Promise<{ data: SalesOrderWorkOrderPullLine[]; total: number }> {
+  return apiRequest<{ data: SalesOrderWorkOrderPullLine[]; total: number }>(
+    '/apps/kuaizhizao/sales-orders/work-order-pull-lines',
+    { method: 'GET', params },
+  );
+}
+
 /**
  * 直推工单预览
  */
@@ -860,6 +981,7 @@ export interface PushToWorkOrderRequest {
   selected_quantities?: Record<number, number>;
   selected_work_centers?: Record<number, number>;
   selected_item_remarks?: Record<number, string>;
+  selected_item_bom_expand?: Record<number, boolean>;
   bom_version?: string;
   material_bom_versions?: Record<number, string>;
 }
@@ -992,17 +1114,26 @@ export async function withdrawSalesOrderFromComputation(id: number): Promise<Sal
 
 /**
  * 删除销售订单
+ * @param cascade 为 true 时先级联清理未执行下游（必要时反审核）再删除
  */
-export async function deleteSalesOrder(id: number): Promise<void> {
+export async function deleteSalesOrder(
+  id: number,
+  options?: { cascade?: boolean },
+): Promise<void> {
   return apiRequest<void>(`/apps/kuaizhizao/sales-orders/${id}`, {
     method: 'DELETE',
+    params: options?.cascade ? { cascade: true } : undefined,
   });
 }
 
 /**
  * 批量删除销售订单
+ * @param cascade 为 true 时对每条尝试级联清理未执行下游后再删
  */
-export async function bulkDeleteSalesOrders(ids: number[]): Promise<{
+export async function bulkDeleteSalesOrders(
+  ids: number[],
+  options?: { cascade?: boolean },
+): Promise<{
   success_count: number;
   failed_count: number;
   failed_items: { id: number; reason: string }[];
@@ -1014,6 +1145,7 @@ export async function bulkDeleteSalesOrders(ids: number[]): Promise<{
   }>('/apps/kuaizhizao/sales-orders/batch-delete', {
     method: 'POST',
     data: ids,
+    params: options?.cascade ? { cascade: true } : undefined,
   });
 }
 
@@ -1190,6 +1322,52 @@ export interface SalesOrderSyncFromSourceResult {
   skipped: number;
   failed: number;
   errors: string[];
+}
+
+export async function getSalesOrderPushBinding(): Promise<{
+  targets: Array<{
+    target_profile: string;
+    connection_code?: string;
+    save_api_uuid?: string;
+    push_mode?: 'auto' | 'manual';
+    trigger_actions?: string[];
+    destination_kind?: 'api' | 'data_source';
+    data_source_uuid?: string;
+    dataset_uuid?: string;
+    user_saved?: boolean;
+  }>;
+  trigger_actions?: string[];
+  connection_code?: string;
+  save_api_uuid?: string;
+  sync_mode?: string;
+  schedule_interval_minutes?: number;
+  targets_configured?: boolean;
+}> {
+  return apiRequest('/apps/kuaizhizao/sales-orders/push-binding');
+}
+
+export async function saveSalesOrderPushBinding(payload: {
+  targets: Array<{
+    target_profile: string;
+    connection_code?: string;
+    save_api_uuid?: string;
+    push_mode?: 'auto' | 'manual';
+    trigger_actions?: string[];
+    destination_kind?: 'api' | 'data_source';
+    data_source_uuid?: string;
+    dataset_uuid?: string;
+    user_saved?: boolean;
+  }>;
+  trigger_actions?: string[];
+  connection_code?: string;
+  save_api_uuid?: string;
+  sync_mode?: string;
+  schedule_interval_minutes?: number;
+}): Promise<unknown> {
+  return apiRequest('/apps/kuaizhizao/sales-orders/push-binding', {
+    method: 'PUT',
+    data: payload,
+  });
 }
 
 export async function getSalesOrderSyncBinding(): Promise<SalesOrderSyncBinding> {

@@ -8,7 +8,9 @@ import type { API } from '../../../../../services/apiManagement';
 import { DocumentPushBatchPanel } from '../../../components/DocumentPushBatchPanel';
 import {
   getSalesOrder,
+  getSalesOrderPushBinding,
   listSalesOrders,
+  saveSalesOrderPushBinding,
   type SalesOrder,
 } from '../../../services/sales-order';
 
@@ -203,6 +205,13 @@ export const SalesOrderDocumentPushPanel: React.FC<SalesOrderDocumentPushPanelPr
     [],
   );
 
+  const loadBinding = useCallback(() => getSalesOrderPushBinding(), []);
+  const saveBinding = useCallback(
+    (payload: Parameters<typeof saveSalesOrderPushBinding>[0]) =>
+      saveSalesOrderPushBinding(payload),
+    [],
+  );
+
   if (!open) return null;
 
   return (
@@ -227,6 +236,8 @@ export const SalesOrderDocumentPushPanel: React.FC<SalesOrderDocumentPushPanelPr
       matchSaveApi={isKingdeeSalSaleOrderSaveApi}
       preferSaveApi={preferSalApiUuid}
       saveApiSearchHints={SALES_SAVE_API_HINTS}
+      loadBinding={loadBinding}
+      saveBinding={saveBinding}
       showScheduleControls={false}
       successCountKey="app.kuaizhizao.documentPush.batch.success"
       partialCountKey="app.kuaizhizao.documentPush.batch.partial"

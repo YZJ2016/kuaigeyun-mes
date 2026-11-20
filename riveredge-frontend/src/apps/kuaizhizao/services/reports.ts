@@ -8,7 +8,7 @@
  */
 
 import { updateLastActivity, incrementPendingRequests, decrementPendingRequests } from '../../../utils/activityUtils';
-import { apiRequest, buildAuthTenantHeaders } from '../../../services/api';
+import { apiRequest, buildAuthTenantHeaders, formatApiErrorDetail } from '../../../services/api';
 import { todaySiteDateString } from '../../../utils/format';
 
 /**
@@ -25,7 +25,6 @@ export interface ReportParams {
   skip?: number;
   limit?: number;
   customer_keyword?: string;
-  customer_id?: number;
   keyword?: string;
   order_by?: string;
   status?: string;
@@ -38,6 +37,8 @@ export interface ReportParams {
   column_filters?: string;
   /** 供应商交货统计：receipt_time / required_date / order_date */
   period_basis?: string;
+  /** 呆滞物料统计：库龄阈值天数 */
+  stale_days?: number;
   filters?: Record<string, any>;
 }
 
@@ -283,6 +284,9 @@ function buildReportQueryParams(
   if (params.work_order_code) query.work_order_code = params.work_order_code;
   if (params.demand_type) query.demand_type = params.demand_type;
   if (params.period_basis) query.period_basis = params.period_basis;
+  if (params.stale_days != null && Number.isFinite(Number(params.stale_days))) {
+    query.stale_days = Number(params.stale_days);
+  }
   if (params.customer_id != null) query.customer_id = params.customer_id;
   if (params.filters?.customer_id != null) query.customer_id = params.filters.customer_id;
   if (params.filters?.warehouse_id != null) query.warehouse_id = params.filters.warehouse_id;
@@ -489,7 +493,22 @@ export const inventoryAnalysisApi = {
   },
 };
 
-function normalizeExportBody(params: ReportParams): Record<string, unknown> {
+export type ReportExportColumn = {
+  key: string;
+  title: string;
+};
+
+export type ReportExportOptions = {
+  /** 下载文件名（含或不含 .csv）；应用中文报表标题 */
+  filename?: string;
+  /** 可见列 key + 中文表头；与列表列对齐，禁止导出内部 id */
+  exportColumns?: ReportExportColumn[];
+};
+
+function normalizeExportBody(
+  params: ReportParams,
+  options?: ReportExportOptions,
+): Record<string, unknown> {
   const body: Record<string, unknown> = {
     report_type: params.report_type || params.reportType,
     date_start: params.date_start || params.startDate,
@@ -505,13 +524,36 @@ function normalizeExportBody(params: ReportParams): Record<string, unknown> {
     if (date_start) body.date_start = date_start;
     if (date_end) body.date_end = date_end;
   }
+  if (options?.filename) {
+    body.filename = options.filename;
+  }
+  if (options?.exportColumns?.length) {
+    body.export_columns = options.exportColumns;
+  }
   return body;
+}
+
+function resolveExportDownloadName(
+  domain: string,
+  params: ReportParams,
+  options?: ReportExportOptions,
+): string {
+  const raw = String(options?.filename || '').trim();
+  if (raw) {
+    return raw.toLowerCase().endsWith('.csv') ? raw : `${raw}.csv`;
+  }
+  const reportType = params.report_type || params.reportType || 'report';
+  return `${domain}-${reportType}-${todaySiteDateString()}.csv`;
 }
 
 /**
  * 按域导出报表（POST /reports/{domain}/export，携带与列表相同的 filter body）
  */
-export async function exportDomainReport(domain: string, params: ReportParams = {}): Promise<void> {
+export async function exportDomainReport(
+  domain: string,
+  params: ReportParams = {},
+  options?: ReportExportOptions,
+): Promise<void> {
   updateLastActivity(true);
   incrementPendingRequests();
   try {
@@ -521,25 +563,35 @@ export async function exportDomainReport(domain: string, params: ReportParams = 
         ...buildAuthTenantHeaders(),
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(normalizeExportBody(params)),
+      body: JSON.stringify(normalizeExportBody(params, options)),
     });
 
     if (!response.ok) {
-      throw new Error('导出失败');
+      let detail = '';
+      try {
+        const data = await response.json();
+        detail = formatApiErrorDetail(data?.detail ?? data?.message ?? '');
+      } catch {
+        /* 非 JSON 错误体时保留空 detail */
+      }
+      throw new Error(detail || `HTTP ${response.status}`);
     }
 
     const blob = await response.blob();
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    const reportType = params.report_type || params.reportType || 'report';
-    link.download = `${domain}-${reportType}-${todaySiteDateString()}.csv`;
+    link.download = resolveExportDownloadName(domain, params, options);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
   } catch (error) {
-    throw new Error('导出失败：' + (error as Error).message);
+    // 业务 detail 原样抛出；由 UniReport i18n「导出失败：{{message}}」统一加前缀，禁止再叠一层
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error(String(error));
   } finally {
     updateLastActivity(true);
     decrementPendingRequests();

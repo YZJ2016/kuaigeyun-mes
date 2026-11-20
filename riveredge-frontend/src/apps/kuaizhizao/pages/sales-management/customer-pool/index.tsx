@@ -57,7 +57,11 @@ import {
   type CustomerPoolLogItem,
   type CustomerPoolRule,
 } from '../../../services/customer-pool';
-import { downloadFile } from '../../../../../utils';
+import {
+  bulkDeleteSalesOrders,
+  listSalesOrders,
+} from '../../../services/sales-order';
+import { batchProcess, downloadFile } from '../../../../../utils';
 import { resolveDictionaryDisplayLabel } from '../../../../../utils/loadImportDictionaryValues';
 import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
 
@@ -82,7 +86,7 @@ const CUSTOMER_POOL_HOST_RESOURCE = 'kuaizhizao:customer-pool';
 const CustomerPoolPage: React.FC = () => {
   const { t } = useTranslation();
   const poolDictOptions = useImportDictionaryOptions(['CUSTOMER_LEVEL']);
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const actionRef = useRef<ActionType>(null);
@@ -104,6 +108,8 @@ const CustomerPoolPage: React.FC = () => {
   }, [canAssign, scope]);
   const { canUpdate: canUpdateCustomer, canDelete: canDeleteCustomer } =
     useResourcePermissions('master-data:supply-chain:customer');
+  const { canDelete: canDeleteSalesOrder } =
+    useResourcePermissions('kuaizhizao:sales-order');
   const [followUpOpen, setFollowUpOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
@@ -1005,32 +1011,249 @@ const CustomerPoolPage: React.FC = () => {
     ],
   );
 
+  const listSalesOrderIdsByCustomer = useCallback(async (customerId: number) => {
+    const ids: number[] = [];
+    const pageSize = 200;
+    let skip = 0;
+    let total = Number.POSITIVE_INFINITY;
+    while (skip < total) {
+      const res = await listSalesOrders({
+        customer_id: customerId,
+        skip,
+        limit: pageSize,
+        view: 'options',
+      });
+      const rows = res.data || [];
+      total = Number(res.total ?? skip + rows.length);
+      for (const row of rows) {
+        const id = Number(row.id);
+        if (Number.isFinite(id) && id > 0) ids.push(id);
+      }
+      if (rows.length === 0) break;
+      skip += rows.length;
+      if (rows.length < pageSize) break;
+    }
+    return ids;
+  }, []);
+
+  const showBatchDeleteResultModal = useCallback(
+    (opts: {
+      targets: Array<{ key: string; row?: CustomerPoolItem; label: string }>;
+      successCount: number;
+      failureCount: number;
+      errors: Array<{ index: number; error: string }>;
+      allowCascade: boolean;
+      onCascade?: () => void | Promise<void>;
+    }) => {
+      const {
+        targets,
+        successCount,
+        failureCount,
+        errors,
+        allowCascade,
+        onCascade,
+      } = opts;
+      const errorList = (
+        <div>
+          <p>
+            {t('app.kuaizhizao.customerPool.batchDeleteResultSummary', {
+              success: successCount,
+              failed: failureCount,
+            })}
+          </p>
+          <ul
+            style={{
+              margin: '12px 0 0',
+              paddingLeft: 20,
+              maxHeight: 320,
+              overflow: 'auto',
+            }}
+          >
+            {errors.map((err) => {
+              const target = targets[err.index];
+              return (
+                <li key={`${err.index}-${err.error}`} style={{ marginBottom: 6 }}>
+                  {t('app.kuaizhizao.customerPool.batchDeleteErrorItem', {
+                    name:
+                      target?.label ||
+                      t('app.kuaizhizao.customerPool.customerFallback'),
+                    reason: err.error || t('common.deleteFailed'),
+                  })}
+                </li>
+              );
+            })}
+          </ul>
+          {allowCascade ? (
+            <p style={{ marginTop: 12, color: 'rgba(0,0,0,0.65)' }}>
+              {t('app.kuaizhizao.customerPool.batchDeleteCascadeHint')}
+            </p>
+          ) : null}
+        </div>
+      );
+
+      if (!allowCascade || !onCascade) {
+        modal.warning({
+          title: t('app.kuaizhizao.customerPool.batchDeleteCompletePartial'),
+          width: 640,
+          content: errorList,
+          okText: t('app.kuaizhizao.customerPool.batchDeleteGotIt'),
+        });
+        return;
+      }
+
+      modal.confirm({
+        title: t('app.kuaizhizao.customerPool.batchDeleteCompletePartial'),
+        width: 640,
+        content: errorList,
+        okText: t('app.kuaizhizao.customerPool.batchDeleteCascadeOk'),
+        cancelText: t('app.kuaizhizao.customerPool.batchDeleteGotIt'),
+        okButtonProps: { danger: true },
+        onOk: async () => {
+          await onCascade();
+        },
+      });
+    },
+    [modal, t],
+  );
+
+  const deleteCustomersClearingSalesOrders = useCallback(
+    async (
+      targets: Array<{ key: string; row?: CustomerPoolItem; label: string }>,
+    ) => {
+      const result = await batchProcess(
+        targets,
+        async (item) => {
+          if (!item.row?.uuid || !item.row?.id) {
+            throw new Error(t('app.kuaizhizao.customerPool.missingUuidForDelete'));
+          }
+          const orderIds = await listSalesOrderIdsByCustomer(item.row.id);
+          if (orderIds.length > 0) {
+            const bulk = await bulkDeleteSalesOrders(orderIds);
+            if ((bulk.failed_count ?? 0) > 0) {
+              const reason =
+                bulk.failed_items?.[0]?.reason || t('common.deleteFailed');
+              throw new Error(
+                t('app.kuaizhizao.customerPool.batchDeleteCascadeOrdersFailed', {
+                  failed: bulk.failed_count,
+                  reason,
+                }),
+              );
+            }
+          }
+          await customerApi.delete(item.row.uuid);
+        },
+        {
+          title: t('app.kuaizhizao.customerPool.batchDeletingCascade'),
+          concurrency: 1,
+          preparingText: (total) =>
+            t('app.kuaizhizao.customerPool.batchDeleteCascadePreparing', {
+              count: total,
+            }),
+          progressText: (current, total) =>
+            t('app.kuaizhizao.customerPool.batchDeleteCascadeProgress', {
+              current,
+              total,
+            }),
+        },
+      );
+
+      if (result.failureCount === 0) {
+        message.success(
+          t('app.kuaizhizao.customerPool.batchDeleteComplete', {
+            count: result.successCount,
+          }),
+        );
+      } else {
+        showBatchDeleteResultModal({
+          targets,
+          successCount: result.successCount,
+          failureCount: result.failureCount,
+          errors: result.errors,
+          allowCascade: false,
+        });
+      }
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    },
+    [listSalesOrderIdsByCustomer, message, showBatchDeleteResultModal, t],
+  );
+
   const handleBatchDelete = useCallback(async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
       message.warning(t('app.kuaizhizao.customerPool.selectCustomersToDelete'));
       return;
     }
     const rowMap = new Map(tableRowsRef.current.map((row) => [String(row.id), row]));
-    let success = 0;
-    let failed = 0;
-    for (const key of keys) {
+    const targets = keys.map((key) => {
       const row = rowMap.get(String(key));
-      if (!row?.uuid) {
-        failed += 1;
-        continue;
-      }
-      try {
-        await customerApi.delete(row.uuid);
-        success += 1;
-      } catch {
-        failed += 1;
-      }
+      return {
+        key: String(key),
+        row,
+        label:
+          row?.name ||
+          row?.code ||
+          t('app.kuaizhizao.customerPool.customerFallback'),
+      };
+    });
+
+    const result = await batchProcess(
+      targets,
+      async (item) => {
+        if (!item.row?.uuid) {
+          throw new Error(t('app.kuaizhizao.customerPool.missingUuidForDelete'));
+        }
+        await customerApi.delete(item.row.uuid);
+      },
+      {
+        title: t('app.kuaizhizao.customerPool.batchDeleting'),
+        concurrency: 1,
+        preparingText: (total) =>
+          t('app.kuaizhizao.customerPool.batchDeletePreparing', { count: total }),
+        progressText: (current, total) =>
+          t('app.kuaizhizao.customerPool.batchDeleteProgress', { current, total }),
+      },
+    );
+
+    if (result.failureCount === 0) {
+      message.success(
+        t('app.kuaizhizao.customerPool.batchDeleteComplete', {
+          count: result.successCount,
+        }),
+      );
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+      return;
     }
-    if (success > 0) message.success(t('app.kuaizhizao.customerPool.batchDeleteSuccess', { count: success }));
-    if (failed > 0) message.warning(t('app.kuaizhizao.customerPool.batchDeletePartialFailed', { count: failed }));
+
+    const failedTargets = result.errors
+      .map((err) => targets[err.index])
+      .filter((item): item is (typeof targets)[number] => Boolean(item?.row?.uuid));
+    const blockedBySalesOrder = result.errors.some((err) =>
+      String(err.error || '').includes('销售订单'),
+    );
+    const allowCascade =
+      canDeleteSalesOrder && blockedBySalesOrder && failedTargets.length > 0;
+
+    showBatchDeleteResultModal({
+      targets,
+      successCount: result.successCount,
+      failureCount: result.failureCount,
+      errors: result.errors,
+      allowCascade,
+      onCascade: allowCascade
+        ? () => deleteCustomersClearingSalesOrders(failedTargets)
+        : undefined,
+    });
+
     setSelectedRowKeys([]);
     actionRef.current?.reload();
-  }, [message, t]);
+  }, [
+    canDeleteSalesOrder,
+    deleteCustomersClearingSalesOrders,
+    message,
+    showBatchDeleteResultModal,
+    t,
+  ]);
 
   const selectedPoolRows = useMemo(() => {
     const selectedSet = new Set(selectedRowKeys.map((key) => String(key)));
@@ -1173,6 +1396,7 @@ const CustomerPoolPage: React.FC = () => {
             }
           }}
           showDeleteButton={canDeleteCustomer}
+          deleteButtonText={t('common.delete')}
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.customerPool.confirmBatchDeleteCustomers', { count })}
           toolBarActionsAfterDelete={[

@@ -306,6 +306,20 @@ export const equipmentFaultApi = {
     });
   },
 
+  addCollaborator: async (uuid: string, data: { user_id: number; remark?: string }) => {
+    return apiRequest(`/apps/kuaizhizao/equipment-faults/repairs/${uuid}/collaborators`, {
+      method: 'POST',
+      data,
+    });
+  },
+
+  reassignRepair: async (uuid: string, data: { to_user_id: number; remark?: string }) => {
+    return apiRequest(`/apps/kuaizhizao/equipment-faults/repairs/${uuid}/reassign`, {
+      method: 'POST',
+      data,
+    });
+  },
+
   deleteRepair: async (uuid: string) => {
     return apiRequest(`/apps/kuaizhizao/equipment-faults/repairs/${uuid}`, { method: 'DELETE' });
   },
@@ -503,7 +517,7 @@ export const sparePartApi = {
     spare_part_id: number;
     quantity: number;
     operation_type: string;
-    warehouse_location: string;
+    warehouse_location?: string;
     rel_type?: string;
     rel_id?: number;
     remark?: string;

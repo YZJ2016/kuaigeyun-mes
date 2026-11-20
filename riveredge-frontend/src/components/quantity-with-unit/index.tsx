@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { InputNumber } from 'antd';
+import { UniInputNumber, UNI_INPUT_NUMBER_MIN_WIDTH_PX } from '../uni-input-number/UniInputNumber';
 import type { Material } from '../../apps/master-data/types/material';
 import {
   MaterialUnitSelect,
@@ -29,7 +29,7 @@ export interface QuantityWithUnitProps {
   value?: QuantityWithUnitValue;
   onChange?: (next: QuantityWithUnitValue) => void;
   disabled?: boolean;
-  size?: 'large' | 'medium' | 'small';
+  size?: 'large' | 'middle' | 'small';
   quantityMin?: number;
   quantityPrecision?: number;
   quantityPlaceholder?: string;
@@ -50,6 +50,7 @@ export {
   type DocumentLineUnitFields,
 } from './formHelpers';
 export {
+  buildDocumentLineAuxQuantityDetailColumn,
   buildDocumentLineDualQuantityDetailColumns,
   buildDocumentLineDualQuantityFormColumns,
   buildDocumentLineDualQuantityPairColumns,
@@ -149,7 +150,7 @@ export const QuantityWithUnit: React.FC<QuantityWithUnitProps> = ({
   );
 
   const quantityControl = (
-    <InputNumber
+    <UniInputNumber
       value={value?.quantity ?? null}
       onChange={handleQuantityChange}
       min={quantityMin}
@@ -187,7 +188,7 @@ export const QuantityWithUnit: React.FC<QuantityWithUnitProps> = ({
         ...style,
       }}
     >
-      <div style={{ flex: 1, minWidth: 0 }}>{quantityControl}</div>
+      <div style={{ flex: '1 1 auto', minWidth: UNI_INPUT_NUMBER_MIN_WIDTH_PX }}>{quantityControl}</div>
       <div style={{ flexShrink: 0, minWidth: 72 }}>{unitControl}</div>
     </div>
   );

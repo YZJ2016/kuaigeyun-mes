@@ -22,7 +22,6 @@ import { pickImportExampleValue } from '../../../../../utils/loadImportDictionar
 import {
   buildImportPriceTypeOptions,
   DEFAULT_SALES_PRICE_TYPE,
-  normalizeSalesPriceType,
   parseImportPriceType,
 } from '../shared/salesPriceType';
 import {
@@ -198,10 +197,6 @@ export type SalesOrderListImportPayload = Partial<SalesOrder> & {
   customer_id: number;
   customer_name: string;
   order_date: string;
-  // 付款/账期字段（本地 SalesOrder 类型尚未含，随 upstream b12cc66e71 对齐后由 Partial 覆盖）
-  payment_method_code?: string;
-  settlement_terms_code?: string;
-  payment_terms_days?: number | null;
   items: Array<
     Pick<
       SalesOrderItem,
@@ -436,7 +431,7 @@ export function parseSalesOrderListImport(
       });
       continue;
     }
-    const priceType = normalizeSalesPriceType(g.priceType);
+    const priceType = g.priceType || DEFAULT_SALES_PRICE_TYPE;
     const sums = computeSalesDocumentTotals(
       g.items,
       [],

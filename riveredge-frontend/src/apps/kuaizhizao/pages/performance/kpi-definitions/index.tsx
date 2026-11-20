@@ -229,17 +229,6 @@ const KpiDefinitionsPage: React.FC = () => {
               <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
             );
           }
-          if (kpiPerms.canDelete) {
-            parts.push(
-              <Popconfirm
-                key="delete"
-                title={t('app.kuaizhizao.performance.kpi.messages.deleteConfirm')}
-                onConfirm={() => handleDelete(record)}
-              >
-                <Button {...rowActionKind('delete')} />
-              </Popconfirm>,
-            );
-          }
           return parts;
         },
       },
@@ -255,7 +244,7 @@ const KpiDefinitionsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.performance.kpi-definitions.v3"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.kpi-definitions.v4"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.kpiDefinitions')}
           showAdvancedSearch
@@ -280,6 +269,7 @@ const KpiDefinitionsPage: React.FC = () => {
           }}
           enableRowSelection={kpiPerms.canDelete}
           showDeleteButton={kpiPerms.canDelete}
+          deleteButtonText={t('common.delete')}
           onDelete={async (keys) => {
             try {
               for (const id of keys) {

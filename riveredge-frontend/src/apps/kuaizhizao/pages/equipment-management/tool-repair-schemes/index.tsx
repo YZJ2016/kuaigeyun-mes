@@ -18,6 +18,7 @@ import {
   type FormListDetailTableHandle,
 } from '../../../../../components/form-list-detail-table';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
+import CodeField from '../../../../../components/code-field';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
@@ -81,6 +82,10 @@ const ToolRepairSchemesPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [current, setCurrent] = useState<RepairScheme | null>(null);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(
+    undefined,
+  );
+  const [createCodeSessionKey, setCreateCodeSessionKey] = useState(0);
   const [itemOptions, setItemOptions] = useState<{ label: string; value: number }[]>([]);
   const [itemQuickCreateOpen, setItemQuickCreateOpen] = useState(false);
   const itemQuickCreateTargetRef = useRef<'bulk' | number | null>(null);
@@ -135,10 +140,10 @@ const ToolRepairSchemesPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrent(null);
+    setCreateCodeSessionKey((k) => k + 1);
+    setFormInitialValues({ is_active: true, lines: [{ sort_order: 0 }] });
     setModalVisible(true);
     void loadItemOptions();
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ is_active: true, lines: [{ sort_order: 0 }] });
   };
   useNewShortcut(handleCreate);
 
@@ -148,15 +153,15 @@ const ToolRepairSchemesPage: React.FC = () => {
       const loaded = await repairSchemesApi.get(record.id);
       setIsEdit(true);
       setCurrent(loaded);
-      setModalVisible(true);
-      void loadItemOptions();
-      formRef.current?.setFieldsValue({
+      setFormInitialValues({
         ...loaded,
         lines: (loaded.lines ?? []).map((l: SchemeLine, i: number) => ({
           item_id: l.item_id,
           sort_order: l.sort_order ?? i,
         })),
       });
+      setModalVisible(true);
+      void loadItemOptions();
     } catch (error: unknown) {
       messageApi.error(error instanceof Error ? error.message : t('common.loadFailed'));
     }
@@ -396,16 +401,35 @@ const ToolRepairSchemesPage: React.FC = () => {
       <FormModalTemplate
         title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}
         open={modalVisible}
-        onClose={() => setModalVisible(false)}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
         onFinish={handleSubmit}
         isEdit={isEdit}
+        initialValues={formInitialValues}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
         grid={false}
       >
         <Row gutter={16}>
           <Col span={12}>
-            <ProFormText name="code" label={t('common.code')} rules={[{ required: true }]} />
+            <CodeField
+              key={
+                isEdit
+                  ? `tool-repair-scheme-code-edit-${current?.id ?? 'none'}`
+                  : `tool-repair-scheme-code-create-${createCodeSessionKey}`
+              }
+              pageCode="kuaizhizao-tool-repair-scheme"
+              name="code"
+              label={t('common.code')}
+              required={false}
+              autoGenerateOnCreate={!isEdit}
+              showGenerateButton={false}
+              documentId={isEdit ? current?.id : undefined}
+              formRef={formRef}
+              generateSessionKey={createCodeSessionKey}
+            />
           </Col>
           <Col span={12}>
             <ProFormText name="name" label={t('common.name')} rules={[{ required: true }]} />

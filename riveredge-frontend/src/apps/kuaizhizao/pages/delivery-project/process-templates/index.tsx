@@ -7,6 +7,7 @@ import {
   Badge,
   Button,
   Empty,
+  Form,
   Input,
   InputNumber,
   List,
@@ -32,7 +33,9 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate, TwoColumnLayout } from '../../../../../components/layout-templates';
+import { CustomFieldsFormSection } from '../../../../../components/custom-fields';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
@@ -49,6 +52,7 @@ import {
 } from '../components/TemplateTaskUserPickers';
 
 const RESOURCE = 'kuaizhizao:delivery-process-template';
+const CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_delivery_process_templates';
 const GT = 'app.kuaiplm.gateTemplates';
 
 type EditableNode = DeliveryProcessTemplateNode & { _key: string };
@@ -78,6 +82,20 @@ const ProcessTemplatesPage: React.FC = () => {
   const [selectedId, setSelectedId] = useState<number>();
   const [detail, setDetail] = useState<DeliveryProcessTemplate | null>(null);
   const [nodes, setNodes] = useState<EditableNode[]>([]);
+  const [cfForm] = Form.useForm();
+  const {
+    customFields: formCustomFields,
+    customFieldValues: formCustomFieldValues,
+    loadFieldValues: loadFormCustomFieldValues,
+    extractFormValues: extractCustomFormValues,
+    saveCustomFieldValues,
+    resetFieldValues: resetFormCustomFieldValues,
+  } = useCustomFields({
+    tableName: CUSTOM_FIELD_TABLE,
+    hostResource: RESOURCE,
+    loadWhenOpen: true,
+    open: Boolean(detail?.id),
+  });
   const [expandedRowKeys, setExpandedRowKeys] = useState<React.Key[]>([]);
 
   const loadTemplates = useCallback(async () => {
@@ -137,8 +155,21 @@ const ProcessTemplatesPage: React.FC = () => {
     else {
       setDetail(null);
       setNodes([]);
+      resetFormCustomFieldValues();
+      cfForm.resetFields();
     }
-  }, [selectedId, loadDetail]);
+  }, [selectedId, loadDetail, resetFormCustomFieldValues, cfForm]);
+
+  useEffect(() => {
+    if (!detail?.id) {
+      resetFormCustomFieldValues();
+      cfForm.resetFields();
+      return;
+    }
+    void loadFormCustomFieldValues(detail.id).then((cfValues) => {
+      cfForm.setFieldsValue(cfValues);
+    });
+  }, [cfForm, detail?.id, loadFormCustomFieldValues, resetFormCustomFieldValues]);
 
   const handleCreateTemplate = useCallback(() => {
     let name = '';
@@ -318,6 +349,8 @@ const ProcessTemplatesPage: React.FC = () => {
         })),
       }));
       const updated = await deliveryProcessTemplateApi.update(detail.id, { nodes: payload });
+      const { customData } = extractCustomFormValues(cfForm.getFieldsValue(true), cfForm);
+      await saveCustomFieldValues(detail.id, customData);
       messageApi.success(t('common.updateSuccess'));
       setDetail(updated);
       setNodes(
@@ -565,6 +598,16 @@ const ProcessTemplatesPage: React.FC = () => {
         ) : null}
         <Typography.Text type="secondary">{detail.template_code}</Typography.Text>
       </Space>
+
+      {formCustomFields.length > 0 ? (
+        <Form form={cfForm} layout="vertical" style={{ marginBottom: 16 }}>
+          <CustomFieldsFormSection
+            fields={formCustomFields}
+            values={formCustomFieldValues}
+            colProps={{ span: 12 }}
+          />
+        </Form>
+      ) : null}
 
       <Space style={{ marginBottom: 16 }} wrap>
         {perms.canUpdate && !detail.is_default ? (

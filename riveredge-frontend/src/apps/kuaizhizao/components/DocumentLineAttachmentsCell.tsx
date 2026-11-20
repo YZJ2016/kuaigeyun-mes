@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Button, Space } from 'antd';
 import { FolderOpenOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import LineAttachmentsUpload from './LineAttachmentsUpload';
 import MaterialAttachmentsPickerModal from './MaterialAttachmentsPickerModal';
 import {
   mapAttachmentsToUploadList,
@@ -64,12 +65,21 @@ export const DocumentLineAttachmentsCell: React.FC<DocumentLineAttachmentsCellPr
   }
 
   return (
-    <Space size={4} wrap align="center">
+    <Space size={8} align="center" style={{ whiteSpace: 'nowrap' }}>
+      <LineAttachmentsUpload
+        variant="inline"
+        value={value}
+        onChange={onChange}
+        category={category}
+        maxCount={maxCount}
+        disabled={disabled}
+      />
       <Button
         type="link"
         size="small"
         icon={<FolderOpenOutlined />}
         disabled={disabled}
+        style={{ display: 'inline-flex', alignItems: 'center' }}
         onClick={() => setMaterialOpen(true)}
       >
         {materialButtonLabel}

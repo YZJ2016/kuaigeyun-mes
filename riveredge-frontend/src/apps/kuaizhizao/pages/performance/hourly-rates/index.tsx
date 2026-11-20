@@ -205,17 +205,6 @@ const HourlyRatesPage: React.FC = () => {
               <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
             );
           }
-          if (ratePerms.canDelete) {
-            parts.push(
-              <Popconfirm
-                key="delete"
-                title={t('app.kuaizhizao.performance.hourlyRates.messages.deleteConfirm')}
-                onConfirm={() => handleDelete(record)}
-              >
-                <Button {...rowActionKind('delete')} />
-              </Popconfirm>,
-            );
-          }
           return parts;
         },
       },
@@ -231,7 +220,7 @@ const HourlyRatesPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.performance.hourly-rates.v3"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.hourly-rates.v4"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.hourlyRates')}
           showAdvancedSearch
@@ -256,6 +245,7 @@ const HourlyRatesPage: React.FC = () => {
           }}
           enableRowSelection={ratePerms.canDelete}
           showDeleteButton={ratePerms.canDelete}
+          deleteButtonText={t('common.delete')}
           onDelete={async (keys) => {
             try {
               for (const id of keys) {

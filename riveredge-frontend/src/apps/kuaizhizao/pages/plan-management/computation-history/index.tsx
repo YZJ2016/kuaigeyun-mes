@@ -303,6 +303,7 @@ const ComputationHistoryPage: React.FC = () => {
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={(keys) => setSelectedRowKeys(keys)}
           showDeleteButton
+          deleteButtonText={t('common.delete')}
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.computationHistory.deleteConfirm', { count })}
           toolBarActionsAfterBatch={[

@@ -199,35 +199,13 @@ export const ShiftRosterOvertimePanel: React.FC<ShiftRosterOvertimePanelProps> =
                     {t('common.edit')}
                   </Button>
                 ) : null}
-                {overtimePerms.canDelete ? (
-                  <Popconfirm
-                    key="delete"
-                    {...rowActionKind('delete')}
-                    title={t('app.kuaizhizao.performance.workCalendar.messages.deleteConfirm')}
-                    onConfirm={async () => {
-                      try {
-                        await overtimeApi.delete(row.uuid);
-                        messageApi.success(
-                          t('app.kuaizhizao.performance.workCalendar.messages.overtimeDeleted'),
-                        );
-                        actionRef.current?.reload();
-                      } catch (e: any) {
-                        messageApi.error(e?.message || t('common.saveFailed'));
-                      }
-                    }}
-                  >
-                    <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                      {t('common.delete')}
-                    </Button>
-                  </Popconfirm>
-                ) : null}
               </Space>
             ),
           },
         ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [messageApi, overtimePerms.canDelete, overtimePerms.canUpdate, t],
+    [overtimePerms.canUpdate, t],
   );
 
   return (
@@ -237,7 +215,7 @@ export const ShiftRosterOvertimePanel: React.FC<ShiftRosterOvertimePanelProps> =
       </Typography.Paragraph>
       <UniTable<OvertimePlan>
         headerTitle={t('app.kuaizhizao.performance.workCalendar.overtimeTableTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.performance.shift-rosters.overtime.v2"
+        columnPersistenceId="apps.kuaizhizao.pages.performance.shift-rosters.overtime.v3"
         permissionResource={OVERTIME_RESOURCE}
         actionRef={actionRef}
         columns={columns}
@@ -270,6 +248,7 @@ export const ShiftRosterOvertimePanel: React.FC<ShiftRosterOvertimePanelProps> =
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}
         enableRowSelection={overtimePerms.canDelete}
         showDeleteButton={overtimePerms.canDelete}
+        deleteButtonText={t('common.delete')}
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => overtimeApi.delete(String(key))));
           messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));

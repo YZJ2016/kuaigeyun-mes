@@ -44,6 +44,15 @@ import {
   KUAIZHIZAO_TOOL_LEDGER_LIST_PATH,
   resolveToolLedgerDetailTabKey,
 } from '../toolLedgerPaths';
+import { toolStatusTag } from '../toolLedgerStatus';
+import { buildOpsOpenCreateQuery } from '../../shared/opsDocumentOpenCreate';
+import { useCustomFieldsForList } from '../../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../../components/custom-fields';
+
+const TOOL_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_tools';
 
 interface ToolDetail {
   id?: number;
@@ -56,6 +65,15 @@ interface ToolDetail {
   supplier?: string;
   purchase_date?: string;
   warranty_expiry?: string;
+  quantity?: number;
+  borrowed_quantity?: number;
+  product_model?: string;
+  custodian_name?: string;
+  inbound_date?: string;
+  current_borrower_name?: string;
+  current_borrow_at?: string;
+  last_return_at?: string;
+  last_return_by_name?: string;
   status?: string;
   is_active?: boolean;
   maintenance_period?: number;
@@ -82,21 +100,6 @@ interface ToolCalibration {
   certificate_no?: string;
   result?: string;
   expiry_date?: string;
-}
-
-function toolStatusTag(
-  status: string | undefined,
-  t: (key: string) => string,
-): { text: string; color: string } {
-  const statusMap: Record<string, { text: string; color: string }> = {
-    正常: { text: t('app.kuaizhizao.toolLedger.statusNormal'), color: 'success' },
-    领用中: { text: t('app.kuaizhizao.toolLedger.statusCheckedOut'), color: 'processing' },
-    维修中: { text: t('app.kuaizhizao.toolLedger.statusRepairing'), color: 'warning' },
-    校验中: { text: t('app.kuaizhizao.toolLedger.statusCalibrating'), color: 'warning' },
-    停用: { text: t('app.kuaizhizao.toolLedger.statusDisabled'), color: 'default' },
-    报废: { text: t('app.kuaizhizao.toolLedger.statusScrapped'), color: 'error' },
-  };
-  return statusMap[status ?? ''] ?? { text: status ?? '-', color: 'default' };
 }
 
 const ToolLedgerDetailPage: React.FC = () => {
@@ -127,6 +130,22 @@ const ToolLedgerDetailPage: React.FC = () => {
 
   const toolTracking = useDocumentTracking(tool?.id ? 'tool' : undefined, tool?.id, trackingRefreshKey);
 
+  const {
+    customFields: toolListCustomFields,
+    customFieldValues: toolDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadToolFieldValuesForDetail,
+    resetDetailFieldValues: resetToolDetailFieldValues,
+  } = useCustomFieldsForList<ToolDetail>({ tableName: TOOL_CUSTOM_FIELD_TABLE });
+
+  const toolOpsOpenCreateQuery = useMemo(
+    () => (tool?.id != null ? buildOpsOpenCreateQuery({ tool_id: tool.id }) : null),
+    [tool?.id],
+  );
+  const toolOpsCreateHref = useCallback(
+    (path: string) => (toolOpsOpenCreateQuery ? `${path}?${toolOpsOpenCreateQuery}` : path),
+    [toolOpsOpenCreateQuery],
+  );
+
   const loadPageData = useCallback(async () => {
     if (!uuid) return;
     setLoading(true);
@@ -135,6 +154,7 @@ const ToolLedgerDetailPage: React.FC = () => {
       setTool(detail);
       setTrackingRefreshKey((k) => k + 1);
       if (detail.id != null) {
+        await loadToolFieldValuesForDetail(detail.id);
         setMaintLoading(true);
         setCalibLoading(true);
         const [maintRes, repairRes, maintBindings, repairBindings, maintList, calibList] = await Promise.all([
@@ -173,12 +193,13 @@ const ToolLedgerDetailPage: React.FC = () => {
     } catch (error: unknown) {
       const err = error as { message?: string };
       messageApi.error(err?.message || t('app.kuaizhizao.toolLedger.getDetailFailed'));
+      resetToolDetailFieldValues();
     } finally {
       setMaintLoading(false);
       setCalibLoading(false);
       setLoading(false);
     }
-  }, [uuid, messageApi, t]);
+  }, [uuid, messageApi, t, loadToolFieldValuesForDetail, resetToolDetailFieldValues]);
 
   useEffect(() => {
     void loadPageData();
@@ -200,6 +221,11 @@ const ToolLedgerDetailPage: React.FC = () => {
       { title: t('app.kuaizhizao.toolLedger.colSupplier'), dataIndex: 'supplier' },
       { title: t('app.kuaizhizao.toolLedger.colProductModel'), dataIndex: 'product_model' },
       { title: t('app.kuaizhizao.toolLedger.colQuantity'), dataIndex: 'quantity' },
+      {
+        title: t('app.kuaizhizao.toolLedger.colBorrowedQuantity'),
+        dataIndex: 'borrowed_quantity',
+        render: (_, r) => (r.borrowed_quantity != null ? String(r.borrowed_quantity) : '0'),
+      },
       { title: t('app.kuaizhizao.toolLedger.colCustodian'), dataIndex: 'custodian_name' },
       { title: t('app.kuaizhizao.toolLedger.colInboundDate'), dataIndex: 'inbound_date', valueType: 'date' },
       { title: t('app.kuaizhizao.toolLedger.colPurchaseDate'), dataIndex: 'purchase_date', valueType: 'date' },
@@ -284,6 +310,14 @@ const ToolLedgerDetailPage: React.FC = () => {
             <Card size="small" title={t('app.uniDetail.sectionBasic')}>
               <ProDescriptions<ToolDetail> dataSource={tool} column={3} columns={detailColumns} />
             </Card>
+            {hasCustomFieldsDetailContent(toolListCustomFields, toolDetailCustomFieldValues) ? (
+              <Card size="small" title={t('app.master-data.customFields')}>
+                <CustomFieldsDetailSection
+                  customFields={toolListCustomFields}
+                  customFieldValues={toolDetailCustomFieldValues}
+                />
+              </Card>
+            ) : null}
             <Card size="small" title={t('app.kuaizhizao.toolOps.schemeBindings.title')}>
               <div style={{ marginBottom: 12 }}>
                 <Typography.Text type="secondary">{t('app.kuaizhizao.toolOps.schemeBindings.maintenance')}</Typography.Text>
@@ -360,7 +394,7 @@ const ToolLedgerDetailPage: React.FC = () => {
         children: (
           <>
             <div style={{ marginBottom: 12 }}>
-              <Link to="/apps/kuaizhizao/equipment-management/tool-maintenances">
+              <Link to={toolOpsCreateHref('/apps/kuaizhizao/equipment-management/tool-maintenances')}>
                 <Button type="primary" icon={<PlusOutlined />}>
                   {t('app.kuaizhizao.toolMaintenanceReminder.createMaintenance')}
                 </Button>
@@ -384,7 +418,7 @@ const ToolLedgerDetailPage: React.FC = () => {
         children: (
           <>
             <div style={{ marginBottom: 12 }}>
-              <Link to="/apps/kuaizhizao/equipment-management/tool-calibrations">
+              <Link to={toolOpsCreateHref('/apps/kuaizhizao/equipment-management/tool-calibrations')}>
                 <Button type="primary" icon={<PlusOutlined />}>
                   {t('app.kuaizhizao.toolMaintenanceReminder.createCalibration')}
                 </Button>
@@ -407,16 +441,16 @@ const ToolLedgerDetailPage: React.FC = () => {
         label: t('app.kuaizhizao.toolOps.opsLinks.title'),
         children: (
           <Space wrap>
-            <Link to="/apps/kuaizhizao/equipment-management/tool-borrows">
+            <Link to={toolOpsCreateHref('/apps/kuaizhizao/equipment-management/tool-borrows')}>
               <Button>{t('app.kuaizhizao.menu.equipment-management.tool-borrows')}</Button>
             </Link>
-            <Link to="/apps/kuaizhizao/equipment-management/tool-maintenances">
+            <Link to={toolOpsCreateHref('/apps/kuaizhizao/equipment-management/tool-maintenances')}>
               <Button>{t('app.kuaizhizao.menu.equipment-management.tool-maintenances')}</Button>
             </Link>
-            <Link to="/apps/kuaizhizao/equipment-management/tool-repairs">
+            <Link to={toolOpsCreateHref('/apps/kuaizhizao/equipment-management/tool-repairs')}>
               <Button>{t('app.kuaizhizao.menu.equipment-management.tool-repairs')}</Button>
             </Link>
-            <Link to="/apps/kuaizhizao/equipment-management/tool-scrap-applications">
+            <Link to={toolOpsCreateHref('/apps/kuaizhizao/equipment-management/tool-scrap-applications')}>
               <Button>{t('app.kuaizhizao.menu.equipment-management.tool-scrap-applications')}</Button>
             </Link>
           </Space>
@@ -427,6 +461,8 @@ const ToolLedgerDetailPage: React.FC = () => {
     tool,
     t,
     detailColumns,
+    toolListCustomFields,
+    toolDetailCustomFieldValues,
     maintenanceSchemeOptions,
     repairSchemeOptions,
     boundMaintenanceSchemeIds,
@@ -441,6 +477,7 @@ const ToolLedgerDetailPage: React.FC = () => {
     calibrations,
     calibrationTableColumns,
     messageApi,
+    toolOpsCreateHref,
   ]);
 
   const handleTabChange = (key: string) => {

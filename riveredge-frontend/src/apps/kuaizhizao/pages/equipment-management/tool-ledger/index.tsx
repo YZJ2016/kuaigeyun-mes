@@ -20,13 +20,18 @@ import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { App, Button, Modal, Row, Col } from 'antd';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import CodeField from '../../../../../components/code-field';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { toolApi } from '../../../services/equipment';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import { CustomFieldsFormSection } from '../../../../../components/custom-fields';
+
+const TOOL_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_tools';
 import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import {
@@ -56,10 +61,12 @@ import {
 } from '../../../utils/equipmentListCore';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import {
   renderEquipmentMasterRowActions,
 } from '../shared/equipmentMasterDataDetail';
 import { buildToolLedgerDetailPath } from './toolLedgerPaths';
+import { buildToolStatusValueEnum, toolStatusTag } from './toolLedgerStatus';
 import { todaySiteDateString } from '../../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import {
@@ -80,6 +87,7 @@ interface Tool {
   inbound_date?: string;
   warranty_expiry?: string;
   quantity?: number;
+  borrowed_quantity?: number;
   custodian_name?: string;
   product_model?: string;
   storage_location?: string;
@@ -181,11 +189,32 @@ const ToolLedgerPage: React.FC = () => {
   const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   const formRef = useRef<any>(null);
 
+  const {
+    customFields: toolFormCustomFields,
+    customFieldValues: toolFormCustomFieldValues,
+    loadFieldValues: loadToolFormFieldValues,
+    extractFormValues: extractToolFormValues,
+    saveCustomFieldValues: saveToolCustomFieldValues,
+    resetFieldValues: resetToolFormFieldValues,
+  } = useCustomFields({
+    tableName: TOOL_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open: modalVisible,
+  });
+
+  const {
+    generateCustomFieldColumns: generateToolCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichToolRecordsWithCustomFields,
+  } = useCustomFieldsForList<Tool>({ tableName: TOOL_CUSTOM_FIELD_TABLE });
+
+  const toolCustomFieldColumns = generateToolCustomFieldColumns();
+
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentTool(null);
     setFormInitialValues(undefined);
+    resetToolFormFieldValues();
     setModalVisible(true);
   };
   useNewShortcut(handleCreate);
@@ -203,6 +232,8 @@ const ToolLedgerPage: React.FC = () => {
       const detail = await toolApi.get(record.uuid);
       setIsEdit(true);
       setCurrentTool(detail);
+      const fieldFormValues =
+        detail.id != null ? await loadToolFormFieldValues(detail.id) : {};
       setFormInitialValues({
         code: detail.code,
         name: detail.name,
@@ -224,6 +255,7 @@ const ToolLedgerPage: React.FC = () => {
         calibration_period: detail.calibration_period,
         description: detail.description,
         attachments: mapAttachmentsToUploadList(detail.attachments),
+        ...fieldFormValues,
       });
       setModalVisible(true);
     } catch (error) {
@@ -263,22 +295,33 @@ const ToolLedgerPage: React.FC = () => {
 
   const handleSubmit = async (values: any) => {
     try {
+      const { customData, standardValues } = extractToolFormValues(values);
       const data = {
-        ...values,
-        purchase_date: toApiDateString(values.purchase_date) ?? null,
-        inbound_date: toApiDateString(values.inbound_date) ?? null,
-        warranty_expiry: toApiDateString(values.warranty_expiry) ?? null,
-        attachments: normalizeDocumentAttachments(values.attachments),
+        ...standardValues,
+        purchase_date: toApiDateString(standardValues.purchase_date) ?? null,
+        inbound_date: toApiDateString(standardValues.inbound_date) ?? null,
+        warranty_expiry: toApiDateString(standardValues.warranty_expiry) ?? null,
+        attachments: normalizeDocumentAttachments(standardValues.attachments),
       };
       const editedUuid = isEdit ? currentTool?.uuid : undefined;
       if (isEdit && editedUuid) {
         await toolApi.update(editedUuid, data);
         messageApi.success(t('app.kuaizhizao.toolLedger.updateSuccess'));
+        const updated = await toolApi.get(editedUuid);
+        if (updated?.id != null) {
+          await saveToolCustomFieldValues(updated.id, customData);
+        }
       } else {
-        await toolApi.create(data);
+        const created = await toolApi.create(data);
+        if (created?.id != null) {
+          await saveToolCustomFieldValues(created.id, customData);
+        }
         messageApi.success(t('app.kuaizhizao.toolLedger.createSuccess'));
       }
       setModalVisible(false);
+      setCurrentTool(null);
+      formRef.current?.resetFields();
+      resetToolFormFieldValues();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || t('common.operationFailed'));
@@ -288,17 +331,7 @@ const ToolLedgerPage: React.FC = () => {
 
   const activeStatusValueEnum = useMemo(() => buildActiveStatusValueEnum(t), [t]);
 
-  const toolStatusValueEnum = useMemo(
-    () => ({
-      正常: { text: t('app.kuaizhizao.toolLedger.statusNormal') },
-      领用中: { text: t('app.kuaizhizao.toolLedger.statusCheckedOut') },
-      维修中: { text: t('app.kuaizhizao.toolLedger.statusRepairing') },
-      校验中: { text: t('app.kuaizhizao.toolLedger.statusCalibrating') },
-      停用: { text: t('app.kuaizhizao.toolLedger.statusDisabled') },
-      报废: { text: t('app.kuaizhizao.toolLedger.statusScrapped') },
-    }),
-    [t],
-  );
+  const toolStatusValueEnum = useMemo(() => buildToolStatusValueEnum(t), [t]);
 
   const columns: ProColumns<Tool>[] = useMemo(() => alignProColumns<Tool>([
     {
@@ -395,6 +428,16 @@ const ToolLedgerPage: React.FC = () => {
       render: (_, r) => (r.quantity != null ? String(r.quantity) : '-'),
     },
     {
+      title: t('app.kuaizhizao.toolLedger.colBorrowedQuantity'),
+      dataIndex: 'borrowed_quantity',
+      width: 96,
+      minWidth: 96,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      render: (_, r) => (r.borrowed_quantity != null ? String(r.borrowed_quantity) : '0'),
+    },
+    {
       title: t('app.kuaizhizao.toolLedger.colSupplier'),
       dataIndex: 'supplier',
       width: 120,
@@ -404,6 +447,21 @@ const ToolLedgerPage: React.FC = () => {
       ellipsis: true,
       hideInSearch: true,
       render: (_, r) => (r.supplier != null && r.supplier !== '' ? String(r.supplier) : '-'),
+    },
+    {
+      // 未进 GLOBAL status(91)：用独立 key 落在供应商与保管人之间（与库存列序一致）
+      title: t('common.status'),
+      key: 'tool_inventory_status',
+      dataIndex: 'status',
+      width: 96,
+      minWidth: 96,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      render: (_, r) => {
+        const mapped = toolStatusTag(r.status, t);
+        return <MarkerTag color={mapped.color}>{mapped.text}</MarkerTag>;
+      },
     },
     {
       title: t('app.kuaizhizao.toolLedger.colCustodian'),
@@ -452,6 +510,7 @@ const ToolLedgerPage: React.FC = () => {
       render: (_, r) => (r.total_usage_count != null ? String(r.total_usage_count) : '-'),
     },
     ...buildDocumentAuditColumns<Record<string, unknown>>(t),
+    ...toolCustomFieldColumns,
     {
       title: t('common.actions'),
       key: 'option',
@@ -478,7 +537,7 @@ const ToolLedgerPage: React.FC = () => {
         }),
     },
   ], SALES_DOC_LIST_FIELD_RANK),
-  [t, activeStatusValueEnum, toolStatusValueEnum, perms, handleDetail],
+  [t, activeStatusValueEnum, toolStatusValueEnum, perms, handleDetail, toolCustomFieldColumns],
   );
 
   return (
@@ -489,7 +548,7 @@ const ToolLedgerPage: React.FC = () => {
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.toolsLedger')}
           headerTitle={t('app.kuaizhizao.toolLedger.title')}
           permissionResource="kuaizhizao:equipment-management-tool-ledger"
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-ledger-r10-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-ledger-r11-inventory-v1"
           actionRef={actionRef}
           rowKey="uuid"
           columns={columns}
@@ -500,7 +559,7 @@ const ToolLedgerPage: React.FC = () => {
             onClick: () => void handleDetail(record),
             style: { cursor: 'pointer' },
           })}
-          request={async (params, sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             try {
               const listParams = resolveLedgerListParams(searchFormValues, sort);
               const response = await toolApi.list({
@@ -509,8 +568,12 @@ const ToolLedgerPage: React.FC = () => {
                 ...listParams,
               });
               const { data, total } = normalizeEquipmentListResponse(response);
+              const enriched =
+                meta?.purpose === 'prefetch'
+                  ? (data as Tool[])
+                  : await enrichToolRecordsWithCustomFields(data as Tool[]);
               return {
-                data: data as Tool[],
+                data: enriched,
                 success: true,
                 total,
               };
@@ -640,8 +703,10 @@ const ToolLedgerPage: React.FC = () => {
                 { key: 'product_model', title: t('app.kuaizhizao.toolLedger.colProductModel') },
                 { key: 'spec', title: t('app.kuaizhizao.toolLedger.import.specification') },
                 { key: 'quantity', title: t('app.kuaizhizao.toolLedger.colQuantity') },
+                { key: 'borrowed_quantity', title: t('app.kuaizhizao.toolLedger.colBorrowedQuantity') },
                 { key: 'manufacturer', title: t('app.kuaizhizao.toolLedger.fieldManufacturer') },
                 { key: 'supplier', title: t('app.kuaizhizao.toolLedger.fieldSupplier') },
+                { key: 'status', title: t('common.status') },
                 { key: 'custodian_name', title: t('app.kuaizhizao.toolLedger.colCustodian') },
                 { key: 'inbound_date', title: t('app.kuaizhizao.toolLedger.colInboundDate') },
                 { key: 'purchase_date', title: t('app.kuaizhizao.toolLedger.fieldPurchaseDate') },
@@ -649,7 +714,6 @@ const ToolLedgerPage: React.FC = () => {
                 { key: 'current_borrow_at', title: t('app.kuaizhizao.toolLedger.colCurrentBorrowAt') },
                 { key: 'last_return_at', title: t('app.kuaizhizao.toolLedger.colLastReturnAt') },
                 { key: 'last_return_by_name', title: t('app.kuaizhizao.toolLedger.colLastReturnBy') },
-                { key: 'status', title: t('app.kuaizhizao.toolLedger.fieldStatus') },
                 { key: 'is_active', title: t('app.kuaizhizao.toolLedger.fieldIsActive') },
               ];
               await downloadRecordsAsXlsx(
@@ -671,6 +735,7 @@ const ToolLedgerPage: React.FC = () => {
         onClose={() => {
           setModalVisible(false);
           setCurrentTool(null);
+          resetToolFormFieldValues();
         }}
         onFinish={handleSubmit}
         isEdit={isEdit}
@@ -788,6 +853,12 @@ const ToolLedgerPage: React.FC = () => {
           <Col span={24}>
             <DocumentAttachmentsField category="tool_ledger_attachments" />
           </Col>
+          <CustomFieldsFormSection
+            customFields={toolFormCustomFields}
+            customFieldValues={toolFormCustomFieldValues}
+            gridColumns={2}
+            embedInParentRow
+          />
           <Col span={24}>
             <ProFormTextArea name="description" label={t('common.remark')} placeholder={t('app.kuaizhizao.toolLedger.phDescription')} fieldProps={{ rows: 2 }} />
           </Col>

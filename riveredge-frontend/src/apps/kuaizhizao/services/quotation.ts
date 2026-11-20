@@ -122,6 +122,11 @@ export interface Quotation {
   items?: QuotationItem[];
   lifecycle?: Record<string, unknown>;
   capabilities?: QuotationCapabilities;
+  audit?: {
+    phase?: string;
+    allowed_actions?: string[];
+    [key: string]: unknown;
+  };
 }
 
 export interface QuotationListParams {
@@ -210,16 +215,23 @@ export async function updateQuotation(id: number, data: Partial<Quotation>): Pro
   });
 }
 
-/** 提交报价单（草稿 → 已发送；蓝图无需审核时自动通过） */
+/** 提交报价单（草稿 → 已提交；页面提交走本接口） */
 export async function submitQuotation(id: number): Promise<Quotation> {
   return apiRequest<Quotation>(`/apps/kuaizhizao/quotations/${id}/submit`, {
     method: 'POST',
   });
 }
 
-/** 撤回报价单（已发送 + 待审核 → 草稿） */
+/** 提交审核（已提交 → 待审核/已发送，或免审直接已发送+已通过） */
+export async function submitQuotationForReview(id: number): Promise<Quotation> {
+  return apiRequest<Quotation>(`/core/uni-audit/quotation/${id}/submit_review`, {
+    method: 'POST',
+  });
+}
+
+/** 撤销提交 / 撤回审核 */
 export async function withdrawQuotation(id: number): Promise<Quotation> {
-  return apiRequest<Quotation>(`/apps/kuaizhizao/quotations/${id}/withdraw`, {
+  return apiRequest<Quotation>(`/core/uni-audit/quotation/${id}/withdraw`, {
     method: 'POST',
   });
 }
@@ -450,6 +462,57 @@ export async function getQuotationPrintVariables(quotationId: number): Promise<R
 export async function recordQuotationPrint(quotationId: number): Promise<{ success: boolean; timestamp?: string }> {
   return apiRequest<{ success: boolean; timestamp?: string }>(`/apps/kuaizhizao/quotations/${quotationId}/record-print`, {
     method: 'POST',
+  });
+}
+
+export type QuotationSalesOrderPullLine = {
+  id: number;
+  quotation_id: number;
+  quotation_code?: string;
+  quotation_status?: string;
+  document_date?: string | null;
+  quotation_date?: string | null;
+  valid_until?: string | null;
+  customer_name?: string | null;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  suggested_quantity?: number;
+  pushed_quantity?: number;
+  remaining_quantity?: number;
+  suggested_aux_quantity?: number | null;
+  pushed_aux_quantity?: number | null;
+  remaining_aux_quantity?: number | null;
+  aux_unit?: string | null;
+  line_notes?: string | null;
+  can_push?: boolean;
+};
+
+export async function listQuotationSalesOrderPullLines(params: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  quotation_id?: number;
+  pullable_only?: boolean;
+}): Promise<{ data: QuotationSalesOrderPullLine[]; total: number }> {
+  return apiRequest('/apps/kuaizhizao/quotations/sales-order-pull-lines', {
+    method: 'GET',
+    params,
+  });
+}
+
+export async function listQuotationSalesReviewPullLines(params: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  quotation_id?: number;
+  pullable_only?: boolean;
+}): Promise<{ data: QuotationSalesOrderPullLine[]; total: number }> {
+  return apiRequest('/apps/kuaizhizao/quotations/sales-review-pull-lines', {
+    method: 'GET',
+    params,
   });
 }
 

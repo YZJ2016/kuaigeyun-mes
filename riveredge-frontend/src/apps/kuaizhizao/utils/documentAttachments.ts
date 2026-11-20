@@ -3,6 +3,8 @@ import { getFileDownloadUrl, getFileDownloadUrlWithToken } from '../../../servic
 
 export type DocumentAttachmentFile = {
   uid?: string;
+  /** 部分接口/历史数据用 uuid 而非 uid */
+  uuid?: string;
   name?: string;
   status?: string;
   url?: string;
@@ -11,6 +13,9 @@ export type DocumentAttachmentFile = {
   supplier_id?: number;
   response?: { uuid?: string; original_name?: string } | Array<{ uuid?: string; original_name?: string }>;
 };
+
+const FILE_UUID_IN_URL_RE =
+  /\/files\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/i;
 
 export function isSystemDocumentAttachment(
   file: Pick<DocumentAttachmentFile, 'kind' | 'source'> | null | undefined,
@@ -23,7 +28,7 @@ export function isSystemDocumentAttachment(
 
 /** 从 Upload 条目或后端 attachments JSON 解析文件 UUID */
 export function resolveDocumentAttachmentFileUuid(
-  file: Pick<DocumentAttachmentFile, 'uid' | 'response'> | UploadFile,
+  file: Pick<DocumentAttachmentFile, 'uid' | 'uuid' | 'url' | 'response'> | UploadFile,
 ): string | undefined {
   const response = (file as DocumentAttachmentFile).response;
   if (response) {
@@ -34,8 +39,16 @@ export function resolveDocumentAttachmentFileUuid(
       return String(response.uuid).trim() || undefined;
     }
   }
+  const directUuid = String((file as DocumentAttachmentFile).uuid ?? '').trim();
+  if (directUuid) return directUuid;
   const uid = String(file.uid ?? '').trim();
-  return uid || undefined;
+  if (uid && !uid.startsWith('rc-upload-') && !uid.startsWith('vc-upload-')) {
+    return uid;
+  }
+  const url = String((file as DocumentAttachmentFile).url ?? '').trim();
+  const fromUrl = url.match(FILE_UUID_IN_URL_RE)?.[1];
+  if (fromUrl) return fromUrl;
+  return undefined;
 }
 
 /** 鉴权打开附件（禁止裸 /download URL，浏览器无法带租户头） */
@@ -71,7 +84,8 @@ export async function downloadDocumentAttachment(
 export function buildDocumentAttachmentUploadHandlers(handlers?: {
   onOpenFailed?: () => void;
 }): Pick<UploadProps, 'onPreview' | 'onDownload'> {
-  const open = (file: UploadFile) => {
+  const open = (file: UploadFile, event?: { preventDefault?: () => void }) => {
+    event?.preventDefault?.();
     void openDocumentAttachment(file).catch(() => {
       handlers?.onOpenFailed?.();
     });
@@ -82,14 +96,22 @@ export function buildDocumentAttachmentUploadHandlers(handlers?: {
   };
 }
 
-/** 编辑回填：后端 attachments → Upload fileList */
+/** 编辑回填：后端 attachments → Upload fileList（保留系统附件标记） */
 export function mapAttachmentsToUploadList(attachments?: DocumentAttachmentFile[] | null) {
-  return (attachments ?? []).map((file) => ({
-    uid: file.uid ?? file.name ?? String(Math.random()),
-    name: file.name ?? '附件',
-    status: 'done' as const,
-    url: file.url ?? (file.uid ? getFileDownloadUrl(file.uid) : undefined),
-  }));
+  return (attachments ?? []).map((file) => {
+    const uuid = resolveDocumentAttachmentFileUuid(file);
+    return {
+      uid: uuid || file.uid || file.name || String(Math.random()),
+      name: file.name ?? '附件',
+      status: 'done' as const,
+      url: file.url ?? (uuid ? getFileDownloadUrl(uuid) : undefined),
+      response: file.response,
+      uuid,
+      kind: file.kind,
+      source: file.source,
+      supplier_id: file.supplier_id,
+    };
+  });
 }
 
 /** 提交前：Upload fileList → 后端 attachments JSON */

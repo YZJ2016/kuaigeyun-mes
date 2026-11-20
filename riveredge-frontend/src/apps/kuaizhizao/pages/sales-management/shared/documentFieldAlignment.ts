@@ -157,6 +157,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   batchNo: 10,
   serialNo: 10,
   photo_file_uuid: 10.2,
+  /** 设备台账：厂区（紧挨图片之后、车间之前；车间最终段位见 51.2） */
+  plant_name: 10.25,
   forecast_name: 10.3,
   name: 10.4,
   title: 10.4,
@@ -239,8 +241,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   /**
    * 检验四单据列表段位（以来料检验为准，四页共用同一 map，勿页面浅覆盖）：
    * inspection_code → quality_inspection_material → supplierReceipt / quality_inspection_partner_stacked
-   * → quality_inspection_kind → 数量类 → quality_inspection_extra → downstream_push_progress
-   * → inspector_name → notes（余量列）→ lifecycle
+   * → quality_inspection_kind → 数量类 → quality_inspection_extra
+   * → inspector_name → notes（余量列）→ downstream_push_progress（紧挨更新时间前）→ lifecycle
    *
    * 不良处理：code → nc_source_inspection → operation_work_order_stacked → nc_material_stacked
    * → nc_defect_type → disposition → defect_quantity → defect_reason → 降级/回用关联 → lifecycle → action
@@ -472,6 +474,10 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   patrol_date: 60,
   fault_date: 60,
   repair_date: 60,
+  /** 设备维修台账：建单 / 到场 / 完修三时点 */
+  repair_task_created_at: 60.04,
+  arrival_at: 60.05,
+  completed_at: 60.06,
   execution_date: 60,
   transfer_date: 60,
   scrap_date: 60,
@@ -531,6 +537,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   supply_source: 20.4,
   visit_method: 20.4,
   current_stage_key: 23,
+  /** 安装执行工作台：阶段进度条列（与 current_stage_key 同段） */
+  stage_progress: 23.1,
   engineer_name: 76.3,
   satisfaction_score: 35,
   planned_start_at: 71,
@@ -577,7 +585,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   supplier_eval_grade_version: 20.7,
   supplier_eval_clause_count: 30.08,
   supplier_eval_template_reminder_lead: 30.085,
-  supplier_eval_plan_progress: 32.1,
+  /** 供应商评审计划进度：与全局进度段一致，紧挨更新时间之前 */
+  supplier_eval_plan_progress: 91.69,
   supplier_eval_score: 34.1,
   supplier_eval_grade: 34.2,
   supplier_eval_env_material: 21.1,
@@ -625,6 +634,17 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   source_type: 20.3,
   version_no: 20.5,
   version: 20.5,
+  /**
+   * 质量体系文件（列须设专用 key，勿用共用 doc_type）
+   * 表单序：编号/标题 → 类型 → 版本 → 体系 → 条款
+   */
+  qms_system_doc_type: 20.4,
+  qms_system_standard: 20.51,
+  qms_system_clause_labels: 20.515,
+  /** 体系文件未回收份数 */
+  qms_system_outstanding_copies: 32.2,
+  /** 体系文件下次复审时刻 */
+  qms_system_next_review_at: 62.2,
   /** 研发/项目单据业务日期（发布日、期望日等；列 key 统一 business_date） */
   business_date: 20.52,
   change_version: 20.55,
@@ -687,6 +707,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   total_quantity: 31,
   quantity: 31,
   required_quantity: 31,
+  /** 工装台账：领用数量（紧挨数量之后） */
+  borrowed_quantity: 31.03,
   available_quantity: 31.1,
   shortage_quantity: 31.2,
   delay_days: 31,
@@ -720,10 +742,12 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   variantPrices: 33.1,
   standard_value: 33.2,
   unit: 33.3,
-  /** 轻财务发票：税率 / 不含税 / 税额（总额 34） */
+  /** 轻财务发票：税率 / 不含税 / 税额 / 优惠 / 开票（总额 34） */
   tax_rate: 33.4,
   invoice_amount: 33.5,
   tax_amount: 33.6,
+  /** 采购发票：优惠金额紧挨税额与开票金额 */
+  discount_amount: 33.7,
   /** 付款单列表：结算类型在付款总额之前 */
   finance_payment_settlement_type: 33.88,
   linked_payable_total_amount: 33.89,
@@ -735,8 +759,10 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   paid_amount: 34.06,
   invoiced_amount: 34.15,
   remaining_invoice_amount: 34.2,
-  /** 轻财务收/付款：已核销 / 未核销 */
+  /** 轻财务收/付款：已核销 / 预付抵扣 / 未核销 */
   settled_amount: 34.25,
+  /** 付款单列表：预付抵扣金额（紧接已核销） */
+  prepayment_deduction_amount: 34.27,
   unsettled_amount: 34.3,
   /** 轻财务往来核销历史金额 */
   finance_settlement_amount: 34.08,
@@ -787,6 +813,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   master_warehouse_type: 20.31,
   master_warehouse_workshop_name: 15.21,
   master_warehouse_work_center_name: 15.22,
+  master_warehouse_storage_area_count: 15.23,
+  master_warehouse_storage_location_count: 15.24,
   /** 轻财务收/付款：退款执行态 Marker */
   refund_execution_status: 34.35,
   /** 工单委外：已发料数量（紧接金额；下推进度 50 须排在其后） */
@@ -818,27 +846,28 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   /** 异常单据：建议动作 */
   suggested_action: 50,
 
-  // —— 50 下推 / 进度（工单委外：须在 issued_quantity 34.5 之后）——
-  work_order_push_progress: 50,
-  order_push_progress: 50,
-  downstream_push_progress: 50,
-  computation_push_progress: 50,
-  /** 发货/收货通知：出库转单 / 入库转单，紧挨关联单号之后、下推进度之前 */
+  /** 发货/收货通知：出库转单 / 入库转单，紧挨关联单号之后 */
   shipment_outbound_conversion: 13,
   receipt_inbound_conversion: 13,
-  outbound_push_progress: 50,
-  inbound_push_progress: 50,
-  /** 轻财务应收：收款下推 / 开票下推 */
-  receipt_push_progress: 50.05,
-  invoice_push_progress: 50.1,
-  /** 轻财务应付：付款下推 */
-  payment_push_progress: 50.06,
-  delivery_progress: 51,
-  receipt_progress: 51,
-  /** 交付项目：当前节点 → 整体进度 → 节点进度（余量列） */
+  /** 交付项目：当前节点 → 节点进度（余量）；整体进度见 progress_percent（紧挨更新时间前） */
   current_node_name: 51.2,
-  progress_percent: 51.5,
   nodes: 52,
+
+  // —— 91.7 下推 / 进度（紧挨 updated_at=92 之前；勿插回数量/日期中段）——
+  work_order_push_progress: 91.7,
+  order_push_progress: 91.7,
+  downstream_push_progress: 91.7,
+  computation_push_progress: 91.7,
+  outbound_push_progress: 91.7,
+  inbound_push_progress: 91.7,
+  /** 轻财务应收：收款下推 / 开票下推 */
+  receipt_push_progress: 91.71,
+  /** 轻财务应付：付款下推 */
+  payment_push_progress: 91.72,
+  invoice_push_progress: 91.73,
+  delivery_progress: 91.8,
+  receipt_progress: 91.8,
+  progress_percent: 91.85,
 
   // —— 60 时间相关 ——
   order_date: 60,
@@ -1025,9 +1054,11 @@ export const SALES_DOC_LIST_FIELD_RANK = GLOBAL_DOC_LIST_FIELD_RANK
  * - 20 产品 / 物料（品种）
  * - 25 类型类（周期/类型等行上带回）
  * - 30–39 数量 / 价税 / 已交未交
- * - 50–59 行下推 / 进度
  * - 60–69 时间
- * - 88–94 更新时间 / 审核 / 生命周期 / 操作
+ * - 76–80 责任人 / 备注
+ * - 88–91.4 审核 / 生命周期
+ * - 91.7 行进度（与列表一致，紧挨 updated_at）
+ * - 92–94 更新时间 / 操作
  */
 export const GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK = {
   // 单据标识
@@ -1050,7 +1081,7 @@ export const GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK = {
   // 类型类
   forecast_period: 25,
   forecast_type: 25.2,
-  // 数量 / 金额
+  // 数量 / 金额（与列表同段；显式 key 须单独登记，normalizeFieldKey 优先 key）
   quote_quantity: 30,
   required_quantity: 30,
   contract_quantity: 30,
@@ -1059,20 +1090,17 @@ export const GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK = {
   quantity: 30,
   unit_price: 31,
   unitPrice: 31,
+  suggested_unit_price: 31,
   tax_rate: 32,
   total_amount: 33,
   item_amount: 33,
   total_price: 33,
+  line_amount: 33,
   delivered_quantity: 34,
   received_quantity: 34,
   remaining_quantity: 35,
   outstanding_quantity: 35,
   bom_check: 36,
-  // 行下推 / 进度
-  line_push_progress: 50,
-  line_delivery_progress: 51,
-  line_release_progress: 52,
-  line_receipt_progress: 53,
   // 时间
   quotation_date: 60,
   contract_date: 60,
@@ -1083,19 +1111,27 @@ export const GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK = {
   quote_deadline: 63,
   partnerMaterialCode: 79.6,
   partnerMaterialName: 79.8,
+  applicant_name: 76.7,
+  department_name: 77.15,
   notes: 80,
   remark: 80,
   remarks: 80,
-  // 系统尾部
-  updated_at: 88,
+  // 系统尾部（与 GLOBAL_DOC_LIST_FIELD_RANK 对齐：审核 → 生命周期 → 进度 → 更新时间 → 操作）
   audit_phase: 89,
   payment_settlement: 91.5,
   lifecycle_stage: 90,
+  lifecycle: 91,
   status: 91,
+  line_push_progress: 91.7,
+  line_delivery_progress: 91.75,
+  line_release_progress: 91.76,
+  line_receipt_progress: 91.77,
+  updated_at: 92,
   action: 94,
+  option: 94,
 } satisfies FieldRankMap
 
-export function alignProColumns<T>(
+export function alignProColumns<T extends Record<string, unknown>>(
   columns: ProColumns<T>[],
   rankMap: FieldRankMap = GLOBAL_DOC_LIST_FIELD_RANK,
 ): ProColumns<T>[] {
@@ -1147,6 +1183,7 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   computation_code: 10,
   inquiry_code: 10,
   requisition_code: 10,
+  order_type: 10.5,
   work_order_code: 10,
   rework_code: 10,
   outsource_order_code: 10,
@@ -1160,6 +1197,17 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   inspection_code: 10,
   report_code: 10,
   document_code: 10,
+  /**
+   * 质量体系文件详情：类型 → 版本 → 适用体系 → 关联条款 → 复审 → 文件地址
+   * （列/描述项须设专用 key，勿用共用 doc_type）
+   */
+  qms_system_doc_type: 20.4,
+  qms_system_version: 20.5,
+  qms_system_standard: 20.51,
+  qms_system_clause_labels: 20.56,
+  qms_system_next_review_at: 62.2,
+  qms_system_file_url: 81.05,
+  qms_system_effective_at: 12.2,
   node_id: 10,
   node_type: 20,
   document_type: 21,
@@ -1265,7 +1313,7 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   demand_type: 20,
   business_mode: 20.1,
   source_type: 20.3,
-  order_type: 20.4,
+  order_type: 10.5,
   request_type: 20.42,
   repair_mode: 20.43,
   supply_source: 20.44,
@@ -1388,6 +1436,9 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   work_center_name: 51.4,
   capable_operations: 51.45,
   workstation_name: 51.6,
+  payment_method_code: 51.9,
+  settlement_terms_code: 51.95,
+  payment_terms_days: 51.97,
   payment_terms: 52,
   payment_method: 52.2,
   settlement_type: 52.3,
@@ -1484,7 +1535,7 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   updated_at: 93.1,
 } satisfies FieldRankMap
 
-export function alignDescriptionColumns<T>(
+export function alignDescriptionColumns<T extends Record<string, unknown>>(
   columns: ProDescriptionsItemProps<T>[],
   rankMap: FieldRankMap = GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK,
 ): ProDescriptionsItemProps<T>[] {

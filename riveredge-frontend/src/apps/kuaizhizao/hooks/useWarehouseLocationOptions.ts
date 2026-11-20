@@ -61,8 +61,12 @@ export function useWarehouseLocationOptions() {
     return storageLocationList
       .filter((loc: any) => {
         const areaId = Number(loc.storageAreaId ?? loc.storage_area_id ?? 0);
+        const locWh = Number(loc.warehouseId ?? loc.warehouse_id ?? 0);
         if (!selectedWarehouseId) return true;
-        return visibleStorageAreaIds.has(areaId);
+        if (areaId) return visibleStorageAreaIds.has(areaId);
+        // 直挂本仓；未挂库区/仓库的独立仓位仍可联用任意仓库
+        if (locWh) return locWh === selectedWarehouseId;
+        return true;
       })
       .map((loc: any) => {
         const code = String(loc.code ?? '').trim();

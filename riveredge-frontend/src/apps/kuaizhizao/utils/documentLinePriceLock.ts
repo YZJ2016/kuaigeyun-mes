@@ -29,7 +29,7 @@ export function isDocumentLineUnitPriceLocked(line: Record<string, unknown> | nu
   }
   const srcCode = line.source_document_code ?? line.sourceDocumentCode ?? line.source_order_code ?? line.sourceOrderCode;
   if (srcCode != null && String(srcCode).trim() !== '') return true;
-  if (line.pricing_locked === true || line.unit_price_locked === true) return true;
+  if (line.pricing_locked === true || line[DOCUMENT_LINE_UNIT_PRICE_LOCKED_KEY] === true) return true;
   const salesDeliveryItemId = line.sales_delivery_item_id ?? line.salesDeliveryItemId;
   if (salesDeliveryItemId != null && String(salesDeliveryItemId).trim() !== '' && Number(salesDeliveryItemId) > 0) {
     return true;
@@ -39,6 +39,23 @@ export function isDocumentLineUnitPriceLocked(line: Record<string, unknown> | nu
     purchaseReceiptItemId != null &&
     String(purchaseReceiptItemId).trim() !== '' &&
     Number(purchaseReceiptItemId) > 0
+  ) {
+    return true;
+  }
+  // 采购入库从采购订单/收货通知取单：行上只有 *_item_id，无 source_*，须锁定以免改数量重算冲掉订单价
+  const purchaseOrderItemId = line.purchase_order_item_id ?? line.purchaseOrderItemId;
+  if (
+    purchaseOrderItemId != null &&
+    String(purchaseOrderItemId).trim() !== '' &&
+    Number(purchaseOrderItemId) > 0
+  ) {
+    return true;
+  }
+  const receiptNoticeItemId = line.receipt_notice_item_id ?? line.receiptNoticeItemId;
+  if (
+    receiptNoticeItemId != null &&
+    String(receiptNoticeItemId).trim() !== '' &&
+    Number(receiptNoticeItemId) > 0
   ) {
     return true;
   }

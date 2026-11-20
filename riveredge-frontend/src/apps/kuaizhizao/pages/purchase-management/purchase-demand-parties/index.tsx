@@ -127,25 +127,6 @@ export function PurchaseDemandPartiesPanel({
               />,
             );
           }
-          if (perms.canDelete) {
-            actions.push(
-              <Popconfirm
-                key="del"
-                title={t(`${NS}.confirmDelete`)}
-                onConfirm={async () => {
-                  try {
-                    await deletePurchaseDemandParty(record.id);
-                    messageApi.success(t('common.deleteSuccess'));
-                    actionRef.current?.reload();
-                  } catch (e) {
-                    messageApi.error(getApiErrorMessage(e, t('common.deleteFailed')));
-                  }
-                }}
-              >
-                <Button type="link" size="small" {...rowActionKind('delete')} />
-              </Popconfirm>,
-            );
-          }
           return actions;
         },
       },

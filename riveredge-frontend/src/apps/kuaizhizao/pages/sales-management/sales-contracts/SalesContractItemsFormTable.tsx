@@ -8,14 +8,13 @@ import { AppstoreAddOutlined, ImportOutlined, PlusOutlined } from '@ant-design/i
 import { Button, DatePicker, Form, Input, InputNumber, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
-import { ThemedSegmented } from '../../../../../components/themed-segmented';
+import { ProductScopeColumnTitle } from '../shared/ProductScopeColumnTitle';
 import PriceTypeSwitch from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import { DEFAULT_SALES_PRICE_TYPE, salesFormPriceType } from '../shared/salesPriceType';
 import {
   buildDocumentDetailPartnerMaterialFormColumns,
   buildDocumentDetailSpecModelFormColumns,
 } from '../shared/materialLineFormDetail';
-import { buildDocumentLineDualQuantityFormColumns } from '../../../../../components/quantity-with-unit';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import {
   DOCUMENT_DETAIL_AMOUNT_STYLE,
@@ -29,7 +28,7 @@ import {
   TaxRateBatchColumnTitle,
   TaxRateDetailCell,
 } from '../../../components/document-detail-table/documentDetailTable';
-import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
+import { buildDocumentLineDualQuantityFormColumns } from '../../../../../components/quantity-with-unit';
 import { OrderLineVariantAttributesCell } from '../../../../master-data/components/OrderLineVariantAttributesCell';
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_SALES_CONTRACT_FIELD_RESOURCE as SC } from '../../../constants/fieldPermissionResources';
@@ -87,18 +86,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
   const [productScope, setProductScope] = React.useState<'make' | 'all'>('make');
   const materialSourceType = productScope === 'make' ? 'Make' : undefined;
   const productColumnTitle = (
-    <Space size={8} align="center">
-      <span>{t('app.kuaizhizao.salesOrder.material')}</span>
-      <ThemedSegmented
-        size="small"
-        value={productScope}
-        options={[
-          { label: t('app.kuaizhizao.sales.common.productScopeMake'), value: 'make' },
-          { label: t('app.kuaizhizao.sales.common.productScopeAll'), value: 'all' },
-        ]}
-        onChange={(val) => setProductScope((val as 'make' | 'all') ?? 'make')}
-      />
-    </Space>
+    <ProductScopeColumnTitle productScope={productScope} onProductScopeChange={setProductScope} />
   );
 
   return (
@@ -160,6 +148,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                       onAfterQuantityChange: (rowIndex) => {
                         void repriceUnlockedSalesDocumentLineIfNeeded(formRef.current, rowIndex, {
                           asOfField: 'contract_date',
+                          trigger: 'quantity',
                         });
                       },
                     }),
@@ -204,6 +193,32 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                         </Form.Item>
                       ),
                     },
+                    {
+                      title: (
+                        <TaxRateBatchColumnTitle
+                          onBatch={(num) => {
+                            const itemsVal = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
+                            if (itemsVal.length === 0) return;
+                            const pt = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
+                            const next = itemsVal.map((it: any) =>
+                              applyDocumentLineTaxRateChange({
+                                row: it,
+                                qty: it.contract_quantity,
+                                newTaxRate: num,
+                                priceType: pt,
+                                priceDecimals,
+                              }),
+                            );
+                            formRef.current?.setFieldsValue({ items: next });
+                          }}
+                        />
+                      ),
+                      dataIndex: 'tax_rate',
+                      width: DOCUMENT_DETAIL_COL_WIDTH.taxRate,
+                      ...DOCUMENT_DETAIL_NUM_COL,
+                      onCell: () => ({ className: 'quotation-tax-rate-col' }),
+                      render: (_: unknown, __: unknown, index: number) => <TaxRateDetailCell index={index} />,
+                    },
                     ...(showTaxBreakdownColumns
                       ? [
                           {
@@ -236,36 +251,6 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                               </Form.Item>
                             ),
                           },
-                        ]
-                      : []),
-                    {
-                      title: (
-                        <TaxRateBatchColumnTitle
-                          onBatch={(num) => {
-                            const itemsVal = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
-                            if (itemsVal.length === 0) return;
-                            const pt = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
-                            const next = itemsVal.map((it: any) =>
-                              applyDocumentLineTaxRateChange({
-                                row: it,
-                                qty: it.contract_quantity,
-                                newTaxRate: num,
-                                priceType: pt,
-                                priceDecimals,
-                              }),
-                            );
-                            formRef.current?.setFieldsValue({ items: next });
-                          }}
-                        />
-                      ),
-                      dataIndex: 'tax_rate',
-                      width: DOCUMENT_DETAIL_COL_WIDTH.taxRate,
-                      ...DOCUMENT_DETAIL_NUM_COL,
-                      onCell: () => ({ className: 'quotation-tax-rate-col' }),
-                      render: (_: unknown, __: unknown, index: number) => <TaxRateDetailCell index={index} />,
-                    },
-                    ...(showTaxBreakdownColumns
-                      ? [
                           {
                             title: t('app.kuaizhizao.salesOrder.taxAmount', currencyVars),
                             width: DOCUMENT_DETAIL_COL_WIDTH.taxAmount,

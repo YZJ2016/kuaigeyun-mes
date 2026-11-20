@@ -20,8 +20,11 @@ export type KuaizhizaoPrintDocumentType =
   | 'purchase_requisition'
   | 'payment_application'
   | 'finance_payment'
+  | 'other_expense'
   | 'purchase_receipt'
   | 'work_order'
+  | 'outsource_order'
+  | 'outsource_work_order'
   | 'production_picking'
   | 'production_return'
   | 'finished_goods_receipt'
@@ -49,9 +52,12 @@ const PRINT_API_PATH_BUILDERS: Record<KuaizhizaoPrintDocumentType, (id: number) 
   purchase_order: (id) => `/apps/kuaizhizao/purchase-orders/${id}/print`,
   purchase_requisition: (id) => `/apps/kuaizhizao/purchase-requisitions/${id}/print`,
   payment_application: (id) => `/apps/kuaizhizao/payment-applications/${id}/print`,
-  finance_payment: (id) => `/apps/kuaicaiwu/payments/${id}/print`,
+  finance_payment: (id) => `/apps/kuaizhizao/payments/${id}/print`,
+  other_expense: (id) => `/apps/kuaizhizao/other-expenses/${id}/print`,
   purchase_receipt: (id) => `/apps/kuaizhizao/purchase-receipts/${id}/print`,
   work_order: (id) => `/apps/kuaizhizao/work-orders/${id}/print`,
+  outsource_order: (id) => `/apps/kuaizhizao/outsource-orders/${id}/print`,
+  outsource_work_order: (id) => `/apps/kuaizhizao/outsource-work-orders/${id}/print`,
   production_picking: (id) => `/apps/kuaizhizao/production-pickings/${id}/print`,
   production_return: (id) => `/apps/kuaizhizao/production-returns/${id}/print`,
   finished_goods_receipt: (id) => `/apps/kuaizhizao/finished-goods-receipts/${id}/print`,

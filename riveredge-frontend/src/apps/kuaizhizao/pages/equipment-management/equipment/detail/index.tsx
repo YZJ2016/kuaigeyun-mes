@@ -104,6 +104,9 @@ interface EquipmentDetail {
   warranty_period?: number;
   workshop_id?: number;
   workshop_name?: string;
+  plant_id?: number;
+  plant_code?: string;
+  plant_name?: string;
   production_line_id?: number;
   production_line_code?: string;
   production_line_name?: string;
@@ -258,6 +261,11 @@ const EquipmentDetailPage: React.FC = () => {
       { title: t('app.kuaizhizao.equipment.colPurchaseDate'), dataIndex: 'purchase_date', valueType: 'date' },
       { title: t('app.kuaizhizao.equipment.colInstallationDate'), dataIndex: 'installation_date', valueType: 'date' },
       { title: t('app.kuaizhizao.equipment.colWarrantyPeriod'), dataIndex: 'warranty_period' },
+      {
+        title: t('app.kuaizhizao.equipment.colPlant'),
+        dataIndex: 'plant_name',
+        render: (_, r) => r.plant_name || '-',
+      },
       { title: t('app.kuaizhizao.equipment.colWorkshop'), dataIndex: 'workshop_name' },
       { title: t('app.kuaizhizao.equipment.colProductionLine'), dataIndex: 'production_line_name' },
       {

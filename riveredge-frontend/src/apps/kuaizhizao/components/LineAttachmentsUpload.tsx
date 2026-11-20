@@ -2,9 +2,9 @@
  * 明细行级图片上传（picture-card），写入 attachments [{uid,name,status,url}]
  * 预览/缩略图必须走鉴权 URL；上传后先用本地 blob 立即显示，再后台换鉴权地址。
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { App, Upload } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { App, Button, Popover, Space, Upload } from 'antd';
+import { DeleteOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
 import { useTranslation } from 'react-i18next';
 import {
@@ -21,6 +21,8 @@ import {
   resolveDocumentAttachmentFileUuid,
   type DocumentAttachmentFile,
 } from '../utils/documentAttachments';
+import FilePreviewModal from '../../../components/file-preview';
+import { getFileExt } from '../../../utils/filePreviewKind';
 import { DocumentAttachmentsReadonly } from './DocumentAttachmentsReadonly';
 
 const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
@@ -39,6 +41,8 @@ type Props = {
   disabled?: boolean;
   /** 只读预览（详情） */
   readOnly?: boolean;
+  /** 明细表行内：图标+文字，无 picture-card */
+  variant?: 'picture-card' | 'inline';
 };
 
 type ResolvedUrls = { thumbUrl?: string; url?: string; local?: boolean };
@@ -50,6 +54,7 @@ export const LineAttachmentsUpload: React.FC<Props> = ({
   maxCount = 4,
   disabled,
   readOnly,
+  variant = 'picture-card',
 }) => {
   const { t } = useTranslation();
   const { message } = App.useApp();
@@ -179,6 +184,23 @@ export const LineAttachmentsUpload: React.FC<Props> = ({
     [baseList, resolvedUrls],
   );
 
+  const [inlinePopoverOpen, setInlinePopoverOpen] = useState(false);
+  const [inlinePreviewOpen, setInlinePreviewOpen] = useState(false);
+  const [inlinePreviewUuid, setInlinePreviewUuid] = useState<string | undefined>();
+  const [inlinePreviewName, setInlinePreviewName] = useState<string | undefined>();
+
+  const removeInlineFile = useCallback(
+    (uid: string) => {
+      const next = normalizeDocumentAttachments(
+        fileList.filter(
+          (f) => (resolveDocumentAttachmentFileUuid(f) || String(f.uid || '')).trim() !== uid,
+        ) as DocumentAttachmentFile[],
+      );
+      onChange?.(next);
+    },
+    [fileList, onChange],
+  );
+
   if (readOnly) {
     if (!fileList.length) return <span>—</span>;
     // PDF/证书等非图片：走 DocumentAttachmentsReadonly → FilePreviewModal
@@ -241,6 +263,105 @@ export const LineAttachmentsUpload: React.FC<Props> = ({
     }
   };
 
+  if (variant === 'inline') {
+    const atMax = fileList.length >= maxCount;
+    const countLabel = t('components.documentAttachments.count', { count: fileList.length });
+    return (
+      <>
+        <Space size={4} align="center" style={{ whiteSpace: 'nowrap' }}>
+          <Upload
+            accept="image/*"
+            multiple
+            disabled={disabled || atMax}
+            showUploadList={false}
+            fileList={fileList}
+            customRequest={customRequest}
+            {...attachmentUploadHandlers}
+            styles={{
+              root: { display: 'inline-flex', alignItems: 'center', lineHeight: 1 },
+              trigger: { display: 'inline-flex', alignItems: 'center', lineHeight: 1 },
+            }}
+            onChange={({ fileList: next }) => {
+              onChange?.(normalizeDocumentAttachments(next as DocumentAttachmentFile[]));
+            }}
+          >
+            <Button
+              type="link"
+              size="small"
+              disabled={disabled || atMax}
+              icon={<UploadOutlined />}
+              style={{ display: 'inline-flex', alignItems: 'center' }}
+            >
+              {t('common.upload')}
+            </Button>
+          </Upload>
+          {fileList.length > 0 ? (
+            <Popover
+              trigger="click"
+              open={inlinePopoverOpen}
+              onOpenChange={setInlinePopoverOpen}
+              content={
+                <Space orientation="vertical" size={4} style={{ maxWidth: 280 }}>
+                  {fileList.map((f) => {
+                    const uid = resolveDocumentAttachmentFileUuid(f) || String(f.uid || '').trim();
+                    if (!uid) return null;
+                    const name = f.name || t('components.documentAttachments.label');
+                    return (
+                      <Space key={uid} size={4} wrap>
+                        <Button
+                          type="link"
+                          size="small"
+                          style={{ padding: 0, height: 'auto' }}
+                          onClick={() => {
+                            setInlinePreviewUuid(uid);
+                            setInlinePreviewName(name);
+                            setInlinePreviewOpen(true);
+                            setInlinePopoverOpen(false);
+                          }}
+                        >
+                          {name}
+                        </Button>
+                        {!disabled ? (
+                          <Button
+                            type="link"
+                            size="small"
+                            danger
+                            icon={<DeleteOutlined />}
+                            aria-label={t('common.delete')}
+                            style={{ padding: 0, height: 'auto' }}
+                            onClick={() => removeInlineFile(uid)}
+                          />
+                        ) : null}
+                      </Space>
+                    );
+                  })}
+                </Space>
+              }
+            >
+              <Button type="link" size="small" style={{ padding: 0, height: 'auto' }}>
+                {countLabel}
+              </Button>
+            </Popover>
+          ) : null}
+        </Space>
+        <FilePreviewModal
+          open={inlinePreviewOpen}
+          onClose={() => {
+            setInlinePreviewOpen(false);
+            setInlinePreviewUuid(undefined);
+            setInlinePreviewName(undefined);
+          }}
+          fileUuid={inlinePreviewUuid}
+          fileName={inlinePreviewName}
+          fileExtension={
+            inlinePreviewName ? getFileExt({ fileName: inlinePreviewName }) : undefined
+          }
+          title={inlinePreviewName}
+        />
+      </>
+    );
+  }
+
   return (
     <Upload
       listType="picture-card"
@@ -259,7 +380,7 @@ export const LineAttachmentsUpload: React.FC<Props> = ({
       {fileList.length >= maxCount ? null : (
         <div>
           <PlusOutlined />
-          <div style={{ marginTop: 4, fontSize: 12 }}>上传</div>
+          <div style={{ marginTop: 4, fontSize: 12 }}>{t('common.upload')}</div>
         </div>
       )}
     </Upload>

@@ -27,6 +27,7 @@ import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
 import { formatDateTime } from '../../../../../utils/format';
+import './index.less';
 
 const { Meta } = Card;
 const { Option } = Select;
@@ -41,7 +42,11 @@ const STATUS_I18N: Record<string, string> = {
   '维修中': `${P}.status.maintenance`,
   '故障': `${P}.status.fault`,
   '停用': `${P}.status.disabled`,
+  '校验中': `${P}.status.calibrating`,
+  '报废': `${P}.status.scrapped`,
 };
+
+const STATUS_MONITOR_PROTECTED = new Set(['停用', '报废', '校验中']);
 
 interface EquipmentStatus {
   equipment: {
@@ -126,17 +131,24 @@ const EquipmentStatusPage: React.FC = () => {
     return key ? t(key) : status;
   };
 
-  const statusFormOptions = useMemo(
-    () => [
+  const statusFormOptions = useMemo(() => {
+    const base = [
       { label: t(`${P}.status.normal`), value: '正常' },
       { label: t(`${P}.status.running`), value: '运行中' },
       { label: t(`${P}.status.standby`), value: '待机' },
       { label: t(`${P}.status.maintenance`), value: '维修中' },
       { label: t(`${P}.status.fault`), value: '故障' },
       { label: t(`${P}.status.disabled`), value: '停用' },
-    ],
-    [t],
-  );
+      { label: t(`${P}.status.calibrating`), value: '校验中' },
+      { label: t(`${P}.status.scrapped`), value: '报废' },
+    ];
+    // 报废/停用/校验中仅展示当前值，不可在监控页改到其它态（须走报废/状态变更单据）
+    const current = String(currentEquipment?.status || '');
+    if (STATUS_MONITOR_PROTECTED.has(current)) {
+      return base.filter((opt) => opt.value === current);
+    }
+    return base.filter((opt) => !STATUS_MONITOR_PROTECTED.has(opt.value));
+  }, [t, currentEquipment?.status]);
 
   const descriptionColumns: ProDescriptionsItemProps<Record<string, unknown>>[] = useMemo(
     () => [
@@ -203,6 +215,8 @@ const EquipmentStatusPage: React.FC = () => {
       '维修中': 'warning',
       '故障': 'error',
       '停用': 'default',
+      '校验中': 'processing',
+      '报废': 'error',
     };
     return statusColors[status] || 'default';
   };
@@ -341,7 +355,21 @@ const EquipmentStatusPage: React.FC = () => {
     running: filteredStatusList.filter((item) => item.status === '运行中').length,
     maintenance: filteredStatusList.filter((item) => item.status === '维修中').length,
     fault: filteredStatusList.filter((item) => item.status === '故障').length,
+    scrapped: filteredStatusList.filter((item) => item.status === '报废').length,
   };
+
+  const statCards = useMemo(
+    () => [
+      { key: 'total', value: stats.total, color: undefined as string | undefined, labelKey: `${P}.stat.total` },
+      { key: 'online', value: stats.online, color: '#52c41a', labelKey: `${P}.stat.online` },
+      { key: 'offline', value: stats.offline, color: '#ff4d4f', labelKey: `${P}.stat.offline` },
+      { key: 'running', value: stats.running, color: '#1890ff', labelKey: `${P}.stat.running` },
+      { key: 'maintenance', value: stats.maintenance, color: '#faad14', labelKey: `${P}.stat.maintenance` },
+      { key: 'fault', value: stats.fault, color: '#ff4d4f', labelKey: `${P}.stat.fault` },
+      { key: 'scrapped', value: stats.scrapped, color: '#8c8c8c', labelKey: `${P}.stat.scrapped` },
+    ],
+    [stats.fault, stats.maintenance, stats.offline, stats.online, stats.running, stats.scrapped, stats.total],
+  );
 
   const hoursSuffix = t(`${P}.unit.hours`);
 
@@ -394,57 +422,22 @@ const EquipmentStatusPage: React.FC = () => {
           </Button>
         </Space>
       </div>
-      {/* 统计卡片 */}
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col xs={12} sm={8} md={6} lg={4}>
-          <Card size="small">
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 24, fontWeight: 'bold' }}>{stats.total}</div>
-              <div style={{ color: '#999' }}>{t(`${P}.stat.total`)}</div>
+      {/* 统计卡片：宽屏 7 列单行，标签不换行 */}
+      <div className="kuaizhizao-equipment-status-stat-grid">
+        {statCards.map((item) => (
+          <Card key={item.key} size="small" className="kuaizhizao-equipment-status-stat-card">
+            <div className="kuaizhizao-equipment-status-stat-card__body">
+              <div
+                className="kuaizhizao-equipment-status-stat-card__value"
+                style={item.color ? { color: item.color } : undefined}
+              >
+                {item.value}
+              </div>
+              <div className="kuaizhizao-equipment-status-stat-card__label">{t(item.labelKey)}</div>
             </div>
           </Card>
-        </Col>
-        <Col xs={12} sm={8} md={6} lg={4}>
-          <Card size="small">
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 24, fontWeight: 'bold', color: '#52c41a' }}>{stats.online}</div>
-              <div style={{ color: '#999' }}>{t(`${P}.stat.online`)}</div>
-            </div>
-          </Card>
-        </Col>
-        <Col xs={12} sm={8} md={6} lg={4}>
-          <Card size="small">
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 24, fontWeight: 'bold', color: '#ff4d4f' }}>{stats.offline}</div>
-              <div style={{ color: '#999' }}>{t(`${P}.stat.offline`)}</div>
-            </div>
-          </Card>
-        </Col>
-        <Col xs={12} sm={8} md={6} lg={4}>
-          <Card size="small">
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 24, fontWeight: 'bold', color: '#1890ff' }}>{stats.running}</div>
-              <div style={{ color: '#999' }}>{t(`${P}.stat.running`)}</div>
-            </div>
-          </Card>
-        </Col>
-        <Col xs={12} sm={8} md={6} lg={4}>
-          <Card size="small">
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 24, fontWeight: 'bold', color: '#faad14' }}>{stats.maintenance}</div>
-              <div style={{ color: '#999' }}>{t(`${P}.stat.maintenance`)}</div>
-            </div>
-          </Card>
-        </Col>
-        <Col xs={12} sm={8} md={6} lg={4}>
-          <Card size="small">
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 24, fontWeight: 'bold', color: '#ff4d4f' }}>{stats.fault}</div>
-              <div style={{ color: '#999' }}>{t(`${P}.stat.fault`)}</div>
-            </div>
-          </Card>
-        </Col>
-      </Row>
+        ))}
+      </div>
 
       {/* 筛选栏 */}
       <Card size="small" style={{ marginBottom: 16 }}>
@@ -464,6 +457,8 @@ const EquipmentStatusPage: React.FC = () => {
                 <Option value="维修中">{t(`${P}.status.maintenance`)}</Option>
                 <Option value="故障">{t(`${P}.status.fault`)}</Option>
                 <Option value="停用">{t(`${P}.status.disabled`)}</Option>
+                <Option value="校验中">{t(`${P}.status.calibrating`)}</Option>
+                <Option value="报废">{t(`${P}.status.scrapped`)}</Option>
               </Select>
             </Space>
           </Col>

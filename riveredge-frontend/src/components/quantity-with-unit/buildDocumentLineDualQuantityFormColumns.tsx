@@ -105,14 +105,39 @@ export type DocumentLineDualQuantityDetailColumnOptions = {
   width?: number;
 };
 
+/** 详情抽屉/只读 Table：副数量。无副单位时显示空值占位。 */
+export function buildDocumentLineAuxQuantityDetailColumn(
+  params: DocumentLineDualQuantityDetailColumnOptions,
+): Record<string, unknown> {
+  const auxQuantityField = params.auxQuantityField ?? 'aux_quantity';
+  const auxUnitField = params.auxUnitField ?? 'aux_unit';
+  const width = params.width ?? DUAL_QUANTITY_COL_WIDTH;
+
+  return {
+    title: params.t('common.auxQuantity'),
+    dataIndex: auxQuantityField,
+    width,
+    align: 'right' as const,
+    render: (_: unknown, row: Record<string, unknown>) => {
+      const auxQty = row[auxQuantityField];
+      const auxUnit = row[auxUnitField];
+      const auxNum = auxQty != null && auxQty !== '' ? Number(auxQty) : NaN;
+      const hasAux =
+        (Number.isFinite(auxNum) && auxNum > 0) || String(auxUnit ?? '').trim().length > 0;
+      if (!hasAux) {
+        return EMPTY_VALUE_PLACEHOLDER;
+      }
+      return <QuantityWithUnitDisplay quantity={auxQty} unit={auxUnit} />;
+    },
+  };
+}
+
 /** 详情抽屉/只读 Table：主数量 + 副数量，与 buildDocumentLineDualQuantityPairColumns 列序一致 */
 export function buildDocumentLineDualQuantityDetailColumns(
   params: DocumentLineDualQuantityDetailColumnOptions,
 ): Record<string, unknown>[] {
   const quantityField = params.quantityField ?? 'quantity';
   const unitField = params.unitField ?? 'unit';
-  const auxQuantityField = params.auxQuantityField ?? 'aux_quantity';
-  const auxUnitField = params.auxUnitField ?? 'aux_unit';
   const width = params.width ?? DUAL_QUANTITY_COL_WIDTH;
 
   return [
@@ -125,23 +150,7 @@ export function buildDocumentLineDualQuantityDetailColumns(
         <QuantityWithUnitDisplay quantity={val} unit={row[unitField]} />
       ),
     },
-    {
-      title: params.t('common.auxQuantity'),
-      dataIndex: auxQuantityField,
-      width,
-      align: 'right' as const,
-      render: (_: unknown, row: Record<string, unknown>) => {
-        const auxQty = row[auxQuantityField];
-        const auxUnit = row[auxUnitField];
-        const auxNum = auxQty != null && auxQty !== '' ? Number(auxQty) : NaN;
-        const hasAux =
-          (Number.isFinite(auxNum) && auxNum > 0) || String(auxUnit ?? '').trim().length > 0;
-        if (!hasAux) {
-          return EMPTY_VALUE_PLACEHOLDER;
-        }
-        return <QuantityWithUnitDisplay quantity={auxQty} unit={auxUnit} />;
-      },
-    },
+    buildDocumentLineAuxQuantityDetailColumn(params),
   ];
 }
 

@@ -134,35 +134,13 @@ export const ShiftRosterDowntimePanel: React.FC = () => {
                     {t('common.edit')}
                   </Button>
                 ) : null}
-                {calendarPerms.canDelete ? (
-                  <Popconfirm
-                    key="delete"
-                    {...rowActionKind('delete')}
-                    title={t('app.kuaizhizao.performance.workCalendar.messages.downtimeDeleteConfirm')}
-                    onConfirm={async () => {
-                      try {
-                        await stationUnavailableApi.delete(row.uuid);
-                        messageApi.success(
-                          t('app.kuaizhizao.performance.workCalendar.messages.downtimeDeleted'),
-                        );
-                        actionRef.current?.reload();
-                      } catch (e: any) {
-                        messageApi.error(e?.message || t('common.saveFailed'));
-                      }
-                    }}
-                  >
-                    <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                      {t('common.delete')}
-                    </Button>
-                  </Popconfirm>
-                ) : null}
               </Space>
             ),
           },
         ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [calendarPerms.canDelete, calendarPerms.canUpdate, form, messageApi, t],
+    [calendarPerms.canUpdate, form, messageApi, t],
   );
 
   return (
@@ -172,7 +150,7 @@ export const ShiftRosterDowntimePanel: React.FC = () => {
       </Typography.Paragraph>
       <UniTable<StationUnavailableWindow>
         headerTitle={t('app.kuaizhizao.performance.workCalendar.downtimeTableTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.performance.shift-rosters.downtime.v1"
+        columnPersistenceId="apps.kuaizhizao.pages.performance.shift-rosters.downtime.v2"
         permissionResource={CALENDAR_RESOURCE}
         actionRef={actionRef}
         rowKey="uuid"
@@ -200,6 +178,7 @@ export const ShiftRosterDowntimePanel: React.FC = () => {
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}
         enableRowSelection={calendarPerms.canDelete}
         showDeleteButton={calendarPerms.canDelete}
+        deleteButtonText={t('common.delete')}
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => stationUnavailableApi.delete(String(key))));
           messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));

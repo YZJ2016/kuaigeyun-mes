@@ -235,25 +235,6 @@ const ShiftsPage: React.FC = () => {
               />,
             );
           }
-          if (shiftPerms.canDelete) {
-            parts.push(
-              <Popconfirm
-                key="delete"
-                title={t('app.kuaizhizao.performance.shifts.messages.deleteConfirm')}
-                onConfirm={async () => {
-                  try {
-                    await shiftApi.delete(record.uuid);
-                    messageApi.success(t('common.deleteSuccess'));
-    actionRef.current?.reload();
-                  } catch (e: any) {
-                    messageApi.error(e?.message || t('common.deleteFailed'));
-                  }
-                }}
-              >
-                <Button {...rowActionKind('delete')} />
-              </Popconfirm>,
-            );
-          }
           return parts;
         },
       },
@@ -266,7 +247,7 @@ const ShiftsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<Shift>
           headerTitle={t('app.kuaizhizao.performance.shifts.pageTitle')}
-          columnPersistenceId="apps.kuaizhizao.pages.performance.shifts.v6"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.shifts.v7"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.shifts')}
           actionRef={actionRef}
@@ -282,6 +263,7 @@ const ShiftsPage: React.FC = () => {
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton={shiftPerms.canDelete}
+          deleteButtonText={t('common.delete')}
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.performance.shifts.messages.deleteBatchConfirm', { count })}
           showAdvancedSearch

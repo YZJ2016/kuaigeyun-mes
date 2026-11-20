@@ -362,7 +362,11 @@ export function resolveInventoryMaterialBalanceListParams(
 ): Record<string, string | number | undefined> {
   return {
     order_by: resolveOrderBy(sort),
-    keyword: pickListSearchKeyword(searchFormValues),
+    keyword: pickListSearchKeywordOrFields(
+      searchFormValues,
+      'material_code',
+      'material_name',
+    ),
     material_id: pickFiniteNumber(searchFormValues, 'material_id'),
     warehouse_id: pickFiniteNumber(searchFormValues, 'warehouse_id'),
   };
@@ -374,7 +378,12 @@ export function resolveInventoryBatchLineListParams(
 ): Record<string, string | number | undefined> {
   return {
     order_by: resolveOrderBy(sort),
-    keyword: pickListSearchKeyword(searchFormValues),
+    keyword: pickListSearchKeywordOrFields(
+      searchFormValues,
+      'material_code',
+      'material_name',
+      'batch_no',
+    ),
     material_id: pickFiniteNumber(searchFormValues, 'material_id'),
     warehouse_id: pickFiniteNumber(searchFormValues, 'warehouse_id'),
     batch_number: pickSearchString(searchFormValues, 'batch_no'),
@@ -776,6 +785,10 @@ export function resolveOutboundHubListParams(
 ): Record<string, string | number | readonly string[] | undefined> {
   const { created_start_date, created_end_date, updated_start_date, updated_end_date } =
     resolveCommonDateRanges(searchFormValues);
+  const { date_start: delivery_start_date, date_end: delivery_end_date } = parseSalesReportDateRange(
+    searchFormValues ?? {},
+    ['delivery_date_range', 'deliveryDateRange'],
+  );
   const hubScopedOutboundTypesRaw = pickSearchRaw(searchFormValues, 'hub_scoped_outbound_types');
   const hubScopedOutboundTypes = Array.isArray(hubScopedOutboundTypesRaw)
     ? hubScopedOutboundTypesRaw.filter(
@@ -800,6 +813,8 @@ export function resolveOutboundHubListParams(
     customer_name: pickSearchString(searchFormValues, 'customer_name'),
     total_quantity: pickFiniteNumber(searchFormValues, 'total_quantity'),
     total_items: pickFiniteNumber(searchFormValues, 'total_items'),
+    delivery_start_date,
+    delivery_end_date,
     created_start_date,
     created_end_date,
     updated_start_date,

@@ -14,16 +14,18 @@ import { apiRequest } from '../../../services/api';
  */
 export enum DemandStatus {
   DRAFT = 'DRAFT',
+  SUBMITTED = 'SUBMITTED',
   PENDING_REVIEW = 'PENDING_REVIEW',
   AUDITED = 'AUDITED',
   REJECTED = 'REJECTED',
-  CONFIRMED = 'CONFIRMED'
+  CONFIRMED = 'CONFIRMED',
 }
 
 export enum ReviewStatus {
+  DRAFT = 'DRAFT',
   PENDING = 'PENDING',
   APPROVED = 'APPROVED',
-  REJECTED = 'REJECTED'
+  REJECTED = 'REJECTED',
 }
 
 export interface Demand {
@@ -94,6 +96,12 @@ export interface Demand {
   capabilities?: {
     merge_computation?: { allowed: boolean; reason?: string | null };
     delete?: { allowed: boolean; reason?: string | null };
+    update?: { allowed: boolean; reason?: string | null };
+    submit?: { allowed: boolean; reason?: string | null };
+    submit_review?: { allowed: boolean; reason?: string | null };
+    withdraw_submit?: { allowed: boolean; reason?: string | null };
+    approve?: { allowed: boolean; reason?: string | null };
+    revoke_approval?: { allowed: boolean; reason?: string | null };
   };
 }
 
@@ -228,12 +236,34 @@ export async function updateDemand(id: number, data: Partial<Demand>): Promise<D
 }
 
 /**
- * 提交需求
+ * 提交需求（遗留业务路径；列表提交请用 commitDemand）
  */
 export async function submitDemand(id: number): Promise<Demand> {
   return apiRequest<Demand>(`/apps/kuaizhizao/demands/${id}/submit`, {
     method: 'POST',
   });
+}
+
+/** 草稿 → 已提交（不启审批） */
+export function commitDemand(id: number) {
+  return apiRequest(`/core/uni-audit/demand/${id}/submit`, { method: 'POST' });
+}
+
+/** 已提交 → 待审核 / 免审已确认 */
+export function submitDemandForReview(id: number) {
+  return apiRequest(`/core/uni-audit/demand/${id}/submit_review`, { method: 'POST' });
+}
+
+export function withdrawDemandSubmit(id: number) {
+  return apiRequest(`/core/uni-audit/demand/${id}/withdraw`, { method: 'POST' });
+}
+
+export function approveDemandAudit(id: number) {
+  return apiRequest(`/core/uni-audit/demand/${id}/approve`, { method: 'POST' });
+}
+
+export function revokeDemandApproval(id: number) {
+  return apiRequest(`/core/uni-audit/demand/${id}/revoke`, { method: 'POST' });
 }
 
 /**
@@ -441,4 +471,62 @@ export async function cleanOrphanDemands(): Promise<CleanOrphanDemandsResponse> 
   return apiRequest<CleanOrphanDemandsResponse>('/apps/kuaizhizao/demands/clean-orphans', {
     method: 'POST',
   });
+}
+
+export type DemandPlanMrpPullLine = {
+  id: number;
+  line_id: number;
+  demand_item_id?: number;
+  demand_id?: number;
+  demand_code?: string;
+  plan_date?: string | null;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  quantity?: number;
+  analyzed_quantity?: number;
+  remaining_quantity?: number;
+  required_date?: string | null;
+  line_notes?: string | null;
+  bom_version?: string | null;
+  bom_multi_version_allowed?: boolean;
+  warehouse_id?: number | null;
+  warehouse_name?: string | null;
+  current_stock?: number;
+};
+
+export type DemandPlanWorkOrderPullLine = DemandPlanMrpPullLine & {
+  transferred_quantity?: number;
+};
+
+export async function listDemandPlanMrpPullLines(params?: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  demand_id?: number;
+  pullable_only?: boolean;
+  date_from?: string;
+  date_to?: string;
+}): Promise<{ data: DemandPlanMrpPullLine[]; total: number }> {
+  return apiRequest<{ data: DemandPlanMrpPullLine[]; total: number }>(
+    '/apps/kuaizhizao/demands/mrp-pull-lines',
+    { method: 'GET', params },
+  );
+}
+
+export async function listDemandPlanWorkOrderPullLines(params?: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  demand_id?: number;
+  pullable_only?: boolean;
+  date_from?: string;
+  date_to?: string;
+}): Promise<{ data: DemandPlanWorkOrderPullLine[]; total: number }> {
+  return apiRequest<{ data: DemandPlanWorkOrderPullLine[]; total: number }>(
+    '/apps/kuaizhizao/demands/work-order-pull-lines',
+    { method: 'GET', params },
+  );
 }

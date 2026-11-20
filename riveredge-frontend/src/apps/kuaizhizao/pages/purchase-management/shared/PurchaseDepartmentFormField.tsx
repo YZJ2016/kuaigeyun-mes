@@ -10,7 +10,7 @@ import {
   type DepartmentPickerOption,
 } from '../../../../master-data/utils/flattenDepartmentTreeOptions';
 
-export type PurchaseDepartmentOption = Pick<DepartmentPickerOption, 'label' | 'value'>;
+export type PurchaseDepartmentOption = Pick<DepartmentPickerOption, 'label' | 'value' | 'uuid'>;
 
 export function usePurchaseDepartmentOptions(): {
   options: PurchaseDepartmentOption[];
@@ -30,6 +30,7 @@ export function usePurchaseDepartmentOptions(): {
           flattenDepartmentTreeOptions(res?.items ?? []).map((d) => ({
             label: d.label,
             value: d.value,
+            uuid: d.uuid,
           })),
         );
       })
@@ -52,6 +53,22 @@ export function usePurchaseDepartmentOptions(): {
   };
 
   return { options, loading, resolveName };
+}
+
+/** 按申请人所在部门 uuid 映射采购表头 department_id/name（选项未就绪时返回空）。 */
+export function resolvePurchaseDepartmentFromApplicant(
+  departmentUuid: string | null | undefined,
+  options: PurchaseDepartmentOption[],
+): { department_id?: number; department_name?: string } {
+  const uuid = String(departmentUuid ?? '').trim();
+  if (!uuid || !options.length) {
+    return { department_id: undefined, department_name: undefined };
+  }
+  const hit = options.find((o) => o.uuid === uuid);
+  if (!hit) {
+    return { department_id: undefined, department_name: undefined };
+  }
+  return { department_id: hit.value, department_name: hit.label };
 }
 
 export function resolvePurchaseDepartmentPayload(

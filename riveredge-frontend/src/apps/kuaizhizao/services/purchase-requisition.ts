@@ -181,6 +181,8 @@ export type PurchaseRequisitionPullLine = {
   /** 申请日期 YYYY-MM-DD */
   requisition_date?: string | null;
   applicant_name?: string | null;
+  department_id?: number | null;
+  department_name?: string | null;
   material_id?: number;
   material_code?: string;
   material_name?: string;
@@ -189,7 +191,15 @@ export type PurchaseRequisitionPullLine = {
   suggested_quantity?: number;
   pushed_quantity?: number;
   remaining_quantity?: number;
+  suggested_aux_quantity?: number | null;
+  pushed_aux_quantity?: number | null;
+  remaining_aux_quantity?: number | null;
+  aux_unit?: string | null;
+  /** 全仓可用总库存（与看板总库存同口径） */
+  current_stock?: number;
   required_date?: string | null;
+  /** 申请行备注 */
+  line_notes?: string | null;
   supplier_id?: number | null;
 };
 
