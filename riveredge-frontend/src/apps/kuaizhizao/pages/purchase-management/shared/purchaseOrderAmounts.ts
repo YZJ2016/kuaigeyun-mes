@@ -8,17 +8,18 @@ import {
   computeDocumentGoodsTotals,
   mapDocumentGoodsTotalsToPurchaseHeader,
   resolveDocumentFormLineAmounts,
+  resolveDocumentLineDisplayAmounts,
   resolveDocumentStoredNetGrossAmount,
   type DocumentGoodsTotals,
 } from '../../../utils/documentLineAmounts';
-import { purchaseFormPriceType } from './purchasePriceType';
-import type { PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
 
 const roundMoney = (value: number): number => {
   const places = getCachedNumericPrecisionPlaces('amount');
   const factor = 10 ** places;
   return Math.round(value * factor) / factor;
 };
+import type { PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
+import { purchaseFormPriceType } from './purchasePriceType';
 
 /**
  * 采购行库字段 total_price / total_amount 恒为未税金额。
@@ -57,8 +58,9 @@ export function resolvePurchaseReceiptLineTaxPercent(
   lineTax: unknown,
   headerTax: unknown,
 ): number {
-  const fromLine = purchaseOrderTaxRateToPercent(lineTax);
-  if (fromLine > 0) return fromLine;
+  if (lineTax != null && lineTax !== '' && Number.isFinite(Number(lineTax))) {
+    return purchaseOrderTaxRateToPercent(lineTax);
+  }
   return purchaseOrderTaxRateToPercent(headerTax);
 }
 
@@ -68,7 +70,7 @@ export function resolvePurchaseOrderLineTaxPercent(
   headerTaxRate?: unknown,
 ): number {
   const lineRaw = Number(item.tax_rate);
-  if (Number.isFinite(lineRaw) && lineRaw > 0) {
+  if (item.tax_rate != null && Number.isFinite(lineRaw)) {
     return purchaseOrderTaxRateToPercent(lineRaw);
   }
   return purchaseOrderTaxRateToPercent(headerTaxRate);
@@ -204,7 +206,7 @@ export function purchaseOrderDetailUnitPriceIncl(
   _priceType: 'tax_inclusive' | 'tax_exclusive' = 'tax_inclusive',
 ): number | null {
   const raw = row.display_unit_price ?? row.displayUnitPrice;
-  if (raw == null || String(raw) === '') return null;
+  if (raw == null || raw === '') return null;
   const n = Number(raw);
   return Number.isFinite(n) ? n : null;
 }
@@ -265,9 +267,18 @@ export function computePurchaseReceiptLineSettlementAmounts(
 ): { excl: number; tax: number; incl: number; taxPct: number } {
   const taxPct = resolvePurchaseReceiptLineTaxPercent(row.tax_rate, headerTaxRate);
   const qty = Number(row.receipt_quantity) || 0;
+  const pt = purchaseFormPriceType(priceType);
   const displayRaw = row.display_unit_price ?? row.displayUnitPrice;
   const hasDisplay =
-    displayRaw != null && String(displayRaw) !== '' && Number(displayRaw) > 0;
+    displayRaw != null && displayRaw !== '' && Number(displayRaw) > 0;
+  const unit = Number(row.unit_price) || 0;
+  if (pt === 'tax_inclusive') {
+    const enteredUnit = hasDisplay ? Number(displayRaw) : unit;
+    if (enteredUnit > 0 && qty > 0) {
+      const line = calcDocumentLineAmounts(qty, enteredUnit, taxPct, 'tax_inclusive');
+      return { excl: line.excl, tax: line.tax, incl: line.incl, taxPct };
+    }
+  }
   if (hasDisplay) {
     const line = calcDocumentLineAmounts(
       qty,
@@ -277,7 +288,6 @@ export function computePurchaseReceiptLineSettlementAmounts(
     );
     return { excl: line.excl, tax: line.tax, incl: line.incl, taxPct };
   }
-  const unit = Number(row.unit_price) || 0;
   const line = calcDocumentLineAmounts(qty, unit, taxPct, 'tax_exclusive');
   return { excl: line.excl, tax: line.tax, incl: line.incl, taxPct };
 }

@@ -496,7 +496,7 @@ riveredge-backend/scripts/backfill_inclusive_tax_misentry.py	80d27a871d1473c213b
 riveredge-backend/scripts/scan_document_action_bypass.py	c75d95016bc34ed87da0728eb52a52d06b8ab472	applied	ea1f4da58e刷新反馈+读加速+门禁加固
 riveredge-backend/scripts/scan_finance_host_orm_imports.py	d9b9d5d63fd1a626fcc5373f19b69e116f6ca1c5	tracked	seed from 52bce20beb
 riveredge-backend/scripts/scan_finance_management_orm_registry.py	67aae842b6f8657cea0a279b205eaaaa4ab5658c	tracked	seed from 2c945a39fb
-riveredge-backend/scripts/scan_tracked_gitignore_drift.py	8a5f6c87dfc2e5cf8aa7f03a7fe4b1ea8301bd99	deferred	测试/脚本/文档随所属特性域待评或安全可摘但暂登记（预审A包）
+riveredge-backend/scripts/scan_tracked_gitignore_drift.py	8a5f6c87dfc2e5cf8aa7f03a7fe4b1ea8301bd99	domain-out	上游瘦身契约脚本：禁路径清单含本地刻意跟踪资产(aoci/.cursor/AGENTS.md/kuaicaiwu)，口径不兼容
 riveredge-backend/scripts/tenant_kingdee_strong_consistency.py	b2844d17485477f2777040de0c3cfd97a5eb7b86	tracked	seed from 1d4531b7f6
 riveredge-backend/src/apps/common/base_service.py	411e8ceac6c4eedf6f639f57cc77bee8a70757c2	applied	R2：与上游tip blob一致，本地已同步
 riveredge-backend/src/apps/common/document_push_gate.py	40ee72e1874963a4d5aff27471a93471f8438f64	applied	R2:kuaiconnect包落地,公共门控随包落地(动态加载apps.kuaiconnect.services.*)
@@ -1874,7 +1874,7 @@ riveredge-frontend/package-lock.json	f0618bf2bb2d07abc3fd67168cf425a5bdb8c785	ap
 riveredge-frontend/package.json	7da58d8e444c484518fb8cb903b9ca6e2f56ee52	applied	积压图标真bug：补已有MenuMorphIcon调用缺失的两导出与lucide/morphicons依赖；反查用globalThis.Map避免Lucide Map遮蔽；真实模块load/解析回归通过；其余依赖不升级
 riveredge-frontend/scripts/antd6-legacy-scan.json	57ea61e8779296d0cfcc8cc67eab95493f993cff	tracked	seed from 9de82e8d57
 riveredge-frontend/scripts/perf_menu_baseline.md	de1ce10f898589108c2f1b9d12d4db9d4c072f00	applied	ea1f4da58e刷新反馈+读加速+门禁加固
-riveredge-frontend/scripts/purchase-amount-live-test.ts	2aea3ea70b969f419337c8a411a1f7facc7eb47d	deferred	测试/脚本/文档随所属特性域待评或安全可摘但暂登记（预审A包）
+riveredge-frontend/scripts/purchase-amount-live-test.ts	2aea3ea70b969f419337c8a411a1f7facc7eb47d	applied	价税函数与上游一致；live-test 30场景全绿（tax_rate=0行覆盖+tax_inclusive入库行口径修复）
 riveredge-frontend/scripts/scan_document_dual_quantity_integration.py	a88387ce91bb3b409f677c16e296c6167daf59ac	tracked	seed from b12cc66e71
 riveredge-frontend/scripts/scan_document_import_export_ssot.py	b6c95cf864ff5af9d064d06919effcaff412d2f8	tracked	seed from 8c111dd65f
 riveredge-frontend/scripts/scan_purchase_amount_contract.py	dfb48d375f7d4d6e4a0b176ad3cbba0cef29be3d	tracked	seed from 5b1b9828e4
@@ -2212,7 +2212,7 @@ riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/shared/Purchase
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/shared/applySupplierFormFields.ts	024e49a3a8b2b29abff1a0f493e22096a688769e	applied	R2簇3 依赖件:salesOrderSyncFields别名/applySupplier defaultCurrency/syncSourceUtils/types(随tip再评)
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/shared/partnerSupplierFormSnapshot.ts	33b412a35d5dd9ba18d933de64e506f1b41bbb9f	tracked	seed from e451b48dc2
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/shared/purchaseOrderAmounts.test.ts	ba6da78e6e31f9d69f0e27dc482095a2a3ee54c4	tracked	seed from e451b48dc2
-riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/shared/purchaseOrderAmounts.ts	8c206ec347288961de357926818903ccc9e95d57	tracked	seed from e451b48dc2
+riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/shared/purchaseOrderAmounts.ts	8c206ec347288961de357926818903ccc9e95d57	applied	价税函数与上游一致；live-test 30场景全绿（tax_rate=0行覆盖+tax_inclusive入库行口径修复）
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/shared/purchasePriceType.ts	9438c7eaefd2e4bfa2e5c9388e04f0ee445ec9bb	tracked	seed from 2c945a39fb
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/components/CreateInspectionDefectModal.tsx	4a033ee75d399b2ee9ee82ad5791909bb97aad1d	applied	R2质量簇：缺陷行库位/处置库位/方案切换器/系统文档导航抽屉取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/components/DispositionConditionalFields.tsx	fb5c35abfc7aa17849331ce763f8f1e356bd962e	applied	R2质量簇：缺陷行库位/处置库位/方案切换器/系统文档导航抽屉取上游tip
