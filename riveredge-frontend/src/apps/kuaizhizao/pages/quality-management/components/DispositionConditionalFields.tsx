@@ -3,6 +3,7 @@ import { Alert, Form } from 'antd';
 import { ProFormItem } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
+import { UniWhLocationOrWholeAuto } from '../../../../../components/uni-wh-dropdown';
 import { DowngradeDispositionFields } from './DowngradeDispositionFields';
 
 const EFFECT_HINT_KEYS: Record<string, string> = {
@@ -15,6 +16,31 @@ const EFFECT_HINT_KEYS: Record<string, string> = {
   other: 'app.kuaizhizao.quality.nc.dispositionHint.other',
 };
 
+function DispositionLocationField({ warehouseId }: { warehouseId?: number }) {
+  const { t } = useTranslation();
+  const form = Form.useFormInstance();
+  return (
+    <ProFormItem name="location_id" label={t('app.kuaizhizao.quality.common.form.dispositionLocation')}>
+      <UniWhLocationOrWholeAuto
+        warehouseId={warehouseId}
+        style={{ width: '100%' }}
+        selectWarehouseFirstPlaceholder={t(
+          'app.kuaizhizao.quality.common.placeholder.selectWarehouseFirst',
+        )}
+        selectLocationPlaceholder={t(
+          'app.kuaizhizao.quality.common.placeholder.dispositionLocation',
+        )}
+        onChange={(value, loc) => {
+          form.setFieldsValue({
+            location_id: value,
+            location_code: loc?.code,
+          });
+        }}
+      />
+    </ProFormItem>
+  );
+}
+
 /** 随处置变化的字段与保存后闭环说明（七种处置统一入口） */
 export function DispositionConditionalFields({
   dispositionFieldName = 'disposition',
@@ -22,8 +48,15 @@ export function DispositionConditionalFields({
   dispositionFieldName?: string;
 }) {
   const { t } = useTranslation();
+  const form = Form.useFormInstance();
   const disposition = Form.useWatch(dispositionFieldName);
+  const quarantineWarehouseId = Form.useWatch('quarantine_warehouse_id');
+  const stockWarehouseId = Form.useWatch('stock_warehouse_id');
   const hintKey = disposition ? EFFECT_HINT_KEYS[String(disposition)] : undefined;
+
+  const clearLocation = () => {
+    form.setFieldsValue({ location_id: undefined, location_code: undefined });
+  };
 
   return (
     <>
@@ -32,56 +65,71 @@ export function DispositionConditionalFields({
       ) : null}
       <DowngradeDispositionFields dispositionFieldName={dispositionFieldName} />
       {disposition === 'quarantine' ? (
-        <ProFormItem
-          name="quarantine_warehouse_id"
-          label={t('app.kuaizhizao.quality.common.form.quarantineWarehouse')}
-          rules={[
-            {
-              required: true,
-              message: t('app.kuaizhizao.quality.common.validation.requiredQuarantineWarehouse'),
-            },
-          ]}
-        >
-          <UniWarehouseSelect
-            placeholder={t('app.kuaizhizao.quality.common.placeholder.quarantineWarehouse')}
-            style={{ width: '100%' }}
-          />
-        </ProFormItem>
+        <>
+          <ProFormItem
+            name="quarantine_warehouse_id"
+            label={t('app.kuaizhizao.quality.common.form.quarantineWarehouse')}
+            rules={[
+              {
+                required: true,
+                message: t('app.kuaizhizao.quality.common.validation.requiredQuarantineWarehouse'),
+              },
+            ]}
+          >
+            <UniWarehouseSelect
+              placeholder={t('app.kuaizhizao.quality.common.placeholder.quarantineWarehouse')}
+              style={{ width: '100%' }}
+              onChange={() => clearLocation()}
+            />
+          </ProFormItem>
+          <DispositionLocationField warehouseId={quarantineWarehouseId} />
+        </>
       ) : null}
       {disposition === 'scrap' ? (
-        <ProFormItem
-          name="stock_warehouse_id"
-          label={t('app.kuaizhizao.quality.common.form.scrapWarehouse')}
-          rules={[
-            {
-              required: true,
-              message: t('app.kuaizhizao.quality.common.validation.requiredScrapWarehouse'),
-            },
-          ]}
-        >
-          <UniWarehouseSelect
-            placeholder={t('app.kuaizhizao.quality.common.placeholder.scrapWarehouse')}
-            style={{ width: '100%' }}
-          />
-        </ProFormItem>
+        <>
+          <ProFormItem
+            name="stock_warehouse_id"
+            label={t('app.kuaizhizao.quality.common.form.scrapWarehouse')}
+            rules={[
+              {
+                required: true,
+                message: t('app.kuaizhizao.quality.common.validation.requiredScrapWarehouse'),
+              },
+            ]}
+          >
+            <UniWarehouseSelect
+              placeholder={t('app.kuaizhizao.quality.common.placeholder.scrapWarehouse')}
+              style={{ width: '100%' }}
+              onChange={() => clearLocation()}
+            />
+          </ProFormItem>
+          <DispositionLocationField warehouseId={stockWarehouseId} />
+        </>
       ) : null}
       {disposition === 'accept' ? (
-        <ProFormItem
-          name="stock_warehouse_id"
-          label={t('app.kuaizhizao.quality.common.form.acceptWarehouse')}
-          rules={[
-            {
-              required: true,
-              message: t('app.kuaizhizao.quality.common.validation.requiredAcceptWarehouse'),
-            },
-          ]}
-        >
-          <UniWarehouseSelect
-            placeholder={t('app.kuaizhizao.quality.common.placeholder.acceptWarehouse')}
-            style={{ width: '100%' }}
-          />
-        </ProFormItem>
+        <>
+          <ProFormItem
+            name="stock_warehouse_id"
+            label={t('app.kuaizhizao.quality.common.form.acceptWarehouse')}
+            rules={[
+              {
+                required: true,
+                message: t('app.kuaizhizao.quality.common.validation.requiredAcceptWarehouse'),
+              },
+            ]}
+          >
+            <UniWarehouseSelect
+              placeholder={t('app.kuaizhizao.quality.common.placeholder.acceptWarehouse')}
+              style={{ width: '100%' }}
+              onChange={() => clearLocation()}
+            />
+          </ProFormItem>
+          <DispositionLocationField warehouseId={stockWarehouseId} />
+        </>
       ) : null}
+      <ProFormItem name="location_code" hidden>
+        <input />
+      </ProFormItem>
     </>
   );
 }

@@ -4,6 +4,7 @@ import { Form } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
+import { UniWhLocationOrWholeAuto } from '../../../../../components/uni-wh-dropdown';
 
 interface DowngradeDispositionFieldsProps {
   dispositionFieldName?: string;
@@ -17,7 +18,9 @@ export function DowngradeDispositionFields({
   warehouseFieldName = 'downgrade_warehouse_id',
 }: DowngradeDispositionFieldsProps) {
   const { t } = useTranslation();
+  const form = Form.useFormInstance();
   const disposition = Form.useWatch(dispositionFieldName);
+  const warehouseId = Form.useWatch(warehouseFieldName);
 
   if (disposition !== 'downgrade') {
     return null;
@@ -43,6 +46,30 @@ export function DowngradeDispositionFields({
         <UniWarehouseSelect
           placeholder={t('app.kuaizhizao.quality.common.placeholder.downgradeWarehouse')}
           style={{ width: '100%' }}
+          onChange={() =>
+            form.setFieldsValue({ location_id: undefined, location_code: undefined })
+          }
+        />
+      </ProFormItem>
+      <ProFormItem
+        name="location_id"
+        label={t('app.kuaizhizao.quality.common.form.dispositionLocation')}
+      >
+        <UniWhLocationOrWholeAuto
+          warehouseId={warehouseId}
+          style={{ width: '100%' }}
+          selectWarehouseFirstPlaceholder={t(
+            'app.kuaizhizao.quality.common.placeholder.selectWarehouseFirst',
+          )}
+          selectLocationPlaceholder={t(
+            'app.kuaizhizao.quality.common.placeholder.dispositionLocation',
+          )}
+          onChange={(value, loc) => {
+            form.setFieldsValue({
+              location_id: value,
+              location_code: loc?.code,
+            });
+          }}
         />
       </ProFormItem>
     </>

@@ -88,7 +88,7 @@ export function buildConductStepResultDefaults(
       out[key] = { value: [] };
     }
   });
-  return out;
+    return out;
 }
 
 /** 已保存的分项检验结果（conduct 后写入模板 JSON） */
@@ -115,6 +115,50 @@ export function hasConductStepResults(inspection: Record<string, unknown> | null
   const template = getInspectionTemplateSource(inspection);
   if (!template) return false;
   return Object.keys(getConductStepResults(template)).length > 0;
+}
+
+/** 是否已开展过检验（可再次打开检验弹窗编辑回填） */
+export function hasConductedInspection(
+  inspection: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!inspection) return false;
+  if (hasConductStepResults(inspection)) return true;
+  const result = String(inspection.inspection_result || '').trim();
+  if (result === '已检验') return true;
+  const status = String(inspection.status || '').trim();
+  return status === '已检验' || status === '已审核' || status === '待审核' || status === '已驳回';
+}
+
+/**
+ * 开展检验弹窗回填：已保存数量/备注/分项结果优先；未开展时合格数默认=检验数量。
+ * 附件由页面自行 mapAttachmentsToUploadList 后合并。
+ */
+export function buildInspectionConductFormValues(
+  inspection: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  const template = getInspectionTemplateSource(inspection);
+  const savedSteps = getConductStepResults(template);
+  const defaults = buildConductStepResultDefaults(inspection);
+  const conducted = hasConductedInspection(inspection);
+  const inspectionQty = Number(inspection?.inspection_quantity ?? 0);
+  const safeInspectionQty = Number.isFinite(inspectionQty) ? inspectionQty : 0;
+  const qualifiedRaw = conducted
+    ? Number(inspection?.qualified_quantity ?? 0)
+    : safeInspectionQty;
+  const unqualifiedRaw = conducted
+    ? Number(inspection?.unqualified_quantity ?? 0)
+    : 0;
+  const notes = String(inspection?.notes ?? '');
+  const reason = inspection?.nonconformance_reason;
+  return {
+    qualified_quantity: Number.isFinite(qualifiedRaw) ? qualifiedRaw : 0,
+    unqualified_quantity: Number.isFinite(unqualifiedRaw) ? unqualifiedRaw : 0,
+    notes,
+    ...(reason != null && String(reason).trim()
+      ? { nonconformance_reason: String(reason) }
+      : {}),
+    conduct_step_results: { ...defaults, ...savedSteps },
+  };
 }
 
 /** 从表单值提取 conduct 所需的 measurement_data / item_results / conduct_step_results / inspector_id */

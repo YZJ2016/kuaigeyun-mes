@@ -11,6 +11,9 @@ export type InspectionDefectLineDraft = {
   stock_warehouse_id?: number;
   downgrade_material_id?: number;
   downgrade_warehouse_id?: number;
+  /** 处置入库/隔离库位（仓下有库位时可选；无库位后端整仓） */
+  location_id?: number;
+  location_code?: string;
 };
 
 export type InspectionDefectLinePayload = {
@@ -23,6 +26,8 @@ export type InspectionDefectLinePayload = {
   stock_warehouse_id?: number;
   downgrade_material_id?: number;
   downgrade_warehouse_id?: number;
+  location_id?: number;
+  location_code?: string;
 };
 
 export function createEmptyDefectLine(
@@ -54,6 +59,8 @@ export function toDefectLinePayload(line: InspectionDefectLineDraft): Inspection
     stock_warehouse_id: line.stock_warehouse_id,
     downgrade_material_id: line.downgrade_material_id,
     downgrade_warehouse_id: line.downgrade_warehouse_id,
+    location_id: line.location_id,
+    location_code: line.location_code?.trim() || undefined,
   };
 }
 

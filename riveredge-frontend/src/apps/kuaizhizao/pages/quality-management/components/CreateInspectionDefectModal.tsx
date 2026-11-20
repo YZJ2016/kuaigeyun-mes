@@ -145,6 +145,8 @@ export function CreateInspectionDefectModal({
             stock_warehouse_id: undefined,
             downgrade_material_id: undefined,
             downgrade_warehouse_id: undefined,
+            location_id: undefined,
+            location_code: undefined,
             remarks: patch.disposition === 'other' ? next.remarks : '',
           };
         }

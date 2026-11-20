@@ -1,16 +1,24 @@
 /**
  * 检验 Modal：待检验切换检验方案（Card 标题栏右侧）。
+ * 无可用方案时可快速新建同类型质检方案（与来料补检 / 巡检新建一致）。
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { App, Button, Popconfirm, Select, Space, Typography } from 'antd';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { App, Button, Popconfirm, Space, Typography, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import InspectionPlanFormModal, {
+  type InspectionPlanRecord,
+} from '../../../components/InspectionPlanFormModal';
 import { inspectionPlanApi, unwrapInspectionPlanList } from '../../../services/production';
 import {
   getInspectionPlanNameAndCode,
   getInspectionTemplateSource,
 } from './inspectionTemplateUtils';
 import type { InspectionPlanType } from './QualityInspectionDetailSupplement';
+
+const INSPECTION_PLAN_RESOURCE = 'kuaizhizao:quality-management-inspection-plans';
 
 function resolveInspectionPlanId(
   template: Record<string, unknown> | null,
@@ -77,13 +85,15 @@ export function InspectionConductPlanSwitcher({
   inspection,
   planType,
   materialId: _materialId,
-  operationId: _operationId,
+  operationId,
   disabled,
   disabledTitle,
   onApplyPlan,
 }: InspectionConductPlanSwitcherProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
+  const { token } = theme.useToken();
+  const { canCreate: canCreatePlan } = useResourcePermissions(INSPECTION_PLAN_RESOURCE);
   const template = getInspectionTemplateSource(inspection);
   const currentPlanId = resolveInspectionPlanId(template, inspection);
   const snapOption = useMemo(
@@ -95,65 +105,96 @@ export function InspectionConductPlanSwitcher({
   const [selectedPlanId, setSelectedPlanId] = useState<number | undefined>();
   const [planApplying, setPlanApplying] = useState(false);
   const [plansLoading, setPlansLoading] = useState(false);
-  const [planSearchText, setPlanSearchText] = useState('');
+  const [quickPlanOpen, setQuickPlanOpen] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
 
   const inspectionIdentity = `${String(inspection.id ?? '')}:${currentPlanId ?? ''}`;
+  const quickPlanModalZIndex = token.zIndexPopupBase + 80;
+
+  const reloadPlanOptions = useCallback(async () => {
+    setPlansLoading(true);
+    try {
+      // 与已入库补检一致：按环节类型列出启用方案，不按物料/工序收窄（否则常为空）
+      const res = await inspectionPlanApi.list({
+        plan_type: planType,
+        is_active: true,
+        skip: 0,
+        limit: 200,
+        include_steps: false,
+      });
+      const items = unwrapInspectionPlanList(res);
+      const options = mergePlanOptions(mapPlanListToOptions(items), snapOption);
+      setPlanOptions(options);
+      setSelectedPlanId((prev) => {
+        if (prev != null && options.some((o) => o.value === prev)) return prev;
+        return currentPlanId ?? snapOption?.value;
+      });
+      return options;
+    } catch (e: unknown) {
+      if (snapOption) {
+        setPlanOptions([snapOption]);
+        setSelectedPlanId(snapOption.value);
+        return [snapOption];
+      }
+      setPlanOptions([]);
+      message.error((e as Error)?.message || t('common.loadFailed'));
+      return [];
+    } finally {
+      setPlansLoading(false);
+    }
+  }, [planType, currentPlanId, snapOption, message, t]);
 
   useEffect(() => {
     let cancelled = false;
-    setPlansLoading(true);
     void (async () => {
-      try {
-        // 与已入库补检一致：按环节类型列出启用方案，不按物料/工序收窄（否则常为空）
-        const res = await inspectionPlanApi.list({
-          plan_type: planType,
-          is_active: true,
-          skip: 0,
-          limit: 200,
-          include_steps: false,
-        });
-        const items = unwrapInspectionPlanList(res);
-        if (cancelled) return;
-        const options = mergePlanOptions(mapPlanListToOptions(items), snapOption);
-        setPlanOptions(options);
-        setSelectedPlanId(currentPlanId ?? snapOption?.value);
-      } catch (e: unknown) {
-        if (!cancelled) {
-          if (snapOption) {
-            setPlanOptions([snapOption]);
-            setSelectedPlanId(snapOption.value);
-          } else {
-            setPlanOptions([]);
-          }
-          message.error((e as Error)?.message || t('common.loadFailed'));
-        }
-      } finally {
-        if (!cancelled) setPlansLoading(false);
-      }
+      if (cancelled) return;
+      await reloadPlanOptions();
     })();
     return () => {
       cancelled = true;
     };
-  }, [planType, currentPlanId, inspectionIdentity, snapOption, message, t]);
+  }, [reloadPlanOptions, inspectionIdentity, reloadToken]);
 
-  const handleApply = async () => {
-    if (!selectedPlanId) {
+  const handleApply = async (planId?: number) => {
+    const targetId = planId ?? selectedPlanId;
+    if (!targetId) {
       message.warning(t('app.kuaizhizao.quality.common.messages.selectInspectionPlan'));
       return;
     }
-    if (currentPlanId && selectedPlanId === currentPlanId) {
+    if (currentPlanId && targetId === currentPlanId) {
       message.info(t('app.kuaizhizao.quality.common.messages.inspectionPlanUnchanged'));
       return;
     }
     try {
       setPlanApplying(true);
-      await onApplyPlan(selectedPlanId);
+      await onApplyPlan(targetId);
       message.success(t('app.kuaizhizao.quality.common.messages.applyInspectionPlanSuccess'));
     } catch (e: unknown) {
       message.error((e as Error)?.message || t('common.saveFailed'));
     } finally {
       setPlanApplying(false);
     }
+  };
+
+  const handleQuickPlanSuccess = async (created: InspectionPlanRecord) => {
+    const id = created?.id != null ? Number(created.id) : NaN;
+    if (!Number.isFinite(id) || id <= 0) {
+      setQuickPlanOpen(false);
+      setReloadToken((n) => n + 1);
+      return;
+    }
+    const label = formatPlanOptionLabel(
+      String(created.plan_name ?? ''),
+      String(created.plan_code ?? ''),
+    );
+    setPlanOptions((prev) => {
+      if (prev.some((o) => o.value === id)) return prev;
+      return [{ value: id, label: label || String(id) }, ...prev];
+    });
+    setSelectedPlanId(id);
+    setQuickPlanOpen(false);
+    message.success(t('app.kuaizhizao.quality.incoming.messages.quickPlanCreateSuccess'));
+    await handleApply(id);
   };
 
   if (disabled) {
@@ -171,39 +212,57 @@ export function InspectionConductPlanSwitcher({
   }
 
   return (
-    <Space wrap size={8} align="center">
-      <Select
-        size="small"
-        style={{ minWidth: 280 }}
-        placeholder={t('app.kuaizhizao.quality.incoming.form.inspectionPlan')}
-        loading={plansLoading}
-        options={planOptions}
-        value={planOptions.length ? selectedPlanId : undefined}
-        onChange={(v) => setSelectedPlanId(v)}
-        showSearch
-        searchValue={planSearchText}
-        onSearch={setPlanSearchText}
-        onOpenChange={(open) => {
-          if (open) setPlanSearchText('');
-        }}
-        filterOption={(input, option) =>
-          String(option?.label ?? '')
-            .toLowerCase()
-            .includes(input.trim().toLowerCase())
-        }
-        optionLabelProp="label"
-        notFoundContent={plansLoading ? null : t('common.noData')}
+    <>
+      <Space wrap size={8} align="center">
+        <UniDropdown
+          size="small"
+          style={{ minWidth: 280 }}
+          placeholder={t('app.kuaizhizao.quality.incoming.form.inspectionPlan')}
+          loading={plansLoading}
+          options={planOptions}
+          value={planOptions.length ? selectedPlanId : undefined}
+          onChange={(v) => setSelectedPlanId(v == null ? undefined : Number(v))}
+          showSearch
+          optionFilterProp="label"
+          notFoundContent={plansLoading ? null : t('common.noData')}
+          allowClear={false}
+          quickCreate={
+            canCreatePlan
+              ? {
+                  label: t('field.operation.quickAddInspectionPlan'),
+                  onClick: () => setQuickPlanOpen(true),
+                }
+              : undefined
+          }
+        />
+        <Popconfirm
+          title={t('app.kuaizhizao.quality.common.confirm.applyInspectionPlanTitle')}
+          description={t('app.kuaizhizao.quality.common.confirm.applyInspectionPlanDescription')}
+          onConfirm={() => void handleApply()}
+          disabled={!selectedPlanId || planApplying}
+        >
+          <Button size="small" type="link" loading={planApplying}>
+            {t('app.kuaizhizao.quality.common.actions.switchInspectionPlan')}
+          </Button>
+        </Popconfirm>
+      </Space>
+      <InspectionPlanFormModal
+        open={quickPlanOpen}
+        zIndex={quickPlanModalZIndex}
+        title={t('app.kuaizhizao.quality.common.quickPlan.modalTitle', {
+          type: t(
+            planType === 'process'
+              ? 'app.kuaizhizao.quality.common.type.process'
+              : `app.kuaizhizao.quality.common.type.${planType}`,
+          ),
+        })}
+        defaultPlanType={planType}
+        lockPlanType
+        operationId={planType === 'process' && operationId != null ? Number(operationId) : null}
+        requireSteps
+        onClose={() => setQuickPlanOpen(false)}
+        onSuccess={(plan) => void handleQuickPlanSuccess(plan)}
       />
-      <Popconfirm
-        title={t('app.kuaizhizao.quality.common.confirm.applyInspectionPlanTitle')}
-        description={t('app.kuaizhizao.quality.common.confirm.applyInspectionPlanDescription')}
-        onConfirm={() => void handleApply()}
-        disabled={!selectedPlanId || planApplying}
-      >
-        <Button size="small" type="link" loading={planApplying}>
-          {t('app.kuaizhizao.quality.common.actions.switchInspectionPlan')}
-        </Button>
-      </Popconfirm>
-    </Space>
+    </>
   );
 }
