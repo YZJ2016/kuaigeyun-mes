@@ -9,9 +9,12 @@ Date: 2026-02-19
 
 from tortoise import fields
 from core.models.base import BaseModel
+from apps.kuaizhizao.models.mixins.document_line_dual_quantity import (
+    DocumentLineDualQuantityMixin,
+)
 
 
-class MaterialBorrowItem(BaseModel):
+class MaterialBorrowItem(DocumentLineDualQuantityMixin, BaseModel):
     """
     借料单明细
 

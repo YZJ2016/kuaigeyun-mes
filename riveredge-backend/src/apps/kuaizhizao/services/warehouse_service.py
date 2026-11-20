@@ -378,16 +378,92 @@ def _convert_line_quantity_to_base(
     quantity: Decimal,
     material_unit: Optional[str],
     material: Optional[Any],
+    item: Optional[Any] = None,
+    aux_quantity: Any = None,
+    unit_conversion_rate: Any = None,
+    unit_attr: str = "material_unit",
 ) -> Decimal:
-    """把业务行数量按物料多单位规则换算为基础单位数量。"""
-    qty = Decimal(str(quantity or 0))
-    if qty <= 0 or not material:
-        return qty
-    return convert_to_base_quantity(
-        material,
-        qty,
-        from_unit=material_unit,
+    """把业务行数量按物料多单位规则换算为基本单位数量（兼容旧调用）。"""
+    return _convert_line_to_posting_quantities(
+        quantity=quantity,
+        material_unit=material_unit,
+        material=material,
+        item=item,
+        aux_quantity=aux_quantity,
+        unit_conversion_rate=unit_conversion_rate,
+        unit_attr=unit_attr,
+    ).base_quantity
+
+
+def _convert_line_to_posting_quantities(
+    *,
+    quantity: Decimal,
+    material_unit: Optional[str],
+    material: Optional[Any],
+    item: Optional[Any] = None,
+    aux_quantity: Any = None,
+    unit_conversion_rate: Any = None,
+    unit_attr: str = "material_unit",
+    confirmation_item: Any = None,
+):
+    """业务行 → 库存单位数量 + 基本单位数量（金蝶双计量过账）。"""
+    from apps.kuaizhizao.utils.inventory_posting_utils import convert_line_to_posting_quantities
+    from apps.kuaizhizao.utils.ledger_dual_quantity_utils import resolve_confirmation_ledger_pair
+
+    if confirmation_item is not None and getattr(confirmation_item, "primary_quantity", None) is not None:
+        secondary_raw = getattr(confirmation_item, "secondary_quantity", None)
+        # 确认体未带副数量时回落单据行 aux（采购确认常只传主数量）
+        if secondary_raw is None and item is not None:
+            secondary_raw = getattr(item, "aux_quantity", None)
+        inv_q, base_q = resolve_confirmation_ledger_pair(
+            material,
+            primary_quantity=confirmation_item.primary_quantity,
+            secondary_quantity_raw=secondary_raw,
+        )
+        from apps.kuaizhizao.utils.inventory_posting_utils import InventoryPostingQuantities
+
+        from apps.kuaizhizao.utils.ledger_dual_quantity_utils import (
+            material_ledger_uses_manual_aux_quantity,
+        )
+
+        ledger_aux = None
+        if material and material_ledger_uses_manual_aux_quantity(material) and secondary_raw is not None:
+            ledger_aux = Decimal(str(secondary_raw))
+        return InventoryPostingQuantities(
+            inventory_quantity=inv_q,
+            base_quantity=base_q,
+            ledger_aux_quantity=ledger_aux,
+        )
+
+    if item is not None:
+        if material_unit is None:
+            material_unit = getattr(item, unit_attr, None)
+        if aux_quantity is None:
+            aux_quantity = getattr(item, "aux_quantity", None)
+        if unit_conversion_rate is None:
+            unit_conversion_rate = getattr(item, "unit_conversion_rate", None)
+    return convert_line_to_posting_quantities(
+        material=material,
+        quantity=quantity,
+        material_unit=material_unit,
+        aux_quantity=aux_quantity,
+        unit_conversion_rate=unit_conversion_rate,
     )
+
+
+def _inventory_posting_call_kwargs(posting) -> Dict[str, Any]:
+    """过账数量 + 无固定换算手录副数量增量。"""
+    from apps.kuaizhizao.utils.inventory_posting_utils import InventoryPostingQuantities
+
+    if not isinstance(posting, InventoryPostingQuantities):
+        raise TypeError("expected InventoryPostingQuantities")
+    kw: Dict[str, Any] = {
+        "quantity": posting.inventory_quantity,
+        "base_quantity": posting.base_quantity,
+    }
+    if posting.ledger_aux_quantity is not None:
+        kw["aux_quantity_delta"] = posting.ledger_aux_quantity
+    return kw
 
 
 async def _load_materials_by_ids(
@@ -405,6 +481,50 @@ async def _load_materials_by_ids(
         deleted_at__isnull=True,
     ).all()
     return {int(m.id): m for m in materials}
+
+
+def _apply_confirm_ledger_quantities_to_item_update(
+    item_update: Dict[str, Any],
+    item_data: Any,
+    *,
+    quantity_field: str,
+) -> None:
+    """确认体 primary/secondary → 行主数量 + aux_quantity（与库存台账口径一致）。"""
+    if getattr(item_data, "primary_quantity", None) is not None:
+        qty = Decimal(str(item_data.primary_quantity))
+        if qty <= 0:
+            raise BusinessLogicError("确认主数量须大于 0")
+        item_update[quantity_field] = qty
+    if getattr(item_data, "secondary_quantity", None) is not None:
+        item_update["aux_quantity"] = Decimal(str(item_data.secondary_quantity))
+
+
+async def _enrich_other_doc_item_responses_ledger(
+    tenant_id: int,
+    items: List[Any],
+    *,
+    quantity_attr: str,
+) -> None:
+    """为其他出入库明细响应补齐 primary_*/secondary_*（与即时库存 API 同口径）。"""
+    from apps.kuaizhizao.utils.ledger_dual_quantity_utils import document_line_ledger_fields
+
+    if not items:
+        return
+    material_ids = [
+        int(getattr(it, "material_id"))
+        for it in items
+        if getattr(it, "material_id", None)
+    ]
+    material_by_id = await _load_materials_by_ids(tenant_id, material_ids)
+    for it in items:
+        mid = int(getattr(it, "material_id", 0) or 0)
+        fields = document_line_ledger_fields(
+            material_by_id.get(mid),
+            line_quantity=getattr(it, quantity_attr, None),
+            aux_quantity=getattr(it, "aux_quantity", None),
+        )
+        for key, value in fields.items():
+            setattr(it, key, value)
 
 
 def _aggregate_warehouse_from_picking_item_rows(
@@ -874,6 +994,42 @@ async def _sum_returned_qty_by_delivery_item_ids(
     return totals
 
 
+async def _sum_returned_aux_qty_by_delivery_item_ids(
+    tenant_id: int,
+    delivery_item_ids: List[int],
+) -> Dict[int, float]:
+    """按销售出库明细统计已退货副数量（含草稿/待退货，占用可退余量）。"""
+    if not delivery_item_ids:
+        return {}
+    return_items = await SalesReturnItem.filter(
+        tenant_id=tenant_id,
+        sales_delivery_item_id__in=list(delivery_item_ids),
+    ).all()
+    if not return_items:
+        return {}
+    return_ids = list({int(ri.return_id) for ri in return_items if ri.return_id})
+    active_return_ids: set[int] = set()
+    if return_ids:
+        returns = await SalesReturn.filter(
+            tenant_id=tenant_id,
+            id__in=return_ids,
+            deleted_at__isnull=True,
+        ).all()
+        active_return_ids = {int(r.id) for r in returns}
+    totals: Dict[int, float] = {}
+    for ri in return_items:
+        if int(ri.return_id) not in active_return_ids:
+            continue
+        item_id = int(ri.sales_delivery_item_id or 0)
+        if item_id <= 0:
+            continue
+        aux = getattr(ri, "aux_quantity", None)
+        if aux is None:
+            continue
+        totals[item_id] = totals.get(item_id, 0.0) + float(aux)
+    return totals
+
+
 def _optional_positive_int(value: Any) -> Optional[int]:
     try:
         parsed = int(value)
@@ -949,6 +1105,88 @@ async def returned_qty_by_sales_order_item_ids(
         if item_id <= 0:
             continue
         result[item_id] = result.get(item_id, 0.0) + float(ri.return_quantity or 0)
+    return result
+
+
+async def returned_aux_qty_by_sales_order_item_ids(
+    tenant_id: int,
+    sales_order_item_ids: List[int],
+) -> Dict[int, float]:
+    """按销售订单行统计已退货副数量（含待退货，占用可退余量）。"""
+    result: Dict[int, float] = {int(i): 0.0 for i in sales_order_item_ids}
+    if not sales_order_item_ids:
+        return result
+    return_items = await SalesReturnItem.filter(
+        tenant_id=tenant_id,
+        sales_order_item_id__in=list(result.keys()),
+    ).all()
+    if not return_items:
+        return result
+    return_ids = list({int(ri.return_id) for ri in return_items if ri.return_id})
+    active_return_ids: set[int] = set()
+    if return_ids:
+        returns = await SalesReturn.filter(
+            tenant_id=tenant_id,
+            id__in=return_ids,
+            deleted_at__isnull=True,
+        ).all()
+        active_return_ids = {int(r.id) for r in returns}
+    for ri in return_items:
+        if int(ri.return_id) not in active_return_ids:
+            continue
+        item_id = int(ri.sales_order_item_id or 0)
+        if item_id <= 0:
+            continue
+        aux = getattr(ri, "aux_quantity", None)
+        if aux is None:
+            continue
+        result[item_id] = result.get(item_id, 0.0) + float(aux)
+    return result
+
+
+async def delivered_aux_qty_by_sales_order_item_ids(
+    tenant_id: int,
+    sales_order_item_ids: List[int],
+) -> Dict[int, float]:
+    """按销售订单行汇总已完成出库明细副数量（退货开口 suggested 辅量真源）。"""
+    result: Dict[int, float] = {int(i): 0.0 for i in sales_order_item_ids}
+    if not sales_order_item_ids:
+        return result
+    from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+    from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
+    from apps.kuaizhizao.utils.sales_order_push_qty import CLOSED_DELIVERY_STATUSES
+
+    item_rows = await SalesDeliveryItem.filter(
+        tenant_id=tenant_id,
+        sales_order_item_id__in=list(result.keys()),
+    ).values("delivery_id", "sales_order_item_id", "aux_quantity")
+    if not item_rows:
+        return result
+    delivery_ids = sorted({int(r["delivery_id"]) for r in item_rows if r.get("delivery_id")})
+    closed_ids: set[int] = set()
+    if delivery_ids:
+        delivery_rows = await SalesDelivery.filter(
+            tenant_id=tenant_id,
+            id__in=delivery_ids,
+            deleted_at__isnull=True,
+        ).values("id", "status")
+        for row in delivery_rows:
+            status = str(row.get("status") or "").strip()
+            if status in CLOSED_DELIVERY_STATUSES:
+                did = int(row.get("id") or 0)
+                if did > 0:
+                    closed_ids.add(did)
+    for row in item_rows:
+        did = int(row.get("delivery_id") or 0)
+        if did not in closed_ids:
+            continue
+        so_item_id = int(row.get("sales_order_item_id") or 0)
+        if so_item_id <= 0:
+            continue
+        aux = row.get("aux_quantity")
+        if aux is None:
+            continue
+        result[so_item_id] = result.get(so_item_id, 0.0) + float(aux)
     return result
 
 
@@ -1479,6 +1717,98 @@ _SALES_DELIVERY_VOID_STATUSES = frozenset(
 )
 
 
+async def occupied_purchase_receipt_aux_qty_by_po_item_ids(
+    tenant_id: int,
+    order_ids: List[int],
+) -> dict[int, Decimal]:
+    """采购订单行被未完成入库单占用的副数量（规则与 occupied_purchase_receipt_qty_by_po_item_ids 一致）。
+
+    仅草稿/待入库；已入库那批的副数量不在此处。开口取单的「已转副数量」必须再叠加
+    received_aux_qty_by_purchase_order_item_ids（见 list_purchase_order_receipt_pull_lines），
+    否则分批入库第二次取单会漏掉已入库批次。
+    """
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+    from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+    from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+
+    if not order_ids:
+        return {}
+
+    po_item_ids = [
+        int(x)
+        for x in await PurchaseOrderItem.filter(
+            tenant_id=tenant_id,
+            order_id__in=order_ids,
+        ).values_list("id", flat=True)
+    ]
+    if not po_item_ids:
+        return {}
+
+    receipt_id_set: set[int] = set()
+    header_rows = await PurchaseReceipt.filter(
+        tenant_id=tenant_id,
+        purchase_order_id__in=order_ids,
+        deleted_at__isnull=True,
+    ).values("id", "status")
+    item_linked_rows = await PurchaseReceiptItem.filter(
+        tenant_id=tenant_id,
+        purchase_order_item_id__in=po_item_ids,
+    ).values_list("receipt_id", flat=True)
+    receipt_id_set.update(int(x) for x in item_linked_rows if x is not None)
+
+    status_by_receipt_id: dict[int, str] = {}
+    for row in header_rows:
+        rid = row.get("id")
+        if rid is None:
+            continue
+        receipt_id_set.add(int(rid))
+        status_by_receipt_id[int(rid)] = str(row.get("status") or "").strip()
+
+    missing_ids = receipt_id_set - set(status_by_receipt_id)
+    if missing_ids:
+        extra_rows = await PurchaseReceipt.filter(
+            tenant_id=tenant_id,
+            id__in=list(missing_ids),
+            deleted_at__isnull=True,
+        ).values("id", "status")
+        for row in extra_rows:
+            rid = row.get("id")
+            if rid is None:
+                continue
+            status_by_receipt_id[int(rid)] = str(row.get("status") or "").strip()
+
+    occupying_receipt_ids: List[int] = []
+    for rid in receipt_id_set:
+        status = status_by_receipt_id.get(rid, "")
+        if status in _PURCHASE_RECEIPT_VOID_STATUSES:
+            continue
+        if status in _PURCHASE_RECEIPT_CONFIRMED_STATUSES:
+            continue
+        occupying_receipt_ids.append(rid)
+
+    if not occupying_receipt_ids:
+        return {}
+
+    occupied_by_po_item: dict[int, Decimal] = {}
+    item_rows = await PurchaseReceiptItem.filter(
+        tenant_id=tenant_id,
+        receipt_id__in=occupying_receipt_ids,
+        purchase_order_item_id__in=po_item_ids,
+    ).values("purchase_order_item_id", "aux_quantity")
+    for row in item_rows:
+        po_item_id = int(row.get("purchase_order_item_id") or 0)
+        if po_item_id <= 0:
+            continue
+        aux = row.get("aux_quantity")
+        if aux is None:
+            continue
+        qty = Decimal(str(aux))
+        if qty <= 0:
+            continue
+        occupied_by_po_item[po_item_id] = occupied_by_po_item.get(po_item_id, Decimal("0")) + qty
+    return occupied_by_po_item
+
+
 async def occupied_purchase_receipt_qty_by_notice_item_ids(
     tenant_id: int,
     notice_item_ids: List[int],
@@ -1520,6 +1850,50 @@ async def occupied_purchase_receipt_qty_by_notice_item_ids(
     return occupied
 
 
+async def occupied_purchase_receipt_aux_qty_by_notice_item_ids(
+    tenant_id: int,
+    notice_item_ids: List[int],
+) -> dict[int, Decimal]:
+    """收货通知行被未作废采购入库占用的副数量。"""
+    from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+    from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+
+    selected_ids = [int(v) for v in notice_item_ids if v is not None]
+    if not selected_ids:
+        return {}
+    item_rows = await PurchaseReceiptItem.filter(
+        tenant_id=tenant_id,
+        receipt_notice_item_id__in=selected_ids,
+    ).values("receipt_id", "receipt_notice_item_id", "aux_quantity")
+    receipt_ids = sorted({int(row["receipt_id"]) for row in item_rows if row.get("receipt_id")})
+    if not receipt_ids:
+        return {}
+    status_rows = await PurchaseReceipt.filter(
+        tenant_id=tenant_id,
+        id__in=receipt_ids,
+        deleted_at__isnull=True,
+    ).values("id", "status")
+    occupying_ids = {
+        int(row["id"])
+        for row in status_rows
+        if str(row.get("status") or "").strip() not in _PURCHASE_RECEIPT_VOID_STATUSES
+    }
+    occupied: dict[int, Decimal] = {}
+    for row in item_rows:
+        notice_item_id = int(row.get("receipt_notice_item_id") or 0)
+        receipt_id = int(row.get("receipt_id") or 0)
+        if notice_item_id <= 0 or receipt_id not in occupying_ids:
+            continue
+        aux = row.get("aux_quantity")
+        if aux is None:
+            continue
+        qty = Decimal(str(aux))
+        if qty <= 0:
+            continue
+        occupied[notice_item_id] = occupied.get(notice_item_id, Decimal("0")) + qty
+    return occupied
+
+
 async def occupied_sales_delivery_qty_by_notice_item_ids(
     tenant_id: int,
     notice_item_ids: List[int],
@@ -1555,6 +1929,47 @@ async def occupied_sales_delivery_qty_by_notice_item_ids(
         if notice_item_id <= 0 or delivery_id not in occupying_ids:
             continue
         qty = Decimal(str(row.get("delivery_quantity") or 0))
+        if qty <= 0:
+            continue
+        occupied[notice_item_id] = occupied.get(notice_item_id, Decimal("0")) + qty
+    return occupied
+
+
+async def occupied_sales_delivery_aux_qty_by_notice_item_ids(
+    tenant_id: int,
+    notice_item_ids: List[int],
+) -> dict[int, Decimal]:
+    """发货通知行被未作废销售出库占用的副数量。"""
+    from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+    from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
+
+    selected_ids = [int(v) for v in notice_item_ids if v is not None]
+    if not selected_ids:
+        return {}
+    item_rows = await SalesDeliveryItem.filter(
+        tenant_id=tenant_id,
+        shipment_notice_item_id__in=selected_ids,
+    ).values("delivery_id", "shipment_notice_item_id", "aux_quantity")
+    delivery_ids = sorted({int(row["delivery_id"]) for row in item_rows if row.get("delivery_id")})
+    if not delivery_ids:
+        return {}
+    status_rows = await SalesDelivery.filter(
+        tenant_id=tenant_id,
+        id__in=delivery_ids,
+        deleted_at__isnull=True,
+    ).values("id", "status")
+    occupying_ids = {
+        int(row["id"])
+        for row in status_rows
+        if str(row.get("status") or "").strip() not in _SALES_DELIVERY_VOID_STATUSES
+    }
+    occupied: dict[int, Decimal] = {}
+    for row in item_rows:
+        notice_item_id = int(row.get("shipment_notice_item_id") or 0)
+        delivery_id = int(row.get("delivery_id") or 0)
+        if notice_item_id <= 0 or delivery_id not in occupying_ids:
+            continue
+        qty = Decimal(str(row.get("aux_quantity") or 0))
         if qty <= 0:
             continue
         occupied[notice_item_id] = occupied.get(notice_item_id, Decimal("0")) + qty
@@ -3434,17 +3849,18 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     qty = issue_qty_by_item_id.get(item.id) or Decimal(0)
                     if qty <= 0:
                         continue
-                    base_qty = _convert_line_quantity_to_base(
+                    posting = _convert_line_to_posting_quantities(
                         quantity=qty,
                         material_unit=getattr(item, "material_unit", None),
                         material=material_by_id.get(item.material_id),
+                        item=item,
                     )
                     wh_id = item.warehouse_id if item.warehouse_id else None
                     item_serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
                     await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
-                        quantity=base_qty,
+                        **_inventory_posting_call_kwargs(posting),
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
                         serial_nos=item_serial_nos or None,
@@ -5372,16 +5788,17 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                     qty = item.return_quantity or Decimal(0)
                     if qty <= 0:
                         continue
-                    base_qty = _convert_line_quantity_to_base(
+                    posting = _convert_line_to_posting_quantities(
                         quantity=qty,
                         material_unit=getattr(item, "material_unit", None),
                         material=material_by_id.get(item.material_id),
+                        item=item,
                     )
                     wh_id = item.warehouse_id if item.warehouse_id else ret.warehouse_id
                     await InventoryService._increase_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
-                        quantity=base_qty,
+                        **_inventory_posting_call_kwargs(posting),
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
                         serial_nos=_parse_serial_numbers(getattr(item, "serial_numbers", None)) or None,
@@ -5429,16 +5846,17 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                     qty = item.return_quantity or Decimal(0)
                     if qty <= 0:
                         continue
-                    base_qty = _convert_line_quantity_to_base(
+                    posting = _convert_line_to_posting_quantities(
                         quantity=qty,
                         material_unit=getattr(item, "material_unit", None),
                         material=material_by_id.get(item.material_id),
+                        item=item,
                     )
                     wh_id = item.warehouse_id if item.warehouse_id else None
                     await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
-                        quantity=base_qty,
+                        **_inventory_posting_call_kwargs(posting),
                         warehouse_id=wh_id,
                         batch_no=getattr(item, "batch_number", None) or None,
                         serial_nos=_parse_serial_numbers(getattr(item, "serial_numbers", None)) or None,
@@ -6037,10 +6455,11 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                     qty = item.receipt_quantity or item.qualified_quantity or Decimal(0)
                     if qty <= 0:
                         continue
-                    base_qty = _convert_line_quantity_to_base(
+                    posting = _convert_line_to_posting_quantities(
                         quantity=qty,
                         material_unit=getattr(item, "material_unit", None),
                         material=material_by_id.get(item.material_id),
+                        item=item,
                     )
                     
                     # 优先使用行仓库，若无则使用表头仓库
@@ -6050,7 +6469,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                     await InventoryService._increase_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
-                        quantity=base_qty,
+                        **_inventory_posting_call_kwargs(posting),
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
                         **InventoryService.location_kwargs_from_line_item(item),
@@ -6174,16 +6593,17 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                     qty = item.receipt_quantity or item.qualified_quantity or Decimal(0)
                     if qty <= 0:
                         continue
-                    base_qty = _convert_line_quantity_to_base(
+                    posting = _convert_line_to_posting_quantities(
                         quantity=qty,
                         material_unit=getattr(item, "material_unit", None),
                         material=material_by_id.get(item.material_id),
+                        item=item,
                     )
                     serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
                     await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
-                        quantity=base_qty,
+                        **_inventory_posting_call_kwargs(posting),
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
                         serial_nos=serial_nos or None,
@@ -8249,10 +8669,11 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 qty = item.delivery_quantity or Decimal(0)
                 if qty <= 0:
                     continue
-                base_qty = _convert_line_quantity_to_base(
+                posting = _convert_line_to_posting_quantities(
                     quantity=Decimal(str(qty)),
                     material_unit=getattr(item, "material_unit", None),
                     material=material_by_id.get(item.material_id),
+                    item=item,
                 )
                 serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
                 mat = material_by_id.get(item.material_id)
@@ -8262,13 +8683,13 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                         material=mat,
                         batch_number=getattr(item, "batch_number", None),
                         serial_numbers=serial_nos,
-                        quantity=base_qty,
+                        quantity=posting.base_quantity,
                         scene="销售出库撤回",
                     )
                 await InventoryService.increase_stock(
                     tenant_id=tenant_id,
                     material_id=item.material_id,
-                    quantity=base_qty,
+                    **_inventory_posting_call_kwargs(posting),
                     warehouse_id=delivery.warehouse_id,
                     batch_no=item.batch_number or None,
                     serial_nos=serial_nos or None,
@@ -8891,6 +9312,11 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         occupied_by_item = await occupied_sales_delivery_qty_by_notice_item_ids(
             tenant_id, [int(item.id) for item in items]
         )
+        occupied_aux_by_item = await occupied_sales_delivery_aux_qty_by_notice_item_ids(
+            tenant_id, [int(item.id) for item in items]
+        )
+        from apps.kuaizhizao.utils.pull_open_line_quantity import enrich_pull_line_from_source_item
+
         consumed_statuses = {"已通知", "已出库"}
         kw = (keyword or "").strip().lower()
         lines: List[Dict[str, Any]] = []
@@ -8927,27 +9353,37 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             if line_wh_id is None and getattr(notice, "warehouse_id", None):
                 line_wh_id = int(notice.warehouse_id)
                 line_wh_name = notice.warehouse_name
-            lines.append(
-                {
-                    "id": int(item.id),
-                    "notice_id": int(item.notice_id),
-                    "notice_code": notice.notice_code,
-                    "sales_order_id": notice.sales_order_id,
-                    "sales_order_code": notice.sales_order_code,
-                    "customer_id": notice.customer_id,
-                    "customer_name": notice.customer_name,
-                    "material_id": item.material_id,
-                    "material_code": material_code,
-                    "material_name": material_name,
-                    "material_spec": material_spec or None,
-                    "unit": item.material_unit or "件",
-                    "warehouse_id": line_wh_id,
-                    "warehouse_name": line_wh_name,
-                    "suggested_quantity": qty,
-                    "pushed_quantity": occupied,
-                    "remaining_quantity": remaining,
-                }
+            row: Dict[str, Any] = {
+                "id": int(item.id),
+                "notice_id": int(item.notice_id),
+                "notice_code": notice.notice_code,
+                "sales_order_id": notice.sales_order_id,
+                "sales_order_code": notice.sales_order_code,
+                "customer_id": notice.customer_id,
+                "customer_name": notice.customer_name,
+                "material_id": item.material_id,
+                "material_code": material_code,
+                "material_name": material_name,
+                "material_spec": material_spec or None,
+                "unit": item.material_unit or "件",
+                "warehouse_id": line_wh_id,
+                "warehouse_name": line_wh_name,
+                "suggested_quantity": qty,
+                "pushed_quantity": occupied,
+                "remaining_quantity": remaining,
+            }
+            enrich_pull_line_from_source_item(
+                row,
+                item,
+                suggested_primary=qty,
+                pushed_primary=occupied,
+                remaining_primary=remaining,
+                occupied_aux_pushed=float(
+                    occupied_aux_by_item.get(int(item.id), Decimal("0"))
+                ),
+                line_fully_pushed=remaining <= 0 and occupied > 0,
             )
+            lines.append(row)
         lines.sort(
             key=lambda r: (
                 str(r.get("notice_code") or ""),
@@ -9940,19 +10376,22 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                         raise BusinessLogicError(
                             f"物料 {item.material_code} 缺少出库仓库，无法确认出库"
                         )
-                    base_qty = _convert_line_quantity_to_base(
+                    posting = _convert_line_to_posting_quantities(
                         quantity=Decimal(str(qty)),
                         material_unit=getattr(item, "material_unit", None),
                         material=material_by_id.get(item.material_id),
+                        item=item,
                     )
                     item_serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
                     await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
-                        quantity=base_qty,
+                        **_inventory_posting_call_kwargs(posting),
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
                         serial_nos=item_serial_nos or None,
+                        **InventoryService.location_kwargs_from_line_item(item),
+                        location_scoped=InventoryService.line_item_location_scoped(item),
                         source_type="sales_delivery",
                         source_doc_id=delivery_id,
                         source_doc_code=delivery.delivery_code,
@@ -10861,6 +11300,25 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         occupied_by_item = await occupied_purchase_receipt_qty_by_po_item_ids(
             tenant_id, list(order_by_id.keys())
         )
+        occupied_aux_by_item = await occupied_purchase_receipt_aux_qty_by_po_item_ids(
+            tenant_id, list(order_by_id.keys())
+        )
+        po_item_ids_for_aux = [int(item.id) for item in items]
+        from apps.kuaizhizao.utils.purchase_return_qty import (
+            confirmed_returned_aux_qty_by_purchase_order_item_ids,
+            received_aux_qty_by_purchase_order_item_ids,
+        )
+
+        received_aux_by_item = await received_aux_qty_by_purchase_order_item_ids(
+            tenant_id, po_item_ids_for_aux
+        )
+        returned_aux_by_item = await confirmed_returned_aux_qty_by_purchase_order_item_ids(
+            tenant_id, po_item_ids_for_aux
+        )
+        from apps.kuaizhizao.utils.pull_open_line_quantity import (
+            compose_pushed_aux_qty,
+            enrich_pull_line_from_source_item,
+        )
         from apps.master_data.services.material_service import (
             resolve_primary_default_warehouse_from_material,
         )
@@ -10912,28 +11370,40 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             line_wh_id, line_wh_name = default_wh_by_material.get(mid, (None, None))
             order_date = getattr(order, "order_date", None)
             document_date = str(order_date)[:10] if order_date else None
-            lines.append(
-                {
-                    "id": int(item.id),
-                    "order_id": int(item.order_id),
-                    "order_code": order.order_code,
-                    "supplier_id": order.supplier_id,
-                    "supplier_name": order.supplier_name,
-                    "material_id": item.material_id,
-                    "material_code": material_code,
-                    "material_name": material_name,
-                    "material_spec": material_spec or None,
-                    "unit": item.unit or "件",
-                    "suggested_quantity": qty,
-                    "pushed_quantity": max(0.0, qty - remaining),
-                    "remaining_quantity": remaining,
-                    "required_date": str(item.required_date) if item.required_date else None,
-                    "document_date": document_date,
-                    "order_date": document_date,
-                    "warehouse_id": line_wh_id,
-                    "warehouse_name": line_wh_name,
-                }
+            pushed_primary = max(0.0, qty - remaining)
+            row: Dict[str, Any] = {
+                "id": int(item.id),
+                "order_id": int(item.order_id),
+                "order_code": order.order_code,
+                "supplier_id": order.supplier_id,
+                "supplier_name": order.supplier_name,
+                "material_id": item.material_id,
+                "material_code": material_code,
+                "material_name": material_name,
+                "material_spec": material_spec or None,
+                "unit": item.unit or "件",
+                "suggested_quantity": qty,
+                "pushed_quantity": pushed_primary,
+                "remaining_quantity": remaining,
+                "required_date": str(item.required_date) if item.required_date else None,
+                "document_date": document_date,
+                "order_date": document_date,
+                "warehouse_id": line_wh_id,
+                "warehouse_name": line_wh_name,
+            }
+            enrich_pull_line_from_source_item(
+                row,
+                item,
+                suggested_primary=qty,
+                pushed_primary=pushed_primary,
+                remaining_primary=remaining,
+                occupied_aux_pushed=compose_pushed_aux_qty(
+                    confirmed_receipt_aux=received_aux_by_item.get(int(item.id), 0),
+                    pending_receipt_aux=occupied_aux_by_item.get(int(item.id), 0),
+                    confirmed_returned_aux=returned_aux_by_item.get(int(item.id), 0),
+                ),
             )
+            lines.append(row)
         # 单据日期优先倒序，同日再按单号倒序（新单在前）
         lines.sort(
             key=lambda r: (
@@ -11205,6 +11675,11 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         occupied_by_item = await occupied_purchase_receipt_qty_by_notice_item_ids(
             tenant_id, [int(item.id) for item in items]
         )
+        occupied_aux_by_item = await occupied_purchase_receipt_aux_qty_by_notice_item_ids(
+            tenant_id, [int(item.id) for item in items]
+        )
+        from apps.kuaizhizao.utils.pull_open_line_quantity import enrich_pull_line_from_source_item
+
         consumed_statuses = {"已通知", "已入库"}
         kw = (keyword or "").strip().lower()
         lines: List[Dict[str, Any]] = []
@@ -11238,27 +11713,36 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     continue
             planned = getattr(notice, "planned_receipt_date", None)
             document_date = str(planned)[:10] if planned else None
-            lines.append(
-                {
-                    "id": int(item.id),
-                    "notice_id": int(item.notice_id),
-                    "notice_code": notice.notice_code,
-                    "document_date": document_date,
-                    "planned_receipt_date": document_date,
-                    "purchase_order_id": notice.purchase_order_id,
-                    "purchase_order_code": notice.purchase_order_code,
-                    "supplier_id": notice.supplier_id,
-                    "supplier_name": notice.supplier_name,
-                    "material_id": item.material_id,
-                    "material_code": material_code,
-                    "material_name": material_name,
-                    "material_spec": material_spec or None,
-                    "unit": item.material_unit or "件",
-                    "suggested_quantity": qty,
-                    "pushed_quantity": occupied,
-                    "remaining_quantity": remaining,
-                }
+            row: Dict[str, Any] = {
+                "id": int(item.id),
+                "notice_id": int(item.notice_id),
+                "notice_code": notice.notice_code,
+                "document_date": document_date,
+                "planned_receipt_date": document_date,
+                "purchase_order_id": notice.purchase_order_id,
+                "purchase_order_code": notice.purchase_order_code,
+                "supplier_id": notice.supplier_id,
+                "supplier_name": notice.supplier_name,
+                "material_id": item.material_id,
+                "material_code": material_code,
+                "material_name": material_name,
+                "material_spec": material_spec or None,
+                "unit": item.material_unit or "件",
+                "suggested_quantity": qty,
+                "pushed_quantity": occupied,
+                "remaining_quantity": remaining,
+            }
+            enrich_pull_line_from_source_item(
+                row,
+                item,
+                suggested_primary=qty,
+                pushed_primary=occupied,
+                remaining_primary=remaining,
+                occupied_aux_pushed=float(
+                    occupied_aux_by_item.get(int(item.id), Decimal("0"))
+                ),
             )
+            lines.append(row)
         lines.sort(key=lambda r: str(r.get("document_date") or ""), reverse=True)
         return {"data": lines[skip : skip + limit], "total": len(lines)}
 
@@ -12455,15 +12939,49 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     ).all()
                     material_ids = list({int(it.material_id) for it in items if getattr(it, "material_id", None)})
                     material_by_id = await _load_materials_by_ids(tenant_id, material_ids)
+                    confirm_by_item_id: Dict[int, Any] = {}
+                    if confirmation_data and confirmation_data.items:
+                        confirm_by_item_id = {
+                            int(ci.item_id): ci for ci in confirmation_data.items
+                        }
                     _stock_snap = []
                     for item in items:
                         qty = item.receipt_quantity or Decimal(0)
                         if qty <= 0:
                             continue
-                        base_qty = _convert_line_quantity_to_base(
+                        material_label = (
+                            getattr(item, "material_name", None)
+                            or getattr(item, "material_code", None)
+                            or "未知物料"
+                        )
+                        line_wh_for_loc = await _resolve_purchase_receipt_line_warehouse_id_for_stock(
+                            tenant_id, item, receipt
+                        )
+                        has_loc = item.location_id is not None and int(item.location_id) > 0
+                        has_code = bool(str(getattr(item, "location_code", None) or "").strip())
+                        if line_wh_for_loc is not None and not has_loc and not has_code:
+                            loc_patch: dict = {}
+                            await _resolve_line_location_into_mapping(
+                                tenant_id,
+                                warehouse_id=line_wh_for_loc,
+                                location_id=None,
+                                material_label=material_label,
+                                direction_label="入库",
+                                target=loc_patch,
+                            )
+                            if loc_patch:
+                                await PurchaseReceiptItem.filter(
+                                    tenant_id=tenant_id, id=item.id, receipt_id=receipt_id
+                                ).update(**loc_patch)
+                                item.location_id = loc_patch["location_id"]
+                                item.location_code = loc_patch["location_code"]
+                        confirm_row = confirm_by_item_id.get(int(item.id))
+                        posting = _convert_line_to_posting_quantities(
                             quantity=qty,
                             material_unit=getattr(item, "material_unit", None),
                             material=material_by_id.get(item.material_id),
+                            item=item,
+                            confirmation_item=confirm_row,
                         )
                         line_wh = await _resolve_purchase_receipt_line_warehouse_id_for_stock(
                             tenant_id, item, receipt
@@ -12494,7 +13012,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         await InventoryService._increase_stock_no_atomic(
                             tenant_id=tenant_id,
                             material_id=item.material_id,
-                            quantity=base_qty,
+                            **_inventory_posting_call_kwargs(posting),
                             warehouse_id=line_wh,
                             batch_no=item.batch_number or None,
                             **InventoryService.location_kwargs_from_line_item(item),
@@ -12612,10 +13130,11 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         qty = item.receipt_quantity or Decimal(0)
                         if qty <= 0:
                             continue
-                        base_qty = _convert_line_quantity_to_base(
+                        posting = _convert_line_to_posting_quantities(
                             quantity=qty,
                             material_unit=getattr(item, "material_unit", None),
                             material=material_by_id.get(item.material_id),
+                            item=item,
                         )
                         line_wh = await _resolve_purchase_receipt_line_warehouse_id_for_stock(
                             tenant_id, item, receipt_obj
@@ -12628,7 +13147,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         await InventoryService._decrease_stock_no_atomic(
                             tenant_id=tenant_id,
                             material_id=item.material_id,
-                            quantity=base_qty,
+                            **_inventory_posting_call_kwargs(posting),
                             warehouse_id=line_wh,
                             batch_no=item.batch_number or None,
                             serial_nos=serial_nos or None,
@@ -13908,9 +14427,16 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             tenant_id=tenant_id, sales_order_id__in=list(order_by_id.keys())
         ).all()
         await _hydrate_item_material_snapshot(tenant_id, items)
-        returned_by_item = await returned_qty_by_sales_order_item_ids(
-            tenant_id, [int(item.id) for item in items]
+        item_ids = [int(item.id) for item in items]
+        returned_by_item = await returned_qty_by_sales_order_item_ids(tenant_id, item_ids)
+        returned_aux_by_item = await returned_aux_qty_by_sales_order_item_ids(tenant_id, item_ids)
+        delivered_aux_by_item = await delivered_aux_qty_by_sales_order_item_ids(tenant_id, item_ids)
+        from apps.kuaizhizao.utils.pull_open_line_quantity import (
+            build_partial_push_aux_triplet,
+            merge_pull_open_line_qty_fields,
+            read_line_aux_pair,
         )
+
         kw = (keyword or "").strip().lower()
         lines: List[Dict[str, Any]] = []
         for item in items:
@@ -13937,24 +14463,44 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                 haystack = " ".join([material_code, material_name, material_spec]).lower()
                 if kw not in haystack:
                     continue
-            lines.append(
-                {
-                    "id": int(item.id),
-                    "sales_order_id": int(item.sales_order_id),
-                    "order_code": order.order_code,
-                    "customer_id": order.customer_id,
-                    "customer_name": order.customer_name,
-                    "material_id": item.material_id,
-                    "material_code": material_code,
-                    "material_name": material_name,
-                    "material_spec": material_spec or None,
-                    "unit": item.material_unit or "个",
-                    "suggested_quantity": delivered,
-                    "pushed_quantity": pushed,
-                    "remaining_quantity": remaining,
-                    "required_date": str(item.required_date) if getattr(item, "required_date", None) else None,
-                }
-            )
+            line: Dict[str, Any] = {
+                "id": int(item.id),
+                "sales_order_id": int(item.sales_order_id),
+                "order_code": order.order_code,
+                "customer_id": order.customer_id,
+                "customer_name": order.customer_name,
+                "material_id": item.material_id,
+                "material_code": material_code,
+                "material_name": material_name,
+                "material_spec": material_spec or None,
+                "unit": item.material_unit or "个",
+                "required_date": str(item.required_date) if getattr(item, "required_date", None) else None,
+            }
+            _, aux_unit = read_line_aux_pair(item)
+            aux_sug = delivered_aux_by_item.get(int(item.id))
+            if aux_unit and aux_sug and float(aux_sug) > 0:
+                aux_triplet = build_partial_push_aux_triplet(
+                    float(aux_sug),
+                    returned_aux_by_item.get(int(item.id), 0.0),
+                )
+                merge_pull_open_line_qty_fields(
+                    line,
+                    suggested_primary=delivered,
+                    pushed_primary=pushed,
+                    remaining_primary=remaining,
+                    suggested_aux=aux_triplet[0],
+                    pushed_aux=aux_triplet[1],
+                    remaining_aux=aux_triplet[2],
+                    aux_unit=aux_unit,
+                )
+            else:
+                merge_pull_open_line_qty_fields(
+                    line,
+                    suggested_primary=delivered,
+                    pushed_primary=pushed,
+                    remaining_primary=remaining,
+                )
+            lines.append(line)
         lines.sort(
             key=lambda r: (
                 str(r.get("order_code") or ""),
@@ -17993,6 +18539,9 @@ class OtherInboundService(AppBaseService[OtherInbound]):
         milestones = await get_document_milestones(inbound.tenant_id, "other_inbound", inbound.id)
         response.lifecycle = get_other_inbound_lifecycle(inbound, milestones=milestones)
         response.items = [OtherInboundItemResponse.model_validate(i) for i in items]
+        await _enrich_other_doc_item_responses_ledger(
+            tenant_id, response.items, quantity_attr="inbound_quantity"
+        )
         return response
 
     async def list_other_inbounds(
@@ -18243,15 +18792,16 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                 qty = Decimal(str(item.inbound_quantity or 0))
                 if qty <= 0:
                     continue
-                base_qty = _convert_line_quantity_to_base(
+                posting = _convert_line_to_posting_quantities(
                     quantity=qty,
                     material_unit=getattr(item, "material_unit", None),
                     material=material_by_id.get(item.material_id),
+                    item=item,
                 )
                 await InventoryService._decrease_stock_no_atomic(
                     tenant_id=tenant_id,
                     material_id=item.material_id,
-                    quantity=base_qty,
+                    **_inventory_posting_call_kwargs(posting),
                     warehouse_id=wh_id,
                     batch_no=item.batch_number or None,
                     serial_nos=_parse_serial_numbers(getattr(item, "serial_numbers", None)) or None,
@@ -18339,6 +18889,11 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                             parsed_serials = _parse_serial_numbers(item_data.serial_numbers)
                             if parsed_serials:
                                 serial_nos_by_item_id[int(item_data.item_id)] = parsed_serials
+                        _apply_confirm_ledger_quantities_to_item_update(
+                            item_update,
+                            item_data,
+                            quantity_field="inbound_quantity",
+                        )
 
                         if item_update:
                             await OtherInboundItem.filter(
@@ -18419,16 +18974,17 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                     qty = Decimal(str(item.inbound_quantity or 0))
                     if qty <= 0:
                         continue
-                    base_qty = _convert_line_quantity_to_base(
+                    posting = _convert_line_to_posting_quantities(
                         quantity=qty,
                         material_unit=getattr(item, "material_unit", None),
                         material=material_by_id.get(item.material_id),
+                        item=item,
                     )
                     wh_id = getattr(item, "warehouse_id", None) or inbound.warehouse_id
                     await InventoryService._increase_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
-                        quantity=base_qty,
+                        **_inventory_posting_call_kwargs(posting),
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
                         **InventoryService.location_kwargs_from_line_item(item),
@@ -18527,10 +19083,11 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                     qty = Decimal(str(item.inbound_quantity or 0))
                     if qty <= 0:
                         continue
-                    base_qty = _convert_line_quantity_to_base(
+                    posting = _convert_line_to_posting_quantities(
                         quantity=qty,
                         material_unit=getattr(item, "material_unit", None),
                         material=material_by_id.get(item.material_id),
+                        item=item,
                     )
                     
                     # 反向扣减库存（decrease_stock 内部会校验余量，如果已被领用，这里会报错拦截）
@@ -18538,7 +19095,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                     await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
-                        quantity=base_qty,
+                        **_inventory_posting_call_kwargs(posting),
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
                         serial_nos=serial_nos or None,
@@ -18684,6 +19241,9 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
 
         response = OtherOutboundWithItemsResponse.model_validate(outbound)
         response.items = [OtherOutboundItemResponse.model_validate(i) for i in items]
+        await _enrich_other_doc_item_responses_ledger(
+            tenant_id, response.items, quantity_attr="outbound_quantity"
+        )
         response.lifecycle = get_other_outbound_lifecycle(outbound)
         return response
 
@@ -19022,9 +19582,19 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                 item_update["location_code"] = item_data.location_code or f"库位{item_data.location_id}"
 
             cleaned_allocs = _clean_outbound_batch_allocations(item_data.batch_allocations)
+            _apply_confirm_ledger_quantities_to_item_update(
+                item_update,
+                item_data,
+                quantity_field="outbound_quantity",
+            )
 
             if len(cleaned_allocs) > 1:
-                target_qty = Decimal(str(item.outbound_quantity or 0))
+                target_raw = (
+                    item_update["outbound_quantity"]
+                    if "outbound_quantity" in item_update
+                    else (item.outbound_quantity or 0)
+                )
+                target_qty = Decimal(str(target_raw))
                 if target_qty <= 0:
                     raise ValidationError(f"物料 {item.material_code} 出库数量须大于 0")
                 from apps.master_data.models.material import Material
@@ -19196,10 +19766,11 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                     qty = Decimal(str(item.outbound_quantity or 0))
                     if qty <= 0:
                         continue
-                    base_qty = _convert_line_quantity_to_base(
+                    posting = _convert_line_to_posting_quantities(
                         quantity=qty,
                         material_unit=getattr(item, "material_unit", None),
                         material=material_by_id.get(item.material_id),
+                        item=item,
                     )
                     mat = material_by_id.get(item.material_id)
                     if mat:
@@ -19215,7 +19786,7 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                     await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
-                        quantity=base_qty,
+                        **_inventory_posting_call_kwargs(posting),
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
                         serial_nos=serial_nos or None,
@@ -19223,6 +19794,8 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                         source_doc_id=outbound_id,
                         source_doc_code=outbound_obj.outbound_code,
                         enforce_fifo=enforce_fifo,
+                        **InventoryService.location_kwargs_from_line_item(item),
+                        location_scoped=InventoryService.line_item_location_scoped(item),
                         idempotency_key=f"other_outbound:{outbound_id}:dec:{item.id}",
                     movement_type="other_outbound",
                     operator_id=confirmed_by,
@@ -19323,16 +19896,17 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                     qty = Decimal(str(item.outbound_quantity or 0))
                     if qty <= 0:
                         continue
-                    base_qty = _convert_line_quantity_to_base(
+                    posting = _convert_line_to_posting_quantities(
                         quantity=qty,
                         material_unit=getattr(item, "material_unit", None),
                         material=material_by_id.get(item.material_id),
+                        item=item,
                     )
                     serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
                     await InventoryService.increase_stock(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
-                        quantity=base_qty,
+                        **_inventory_posting_call_kwargs(posting),
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
                         serial_nos=serial_nos or None,
@@ -19808,10 +20382,11 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
                     qty = item.borrow_quantity or Decimal(0)
                     if qty <= 0:
                         continue
-                    base_qty = _convert_line_quantity_to_base(
+                    posting = _convert_line_to_posting_quantities(
                         quantity=qty,
                         material_unit=getattr(item, "material_unit", None),
                         material=material_by_id.get(item.material_id),
+                        item=item,
                     )
                     # 明细仓优先；缺省用表头借出仓（禁止回落到物料默认仓导致错仓过账）
                     wh_id = item.warehouse_id or borrow_obj.warehouse_id
@@ -19833,7 +20408,7 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
                     await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
-                        quantity=base_qty,
+                        **_inventory_posting_call_kwargs(posting),
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
                         serial_nos=serial_nos or None,
@@ -19889,17 +20464,18 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
                     qty = item.borrow_quantity or Decimal(0)
                     if qty <= 0:
                         continue
-                    base_qty = _convert_line_quantity_to_base(
+                    posting = _convert_line_to_posting_quantities(
                         quantity=qty,
                         material_unit=getattr(item, "material_unit", None),
                         material=material_by_id.get(item.material_id),
+                        item=item,
                     )
                     wh_id = item.warehouse_id if item.warehouse_id else None
                     serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
                     await InventoryService.increase_stock(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
-                        quantity=base_qty,
+                        **_inventory_posting_call_kwargs(posting),
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
                         serial_nos=serial_nos or None,
@@ -20312,10 +20888,11 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
                     qty = item.return_quantity or Decimal(0)
                     if qty <= 0:
                         continue
-                    base_qty = _convert_line_quantity_to_base(
+                    posting = _convert_line_to_posting_quantities(
                         quantity=qty,
                         material_unit=getattr(item, "material_unit", None),
                         material=material_by_id.get(item.material_id),
+                        item=item,
                     )
                     wh_id = item.warehouse_id or return_entity.warehouse_id
                     if not wh_id:
@@ -20330,7 +20907,7 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
                     await InventoryService._increase_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
-                        quantity=base_qty,
+                        **_inventory_posting_call_kwargs(posting),
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
                         serial_nos=serial_nos or None,

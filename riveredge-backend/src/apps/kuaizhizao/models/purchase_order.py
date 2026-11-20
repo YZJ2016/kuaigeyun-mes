@@ -14,6 +14,9 @@ from apps.kuaizhizao.constants.price_type import DEFAULT_PURCHASE_PRICE_TYPE
 from apps.kuaizhizao.models.mixins.document_line_partner_material import (
     DocumentLinePartnerMaterialSnapshotMixin,
 )
+from apps.kuaizhizao.models.mixins.document_line_dual_quantity import (
+    DocumentLineDualQuantityMixin,
+)
 from decimal import Decimal
 
 
@@ -145,7 +148,11 @@ class PurchaseOrder(BaseModel):
         exclude = ["deleted_at"]
 
 
-class PurchaseOrderItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
+class PurchaseOrderItem(
+    DocumentLinePartnerMaterialSnapshotMixin,
+    DocumentLineDualQuantityMixin,
+    BaseModel,
+):
     """
     采购订单行
 

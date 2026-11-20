@@ -3458,6 +3458,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             _resolve_warehouse_name_by_id,
         )
         from apps.kuaizhizao.schemas.warehouse import PurchaseReceiptCreate, PurchaseReceiptItemCreate
+        from apps.kuaizhizao.utils.material_dual_quantity_utils import (
+            document_line_dual_quantity_for_push,
+        )
         from decimal import Decimal
         
         # 验证采购单存在且已审核
@@ -3529,6 +3532,12 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
             batch_number = batch_numbers.get(item.id) if batch_numbers else None
             snapshot = await self._resolve_po_item_receipt_snapshot(tenant_id, item)
+            # 部分下推按主数量比例带出副数量，否则入库行丢副数量，开口取单「副已转」会少算已入库批次
+            dual_for_push = document_line_dual_quantity_for_push(
+                item,
+                source_primary_qty=getattr(item, "ordered_quantity", None),
+                push_primary_qty=receipt_quantity,
+            )
 
             line_wh: Optional[int] = None
             if line_warehouses and item.id in line_warehouses:
@@ -3557,6 +3566,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 material_unit=snapshot["material_unit"],
                 receipt_quantity=receipt_quantity,
                 unit_price=item.unit_price,
+                tax_rate=float(getattr(item, "tax_rate", 0) or 0),
                 total_amount=line_total_qty_unit_price(receipt_quantity, item.unit_price),
                 qualified_quantity=receipt_quantity,  # 默认全部合格，后续可通过检验调整
                 unqualified_quantity=Decimal('0'),  # 默认无不合格数量
@@ -3565,6 +3575,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 warehouse_name=line_wh_name,
                 location_id=line_loc_id,
                 location_code=line_loc_code,
+                **dual_for_push,
             ))
         
         if not receipt_items:

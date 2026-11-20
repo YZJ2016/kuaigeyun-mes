@@ -55,6 +55,7 @@ async def test_withdraw_receipt_passes_serial_nos_to_decrease():
                 return_value=SimpleNamespace(
                     all=AsyncMock(return_value=[item]),
                     update=AsyncMock(),
+                    values_list=AsyncMock(return_value=[]),
                 )
             ),
         ),

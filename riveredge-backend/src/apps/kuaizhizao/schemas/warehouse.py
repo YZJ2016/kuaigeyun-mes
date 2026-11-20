@@ -22,6 +22,7 @@ from apps.kuaizhizao.services.document_action_policy.types import (
 from apps.kuaizhizao.schemas.document_line_dual_quantity import (
     DocumentLineDualQuantitySchemaMixin,
 )
+from apps.kuaizhizao.schemas.ledger_dual_quantity import LedgerDualQuantityReadMixin
 
 
 class DocumentLineMaterialPreview(BaseSchema):
@@ -64,7 +65,7 @@ class OutboundConfirmationBatchAllocation(BaseSchema):
     quantity: float = Field(..., gt=0, description="本批出库数量")
 
 
-class ProductionPickingItemEditLine(BaseSchema):
+class ProductionPickingItemEditLine(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     """生产领料单明细编辑行（确认领料前）"""
     id: int = Field(..., description="明细ID")
     required_quantity: Optional[float] = Field(None, gt=0, description="应领数量")
@@ -186,7 +187,7 @@ class ProductionPickingPullFromMaterialCallRequest(BaseSchema):
 
 # === 生产领料单明细 ===
 
-class ProductionPickingItemBase(BaseSchema):
+class ProductionPickingItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     """生产领料单明细基础schema"""
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")
@@ -527,7 +528,7 @@ class FinishedGoodsReceiptWithItemsResponse(FinishedGoodsReceiptResponse):
 
 # === 成品入库单明细 ===
 
-class FinishedGoodsReceiptItemBase(BaseSchema):
+class FinishedGoodsReceiptItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     """成品入库单明细基础schema"""
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")
@@ -742,7 +743,7 @@ class SalesDeliveryCreate(SalesDeliveryBase):
     items: Optional[List["SalesDeliveryItemCreate"]] = Field(None, description="出库明细列表")
 
 
-class SalesDeliveryItemEditLine(BaseSchema):
+class SalesDeliveryItemEditLine(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     """销售出库单明细编辑行（确认出库前）"""
     id: int = Field(..., description="明细ID")
     delivery_quantity: Optional[float] = Field(None, gt=0, description="出库数量")
@@ -811,7 +812,7 @@ class SalesDeliveryWithItemsResponse(SalesDeliveryResponse):
 
 # === 销售出库单明细 ===
 
-class SalesDeliveryItemBase(BaseSchema):
+class SalesDeliveryItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     """销售出库单明细基础schema"""
     sales_order_item_id: Optional[int] = Field(None, description="销售订单明细ID")
     shipment_notice_item_id: Optional[int] = Field(None, description="发货通知明细ID")
@@ -956,7 +957,7 @@ class PurchaseReceiptBase(BaseSchema):
 
 # === 采购入库单明细 ===
 
-class PurchaseReceiptItemBase(BaseSchema):
+class PurchaseReceiptItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     """采购入库单明细基础schema"""
     purchase_order_item_id: Optional[int] = Field(None, description="采购订单明细ID（空白建单可空；勿传0）")
     receipt_notice_item_id: Optional[int] = Field(None, description="收货通知明细ID")
@@ -1188,7 +1189,7 @@ class SalesReturnListPaginatedResponse(BaseSchema):
 
 # === 销售退货单明细 ===
 
-class SalesReturnItemBase(BaseSchema):
+class SalesReturnItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     """销售退货单明细基础schema"""
     # 关联原销售出库单明细 / 销售订单行
     sales_delivery_item_id: Optional[int] = Field(None, description="销售出库单明细ID")
@@ -1372,7 +1373,7 @@ class PurchaseReturnListPaginatedResponse(BaseSchema):
 
 # === 采购退货单明细 ===
 
-class PurchaseReturnItemBase(BaseSchema):
+class PurchaseReturnItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     """采购退货单明细基础schema"""
     # 关联原采购入库单明细 / 采购订单行
     purchase_receipt_item_id: Optional[int] = Field(None, description="采购入库单明细ID")
@@ -1516,7 +1517,7 @@ class OtherInboundListResponse(OtherInboundResponse):
 
 # === 其他入库单明细 ===
 
-class OtherInboundItemBase(BaseSchema):
+class OtherInboundItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     """其他入库单明细基础schema"""
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")
@@ -1548,7 +1549,7 @@ class OtherInboundItemUpdate(OtherInboundItemBase):
     pass
 
 
-class OtherInboundItemResponse(OtherInboundItemBase):
+class OtherInboundItemResponse(LedgerDualQuantityReadMixin, OtherInboundItemBase):
     """其他入库单明细响应schema"""
     id: int = Field(..., description="明细ID")
     tenant_id: int = Field(..., description="租户ID")
@@ -1677,7 +1678,7 @@ class OtherOutboundListResponse(OtherOutboundResponse):
 
 # === 其他出库单明细 ===
 
-class OtherOutboundItemBase(BaseSchema):
+class OtherOutboundItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     """其他出库单明细基础schema"""
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")
@@ -1709,7 +1710,7 @@ class OtherOutboundItemUpdate(OtherOutboundItemBase):
     pass
 
 
-class OtherOutboundItemResponse(OtherOutboundItemBase):
+class OtherOutboundItemResponse(LedgerDualQuantityReadMixin, OtherOutboundItemBase):
     """其他出库单明细响应schema"""
     id: int = Field(..., description="明细ID")
     tenant_id: int = Field(..., description="租户ID")
@@ -1795,7 +1796,7 @@ class MaterialBorrowListResponse(MaterialBorrowResponse):
 # === 借料单明细 ===
 
 
-class MaterialBorrowItemBase(BaseSchema):
+class MaterialBorrowItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     """借料单明细基础schema"""
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")
@@ -1912,7 +1913,7 @@ class MaterialReturnListResponse(MaterialReturnResponse):
 # === 还料单明细 ===
 
 
-class MaterialReturnItemBase(BaseSchema):
+class MaterialReturnItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     """还料单明细基础schema"""
     borrow_item_id: Optional[int] = Field(None, description="借料单明细ID")
     material_id: int = Field(..., description="物料ID")

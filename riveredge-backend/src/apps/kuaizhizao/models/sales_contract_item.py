@@ -7,9 +7,16 @@ from core.models.base import BaseModel
 from apps.kuaizhizao.models.mixins.document_line_partner_material import (
     DocumentLinePartnerMaterialSnapshotMixin,
 )
+from apps.kuaizhizao.models.mixins.document_line_dual_quantity import (
+    DocumentLineDualQuantityMixin,
+)
 
 
-class SalesContractItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
+class SalesContractItem(
+    DocumentLineDualQuantityMixin,
+    DocumentLinePartnerMaterialSnapshotMixin,
+    BaseModel,
+):
     """销售合同明细"""
 
     tenant_id = fields.IntField(description="租户ID")

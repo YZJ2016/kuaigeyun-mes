@@ -27,6 +27,7 @@ from apps.kuaizhizao.schemas.shipment_notice import (
     ShipmentNoticeCreate,
     ShipmentNoticeUpdate,
     ShipmentNoticeNotify,
+    ShipmentNoticeNotifyPreviewRequest,
     ShipmentNoticeResponse,
     ShipmentNoticeListResponse,
     ShipmentNoticeListPaginatedResponse,
@@ -227,14 +228,16 @@ async def delete_shipment_notice(
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get(
+@router.post(
     "/{notice_id}/notify/preview",
     summary="Preview notify warehouse",
     dependencies=[Depends(require_permission_codes("kuaizhizao:shipment-notice:update"))],
 )
 async def preview_notify_warehouse(
     notice_id: int = Path(..., description="通知单ID"),
-    warehouse_id: Optional[int] = Query(None, description="出库仓库ID（通知单未指定仓库时必填）"),
+    preview_data: ShipmentNoticeNotifyPreviewRequest = Body(
+        default_factory=ShipmentNoticeNotifyPreviewRequest
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -243,7 +246,8 @@ async def preview_notify_warehouse(
         return await shipment_notice_service.preview_notify_warehouse(
             tenant_id=tenant_id,
             notice_id=notice_id,
-            warehouse_id=warehouse_id,
+            warehouse_id=preview_data.warehouse_id,
+            line_warehouses=preview_data.line_warehouses,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))

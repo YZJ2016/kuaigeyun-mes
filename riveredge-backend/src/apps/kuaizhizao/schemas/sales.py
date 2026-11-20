@@ -14,6 +14,9 @@ from decimal import Decimal
 from typing import Optional, List
 from pydantic import Field
 from core.schemas.base import BaseSchema
+from apps.kuaizhizao.schemas.document_line_dual_quantity import (
+    DocumentLineDualQuantitySchemaMixin,
+)
 
 from apps.kuaizhizao.services.document_action_policy.types import SalesForecastCapabilities
 
@@ -193,7 +196,7 @@ class SalesOrderListResponse(SalesOrderResponse):
 
 # === 销售订单明细 ===
 
-class SalesOrderItemBase(BaseSchema):
+class SalesOrderItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     """销售订单明细基础schema"""
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")

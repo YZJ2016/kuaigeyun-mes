@@ -14,6 +14,9 @@ from apps.kuaizhizao.constants import DocumentStatus
 from apps.kuaizhizao.models.mixins.document_line_partner_material import (
     DocumentLinePartnerMaterialSnapshotMixin,
 )
+from apps.kuaizhizao.models.mixins.document_line_dual_quantity import (
+    DocumentLineDualQuantityMixin,
+)
 from apps.kuaizhizao.constants.purchase_inquiry import (
     PurchaseInquiryStatus,
     PurchaseInquiryVendorStatus,
@@ -92,7 +95,11 @@ class PurchaseInquiry(BaseModel):
         exclude = ["deleted_at"]
 
 
-class PurchaseInquiryItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
+class PurchaseInquiryItem(
+    DocumentLineDualQuantityMixin,
+    DocumentLinePartnerMaterialSnapshotMixin,
+    BaseModel,
+):
     """采购询价明细"""
 
     tenant_id = fields.IntField(description="租户ID")

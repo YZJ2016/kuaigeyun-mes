@@ -9,9 +9,12 @@ Date: 2025-12-30
 
 from tortoise import fields
 from core.models.base import BaseModel
+from apps.kuaizhizao.models.mixins.document_line_dual_quantity import (
+    DocumentLineDualQuantityMixin,
+)
 
 
-class ProductionPickingItem(BaseModel):
+class ProductionPickingItem(DocumentLineDualQuantityMixin, BaseModel):
     """
     生产领料单明细
 

@@ -12,9 +12,16 @@ from core.models.base import BaseModel
 from apps.kuaizhizao.models.mixins.document_line_partner_material import (
     DocumentLinePartnerMaterialSnapshotMixin,
 )
+from apps.kuaizhizao.models.mixins.document_line_dual_quantity import (
+    DocumentLineDualQuantityMixin,
+)
 
 
-class FinishedGoodsReceiptItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
+class FinishedGoodsReceiptItem(
+    DocumentLinePartnerMaterialSnapshotMixin,
+    DocumentLineDualQuantityMixin,
+    BaseModel,
+):
     """
     成品入库单明细
 

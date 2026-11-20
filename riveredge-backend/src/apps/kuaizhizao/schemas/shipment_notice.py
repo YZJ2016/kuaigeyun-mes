@@ -11,10 +11,13 @@ from __future__ import annotations
 
 from datetime import datetime, date
 from decimal import Decimal
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 from pydantic import Field
 from core.schemas.base import BaseSchema
+from apps.kuaizhizao.schemas.document_line_dual_quantity import (
+    DocumentLineDualQuantitySchemaMixin,
+)
 
 from apps.kuaizhizao.services.document_action_policy.types import ShipmentNoticeCapabilities
 
@@ -68,9 +71,38 @@ class ShipmentNoticeUpdate(BaseSchema):
 
 
 class ShipmentNoticeNotify(BaseSchema):
-    """通知仓库请求体（单据未指定仓库时须传入 warehouse_id）。"""
-    warehouse_id: Optional[int] = Field(None, description="出库仓库ID")
+    """通知仓库请求体。
+
+    真源为明细行仓/库位：优先 ``line_warehouses`` / ``line_location_ids``；
+    ``warehouse_id`` 仅作整单默认（兼容旧调用），灌入尚未指定行仓的明细。
+    """
+    warehouse_id: Optional[int] = Field(None, description="出库仓库ID（整单默认，兼容旧调用）")
     warehouse_name: Optional[str] = Field(None, max_length=100, description="出库仓库名称")
+    line_warehouses: Optional[Dict[str, int]] = Field(
+        None,
+        description="明细行出库仓库 {shipment_notice_item_id: warehouse_id}",
+    )
+    line_warehouse_names: Optional[Dict[str, str]] = Field(
+        None,
+        description="明细行出库仓库名称 {shipment_notice_item_id: warehouse_name}",
+    )
+    line_location_ids: Optional[Dict[str, int]] = Field(
+        None,
+        description="明细行库位 {shipment_notice_item_id: location_id}",
+    )
+    line_location_codes: Optional[Dict[str, str]] = Field(
+        None,
+        description="明细行库位编码 {shipment_notice_item_id: location_code}",
+    )
+
+
+class ShipmentNoticeNotifyPreviewRequest(BaseSchema):
+    """通知仓库预览请求：可带行仓覆盖，便于按所选仓刷新库存预占校验。"""
+    warehouse_id: Optional[int] = Field(None, description="整单默认出库仓库（兼容）")
+    line_warehouses: Optional[Dict[str, int]] = Field(
+        None,
+        description="明细行出库仓库 {shipment_notice_item_id: warehouse_id}",
+    )
 
 
 class ShipmentNoticeResponse(ShipmentNoticeBase):
@@ -118,7 +150,7 @@ class ShipmentNoticeListPaginatedResponse(BaseSchema):
 
 # === 发货通知单明细 ===
 
-class ShipmentNoticeItemBase(BaseSchema):
+class ShipmentNoticeItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     """发货通知单明细基础schema"""
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")

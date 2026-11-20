@@ -519,6 +519,7 @@ async def get_material_inventory_info(
     with_breakdown: bool = False,
     ownership_type: Optional[str] = None,
     customer_id: Optional[int] = None,
+    location_code: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     获取物料的库存信息（用于需求计算可供应量）
@@ -587,6 +588,15 @@ async def get_material_inventory_info(
                         _apply_material_batch_warehouse_scope_q(
                             wh_scope, include_unassigned=include_unassigned
                         )
+                    )
+
+            if location_code is not None:
+                loc_key = str(location_code).strip()
+                if loc_key:
+                    batch_query = batch_query.filter(location_code=loc_key)
+                else:
+                    batch_query = batch_query.filter(
+                        Q(location_code__isnull=True) | Q(location_code="")
                     )
 
             batch_agg = (

@@ -12,9 +12,16 @@ from core.models.base import BaseModel
 from apps.kuaizhizao.models.mixins.document_line_partner_material import (
     DocumentLinePartnerMaterialSnapshotMixin,
 )
+from apps.kuaizhizao.models.mixins.document_line_dual_quantity import (
+    DocumentLineDualQuantityMixin,
+)
 
 
-class SalesDeliveryItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
+class SalesDeliveryItem(
+    DocumentLinePartnerMaterialSnapshotMixin,
+    DocumentLineDualQuantityMixin,
+    BaseModel,
+):
     """
     销售出库单明细
 

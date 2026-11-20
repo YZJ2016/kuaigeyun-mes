@@ -48,6 +48,7 @@ from apps.kuaizhizao.utils.material_source_helper import (
     SOURCE_TYPE_BUY,
     resolve_material_purchase_line_unit_price,
 )
+from apps.kuaizhizao.utils.inventory_helper import aggregate_on_hand_qty_by_material
 from apps.kuaizhizao.services.document_action_policy.enricher import (
     enrich_purchase_requisition_detail_capabilities,
     enrich_purchase_requisition_list_capabilities,
@@ -929,7 +930,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         )
 
         item_ids = [int(it.id) for it in all_items if it.id is not None]
-        occupied_map = await self._occupied_purchase_order_qty_by_requisition_item_ids(
+        occupied_map, _ = await self._occupied_purchase_order_qty_by_requisition_item_ids(
             tenant_id, item_ids
         )
         for sid in po_item_by_source.keys():
@@ -1687,7 +1688,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             for item in (detail.items or [])
             if item.id is not None and float(item.quantity or 0) > 0
         ]
-        occupied_po = await self._occupied_purchase_order_qty_by_requisition_item_ids(
+        occupied_po, _occupied_po_aux = await self._occupied_purchase_order_qty_by_requisition_item_ids(
             tenant_id, [int(item.id) for item in open_items]
         )
         preview_items: List[Dict[str, Any]] = []
@@ -1852,8 +1853,8 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         candidate_ids = [iid for iid in selected_ids if iid in owned_set]
         if not candidate_ids:
             raise BusinessLogicError("所选申请行不属于本单或不存在")
-        occupied_po = await self._occupied_purchase_order_qty_by_requisition_item_ids(
-            tenant_id, candidate_ids
+        occupied_po, _occupied_po_aux = (
+            await self._occupied_purchase_order_qty_by_requisition_item_ids(tenant_id, candidate_ids)
         )
         owned_items = await PurchaseRequisitionItem.filter(
             tenant_id=tenant_id, id__in=candidate_ids,
@@ -1895,10 +1896,10 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         self,
         tenant_id: int,
         item_ids: List[int],
-    ) -> Dict[int, Decimal]:
-        """按申请行汇总下游采购订单占用数量（含草稿；删除的 PO 不计）。"""
+    ) -> Tuple[Dict[int, Decimal], Dict[int, Decimal]]:
+        """按申请行汇总下游采购订单占用数量（含草稿；删除的 PO 不计）。返回 (主, 副)。"""
         if not item_ids:
-            return {}
+            return {}, {}
         from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
 
         pois = await PurchaseOrderItem.filter(
@@ -1907,7 +1908,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             deleted_at__isnull=True,
         ).all()
         if not pois:
-            return {}
+            return {}, {}
         order_ids = {int(pi.order_id) for pi in pois if pi.order_id}
         live_order_ids = set(
             await PurchaseOrder.filter(
@@ -1917,6 +1918,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             ).values_list("id", flat=True)
         )
         occupied: Dict[int, Decimal] = {}
+        occupied_aux: Dict[int, Decimal] = {}
         for pi in pois:
             if int(pi.order_id or 0) not in live_order_ids:
                 continue
@@ -1928,16 +1930,20 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             occupied[sid] = occupied.get(sid, Decimal("0")) + Decimal(
                 str(pi.ordered_quantity or 0)
             )
-        return occupied
+            if getattr(pi, "aux_quantity", None) is not None:
+                occupied_aux[sid] = occupied_aux.get(sid, Decimal("0")) + Decimal(
+                    str(pi.aux_quantity or 0)
+                )
+        return occupied, occupied_aux
 
     async def _occupied_inquiry_qty_by_requisition_item_ids(
         self,
         tenant_id: int,
         item_ids: List[int],
-    ) -> Dict[int, Decimal]:
-        """按申请行汇总下游询价占用数量（含草稿；删除的询价不计）。"""
+    ) -> Tuple[Dict[int, Decimal], Dict[int, Decimal]]:
+        """按申请行汇总下游询价占用数量（含草稿；删除的询价不计）。返回 (主, 副)。"""
         if not item_ids:
-            return {}
+            return {}, {}
         from apps.kuaizhizao.models.purchase_inquiry import PurchaseInquiry, PurchaseInquiryItem
 
         rows = await PurchaseInquiryItem.filter(
@@ -1945,7 +1951,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             source_requisition_item_id__in=item_ids,
         ).all()
         if not rows:
-            return {}
+            return {}, {}
         inquiry_ids = {int(r.inquiry_id) for r in rows if r.inquiry_id}
         live_inquiry_ids = set(
             await PurchaseInquiry.filter(
@@ -1955,6 +1961,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             ).values_list("id", flat=True)
         )
         occupied: Dict[int, Decimal] = {}
+        occupied_aux: Dict[int, Decimal] = {}
         for row in rows:
             if int(row.inquiry_id or 0) not in live_inquiry_ids:
                 continue
@@ -1962,7 +1969,11 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             if sid <= 0:
                 continue
             occupied[sid] = occupied.get(sid, Decimal("0")) + Decimal(str(row.quantity or 0))
-        return occupied
+            if getattr(row, "aux_quantity", None) is not None:
+                occupied_aux[sid] = occupied_aux.get(sid, Decimal("0")) + Decimal(
+                    str(row.aux_quantity or 0)
+                )
+        return occupied, occupied_aux
 
     async def list_purchase_order_pull_lines(
         self,
@@ -2042,15 +2053,23 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         ).all()
 
         item_ids = [int(i.id) for i in items if i.id is not None]
-        occupied_po = (
-            await self._occupied_purchase_order_qty_by_requisition_item_ids(tenant_id, item_ids)
-            if target == "purchase_order"
-            else {}
-        )
-        occupied_inquiry = (
-            await self._occupied_inquiry_qty_by_requisition_item_ids(tenant_id, item_ids)
-            if target == "inquiry"
-            else {}
+        occupied_po: Dict[int, Decimal] = {}
+        occupied_po_aux: Dict[int, Decimal] = {}
+        occupied_inquiry: Dict[int, Decimal] = {}
+        occupied_inquiry_aux: Dict[int, Decimal] = {}
+        if target == "purchase_order":
+            occupied_po, occupied_po_aux = (
+                await self._occupied_purchase_order_qty_by_requisition_item_ids(tenant_id, item_ids)
+            )
+        elif target == "inquiry":
+            occupied_inquiry, occupied_inquiry_aux = (
+                await self._occupied_inquiry_qty_by_requisition_item_ids(tenant_id, item_ids)
+            )
+        stock_by_material = await aggregate_on_hand_qty_by_material(tenant_id)
+
+        from apps.kuaizhizao.utils.pull_open_line_quantity import (
+            enrich_pull_line_from_source_item,
+            resolve_requisition_material_aux_triplet,
         )
 
         items_by_material_group: Dict[Tuple[int, int], List] = {}
@@ -2060,6 +2079,9 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             )
             items_by_material_group.setdefault(key, []).append(item)
         occupied_map = occupied_po if target == "purchase_order" else occupied_inquiry
+        occupied_aux_map = (
+            occupied_po_aux if target == "purchase_order" else occupied_inquiry_aux
+        )
         kw = (keyword or "").strip().lower()
         lines: List[Dict[str, Any]] = []
         for item in items:
@@ -2075,6 +2097,11 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 item.requisition_id, item.material_id, fallback_item_id=item_id or None,
             )
             group_items = items_by_material_group[key]
+            group_occ_aux_by_item = {
+                int(i.id): occupied_aux_map.get(int(i.id), Decimal("0"))
+                for i in group_items
+                if i.id is not None
+            }
             group_suggested = sum(Decimal(str(i.quantity or 0)) for i in group_items)
             group_occupied = sum(
                 (occupied_map.get(int(i.id), Decimal("0")) for i in group_items if i.id is not None),
@@ -2082,6 +2109,18 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             )
             suggested, pushed, remaining = build_partial_push_qty_triplet(
                 group_suggested, group_occupied,
+            )
+            (
+                group_aux_sug,
+                _group_aux_pushed,
+                _group_aux_rem,
+                group_aux_unit,
+            ) = resolve_requisition_material_aux_triplet(
+                group_items=group_items,
+                occupied_aux_by_item_id=group_occ_aux_by_item,
+            )
+            group_occ_aux_sum = float(
+                sum(Decimal(str(v or 0)) for v in group_occ_aux_by_item.values())
             )
             is_open_carrier = qty > float(occupied_map.get(item_id, Decimal("0")))
             group_ids = [int(i.id) for i in group_items if i.id is not None]
@@ -2096,38 +2135,63 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             material_code = str(item.material_code or "").strip()
             material_name = str(item.material_name or "").strip()
             material_spec = str(item.material_spec or "").strip()
+            requisition_code = str(req.requisition_code or "").strip()
+            applicant_name = str(req.applicant_name or "").strip()
             department_name = str(getattr(req, "department_name", None) or "").strip()
+            line_notes = str(item.notes or "").strip()
             if kw:
                 haystack = " ".join(
-                    [material_code, material_name, material_spec, department_name]
+                    [
+                        requisition_code,
+                        applicant_name,
+                        department_name,
+                        material_code,
+                        material_name,
+                        material_spec,
+                        line_notes,
+                    ]
                 ).lower()
                 if kw not in haystack:
                     continue
             requisition_date = req.requisition_date.isoformat() if req.requisition_date else None
-            lines.append(
-                {
-                    "id": int(item.id),
-                    "requisition_id": int(item.requisition_id),
-                    "requisition_code": req.requisition_code,
-                    "requisition_status": req.status,
-                    "can_push": can_push,
-                    "document_date": requisition_date,
-                    "requisition_date": requisition_date,
-                    "applicant_name": (str(req.applicant_name or "").strip() or None),
-                    "department_id": getattr(req, "department_id", None),
-                    "department_name": department_name or None,
-                    "material_id": item.material_id,
-                    "material_code": material_code,
-                    "material_name": material_name,
-                    "material_spec": material_spec or None,
-                    "unit": item.unit or "件",
-                    "suggested_quantity": suggested,
-                    "pushed_quantity": pushed,
-                    "remaining_quantity": remaining,
-                    "required_date": str(item.required_date) if item.required_date else None,
-                    "supplier_id": item.supplier_id,
-                }
+            material_id = int(item.material_id) if item.material_id is not None else 0
+            current_stock = (
+                float(stock_by_material.get(material_id, Decimal("0")))
+                if material_id > 0
+                else 0.0
             )
+            row: Dict[str, Any] = {
+                "id": int(item.id),
+                "requisition_id": int(item.requisition_id),
+                "requisition_code": req.requisition_code,
+                "requisition_status": req.status,
+                "can_push": can_push,
+                "document_date": requisition_date,
+                "requisition_date": requisition_date,
+                "applicant_name": applicant_name or None,
+                "department_id": getattr(req, "department_id", None),
+                "department_name": department_name or None,
+                "material_id": item.material_id,
+                "material_code": material_code,
+                "material_name": material_name,
+                "material_spec": material_spec or None,
+                "unit": item.unit or "件",
+                "current_stock": current_stock,
+                "required_date": str(item.required_date) if item.required_date else None,
+                "line_notes": line_notes or None,
+                "supplier_id": item.supplier_id,
+            }
+            enrich_pull_line_from_source_item(
+                row,
+                item,
+                suggested_primary=suggested,
+                pushed_primary=pushed,
+                remaining_primary=remaining,
+                occupied_aux_pushed=group_occ_aux_sum,
+                suggested_aux_override=group_aux_sug,
+                aux_unit_override=group_aux_unit,
+            )
+            lines.append(row)
 
         # 单据日期倒序（最新在前），同日按申请/行 id 倒序
         lines.sort(
@@ -2187,11 +2251,30 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         ordered_items = [item_by_id[iid] for iid in selected_ids if iid in item_by_id]
         if not ordered_items:
             raise BusinessLogicError("没有可转单的申请行或所选行不存在")
-        occupied_po = await self._occupied_purchase_order_qty_by_requisition_item_ids(
-            tenant_id, [int(i.id) for i in ordered_items if i.id is not None]
-        )
 
         requisition_ids = sorted({int(i.requisition_id) for i in ordered_items})
+        all_req_items = await PurchaseRequisitionItem.filter(
+            tenant_id=tenant_id,
+            requisition_id__in=requisition_ids,
+        ).all()
+        from apps.kuaizhizao.utils.pull_open_line_quantity import (
+            dual_quantity_for_open_requisition_push,
+        )
+
+        items_by_group: Dict[Tuple[int, int], List[PurchaseRequisitionItem]] = {}
+        for it in all_req_items:
+            gkey = requisition_material_group_key(
+                it.requisition_id,
+                it.material_id,
+                fallback_item_id=int(it.id or 0) or None,
+            )
+            items_by_group.setdefault(gkey, []).append(it)
+        all_group_item_ids = [int(i.id) for i in all_req_items if i.id is not None]
+        occupied_po, occupied_po_aux = (
+            await self._occupied_purchase_order_qty_by_requisition_item_ids(
+                tenant_id, all_group_item_ids
+            )
+        )
         requisitions = await PurchaseRequisition.filter(
             tenant_id=tenant_id,
             id__in=requisition_ids,
@@ -2287,6 +2370,24 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 price_override=price_override,
             )
             conversions.append((item, qty))
+            group_key = requisition_material_group_key(
+                item.requisition_id,
+                item.material_id,
+                fallback_item_id=item_id or None,
+            )
+            group_items = items_by_group.get(group_key, [item])
+            occ_aux_map = {
+                int(i.id): occupied_po_aux.get(int(i.id), Decimal("0"))
+                for i in group_items
+                if i.id is not None
+            }
+            dual_for_push = dual_quantity_for_open_requisition_push(
+                item,
+                group_items=group_items,
+                occupied_aux_by_item_id=occ_aux_map,
+                push_primary_qty=qty,
+                line_remaining_primary=remaining,
+            )
             po_items.append(
                 PurchaseOrderItemCreate(
                     material_id=item.material_id,
@@ -2308,6 +2409,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                     work_order_id=item.work_order_id,
                     work_order_code=item.work_order_code,
                     notes=item.notes,
+                    **dual_for_push,
                     **partner_snapshot_fields_from_source_line(item),
                 )
             )
@@ -2434,7 +2536,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         )
         if not item or item.id is None:
             return
-        occupied_map = await self._occupied_purchase_order_qty_by_requisition_item_ids(
+        occupied_map, _ = await self._occupied_purchase_order_qty_by_requisition_item_ids(
             tenant_id, [int(item.id)]
         )
         occupied = occupied_map.get(int(item.id), Decimal("0"))

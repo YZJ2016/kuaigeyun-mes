@@ -13,6 +13,7 @@ from decimal import Decimal
 
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity, get_material_inventory_info
+from apps.kuaizhizao.utils.ledger_dual_quantity_utils import apply_ledger_fields_to_inventory_row
 from core.services.authorization.data_scope_service import DataScopeService
 from core.utils.timezone_utils import (
     coerce_business_datetime_to_utc,
@@ -269,6 +270,19 @@ class ReportService:
             tenant_id=tenant_id,
             user=current_user,
             resource="kuaizhizao:purchase-order",
+        )
+
+    async def _scoped_purchase_receipt_query(self, tenant_id: int, current_user: Optional[Any] = None):
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+
+        query = PurchaseReceipt.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if current_user is None:
+            return query
+        return await DataScopeService.apply(
+            query,
+            tenant_id=tenant_id,
+            user=current_user,
+            resource="kuaizhizao:inbound",
         )
 
     async def _scoped_work_order_query(self, tenant_id: int, current_user: Optional[Any] = None):
@@ -2736,6 +2750,15 @@ class ReportService:
             line_query = line_query.filter(Q(expiry_date__isnull=True) | Q(expiry_date__gte=today))
 
         batches = await batch_query.prefetch_related("material").all()
+        batch_material_ids = list({int(b.material_id) for b in batches if b.material_id is not None})
+        if batch_material_ids:
+            from apps.kuaizhizao.services.inventory_service import InventoryService
+
+            await InventoryService.heal_duplicate_default_batch_rows(
+                tenant_id, material_ids=batch_material_ids
+            )
+            batches = await batch_query.prefetch_related("material").all()
+        await self._heal_material_batches_ledger_quantities(batches)
         lines = await line_query.all()
 
         line_wh_map: Dict[int, Any] = {}
@@ -2764,24 +2787,34 @@ class ReportService:
                     continue
                 expiry_iso = to_api_isoformat(b.expiry_date) if b.expiry_date else None
                 qty = float(b.quantity or 0)
+                aux_qty = float(
+                    getattr(b, "aux_quantity", None)
+                    if getattr(b, "aux_quantity", None) is not None
+                    else b.quantity or 0
+                )
                 if qty <= 0 and not include_zero_stock:
                     continue
                 status = "已过期" if b.expiry_date and b.expiry_date < today else "在库"
+                mat = b.material
+                inv_unit = None
+                base_unit = None
+                if mat:
+                    base_unit = str(getattr(mat, "base_unit", None) or "").strip() or None
+                    inv_unit = str(getattr(mat, "inventory_unit", None) or "").strip() or base_unit
                 rows.append({
                     "id": 1000000 + b.id,
                     "material_id": b.material_id,
                     "material_code": b.material.main_code if b.material else "UNKNOWN",
                     "material_name": b.material.name if b.material else "UNKNOWN",
-                    "material_unit": (
-                        str(getattr(b.material, "base_unit", None) or "").strip() or None
-                        if b.material
-                        else None
-                    ),
+                    "material_unit": inv_unit,
+                    "inventory_unit": inv_unit,
+                    "base_unit": base_unit,
                     "batch_no": self._normalize_batch_no_for_report(b.batch_no),
                     "production_date": to_api_isoformat(b.production_date) if b.production_date else None,
                     "expiry_date": expiry_iso,
                     "supplier_batch_no": b.supplier_batch_no,
                     "quantity": qty,
+                    "aux_quantity": aux_qty,
                     "status": status,
                     "warehouse_id": resolved_wh_id,
                     "warehouse_name": resolved_wh_name,
@@ -2790,6 +2823,11 @@ class ReportService:
                 })
         for l in lines:
             qty = float((l.quantity or 0) - (l.reserved_quantity or 0))
+            aux_qty = float(
+                getattr(l, "aux_quantity", None)
+                if getattr(l, "aux_quantity", None) is not None
+                else qty
+            )
             if qty <= 0 and not include_zero_stock:
                 continue
             status = "已过期" if l.expiry_date and l.expiry_date < today else "在库"
@@ -2806,11 +2844,14 @@ class ReportService:
                 "material_code": l.material_code,
                 "material_name": l.material_name,
                 "material_unit": getattr(l, "material_unit", None),
+                "inventory_unit": getattr(l, "material_unit", None),
+                "base_unit": None,
                 "batch_no": self._normalize_batch_no_for_report(l.batch_no),
                 "production_date": to_api_isoformat(l.production_date) if l.production_date else None,
                 "expiry_date": to_api_isoformat(l.expiry_date) if l.expiry_date else None,
                 "supplier_batch_no": None,
                 "quantity": qty,
+                "aux_quantity": aux_qty,
                 "status": status,
                 "warehouse_id": wh_id,
                 "warehouse_name": self._normalize_warehouse_display_name(wh_name),
@@ -2819,6 +2860,63 @@ class ReportService:
             })
         await self._enrich_inventory_rows_location_fields(tenant_id, rows)
         return rows
+
+    @staticmethod
+    def _inventory_row_primary_qty(row: Dict[str, Any]) -> float:
+        if "primary_quantity" in row:
+            return float(row.get("primary_quantity") or 0)
+        return float(row.get("quantity") or 0)
+
+    async def _heal_material_batches_ledger_quantities(
+        self,
+        batches: List[Any],
+    ) -> None:
+        """即时库存取数前校正批号三量，消除历史孤立 aux_quantity。"""
+        from apps.kuaizhizao.utils.ledger_dual_quantity_utils import (
+            sync_material_batch_ledger_quantities,
+        )
+
+        for batch in batches:
+            material = getattr(batch, "material", None)
+            before = (
+                batch.quantity,
+                batch.base_quantity,
+                batch.aux_quantity,
+            )
+            sync_material_batch_ledger_quantities(batch, material)
+            after = (
+                batch.quantity,
+                batch.base_quantity,
+                batch.aux_quantity,
+            )
+            if before != after:
+                await batch.save(
+                    update_fields=["quantity", "base_quantity", "aux_quantity"]
+                )
+
+    async def _finalize_inventory_api_rows(
+        self,
+        tenant_id: int,
+        rows: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        from apps.master_data.models.material import Material
+
+        material_ids = {
+            int(r["material_id"])
+            for r in rows
+            if r.get("material_id") is not None
+        }
+        materials = (
+            await Material.filter(tenant_id=tenant_id, id__in=list(material_ids)).all()
+            if material_ids
+            else []
+        )
+        by_id = {int(m.id): m for m in materials}
+        finalized: List[Dict[str, Any]] = []
+        for row in rows:
+            mat = by_id.get(int(row.get("material_id") or 0))
+            finalized.append(apply_ledger_fields_to_inventory_row(dict(row), mat))
+        return finalized
 
     async def _enrich_inventory_balance_material_fields(
         self,
@@ -2980,12 +3078,12 @@ class ReportService:
     ) -> List[Dict[str, Any]]:
         out = rows
         if not include_zero_stock:
-            out = [r for r in out if float(r.get("quantity") or 0) > 0]
+            out = [r for r in out if ReportService._inventory_row_primary_qty(r) > 0]
         if status_filter in {"in_stock", "zero", "expired"}:
             if status_filter == "in_stock":
-                out = [r for r in out if float(r.get("quantity") or 0) > 0 and r.get("status") != "已过期"]
+                out = [r for r in out if ReportService._inventory_row_primary_qty(r) > 0 and r.get("status") != "已过期"]
             elif status_filter == "zero":
-                out = [r for r in out if float(r.get("quantity") or 0) <= 0]
+                out = [r for r in out if ReportService._inventory_row_primary_qty(r) <= 0]
             else:
                 out = [r for r in out if r.get("status") == "已过期"]
         if aging_bucket in {"expired", "0-30", "31-90", "90+"}:
@@ -3068,6 +3166,8 @@ class ReportService:
             aging_bucket=aging_bucket,
             keyword=keyword,
         )
+        # 先 finalize 再排序：对外仅有 primary_quantity，无 legacy quantity
+        rows = await self._finalize_inventory_api_rows(tenant_id, rows)
         from apps.kuaizhizao.services.warehouse_list_core import (
             INVENTORY_BATCH_LINE_SORTABLE_FIELDS,
             sort_inventory_report_rows,
@@ -3166,6 +3266,7 @@ class ReportService:
             loc_labels = b.pop("_location_labels", set())
             b["location_name"] = "、".join(sorted(loc_labels)) if loc_labels else None
         await self._enrich_inventory_balance_material_fields(tenant_id, balances)
+        balances = await self._finalize_inventory_api_rows(tenant_id, balances)
         balances = self._apply_inventory_filters(
             balances,
             include_zero_stock=include_zero_stock,
@@ -3225,6 +3326,7 @@ class ReportService:
         logger.info(f"query_batch_inventory: material_id={material_id}, material_ids={material_ids}, include_sales_commitment={include_sales_commitment}")
         from apps.master_data.constants.batch_quality_status import QUALIFIED
         from apps.master_data.models.material_batch import MaterialBatch
+        from apps.master_data.services.material_batch_service import MaterialBatchService
         from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
         from tortoise.expressions import Q
         query = MaterialBatch.filter(
@@ -3336,8 +3438,16 @@ class ReportService:
             if not self._material_batch_matches_warehouse_filter(resolved_wh_id, main_warehouse_filter_id):
                 continue
             status = b.status
-            if b.expiry_date and b.expiry_date < date.today(): status = "已过期"
-            elif (b.quantity or 0) <= 0: status = "无库存"
+            material_row = getattr(b, "material", None)
+            effective_expiry = MaterialBatchService.effective_expiry_date(
+                batch=b,
+                material=material_row,
+            )
+            status = b.status
+            if effective_expiry and effective_expiry < date.today():
+                status = "已过期"
+            elif (b.quantity or 0) <= 0:
+                status = "无库存"
             items.append({
                 "id": 1000000 + b.id, 
                 "material_id": b.material_id, 
@@ -3345,12 +3455,18 @@ class ReportService:
                 "material_name": b.material.name if b.material else "UNKNOWN", 
                 "batch_no": self._normalize_batch_no_for_report(b.batch_no), 
                 "production_date": to_api_isoformat(b.production_date) if b.production_date else None,
-                "expiry_date": to_api_isoformat(b.expiry_date) if b.expiry_date else None,
+                "expiry_date": to_api_isoformat(effective_expiry) if effective_expiry else None,
                 "supplier_batch_no": b.supplier_batch_no,
-                "quantity": float(b.quantity or 0), 
-                "status": status, 
+                "quantity": float(b.quantity or 0),
+                "aux_quantity": float(
+                    b.aux_quantity if b.aux_quantity is not None else b.quantity or 0
+                ),
+                "status": status,
                 "warehouse_id": resolved_wh_id,
                 "warehouse_name": resolved_wh_name,
+                # 出库库位下拉按 location_id/code 汇总库存；缺字段会把有库位库存误记成「无库位」
+                "location_id": getattr(b, "location_id", None),
+                "location_code": getattr(b, "location_code", None),
                 "ownership_type": getattr(b, "ownership_type", None) or "company_owned",
                 "customer_id": int(getattr(b, "customer_id", 0) or 0),
             })
@@ -3366,13 +3482,22 @@ class ReportService:
                 "production_date": to_api_isoformat(l.production_date) if l.production_date else None,
                 "expiry_date": to_api_isoformat(l.expiry_date) if l.expiry_date else None,
                 "supplier_batch_no": None,
-                "quantity": qty, 
+                "quantity": qty,
+                "aux_quantity": float(
+                    getattr(l, "aux_quantity", None)
+                    if getattr(l, "aux_quantity", None) is not None
+                    else qty
+                ),
                 "status": "在库" if qty > 0 else "无库存",
                 "warehouse_id": line_wh_id,
                 "warehouse_name": self._normalize_warehouse_display_name(getattr(l, "warehouse_name", None)),
+                "location_id": getattr(l, "location_id", None),
+                "location_code": getattr(l, "location_code", None),
                 "ownership_type": getattr(l, "ownership_type", None) or "company_owned",
                 "customer_id": int(getattr(l, "customer_id", 0) or 0),
             })
+        await self._enrich_inventory_rows_location_fields(tenant_id, items)
+        items = await self._finalize_inventory_api_rows(tenant_id, items)
         if aggregate_by_material:
             # 即时库存口径：按物料（可按仓库）汇总，不按批次拆分
             grouped: Dict[tuple, Dict[str, Any]] = {}
@@ -3385,18 +3510,20 @@ class ReportService:
                         "material_id": it.get("material_id"),
                         "material_code": it.get("material_code"),
                         "material_name": it.get("material_name"),
-                        "quantity": 0.0,
+                        "primary_quantity": 0.0,
+                        "secondary_quantity": 0.0,
                         "status": "无库存",
                         "warehouse_name": warehouse_name,
                     }
-                grouped[key]["quantity"] += float(it.get("quantity") or 0)
+                grouped[key]["primary_quantity"] += float(it.get("primary_quantity") or 0)
+                grouped[key]["secondary_quantity"] += float(it.get("secondary_quantity") or 0)
             agg_items = []
             for row in grouped.values():
-                qty = float(row["quantity"] or 0)
+                qty = float(row["primary_quantity"] or 0)
                 row["status"] = "在库" if qty > 0 else "无库存"
                 agg_items.append(row)
             if not include_zero_stock:
-                agg_items = [row for row in agg_items if float(row.get("quantity") or 0) > 0]
+                agg_items = [row for row in agg_items if float(row.get("primary_quantity") or 0) > 0]
             agg_items.sort(key=lambda x: ((x.get("material_code") or ""), (x.get("warehouse_name") or "")))
             summary = self._build_inventory_items_summary(agg_items)
             grouped = self._group_inventory_items(agg_items, group_by)
@@ -3416,7 +3543,7 @@ class ReportService:
                 },
             }
         if not include_zero_stock:
-            items = [it for it in items if float(it.get("quantity") or 0) > 0]
+            items = [it for it in items if float(it.get("primary_quantity") or 0) > 0]
         summary = self._build_inventory_items_summary(items)
         grouped = self._group_inventory_items(items, group_by)
         return {
@@ -5505,9 +5632,9 @@ class ReportService:
 
     @staticmethod
     def _build_inventory_items_summary(items: List[Dict[str, Any]]) -> Dict[str, Any]:
-        total_quantity = sum(float(it.get("quantity") or 0) for it in items)
-        in_stock_count = sum(1 for it in items if float(it.get("quantity") or 0) > 0)
-        zero_stock_count = sum(1 for it in items if float(it.get("quantity") or 0) <= 0)
+        total_quantity = sum(ReportService._inventory_row_primary_qty(it) for it in items)
+        in_stock_count = sum(1 for it in items if ReportService._inventory_row_primary_qty(it) > 0)
+        zero_stock_count = sum(1 for it in items if ReportService._inventory_row_primary_qty(it) <= 0)
         expired_count = sum(1 for it in items if it.get("status") == "已过期")
         near_expiry_count = 0
         today = date.today()
@@ -5523,7 +5650,7 @@ class ReportService:
                 continue
         return {
             "total_records": len(items),
-            "total_quantity": round(total_quantity, 4),
+            "total_primary_quantity": round(total_quantity, 4),
             "in_stock_count": in_stock_count,
             "zero_stock_count": zero_stock_count,
             "expired_count": expired_count,

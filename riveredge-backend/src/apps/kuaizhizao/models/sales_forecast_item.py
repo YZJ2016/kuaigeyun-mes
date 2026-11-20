@@ -12,9 +12,16 @@ from core.models.base import BaseModel
 from apps.kuaizhizao.models.mixins.document_line_partner_material import (
     DocumentLinePartnerMaterialSnapshotMixin,
 )
+from apps.kuaizhizao.models.mixins.document_line_dual_quantity import (
+    DocumentLineDualQuantityMixin,
+)
 
 
-class SalesForecastItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
+class SalesForecastItem(
+    DocumentLineDualQuantityMixin,
+    DocumentLinePartnerMaterialSnapshotMixin,
+    BaseModel,
+):
     """
     销售预测明细
 

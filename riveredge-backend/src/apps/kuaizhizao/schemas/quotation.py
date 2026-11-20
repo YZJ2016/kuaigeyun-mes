@@ -16,12 +16,15 @@ from pydantic import Field, model_validator
 
 from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE
 from core.schemas.base import BaseSchema
+from apps.kuaizhizao.schemas.document_line_dual_quantity import (
+    DocumentLineDualQuantitySchemaMixin,
+)
 from apps.kuaizhizao.services.document_action_policy.types import QuotationCapabilities
 
 
 # === 报价单明细 ===
 
-class QuotationItemBase(BaseSchema):
+class QuotationItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     """报价单明细基础schema"""
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., max_length=100, description="物料编码")

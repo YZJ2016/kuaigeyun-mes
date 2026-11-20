@@ -9,6 +9,9 @@ Date: 2026-01-15
 
 from tortoise import fields
 from core.models.base import BaseModel
+from apps.kuaizhizao.models.mixins.document_line_dual_quantity import (
+    DocumentLineDualQuantityMixin,
+)
 
 
 class InventoryTransfer(BaseModel):
@@ -98,7 +101,7 @@ class InventoryTransfer(BaseModel):
         return f"{self.code} - {self.from_warehouse_name} → {self.to_warehouse_name}"
 
 
-class InventoryTransferItem(BaseModel):
+class InventoryTransferItem(DocumentLineDualQuantityMixin, BaseModel):
     """
     库存调拨明细模型
 

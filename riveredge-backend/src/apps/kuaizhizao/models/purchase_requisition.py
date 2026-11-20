@@ -13,6 +13,9 @@ from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
 from apps.kuaizhizao.models.mixins.document_line_partner_material import (
     DocumentLinePartnerMaterialSnapshotMixin,
 )
+from apps.kuaizhizao.models.mixins.document_line_dual_quantity import (
+    DocumentLineDualQuantityMixin,
+)
 
 
 class PurchaseRequisition(BaseModel):
@@ -58,7 +61,11 @@ class PurchaseRequisition(BaseModel):
         table_description = "快格轻制造 - 采购申请"
 
 
-class PurchaseRequisitionItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
+class PurchaseRequisitionItem(
+    DocumentLineDualQuantityMixin,
+    DocumentLinePartnerMaterialSnapshotMixin,
+    BaseModel,
+):
     """
     采购申请行
 

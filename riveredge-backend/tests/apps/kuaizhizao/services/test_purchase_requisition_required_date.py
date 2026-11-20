@@ -67,7 +67,7 @@ async def test_open_lines_use_actual_occupancy_and_group_split_rows(
             id=index, requisition_id=11, material_id=5,
             quantity=Decimal(qty), purchase_order_id=100 if index in occupied else None,
             material_code="M-5", material_name="Material", material_spec=None,
-            unit="件", required_date=None, supplier_id=7,
+            unit="件", required_date=None, supplier_id=7, notes=None,
         )
         for index, qty in enumerate(quantities, 1)
     ]
@@ -79,10 +79,14 @@ async def test_open_lines_use_actual_occupancy_and_group_split_rows(
     monkeypatch.setattr(requisition_module.PurchaseRequisition, "filter", MagicMock(return_value=req_query))
     monkeypatch.setattr(requisition_module.PurchaseRequisitionItem, "filter", MagicMock(return_value=item_query))
     monkeypatch.setattr(requisition_module, "requisition_open_line_can_push", lambda *args, **kwargs: True)
+    monkeypatch.setattr(requisition_module, "aggregate_on_hand_qty_by_material", AsyncMock(return_value={}))
     service = PurchaseRequisitionService()
     monkeypatch.setattr(
         service, "_occupied_purchase_order_qty_by_requisition_item_ids",
-        AsyncMock(return_value={key: Decimal(value) for key, value in occupied.items()}),
+        AsyncMock(return_value=(
+            {key: Decimal(value) for key, value in occupied.items()},
+            {},
+        )),
     )
     result = await service.list_purchase_order_pull_lines(1, pullable_only=pullable_only)
     assert [row["id"] for row in result["data"]] == expected_ids

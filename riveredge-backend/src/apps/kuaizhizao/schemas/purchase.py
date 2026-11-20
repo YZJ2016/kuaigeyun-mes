@@ -22,6 +22,9 @@ from apps.kuaizhizao.constants.price_type import (
 
 # 导入BaseSchema用于兼容性
 from core.schemas.base import BaseSchema
+from apps.kuaizhizao.schemas.document_line_dual_quantity import (
+    DocumentLineDualQuantitySchemaMixin,
+)
 
 
 # === 采购订单付款里程碑 ===
@@ -285,7 +288,7 @@ class PurchaseOrderListResponse(PurchaseOrderResponse):
 
 
 # === 采购订单明细 ===
-class PurchaseOrderItemBase(BaseSchema):
+class PurchaseOrderItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     """采购订单明细基础Schema"""
     model_config = ConfigDict(from_attributes=True)
 

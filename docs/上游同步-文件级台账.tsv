@@ -668,7 +668,7 @@ riveredge-backend/src/apps/kuaizhizao/api/sales_contracts/sales_contracts.py	597
 riveredge-backend/src/apps/kuaizhizao/api/sales_order_changes/sales_order_changes.py	2d342c0f2c9156a0f0317afab1023e7ade1e106a	tracked	seed from 899307f4d6
 riveredge-backend/src/apps/kuaizhizao/api/sales_orders/sales_orders.py	6ce7c80d0dd126fa64cffe05724712e07e763ddc	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/api/sales_reviews/sales_reviews.py	19a39242c4ff6089bf192365c47f1de3a532369d	tracked	seed from 57a37e2749
-riveredge-backend/src/apps/kuaizhizao/api/shipment_notices/shipment_notices.py	d2632318249ee6c0e209fb0de1e7e6224b8452a8	applied	宽区间补登：上游tip已落地（同文/等价映射/预审A包复核）
+riveredge-backend/src/apps/kuaizhizao/api/shipment_notices/shipment_notices.py	d2632318249ee6c0e209fb0de1e7e6224b8452a8	applied	副数量簇：18模型挂DualQuantityMixin+schema mixin/aux字段；服务层aux三元组(enrich_pull_line_from_source_item/occupied查询tuple)+过账链InventoryPostingQuantities(normalize/base/aux_quantity_delta)+确认单primary/secondary覆盖+库存报表primary/secondary聚合+库位维度(MaterialBatch唯一键含location_code)+多行分摊扣减；保本地spec141幂等/KR-PG1开关前置/序列号留痕/tax_rate与required_date可选语义；修复_scoped_purchase_receipt_query断链；测试fixture对齐新签名(mock tuple/notes/BatchListQuery)并补齐station写路由漂移归类
 riveredge-backend/src/apps/kuaizhizao/api/station/station.py	64369ce5385bc2b485ee047753fd8a9e11f4555a	superset	本地超前：工位操作员会话/spec-181数据域扩展/serial+幂等+stock_document_guard/真实OEE传感器计算/model_factory+runtime.vision新AI架构/ipqc多模式/spec206看板事实函数/spec144序列号拆分关系/spec200 SOP知识同步/8D草稿/HITL续跑/permissions_any/tenant_context任务scope——上游均为旧版/简化版
 riveredge-backend/src/apps/kuaizhizao/api/tool_ops/documents.py	8564d697bf829e00d58571d760d378afd269465a	tracked	seed from 5f085a19c9
 riveredge-backend/src/apps/kuaizhizao/api/tools/tools.py	0025db9cb899a8d3dd5d4b32b095629ad4d2c368	tracked	seed from 2c945a39fb
@@ -905,16 +905,16 @@ riveredge-backend/src/apps/kuaizhizao/models/equipment_spot_check_plan.py	DELETE
 riveredge-backend/src/apps/kuaizhizao/models/finance_misc_category.py	805a67ac3e834958871034ddbf0f4334e647fc97	superset	同表（apps_kuaicaiwu_misc_*）权威模型已在apps.kuaicaiwu.models.finance_misc_category；上游kuaizhizao副本属OSS/pro拆分平行面
 riveredge-backend/src/apps/kuaizhizao/models/finished_goods_inspection.py	fb058384bdbce473d6da47fcf0460c64566472f3	applied	R2：与上游tip blob一致，本地已同步
 riveredge-backend/src/apps/kuaizhizao/models/finished_goods_receipt.py	1b44583e6cecaebdfb99f3228170e20a64716d23	applied	摘取：空白建单模型对齐（三模型与上游字节一致）+迁移981/982/985→20261123000040-42+schema可空/领用部门；schema其余增量仍deferred
-riveredge-backend/src/apps/kuaizhizao/models/finished_goods_receipt_item.py	96b80015acfbacbb3ea78294f549749f398b8db1	tracked	seed from 93b3cb5998
+riveredge-backend/src/apps/kuaizhizao/models/finished_goods_receipt_item.py	96b80015acfbacbb3ea78294f549749f398b8db1	applied	副数量簇：模型挂DocumentLineDualQuantityMixin(aux_quantity/aux_unit/unit_conversion_rate)，与上游迁移914/915已落库列对齐
 riveredge-backend/src/apps/kuaizhizao/models/finished_goods_receipt_sync_binding.py	0f7cceebb306836854c3fe85b8d3d60be056526d	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/models/incoming_inspection.py	8e1d522d50d753bec26e86a51df8216c34f1bf5c	tracked	seed from a62d32cff6
 riveredge-backend/src/apps/kuaizhizao/models/inspection_sampling_transfer.py	0808572b5af8f3425a7f11fd2eadba501d07848f	applied	E域GB2828簇(源905787348a/1efec0da1d等)
 riveredge-backend/src/apps/kuaizhizao/models/inspection_step_spec.py	DELETED	applied	E域GB2828簇(源905787348a/1efec0da1d等)
 riveredge-backend/src/apps/kuaizhizao/models/inventory_sync_binding.py	c6e7befe7eff74e53e6cde3c95f40ee77be7e671	applied	R2簇5 core/sync:摘取上游tip实现
-riveredge-backend/src/apps/kuaizhizao/models/inventory_transfer.py	d735d33c85c3e2c4431d4c1f4121337fa42df69f	tracked	seed from a60f3e9039
+riveredge-backend/src/apps/kuaizhizao/models/inventory_transfer.py	d735d33c85c3e2c4431d4c1f4121337fa42df69f	applied	副数量簇：模型挂DocumentLineDualQuantityMixin(aux_quantity/aux_unit/unit_conversion_rate)，与上游迁移914/915已落库列对齐
 riveredge-backend/src/apps/kuaizhizao/models/line_side_inventory.py	c8d6cf3e825e82f37cc6dd262e90d06da19246f1	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/models/maintenance_plan.py	cc7385d09ef3cda4355737040dec1c8e59deea66	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
-riveredge-backend/src/apps/kuaizhizao/models/material_borrow_item.py	60281b47d9f76edd7931a01dec923ef9981e73b1	tracked	seed from 5b1b9828e4
+riveredge-backend/src/apps/kuaizhizao/models/material_borrow_item.py	60281b47d9f76edd7931a01dec923ef9981e73b1	applied	副数量簇：模型挂DocumentLineDualQuantityMixin(aux_quantity/aux_unit/unit_conversion_rate)，与上游迁移914/915已落库列对齐
 riveredge-backend/src/apps/kuaizhizao/models/material_return_item.py	de89b4951af42f2b26ae2894d3c2366d5e7b3f58	tracked	seed from 5b1b9828e4
 riveredge-backend/src/apps/kuaizhizao/models/material_stock_movement.py	f08b7dba0743cd2cdb3f427dcf8f485317ab5dc5	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/models/mixins/document_line_dual_quantity.py	f839bad4b15dd0d982129a24140cb82f5a8ed360	tracked	seed from b12cc66e71
@@ -923,10 +923,10 @@ riveredge-backend/src/apps/kuaizhizao/models/mold_ops.py	fcf1668cf8931679c051738
 riveredge-backend/src/apps/kuaizhizao/models/oqc_inspection.py	dfca686a03204c81abf86c1754e45a6a2e7e2623	applied	R2：与上游tip blob一致，本地已同步
 riveredge-backend/src/apps/kuaizhizao/models/orm_models.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/models/other_expense_application.py	78c68ee35181040ee439395819f3caf5be42e188	tracked	seed from d81b4b70bf
-riveredge-backend/src/apps/kuaizhizao/models/other_inbound_item.py	42a59efe32a757879cff176ddf83ee6ce7913bb0	tracked	seed from 93b3cb5998
+riveredge-backend/src/apps/kuaizhizao/models/other_inbound_item.py	42a59efe32a757879cff176ddf83ee6ce7913bb0	applied	副数量簇：模型挂DocumentLineDualQuantityMixin(aux_quantity/aux_unit/unit_conversion_rate)，与上游迁移914/915已落库列对齐
 riveredge-backend/src/apps/kuaizhizao/models/other_inbound_sync_binding.py	6f0e026bff91b50159ee9d7a08aec72959726801	tracked	seed from a0b353ce7e
 riveredge-backend/src/apps/kuaizhizao/models/other_outbound.py	876e411d9cbc884154b1752457a0f43a364fdadb	tracked	seed from a0b353ce7e
-riveredge-backend/src/apps/kuaizhizao/models/other_outbound_item.py	a87049c4021367d678eaf7c405d144b638f97f84	tracked	seed from 5b1b9828e4
+riveredge-backend/src/apps/kuaizhizao/models/other_outbound_item.py	a87049c4021367d678eaf7c405d144b638f97f84	applied	副数量簇：模型挂DocumentLineDualQuantityMixin(aux_quantity/aux_unit/unit_conversion_rate)，与上游迁移914/915已落库列对齐
 riveredge-backend/src/apps/kuaizhizao/models/other_outbound_sync_binding.py	fc286fb773ad281c97387041cedc79df819ad859	tracked	seed from a0b353ce7e
 riveredge-backend/src/apps/kuaizhizao/models/other_voucher.py	6498320e597ed1f9ca348c5a0216a04c424e14a8	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/models/outsource_inspection.py	23eeaa237df62d16ecfcc47e9184f5e7fbda51cc	applied	R2：与上游tip blob一致，本地已同步
@@ -939,21 +939,21 @@ riveredge-backend/src/apps/kuaizhizao/models/packing_profile.py	b92330980c9a923a
 riveredge-backend/src/apps/kuaizhizao/models/payment_application.py	8702ba2428f79ca9893237ea99099b93380df1ea	tracked	seed from 37409d3b29
 riveredge-backend/src/apps/kuaizhizao/models/process_inspection.py	c846f85583de65e877a08b77adda2a65fc3a57a5	applied	R2：与上游tip blob一致，本地已同步
 riveredge-backend/src/apps/kuaizhizao/models/production_picking.py	e0ab97316c00af9d1ac6c0c905293b925182cb79	applied	摘取：空白建单模型对齐（三模型与上游字节一致）+迁移981/982/985→20261123000040-42+schema可空/领用部门；schema其余增量仍deferred
-riveredge-backend/src/apps/kuaizhizao/models/production_picking_item.py	e5472a90966bbd6a3fb768ccc5a60eb4b217f995	tracked	seed from 6abba1dbd5
+riveredge-backend/src/apps/kuaizhizao/models/production_picking_item.py	e5472a90966bbd6a3fb768ccc5a60eb4b217f995	applied	副数量簇：模型挂DocumentLineDualQuantityMixin(aux_quantity/aux_unit/unit_conversion_rate)，与上游迁移914/915已落库列对齐
 riveredge-backend/src/apps/kuaizhizao/models/production_picking_sync_binding.py	39f97de77eb313817e104b47c7800777683a1405	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/models/production_return_item.py	c73e74ee803ef8d43d7dcc87bb94c54cff522886	superset	本地超集：spec143/184硬化或本地功能字段（tenant隔离/attachment/serial_numbers/urgency/mqtt/OEE富schema/严格版本/序列号台账/脉冲计数Optional/关键写路径/unscoped清理/public_error脱敏/kuaicaiwu路径/STATION_TERMINAL/design动作/宽度64)
 riveredge-backend/src/apps/kuaizhizao/models/purchase_demand_party.py	2e6fbcfe5202f8b620656673900c2dea6beb0f56	tracked	seed from d892f36d03
-riveredge-backend/src/apps/kuaizhizao/models/purchase_inquiry.py	67ca23634d4a5149c64c09a1620fcfd8ea3e3f70	deferred	部分摘取：tax_rate非空+默认0(迁移1027)与department_id/name部门快照(迁移20261123000002)已落；DocumentLineDualQuantityMixin副数量mixin其余hunk随域复核
-riveredge-backend/src/apps/kuaizhizao/models/purchase_order.py	c7be7805af2f30ddcc3a17e95393b4d8d6f038c7	applied	部门字段簇：ORM补department_id/name列(迁移20261123000002已落库)对接采购单据部门快照
+riveredge-backend/src/apps/kuaizhizao/models/purchase_inquiry.py	67ca23634d4a5149c64c09a1620fcfd8ea3e3f70	applied	副数量簇：模型挂DocumentLineDualQuantityMixin(aux_quantity/aux_unit/unit_conversion_rate)，与上游迁移914/915已落库列对齐
+riveredge-backend/src/apps/kuaizhizao/models/purchase_order.py	c7be7805af2f30ddcc3a17e95393b4d8d6f038c7	applied	副数量簇：模型挂DocumentLineDualQuantityMixin(aux_quantity/aux_unit/unit_conversion_rate)，与上游迁移914/915已落库列对齐
 riveredge-backend/src/apps/kuaizhizao/models/purchase_order_change_order.py	3c5bf2d4b1c866917cdf1dd295a9f35bfefa93fb	applied	部门字段簇：ORM补department_id/name列(迁移20261123000002已落库)对接采购单据部门快照
 riveredge-backend/src/apps/kuaizhizao/models/purchase_order_milestone.py	4f41f6a88583bbfc887ffdb5793240113240661a	tracked	seed from 3958bb1524
 riveredge-backend/src/apps/kuaizhizao/models/purchase_order_sync_binding.py	8cdd55908cbe8ad3c460416bee638405d97b8b10	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/apps/kuaizhizao/models/purchase_receipt.py	5da5c65f6e4728360164d949f4c55b5d25ac1c7a	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
-riveredge-backend/src/apps/kuaizhizao/models/purchase_receipt_item.py	b68774e58e8ab2520a8388680d245e32ec70b215	deferred	部分摘取：tax_rate 非空+默认0 hunk 已落（配套迁移1027）；DocumentLineDualQuantityMixin 副数量等其余 hunk 属未落地特性域随域复核
+riveredge-backend/src/apps/kuaizhizao/models/purchase_receipt_item.py	b68774e58e8ab2520a8388680d245e32ec70b215	applied	副数量簇：模型挂DocumentLineDualQuantityMixin(aux_quantity/aux_unit/unit_conversion_rate)，与上游迁移914/915已落库列对齐
 riveredge-backend/src/apps/kuaizhizao/models/purchase_receipt_sync_binding.py	46542f61530dd22c474d350eb2cd3cc227a74422	tracked	seed from 4bd853a94f
-riveredge-backend/src/apps/kuaizhizao/models/purchase_requisition.py	e2a6305c00d86abf0a75f22107377dc4beae1708	applied	部门字段簇：ORM补department_id/name列(迁移20261123000002已落库)对接采购单据部门快照
+riveredge-backend/src/apps/kuaizhizao/models/purchase_requisition.py	e2a6305c00d86abf0a75f22107377dc4beae1708	applied	副数量簇：模型挂DocumentLineDualQuantityMixin(aux_quantity/aux_unit/unit_conversion_rate)，与上游迁移914/915已落库列对齐
 riveredge-backend/src/apps/kuaizhizao/models/purchase_return.py	210de15f7013114f78cc99ee0ffa7344ed5deef6	applied	部门字段簇：ORM补department_id/name列(迁移20261123000002已落库)对接采购单据部门快照
-riveredge-backend/src/apps/kuaizhizao/models/purchase_return_item.py	2c99c42ec17e78882a315cfbc6a08680a7287cc5	tracked	seed from a62d32cff6
+riveredge-backend/src/apps/kuaizhizao/models/purchase_return_item.py	2c99c42ec17e78882a315cfbc6a08680a7287cc5	applied	副数量簇：模型挂DocumentLineDualQuantityMixin(aux_quantity/aux_unit/unit_conversion_rate)，与上游迁移914/915已落库列对齐
 riveredge-backend/src/apps/kuaizhizao/models/qms_certificate.py	8e1404f75d354b53dbccd1e3a2653d93a74faadc	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-backend/src/apps/kuaizhizao/models/qms_corrective_action.py	d8018e09b7fca1df7e434d5b0a3c9482f37f5563	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-backend/src/apps/kuaizhizao/models/qms_external_audit.py	10b3be4ed3b944f7dcb86b7dc7fb3d38a1766722	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
@@ -966,29 +966,29 @@ riveredge-backend/src/apps/kuaizhizao/models/qms_nonconformity_report.py	bad8002
 riveredge-backend/src/apps/kuaizhizao/models/qms_quality_objective.py	00a1d387153c5bc892575129a61857021cd14a49	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-backend/src/apps/kuaizhizao/models/qms_system_document_circulation.py	ad0bc06373068db1f4528f6fcab73363a94eb70b	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-backend/src/apps/kuaizhizao/models/quality_patrol.py	752bc357aabd690ff7af7ab2a56e6513bf561601	applied	R2：与上游tip blob一致，本地已同步
-riveredge-backend/src/apps/kuaizhizao/models/quotation_item.py	ecd431cffcc19c0c9523d7b0c5e02d07f89ffa6f	tracked	seed from a60f3e9039
+riveredge-backend/src/apps/kuaizhizao/models/quotation_item.py	ecd431cffcc19c0c9523d7b0c5e02d07f89ffa6f	applied	副数量簇：模型挂DocumentLineDualQuantityMixin(aux_quantity/aux_unit/unit_conversion_rate)，与上游迁移914/915已落库列对齐
 riveredge-backend/src/apps/kuaizhizao/models/receipt_notice.py	541a95f65dda6480f9466b1f8c3a7c89ca3e1089	applied	部门字段簇：ORM补department_id/name列(迁移20261123000002已落库)对接采购单据部门快照
 riveredge-backend/src/apps/kuaizhizao/models/receipt_notice_item.py	8f0825b937650e12aae72b5554d0262552968457	applied	R2：与上游tip blob一致，本地已同步
 riveredge-backend/src/apps/kuaizhizao/models/reporting_record.py	b834215654a211156e39a50868748f949e4cb437	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/models/reporting_sync_binding.py	955ef111471d1fe7c994bf40e4254a13491da505	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/apps/kuaizhizao/models/rework_order.py	eccfcb684cf2881e12ab03ee997859f3154b8467	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/models/rework_order_operation.py	3293b8d4b4cd705fd5c651281d929b0db8355bd6	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
-riveredge-backend/src/apps/kuaizhizao/models/sales_contract_item.py	7f08b59a98d8b7da5c7be8cc4a72eca54f3f17f9	tracked	seed from a62d32cff6
+riveredge-backend/src/apps/kuaizhizao/models/sales_contract_item.py	7f08b59a98d8b7da5c7be8cc4a72eca54f3f17f9	applied	副数量簇：模型挂DocumentLineDualQuantityMixin(aux_quantity/aux_unit/unit_conversion_rate)，与上游迁移914/915已落库列对齐
 riveredge-backend/src/apps/kuaizhizao/models/sales_delivery.py	f10355799ed4d056953f0a5e10e46792b9c29d64	tracked	seed from 6abba1dbd5
-riveredge-backend/src/apps/kuaizhizao/models/sales_delivery_item.py	db0d803d8fabc1449f7214fb189d288f4e2368e9	tracked	seed from 57a37e2749
+riveredge-backend/src/apps/kuaizhizao/models/sales_delivery_item.py	db0d803d8fabc1449f7214fb189d288f4e2368e9	applied	副数量簇：模型挂DocumentLineDualQuantityMixin(aux_quantity/aux_unit/unit_conversion_rate)，与上游迁移914/915已落库列对齐
 riveredge-backend/src/apps/kuaizhizao/models/sales_delivery_sync_binding.py	a552fea9b1d96392aa423f7b48d70a3121723d59	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
-riveredge-backend/src/apps/kuaizhizao/models/sales_forecast_item.py	1ea0f3f30155df01fb9698ef78164b6a26918e14	tracked	seed from a62d32cff6
+riveredge-backend/src/apps/kuaizhizao/models/sales_forecast_item.py	1ea0f3f30155df01fb9698ef78164b6a26918e14	applied	副数量簇：模型挂DocumentLineDualQuantityMixin(aux_quantity/aux_unit/unit_conversion_rate)，与上游迁移914/915已落库列对齐
 riveredge-backend/src/apps/kuaizhizao/models/sales_order.py	3829044de1703606cda6c5689aa5f03b76beb31b	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/models/sales_order_change_order.py	060a09802509d8e4af38a5bf9795cd091fcc615c	applied	R2：与上游tip blob一致，本地已同步
-riveredge-backend/src/apps/kuaizhizao/models/sales_order_item.py	b3c6a84fff3e09230f75da777208f14238246990	tracked	seed from a60f3e9039
+riveredge-backend/src/apps/kuaizhizao/models/sales_order_item.py	b3c6a84fff3e09230f75da777208f14238246990	applied	副数量簇：模型挂DocumentLineDualQuantityMixin(aux_quantity/aux_unit/unit_conversion_rate)，与上游迁移914/915已落库列对齐
 riveredge-backend/src/apps/kuaizhizao/models/sales_order_sync_binding.py	e3ba009449aacd9a9cf1855893425e0847d32a10	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/apps/kuaizhizao/models/sales_return.py	0b379e0b73203d8eb111406f9c733b3fdf63a9a0	tracked	seed from b12cc66e71
-riveredge-backend/src/apps/kuaizhizao/models/sales_return_item.py	3905765ffdbaf60f6a2ecc7bc18f8bb5fceb37cf	tracked	seed from a62d32cff6
+riveredge-backend/src/apps/kuaizhizao/models/sales_return_item.py	3905765ffdbaf60f6a2ecc7bc18f8bb5fceb37cf	applied	副数量簇：模型挂DocumentLineDualQuantityMixin(aux_quantity/aux_unit/unit_conversion_rate)，与上游迁移914/915已落库列对齐
 riveredge-backend/src/apps/kuaizhizao/models/sales_review_item.py	8425d4efaa25938246304663910cc0762cb22d05	applied	R2：与上游tip blob一致，本地已同步
 riveredge-backend/src/apps/kuaizhizao/models/semi_finished_goods_receipt.py	76f55ac163afc7d401d2f924da8ee2d85967d7b0	applied	摘取：空白建单模型对齐（三模型与上游字节一致）+迁移981/982/985→20261123000040-42+schema可空/领用部门；schema其余增量仍deferred
 riveredge-backend/src/apps/kuaizhizao/models/semi_finished_goods_receipt_item.py	7aaed480287280d09d30df8c2838a3a58647c0e3	superset	本地超集：spec143/184硬化或本地功能字段（tenant隔离/attachment/serial_numbers/urgency/mqtt/OEE富schema/严格版本/序列号台账/脉冲计数Optional/关键写路径/unscoped清理/public_error脱敏/kuaicaiwu路径/STATION_TERMINAL/design动作/宽度64)
 riveredge-backend/src/apps/kuaizhizao/models/shipment_notice.py	9dfcdc62ea5e0076f340a5b6ff372819d53b8abd	tracked	seed from 899307f4d6
-riveredge-backend/src/apps/kuaizhizao/models/shipment_notice_item.py	3ad68b67e2c83075d2fa9204562738ac96f6096e	tracked	seed from a62d32cff6
+riveredge-backend/src/apps/kuaizhizao/models/shipment_notice_item.py	3ad68b67e2c83075d2fa9204562738ac96f6096e	applied	副数量簇：模型挂DocumentLineDualQuantityMixin(aux_quantity/aux_unit/unit_conversion_rate)，与上游迁移914/915已落库列对齐
 riveredge-backend/src/apps/kuaizhizao/models/supplier_evaluation.py	2c1c5684f0bdb5e7ac25e3989d23f36af9766a49	applied	13be286f11联调修复簇
 riveredge-backend/src/apps/kuaizhizao/models/sync_run_log.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/models/work_order.py	4f7e4d2ffa1b902a1b9c731697daf9c051c8ea5c	tracked	seed from 18c0e4ce1a
@@ -1018,9 +1018,9 @@ riveredge-backend/src/apps/kuaizhizao/schemas/equipment_ops.py	f903e738d9ac3f210
 riveredge-backend/src/apps/kuaizhizao/schemas/equipment_spot_check_plan.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 riveredge-backend/src/apps/kuaizhizao/schemas/finished_goods_receipt_sync.py	4af089bae8d511b2cbd1e5b38894fff7ed92d270	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/schemas/inventory_sync.py	e6b59e51f35aba2bf64451a2731ba2c1995fe1a9	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
-riveredge-backend/src/apps/kuaizhizao/schemas/inventory_transfer.py	d91042ec461e8c1af629eb0eea0f14e2af84ca4c	tracked	seed from a60f3e9039
+riveredge-backend/src/apps/kuaizhizao/schemas/inventory_transfer.py	d91042ec461e8c1af629eb0eea0f14e2af84ca4c	applied	副数量簇：18模型挂DualQuantityMixin+schema mixin/aux字段；服务层aux三元组(enrich_pull_line_from_source_item/occupied查询tuple)+过账链InventoryPostingQuantities(normalize/base/aux_quantity_delta)+确认单primary/secondary覆盖+库存报表primary/secondary聚合+库位维度(MaterialBatch唯一键含location_code)+多行分摊扣减；保本地spec141幂等/KR-PG1开关前置/序列号留痕/tax_rate与required_date可选语义；修复_scoped_purchase_receipt_query断链；测试fixture对齐新签名(mock tuple/notes/BatchListQuery)并补齐station写路由漂移归类
 riveredge-backend/src/apps/kuaizhizao/schemas/kingdee_consistency.py	205ffaefb1ff65c5c13459e2380e69c8d518b7d4	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
-riveredge-backend/src/apps/kuaizhizao/schemas/ledger_dual_quantity.py	b8d005c8047bab7947f1a4ff8190b5968f22ba19	tracked	seed from 52b1abf2e3
+riveredge-backend/src/apps/kuaizhizao/schemas/ledger_dual_quantity.py	b8d005c8047bab7947f1a4ff8190b5968f22ba19	applied	副数量簇：18模型挂DualQuantityMixin+schema mixin/aux字段；服务层aux三元组(enrich_pull_line_from_source_item/occupied查询tuple)+过账链InventoryPostingQuantities(normalize/base/aux_quantity_delta)+确认单primary/secondary覆盖+库存报表primary/secondary聚合+库位维度(MaterialBatch唯一键含location_code)+多行分摊扣减；保本地spec141幂等/KR-PG1开关前置/序列号留痕/tax_rate与required_date可选语义；修复_scoped_purchase_receipt_query断链；测试fixture对齐新签名(mock tuple/notes/BatchListQuery)并补齐station写路由漂移归类
 riveredge-backend/src/apps/kuaizhizao/schemas/maintenance_plan.py	55cb70753f838e0ddae74b12fc3ab14acbf512bb	tracked	seed from 46508115c7
 riveredge-backend/src/apps/kuaizhizao/schemas/material_call.py	ebd400d6e9a9017f42cd0960df2d3f16dd679aa3	tracked	seed from 899307f4d6
 riveredge-backend/src/apps/kuaizhizao/schemas/mold_ops.py	ad8c6173f0211316b42ff519b0a64dbaa5cb547b	tracked	seed from 5f085a19c9
@@ -1035,9 +1035,9 @@ riveredge-backend/src/apps/kuaizhizao/schemas/outsource_work_order.py	8c31b474af
 riveredge-backend/src/apps/kuaizhizao/schemas/packing_binding.py	61a4374dd65c1fd82f20eeca0b5e4b096d1cc1d9	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/schemas/payment_application.py	b7b9ba9a0a386690ce7bb5969414eca271dba20f	tracked	seed from 1d968cd27b
 riveredge-backend/src/apps/kuaizhizao/schemas/production_picking_sync.py	2f1c35711e90835f82fe98d67011d8068cb47a06	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
-riveredge-backend/src/apps/kuaizhizao/schemas/purchase.py	eb3431ba6539a3d28033b17bc91b9cc39cf00895	applied	部门字段簇：schema补department_id/name对接采购单据部门快照链
+riveredge-backend/src/apps/kuaizhizao/schemas/purchase.py	eb3431ba6539a3d28033b17bc91b9cc39cf00895	applied	副数量簇：18模型挂DualQuantityMixin+schema mixin/aux字段；服务层aux三元组(enrich_pull_line_from_source_item/occupied查询tuple)+过账链InventoryPostingQuantities(normalize/base/aux_quantity_delta)+确认单primary/secondary覆盖+库存报表primary/secondary聚合+库位维度(MaterialBatch唯一键含location_code)+多行分摊扣减；保本地spec141幂等/KR-PG1开关前置/序列号留痕/tax_rate与required_date可选语义；修复_scoped_purchase_receipt_query断链；测试fixture对齐新签名(mock tuple/notes/BatchListQuery)并补齐station写路由漂移归类
 riveredge-backend/src/apps/kuaizhizao/schemas/purchase_demand_party.py	224dde78d27977b9f6c0a384586bb993ce439475	tracked	seed from d892f36d03
-riveredge-backend/src/apps/kuaizhizao/schemas/purchase_inquiry.py	83cfea8f0c41a1481a2aa9790a1eb80b763094d8	applied	部门字段簇：schema补department_id/name对接采购单据部门快照链
+riveredge-backend/src/apps/kuaizhizao/schemas/purchase_inquiry.py	83cfea8f0c41a1481a2aa9790a1eb80b763094d8	applied	副数量簇：18模型挂DualQuantityMixin+schema mixin/aux字段；服务层aux三元组(enrich_pull_line_from_source_item/occupied查询tuple)+过账链InventoryPostingQuantities(normalize/base/aux_quantity_delta)+确认单primary/secondary覆盖+库存报表primary/secondary聚合+库位维度(MaterialBatch唯一键含location_code)+多行分摊扣减；保本地spec141幂等/KR-PG1开关前置/序列号留痕/tax_rate与required_date可选语义；修复_scoped_purchase_receipt_query断链；测试fixture对齐新签名(mock tuple/notes/BatchListQuery)并补齐station写路由漂移归类
 riveredge-backend/src/apps/kuaizhizao/schemas/purchase_order_sync.py	4e8c3994bedc80d04207bfabd0904345f9ce51c8	applied	f40f54e336调度窗+价税簇
 riveredge-backend/src/apps/kuaizhizao/schemas/purchase_receipt_sync.py	97c72778a051498e0966ca13fb83c8cee44b7b28	tracked	seed from 4bd853a94f
 riveredge-backend/src/apps/kuaizhizao/schemas/purchase_requisition.py	0c1c3250b622de072cdd50a784bf125e79f9ec30	applied	部门字段簇：schema补department_id/name对接采购单据部门快照链
@@ -1045,25 +1045,25 @@ riveredge-backend/src/apps/kuaizhizao/schemas/quality.py	29d3857ae8d4a44996b3638
 riveredge-backend/src/apps/kuaizhizao/schemas/quality_improvement.py	4f525bc1ea446dc6b9282f1bdeadeecc1a65ba52	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/apps/kuaizhizao/schemas/quality_patrol.py	eafa33db53419ef0095777ec3b8600aa9ccc9dd1	applied	R2：与上游tip blob一致，本地已同步
 riveredge-backend/src/apps/kuaizhizao/schemas/quality_qms.py	be12fa0e312f5d10978fa1a21f218e29170cd914	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
-riveredge-backend/src/apps/kuaizhizao/schemas/quotation.py	017d7b68952f03d8af9d2c7450302a07b3a76f8e	tracked	seed from a60f3e9039
+riveredge-backend/src/apps/kuaizhizao/schemas/quotation.py	017d7b68952f03d8af9d2c7450302a07b3a76f8e	applied	副数量簇：18模型挂DualQuantityMixin+schema mixin/aux字段；服务层aux三元组(enrich_pull_line_from_source_item/occupied查询tuple)+过账链InventoryPostingQuantities(normalize/base/aux_quantity_delta)+确认单primary/secondary覆盖+库存报表primary/secondary聚合+库位维度(MaterialBatch唯一键含location_code)+多行分摊扣减；保本地spec141幂等/KR-PG1开关前置/序列号留痕/tax_rate与required_date可选语义；修复_scoped_purchase_receipt_query断链；测试fixture对齐新签名(mock tuple/notes/BatchListQuery)并补齐station写路由漂移归类
 riveredge-backend/src/apps/kuaizhizao/schemas/receipt_notice.py	759cec52b3442f410ddb35ff584fa4cb5ddd400b	applied	部门字段簇：schema补department_id/name对接采购单据部门快照链
 riveredge-backend/src/apps/kuaizhizao/schemas/reporting_record.py	99b0c38acbe6e76eab4e1bd737f8967d9a064634	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/schemas/reporting_sync.py	31628b220398ea946c921471bfb206b30694f1f6	applied	f40f54e336调度窗+价税簇
 riveredge-backend/src/apps/kuaizhizao/schemas/rework_order.py	cdae7eb259dd807a9fcf9c1bfebba94e952f079a	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
-riveredge-backend/src/apps/kuaizhizao/schemas/sales.py	7c2aedee7cc19777acb9d40636ea1c911a7b246f	tracked	seed from a62d32cff6
-riveredge-backend/src/apps/kuaizhizao/schemas/sales_contract.py	a475b784fb517a86790fcedffcbc7aab8d7ca244	tracked	seed from 905787348a
+riveredge-backend/src/apps/kuaizhizao/schemas/sales.py	7c2aedee7cc19777acb9d40636ea1c911a7b246f	applied	副数量簇：18模型挂DualQuantityMixin+schema mixin/aux字段；服务层aux三元组(enrich_pull_line_from_source_item/occupied查询tuple)+过账链InventoryPostingQuantities(normalize/base/aux_quantity_delta)+确认单primary/secondary覆盖+库存报表primary/secondary聚合+库位维度(MaterialBatch唯一键含location_code)+多行分摊扣减；保本地spec141幂等/KR-PG1开关前置/序列号留痕/tax_rate与required_date可选语义；修复_scoped_purchase_receipt_query断链；测试fixture对齐新签名(mock tuple/notes/BatchListQuery)并补齐station写路由漂移归类
+riveredge-backend/src/apps/kuaizhizao/schemas/sales_contract.py	a475b784fb517a86790fcedffcbc7aab8d7ca244	applied	副数量簇：18模型挂DualQuantityMixin+schema mixin/aux字段；服务层aux三元组(enrich_pull_line_from_source_item/occupied查询tuple)+过账链InventoryPostingQuantities(normalize/base/aux_quantity_delta)+确认单primary/secondary覆盖+库存报表primary/secondary聚合+库位维度(MaterialBatch唯一键含location_code)+多行分摊扣减；保本地spec141幂等/KR-PG1开关前置/序列号留痕/tax_rate与required_date可选语义；修复_scoped_purchase_receipt_query断链；测试fixture对齐新签名(mock tuple/notes/BatchListQuery)并补齐station写路由漂移归类
 riveredge-backend/src/apps/kuaizhizao/schemas/sales_delivery_sync.py	a65bd6612778a0f253f3f5e0217caa30c39f1b45	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
-riveredge-backend/src/apps/kuaizhizao/schemas/sales_forecast.py	b7c3165681a3c5ffdbef72bbad7993388c25889a	tracked	seed from b12cc66e71
+riveredge-backend/src/apps/kuaizhizao/schemas/sales_forecast.py	b7c3165681a3c5ffdbef72bbad7993388c25889a	applied	副数量簇：18模型挂DualQuantityMixin+schema mixin/aux字段；服务层aux三元组(enrich_pull_line_from_source_item/occupied查询tuple)+过账链InventoryPostingQuantities(normalize/base/aux_quantity_delta)+确认单primary/secondary覆盖+库存报表primary/secondary聚合+库位维度(MaterialBatch唯一键含location_code)+多行分摊扣减；保本地spec141幂等/KR-PG1开关前置/序列号留痕/tax_rate与required_date可选语义；修复_scoped_purchase_receipt_query断链；测试fixture对齐新签名(mock tuple/notes/BatchListQuery)并补齐station写路由漂移归类
 riveredge-backend/src/apps/kuaizhizao/schemas/sales_order.py	faf0c8c6a420c826d1f4567c81ad017c027b7526	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/schemas/sales_order_sync.py	73591aee5ee60cae428842204221d6b2423331a6	applied	f40f54e336调度窗+价税簇
 riveredge-backend/src/apps/kuaizhizao/schemas/sales_review.py	69297bd5ea58966549350acea8ebda346e7026c4	tracked	seed from 57a37e2749
-riveredge-backend/src/apps/kuaizhizao/schemas/shipment_notice.py	f99946b4ac5a6ab8ed22d5027067b2ad5d3b132f	tracked	seed from 6abba1dbd5
+riveredge-backend/src/apps/kuaizhizao/schemas/shipment_notice.py	f99946b4ac5a6ab8ed22d5027067b2ad5d3b132f	applied	副数量簇：18模型挂DualQuantityMixin+schema mixin/aux字段；服务层aux三元组(enrich_pull_line_from_source_item/occupied查询tuple)+过账链InventoryPostingQuantities(normalize/base/aux_quantity_delta)+确认单primary/secondary覆盖+库存报表primary/secondary聚合+库位维度(MaterialBatch唯一键含location_code)+多行分摊扣减；保本地spec141幂等/KR-PG1开关前置/序列号留痕/tax_rate与required_date可选语义；修复_scoped_purchase_receipt_query断链；测试fixture对齐新签名(mock tuple/notes/BatchListQuery)并补齐station写路由漂移归类
 riveredge-backend/src/apps/kuaizhizao/schemas/station.py	c2db0545d34cbfec034841248334a5f3328dc6fc	superset	本地超前：工位操作员会话/spec-181数据域扩展/serial+幂等+stock_document_guard/真实OEE传感器计算/model_factory+runtime.vision新AI架构/ipqc多模式/spec206看板事实函数/spec144序列号拆分关系/spec200 SOP知识同步/8D草稿/HITL续跑/permissions_any/tenant_context任务scope——上游均为旧版/简化版
 riveredge-backend/src/apps/kuaizhizao/schemas/supplier_evaluation.py	2643e3ae9a7c80dc6637946cf77ce6f096df1fbb	applied	13be286f11联调修复簇
 riveredge-backend/src/apps/kuaizhizao/schemas/tool.py	dd3a24e78c5bb57a4e820782f002ce546cc63062	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/schemas/tool_ops.py	7caa7df817e0e0ff89de0c463dc1a5d795d3a06e	tracked	seed from 5f085a19c9
 riveredge-backend/src/apps/kuaizhizao/schemas/visual_scheduling.py	834cef5b33d16fd19b2283a0465d72c747f20111	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
-riveredge-backend/src/apps/kuaizhizao/schemas/warehouse.py	a745f86c7c7a6439a9f56ae08c15b61e1ba92269	deferred	部分摘取：ProductionPickingBase已对齐(可空+领用部门)+PurchaseReturnBase部门快照hunk已落；文件其余70+hunk随仓储域批次复核
+riveredge-backend/src/apps/kuaizhizao/schemas/warehouse.py	a745f86c7c7a6439a9f56ae08c15b61e1ba92269	applied	副数量簇：18模型挂DualQuantityMixin+schema mixin/aux字段；服务层aux三元组(enrich_pull_line_from_source_item/occupied查询tuple)+过账链InventoryPostingQuantities(normalize/base/aux_quantity_delta)+确认单primary/secondary覆盖+库存报表primary/secondary聚合+库位维度(MaterialBatch唯一键含location_code)+多行分摊扣减；保本地spec141幂等/KR-PG1开关前置/序列号留痕/tax_rate与required_date可选语义；修复_scoped_purchase_receipt_query断链；测试fixture对齐新签名(mock tuple/notes/BatchListQuery)并补齐station写路由漂移归类
 riveredge-backend/src/apps/kuaizhizao/schemas/work_order.py	d2e2f3da2ba424b9c44450ac55dbeb8947e47224	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
 riveredge-backend/src/apps/kuaizhizao/schemas/work_order_sync.py	f04609e2feecdf3e20b53bb2a52087111afe8ad0	applied	f40f54e336调度窗+价税簇
 riveredge-backend/src/apps/kuaizhizao/scripts/__init__.py	DELETED	superset	上游已删/无对应，本地保留独有治理与记忆库资产（.cursor/.aoci/openapi等）
@@ -1174,7 +1174,7 @@ riveredge-backend/src/apps/kuaizhizao/services/inspection_step_spec.py	726d38936
 riveredge-backend/src/apps/kuaizhizao/services/install_execution_service.py	3f3503d7ba8a3fa56f15c6bc8a6de7f6615c0468	applied	宽区间补登：上游tip已落地（同文/等价映射/预审A包复核）
 riveredge-backend/src/apps/kuaizhizao/services/inventory_alert_service.py	cdbd71f4264c4f434b4722af8c258a148f4d9113	tracked	seed from ec29267f5b
 riveredge-backend/src/apps/kuaizhizao/services/inventory_analysis_service.py	d25e39a87a48108c4b20adad6a13c557d66aebd9	domain-out	上游改为 optional_pro 惰性指向 apps.kuaizhizao.finance.inventory_cost_service（域外 finance 包本地不存在）；本地 apps.kuaicaiwu.InventoryCostService 直连为权威等价实现，不随上游改道
-riveredge-backend/src/apps/kuaizhizao/services/inventory_service.py	18eabdc6fc24720cdfee4891dfaada1f473e8300	applied	入库撤回DEFAULT批号链：常量+resolve_managed_decrease_batch_no+判定块+use_specific_batch准入；上游多批拆分deduction引擎(_list_in_stock_material_batches/location-scoped)仍deferred
+riveredge-backend/src/apps/kuaizhizao/services/inventory_service.py	18eabdc6fc24720cdfee4891dfaada1f473e8300	applied	副数量簇：18模型挂DualQuantityMixin+schema mixin/aux字段；服务层aux三元组(enrich_pull_line_from_source_item/occupied查询tuple)+过账链InventoryPostingQuantities(normalize/base/aux_quantity_delta)+确认单primary/secondary覆盖+库存报表primary/secondary聚合+库位维度(MaterialBatch唯一键含location_code)+多行分摊扣减；保本地spec141幂等/KR-PG1开关前置/序列号留痕/tax_rate与required_date可选语义；修复_scoped_purchase_receipt_query断链；测试fixture对齐新签名(mock tuple/notes/BatchListQuery)并补齐station写路由漂移归类
 riveredge-backend/src/apps/kuaizhizao/services/inventory_sync_service.py	e7764ab683e411eb7759ef18c4f44f0a61a90fa0	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-backend/src/apps/kuaizhizao/services/inventory_transfer_service.py	c0a8128b0becf9cfd1c51a9b58de6b5922728991	applied	R2：与上游tip blob一致，本地已同步
 riveredge-backend/src/apps/kuaizhizao/services/kingdee_consistency_orchestrator.py	33b62cf2406accbc22f113f9894649b6d5a632dd	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
@@ -1271,15 +1271,15 @@ riveredge-backend/src/apps/kuaizhizao/services/purchase_arrival_delay_service.py
 riveredge-backend/src/apps/kuaizhizao/services/purchase_arrival_warning_service.py	76b5c0dbc29adcc5423bd8d4a160f40bf511d5df	tracked	seed from 4bd853a94f
 riveredge-backend/src/apps/kuaizhizao/services/purchase_cost_service.py	e997067f02a1788be6bc22bb975cbfe2eefaf345	tracked	seed from 432bd5f7fd
 riveredge-backend/src/apps/kuaizhizao/services/purchase_demand_party_service.py	c9e616b5d0805061822fa378c83fd793f432e807	tracked	seed from d892f36d03
-riveredge-backend/src/apps/kuaizhizao/services/purchase_inquiry_service.py	af46165708c144c4b01f5ae61fa0fc5180696d28	applied	部门字段簇：补部门快照传播链(申请/询价→订单→收货通知/入库/退货/变更单+打印占位符+领料领用部门占位符补漏)；测试双供体用getattr安全取值
+riveredge-backend/src/apps/kuaizhizao/services/purchase_inquiry_service.py	af46165708c144c4b01f5ae61fa0fc5180696d28	applied	副数量簇：18模型挂DualQuantityMixin+schema mixin/aux字段；服务层aux三元组(enrich_pull_line_from_source_item/occupied查询tuple)+过账链InventoryPostingQuantities(normalize/base/aux_quantity_delta)+确认单primary/secondary覆盖+库存报表primary/secondary聚合+库位维度(MaterialBatch唯一键含location_code)+多行分摊扣减；保本地spec141幂等/KR-PG1开关前置/序列号留痕/tax_rate与required_date可选语义；修复_scoped_purchase_receipt_query断链；测试fixture对齐新签名(mock tuple/notes/BatchListQuery)并补齐station写路由漂移归类
 riveredge-backend/src/apps/kuaizhizao/services/purchase_inquiry_vendor_pdf.py	4588c81cc5f816d82941ed85f369433df4c75ddd	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/apps/kuaizhizao/services/purchase_order_change_service.py	95687a7e87ff15f724108eba9625df6f47afdf90	applied	部门字段簇：补部门快照传播链(申请/询价→订单→收货通知/入库/退货/变更单+打印占位符+领料领用部门占位符补漏)；测试双供体用getattr安全取值
 riveredge-backend/src/apps/kuaizhizao/services/purchase_order_sync_service.py	375d694d8cbfe9cae2d5baebe7fbab3a8f5a9118	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-backend/src/apps/kuaizhizao/services/purchase_order_terms_service.py	7f6f9e760f171857fd6e599c62133333b8d6df74	tracked	seed from 1efec0da1d
 riveredge-backend/src/apps/kuaizhizao/services/purchase_receipt_sync_service.py	29a9e262f638fd9d665865fcdd33cafb2c9ddf3f	tracked	seed from 4bd853a94f
-riveredge-backend/src/apps/kuaizhizao/services/purchase_requisition_service.py	2fef94ad657c60305ee4fa1ce0ffdcd4a517a0b1	applied	部门字段簇：补部门快照传播链(申请/询价→订单→收货通知/入库/退货/变更单+打印占位符+领料领用部门占位符补漏)；测试双供体用getattr安全取值
+riveredge-backend/src/apps/kuaizhizao/services/purchase_requisition_service.py	2fef94ad657c60305ee4fa1ce0ffdcd4a517a0b1	applied	副数量簇：18模型挂DualQuantityMixin+schema mixin/aux字段；服务层aux三元组(enrich_pull_line_from_source_item/occupied查询tuple)+过账链InventoryPostingQuantities(normalize/base/aux_quantity_delta)+确认单primary/secondary覆盖+库存报表primary/secondary聚合+库位维度(MaterialBatch唯一键含location_code)+多行分摊扣减；保本地spec141幂等/KR-PG1开关前置/序列号留痕/tax_rate与required_date可选语义；修复_scoped_purchase_receipt_query断链；测试fixture对齐新签名(mock tuple/notes/BatchListQuery)并补齐station写路由漂移归类
 riveredge-backend/src/apps/kuaizhizao/services/purchase_requisition_stock_service.py	e33ffcbc20cceab7c8fa7db247c5dd7d4e865337	tracked	seed from 93b3cb5998
-riveredge-backend/src/apps/kuaizhizao/services/purchase_service.py	42e64ea15074d92681cab60a4e8164d46dd35ced	applied	部门字段簇：补部门快照传播链(申请/询价→订单→收货通知/入库/退货/变更单+打印占位符+领料领用部门占位符补漏)；测试双供体用getattr安全取值
+riveredge-backend/src/apps/kuaizhizao/services/purchase_service.py	42e64ea15074d92681cab60a4e8164d46dd35ced	applied	副数量簇：18模型挂DualQuantityMixin+schema mixin/aux字段；服务层aux三元组(enrich_pull_line_from_source_item/occupied查询tuple)+过账链InventoryPostingQuantities(normalize/base/aux_quantity_delta)+确认单primary/secondary覆盖+库存报表primary/secondary聚合+库位维度(MaterialBatch唯一键含location_code)+多行分摊扣减；保本地spec141幂等/KR-PG1开关前置/序列号留痕/tax_rate与required_date可选语义；修复_scoped_purchase_receipt_query断链；测试fixture对齐新签名(mock tuple/notes/BatchListQuery)并补齐station写路由漂移归类
 riveredge-backend/src/apps/kuaizhizao/services/qms_audit_nc_service.py	0cda9ffab9f6a1dc2fe7f6f6d73f736b62bed946	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-backend/src/apps/kuaizhizao/services/qms_clause_presets/__init__.py	b3aeb0bb5997d172ba930717797276f9b4cdbdcd	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/qms_clause_presets/ansiesd_s2020.py	a7134d3ebb7d52dd0ac42fd5fdf00d8ad74d735b	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
@@ -1299,7 +1299,7 @@ riveredge-backend/src/apps/kuaizhizao/services/quotation_service.py	de05bdcd3edb
 riveredge-backend/src/apps/kuaizhizao/services/receipt_notice_service.py	75f01dc040d1e309482f1d04b22db9979aaa9127	tracked	seed from 1eb300325a
 riveredge-backend/src/apps/kuaizhizao/services/replenishment_suggestion_service.py	30679fcf87504b3829679a84528382e451cc7db2	tracked	seed from 57a37e2749
 riveredge-backend/src/apps/kuaizhizao/services/report_enhancements.py	d60e94039a6e53176c43865906f6454609590fe9	applied	摘上游收发存移动分类/撤回归集/类型标签表+辅助函数组（含inventory balance group key/direction filter）
-riveredge-backend/src/apps/kuaizhizao/services/report_service.py	14300e14dee75a0ce1e63b9a2e606664cfe5c920	tracked	seed from 3958bb1524
+riveredge-backend/src/apps/kuaizhizao/services/report_service.py	14300e14dee75a0ce1e63b9a2e606664cfe5c920	applied	副数量簇：18模型挂DualQuantityMixin+schema mixin/aux字段；服务层aux三元组(enrich_pull_line_from_source_item/occupied查询tuple)+过账链InventoryPostingQuantities(normalize/base/aux_quantity_delta)+确认单primary/secondary覆盖+库存报表primary/secondary聚合+库位维度(MaterialBatch唯一键含location_code)+多行分摊扣减；保本地spec141幂等/KR-PG1开关前置/序列号留痕/tax_rate与required_date可选语义；修复_scoped_purchase_receipt_query断链；测试fixture对齐新签名(mock tuple/notes/BatchListQuery)并补齐station写路由漂移归类
 riveredge-backend/src/apps/kuaizhizao/services/reporting_service.py	02898b1399fc326b3c8d5998fd73d384e0b5217f	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/reporting_sync_service.py	d68c324e5d710e93e243e4e1cd92b45d2efac1ad	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-backend/src/apps/kuaizhizao/services/reset_data_service.py	7f9e1e8718aa3c9724c0bdf6df4ccf0b1a788c90	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
@@ -1320,7 +1320,7 @@ riveredge-backend/src/apps/kuaizhizao/services/scheduling_engine/base.py	90b48f3
 riveredge-backend/src/apps/kuaizhizao/services/scheduling_engine/greedy_rules_engine.py	45fb4c81e80804f9f1ad63f85bf0a287d216dd4f	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
 riveredge-backend/src/apps/kuaizhizao/services/scheduling_engine/strategies.py	be333a2cdf6af2e027c2575a280f7fede175e3b8	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
 riveredge-backend/src/apps/kuaizhizao/services/semi_finished_goods_receipt_service.py	62954ecd7a61ac63aba209640fc3fd364bdd7c24	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
-riveredge-backend/src/apps/kuaizhizao/services/shipment_notice_service.py	c9d7427396022c3b15f663ab0d4462585f38fb51	tracked	seed from 154977d948
+riveredge-backend/src/apps/kuaizhizao/services/shipment_notice_service.py	c9d7427396022c3b15f663ab0d4462585f38fb51	applied	副数量簇：18模型挂DualQuantityMixin+schema mixin/aux字段；服务层aux三元组(enrich_pull_line_from_source_item/occupied查询tuple)+过账链InventoryPostingQuantities(normalize/base/aux_quantity_delta)+确认单primary/secondary覆盖+库存报表primary/secondary聚合+库位维度(MaterialBatch唯一键含location_code)+多行分摊扣减；保本地spec141幂等/KR-PG1开关前置/序列号留痕/tax_rate与required_date可选语义；修复_scoped_purchase_receipt_query断链；测试fixture对齐新签名(mock tuple/notes/BatchListQuery)并补齐station写路由漂移归类
 riveredge-backend/src/apps/kuaizhizao/services/spare_part_service.py	0a18625c1d89a62b34b263aa1971aa98f9563cce	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/services/spot_check_reminder_service.py	79e6418980dcb84dce971a5d7e757d5e9414c69e	tracked	seed from 978a1fb9e5
 riveredge-backend/src/apps/kuaizhizao/services/station_service.py	e88639bd6b0f330759c570854d7d233bea003ab7	applied	宽区间补登：上游tip已落地（同文/等价映射/预审A包复核）
@@ -1333,7 +1333,7 @@ riveredge-backend/src/apps/kuaizhizao/services/traceability/report_service.py	78
 riveredge-backend/src/apps/kuaizhizao/services/visual_scheduling_service.py	28b9d9a36cc754990957acd475e8f91822d9bff3	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
 riveredge-backend/src/apps/kuaizhizao/services/warehouse_kingdee_alignment.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/services/warehouse_list_core.py	5d3cf9707f2bb73abeedd5be3d19eb25d36684fb	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
-riveredge-backend/src/apps/kuaizhizao/services/warehouse_service.py	cc1d82baa53c41976bb8dc108d82a20d4d292104	applied	部门字段簇：补部门快照传播链(申请/询价→订单→收货通知/入库/退货/变更单+打印占位符+领料领用部门占位符补漏)；测试双供体用getattr安全取值
+riveredge-backend/src/apps/kuaizhizao/services/warehouse_service.py	cc1d82baa53c41976bb8dc108d82a20d4d292104	applied	副数量簇：18模型挂DualQuantityMixin+schema mixin/aux字段；服务层aux三元组(enrich_pull_line_from_source_item/occupied查询tuple)+过账链InventoryPostingQuantities(normalize/base/aux_quantity_delta)+确认单primary/secondary覆盖+库存报表primary/secondary聚合+库位维度(MaterialBatch唯一键含location_code)+多行分摊扣减；保本地spec141幂等/KR-PG1开关前置/序列号留痕/tax_rate与required_date可选语义；修复_scoped_purchase_receipt_query断链；测试fixture对齐新签名(mock tuple/notes/BatchListQuery)并补齐station写路由漂移归类
 riveredge-backend/src/apps/kuaizhizao/services/warehouse_wo_outsource_pull_service.py	222c4850eafc6d7bc69db6297febf357bd87bf83	tracked	seed from 5b1b9828e4
 riveredge-backend/src/apps/kuaizhizao/services/work_order_bom_line_service.py	dbebd0ad922e1fff09f2c878f662654aa16c16c1	tracked	seed from 5b1b9828e4
 riveredge-backend/src/apps/kuaizhizao/services/work_order_service.py	5aa526d15bc389346df7abd144d013f23ade77ba	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
@@ -1345,10 +1345,10 @@ riveredge-backend/src/apps/kuaizhizao/utils/document_amount_write.py	284b9a7bd6e
 riveredge-backend/src/apps/kuaizhizao/utils/document_line_amounts.py	d54a784663f6a6ffeaeb10600466fb75fe05bdd5	tracked	seed from db319377bb
 riveredge-backend/src/apps/kuaizhizao/utils/document_line_material_snapshot.py	8618d1de2b9ac9360380eeff881bb23fa6fc9575	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/kuaizhizao/utils/document_source_types.py	f661ef74621f646586b7439d77643d6784a3149d	tracked	seed from b12cc66e71
-riveredge-backend/src/apps/kuaizhizao/utils/inventory_helper.py	5bd6066c523377679ce3f8595fd6a5403a7c2c72	tracked	seed from 432bd5f7fd
+riveredge-backend/src/apps/kuaizhizao/utils/inventory_helper.py	5bd6066c523377679ce3f8595fd6a5403a7c2c72	applied	副数量簇：18模型挂DualQuantityMixin+schema mixin/aux字段；服务层aux三元组(enrich_pull_line_from_source_item/occupied查询tuple)+过账链InventoryPostingQuantities(normalize/base/aux_quantity_delta)+确认单primary/secondary覆盖+库存报表primary/secondary聚合+库位维度(MaterialBatch唯一键含location_code)+多行分摊扣减；保本地spec141幂等/KR-PG1开关前置/序列号留痕/tax_rate与required_date可选语义；修复_scoped_purchase_receipt_query断链；测试fixture对齐新签名(mock tuple/notes/BatchListQuery)并补齐station写路由漂移归类
 riveredge-backend/src/apps/kuaizhizao/utils/inventory_posting_utils.py	f47f5f30d69f06ef05cef16c503b28893b0bf6c6	applied	full file landed; used by billentry dual qty
 riveredge-backend/src/apps/kuaizhizao/utils/kingdee_warehouse_operator_utils.py	a282c1c52d107b0abe22a3b470d5effdc2fe647c	applied	D依赖簇续:支撑件+前端
-riveredge-backend/src/apps/kuaizhizao/utils/ledger_dual_quantity_utils.py	a53e4405654bf1e078cad74ed164946c9611ac61	applied	only aux-unit resolvers for push; omitted batch sync, confirmation pair, inventory row writers
+riveredge-backend/src/apps/kuaizhizao/utils/ledger_dual_quantity_utils.py	a53e4405654bf1e078cad74ed164946c9611ac61	applied	副数量簇：18模型挂DualQuantityMixin+schema mixin/aux字段；服务层aux三元组(enrich_pull_line_from_source_item/occupied查询tuple)+过账链InventoryPostingQuantities(normalize/base/aux_quantity_delta)+确认单primary/secondary覆盖+库存报表primary/secondary聚合+库位维度(MaterialBatch唯一键含location_code)+多行分摊扣减；保本地spec141幂等/KR-PG1开关前置/序列号留痕/tax_rate与required_date可选语义；修复_scoped_purchase_receipt_query断链；测试fixture对齐新签名(mock tuple/notes/BatchListQuery)并补齐station写路由漂移归类
 riveredge-backend/src/apps/kuaizhizao/utils/list_item_material_keyword.py	21ae6c05b1d50aa8098755d77b08160b97d9c607	tracked	seed from 37409d3b29
 riveredge-backend/src/apps/kuaizhizao/utils/material_dual_quantity_utils.py	b9bd4692a923a0d4eff0162a3be4ccd5c194f60c	tracked	seed from 899307f4d6
 riveredge-backend/src/apps/kuaizhizao/utils/material_source_helper.py	1ea792d1ac3a3438c6d98042cdfebaba601c3aa5	tracked	seed from 0b8630adfd
@@ -1361,7 +1361,7 @@ riveredge-backend/src/apps/kuaizhizao/utils/pull_open_line_quantity.py	133106f6b
 riveredge-backend/src/apps/kuaizhizao/utils/pull_query_date_filter.py	300295d2a8524e87f0be848e89334401735de2f1	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/utils/purchase_arrival_warning.py	0d4372b01f71f9052009d4a30eea97c661eb6b3d	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/utils/purchase_order_line_amounts.py	73a8d62ca6c842cefdd2c5eaa0409cfc14207ee5	applied	13be286f11联调修复簇
-riveredge-backend/src/apps/kuaizhizao/utils/purchase_return_qty.py	84cd6c6aa5399dd9363c5a6b2492cd622cafc65f	superset	superset:上游区间零增量；本地主数量工具版保持（aux助手随副量ORM域）
+riveredge-backend/src/apps/kuaizhizao/utils/purchase_return_qty.py	84cd6c6aa5399dd9363c5a6b2492cd622cafc65f	applied	副数量簇：18模型挂DualQuantityMixin+schema mixin/aux字段；服务层aux三元组(enrich_pull_line_from_source_item/occupied查询tuple)+过账链InventoryPostingQuantities(normalize/base/aux_quantity_delta)+确认单primary/secondary覆盖+库存报表primary/secondary聚合+库位维度(MaterialBatch唯一键含location_code)+多行分摊扣减；保本地spec141幂等/KR-PG1开关前置/序列号留痕/tax_rate与required_date可选语义；修复_scoped_purchase_receipt_query断链；测试fixture对齐新签名(mock tuple/notes/BatchListQuery)并补齐station写路由漂移归类
 riveredge-backend/src/apps/kuaizhizao/utils/sales_order_attachment_carry.py	628183c369a4ba52f1ce5457dd1bfcf61473d910	tracked	seed from d892f36d03
 riveredge-backend/src/apps/kuaizhizao/utils/sales_order_push_qty.py	af7bf59c7ec25c10104c6dc602055c150ef5b571	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/utils/sales_price_amount.py	4f8d0089ce12dffd805c766b9f723a3e07ed65be	tracked	seed from 6abba1dbd5

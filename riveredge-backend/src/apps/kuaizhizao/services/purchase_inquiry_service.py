@@ -1441,10 +1441,10 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         self,
         tenant_id: int,
         item_ids: List[int],
-    ) -> Dict[int, Decimal]:
+    ) -> Tuple[Dict[int, Decimal], Dict[int, Decimal]]:
         """按询价行汇总下游采购订单占用（含草稿；删除的 PO 不计）。"""
         if not item_ids:
-            return {}
+            return {}, {}
         from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
 
         pois = await PurchaseOrderItem.filter(
@@ -1453,7 +1453,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             deleted_at__isnull=True,
         ).all()
         if not pois:
-            return {}
+            return {}, {}
         order_ids = {int(pi.order_id) for pi in pois if pi.order_id}
         live_order_ids = set(
             await PurchaseOrder.filter(
@@ -1463,6 +1463,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             ).values_list("id", flat=True)
         )
         occupied: Dict[int, Decimal] = {}
+        occupied_aux: Dict[int, Decimal] = {}
         for pi in pois:
             if int(pi.order_id or 0) not in live_order_ids:
                 continue
@@ -1474,7 +1475,11 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             occupied[sid] = occupied.get(sid, Decimal("0")) + Decimal(
                 str(pi.ordered_quantity or 0)
             )
-        return occupied
+            if getattr(pi, "aux_quantity", None) is not None:
+                occupied_aux[sid] = occupied_aux.get(sid, Decimal("0")) + Decimal(
+                    str(pi.aux_quantity or 0)
+                )
+        return occupied, occupied_aux
 
     async def list_purchase_order_pull_lines(
         self,
@@ -1500,7 +1505,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             inquiry_id__in=list(inq_by_id.keys()),
         ).all()
         item_ids = [int(i.id) for i in items if i.id is not None]
-        occupied_po = await self._occupied_purchase_order_qty_by_inquiry_item_ids(
+        occupied_po, occupied_po_aux = await self._occupied_purchase_order_qty_by_inquiry_item_ids(
             tenant_id, item_ids
         )
 
@@ -1516,12 +1521,21 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                 continue
             awarded = bool(item.awarded_supplier_id)
             item_id = int(item.id) if item.id is not None else 0
-            if item.purchase_order_id or not awarded:
-                remaining = 0.0
-                pushed = qty
+            from apps.kuaizhizao.utils.pull_open_line_quantity import (
+                build_partial_push_qty_triplet,
+                enrich_pull_line_from_source_item,
+            )
+
+            line_fully = bool(item.purchase_order_id or not awarded)
+            if line_fully:
+                qty_s, pushed, remaining = build_partial_push_qty_triplet(
+                    qty, qty, line_fully_pushed=True
+                )
+                occ_aux = qty
             else:
-                pushed = min(qty, float(occupied_po.get(item_id, Decimal("0"))))
-                remaining = max(0.0, qty - pushed)
+                occ = float(occupied_po.get(item_id, Decimal("0")))
+                qty_s, pushed, remaining = build_partial_push_qty_triplet(qty, occ)
+                occ_aux = float(occupied_po_aux.get(item_id, Decimal("0")))
             selectable = can_push and remaining > 0
             if pullable_only and not selectable:
                 continue
@@ -1534,25 +1548,30 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                     continue
             inquiry_date = getattr(inquiry, "inquiry_date", None)
             document_date = str(inquiry_date)[:10] if inquiry_date else None
-            lines.append(
-                {
-                    "id": int(item.id),
-                    "inquiry_id": int(item.inquiry_id),
-                    "inquiry_code": inquiry.inquiry_code,
-                    "document_date": document_date,
-                    "inquiry_date": document_date,
-                    "material_id": item.material_id,
-                    "material_code": material_code,
-                    "material_name": material_name,
-                    "material_spec": material_spec or None,
-                    "unit": item.unit or "件",
-                    "suggested_quantity": qty,
-                    "pushed_quantity": pushed,
-                    "remaining_quantity": remaining,
-                    "required_date": str(item.required_date) if item.required_date else None,
-                    "awarded_supplier_id": item.awarded_supplier_id,
-                }
+            row: Dict[str, Any] = {
+                "id": int(item.id),
+                "inquiry_id": int(item.inquiry_id),
+                "inquiry_code": inquiry.inquiry_code,
+                "document_date": document_date,
+                "inquiry_date": document_date,
+                "material_id": item.material_id,
+                "material_code": material_code,
+                "material_name": material_name,
+                "material_spec": material_spec or None,
+                "unit": item.unit or "件",
+                "required_date": str(item.required_date) if item.required_date else None,
+                "awarded_supplier_id": item.awarded_supplier_id,
+            }
+            enrich_pull_line_from_source_item(
+                row,
+                item,
+                suggested_primary=qty_s,
+                pushed_primary=pushed,
+                remaining_primary=remaining,
+                occupied_aux_pushed=occ_aux,
+                line_fully_pushed=line_fully,
             )
+            lines.append(row)
 
         lines.sort(key=lambda r: str(r.get("document_date") or ""), reverse=True)
         total = len(lines)
@@ -1588,7 +1607,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         if not ordered_items:
             raise BusinessLogicError("没有可转单的已定标询价行")
 
-        occupied_po = await self._occupied_purchase_order_qty_by_inquiry_item_ids(
+        occupied_po, _occupied_po_aux = await self._occupied_purchase_order_qty_by_inquiry_item_ids(
             tenant_id, [int(i.id) for i in ordered_items if i.id is not None]
         )
 

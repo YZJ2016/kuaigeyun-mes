@@ -14,6 +14,9 @@ from typing import Optional, List
 from decimal import Decimal
 from pydantic import Field, field_validator, model_validator
 from core.schemas.base import BaseSchema
+from apps.kuaizhizao.schemas.document_line_dual_quantity import (
+    DocumentLineDualQuantitySchemaMixin,
+)
 
 
 # === 销售预测 ===
@@ -131,7 +134,7 @@ class SalesForecastListResponse(BaseSchema):
 
 # === 销售预测明细 ===
 
-class SalesForecastItemBase(BaseSchema):
+class SalesForecastItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     """销售预测明细基础schema"""
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")

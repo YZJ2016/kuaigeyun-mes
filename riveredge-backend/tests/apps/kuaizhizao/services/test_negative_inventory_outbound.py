@@ -152,6 +152,12 @@ async def test_decrease_stock_blocks_when_allow_negative_disabled():
         "apps.kuaizhizao.services.inventory_service.InventoryService._get_allow_negative_inventory",
         new=AsyncMock(return_value=False),
     ), patch(
+        "apps.kuaizhizao.services.inventory_service.InventoryService._get_warehouse_management_flags",
+        new=AsyncMock(return_value=(False, False)),
+    ), patch(
+        "apps.master_data.models.material.Material.get_or_none",
+        new=AsyncMock(return_value=None),
+    ), patch(
         "apps.master_data.models.warehouse.Warehouse.get_or_none",
         new=AsyncMock(return_value=wh),
     ), patch(

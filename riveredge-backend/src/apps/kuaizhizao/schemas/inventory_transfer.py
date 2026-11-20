@@ -156,6 +156,9 @@ class InventoryTransferItemBase(BaseModel):
     batch_no: Optional[str] = Field(None, description="批次号（可选）")
     serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
     quantity: Decimal = Field(..., description="调拨数量")
+    aux_quantity: Optional[Decimal] = Field(None, ge=0, description="副数量")
+    aux_unit: Optional[str] = Field(None, max_length=20, description="副单位")
+    unit_conversion_rate: Optional[Decimal] = Field(None, gt=0, description="行换算率")
     unit_price: Decimal = Field(default=0, description="单价")
     remarks: Optional[str] = Field(None, description="备注")
 

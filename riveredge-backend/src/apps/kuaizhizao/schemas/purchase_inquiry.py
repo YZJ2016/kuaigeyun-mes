@@ -26,6 +26,9 @@ class PurchaseInquiryItemBase(BaseModel):
     required_date: Optional[date] = None
     source_requisition_item_id: Optional[int] = None
     notes: Optional[str] = None
+    aux_quantity: Optional[Decimal] = Field(None, ge=0, description="副数量")
+    aux_unit: Optional[str] = Field(None, max_length=20, description="副单位")
+    unit_conversion_rate: Optional[Decimal] = Field(None, gt=0, description="行换算率")
 
 
 class PurchaseInquiryItemCreate(PurchaseInquiryItemBase):

@@ -402,6 +402,8 @@ def _patch_decrease(monkeypatch, *, serial_row):
     batch = SimpleNamespace(
         id=4,
         quantity=Decimal("5"),
+        base_quantity=Decimal("5"),
+        aux_quantity=Decimal("0"),
         warehouse_id=0,
         batch_no="LOT",
         status="in_stock",
@@ -411,6 +413,38 @@ def _patch_decrease(monkeypatch, *, serial_row):
         InventoryService,
         "_find_in_stock_material_batch",
         AsyncMock(return_value=batch),
+    )
+    monkeypatch.setattr(
+        InventoryService,
+        "_list_in_stock_material_batches",
+        AsyncMock(return_value=[batch]),
+    )
+
+    class BatchListQuery:
+        def filter(self, *args, **kwargs):
+            return self
+
+        def order_by(self, *fields):
+            return self
+
+        def select_for_update(self):
+            return self
+
+        async def values_list(self, *fields):
+            return []
+
+        async def first(self):
+            return None
+
+        def __await__(self):
+            async def _all():
+                return []
+
+            return _all().__await__()
+
+    monkeypatch.setattr(
+        "apps.master_data.models.material_batch.MaterialBatch.filter",
+        lambda *args, **kw: BatchListQuery(),
     )
     monkeypatch.setattr(InventoryService, "_record_stock_movement", AsyncMock())
     monkeypatch.setattr(
