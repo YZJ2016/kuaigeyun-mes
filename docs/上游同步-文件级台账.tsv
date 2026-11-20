@@ -1945,7 +1945,7 @@ riveredge-frontend/src/apps/kuaizhizao/components/documentDetailSerialNumberColu
 riveredge-frontend/src/apps/kuaizhizao/components/documentLineAttachmentsColumns.tsx	eb4ee519a1493b65dc0e308346472d5dfb10dab9	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/components/order-change/OrderChangeItemsTable.tsx	d03619d95cfaa0bffedcd5aa97cb398df2976185	tracked	seed from 4d124a088e
 riveredge-frontend/src/apps/kuaizhizao/constants/documentActionRegistry.ts	af1d11d35ed41eed0c4d9644b3b37609bca0804c	tracked	seed from 93b3cb5998
-riveredge-frontend/src/apps/kuaizhizao/constants/documentStatus.ts	f6c53705104596ed441750e923a7d27a89469d9b	tracked	seed from 1d968cd27b
+riveredge-frontend/src/apps/kuaizhizao/constants/documentStatus.ts	f6c53705104596ed441750e923a7d27a89469d9b	applied	R5 B包摘取:sales-contract.submit/submitForReview与sales-forecast.submitSalesForecastForReview客户端随双段提交落地;documentStatus.isSubmittedStatus补齐
 riveredge-frontend/src/apps/kuaizhizao/constants/financeDocumentActionRegistry.ts	bf3969811911884a6a7be6e6781a91ebe35a5b99	domain-out	决策:上游finance并入pro包(finance包+finance-management页+对账pull链)，本地kuaicaiwu权威不摘，随架构决策整体排除
 riveredge-frontend/src/apps/kuaizhizao/constants/routes.ts	14dd97c755b98bf9a63689dc28ff43a73bdbbd27	tracked	seed from ac177741ff
 riveredge-frontend/src/apps/kuaizhizao/financeManagementRoutes.tsx	84eb22834ce869b1268f43ad601924b80431cc2a	domain-out	决策:上游finance并入pro包(finance包+finance-management页+对账pull链)，本地kuaicaiwu权威不摘，随架构决策整体排除
@@ -2267,7 +2267,7 @@ riveredge-frontend/src/apps/kuaizhizao/pages/quality/InspectionPlanFormModal.tsx
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/customer-follow-ups/index.tsx	1c25dc52930dd895dd3fe1a0b4b9acc1d7eea6cf	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/customer-pool/index.tsx	39cba4297ef43591ef87d50fb902f29ce927e591	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/outbound/index.tsx	ba2a45e311aa3aacce396196ff52781402a1cb0f	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
-riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/quotations/index.tsx	28c29fd173d0c57cb42df6296e3ca7ad4b3cf797	deferred	依赖未落地特性域暂缓（上游送审选人双段提交架构/kuaicaiwu结算口径/路由门禁基线分叉）
+riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/quotations/index.tsx	28c29fd173d0c57cb42df6296e3ca7ad4b3cf797	applied	R5 B包摘取:销售四页迁uni-audit双段提交(commitAfterSaveRef+useDocumentFormCommitAndSubmitReview送审选人+withDocumentSubmitCombinedItem合并项);本地保留kuaicaiwu结算/路由门禁/报价编辑keep-alive分叉,服务层submit_review客户端齐备
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/quotations/quotationListExport.ts	0e109383e5d456eed8a533512bbd447a2ec88f94	tracked	seed from 029aa6f542
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/reports/QuotationQuery.tsx	4d2fb42e76641441b4ac157daf2e1d1d64657fc4	tracked	seed from a60f3e9039
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/reports/SalesDeliveryDetail.tsx	791b654db169c4a0f69eb1026f70f1f1d5bf2300	tracked	seed from a60f3e9039
@@ -2275,15 +2275,15 @@ riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/reports/SalesOrder
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/sales-contracts/SalesContractItemsFormTable.tsx	014a9cecd7ebba2008cd27526e3168738b3cb81d	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/sales-contracts/contract-line-items-shared.tsx	26ee2ca5ed0cda7645d5e43c5c9ac08c96b61a5e	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/sales-contracts/contractListImport.ts	08422cc3c29bf3628d470f4d225c295d2ee5df2c	tracked	seed from 8c111dd65f
-riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/sales-contracts/index.tsx	f8b41ca23f27ca84152a6ce90c0961553c2c6a5e	deferred	依赖未落地特性域暂缓（上游送审选人双段提交架构/kuaicaiwu结算口径/路由门禁基线分叉）
+riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/sales-contracts/index.tsx	f8b41ca23f27ca84152a6ce90c0961553c2c6a5e	applied	R5 B包摘取:销售四页迁uni-audit双段提交(commitAfterSaveRef+useDocumentFormCommitAndSubmitReview送审选人+withDocumentSubmitCombinedItem合并项);本地保留kuaicaiwu结算/路由门禁/报价编辑keep-alive分叉,服务层submit_review客户端齐备
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/sales-forecasts/components/SalesForecastDetailDrawer.tsx	992cd5cb40c6b7332ce958ef00967974083541b1	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
-riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/sales-forecasts/index.tsx	ed3daeecb89008f23a3ed00dddac2af6c3f86cbb	deferred	依赖未落地特性域暂缓（上游送审选人双段提交架构/kuaicaiwu结算口径/路由门禁基线分叉）
+riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/sales-forecasts/index.tsx	ed3daeecb89008f23a3ed00dddac2af6c3f86cbb	applied	R5 B包摘取:销售四页迁uni-audit双段提交(commitAfterSaveRef+useDocumentFormCommitAndSubmitReview送审选人+withDocumentSubmitCombinedItem合并项);本地保留kuaicaiwu结算/路由门禁/报价编辑keep-alive分叉,服务层submit_review客户端齐备
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/sales-order-changes/index.tsx	c33311e794a7465fd47cdb2f28ba394ee71f6879	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/sales-orders/SalesOrderDocumentPushPanel.tsx	438a62e6b7717ebca6697a0918a37a9f37a7f4c1	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/sales-orders/components/SalesOrderDetailBody.tsx	5c3e239a3f0bee1524fe0ae8fe3297831851b161	tracked	seed from 899307f4d6
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/sales-orders/components/SalesOrderDetailDrawer.tsx	16ec75a9c90aa208019ca0c9925a4d3f0705e66a	tracked	seed from 2c945a39fb
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/sales-orders/components/salesOrderOcrMasters.ts	b2c23b2cbe39a261bccc170d50a62d5de85c9f36	tracked	seed from 8c111dd65f
-riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/sales-orders/index.tsx	27fbe6353f093d4d22c0355da33203d072d51300	deferred	依赖未落地特性域暂缓（上游送审选人双段提交架构/kuaicaiwu结算口径/路由门禁基线分叉）
+riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/sales-orders/index.tsx	27fbe6353f093d4d22c0355da33203d072d51300	applied	R5 B包摘取:销售四页迁uni-audit双段提交(commitAfterSaveRef+useDocumentFormCommitAndSubmitReview送审选人+withDocumentSubmitCombinedItem合并项);本地保留kuaicaiwu结算/路由门禁/报价编辑keep-alive分叉,服务层submit_review客户端齐备
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/sales-orders/salesOrderListExport.ts	942c8c0096a7829c4dd2c2cc8ac1eda687135bec	tracked	seed from 37409d3b29
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/sales-orders/salesOrderListImport.ts	80abc4460e631a1417babd9c9d828ba8de06c1dc	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/sales-orders/salesOrderSyncConfig.ts	29941c70b01841ee6ef2aa175bb6af3040b2fd93	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
@@ -2454,8 +2454,8 @@ riveredge-frontend/src/apps/kuaizhizao/services/quotation.ts	142b549164d2ba1c434
 riveredge-frontend/src/apps/kuaizhizao/services/receipt-notice.ts	d4a1af2bf961d091482ee3155e953d26c12bc50c	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/services/reporting.ts	a5f405619233cd8bdccc12c7b6dc737a5ccb8684	applied	R2簇3 合并:本地feature保留+上游增量(reporting stationSession/uni-audit端点;quality outsource-pull+location;app inflight+queryKey tenantId宽化)
 riveredge-frontend/src/apps/kuaizhizao/services/reports.ts	3938278fa445ab4b9a1126d397cab78fd5a38b1a	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
-riveredge-frontend/src/apps/kuaizhizao/services/sales-contract.ts	ef667be1762100552451e438c3dbf298fab8df7c	tracked	seed from 57a37e2749
-riveredge-frontend/src/apps/kuaizhizao/services/sales-forecast.ts	1e76ee40c30b89a6828ba74c173971eac62b04c1	tracked	seed from 899307f4d6
+riveredge-frontend/src/apps/kuaizhizao/services/sales-contract.ts	ef667be1762100552451e438c3dbf298fab8df7c	applied	R5 B包摘取:sales-contract.submit/submitForReview与sales-forecast.submitSalesForecastForReview客户端随双段提交落地;documentStatus.isSubmittedStatus补齐
+riveredge-frontend/src/apps/kuaizhizao/services/sales-forecast.ts	1e76ee40c30b89a6828ba74c173971eac62b04c1	applied	R5 B包摘取:sales-contract.submit/submitForReview与sales-forecast.submitSalesForecastForReview客户端随双段提交落地;documentStatus.isSubmittedStatus补齐
 riveredge-frontend/src/apps/kuaizhizao/services/sales-order-change.ts	b45f973642b0e8262b7d6d10f8d2844918570772	tracked	seed from 899307f4d6
 riveredge-frontend/src/apps/kuaizhizao/services/sales-order.ts	2e8f2329b5c23c953b475dd34b55aafa5f2c6cd9	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/services/sales-return.ts	e5e4c85cf43abeb00114406369dce0c097383a18	tracked	seed from 899307f4d6

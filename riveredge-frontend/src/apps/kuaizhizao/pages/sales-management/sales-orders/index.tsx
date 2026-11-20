@@ -130,9 +130,10 @@ import {
 import { getSalesOrderLifecycle, isSalesOrderDeliveryOverdue, isSalesOrderLineDeliveryOverdue, buildSalesOrderLifecycleValueEnum, resolveSalesOrderListApiParams } from '../../../utils/salesOrderLifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import {
-  isAuditedStatus,
   isDraftStatus,
   isPendingReviewStatus,
+  isRejectedStatus,
+  isSubmittedStatus,
 } from '../../../constants/documentStatus';
 import SalesOrderSyncFromSourceModal from './SalesOrderSyncFromSourceModal';
 import SalesOrderDocumentPushPanel from './SalesOrderDocumentPushPanel';
@@ -166,7 +167,18 @@ import {
   renderPullQueryReviewStatus,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
-import { UniAuditBatchMenuButton, UniBatchButton, UniCapabilityBatchButton, type UniBatchMenuItem } from '../../../../../components/uni-batch';
+import {
+  UniBatchButton,
+  UniBatchMenuButton,
+  UniCapabilityBatchButton,
+  defaultAuditBatchAllowed,
+  pickCapability,
+  runCapabilityBatchLoop,
+  useAuditBatchRunner,
+  withDocumentSubmitCombinedItem,
+  type AuditBatchAction,
+  type UniBatchMenuItem,
+} from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import {
@@ -213,6 +225,7 @@ import {
   submitSalesOrder,
   approveSalesOrder,
   rejectSalesOrder,
+  submitSalesOrderForReview,
   unapproveSalesOrder,
   previewPushSalesOrderToComputation,
   previewPushSalesOrderToWorkOrder,
@@ -239,10 +252,6 @@ import {
   withdrawSalesOrderFromComputation,
   createSalesOrderReminder,
   bulkDeleteSalesOrders,
-  bulkSubmitSalesOrders,
-  bulkApproveSalesOrders,
-  bulkWithdrawSalesOrders,
-  bulkUnapproveSalesOrders,
   bulkCloseSalesOrders,
   bulkReopenSalesOrders,
   deleteSalesOrder,
@@ -341,6 +350,7 @@ import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../..
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
+import { useDocumentFormCommitAndSubmitReview } from '../../../../../hooks/useDocumentFormCommitAndSubmitReview';
 import { formatDateTime, formatQuantity, formatAmount, todaySiteDateString } from '../../../../../utils/format';
 import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
@@ -733,6 +743,7 @@ const SalesOrdersPage: React.FC = () => {
   );
   const rowKeyToOrderIdRef = useRef<Map<string, number>>(new Map());
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const commitAfterSaveRef = useRef(false);
   const leaveSalesOrderFormPage = useLeaveFormTab(SALES_ORDER_LIST_PATH);
 
   /** 订单视图表格当前页数据（唯一源：UniTable onTableDataChange，与表格展示一致） */
@@ -767,6 +778,20 @@ const SalesOrdersPage: React.FC = () => {
   const invalidateStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['salesOrderStatistics'] });
   };
+
+  const { runAfterPersist: runSalesOrderSaveAndAudit, initiatorModal: salesOrderInitiatorModal } =
+    useDocumentFormCommitAndSubmitReview({
+      entityType: 'sales_order',
+      entityLabel: t('app.kuaizhizao.salesOrder.entityName'),
+      commit: submitSalesOrder,
+      submitReview: submitSalesOrderForReview,
+      onSuccess: () => {
+        leaveSalesOrderFormPage();
+        invalidateMenuBadge();
+        invalidateStatistics();
+        actionRef.current?.reload();
+      },
+    });
 
   const listRefreshVersion = useListPageRefreshStore(
     (s) => s.versions[LIST_PAGE_REFRESH_KEYS.salesOrders] ?? 0,
@@ -1620,12 +1645,12 @@ const SalesOrdersPage: React.FC = () => {
     setSelectedRowKeys([]);
   }, [invalidateMenuBadge, invalidateStatistics]);
 
-  const salesOrderAuditBulkHandlers = useMemo(
+  const salesOrderAuditBatchHandlers = useMemo(
     () => ({
-      submit: bulkSubmitSalesOrders,
-      withdraw: bulkWithdrawSalesOrders,
-      approve: bulkApproveSalesOrders,
-      revoke: bulkUnapproveSalesOrders,
+      submit: submitSalesOrder,
+      withdraw: withdrawSalesOrder,
+      approve: approveSalesOrder,
+      revoke: unapproveSalesOrder,
     }),
     [],
   );
@@ -1636,6 +1661,20 @@ const SalesOrdersPage: React.FC = () => {
     const id = Number(key);
     return Number.isFinite(id) && id > 0 ? id : null;
   }, []);
+
+  const {
+    runAction: runSalesOrderAuditBatch,
+    auditModal: salesOrderAuditModal,
+  } = useAuditBatchRunner<SalesOrder>({
+    permGates: salesOrderPerms,
+    handlers: salesOrderAuditBatchHandlers,
+    onBatchComplete: handleBulkCapabilityBatchSuccess,
+    resolveIdFromKey: resolveSalesOrderBatchId,
+    auditEntity: {
+      entityType: 'sales_order',
+      entityName: t('app.kuaizhizao.salesOrder.entityName'),
+    },
+  });
 
   /**
    * 处理删除销售订单（单条，草稿或待审核）
@@ -1670,9 +1709,10 @@ const SalesOrdersPage: React.FC = () => {
   /**
    * 通用保存逻辑（内部使用）
    * @param values 表单数据
-   * @param isDraft 是否为草稿（true=保存草稿，false=直接提交）
+   * @param options.commit 保存后提交并发起送审（true=提交送审，false/缺省=保存草稿）
    */
-  const handleSaveInternal = async (values: any, isDraft: boolean) => {
+  const handleSaveInternal = async (values: any, options?: { commit?: boolean }) => {
+    const commit = options?.commit === true;
     try {
       const { customData, standardValues } = extractSalesOrderFormValues(values, formRef.current);
       Object.keys(values).forEach((key) => {
@@ -1863,9 +1903,8 @@ const SalesOrdersPage: React.FC = () => {
       let orderId = isEditPage ? editRouteId : null;
 
       // 1. 创建或更新订单
-      let updateRes: any = null;
       if (isEditPage && editRouteId) {
-        updateRes = await updateSalesOrder(editRouteId, values);
+        await updateSalesOrder(editRouteId, values);
         orderId = editRouteId;
       } else {
         const res = await createSalesOrder(values);
@@ -1876,45 +1915,27 @@ const SalesOrdersPage: React.FC = () => {
         await saveSalesOrderCustomFieldValues(orderId, customData);
       }
 
-      // 2. 草稿保存直接提示
-      if (isDraft) {
-         messageApi.success(isEditPage ? t('app.kuaizhizao.salesOrder.updated') : t('app.kuaizhizao.salesOrder.savedDraft'));
-      } else if (orderId) {
-        // 非草稿（即点击了“提交订单”或“更新”），则按状态决定是否继续提交。
-        // 编辑态若 update 后已是待审核/已审核，则无需再次 submit，避免“二次编辑待审核单”重复提交报错。
-        const updatedStatus = String(updateRes?.status ?? '').trim();
-        const updatedReviewStatus = String(updateRes?.review_status ?? '').trim();
-        const alreadyApproved = updateRes != null && (
-          isAuditedStatus(updatedStatus) ||
-          updatedReviewStatus === ReviewStatus.APPROVED
-        );
-        const alreadyPendingReview = updateRes != null && (
-          isPendingReviewStatus(updatedStatus) ||
-          updatedReviewStatus === ReviewStatus.PENDING
-        );
-        const shouldSubmitAfterSave = !isEditPage || (!alreadyApproved && !alreadyPendingReview);
-
-        if (isEditPage && (alreadyPendingReview || alreadyApproved)) {
-          messageApi.success(t('app.kuaizhizao.salesOrder.updated'));
-        }
-
+      if (orderId && commit) {
         try {
-          const submitRes = shouldSubmitAfterSave
-            ? await submitSalesOrder(orderId!)
-            : updateRes;
-          // 判断后端返回的状态是否已经是“已审核”
-          if (shouldSubmitAfterSave) {
-            const isApproved = submitRes?.status === 'AUDITED' || submitRes?.status === '已审核';
-            const syncTip = submitRes?.demand_synced ? t('app.kuaizhizao.salesOrder.demandSyncTip') : '';
-            if (isApproved) {
-               messageApi.success(isEditPage ? t('app.kuaizhizao.salesOrder.orderUpdatedAndAutoApproved', { syncTip }) : t('app.kuaizhizao.salesOrder.orderCreatedAndAutoApproved', { syncTip }));
-            } else {
-               messageApi.success(isEditPage ? t('app.kuaizhizao.salesOrder.orderResubmitted') : t('app.kuaizhizao.salesOrder.orderCreatedAndSubmitted'));
-            }
+          const { completed } = await runSalesOrderSaveAndAudit(orderId);
+          if (!completed) {
+            return;
           }
         } catch (submitError: any) {
-          messageApi.error(t('app.kuaizhizao.salesOrder.saveSuccessSubmitFailed', { message: submitError.message || t('app.kuaizhizao.salesOrder.unknownError') }));
+          messageApi.error(
+            t('app.kuaizhizao.salesOrder.saveSuccessSubmitFailed', {
+              message: submitError.message || t('app.kuaizhizao.salesOrder.unknownError'),
+            }),
+          );
+          if (isCreatePage && orderId) {
+            navigate(salesOrderEditPath(orderId), { replace: true });
+          }
+          return;
         }
+      } else {
+        messageApi.success(
+          isEditPage ? t('app.kuaizhizao.salesOrder.updated') : t('app.kuaizhizao.salesOrder.savedDraft'),
+        );
       }
 
       setPreviewCode(null);
@@ -1941,7 +1962,7 @@ const SalesOrdersPage: React.FC = () => {
     try {
       await formRef.current?.validateFields();
       const values = formRef.current?.getFieldsValue(true);
-      if (values) await handleSaveInternal(values, true);
+      if (values) await handleSaveInternal(values);
     } catch (err: any) {
       if (err?.errorFields?.length) {
         messageApi.warning(err?.message ?? t('app.kuaizhizao.salesOrder.completeRequired'));
@@ -3736,6 +3757,99 @@ const SalesOrdersPage: React.FC = () => {
     ],
   );
 
+  const salesOrderToolbarAuditMenus = useMemo(() => {
+    const canPerm = (action: AuditBatchAction) => {
+      const perm = action === 'approve' ? 'audit' : action === 'submit' ? 'submit' : 'revoke';
+      return salesOrderPerms.canAction?.(perm) ?? false;
+    };
+    const item = (
+      key: string,
+      action: AuditBatchAction,
+      label: string,
+      capKey: string,
+      rows: SalesOrder[],
+    ): UniBatchMenuItem => ({
+      key,
+      label,
+      disabled:
+        selectedOrdersForBatch.length > 0
+        && !defaultAuditBatchAllowed(rows, canPerm(action), capKey, (row) => row),
+      onClick: (keys) => {
+        const idSet = new Set(rows.map((row) => String(row.id)));
+        return runSalesOrderAuditBatch(
+          action,
+          keys.filter((rowKey) => idSet.has(String(rowKey))),
+          rows,
+          auditEnabled,
+        );
+      },
+    });
+    const capOn = (row: SalesOrder, capKey: string) => pickCapability(row, capKey)?.allowed === true;
+    const submittedRows = selectedOrdersForBatch.filter(
+      (row) => isSubmittedStatus(row.status) && capOn(row, 'withdraw_submit'),
+    );
+    const pendingRows = selectedOrdersForBatch.filter(
+      (row) => isPendingReviewStatus(row.status) && capOn(row, 'withdraw_submit'),
+    );
+    const submitReviewRows = selectedOrdersForBatch.filter((row) =>
+      (row.audit?.allowed_actions ?? []).includes('submit_review'),
+    );
+    const canSubmitReview = salesOrderPerms.canAction?.('submit') ?? false;
+    const submitRows = selectedOrdersForBatch.filter((row) => capOn(row, 'submit'));
+    const submitMenuItem = item('submit', 'submit', t('common.submit'), 'submit', submitRows);
+    const submitDisabled = Boolean(submitMenuItem.disabled);
+    return {
+      submit: withDocumentSubmitCombinedItem(
+        [
+          submitMenuItem,
+          item('withdraw-submit', 'withdraw', t('app.kuaizhizao.salesOrder.toolbar.withdrawSubmit'), 'withdraw_submit', submittedRows),
+          {
+            key: 'submit-review',
+            label: t('app.kuaizhizao.salesOrder.toolbar.submitReview'),
+            disabled: selectedOrdersForBatch.length > 0 && !(canSubmitReview && submitReviewRows.length > 0),
+            onClick: (keys: React.Key[]) => runCapabilityBatchLoop({
+              keys,
+              records: submitReviewRows,
+              capabilityKey: 'submit_review',
+              permAllowed: canSubmitReview,
+              notAllowedMessage: t('app.kuaizhizao.salesOrder.toolbar.submitReviewNotAllowed'),
+              onRun: (id) => submitSalesOrderForReview(id),
+              message: messageApi,
+              t,
+              onSuccess: handleBulkCapabilityBatchSuccess,
+              resolveId: (key) => resolveSalesOrderBatchId(key),
+            }),
+          },
+        ],
+        {
+          t,
+          message: messageApi,
+          disabled: submitDisabled,
+          commitRecords: submitRows,
+          permAllowed: canSubmitReview,
+          resolveId: (key) => resolveSalesOrderBatchId(key),
+          commit: (id) => submitSalesOrder(id),
+          submitReview: (id) => submitSalesOrderForReview(id),
+          onSuccess: handleBulkCapabilityBatchSuccess,
+        },
+      ),
+      audit: [
+        item('approve', 'approve', t('components.uniAction.audit'), 'approve', selectedOrdersForBatch.filter((row) => capOn(row, 'approve'))),
+        item('withdraw-review', 'withdraw', t('app.kuaizhizao.salesOrder.toolbar.withdrawReview'), 'withdraw_submit', pendingRows),
+        item('revoke', 'revoke', t('app.kuaizhizao.salesOrder.toolbar.revoke'), 'revoke_approval', selectedOrdersForBatch.filter((row) => capOn(row, 'revoke_approval'))),
+      ] satisfies UniBatchMenuItem[],
+    };
+  }, [
+    auditEnabled,
+    handleBulkCapabilityBatchSuccess,
+    messageApi,
+    resolveSalesOrderBatchId,
+    runSalesOrderAuditBatch,
+    salesOrderPerms,
+    selectedOrdersForBatch,
+    t,
+  ]);
+
   const buildToolbarPushMenuItems = useCallback((record: SalesOrder) => {
     const resolvePushReason = (
       cap: { allowed?: boolean; reason?: string | null } | undefined,
@@ -3984,42 +4098,61 @@ const SalesOrdersPage: React.FC = () => {
           },
         ])}
       />,
-      <UniPushToolbarButton
-        key={`push-toolbar-${selectedRowKeys.join('-') || 'none'}`}
-        menuItems={toolbarPushMenuItems}
-        disabled={selectedRowKeys.length !== 1 || !selectedOrderForToolbar}
-        disabledReason={salesOrderToolbarPushDisabledReason}
-        sourceDocument={
-          selectedOrderForToolbar?.id
-            ? { type: 'sales_order', id: Number(selectedOrderForToolbar.id) }
-            : null
-        }
-        pushTargets={{
-          computation: 'demand_computation',
-          workorder: 'work_order',
-          'purchase-requisition': 'purchase_requisition',
-          'purchase-order': 'purchase_order',
-          'delivery-project': 'delivery_project',
-          invoice: 'sales_invoice',
-          prepayment: 'receipt',
-          shipment: 'shipment_notice',
-          delivery: 'sales_delivery',
-          'sales-return': 'sales_return',
-          'sales-order-change': 'sales_order_change',
-          'backfill-sales-contract': 'sales_contract',
-        }}
-      />,
+      ...(viewTypeState !== 'detailTable'
+        ? [
+            <UniPushToolbarButton
+              key={`push-toolbar-${selectedRowKeys.join('-') || 'none'}`}
+              menuItems={toolbarPushMenuItems}
+              disabled={selectedRowKeys.length !== 1 || !selectedOrderForToolbar}
+              disabledReason={salesOrderToolbarPushDisabledReason}
+              sourceDocument={
+                selectedOrderForToolbar?.id
+                  ? { type: 'sales_order', id: Number(selectedOrderForToolbar.id) }
+                  : null
+              }
+              pushTargets={{
+                computation: 'demand_computation',
+                workorder: 'work_order',
+                'purchase-requisition': 'purchase_requisition',
+                'purchase-order': 'purchase_order',
+                'delivery-project': 'delivery_project',
+                invoice: 'sales_invoice',
+                prepayment: 'receipt',
+                shipment: 'shipment_notice',
+                delivery: 'sales_delivery',
+                'sales-return': 'sales_return',
+                'sales-order-change': 'sales_order_change',
+                'backfill-sales-contract': 'sales_contract',
+              }}
+            />,
+            <UniBatchMenuButton
+              key="sales-order-submit"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={salesOrderToolbarAuditMenus.submit}
+              buttonText={t('common.submit')}
+            />,
+            <UniBatchMenuButton
+              key="sales-order-audit"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={salesOrderToolbarAuditMenus.audit}
+              buttonText={t('components.uniAction.audit')}
+            />,
+          ]
+        : []),
     ],
     [
       handleCreate,
       handlePullFromSalesContract,
       handlePullFromQuotation,
       handlePullFromSalesReview,
+      salesOrderToolbarAuditMenus.audit,
+      salesOrderToolbarAuditMenus.submit,
       salesOrderToolbarPushDisabledReason,
       selectedOrderForToolbar,
       selectedRowKeys,
       t,
       toolbarPushMenuItems,
+      viewTypeState,
     ],
   );
 
@@ -4741,9 +4874,7 @@ const SalesOrdersPage: React.FC = () => {
         },
       ];
 
-  const triggerSalesOrderFormSubmit = () => formRef.current?.submit?.();
-
-  useSubmitShortcut(() => triggerSalesOrderFormSubmit(), isFormPage);
+  useSubmitShortcut(() => void handleSaveDraft(), isFormPage);
 
   const salesOrderFormItemContent = (
     <>
@@ -5664,8 +5795,10 @@ const SalesOrdersPage: React.FC = () => {
   );
 
   if (isFormPage) {
-    const canSubmitAfterSave =
-      isCreatePage || (isEditPage && isDraftStatus(formEditOrder?.status));
+    const canCommitSubmit =
+      isCreatePage ||
+      isDraftStatus(formEditOrder?.status) ||
+      isRejectedStatus(formEditOrder?.status);
     return (
       <>
         <DocumentFormPageLayout
@@ -5688,9 +5821,14 @@ const SalesOrdersPage: React.FC = () => {
               <DocumentFormPageHeaderActions
                 onCancel={leaveSalesOrderFormPage}
                 onSaveDraft={() => void handleSaveDraft()}
-                onPrimarySubmit={triggerSalesOrderFormSubmit}
+                onPrimarySubmit={() => void handleSaveDraft()}
                 isCreatePage={isCreatePage}
-                canSubmitAfterSave={canSubmitAfterSave}
+                canSubmitAfterSave={false}
+                showCommitSubmit={canCommitSubmit}
+                onCommitSubmit={() => {
+                  commitAfterSaveRef.current = true;
+                  formRef.current?.submit?.();
+                }}
               />
               {isCreatePage && kuaiaiAvailable ? (
                 <SalesOrderAiCreateTrigger
@@ -5716,8 +5854,10 @@ const SalesOrdersPage: React.FC = () => {
                 onFinish={async () => {
                   setModalSubmitting(true);
                   try {
+                    const commit = commitAfterSaveRef.current;
+                    commitAfterSaveRef.current = false;
                     const values = formRef.current?.getFieldsValue(true);
-                    await handleSaveInternal(values, false);
+                    await handleSaveInternal(values, { commit });
                   } finally {
                     setModalSubmitting(false);
                   }
@@ -5743,6 +5883,7 @@ const SalesOrdersPage: React.FC = () => {
               </ProForm>
             </div>
         </DocumentFormPageLayout>
+        {salesOrderInitiatorModal}
         {salesOrderFormAuxModals}
       </>
     );
@@ -5750,6 +5891,7 @@ const SalesOrdersPage: React.FC = () => {
 
   return (
     <>
+      {salesOrderAuditModal}
       <style>{`
         .sales-order-row-overdue td.ant-table-cell {
           background: var(--ant-color-warning-bg) !important;
@@ -5954,21 +6096,14 @@ const SalesOrdersPage: React.FC = () => {
           onDelete={handleBatchDelete}
           deleteConfirmTitle={t('app.kuaizhizao.salesOrder.confirmDelete')}
           deleteConfirmDescription={(count) => t('app.kuaizhizao.salesOrder.deleteConfirm', { count })}
-          toolBarActionsAfterDelete={[
-            <UniAuditBatchMenuButton
-              key="sales-order-batch-menu"
-              selectedRowKeys={selectedRowKeys}
-              selectedRecords={selectedOrdersForBatch}
-              auditEnabled={auditEnabled}
-              permGates={salesOrderPerms}
-              bulkHandlers={salesOrderAuditBulkHandlers}
-              resolveIdFromKey={resolveSalesOrderBatchId}
-              extraMenuItems={salesOrderBatchExtraMenuItems}
-              onSuccess={handleBulkCapabilityBatchSuccess}
-              toolBarButtonSize="medium"
-            />,
-          ]}
+          toolBarActionsAfterDelete={[]}
           toolBarActionsAfterBatch={[
+            <UniBatchMenuButton
+              key="sales-order-close-reopen"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={salesOrderBatchExtraMenuItems}
+              buttonText={t('common.more')}
+            />,
             ...(salesContractPerms.canUpdate
               ? [
                   <Button

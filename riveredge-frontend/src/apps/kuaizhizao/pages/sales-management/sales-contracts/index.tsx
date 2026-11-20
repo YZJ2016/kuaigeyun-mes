@@ -146,7 +146,17 @@ import {
   UNI_TABLE_STACKED_BADGE_DATE_COLUMN_DEFAULTS,
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
+import {
+  UniBatchMenuButton,
+  UniCapabilityBatchButton,
+  defaultAuditBatchAllowed,
+  pickCapability,
+  runCapabilityBatchLoop,
+  useAuditBatchRunner,
+  withDocumentSubmitCombinedItem,
+  type AuditBatchAction,
+  type UniBatchMenuItem,
+} from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
@@ -169,6 +179,8 @@ import { KUAIZHIZAO_SALES_CONTRACT_FIELD_RESOURCE as SC } from '../../../constan
 import { resolveDocumentCurrencyInputPrefix } from '../../../utils/documentCurrencyDisplay';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { useDocumentFormCommitAndSubmitReview } from '../../../../../hooks/useDocumentFormCommitAndSubmitReview';
+import { isPendingReviewStatus } from '../../../constants/documentStatus';
 import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
 import { pickImportExampleValue } from '../../../../../utils/loadImportDictionaryValues';
 import { useImportMaterialUnitOptions } from '../../../../master-data/hooks/useImportMaterialUnitOptions';
@@ -446,12 +458,14 @@ const SalesContractsPage: React.FC = () => {
   }, [dataViewMode]);
 
   const formRef = useRef<ProFormInstance>();
+  const commitAfterSaveRef = useRef(false);
 
   const changeFormRef = useRef<ProFormInstance>();
 
   const contractEditingInclValueRef = useRef<number | null>(null);
 
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingStatus, setEditingStatus] = useState<string | null>(null);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null);
@@ -539,6 +553,18 @@ const SalesContractsPage: React.FC = () => {
     [selectedRowKeys],
   );
   const leaveSalesContractFormPage = useLeaveFormTab(SALES_CONTRACT_LIST_PATH);
+
+  const { runAfterPersist: runSalesContractSaveAndAudit, initiatorModal: salesContractInitiatorModal } =
+    useDocumentFormCommitAndSubmitReview({
+      entityType: 'sales_contract',
+      entityLabel: t('app.kuaizhizao.salesContract.entityName'),
+      commit: (id) => salesContractApi.submit(id),
+      submitReview: (id) => salesContractApi.submitForReview(id),
+      onSuccess: () => {
+        leaveSalesContractFormPage();
+        actionRef.current?.reload();
+      },
+    });
 
   const contractTracking = useDocumentTracking(
 
@@ -1079,6 +1105,7 @@ const SalesContractsPage: React.FC = () => {
 
   async function initSalesContractCreateForm() {
     setEditingId(null);
+    setEditingStatus(null);
     setPreviewCode(null);
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
@@ -1132,6 +1159,7 @@ const SalesContractsPage: React.FC = () => {
     try {
       const data = await salesContractApi.get(contractId);
       setEditingId(contractId);
+      setEditingStatus(data.status ?? null);
       setTimeout(() => {
         formRef.current?.setFieldsValue({
           contract_code: data.contract_code,
@@ -1211,16 +1239,17 @@ const SalesContractsPage: React.FC = () => {
     }
   }, [isFormPage, isCreatePage, editRouteId]);
 
-  const triggerContractFormSubmit = () => formRef.current?.submit?.();
+  const canCommitSubmit =
+    isCreatePage ||
+    editingStatus === '草稿' ||
+    editingStatus === '已驳回' ||
+    editingStatus === 'REJECTED';
 
-  useSubmitShortcut(() => triggerContractFormSubmit(), isFormPage);
-
-
-  const handleFormSubmit = async (values: any, options?: { asDraft?: boolean }) => {
-    const asDraft = options?.asDraft ?? false;
+  const handleFormSubmit = async (values: any, options?: { commit?: boolean }) => {
+    const commit = options?.commit === true;
     try {
       let submitValues = values;
-      if (isCreatePage) {
+      if (isCreatePage && editingId == null) {
         const submitRuleCode = effectiveRuleCode || getPageRuleCode('kuaizhizao-sales-contract');
         const submitAutoEnabled = effectiveAutoGen ?? isAutoGenerateEnabled('kuaizhizao-sales-contract');
         const contractCode = submitValues.contract_code;
@@ -1250,21 +1279,30 @@ const SalesContractsPage: React.FC = () => {
         payload.contract_code = submitValues.contract_code.trim();
       }
 
+      let savedId = editingId;
       if (editingId) {
         await salesContractApi.update(editingId, payload);
-        if (!asDraft) {
-          await salesContractApi.submit(editingId);
-          messageApi.success(t('app.kuaizhizao.salesContract.saveAndSubmit'));
-        } else {
-          messageApi.success(t('app.kuaizhizao.salesContract.savedDraft'));
+      } else {
+        const created = await salesContractApi.create(payload, false);
+        savedId = created.id ?? null;
+        if (savedId != null) {
+          setEditingId(savedId);
+        }
+      }
+      if (commit && savedId) {
+        try {
+          const { completed } = await runSalesContractSaveAndAudit(savedId);
+          if (!completed) {
+            return;
+          }
+        } catch {
+          if (isCreatePage) {
+            navigate(salesContractEditPath(savedId), { replace: true });
+          }
+          return;
         }
       } else {
-        await salesContractApi.create(payload, !asDraft);
-        messageApi.success(
-          asDraft
-            ? t('app.kuaizhizao.salesContract.savedDraft')
-            : t('app.kuaizhizao.salesContract.created'),
-        );
+        messageApi.success(t('app.kuaizhizao.salesContract.savedDraft'));
       }
 
       if (isFormPage) {
@@ -1293,7 +1331,9 @@ const SalesContractsPage: React.FC = () => {
       messageApi.error(
         getApiErrorMessage(
           err,
-          asDraft ? t('app.kuaizhizao.salesContract.saveDraftFailed') : t('app.kuaizhizao.salesContract.createFailed'),
+          commit
+            ? t('app.kuaizhizao.salesContract.commitFailed')
+            : t('app.kuaizhizao.salesContract.saveDraftFailed'),
         ),
       );
     }
@@ -1302,7 +1342,7 @@ const SalesContractsPage: React.FC = () => {
   const handleSaveDraft = async () => {
     try {
       const values = await formRef.current?.validateFields();
-      if (values) await handleFormSubmit(values, { asDraft: true });
+      if (values) await handleFormSubmit(values);
     } catch (err: any) {
       if (err?.errorFields?.length) {
         messageApi.warning(err?.message ?? t('components.layoutTemplates.formModal.checkFormHint'));
@@ -1311,6 +1351,8 @@ const SalesContractsPage: React.FC = () => {
       }
     }
   };
+  useSubmitShortcut(() => void handleSaveDraft(), isFormPage);
+
 
 
   const executeDeleteDraft = async (record: SalesContract) => {
@@ -1697,6 +1739,19 @@ const SalesContractsPage: React.FC = () => {
     }
   }, [detail?.id, detailOpen, reload]);
 
+  const {
+    runAction: runContractAuditBatch,
+    auditModal: salesContractAuditModal,
+  } = useAuditBatchRunner<SalesContract>({
+    permGates: contractPerms,
+    handlers: contractAuditBatchHandlers,
+    onBatchComplete: handleContractAuditBatchSuccess,
+    auditEntity: {
+      entityType: 'sales_contract',
+      entityName: t('app.kuaizhizao.salesContract.entityName'),
+    },
+  });
+
   const handleBatchDeleteDrafts = useCallback(async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
       messageApi.warning(t('app.kuaizhizao.salesContract.selectToDelete'));
@@ -1911,6 +1966,96 @@ const SalesContractsPage: React.FC = () => {
     await showContractPushPreview(record);
   }, [messageApi, selectedContractForPush, showContractPushPreview, t]);
 
+  const salesContractToolbarAuditMenus = useMemo(() => {
+    const canPerm = (action: AuditBatchAction) => {
+      const perm = action === 'approve' ? 'audit' : action === 'submit' ? 'submit' : 'revoke';
+      return contractPerms.canAction?.(perm) ?? false;
+    };
+    const item = (
+      key: string,
+      action: AuditBatchAction,
+      label: string,
+      capKey: string,
+      rows: SalesContract[],
+    ): UniBatchMenuItem => ({
+      key,
+      label,
+      disabled:
+        selectedContractsForBatch.length > 0
+        && !defaultAuditBatchAllowed(rows, canPerm(action), capKey, (row) => row),
+      onClick: (keys) => {
+        const idSet = new Set(rows.map((row) => String(row.id)));
+        return runContractAuditBatch(
+          action,
+          keys.filter((rowKey) => idSet.has(String(rowKey))),
+          rows,
+          contractAuditRequired,
+        );
+      },
+    });
+    const capOn = (row: SalesContract, capKey: string) => pickCapability(row, capKey)?.allowed === true;
+    const submittedRows = selectedContractsForBatch.filter(
+      (row) => String(row.status || '').trim() === 'SUBMITTED' && capOn(row, 'withdraw_submit'),
+    );
+    const pendingRows = selectedContractsForBatch.filter(
+      (row) => isPendingReviewStatus(row.status) && capOn(row, 'withdraw_submit'),
+    );
+    const submitReviewRows = selectedContractsForBatch.filter((row) =>
+      (row.audit?.allowed_actions ?? []).includes('submit_review'),
+    );
+    const canSubmitReview = contractPerms.canAction?.('submit') ?? false;
+    const submitRows = selectedContractsForBatch.filter((row) => capOn(row, 'submit'));
+    const submitMenuItem = item('submit', 'submit', t('common.submit'), 'submit', submitRows);
+    const submitDisabled = Boolean(submitMenuItem.disabled);
+    return {
+      submit: withDocumentSubmitCombinedItem(
+        [
+          submitMenuItem,
+          item('withdraw-submit', 'withdraw', t('app.kuaizhizao.salesContract.toolbar.withdrawSubmit'), 'withdraw_submit', submittedRows),
+          {
+            key: 'submit-review',
+            label: t('app.kuaizhizao.salesContract.toolbar.submitReview'),
+            disabled: selectedContractsForBatch.length > 0 && !(canSubmitReview && submitReviewRows.length > 0),
+            onClick: (keys: React.Key[]) => runCapabilityBatchLoop({
+              keys,
+              records: submitReviewRows,
+              capabilityKey: 'submit_review',
+              permAllowed: canSubmitReview,
+              notAllowedMessage: t('app.kuaizhizao.salesContract.toolbar.submitReviewNotAllowed'),
+              onRun: (id) => salesContractApi.submitForReview(id),
+              message: messageApi,
+              t,
+              onSuccess: handleContractAuditBatchSuccess,
+            }),
+          },
+        ],
+        {
+          t,
+          message: messageApi,
+          disabled: submitDisabled,
+          commitRecords: submitRows,
+          permAllowed: canSubmitReview,
+          commit: (id) => salesContractApi.submit(id),
+          submitReview: (id) => salesContractApi.submitForReview(id),
+          onSuccess: handleContractAuditBatchSuccess,
+        },
+      ),
+      audit: [
+        item('approve', 'approve', t('components.uniAction.audit'), 'approve', selectedContractsForBatch.filter((row) => capOn(row, 'approve'))),
+        item('withdraw-review', 'withdraw', t('app.kuaizhizao.salesContract.toolbar.withdrawReview'), 'withdraw_submit', pendingRows),
+        item('revoke', 'revoke', t('app.kuaizhizao.salesContract.toolbar.revoke'), 'revoke_approval', selectedContractsForBatch.filter((row) => capOn(row, 'revoke_approval'))),
+      ] satisfies UniBatchMenuItem[],
+    };
+  }, [
+    contractAuditRequired,
+    contractPerms,
+    handleContractAuditBatchSuccess,
+    messageApi,
+    runContractAuditBatch,
+    selectedContractsForBatch,
+    t,
+  ]);
+
   const salesContractToolbarRenderItems = useMemo(
     () => [
       <Button key="create-sales-contract" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
@@ -1936,6 +2081,18 @@ const SalesContractsPage: React.FC = () => {
           },
         ])}
       />,
+      <UniBatchMenuButton
+        key="sales-contract-submit"
+        selectedRowKeys={selectedRowKeys}
+        menuItems={salesContractToolbarAuditMenus.submit}
+        buttonText={t('common.submit')}
+      />,
+      <UniBatchMenuButton
+        key="sales-contract-audit"
+        selectedRowKeys={selectedRowKeys}
+        menuItems={salesContractToolbarAuditMenus.audit}
+        buttonText={t('components.uniAction.audit')}
+      />,
     ],
     [
       contractToolbarPushDisabledReason,
@@ -1943,6 +2100,7 @@ const SalesContractsPage: React.FC = () => {
       handleToolbarPushToOrder,
       pushToSalesOrderAction.label,
       resolveContractPushOrderReason,
+      salesContractToolbarAuditMenus,
       selectedContractForPush,
       selectedRowKeys,
       t,
@@ -2585,8 +2743,15 @@ const SalesContractsPage: React.FC = () => {
             <DocumentFormPageHeaderActions
               onCancel={leaveSalesContractFormPage}
               onSaveDraft={() => void handleSaveDraft()}
-              onPrimarySubmit={triggerContractFormSubmit}
+              onPrimarySubmit={() => void handleSaveDraft()}
               isCreatePage={isCreatePage}
+              showSaveDraft={false}
+              canSubmitAfterSave={false}
+              showCommitSubmit={canCommitSubmit}
+              onCommitSubmit={() => {
+                commitAfterSaveRef.current = true;
+                formRef.current?.submit?.();
+              }}
             />
             </>
           }
@@ -2598,7 +2763,11 @@ const SalesContractsPage: React.FC = () => {
                 submitter={false}
                 scrollToFirstError
                 onValuesChange={handleContractFormValuesChange}
-                onFinish={(values) => handleFormSubmit(values, { asDraft: false })}
+                onFinish={(values) => {
+                  const commit = commitAfterSaveRef.current;
+                  commitAfterSaveRef.current = false;
+                  return handleFormSubmit(values, { commit });
+                }}
                 onFinishFailed={({ errorFields }) => {
                   const first = errorFields?.[0];
                   const msg = first?.errors?.filter(Boolean)[0];
@@ -2610,6 +2779,7 @@ const SalesContractsPage: React.FC = () => {
               </ProForm>
             </div>
         </DocumentFormPageLayout>
+        {salesContractInitiatorModal}
         <UniMaterialBatchPicker
           open={materialPickerOpen}
           onCancel={() => setMaterialPickerOpen(false)}
@@ -2634,7 +2804,8 @@ const SalesContractsPage: React.FC = () => {
   }
 
   return (
-
+    <>
+      {salesContractAuditModal}
     <ListPageTemplate>
 
       <UniTable<SalesContract>
@@ -2687,18 +2858,7 @@ const SalesContractsPage: React.FC = () => {
         showDeleteButton={contractPerms.canDelete}
         onDelete={handleBatchDeleteDrafts}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.salesContract.batchDeleteConfirm', { count })}
-        toolBarActionsAfterDelete={[
-          <UniAuditBatchMenuButton
-            key="sales-contract-batch-menu"
-            selectedRowKeys={selectedRowKeys}
-            selectedRecords={selectedContractsForBatch}
-            auditEnabled={contractAuditRequired}
-            permGates={contractPerms}
-            handlers={contractAuditBatchHandlers}
-            onSuccess={handleContractAuditBatchSuccess}
-            toolBarButtonSize="medium"
-          />,
-        ]}
+        toolBarActionsAfterDelete={[]}
         rightToolBarActionsBeforeExport={
           contractPerms.canPrint
             ? [
@@ -3401,7 +3561,7 @@ const SalesContractsPage: React.FC = () => {
       />
 
     </ListPageTemplate>
-
+    </>
   );
 
 };

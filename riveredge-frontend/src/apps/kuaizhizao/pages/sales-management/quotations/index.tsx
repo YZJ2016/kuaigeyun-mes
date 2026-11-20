@@ -40,7 +40,17 @@ import {
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { renderDocumentLineMaterialsPreview } from '../shared/documentLineMaterialsPreview';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
-import { UniBatchButton, UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
+import {
+  UniBatchButton,
+  UniBatchMenuButton,
+  defaultAuditBatchAllowed,
+  pickCapability,
+  runCapabilityBatchLoop,
+  useAuditBatchRunner,
+  withDocumentSubmitCombinedItem,
+  type AuditBatchAction,
+  type UniBatchMenuItem,
+} from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import {
@@ -113,6 +123,7 @@ import {
   approveQuotation,
   rejectQuotation,
   revokeReviewQuotation,
+  submitQuotationForReview,
   confirmCustomerQuotation,
   cancelCustomerConfirmQuotation,
   reopenQuotation,
@@ -223,6 +234,8 @@ import {
   TaxRateDetailCell,
 } from '../../../components/document-detail-table/documentDetailTable';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
+import { useDocumentFormCommitAndSubmitReview } from '../../../../../hooks/useDocumentFormCommitAndSubmitReview';
+import { isPendingReviewStatus } from '../../../constants/documentStatus';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import {
   alignDescriptionColumns,
@@ -912,6 +925,9 @@ const QuotationsPage: React.FC = () => {
 
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingStatus, setEditingStatus] = useState<string | null>(null);
+  const commitAfterSaveRef = useRef(false);
+  const createdQuotationIdRef = useRef<number | null>(null);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [pendingCreateCustomerId, setPendingCreateCustomerId] = useState<number | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
@@ -1046,6 +1062,20 @@ const QuotationsPage: React.FC = () => {
   const [pushPreviewRecord, setPushPreviewRecord] = useState<Quotation | null>(null);
   const [pushSelectedItemIds, setPushSelectedItemIds] = useState<number[]>([]);
   const leaveQuotationFormPage = useLeaveFormTab(QUOTATION_LIST_PATH);
+
+  const { runAfterPersist: runQuotationSaveAndAudit, initiatorModal: quotationInitiatorModal } =
+    useDocumentFormCommitAndSubmitReview({
+      entityType: 'quotation',
+      entityLabel: t('app.kuaizhizao.quotation.entityName'),
+      commit: submitQuotation,
+      submitReview: submitQuotationForReview,
+      onSuccess: () => {
+        createdQuotationIdRef.current = null;
+        scheduleQuotationListReload();
+        leaveQuotationFormPage();
+        invalidateMenuBadgeCounts();
+      },
+    });
 
   const currentUser = useCurrentUser();
   const quotationPerms = useResourcePermissions(QUOTATION_RESOURCE);
@@ -1857,6 +1887,19 @@ const QuotationsPage: React.FC = () => {
     actionRef.current?.reload();
     clearTableSelection();
   }, [invalidateMenuBadgeCounts, clearTableSelection]);
+
+  const {
+    runAction: runQuotationAuditBatch,
+    auditModal: quotationAuditModal,
+  } = useAuditBatchRunner<Quotation>({
+    permGates: quotationPerms,
+    handlers: quotationAuditBatchHandlers,
+    onBatchComplete: handleQuotationAuditBatchSuccess,
+    auditEntity: {
+      entityType: 'quotation',
+      entityName: t('app.kuaizhizao.quotation.entityName'),
+    },
+  });
   const handleBatchConfirmCustomer = (keys: React.Key[]) => {
     const confirmableKeys = keys.filter((key) => {
       const q = resolveQuotationByRowKey(key);
@@ -2502,6 +2545,97 @@ const QuotationsPage: React.FC = () => {
     [selectedRowKeys, resolveQuotationByRowKey],
   );
 
+  const quotationToolbarAuditMenus = useMemo(() => {
+    const canPerm = (action: AuditBatchAction) => {
+      const perm = action === 'approve' ? 'audit' : action === 'submit' ? 'submit' : 'revoke';
+      return quotationPerms.canAction?.(perm) ?? false;
+    };
+    const item = (
+      key: string,
+      action: AuditBatchAction,
+      label: string,
+      capKey: string,
+      rows: Quotation[],
+    ): UniBatchMenuItem => ({
+      key,
+      label,
+      disabled:
+        selectedQuotationsForToolbar.length > 0
+        && !defaultAuditBatchAllowed(rows, canPerm(action), capKey, (row) => row),
+      onClick: (keys) => {
+        const idSet = new Set(rows.map((row) => String(row.id)));
+        return runQuotationAuditBatch(
+          action,
+          keys.filter((rowKey) => idSet.has(String(rowKey))),
+          rows,
+          quotationAuditRequired,
+        );
+      },
+    });
+    const capOn = (row: Quotation, capKey: string) => pickCapability(row, capKey)?.allowed === true;
+    const submittedRows = selectedQuotationsForToolbar.filter(
+      (row) => String(row.review_status || '').trim() === 'SUBMITTED' && capOn(row, 'withdraw_submit'),
+    );
+    const pendingRows = selectedQuotationsForToolbar.filter((row) => {
+      const review = String(row.review_status || '').trim();
+      return review !== 'SUBMITTED' && isPendingReviewStatus(review) && capOn(row, 'withdraw_submit');
+    });
+    const submitReviewRows = selectedQuotationsForToolbar.filter((row) =>
+      (row.audit?.allowed_actions ?? []).includes('submit_review'),
+    );
+    const canSubmitReview = quotationPerms.canAction?.('submit') ?? false;
+    const submitRows = selectedQuotationsForToolbar.filter((row) => capOn(row, 'submit'));
+    const submitMenuItem = item('submit', 'submit', t('common.submit'), 'submit', submitRows);
+    const submitDisabled = Boolean(submitMenuItem.disabled);
+    return {
+      submit: withDocumentSubmitCombinedItem(
+        [
+          submitMenuItem,
+          item('withdraw-submit', 'withdraw', t('app.kuaizhizao.quotation.toolbar.withdrawSubmit'), 'withdraw_submit', submittedRows),
+          {
+            key: 'submit-review',
+            label: t('app.kuaizhizao.quotation.toolbar.submitReview'),
+            disabled: selectedQuotationsForToolbar.length > 0 && !(canSubmitReview && submitReviewRows.length > 0),
+            onClick: (keys: React.Key[]) => runCapabilityBatchLoop({
+              keys,
+              records: submitReviewRows,
+              capabilityKey: 'submit_review',
+              permAllowed: canSubmitReview,
+              notAllowedMessage: t('app.kuaizhizao.quotation.toolbar.submitReviewNotAllowed'),
+              onRun: (id) => submitQuotationForReview(id),
+              message: messageApi,
+              t,
+              onSuccess: handleQuotationAuditBatchSuccess,
+            }),
+          },
+        ],
+        {
+          t,
+          message: messageApi,
+          disabled: submitDisabled,
+          commitRecords: submitRows,
+          permAllowed: canSubmitReview,
+          commit: (id) => submitQuotation(id),
+          submitReview: (id) => submitQuotationForReview(id),
+          onSuccess: handleQuotationAuditBatchSuccess,
+        },
+      ),
+      audit: [
+        item('approve', 'approve', t('components.uniAction.audit'), 'approve', selectedQuotationsForToolbar.filter((row) => capOn(row, 'approve'))),
+        item('withdraw-review', 'withdraw', t('app.kuaizhizao.quotation.toolbar.withdrawReview'), 'withdraw_submit', pendingRows),
+        item('revoke', 'revoke', t('app.kuaizhizao.quotation.toolbar.revoke'), 'revoke_approval', selectedQuotationsForToolbar.filter((row) => capOn(row, 'revoke_approval'))),
+      ] satisfies UniBatchMenuItem[],
+    };
+  }, [
+    handleQuotationAuditBatchSuccess,
+    messageApi,
+    quotationAuditRequired,
+    quotationPerms,
+    runQuotationAuditBatch,
+    selectedQuotationsForToolbar,
+    t,
+  ]);
+
   const canToolbarBatchDelete = useMemo(
     () => quotationBatchDeleteAllowed(selectedQuotationsForToolbar, quotationPerms.canDelete),
     [selectedQuotationsForToolbar, quotationPerms.canDelete],
@@ -2671,6 +2805,9 @@ const QuotationsPage: React.FC = () => {
   };
 
   async function initQuotationCreateForm(options?: { customerId?: number }) {
+    setEditingStatus(null);
+    commitAfterSaveRef.current = false;
+    createdQuotationIdRef.current = null;
     const prefillCustomerId = options?.customerId;
     lastHeaderDeliveryRef.current = null;
     resetQuotationFormFieldValues();
@@ -2747,6 +2884,8 @@ const QuotationsPage: React.FC = () => {
       const detail = await getQuotation(quotationId, true);
       void prefetchMaterialsForUnitSelect((detail.items ?? []).map((it) => it.material_id));
       setEditingId(quotationId);
+      setEditingStatus(detail.status ?? null);
+      commitAfterSaveRef.current = false;
       const editValues = {
         quotation_code: detail.quotation_code,
         quotation_date: detail.quotation_date ? dayjs(detail.quotation_date) : undefined,
@@ -2820,7 +2959,14 @@ const QuotationsPage: React.FC = () => {
     navigate(`${QUOTATION_CREATE_PATH}${qs}`);
   }
 
-  const submitCreate = async (values: any, options?: { asDraft?: boolean }) => {
+  const canCommitSubmit =
+    isCreatePage ||
+    editingStatus === '草稿' ||
+    editingStatus === '已拒绝' ||
+    editingStatus === 'rejected';
+
+  const submitCreate = async (values: any, options?: { commit?: boolean }) => {
+    const commit = options?.commit === true;
     const { customData, standardValues } = extractQuotationFormValues(values, formRef.current);
     Object.keys(values).forEach((key) => {
       if (key.startsWith('custom_')) delete values[key];
@@ -2879,12 +3025,27 @@ const QuotationsPage: React.FC = () => {
         discount_amount: Number(values.discount_amount ?? 0) || 0,
         items: submitItems,
       },
-      { autoSubmit: !options?.asDraft },
+      { autoSubmit: false },
     );
     if (created?.id != null) {
+      createdQuotationIdRef.current = created.id;
+      setEditingId(created.id);
       await saveQuotationCustomFieldValues(created.id, customData);
+      if (commit) {
+        try {
+          const { completed } = await runQuotationSaveAndAudit(created.id);
+          if (!completed) {
+            return;
+          }
+        } catch {
+          navigate(quotationEditPath(created.id), { replace: true });
+          return;
+        }
+      } else {
+        messageApi.success(t('app.kuaizhizao.quotation.savedDraft'));
+      }
     }
-    messageApi.success(options?.asDraft ? t('app.kuaizhizao.quotation.savedDraft') : t('common.createSuccess'));
+    createdQuotationIdRef.current = null;
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
     invalidateMenuBadgeCounts();
@@ -2901,7 +3062,7 @@ const QuotationsPage: React.FC = () => {
     try {
       await formRef.current?.validateFields();
       const values = formRef.current?.getFieldsValue(true);
-      if (values) await submitCreate(values, { asDraft: true });
+      if (values) await handleFormSubmit(values);
     } catch (err: any) {
       if (err?.errorFields?.length) {
         messageApi.warning(err?.message ?? t('app.kuaizhizao.quotation.completeRequired'));
@@ -2911,17 +3072,17 @@ const QuotationsPage: React.FC = () => {
     }
   };
 
-  const handleFormSubmit = async () => {
-    const values = formRef.current?.getFieldsValue(true);
-    if (!values) {
-      messageApi.warning(t('components.layoutTemplates.formModal.formNotReady'));
-      return;
-    }
+  const handleFormSubmit = async (values: any, options?: { commit?: boolean }) => {
+    const commit = options?.commit === true;
+    const pinnedId =
+      editingId ??
+      createdQuotationIdRef.current ??
+      (isEditPage && editRouteId != null && editRouteId > 0 ? editRouteId : null);
     try {
-      if (isCreatePage) {
-        await submitCreate(values);
+      if (isCreatePage && pinnedId == null) {
+        await submitCreate(values, { commit });
       } else {
-        await submitEdit(values);
+        await submitEdit(values, { commit });
       }
     } catch (err: any) {
       if (err?.errorFields?.length) {
@@ -2931,15 +3092,26 @@ const QuotationsPage: React.FC = () => {
       if (err?.message === t('app.kuaizhizao.quotation.validLineHint')) {
         return;
       }
-      messageApi.error(getApiErrorMessage(err, isCreatePage ? t('app.kuaizhizao.quotation.createFailed') : t('app.kuaizhizao.quotation.updateFailed')));
+      messageApi.error(
+        getApiErrorMessage(
+          err,
+          commit
+            ? t('app.kuaizhizao.quotation.commitFailed')
+            : isCreatePage && pinnedId == null
+              ? t('app.kuaizhizao.quotation.createFailed')
+              : t('app.kuaizhizao.quotation.updateFailed'),
+        ),
+      );
     }
   };
 
-  const submitEdit = async (values: any) => {
+  const submitEdit = async (values: any, options?: { commit?: boolean }) => {
+    const commit = options?.commit === true;
     // 编辑页标签 keep-alive：保存成功后若清空 editingId，回到未关的编辑标签再保存会静默失败。
     // 与销售订单一致，以路由 id 为真源。
     const quotationId =
       editingId ??
+      createdQuotationIdRef.current ??
       (editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0 ? editRouteId : null);
     if (quotationId == null) {
       messageApi.error(t('app.kuaizhizao.quotation.updateFailed'));
@@ -2989,7 +3161,14 @@ const QuotationsPage: React.FC = () => {
       items: submitItems,
     });
     await saveQuotationCustomFieldValues(quotationId, customData);
-    messageApi.success(t('common.updateSuccess'));
+    if (commit) {
+      const { completed } = await runQuotationSaveAndAudit(quotationId);
+      if (!completed) {
+        return;
+      }
+    } else {
+      messageApi.success(t('app.kuaizhizao.quotation.savedDraft'));
+    }
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
     invalidateMenuBadgeCounts();
@@ -3317,7 +3496,7 @@ const QuotationsPage: React.FC = () => {
     });
   }, [formRef, messageApi, t]);
 
-  useSubmitShortcut(() => triggerQuotationFormSubmit(), isFormPage);
+  useSubmitShortcut(() => void handleSaveDraft(), isFormPage);
 
   const appendEmptyQuotationItem = useCallback(() => {
     const headerDelivery = coerceFormDate(formRef.current?.getFieldValue('delivery_date')) ?? undefined;
@@ -4110,10 +4289,15 @@ const QuotationsPage: React.FC = () => {
             <DocumentFormPageHeaderActions
               onCancel={leaveQuotationFormPage}
               onSaveDraft={() => void handleSaveDraft()}
-              onPrimarySubmit={triggerQuotationFormSubmit}
+              onPrimarySubmit={() => void handleSaveDraft()}
               isCreatePage={isCreatePage}
-              showSaveDraft={isCreatePage}
-              canSubmitAfterSave={isCreatePage}
+              showSaveDraft={false}
+              canSubmitAfterSave={false}
+              showCommitSubmit={canCommitSubmit}
+              onCommitSubmit={() => {
+                commitAfterSaveRef.current = true;
+                triggerQuotationFormSubmit();
+              }}
             />
             </>
           }
@@ -4124,7 +4308,11 @@ const QuotationsPage: React.FC = () => {
                 layout="vertical"
                 submitter={false}
                 scrollToFirstError
-                onFinish={handleFormSubmit}
+                onFinish={(values) => {
+                  const commit = commitAfterSaveRef.current;
+                  commitAfterSaveRef.current = false;
+                  return handleFormSubmit(values, { commit });
+                }}
                 onFinishFailed={({ errorFields }) => {
                   const first = errorFields?.[0];
                   const text = first?.errors?.filter(Boolean)[0];
@@ -4146,6 +4334,7 @@ const QuotationsPage: React.FC = () => {
               </ProForm>
             </div>
         </DocumentFormPageLayout>
+        {quotationInitiatorModal}
         {quotationFormModals}
       </>
     );
@@ -4157,6 +4346,7 @@ const QuotationsPage: React.FC = () => {
 
   return (
     <>
+      {quotationAuditModal}
       <ListPageTemplate>
         <UniTable
           className="kuaizhizao-quotations-table"
@@ -4238,22 +4428,20 @@ const QuotationsPage: React.FC = () => {
           onDelete={handleBatchDelete}
           deleteButtonDisabled={!canToolbarBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.quotation.confirmBatchDelete', { count })}
-          toolBarActionsAfterDelete={
-            quotationAuditRequired
-              ? [
-                  <UniAuditBatchMenuButton
-                    key="quotation-batch-menu"
-                    selectedRowKeys={selectedRowKeys}
-                    selectedRecords={selectedQuotationsForToolbar}
-                    auditEnabled={quotationAuditRequired}
-                    permGates={quotationPerms}
-                    handlers={quotationAuditBatchHandlers}
-                    onSuccess={handleQuotationAuditBatchSuccess}
-                    toolBarButtonSize="medium"
-                  />,
-                ]
-              : []
-          }
+          toolBarActionsAfterDelete={[
+            <UniBatchMenuButton
+              key="quotation-submit"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={quotationToolbarAuditMenus.submit}
+              buttonText={t('common.submit')}
+            />,
+            <UniBatchMenuButton
+              key="quotation-audit"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={quotationToolbarAuditMenus.audit}
+              buttonText={t('components.uniAction.audit')}
+            />,
+          ]}
           toolBarActionsAfterBatch={[
             <UniBatchButton
               key="quotation-confirm-customer"

@@ -22,6 +22,8 @@ import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint'
 import { theme as AntdTheme } from 'antd'
 import { StatCardTrendArea } from '../../../../../components/common/StatCardTrendArea'
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired'
+import { useDocumentFormCommitAndSubmitReview } from '../../../../../hooks/useDocumentFormCommitAndSubmitReview'
+import { isPendingReviewStatus } from '../../../constants/documentStatus'
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions'
 import {
   salesForecastCapabilityReasonMessage,
@@ -63,7 +65,17 @@ import {
   buildPartnerMaterialLineColumns,
 } from '../shared/materialLineColumns'
 import { pickImportExampleValue } from '../../../../../utils/loadImportDictionaryValues'
-import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
+import {
+  UniBatchMenuButton,
+  UniCapabilityBatchButton,
+  defaultAuditBatchAllowed,
+  pickCapability,
+  runCapabilityBatchLoop,
+  useAuditBatchRunner,
+  withDocumentSubmitCombinedItem,
+  type AuditBatchAction,
+  type UniBatchMenuItem,
+} from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import {
   UniTableStackedPrimaryCell,
@@ -116,6 +128,7 @@ import {
   updateSalesForecast,
   deleteSalesForecast,
   submitSalesForecast,
+  submitSalesForecastForReview,
   approveSalesForecast,
   withdrawSalesForecast,
   withdrawSalesForecastApproval,
@@ -207,6 +220,8 @@ export default function SalesForecastsPage() {
   const [currentForecast, setCurrentForecast] = useState<SalesForecast | null>(null)
   const [isEdit, setIsEdit] = useState(false)
   const [currentId, setCurrentId] = useState<number | null>(null)
+  const [editingStatus, setEditingStatus] = useState<string | null>(null)
+  const commitAfterSaveRef = useRef(false)
   const [previewCode, setPreviewCode] = useState<string | null>(null)
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null)
   const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null)
@@ -220,6 +235,19 @@ export default function SalesForecastsPage() {
   const [pushSelectedItemIds, setPushSelectedItemIds] = useState<number[]>([])
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
   const leaveSalesForecastFormPage = useLeaveFormTab(SALES_FORECAST_LIST_PATH);
+
+  const { runAfterPersist: runSalesForecastSaveAndAudit, initiatorModal: salesForecastInitiatorModal } =
+    useDocumentFormCommitAndSubmitReview({
+      entityType: 'sales_forecast',
+      entityLabel: t('app.kuaizhizao.salesForecast.title'),
+      commit: submitSalesForecast,
+      submitReview: submitSalesForecastForReview,
+      onSuccess: () => {
+        leaveSalesForecastFormPage();
+        invalidateMenuBadge();
+        actionRef.current?.reload();
+      },
+    });
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false)
   const [productScope, setProductScope] = useState<'make' | 'all'>('make')
   const [importModalVisible, setImportModalVisible] = useState(false)
@@ -669,12 +697,14 @@ export default function SalesForecastsPage() {
   async function initSalesForecastEditForm(forecastId: number) {
     setIsEdit(true);
     setCurrentId(forecastId);
+    commitAfterSaveRef.current = false;
     setPreviewCode(null);
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
     formRef.current?.resetFields();
     try {
       const [data, itemsRes] = await Promise.all([getSalesForecast(forecastId), getSalesForecastItems(forecastId)]);
+      setEditingStatus(data.status ?? null);
       const items = Array.isArray(itemsRes) ? itemsRes : [];
       const itemsForm = items.map((it: SalesForecastItem) => ({
         ...it,
@@ -888,7 +918,15 @@ export default function SalesForecastsPage() {
     }
   }
 
-  const handleSaveInternal = async (values: any, isDraft: boolean = false) => {
+  const canCommitSubmit =
+    isCreatePage ||
+    editingStatus === '草稿' ||
+    editingStatus === 'DRAFT' ||
+    editingStatus === '已驳回' ||
+    editingStatus === 'REJECTED';
+
+  const handleSaveInternal = async (values: any, options?: { commit?: boolean }) => {
+    const commit = options?.commit === true
     try {
       if (!isEdit && !salesNodesEnabled.sales_forecast) {
         messageApi.warning(t('app.kuaizhizao.salesForecast.nodeDisabledSave'))
@@ -934,19 +972,42 @@ export default function SalesForecastsPage() {
             : values.end_date,
         notes: values.notes,
         attachments: normalizeDocumentAttachments(values.attachments),
-        status: isDraft ? '草稿' : undefined,
+        status: '草稿',
       }
+      let recordId: number | undefined
       if (isEdit && currentId) {
         const res = await updateSalesForecast(currentId, { ...basePayload, items: items as any[] })
         const syncTip = t('app.kuaizhizao.salesForecast.syncTip')
-        messageApi.success(res?.demand_synced ? `${t('common.updateSuccess')}。${syncTip}` : t('common.updateSuccess'))
+        if (!commit) {
+          messageApi.success(res?.demand_synced ? `${t('common.updateSuccess')}。${syncTip}` : t('common.updateSuccess'))
+        }
+        recordId = currentId
       } else {
-        await createSalesForecast({
+        const created = await createSalesForecast({
           ...basePayload,
           forecast_code: forecastCode,
           items: items as any[],
         } as SalesForecast)
-        messageApi.success(isDraft ? t('app.kuaizhizao.salesForecast.draftSaved') : t('common.createSuccess'))
+        recordId = created?.id
+        if (recordId != null) {
+          setIsEdit(true)
+          setCurrentId(recordId)
+        }
+      }
+      if (recordId != null && commit) {
+        try {
+          const { completed } = await runSalesForecastSaveAndAudit(recordId)
+          if (!completed) {
+            return
+          }
+        } catch {
+          if (isCreatePage) {
+            navigate(salesForecastEditPath(recordId), { replace: true })
+          }
+          return
+        }
+      } else if (recordId != null && !isEdit) {
+        messageApi.success(t('app.kuaizhizao.salesForecast.draftSaved'))
       }
       setPreviewCode(null)
       setEffectiveRuleCode(null)
@@ -960,14 +1021,19 @@ export default function SalesForecastsPage() {
         actionRef.current?.reload()
       }
     } catch (e: any) {
-      messageApi.error(e?.message || t('common.saveFailed'))
+      messageApi.error(
+        e?.message ||
+          (commit
+            ? t('app.kuaizhizao.salesForecast.commitFailed')
+            : t('common.saveFailed')),
+      )
       throw e
     }
   }
 
   const handleSaveDraft = () => {
     formRef.current?.validateFields().then((values: any) => {
-      handleSaveInternal(values, true);
+      void handleSaveInternal(values);
     });
   };
 
@@ -1541,6 +1607,125 @@ export default function SalesForecastsPage() {
     [selectedRowKeys],
   );
 
+  const handleSalesForecastAuditBatchSuccess = useCallback(() => {
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+    invalidateMenuBadge();
+  }, [invalidateMenuBadge]);
+
+  const salesForecastAuditBatchHandlers = useMemo(
+    () => ({
+      submit: submitSalesForecast,
+      withdraw: withdrawSalesForecast,
+      approve: approveSalesForecast,
+      revoke: withdrawSalesForecastApproval,
+    }),
+    [],
+  );
+
+  const {
+    runAction: runSalesForecastAuditBatch,
+    auditModal: salesForecastAuditModal,
+  } = useAuditBatchRunner<SalesForecast>({
+    permGates: forecastPerms,
+    handlers: salesForecastAuditBatchHandlers,
+    onBatchComplete: handleSalesForecastAuditBatchSuccess,
+    auditEntity: {
+      entityType: 'sales_forecast',
+      entityName: t('app.kuaizhizao.menu.sales-management.sales-forecasts'),
+    },
+  });
+
+  const salesForecastToolbarAuditMenus = useMemo(() => {
+    const canPerm = (action: AuditBatchAction) => {
+      const perm = action === 'approve' ? 'audit' : action === 'submit' ? 'submit' : 'revoke';
+      return forecastPerms.canAction?.(perm) ?? false;
+    };
+    const item = (
+      key: string,
+      action: AuditBatchAction,
+      label: string,
+      capKey: string,
+      rows: SalesForecast[],
+    ): UniBatchMenuItem => ({
+      key,
+      label,
+      disabled:
+        selectedForecastsForBatch.length > 0
+        && !defaultAuditBatchAllowed(rows, canPerm(action), capKey, (row) => row),
+      onClick: (keys) => {
+        const idSet = new Set(rows.map((row) => String(row.id)));
+        return runSalesForecastAuditBatch(
+          action,
+          keys.filter((rowKey) => idSet.has(String(rowKey))),
+          rows,
+          auditEnabled,
+        );
+      },
+    });
+    const capOn = (row: SalesForecast, capKey: string) => pickCapability(row, capKey)?.allowed === true;
+    const submittedRows = selectedForecastsForBatch.filter(
+      (row) => String(row.status || '').trim() === 'SUBMITTED' && capOn(row, 'withdraw_submit'),
+    );
+    const pendingRows = selectedForecastsForBatch.filter(
+      (row) => isPendingReviewStatus(row.status) && capOn(row, 'withdraw_submit'),
+    );
+    const submitReviewRows = selectedForecastsForBatch.filter((row) =>
+      (row.audit?.allowed_actions ?? []).includes('submit_review'),
+    );
+    const canSubmitReview = forecastPerms.canAction?.('submit') ?? false;
+    const submitRows = selectedForecastsForBatch.filter((row) => capOn(row, 'submit'));
+    const submitMenuItem = item('submit', 'submit', t('common.submit'), 'submit', submitRows);
+    const submitDisabled = Boolean(submitMenuItem.disabled);
+    return {
+      submit: withDocumentSubmitCombinedItem(
+        [
+          submitMenuItem,
+          item('withdraw-submit', 'withdraw', t('app.kuaizhizao.salesForecast.toolbar.withdrawSubmit'), 'withdraw_submit', submittedRows),
+          {
+            key: 'submit-review',
+            label: t('app.kuaizhizao.salesForecast.toolbar.submitReview'),
+            disabled: selectedForecastsForBatch.length > 0 && !(canSubmitReview && submitReviewRows.length > 0),
+            onClick: (keys: React.Key[]) => runCapabilityBatchLoop({
+              keys,
+              records: submitReviewRows,
+              capabilityKey: 'submit_review',
+              permAllowed: canSubmitReview,
+              notAllowedMessage: t('app.kuaizhizao.salesForecast.toolbar.submitReviewNotAllowed'),
+              onRun: (id) => submitSalesForecastForReview(id),
+              message: messageApi,
+              t,
+              onSuccess: handleSalesForecastAuditBatchSuccess,
+            }),
+          },
+        ],
+        {
+          t,
+          message: messageApi,
+          disabled: submitDisabled,
+          commitRecords: submitRows,
+          permAllowed: canSubmitReview,
+          commit: (id) => submitSalesForecast(id),
+          submitReview: (id) => submitSalesForecastForReview(id),
+          onSuccess: handleSalesForecastAuditBatchSuccess,
+        },
+      ),
+      audit: [
+        item('approve', 'approve', t('components.uniAction.audit'), 'approve', selectedForecastsForBatch.filter((row) => capOn(row, 'approve'))),
+        item('withdraw-review', 'withdraw', t('app.kuaizhizao.salesForecast.toolbar.withdrawReview'), 'withdraw_submit', pendingRows),
+        item('revoke', 'revoke', t('app.kuaizhizao.salesForecast.toolbar.revoke'), 'revoke_approval', selectedForecastsForBatch.filter((row) => capOn(row, 'revoke_approval'))),
+      ] satisfies UniBatchMenuItem[],
+    };
+  }, [
+    auditEnabled,
+    forecastPerms,
+    handleSalesForecastAuditBatchSuccess,
+    messageApi,
+    runSalesForecastAuditBatch,
+    selectedForecastsForBatch,
+    t,
+  ]);
+
   const toolbarPushDisabledReason = useMemo(
     () =>
       buildUniPushToolbarDisabledReason(t, {
@@ -1970,9 +2155,7 @@ export default function SalesForecastsPage() {
     </>
   );
 
-  const triggerForecastFormSubmit = () => formRef.current?.submit?.();
-
-  useSubmitShortcut(() => triggerForecastFormSubmit(), isFormPage);
+  useSubmitShortcut(() => void handleSaveDraft(), isFormPage);
 
   if (isFormPage) {
     return (
@@ -1996,10 +2179,15 @@ export default function SalesForecastsPage() {
             <DocumentFormPageHeaderActions
               onCancel={leaveSalesForecastFormPage}
               onSaveDraft={() => void handleSaveDraft()}
-              onPrimarySubmit={triggerForecastFormSubmit}
+              onPrimarySubmit={() => void handleSaveDraft()}
               isCreatePage={isCreatePage}
-              showSaveDraft={isCreatePage}
-              canSubmitAfterSave={isCreatePage}
+              showSaveDraft={false}
+              canSubmitAfterSave={false}
+              showCommitSubmit={canCommitSubmit}
+              onCommitSubmit={() => {
+                commitAfterSaveRef.current = true;
+                formRef.current?.submit?.();
+              }}
             />
             </>
           }
@@ -2010,7 +2198,11 @@ export default function SalesForecastsPage() {
                 layout="vertical"
                 submitter={false}
                 scrollToFirstError
-                onFinish={(values) => handleSaveInternal(values, false)}
+                onFinish={(values) => {
+                  const commit = commitAfterSaveRef.current;
+                  commitAfterSaveRef.current = false;
+                  return handleSaveInternal(values, { commit });
+                }}
                 onFinishFailed={({ errorFields }) => {
                   const first = errorFields?.[0];
                   const errText = first?.errors?.filter(Boolean)[0];
@@ -2022,6 +2214,7 @@ export default function SalesForecastsPage() {
               </ProForm>
             </div>
         </DocumentFormPageLayout>
+        {salesForecastInitiatorModal}
         {forecastFormSecondaryModals}
       </>
     );
@@ -2029,6 +2222,7 @@ export default function SalesForecastsPage() {
 
   return (
     <>
+      {salesForecastAuditModal}
       <ListPageTemplate statCards={statCards}>
         <UniTable<any>
           columnPersistenceId={SALES_FORECAST_LIST_PERSISTENCE_ID}
@@ -2158,27 +2352,17 @@ export default function SalesForecastsPage() {
           onDelete={executeDeleteByKeys}
           deleteConfirmTitle={(count) => t('common.confirmBatchDeleteContent', { count })}
           toolBarActionsAfterDelete={[
-            <UniAuditBatchMenuButton
-              key="sales-forecast-batch-menu"
+            <UniBatchMenuButton
+              key="sales-forecast-submit"
               selectedRowKeys={selectedRowKeys}
-              selectedRecords={selectedForecastsForBatch}
-              auditEnabled={auditEnabled}
-              permGates={forecastPerms}
-              handlers={{
-                submit: submitSalesForecast,
-                withdraw: withdrawSalesForecast,
-                approve: approveSalesForecast,
-                revoke: withdrawSalesForecastApproval,
-              }}
-              resolveIdFromKey={(key) => {
-                const id = Number(key);
-                return Number.isFinite(id) && id > 0 ? id : null;
-              }}
-              onSuccess={() => {
-                setSelectedRowKeys([]);
-    actionRef.current?.reload();
-              }}
-              toolBarButtonSize="medium"
+              menuItems={salesForecastToolbarAuditMenus.submit}
+              buttonText={t('common.submit')}
+            />,
+            <UniBatchMenuButton
+              key="sales-forecast-audit"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={salesForecastToolbarAuditMenus.audit}
+              buttonText={t('components.uniAction.audit')}
             />,
           ]}
           rightToolBarActionsBeforeExport={[

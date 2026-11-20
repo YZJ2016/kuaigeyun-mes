@@ -125,6 +125,12 @@ export function isDraftStatus(status: string | undefined): boolean {
   return normalizeStatus(String(status).trim()) === DocumentStatus.DRAFT;
 }
 
+/** 已提交、尚未进入审核 */
+export function isSubmittedStatus(status: string | undefined): boolean {
+  if (!status) return false;
+  return normalizeStatus(String(status).trim()) === DocumentStatus.SUBMITTED;
+}
+
 /** 判断是否为待审核状态 */
 export function isPendingReviewStatus(status: string | undefined): boolean {
   if (!status) return false;

@@ -214,6 +214,13 @@ export async function submitSalesForecast(id: number): Promise<SalesForecast> {
   return apiRequest<SalesForecast>(`/apps/kuaizhizao/sales-forecasts/${id}/submit`, { method: 'POST' });
 }
 
+/** 提交审核（已提交 → 待审核，或免审已确认） */
+export async function submitSalesForecastForReview(id: number): Promise<SalesForecast> {
+  return apiRequest<SalesForecast>(`/core/uni-audit/sales_forecast/${id}/submit_review`, {
+    method: 'POST',
+  });
+}
+
 /**
  * 下推销售预测到需求计算预览
  */

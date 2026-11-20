@@ -445,6 +445,9 @@ export const salesContractApi = {
 
   submit: (id: number) => apiRequest<SalesContract>(`${BASE}/${id}/submit`, { method: 'POST' }),
 
+  submitForReview: (id: number) =>
+    apiRequest<SalesContract>(`/core/uni-audit/sales_contract/${id}/submit_review`, { method: 'POST' }),
+
 
 
   approve: (id: number, review_remarks?: string) =>
