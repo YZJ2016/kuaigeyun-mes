@@ -4,7 +4,9 @@ import { getCustomerSyncBinding, syncCustomersFromSource } from './services/supp
 import {
   CUSTOMER_SYNC_AVAILABLE_TARGET_FIELDS,
   CUSTOMER_SYNC_CUSTOM_FIELD_TABLE,
+  CUSTOMER_SYNC_MAPPING_EXPORT_FILENAME,
   CUSTOMER_SYNC_REQUIRED_TARGETS,
+  CUSTOMER_SYNC_TARGET_ALIASES,
   CUSTOMER_SYNC_TARGET_FIELDS,
 } from './pages/supply-chain/customers/customerSyncFields';
 
@@ -24,6 +26,8 @@ export function createCustomerSyncConfig(): SyncFromSourceConfig {
     preferredApiCodeSuffixes: ['basedata_query', 'query_customer'],
     preferredApiPathTokens: ['basedata', 'bd_customer', 'executebillquery'],
     preferredConnectorTypes: ['kingdee_cosmic', 'kingdee_galaxy', 'kingdee_xinghan'],
+    targetAliases: CUSTOMER_SYNC_TARGET_ALIASES,
+    mappingExportFileName: CUSTOMER_SYNC_MAPPING_EXPORT_FILENAME,
     getBinding: getCustomerSyncBinding,
     syncFromSource: syncCustomersFromSource,
     completeSuccessKey: 'app.master-data.customers.syncComplete',

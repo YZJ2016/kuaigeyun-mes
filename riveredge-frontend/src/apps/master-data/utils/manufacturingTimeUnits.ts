@@ -69,7 +69,60 @@ export function productProcessLineFromApi(line: ProductProcessLine): ProductProc
   };
 }
 
-/** 界面 → API（秒 + 件数基准 + 单位偏好） */
+/** 路线 operation_sequence 已写入 qty/unit 时，standard_time 为秒（与产品工艺一致） */
+export function routeRowUsesStandardTimeV2(row: Record<string, unknown>): boolean {
+  return (
+    row.standard_time_unit != null ||
+    row.standardTimeUnit != null ||
+    row.standard_time_qty != null ||
+    row.standardTimeQty != null
+  );
+}
+
+export function parseRouteRowStandardTime(row: Record<string, unknown>): {
+  standardTime?: number;
+  standardTimeQty: number;
+  standardTimeUnit: ManufacturingTimeUnit;
+} {
+  const qtyRaw = row.standard_time_qty ?? row.standardTimeQty;
+  const qty = qtyRaw != null && Number(qtyRaw) >= 1 ? Number(qtyRaw) : 1;
+  const unit = normalizeTimeUnit(String(row.standard_time_unit ?? row.standardTimeUnit ?? 'm'));
+  const raw = row.standard_time ?? row.standardTime;
+  if (routeRowUsesStandardTimeV2(row)) {
+    const seconds = raw != null && raw !== '' ? Number(raw) : undefined;
+    return {
+      standardTime: fromSeconds(Number.isFinite(seconds as number) ? seconds : undefined, unit),
+      standardTimeQty: qty,
+      standardTimeUnit: unit,
+    };
+  }
+  const hours = raw != null && raw !== '' ? Number(raw) : undefined;
+  return {
+    standardTime: hoursToDisplayMinutes(Number.isFinite(hours as number) ? hours : undefined),
+    standardTimeQty: 1,
+    standardTimeUnit: 'm',
+  };
+}
+
+export function operationItemStandardTimeToRouteRow(item: {
+  standardTime?: number;
+  standardTimeQty?: number;
+  standardTimeUnit?: ManufacturingTimeUnit;
+}): Record<string, unknown> | null {
+  const unit = normalizeTimeUnit(item.standardTimeUnit);
+  const qty = item.standardTimeQty != null && item.standardTimeQty >= 1 ? item.standardTimeQty : 1;
+  const seconds = toSeconds(item.standardTime, unit);
+  if (seconds == null) return null;
+  return {
+    standard_time: seconds,
+    standardTime: seconds,
+    standard_time_qty: qty,
+    standardTimeQty: qty,
+    standard_time_unit: unit,
+    standardTimeUnit: unit,
+  };
+}
+
 export function productProcessLineToApi(line: ProductProcessLine): ProductProcessLine {
   const stdUnit = normalizeTimeUnit(line.standardTimeUnit);
   const setupUnit = normalizeTimeUnit(line.setupTimeUnit);

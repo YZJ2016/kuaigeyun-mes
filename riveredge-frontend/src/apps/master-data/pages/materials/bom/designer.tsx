@@ -439,11 +439,14 @@ const BOMDesignerPage: React.FC = () => {
   // 在「可选物料」列表中直接添加（选料后追加，不新建空白节点）
   const [addConfigurableOptionModalVisible, setAddConfigurableOptionModalVisible] = useState(false);
   const [addConfigurableOptionMaterial, setAddConfigurableOptionMaterial] = useState<Material | null>(null);
+  const [addConfigurableOptionForm] = Form.useForm();
   const [addAlternativeOptionModalVisible, setAddAlternativeOptionModalVisible] = useState(false);
   const [addAlternativeOptionMaterial, setAddAlternativeOptionMaterial] = useState<Material | null>(null);
+  const [addAlternativeOptionForm] = Form.useForm();
   /** 复制BOM弹窗：选择新根物料后以当前结构生成新BOM */
   const [copyBomModalVisible, setCopyBomModalVisible] = useState(false);
   const [copyBomNewRootMaterial, setCopyBomNewRootMaterial] = useState<Material | null>(null);
+  const [copyBomRootForm] = Form.useForm();
   const [copyBomLoading, setCopyBomLoading] = useState(false);
   /** 工艺型原料向导（Tier 3） */
   const fabricationWizardPromptedRef = useRef<Set<string>>(new Set());
@@ -958,8 +961,9 @@ const BOMDesignerPage: React.FC = () => {
   /** 打开「在列表中添加可选物料」弹窗（选料后直接追加到列表，不新建空白节点） */
   const handleOpenAddConfigurableOptionModal = useCallback(() => {
     setAddConfigurableOptionMaterial(null);
+    addConfigurableOptionForm.resetFields();
     setAddConfigurableOptionModalVisible(true);
-  }, []);
+  }, [addConfigurableOptionForm]);
 
   /**
    * 在列表中直接添加可选物料：用已选物料创建同级配置位节点，插入到当前节点（或同组末尾）紧跟的下一个位置，不追加到 children 末尾
@@ -1070,8 +1074,9 @@ const BOMDesignerPage: React.FC = () => {
   /** 打开「添加可替代物料」弹窗（与配置位一致：选料后追加） */
   const handleOpenAddAlternativeOptionModal = useCallback(() => {
     setAddAlternativeOptionMaterial(null);
+    addAlternativeOptionForm.resetFields();
     setAddAlternativeOptionModalVisible(true);
-  }, []);
+  }, [addAlternativeOptionForm]);
 
   /** 在列表中直接添加可替代物料：选料后追加，与配置位逻辑一致 */
   const handleAddAlternativeOptionWithMaterial = useCallback(
@@ -1897,8 +1902,9 @@ const BOMDesignerPage: React.FC = () => {
    */
   const handleOpenCopyBomModal = useCallback(() => {
     setCopyBomNewRootMaterial(null);
+    copyBomRootForm.resetFields();
     setCopyBomModalVisible(true);
-  }, []);
+  }, [copyBomRootForm]);
 
   /**
    * 复制BOM：以选中的新根物料创建新BOM（结构同当前，根节点强制更换）
@@ -3352,24 +3358,34 @@ const BOMDesignerPage: React.FC = () => {
                 {t('app.master-data.bom.mainMaterialCannotEdit')}
               </p>
               {rootMaterial && isFabricationMaterial(rootMaterial) && (
-                <Alert
-                  type="info"
-                  showIcon
-                  style={{ marginTop: 16 }}
-                  title={t('app.master-data.fabricationWizard.introTitle')}
-                  description={
-                    <Space orientation="vertical" size={8}>
-                      <span>{t('app.master-data.fabricationWizard.promptAfterCreate')}</span>
-                      <Button
-                        type="primary"
-                        size="small"
-                        onClick={() => openFabricationWizard(rootMaterial, 'root')}
-                      >
-                        {t('app.master-data.fabricationWizard.configureRawMaterial')}
-                      </Button>
-                    </Space>
-                  }
-                />
+                !(mindMapData?.children?.length) ? (
+                  <Alert
+                    type="info"
+                    showIcon
+                    style={{ marginTop: 16 }}
+                    title={t('app.master-data.fabricationWizard.introTitle')}
+                    description={
+                      <Space orientation="vertical" size={8}>
+                        <span>{t('app.master-data.fabricationWizard.promptAfterCreate')}</span>
+                        <Button
+                          type="primary"
+                          size="small"
+                          onClick={() => openFabricationWizard(rootMaterial, 'root')}
+                        >
+                          {t('app.master-data.fabricationWizard.configureRawMaterial')}
+                        </Button>
+                      </Space>
+                    }
+                  />
+                ) : bomStatus !== 'approved' ? (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    style={{ marginTop: 16 }}
+                    title={t('app.master-data.fabricationWizard.rawMaterialLinkedTitle')}
+                    description={t('app.master-data.fabricationWizard.rawMaterialLinkedDraftHint')}
+                  />
+                ) : null
               )}
             </div>
           ) : (
@@ -3905,6 +3921,7 @@ const BOMDesignerPage: React.FC = () => {
       onCancel={() => {
         setAddConfigurableOptionModalVisible(false);
         setAddConfigurableOptionMaterial(null);
+        addConfigurableOptionForm.resetFields();
       }}
       onOk={() => {
         if (addConfigurableOptionMaterial) {
@@ -3917,28 +3934,39 @@ const BOMDesignerPage: React.FC = () => {
       okButtonProps={{ disabled: !addConfigurableOptionMaterial }}
     >
       <div style={{ marginBottom: 8 }}>{t('app.master-data.bom.optionalMaterialsList')}</div>
-      <Select
-        placeholder={t('app.master-data.bom.selectMaterialFirst')}
-        showSearch
-        optionFilterProp="label"
-        value={addConfigurableOptionMaterial?.id ?? undefined}
-        onChange={(id) => setAddConfigurableOptionMaterial(materials.find((m) => m.id === id) ?? null)}
-        options={materials
-          .filter(
-            (m) =>
-              m.id !== selectedMaterial?.id &&
-              !configurableSiblings.some(
-                (s) => (s.componentId ?? (s.material as any)?.id) === m.id
-              )
-          )
-          .map((m) => ({
-            value: m.id,
-            label: `${(m as any).mainCode ?? (m as any).main_code ?? ''} - ${m.name}`,
-          }))}
-        style={{ width: '100%' }}
-        allowClear
-        onClear={() => setAddConfigurableOptionMaterial(null)}
-      />
+      <Form form={addConfigurableOptionForm} layout="vertical">
+        <UniMaterialSelect
+          name="materialId"
+          label=""
+          placeholder={t('app.master-data.bom.selectMaterialFirst')}
+          showQuickCreate={false}
+          showAdvancedSearch
+          fillMapping={{}}
+          formItemProps={{ style: { marginBottom: 0 } }}
+          onChange={(_val, material) => {
+            const picked = material && !Array.isArray(material) ? (material as Material) : null;
+            if (
+              picked &&
+              (picked.id === selectedMaterial?.id ||
+                configurableSiblings.some(
+                  (s) => (s.componentId ?? (s.material as any)?.id) === picked.id,
+                ))
+            ) {
+              messageApi.warning(t('app.master-data.bom.materialAlreadyInList'));
+              addConfigurableOptionForm.setFieldValue('materialId', undefined);
+              setAddConfigurableOptionMaterial(null);
+              return;
+            }
+            setAddConfigurableOptionMaterial(picked);
+            if (picked) {
+              setMaterials((prev) => {
+                if (prev.some((m) => m.id === picked.id)) return prev;
+                return [...prev, picked];
+              });
+            }
+          }}
+        />
+      </Form>
     </Modal>
     {/* 添加可替代物料弹窗（与配置位一致：选料后追加，可继续添加或保存） */}
     <Modal
@@ -3947,6 +3975,7 @@ const BOMDesignerPage: React.FC = () => {
       onCancel={() => {
         setAddAlternativeOptionModalVisible(false);
         setAddAlternativeOptionMaterial(null);
+        addAlternativeOptionForm.resetFields();
       }}
       onOk={() => {
         if (addAlternativeOptionMaterial) {
@@ -3959,28 +3988,39 @@ const BOMDesignerPage: React.FC = () => {
       okButtonProps={{ disabled: !addAlternativeOptionMaterial }}
     >
       <div style={{ marginBottom: 8 }}>{t('app.master-data.bom.alternativeMaterialsList')}</div>
-      <Select
-        placeholder={t('app.master-data.bom.selectMaterialFirst')}
-        showSearch
-        optionFilterProp="label"
-        value={addAlternativeOptionMaterial?.id ?? undefined}
-        onChange={(id) => setAddAlternativeOptionMaterial(materials.find((m) => m.id === id) ?? null)}
-        options={materials
-          .filter(
-            (m) =>
-              m.id !== selectedMaterial?.id &&
-              !alternativeSiblings.some(
-                (s) => (s.componentId ?? (s.material as any)?.id) === m.id
-              )
-          )
-          .map((m) => ({
-            value: m.id,
-            label: `${(m as any).mainCode ?? (m as any).main_code ?? ''} - ${m.name}`,
-          }))}
-        style={{ width: '100%' }}
-        allowClear
-        onClear={() => setAddAlternativeOptionMaterial(null)}
-      />
+      <Form form={addAlternativeOptionForm} layout="vertical">
+        <UniMaterialSelect
+          name="materialId"
+          label=""
+          placeholder={t('app.master-data.bom.selectMaterialFirst')}
+          showQuickCreate={false}
+          showAdvancedSearch
+          fillMapping={{}}
+          formItemProps={{ style: { marginBottom: 0 } }}
+          onChange={(_val, material) => {
+            const picked = material && !Array.isArray(material) ? (material as Material) : null;
+            if (
+              picked &&
+              (picked.id === selectedMaterial?.id ||
+                alternativeSiblings.some(
+                  (s) => (s.componentId ?? (s.material as any)?.id) === picked.id,
+                ))
+            ) {
+              messageApi.warning(t('app.master-data.bom.materialAlreadyInList'));
+              addAlternativeOptionForm.setFieldValue('materialId', undefined);
+              setAddAlternativeOptionMaterial(null);
+              return;
+            }
+            setAddAlternativeOptionMaterial(picked);
+            if (picked) {
+              setMaterials((prev) => {
+                if (prev.some((m) => m.id === picked.id)) return prev;
+                return [...prev, picked];
+              });
+            }
+          }}
+        />
+      </Form>
     </Modal>
     {/* 复制BOM：选择新根物料，以当前结构生成新BOM（强制更换根节点） */}
     <Modal
@@ -3989,6 +4029,7 @@ const BOMDesignerPage: React.FC = () => {
       onCancel={() => {
         setCopyBomModalVisible(false);
         setCopyBomNewRootMaterial(null);
+        copyBomRootForm.resetFields();
       }}
       onOk={() => handleCopyBomSubmit()}
       okText={t('common.confirm')}
@@ -3998,25 +4039,36 @@ const BOMDesignerPage: React.FC = () => {
       okButtonProps={{ disabled: !copyBomNewRootMaterial }}
     >
       <p style={{ marginBottom: 12 }}>{t('app.master-data.bom.copyBomNewRootHint')}</p>
-      <Form.Item label={t('app.master-data.bom.copyBomNewRootLabel')} required>
-        <Select
+      <Form form={copyBomRootForm} layout="vertical">
+        <UniMaterialSelect
+          name="materialId"
+          label={t('app.master-data.bom.copyBomNewRootLabel')}
           placeholder={t('app.master-data.bom.copyBomNewRootPlaceholder')}
-          showSearch
-          optionFilterProp="label"
-          value={copyBomNewRootMaterial?.id ?? undefined}
-          onChange={(id) => setCopyBomNewRootMaterial(materials.find((m) => m.id === id) ?? null)}
-          options={materials
-            .filter((m) => m.id !== rootMaterial?.id)
-            .map((m) => ({
-              value: m.id,
-              label: `${(m as any).mainCode ?? (m as any).main_code ?? ''} - ${m.name}`,
-            }))}
-          style={{ width: '100%' }}
-          allowClear
-          onClear={() => setCopyBomNewRootMaterial(null)}
-          notFoundContent={materials.length === 0 ? t('common.loading') : undefined}
+          required
+          showQuickCreate={false}
+          showAdvancedSearch
+          fillMapping={{}}
+          formItemProps={{
+            rules: [{ required: true, message: t('app.master-data.bom.selectMaterialRequired') }],
+          }}
+          onChange={(_val, material) => {
+            const picked = material && !Array.isArray(material) ? (material as Material) : null;
+            if (picked && rootMaterial && picked.id === rootMaterial.id) {
+              messageApi.warning(t('app.master-data.bom.copyBomNewRootMustDiff'));
+              copyBomRootForm.setFieldValue('materialId', undefined);
+              setCopyBomNewRootMaterial(null);
+              return;
+            }
+            setCopyBomNewRootMaterial(picked);
+            if (picked) {
+              setMaterials((prev) => {
+                if (prev.some((m) => m.id === picked.id)) return prev;
+                return [...prev, picked];
+              });
+            }
+          }}
         />
-      </Form.Item>
+      </Form>
     </Modal>
     {/* 版本比对弹窗 */}
     <Modal

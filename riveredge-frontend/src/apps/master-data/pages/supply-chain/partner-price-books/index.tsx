@@ -413,7 +413,10 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
       setSubmitting(true);
       const variantPrices = normalizeVariantPricesForSubmit(values.variantPrices);
       const tierPricesEnabled = values.tierPricesEnabled === true;
-      const tierPrices = tierPricesEnabled ? normalizeTierPricesForSubmit(values.tierPrices) : undefined;
+      // 关闭阶梯时显式传空数组，清掉库内阶梯，避免单据仍按旧档取价
+      const tierPrices = tierPricesEnabled
+        ? normalizeTierPricesForSubmit(values.tierPrices)
+        : [];
       if ((!values.unitPrice || values.unitPrice <= 0) && !variantPrices?.length && !tierPrices?.length) {
         messageApi.warning(t('app.master-data.priceBook.priceRequired'));
         return;
@@ -428,8 +431,13 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         taxRate: values.taxRate,
         unit: values.unit,
         currencyCode: values.currencyCode,
-        effectiveFrom: values.effectiveFrom ? formatDateTime(values.effectiveFrom, 'YYYY-MM-DD') : undefined,
-        effectiveTo: values.effectiveTo ? formatDateTime(values.effectiveTo, 'YYYY-MM-DD') : undefined,
+        // 不填/清空须显式 null，更新时才能清库内日期；空=一直生效
+        effectiveFrom: values.effectiveFrom
+          ? formatDateTime(values.effectiveFrom, 'YYYY-MM-DD')
+          : null,
+        effectiveTo: values.effectiveTo
+          ? formatDateTime(values.effectiveTo, 'YYYY-MM-DD')
+          : null,
         remark: values.remark,
         isActive: values.isActive ?? true,
       };
@@ -573,8 +581,22 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
       },
       { title: t('app.master-data.defaults.defaultTaxRate', '税率'), dataIndex: 'taxRate' },
       { title: t('app.master-data.materialForm.baseUnit', '单位'), dataIndex: 'unit' },
-      { title: t('app.master-data.priceBook.effectiveFrom', '生效起始'), dataIndex: 'effectiveFrom', valueType: 'date' },
-      { title: t('app.master-data.priceBook.effectiveTo', '生效截止'), dataIndex: 'effectiveTo', valueType: 'date' },
+      {
+        title: t('app.master-data.priceBook.effectiveFrom', '生效起始'),
+        dataIndex: 'effectiveFrom',
+        render: (_, r) =>
+          r?.effectiveFrom
+            ? r.effectiveFrom
+            : t('app.master-data.priceBook.effectiveOpenEnded', '一直生效'),
+      },
+      {
+        title: t('app.master-data.priceBook.effectiveTo', '生效截止'),
+        dataIndex: 'effectiveTo',
+        render: (_, r) =>
+          r?.effectiveTo
+            ? r.effectiveTo
+            : t('app.master-data.priceBook.effectiveOpenEnded', '一直生效'),
+      },
       { title: t('common.remark', '备注'), dataIndex: 'remark' },
       {
         title: t('common.enabled', '状态'),
@@ -706,6 +728,10 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         resizable: false,
         hideInSearch: true,
         sorter: true,
+        render: (_, r) =>
+          r?.effectiveFrom
+            ? r.effectiveFrom
+            : t('app.master-data.priceBook.effectiveOpenEnded', '一直生效'),
       },
       {
         title: t('app.master-data.priceBook.effectiveTo', '生效截止'),
@@ -716,6 +742,10 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         resizable: false,
         hideInSearch: true,
         sorter: true,
+        render: (_, r) =>
+          r?.effectiveTo
+            ? r.effectiveTo
+            : t('app.master-data.priceBook.effectiveOpenEnded', '一直生效'),
       },
       {
         title: t('common.enabled', '状态'),
@@ -996,18 +1026,6 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
                         ? t('app.master-data.priceBook.customerMaterialCode')
                         : t('app.master-data.priceBook.supplierMaterialCode')
                     }
-                    rules={[
-                      {
-                        validator: async (_, value) => {
-                          const sync = form.getFieldValue('syncPartnerAlias');
-                          if (sync && !value?.trim()) {
-                            throw new Error(
-                              t('app.master-data.priceBook.partnerCodeRequiredWhenSync'),
-                            );
-                          }
-                        },
-                      },
-                    ]}
                   >
                     <Input
                       placeholder={
@@ -1105,8 +1123,36 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
                 </Col>
               </Row>
             </Form.Item>
-            <Form.Item name="taxRate" label={t('app.master-data.defaults.defaultTaxRate', '默认税率')}>
-              <InputNumber min={0} max={100} precision={2} style={{ width: '100%' }} />
+            <Form.Item
+              noStyle
+              shouldUpdate={(prev, cur) => prev.priceType !== cur.priceType}
+            >
+              {() => {
+                const priceType = (form.getFieldValue('priceType') ?? 'tax_inclusive') as PriceTypeValue;
+                return (
+                  <Form.Item
+                    name="taxRate"
+                    label={t('app.master-data.defaults.defaultTaxRate', '默认税率')}
+                    rules={
+                      priceType === 'tax_inclusive'
+                        ? [
+                            {
+                              required: true,
+                              message: t('app.master-data.priceBook.taxRateRequiredWhenInclusive'),
+                            },
+                            {
+                              type: 'number',
+                              min: 0.01,
+                              message: t('app.master-data.priceBook.taxRateRequiredWhenInclusive'),
+                            },
+                          ]
+                        : undefined
+                    }
+                  >
+                    <InputNumber min={0} max={100} precision={2} style={{ width: '100%' }} />
+                  </Form.Item>
+                );
+              }}
             </Form.Item>
             <Form.Item name="unit" label={t('app.master-data.materialForm.baseUnit', '基础单位')}>
               <UniDropdown
@@ -1133,13 +1179,29 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
           </div>
           <Row gutter={16}>
             <Col xs={24} sm={12}>
-              <Form.Item name="effectiveFrom" label={t('app.master-data.priceBook.effectiveFrom', '生效起始')}>
-                <DatePicker style={{ width: '100%' }} />
+              <Form.Item
+                name="effectiveFrom"
+                label={t('app.master-data.priceBook.effectiveFrom', '生效起始')}
+                extra={t('app.master-data.priceBook.effectiveOpenEndedHelp', '不填表示一直生效')}
+              >
+                <DatePicker
+                  style={{ width: '100%' }}
+                  allowClear
+                  placeholder={t('app.master-data.priceBook.effectiveOpenEnded', '一直生效')}
+                />
               </Form.Item>
             </Col>
             <Col xs={24} sm={12}>
-              <Form.Item name="effectiveTo" label={t('app.master-data.priceBook.effectiveTo', '生效截止')}>
-                <DatePicker style={{ width: '100%' }} />
+              <Form.Item
+                name="effectiveTo"
+                label={t('app.master-data.priceBook.effectiveTo', '生效截止')}
+                extra={t('app.master-data.priceBook.effectiveOpenEndedHelp', '不填表示一直生效')}
+              >
+                <DatePicker
+                  style={{ width: '100%' }}
+                  allowClear
+                  placeholder={t('app.master-data.priceBook.effectiveOpenEnded', '一直生效')}
+                />
               </Form.Item>
             </Col>
           </Row>

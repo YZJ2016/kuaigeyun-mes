@@ -12,6 +12,8 @@ export interface ImConversation {
   is_pinned?: boolean;
   /** 私聊对方用户 id；群聊为空 */
   peer_user_id?: number | null;
+  /** 创建人；与后端解散群主判定（role=owner 或创建人）对齐 */
+  created_by_id?: number | null;
   module_codes?: string[];
   member_count?: number;
   last_message_at?: string | null;
@@ -83,6 +85,13 @@ export async function updateGroupImConversation(
   return apiRequest(`/personal/im/conversations/${conversationUuid}`, {
     method: 'PATCH',
     data,
+  });
+}
+
+/** 解散自定义群聊（仅群主；公共群不可解散） */
+export async function dissolveGroupImConversation(conversationUuid: string): Promise<void> {
+  await apiRequest(`/personal/im/conversations/${conversationUuid}`, {
+    method: 'DELETE',
   });
 }
 

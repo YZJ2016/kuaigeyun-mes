@@ -3,8 +3,17 @@
  *
  * 在「角色权限」中勾选对应资源的「显示同步」「显示推送」即可控制。
  * 业务配置里的 toolbar_*_enabled 已废弃，勿再写入。
+ *
+ * 「同步」「推送」均另依赖快连接（kuaiconnect）已安装启用且 PRO 授权通过；未就绪时对应 Tab 隐藏。
  */
 import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import {
+  getInstalledApplicationList,
+  installedApplicationsQueryKey,
+} from '../services/application';
+import { getTenantId } from '../utils/auth';
+import { isKuaiconnectReady } from '../utils/kuaiconnectAccess';
 import { useResourcePermissions } from './useResourcePermissions';
 
 /** @deprecated 仅为历史 import 兼容；实际是 businessConfig 缓存 key */
@@ -55,10 +64,12 @@ export function resolveToolbarSyncPushResource(
 
 export function resolveToolbarSyncPushFlagsFromPerms(
   canAction: ((action: string) => boolean) | undefined,
+  options?: { kuaiconnectReady?: boolean },
 ): ToolbarSyncPushFlags {
   const check = canAction || (() => false);
-  const syncEnabled = Boolean(check('sync'));
-  const pushEnabled = Boolean(check('push'));
+  const kuaiconnectReady = options?.kuaiconnectReady !== false;
+  const syncEnabled = Boolean(check('sync')) && kuaiconnectReady;
+  const pushEnabled = Boolean(check('push')) && kuaiconnectReady;
   return {
     syncEnabled,
     pushEnabled,
@@ -71,9 +82,17 @@ export function useToolbarSyncPushFlags(
 ): ToolbarSyncPushFlags {
   const resource = resolveToolbarSyncPushResource(resourceOrCategory);
   const perms = useResourcePermissions(resource);
+  const tenantId = getTenantId();
+  const { data: installedApps } = useQuery({
+    queryKey: installedApplicationsQueryKey(tenantId),
+    queryFn: () => getInstalledApplicationList({ is_active: true }),
+    staleTime: 60_000,
+  });
+  const kuaiconnectReady = isKuaiconnectReady(installedApps);
   return useMemo(
-    () => resolveToolbarSyncPushFlagsFromPerms(perms.canAction),
-    [perms.canAction],
+    () =>
+      resolveToolbarSyncPushFlagsFromPerms(perms.canAction, { kuaiconnectReady }),
+    [perms.canAction, kuaiconnectReady],
   );
 }
 

@@ -22,7 +22,8 @@ import {
   readActionVisualProfile,
   ROW_ACTION_KIND_ATTR,
 } from './actionText'
-import { rowActionSortRank } from './actionCatalog'
+import { rowActionLabel, rowActionSortRank } from './actionCatalog'
+import type { RowActionPermissionKind } from './actionText'
 import { normalizeActionTree } from './normalize'
 import { ActionConfirmPopconfirm } from '../action-confirm'
 /**
@@ -264,9 +265,20 @@ function invokeRowActionClick(
   } as React.MouseEvent)
 }
 
+function resolveOverflowMenuLabel(node: React.ReactNode, interactive: React.ReactElement | null): string {
+  const fromText = normalizeActionLabelText(readNodeText(node))
+  if (fromText) return fromText
+  const kind =
+    readExplicitActionKind(node) ??
+    (interactive ? readExplicitActionKind(interactive) : null) ??
+    resolveActionKind(interactive ?? node)
+  if (kind) return rowActionLabel(kind as RowActionPermissionKind)
+  return i18next.t('common.action', { defaultValue: '操作' })
+}
+
 function toMenuItem(node: React.ReactNode, key: string) {
-  const text = normalizeActionLabelText(readNodeText(node)) || '操作'
   const interactive = findInteractiveElement(node)
+  const text = resolveOverflowMenuLabel(node, interactive)
   const popconfirm = findPopconfirmElement(node)
   const inheritedExplicit = readExplicitActionKind(node)
   const tone = resolveButtonToneFromNode(interactive ?? node, inheritedExplicit)
@@ -290,32 +302,27 @@ function toMenuItem(node: React.ReactNode, key: string) {
       return {
         key,
         icon: props.icon as React.ReactNode,
-        label: (
-          <Popconfirm
-            title={titleNode}
-            description={hasDescription ? descriptionNode : undefined}
-            okText={(popProps.okText as string) || i18next.t('common.confirm', { defaultValue: 'Confirm' })}
-            cancelText={
-              (popProps.cancelText as string) || i18next.t('common.cancel', { defaultValue: 'Cancel' })
-            }
-            okButtonProps={destructive ? { danger: true } : undefined}
-            onConfirm={async (e) => {
-              e?.stopPropagation()
+        label: text,
+        danger: destructive || !!props.danger,
+        disabled: !!props.disabled,
+        onClick: (info?: { domEvent?: React.MouseEvent }) => {
+          info?.domEvent?.stopPropagation()
+          Modal.confirm({
+            title: titleNode,
+            content: hasDescription ? descriptionNode : undefined,
+            okText: (popProps.okText as string) || i18next.t('common.confirm', { defaultValue: 'Confirm' }),
+            cancelText:
+              (popProps.cancelText as string) || i18next.t('common.cancel', { defaultValue: 'Cancel' }),
+            okButtonProps: destructive
+              ? { danger: true, ...(popProps.okButtonProps as object) }
+              : (popProps.okButtonProps as object | undefined),
+            onOk: async () => {
               if (typeof onConfirm === 'function') {
                 await (onConfirm as () => void | Promise<void>)()
               }
-            }}
-          >
-            <span
-              style={{ display: 'inline-block', width: '100%' }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {text}
-            </span>
-          </Popconfirm>
-        ),
-        danger: destructive || !!props.danger,
-        disabled: !!props.disabled,
+            },
+          })
+        },
       }
     }
 
@@ -407,7 +414,7 @@ function mergeOverflowIntoSelfManagedDropdown(
 
 /**
  * 列表操作列：统一顺序；禁用项隐藏；需要溢出时主行至少 ROW_ACTIONS_MIN_PRIMARY_VISIBLE 个可点操作，其余进「更多」。
- * 若「更多」仅剩 1 项则改回主行直出（再点一层无收益，且「更多」触发器往往更宽）。
+ * 仅当「更多」下多于 1 项时才展示「更多」；仅剩 1 项则主行直出。
  */
 export function renderRowActionsOverflow(
   nodes: React.ReactNode[],
@@ -429,30 +436,36 @@ export function renderRowActionsOverflow(
    * 1) 页面自管 Dropdown（已有菜单）——再折会叠成「更多里套更多」
    * 2) skip 且无可静态识别交互的自管组件（如 UniWorkflowActions）
    *
-   * 自管 Dropdown 不占主行动作槽位（它本身就是溢出容器）；其余钉住项仍从槽位扣除。
+   * 自管 Dropdown 不占主行动作槽位。其余钉住项（工作流）在「按 rank 填满直出槽」之后追加，
+   * 禁止先占槽把删除等更高优先级动作挤到列外或「更多」里（草稿行应为 详情/编辑/删除/提交）。
    */
   const isPinnedInlineAction = (node: React.ReactNode): boolean => {
     if (isSelfManagedMenuDropdown(node)) return true
-    // 页面显式 skip 包裹的自管工作流（UniWorkflowActions）：即使子节点带 submit/approve，
-    // 仍钉在主行末尾，避免挤掉删除等更高优先级动作。
-    if (React.isValidElement(node)) {
-      const onSelf = (node.props as Record<string, unknown>)?.[ROW_ACTION_KIND_ATTR]
-      if (onSelf === 'skip') return true
+    if (!React.isValidElement(node)) return false
+    // 普通 Button/a 即使 kind=skip（跨模块门控）也参与槽位折叠，禁止钉死撑爆主行/抽屉标题。
+    const ty = node.type
+    if (ty === Button || ty === 'a' || (typeof ty === 'string' && ty === 'button')) {
+      return false
+    }
+    // 自管外壳（如 UniWorkflowActions）：外层 skip，内层仍有提交/审核按钮 —— 钉在主行末尾
+    if ((node.props as Record<string, unknown>)?.[ROW_ACTION_KIND_ATTR] === 'skip') {
+      return true
     }
     return readExplicitActionKind(node) === 'skip' && !findInteractiveElement(node)
   }
 
-  const pinnedSlotConsumers = enabled.filter(
-    (node) => isPinnedInlineAction(node) && !isSelfManagedMenuDropdown(node),
-  ).length
-  const collapsibleSlots = Math.max(0, primarySlotsBeforeMore - pinnedSlotConsumers)
-
+  const collapsibleSlots = primarySlotsBeforeMore
   const inline: React.ReactNode[] = []
+  const deferredPinned: React.ReactNode[] = []
   let overflow: React.ReactNode[] = []
   let usedSlots = 0
   for (const node of enabled) {
-    if (isPinnedInlineAction(node)) {
+    if (isSelfManagedMenuDropdown(node)) {
       inline.push(node)
+      continue
+    }
+    if (isPinnedInlineAction(node)) {
+      deferredPinned.push(node)
       continue
     }
     if (usedSlots < collapsibleSlots) {
@@ -462,6 +475,7 @@ export function renderRowActionsOverflow(
     }
     overflow.push(node)
   }
+  inline.push(...deferredPinned)
 
   let finalInline = inline
   if (overflow.length > 0) {
@@ -491,7 +505,7 @@ export function renderRowActionsOverflow(
     }
   }
 
-  // 系统「更多」仅 1 项时直出，避免多点一层
+  // 系统「更多」仅 1 项时改主行直出；仅 overflow.length > 1 才展示「更多」
   if (overflow.length === 1) {
     finalInline = [...inline, overflow[0]]
     overflow = []
@@ -523,6 +537,7 @@ export function renderRowActionsOverflow(
     >
       {keyedInline}
       <Dropdown
+        destroyOnHidden={false}
         menu={{
           items: overflow.map((node, i) => toMenuItem(node, `${keyPrefix}-more-${i}`)),
         }}

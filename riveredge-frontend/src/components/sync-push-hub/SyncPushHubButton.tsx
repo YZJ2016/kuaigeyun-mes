@@ -23,7 +23,7 @@ import { getApiErrorMessage } from '../../utils/errorHandler';
 
 export interface SyncPushHubButtonProps
   extends Omit<SyncPushHubModalProps, 'open' | 'onClose'>,
-    Omit<ButtonProps, 'onClick' | 'children' | 'icon' | 'title'> {
+    Omit<ButtonProps, 'onClick' | 'children' | 'icon'> {
   /** 覆盖默认按钮文案 */
   buttonText?: React.ReactNode;
   /** 仅图标（窄屏） */

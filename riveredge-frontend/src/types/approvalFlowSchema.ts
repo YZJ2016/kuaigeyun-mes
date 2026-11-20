@@ -11,6 +11,8 @@ export interface ConditionItem {
   label?: string;
   /** 公式模式：其余分支 */
   else?: boolean;
+  /** 人工选边：默认分支。流程走到该条件时预选此项，仍可改选 */
+  isDefault?: boolean;
 }
 
 const CONDITION_ROUTE_MODES = new Set<ConditionRouteMode>([
@@ -49,6 +51,7 @@ export function normalizeConditionNodeData(
     value: c.value,
     label: c.label || '',
     else: Boolean(c.else),
+    isDefault: Boolean(c.isDefault ?? (c as { is_default?: boolean }).is_default),
   }));
   out.conditions = normalized;
   delete out.condition_list;
@@ -66,6 +69,7 @@ export function normalizeConditionNodeData(
   if (mode === 'previous_approver' || mode === 'initiator') {
     out.conditions = normalized.map((item, i) => ({
       label: String(item.label || '').trim() || `分支${i + 1}`,
+      ...(item.isDefault ? { isDefault: true } : {}),
     }));
   }
   return out;
@@ -167,7 +171,29 @@ export function normalizeNodeData(nodeType: string, data: ApprovalNodeData = {})
       delete out.decisionOnApproveField;
       delete out.decisionOnApproveLabel;
       delete out.decisionOnApproveDefault;
-      out.allowEditDuringApproval = Boolean(out.allowEditDuringApproval);
+      // 默认开启「允许直接改单」；弹窗可填字段可选（空=仅改单，不强制弹窗字段）
+      out.allowEditDuringApproval = out.allowEditDuringApproval !== false;
+      if (!out.allowEditDuringApproval) {
+        delete out.editableFields;
+        delete out.editableFieldsUseAll;
+      } else {
+        const picked = Array.isArray(out.editableFields)
+          ? out.editableFields.map(String).filter((x) => x && x !== '*')
+          : [];
+        // 显式 false 优先：避免表单关「全部」后仍残留 editableFields:'*' 被当成全开
+        if (out.editableFieldsUseAll === false) {
+          out.editableFields = picked;
+        } else if (
+          out.editableFieldsUseAll === true
+          || out.editableFields === '*'
+          || (Array.isArray(out.editableFields) && out.editableFields.includes('*'))
+        ) {
+          out.editableFields = '*';
+        } else {
+          out.editableFields = picked;
+        }
+        delete out.editableFieldsUseAll;
+      }
       out.refreshContextOnEdit = out.refreshContextOnEdit !== false;
       out.allowTransfer = Boolean(out.allowTransfer);
       out.allowAddSign = Boolean(out.allowAddSign);
@@ -286,6 +312,10 @@ export function validateFlowGraph(graph: FlowGraph): string[] {
         });
       }
       if (mode === 'previous_approver' || mode === 'initiator') {
+        const defaultCount = conds.filter((c) => c.isDefault).length;
+        if (defaultCount > 1) {
+          errors.push(`条件节点「${node.data.label || node.id}」仅允许一条默认分支`);
+        }
         conds.forEach((c, i) => {
           if (!String(c.label || '').trim()) {
             errors.push(`条件节点「${node.data.label || node.id}」分支 ${i + 1} 须填写名称`);
@@ -297,9 +327,38 @@ export function validateFlowGraph(graph: FlowGraph): string[] {
   return errors;
 }
 
+/** 新建审批节点默认：允许直接改单；弹窗可填字段默认不勾（可空） */
+export function defaultApprovalNodeEditFlags(): Pick<
+  ApprovalNodeData,
+  'allowEditDuringApproval' | 'editableFields' | 'refreshContextOnEdit'
+> {
+  return {
+    allowEditDuringApproval: true,
+    editableFields: [],
+    refreshContextOnEdit: true,
+  };
+}
+
 /** 表单 approverIds ↔ UI 分字段 */
 export function nodeDataToFormValues(data: ApprovalNodeData): ApprovalNodeData {
   const v = { ...data };
+  if (v.allowEditDuringApproval == null) {
+    v.allowEditDuringApproval = true;
+  }
+  if (v.allowEditDuringApproval) {
+    if (
+      v.editableFields === '*'
+      || (Array.isArray(v.editableFields) && v.editableFields.includes('*'))
+    ) {
+      v.editableFieldsUseAll = true;
+      v.editableFields = [];
+    } else if (Array.isArray(v.editableFields) && v.editableFields.length > 0) {
+      v.editableFieldsUseAll = false;
+    } else {
+      v.editableFieldsUseAll = false;
+      v.editableFields = [];
+    }
+  }
   if (v.decisionOnApprove?.field) {
     v.decisionOnApproveEnabled = true;
     v.decisionOnApproveField = v.decisionOnApprove.field;

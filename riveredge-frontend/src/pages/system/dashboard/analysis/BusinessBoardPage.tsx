@@ -61,6 +61,8 @@ import {
   type ProductionBroadcastItem,
   type ActiveWorkOrderItem,
 } from '../../../../services/dashboard';
+import { mesDashboardService } from '../../../../apps/kuaizhizao/services/dashboard';
+import { equipmentStatusApi } from '../../../../apps/kuaizhizao/services/equipment';
 import { formatDateTime, formatQuantity } from '../../../../utils/format';
 /** 打包进 assets，避免依赖线上 /img/dashboard.png（现网曾出现 0 字节空文件导致整应用崩溃） */
 import defaultHeroTextureUrl from '../../../../assets/board/dashboard.png';
@@ -545,6 +547,8 @@ interface HudHeroProps {
     repairingEquip: string;
     unitDays: string;
   };
+  /** 在册设备等整型指标：不保留小数 */
+  integerAssetCount?: boolean;
 }
 
 const HudHero: React.FC<HudHeroProps> = ({
@@ -557,6 +561,7 @@ const HudHero: React.FC<HudHeroProps> = ({
   onTimeDelivery,
   reworkCount,
   labels,
+  integerAssetCount = false,
 }) => (
   <div
     style={{
@@ -603,7 +608,15 @@ const HudHero: React.FC<HudHeroProps> = ({
         gap: 24,
       }}>
         <div style={{ marginBottom: 0 }}><TechBadge label={labels.inProgressWo} value={inProgressWo} color={getBoardHud().cyan} align="left" /></div>
-        <div style={{ marginLeft: -40 }}><TechBadge label={labels.avgCycle} value={avgCycle.toFixed(1)} color={getBoardHud().platformBlue} unit={labels.unitDays} align="left" /></div>
+        <div style={{ marginLeft: -40 }}>
+          <TechBadge
+            label={labels.avgCycle}
+            value={integerAssetCount ? Math.round(avgCycle) : avgCycle.toFixed(1)}
+            color={getBoardHud().platformBlue}
+            unit={labels.unitDays}
+            align="left"
+          />
+        </div>
         <div style={{ marginTop: 0 }}><TechBadge label={labels.reworkOrders} value={reworkCount} color={getBoardHud().rose} align="left" /></div>
       </div>
 
@@ -868,6 +881,643 @@ const BroadcastFeed: React.FC<BroadcastFeedProps> = ({ items, emptyText }) => {
   );
 };
 
+const resolveEquipmentHudStatusColor = (status: string) => {
+  const s = (status || '').trim();
+  if (s === '故障') return getBoardHud().rose;
+  if (s === '维修中') return getBoardHud().amber;
+  if (s === '运行中') return getBoardHud().emerald;
+  if (s === '待机') return getBoardHud().platformBlue;
+  return getBoardHud().cyan;
+};
+
+interface EquipmentHudScrollListProps {
+  items: {
+    key: string;
+    primary: string;
+    secondary?: string;
+    meta?: string;
+    dotColor: string;
+  }[];
+  emptyText: string;
+  minHeight?: number;
+  /** 每条滚动停留加权秒数，越大越慢 */
+  scrollSecondsPerItem?: number;
+  /** 同页多列表时区分动画 class */
+  instanceId?: string;
+}
+
+const EquipmentHudScrollList: React.FC<EquipmentHudScrollListProps> = ({
+  items,
+  emptyText,
+  minHeight = 200,
+  scrollSecondsPerItem = 3,
+  instanceId = 'default',
+}) => {
+  if (!items.length) {
+    return (
+      <div
+        style={{
+          flex: 1,
+          minHeight,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: getBoardHud().textDim,
+          fontSize: 13,
+        }}
+      >
+        {emptyText}
+      </div>
+    );
+  }
+  const loop = items.length > 6 ? [...items, ...items] : items;
+  const animKey = `equip-hud-scroll-${instanceId}`;
+  const feedClass = `equip-hud-scroll-feed-${instanceId}`;
+  const durationSec = Math.max(36, items.length * scrollSecondsPerItem);
+  return (
+    <div
+      style={{
+        flex: 1,
+        minHeight,
+        overflow: 'hidden',
+        position: 'relative',
+        maskImage: 'linear-gradient(to bottom, transparent, black 8%, black 92%, transparent)',
+      }}
+    >
+      <style>
+        {`
+          @keyframes ${animKey} {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-50%); }
+          }
+          .${feedClass} { animation: ${animKey} ${durationSec}s linear infinite; }
+          .${feedClass}:hover { animation-play-state: paused; }
+          @media (prefers-reduced-motion: reduce) {
+            .${feedClass} { animation: none !important; }
+          }
+        `}
+      </style>
+      <div className={feedClass} style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 4, paddingBottom: 4 }}>
+        {loop.map((row, idx) => (
+          <div
+            key={`${row.key}-${idx}`}
+            style={{
+              padding: '8px 12px',
+              background: 'rgba(255,255,255,0.02)',
+              borderRadius: 4,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              border: `1px solid ${getBoardHud().borderLine}`,
+            }}
+          >
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: row.dotColor,
+                boxShadow: `0 0 6px ${row.dotColor}`,
+                flexShrink: 0,
+              }}
+            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 13,
+                  color: getBoardHud().textSoft,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {row.primary}
+              </div>
+              {row.secondary ? (
+                <div style={{ fontSize: 11, color: getBoardHud().textDim, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {row.secondary}
+                </div>
+              ) : null}
+            </div>
+            {row.meta ? (
+              <span style={{ fontSize: 11, color: getBoardHud().textDim, fontFamily: clockFont, flexShrink: 0 }}>
+                {row.meta}
+              </span>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export type BusinessBoardScope = 'operations' | 'equipment';
+
+type EquipmentBoardPayload = Awaited<ReturnType<typeof mesDashboardService.getEquipmentBoard>>;
+
+type EquipmentHudStatusRow = NonNullable<EquipmentBoardPayload['status_rows']>[number];
+
+interface EquipmentScopeHudColumnsProps {
+  board: EquipmentBoardPayload | undefined;
+  statusRows: EquipmentHudStatusRow[];
+  heroTextureUrl: string;
+  isFullscreen: boolean;
+}
+
+const EquipmentScopeHudColumns: React.FC<EquipmentScopeHudColumnsProps> = ({
+  board,
+  statusRows,
+  heroTextureUrl,
+  isFullscreen,
+}) => {
+  const { t } = useTranslation();
+  const m = board?.metrics;
+  const healthRate = m != null ? Math.max(0, Math.min(100, 100 - Number(m.failure_rate || 0))) : 0;
+  const heroLabels = useMemo(
+    () => ({
+      woPlatform: '',
+      opPlatform: '',
+      todayOutput: t('app.kuaiems.equipmentBusinessBoard.hero.todaySpotDone'),
+      qualifiedRate: t('app.kuaiems.equipmentBusinessBoard.hero.spotCheckRate'),
+      inProgressWo: t('app.kuaiems.equipmentBusinessBoard.hero.openFaults'),
+      pendingSchedule: t('app.kuaiems.equipmentBusinessBoard.hero.spotPending'),
+      avgCycle: t('app.kuaiems.equipmentBusinessBoard.hero.totalAssets'),
+      onTimeDelivery: t('app.kuaiems.equipmentBusinessBoard.hero.healthIndex'),
+      reworkOrders: t('app.kuaiems.equipmentBusinessBoard.hero.spotReviewPending'),
+      repairingEquip: t('app.kuaiems.equipmentBusinessBoard.hero.faultyAssets'),
+      unitDays: t('app.kuaiems.equipmentBusinessBoard.hero.unitAssets'),
+    }),
+    [t],
+  );
+  const alerts = board?.alerts ?? [];
+  const statusBreakdown = board?.status_breakdown ?? [];
+  const statusMonitors = statusRows;
+  const panelBodyMinHeight = isFullscreen ? 280 : 220;
+  const spotRate = Number(m?.spot_check_rate ?? 0);
+
+  /** 有产量米数时按产量排行；否则回退运行小时（兼容未灌产量参数的租户） */
+  const productionPanelMode = useMemo(
+    () => statusMonitors.some((r) => Number(r.production_meters ?? 0) > 0),
+    [statusMonitors],
+  );
+
+  const productionTopRows = useMemo(() => {
+    if (productionPanelMode) {
+      const ranked = statusMonitors
+        .map((row) => ({
+          ...row,
+          meters: Math.max(0, Number(row.production_meters ?? 0)),
+          hours: Math.max(0, Number(row.runtime_hours ?? 0)),
+        }))
+        .sort((a, b) => b.meters - a.meters || String(a.code).localeCompare(String(b.code)));
+      const withMeters = ranked.filter((row) => row.meters > 0);
+      if (withMeters.length >= 6) {
+        return withMeters.slice(0, 10);
+      }
+      return ranked.slice(0, 10);
+    }
+    const ranked = statusMonitors
+      .map((row) => ({
+        ...row,
+        meters: 0,
+        hours: Math.max(0, Number(row.runtime_hours ?? 0)),
+      }))
+      .sort((a, b) => b.hours - a.hours || String(a.code).localeCompare(String(b.code)));
+    const withHours = ranked.filter((row) => row.hours > 0);
+    if (withHours.length >= 6) {
+      return withHours.slice(0, 10);
+    }
+    return ranked.slice(0, 10);
+  }, [statusMonitors, productionPanelMode]);
+
+  const productionMaxValue = useMemo(() => {
+    if (productionPanelMode) {
+      return Math.max(1, ...productionTopRows.map((row) => row.meters));
+    }
+    return Math.max(1, ...productionTopRows.map((row) => row.hours));
+  }, [productionTopRows, productionPanelMode]);
+
+  const productionAvgValue = useMemo(() => {
+    if (productionPanelMode) {
+      const vals = statusMonitors.map((r) => Number(r.production_meters ?? 0)).filter((m) => m > 0);
+      if (!vals.length) {
+        return null;
+      }
+      return vals.reduce((s, m) => s + m, 0) / vals.length;
+    }
+    const vals = statusMonitors.map((r) => Number(r.runtime_hours ?? 0)).filter((h) => h > 0);
+    if (!vals.length) {
+      return null;
+    }
+    return vals.reduce((s, h) => s + h, 0) / vals.length;
+  }, [statusMonitors, productionPanelMode]);
+
+  const formatBoardMeters = (meters: number) => {
+    if (meters >= 10000) {
+      return t('app.kuaiems.equipmentBusinessBoard.productionOutput.metersWan', {
+        value: (meters / 10000).toFixed(1),
+      });
+    }
+    return t('app.kuaiems.equipmentBusinessBoard.productionOutput.meters', {
+      value: meters.toFixed(0),
+    });
+  };
+
+  const alertScrollItems = useMemo(
+    () =>
+      alerts.map((row, idx) => ({
+        key: `${row.kind}-${row.document_no ?? idx}`,
+        primary: `${row.title}${row.equipment_code ? ` ${row.equipment_code}` : ''}`,
+        secondary: row.detail,
+        meta: row.occurred_at ? formatDateTime(row.occurred_at, 'MM-DD HH:mm') : undefined,
+        dotColor:
+          row.kind === 'fault_open' || row.kind === 'repair_arrival_overdue'
+            ? getBoardHud().rose
+            : row.kind === 'spot_review_pending'
+              ? getBoardHud().amber
+              : getBoardHud().cyan,
+      })),
+    [alerts],
+  );
+
+  const statusScrollItems = useMemo(
+    () =>
+      statusMonitors.map((row) => ({
+        key: `${row.equipment_id}-${row.code}`,
+        primary: `${row.code} ${row.name}`.trim(),
+        secondary: row.status,
+        meta:
+          row.runtime_hours != null
+            ? `${row.runtime_hours.toFixed(0)}h`
+            : row.is_online
+              ? t('app.kuaiems.equipmentBusinessBoard.status.online')
+              : undefined,
+        dotColor: resolveEquipmentHudStatusColor(row.status),
+      })),
+    [statusMonitors, t],
+  );
+
+  return (
+    <div style={{ display: 'contents' }}>
+      <div
+        style={{
+          flex: '1 1 0',
+          minWidth: 0,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+        }}
+      >
+        <HudPanel style={{ flex: '0 0 auto' }}>
+          <HudTitle
+            title={t('app.kuaiems.equipmentBusinessBoard.section.opsOverview')}
+            suffix={board?.spot_check_date}
+          />
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+              gap: 8,
+              marginBottom: 10,
+            }}
+          >
+            <StatTile
+              label={t('app.kuaiems.equipmentBusinessBoard.spot.due')}
+              value={m?.spot_check_due ?? '—'}
+              color={getBoardHud().cyan}
+            />
+            <StatTile
+              label={t('app.kuaiems.equipmentBusinessBoard.spot.done')}
+              value={m?.spot_check_done ?? '—'}
+              color={getBoardHud().emerald}
+            />
+            <StatTile
+              label={t('app.kuaiems.equipmentBusinessBoard.fault.open')}
+              value={m?.open_fault_count ?? '—'}
+              color={getBoardHud().rose}
+            />
+            <StatTile
+              label={t('app.kuaiems.equipmentBusinessBoard.spot.pending')}
+              value={m?.spot_check_pending ?? '—'}
+              color={getBoardHud().amber}
+            />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: getBoardHud().textDim, marginBottom: 6 }}>
+              <span>{t('app.kuaiems.equipmentBusinessBoard.spot.rate')}</span>
+              <span style={{ fontFamily: clockFont, color: getBoardHud().cyan }}>{spotRate.toFixed(1)}%</span>
+            </div>
+            <div style={{ height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+              <div
+                style={{
+                  height: '100%',
+                  width: `${Math.min(100, spotRate)}%`,
+                  background: `linear-gradient(90deg, ${getBoardHud().emerald}55, ${getBoardHud().emerald})`,
+                  boxShadow: `0 0 12px ${getBoardHud().emerald}66`,
+                }}
+              />
+            </div>
+          </div>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+              gap: 8,
+              paddingTop: 8,
+              borderTop: `1px solid ${getBoardHud().borderLine}`,
+            }}
+          >
+            <StatTile
+              label={t('app.kuaiems.equipmentBusinessBoard.overview.totalAssets')}
+              value={m?.total_count ?? '—'}
+              color={getBoardHud().platformBlue}
+            />
+            <StatTile
+              label={t('app.kuaiems.equipmentBusinessBoard.overview.alertCount')}
+              value={m?.alert_count ?? alerts.length}
+              color={getBoardHud().amber}
+            />
+            <StatTile
+              label={t('app.kuaiems.equipmentBusinessBoard.overview.health')}
+              value={healthRate.toFixed(1)}
+              unit="%"
+              color={getBoardHud().emerald}
+            />
+          </div>
+        </HudPanel>
+
+        <HudPanel style={{ flex: '1 1 0', minHeight: isFullscreen ? 320 : 240, display: 'flex', flexDirection: 'column' }}>
+          <HudTitle
+            title={t('app.kuaiems.equipmentBusinessBoard.section.statusScroll')}
+            right={
+              <span style={{ fontSize: 10, color: getBoardHud().cyan, fontFamily: clockFont }}>
+                {t('app.kuaiems.equipmentBusinessBoard.statusScroll.total', { count: statusMonitors.length })}
+              </span>
+            }
+          />
+          <EquipmentHudScrollList
+            instanceId="status"
+            items={statusScrollItems}
+            emptyText={t('common.noData')}
+            minHeight={isFullscreen ? 280 : 200}
+            scrollSecondsPerItem={9}
+          />
+        </HudPanel>
+      </div>
+
+      <div
+        style={{
+          flex: '1.55 1 0',
+          minWidth: 0,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+        }}
+      >
+        <HudPanel variant="middleTop" style={{ flex: '1 1 0', minHeight: 240 }}>
+          <HudHero
+            centerTextureUrl={heroTextureUrl}
+            todayOutput={Number(m?.spot_check_done ?? 0)}
+            qualifiedRate={Number(m?.spot_check_rate ?? 0)}
+            inProgressWo={Number(m?.open_fault_count ?? 0)}
+            pendingSchedule={Number(m?.spot_check_pending ?? 0)}
+            avgCycle={Number(m?.total_count ?? 0)}
+            onTimeDelivery={healthRate}
+            reworkCount={Number(m?.spot_check_review_pending ?? 0)}
+            repairingCount={Number(m?.faulty_count ?? 0)}
+            labels={heroLabels}
+            integerAssetCount
+          />
+        </HudPanel>
+
+        <HudPanel variant="middleBottom" style={{ flex: '1 1 0', minHeight: panelBodyMinHeight, display: 'flex', flexDirection: 'column' }}>
+          <HudTitle
+            title={
+              productionPanelMode
+                ? t('app.kuaiems.equipmentBusinessBoard.section.productionOutput')
+                : t('app.kuaiems.equipmentBusinessBoard.section.runtimeLoad')
+            }
+            right={
+              <span style={{ fontSize: 10, color: getBoardHud().textDim, fontFamily: clockFont }}>
+                {productionAvgValue != null
+                  ? productionPanelMode
+                    ? t('app.kuaiems.equipmentBusinessBoard.productionOutput.avg', {
+                        meters: formatBoardMeters(productionAvgValue),
+                      })
+                    : t('app.kuaiems.equipmentBusinessBoard.runtimeLoad.avg', {
+                        hours: productionAvgValue.toFixed(0),
+                      })
+                  : null}
+                <span style={{ color: getBoardHud().cyan, marginLeft: productionAvgValue != null ? 8 : 0 }}>
+                  {t('app.kuaiems.equipmentBusinessBoard.runtimeLoad.topN', {
+                    count: productionTopRows.length,
+                  })}
+                </span>
+              </span>
+            }
+          />
+          {productionTopRows.length === 0 ? (
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: getBoardHud().textDim,
+                fontSize: 13,
+                minHeight: panelBodyMinHeight - 40,
+              }}
+            >
+              {t('common.noData')}
+            </div>
+          ) : (
+            <div
+              style={{
+                flex: 1,
+                minHeight: panelBodyMinHeight - 40,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+                paddingTop: 4,
+                overflow: 'hidden',
+              }}
+            >
+              {productionTopRows.map((row, idx) => {
+                const metric = productionPanelMode ? row.meters : row.hours;
+                const pct = (metric / productionMaxValue) * 100;
+                const barColor = resolveEquipmentHudStatusColor(row.status);
+                const titleLine = productionPanelMode
+                  ? [row.name, row.specification].filter(Boolean).join(' ')
+                  : row.name;
+                return (
+                  <div key={`${row.equipment_id}-${row.code}`} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span
+                      style={{
+                        width: 22,
+                        fontSize: 11,
+                        color: getBoardHud().textDim,
+                        fontFamily: clockFont,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {(idx + 1).toString().padStart(2, '0')}
+                    </span>
+                    <div style={{ width: 72, flexShrink: 0, fontSize: 12, color: getBoardHud().cyan, fontFamily: clockFont }}>
+                      {row.code}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 3 }}>
+                        <span
+                          style={{
+                            fontSize: 12,
+                            color: getBoardHud().textSoft,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {titleLine}
+                        </span>
+                        <span style={{ fontSize: 11, color: barColor, flexShrink: 0 }}>{row.status}</span>
+                      </div>
+                      <div style={{ height: 6, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden' }}>
+                        <div
+                          style={{
+                            height: '100%',
+                            width: `${Math.max(metric > 0 ? 4 : 0, pct)}%`,
+                            background: `linear-gradient(90deg, ${barColor}44, ${barColor})`,
+                            boxShadow: metric > 0 ? `0 0 8px ${barColor}55` : undefined,
+                            borderRadius: 3,
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <span
+                      style={{
+                        width: productionPanelMode ? 72 : 56,
+                        textAlign: 'right',
+                        fontSize: 12,
+                        color: getBoardHud().textPrimary,
+                        fontFamily: clockFont,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {metric > 0
+                        ? productionPanelMode
+                          ? formatBoardMeters(metric)
+                          : t('app.kuaiems.equipmentBusinessBoard.runtimeLoad.hours', {
+                              hours: metric.toFixed(0),
+                            })
+                        : '—'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </HudPanel>
+      </div>
+
+      <div
+        style={{
+          flex: '1 1 0',
+          minWidth: 0,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+        }}
+      >
+        <HudPanel variant="right" style={{ flex: '0 0 auto' }}>
+          <HudTitle title={t('app.kuaiems.equipmentBusinessBoard.section.statusBreakdown')} />
+          {statusBreakdown.length === 0 ? (
+            <div style={{ textAlign: 'center', color: getBoardHud().textDim, padding: '16px 0', fontSize: 13 }}>
+              {t('common.noData')}
+            </div>
+          ) : (
+            <>
+              <div
+                style={{
+                  display: 'flex',
+                  height: 14,
+                  borderRadius: 4,
+                  overflow: 'hidden',
+                  marginBottom: 12,
+                  border: `1px solid ${getBoardHud().borderLine}`,
+                }}
+              >
+                {statusBreakdown.map((row) => {
+                  const total = Math.max(1, Number(m?.total_count ?? 0));
+                  const pct = (Number(row.count) / total) * 100;
+                  if (pct <= 0) return null;
+                  return (
+                    <div
+                      key={row.status}
+                      title={`${row.status} ${row.count}`}
+                      style={{
+                        width: `${pct}%`,
+                        background: resolveEquipmentHudStatusColor(row.status),
+                        opacity: 0.85,
+                      }}
+                    />
+                  );
+                })}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {statusBreakdown.map((row) => {
+                  const total = Math.max(1, Number(m?.total_count ?? 0));
+                  const pct = (Number(row.count) / total) * 100;
+                  return (
+                    <div key={row.status}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 13 }}>
+                        <span style={{ color: getBoardHud().textSoft }}>{row.status}</span>
+                        <span style={{ color: getBoardHud().cyan, fontFamily: clockFont }}>
+                          {row.count}
+                          <span style={{ color: getBoardHud().textDim, marginLeft: 6, fontSize: 11 }}>{pct.toFixed(1)}%</span>
+                        </span>
+                      </div>
+                      <div style={{ height: 4, background: 'rgba(255,255,255,0.03)', borderRadius: 2, overflow: 'hidden' }}>
+                        <div
+                          style={{
+                            height: '100%',
+                            width: `${pct}%`,
+                            background: `linear-gradient(90deg, ${resolveEquipmentHudStatusColor(row.status)}44, ${resolveEquipmentHudStatusColor(row.status)})`,
+                            borderRadius: 2,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </HudPanel>
+
+        <HudPanel variant="right" style={{ flex: '1 1 0', minHeight: isFullscreen ? 320 : 240, display: 'flex', flexDirection: 'column' }}>
+          <HudTitle
+            title={t('app.kuaiems.equipmentBusinessBoard.section.alerts')}
+            right={
+              <span style={{ fontSize: 10, color: getBoardHud().cyan, fontFamily: clockFont }}>
+                {t('app.kuaiems.equipmentBusinessBoard.alerts.total', { count: alerts.length })}
+              </span>
+            }
+          />
+          <EquipmentHudScrollList
+            instanceId="alerts"
+            items={alertScrollItems}
+            emptyText={t('common.noData')}
+            minHeight={isFullscreen ? 280 : 200}
+            scrollSecondsPerItem={3}
+          />
+        </HudPanel>
+      </div>
+    </div>
+  );
+};
+
 /** ===== 顶部装饰标题栏（对齐参考图：中心大字 + 两侧波形） ===== */
 const HeaderDecoration: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div
@@ -972,7 +1622,7 @@ const VISIT_METRIC_FIELDS: Array<{
   { key: 'repairing_count', labelKey: 'dashboard.businessBoard.hero.repairingEquip' },
 ];
 
-const BusinessBoardPage: React.FC = () => {
+const BusinessBoardPage: React.FC<{ scope?: BusinessBoardScope }> = ({ scope = 'operations' }) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
   const currentUser = useCurrentUser();
@@ -1018,10 +1668,13 @@ const BusinessBoardPage: React.FC = () => {
     };
   }, [timeRange]);
 
-  const siteName = (useConfigStore((state) => state.configs['site_name']) as string) || '星技谷';
+  const siteName = (useConfigStore((state) => state.configs['site_name']) as string) || 'RiverEdge SaaS';
   const siteLogoUrl = useSiteLogoUrl();
 
-  const defaultBoardTitle = t('dashboard.businessBoard.siteTitle', { siteName });
+  const defaultBoardTitle =
+    scope === 'equipment'
+      ? t('app.kuaiems.equipmentBusinessBoard.siteTitle', { siteName })
+      : t('dashboard.businessBoard.siteTitle', { siteName });
   const displayBoardTitle = customBoardTitle || defaultBoardTitle;
 
   useEffect(() => {
@@ -1198,78 +1851,145 @@ const BusinessBoardPage: React.FC = () => {
   };
 
   /** ===== 真实数据 ===== */
+  const opsBoard = scope === 'operations';
   const salesQuery = useQuery({
     queryKey: ['dashboard-board', 'sales', timeRange],
     queryFn: () => getSalesSummary(dateRange.dateStart, dateRange.dateEnd),
+    enabled: opsBoard,
     refetchInterval: 60_000,
     retry: 1,
   });
   const purchaseQuery = useQuery({
     queryKey: ['dashboard-board', 'purchase', timeRange],
     queryFn: () => getPurchaseSummary(dateRange.dateStart, dateRange.dateEnd),
+    enabled: opsBoard,
     refetchInterval: 60_000,
     retry: 1,
   });
   const manufacturingQuery = useQuery({
     queryKey: ['dashboard-board', 'manufacturing', timeRange],
     queryFn: () => getManufacturingSummary(dateRange.dateStart, dateRange.dateEnd),
+    enabled: opsBoard,
     refetchInterval: 45_000,
     retry: 1,
   });
   const equipmentQuery = useQuery({
     queryKey: ['dashboard-board', 'equipment', timeRange],
     queryFn: () => getEquipmentSummary(dateRange.dateStart, dateRange.dateEnd),
+    enabled: opsBoard,
     refetchInterval: 60_000,
     retry: 1,
   });
   const metricsQuery = useQuery({
     queryKey: ['dashboard-board', 'metrics', timeRange],
     queryFn: () => getManagementMetrics(dateRange.dateStart, dateRange.dateEnd),
+    enabled: opsBoard,
     refetchInterval: 90_000,
     retry: 1,
   });
   const processQuery = useQuery({
     queryKey: ['dashboard-board', 'process'],
     queryFn: () => getProcessProgress(false),
+    enabled: opsBoard,
     refetchInterval: 45_000,
     retry: 1,
   });
   const broadcastQuery = useQuery({
     queryKey: ['dashboard-board', 'broadcast'],
     queryFn: () => getProductionBroadcast(20),
+    enabled: opsBoard,
     refetchInterval: 30_000,
     retry: 1,
   });
   const salesTop10Query = useQuery({
     queryKey: ['dashboard-board', 'sales-top10', timeRange],
     queryFn: () => getSalesTop10(dateRange.dateStart, dateRange.dateEnd),
+    enabled: opsBoard,
     refetchInterval: 120_000,
     retry: 1,
   });
   const purchaseTop10Query = useQuery({
     queryKey: ['dashboard-board', 'purchase-top10', timeRange],
     queryFn: () => getPurchaseTop10(dateRange.dateStart, dateRange.dateEnd),
+    enabled: opsBoard,
     refetchInterval: 120_000,
     retry: 1,
   });
   const activeWorkOrdersQuery = useQuery({
     queryKey: ['dashboard-board', 'active-work-orders'],
     queryFn: () => getActiveWorkOrders(50),
+    enabled: opsBoard,
     refetchInterval: 30_000,
     retry: 1,
   });
   const warehouseSummaryQuery = useQuery({
     queryKey: ['dashboard-board', 'warehouse-summary'],
     queryFn: getWarehouseSummary,
+    enabled: opsBoard,
     refetchInterval: 60_000,
     retry: 1,
   });
   const warehouseTrendQuery = useQuery({
     queryKey: ['dashboard-board', 'warehouse-trend', timeRange],
     queryFn: () => getWarehouseTrend(dateRange.dateStart, dateRange.dateEnd),
+    enabled: opsBoard,
     refetchInterval: 120_000,
     retry: 1,
   });
+  const equipmentBoardQuery = useQuery({
+    queryKey: ['dashboard-board', 'equipment-hud-board'],
+    queryFn: () => mesDashboardService.getEquipmentBoard(undefined, 50, false, 80),
+    enabled: scope === 'equipment',
+    refetchInterval: 60_000,
+    retry: 1,
+  });
+  const equipmentRealtimeStatusQuery = useQuery({
+    queryKey: ['dashboard-board', 'equipment-realtime-status'],
+    queryFn: () => equipmentStatusApi.getRealtimeStatus(),
+    enabled:
+      scope === 'equipment' &&
+      equipmentBoardQuery.isSuccess &&
+      (equipmentBoardQuery.data?.status_rows?.length ?? 0) === 0,
+    refetchInterval: 60_000,
+    retry: 1,
+  });
+
+  const equipmentHudStatusRows = useMemo((): EquipmentHudStatusRow[] => {
+    const fromBoard = equipmentBoardQuery.data?.status_rows ?? [];
+    if (fromBoard.length > 0) {
+      return fromBoard;
+    }
+    const rt = equipmentRealtimeStatusQuery.data;
+    if (!Array.isArray(rt)) {
+      return [];
+    }
+    return rt
+      .map((row) => {
+        const eq = row.equipment as { id?: number; code?: string; name?: string } | undefined;
+        if (!eq?.id) {
+          return null;
+        }
+        const other =
+          row.other_parameters && typeof row.other_parameters === 'object'
+            ? (row.other_parameters as Record<string, unknown>)
+            : {};
+        const metersRaw =
+          row.production_meters ?? other.production_meters ?? other.drawn_meters ?? other['产量米数'];
+        const specRaw = row.specification ?? other.specification ?? other['规格'];
+        return {
+          equipment_id: eq.id,
+          code: eq.code ?? '',
+          name: eq.name ?? '',
+          status: String(row.status ?? '正常'),
+          is_online: Boolean(row.is_online),
+          runtime_hours: row.runtime_hours != null ? Number(row.runtime_hours) : null,
+          production_meters: metersRaw != null ? Number(metersRaw) : null,
+          specification: specRaw != null ? String(specRaw) : null,
+          monitored_at: row.monitored_at ?? null,
+        };
+      })
+      .filter((row): row is EquipmentHudStatusRow => row != null);
+  }, [equipmentBoardQuery.data?.status_rows, equipmentRealtimeStatusQuery.data]);
 
   const [woPage, setWoPage] = useState(0);
   const WO_PAGE_SIZE = 5;
@@ -1633,7 +2353,7 @@ const BusinessBoardPage: React.FC = () => {
           </div>
         </div>
 
-        {canManageVisitMode ? (
+        {canManageVisitMode && scope === 'operations' ? (
           <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${token.colorBorderSecondary}` }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
               <div style={{ fontSize: 13, fontWeight: 600 }}>
@@ -1688,6 +2408,15 @@ const BusinessBoardPage: React.FC = () => {
           boxSizing: 'border-box',
         }}
       >
+        {scope === 'equipment' ? (
+          <EquipmentScopeHudColumns
+            board={equipmentBoardQuery.data}
+            statusRows={equipmentHudStatusRows}
+            heroTextureUrl={heroTextureUrl}
+            isFullscreen={isFullscreen}
+          />
+        ) : (
+        <>
         {/* Left */}
         <div
           style={{
@@ -2252,6 +2981,8 @@ const BusinessBoardPage: React.FC = () => {
             />
           </HudPanel>
         </div>
+        </>
+        )}
       </div>
 
       {/* 底部信息条 */}
@@ -2274,7 +3005,9 @@ const BusinessBoardPage: React.FC = () => {
         }}
       >
         <span>
-          SYS - OK - {broadcastItems.length.toString().padStart(2, '0')} BROADCAST - {processItems.length.toString().padStart(2, '0')} PROCESS
+          {scope === 'equipment'
+            ? `EQUIP - OK - ${(equipmentBoardQuery.data?.alerts?.length ?? 0).toString().padStart(2, '0')} ALERT - ${(equipmentBoardQuery.data?.metrics?.total_count ?? 0).toString().padStart(2, '0')} ASSET`
+            : `SYS - OK - ${broadcastItems.length.toString().padStart(2, '0')} BROADCAST - ${processItems.length.toString().padStart(2, '0')} PROCESS`}
         </span>
         <span>{currentTime}</span>
       </div>

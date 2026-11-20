@@ -28,7 +28,10 @@ const partnerFormSlice = (d: Customer | Supplier) => ({
   legalRepresentative: d.legalRepresentative ?? undefined,
   enterpriseTypeCode: d.enterpriseTypeCode ?? undefined,
   paymentTermsDays: optNum(d.paymentTermsDays as number | string | undefined),
-  settlementMethodCode: d.settlementMethodCode ?? undefined,
+  defaultPaymentMethodCode: d.defaultPaymentMethodCode ?? undefined,
+  settlementTermsCode: d.settlementTermsCode ?? undefined,
+  defaultCurrencyCode: d.defaultCurrencyCode ?? undefined,
+  defaultExchangeRate: optNum(d.defaultExchangeRate as number | string | undefined),
   financeContactName: d.financeContactName ?? undefined,
   financeContactPhone: d.financeContactPhone ?? undefined,
   financeContactEmail: d.financeContactEmail ?? undefined,
@@ -70,7 +73,7 @@ export function normalizePartnerContactsForSubmit(
 ): PartnerContact[] {
   if (!Array.isArray(contacts)) return [];
   return contacts
-    .map((row): PartnerContact | null => {
+    .map((row) => {
       const contactPerson = row.contactPerson?.trim() || undefined;
       const contactTitle = row.contactTitle?.trim() || undefined;
       const phone = row.phone?.trim() || undefined;

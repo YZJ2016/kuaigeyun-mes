@@ -18,7 +18,11 @@ import { layoutShellQueryOptions } from '../../../config/reactQuery';
 
 import { MarkerTag } from '../../../constants/statusBadges';
 
-import { getInstalledApplicationList } from '../../../services/application';
+import {
+  getInstalledApplicationList,
+  installedApplicationsQueryKey,
+} from '../../../services/application';
+import { getTenantId } from '../../../utils/auth';
 
 import {
 
@@ -848,13 +852,9 @@ export function DashboardUpdateLogModal({ open, onClose, t }: DashboardUpdateLog
   const [activeTab, setActiveTab] = useState<PlatformUpdateTabKey>('all');
 
   const { data: installedApps } = useQuery({
-
-    queryKey: ['installedApplications', { is_active: true }],
-
+    queryKey: installedApplicationsQueryKey(getTenantId()),
     queryFn: () => getInstalledApplicationList({ is_active: true }),
-
     ...layoutShellQueryOptions,
-
   });
 
   const enabledDedicatedAppCodes = useMemo(

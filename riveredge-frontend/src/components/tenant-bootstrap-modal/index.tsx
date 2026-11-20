@@ -28,15 +28,24 @@ import {
 
 type StepStatus = 'pending' | 'running' | 'success' | 'error';
 
+const BOOTSTRAP_STATUS_QUERY_KEY = ['tenantBootstrapStatus'] as const;
+
 const TenantBootstrapModal: React.FC = () => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const startedRef = useRef(false);
+  const finishedRef = useRef(false);
 
-  const { data: status, refetch: refetchStatus } = useQuery({
-    queryKey: ['tenantBootstrapStatus'],
+  const {
+    data: status,
+    refetch: refetchStatus,
+    isError: bootstrapStatusError,
+    error: bootstrapStatusErr,
+  } = useQuery({
+    queryKey: BOOTSTRAP_STATUS_QUERY_KEY,
     queryFn: getBootstrapStatus,
     staleTime: 0,
+    retry: false,
   });
 
   const [visible, setVisible] = useState(false);
@@ -45,6 +54,11 @@ const TenantBootstrapModal: React.FC = () => {
   const [stepStatus, setStepStatus] = useState<Record<string, StepStatus>>({});
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
   const [bootstrapError, setBootstrapError] = useState<string>();
+  const ghostTenant =
+    bootstrapStatusError &&
+    /组织(?:\s*'[^']*'\s*)?不存在/.test(
+      String((bootstrapStatusErr as Error)?.message || ''),
+    );
 
   const steps = status?.steps ?? [];
   const completedCount = steps.filter((s) => stepStatus[s.key] === 'success').length;
@@ -55,6 +69,15 @@ const TenantBootstrapModal: React.FC = () => {
     queryClient.invalidateQueries({ queryKey: ['dashboard-menu-tree'] });
     queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
     useGlobalStore.getState().incrementApplicationMenuVersion();
+  }, [queryClient]);
+
+  const markBootstrapDoneLocally = useCallback(() => {
+    finishedRef.current = true;
+    queryClient.setQueryData(BOOTSTRAP_STATUS_QUERY_KEY, (old: any) =>
+      old
+        ? { ...old, pending: false, bootstrap_completed: true }
+        : { pending: false, bootstrap_completed: true, steps: [] },
+    );
   }, [queryClient]);
 
   const runBootstrap = useCallback(async () => {
@@ -95,35 +118,72 @@ const TenantBootstrapModal: React.FC = () => {
 
     try {
       await completeBootstrap();
+      markBootstrapDoneLocally();
       refreshMenus();
       await refetchStatus();
       setFinished(true);
+      setVisible(false);
     } catch (error: any) {
       setBootstrapError(error?.message || t('components.tenantBootstrap.completeFailed'));
     } finally {
       setRunning(false);
     }
-  }, [refetchStatus, refreshMenus, stepStatus, steps, t]);
+  }, [markBootstrapDoneLocally, refetchStatus, refreshMenus, stepStatus, steps, t]);
 
   useEffect(() => {
+    // 幽灵组织 / 组织不存在：不要当成「新组织待初始化」自动跑步骤
+    if (ghostTenant || finishedRef.current || status?.bootstrap_completed) {
+      setVisible(ghostTenant);
+      if (ghostTenant) {
+        setBootstrapError(
+          t('components.tenantBootstrap.ghostTenant', {
+            detail: String((bootstrapStatusErr as Error)?.message || ''),
+          }),
+        );
+        setRunning(false);
+      }
+      return;
+    }
     if (status?.pending) {
       setVisible(true);
     } else {
       setVisible(false);
     }
-  }, [status?.pending]);
+  }, [bootstrapStatusErr, ghostTenant, status?.bootstrap_completed, status?.pending, t]);
 
   useEffect(() => {
-    if (!status?.pending || running || startedRef.current || !steps.length) {
+    if (
+      finishedRef.current
+      || ghostTenant
+      || !status?.pending
+      || status?.bootstrap_completed
+      || running
+      || startedRef.current
+      || !steps.length
+    ) {
       return;
     }
     startedRef.current = true;
     void runBootstrap();
-  }, [runBootstrap, running, status?.pending, steps.length]);
+  }, [
+    ghostTenant,
+    runBootstrap,
+    running,
+    status?.bootstrap_completed,
+    status?.pending,
+    steps.length,
+  ]);
 
   const handleEnter = () => {
+    markBootstrapDoneLocally();
     setVisible(false);
     refreshMenus();
+    // 进度已满但完成接口曾被并发写冲掉时，进入系统时再落一次完成标志
+    if (!status?.bootstrap_completed) {
+      void completeBootstrap()
+        .then(() => refetchStatus())
+        .catch(() => undefined);
+    }
   };
 
   if (!visible) {
@@ -137,15 +197,27 @@ const TenantBootstrapModal: React.FC = () => {
       closable={false}
       mask={{ closable: false }}
       keyboard={false}
-      footer={running ? null : finished ? undefined : (
-        <Button type="primary" icon={<ReloadOutlined />} onClick={() => void runBootstrap()}>
-          {t('common.retry')}
-        </Button>
-      )}
+      footer={
+        ghostTenant
+          ? (
+            <Button type="primary" onClick={() => setVisible(false)}>
+              {t('components.tenantBootstrap.closeAndSwitchTenant')}
+            </Button>
+          )
+          : running
+            ? null
+            : finished
+              ? undefined
+              : (
+                <Button type="primary" icon={<ReloadOutlined />} onClick={() => void runBootstrap()}>
+                  {t('common.retry')}
+                </Button>
+              )
+      }
       okText={t('components.tenantBootstrap.enterSystem')}
       cancelButtonProps={{ style: { display: 'none' } }}
       onOk={handleEnter}
-      okButtonProps={{ disabled: running }}
+      okButtonProps={{ disabled: running || ghostTenant }}
       width={560}
       destroyOnHidden
     >

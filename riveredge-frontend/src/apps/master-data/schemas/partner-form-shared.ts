@@ -25,14 +25,23 @@ const enterpriseTypeOptions: FieldConfig['options'] = [
   { labelKey: 'field.partner.enterpriseType.other', value: 'other' },
 ];
 
-const settlementMethodOptions: FieldConfig['options'] = [
+const defaultPaymentMethodOptions: FieldConfig['options'] = [
   { labelKey: 'field.partner.settlementMethod.cash', value: 'cash' },
   { labelKey: 'field.partner.settlementMethod.bankTransfer', value: 'bank_transfer' },
   { labelKey: 'field.partner.settlementMethod.bankAcceptance', value: 'bank_acceptance' },
   { labelKey: 'field.partner.settlementMethod.commercialAcceptance', value: 'commercial_acceptance' },
-  { labelKey: 'field.partner.settlementMethod.monthly', value: 'monthly' },
-  { labelKey: 'field.partner.settlementMethod.prepaid', value: 'prepaid' },
   { labelKey: 'field.partner.settlementMethod.other', value: 'other' },
+];
+
+const settlementTermsOptions: FieldConfig['options'] = [
+  { labelKey: 'field.partner.settlementMethod.prepaid', value: 'prepaid' },
+  { labelKey: 'field.partner.settlementMethod.payBeforeShip', value: 'pay_before_ship' },
+  { labelKey: 'field.partner.settlementMethod.spot', value: 'spot' },
+  { labelKey: 'field.partner.settlementMethod.cod', value: 'cod' },
+  { labelKey: 'field.partner.settlementMethod.netTerms', value: 'net_terms' },
+  { labelKey: 'field.partner.settlementMethod.payOnInvoice', value: 'pay_on_invoice' },
+  { labelKey: 'field.partner.settlementMethod.installment', value: 'installment' },
+  { labelKey: 'field.partner.settlementMethod.progress', value: 'progress' },
 ];
 
 /** 开票资料 TAB（开票地址、电话分栏） */
@@ -140,13 +149,49 @@ const partnerExtendedSettlementFormFields: FieldConfig[] = [
     fieldProps: { min: 0, precision: 0, style: { width: '100%' } },
   },
   {
-    name: 'settlementMethodCode',
+    name: 'defaultPaymentMethodCode',
     type: 'select',
-    labelKey: 'field.partner.settlementMethod',
-    placeholderKey: 'field.partner.settlementMethodPlaceholder',
-    options: settlementMethodOptions,
+    labelKey: 'field.partner.defaultPaymentMethod',
+    placeholderKey: 'field.partner.defaultPaymentMethodPlaceholder',
+    options: defaultPaymentMethodOptions,
     allowClear: true,
     colSpan: 12,
+  },
+  {
+    name: 'settlementTermsCode',
+    type: 'select',
+    labelKey: 'field.partner.settlementTerms',
+    placeholderKey: 'field.partner.settlementTermsPlaceholder',
+    extraKey: 'field.partner.settlementTermsDesc',
+    extraAsTooltip: true,
+    options: settlementTermsOptions,
+    allowClear: true,
+    colSpan: 12,
+  },
+  {
+    name: 'defaultCurrencyCode',
+    type: 'select',
+    labelKey: 'field.partner.defaultCurrency',
+    placeholderKey: 'field.partner.defaultCurrencyPlaceholder',
+    extraKey: 'field.partner.defaultCurrencyDesc',
+    extraAsTooltip: true,
+    options: [
+      { labelKey: 'field.partner.currency.cny', value: 'CNY' },
+      { labelKey: 'field.partner.currency.usd', value: 'USD' },
+      { labelKey: 'field.partner.currency.eur', value: 'EUR' },
+    ],
+    allowClear: true,
+    colSpan: 12,
+  },
+  {
+    name: 'defaultExchangeRate',
+    type: 'number',
+    labelKey: 'field.partner.defaultExchangeRate',
+    placeholderKey: 'field.partner.defaultExchangeRatePlaceholder',
+    extraKey: 'field.partner.defaultExchangeRateDesc',
+    extraAsTooltip: true,
+    colSpan: 12,
+    fieldProps: { min: 0.000001, precision: 4, style: { width: '100%' } },
   },
 ];
 

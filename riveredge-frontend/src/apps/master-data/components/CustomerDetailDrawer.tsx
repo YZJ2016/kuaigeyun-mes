@@ -12,10 +12,13 @@ import { customerApi, getDictionaryOptions } from '../services/supply-chain';
 import type { Customer } from '../types/supply-chain';
 import { resolveDictionaryDisplayLabel } from '../../../utils/loadImportDictionaryValues';
 import {
+  customerBizFunctionLabel,
+  customerPartnerTypeLabel,
   partnerEnterpriseTypeLabel,
   partnerInvoiceTypeLabel,
   partnerRevenueRecognitionOverrideLabel,
-  partnerSettlementMethodLabel,
+  partnerDefaultPaymentMethodLabel,
+  partnerSettlementTermsLabel,
   partnerTaxpayerTypeLabel,
 } from '../utils/partner-static-labels';
 import { renderMasterActiveTag } from '../utils/masterListPresentation';
@@ -247,6 +250,16 @@ export const CustomerDetailDrawer: React.FC<CustomerDetailDrawerProps> = ({
         render: (_, record) => partnerEnterpriseTypeLabel(t, record.enterpriseTypeCode),
       },
       {
+        title: t('field.customer.partnerType'),
+        dataIndex: 'partnerType',
+        render: (_, record) => customerPartnerTypeLabel(t, record.partnerType),
+      },
+      {
+        title: t('field.customer.bizFunction'),
+        dataIndex: 'bizFunction',
+        render: (_, record) => customerBizFunctionLabel(t, record.bizFunction),
+      },
+      {
         title: t('field.partner.paymentTermsDays'),
         dataIndex: 'paymentTermsDays',
         render: (_, record) =>
@@ -255,9 +268,14 @@ export const CustomerDetailDrawer: React.FC<CustomerDetailDrawerProps> = ({
             : '—',
       },
       {
-        title: t('field.partner.settlementMethod'),
-        dataIndex: 'settlementMethodCode',
-        render: (_, record) => partnerSettlementMethodLabel(t, record.settlementMethodCode),
+        title: t('field.partner.defaultPaymentMethod'),
+        dataIndex: 'defaultPaymentMethodCode',
+        render: (_, record) => partnerDefaultPaymentMethodLabel(t, record.defaultPaymentMethodCode),
+      },
+      {
+        title: t('field.partner.settlementTerms'),
+        dataIndex: 'settlementTermsCode',
+        render: (_, record) => partnerSettlementTermsLabel(t, record.settlementTermsCode),
       },
       { title: t('field.partner.deliveryContactName'), dataIndex: 'deliveryContactName' },
       { title: t('field.partner.deliveryContactPhone'), dataIndex: 'deliveryContactPhone' },

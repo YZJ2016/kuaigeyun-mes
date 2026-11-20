@@ -243,6 +243,14 @@ export function useCustomFields({
           }
           const num = Number(value);
           value = Number.isFinite(num) ? num : null;
+        } else if (
+          field.field_type === 'number' ||
+          field.field_type === 'associated_object'
+        ) {
+          // 空串勿交给后端 Decimal，否则会报 ConversionSyntax
+          if (value == null || value === '' || (typeof value === 'string' && !value.trim())) {
+            value = null;
+          }
         }
         if (value === undefined) {
           value = null;

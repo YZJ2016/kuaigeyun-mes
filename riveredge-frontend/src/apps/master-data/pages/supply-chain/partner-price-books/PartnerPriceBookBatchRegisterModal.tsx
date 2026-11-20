@@ -178,8 +178,8 @@ export const PartnerPriceBookBatchRegisterModal: React.FC<PartnerPriceBookBatchR
       lines,
       priceType: values.priceType === 'tax_exclusive' ? 'tax_exclusive' : 'tax_inclusive',
       taxRate: values.taxRate != null ? Number(values.taxRate) : undefined,
-      effectiveFrom: values.effectiveFrom ? values.effectiveFrom.format('YYYY-MM-DD') : undefined,
-      effectiveTo: values.effectiveTo ? values.effectiveTo.format('YYYY-MM-DD') : undefined,
+      effectiveFrom: values.effectiveFrom ? values.effectiveFrom.format('YYYY-MM-DD') : null,
+      effectiveTo: values.effectiveTo ? values.effectiveTo.format('YYYY-MM-DD') : null,
       remark: values.remark?.trim() || undefined,
       isActive: values.isActive !== false,
       syncPartnerAlias: values.syncPartnerAlias !== false,
@@ -443,18 +443,63 @@ export const PartnerPriceBookBatchRegisterModal: React.FC<PartnerPriceBookBatchR
             </Form.Item>
           </Col>
           <Col xs={24} sm={6}>
-            <Form.Item name="taxRate" label={t('app.master-data.defaults.defaultTaxRate', '默认税率')}>
-              <InputNumber min={0} max={100} precision={2} style={{ width: '100%' }} />
+            <Form.Item
+              noStyle
+              shouldUpdate={(prev, cur) => prev.priceType !== cur.priceType}
+            >
+              {() => {
+                const priceType = (formRef.current?.getFieldValue('priceType') ??
+                  'tax_inclusive') as PriceTypeValue;
+                return (
+                  <Form.Item
+                    name="taxRate"
+                    label={t('app.master-data.defaults.defaultTaxRate', '默认税率')}
+                    rules={
+                      priceType === 'tax_inclusive'
+                        ? [
+                            {
+                              required: true,
+                              message: t('app.master-data.priceBook.taxRateRequiredWhenInclusive'),
+                            },
+                            {
+                              type: 'number',
+                              min: 0.01,
+                              message: t('app.master-data.priceBook.taxRateRequiredWhenInclusive'),
+                            },
+                          ]
+                        : undefined
+                    }
+                  >
+                    <InputNumber min={0} max={100} precision={2} style={{ width: '100%' }} />
+                  </Form.Item>
+                );
+              }}
             </Form.Item>
           </Col>
           <Col xs={24} sm={6}>
-            <Form.Item name="effectiveFrom" label={t('app.master-data.priceBook.effectiveFrom', '生效起始')}>
-              <DatePicker style={{ width: '100%' }} />
+            <Form.Item
+              name="effectiveFrom"
+              label={t('app.master-data.priceBook.effectiveFrom', '生效起始')}
+              extra={t('app.master-data.priceBook.effectiveOpenEndedHelp', '不填表示一直生效')}
+            >
+              <DatePicker
+                style={{ width: '100%' }}
+                allowClear
+                placeholder={t('app.master-data.priceBook.effectiveOpenEnded', '一直生效')}
+              />
             </Form.Item>
           </Col>
           <Col xs={24} sm={6}>
-            <Form.Item name="effectiveTo" label={t('app.master-data.priceBook.effectiveTo', '生效截止')}>
-              <DatePicker style={{ width: '100%' }} />
+            <Form.Item
+              name="effectiveTo"
+              label={t('app.master-data.priceBook.effectiveTo', '生效截止')}
+              extra={t('app.master-data.priceBook.effectiveOpenEndedHelp', '不填表示一直生效')}
+            >
+              <DatePicker
+                style={{ width: '100%' }}
+                allowClear
+                placeholder={t('app.master-data.priceBook.effectiveOpenEnded', '一直生效')}
+              />
             </Form.Item>
           </Col>
           <Col xs={24} sm={2}>

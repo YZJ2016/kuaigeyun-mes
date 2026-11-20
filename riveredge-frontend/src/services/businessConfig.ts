@@ -56,15 +56,14 @@ export async function getBusinessConfig(): Promise<BusinessConfig> {
 }
 
 /** 平台文件上传硬上限（与后端 infra MAX_FILE_SIZE 默认一致，单位 MB） */
-export const PLATFORM_MAX_UPLOAD_SIZE_MB = 100;
+export const PLATFORM_MAX_UPLOAD_SIZE_MB = 200;
 
-/** 图纸主文件/附件上传大小上限（MB，默认 100） */
+/** 图纸主文件/附件上传大小上限（MB，默认 200，可配至平台硬上限） */
 export function resolveDrawingMaxUploadSizeMb(
   config: BusinessConfig | null | undefined,
 ): number {
   const raw = config?.parameters?.master_data?.drawing_max_upload_size_mb;
-
-  let mb = PLATFORM_MAX_UPLOAD_SIZE_MB;
+  let mb = 200;
   if (raw != null) {
     const parsed = Number(raw);
     if (Number.isFinite(parsed)) {
@@ -72,23 +71,6 @@ export function resolveDrawingMaxUploadSizeMb(
     }
   }
   return Math.max(1, Math.min(PLATFORM_MAX_UPLOAD_SIZE_MB, mb));
-}
-
-/**
- * 单据物料下拉是否允许「快速新增物料」。
- * 读取 parameters.master_data.allow_material_quick_create；缺省 true（保持历史行为）。
- */
-export function isMaterialQuickCreateAllowed(
-  config: BusinessConfig | null | undefined,
-): boolean {
-  const raw = config?.parameters?.master_data?.allow_material_quick_create;
-  if (raw === undefined || raw === null) return true;
-  if (typeof raw === 'boolean') return raw;
-  if (typeof raw === 'number') return raw !== 0;
-  const text = String(raw).trim().toLowerCase();
-  if (['0', 'false', 'no', 'off', 'n'].includes(text)) return false;
-  if (['1', 'true', 'yes', 'on', 'y'].includes(text)) return true;
-  return true;
 }
 
 export function resolveDrawingMaxUploadBytes(
@@ -100,6 +82,34 @@ export function resolveDrawingMaxUploadBytes(
 /** 是否开启试运营模式（读取 parameters.common.trial_run_mode，默认 false） */
 export function isTrialRunModeEnabled(config: BusinessConfig | null | undefined): boolean {
   return Boolean(config?.parameters?.common?.trial_run_mode);
+}
+
+/**
+ * 单据物料下拉是否允许「快速新增物料」。
+ * 读取 parameters.master_data.allow_material_quick_create；缺省 true（保持历史行为）。
+ */
+export type MaterialCodeSearchMode = 'fuzzy' | 'prefix';
+
+export function resolveMaterialCodeSearchMode(
+  config: BusinessConfig | null | undefined,
+): MaterialCodeSearchMode {
+  const raw = config?.parameters?.master_data?.material_code_search_mode;
+  if (raw === 'prefix' || raw === 'fuzzy') return raw;
+  const text = String(raw ?? '').trim().toLowerCase();
+  return text === 'prefix' ? 'prefix' : 'fuzzy';
+}
+
+export function isMaterialQuickCreateAllowed(
+  config: BusinessConfig | null | undefined,
+): boolean {
+  const raw = config?.parameters?.master_data?.allow_material_quick_create;
+  if (raw === undefined || raw === null) return true;
+  if (typeof raw === 'boolean') return raw;
+  if (typeof raw === 'number') return raw !== 0;
+  const text = String(raw).trim().toLowerCase();
+  if (['0', 'false', 'no', 'off', 'n'].includes(text)) return false;
+  if (['1', 'true', 'yes', 'on', 'y'].includes(text)) return true;
+  return true;
 }
 
 /** 详情抽屉全链路模式：关闭 / 启用（含节点时间） / 只显示单据（不展示节点创建时间） */

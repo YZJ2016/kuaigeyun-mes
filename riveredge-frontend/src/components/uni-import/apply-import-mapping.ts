@@ -1,9 +1,20 @@
-/** 导入表头规范化：去首尾空白、去掉必填星号 */
+/** 导入表头规范化：去掉换行/空白折叠、首尾空白、必填星号（兼容 Excel 单元格内换行表头） */
 export function normalizeImportHeader(name: unknown): string {
   return String(name ?? '')
+    .replace(/[\r\n\u2028\u2029]+/g, '')
+    .replace(/[\t\u00a0]+/g, ' ')
     .trim()
     .replace(/^\*+/, '')
     .trim();
+}
+
+/**
+ * 客户「工资明细总表」等：首行多为「年份 / 2026年」，真实表头在第 2 行。
+ * 用于映射弹窗默认表头行、以及确认导入前的列投影。
+ */
+export function isImportYearPreambleFirstCell(value: unknown): boolean {
+  const first = normalizeImportHeader(value);
+  return first === '年份' || first === '年度' || /^year$/i.test(first);
 }
 
 /** 系统列索引 → Excel 列索引；-1 表示不导入 */

@@ -25,11 +25,13 @@ import {
   Space,
   Table,
 } from 'antd';
+import { CheckCircleOutlined, StopOutlined } from '@ant-design/icons';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
 import { buildDocumentAuditColumns } from '../../../../apps/kuaizhizao/pages/shared/documentAuditColumns';
 import { ListPageTemplate } from '../../../../components/layout-templates';
+import { UniBatchMenuButton } from '../../../../components/uni-batch';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
 import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
@@ -49,6 +51,7 @@ import {
   getDepartmentDatasetBinding,
   putDepartmentDatasetBinding,
   syncDepartmentsFromDataset,
+  batchUpdateDepartmentsStatus,
   type DepartmentDatasetBindingPayload,
   type PresetDepartmentItem,
   Department,
@@ -57,7 +60,10 @@ import {
 import { executeDatasetQuery, getDatasetList } from '../../../../services/dataset';
 import { downloadFile } from '../../../../utils';
 import { useTrialRunMode } from '../../../../hooks/useTrialRunMode';
-import { resolvePresetDepartmentName } from '../../../../utils/presetEntityI18n';
+import {
+  resolvePresetDepartmentCatalogName,
+  resolvePresetDepartmentName,
+} from '../../../../utils/presetEntityI18n';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../utils/format';
 import { importExcelMatrixInChunks } from '../../../../utils/chunkedBulkImport';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
@@ -268,7 +274,7 @@ const DepartmentListPage: React.FC = () => {
     }
     let v: Record<string, unknown>;
     try {
-      v = { ...await bindingCfgForm.validateFields() };
+      v = await bindingCfgForm.validateFields();
     } catch {
       return;
     }
@@ -491,6 +497,43 @@ const DepartmentListPage: React.FC = () => {
     }
   };
 
+  const reportBatchStatusResult = useCallback(
+    (result: { success_count: number; failure_count: number; errors?: Array<{ message: string }> }) => {
+      if (result.failure_count > 0) {
+        const reasonHint =
+          result.errors && result.errors.length > 0
+            ? `：${result.errors
+                .slice(0, 3)
+                .map((e) => e.message)
+                .join('；')}${result.errors.length > 3 ? '…' : ''}`
+            : '';
+        messageApi.warning(
+          t('field.department.batchUpdatePartial', {
+            success: result.success_count,
+            fail: result.failure_count,
+          }) + reasonHint,
+        );
+      } else {
+        messageApi.success(t('field.department.batchUpdateSuccess', { count: result.success_count }));
+      }
+      actionRef.current?.reload();
+    },
+    [messageApi, t],
+  );
+
+  const handleBatchStatus = useCallback(
+    async (uuids: React.Key[], isActive: boolean) => {
+      if (!uuids.length) return;
+      try {
+        const result = await batchUpdateDepartmentsStatus(uuids as string[], isActive);
+        reportBatchStatusResult(result);
+      } catch (error: any) {
+        messageApi.error(error.message || t('common.operationFailed'));
+      }
+    },
+    [messageApi, reportBatchStatusResult, t],
+  );
+
   const handleImport = async (data: any[][]) => {
     try {
       const result = await importExcelMatrixInChunks({
@@ -525,7 +568,7 @@ const DepartmentListPage: React.FC = () => {
     }
   };
 
-  const columns = useMemo<ProColumns<Department>[]>(() => alignProColumns<Department>([
+  const columns = useMemo<ProColumns<Department>[]>(() => alignProColumns([
     {
       title: t('field.department.name'),
       dataIndex: 'name',
@@ -671,6 +714,35 @@ const DepartmentListPage: React.FC = () => {
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
+        toolBarActionsAfterDelete={[
+          <UniBatchMenuButton
+            key="department-batch-actions"
+            selectedRowKeys={selectedRowKeys}
+            buttonText={t('components.uniBatch.batchActions')}
+            menuItems={[
+              {
+                key: 'batch-enable',
+                label: t('field.department.batchEnable'),
+                icon: <CheckCircleOutlined />,
+                requireConfirm: true,
+                confirmTitle: t('field.department.batchEnableConfirmTitle'),
+                confirmDescription: (c) =>
+                  t('field.department.batchEnableConfirmDescription', { count: c }),
+                onClick: (keys) => handleBatchStatus(keys, true),
+              },
+              {
+                key: 'batch-disable',
+                label: t('field.department.batchDisable'),
+                icon: <StopOutlined />,
+                requireConfirm: true,
+                confirmTitle: t('field.department.batchDisableConfirmTitle'),
+                confirmDescription: (c) =>
+                  t('field.department.batchDisableConfirmDescription', { count: c }),
+                onClick: (keys) => handleBatchStatus(keys, false),
+              },
+            ]}
+          />,
+        ]}
         toolBarRender={() => [
           trialRunMode && (
           <Button {...rowActionKind('import')}
@@ -717,6 +789,7 @@ const DepartmentListPage: React.FC = () => {
           showSizeChanger: true,
           showQuickJumper: true,
         }}
+        showAdvancedSearch={true}
         expandable={{
           expandedRowKeys,
           onExpandedRowsChange: (keys) => setExpandedRowKeys(keys as React.Key[]),
@@ -785,7 +858,8 @@ const DepartmentListPage: React.FC = () => {
               title: t('field.department.name'),
               dataIndex: 'name',
               width: 140,
-              render: (_: unknown, row: PresetDepartmentItem) => resolvePresetDepartmentName(row, t),
+              render: (_: unknown, row: PresetDepartmentItem) =>
+                resolvePresetDepartmentCatalogName(row, t),
             },
             { title: t('field.department.code'), dataIndex: 'code', width: 100 },
             { title: t('field.department.sortOrder'), dataIndex: 'sort_order', width: 88 },

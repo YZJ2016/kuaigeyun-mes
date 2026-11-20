@@ -4,7 +4,7 @@
  */
 import { useEffect, useState } from 'react';
 import type { TFunction } from 'i18next';
-import { Avatar, theme } from 'antd';
+import { Avatar, Tooltip, theme } from 'antd';
 import { MarkerTag, StatusTag } from '../../../constants/statusBadges';
 import {
   getAvatarFontSize,
@@ -15,6 +15,90 @@ import {
   getTextAvatarCircleStyle,
   isTextAvatarDisplay,
 } from '../../../utils/avatar';
+import type { UserOauthBindings } from '../../../services/user';
+import wecomLogo from '../../../assets/social/qwei.svg';
+import dingtalkLogo from '../../../assets/social/dingtalk.svg';
+import feishuLogo from '../../../assets/social/feishu.svg';
+
+const OAUTH_BIND_ICON_ITEMS: Array<{
+  key: keyof UserOauthBindings;
+  src: string;
+  color: string;
+  titleKey: string;
+}> = [
+  {
+    key: 'wecom',
+    src: wecomLogo,
+    color: '#78C340',
+    titleKey: 'field.user.oauthBoundWecom',
+  },
+  {
+    key: 'dingtalk',
+    src: dingtalkLogo,
+    color: '#0075FF',
+    titleKey: 'field.user.oauthBoundDingtalk',
+  },
+  {
+    key: 'feishu',
+    src: feishuLogo,
+    color: '#3370FF',
+    titleKey: 'field.user.oauthBoundFeishu',
+  },
+];
+
+/** 用户名旁：已绑定企微/钉钉/飞书时显示小品牌图标 */
+export function UserOauthBindingIcons({
+  bindings,
+  t,
+}: {
+  bindings?: UserOauthBindings | null;
+  t: TFunction;
+}) {
+  if (!bindings) {
+    return null;
+  }
+  const items = OAUTH_BIND_ICON_ITEMS.filter((item) => Boolean(bindings[item.key]));
+  if (items.length === 0) {
+    return null;
+  }
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        flexShrink: 0,
+        marginLeft: 6,
+        verticalAlign: 'middle',
+      }}
+    >
+      {items.map((item) => (
+        <Tooltip key={item.key} title={t(item.titleKey)}>
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 16,
+              height: 16,
+              borderRadius: '50%',
+              background: item.color,
+              flexShrink: 0,
+            }}
+          >
+            <img
+              src={item.src}
+              alt=""
+              width={10}
+              height={10}
+              style={{ display: 'block', objectFit: 'contain' }}
+            />
+          </span>
+        </Tooltip>
+      ))}
+    </span>
+  );
+}
 
 export function SystemUserAvatar({
   avatarUuid,

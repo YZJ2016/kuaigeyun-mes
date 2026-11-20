@@ -5,7 +5,7 @@
  * 支持打印模板的 CRUD 操作和模板渲染功能。
  */
 
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useCallback, useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProForm } from '@ant-design/pro-components';
@@ -17,7 +17,9 @@ import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/syste
 import { DeleteOutlined, EyeOutlined, PrinterOutlined, FileTextOutlined, EditOutlined, HighlightOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { rowActionKind, rowActionLabelKeep } from '../../../../components/uni-action';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG, TwoColumnLayout } from '../../../../components/layout-templates';
+import { useResourceCategoryPanel } from '../../shared/useResourceCategoryPanel';
+import { type ResourceCategoryListFilter } from '../../../../services/resourceCategory';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
 import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
@@ -108,6 +110,36 @@ const PrintTemplateListPage: React.FC = () => {
   const { token } = useToken();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
+
+  const reloadList = useCallback(() => {
+    actionRef.current?.reload();
+  }, []);
+
+  const categoryListFilterRef = useRef<ResourceCategoryListFilter>({});
+
+  const handleCategorySelectionChange = useCallback(
+    (nextFilter: ResourceCategoryListFilter) => {
+      categoryListFilterRef.current = nextFilter;
+      reloadList();
+    },
+    [reloadList],
+  );
+
+  const {
+    leftPanel: categoryLeftPanel,
+    listFilter: categoryListFilter,
+    selectedCategoryKey,
+    categorySelectOptions,
+    reloadCategories,
+    categoryFormModal,
+  } = useResourceCategoryPanel({
+    resourceType: 'print_template',
+    onSelectionChange: handleCategorySelectionChange,
+    onFunctionPresetsApplied: reloadList,
+  });
+
+  categoryListFilterRef.current = categoryListFilter;
+
   const detailRetryUuidRef = useRef<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [allTemplates, setAllTemplates] = useState<PrintTemplate[]>([]); // 用于统计
@@ -160,6 +192,7 @@ const PrintTemplateListPage: React.FC = () => {
         code: '',
       is_active: true,
       is_default: false,
+      category_uuid: categoryListFilter.category_uuid,
     });
     setModalVisible(true);
   };
@@ -183,6 +216,7 @@ const PrintTemplateListPage: React.FC = () => {
         description: detail.description,
         is_active: detail.is_active,
         is_default: detail.is_default,
+        category_uuid: detail.category_uuid || undefined,
       });
       setModalVisible(true);
     } catch (error: any) {
@@ -330,6 +364,7 @@ const PrintTemplateListPage: React.FC = () => {
           description: values.description,
           is_active: values.is_active,
           is_default: values.is_default,
+          category_uuid: values.category_uuid ?? null,
           config: { ...(currentEditDetail?.config || {}), document_type: values.document_type },
         };
         await updatePrintTemplate(currentPrintTemplateUuid, updateData);
@@ -343,6 +378,7 @@ const PrintTemplateListPage: React.FC = () => {
           content: EMPTY_HTML_TEMPLATE,
           config: EMPTY_VISUAL_PRINT_CONFIG(values.document_type),
           is_active: values.is_active !== false,
+          category_uuid: values.category_uuid || undefined,
         };
         await createPrintTemplate(data);
         messageApi.success(t('common.createSuccess'));
@@ -351,6 +387,7 @@ const PrintTemplateListPage: React.FC = () => {
       setModalVisible(false);
       setFormInitialValues(undefined);
       actionRef.current?.reload();
+      void reloadCategories();
     } catch (error: any) {
       messageApi.error(error.message || t('common.operationFailed'));
       throw error;
@@ -501,7 +538,7 @@ const PrintTemplateListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns = useMemo<ProColumns<PrintTemplate>[]>(() => alignProColumns<PrintTemplate>([
+  const columns = useMemo<ProColumns<PrintTemplate>[]>(() => alignProColumns([
     {
       title: t('pages.system.printTemplates.columnCode'),
       dataIndex: 'code',
@@ -683,9 +720,16 @@ const PrintTemplateListPage: React.FC = () => {
 
   return (
     <>
+      <TwoColumnLayout
+        style={{ height: '100%' }}
+        layoutPersistenceId="pages.system.print-templates.list"
+        leftPanel={categoryLeftPanel}
+        rightPanel={{
+          content: (
       <ListPageTemplate statCards={statCards}>
         <UniTable<PrintTemplate>
-          columnPersistenceId="pages.system.print-templates.list-v2"
+          columnPersistenceId="pages.system.print-templates.list-v3"
+          tanstackQuery={{ queryKeyPrefix: ['pages.system.print-templates.list', selectedCategoryKey] }}
           actionRef={actionRef}
           columns={columns}
           request={async (params, _sort, _filter, searchFormValues) => {
@@ -694,16 +738,22 @@ const PrintTemplateListPage: React.FC = () => {
             const limit = pageSize;
             
             const filter = resolvePrintTemplateListFilter(searchFormValues);
+            const categoryFilter = categoryListFilterRef.current;
             const listParams: PrintTemplateListParams = {
               skip,
               limit,
               ...filter,
+              ...categoryFilter,
             };
             
             try {
               const [data, total] = await Promise.all([
                 getPrintTemplateList(listParams),
-                countWithPagedRequests(getPrintTemplateList, filter, { chunkSize: 100 }),
+                countWithPagedRequests(
+                  (p) => getPrintTemplateList({ ...p, ...categoryFilter }),
+                  filter,
+                  { chunkSize: 100 },
+                ),
               ]);
               
               // 同时获取所有数据用于统计（如果当前页是第一页）
@@ -775,6 +825,11 @@ const PrintTemplateListPage: React.FC = () => {
           }}
         />
       </ListPageTemplate>
+          ),
+        }}
+      />
+
+      {categoryFormModal}
 
       {/* 创建/编辑 Modal */}
       <FormModalTemplate
@@ -844,6 +899,13 @@ const PrintTemplateListPage: React.FC = () => {
           name="description"
           label={t('common.remark')}
           fieldProps={{ rows: 3 }}
+        />
+        <SafeProFormSelect
+          name="category_uuid"
+          label={t('pages.system.resourceCategory.fieldCategory')}
+          placeholder={t('pages.system.resourceCategory.categoryPlaceholder')}
+          options={categorySelectOptions}
+          allowClear
         />
         {isEdit && (
           <ProFormSwitch name="is_default" label={t('pages.system.printTemplates.labelDefault')} />

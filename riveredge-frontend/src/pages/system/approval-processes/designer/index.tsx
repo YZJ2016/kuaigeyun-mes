@@ -34,6 +34,7 @@ import {
   updateApprovalProcess,
   publishApprovalProcess,
   getConditionFields,
+  getEditableFields,
   ApprovalProcess,
 } from '../../../../services/approvalProcess';
 import { CanvasPageTemplate } from '../../../../components/layout-templates/CanvasPageTemplate';
@@ -43,6 +44,7 @@ import {
   CANVAS_GRID_REACTFLOW_FRAMED_INNER,
 } from '../../../../components/layout-templates/constants';
 import {
+  defaultApprovalNodeEditFlags,
   normalizeFlowGraph,
   normalizeNodeData,
   nodeDataToFormValues,
@@ -82,6 +84,7 @@ const ApprovalProcessDesignerPage: React.FC = () => {
   const [nodeConfigForm] = Form.useForm();
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
   const [conditionFieldOptions, setConditionFieldOptions] = useState<{ label: string; value: string }[]>([]);
+  const [editableFieldOptions, setEditableFieldOptions] = useState<{ label: string; value: string }[]>([]);
 
   useEffect(() => {
     const code = processData?.code;
@@ -93,6 +96,13 @@ const ApprovalProcessDesignerPage: React.FC = () => {
         );
       })
       .catch(() => setConditionFieldOptions([]));
+    getEditableFields(code)
+      .then((res) => {
+        setEditableFieldOptions(
+          (res.fields || []).map((f) => ({ label: f.label || f.field, value: f.field })),
+        );
+      })
+      .catch(() => setEditableFieldOptions([]));
   }, [processData?.code]);
 
   const loadProcessData = useCallback(async () => {
@@ -155,10 +165,21 @@ const ApprovalProcessDesignerPage: React.FC = () => {
     init();
   }, [processUuid, loadProcessData]);
 
+  const buildNewNodeSeed = useCallback(
+    (type: 'approval' | 'cc' | 'condition', label: string) => {
+      if (type === 'approval') {
+        return { label, ...defaultApprovalNodeEditFlags() };
+      }
+      return { label };
+    },
+    [],
+  );
+
   const addNextNodeFromNode = useCallback((sourceNodeId: string, type: 'approval' | 'cc' | 'condition') => {
     const newId = `${type}_${Math.random().toString(36).substr(2, 9)}`;
     const label = t(`pages.approval.designer.${type}Node`);
-    const newNode: Node = { id: newId, type, position: { x: 0, y: 0 }, data: { label } };
+    const data = buildNewNodeSeed(type, label);
+    const newNode: Node = { id: newId, type, position: { x: 0, y: 0 }, data };
     const outEdges = edges.filter((e) => e.source === sourceNodeId);
     let newEdges = edges.filter((e) => e.source !== sourceNodeId);
     newEdges.push({ id: `e-${sourceNodeId}-${newId}`, source: sourceNodeId, target: newId, type: 'default' });
@@ -166,110 +187,139 @@ const ApprovalProcessDesignerPage: React.FC = () => {
       newEdges.push({ id: `e-${newId}-${e.target}-${i}`, source: newId, target: e.target, type: 'default' });
     });
     
-    setNodeDataMap(prev => ({ ...prev, [newId]: { label } }));
+    setNodeDataMap(prev => ({ ...prev, [newId]: data }));
     const newNodes = [...nodes, newNode];
     setNodes(enrichApprovalFlowGraph(newNodes as Node[], newEdges as Edge[], { relayout: true }).nodes as any);
     setEdges(newEdges);
-  }, [nodes, edges, setNodes, setEdges, t]);
+  }, [nodes, edges, setNodes, setEdges, t, buildNewNodeSeed]);
 
   const addBranchFromConditionNode = useCallback((type: 'approval' | 'cc' | 'condition') => {
     if (!selectedNode || selectedNode.type !== 'condition') return;
     const sourceNodeId = selectedNode.id;
     const newId = `${type}_${Math.random().toString(36).substr(2, 9)}`;
     const label = t(`pages.approval.designer.${type}Node`);
-    const newNode: Node = { id: newId, type, position: { x: 0, y: 0 }, data: { label } };
+    const data = buildNewNodeSeed(type, label);
+    const newNode: Node = { id: newId, type, position: { x: 0, y: 0 }, data };
     const newEdges = [
       ...edges,
       { id: `e-${sourceNodeId}-${newId}`, source: sourceNodeId, target: newId, type: 'default' },
       { id: `e-${newId}-end`, source: newId, target: 'end', type: 'default' },
     ];
     
-    setNodeDataMap(prev => ({ ...prev, [newId]: { label } }));
+    setNodeDataMap(prev => ({ ...prev, [newId]: data }));
     const newNodes = [...nodes, newNode];
     setNodes(enrichApprovalFlowGraph(newNodes as Node[], newEdges as Edge[], { relayout: true }).nodes as any);
     setEdges(newEdges);
-  }, [selectedNode, nodes, edges, setNodes, setEdges, t]);
+  }, [selectedNode, nodes, edges, setNodes, setEdges, t, buildNewNodeSeed]);
 
   const addNodeOnEdge = useCallback((type: 'approval' | 'cc' | 'condition') => {
     if (!selectedEdge) return;
     const edge = selectedEdge;
     const newId = `${type}_${Math.random().toString(36).substr(2, 9)}`;
     const label = t(`pages.approval.designer.${type}Node`);
-    const newNode: Node = { id: newId, type, position: { x: 0, y: 0 }, data: { label } };
+    const data = buildNewNodeSeed(type, label);
+    const newNode: Node = { id: newId, type, position: { x: 0, y: 0 }, data };
     const newEdges = edges.filter((e) => e.id !== edge.id).concat([
       { id: `e-${edge.source}-${newId}`, source: edge.source, target: newId, type: 'default' },
       { id: `e-${newId}-${edge.target}`, source: newId, target: edge.target, type: 'default' },
     ]);
     
-    setNodeDataMap(prev => ({ ...prev, [newId]: { label } }));
+    setNodeDataMap(prev => ({ ...prev, [newId]: data }));
     const newNodes = [...nodes, newNode];
     setNodes(enrichApprovalFlowGraph(newNodes as Node[], newEdges as Edge[], { relayout: true }).nodes as any);
     setEdges(newEdges);
     setSelectedEdge(null);
-  }, [selectedEdge, nodes, edges, setNodes, setEdges, t]);
+  }, [selectedEdge, nodes, edges, setNodes, setEdges, t, buildNewNodeSeed]);
 
   const onConnect = useCallback((params: Connection) => {
     setEdges((eds) => addEdge({ ...params, type: 'default' }, eds));
   }, [setEdges]);
 
+  /** 刷入右侧表单最新值并组装可提交流程图；校验失败返回 null */
+  const buildPersistGraph = useCallback(() => {
+    const livePatch =
+      selectedNode &&
+      (selectedNode.type === 'approval' || selectedNode.type === 'cc' || selectedNode.type === 'condition')
+        ? {
+            [selectedNode.id]: (() => {
+              const merged = mergeFormToNodeData(
+                String(selectedNode.type),
+                nodeConfigForm.getFieldsValue(true) as Record<string, unknown>,
+              );
+              delete merged.approvers;
+              delete merged.roles;
+              return { ...nodeDataMap[selectedNode.id], ...merged };
+            })(),
+          }
+        : {};
+    const latestMap = { ...nodeDataMap, ...livePatch };
+    const strippedNodes = applyVerticalLayout(
+      nodes.map((node) => {
+        const merged = mergeFormToNodeData(String(node.type), {
+          ...node.data,
+          ...latestMap[node.id],
+        });
+        delete merged.approvers;
+        delete merged.roles;
+        const data = normalizeNodeData(String(node.type), merged);
+        return {
+          id: node.id,
+          type: node.type,
+          position: node.position,
+          data,
+        };
+      }) as Node[],
+      edges as Edge[],
+    ).map((node) => ({
+      id: node.id,
+      type: node.type,
+      position: node.position,
+      data: node.data,
+    }));
+    const graph = normalizeFlowGraph({ nodes: strippedNodes, edges });
+    const validationErrors = validateFlowGraph(graph);
+    if (validationErrors.length > 0) {
+      messageApi.error(validationErrors.join('；'));
+      return null;
+    }
+    return { graph, latestMap, livePatch };
+  }, [selectedNode, nodeConfigForm, nodeDataMap, nodes, edges, messageApi]);
+
   const handleSave = async () => {
     if (!processUuid || !processData) return;
     try {
       setSaving(true);
-      // 右侧表单打开时，以当前表单为准刷进 map，避免 Select 变更未完全写入
-      const livePatch =
-        selectedNode &&
-        (selectedNode.type === 'approval' || selectedNode.type === 'cc' || selectedNode.type === 'condition')
-          ? {
-              [selectedNode.id]: (() => {
-                const merged = mergeFormToNodeData(
-                  String(selectedNode.type),
-                  nodeConfigForm.getFieldsValue(true) as Record<string, unknown>,
-                );
-                delete merged.approvers;
-                delete merged.roles;
-                return { ...nodeDataMap[selectedNode.id], ...merged };
-              })(),
-            }
-          : {};
-      const latestMap = { ...nodeDataMap, ...livePatch };
-      if (Object.keys(livePatch).length > 0) {
-        setNodeDataMap(latestMap);
+      const built = buildPersistGraph();
+      if (!built) return;
+      if (Object.keys(built.livePatch).length > 0) {
+        setNodeDataMap(built.latestMap);
       }
-      const strippedNodes = applyVerticalLayout(
-        nodes.map((node) => {
-          const merged = mergeFormToNodeData(String(node.type), {
-            ...node.data,
-            ...latestMap[node.id],
-          });
-          delete merged.approvers;
-          delete merged.roles;
-          const data = normalizeNodeData(String(node.type), merged);
-          return {
-            id: node.id,
-            type: node.type,
-            position: node.position,
-            data,
-          };
-        }) as Node[],
-        edges as Edge[],
-      ).map((node) => ({
-        id: node.id,
-        type: node.type,
-        position: node.position,
-        data: node.data,
-      }));
-      const graph = normalizeFlowGraph({ nodes: strippedNodes, edges });
-      const validationErrors = validateFlowGraph(graph);
-      if (validationErrors.length > 0) {
-        messageApi.error(validationErrors.join('；'));
-        return;
-      }
-      await updateApprovalProcess(processUuid, { ...processData, nodes: graph });
+      await updateApprovalProcess(processUuid, { ...processData, nodes: built.graph });
       messageApi.success(t('common.saveSuccess'));
       await loadProcessData();
     } catch (error: any) {
       messageApi.error(error.message || t('common.saveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** 一次发布：先落当前编辑再 publish，不必先点保存 */
+  const handlePublish = async () => {
+    if (!processUuid || !processData) return;
+    try {
+      setSaving(true);
+      const built = buildPersistGraph();
+      if (!built) return;
+      if (Object.keys(built.livePatch).length > 0) {
+        setNodeDataMap(built.latestMap);
+      }
+      await updateApprovalProcess(processUuid, { ...processData, nodes: built.graph });
+      await publishApprovalProcess(processUuid);
+      messageApi.success(t('pages.approval.designer.publishSuccess'));
+      await loadProcessData();
+    } catch (error: any) {
+      messageApi.error(error.message || t('pages.approval.designer.publishFailed'));
     } finally {
       setSaving(false);
     }
@@ -291,20 +341,37 @@ const ApprovalProcessDesignerPage: React.FC = () => {
     const { nodes: laid, edges: enriched } = enrichApprovalFlowGraph(merged, edges as Edge[], {
       relayout: true,
     });
+    const branchOrdinal: Record<string, number> = {};
     return {
       flowNodes: laid,
-      flowEdges: enriched.map((e) => ({
-        ...e,
-        type: 'default',
-        style: {
-          ...APPROVAL_FLOW_EDGE_STYLE,
-          stroke: selectedEdge?.id === e.id ? token.colorPrimary : APPROVAL_FLOW_EDGE_STYLE.stroke,
-          strokeWidth: selectedEdge?.id === e.id ? 3 : APPROVAL_FLOW_EDGE_STYLE.strokeWidth,
-          ...(e.style || {}),
-        },
-      })),
+      flowEdges: enriched.map((e) => {
+        const sourceNode = merged.find((n) => n.id === e.source);
+        let edgeLabel: string | undefined;
+        if (sourceNode?.type === 'condition') {
+          const idx = branchOrdinal[e.source] || 0;
+          branchOrdinal[e.source] = idx + 1;
+          const conds = (sourceNode.data as { conditions?: Array<{ label?: string }> }).conditions;
+          const text = String(conds?.[idx]?.label || '').trim();
+          if (text) edgeLabel = text;
+        }
+        return {
+          ...e,
+          label: edgeLabel,
+          labelStyle: edgeLabel ? { fill: token.colorText, fontSize: 12 } : undefined,
+          labelBgStyle: edgeLabel ? { fill: token.colorBgContainer } : undefined,
+          labelBgPadding: edgeLabel ? ([4, 2] as [number, number]) : undefined,
+          labelBgBorderRadius: edgeLabel ? 4 : undefined,
+          type: 'default',
+          style: {
+            ...APPROVAL_FLOW_EDGE_STYLE,
+            stroke: selectedEdge?.id === e.id ? token.colorPrimary : APPROVAL_FLOW_EDGE_STYLE.stroke,
+            strokeWidth: selectedEdge?.id === e.id ? 3 : APPROVAL_FLOW_EDGE_STYLE.strokeWidth,
+            ...(e.style || {}),
+          },
+        };
+      }),
     };
-  }, [nodes, edges, nodeDataMap, selectedNode, selectedEdge, token.colorPrimary]);
+  }, [nodes, edges, nodeDataMap, selectedNode, selectedEdge, token.colorPrimary, token.colorText, token.colorBgContainer]);
 
   const nodeTypes = useMemo(() => ({
     start: (p: any) => <UniFlowNode {...p} type="start" selected={p.selected} />,
@@ -385,27 +452,11 @@ const ApprovalProcessDesignerPage: React.FC = () => {
         )}
       </Space>
       <Space>
-        {processData?.draft_nodes && (
-          <Button
-            onClick={async () => {
-              if (!processUuid) return;
-              try {
-                setSaving(true);
-                await publishApprovalProcess(processUuid);
-                await loadProcessData();
-                messageApi.success(t('pages.approval.designer.publishSuccess'));
-              } catch (e: any) {
-                messageApi.error(e.message || t('pages.approval.designer.publishFailed'));
-              } finally {
-                setSaving(false);
-              }
-            }}
-          >
-            {t('pages.approval.designer.publishDraft')}
-          </Button>
-        )}
+        <Button loading={saving} onClick={() => void handlePublish()}>
+          {t('pages.approval.designer.publishDraft')}
+        </Button>
         <Button icon={<CloseOutlined />} onClick={() => navigate('/system/approval-processes')}>{t('common.close')}</Button>
-        <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleSave}>{t('common.save')}</Button>
+        <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={() => void handleSave()}>{t('common.save')}</Button>
       </Space>
     </div>
   );
@@ -450,6 +501,22 @@ const ApprovalProcessDesignerPage: React.FC = () => {
     ? edges.filter((e) => e.source === selectedNode.id).length
     : 0;
 
+  const conditionBranchTargets = selectedNode?.type === 'condition'
+    ? edges
+        .filter((e) => e.source === selectedNode.id)
+        .map((e) => {
+          const target = nodes.find((n) => n.id === e.target);
+          const data = {
+            ...(target?.data || {}),
+            ...(nodeDataMap[e.target] || {}),
+          } as { label?: string };
+          return {
+            nodeId: String(e.target),
+            label: String(data.label || e.target || ''),
+          };
+        })
+    : [];
+
   const rightPanel = selectedNode && (selectedNode.type === 'approval' || selectedNode.type === 'cc' || selectedNode.type === 'condition') ? {
     title: t('pages.approval.designer.nodeConfig'),
     children: (
@@ -473,10 +540,16 @@ const ApprovalProcessDesignerPage: React.FC = () => {
         );
       }}>
         <ProFormText name="label" label={t('pages.approval.designer.nodeLabel')} rules={[{ required: true }]} />
-        {selectedNode.type === 'approval' && <ApprovalNodeForm />}
+        {selectedNode.type === 'approval' && (
+          <ApprovalNodeForm editableFieldOptions={editableFieldOptions} />
+        )}
         {selectedNode.type === 'cc' && <CcNodeForm />}
         {selectedNode.type === 'condition' && (
-          <ConditionNodeForm branchCount={conditionBranchCount} fieldOptions={conditionFieldOptions} />
+          <ConditionNodeForm
+            branchCount={conditionBranchCount}
+            fieldOptions={conditionFieldOptions}
+            branchTargets={conditionBranchTargets}
+          />
         )}
       </ProForm>
     )

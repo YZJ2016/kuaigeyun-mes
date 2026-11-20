@@ -106,10 +106,8 @@ export function AuditPhaseBadge({
   } else if (phase === 'pending' && mine) {
     label = t('components.uniAudit.phasePendingMine', { defaultValue: '待我审核' });
     color = DOCUMENT_STATUS_SEMANTIC_COLOR.active;
-  } else if (phase === 'submitted' && audit.enabled !== false) {
-    label = t('components.uniAudit.phaseInReview', { defaultValue: '审核中' });
-    color = resolveAuditPhaseTagColor('pending');
   } else {
+    // submitted（已提交、待点「提交审核」）必须显示「已提交」，禁止冒充「审核中」
     const i18nKey = PHASE_I18N[phase];
     label = i18nKey
       ? t(i18nKey, { defaultValue: PHASE_FALLBACK[phase] ?? phase })

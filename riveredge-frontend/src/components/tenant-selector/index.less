@@ -1,0 +1,19 @@
+/* 组织下拉：分隔行独立于「设置默认组织」，避免 hover 背景盖住分割线 */
+.tenant-selector-dropdown {
+  .tenant-selector-default-divider.ant-select-item-option-disabled {
+    cursor: default !important;
+    min-height: 0 !important;
+    height: auto !important;
+    padding-block: 0 !important;
+    color: inherit !important;
+    background: transparent !important;
+
+    &:hover {
+      background: transparent !important;
+    }
+
+    .ant-select-item-option-content {
+      min-height: 0;
+    }
+  }
+}

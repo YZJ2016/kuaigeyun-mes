@@ -22,6 +22,66 @@ function resolvePkg(name: string): string {
   return normalizePath(resolve(frontendRoot, 'node_modules', name))
 }
 
+const patchedAntdInputNumberPath = normalizePath(
+  resolve(frontendRoot, 'src/components/uni-input-number/patchedAntdInputNumber.tsx'),
+)
+
+/** antd 桶文件用相对路径导出 InputNumber，别名拦不住。开发预构建与正式打包都改到补丁。 */
+function isAntdInputNumberBarrel(importer: string | undefined): boolean {
+  if (!importer) return false
+  const id = importer.replace(/\\/g, '/')
+  return id.endsWith('/antd/es/index.js') || id.endsWith('/antd/lib/index.js')
+}
+
+function patchAntdInputNumberPlugin(): Plugin {
+  return {
+    name: 'patch-antd-input-number',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      if (source === './input-number' && isAntdInputNumberBarrel(importer)) {
+        return patchedAntdInputNumberPath
+      }
+      return null
+    },
+  }
+}
+
+/**
+ * antd6 Drawer 已弃用 width/height，改用 size。
+ * @ant-design/pro-layout / pro-form / pro-flow 仍向 Drawer 传 width，开发态会刷控制台警告。
+ */
+function patchProComponentsDrawerWidthPlugin(): Plugin {
+  const targets = [
+    '/@ant-design/pro-layout/es/components/SiderMenu/index.js',
+    '/@ant-design/pro-layout/es/components/SettingDrawer/index.js',
+    '/@ant-design/pro-layout/es/components/Help/ProHelpDrawer.js',
+    '/@ant-design/pro-form/es/layouts/DrawerForm/index.js',
+    '/@ant-design/pro-flow/es/Inspector/index.js',
+  ]
+  return {
+    name: 'patch-pro-components-drawer-width',
+    enforce: 'pre',
+    transform(code, id) {
+      const normalizedId = id.replace(/\\/g, '/')
+      if (!targets.some((t) => normalizedId.includes(t))) return null
+      if (!/\bwidth\s*:/.test(code)) return null
+      // 仅替换传给 Drawer 的尺寸字段；CSS 里的 width: 48 / 100% 等保持不动
+      let next = code
+      next = next.replace(/\bwidth:\s*siderWidth\b/g, 'size: siderWidth')
+      next = next.replace(/\bwidth:\s*drawerWidth\b/g, 'size: drawerWidth')
+      // pro-flow Inspector：`width: width`（变量名同为 width）
+      if (normalizedId.includes('/pro-flow/')) {
+        next = next.replace(/(\bopen:\s*open,\s*\n\s*onClose:\s*onClose,\s*\n\s*)width:\s*width\b/, '$1size: width')
+        next = next.replace(/\bwidth:\s*width,/g, 'size: width,')
+      }
+      next = next.replace(/\bwidth:\s*300\b/g, 'size: 300')
+      next = next.replace(/\bwidth:\s*720\b/g, 'size: 720')
+      if (next === code) return null
+      return { code: next, map: null }
+    },
+  }
+}
+
 
 /** Safari < 16.4 不支持 (?<!#) 负向回顾；Univer engine-formula 模块初始化时会 new RegExp 抛错。 */
 function fixUniverSafariLookbehindPlugin(): Plugin {
@@ -371,6 +431,8 @@ export default defineConfig({
     } : undefined,
   },
   plugins: [
+    patchAntdInputNumberPlugin(),
+    patchProComponentsDrawerWidthPlugin(),
     fixUniverSafariLookbehindPlugin(),
     // occt-import-js：Emscripten UMD/CJS。禁止交给 commonjs 插件（会产出裸标识符 occtimportjs; 导致生产 ReferenceError）。
     // 在 pre 阶段整文件包成 ESM：提供 module/exports，再 export default。
@@ -422,6 +484,42 @@ export default defineConfig({
         });
       },
     },
+    /**
+     * SPA 文档请求 vs 源码模块冲突：
+     * root=src 时，浏览器 F5 `/apps/ind-relay` 会命中真实文件 `apps/ind-relay/index.tsx`，
+     * Vite 返回 JS 正文而非 index.html（用户看到 createHotContext 源码）。
+     * 仅对 document / text/html 导航改写到 /，模块 import（Sec-Fetch-Dest=script）不动。
+     */
+    {
+      name: 'spa-apps-html-fallback',
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          const url = req.url || '';
+          const pathname = url.split('?')[0] || '';
+          if (!pathname.startsWith('/apps/')) {
+            next();
+            return;
+          }
+          // 带扩展名的是模块/静态资源，留给 Vite
+          if (/\.[a-zA-Z0-9]+$/.test(pathname)) {
+            next();
+            return;
+          }
+          const dest = String(req.headers['sec-fetch-dest'] || '');
+          const accept = String(req.headers.accept || '');
+          const isDocument =
+            dest === 'document' ||
+            (dest !== 'script' && dest !== 'empty' && accept.includes('text/html'));
+          if (!isDocument) {
+            next();
+            return;
+          }
+          const qs = url.includes('?') ? url.slice(url.indexOf('?')) : '';
+          req.url = `/${qs}`;
+          next();
+        });
+      },
+    },
     // React 插件 - 优化 Fast Refresh 和 HMR
     react({
       // 包含所有 React 文件进行 HMR
@@ -437,7 +535,7 @@ export default defineConfig({
       // ⚠️ 关键修复：使用经典的JSX运行时，确保兼容性
       jsxRuntime: 'automatic', // 使用自动JSX运行时，不需要显式导入React
     }),
-    // P5-1：本地/CI 构建仍生成 .gz/.br；不提交 Git。生产 update 由 precompress_web_dist 补齐。
+    // P5-1：预压缩产物（.gz/.br），Caddy file_server precompressed 直出。
     // BUILD_WEB_SKIP_PRECOMPRESS=1 可跳过（发版热路径加速；Caddy 仍有 encode gzip/zstd）。
     ...(process.env.BUILD_WEB_SKIP_PRECOMPRESS === '1'
       ? []
@@ -475,7 +573,7 @@ export default defineConfig({
         find: /^@\/(.*)$/,
         replacement: `${srcRootPosix}/$1`,
       },
-      /** 聚焦时不强制 precision，失焦再量化，全站 InputNumber / ProFormDigit 生效 */
+      /** 桶内相对导入由 patchAntdInputNumberPlugin 改写；此处只拦直接 import antd/es/input-number */
       {
         find: '@antd-input-number-internal',
         replacement: resolvePkg('antd/es/input-number/index.js'),
@@ -526,6 +624,7 @@ export default defineConfig({
       // 平台看板 / 指标卡动态 import；未预构建时冷启动按需打包易 504 → Failed to fetch dynamically imported module
       '@ant-design/charts',
       '@ant-design/plots',
+      'lodash-es',
       // Univer 依赖注入 token 须在同一预构建图内（dev 下 exclude 会导致多份 @univerjs/core / engine-render）
       '@univerjs/presets',
       '@univerjs/presets/preset-sheets-core',
@@ -549,6 +648,17 @@ export default defineConfig({
     force: false,
     esbuildOptions: {
       target: 'es2020',
+      plugins: [
+        {
+          name: 'patch-antd-input-number',
+          setup(build) {
+            build.onResolve({ filter: /^\.\/input-number$/ }, (args) => {
+              if (!isAntdInputNumberBarrel(args.importer)) return undefined
+              return { path: patchedAntdInputNumberPath }
+            })
+          },
+        },
+      ],
     },
   },
   // ⚠️ 优化：适当的日志级别

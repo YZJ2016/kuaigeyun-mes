@@ -56,7 +56,7 @@ export const QUOTATION_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'quotation.reopen.not_rejected': '仅已驳回的报价单可重新编辑',
   'quotation.revision.not_allowed': '仅非草稿的最新系列版本可新建修订版',
   'quotation.print.not_allowed': '须审核通过、客户确认或已转订单后方可打印',
-  'quotation.print.requires_audit': '已开启「打印须审核」，未审核通过的报价单不可打印',
+  'document.print.unaudited_denied': '未审核单据不可打印（系统参数已关闭未审核打印）',
 };
 
 export function quotationCapabilityReasonMessage(
@@ -220,7 +220,7 @@ export const SALES_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
     '该销售订单已有下游单据，请先反审核并删除下游后再删除',
   'sales_order.submit.not_draft': '只能提交草稿状态的订单',
   'sales_order.approve.not_pending': '只有待审核状态的订单可审核',
-  'sales_order.print.requires_audit': '已开启「打印须审核」，未审核通过的销售订单不可打印',
+  'document.print.unaudited_denied': '未审核单据不可打印（系统参数已关闭未审核打印）',
   'sales_order.close.not_allowed': '当前状态不可关闭订单',
   'sales_order.close.already_closed': '订单已关闭',
   'sales_order.close.cancelled': '已取消的订单不能关闭',
@@ -813,6 +813,7 @@ export function purchaseInquiryCapabilityReasonMessage(
 }
 
 export const PURCHASE_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
+  'document.print.unaudited_denied': '未审核单据不可打印（系统参数已关闭未审核打印）',
   'purchase_order.update.not_allowed': '只能更新草稿或待审核的采购订单',
   'purchase_order.delete.not_allowed': '只能删除草稿或待审核的采购订单',
   'purchase_order.delete.has_downstream':
@@ -1064,7 +1065,13 @@ export function qualityInspectionCapabilityReasonMessage(
 export const WORK_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'work_order.not_applicable': '该行不是可操作的工单',
   'work_order.update.not_draft': '仅草稿状态工单可编辑',
+  'work_order.update.submitted': '已提交的工单不可编辑，请先撤销提交',
+  'work_order.update.approved': '已审核的工单不可编辑，请先反审核',
   'work_order.delete.not_allowed': '当前状态不可删除工单',
+  'work_order.delete.submitted': '已提交的工单不可删除，请先撤销提交',
+  'work_order.delete.approved': '已审核的工单不可删除，请先反审核',
+  'work_order.delete.need_revoke_then_unaudit':
+    '已下达且已审核的工单不可删除，请先撤回下达并反审核',
   'work_order.release.not_draft': '只能下达草稿状态的工单',
   'work_order.release.frozen': '工单已冻结，不能下达',
   'work_order.release.split': '已拆分主工单不可下达',
@@ -1160,6 +1167,15 @@ export function workOrderBatchPrintAllowed(
   canPrint: boolean,
 ): boolean {
   return batchSomeCapabilityAllowed(records, canPrint, (r) => r.capabilities?.print);
+}
+
+/** 工具栏删除：选中行须全部允许删除（避免混选后部分失败） */
+export function workOrderBatchDeleteAllowed(
+  records: { capabilities?: { delete?: ActionCapability } }[],
+  canDelete: boolean,
+): boolean {
+  if (!canDelete || records.length === 0) return false;
+  return records.every((r) => r.capabilities?.delete?.allowed === true);
 }
 
 export function workOrderBatchPushProductionPickingAllowed(
@@ -1533,6 +1549,9 @@ export const EIGHT_D_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
 
 export const NC_LEDGER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'nonconforming_ledger.update.closed': '已处理或已取消的台账不可更新处置',
+  'nonconforming_ledger.revoke_disposition.not_processed': '仅已处理的台账可撤回处置',
+  'nonconforming_ledger.revoke_disposition.has_downstream':
+    '该台账已有退货/返工/报废/入库等下游单据，请先处理后撤回处置',
   'nonconforming_ledger.start_8d.closed': '已处理或已取消的台账不可发起 8D',
   'nonconforming_ledger.start_8d.already_linked': '该台账已关联 8D 报告',
 };
@@ -1793,7 +1812,11 @@ export function eightDReportRowGates(
 
 export function nonconformingLedgerRowGates(
   record: {
-    capabilities?: { update_disposition?: ActionCapability; start_8d?: ActionCapability };
+    capabilities?: {
+      update_disposition?: ActionCapability;
+      revoke_disposition?: ActionCapability;
+      start_8d?: ActionCapability;
+    };
   } | null | undefined,
   ncPerms: ResourcePermissionGates,
   canStart8d: boolean,
@@ -1805,6 +1828,14 @@ export function nonconformingLedgerRowGates(
     updateDisposition: qualityCapView(
       caps?.update_disposition,
       ncPerms.canUpdate,
+      permDeniedTitle,
+      t,
+      NC_LEDGER_CAPABILITY_REASON_MESSAGES,
+      'app.kuaizhizao.quality.nc.capability',
+    ),
+    revokeDisposition: qualityCapView(
+      caps?.revoke_disposition,
+      ncPerms.canAction?.('revoke') ?? false,
       permDeniedTitle,
       t,
       NC_LEDGER_CAPABILITY_REASON_MESSAGES,

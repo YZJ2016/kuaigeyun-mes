@@ -23,6 +23,8 @@ import {
   formatMaterialSelectLabel,
 } from './materialSelectOption';
 import { useMaterialQuickCreateAllowed } from '../../hooks/useMaterialQuickCreateAllowed';
+import { useMaterialCodeSearchMode } from '../../hooks/useMaterialCodeSearchMode';
+import { useResourcePermissions } from '../../hooks/useResourcePermissions';
 
 const MATERIAL_REFERENCE_RESOURCE = 'master-data:material';
 
@@ -36,6 +38,20 @@ export {
 function filterSelectableMaterials(items: Material[], mastersOnly: boolean): Material[] {
   if (!mastersOnly) return items;
   return items.filter((m) => !isVariantSkuMaterial(m));
+}
+
+function materialRowSourceType(m: Material): string {
+  return String((m as { source_type?: string; sourceType?: string }).source_type ?? (m as { sourceType?: string }).sourceType ?? '');
+}
+
+/** 多种来源类型时 API 仅支持单值过滤，其余在客户端 filterClientMaterialRows 收窄 */
+export function referenceSearchSourceTypeParam(
+  sourceType?: string,
+  sourceTypes?: string[],
+): string | undefined {
+  if (sourceType) return sourceType;
+  if (sourceTypes?.length === 1) return sourceTypes[0];
+  return undefined;
 }
 
 /** 与 Form.Item 的 getValueFromEvent 对齐：将 Select 值规范为数字 ID */
@@ -135,6 +151,8 @@ interface UniMaterialSelectProps {
   fallbackOption?: { value: number; label: string };
   /** 按物料来源类型过滤（如 Make 仅自制件） */
   sourceType?: string;
+  /** 多种来源类型（如 Make + Outsource）；与 sourceType 二选一，优先 sourceTypes */
+  sourceTypes?: string[];
   /** 按物料分组过滤（仅展示该分组及子分组内物料） */
   groupId?: number;
   /** 限定为指定仓库内有库存的物料（即时库存汇总口径） */
@@ -182,6 +200,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   showAdvancedSearch = true,
   fallbackOption,
   sourceType,
+  sourceTypes,
   groupId,
   warehouseId,
   hostResource,
@@ -207,18 +226,30 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   const form = Form.useFormInstance();
   const [materialModalVisible, setMaterialModalVisible] = useState(false);
   const allowMaterialQuickCreate = useMaterialQuickCreateAllowed(true);
+  const materialCodeSearchMode = useMaterialCodeSearchMode();
+  const { canCreate: canCreateMaterial } = useResourcePermissions(MATERIAL_REFERENCE_RESOURCE);
 
-  const effectiveQuickCreate = allowMaterialQuickCreate
-    ? quickCreateProp ??
-      (showQuickCreate
-        ? {
-            label: '快速新增物料',
-            onClick: () => setMaterialModalVisible(true),
-          }
-        : undefined)
-    : undefined;
+  const defaultPlaceholder =
+    materialCodeSearchMode === 'prefix'
+      ? '请选择物料（按物料编码从头匹配）'
+      : '请选择物料（支持编号、名称、客户/供应商料号、拼音首字母）';
+  const effectivePlaceholder = placeholder === '请选择物料（支持编号、名称、客户/供应商料号、拼音首字母）'
+    ? defaultPlaceholder
+    : placeholder ?? defaultPlaceholder;
+
+  const effectiveQuickCreate =
+    allowMaterialQuickCreate && canCreateMaterial
+      ? quickCreateProp ??
+        (showQuickCreate
+          ? {
+              label: '快速新增物料',
+              onClick: () => setMaterialModalVisible(true),
+            }
+          : undefined)
+      : undefined;
   const { message } = App.useApp();
   const [data, setData] = useState<Material[]>([]);
+  const [optionSearchKeyword, setOptionSearchKeyword] = useState('');
   const [loading, setLoading] = useState(false);
   const dataIdsRef = useRef<Set<number>>(new Set());
   const resolvingIdsRef = useRef<Set<number>>(new Set());
@@ -290,13 +321,16 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
     });
   };
 
+  const apiSourceType = referenceSearchSourceTypeParam(sourceType, sourceTypes);
+
   const filterClientMaterialRows = (rows: Material[]): Material[] => {
     let next = rows;
-    if (sourceType) {
+    if (sourceTypes?.length) {
+      const allowed = new Set(sourceTypes.map(String));
+      next = next.filter((m) => allowed.has(materialRowSourceType(m)));
+    } else if (sourceType) {
       const st = String(sourceType);
-      next = next.filter(
-        (m) => String((m as any).source_type ?? (m as any).sourceType ?? '') === st,
-      );
+      next = next.filter((m) => materialRowSourceType(m) === st);
     }
     if (resolvedGroupId != null) {
       next = next.filter(
@@ -307,6 +341,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   };
 
   const fetchMaterials = async (searchText: string = '') => {
+    setOptionSearchKeyword(searchText.trim());
     listAbortRef.current?.abort();
     const ac = new AbortController();
     listAbortRef.current = ac;
@@ -341,7 +376,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
             hostResource,
             keyword: kw,
             isActive: activeOnly ? true : undefined,
-            sourceType: sourceType || undefined,
+            sourceType: apiSourceType,
             groupId: resolvedGroupId,
             pageSize: 200,
             ...referenceSearchPartnerIds,
@@ -401,15 +436,14 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
           hostResource,
           keyword: searchText.trim() || undefined,
           isActive: activeOnly ? true : undefined,
-          sourceType: sourceType || undefined,
+          sourceType: apiSourceType,
           groupId: resolvedGroupId,
           pageSize: 200,
           ...referenceSearchPartnerIds,
         });
         if (ac.signal.aborted) return;
-        rows = filterSelectableMaterials(
-          referenceDisplayItemsToMaterials(response.items ?? []),
-          mastersOnly,
+        rows = filterClientMaterialRows(
+          filterSelectableMaterials(referenceDisplayItemsToMaterials(response.items ?? []), mastersOnly),
         );
       }
       const next = rows;
@@ -457,6 +491,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
     activeOnly,
     mastersOnly,
     sourceType,
+    sourceTypes,
     resolvedGroupId,
     resolvedWarehouseId,
     hostResource,
@@ -569,11 +604,11 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
         hostResource,
         keyword: codePart,
         isActive: activeOnly ? true : undefined,
-        sourceType: sourceType || undefined,
+        sourceType: apiSourceType,
         groupId: resolvedGroupId,
         pageSize: 50,
       });
-      selected = referenceDisplayItemsToMaterials(response.items ?? []).find(
+      selected = filterClientMaterialRows(referenceDisplayItemsToMaterials(response.items ?? [])).find(
         (m) => Number((m as any).id) === Number(val),
       );
       if (selected) {
@@ -706,10 +741,11 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
         <MaterialSelectOptionContent
           material={material as Record<string, unknown> | undefined}
           fallbackLabel={option.label}
+          searchKeyword={optionSearchKeyword}
         />
       );
     },
-    [materialById],
+    [materialById, optionSearchKeyword],
   );
 
   const embedValueProps = embedInProFormField
@@ -724,7 +760,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
    */
   const dropdown = (
     <UniDropdown
-      placeholder={placeholder}
+      placeholder={effectivePlaceholder}
       allowClear
       showSearch
       loading={loading}
@@ -763,6 +799,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
                   .filter(Boolean)
                   .join(' ')
                   .trim();
+                setOptionSearchKeyword(kw);
                 let items: Material[] = [];
                 if (resolvedWarehouseId) {
                   const balanceRes: any = await apiRequest('/apps/kuaizhizao/reports/inventory/material-balances', {
@@ -797,14 +834,16 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
                     hostResource,
                     keyword: kw || undefined,
                     isActive: activeOnly ? true : undefined,
-                    sourceType: sourceType || undefined,
+                    sourceType: apiSourceType,
                     groupId: resolvedGroupId,
                     pageSize: 200,
                     ...referenceSearchPartnerIds,
                   });
-                  items = filterSelectableMaterials(
-                    referenceDisplayItemsToMaterials(response.items ?? []),
-                    mastersOnly,
+                  items = filterClientMaterialRows(
+                    filterSelectableMaterials(
+                      referenceDisplayItemsToMaterials(response.items ?? []),
+                      mastersOnly,
+                    ),
                   );
                 }
                 mergeMaterialsIntoData(items);

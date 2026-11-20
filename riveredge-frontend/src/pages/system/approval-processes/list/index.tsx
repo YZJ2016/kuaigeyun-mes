@@ -5,9 +5,10 @@
  * 支持审批流程的 CRUD 操作。
  */
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag } from '../../utils/systemListPresentation';
@@ -16,7 +17,9 @@ import { useNavigate } from 'react-router-dom';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { FormModalTemplate, MODAL_CONFIG, TwoColumnLayout } from '../../../../components/layout-templates';
+import { useResourceCategoryPanel } from '../../shared/useResourceCategoryPanel';
+import { type ResourceCategoryListFilter } from '../../../../services/resourceCategory';
 import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import {
@@ -48,6 +51,35 @@ const ApprovalProcessListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
+
+  const reloadList = useCallback(() => {
+    actionRef.current?.reload();
+  }, []);
+
+  const categoryListFilterRef = useRef<ResourceCategoryListFilter>({});
+
+  const handleCategorySelectionChange = useCallback(
+    (nextFilter: ResourceCategoryListFilter) => {
+      categoryListFilterRef.current = nextFilter;
+      reloadList();
+    },
+    [reloadList],
+  );
+
+  const {
+    leftPanel: categoryLeftPanel,
+    listFilter: categoryListFilter,
+    selectedCategoryKey,
+    categorySelectOptions,
+    reloadCategories,
+    categoryFormModal,
+  } = useResourceCategoryPanel({
+    resourceType: 'approval_process',
+    onSelectionChange: handleCategorySelectionChange,
+    onFunctionPresetsApplied: reloadList,
+  });
+
+  categoryListFilterRef.current = categoryListFilter;
 
   const approvalProcessDetailDescColumns = useMemo<ProDescriptionsItemProps<Record<string, unknown>>[]>(
     () => [
@@ -148,6 +180,7 @@ const ApprovalProcessListPage: React.FC = () => {
     setCurrentApprovalProcessUuid(null);
     setFormInitialValues({
       is_active: true,
+      category_uuid: categoryListFilter.category_uuid,
     });
     setModalVisible(true);
   };
@@ -167,6 +200,7 @@ const ApprovalProcessListPage: React.FC = () => {
         code: detail.code,
         description: detail.description,
         is_active: detail.is_active,
+        category_uuid: detail.category_uuid || undefined,
       });
       setModalVisible(true);
     } catch (error: any) {
@@ -282,6 +316,7 @@ const ApprovalProcessListPage: React.FC = () => {
       setModalVisible(false);
       setFormInitialValues(undefined);
       actionRef.current?.reload();
+      void reloadCategories();
     } catch (error: any) {
       messageApi.error(error.message || t('common.operationFailed'));
       throw error;
@@ -293,7 +328,7 @@ const ApprovalProcessListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns = useMemo<ProColumns<ApprovalProcess>[]>(() => alignProColumns<ApprovalProcess>([
+  const columns = useMemo<ProColumns<ApprovalProcess>[]>(() => alignProColumns([
     {
       title: t('pages.system.approvalProcesses.code'),
       dataIndex: 'code',
@@ -378,11 +413,17 @@ const ApprovalProcessListPage: React.FC = () => {
 
   return (
     <>
-      <ListPageTemplate>
+      <TwoColumnLayout
+        style={{ height: '100%' }}
+        layoutPersistenceId="pages.system.approval-processes.list"
+        leftPanel={categoryLeftPanel}
+        rightPanel={{
+          content: (
         <UniTable<ApprovalProcess>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.approvalProcesses')}
-        columnPersistenceId="pages.system.approval-processes.list-v3"
+        columnPersistenceId="pages.system.approval-processes.list-v4"
+        tanstackQuery={{ queryKeyPrefix: ['pages.system.approval-processes.list', selectedCategoryKey] }}
         headerTitle={t('pages.system.approvalProcesses.headerTitle')}
         actionRef={actionRef}
         columns={columns}
@@ -393,10 +434,12 @@ const ApprovalProcessListPage: React.FC = () => {
             const limit = pageSize;
 
             const filter = resolveApprovalProcessListFilter(searchFormValues);
+            const categoryFilter = categoryListFilterRef.current;
             const listParams: ApprovalProcessListParams = {
               skip,
               limit,
               ...filter,
+              ...categoryFilter,
             };
 
             const countTotal = async (): Promise<number> => {
@@ -408,6 +451,7 @@ const ApprovalProcessListPage: React.FC = () => {
                   skip: offset,
                   limit: chunkSize,
                   ...filter,
+                  ...categoryFilter,
                 });
                 total += chunk.length;
                 if (chunk.length < chunkSize) break;
@@ -465,7 +509,11 @@ const ApprovalProcessListPage: React.FC = () => {
           messageApi.success(t('pages.system.approvalProcesses.exportSuccess'));
         }}
       />
-      </ListPageTemplate>
+          ),
+        }}
+      />
+
+      {categoryFormModal}
 
       <FormModalTemplate
         title={isEdit ? t('pages.system.approvalProcesses.editModalTitle') : t('pages.system.approvalProcesses.createModalTitle')}
@@ -507,6 +555,15 @@ const ApprovalProcessListPage: React.FC = () => {
           fieldProps={{
             rows: 3,
           }}
+          colProps={{ span: 24 }}
+        />
+
+        <SafeProFormSelect
+          name="category_uuid"
+          label={t('pages.system.resourceCategory.fieldCategory')}
+          placeholder={t('pages.system.resourceCategory.categoryPlaceholder')}
+          options={categorySelectOptions}
+          allowClear
           colProps={{ span: 24 }}
         />
       

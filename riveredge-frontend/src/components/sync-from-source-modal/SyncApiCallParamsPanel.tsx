@@ -53,7 +53,7 @@ async function fetchAllLocalMaterialCodes(): Promise<string[]> {
   let skip = 0;
   const limit = 2000;
   for (let page = 0; page < 50; page += 1) {
-    const res = await materialApi.list({ skip, limit, is_active: true });
+    const res = await materialApi.list({ skip, limit, isActive: true });
     for (const item of res.items) {
       const code = materialCodeOf(item);
       if (!code || seen.has(code)) continue;
@@ -72,7 +72,7 @@ async function fetchAllLocalWarehouseCodes(): Promise<string[]> {
   let skip = 0;
   const limit = 1000;
   for (let page = 0; page < 50; page += 1) {
-    const res = await warehouseApi.list({ skip, limit, is_active: true });
+    const res = await warehouseApi.list({ skip, limit, isActive: true });
     for (const item of res.items) {
       const code = String(item.code ?? '').trim();
       if (!code || seen.has(code)) continue;

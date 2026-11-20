@@ -4,7 +4,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ProFormInstance, ProForm, ProFormDependency } from '@ant-design/pro-components';
+import { ProFormInstance, ProForm } from '@ant-design/pro-components';
 import { App, Tag, theme } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../components/layout-templates/constants';
@@ -19,6 +19,7 @@ import {
   buildOperationSequencePayload,
   parseOperationSequenceFromRoute,
 } from '../utils/processRouteSequenceUtils';
+import { fetchActiveOperationCatalog } from '../utils/activeOperationCatalog';
 import { routeFormSchema } from '../schemas/route';
 import { useCustomFields } from '../../../hooks/useCustomFields';
 import { CustomFieldsFormSection } from '../../../components/custom-fields';
@@ -191,10 +192,7 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
           overReportValue: Number((detail as any).over_report_value ?? (detail as any).overReportValue ?? 0) || 0,
         });
         const seq = detail.operation_sequence ?? (detail as any).operationSequence;
-        const { operationApi, unwrapProcessPagedList } = await import('../services/process');
-        const ops = await parseOperationSequenceFromRoute(seq, t, async () =>
-          unwrapProcessPagedList(await operationApi.list({ limit: 1000, is_active: true })),
-        );
+        const ops = await parseOperationSequenceFromRoute(seq, t, () => fetchActiveOperationCatalog());
         if (ops.length > 0) setOperationSequence(ops);
         const fieldFormValues = await loadFieldValues(detail.id);
         formRef.current?.setFieldsValue(fieldFormValues);
@@ -358,18 +356,15 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
         className="operation-sequence-form-item"
       >
         <div style={{ width: '100%', minWidth: 0 }}>
-          <ProFormDependency name={['allowOperationJump']}>
-            {({ allowOperationJump }) => (
-              <OperationSequenceEditor
-                key="route-operation-sequence"
-                value={operationSequence}
-                onChange={setOperationSequence}
-                showNodeOperationColumn={!!allowOperationJump}
-                nestedModalZIndex={operationPickModalZIndex}
-                onPickModalOpenChange={setPickModalOpen}
-              />
-            )}
-          </ProFormDependency>
+          <OperationSequenceEditor
+            key="route-operation-sequence"
+            value={operationSequence}
+            onChange={setOperationSequence}
+            showNodeOperationColumn={false}
+            showTimeColumns
+            nestedModalZIndex={operationPickModalZIndex}
+            onPickModalOpenChange={setPickModalOpen}
+          />
         </div>
       </ProForm.Item>
       <SchemaFormRenderer

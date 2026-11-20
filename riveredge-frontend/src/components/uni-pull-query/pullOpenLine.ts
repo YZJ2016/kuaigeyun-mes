@@ -7,6 +7,10 @@ export type PullOpenLineQtyRow = {
   suggested_quantity?: number | null;
   pushed_quantity?: number | null;
   remaining_quantity?: number | null;
+  suggested_aux_quantity?: number | null;
+  pushed_aux_quantity?: number | null;
+  remaining_aux_quantity?: number | null;
+  aux_unit?: string | null;
 };
 
 /** 采购申请开口行：来源单须已审核通过方可下推（与 BE push_purchase_order / push_inquiry 一致） */
@@ -39,4 +43,29 @@ export function readPullOpenLinePushedQty(row: PullOpenLineQtyRow): number {
 
 export function readPullOpenLineRemainingQty(row: PullOpenLineQtyRow): number {
   return Number(row.remaining_quantity ?? 0);
+}
+
+export function readPullOpenLineAuxSuggestedQty(row: PullOpenLineQtyRow): number | null {
+  if (!row.aux_unit || !String(row.aux_unit).trim()) return null;
+  const v = row.suggested_aux_quantity;
+  return v == null ? 0 : Number(v);
+}
+
+export function readPullOpenLineAuxPushedQty(row: PullOpenLineQtyRow): number | null {
+  if (!row.aux_unit || !String(row.aux_unit).trim()) return null;
+  const v = row.pushed_aux_quantity;
+  return v == null ? 0 : Number(v);
+}
+
+export function readPullOpenLineAuxRemainingQty(row: PullOpenLineQtyRow): number | null {
+  if (!row.aux_unit || !String(row.aux_unit).trim()) return null;
+  const v = row.remaining_aux_quantity;
+  return v == null ? 0 : Number(v);
+}
+
+/** 确认/handoff 预填：有副剩余用副剩余，否则不落副数量 */
+export function readPullOpenLineHandoffAuxQty(row: PullOpenLineQtyRow): number | undefined {
+  const rem = readPullOpenLineAuxRemainingQty(row);
+  if (rem == null) return undefined;
+  return rem > 0 ? rem : 0;
 }

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Flex, Modal, Table, theme } from 'antd';
+import type { TableColumnsType } from 'antd/es/table';
 import { MODAL_CONFIG } from '../layout-templates/constants';
 import { UniPullQueryFilterBar } from './UniPullQueryFilterBar';
 import {
@@ -10,7 +11,39 @@ import {
 import { defaultPullRowLabel } from './defaultPullRowLabel';
 import { resolvePullQueryModalFilterProps } from './resolvePullQueryModalFilterProps';
 import { normalizePullKey, resolvePullRowKey } from './pullRowKey';
+import { DocumentLineTotalStockProvider } from '../../apps/kuaizhizao/components/DocumentLineTotalStock';
+import {
+  buildPullQueryCurrentStockColumn,
+  pullRowMaterialId,
+} from './pullQueryCurrentStockColumn.tsx';
+import {
+  columnsHavePullMaterialFields,
+  pullQueryColumnDataIndex,
+  resolvePullCurrentStockInsertIndex,
+} from './pullQueryColumnUtils';
 import type { UniPullQueryModalProps } from './types';
+
+function shouldAppendPullCurrentStockColumn(columns: UniPullQueryModalProps<object>['columns']): boolean {
+  if (!columns?.length) return false;
+  if (columns.some((col) => pullQueryColumnDataIndex(col) === 'current_stock')) return false;
+  return columnsHavePullMaterialFields(columns as TableColumnsType<unknown>);
+}
+
+function withPullCurrentStockColumn<T extends object>(
+  columns: TableColumnsType<T>,
+  t: (key: string, defaultValue?: string) => string,
+): TableColumnsType<T> {
+  const stockRender = buildPullQueryCurrentStockColumn<T>(t).render;
+  const mapped = columns.map((col) =>
+    pullQueryColumnDataIndex(col) === 'current_stock' ? { ...col, render: stockRender } : col,
+  );
+  if (!shouldAppendPullCurrentStockColumn(columns)) return mapped;
+  const stockCol = buildPullQueryCurrentStockColumn<T>(t);
+  const insertAt = resolvePullCurrentStockInsertIndex(mapped as TableColumnsType<unknown>);
+  const next = [...mapped];
+  next.splice(insertAt, 0, stockCol);
+  return next;
+}
 
 /**
  * 统一加载取单弹窗：筛选栏 + 可选表格 + 分页 + 确认创建。
@@ -27,6 +60,7 @@ export function UniPullQueryModal<T extends object>({
   loading = false,
   confirmLoading = false,
   selectionType = 'radio',
+  defaultCrossPageMode: defaultCrossPageModeProp,
   selectedRowKeys,
   onSelectedRowKeysChange,
   isRowDisabled,
@@ -61,7 +95,7 @@ export function UniPullQueryModal<T extends object>({
   cancelText,
   okButtonProps,
   footer,
-  width = MODAL_CONFIG.PULL_QUERY_WIDTH,
+  width = MODAL_CONFIG.EXTRA_LARGE_WIDTH,
   zIndex,
   destroyOnHidden = true,
   afterOpenChange,
@@ -108,7 +142,11 @@ export function UniPullQueryModal<T extends object>({
   const resolvedTotal = filterProps.total ?? total;
   const resolvedOnPageChange = filterProps.onPageChange ?? onPageChange;
   const isMultiSelect = selectionType === 'checkbox';
-  const [crossPageMode, setCrossPageMode] = useState<UniPullQueryCrossPageMode>('page');
+  const resolvedDefaultCrossPageMode: UniPullQueryCrossPageMode =
+    defaultCrossPageModeProp ?? (isMultiSelect ? 'cross' : 'page');
+  const [crossPageMode, setCrossPageMode] = useState<UniPullQueryCrossPageMode>(
+    resolvedDefaultCrossPageMode,
+  );
 
   const resolvedSearchPlaceholder = String(
     searchPlaceholder ?? t('components.uniPullQuery.searchPlaceholder'),
@@ -117,12 +155,27 @@ export function UniPullQueryModal<T extends object>({
   const resolvedEmptySearchText = emptySearchText ?? t('components.uniPullQuery.emptySearch');
   const resolvedOkText = okText ?? t('common.confirm');
   const resolvedCancelText = cancelText ?? t('common.cancel');
+  const resolvedColumns = useMemo(
+    () => withPullCurrentStockColumn(columns, t),
+    [columns, t],
+  );
+  const stockMaterialIds = useMemo(
+    () =>
+      dataSource
+        .map((row) => pullRowMaterialId(row))
+        .filter((id): id is number => id != null),
+    [dataSource],
+  );
   const selectedCount = selectedRowKeys.length;
   const resolveLabel = getRowLabel ?? ((record: T) => defaultPullRowLabel(record));
 
   useEffect(() => {
-    if (!open) setCrossPageMode('page');
-  }, [open]);
+    if (!open) {
+      setCrossPageMode('page');
+      return;
+    }
+    setCrossPageMode(resolvedDefaultCrossPageMode);
+  }, [open, resolvedDefaultCrossPageMode]);
 
   const tableRowKey = useCallback(
     (record: T) => resolvePullRowKey(record, rowKey),
@@ -260,12 +313,13 @@ export function UniPullQueryModal<T extends object>({
         onRemove={handleRemoveSelected}
         onClear={handleClearSelected}
       />
+      <DocumentLineTotalStockProvider materialIds={stockMaterialIds}>
       <Table<T>
         rowKey={tableRowKey}
         loading={loading}
         size="small"
         tableLayout="fixed"
-        columns={columns}
+        columns={resolvedColumns}
         dataSource={dataSource}
         locale={{
           emptyText:
@@ -309,6 +363,7 @@ export function UniPullQueryModal<T extends object>({
         }}
         scroll={tableScroll}
       />
+      </DocumentLineTotalStockProvider>
       {footerHint ? <div style={{ marginTop: 12 }}>{footerHint}</div> : null}
       {alert ? <div style={{ marginTop: 12 }}>{alert}</div> : null}
     </>

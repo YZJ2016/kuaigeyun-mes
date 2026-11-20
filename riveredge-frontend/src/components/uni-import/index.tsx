@@ -48,7 +48,8 @@ import {
 import { getImportDataRows } from './import-preview-utils';
 import { readImportSheetStringMatrix, mergeLiveImportRowsWithPrecisionCache } from './read-import-sheet-matrix';
 import { translatePathTitle } from '../../utils/menuTranslation';
-import { resolveSystemFieldKey } from './apply-import-mapping';
+import { isImportYearPreambleFirstCell, resolveSystemFieldKey } from './apply-import-mapping';
+import { resolveFactoryImportHeaderIndexMap } from '../../utils/spreadsheetImportTemplate';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 import ErrorBoundary from '../error-boundary';
 
@@ -206,6 +207,11 @@ export interface UniImportProps {
    */
   importTemplateRevision?: string;
   /**
+   * 自定义下载模板（如定制仓按客户「工资明细总表」生成带年份行的 xlsx）。
+   * 提供时替代默认 headers+示例行模板下载。
+   */
+  onDownloadTemplate?: () => void | Promise<void>;
+  /**
    * 确认入库前是否展示预检预览（默认：true）
    */
   enableImportPreview?: boolean;
@@ -259,6 +265,7 @@ export const UniImport: React.FC<UniImportProps> = ({
   onRelationImportSubmit,
   customImportPreferenceKey,
   importTemplateRevision,
+  onDownloadTemplate,
   enableImportPreview = true,
   importPreviewMaxRows = 10,
   importDataStartRow = 2,
@@ -369,6 +376,52 @@ export const UniImport: React.FC<UniImportProps> = ({
       const sliceToWidth = (row: string[], width: number): string[] =>
         Array.from({ length: width }, (_, idx) => String(row[idx] ?? ''));
 
+      const buildHeaderMappedRows = (
+        excelHeaderRow: string[],
+        dataStartIdx: number,
+      ): string[][] => {
+        const fm = importFieldMapRef.current ?? {};
+        const trimmedExcelHeader = trimTrailingEmpty(excelHeaderRow);
+        const headerIndexMap = resolveFactoryImportHeaderIndexMap(trimmedExcelHeader, fm);
+        const headerOut =
+          effectiveHeaders && effectiveHeaders.length > 0
+            ? effectiveHeaders.map((h) => String(h ?? ''))
+            : selectedImportFieldKeys.map((fieldKey) => {
+                const pair = Object.entries(fm).find(([, f]) => f === fieldKey);
+                return pair ? String(pair[0]).replace(/^\*+/, '').trim() : fieldKey;
+              });
+        const exampleOut =
+          effectiveExampleRow && effectiveExampleRow.length > 0
+            ? effectiveExampleRow.map((v) => String(v ?? ''))
+            : headerOut.map(() => '');
+
+        const rowLooksLikeTemplateExample = (row: string[]): boolean => {
+          const joined = row.map((c) => String(c ?? '').trim()).join('\t');
+          return /示例|example|MAT-001|MOLD-001/i.test(joined);
+        };
+
+        const remapped: string[][] = [headerOut, exampleOut];
+        for (let r = dataStartIdx; r < stringRows.length; r += 1) {
+          const srcRow = stringRows[r] ?? [];
+          if (!srcRow.some((c) => String(c ?? '').trim() !== '')) continue;
+          if (r === dataStartIdx && rowLooksLikeTemplateExample(srcRow)) continue;
+          const outRow = selectedImportFieldKeys.map((fieldKey) => {
+            const colIdx = headerIndexMap[fieldKey];
+            if (colIdx === undefined) return '';
+            return String(srcRow[colIdx] ?? '').trim();
+          });
+          if (outRow.some((c) => c !== '')) {
+            remapped.push(outRow);
+          }
+        }
+        return remapped;
+      };
+
+      // 工资明细总表：第 1 行年份导语、第 2 行表头；勿把「年份」当表头做列投影，否则数据行全被冲掉。
+      if (isImportYearPreambleFirstCell(stringRows[0]?.[0]) && stringRows.length >= 2) {
+        return buildHeaderMappedRows(stringRows[1] ?? [], 2);
+      }
+
       // Univer 常在末尾垫空列；先按表头去尾，再判断是否已是自定义列布局。
       const trimmedHeader = trimTrailingEmpty(stringRows[0] ?? []);
       const effectiveCount = effectiveHeaders?.length ?? 0;
@@ -381,12 +434,17 @@ export const UniImport: React.FC<UniImportProps> = ({
         sheetHeaderKeys.every((key, idx) => key === selectedImportFieldKeys[idx]);
 
       // 自定义导入 / 上传 Excel 后，表格已是 effectiveHeaders 顺序，不能再用全量模板下标重排。
-      if (alreadyProjected || trimmedHeader.length !== headers.length) {
+      if (alreadyProjected) {
         const width =
           effectiveCount > 0 && trimmedHeader.length >= effectiveCount
             ? effectiveCount
             : trimmedHeader.length;
         return stringRows.map((row) => sliceToWidth(row, width));
+      }
+
+      /** 客户表列数与系统模板不一致（如导出含合格率/不良率列）：按表头名映射，禁止截断前 N 列 */
+      if (trimmedHeader.length !== headers.length) {
+        return buildHeaderMappedRows(trimmedHeader, 1);
       }
 
       const selectedIndexes = selectedImportFieldKeys
@@ -397,7 +455,13 @@ export const UniImport: React.FC<UniImportProps> = ({
       }
       return stringRows.map((row) => selectedIndexes.map((colIdx) => row?.[colIdx] ?? ''));
     },
-    [headers, selectedImportFieldKeys, effectiveHeaders, fieldKeyToIndex],
+    [
+      headers,
+      selectedImportFieldKeys,
+      effectiveHeaders,
+      effectiveExampleRow,
+      fieldKeyToIndex,
+    ],
   );
 
   const resolveHeaderFieldKeys = useCallback(
@@ -569,12 +633,16 @@ export const UniImport: React.FC<UniImportProps> = ({
       onOk: async () => {
         try {
           setXlsxBusy(true);
-          await downloadImportTemplateXlsx(
-            importHeaders,
-            exampleRowRef.current,
-            resolvedTemplateFileName,
-            columnOptionsRef.current,
-          );
+          if (onDownloadTemplate) {
+            await onDownloadTemplate();
+          } else {
+            await downloadImportTemplateXlsx(
+              importHeaders,
+              exampleRowRef.current,
+              resolvedTemplateFileName,
+              columnOptionsRef.current,
+            );
+          }
           messageApi.success(t('components.uniImport.templateDownloaded'));
         } catch (error: unknown) {
           const msg = error instanceof Error ? error.message : String(error);

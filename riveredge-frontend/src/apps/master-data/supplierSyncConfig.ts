@@ -4,7 +4,10 @@ import { getSupplierSyncBinding, syncSuppliersFromSource } from './services/supp
 import {
   SUPPLIER_SYNC_AVAILABLE_TARGET_FIELDS,
   SUPPLIER_SYNC_CUSTOM_FIELD_TABLE,
+  SUPPLIER_SYNC_MAPPING_EXPORT_FILENAME,
+  SUPPLIER_SYNC_PREVIEW_PREFERRED_SOURCE_KEYS,
   SUPPLIER_SYNC_REQUIRED_TARGETS,
+  SUPPLIER_SYNC_TARGET_ALIASES,
   SUPPLIER_SYNC_TARGET_FIELDS,
 } from './pages/supply-chain/suppliers/supplierSyncFields';
 
@@ -23,6 +26,9 @@ export function createSupplierSyncConfig(): SyncFromSourceConfig {
     preferredApiCodeSuffixes: ['query_supplier'],
     preferredApiPathTokens: ['bd_supplier', 'executebillquery'],
     preferredConnectorTypes: ['kingdee_cosmic', 'kingdee_galaxy', 'kingdee_xinghan'],
+    previewPreferredSourceKeys: SUPPLIER_SYNC_PREVIEW_PREFERRED_SOURCE_KEYS,
+    targetAliases: SUPPLIER_SYNC_TARGET_ALIASES,
+    mappingExportFileName: SUPPLIER_SYNC_MAPPING_EXPORT_FILENAME,
     getBinding: getSupplierSyncBinding,
     syncFromSource: syncSuppliersFromSource,
     completeSuccessKey: 'app.master-data.suppliers.syncComplete',

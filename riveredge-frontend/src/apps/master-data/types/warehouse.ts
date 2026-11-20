@@ -19,6 +19,8 @@ export interface Warehouse {
   workstationName?: string;
   workCenterId?: number;
   workCenterName?: string;
+  storageAreaCount?: number;
+  storageLocationCount?: number;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
@@ -105,10 +107,15 @@ export interface StorageLocation {
   tenantId: number;
   code: string;
   name: string;
-  storageAreaId: number;
+  /** 可选；挂库区，或与 warehouseId 二选一/皆空（金蝶独立仓位） */
+  storageAreaId?: number | null;
+  /** 可选；未挂库区时可直挂仓库 */
+  warehouseId?: number | null;
   /** 后端列表/详情顺带返回，避免前端异步拉库区字典闪烁 */
   storageAreaCode?: string;
   storageAreaName?: string;
+  warehouseCode?: string;
+  warehouseName?: string;
   description?: string;
   isActive: boolean;
   createdAt: string;
@@ -119,7 +126,8 @@ export interface StorageLocation {
 export interface StorageLocationCreate {
   code: string;
   name: string;
-  storageAreaId: number;
+  storageAreaId?: number | null;
+  warehouseId?: number | null;
   description?: string;
   isActive?: boolean;
 }
@@ -127,7 +135,8 @@ export interface StorageLocationCreate {
 export interface StorageLocationUpdate {
   code?: string;
   name?: string;
-  storageAreaId?: number;
+  storageAreaId?: number | null;
+  warehouseId?: number | null;
   description?: string;
   isActive?: boolean;
 }
@@ -136,6 +145,7 @@ export interface StorageLocationListParams {
   skip?: number;
   limit?: number;
   storage_area_id?: number;
+  warehouse_id?: number;
   is_active?: boolean;
   keyword?: string;
   sort_field?: string;

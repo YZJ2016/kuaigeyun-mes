@@ -34,6 +34,49 @@ export {
   pagePullCandidates,
   paginatePullRows,
 } from './pullScope';
+export { buildPullQueryCurrentStockColumn } from './pullQueryCurrentStockColumn.tsx';
+export { buildPullQueryMaterialSpecColumn } from './pullQueryMaterialColumns';
+export {
+  buildPullQueryMaterialIdentityColumn,
+  buildPullQueryPartnerDocumentColumn,
+} from './pullQueryStackedColumns';
+export type { PullQueryMaterialIdentityRow, PullQueryPartnerField } from './pullQueryStackedColumns';
+export {
+  columnsHavePullMaterialFields,
+  pullQueryColumnDataIndex,
+  resolvePullCurrentStockInsertIndex,
+} from './pullQueryColumnUtils';
+export {
+  renderPullQueryEmptyValue,
+  renderPullQueryOptionalDate,
+  renderPullQueryOptionalText,
+} from './renderPullQueryEmptyValue';
+export {
+  isPullOpenLineRowDisabled,
+  isPullOpenLineSelectable,
+  isPullRequisitionOpenLineSelectable,
+  readPullOpenLineAuxPushedQty,
+  readPullOpenLineAuxRemainingQty,
+  readPullOpenLineAuxSuggestedQty,
+  readPullOpenLineHandoffAuxQty,
+  readPullOpenLinePushedQty,
+  readPullOpenLineRemainingQty,
+  readPullOpenLineSuggestedQty,
+} from './pullOpenLine';
+export {
+  buildPullOpenLineQtyColumn,
+  buildPullOpenLinePrimaryQtyColumn,
+  buildPullOpenLineAuxQtyColumn,
+  buildPullOpenLineQtyColumns,
+  buildDefaultPullOpenLineQtyColumns,
+  PULL_OPEN_LINE_QTY_COLUMN_KEYS,
+  PULL_OPEN_LINE_AUX_QTY_COLUMN_KEYS,
+  renderPullOpenLinePrimaryQtyCell,
+  renderPullOpenLineAuxQtyCell,
+  renderPullOpenLineDualQtyCell,
+} from './pullOpenLineQtyColumns';
+export type { BuildPullOpenLineQtyColumnOptions, PullOpenLineQtyPart } from './pullOpenLineQtyColumns';
+export type { PullOpenLineQtyRow, PullRequisitionOpenLineRow } from './pullOpenLine';
 export {
   composePullRowDisabled,
   isPullRowBlockedByPartnerLock,
@@ -50,12 +93,3 @@ export type {
   UseUniPullQueryOptions,
 } from './types';
 export type { UniPullQueryFilterBarProps } from './UniPullQueryFilterBar';
-export {
-  isPullOpenLineRowDisabled,
-  isPullOpenLineSelectable,
-  isPullRequisitionOpenLineSelectable,
-  readPullOpenLinePushedQty,
-  readPullOpenLineRemainingQty,
-  readPullOpenLineSuggestedQty,
-} from './pullOpenLine';
-export type { PullOpenLineQtyRow, PullRequisitionOpenLineRow } from './pullOpenLine';

@@ -57,6 +57,7 @@ export function createMaterialSyncConfig(): SyncFromSourceConfig {
       'group.name',
       'group_number',
       'group_name',
+      'enableserial',
       'FNumber',
       'FName',
       'FSpecification',
@@ -93,6 +94,7 @@ export function createMaterialSyncConfig(): SyncFromSourceConfig {
       ],
       group_code: ['group_number', 'group.number', 'FMaterialGroup.FNumber'],
       group_name: ['group_name', 'group.name', 'FMaterialGroup.FName'],
+      serial_managed: ['enableserial'],
     },
     preferredApiCodeSuffixes: ['query_material'],
     // 星空/苍穹 code 后缀同为 query_material：先 path 分流，禁止只靠后缀猜到另一套

@@ -53,6 +53,21 @@ export const UNI_TABLE_PAYMENT_SETTLEMENT_COLUMN_DEFAULTS = {
 } as const;
 
 /**
+ * 站点墙钟 `YYYY-MM-DD HH:MM:SS` 单列（含表头排序图标），禁止 180px 导致「创建/更新时间」裁切。
+ */
+export const UNI_TABLE_SITE_DATETIME_COLUMN_WIDTH = 200;
+
+export const UNI_TABLE_SITE_DATETIME_COLUMN_DEFAULTS = {
+  width: UNI_TABLE_SITE_DATETIME_COLUMN_WIDTH,
+  minWidth: UNI_TABLE_SITE_DATETIME_COLUMN_WIDTH,
+  uniTableKeepWidth: true,
+  resizable: false,
+  ellipsis: false,
+  hideInSearch: true,
+  valueType: 'dateTime' as const,
+} as const;
+
+/**
  * 操作列宽度布局令牌（1280 视口 / small 表格 / type="link" + 图标，Playwright 实测）：
  * 单槽按**最宽单动作**预算——四字标签 92px（双字实测 64px），
  * 「更多」按钮 70px、Space 间距 4px、单元格左右内边距 8+8=16px。
@@ -156,7 +171,12 @@ export function buildUniTableFillerColumn(): Record<string, unknown> {
 /** 无 width/minWidth 时的回退列宽（空表 scroll.x 求和） */
 export const UNI_TABLE_EMPTY_FALLBACK_COL_WIDTH = 120;
 
-/** 浏览器原生纵向滚动条宽度（模块级一次性测量，用于 scroll.y 表头列宽预算） */
+/**
+ * 表体纵向滚动条的布局占位（模块级一次性测量，用于 scroll.y 列宽预算）。
+ * `.ant-table-body` 强制 `scrollbar-width: thin`（global.less）。Chromium 上该值决定
+ * clientWidth 扣减，常大于 `::-webkit-scrollbar { width: 6px }` 的绘制宽度。
+ * 裸 div 只量到绘制宽度时，列宽合计会比滚动口多出这几像素，出现假横滚。
+ */
 let uniTableVerticalScrollbarWidthCache: number | undefined;
 
 export function getUniTableVerticalScrollbarWidth(): number {
@@ -170,6 +190,7 @@ export function getUniTableVerticalScrollbarWidth(): number {
   const outer = document.createElement('div');
   outer.style.visibility = 'hidden';
   outer.style.overflow = 'scroll';
+  outer.style.scrollbarWidth = 'thin';
   outer.style.width = '100px';
   outer.style.height = '100px';
   outer.style.position = 'absolute';
@@ -201,6 +222,8 @@ const LIFECYCLE_COLUMN_KEYS = new Set([
   'lifecycle',
   LIST_LIFECYCLE_STAGE_FIELD,
   LEGACY_LIST_LIFECYCLE_FIELD,
+  /** 库存预警（批次/即时库存）：按状态列 SystemFixed，勿用 MarkerTag 浅底 */
+  'alert_label',
 ]);
 
 function parseUniTableColumnWidth(width: unknown): number | undefined {

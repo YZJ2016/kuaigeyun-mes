@@ -91,14 +91,19 @@ export interface MaterialCodeAlias {
   isPrimary: boolean;
 }
 
+/** 副单位换算类型：fixed=固定换算；floating=无固定换算（单据手工双录） */
+export type MaterialUnitConversionType = 'fixed' | 'floating';
+
 // 多单位管理类型定义
 export interface MaterialUnit {
-  /** 单位名称 */
+  /** 副单位名称 */
   unit: string;
-  /** 换算分子（相对于基础单位，如1吨=1000kg，则numerator=1000，denominator=1） */
-  numerator: number;
-  /** 换算分母（相对于基础单位，如1kg=1000g，则numerator=1，denominator=1000） */
-  denominator: number;
+  /** 换算类型；缺省 fixed */
+  conversionType?: MaterialUnitConversionType;
+  /** 固定换算：分子（1 副单位 = numerator/denominator 主单位） */
+  numerator?: number;
+  /** 固定换算：分母 */
+  denominator?: number;
   /** 使用场景（purchase/sale/production/inventory） */
   scenarios?: string[];
 }
@@ -125,6 +130,8 @@ export interface Material {
   groupId?: number;
   specification?: string;
   baseUnit: string;
+  /** 库存单位（金蝶库存单位；默认等于 baseUnit） */
+  inventoryUnit?: string;
   units?: MaterialUnits;
   batchManaged: boolean;
   defaultBatchRuleId?: number;
@@ -136,6 +143,8 @@ export interface Material {
   brand?: string;
   model?: string;
   texture?: string;
+  inventoryCategory?: string;
+  inventory_category?: string;
   weight?: number;
   volume?: number;
   barcode?: string;
@@ -301,6 +310,7 @@ export interface MaterialCreate {
   brand?: string;
   model?: string;
   texture?: string;
+  inventoryCategory?: string;
   isActive?: boolean;
   // 编号映射
   departmentCodes?: DepartmentCodeMapping[]; // 部门编号列表
@@ -335,6 +345,7 @@ export interface MaterialUpdate {
   brand?: string;
   model?: string;
   texture?: string;
+  inventoryCategory?: string;
   isActive?: boolean;
   // 编号映射
   departmentCodes?: DepartmentCodeMapping[]; // 部门编号列表
@@ -358,10 +369,14 @@ export interface MaterialListParams {
   groupId?: number;
   noGroup?: boolean;
   isActive?: boolean;
+  /** 是否启用批号管理 */
+  batchManaged?: boolean;
   keyword?: string;
   code?: string;
   name?: string;
   sourceType?: string; // 物料来源类型（Make/Buy/Outsource/Phantom/CustomerProvided/Gift/Service）
+  /** 批号台账模糊匹配，返回拥有该批号的物料 */
+  batchNo?: string;
   /** 按物料主键精确查询（BOM 列表按引用补齐名称） */
   ids?: number[];
   /** 后端：main_code | name | created_at | updated_at */
@@ -612,6 +627,13 @@ export interface BOM {
   tenantId: number;
   materialId: number;
   componentId: number;
+  /** 安装位置（重复子件时手工区分） */
+  installPosition?: string | null;
+  materialWarehouseId?: number | null;
+  manufacturingDepartmentId?: number | null;
+  attachments?: unknown;
+  warehouseId?: number | null;
+  isOutsource?: boolean;
   quantity: number;
   baseQuantity?: number;
   unit?: string;
@@ -661,6 +683,13 @@ export interface BOM {
 export interface BOMCreate {
   materialId: number;
   componentId: number;
+  /** 安装位置（重复子件时手工区分） */
+  installPosition?: string | null;
+  materialWarehouseId?: number | null;
+  manufacturingDepartmentId?: number | null;
+  attachments?: unknown;
+  warehouseId?: number | null;
+  isOutsource?: boolean;
   quantity: number;
   baseQuantity?: number;
   unit?: string;
@@ -718,10 +747,16 @@ export interface BOMGroupSummary {
   is_default: boolean;
   is_obsolete: boolean;
   item_count: number;
+  /** 主物料编码（groups 接口一次带回，取单勿再二次拉主数据） */
+  material_code?: string | null;
+  material_name?: string | null;
 }
 
 export interface BOMItemCreate {
   componentId: number;
+  installPosition?: string | null;
+  warehouseId?: number | null;
+  isOutsource?: boolean;
   quantity: number;
   baseQuantity?: number;
   unit?: string;
@@ -741,6 +776,9 @@ export interface BOMItemCreate {
 export interface BOMBatchCreate {
   materialId: number;
   items: BOMItemCreate[];
+  materialWarehouseId?: number | null;
+  manufacturingDepartmentId?: number | null;
+  attachments?: unknown;
   baseQuantity?: number;
   bomName?: string | null;
   // 版本控制

@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { Alert, Button, Dropdown, Select, Space, Typography, App } from 'antd';
 import { DownOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
-import type { Material } from '../types/material';
+import type { Material, MaterialGroup } from '../types/material';
 import type { ProcessRoute } from '../types/process';
 import { processRouteApi, operationApi, unwrapProcessPagedList } from '../services/process';
 import { productProcessApi } from '../services/productProcess';
@@ -15,7 +15,12 @@ import { materialApi } from '../services/material';
 import { ProductProcessLinesTable } from './ProductProcessLinesTable';
 import { RouteFormModal } from './RouteFormModal';
 import { ProductProcessSaveAsRouteModal } from './ProductProcessSaveAsRouteModal';
-import type { MaterialProductProcessSave, ProductProcessLine } from '../types/productProcess';
+import type {
+  MaterialGroupProductProcessSave,
+  MaterialProductProcessSave,
+  ProductProcessInheritanceGroup,
+  ProductProcessLine,
+} from '../types/productProcess';
 import {
   enrichLineFromOperation,
   linesFromProcessRoute,
@@ -53,27 +58,40 @@ function resolveProductProcessAudit(data: {
   };
 }
 
+export type ProductProcessPanelScope = 'material' | 'group';
+
 export type ProductProcessPanelProps = {
-  material: Material;
+  scope: ProductProcessPanelScope;
+  material?: Material;
+  materialGroup?: MaterialGroup;
   processRoutes: ProcessRoute[];
   processRoutesLoading: boolean;
   onMaterialUpdated?: (material: Material) => void;
+  onMaterialGroupUpdated?: (group: MaterialGroup) => void;
   /** 普通保存后同步产品工艺页左栏路线标签（不回写物料默认路线） */
   onProductProcessRouteSaved?: (materialUuid: string, processRouteUuid?: string | null) => void;
+  onProductProcessGroupRouteSaved?: (
+    materialGroupUuid: string,
+    processRouteUuid?: string | null,
+  ) => void;
   /** 路线模板保存后刷新下拉列表（编号/名称等） */
   onProcessRoutesRefresh?: () => void | Promise<void>;
-  /** 两栏布局页不展示物料标题 */
+  /** 两栏布局页不展示物料/分组标题 */
   hideMaterialHeading?: boolean;
   /** 不展示顶部说明条 */
   hidePanelHint?: boolean;
 };
 
 export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
+  scope,
   material,
+  materialGroup,
   processRoutes,
   processRoutesLoading,
   onMaterialUpdated,
+  onMaterialGroupUpdated,
   onProductProcessRouteSaved,
+  onProductProcessGroupRouteSaved,
   onProcessRoutesRefresh,
   hideMaterialHeading = false,
   hidePanelHint = false,
@@ -91,13 +109,21 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
   const [routeFormEditUuid, setRouteFormEditUuid] = useState<string | null>(null);
   const [saveAsRouteOpen, setSaveAsRouteOpen] = useState(false);
   const [auditHint, setAuditHint] = useState<{ operator: string; time: string } | null>(null);
+  const [hasOwnRecord, setHasOwnRecord] = useState(true);
+  const [inheritedFromGroup, setInheritedFromGroup] = useState<
+    ProductProcessInheritanceGroup | undefined
+  >();
+
+  const entityUuid = scope === 'material' ? material?.uuid : materialGroup?.uuid;
 
   const baselineRef = useRef('');
   const routeImportRef = useRef<string | undefined>();
   const isDirtyRef = useRef(false);
   const materialRef = useRef(material);
+  const materialGroupRef = useRef(materialGroup);
   const processRoutesRef = useRef(processRoutes);
   materialRef.current = material;
+  materialGroupRef.current = materialGroup;
   processRoutesRef.current = processRoutes;
 
   const isDirty =
@@ -200,13 +226,23 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
     [fetchRouteTemplateLines],
   );
 
+  const resolveGroupFallbackRouteUuid = useCallback((): string | undefined => {
+    const group = materialGroupRef.current;
+    if (!group) return undefined;
+    const prId = group.processRouteId ?? group.process_route_id;
+    if (prId == null) return undefined;
+    return processRoutesRef.current.find((pr) => pr.id === prId)?.uuid;
+  }, []);
+
   const loadConfig = useCallback(async (options?: { force?: boolean }) => {
-    const mat = materialRef.current;
-    if (!mat.uuid) return;
+    if (!entityUuid) return;
     if (!options?.force && isDirtyRef.current) return;
     setLoading(true);
     try {
-      const data = await productProcessApi.get(mat.uuid);
+      const data =
+        scope === 'group'
+          ? await productProcessApi.getGroup(entityUuid)
+          : await productProcessApi.get(entityUuid);
       if (!options?.force && isDirtyRef.current) return;
       const userIdToUuid = await buildUserIdToUuidMap();
       const allOps = await loadAllOperations();
@@ -220,24 +256,47 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
       const processRouteUuid = data.processRouteUuid;
       applyConfig(processRouteUuid, data.allowOperationJump, enriched);
       setAuditHint(resolveProductProcessAudit(data));
+      if (scope === 'material' && 'hasOwnRecord' in data) {
+        setHasOwnRecord(Boolean(data.hasOwnRecord));
+        setInheritedFromGroup(data.inheritedFromGroup);
+      } else {
+        setHasOwnRecord(true);
+        setInheritedFromGroup(undefined);
+      }
     } catch (e: unknown) {
       messageApi.error((e as Error).message || t('common.loadFailed'));
       if (!isDirtyRef.current) {
-        const fallbackRoute = resolveEffectiveProcessRouteUuid(mat, processRoutesRef.current);
+        const fallbackRoute =
+          scope === 'material' && materialRef.current
+            ? resolveEffectiveProcessRouteUuid(materialRef.current, processRoutesRef.current)
+            : resolveGroupFallbackRouteUuid();
         applyConfig(fallbackRoute, false, []);
+        if (scope === 'material') {
+          setHasOwnRecord(false);
+          setInheritedFromGroup(undefined);
+        }
       }
     } finally {
       setLoading(false);
     }
-  }, [applyConfig, messageApi, t, buildUserIdToUuidMap, loadAllOperations]);
+  }, [
+    applyConfig,
+    buildUserIdToUuidMap,
+    entityUuid,
+    loadAllOperations,
+    messageApi,
+    resolveGroupFallbackRouteUuid,
+    scope,
+    t,
+  ]);
 
   useEffect(() => {
-    if (processRoutesLoading || !material.uuid) return;
+    if (processRoutesLoading || !entityUuid) return;
     routeImportRef.current = undefined;
     void loadConfig({ force: true });
-    // 仅随物料切换 / 路线列表就绪重载，避免 loadConfig 引用变化时覆盖未保存编辑
+    // 仅随选中实体 / 路线列表就绪重载，避免 loadConfig 引用变化时覆盖未保存编辑
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [material.uuid, processRoutesLoading]);
+  }, [entityUuid, scope, processRoutesLoading]);
 
   useEffect(() => {
     if (!routeUuid) return;
@@ -264,7 +323,20 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
         return;
       }
       const reloaded = reloadProductProcessLinesFromRouteTemplate(lines, routeLines);
-      if (sameProductProcessLineSequence(reloaded, lines) && allowOperationJump === jump) {
+      const sameSequence =
+        sameProductProcessLineSequence(reloaded, lines) && allowOperationJump === jump;
+      const sameContent =
+        snapshotProductProcessState({
+          processRouteUuid: routeUuid,
+          allowOperationJump: jump,
+          lines: reloaded,
+        }) ===
+        snapshotProductProcessState({
+          processRouteUuid: routeUuid,
+          allowOperationJump,
+          lines,
+        });
+      if (sameSequence && sameContent) {
         messageApi.info(t('app.master-data.productProcess.reloadRouteAlreadyComplete'));
         return;
       }
@@ -288,35 +360,64 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
   const canSaveAsNewRoute = canSave && Boolean(routeUuid) && lines.length > 0;
 
   const persistConfig = useCallback(
-    async (extra?: Pick<MaterialProductProcessSave, 'saveAsNewRoute' | 'newRouteCode' | 'newRouteName'>) => {
-      if (!material.uuid) return;
+    async (
+      extra?: Pick<MaterialProductProcessSave, 'saveAsNewRoute' | 'newRouteCode' | 'newRouteName'>,
+    ) => {
+      if (!entityUuid) return;
       if (routeUuid && lines.length === 0) {
         messageApi.warning(t('app.master-data.routes.operationRequired'));
         return;
       }
       setSaving(true);
       try {
-        const saved = await productProcessApi.save(material.uuid, {
+        const payload = {
           processRouteUuid: routeUuid,
           allowOperationJump,
           lines: lines.map(productProcessLineToApi),
           ...extra,
-        });
-        applyConfig(
-          saved.processRouteUuid,
-          saved.allowOperationJump,
-          (saved.lines ?? []).map((ln) => productProcessLineFromApi(ln)),
-        );
-        setAuditHint(resolveProductProcessAudit(saved));
-        onProductProcessRouteSaved?.(material.uuid, saved.processRouteUuid ?? null);
-        if (extra?.saveAsNewRoute) {
-          await onProcessRoutesRefresh?.();
-          const refreshed = await materialApi.get(material.uuid);
-          onMaterialUpdated?.(refreshed);
-          setSaveAsRouteOpen(false);
-          messageApi.success(t('app.master-data.productProcess.savedAsNewRoute'));
+        };
+        if (scope === 'group') {
+          const saved = await productProcessApi.saveGroup(
+            entityUuid,
+            payload as MaterialGroupProductProcessSave,
+          );
+          applyConfig(
+            saved.processRouteUuid,
+            saved.allowOperationJump,
+            (saved.lines ?? []).map((ln) => productProcessLineFromApi(ln)),
+          );
+          setAuditHint(resolveProductProcessAudit(saved));
+          onProductProcessGroupRouteSaved?.(entityUuid, saved.processRouteUuid ?? null);
+          if (extra?.saveAsNewRoute) {
+            await onProcessRoutesRefresh?.();
+            const { materialGroupApi } = await import('../services/material');
+            const refreshed = await materialGroupApi.get(entityUuid);
+            onMaterialGroupUpdated?.(refreshed);
+            setSaveAsRouteOpen(false);
+            messageApi.success(t('app.master-data.productProcess.savedAsNewRoute'));
+          } else {
+            messageApi.success(t('app.master-data.productProcess.saved'));
+          }
         } else {
-          messageApi.success(t('app.master-data.productProcess.saved'));
+          const saved = await productProcessApi.save(entityUuid, payload);
+          applyConfig(
+            saved.processRouteUuid,
+            saved.allowOperationJump,
+            (saved.lines ?? []).map((ln) => productProcessLineFromApi(ln)),
+          );
+          setAuditHint(resolveProductProcessAudit(saved));
+          setHasOwnRecord(true);
+          setInheritedFromGroup(undefined);
+          onProductProcessRouteSaved?.(entityUuid, saved.processRouteUuid ?? null);
+          if (extra?.saveAsNewRoute) {
+            await onProcessRoutesRefresh?.();
+            const refreshed = await materialApi.get(entityUuid);
+            onMaterialUpdated?.(refreshed);
+            setSaveAsRouteOpen(false);
+            messageApi.success(t('app.master-data.productProcess.savedAsNewRoute'));
+          } else {
+            messageApi.success(t('app.master-data.productProcess.saved'));
+          }
         }
       } catch (e: unknown) {
         messageApi.error((e as Error).message || t('common.saveFailed'));
@@ -328,13 +429,16 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
     [
       allowOperationJump,
       applyConfig,
+      entityUuid,
       lines,
-      material.uuid,
       messageApi,
+      onMaterialGroupUpdated,
       onMaterialUpdated,
+      onProductProcessGroupRouteSaved,
       onProductProcessRouteSaved,
       onProcessRoutesRefresh,
       routeUuid,
+      scope,
       t,
     ],
   );
@@ -384,19 +488,60 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
     }
   };
 
+  const headingTitle =
+    scope === 'material' && material
+      ? `${material.code ?? ''} — ${material.name ?? ''}`
+      : scope === 'group' && materialGroup
+        ? `${materialGroup.code ?? ''} — ${materialGroup.name ?? ''}`
+        : '';
+
+  const inheritGroupLabel = inheritedFromGroup
+    ? `${inheritedFromGroup.materialGroupCode ?? ''} ${inheritedFromGroup.materialGroupName ?? ''}`.trim()
+    : '';
+
+  if (!entityUuid) {
+    return null;
+  }
+
   return (
     <>
       {hideMaterialHeading ? null : (
         <Typography.Title level={5} style={{ marginTop: 0 }}>
-          {material.code ?? ''} — {material.name ?? ''}
+          {headingTitle}
         </Typography.Title>
       )}
+      {scope === 'material' && !hasOwnRecord && inheritedFromGroup ? (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          title={t('app.master-data.productProcess.inheritGroupTitle', {
+            group: inheritGroupLabel || inheritedFromGroup.materialGroupUuid,
+          })}
+          description={t('app.master-data.productProcess.inheritGroupDesc')}
+          action={
+            <Button
+              type="primary"
+              size="small"
+              loading={saving}
+              disabled={saving || (!routeUuid && lines.length === 0)}
+              onClick={() => void persistConfig()}
+            >
+              {t('app.master-data.productProcess.saveAsMaterialOverride')}
+            </Button>
+          }
+        />
+      ) : null}
       {hidePanelHint ? null : (
         <Alert
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
-          title={t('app.master-data.productProcess.panelHint')}
+          title={
+            scope === 'group'
+              ? t('app.master-data.productProcess.groupPanelHint')
+              : t('app.master-data.productProcess.panelHint')
+          }
         />
       )}
 
@@ -481,14 +626,6 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
           allowOperationJump={allowOperationJump}
           onAllowOperationJumpChange={(v) => {
             setAllowOperationJump(v);
-            // 关闭「允许工序跳转」时同步关闭各行「节点工序」
-            if (!v) {
-              setLines((prev) =>
-                prev.some((ln) => ln.isNodeOperation)
-                  ? prev.map((ln) => (ln.isNodeOperation ? { ...ln, isNodeOperation: false } : ln))
-                  : prev,
-              );
-            }
           }}
           disabled={loading}
         />
@@ -509,6 +646,9 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
       <ProductProcessSaveAsRouteModal
         open={saveAsRouteOpen}
         material={material}
+        nameForRouteSuggestion={
+          scope === 'group' ? materialGroup?.name : material?.name
+        }
         loading={saving}
         onClose={() => setSaveAsRouteOpen(false)}
         onSubmit={handleSaveAsNewRoute}

@@ -1601,17 +1601,17 @@ riveredge-frontend/e2e/check-residue.py	DELETED	superset	上游窗口内新增�
 riveredge-frontend/e2e/cleanup-mrp.py	a5182cfb915c188e2fddce44aae408ab2463b72e	tracked	seed from 31efc2b64c
 riveredge-frontend/e2e/custom-field-associated-fk.spec.ts	ab0254c42edce2c83e4bccf1e8026f51cf3f9e93	tracked	seed from 8c111dd65f
 riveredge-frontend/e2e/helpers/customFieldApi.ts	fceb2d074e0f505a26e883621d8b68977679ef00	tracked	seed from 8c111dd65f
-riveredge-frontend/e2e/helpers/equipmentApi.ts	738cc10a29f8a9dd5b4ca131633c332ad9f2a7a8	tracked	seed from d81b4b70bf
+riveredge-frontend/e2e/helpers/equipmentApi.ts	738cc10a29f8a9dd5b4ca131633c332ad9f2a7a8	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/e2e/kz-delivery.spec.ts	96d4d65dbb788a1cff883fdb9ceac7d7ba533e2f	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/e2e/kz-equipment.spec.ts	1dc0a4bc565bd4f5a3d9f017566736600baf525a	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/e2e/kz-outsource.spec.ts	5c068ac88454038473cec77d26f74b10c008ed03	applied	R2：与上游tip blob一致，本地已同步
-riveredge-frontend/e2e/kz-plan.spec.ts	d02e01c496f58d9f09d0bd7290ccf0f31a60151e	tracked	seed from 31efc2b64c
+riveredge-frontend/e2e/kz-plan.spec.ts	d02e01c496f58d9f09d0bd7290ccf0f31a60151e	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/e2e/kz-production.spec.ts	c7b37e40074f94107ebb89b689ad8948d2abaa49	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/e2e/kz-purchase-finance-chain.spec.ts	e663d622df89af14fcc0565a24f8e7d6e2a2ebde	tracked	seed from 3958bb1524
-riveredge-frontend/e2e/kz-purchase.spec.ts	2c0b9063746f22baef6d4ced13d66ac5a73e64c4	tracked	seed from 31efc2b64c
+riveredge-frontend/e2e/kz-purchase.spec.ts	2c0b9063746f22baef6d4ced13d66ac5a73e64c4	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/e2e/kz-quality.spec.ts	d943b02dde9bccc792a9be5322aa70a3f562dc71	applied	R2：与上游tip blob一致，本地已同步
-riveredge-frontend/e2e/kz-sales.spec.ts	78a5176f7967aeca97160ece42b10104004062a9	tracked	seed from 02f730b1c2
-riveredge-frontend/e2e/kz-warehouse.spec.ts	47ad76e092f09d9a9762b5586dca234dae7a54ae	tracked	seed from 905787348a
+riveredge-frontend/e2e/kz-sales.spec.ts	78a5176f7967aeca97160ece42b10104004062a9	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
+riveredge-frontend/e2e/kz-warehouse.spec.ts	47ad76e092f09d9a9762b5586dca234dae7a54ae	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/e2e/playwright.cf-fk.config.ts	c5ac836a6fd65c05f65367512019bdd673333bb4	tracked	seed from 8c111dd65f
 riveredge-frontend/e2e/playwright.finance-chain.config.ts	aa4052c954106b22164f22d3c1f5e96fdfc6f595	tracked	seed from 3958bb1524
 riveredge-frontend/e2e/probe-forecast.py	DELETED	superset	上游窗口内新增后删除,无落地价值
@@ -1629,15 +1629,19 @@ riveredge-frontend/src/api/warehouse-execution.ts	DELETED	applied	D依赖簇续:
 riveredge-frontend/src/app.tsx	45f3edefe13e595344a35c7f7b0626d624e14333	tracked	seed from 3050130eb5
 riveredge-frontend/src/apps/industry-pack/manifest.json	8b3e140fee02933d0ba17ad248c81dd2b7ea63e5	tracked	seed from 2c76a942c2
 riveredge-frontend/src/apps/kuaicaiwu/pages/payment-applications/index.tsx	DELETED	applied	13be286f11续:前端+财务适配+迁移
+riveredge-frontend/src/apps/kuaiconnect/pages/apis/ApiFormModal.tsx	e97df01c3c46d2608ec0aa445595a235a8e95164	deferred	R2:kuaiconnect页import路径需适配(src/components深度)且依赖apiManagement服务未落
+riveredge-frontend/src/apps/kuaiconnect/pages/apis/OutboundFieldMappingEditor.tsx	DELETED	deferred	R2:kuaiconnect页import路径需适配(src/components深度)且依赖apiManagement服务未落
+riveredge-frontend/src/apps/kuaiconnect/pages/apis/apiFormUtils.ts	fd6cf9b8b78375ef940c60c35d2f02a666bb6b83	deferred	R2:kuaiconnect页import路径需适配(src/components深度)且依赖apiManagement服务未落
 riveredge-frontend/src/apps/kuaiconnect/pages/apis/apiTestResultPreview.ts	8e36e5c02a7307c4a07ee4750fd8a9d5dde4c39e	tracked	seed from 7fa73e053a
-riveredge-frontend/src/apps/kuaiconnect/pages/apis/list/index.tsx	b9c872e0bf99526c2d9d2a8e6739c1d0f210ac00	tracked	seed from 3958bb1524
+riveredge-frontend/src/apps/kuaiconnect/pages/apis/list/index.tsx	b9c872e0bf99526c2d9d2a8e6739c1d0f210ac00	deferred	R2:kuaiconnect页import路径需适配(src/components深度)且依赖apiManagement服务未落
+riveredge-frontend/src/apps/kuaiconnect/pages/apis/outboundFieldMappings.ts	DELETED	deferred	R2:kuaiconnect页import路径需适配(src/components深度)且依赖apiManagement服务未落
 riveredge-frontend/src/apps/kuaiconnect/pages/application-connections/AppConnectorMarket.tsx	651ea62e4a99b8d67fae72eae6694f547271ea10	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-frontend/src/apps/kuaiconnect/pages/application-connections/connectorBrandPresentation.tsx	82054df5a48a03de22e0cb4ba207f4c1d1ce09bb	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-frontend/src/apps/kuaiconnect/pages/application-connections/connectors.tsx	fc1d44e623908ab6a1ecf3710f81315fea2ea6c7	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-frontend/src/apps/kuaiconnect/pages/application-connections/list/index.tsx	0b23e0fb66a59baaf7de04d10fbb8a2c605eebc2	superset	R2预审：本地已有等价/更深实现，不摘
-riveredge-frontend/src/apps/kuaiconnect/pages/data-sources/DatabaseBrandIcon.tsx	0d65ef595a88d44bfd044bcbe8c0fa1deb18146a	tracked	seed from 2cb998d625
-riveredge-frontend/src/apps/kuaiconnect/pages/data-sources/databaseBrandColors.ts	1ee34f2f9beedaabe54efe306d1380c72e62e4aa	tracked	seed from 2cb998d625
-riveredge-frontend/src/apps/kuaiconnect/pages/datasets/list/index.tsx	a113157c300391b96a337d1000b8f1dc4e24cec1	tracked	seed from 3958bb1524
+riveredge-frontend/src/apps/kuaiconnect/pages/data-sources/DatabaseBrandIcon.tsx	0d65ef595a88d44bfd044bcbe8c0fa1deb18146a	deferred	R2:kuaiconnect页import路径需适配(src/components深度)且依赖apiManagement服务未落
+riveredge-frontend/src/apps/kuaiconnect/pages/data-sources/databaseBrandColors.ts	1ee34f2f9beedaabe54efe306d1380c72e62e4aa	deferred	R2:kuaiconnect页import路径需适配(src/components深度)且依赖apiManagement服务未落
+riveredge-frontend/src/apps/kuaiconnect/pages/datasets/list/index.tsx	a113157c300391b96a337d1000b8f1dc4e24cec1	deferred	R2:kuaiconnect页import路径需适配(src/components深度)且依赖apiManagement服务未落
 riveredge-frontend/src/apps/kuaiems/manifest.json	5ef0dd94364e247a47c958f326329cc8c22cad0d	tracked	seed from 46508115c7
 riveredge-frontend/src/apps/kuaiplm/components/SystemArchiveCapabilitiesTags.tsx	DELETED	deferred	kuaiplm星研发深度分叉,随域评估
 riveredge-frontend/src/apps/kuaiplm/manifest.json	DELETED	deferred	kuaiplm星研发深度分叉,随域评估
@@ -1649,7 +1653,7 @@ riveredge-frontend/src/apps/kuaizhizao/components/DocumentApprovalRecordsPane.ts
 riveredge-frontend/src/apps/kuaizhizao/components/DocumentAttachmentCenterPane.tsx	14fb1267f1f60a88a18934db72e85cc9539c31c5	tracked	seed from 2c945a39fb
 riveredge-frontend/src/apps/kuaizhizao/components/DocumentAttachmentsReadonly.tsx	7d08bc0dfff952ed858e38d5cec4d3cf8e6d7f84	tracked	seed from 2c945a39fb
 riveredge-frontend/src/apps/kuaizhizao/components/DocumentLineAttachmentsCell.tsx	2212ee8490566007e03a624b9fa7d8f0326ce7d4	tracked	seed from 95c4869063
-riveredge-frontend/src/apps/kuaizhizao/components/DocumentLineTotalStock.tsx	496c52c176200f32103de9ddecb067dc5781809f	tracked	seed from 93b3cb5998
+riveredge-frontend/src/apps/kuaizhizao/components/DocumentLineTotalStock.tsx	496c52c176200f32103de9ddecb067dc5781809f	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/apps/kuaizhizao/components/DocumentPushApiDefaultsModal.tsx			
 riveredge-frontend/src/apps/kuaizhizao/components/DocumentPushBatchPanel.tsx	7c2ffc4caad6bd204ea00f4a69f95c32c77b947e	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/apps/kuaizhizao/components/EquipmentPersonSelect.tsx	5b609d42cda89048409fdd2234dd11aa73751650	tracked	seed from 2c945a39fb
@@ -2062,7 +2066,7 @@ riveredge-frontend/src/apps/kuaizhizao/services/finance/sales-invoice.ts	d67d3e6
 riveredge-frontend/src/apps/kuaizhizao/services/finance/settlement.ts	7fab2b4219c6d6e0e1ecb2cb48f0026992959292	tracked	seed from 2c76a942c2
 riveredge-frontend/src/apps/kuaizhizao/services/flow-data-generate.ts	DELETED	tracked	seed from 0b8630adfd
 riveredge-frontend/src/apps/kuaizhizao/services/management-report.ts	60beab248a9eae2569fd8183c21e4c257be2dd90	tracked	seed from a60f3e9039
-riveredge-frontend/src/apps/kuaizhizao/services/material-line-stock.ts	92dbfd0e5d604fca5c7c9b64185bdf42cbb6b524	tracked	seed from 93b3cb5998
+riveredge-frontend/src/apps/kuaizhizao/services/material-line-stock.ts	92dbfd0e5d604fca5c7c9b64185bdf42cbb6b524	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/apps/kuaizhizao/services/packing-binding.ts	22c1a6fb744299eb977034f4953fe85fc7e025fd	tracked	seed from b12cc66e71
 riveredge-frontend/src/apps/kuaizhizao/services/payment-application.ts	60b1c63373fd743415c976c6df0a95980bf0a29f	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/apps/kuaizhizao/services/production.ts	db206e930adc9f75f226d3987ec04497b4d13318	tracked	seed from 93b3cb5998
@@ -2140,7 +2144,7 @@ riveredge-frontend/src/apps/kuaizhizao/utils/salesOrderLifecycle.ts	ff73857cbcc9
 riveredge-frontend/src/apps/kuaizhizao/utils/warehouseListCore.ts	038cea56d1765b7e2688d987560359b233ed9182	tracked	seed from 37409d3b29
 riveredge-frontend/src/apps/kuaizhizao/utils/workOrderReporting.ts	1f78c6d555385dd088f8efba72f1ad9116c84fb0	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/apps/master-data/bomSyncConfig.ts	3a94d2a2cb3bb9963d7b256158a715da36c3ea37	tracked	seed from a0b353ce7e
-riveredge-frontend/src/apps/master-data/components/CustomerDetailDrawer.tsx	2cd2f68112a9fbaf7264047baf4365b62cb0902a	tracked	seed from 37409d3b29
+riveredge-frontend/src/apps/master-data/components/CustomerDetailDrawer.tsx	2cd2f68112a9fbaf7264047baf4365b62cb0902a	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/apps/master-data/components/CustomerFormModal.tsx	3d7922932d10575402a0f52ce72b87d7e91eff11	tracked	seed from 37409d3b29
 riveredge-frontend/src/apps/master-data/components/CustomerSelectDropdown.tsx	598418d2201704ecec57776f2730d38f26d26a20	tracked	seed from 88b0c140f1
 riveredge-frontend/src/apps/master-data/components/DrawingFormModal.tsx	f1ef8e90e94b90a63fdc364c445e92eb4564403a	tracked	seed from df7d635797
@@ -2153,32 +2157,32 @@ riveredge-frontend/src/apps/master-data/components/MaterialGroupFormModal.tsx	fd
 riveredge-frontend/src/apps/master-data/components/MaterialMultiUnitSyncFromSourceModal.tsx	bdc7cf3058d468073672e1d3f2f3d948a97861bc	applied	R2簇4 master-data:摘取上游tip实现
 riveredge-frontend/src/apps/master-data/components/MaterialUnitQuickSelect.tsx	1cf9463c7dda94d5d349e0579f63ad3e9678a640	tracked	seed from 6abba1dbd5
 riveredge-frontend/src/apps/master-data/components/OperationFormModal.tsx	ea23037a3dbefeb88c22377e55d64cc368eb9f6b	tracked	seed from 1eb300325a
-riveredge-frontend/src/apps/master-data/components/OperationSequenceEditor.tsx	609eb545b69a5b0cc3cbc4e2848e6728b718f5e2	tracked	seed from 93b3cb5998
+riveredge-frontend/src/apps/master-data/components/OperationSequenceEditor.tsx	609eb545b69a5b0cc3cbc4e2848e6728b718f5e2	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/apps/master-data/components/OrderLineVariantAttributesCell.tsx	7be19982b32af01e9c92deb525589f9acd7bb138	tracked	seed from b12cc66e71
 riveredge-frontend/src/apps/master-data/components/PartnerAddressesDetailTable.tsx	22d6d9230ed97215a733accd1edda47339c73fb6	tracked	seed from 37409d3b29
 riveredge-frontend/src/apps/master-data/components/PartnerAddressesFormTable.tsx	902962acb7084374890789a4f57ddd8919288d19	tracked	seed from 37409d3b29
 riveredge-frontend/src/apps/master-data/components/PartnerPriceTierLinesEditor.tsx	830789867cadaab837efc73450372dc4df049306	tracked	seed from a60f3e9039
 riveredge-frontend/src/apps/master-data/components/PartnerSettlementAccountsFormTable.tsx	781082f9208d01e6836e8e9969dd5fa81d9560d2	tracked	seed from d81b4b70bf
-riveredge-frontend/src/apps/master-data/components/ProductProcessLinesTable.tsx	74a378bc859d6598b4d6fe6fa18f078956756bdf	tracked	seed from 93b3cb5998
-riveredge-frontend/src/apps/master-data/components/ProductProcessPanel.tsx	ad243778c2502fb04988b87fbb69023338b83b25	tracked	seed from 93b3cb5998
+riveredge-frontend/src/apps/master-data/components/ProductProcessLinesTable.tsx	74a378bc859d6598b4d6fe6fa18f078956756bdf	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
+riveredge-frontend/src/apps/master-data/components/ProductProcessPanel.tsx	ad243778c2502fb04988b87fbb69023338b83b25	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/apps/master-data/components/ProductProcessSaveAsRouteModal.tsx	44f8a92715d282f71d1ec98f7f69aa34c93c5b8b	tracked	seed from 93b3cb5998
-riveredge-frontend/src/apps/master-data/components/RouteFormModal.tsx	3c4d23dad1c7838d1669e50f47f18870ba9aa31d	tracked	seed from 93b3cb5998
+riveredge-frontend/src/apps/master-data/components/RouteFormModal.tsx	3c4d23dad1c7838d1669e50f47f18870ba9aa31d	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/apps/master-data/components/StorageLocationFormModal.tsx	8bf2cecf90b616c7344f2062af5715d5d75082e0	applied	R2簇4 master-data:摘取上游tip实现
 riveredge-frontend/src/apps/master-data/components/StorageLocationSyncFromSourceModal.tsx	9b8f16e2299b2e2d9f65e08d2d4060d2fcac5898	tracked	seed from 57a37e2749
 riveredge-frontend/src/apps/master-data/components/SupplierFormModal.tsx	70dbe777afc65aa9d4221d9ea109e3db97df6120	tracked	seed from 37409d3b29
 riveredge-frontend/src/apps/master-data/components/SupplierSelectDropdown.tsx	0d2a2d0c6e92fda8ef4d81dd64ee7cdc676fef3f	tracked	seed from 3958bb1524
 riveredge-frontend/src/apps/master-data/components/WarehouseLocationRefSyncFromSourceModal.tsx	135a7bfc93e1840ffbc2a1c13c553f31dd3c70f0	applied	R2簇4 master-data:摘取上游tip实现
 riveredge-frontend/src/apps/master-data/components/WorkGroupFormModal.tsx	5af2fcb4ad986e402a054342818c90843b2ca60b	applied	R2簇4 master-data:摘取上游tip实现
-riveredge-frontend/src/apps/master-data/customerSyncConfig.ts	e006c4030877987c816b2f8ebdde349b770b4cc2	tracked	seed from a0b353ce7e
+riveredge-frontend/src/apps/master-data/customerSyncConfig.ts	e006c4030877987c816b2f8ebdde349b770b4cc2	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/apps/master-data/hooks/useMaterialUnitOptions.ts	c7d891facdbcf0c05acca3fa0a228bbec13e47b5	applied	R2簇4 master-data:摘取上游tip实现
 riveredge-frontend/src/apps/master-data/index.tsx	695a06429d3bb4ff92c199eb72783fb205c3989e	tracked	seed from 93b3cb5998
 riveredge-frontend/src/apps/master-data/manifest.json	a84a5192f4e6d6d3e2322f61c57d0c31e87e791c	tracked	seed from 5f085a19c9
 riveredge-frontend/src/apps/master-data/materialBatchManageSyncConfig.ts	d646a4b1b16bd0ce11a93a997fc0432270b769f9	applied	R2簇4 master-data:摘取上游tip实现
 riveredge-frontend/src/apps/master-data/materialGroupSyncConfig.ts	18c900a37607a65dff9ba7adf39e1ccdf31746db	tracked	seed from 7fa73e053a
 riveredge-frontend/src/apps/master-data/materialMultiUnitSyncConfig.ts	b01e0b31bccf470a1cf9df38e7c1f3d9d53845f8	applied	R2簇4 master-data:摘取上游tip实现
-riveredge-frontend/src/apps/master-data/materialSyncConfig.ts	7adb4f4c199bf10eb3e6e64e3f4ddee72f487f02	tracked	seed from a0b353ce7e
+riveredge-frontend/src/apps/master-data/materialSyncConfig.ts	7adb4f4c199bf10eb3e6e64e3f4ddee72f487f02	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/apps/master-data/operationSyncConfig.ts	01819195ba96ab1d643c5a2799dffedb0de5a6f5	tracked	seed from a0b353ce7e
-riveredge-frontend/src/apps/master-data/pages/materials/bom/designer.tsx	abd1bc253f07ff7a7895c8e967845d1cd8a71e6a	tracked	seed from df7d635797
+riveredge-frontend/src/apps/master-data/pages/materials/bom/designer.tsx	abd1bc253f07ff7a7895c8e967845d1cd8a71e6a	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/apps/master-data/pages/materials/bom/index.tsx	b78e7737b581016331686d83354147a20b01c294	tracked	seed from 905787348a
 riveredge-frontend/src/apps/master-data/pages/materials/management.tsx	3362efb2240af30f3691cf83dd7e0373a3190ca7	applied	R2簇4 master-data:适配本地(禁kuaiconnect薄代理/inbound_sync_gate)
 riveredge-frontend/src/apps/master-data/pages/materials/materialBatchManageSyncFields.ts	53e65a3135d7f209fd80e31672fa0114ad3ceebb	applied	R2簇4 master-data:摘取上游tip实现
@@ -2192,13 +2196,13 @@ riveredge-frontend/src/apps/master-data/pages/process/product-process/index.tsx	
 riveredge-frontend/src/apps/master-data/pages/process/sop/SOPBatchCreateSteps.tsx	76da2ea4f346a18a795c9bcacec2f7217a16614a	tracked	seed from df7d635797
 riveredge-frontend/src/apps/master-data/pages/process/sop/designer.tsx	dfcb3ea9aed7ee59311144298dbbd11c0527dfb0	tracked	seed from 4c4afe4d32
 riveredge-frontend/src/apps/master-data/pages/process/sop/execution.tsx	4dadad8dd3b23a5c80b45fde8b619a31c6295567	superset	R2簇4:本地实现超前上游(antd6 title=已先行)
-riveredge-frontend/src/apps/master-data/pages/process/sop/index.tsx	8211316560efede452197e2af4d26cba93368448	tracked	seed from df7d635797
-riveredge-frontend/src/apps/master-data/pages/supply-chain/customers/customerSyncFields.ts	3f5623159b71605570952a92e3fa1d7555d4cc6a	tracked	seed from b12cc66e71
+riveredge-frontend/src/apps/master-data/pages/process/sop/index.tsx	8211316560efede452197e2af4d26cba93368448	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
+riveredge-frontend/src/apps/master-data/pages/supply-chain/customers/customerSyncFields.ts	3f5623159b71605570952a92e3fa1d7555d4cc6a	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/apps/master-data/pages/supply-chain/customers/index.tsx	ffbf58dfe9796d17827611f1b385b94b1a8f7710	tracked	seed from b12cc66e71
-riveredge-frontend/src/apps/master-data/pages/supply-chain/partner-price-books/PartnerPriceBookBatchRegisterModal.tsx	a62c6d7a258ed4e6336f94f59d4e0c5b261d9987	tracked	seed from 154977d948
-riveredge-frontend/src/apps/master-data/pages/supply-chain/partner-price-books/index.tsx	386018706ba673aeaa8cc999f6708e9bb8434087	tracked	seed from 154977d948
+riveredge-frontend/src/apps/master-data/pages/supply-chain/partner-price-books/PartnerPriceBookBatchRegisterModal.tsx	a62c6d7a258ed4e6336f94f59d4e0c5b261d9987	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
+riveredge-frontend/src/apps/master-data/pages/supply-chain/partner-price-books/index.tsx	386018706ba673aeaa8cc999f6708e9bb8434087	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/apps/master-data/pages/supply-chain/suppliers/index.tsx	577381d22f53f0d6c9d1970c1bd08701f24ca7c0	tracked	seed from 37409d3b29
-riveredge-frontend/src/apps/master-data/pages/supply-chain/suppliers/supplierSyncFields.ts	e403975a60570ff516480b6ae32875922838ffa0	tracked	seed from b12cc66e71
+riveredge-frontend/src/apps/master-data/pages/supply-chain/suppliers/supplierSyncFields.ts	e403975a60570ff516480b6ae32875922838ffa0	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/apps/master-data/pages/warehouse/storage-locations/index.tsx	46b882de6ca9ef3286bac09018d6b40628461af7	tracked	seed from 57a37e2749
 riveredge-frontend/src/apps/master-data/pages/warehouse/storage-locations/storageLocationSyncFields.ts	93ec479c0a7d5ea057585036976db8aa775e1584	tracked	seed from 57a37e2749
 riveredge-frontend/src/apps/master-data/pages/warehouse/warehouses/index.tsx	77a666112bd3c17256d2b5526439ff81e2e9004d	applied	R2簇4 master-data:适配本地(禁kuaiconnect薄代理/inbound_sync_gate)
@@ -2206,9 +2210,9 @@ riveredge-frontend/src/apps/master-data/pages/warehouse/warehouses/warehouseLoca
 riveredge-frontend/src/apps/master-data/routePrefetch.ts	3d889b183ec74dbf1d6a3a0d8e88ce3bf4b0043a	tracked	seed from 93b3cb5998
 riveredge-frontend/src/apps/master-data/schemas/customer.ts	e5db57288c5090926a8f3cd639b373ae51104448	tracked	seed from b12cc66e71
 riveredge-frontend/src/apps/master-data/schemas/operation.ts	783fd39f84b3c2038d225fbd920a93d32d2da4fe	applied	R2簇4 master-data:摘取上游tip实现
-riveredge-frontend/src/apps/master-data/schemas/partner-form-shared.ts	59608e7acdf5768f6ec133fb35c8d9740eba6cc9	tracked	seed from 37409d3b29
+riveredge-frontend/src/apps/master-data/schemas/partner-form-shared.ts	59608e7acdf5768f6ec133fb35c8d9740eba6cc9	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/apps/master-data/schemas/route.ts	9a4035dc899c9dea72d6ab5ee72bab176126d3cb	applied	R2簇4 master-data:摘取上游tip实现
-riveredge-frontend/src/apps/master-data/schemas/storage-location.ts	cf7f0d6c83a53c230cddd20cbd92b35ce5223458	tracked	seed from 57a37e2749
+riveredge-frontend/src/apps/master-data/schemas/storage-location.ts	cf7f0d6c83a53c230cddd20cbd92b35ce5223458	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/apps/master-data/schemas/supplier.ts	7d3e94681a506351df1abe8e40d4a62b79f12c43	tracked	seed from 37409d3b29
 riveredge-frontend/src/apps/master-data/schemas/warehouse.ts	8cc3a96ee26c4e270fdfb39be715d081dae90b6d	tracked	seed from b12cc66e71
 riveredge-frontend/src/apps/master-data/services/drawingDistribution.ts	8db3a6d3af32780d37807e5eca8cb9d6d29b3893	tracked	seed from b12cc66e71
@@ -2220,33 +2224,33 @@ riveredge-frontend/src/apps/master-data/services/productProcess.ts	97760e9d970c9
 riveredge-frontend/src/apps/master-data/services/supply-chain.ts	b8eda38a4145058ac23147626b8d45495bcd693c	tracked	seed from d025413d18
 riveredge-frontend/src/apps/master-data/services/warehouse.ts	17271d16ede4f449424792baf940339eedb2edeb	applied	R2簇4 master-data:摘取上游tip实现
 riveredge-frontend/src/apps/master-data/storageLocationSyncConfig.ts	99437e8546af185bd6595e8f73ec387948c3f22a	tracked	seed from 57a37e2749
-riveredge-frontend/src/apps/master-data/supplierSyncConfig.ts	8a03819891b0600ad9902a3cbb8cf47ab06e877b	tracked	seed from a0b353ce7e
-riveredge-frontend/src/apps/master-data/types/material.ts	dfae300fe5c5280b526de340e4cc028379e2e67a	tracked	seed from 93b3cb5998
-riveredge-frontend/src/apps/master-data/types/partner-price-book.ts	41ac8683755c6a659a06d924c791c0e21ef529fe	tracked	seed from 154977d948
+riveredge-frontend/src/apps/master-data/supplierSyncConfig.ts	8a03819891b0600ad9902a3cbb8cf47ab06e877b	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
+riveredge-frontend/src/apps/master-data/types/material.ts	dfae300fe5c5280b526de340e4cc028379e2e67a	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
+riveredge-frontend/src/apps/master-data/types/partner-price-book.ts	41ac8683755c6a659a06d924c791c0e21ef529fe	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/apps/master-data/types/process.ts	271ae05b6da125678a28c37645a2626712ff9f30	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-frontend/src/apps/master-data/types/productProcess.ts	b8d1e1080277babf720012c8c02d1988d4855ff2	tracked	seed from 93b3cb5998
-riveredge-frontend/src/apps/master-data/types/supply-chain.ts	836e8e223223b99bd4bd72137df9fa829ca31ee1	tracked	seed from 37409d3b29
-riveredge-frontend/src/apps/master-data/types/warehouse.ts	03aa5b87d8e2ee526abd623c286af9cfb292cd03	tracked	seed from 57a37e2749
+riveredge-frontend/src/apps/master-data/types/supply-chain.ts	836e8e223223b99bd4bd72137df9fa829ca31ee1	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
+riveredge-frontend/src/apps/master-data/types/warehouse.ts	03aa5b87d8e2ee526abd623c286af9cfb292cd03	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/apps/master-data/unitSyncConfig.ts	f0b4e6b7797220d1c4bace41de1ec60d0abefe04	tracked	seed from a0b353ce7e
-riveredge-frontend/src/apps/master-data/utils/activeOperationCatalog.ts	b498a60969f36d09f9b21ef6eefbd7abc2056ecb	tracked	seed from 93b3cb5998
-riveredge-frontend/src/apps/master-data/utils/manufacturingTimeUnits.ts	cc66982836db6f461a239a37d437bc753df90fe3	tracked	seed from 93b3cb5998
+riveredge-frontend/src/apps/master-data/utils/activeOperationCatalog.ts	b498a60969f36d09f9b21ef6eefbd7abc2056ecb	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
+riveredge-frontend/src/apps/master-data/utils/manufacturingTimeUnits.ts	cc66982836db6f461a239a37d437bc753df90fe3	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/apps/master-data/utils/masterListCore.ts	3820cf1d9479ab26d8f4f10669cc440a7c65c721	applied	R2簇4 master-data:摘取上游tip实现
 riveredge-frontend/src/apps/master-data/utils/materialConversionType.ts	7e6c7ca4870400d6ddbc727d81806a0d51f2307a	tracked	seed from b12cc66e71
-riveredge-frontend/src/apps/master-data/utils/materialDefaultWarehouse.ts	677060e7a1e306618ea2ce9de1e24f6bf95f2fe8	tracked	seed from 93b3cb5998
+riveredge-frontend/src/apps/master-data/utils/materialDefaultWarehouse.ts	677060e7a1e306618ea2ce9de1e24f6bf95f2fe8	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/apps/master-data/utils/materialImportResolve.ts	84ea620e1a47578529634b6502060f5b9843e4bf	tracked	seed from 8c111dd65f
 riveredge-frontend/src/apps/master-data/utils/materialInventoryCategory.ts	00b719608bbb1eec0c65e6003dec302343d2aa28	tracked	seed from b12cc66e71
 riveredge-frontend/src/apps/master-data/utils/materialListCore.ts	fcf4dc61a2f990674929bd24b26701ae447149fc	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-frontend/src/apps/master-data/utils/materialUnitsImport.ts	6dd2bf6be88c0d751f480375ec94f8b803438e7e	tracked	seed from b12cc66e71
-riveredge-frontend/src/apps/master-data/utils/partner-form-map.ts	69160433052fb9c20f9adf838d8938c3d19258c5	tracked	seed from 37409d3b29
-riveredge-frontend/src/apps/master-data/utils/partner-static-labels.ts	b2b1758fbd7191f3f909f5a687c3bdb2dfac627c	tracked	seed from 37409d3b29
+riveredge-frontend/src/apps/master-data/utils/partner-form-map.ts	69160433052fb9c20f9adf838d8938c3d19258c5	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
+riveredge-frontend/src/apps/master-data/utils/partner-static-labels.ts	b2b1758fbd7191f3f909f5a687c3bdb2dfac627c	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/apps/master-data/utils/partnerPriceBookImport.ts	d4305f74161adfb66ddc5cd951c5a863ead57e37	tracked	seed from a60f3e9039
-riveredge-frontend/src/apps/master-data/utils/processRouteSequenceUtils.ts	3c5c7334b35118266af526a1f3543f67c47cb463	tracked	seed from 93b3cb5998
+riveredge-frontend/src/apps/master-data/utils/processRouteSequenceUtils.ts	3c5c7334b35118266af526a1f3543f67c47cb463	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/apps/master-data/utils/productProcessLineUtils.ts	d9a55f1b5b56eeff03668024621fc87f068313e6	tracked	seed from 93b3cb5998
 riveredge-frontend/src/apps/master-data/utils/resolve-partner-material-price.convertUnitPrice.test.ts	afb33f0b51ed85ac060c476c5d00d2dd799dada8	tracked	seed from e451b48dc2
-riveredge-frontend/src/apps/master-data/utils/resolve-partner-material-price.ts	4f214403892b2c7c6358ff53191d026049cc30ac	tracked	seed from 2c945a39fb
+riveredge-frontend/src/apps/master-data/utils/resolve-partner-material-price.ts	49a0c78f8ecb74f7c3fb8e34ee573f0a6c90ea3a	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/apps/master-data/utils/workGroupPerformanceWeight.ts	c5ae40adc691c01bad23bfe2f2ab8b0ac64de978	applied	R2簇4 master-data:摘取上游tip实现
 riveredge-frontend/src/apps/master-data/warehouseLocationRefSyncConfig.ts	712de8da67f3820afb68c3c9973d8cb4e88022f7	applied	R2簇4 master-data:摘取上游tip实现
-riveredge-frontend/src/apps/master-data/warehouseSyncConfig.ts	34aab0e494cd3590f3ff48a969c745fa431a3440	tracked	seed from 905787348a
+riveredge-frontend/src/apps/master-data/warehouseSyncConfig.ts	34aab0e494cd3590f3ff48a969c745fa431a3440	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/assets/board/dashboard.png	32dc1171fae7c47440e5c6665b8d48a41662fa1d	tracked	seed from ddd31709d6
 riveredge-frontend/src/components/QuickActions/index.tsx	92a3350331448c65c6fa2754af53fe82abce49ef	superset	本地antd6已超前(size=medium/Alert title),上游tip反旧
 riveredge-frontend/src/components/RefreshButton.tsx	cee810eba19b804b75358f8800f4c25232778a52	applied	ea1f4da58e刷新反馈+读加速+门禁加固
@@ -2256,7 +2260,7 @@ riveredge-frontend/src/components/ai-assistant/index.tsx	e0bcf0745bc131e5ad3e8b9
 riveredge-frontend/src/components/ai-assistant/kuAiConversationApi.ts	fe09bfc690686a27f45063df9cdb145c83602dde	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/components/ai-assistant/kuAiConversationStore.ts	2f4c411a25044eff5e9835a2f1463c0aa103ab08	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/components/ai-assistant/kuAiMessageMeta.ts	9ca3a5fa1964695660528d5325b904a9d08b57b5	tracked	seed from 3050130eb5
-riveredge-frontend/src/components/business-notification-rules/NotificationRulesPanel.tsx	6c68aba8ab45a1cf995ce140254e4a79f6bc064d	tracked	seed from 4bd853a94f
+riveredge-frontend/src/components/business-notification-rules/NotificationRulesPanel.tsx	6c68aba8ab45a1cf995ce140254e4a79f6bc064d	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/components/code-field/index.tsx	ac31ff9aba81a23262af87c8ed690d1a4f47e8d9	tracked	seed from 905787348a
 riveredge-frontend/src/components/code-rule-component-builder/ComponentConfigModal.tsx	ac7154fa53a2864d180ca5da5c308c0339ec4926	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/components/code-rule-component-builder/index.tsx	53821fbb0bfb6945fa10f521a5138f27ca32e2d8	applied	R2：与上游tip blob一致，本地已同步
@@ -2276,7 +2280,7 @@ riveredge-frontend/src/components/custom-fields/customFieldSourceFieldUtils.test
 riveredge-frontend/src/components/custom-fields/customFieldSourceFieldUtils.ts	74afbae963c676ff188184ef5b6c5e7cfaaf8b8e	tracked	seed from 8c111dd65f
 riveredge-frontend/src/components/custom-fields/index.ts	b6ebdc640e0104a9f6644e40a0efb14621820143	tracked	seed from 8c111dd65f
 riveredge-frontend/src/components/custom-fields/jsonFieldDateShortcuts.test.ts	06a2c0dc8b97186cbd5db9e3bdd00860e3d6266b	applied	R2：与上游tip blob一致，本地已同步
-riveredge-frontend/src/components/custom-fields/jsonFieldDateShortcuts.ts			
+riveredge-frontend/src/components/custom-fields/jsonFieldDateShortcuts.ts	2f87e530216f3b16ac608ff61742dbbfba2469ff	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/components/dictionary-select/index.tsx	a37339c2f9b782efb4d02986848ddb907305f2f8	tracked	seed from d81b4b70bf
 riveredge-frontend/src/components/document-line-materials-preview/index.tsx	10d0704f634fbcedf11b842d8373f7c0bd9cf385	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/components/document-tracking-panel/TraceLinkedDocumentBrief.tsx	ed8733bb8300267909c463e64769f1c5481a8987	tracked	seed from 57a37e2749
@@ -2291,7 +2295,7 @@ riveredge-frontend/src/components/layout-templates/DocumentFormPageHeaderActions
 riveredge-frontend/src/components/layout-templates/DocumentFormPageLayout.tsx	1ddc246b6b001f101711be9ccc68e7ea4d77b2ef	tracked	seed from 93b3cb5998
 riveredge-frontend/src/components/layout-templates/FormModalTemplate.tsx	eff4e96249e887afc8876578304bb95e5dd1923a	tracked	seed from 93b3cb5998
 riveredge-frontend/src/components/layout-templates/MultiTabListPageTemplate.tsx	7767efc119674d0479d182bd77632ba18bf6c298	superset	本地antd6已超前(size=medium/Alert title),上游tip反旧
-riveredge-frontend/src/components/layout-templates/constants.ts	e9119451df04df1f2b4b12fdb786e010ecc60131	tracked	seed from 4c4afe4d32
+riveredge-frontend/src/components/layout-templates/constants.ts	e9119451df04df1f2b4b12fdb786e010ecc60131	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/components/layout-templates/detailDrawerDescriptionItems.tsx	327d5d3b1628bdc2d103a35508394c8b5152f072	tracked	seed from d81b4b70bf
 riveredge-frontend/src/components/layout-templates/warehouse-detail-table-styles.ts	4d11d532afc54d3691c7509bd0eba8b7d1b29f21	tracked	seed from a0b353ce7e
 riveredge-frontend/src/components/linked-document-detail/drawers/ReceiptNoticeLinkedDetailDrawer.tsx	8f898563d24a25bfbc33469d71d4fbb58736ccaa	tracked	seed from 95c4869063
@@ -2309,35 +2313,36 @@ riveredge-frontend/src/components/quantity-with-unit/documentLineDualQuantityCol
 riveredge-frontend/src/components/quantity-with-unit/index.tsx	1ada2ed6c957443f47ec88e2e5e01e696742b5f5	tracked	seed from a0b353ce7e
 riveredge-frontend/src/components/schema-form/SchemaFormRenderer.tsx	2000cd522887f3e69fdb6ea18019423d34ad095e	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/components/schema-form/form-schemas.ts	93697d441163112e426dcc90a2d8cb8e60623815	applied	R2：与上游tip blob一致，本地已同步
-riveredge-frontend/src/components/sync-from-source-modal/SyncApiCallParamsPanel.tsx			
+riveredge-frontend/src/components/sync-from-source-modal/SyncApiCallParamsPanel.tsx	4d65487f0d5cbb768b641617d65d241b2474719f	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/components/sync-from-source-modal/SyncSourceSettingModal.tsx	e911b40fca3868643376f61bae123dfd641b50db	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/components/sync-from-source-modal/index.tsx	3507b257102475950ba5c677b9e7d9f1abad0240	applied	manual_force skip bypass only
 riveredge-frontend/src/components/sync-from-source-modal/syncBindingPut.ts	9465e3d836331a1e1d2f58d00946936d0af28040	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/components/sync-from-source-modal/syncCallParams.ts	8db6d1c27ce9dac05703b1b53aee0aaf72e2b94f	applied	R2：与上游tip blob一致，本地已同步
-riveredge-frontend/src/components/sync-from-source-modal/syncRunHistory.ts	067739314a94242e04c6c335530e9e3d3bad021a	tracked	seed from a0b353ce7e
+riveredge-frontend/src/components/sync-from-source-modal/syncRunHistory.ts	067739314a94242e04c6c335530e9e3d3bad021a	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/components/sync-from-source-modal/syncSourceNormalize.test.ts	a2f65ce6e991e79dfc95e6c219bc4968f01ce92e	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/components/sync-from-source-modal/syncSourceUtils.ts	16e30cee28aa75b392b25970addb3cc7aeba9e3d	applied	R2簇3 依赖件:salesOrderSyncFields别名/applySupplier defaultCurrency/syncSourceUtils/types(随tip再评)
 riveredge-frontend/src/components/sync-from-source-modal/syncSourcesDraft.ts	3d976bbbfec0925225903447b5e9ebf4f24c9d25	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-frontend/src/components/sync-from-source-modal/types.ts	072e341576492c2265449c55812c012261d7f5f9	applied	R2簇3 依赖件:salesOrderSyncFields别名/applySupplier defaultCurrency/syncSourceUtils/types(随tip再评)
 riveredge-frontend/src/components/sync-push-hub/DocumentPushUnavailablePanel.tsx	0e6cef9c96f8373661ca395e060f3cc2af515491	superset	本地antd6已超前(size=medium/Alert title),上游tip反旧
-riveredge-frontend/src/components/sync-push-hub/SyncPushHubButton.tsx	037d5c26d53627463568084d297f47339c2a8722	tracked	seed from 905787348a
+riveredge-frontend/src/components/sync-push-hub/SyncPushHubButton.tsx	037d5c26d53627463568084d297f47339c2a8722	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/components/sync-push-hub/SyncPushHubModal.tsx	0fd094fa52c9aaaeb6ad4fe72c870d5e62c48327	tracked	seed from 905787348a
 riveredge-frontend/src/components/sync-push-hub/SyncReconcilePanel.tsx	c1260838374b3c6656df2c4811645c5ce6e64340	applied	D依赖簇续:支撑件+前端
 riveredge-frontend/src/components/sync-push-hub/SyncRunHistoryPanel.tsx	f5280111f40a1025a93d6d34f795a4c717f286c7	applied	f40f54e336调度窗+价税簇
 riveredge-frontend/src/components/sync-push-hub/index.ts	0c0a8f787460b7b1c1176c0f98cfa39dba3c98f4	applied	D依赖簇续:支撑件+前端
 riveredge-frontend/src/components/sync-push-hub/pushBindingPause.ts	278bcf90e56731b6603db8004b404976d4dfd8b8	applied	D依赖簇续:支撑件+前端
 riveredge-frontend/src/components/sync-push-hub/reconcileSourceTypes.ts	aecc2e59aba00eea6e0dc4c267d63542eb65d8d9	applied	D依赖簇续:支撑件+前端
-riveredge-frontend/src/components/tenant-bootstrap-modal/index.tsx	46b59ddd2aedb85961750d35e3e4ba53310ebe0a	tracked	seed from 1eb300325a
+riveredge-frontend/src/components/tenant-bootstrap-modal/index.tsx	46b59ddd2aedb85961750d35e3e4ba53310ebe0a	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/components/tenant-selection-modal/index.tsx	5ff99961aaa1321399aab70657556b93b4de0a1d	applied	R2簇5:三方合并/本地适配
+riveredge-frontend/src/components/tenant-selector/index.less	183f865d5b2847b7462edf51bd96ca23b5ecdb48	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/components/tenant-selector/index.tsx	d7a3845c581a2dc69354ffe533dfa550d798614d	applied	R2簇5:三方合并/本地适配
 riveredge-frontend/src/components/themed-segmented/ThemedSegmented.tsx	a1d0b29006a87d9155842c5debc0682b5311d23c	tracked	seed from 93b3cb5998
 riveredge-frontend/src/components/uni-action/actionCatalog.ts	e24b751945685e15cb86bdd936ebf01a3428acb0	tracked	seed from 899307f4d6
 riveredge-frontend/src/components/uni-action/actionText.ts	d79a1105ebd379bec8f060a49cd70fea47b226d6	tracked	seed from 5f085a19c9
 riveredge-frontend/src/components/uni-action/index.tsx	a417ff5291f44dbf09e6804d0bbe41f8eaf48494	tracked	seed from 899307f4d6
 riveredge-frontend/src/components/uni-action/normalize.tsx	c9fe86e82744c0e1871649aab538692260c68a94	tracked	seed from 5f085a19c9
-riveredge-frontend/src/components/uni-action/overflow.tsx	0adf077a1d028a40c3b962723a96592f053de0f5	tracked	seed from 2c945a39fb
+riveredge-frontend/src/components/uni-action/overflow.tsx	0adf077a1d028a40c3b962723a96592f053de0f5	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/components/uni-audit/ApprovalFlowPreview.tsx	59ece1481335fbb64606ab8c4b6f19e5d66c8983	applied	R2：与上游tip blob一致，本地已同步
-riveredge-frontend/src/components/uni-audit/AuditPhaseBadge.tsx	e8d831256141e8faed3c0cbd19c54d3a342a370d	tracked	seed from 37409d3b29
+riveredge-frontend/src/components/uni-audit/AuditPhaseBadge.tsx	e8d831256141e8faed3c0cbd19c54d3a342a370d	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/components/uni-audit/UniAuditInitiatorSubmitModal.tsx	9173ad8b8492a4a8238877ca0ff626acdba06d95	tracked	seed from 6abba1dbd5
 riveredge-frontend/src/components/uni-audit/UniAuditModal.tsx	38fe5d725de4b799476788be77d37c8db3525274	tracked	seed from 171b3d10cf
 riveredge-frontend/src/components/uni-audit/auditInlineEditableFields.tsx	67fa19a101f1844906023af96d788e4247ce3dcc	applied	R2：与上游tip blob一致，本地已同步
@@ -2355,12 +2360,12 @@ riveredge-frontend/src/components/uni-export/index.ts	96388774f8ef1932986444aa9a
 riveredge-frontend/src/components/uni-export/index.tsx	fb679cea37455c1acdc8c7a09454b4cd6aa065fb	tracked	seed from 029aa6f542
 riveredge-frontend/src/components/uni-im/UniImCreateGroupModal.tsx	746dce91475d406900abbee75f57004dcfa215de	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/components/uni-im/UniImDock.tsx	13f2bc7d3b712d9c339099d928a3370c893469cb	tracked	seed from 9de82e8d57
-riveredge-frontend/src/components/uni-im/UniImGroupSettingsModal.tsx	1eacbeb9375062c5f61ece5ee36fb87a5b17ae8a	tracked	seed from 9de82e8d57
+riveredge-frontend/src/components/uni-im/UniImGroupSettingsModal.tsx	1eacbeb9375062c5f61ece5ee36fb87a5b17ae8a	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/components/uni-import/UniImportMenuButton.tsx	fe200579b16886e7ad579cd66e201e19e830949e	tracked	seed from a0b353ce7e
 riveredge-frontend/src/components/uni-import/UniImportToolbarButton.tsx	fb8bf3ef696065e08319b299c971c08761521a68	tracked	seed from a0b353ce7e
-riveredge-frontend/src/components/uni-import/apply-import-mapping.ts	5b9706d5c41573698def9e7bda321b34efc5a268	tracked	seed from 3958bb1524
+riveredge-frontend/src/components/uni-import/apply-import-mapping.ts	5b9706d5c41573698def9e7bda321b34efc5a268	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/components/uni-import/import-preview-utils.ts	42786585713a2c6fc16b37dc1ce043a67d447d0f	tracked	seed from 57a37e2749
-riveredge-frontend/src/components/uni-import/index.tsx	9e3d293520ff357b2ad21a2222c6c4660d8c2eb2	tracked	seed from 3958bb1524
+riveredge-frontend/src/components/uni-import/index.tsx	9e3d293520ff357b2ad21a2222c6c4660d8c2eb2	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/components/uni-import/paste-import-text.ts	f32186c9235c779214b9b0d164b6cdbe4a5f11e0	tracked	seed from 8c111dd65f
 riveredge-frontend/src/components/uni-import/read-import-sheet-matrix.ts	b29697cc582b8bba07c938418b585c59d4585dea	tracked	seed from 8c111dd65f
 riveredge-frontend/src/components/uni-import/uni-import-duplicate-types.ts	65f6c694cea50c1a318b154bb06892b886f4edb2	tracked	seed from 57a37e2749
@@ -2373,17 +2378,17 @@ riveredge-frontend/src/components/uni-input-number/roundInputNumberPrecision.ts	
 riveredge-frontend/src/components/uni-material-batch-picker/index.less	94e2260b14099fe7d76cfa66851cad67e149e792	tracked	seed from 93b3cb5998
 riveredge-frontend/src/components/uni-material-batch-picker/index.tsx	55b8cec86a2bce946ccffdc477dc955764de3ff4	tracked	seed from 6abba1dbd5
 riveredge-frontend/src/components/uni-material-batch-picker/types.ts	ec6c175e97375744f9d7961fb2bbd3d5e4a0af65	tracked	seed from 6abba1dbd5
-riveredge-frontend/src/components/uni-material-batch-picker/utils.ts	70b89b51c7e803370267118034c521ead426e9ab	tracked	seed from 93b3cb5998
-riveredge-frontend/src/components/uni-material-select/index.tsx	7a122db0c0874ae7c4b106a411869ce82e4c1378	tracked	seed from 37409d3b29
+riveredge-frontend/src/components/uni-material-batch-picker/utils.ts	70b89b51c7e803370267118034c521ead426e9ab	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
+riveredge-frontend/src/components/uni-material-select/index.tsx	7a122db0c0874ae7c4b106a411869ce82e4c1378	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/components/uni-material-select/materialSelectOption.tsx	c435c96919cd42b013653fcd4811bcfebdbf2bf0	tracked	seed from d81b4b70bf
 riveredge-frontend/src/components/uni-pull-query/UniPullQueryFilterBar.tsx	c5710b700ee8102f4d23260c0ff3dcc57f82618b	tracked	seed from b12cc66e71
-riveredge-frontend/src/components/uni-pull-query/UniPullQueryModal.tsx	9b7546298464232983c6272aea04f32a093dd4ff	tracked	seed from 6abba1dbd5
+riveredge-frontend/src/components/uni-pull-query/UniPullQueryModal.tsx	9b7546298464232983c6272aea04f32a093dd4ff	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/components/uni-pull-query/UniPullQuerySelectionBar.tsx	c8e6ec6aa6af4683129aa8a40f78cae315ba9686	tracked	seed from 93b3cb5998
-riveredge-frontend/src/components/uni-pull-query/index.ts	f7596b23c182b3cb19fc328866643c985251056b	tracked	seed from 1d968cd27b
-riveredge-frontend/src/components/uni-pull-query/pullOpenLine.ts	9f0513a5f0de6a591f816d6522771b712ca8b95b	tracked	seed from 777aa1a468
-riveredge-frontend/src/components/uni-pull-query/pullOpenLineQtyColumns.tsx	a6e7f6f784eb640cdbde9fc9b522c4736360420f	deferred	本次新增hunk为副数量全景B2；本地缺aux ORM写读闭环，不引入伪字段/第二套helper；既有主数量与本地硬化保留；主数量工具在本地既有文件扩回归验证
+riveredge-frontend/src/components/uni-pull-query/index.ts	f7596b23c182b3cb19fc328866643c985251056b	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
+riveredge-frontend/src/components/uni-pull-query/pullOpenLine.ts	9f0513a5f0de6a591f816d6522771b712ca8b95b	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
+riveredge-frontend/src/components/uni-pull-query/pullOpenLineQtyColumns.tsx	a6e7f6f784eb640cdbde9fc9b522c4736360420f	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/components/uni-pull-query/pullQueryColumnUtils.ts	e0c23c20b19f7f6780d76c31435a59efa95482af	applied	R2：与上游tip blob一致，本地已同步
-riveredge-frontend/src/components/uni-pull-query/pullQueryCurrentStockColumn.tsx	614affe24e7296482e24a2ef4e458180aaa84def	tracked	seed from 93b3cb5998
+riveredge-frontend/src/components/uni-pull-query/pullQueryCurrentStockColumn.tsx	614affe24e7296482e24a2ef4e458180aaa84def	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/components/uni-pull-query/pullQueryMaterialColumns.tsx	73b45b512eecba84fa844f17ebe59b97230dc73c	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/components/uni-pull-query/pullQuerySameSupplierLock.ts	819ff217560c8d520ff084be618550f109faf609	tracked	seed from 1d968cd27b
 riveredge-frontend/src/components/uni-pull-query/pullQueryStackedColumns.tsx	6c877c222f72289b92d2db3a90e3afb11f1c8486	applied	R2：与上游tip blob一致，本地已同步
@@ -2419,27 +2424,28 @@ riveredge-frontend/src/components/uni-user-select/index.tsx	320f1bba3ad302b9d37b
 riveredge-frontend/src/components/uni-wh-dropdown/UniWhDropdown.tsx	ebb7104ba4a20a58fc3432f83b19278fc3fae6f0	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/components/uni-wh-dropdown/UniWhLocationDropdown.tsx	835b9e4d8434620bceb8ddc7d6d7686e016489df	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/components/uni-wh-dropdown/UniWhLocationOrWholeAuto.tsx	d00f4baef9bcb6184b705f4adc0ce2db5cca9cfe	superset	R2预审：本地已有等价/更深实现，不摘
-riveredge-frontend/src/components/uni-wh-dropdown/index.tsx	c58f3ffc3b6072a8a6bac54c07300f020b35029b	tracked	seed from 57a37e2749
+riveredge-frontend/src/components/uni-wh-dropdown/index.tsx	c58f3ffc3b6072a8a6bac54c07300f020b35029b	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/components/uni-wh-dropdown/types.ts	9fff1090781f21f5d565ae95a81d9c1140266566	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/components/uni-wh-dropdown/useWarehouseHasLocations.ts	5e35b389c9e99c639bb00b265d856df1ac45fe1d	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-frontend/src/components/uni-wh-dropdown/warehouseLocationProbe.ts	fb2b20276fdfb6f9687ad5c6d31748e343102886	superset	R2预审：本地已有等价/更深实现，不摘
-riveredge-frontend/src/config/printTemplateSchemas.ts	6debc73a0e365c6acdffb767a7567758b32fd0e9	tracked	seed from 2c945a39fb
+riveredge-frontend/src/config/printTemplateSchemas.ts	6debc73a0e365c6acdffb767a7567758b32fd0e9	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/config/reactQuery.ts	d9ff05f165c379d07e82be34003debf5630fb87c	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/configs/apiLibraryContract.ts			
 riveredge-frontend/src/constants/documentStatusColors.ts	d779610f163a9e40cdeaea9961beec0e7da97e28	tracked	seed from 37409d3b29
 riveredge-frontend/src/constants/fieldPermissionResources.ts	8b37cd082c03f3d756ac3d3a7e7b2f7decc2c2c1	tracked	seed from 2c945a39fb
 riveredge-frontend/src/constants/kuaiaiAssistantTab.ts	1981c901cb9d62764fe535aaba7cb7854285cf84	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/global.less	4351fcdc4b06a28b7929981b8123040caabb8923	applied	FE独立增量手工适配：付款申请订单/申请双金额及各自合计、物料分组前移、配置中心隐藏滚动条、菜单同步提示、中文与日志；只中文不扩六语；配套取单引用用既有helper
-riveredge-frontend/src/hooks/useCustomFields.ts	1f6ef5391b6549e6013a3387bdbbf4ee48f9cd9e	tracked	seed from 826acd7181
+riveredge-frontend/src/hooks/useCustomFields.ts	1f6ef5391b6549e6013a3387bdbbf4ee48f9cd9e	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/hooks/useCustomFieldsForList.tsx	0aabcbd8333df23169f339036ab7801ed4368c53	tracked	seed from 826acd7181
-riveredge-frontend/src/hooks/useDocumentCapabilities.ts	f07bb2c2a641329b0014a16dcdfd0ad864502834	tracked	seed from 2c945a39fb
+riveredge-frontend/src/hooks/useDocumentCapabilities.ts	f07bb2c2a641329b0014a16dcdfd0ad864502834	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/hooks/useDocumentFormCommitAndSubmitReview.ts	9f2eb887314db42ada21ac64c0e1221b5fb7b143	tracked	seed from 93b3cb5998
 riveredge-frontend/src/hooks/useDocumentFormCommitAndSubmitReview.tsx	d51ee8770b93d3a8eae88c51bbe4f92935baf90f	tracked	seed from 93b3cb5998
 riveredge-frontend/src/hooks/useKuaiaiEntryAvailable.ts	18642564f5e7d45defef1310efb8c48205a1b8df	applied	R2：与上游tip blob一致，本地已同步
+riveredge-frontend/src/hooks/useMaterialCodeSearchMode.ts	7365bbb590668f8124b3c9d9ce29a0bbc701ac8f	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/hooks/useMaterialQuickCreateAllowed.ts	922fdad15fdd4163e6ce49f1cf3ff69d04eadf03	tracked	seed from 4a7f11604c
 riveredge-frontend/src/hooks/useRealtimeInbox.ts	abf3f8ab09ecb8301caec712e630f4bf4dcdb3d5	tracked	seed from 31efc2b64c
 riveredge-frontend/src/hooks/useSiteSettingQuery.ts	f66ed81dcd3649c9a93fada9187e68947463d902	applied	R2：与上游tip blob一致，本地已同步
-riveredge-frontend/src/hooks/useToolbarSyncPushFlags.ts	2a364d05ed9bfa3e2284b596bd0f3a89441fef94	tracked	seed from 2c945a39fb
+riveredge-frontend/src/hooks/useToolbarSyncPushFlags.ts	2a364d05ed9bfa3e2284b596bd0f3a89441fef94	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/index.html	ce513e8355c1c401337efccd63ae0b5059b21c57	tracked	seed from 5b75d78120
 riveredge-frontend/src/layouts/BasicLayout.tsx	6ada74cfa26be420c8b3830b05ff66d77707f6ca	tracked	seed from 2cb998d625
 riveredge-frontend/src/layouts/basicLayout/buildInlineLayoutStyles.ts	9ecb6df8df9fd83e597ddec4fb09febbff4aeb88	applied	R2：与上游tip blob一致，本地已同步
@@ -2457,36 +2463,38 @@ riveredge-frontend/src/pages/infra/tenants/list/index.tsx	79ebee8abbadc1900e01fe
 riveredge-frontend/src/pages/login/index.tsx	a810d49948460fa99f5f4b2f3addae98d5156f1e	tracked	seed from 1d968cd27b
 riveredge-frontend/src/pages/master-data/supply-chain/suppliers/supplierSyncFields.ts	DELETED	deferred	本地无warehouse_location_ref同步服务;供应商字段别名特性未同步
 riveredge-frontend/src/pages/system/apis/ApiTestDrawer.tsx	3a266f6aff79727fef9d0740d5c4fad08a8fd7f3	superset	R2预审：本地已有等价/更深实现，不摘
-riveredge-frontend/src/pages/system/apis/apiCategoryTree.ts	18eb9b92d69cd16212f53a0a1569964f27e7037c	tracked	seed from 3958bb1524
+riveredge-frontend/src/pages/system/apis/apiCategoryTree.ts	18eb9b92d69cd16212f53a0a1569964f27e7037c	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/pages/system/apis/apiTestResultPreview.ts	0f49daf0ae44a82938427c97a2281e49e6acad70	tracked	seed from 7fa73e053a
 riveredge-frontend/src/pages/system/apis/list/index.tsx	70d818ce09cb2d48791c9801b59384fd4e1a8b09	tracked	seed from 3958bb1524
 riveredge-frontend/src/pages/system/application-connections/WeComDeploymentGuideBlock.tsx	439f6d81ec0d9bf45bbb0a88a87338087e23c65f	tracked	seed from 3958bb1524
 riveredge-frontend/src/pages/system/application-connections/list/index.tsx	35254e0da9fb5a3093eee4dc9785754f90e57688	tracked	seed from 905787348a
 riveredge-frontend/src/pages/system/applications/list/index.tsx	2764c9d50e297f6501600123c39dd8fd8ead9ebd	tracked	seed from 5f085a19c9
-riveredge-frontend/src/pages/system/approval-processes/designer/index.tsx	0adb3944cc8b421f84dfcb6936654cdf2dc7ded7	tracked	seed from 4c4afe4d32
-riveredge-frontend/src/pages/system/approval-processes/designer/properties/NodePropertyForms.tsx	c92be51dd1fdeb41841d06fe02d79ce899a46120	tracked	seed from 4c4afe4d32
+riveredge-frontend/src/pages/system/approval-processes/designer/index.tsx	0adb3944cc8b421f84dfcb6936654cdf2dc7ded7	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
+riveredge-frontend/src/pages/system/approval-processes/designer/properties/NodePropertyForms.tsx	c92be51dd1fdeb41841d06fe02d79ce899a46120	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/pages/system/approval-processes/instances/index.tsx	9a8562b31de3cd7bc027b6e7b8191b5f91d68bf4	tracked	seed from aeaec6dbb2
-riveredge-frontend/src/pages/system/approval-processes/list/index.tsx	a2c03b8bdca1eaa5460a0e99b92575a4870f99ea	tracked	seed from 3958bb1524
+riveredge-frontend/src/pages/system/approval-processes/list/index.tsx	a2c03b8bdca1eaa5460a0e99b92575a4870f99ea	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/pages/system/config-center/AuditSettingsPanel.tsx	6df9febc083027ef32004289adb5947e18ede03a	tracked	seed from 1eb300325a
-riveredge-frontend/src/pages/system/config-center/configTree.ts	66dfb94e22322296d590192e949f99b0c774ef32	tracked	seed from 1eb300325a
+riveredge-frontend/src/pages/system/config-center/configTree.ts	66dfb94e22322296d590192e949f99b0c774ef32	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/pages/system/config-center/index.tsx	11ebb124186d12db2acde9243ca42e07ac3c7fed	tracked	seed from 1eb300325a
 riveredge-frontend/src/pages/system/custom-fields/list/index.tsx	5d2201d48896ebcbb033484cb26a7fa7a6229ef9	tracked	seed from df7d635797
-riveredge-frontend/src/pages/system/dashboard/analysis/BusinessBoardPage.tsx	09aedf0410beeb30cadadf6e5c97c89b292a018c	tracked	seed from 9edda14493
+riveredge-frontend/src/pages/system/dashboard/DashboardUpdateLogModal.tsx	4d9b745f9c81386a9b4c5a63218249c0f3bacfb1	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
+riveredge-frontend/src/pages/system/dashboard/analysis/BusinessBoardPage.tsx	09aedf0410beeb30cadadf6e5c97c89b292a018c	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/pages/system/dashboard/platformUpdateLog.ts	3a5890c89b34be4230ad920dac0c3e1d522f264b	applied	FE独立增量手工适配：付款申请订单/申请双金额及各自合计、物料分组前移、配置中心隐藏滚动条、菜单同步提示、中文与日志；只中文不扩六语；配套取单引用用既有helper
 riveredge-frontend/src/pages/system/dashboard/platformUpdateLogDedicated.ts	65888821852fdf7845e3a2b011d452cfcc64694c	tracked	seed from 2c945a39fb
 riveredge-frontend/src/pages/system/datasets/list/index.tsx	964b28fb21d716505c6a70609ce8ada98dd40dc7	tracked	seed from 3958bb1524
 riveredge-frontend/src/pages/system/departments/components/DepartmentFormModal.tsx	4699a50adda3187724f4a1a35afefbed9276f827	superset	R2预审：本地已有等价/更深实现，不摘
-riveredge-frontend/src/pages/system/departments/list/index.tsx	31f5ac16fa84b28840e8dfdda32731ad82de6e02	tracked	seed from 46508115c7
+riveredge-frontend/src/pages/system/departments/list/index.tsx	31f5ac16fa84b28840e8dfdda32731ad82de6e02	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/pages/system/menus/index.tsx	05d001dd6d	applied	R2-前端小件簇: 编辑中剔除自身子树防父级循环
 riveredge-frontend/src/pages/system/messages/config/index.tsx	90b31ca67cd7cabb24e4705a0ebb2331d329af1d	tracked	seed from 4bd853a94f
-riveredge-frontend/src/pages/system/messages/template/index.tsx	ff725fd95d12be7ab854eff685dd3f6cc4832f23	tracked	seed from 3958bb1524
-riveredge-frontend/src/pages/system/positions/list/index.tsx	d4d05f2a4a02c4f5568469e816341935fd444362	tracked	seed from 46508115c7
+riveredge-frontend/src/pages/system/messages/template/index.tsx	ff725fd95d12be7ab854eff685dd3f6cc4832f23	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
+riveredge-frontend/src/pages/system/positions/list/index.tsx	d4d05f2a4a02c4f5568469e816341935fd444362	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/pages/system/print-templates/design/index.tsx	4f0653cf94ea0bda98bb093220ff56764a17ead7	tracked	seed from ec29267f5b
-riveredge-frontend/src/pages/system/print-templates/list/index.tsx	6efbebfce6003bd9fdb17960e3fd7f0534c9ab51	tracked	seed from 3958bb1524
+riveredge-frontend/src/pages/system/print-templates/list/index.tsx	6efbebfce6003bd9fdb17960e3fd7f0534c9ab51	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/pages/system/roles/components/RoleFormModal.tsx	3908606e278f0aaa208cb4be1932efc53f595f28	tracked	seed from 4613d982e6
-riveredge-frontend/src/pages/system/shared/useResourceCategoryPanel.tsx	ac8d7ead6415817ead25dd985a093dac0b25f94a	tracked	seed from 3958bb1524
+riveredge-frontend/src/pages/system/shared/useResourceCategoryPanel.tsx	ac8d7ead6415817ead25dd985a093dac0b25f94a	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/pages/system/users/components/UserFormModal.tsx	0caa11b44e59bf94517485796593978738245f70	tracked	seed from ec29267f5b
 riveredge-frontend/src/pages/system/users/list/index.tsx	e39d412494f9fad06d39abac9d46e1bad0ae5b31	applied	C密码策略/默认与临时重置整簇；应用扫描按目录项容忍OSError但整目录不可枚举上抛；63聚焦测试包含用户与菜单同步；生成口令不写日志
+riveredge-frontend/src/pages/system/utils/systemListPresentation.tsx	a54778ee2ae70396fcc0fc09a5bba9bbb786e822	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/patches/isolatedRcDialog.tsx	50dd3e7f4c66d6ea83df43c185c4deb3162b3f60	tracked	seed from 2d6aa3988d
 riveredge-frontend/src/polyfills.ts	38a01eedd2c86ca776fe9c3911a0fbbc19ac3147	tracked	seed from 66af904bd3
 riveredge-frontend/src/routes/AppRoutes.tsx	0726abcbbba9c5166eb37612a5caa8d4b0949ec8	superset	R2预审：本地已有等价/更深实现，不摘
@@ -2499,14 +2507,14 @@ riveredge-frontend/src/services/approvalInstance.ts	2fc3b17b1e0f23f183135e117dd0
 riveredge-frontend/src/services/approvalProcess.ts	5c11ce7628e2500ea539e6c594b2b459046a22c0	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/services/auth.ts	0f395e8a814d2dcc83e6c6d219a7184f078df1bb	applied	R2簇5:三方合并/本地适配
 riveredge-frontend/src/services/businessBoardTitle.ts	dd4287f23bbd9ed4710da3e28f2a669d07d58044	tracked	seed from ddd31709d6
-riveredge-frontend/src/services/businessConfig.ts	e08b45040d5474b1ed001f115a64dc6fc416f215	tracked	seed from 4a7f11604c
+riveredge-frontend/src/services/businessConfig.ts	e08b45040d5474b1ed001f115a64dc6fc416f215	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/services/codeRule.ts			
 riveredge-frontend/src/services/customField.ts	83b550039f07e941e7079d952953c4daa48e43dd	tracked	seed from 826acd7181
 riveredge-frontend/src/services/dashboard.ts	523ad59abf370ace28b6d8b0f2bbc3d9797fb188	tracked	seed from c346cff13b
 riveredge-frontend/src/services/deepseekChat.ts	595e7dab5021046991cf53d955f6fceb592770c0	tracked	seed from 6c946f0717
 riveredge-frontend/src/services/department.ts	d3ce690c25f4bcee4142e80c24033b4825663b5a	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/services/equipmentFault.ts	f8822d4b0a6bc27db85077dd25e48392933823a0	tracked	seed from d81b4b70bf
-riveredge-frontend/src/services/im.ts	44d47150430ce4f91998450f1a37aa9d5b8717de	tracked	seed from 9de82e8d57
+riveredge-frontend/src/services/im.ts	44d47150430ce4f91998450f1a37aa9d5b8717de	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/services/init-wizard.ts	50975e02050bbafe1e4d016cc8af43e908a464f5	tracked	seed from 1d968cd27b
 riveredge-frontend/src/services/messageTemplate.ts	89ae645d05a5a612fe8b7bd6b8b2051883d070e2	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/services/position.ts	6f556989dd45b2de8a6d52a337b017a9545605f2	applied	R2：与上游tip blob一致，本地已同步
@@ -2521,13 +2529,13 @@ riveredge-frontend/src/stores/configStore.ts	f4bcc4765f833734cd5cf8d373476ffc371
 riveredge-frontend/src/stores/userPreferenceStore.ts	2edfe40f4c707e59678c65fbcffb338f1e38ed6f	applied	13be286f11续:前端+财务适配+迁移
 riveredge-frontend/src/styles/uni-toolbar-chrome.less	1051bdaa06f035b8e15415cf06c425a49a554578	tracked	seed from 93b3cb5998
 riveredge-frontend/src/types/antd-input-number-internal.d.ts	1038d8e14d86167fe204b79fe34c1842b83c9f7e	tracked	seed from 1d968cd27b
-riveredge-frontend/src/types/approvalFlowSchema.ts	ec198c27241f25f65c20d46d1f554380b7ae9004	tracked	seed from 9edda14493
+riveredge-frontend/src/types/approvalFlowSchema.ts	ec198c27241f25f65c20d46d1f554380b7ae9004	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/utils/activeApiSelectOptions.ts	fcf5b32895ddf4ce9ea70ef5f80bc0ae729a8ebe	tracked	seed from a0b353ce7e
 riveredge-frontend/src/utils/apiImportExport.ts	a3addfbded16ed85fe4f6d9201f20db00b37e728	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/utils/appShellSessionInit.ts	e6670cc741afe3bb26d54f50f687c8e64f21efc3	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/utils/applyTenantSwitch.ts	64dd801ef5a1473c5588ba4271acef8675c1a43a	applied	R2簇5:三方合并/本地适配
 riveredge-frontend/src/utils/auditFlowViewerGate.ts	71401a3307e95b4fa7215d5bb954cc3e3e76fb37	tracked	seed from f717a4fa10
-riveredge-frontend/src/utils/auditMode.ts	c878892c00f17f6e9a15b4172c9efb05d9026909	tracked	seed from 9edda14493
+riveredge-frontend/src/utils/auditMode.ts	e10c5cd4a1775f585991be5ade6a5703149b4d6a	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/utils/batchOperations.tsx	cf420eeef10117cc13e77e4c7888ad82b6fa7551	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/utils/codeRuleComponent.ts	2ad3a60e537a15e10d8a3f67b08241a03a821e96	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/utils/dedicatedHostPathMap.ts	ccdf6d1c7bfe9278c198d38ecec711e3d29f8791	superset	R2预审：本地已有等价/更深实现，不摘
@@ -2541,7 +2549,7 @@ riveredge-frontend/src/utils/fieldPermissionI18n.ts	3e261cc74c8cd0103922e14c7a9e
 riveredge-frontend/src/utils/fileDownload.ts			
 riveredge-frontend/src/utils/formListItems.ts	95a60bc0476846a4dcec74dad3b30b06a04d9920	tracked	seed from 3958bb1524
 riveredge-frontend/src/utils/format.ts	c7d956481114b0bededec37ad3323688d8b805e4	tracked	seed from d81b4b70bf
-riveredge-frontend/src/utils/globalLifecycleI18n.ts	e51612a012fe120d3713595d25f9ede9747bd3e3	tracked	seed from 3958bb1524
+riveredge-frontend/src/utils/globalLifecycleI18n.ts	e51612a012fe120d3713595d25f9ede9747bd3e3	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/utils/inputSelectAllOnFocus.ts	b073bfcf2a037a574a31cbf02f16de3293c3f6e1	tracked	seed from a0b353ce7e
 riveredge-frontend/src/utils/inventoryLedgerApi.ts	95d34aa0f2a6d4a02251b91d03db6f6c86db6b20	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/utils/kuaiconnectAccess.ts	37b9275291edd42f48e862826fe770f8f925146a	applied	R2簇3 fe_extra:cf-json-date/schema-percent/sync-modal/tenant-selector依赖/api-bulk/batch-ops/pull-query/audit-inline/inventoryLedger/partner-prefill/e2e6件
@@ -2549,22 +2557,22 @@ riveredge-frontend/src/utils/lazyWithRetry.ts	1b7b7b7f8b99bcc371659ad9d831af60ab
 riveredge-frontend/src/utils/lucideIconNodes.ts	18d60ec69a21293d8d4b18d21f8fce313ae08994	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/utils/manufacturingIcons.tsx	5c5be583b023450e9fc5cded5b6673feca0308f0	applied	积压图标真bug：补已有MenuMorphIcon调用缺失的两导出与lucide/morphicons依赖；反查用globalThis.Map避免Lucide Map遮蔽；真实模块load/解析回归通过；其余依赖不升级
 riveredge-frontend/src/utils/materialDualQuantity.ts	b9db0632d5ee3891196f7318e365383b2b1ac091	tracked	seed from 6abba1dbd5
-riveredge-frontend/src/utils/materialScenarioUnit.ts	ceaa622e3ae5d2f65bd99e0a46828b537b179bb4	tracked	seed from a0ea4efd00
+riveredge-frontend/src/utils/materialScenarioUnit.ts	ceaa622e3ae5d2f65bd99e0a46828b537b179bb4	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/utils/modalEventIsolation.ts	39910c12707c857a8e5503043ec3cc2c1e06ea7a	tracked	seed from 3eba91c55b
 riveredge-frontend/src/utils/notifyDataRefreshed.ts	1a1f8150057188f9b981f8fc1c46b00b0afe4c95	tracked	seed from f1c2d18cfb
 riveredge-frontend/src/utils/numericFieldLimits.ts	14bebfa4b89bd502a0d3ad9c6e91df9632d6c246	tracked	seed from b74aba704c
 riveredge-frontend/src/utils/partnerFormPrefillHydration.ts	fa85d9a118faaac219d4064d2b4690dc870ceebc	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/utils/presetEntityI18n.ts	05d001dd6d	applied	R2-前端小件簇: 部门名以库内真源为准+预设目录预览resolver
 riveredge-frontend/src/utils/printResponseHelpers.ts	a0ccb13d08	applied	R2-前端小件簇: 多单据打印HTML拼接joinPrintHtmlDocuments
-riveredge-frontend/src/utils/referenceDisplay.ts	cf7f82cbd8f907d4f5466941dbc89822758a4697	tracked	seed from 37409d3b29
+riveredge-frontend/src/utils/referenceDisplay.ts	cf7f82cbd8f907d4f5466941dbc89822758a4697	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/utils/requestCancellation.ts	c72686c785379cd840b24efca5448832d62ae345	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/utils/spreadsheetCellPlainString.ts	93f504a33474c8a2bdd13ec0c1dfa7afeb6a1847	tracked	seed from 8c111dd65f
 riveredge-frontend/src/utils/spreadsheetImportTemplate.ts	b7fba0c488695e9a8f867ad03f16ce7aac190814	tracked	seed from 57a37e2749
 riveredge-frontend/src/utils/spreadsheetPreserveText.test.ts	c3f3c8e2c24c238e34e6791e97b850344ccfaeda	tracked	seed from 8c111dd65f
 riveredge-frontend/src/utils/spreadsheetPreserveText.ts	0ff5f3233be4aa862af738c847e43baa71858f58	tracked	seed from 8c111dd65f
 riveredge-frontend/src/utils/systemUniTableListFilters.ts	37c2169cb6eb0fdf701f399581bd8fc861e0feb2	deferred	站点墙钟语义分歧:上游改dayjs().toISOString() UTC,本地toApiDateTimeString站点时区
-riveredge-frontend/src/utils/uniTableLayoutColumns.ts	3745fc5b258f4027c08bebd3a3980f70f442dfc6	tracked	seed from 37409d3b29
+riveredge-frontend/src/utils/uniTableLayoutColumns.ts	3745fc5b258f4027c08bebd3a3980f70f442dfc6	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/utils/userDisplay.ts	c1d47fe81a50b56e83935c93affbc07c45aa2cc9	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-frontend/src/vite-env.d.ts	6232bdf5f89c14048bf36fd63651a1b16c4bcb76	tracked	seed from ddd31709d6
-riveredge-frontend/vite.config.ts	c24e43bf04ac91b9caddd6ad2c23ad1e1d93e94c	tracked	seed from 905787348a
+riveredge-frontend/vite.config.ts	c24e43bf04ac91b9caddd6ad2c23ad1e1d93e94c	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 test-report/purchase.md	DELETED	tracked	seed from 31efc2b64c

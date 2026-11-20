@@ -10,7 +10,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Space, message, Modal, Table } from 'antd';
+import { App, Popconfirm, Button, Space, message, Modal, Table, List } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag } from '../../utils/systemListPresentation';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
@@ -32,9 +32,11 @@ import {
   deletePosition,
   loadPresetPositions,
   getPositionPresetPreview,
+  importPositionsFromData,
   type PresetPositionItem,
   Position,
 } from '../../../../services/position';
+import { importExcelMatrixInChunks } from '../../../../utils/chunkedBulkImport';
 import { getDepartmentTree, DepartmentTreeItem } from '../../../../services/department';
 import { useTrialRunMode } from '../../../../hooks/useTrialRunMode';
 import { resolvePresetPositionName } from '../../../../utils/presetEntityI18n';
@@ -122,11 +124,37 @@ const PositionListPage: React.FC = () => {
   };
 
   const handleImport = async (data: any[][]) => {
-    message.info(t('pages.system.importDeveloping'));
-    if (typeof window !== 'undefined') {
-      window.console.log('导入数据:', data);
+    try {
+      const result = await importExcelMatrixInChunks({
+        data,
+        hasExampleRow: true,
+        chunkSize: 100,
+        title: t('field.position.importing', { defaultValue: '正在导入岗位' }),
+        importChunk: (matrix) => importPositionsFromData(matrix),
+      });
+      if (result.success_count > 0) {
+        messageApi.success(t('field.position.importSuccess', { count: result.success_count }));
+        actionRef.current?.reload();
+      }
+      if (result.failure_count > 0) {
+        Modal.error({
+          title: t('field.position.importPartialFail'),
+          content: (
+            <List
+              size="small"
+              dataSource={result.errors}
+              renderItem={(item) => (
+                <List.Item>
+                  {t('common.row')} {item.row}: {item.error}
+                </List.Item>
+              )}
+            />
+          ),
+        });
+      }
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('field.position.importFail')));
     }
-
   };
 
   const handleExport = (
@@ -200,7 +228,7 @@ const PositionListPage: React.FC = () => {
     }
   };
 
-  const columns = useMemo<ProColumns<Position>[]>(() => alignProColumns<Position>([
+  const columns = useMemo<ProColumns<Position>[]>(() => alignProColumns([
     {
       title: t('field.position.name'),
       dataIndex: 'name',

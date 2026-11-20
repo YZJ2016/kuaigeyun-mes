@@ -3,8 +3,7 @@
  * 「此刻」写入 __NOW__，由后端在每次调用时解析为站点墙钟。
  */
 
-import dayjs from '../../config/dayjs';
-import type { Dayjs } from 'dayjs';
+import dayjs, { type Dayjs } from '../../config/dayjs';
 import { getTimezoneFromSiteSetting } from '../../utils/format';
 
 /** 每次调用解析为当前站点墙钟的占位值 */

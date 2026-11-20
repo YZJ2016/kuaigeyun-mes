@@ -26,13 +26,20 @@ export const storageLocationFormSchema: FieldConfig[] = [
     rules: [{ required: true, messageKey: 'field.storageLocation.nameRequired' }],
   },
   {
+    name: 'warehouseId',
+    type: 'select',
+    labelKey: 'field.storageLocation.warehouseId',
+    placeholderKey: 'field.storageLocation.warehouseIdPlaceholder',
+    required: false,
+    colSpan: 12,
+  },
+  {
     name: 'storageAreaId',
     type: 'select',
     labelKey: 'field.storageLocation.storageAreaId',
     placeholderKey: 'field.storageLocation.storageAreaIdPlaceholder',
-    required: true,
+    required: false,
     colSpan: 12,
-    rules: [{ required: true, messageKey: 'field.storageLocation.storageAreaIdRequired' }],
   },
   { type: 'slot', name: '__customFields__', slotKey: 'customFields', colSpan: 24 },
   {

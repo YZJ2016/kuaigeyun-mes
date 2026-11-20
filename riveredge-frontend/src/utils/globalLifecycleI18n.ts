@@ -51,6 +51,7 @@ export const LIFECYCLE_ONLY_STAGE_KEYS = [
   'manual_plan',
   'sales_invoice',
   'receivable_collection',
+  'payable_payment',
   'work_order_released',
   'shipment_waiting',
   'material_picking',
@@ -254,6 +255,7 @@ export function normalizeLifecycleStageKey(raw: string): string {
 
 /** 审核状态中文展示 → reviewStatus key（与 LIFECYCLE_ZH_LABEL_TO_KEY 同级，唯一真源） */
 export const REVIEW_STATUS_ZH_TO_KEY: Record<string, string> = {
+  草稿: 'draft',
   待审核: 'pending',
   审核通过: 'approved',
   已通过: 'approved',

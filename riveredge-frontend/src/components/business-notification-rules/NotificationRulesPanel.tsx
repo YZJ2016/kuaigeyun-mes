@@ -8,7 +8,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { App, Button, Layout, Modal, Descriptions, Spin, Typography, Divider } from 'antd';
-import type { ActionType, ProFormInstance } from '@ant-design/pro-components';
+import type { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 import { ProFormSelect, ProFormDependency, ProFormCheckbox, ProFormSwitch, ProFormDigit } from '@ant-design/pro-components';
 import { UniTable } from '../uni-table';
 import { FormModalTemplate } from '../layout-templates';
@@ -16,7 +16,11 @@ import { getBusinessConfig, batchUpdateProcessParameters } from '../../services/
 import { getMessageConfigList, type MessageConfig } from '../../services/messageConfig';
 import { getMessageTemplateList, type MessageTemplate } from '../../services/messageTemplate';
 import { getUserList, type User } from '../../services/user';
-import { getInstalledApplicationList } from '../../services/application';
+import {
+  getInstalledApplicationList,
+  installedApplicationsQueryKey,
+} from '../../services/application';
+import { getTenantId } from '../../utils/auth';
 import {
   CORE_NOTIFICATION_RECIPIENT_SCOPES,
   isRecommendedNotificationAction,
@@ -45,19 +49,75 @@ import {
 } from './notificationChannelRefs';
 import { stripMiddleDotSeparator } from './stripMiddleDotSeparator';
 import { getAntdModal } from '../../utils/antdAppApis';
-import { pickListSearchKeyword } from '../../utils/tableQueryKey';
+import {
+  pickListSearchKeyword,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../utils/tableQueryKey';
 
 type NotificationRuleTableRow = {
   id: string;
   scene: string;
   document: string;
   action: string;
+  trigger_document: string;
+  trigger_action: string;
   channels: string;
   recipients: string;
   template: string;
   enabled: boolean;
   raw: Record<string, unknown>;
 };
+
+function filterNotificationRuleRows(
+  rows: NotificationRuleTableRow[],
+  searchFormValues?: Record<string, unknown> | null,
+): NotificationRuleTableRow[] {
+  let filtered = rows;
+  const keyword = (pickListSearchKeyword(searchFormValues) ?? '').trim().toLowerCase();
+  if (keyword) {
+    filtered = filtered.filter((row) =>
+      [row.scene, row.document, row.action, row.template, row.channels, row.recipients].some((v) =>
+        String(v ?? '')
+          .toLowerCase()
+          .includes(keyword),
+      ),
+    );
+  }
+  const scene = pickSearchString(searchFormValues, 'scene');
+  if (scene) {
+    const s = scene.toLowerCase();
+    filtered = filtered.filter((row) => row.scene.toLowerCase().includes(s));
+  }
+  const triggerDocument = pickSearchString(searchFormValues, 'trigger_document');
+  if (triggerDocument) {
+    filtered = filtered.filter((row) => row.trigger_document === triggerDocument);
+  }
+  const triggerAction = pickSearchString(searchFormValues, 'trigger_action');
+  if (triggerAction) {
+    filtered = filtered.filter((row) => row.trigger_action === triggerAction);
+  }
+  const template = pickSearchString(searchFormValues, 'template');
+  if (template) {
+    const tq = template.toLowerCase();
+    filtered = filtered.filter((row) => row.template.toLowerCase().includes(tq));
+  }
+  const channels = pickSearchString(searchFormValues, 'channels');
+  if (channels) {
+    const cq = channels.toLowerCase();
+    filtered = filtered.filter((row) => row.channels.toLowerCase().includes(cq));
+  }
+  const recipients = pickSearchString(searchFormValues, 'recipients');
+  if (recipients) {
+    const rq = recipients.toLowerCase();
+    filtered = filtered.filter((row) => row.recipients.toLowerCase().includes(rq));
+  }
+  const enabled = pickSearchTriStateBoolean(searchFormValues, 'enabled');
+  if (enabled !== undefined) {
+    filtered = filtered.filter((row) => row.enabled === enabled);
+  }
+  return filtered;
+}
 
 function splitRecipientScopes(scopes: unknown): {
   recipient_role_scopes: string[];
@@ -80,7 +140,6 @@ const { Content } = Layout;
 const { Text, Paragraph } = Typography;
 
 const BUSINESS_CONFIG_QUERY_KEY = ['businessConfig'] as const;
-const INSTALLED_APPS_QUERY_KEY = ['installedApplications', { is_active: true }] as const;
 
 export type NotificationRulesPanelProps = {
   /** 为 false 时不渲染区块标题（外层 Tab 已展示页面名时） */
@@ -119,7 +178,7 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
   }, []);
 
   const { data: installedApps } = useQuery({
-    queryKey: INSTALLED_APPS_QUERY_KEY,
+    queryKey: installedApplicationsQueryKey(getTenantId()),
     queryFn: () => getInstalledApplicationList({ is_active: true }),
     staleTime: 60_000,
   });
@@ -134,11 +193,20 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
     [installedAppCodes, notificationModulesReady],
   );
 
-  const { data: bizRes, isLoading: configLoading, isFetching, refetch: refetchBusinessConfig } = useQuery({
+  const {
+    data: bizResRaw,
+    isLoading: configLoading,
+    isFetching,
+    isError: businessConfigError,
+    error: businessConfigErr,
+    refetch: refetchBusinessConfig,
+  } = useQuery({
     queryKey: BUSINESS_CONFIG_QUERY_KEY,
     queryFn: getBusinessConfig,
     staleTime: 60_000,
   });
+  // 加载失败时丢弃 keepPreviousData，避免展示过期组织的规则（模板 UUID 会对不上）
+  const bizRes = businessConfigError ? undefined : bizResRaw;
 
   const { data: usersRes } = useQuery({
     queryKey: ['notificationRulesUsers'],
@@ -358,15 +426,17 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
       const template =
         templateNameByKey.get(templateKey) ||
         (templateKey ? t('pages.system.configCenter.notification.template.unknown') : '-');
+      const triggerDocument = String(rule?.trigger_document || '');
+      const triggerAction = String(rule?.trigger_action || '');
       return {
         id: String(rule?.id || rule?.code || idx + 1),
         scene:
           stripMiddleDotSeparator(rule?.scene_name) ||
           t('pages.system.configCenter.notification.scene.default'),
-        document: getDocumentLabel(String(rule?.trigger_document || '')) || String(rule?.trigger_document || '-'),
-        action:
-          getActionLabel(String(rule?.trigger_document || ''), String(rule?.trigger_action || '')) ||
-          String(rule?.trigger_action || '-'),
+        document: getDocumentLabel(triggerDocument) || triggerDocument || '-',
+        action: getActionLabel(triggerDocument, triggerAction) || triggerAction || '-',
+        trigger_document: triggerDocument,
+        trigger_action: triggerAction,
         channels,
         recipients,
         template,
@@ -375,6 +445,23 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
       };
     });
   }, [bizRes, channelNameByKey, templateNameByKey, t, i18n, cfg]);
+
+  const notificationActionSearchOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const options: { value: string; label: string }[] = [];
+    for (const doc of Object.keys(cfg.actionOptions)) {
+      for (const it of cfg.actionOptions[doc] || []) {
+        const value = String(it.value);
+        if (seen.has(value)) continue;
+        seen.add(value);
+        options.push({
+          value,
+          label: renderText(it.labelKey, it.fallback),
+        });
+      }
+    }
+    return options.sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'));
+  }, [cfg.actionOptions, t, i18n.language]);
 
   const handleCreateNotificationRule = async (values: Record<string, unknown>) => {
     try {
@@ -568,7 +655,7 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
         lastRes = await load();
       }
       await queryClient.invalidateQueries({ queryKey: BUSINESS_CONFIG_QUERY_KEY });
-      queryClient.removeQueries({ queryKey: ['uniTable', 'notification-rules.config-center-r01'], exact: false });
+      queryClient.removeQueries({ queryKey: ['uniTable', 'notification-rules.config-center-r02'], exact: false });
       await refetchBusinessConfig();
       notificationTableActionRef.current?.reload?.();
       const res = lastRes || { created: 0, updated: 0, total_rules: 0 };
@@ -671,6 +758,115 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅在配置首次就绪时清洗
   }, [bizRes, loading]);
 
+  const notificationTableColumns = useMemo<ProColumns<NotificationRuleTableRow>[]>(
+    () => [
+      {
+        title: t('pages.system.configCenter.notification.column.scene'),
+        dataIndex: 'scene',
+        minWidth: 200,
+        uniTableRemainderFlex: true,
+        ellipsis: true,
+      },
+      {
+        title: t('pages.system.configCenter.notification.column.document'),
+        dataIndex: 'trigger_document',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        ellipsis: true,
+        valueType: 'select',
+        fieldProps: {
+          options: notificationDocumentOptions,
+          showSearch: true,
+        },
+        render: (_: unknown, row) => row.document,
+      },
+      {
+        title: t('pages.system.configCenter.notification.column.template'),
+        dataIndex: 'template',
+        width: 220,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        ellipsis: true,
+      },
+      {
+        title: t('pages.system.configCenter.notification.column.action'),
+        dataIndex: 'trigger_action',
+        width: 140,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        ellipsis: true,
+        valueType: 'select',
+        fieldProps: {
+          options: notificationActionSearchOptions,
+          showSearch: true,
+        },
+        render: (_: unknown, row) => row.action,
+      },
+      {
+        title: t('pages.system.configCenter.notification.column.channels'),
+        dataIndex: 'channels',
+        width: 180,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        ellipsis: true,
+      },
+      {
+        title: t('pages.system.configCenter.notification.column.recipients'),
+        dataIndex: 'recipients',
+        width: 220,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        ellipsis: true,
+      },
+      {
+        title: t('common.status'),
+        dataIndex: 'enabled',
+        width: 90,
+        valueType: 'select',
+        valueEnum: {
+          true: { text: t('common.enabled'), status: 'Success' },
+          false: {
+            text: t('pages.system.configCenter.notification.status.disabled'),
+            status: 'Default',
+          },
+        },
+        render: (_: unknown, row: { enabled: boolean }) =>
+          row.enabled
+            ? t('common.enabled')
+            : t('pages.system.configCenter.notification.status.disabled'),
+      },
+      {
+        title: t('common.actions'),
+        key: 'actions',
+        width: 220,
+        fixed: 'right' as const,
+        hideInSearch: true,
+        render: (_: unknown, row: { id: string }) => {
+          const actions: React.ReactNode[] = [
+            <Button {...rowActionKind('read')} key="detail" onClick={() => handleViewNotificationRule(row as never)}>
+              {t('common.detail')}
+            </Button>,
+            <Button {...rowActionKind('update')} key="edit" onClick={() => handleEditNotificationRule(row as never)}>
+              {t('common.edit')}
+            </Button>,
+            <ActionConfirmPopconfirm
+              title={t('pages.system.configCenter.notification.modal.deleteTitle')}
+              description={t('pages.system.configCenter.notification.modal.deleteConfirm')}
+              onConfirm={() => executeDeleteNotificationRule(row)}
+            >
+              <Button {...rowActionKind('delete')} key="delete" onClick={(e) => e.stopPropagation()}>
+                {t('common.delete')}
+              </Button>
+            </ActionConfirmPopconfirm>,
+          ];
+          return actions;
+        },
+      },
+    ],
+    [t, notificationDocumentOptions, notificationActionSearchOptions],
+  );
+
   useEffect(() => {
     if (!notificationModalOpen || channelOptions.length === 0) return;
     const form = notificationFormRef.current;
@@ -714,15 +910,22 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
               </div>
             ) : null}
             <Spin spinning={loading || isFetching}>
+              {businessConfigError ? (
+                <Paragraph type="danger" style={{ marginBottom: 12 }}>
+                  {(businessConfigErr as Error)?.message ||
+                    t('pages.system.configCenter.notification.loadFailed')}
+                </Paragraph>
+              ) : null}
               <UniTable
-                columnPersistenceId="notification-rules.config-center-r01"
+                columnPersistenceId="notification-rules.config-center-r02"
                 permissionResource="system:config-center"
                 actionRef={notificationTableActionRef}
                 tanstackQuery={{ enabled: false }}
                 rowKey="id"
                 pagination={false}
                 showFuzzySearch
-                showAdvancedSearch={false}
+                showAdvancedSearch
+                skipFuzzyPinyinClientFilter
                 fuzzySearchPlaceholder={t('pages.system.configCenter.notification.searchPlaceholder')}
                 options={false}
                 enableRowSelection
@@ -756,94 +959,10 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
                   setEditingNotificationRuleId(null);
                   setNotificationModalOpen(true);
                 }}
-                columns={[
-                  {
-                    title: t('pages.system.configCenter.notification.column.scene'),
-                    dataIndex: 'scene',
-                    minWidth: 200,
-                    uniTableRemainderFlex: true,
-                    ellipsis: true,
-                  },
-                  {
-                    title: t('pages.system.configCenter.notification.column.document'),
-                    dataIndex: 'document',
-                    width: 120,
-                    minWidth: 120,
-                    uniTableKeepWidth: true,
-                    ellipsis: true,
-                  },
-                  {
-                    title: t('pages.system.configCenter.notification.column.template'),
-                    dataIndex: 'template',
-                    width: 220,
-                    minWidth: 160,
-                    uniTableKeepWidth: true,
-                    ellipsis: true,
-                  },
-                  {
-                    title: t('pages.system.configCenter.notification.column.action'),
-                    dataIndex: 'action',
-                    width: 140,
-                    minWidth: 120,
-                    uniTableKeepWidth: true,
-                    ellipsis: true,
-                  },
-                  {
-                    title: t('pages.system.configCenter.notification.column.channels'),
-                    dataIndex: 'channels',
-                    width: 180,
-                    minWidth: 140,
-                    uniTableKeepWidth: true,
-                    ellipsis: true,
-                  },
-                  {
-                    title: t('pages.system.configCenter.notification.column.recipients'),
-                    dataIndex: 'recipients',
-                    width: 220,
-                    minWidth: 160,
-                    uniTableKeepWidth: true,
-                    ellipsis: true,
-                  },
-                  {
-                    title: t('common.status'),
-                    dataIndex: 'enabled',
-                    width: 90,
-                    render: (_: unknown, row: { enabled: boolean }) =>
-                      row.enabled
-                        ? t('common.enabled')
-                        : t('pages.system.configCenter.notification.status.disabled'),
-                  },
-                  {
-                    title: t('common.actions'),
-                    width: 220,
-                    fixed: 'right' as const,
-                    render: (_: unknown, row: { id: string }) => {
-                      const actions: React.ReactNode[] = [
-                        <Button {...rowActionKind('read')} key="detail" onClick={() => handleViewNotificationRule(row as never)}>
-                          {t('common.detail')}
-                        </Button>,
-                        <Button {...rowActionKind('update')} key="edit" onClick={() => handleEditNotificationRule(row as never)}>
-                          {t('common.edit')}
-                        </Button>,
-                        <ActionConfirmPopconfirm title={t('pages.system.configCenter.notification.modal.deleteTitle')} description={t('pages.system.configCenter.notification.modal.deleteConfirm')} onConfirm={() => executeDeleteNotificationRule(row)}>
-              <Button {...rowActionKind('delete')} key="delete" onClick={(e) => e.stopPropagation()}>
-                          {t('common.delete')}
-                        </Button>
-            </ActionConfirmPopconfirm>,
-                      ];
-                      return actions;
-                    },
-                  },
-                ]}
+                columns={notificationTableColumns}
                 request={async (_params, _sort, _filter, searchFormValues) => {
-                  const keyword = (pickListSearchKeyword(searchFormValues) ?? '').trim().toLowerCase();
                   const rows = notificationRuleRows as NotificationRuleTableRow[];
-                  const filtered = keyword
-                    ? rows.filter((row) =>
-                        [row.scene, row.document, row.action, row.template, row.channels, row.recipients]
-                          .some((v) => String(v ?? '').toLowerCase().includes(keyword)),
-                      )
-                    : rows;
+                  const filtered = filterNotificationRuleRows(rows, searchFormValues);
                   return {
                     data: filtered,
                     success: true,

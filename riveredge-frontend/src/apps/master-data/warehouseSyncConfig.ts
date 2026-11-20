@@ -1,7 +1,11 @@
 import type { SyncFromSourceConfig } from '../../components/sync-from-source-modal/types';
 import { loadSyncCustomTargetFields } from '../../components/sync-from-source-modal/loadSyncCustomTargetFields';
 import {
+  getStorageLocationSyncBinding,
+  getWarehouseLocationRefSyncBinding,
   getWarehouseSyncBinding,
+  syncStorageLocationsFromSource,
+  syncWarehouseLocationRefsFromSource,
   syncWarehousesFromSource,
 } from './services/warehouse';
 import {
@@ -17,6 +21,21 @@ export function createWarehouseSyncConfig(): SyncFromSourceConfig {
     hintKey: 'app.master-data.warehouses.syncHint',
     apiRealtimeHintKey: 'app.master-data.warehouses.syncApiHint',
     datasetBatchHintKey: 'app.master-data.warehouses.syncDatasetHint',
+    mainStepTitleKey: 'app.master-data.warehouses.syncStep.warehouse',
+    followUpSteps: [
+      {
+        id: 'warehouseLocationRef',
+        titleKey: 'app.master-data.warehouses.syncStep.locationRef',
+        getBinding: getWarehouseLocationRefSyncBinding,
+        syncFromSource: syncWarehouseLocationRefsFromSource,
+      },
+      {
+        id: 'storageLocation',
+        titleKey: 'app.master-data.warehouses.syncStep.location',
+        getBinding: getStorageLocationSyncBinding,
+        syncFromSource: syncStorageLocationsFromSource,
+      },
+    ],
     targetFields: WAREHOUSE_SYNC_TARGET_FIELDS,
     availableTargetFields: WAREHOUSE_SYNC_AVAILABLE_TARGET_FIELDS,
     loadAvailableTargetFields: () => loadSyncCustomTargetFields(WAREHOUSE_SYNC_CUSTOM_FIELD_TABLE),
@@ -24,6 +43,7 @@ export function createWarehouseSyncConfig(): SyncFromSourceConfig {
     requiredTargets: WAREHOUSE_SYNC_REQUIRED_TARGETS,
     getBinding: getWarehouseSyncBinding,
     syncFromSource: syncWarehousesFromSource,
+    preferredApiCodeSuffixes: ['query_warehouse'],
     completeSuccessKey: 'app.master-data.warehouses.syncComplete',
     completePartialKey: 'app.master-data.warehouses.syncPartial',
     failedKey: 'app.master-data.warehouses.syncFailed',

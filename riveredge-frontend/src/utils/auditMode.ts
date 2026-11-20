@@ -9,7 +9,7 @@
 
 export type AuditWorkflowMode = 'manual' | 'auto';
 
-export type AuditActionType = 'submit' | 'withdraw' | 'approve' | 'reject' | 'revoke' | 'recall_own';
+export type AuditActionType = 'submit' | 'submit_review' | 'withdraw' | 'approve' | 'reject' | 'revoke' | 'recall_own';
 
 export interface AuditViewerActionsLike {
   has_my_pending_task?: boolean;
@@ -17,6 +17,13 @@ export interface AuditViewerActionsLike {
   reject?: boolean;
   /** 当前人已通过本单某一级，且当前节点不再是他的待办 */
   my_acted?: boolean;
+  block_reason?: string | null;
+}
+
+export interface AuditViewerActionsLike {
+  has_my_pending_task?: boolean;
+  approve?: boolean;
+  reject?: boolean;
   block_reason?: string | null;
 }
 
@@ -38,6 +45,7 @@ export interface AuditActionVisibility {
   allowedActions: string[];
   manualAuditEnabled: boolean;
   showSubmit: boolean;
+  showSubmitReview: boolean;
   showWithdraw: boolean;
   showApprove: boolean;
   showReject: boolean;
@@ -82,26 +90,36 @@ export function resolveAuditActionVisibility(
   if (audit && typeof audit === 'object' && typeof audit.phase === 'string') {
     const allowedActions = Array.isArray(audit.allowed_actions) ? audit.allowed_actions : [];
     const manualAuditEnabled = isManualAuditEnabled(audit);
+    // 有 live 身份门禁字段时必须为 true 才展示；缺字段时仍认 allowed_actions（遗留列表）
     const flowWithdraw =
       includesAuditAction(allowedActions, 'withdraw')
-      && audit.viewer_can_withdraw_submit !== false;
+      && (typeof audit.viewer_can_withdraw_submit === 'boolean'
+        ? audit.viewer_can_withdraw_submit
+        : true);
     const flowRevoke =
       includesAuditAction(allowedActions, 'revoke')
-      && audit.viewer_can_revoke !== false;
-    const flowRecallOwn = includesAuditAction(allowedActions, 'recall_own');
+      && (typeof audit.viewer_can_revoke === 'boolean'
+        ? audit.viewer_can_revoke
+        : true);
+    const flowRecallOwn =
+      includesAuditAction(allowedActions, 'recall_own')
+      && (typeof audit.viewer_can_recall_own === 'boolean'
+        ? audit.viewer_can_recall_own
+        : true);
     return {
       authoritative: true,
       allowedActions,
       manualAuditEnabled,
       showSubmit: includesAuditAction(allowedActions, 'submit'),
+      showSubmitReview: includesAuditAction(allowedActions, 'submit_review'),
       showWithdraw: flowWithdraw,
       showApprove: includesAuditAction(allowedActions, 'approve'),
       showReject: includesAuditAction(allowedActions, 'reject'),
       showRevoke: flowRevoke,
       showRecallOwn: flowRecallOwn,
+      // 已通过反审、撤回提交走行内按钮；hub 仅在人审/驳回待办时打开（禁止仅 withdraw 时出现「确认」假入口）
       showAuditHub:
-        flowWithdraw
-        || flowRecallOwn
+        flowRecallOwn
         || includesAuditAction(allowedActions, 'approve')
         || includesAuditAction(allowedActions, 'reject'),
     };
@@ -118,6 +136,7 @@ export function resolveAuditActionVisibility(
     allowedActions: [],
     manualAuditEnabled,
     showSubmit: isDraft || isRejected,
+    showSubmitReview: false,
     showWithdraw: manualAuditEnabled && isPending,
     showApprove: manualAuditEnabled && isPending,
     showReject: manualAuditEnabled && isPending,

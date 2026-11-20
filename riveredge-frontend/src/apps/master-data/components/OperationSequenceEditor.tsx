@@ -19,8 +19,6 @@ import {
   Switch,
   InputNumber,
   Input,
-  Checkbox,
-  Radio,
   theme,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -46,6 +44,29 @@ import {
   type InspectionPlanRecord,
 } from '../../kuaizhizao/components/InspectionPlanFormModal';
 import { ipqcFromOperation } from '../utils/processRouteSequenceUtils';
+import {
+  fetchActiveOperationCatalog,
+  mergeOperationIntoActiveCatalog,
+} from '../utils/activeOperationCatalog';
+import {
+  fromSeconds,
+  normalizeTimeUnit,
+  toSeconds,
+} from '../utils/manufacturingTimeUnits';
+import type { ManufacturingTimeUnit } from '../types/productProcess';
+
+const TIME_UNIT_OPTIONS: { value: ManufacturingTimeUnit; labelKey: string }[] = [
+  { value: 'h', labelKey: 'app.master-data.manufacturing.timeUnitHour' },
+  { value: 'm', labelKey: 'app.master-data.manufacturing.timeUnitMinute' },
+  { value: 's', labelKey: 'app.master-data.manufacturing.timeUnitSecond' },
+];
+
+const OPERATION_PICK_MODAL_WIDTH = 840;
+/** 顶对齐距视口顶（与 antd 默认 100px 接近，略收一点以免遮挡站顶栏） */
+const OPERATION_PICK_MODAL_TOP = 88;
+const OPERATION_PICK_TABLE_SCROLL_Y = 400;
+/** 表头 + 滚动区，避免无数据时弹窗变矮、垂直位置跳动 */
+const OPERATION_PICK_TABLE_MIN_HEIGHT = OPERATION_PICK_TABLE_SCROLL_Y + 40;
 
 const operationPickModalStyles = {
   body: { paddingTop: 8, paddingBottom: 12 },
@@ -100,7 +121,6 @@ export const OperationPickPanel: React.FC<OperationPickPanelProps> = ({
   const { token } = theme.useToken();
   const [keyword, setKeyword] = useState('');
   const filtered = useMemo(() => filterOperationList(operations, keyword), [operations, keyword]);
-  const filteredIdSet = useMemo(() => new Set(filtered.map((o) => o.uuid)), [filtered]);
   const selectedOperations = useMemo(
     () =>
       multipleValue
@@ -108,13 +128,6 @@ export const OperationPickPanel: React.FC<OperationPickPanelProps> = ({
         .filter((op): op is Operation => !!op),
     [multipleValue, operations],
   );
-
-  /** Checkbox.Group 仅上报当前可见项；保留不在当前搜索结果中的已选项 */
-  const handleMultipleChangeInView = (checkedInView: string[]) => {
-    if (!onMultipleChange) return;
-    const keptOutsideView = multipleValue.filter((id) => !filteredIdSet.has(id));
-    onMultipleChange([...keptOutsideView, ...checkedInView]);
-  };
 
   const handleSelectAllFiltered = () => {
     if (mode !== 'multiple' || !onMultipleChange) return;
@@ -127,7 +140,56 @@ export const OperationPickPanel: React.FC<OperationPickPanelProps> = ({
     }
   };
 
-  const listBorder = '1px solid var(--river-border-color, #f0f0f0)';
+  const pickColumns = useMemo<ColumnsType<Operation>>(
+    () => [
+      {
+        title: t('field.operation.code'),
+        dataIndex: 'code',
+        key: 'code',
+        width: 112,
+        ellipsis: true,
+      },
+      {
+        title: t('field.operation.name'),
+        dataIndex: 'name',
+        key: 'name',
+        width: 140,
+        ellipsis: true,
+      },
+      {
+        title: t('app.master-data.operationSequence.reportingType'),
+        key: 'reportingType',
+        width: 108,
+        render: (_: unknown, record) =>
+          renderOperationReportingTypeMarker(
+            t,
+            record.reportingType ?? (record as { reporting_type?: string }).reporting_type,
+          ),
+      },
+      {
+        title: t('app.master-data.operationSequence.pickColDescription'),
+        key: 'description',
+        ellipsis: true,
+        render: (_: unknown, record) => (
+          <Typography.Text type="secondary" ellipsis style={{ fontSize: 12 }}>
+            {record.description?.trim() || t('common.empty')}
+          </Typography.Text>
+        ),
+      },
+    ],
+    [t],
+  );
+
+  const handlePickRowSelectionChange = (keys: React.Key[]) => {
+    if (mode === 'single') {
+      onSingleChange?.(keys[0] != null ? String(keys[0]) : undefined);
+      return;
+    }
+    if (!onMultipleChange) return;
+    const inViewIds = new Set(filtered.map((o) => o.uuid));
+    const keptOutsideView = multipleValue.filter((id) => !inViewIds.has(id));
+    onMultipleChange([...keptOutsideView, ...keys.map(String)]);
+  };
 
   return (
     <div>
@@ -184,68 +246,52 @@ export const OperationPickPanel: React.FC<OperationPickPanelProps> = ({
           </Space>
         </div>
       ) : null}
-      <div
-        style={{
-          maxHeight: 280,
-          overflow: 'auto',
-          border: listBorder,
-          borderRadius: 6,
-          padding: '8px 12px',
-          background: token.colorFillAlter,
-        }}
-      >
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: 24, color: token.colorTextSecondary }}>
-            {t('app.master-data.operationSequence.loading')}
-          </div>
-        ) : filtered.length === 0 ? (
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description={t('app.master-data.operationSequence.noAvailableOperations')}
-          />
-        ) : mode === 'multiple' ? (
-          <Checkbox.Group
-            value={multipleValue}
-            onChange={(v) => handleMultipleChangeInView(v as string[])}
-            style={{ width: '100%' }}
-          >
-            <Space orientation="vertical" style={{ width: '100%' }} size={6}>
-              {filtered.map((op) => (
-                <Checkbox key={op.uuid} value={op.uuid} style={{ width: '100%', marginInlineStart: 0 }}>
-                  <span style={{ fontWeight: 500 }}>
-                    {op.code} - {op.name}
-                  </span>
-                  {op.description ? (
-                    <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
-                      {op.description}
-                    </Typography.Text>
-                  ) : null}
-                </Checkbox>
-              ))}
-            </Space>
-          </Checkbox.Group>
-        ) : (
-          <Radio.Group
-            value={singleValue}
-            onChange={(e) => onSingleChange?.(e.target.value)}
-            style={{ width: '100%' }}
-          >
-            <Space orientation="vertical" style={{ width: '100%' }} size={6}>
-              {filtered.map((op) => (
-                <Radio key={op.uuid} value={op.uuid} style={{ width: '100%', marginInlineStart: 0 }}>
-                  <span style={{ fontWeight: 500 }}>
-                    {op.code} - {op.name}
-                  </span>
-                  {op.description ? (
-                    <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
-                      {op.description}
-                    </Typography.Text>
-                  ) : null}
-                </Radio>
-              ))}
-            </Space>
-          </Radio.Group>
-        )}
+      <div style={{ minHeight: OPERATION_PICK_TABLE_MIN_HEIGHT }}>
+        <Table<Operation>
+          size="small"
+          rowKey="uuid"
+          loading={loading}
+          pagination={false}
+          scroll={{ x: 520, y: OPERATION_PICK_TABLE_SCROLL_Y }}
+          locale={{
+            emptyText: (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={t('app.master-data.operationSequence.noAvailableOperations')}
+              />
+            ),
+          }}
+          dataSource={filtered}
+          columns={pickColumns}
+          rowSelection={{
+            type: mode === 'multiple' ? 'checkbox' : 'radio',
+            columnWidth: mode === 'multiple' ? 48 : 40,
+            preserveSelectedRowKeys: true,
+            selectedRowKeys:
+              mode === 'multiple'
+                ? multipleValue
+                : singleValue
+                  ? [singleValue]
+                  : [],
+            onChange: handlePickRowSelectionChange,
+          }}
+          onRow={(record) => ({
+            onClick: () => {
+              if (mode === 'single') {
+                onSingleChange?.(record.uuid);
+                return;
+              }
+              const checked = multipleValue.includes(record.uuid);
+              if (checked) {
+                onMultipleChange?.(multipleValue.filter((id) => id !== record.uuid));
+              } else {
+                onMultipleChange?.([...multipleValue, record.uuid]);
+              }
+            },
+            style: { cursor: 'pointer' },
+          })}
+          style={{ background: token.colorFillAlter, borderRadius: 6 }}
+        />
       </div>
     </div>
   );
@@ -262,10 +308,14 @@ export interface OperationItem {
   /** 工序级超报（写入路线 JSON；none+0 可不提交键以继承路线默认） */
   overReportMode?: 'none' | 'fixed' | 'percent';
   overReportValue?: number;
-  /** 标准工时（小时/件），写入路线 operation_sequence */
+  /** 标准工时（界面值 + 单位 + 件数基准；写入路线 operation_sequence） */
   standardTime?: number;
-  /** 准备时间（小时） */
+  standardTimeQty?: number;
+  standardTimeUnit?: 'h' | 'm' | 's';
+  /** 准备时间（界面分钟；落库为小时） */
   setupTime?: number;
+  /** 工价/计件单价（元），写入路线 operation_sequence */
+  pieceRate?: number;
   /** 计划工序委外（写入路线 operation_sequence） */
   isOutsourced?: boolean;
   outsourceLeadTimeDays?: number;
@@ -286,7 +336,7 @@ export interface OperationSequenceEditorProps {
   onChange?: (operations: OperationItem[]) => void;
   /** 为 true 时显示「节点工序」列（与路线「允许工序跳转」联动） */
   showNodeOperationColumn?: boolean;
-  /** 产品工艺 Tab：显示标准工时、准备时间列 */
+  /** 工艺路线 / 产品工艺：显示工时、工价列 */
   showTimeColumns?: boolean;
   /** 嵌套在 FormModal 内时传入，保证工序选择弹窗叠在父弹窗之上 */
   nestedModalZIndex?: number;
@@ -324,7 +374,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
   const [processPlanOptions, setProcessPlanOptions] = useState<
     Array<{ value: number; label: string; name: string }>
   >([]);
-  const [loading, setLoading] = useState(false);
+  const [operationsCatalogLoading, setOperationsCatalogLoading] = useState(false);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [selectedOperationUuids, setSelectedOperationUuids] = useState<string[]>([]);
   const [replaceModalVisible, setReplaceModalVisible] = useState(false);
@@ -349,15 +399,17 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
     onPickModalOpenChange,
   ]);
 
+  const suppliersLoadedRef = useRef(false);
+
   const loadAllOperations = useCallback(async () => {
     try {
-      setLoading(true);
-      const result = await operationApi.list({ isActive: true, limit: 1000 });
-      setAllOperations(Array.isArray(result) ? result : result?.data ?? []);
+      setOperationsCatalogLoading(true);
+      const list = await fetchActiveOperationCatalog();
+      setAllOperations(list);
     } catch (error: any) {
       message.error(error.message || t('app.master-data.operationSequence.loadListFailed'));
     } finally {
-      setLoading(false);
+      setOperationsCatalogLoading(false);
     }
   }, [t]);
 
@@ -365,26 +417,23 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
     void loadAllOperations();
   }, [loadAllOperations]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const result = await supplierApi.list({ limit: 1000, isActive: true });
-        const items = unwrapSupplyPagedList(result);
-        if (cancelled) return;
-        setSupplierOptions(
-          items.map((s: { id?: number; code?: string; name?: string }) => ({
+  const loadSupplierOptions = useCallback(async () => {
+    if (suppliersLoadedRef.current) return;
+    try {
+      const result = await supplierApi.list({ limit: 1000, isActive: true });
+      const items = unwrapSupplyPagedList(result);
+      setSupplierOptions(
+        items
+          .map((s: { id?: number; code?: string; name?: string }) => ({
             value: Number(s.id),
             label: s.code ? `${s.code} ${s.name ?? ''}` : String(s.name ?? s.id),
-          })).filter((o) => Number.isFinite(o.value) && o.value > 0),
-        );
-      } catch {
-        if (!cancelled) setSupplierOptions([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+          }))
+          .filter((o) => Number.isFinite(o.value) && o.value > 0),
+      );
+      suppliersLoadedRef.current = true;
+    } catch {
+      setSupplierOptions([]);
+    }
   }, []);
 
   const loadProcessPlanOptions = useCallback(async () => {
@@ -483,6 +532,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
 
   const handleOperationQuickCreateSuccess = useCallback(
     (created: Operation) => {
+      mergeOperationIntoActiveCatalog(created);
       setAllOperations((prev) => {
         if (prev.some((op) => op.uuid === created.uuid)) return prev;
         return [...prev, created];
@@ -579,8 +629,27 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
     commitOperations(operations.map((op) => (op.uuid === uuid ? { ...op, ...patch } : op)));
   };
 
-  const patchTime = (uuid: string, patch: Partial<Pick<OperationItem, 'standardTime' | 'setupTime'>>) => {
+  const patchTime = (
+    uuid: string,
+    patch: Partial<
+      Pick<
+        OperationItem,
+        'standardTime' | 'standardTimeQty' | 'standardTimeUnit' | 'setupTime' | 'pieceRate'
+      >
+    >,
+  ) => {
     commitOperations(operations.map((op) => (op.uuid === uuid ? { ...op, ...patch } : op)));
+  };
+
+  const changeStandardTimeUnit = (uuid: string, nextUnit: ManufacturingTimeUnit) => {
+    const row = operations.find((op) => op.uuid === uuid);
+    if (!row) return;
+    const prevUnit = normalizeTimeUnit(row.standardTimeUnit);
+    const seconds = toSeconds(row.standardTime, prevUnit);
+    patchTime(uuid, {
+      standardTimeUnit: nextUnit,
+      standardTime: fromSeconds(seconds, nextUnit),
+    });
   };
 
   const handleOpenReplaceModal = (uuid: string) => {
@@ -646,12 +715,20 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
   /** 任一行开启计划委外时才展示提前期 / 委外供应商列 */
   const showOutsourceDetailColumns = operations.some((op) => !!op.isOutsourced);
 
+  useEffect(() => {
+    if (!showOutsourceDetailColumns) return;
+    void loadSupplierOptions();
+  }, [showOutsourceDetailColumns, loadSupplierOptions]);
+
+  const pickListLoading = operationsCatalogLoading && allOperations.length === 0;
+
   /** 与昨日布局一致：scroll.x ≥ 列宽之和，避免挤列；弹窗加宽后仍按列宽总和滚动 */
   const tableScrollX = useMemo(() => {
-    let w = 100 + 220 + 120 + 88 + 148 + 280 + 320;
+    // 序号(左固定) + 工序 + 报工 + 质检模式 + 检验方案 + 计划委外 + 超报 + 操作(右固定)
+    let w = 100 + 220 + 120 + 148 + 280 + 88 + 200 + 100;
     if (showOutsourceDetailColumns) w += 100 + 180;
     if (showNodeOperationColumn) w += 88;
-    if (showTimeColumns) w += 148 + 136;
+    if (showTimeColumns) w += 312 + 120;
     return w;
   }, [showNodeOperationColumn, showTimeColumns, showOutsourceDetailColumns]);
 
@@ -668,6 +745,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
         title: t('app.master-data.operationSequence.index'),
         key: 'index',
         width: 100,
+        fixed: 'left',
         render: (_: unknown, record: OperationItem, index: number) => (
           <SequenceIndexCell
             index={index}
@@ -735,36 +813,90 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
             {
               title: t('app.master-data.manufacturing.standardTime'),
               key: 'standardTime',
-              width: 148,
+              width: 312,
               render: (_: unknown, record: OperationItem) => (
-                <InputNumber
-                  size="small"
-                  min={0}
-                  precision={0}
-                  step={1}
-                  style={{ width: '100%' }}
-                  suffix={t('app.master-data.manufacturing.minutePerPieceUnit')}
-                  placeholder="0"
-                  value={record.standardTime}
-                  onChange={(v) => patchTime(record.uuid, { standardTime: v ?? undefined })}
-                />
+                <Space.Compact style={{ display: 'inline-flex', flexWrap: 'nowrap', maxWidth: '100%' }}>
+                  <InputNumber
+                    size="small"
+                    min={0}
+                    step={0.01}
+                    precision={2}
+                    style={{ width: 76 }}
+                    placeholder="0"
+                    value={record.standardTime}
+                    onChange={(v) => patchTime(record.uuid, { standardTime: v ?? undefined })}
+                  />
+                  <Select
+                    size="small"
+                    style={{ width: 68 }}
+                    value={normalizeTimeUnit(record.standardTimeUnit)}
+                    options={TIME_UNIT_OPTIONS.map((o) => ({
+                      value: o.value,
+                      label: t(o.labelKey),
+                    }))}
+                    {...selectPopupProps}
+                    onChange={(u) => changeStandardTimeUnit(record.uuid, u as ManufacturingTimeUnit)}
+                  />
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      padding: '0 6px',
+                      color: token.colorTextSecondary,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    /
+                  </span>
+                  <InputNumber
+                    size="small"
+                    min={1}
+                    step={1}
+                    precision={0}
+                    style={{ width: 76 }}
+                    value={record.standardTimeQty ?? 1}
+                    onChange={(v) =>
+                      patchTime(record.uuid, {
+                        standardTimeQty: v != null && Number(v) >= 1 ? Number(v) : 1,
+                      })
+                    }
+                  />
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      padding: '0 8px',
+                      background: token.colorFillAlter,
+                      border: `1px solid ${token.colorBorder}`,
+                      borderLeft: 0,
+                      borderRadius: '0 6px 6px 0',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {t('app.master-data.manufacturing.pieceUnit')}
+                  </span>
+                </Space.Compact>
               ),
             },
             {
-              title: t('app.master-data.manufacturing.setupTime'),
-              key: 'setupTime',
-              width: 136,
+              title: t('app.master-data.manufacturing.laborPrice'),
+              key: 'pieceRate',
+              width: 120,
               render: (_: unknown, record: OperationItem) => (
                 <InputNumber
                   size="small"
                   min={0}
-                  precision={0}
-                  step={1}
+                  precision={2}
+                  step={0.01}
                   style={{ width: '100%' }}
-                  suffix={t('app.master-data.manufacturing.minuteUnit')}
+                  suffix={t('app.master-data.manufacturing.yuanPerPieceUnit')}
                   placeholder="0"
-                  value={record.setupTime}
-                  onChange={(v) => patchTime(record.uuid, { setupTime: v ?? undefined })}
+                  value={record.pieceRate}
+                  onChange={(v) =>
+                    patchTime(record.uuid, {
+                      pieceRate: v != null && Number.isFinite(Number(v)) ? Number(v) : undefined,
+                    })
+                  }
                 />
               ),
             },
@@ -981,9 +1113,9 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
           ]
         : []),
       {
-        title: t('app.master-data.operationSequence.overReportAction'),
-        key: 'action',
-        width: 320,
+        title: t('app.master-data.operationSequence.overReport'),
+        key: 'overReport',
+        width: 200,
         render: (_: unknown, record: OperationItem) => (
           <div
             style={{
@@ -1004,21 +1136,59 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                 { label: t('field.operation.overReportModePercent'), value: 'percent' },
               ]}
               {...selectPopupProps}
-              onChange={(v) =>
-                patchOverReport(record.uuid, { overReportMode: v as OperationItem['overReportMode'] })
-              }
+              onChange={(v) => {
+                const mode = v as OperationItem['overReportMode'];
+                const next: Partial<Pick<OperationItem, 'overReportMode' | 'overReportValue'>> = {
+                  overReportMode: mode,
+                };
+                if (mode === 'none') next.overReportValue = 0;
+                else if (mode === 'percent' && (record.overReportValue ?? 0) > 100) {
+                  next.overReportValue = 100;
+                }
+                patchOverReport(record.uuid, next);
+              }}
             />
             <InputNumber
               size="small"
               min={0}
+              max={(record.overReportMode ?? 'none') === 'percent' ? 100 : undefined}
               style={{ width: 88, flexShrink: 0 }}
               value={record.overReportValue ?? 0}
               onChange={(v) => patchOverReport(record.uuid, { overReportValue: v ?? 0 })}
             />
-            <Button type="link" size="small" style={{ paddingInline: 4, flexShrink: 0 }} onClick={() => handleOpenReplaceModal(record.uuid)}>
+          </div>
+        ),
+      },
+      {
+        title: t('common.action'),
+        key: 'action',
+        width: 100,
+        fixed: 'right',
+        render: (_: unknown, record: OperationItem) => (
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'nowrap',
+              alignItems: 'center',
+              gap: 4,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <Button
+              type="link"
+              size="small"
+              style={{ paddingInline: 4, flexShrink: 0 }}
+              onClick={() => handleOpenReplaceModal(record.uuid)}
+            >
               {t('app.master-data.operationSequence.replace')}
             </Button>
-            <Button type="link" size="small" danger style={{ paddingInline: 4, flexShrink: 0 }} onClick={() => handleDeleteOperation(record.uuid)}>
+            <Button
+              type="link"
+              size="small"
+              danger
+              style={{ paddingInline: 4, flexShrink: 0 }}
+              onClick={() => handleDeleteOperation(record.uuid)}
+            >
               {t('common.delete')}
             </Button>
           </div>
@@ -1031,8 +1201,9 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
       <Modal
         title={t('app.master-data.operationSequence.selectOperation')}
         open={addModalVisible}
-        centered
-        width={520}
+        centered={false}
+        style={{ top: OPERATION_PICK_MODAL_TOP }}
+        width={OPERATION_PICK_MODAL_WIDTH}
         zIndex={effectivePickModalZIndex}
         getContainer={() => document.body}
         destroyOnHidden
@@ -1046,19 +1217,19 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
         }}
         okText={t('common.confirm') + SUBMIT_SHORTCUT_HINT}
         cancelText={t('common.cancel')}
-        okButtonProps={{ disabled: !selectedOperationUuids?.length || loading }}
+        okButtonProps={{ disabled: !selectedOperationUuids?.length || pickListLoading }}
       >
         <OperationPickPanel
           key={addModalVisible ? 'add-open' : 'add-closed'}
           mode="multiple"
           operations={availableOperations}
-          loading={loading}
+          loading={pickListLoading}
           multipleValue={selectedOperationUuids}
           onMultipleChange={setSelectedOperationUuids}
           searchPlaceholder={t('app.master-data.operationSequence.pickSearchPlaceholder')}
           onQuickAdd={() => setOperationFormModalOpen(true)}
         />
-        {availableOperations.length === 0 && !loading && (
+        {availableOperations.length === 0 && !pickListLoading && (
           <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
             {t('app.master-data.operationSequence.createOperationFirst')}
           </Typography.Text>
@@ -1068,8 +1239,9 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
       <Modal
         title={t('app.master-data.operationSequence.replaceOperation')}
         open={replaceModalVisible}
-        centered
-        width={520}
+        centered={false}
+        style={{ top: OPERATION_PICK_MODAL_TOP }}
+        width={OPERATION_PICK_MODAL_WIDTH}
         zIndex={effectivePickModalZIndex}
         getContainer={() => document.body}
         destroyOnHidden
@@ -1084,7 +1256,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
         }}
         okText={t('common.confirm') + SUBMIT_SHORTCUT_HINT}
         cancelText={t('common.cancel')}
-        okButtonProps={{ disabled: !replacementOperationUuid || loading }}
+        okButtonProps={{ disabled: !replacementOperationUuid || pickListLoading }}
       >
         <div style={{ marginBottom: 12 }}>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -1106,13 +1278,13 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
           key={replaceModalVisible ? 'replace-open' : 'replace-closed'}
           mode="single"
           operations={getAvailableForReplace(replacingOperationUuid)}
-          loading={loading}
+          loading={pickListLoading}
           singleValue={replacementOperationUuid}
           onSingleChange={setReplacementOperationUuid}
           searchPlaceholder={t('app.master-data.operationSequence.pickSearchPlaceholder')}
           onQuickAdd={() => setOperationFormModalOpen(true)}
         />
-        {getAvailableForReplace(replacingOperationUuid).length === 0 && !loading && (
+        {getAvailableForReplace(replacingOperationUuid).length === 0 && !pickListLoading && (
           <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
             {t('app.master-data.operationSequence.createOperationFirst')}
           </Typography.Text>

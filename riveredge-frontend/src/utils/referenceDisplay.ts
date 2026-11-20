@@ -139,6 +139,69 @@ function extraStr(extra: Record<string, unknown>, ...keys: string[]): string | u
   return undefined;
 }
 
+function mapPartnerContactsFromExtra(
+  extra: Record<string, unknown>,
+): { contactPerson?: string; contactTitle?: string; phone?: string; email?: string }[] | undefined {
+  const raw = extra.contacts;
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const rows = raw
+    .map((row) => {
+      if (!row || typeof row !== 'object') return null;
+      const r = row as Record<string, unknown>;
+      const contactPerson = extraStr(r, 'contact_person', 'contactPerson');
+      const phone = extraStr(r, 'phone');
+      const email = extraStr(r, 'email');
+      const contactTitle = extraStr(r, 'contact_title', 'contactTitle');
+      if (!contactPerson && !phone) return null;
+      return { contactPerson, contactTitle, phone, email };
+    })
+    .filter(Boolean) as {
+    contactPerson?: string;
+    contactTitle?: string;
+    phone?: string;
+    email?: string;
+  }[];
+  return rows.length ? rows : undefined;
+}
+
+function mapPartnerAddressesFromExtra(
+  extra: Record<string, unknown>,
+):
+  | {
+      addressType?: string;
+      address?: string;
+      contactName?: string;
+      contactPhone?: string;
+      isDefault?: boolean;
+    }[]
+  | undefined {
+  const raw = extra.addresses;
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const rows = raw
+    .map((row) => {
+      if (!row || typeof row !== 'object') return null;
+      const r = row as Record<string, unknown>;
+      const address = extraStr(r, 'address');
+      if (!address) return null;
+      const addressType = extraStr(r, 'address_type', 'addressType');
+      return {
+        addressType,
+        address,
+        contactName: extraStr(r, 'contact_name', 'contactName'),
+        contactPhone: extraStr(r, 'contact_phone', 'contactPhone'),
+        isDefault: Boolean(r.is_default ?? r.isDefault),
+      };
+    })
+    .filter(Boolean) as {
+    addressType?: string;
+    address?: string;
+    contactName?: string;
+    contactPhone?: string;
+    isDefault?: boolean;
+  }[];
+  return rows.length ? rows : undefined;
+}
+
 function extraNum(extra: Record<string, unknown>, ...keys: string[]): number | undefined {
   for (const key of keys) {
     const raw = extra[key];
@@ -162,7 +225,12 @@ export function mapPartnerReferenceDisplayItem(item: ReferenceDisplayItem): {
   salesmanId?: number;
   salesmanName?: string;
   paymentTermsDays?: number;
-  settlementMethodCode?: string;
+  defaultPaymentMethodCode?: string;
+  settlementTermsCode?: string;
+  defaultCurrencyCode?: string;
+  defaultExchangeRate?: number;
+  revenueRecognitionOverride?: string;
+  payableRecognitionOverride?: string;
   buyerId?: number;
   buyerName?: string;
 } {
@@ -182,9 +250,28 @@ export function mapPartnerReferenceDisplayItem(item: ReferenceDisplayItem): {
     salesmanId: extraNum(extra, 'salesman_id', 'salesmanId'),
     salesmanName: extraStr(extra, 'salesman_name', 'salesmanName'),
     paymentTermsDays: extraNum(extra, 'payment_terms_days', 'paymentTermsDays'),
-    settlementMethodCode: extraStr(extra, 'settlement_method_code', 'settlementMethodCode'),
+    defaultPaymentMethodCode: extraStr(
+      extra,
+      'default_payment_method_code',
+      'defaultPaymentMethodCode',
+    ),
+    settlementTermsCode: extraStr(extra, 'settlement_terms_code', 'settlementTermsCode'),
+    defaultCurrencyCode: extraStr(extra, 'default_currency_code', 'defaultCurrencyCode'),
+    defaultExchangeRate: extraNum(extra, 'default_exchange_rate', 'defaultExchangeRate'),
+    revenueRecognitionOverride: extraStr(
+      extra,
+      'revenue_recognition_override',
+      'revenueRecognitionOverride',
+    ),
+    payableRecognitionOverride: extraStr(
+      extra,
+      'payable_recognition_override',
+      'payableRecognitionOverride',
+    ),
     buyerId: extraNum(extra, 'buyer_id', 'buyerId'),
     buyerName: extraStr(extra, 'buyer_name', 'buyerName'),
+    contacts: mapPartnerContactsFromExtra(extra),
+    addresses: mapPartnerAddressesFromExtra(extra),
   };
 }
 

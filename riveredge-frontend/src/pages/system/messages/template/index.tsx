@@ -6,7 +6,7 @@ import { rowActionKind } from '../../../../components/uni-action';
  * 支持消息模板的 CRUD 操作。
  */
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -26,7 +26,9 @@ import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTab
 import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { FormModalTemplate, MODAL_CONFIG, TwoColumnLayout } from '../../../../components/layout-templates';
+import { useResourceCategoryPanel } from '../../shared/useResourceCategoryPanel';
+import { type ResourceCategoryListFilter } from '../../../../services/resourceCategory';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
 import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
@@ -63,6 +65,35 @@ const MessageTemplateListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
+
+  const reloadList = useCallback(() => {
+    actionRef.current?.reload();
+  }, []);
+
+  const categoryListFilterRef = useRef<ResourceCategoryListFilter>({});
+
+  const handleCategorySelectionChange = useCallback(
+    (nextFilter: ResourceCategoryListFilter) => {
+      categoryListFilterRef.current = nextFilter;
+      reloadList();
+    },
+    [reloadList],
+  );
+
+  const {
+    leftPanel: categoryLeftPanel,
+    listFilter: categoryListFilter,
+    selectedCategoryKey,
+    categorySelectOptions,
+    reloadCategories,
+    categoryFormModal,
+  } = useResourceCategoryPanel({
+    resourceType: 'message_template',
+    onSelectionChange: handleCategorySelectionChange,
+    onFunctionPresetsApplied: reloadList,
+  });
+
+  categoryListFilterRef.current = categoryListFilter;
   const detailRetryUuidRef = useRef<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
@@ -90,6 +121,7 @@ const MessageTemplateListPage: React.FC = () => {
     formRef.current?.setFieldsValue({
       type: 'email',
       is_active: true,
+      category_uuid: categoryListFilter.category_uuid,
     });
   };
 
@@ -119,6 +151,7 @@ const MessageTemplateListPage: React.FC = () => {
         content: detail.content,
         variableList,
         is_active: detail.is_active,
+        category_uuid: detail.category_uuid || undefined,
       });
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.messageTemplate.getDetailFailed'));
@@ -222,6 +255,7 @@ const MessageTemplateListPage: React.FC = () => {
           content: values.content,
           variables: variables,
           is_active: values.is_active,
+          category_uuid: values.category_uuid ?? null,
         } as UpdateMessageTemplateData);
         messageApi.success(t('common.updateSuccess'));
       } else {
@@ -234,12 +268,14 @@ const MessageTemplateListPage: React.FC = () => {
           content: values.content,
           variables: variables,
           is_active: values.is_active,
+          category_uuid: values.category_uuid || undefined,
         } as CreateMessageTemplateData);
         messageApi.success(t('common.createSuccess'));
       }
       
       setModalVisible(false);
       actionRef.current?.reload();
+      void reloadCategories();
     } catch (error: any) {
       messageApi.error(error.message || t('common.operationFailed'));
       throw error;
@@ -251,7 +287,7 @@ const MessageTemplateListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns = useMemo<ProColumns<MessageTemplate>[]>(() => alignProColumns<MessageTemplate>([
+  const columns = useMemo<ProColumns<MessageTemplate>[]>(() => alignProColumns([
     {
       title: t('pages.system.messageTemplate.templateCode'),
       dataIndex: 'code',
@@ -437,11 +473,17 @@ const MessageTemplateListPage: React.FC = () => {
 
   return (
     <>
-      <ListPageTemplate>
+      <TwoColumnLayout
+        style={{ height: '100%' }}
+        layoutPersistenceId="pages.system.messages.template.list"
+        leftPanel={categoryLeftPanel}
+        rightPanel={{
+          content: (
         <UniTable<MessageTemplate>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.messageTemplates')}
-        columnPersistenceId="pages.system.messages.template.list-v3"
+        columnPersistenceId="pages.system.messages.template.list-v4"
+        tanstackQuery={{ queryKeyPrefix: ['pages.system.messages.template.list', selectedCategoryKey] }}
         actionRef={actionRef}
         columns={columns}
         request={async (params, _sort, _filter, searchFormValues) => {
@@ -464,6 +506,8 @@ const MessageTemplateListPage: React.FC = () => {
           if (keyword) {
             apiParams.keyword = keyword;
           }
+
+          Object.assign(apiParams, categoryListFilterRef.current);
           
           try {
             const result = await getMessageTemplateList(apiParams);
@@ -542,7 +586,11 @@ const MessageTemplateListPage: React.FC = () => {
           showSizeChanger: true,
         }}
         />
-      </ListPageTemplate>
+          ),
+        }}
+      />
+
+      {categoryFormModal}
 
       {/* 创建/编辑消息模板 Modal */}
       <FormModalTemplate
@@ -586,6 +634,14 @@ const MessageTemplateListPage: React.FC = () => {
               ]}
               disabled={isEdit}
               colProps={{ span: 8 }}
+            />
+            <SafeProFormSelect
+              name="category_uuid"
+              label={t('pages.system.resourceCategory.fieldCategory')}
+              placeholder={t('pages.system.resourceCategory.categoryPlaceholder')}
+              options={categorySelectOptions}
+              allowClear
+              colProps={{ span: 24 }}
             />
             <ProFormText
               name="subject"

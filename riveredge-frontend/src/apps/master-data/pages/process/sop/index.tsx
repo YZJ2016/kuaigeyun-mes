@@ -4,9 +4,9 @@
  * 提供标准操作SOP的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptionsItemProps, ProFormDependency } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptionsItemProps, ProFormDependency } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Modal, Row, Col, List, Typography, Descriptions } from 'antd';
 import dayjs from 'dayjs';
@@ -57,13 +57,9 @@ import {
   resolveSopListParams,
 } from '../../../utils/processListCore';
 import { materialApi, materialGroupApi } from '../../../services/material';
-import type { MaterialListResponse } from '../../../types/material';
 import type { SOP, SOPCreate, SOPUpdate, Operation } from '../../../types/process';
-import {
-  MATERIAL_SELECT_OPTION_ITEM_HEIGHT,
-  MaterialSelectOptionContent,
-  formatMaterialSelectLabel,
-} from '../../../../../components/uni-material-select';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import type { Material } from '../../../types/material';
 import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
@@ -129,18 +125,73 @@ const SOPPage: React.FC<SOPPageProps> = ({ fixedSopDomain = 'pe' }) => {
   const [operationsLoading, setOperationsLoading] = useState(false);
   // 物料组/物料/工艺路线（绑定与载入用）
   const [materialGroups, setMaterialGroups] = useState<{ uuid: string; code: string; name: string }[]>([]);
-  const [materials, setMaterials] = useState<
-    Array<{
-      uuid: string;
-      code: string;
-      mainCode?: string;
-      name: string;
-      specification?: string;
-      model?: string;
-      images?: Array<string | { uuid?: string; uid?: string }>;
-    }>
-  >([]);
+  type SopMaterialOption = {
+    uuid: string;
+    code: string;
+    mainCode?: string;
+    name: string;
+    specification?: string;
+    model?: string;
+    images?: Array<string | { uuid?: string; uid?: string }>;
+  };
+  const [materials, setMaterials] = useState<SopMaterialOption[]>([]);
+  const materialsRef = useRef<SopMaterialOption[]>([]);
   const [routes, setRoutes] = useState<{ uuid: string; code: string; name: string }[]>([]);
+
+  const mapMaterialOption = useCallback((m: any): SopMaterialOption => ({
+    uuid: m.uuid,
+    code: m.mainCode ?? m.main_code ?? m.code ?? '',
+    mainCode: m.mainCode ?? m.main_code ?? m.code ?? '',
+    name: m.name ?? '',
+    specification: m.specification ?? undefined,
+    model: m.model ?? undefined,
+    images: Array.isArray(m.images) ? m.images : undefined,
+  }), []);
+
+  const mergeMaterialsIntoCache = useCallback((incoming: SopMaterialOption[]) => {
+    if (!incoming.length) return;
+    setMaterials((prev) => {
+      const map = new Map(prev.map((m) => [m.uuid, m]));
+      for (const m of incoming) {
+        if (m?.uuid) map.set(m.uuid, m);
+      }
+      const next = Array.from(map.values());
+      materialsRef.current = next;
+      return next;
+    });
+  }, []);
+
+  /** 编辑/详情回显：按 uuid 拉物料（展示名 + UniMaterialSelect 的 numeric id） */
+  const ensureMaterialsByUuids = useCallback(
+    async (uuids: string[]): Promise<Material[]> => {
+      const unique = [...new Set((uuids || []).filter(Boolean))];
+      if (!unique.length) return [];
+      const loaded = await Promise.all(
+        unique.map(async (uuid) => {
+          try {
+            return await materialApi.get(uuid);
+          } catch {
+            return null;
+          }
+        }),
+      );
+      const mats = loaded.filter((m): m is Material => m != null && m.id != null);
+      mergeMaterialsIntoCache(mats.map(mapMaterialOption));
+      return mats;
+    },
+    [mapMaterialOption, mergeMaterialsIntoCache],
+  );
+
+  const syncSopMaterialUuidsFromSelection = useCallback(
+    (selected: Material | Material[] | undefined): string[] => {
+      const list = Array.isArray(selected) ? selected : selected ? [selected] : [];
+      mergeMaterialsIntoCache(list.map(mapMaterialOption));
+      const uuids = list.map((m) => m.uuid).filter((u): u is string => Boolean(u));
+      formRef.current?.setFieldValue('material_uuids', uuids.length ? uuids : undefined);
+      return uuids;
+    },
+    [mapMaterialOption, mergeMaterialsIntoCache],
+  );
   const [existingSopsForCheck, setExistingSopsForCheck] = useState<SOP[]>([]);
   const [sopPreviewCode, setSopPreviewCode] = useState<string | null>(null);
 
@@ -236,34 +287,19 @@ const SOPPage: React.FC<SOPPageProps> = ({ fixedSopDomain = 'pe' }) => {
   }, [searchParams.get('editUuid'), searchParams.get('create')]);
 
   /**
-   * 加载工序、物料组、物料、工艺路线列表
+   * 加载工序、物料组、工艺路线；物料改为远程搜索，不在进页时全表预载
    */
   useEffect(() => {
     const load = async () => {
       try {
         setOperationsLoading(true);
-        const [opRes, mgRes, matRes, routeRes] = await Promise.all([
+        const [opRes, mgRes, routeRes] = await Promise.all([
           operationApi.list({ limit: 1000, isActive: true }),
           materialGroupApi.list({ limit: 1000 }).catch(() => []),
-          materialApi.list({ limit: 2000, isActive: true }).catch(() => []),
           processRouteApi.list({ limit: 500, isActive: true }).catch(() => []),
         ]);
         setOperations(unwrapProcessPagedList(opRes));
         setMaterialGroups(Array.isArray(mgRes) ? mgRes : []);
-        const rawMats = Array.isArray(matRes)
-          ? matRes
-          : ((matRes as MaterialListResponse | undefined)?.items ?? []);
-        setMaterials(
-          rawMats.map((m: any) => ({
-            uuid: m.uuid,
-            code: m.mainCode ?? m.main_code ?? m.code ?? '',
-            mainCode: m.mainCode ?? m.main_code ?? m.code ?? '',
-            name: m.name ?? '',
-            specification: m.specification ?? undefined,
-            model: m.model ?? undefined,
-            images: Array.isArray(m.images) ? m.images : undefined,
-          }))
-        );
         setRoutes(
           unwrapProcessPagedList(routeRes).map((r: any) => ({
             uuid: r.uuid,
@@ -318,6 +354,8 @@ const SOPPage: React.FC<SOPPageProps> = ({ fixedSopDomain = 'pe' }) => {
 
       const detail = await sopApi.get(record.uuid);
       const d = detail as any;
+      const materialUuids: string[] = d.material_uuids ?? d.materialUuids ?? [];
+      const boundMaterials = await ensureMaterialsByUuids(materialUuids);
       formRef.current?.setFieldsValue({
         code: detail.code,
         name: detail.name,
@@ -333,7 +371,8 @@ const SOPPage: React.FC<SOPPageProps> = ({ fixedSopDomain = 'pe' }) => {
         attachments: mapSopAttachmentsToUploadList(detail.attachments),
         isActive: detail.isActive ?? d.is_active ?? true,
         material_group_uuids: d.material_group_uuids ?? d.materialGroupUuids ?? undefined,
-        material_uuids: d.material_uuids ?? d.materialUuids ?? undefined,
+        material_uuids: boundMaterials.map((m) => m.uuid).filter(Boolean),
+        material_ids: boundMaterials.map((m) => m.id),
       });
       const fieldFormValues = await loadSopFormFieldValues(detail.id);
       formRef.current?.setFieldsValue(fieldFormValues);
@@ -407,6 +446,9 @@ const SOPPage: React.FC<SOPPageProps> = ({ fixedSopDomain = 'pe' }) => {
     setDetailError(null);
     try {
       const detail = await sopApi.get(uuid);
+      const d = detail as any;
+      const materialUuids: string[] = d.material_uuids ?? d.materialUuids ?? [];
+      await ensureMaterialsByUuids(materialUuids);
       setSopDetail(normalizeSopRecord(detail as SOP & Record<string, unknown>));
       setCurrentSOPUuid(detail.uuid);
       if (detail.id != null) {
@@ -1140,26 +1182,22 @@ const SOPPage: React.FC<SOPPageProps> = ({ fixedSopDomain = 'pe' }) => {
       title: t('app.master-data.sop.filterByMaterial'),
       dataIndex: 'material_uuid',
       hideInTable: true,
-      valueType: 'select',
-      fieldProps: {
-        placeholder: t('app.master-data.sop.filterMaterialPlaceholder'),
-        options: materials.map((m: any) => ({
-          label: formatMaterialSelectLabel(m),
-          value: m.uuid,
-        })),
-        showSearch: true,
-        listItemHeight: MATERIAL_SELECT_OPTION_ITEM_HEIGHT,
-        popupMatchSelectWidth: 480,
-        optionRender: (option: { value?: string | number; label?: React.ReactNode }) => {
-          const material = materials.find((m: any) => m.uuid === option.value);
-          return (
-            <MaterialSelectOptionContent
-              material={material as Record<string, unknown> | undefined}
-              fallbackLabel={option.label}
-            />
-          );
-        },
-      },
+      renderFormItem: (_schema, _config, form) => (
+        <UniMaterialSelect
+          name="_filter_material_id"
+          label=""
+          placeholder={t('app.master-data.sop.filterMaterialPlaceholder')}
+          showQuickCreate={false}
+          showAdvancedSearch={false}
+          fillMapping={{}}
+          formItemProps={{ style: { marginBottom: 0 } }}
+          onChange={(_id, material) => {
+            const picked = material && !Array.isArray(material) ? (material as Material) : undefined;
+            if (picked) mergeMaterialsIntoCache([mapMaterialOption(picked)]);
+            form?.setFieldValue('material_uuid', picked?.uuid);
+          }}
+        />
+      ),
     },
     {
       title: t('app.master-data.sop.filterByMaterialGroup'),
@@ -1325,7 +1363,20 @@ const SOPPage: React.FC<SOPPageProps> = ({ fixedSopDomain = 'pe' }) => {
       },
     },
   ];
-  }, [sopListCustomFields, generateSopCustomFieldColumns, operations, materials, materialGroups, routes, navigate, getOperationName, t, sopActiveValueEnum]);
+  }, [
+    sopListCustomFields,
+    generateSopCustomFieldColumns,
+    operations,
+    materials,
+    mergeMaterialsIntoCache,
+    mapMaterialOption,
+    materialGroups,
+    routes,
+    navigate,
+    getOperationName,
+    t,
+    sopActiveValueEnum,
+  ]);
 
   return (
     <ListPageTemplate>
@@ -1502,7 +1553,15 @@ const SOPPage: React.FC<SOPPageProps> = ({ fixedSopDomain = 'pe' }) => {
       </Modal>
 
       <FormModalTemplate
-        title={isEdit ? t('app.master-data.sop.editTitle') : t('app.master-data.sop.createTitle')}
+        title={
+          fixedSopDomain === 'qc'
+            ? isEdit
+              ? t('app.kuaizhizao.qcSop.editTitle')
+              : t('app.kuaizhizao.qcSop.createTitle')
+            : isEdit
+              ? t('app.master-data.sop.editTitle')
+              : t('app.master-data.sop.createTitle')
+        }
         open={modalVisible}
         onClose={handleCloseModal}
         onFinish={handleSubmit}
@@ -1557,33 +1616,20 @@ const SOPPage: React.FC<SOPPageProps> = ({ fixedSopDomain = 'pe' }) => {
               />
             </Col>
             <Col span={12} style={{ minWidth: 0 }}>
-              <SafeProFormSelect
-                name="material_uuids"
+              <ProForm.Item name="material_uuids" hidden />
+              <UniMaterialSelect
+                name="material_ids"
                 label={t('app.master-data.sop.bindMaterials')}
                 placeholder={t('app.master-data.sop.bindMaterialPlaceholder')}
                 mode="multiple"
-                options={materials.map((m) => ({
-                  label: formatMaterialSelectLabel(m as Record<string, unknown>),
-                  value: m.uuid,
-                }))}
-                fieldProps={{
-                  showSearch: true,
-                  filterOption: (i: string, o: any) =>
-                    String(o?.label ?? '')
-                      .toLowerCase()
-                      .includes((i || '').toLowerCase()),
-                  listItemHeight: MATERIAL_SELECT_OPTION_ITEM_HEIGHT,
-                  popupMatchSelectWidth: 480,
-                  optionRender: (option: { value?: string | number; label?: React.ReactNode }) => {
-                    const material = materials.find((m: any) => m.uuid === option.value);
-                    return (
-                      <MaterialSelectOptionContent
-                        material={material as Record<string, unknown> | undefined}
-                        fallbackLabel={option.label}
-                      />
-                    );
-                  },
-                  onChange: (value: string[]) => handleBindingScopeChange(value, undefined),
+                showQuickCreate={false}
+                showAdvancedSearch
+                fillMapping={{}}
+                onChange={(_ids, selected) => {
+                  const uuids = syncSopMaterialUuidsFromSelection(
+                    selected as Material | Material[] | undefined,
+                  );
+                  handleBindingScopeChange(uuids, undefined);
                 }}
               />
             </Col>

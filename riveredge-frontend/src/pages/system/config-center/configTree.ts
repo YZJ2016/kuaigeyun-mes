@@ -10,7 +10,7 @@ export type ParamType = 'boolean' | 'number' | 'string' | 'color' | 'select' | '
 
 /** 下拉选项（label 使用 i18n key，由页面 t(labelKey) 渲染） */
 export interface ParamSelectOption {
-  value: string | number;
+  value: string;
   labelKey: string;
 }
 
@@ -63,7 +63,6 @@ const COMMON_CATEGORY = {
   id: 'common',
   nameKey: 'pages.system.configCenter.category.common',
   descriptionKey: 'pages.system.configCenter.category.commonDesc',
-  params: [] as ParamMeta[],
 };
 
 /** 8 个标准系统模块的基础定义（按快制造菜单顺序） */
@@ -99,7 +98,7 @@ const MASTER_DATA_PARAMETER_CATEGORY: ConfigCategory = {
       sourcePath: 'parameters.master_data.drawing_max_upload_size_mb',
       type: 'number',
       min: 1,
-      max: 100,
+      max: 200,
     },
     {
       key: 'master_data.allow_material_quick_create',
@@ -109,6 +108,27 @@ const MASTER_DATA_PARAMETER_CATEGORY: ConfigCategory = {
       source: 'business_config',
       sourcePath: 'parameters.master_data.allow_material_quick_create',
       type: 'boolean',
+    },
+    {
+      key: 'master_data.material_code_search_mode',
+      nameKey: 'pages.system.configCenter.param.master_data_material_code_search_mode',
+      descriptionKey:
+        'pages.system.configCenter.param.master_data_material_code_search_mode_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.master_data.material_code_search_mode',
+      type: 'select',
+      selectOptions: [
+        {
+          value: 'fuzzy',
+          labelKey:
+            'pages.system.configCenter.param.master_data_material_code_search_mode_opt_fuzzy',
+        },
+        {
+          value: 'prefix',
+          labelKey:
+            'pages.system.configCenter.param.master_data_material_code_search_mode_opt_prefix',
+        },
+      ],
     },
   ],
 };
@@ -147,6 +167,14 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = [
       descriptionKey: 'pages.system.configCenter.param.common_trial_run_mode_desc',
       source: 'business_config',
       sourcePath: 'parameters.common.trial_run_mode',
+      type: 'boolean',
+    },
+    {
+      key: 'common.allow_print_unaudited',
+      nameKey: 'pages.system.configCenter.param.common_allow_print_unaudited',
+      descriptionKey: 'pages.system.configCenter.param.common_allow_print_unaudited_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.common.allow_print_unaudited',
       type: 'boolean',
     },
     {
@@ -205,14 +233,6 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = [
           labelKey: 'pages.system.configCenter.param.sales_partner_price_source_opt_price_book',
         },
       ],
-    },
-    {
-      key: 'sales.require_audit_before_print',
-      nameKey: 'pages.system.configCenter.param.sales_require_audit_before_print',
-      descriptionKey: 'pages.system.configCenter.param.sales_require_audit_before_print_desc',
-      source: 'business_config',
-      sourcePath: 'parameters.sales.require_audit_before_print',
-      type: 'boolean',
     },
     {
       key: 'sales.low_margin_threshold_percent',
@@ -290,6 +310,16 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = [
       descriptionKey: 'pages.system.configCenter.param.work_order_allow_work_order_without_bom_desc',
       source: 'business_config',
       sourcePath: 'parameters.work_order.allow_work_order_without_bom',
+      type: 'boolean',
+      sectionKey: 'production.work_order',
+      sectionNameKey: 'pages.system.configCenter.paramSection.production_work_order',
+    },
+    {
+      key: 'work_order.require_operation_dispatch',
+      nameKey: 'pages.system.configCenter.param.work_order_require_operation_dispatch',
+      descriptionKey: 'pages.system.configCenter.param.work_order_require_operation_dispatch_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.work_order.require_operation_dispatch',
       type: 'boolean',
       sectionKey: 'production.work_order',
       sectionNameKey: 'pages.system.configCenter.paramSection.production_work_order',
@@ -476,6 +506,17 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = [
       sectionNameKey: 'pages.system.configCenter.paramSection.warehouse_over_issue',
       sectionDescriptionKey: 'pages.system.configCenter.paramSection.warehouse_over_issue_desc',
     },
+    {
+      key: 'warehouse.finished_goods_inbound_limit_mode',
+      nameKey: 'pages.system.configCenter.param.warehouse_finished_goods_inbound_limit_mode',
+      descriptionKey: 'pages.system.configCenter.param.warehouse_finished_goods_inbound_limit_mode_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.warehouse.finished_goods_inbound_limit_mode',
+      type: 'select',
+      sectionKey: 'warehouse.over_issue',
+      sectionNameKey: 'pages.system.configCenter.paramSection.warehouse_over_issue',
+      sectionDescriptionKey: 'pages.system.configCenter.paramSection.warehouse_over_issue_desc',
+    },
   ],
   quality: [
     {
@@ -622,6 +663,9 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = [
       selectOptions: [
         { value: 'on_shipment', labelKey: 'pages.system.configCenter.param.finance_revenue_recognition_opt_on_shipment' },
         { value: 'on_invoice', labelKey: 'pages.system.configCenter.param.finance_revenue_recognition_opt_on_invoice' },
+        { value: 'on_milestone', labelKey: 'pages.system.configCenter.param.finance_revenue_recognition_opt_on_milestone' },
+        { value: 'mixed', labelKey: 'pages.system.configCenter.param.finance_revenue_recognition_opt_mixed' },
+        { value: 'on_partner_statement', labelKey: 'pages.system.configCenter.param.finance_revenue_recognition_opt_on_partner_statement' },
         { value: 'manual', labelKey: 'pages.system.configCenter.param.finance_revenue_recognition_opt_manual' },
       ],
     },
@@ -635,6 +679,7 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = [
       selectOptions: [
         { value: 'on_receipt', labelKey: 'pages.system.configCenter.param.finance_payable_recognition_opt_on_receipt' },
         { value: 'on_purchase_invoice', labelKey: 'pages.system.configCenter.param.finance_payable_recognition_opt_on_purchase_invoice' },
+        { value: 'on_partner_statement', labelKey: 'pages.system.configCenter.param.finance_payable_recognition_opt_on_partner_statement' },
         { value: 'manual', labelKey: 'pages.system.configCenter.param.finance_payable_recognition_opt_manual' },
       ],
     },
@@ -671,6 +716,14 @@ export const FLOW_CATEGORIES: ConfigCategory[] = createCategories({
       descriptionKey: 'pages.system.configCenter.param.sales_require_shipment_notice_before_delivery_desc',
       source: 'business_config',
       sourcePath: 'parameters.sales.require_shipment_notice_before_delivery',
+      type: 'boolean',
+    },
+    {
+      key: 'sales.auto_confirm_sales_delivery',
+      nameKey: 'pages.system.configCenter.param.sales_auto_confirm_sales_delivery',
+      descriptionKey: 'pages.system.configCenter.param.sales_auto_confirm_sales_delivery_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.sales.auto_confirm_sales_delivery',
       type: 'boolean',
     },
   ],
@@ -828,6 +881,63 @@ export const FLOW_CATEGORIES: ConfigCategory[] = createCategories({
   ],
 });
 
+/** 手动建单自动提交：单证开关（与后端 MANUAL_CREATE_LIFECYCLE_DOCS 对齐） */
+type ManualCreateDocCategory =
+  | 'sales'
+  | 'planning'
+  | 'procurement'
+  | 'production'
+  | 'warehouse'
+  | 'finance';
+
+const MANUAL_CREATE_AUTO_SUBMIT_DOCS: Array<{ nodeKey: string; categoryId: ManualCreateDocCategory }> = [
+  { nodeKey: 'sales_order', categoryId: 'sales' },
+  { nodeKey: 'sales_forecast', categoryId: 'sales' },
+  { nodeKey: 'sales_contract', categoryId: 'sales' },
+  { nodeKey: 'quotation', categoryId: 'sales' },
+  { nodeKey: 'shipment_notice', categoryId: 'sales' },
+  { nodeKey: 'sales_delivery', categoryId: 'sales' },
+  { nodeKey: 'sales_return', categoryId: 'sales' },
+  { nodeKey: 'demand', categoryId: 'planning' },
+  { nodeKey: 'purchase_order', categoryId: 'procurement' },
+  { nodeKey: 'purchase_request', categoryId: 'procurement' },
+  { nodeKey: 'payment_application', categoryId: 'procurement' },
+  { nodeKey: 'purchase_inquiry', categoryId: 'procurement' },
+  { nodeKey: 'purchase_return', categoryId: 'procurement' },
+  { nodeKey: 'receipt_notice', categoryId: 'procurement' },
+  { nodeKey: 'purchase_receipt', categoryId: 'procurement' },
+  { nodeKey: 'work_order', categoryId: 'production' },
+  { nodeKey: 'rework_order', categoryId: 'production' },
+  { nodeKey: 'reporting_record', categoryId: 'production' },
+  { nodeKey: 'production_picking', categoryId: 'warehouse' },
+  { nodeKey: 'freight_bill', categoryId: 'warehouse' },
+  { nodeKey: 'other_income', categoryId: 'finance' },
+  { nodeKey: 'other_expense', categoryId: 'finance' },
+  { nodeKey: 'other_expense_application', categoryId: 'finance' },
+];
+
+function buildManualCreateDocParam(nodeKey: string): ParamMeta {
+  return {
+    key: `automation.manual_create_doc_${nodeKey}`,
+    nameKey: `pages.system.configCenter.param.automation_manual_create_doc_${nodeKey}`,
+    // 说明只放在分区标题；单项仅名称+开关，组内并排
+    descriptionKey: '',
+    source: 'business_config',
+    sourcePath: `parameters.automation.manual_create_doc_${nodeKey}`,
+    type: 'boolean',
+    sectionKey: 'automation.manual_create_docs',
+    sectionNameKey: 'pages.system.configCenter.paramSection.automation_manual_create_docs',
+    sectionDescriptionKey: 'pages.system.configCenter.paramSection.automation_manual_create_docs_desc',
+    groupKey: 'automation.manual_create_docs',
+  };
+}
+
+function manualCreateDocParamsFor(categoryId: ManualCreateDocCategory): ParamMeta[] {
+  return MANUAL_CREATE_AUTO_SUBMIT_DOCS.filter((d) => d.categoryId === categoryId).map((d) =>
+    buildManualCreateDocParam(d.nodeKey),
+  );
+}
+
 /** 4. 业务自动化（配合taskiq进行业务按需的自动完成） */
 export const AUTOMATION_CATEGORIES: ConfigCategory[] = createCategories({
   common: [
@@ -843,8 +953,18 @@ export const AUTOMATION_CATEGORIES: ConfigCategory[] = createCategories({
         { value: 'confirm', labelKey: 'pages.system.configCenter.param.automation_push_default_mode_opt_confirm' },
       ],
     },
+    {
+      key: 'automation.manual_create_auto_submit',
+      nameKey: 'pages.system.configCenter.param.automation_manual_create_auto_submit',
+      descriptionKey: 'pages.system.configCenter.param.automation_manual_create_auto_submit_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.automation.manual_create_auto_submit',
+      type: 'boolean',
+    },
   ],
+  sales: [...manualCreateDocParamsFor('sales')],
   planning: [
+    ...manualCreateDocParamsFor('planning'),
     {
       key: 'planning.auto_push_sales_to_computation_on_approve',
       nameKey: 'pages.system.configCenter.param.planning_auto_push_sales_to_computation_on_approve',
@@ -869,8 +989,17 @@ export const AUTOMATION_CATEGORIES: ConfigCategory[] = createCategories({
       sourcePath: 'parameters.planning.auto_push_purchase_on_computation_complete',
       type: 'boolean',
     },
+    {
+      key: 'planning.auto_push_work_order_on_computation_complete',
+      nameKey: 'pages.system.configCenter.param.planning_auto_push_work_order_on_computation_complete',
+      descriptionKey: 'pages.system.configCenter.param.planning_auto_push_work_order_on_computation_complete_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.planning.auto_push_work_order_on_computation_complete',
+      type: 'boolean',
+    },
   ],
   procurement: [
+    ...manualCreateDocParamsFor('procurement'),
     {
       key: 'procurement.auto_approve_purchase_order_on_create',
       nameKey: 'pages.system.configCenter.param.procurement_auto_approve_purchase_order_on_create',
@@ -887,9 +1016,25 @@ export const AUTOMATION_CATEGORIES: ConfigCategory[] = createCategories({
       sourcePath: 'parameters.procurement.auto_push_receipt_notice_on_approve',
       type: 'boolean',
     },
+    {
+      key: 'procurement.auto_notify_warehouse_on_receipt_notice',
+      nameKey: 'pages.system.configCenter.param.procurement_auto_notify_warehouse_on_receipt_notice',
+      descriptionKey: 'pages.system.configCenter.param.procurement_auto_notify_warehouse_on_receipt_notice_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.procurement.auto_notify_warehouse_on_receipt_notice',
+      type: 'boolean',
+    },
+    {
+      key: 'procurement.auto_confirm_purchase_receipt',
+      nameKey: 'pages.system.configCenter.param.procurement_auto_confirm_purchase_receipt',
+      descriptionKey: 'pages.system.configCenter.param.procurement_auto_confirm_purchase_receipt_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.procurement.auto_confirm_purchase_receipt',
+      type: 'boolean',
+    },
   ],
   production: [
-    { key: 'work_order.auto_generate', nameKey: 'pages.system.configCenter.param.work_order_auto_generate', descriptionKey: 'pages.system.configCenter.param.work_order_auto_generate_desc', source: 'business_config', sourcePath: 'parameters.work_order.auto_generate', type: 'boolean' },
+    ...manualCreateDocParamsFor('production'),
     {
       key: 'work_order.last_operation_auto_inbound_mode',
       nameKey: 'pages.system.configCenter.param.work_order_last_operation_auto_inbound_mode',
@@ -924,10 +1069,12 @@ export const AUTOMATION_CATEGORIES: ConfigCategory[] = createCategories({
     },
   ],
   warehouse: [
+    ...manualCreateDocParamsFor('warehouse'),
     { key: 'warehouse.auto_outbound', nameKey: 'pages.system.configCenter.param.warehouse_auto_outbound', descriptionKey: 'pages.system.configCenter.param.warehouse_auto_outbound_desc', source: 'business_config', sourcePath: 'parameters.warehouse.auto_outbound', type: 'boolean' },
     { key: 'warehouse.allow_negative_inventory', nameKey: 'pages.system.configCenter.param.warehouse_allow_negative_inventory', descriptionKey: 'pages.system.configCenter.param.warehouse_allow_negative_inventory_desc', source: 'business_config', sourcePath: 'parameters.warehouse.allow_negative_inventory', type: 'boolean' },
   ],
   finance: [
+    ...manualCreateDocParamsFor('finance'),
     {
       key: 'finance.auto_generate_receivable_from_sales_invoice',
       nameKey: 'pages.system.configCenter.param.finance_auto_generate_receivable_from_sales_invoice',
@@ -942,6 +1089,15 @@ export const AUTOMATION_CATEGORIES: ConfigCategory[] = createCategories({
       descriptionKey: 'pages.system.configCenter.param.finance_auto_generate_payable_from_purchase_invoice_desc',
       source: 'business_config',
       sourcePath: 'parameters.finance.auto_generate_payable_from_purchase_invoice',
+      type: 'boolean',
+    },
+    {
+      key: 'finance.auto_apply_supplier_prepayment_to_payable',
+      nameKey: 'pages.system.configCenter.param.finance_auto_apply_supplier_prepayment_to_payable',
+      descriptionKey:
+        'pages.system.configCenter.param.finance_auto_apply_supplier_prepayment_to_payable_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.finance.auto_apply_supplier_prepayment_to_payable',
       type: 'boolean',
     },
     {
@@ -972,6 +1128,17 @@ export const AUTOMATION_CATEGORIES: ConfigCategory[] = createCategories({
       sectionKey: 'automation.quality_auto_create',
       sectionNameKey: 'pages.system.configCenter.paramSection.automation_quality_auto_create',
       sectionDescriptionKey: 'pages.system.configCenter.paramSection.automation_quality_auto_create_desc',
+    },
+    {
+      key: 'quality.auto_push_purchase_receipt_after_iqc_pass',
+      nameKey: 'pages.system.configCenter.param.quality_auto_push_purchase_receipt_after_iqc_pass',
+      descriptionKey:
+        'pages.system.configCenter.param.quality_auto_push_purchase_receipt_after_iqc_pass_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.quality.auto_push_purchase_receipt_after_iqc_pass',
+      type: 'boolean',
+      sectionKey: 'automation.quality_auto_create',
+      sectionNameKey: 'pages.system.configCenter.paramSection.automation_quality_auto_create',
     },
     {
       key: 'quality.auto_create_ipqc_on_reporting',

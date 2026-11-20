@@ -39,6 +39,7 @@ const PAYMENT_METHOD_KEYS: Record<string, string> = {
   cash: 'field.partner.settlementMethod.cash',
   bank_transfer: 'field.partner.settlementMethod.bankTransfer',
   bank_acceptance: 'field.partner.settlementMethod.bankAcceptance',
+  bank_transfer_and_acceptance: 'field.partner.settlementMethod.bankTransferAndAcceptance',
   commercial_acceptance: 'field.partner.settlementMethod.commercialAcceptance',
   other: 'field.partner.settlementMethod.other',
 };
@@ -292,9 +293,9 @@ export function partnerSettlementTermsSelectOptions(
     'spot',
     'cod',
     'net_terms',
+    'pay_on_invoice',
     'installment',
     'progress',
-    'pay_on_invoice',
   ];
   return current.map((value) => ({
     value,

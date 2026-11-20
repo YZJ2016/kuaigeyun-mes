@@ -14,7 +14,7 @@ export async function getAccessToken(forceRefresh = false): Promise<string> {
   return cachedToken;
 }
 
-async function api(
+export async function api(
   method: string,
   path: string,
   body?: unknown,
@@ -28,6 +28,8 @@ async function api(
       headers: {
         Authorization: `Bearer ${token}`,
         'X-Tenant-ID': String(TENANT_ID),
+        // 写门禁：官方渠道白名单（pc），普通登录 Token 不可用于 integration（需开放 API Token）
+        'X-Client-Channel': 'pc',
         'Content-Type': 'application/json; charset=utf-8',
         Accept: 'application/json',
       },
@@ -128,35 +130,60 @@ export async function createEquipmentFault(equipmentUuid: string, overrides: Jso
 }
 
 export async function createEquipmentRepair(equipmentUuid: string, overrides: Json = {}) {
+  let defaultRepairerId: number | undefined;
+  if (overrides.repairer_id == null) {
+    const login = await getAccessToken().then(() => apiLogin());
+    const uid = Number((login.user as { id?: number })?.id);
+    if (Number.isFinite(uid) && uid > 0) {
+      defaultRepairerId = uid;
+    }
+  }
   const payload = {
     equipment_uuid: equipmentUuid,
     repair_date: new Date().toISOString(),
     repair_type: '现场维修',
-    repairer_name: 'E2E测试员',
     repair_description: `E2E维修-${uniqueSuffix()}`,
     status: '进行中',
+    ...(defaultRepairerId != null ? { repairer_id: defaultRepairerId } : {}),
     ...overrides,
   };
+  if (payload.repairer_id == null) {
+    throw new Error('createEquipmentRepair 须传入 repairer_id');
+  }
   const { status, data } = await api('POST', '/equipment-faults/repairs', payload);
   if (status >= 400) throw new Error(`维修失败 ${status}: ${JSON.stringify(data)}`);
   return data as { uuid: string; repair_no?: string; status: string };
 }
 
+/** 完修前获取签到自建的维修单（arrival_at 已写入，可直接完修） */
+export async function getArrivedRepair(faultUuid: string) {
+  const { status, data } = await api(
+    'GET',
+    `/equipment-faults/repairs?equipment_fault_uuid=${faultUuid}&status=进行中&limit=5`,
+  );
+  if (status >= 400) throw new Error(`维修单列表失败 ${status}: ${JSON.stringify(data)}`);
+  const items: any[] = data?.items || [];
+  const hit = items.find((i) => i.arrival_at) || items[0];
+  if (!hit) throw new Error(`故障 ${faultUuid} 无到场签到的维修单: ${JSON.stringify(data)}`);
+  return hit as { uuid: string; arrival_at: string; status: string };
+}
+
 export async function completeEquipmentRepair(uuid: string, overrides: Json = {}) {
   const payload = {
-    status: '已完成',
+    // 完修契约：fault_cause + repair_content 必填（EquipmentRepairCompleteRequest）
+    fault_cause: 'E2E故障原因',
+    repair_content: 'E2E维修内容',
     // schema 仅允许：成功 / 失败 / 部分成功
     repair_result: '成功',
-    repair_description: 'E2E完修',
     ...overrides,
   };
-  const { status, data } = await api('PUT', `/equipment-faults/repairs/${uuid}`, payload);
+  const { status, data } = await api('POST', `/equipment-faults/repairs/${uuid}/complete`, payload);
   if (status >= 400) throw new Error(`完修失败 ${status}: ${JSON.stringify(data)}`);
   return data;
 }
 
 /** 点检项 + 点检方案 + 设备绑定（点检创建前置） */
-export async function ensureSpotCheckScheme(equipmentId: number) {
+export async function ensureSpotCheckScheme(equipmentId: number, overrides: Json = {}) {
   const suffix = uniqueSuffix();
   const itemRes = await api('POST', '/equipment-inspection-items', {
     code: `II-${suffix}`.slice(0, 64),
@@ -172,7 +199,10 @@ export async function ensureSpotCheckScheme(equipmentId: number) {
   const schemeRes = await api('POST', '/equipment-inspection-schemes', {
     code: `IS-${suffix}`.slice(0, 64),
     name: `E2E点检方案-${suffix}`,
+    cycle_type: '每天',
+    capture_mode: 'A',
     is_active: true,
+    ...overrides,
     lines: [{ item_id: itemId, sort_order: 1 }],
   });
   if (schemeRes.status >= 400) {
@@ -189,6 +219,15 @@ export async function ensureSpotCheckScheme(equipmentId: number) {
     throw new Error(`方案绑定失败 ${bindRes.status}: ${JSON.stringify(bindRes.data)}`);
   }
   return { itemId, schemeId };
+}
+
+/** 故障到场签到（完修前置）：设备码需与故障设备一致 */
+export async function arriveAtFault(faultUuid: string, equipmentUuid: string) {
+  const { status, data } = await api('POST', `/equipment-faults/${faultUuid}/arrive`, {
+    equipment_uuid: equipmentUuid,
+  });
+  if (status >= 400) throw new Error(`到场签到失败 ${status}: ${JSON.stringify(data)}`);
+  return data;
 }
 
 export async function createSparePart(overrides: Json = {}) {
@@ -292,15 +331,8 @@ export async function listEquipmentStatus(params: Record<string, string | number
 }
 
 export async function updateEquipmentStatusMonitor(payload: Json) {
-  const { status, data } = await api('POST', '/equipment-status', payload);
-  if (status >= 400) {
-    // 某些环境可能用 PUT /equipment-status/{id}
-    const retry = await api('PUT', '/equipment-status', payload);
-    if (retry.status >= 400) {
-      throw new Error(`状态更新失败 ${status}/${retry.status}: ${JSON.stringify(data)}`);
-    }
-    return retry.data;
-  }
+  const { status, data } = await api('POST', '/equipment-status/update', payload);
+  if (status >= 400) throw new Error(`状态监控更新失败 ${status}: ${JSON.stringify(data)}`);
   return data;
 }
 
@@ -344,3 +376,309 @@ export async function assertPageHealthy(page: import('@playwright/test').Page, r
     page.off('response', onResponse);
   }
 }
+
+// ===================== kz-equipment.spec.ts 新增夹具（TEST-EQP-） =====================
+
+/** 保养项 + 保养方案 + 设备绑定（保养计划/执行前置） */
+export async function ensureMaintenanceScheme(equipmentId: number) {
+  const suffix = uniqueSuffix();
+  const itemRes = await api('POST', '/equipment-maintenance-items', {
+    code: `MI-${suffix}`.slice(0, 64),
+    name: `E2E保养项-${suffix}`,
+    is_active: true,
+  });
+  if (itemRes.status >= 400) {
+    throw new Error(`保养项创建失败 ${itemRes.status}: ${JSON.stringify(itemRes.data)}`);
+  }
+  const itemId = itemRes.data.id as number;
+
+  const schemeRes = await api('POST', '/equipment-maintenance-schemes', {
+    code: `MS-${suffix}`.slice(0, 64),
+    name: `E2E保养方案-${suffix}`,
+    maintenance_type: '日常保养',
+    cycle_type: '按时间',
+    cycle_value: 30,
+    cycle_unit: '天',
+    is_active: true,
+    lines: [{ item_id: itemId, sort_order: 1 }],
+  });
+  if (schemeRes.status >= 400) {
+    throw new Error(`保养方案创建失败 ${schemeRes.status}: ${JSON.stringify(schemeRes.data)}`);
+  }
+  const schemeId = schemeRes.data.id as number;
+
+  const bindRes = await api('POST', '/equipment-scheme-bindings', {
+    equipment_id: equipmentId,
+    scheme_id: schemeId,
+    scheme_type: 'maintenance',
+  });
+  if (bindRes.status >= 400) {
+    throw new Error(`保养方案绑定失败 ${bindRes.status}: ${JSON.stringify(bindRes.data)}`);
+  }
+  return { itemId, schemeId };
+}
+
+/** 保养计划：必绑保养方案 + 设备范围；计划类型/状态有白名单 */
+export async function createMaintenancePlan(equipmentUuid: string, schemeId: number, overrides: Json = {}) {
+  const payload = {
+    plan_name: `E2E保养计划-${uniqueSuffix()}`,
+    plan_type: '定期维护',
+    maintenance_scheme_id: schemeId,
+    equipment_uuids: [equipmentUuid],
+    status: '草稿',
+    ...overrides,
+  };
+  const { status, data } = await api('POST', '/maintenance-plans', payload);
+  if (status >= 400) throw new Error(`保养计划创建失败 ${status}: ${JSON.stringify(data)}`);
+  return data as { uuid: string; id: number; status: string };
+}
+
+/** 保养计划 → 发布 → 手动检查生成到期提醒 */
+export async function publishMaintenancePlan(uuid: string) {
+  const { status, data } = await api('PUT', `/maintenance-plans/${uuid}`, { status: '已发布' });
+  if (status >= 400) throw new Error(`保养计划发布失败 ${status}: ${JSON.stringify(data)}`);
+  return data;
+}
+
+export async function checkMaintenanceReminders(advanceDays = 30) {
+  const { status, data } = await api('POST', `/maintenance-reminders/check?advance_days=${advanceDays}`, {});
+  if (status >= 400) throw new Error(`保养提醒检查失败 ${status}: ${JSON.stringify(data)}`);
+  return data;
+}
+
+export async function listMaintenanceReminders(params: Record<string, string | number> = {}) {
+  const qs = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => qs.set(k, String(v)));
+  const { status, data } = await api('GET', `/maintenance-reminders?${qs.toString()}`);
+  if (status >= 400) throw new Error(`保养提醒列表失败 ${status}: ${JSON.stringify(data)}`);
+  return data;
+}
+
+/** 备件领用单：设备 + 领用明细行 */
+export async function createSparePartRequisition(overrides: Json = {}) {
+  const payload = {
+    purpose: 'E2E领用',
+    remark: `E2E备件领用-${uniqueSuffix()}`,
+    ...overrides,
+  };
+  const { status, data } = await api('POST', '/spare-part-requisitions', payload);
+  if (status >= 400) throw new Error(`备件领用单创建失败 ${status}: ${JSON.stringify(data)}`);
+  return data as { id: number; uuid?: string; requisition_no?: string; status?: string };
+}
+
+export async function submitSparePartRequisition(rowId: number) {
+  const { status, data } = await api('POST', `/spare-part-requisitions/${rowId}/submit`, {});
+  if (status >= 400) throw new Error(`备件领用提交失败 ${status}: ${JSON.stringify(data)}`);
+  return data;
+}
+
+export async function approveSparePartRequisition(rowId: number) {
+  const { status, data } = await api('POST', `/spare-part-requisitions/${rowId}/approve`, {});
+  if (status >= 400) throw new Error(`备件领用审批失败 ${status}: ${JSON.stringify(data)}`);
+  return data;
+}
+
+/** 模具台账（status 有字典校验，默认待启用；PUT 按 uuid 寻址） */
+export async function createMold(overrides: Json = {}) {
+  const suffix = uniqueSuffix();
+  const payload = {
+    name: `E2E模具-${suffix}`,
+    type: '注塑模具',
+    status: '待启用',
+    is_active: true,
+    ...overrides,
+  };
+  const { status, data } = await api('POST', '/molds', payload);
+  if (status >= 400) throw new Error(`模具创建失败 ${status}: ${JSON.stringify(data)}`);
+  return data as { id: number; uuid: string; status: string };
+}
+
+export async function deleteMold(uuid: string) {
+  const { status, data } = await api('DELETE', `/molds/${uuid}`);
+  if (status >= 400 && status !== 204) throw new Error(`模具删除失败 ${status}: ${JSON.stringify(data)}`);
+  return status;
+}
+
+export async function updateMold(uuid: string, payload: Json) {
+  const { status, data } = await api('PUT', `/molds/${uuid}`, payload);
+  if (status >= 400) throw new Error(`模具更新失败 ${status}: ${JSON.stringify(data)}`);
+  return data;
+}
+
+export async function createMoldBorrow(moldId: number, overrides: Json = {}) {
+  const payload = {
+    mold_id: moldId,
+    borrower_name: 'E2E领用人',
+    department_name: 'E2E车间',
+    expected_return_date: new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10),
+    remark: `E2E模具领用-${uniqueSuffix()}`,
+    ...overrides,
+  };
+  const { status, data } = await api('POST', '/mold-borrows', payload);
+  if (status >= 400) throw new Error(`模具领用失败 ${status}: ${JSON.stringify(data)}`);
+  return data as { id: number; status: string };
+}
+
+export async function createMoldReturn(moldId: number, borrowId: number, overrides: Json = {}) {
+  const payload = {
+    mold_id: moldId,
+    borrow_id: borrowId,
+    usage_count: 1,
+    operator_name: 'E2E归还人',
+    remark: `E2E模具归还-${uniqueSuffix()}`,
+    ...overrides,
+  };
+  const { status, data } = await api('POST', '/mold-returns', payload);
+  if (status >= 400) throw new Error(`模具归还失败 ${status}: ${JSON.stringify(data)}`);
+  return data as { id: number; status: string };
+}
+
+export async function createMoldTrial(moldId: number, overrides: Json = {}) {
+  const payload = {
+    mold_id: moldId,
+    operator_name: 'E2E试模员',
+    remark: `E2E试模-${uniqueSuffix()}`,
+    ...overrides,
+  };
+  const { status, data } = await api('POST', '/mold-trials', payload);
+  if (status >= 400) throw new Error(`模具试模失败 ${status}: ${JSON.stringify(data)}`);
+  return data as { id: number; status: string };
+}
+
+export async function createMoldScrap(moldId: number, overrides: Json = {}) {
+  const payload = {
+    mold_id: moldId,
+    reason: `E2E模具报废-${uniqueSuffix()}`,
+    ...overrides,
+  };
+  const { status, data } = await api('POST', '/mold-scrap-applications', payload);
+  if (status >= 400) throw new Error(`模具报废申请失败 ${status}: ${JSON.stringify(data)}`);
+  return data as { id: number; status?: string };
+}
+
+/** 工装台账 */
+export async function createTool(overrides: Json = {}) {
+  const suffix = uniqueSuffix();
+  const payload = {
+    name: `E2E工装-${suffix}`,
+    type: '夹具',
+    status: '待启用',
+    is_active: true,
+    quantity: 1,
+    ...overrides,
+  };
+  const { status, data } = await api('POST', '/tools', payload);
+  if (status >= 400) throw new Error(`工装创建失败 ${status}: ${JSON.stringify(data)}`);
+  return data as { id: number; uuid: string; status: string };
+}
+
+export async function deleteTool(uuid: string) {
+  const { status, data } = await api('DELETE', `/tools/${uuid}`);
+  if (status >= 400 && status !== 204) throw new Error(`工装删除失败 ${status}: ${JSON.stringify(data)}`);
+  return status;
+}
+
+export async function updateTool(uuid: string, payload: Json) {
+  const { status, data } = await api('PUT', `/tools/${uuid}`, payload);
+  if (status >= 400) throw new Error(`工装更新失败 ${status}: ${JSON.stringify(data)}`);
+  return data;
+}
+
+export async function createToolBorrow(toolId: number, overrides: Json = {}) {
+  const payload = {
+    tool_id: toolId,
+    borrower_name: 'E2E领用人',
+    department_name: 'E2E车间',
+    expected_return_date: new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10),
+    remark: `E2E工装领用-${uniqueSuffix()}`,
+    ...overrides,
+  };
+  const { status, data } = await api('POST', '/tool-borrows', payload);
+  if (status >= 400) throw new Error(`工装领用失败 ${status}: ${JSON.stringify(data)}`);
+  return data as { id: number; status: string };
+}
+
+export async function createToolReturn(toolId: number, borrowId: number, overrides: Json = {}) {
+  const payload = {
+    tool_id: toolId,
+    borrow_id: borrowId,
+    usage_count: 1,
+    operator_name: 'E2E归还人',
+    ...overrides,
+  };
+  const { status, data } = await api('POST', '/tool-returns', payload);
+  if (status >= 400) throw new Error(`工装归还失败 ${status}: ${JSON.stringify(data)}`);
+  return data as { id: number; status: string };
+}
+
+/** 计量器具：创建时 equipment_nature 决定其进入检定到期提醒链路 */
+export async function createMeasuringInstrument(overrides: Json = {}) {
+  const suffix = uniqueSuffix();
+  const payload = {
+    code: `MI${suffix}`.slice(0, 40),
+    name: `E2E计量器具-${suffix}`,
+    equipment_nature: '计量器具',
+    status: '正常',
+    is_active: true,
+    brand: 'E2E',
+    ...overrides,
+  };
+  const { status, data } = await api('POST', '/equipment', payload);
+  if (status >= 400) throw new Error(`计量器具创建失败 ${status}: ${JSON.stringify(data)}`);
+  return data as { uuid: string; id: number; code: string };
+}
+
+export async function listCalibrationReminders(params: Record<string, string | number> = {}) {
+  const qs = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => qs.set(k, String(v)));
+  const { status, data } = await api('GET', `/equipment/calibration-reminders?${qs.toString()}`);
+  if (status >= 400) throw new Error(`检定到期提醒失败 ${status}: ${JSON.stringify(data)}`);
+  return data;
+}
+
+export async function getCalibrationReminderSettings() {
+  const { status, data } = await api('GET', '/equipment/calibration-reminder-settings');
+  if (status >= 400) throw new Error(`检定提醒设置读取失败 ${status}: ${JSON.stringify(data)}`);
+  return data;
+}
+
+/** 设备报表（report_type 含 equipment-mttr-mtbf） */
+export async function getEquipmentReport(reportType: string, params: Record<string, string | number> = {}) {
+  const qs = new URLSearchParams();
+  qs.set('report_type', reportType);
+  Object.entries(params).forEach(([k, v]) => qs.set(k, String(v)));
+  const { status, data } = await api('GET', `/reports/equipment?${qs.toString()}`);
+  if (status >= 400) throw new Error(`设备报表获取失败 ${status}: ${JSON.stringify(data)}`);
+  return data;
+}
+
+/** 巡检路线（含步骤） */
+export async function createPatrolRoute(equipmentId: number, overrides: Json = {}) {
+  const suffix = uniqueSuffix();
+  const payload = {
+    code: `PR-${suffix}`.slice(0, 64),
+    name: `E2E巡检路线-${suffix}`,
+    is_active: true,
+    steps: [{ sort_order: 1, equipment_id: equipmentId }],
+    ...overrides,
+  };
+  const { status, data } = await api('POST', '/equipment-patrol-routes', payload);
+  if (status >= 400) throw new Error(`巡检路线创建失败 ${status}: ${JSON.stringify(data)}`);
+  return data as { id: number };
+}
+
+/** 巡检执行：路线 + 步骤设备 */
+export async function createRoutePatrol(routeId: number, equipmentId: number, overrides: Json = {}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const payload = {
+    route_id: routeId,
+    patrol_date: today,
+    inspector_name: 'E2E巡检员',
+    lines: [{ step_no: 1, equipment_id: equipmentId, is_pass: true }],
+    ...overrides,
+  };
+  const { status, data } = await api('POST', '/equipment-route-patrols', payload);
+  if (status >= 400) throw new Error(`巡检执行创建失败 ${status}: ${JSON.stringify(data)}`);
+  return data as { id: number; uuid: string; document_no?: string; status?: string };
+}
+

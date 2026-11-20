@@ -1,7 +1,12 @@
 import type { TFunction } from 'i18next';
 import type { OperationItem } from '../components/OperationSequenceEditor';
 import type { Operation } from '../types/process';
-import { displayMinutesToHours, hoursToDisplayMinutes } from './manufacturingTimeUnits';
+import {
+  displayMinutesToHours,
+  hoursToDisplayMinutes,
+  operationItemStandardTimeToRouteRow,
+  parseRouteRowStandardTime,
+} from './manufacturingTimeUnits';
 
 type SeqInput = unknown;
 
@@ -214,6 +219,8 @@ function toOpItemBase(
     standard_time?: number;
     setupTime?: number;
     setup_time?: number;
+    pieceRate?: number;
+    piece_rate?: number;
     isOutsourced?: boolean;
     is_outsourced?: boolean;
     outsourceLeadTimeDays?: number;
@@ -253,10 +260,14 @@ function toOpItemBase(
       'none') as OperationItem['overReportMode'],
     overReportValue:
       Number(merged.overReportValue ?? merged.over_report_value ?? 0) || 0,
-    standardTime: hoursToDisplayMinutes(
-      Number(merged.standardTime ?? merged.standard_time ?? 0) || undefined,
-    ),
+    ...parseRouteRowStandardTime(merged as Record<string, unknown>),
     setupTime: hoursToDisplayMinutes(Number(merged.setupTime ?? merged.setup_time ?? 0) || undefined),
+    pieceRate: (() => {
+      const raw = merged.pieceRate ?? merged.piece_rate;
+      if (raw == null || raw === '') return undefined;
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : undefined;
+    })(),
     isOutsourced,
     outsourceLeadTimeDays: isOutsourced
       ? Math.max(0, Number(leadRaw ?? 1) || 1)
@@ -361,9 +372,10 @@ export function buildOperationSequencePayload(
         code: op.code,
         name: op.name,
         reportingType: op.reportingType ?? 'quantity',
-        isNodeOperation: allowOperationJump ? (op.isNodeOperation ?? false) : false,
-        allowJump: allowOperationJump && !(op.isNodeOperation ?? false),
-        allow_jump: allowOperationJump && !(op.isNodeOperation ?? false),
+        // 跳转唯一控制源在路线头 allowOperationJump；行仅镜像，节点工序不再关闸
+        isNodeOperation: false,
+        allowJump: allowOperationJump,
+        allow_jump: allowOperationJump,
       };
       const om = op.overReportMode ?? 'none';
       const ov = Number(op.overReportValue) || 0;
@@ -371,13 +383,17 @@ export function buildOperationSequencePayload(
         row.overReportMode = om;
         row.overReportValue = ov;
       }
-      const standardHours = displayMinutesToHours(op.standardTime);
-      if (standardHours != null) {
-        row.standard_time = standardHours;
+      const standardPayload = operationItemStandardTimeToRouteRow(op);
+      if (standardPayload) {
+        Object.assign(row, standardPayload);
       }
       const setupHours = displayMinutesToHours(op.setupTime);
       if (setupHours != null) {
         row.setup_time = setupHours;
+      }
+      if (op.pieceRate != null && Number.isFinite(op.pieceRate)) {
+        row.piece_rate = op.pieceRate;
+        row.pieceRate = op.pieceRate;
       }
       if (op.isOutsourced) {
         row.is_outsourced = true;

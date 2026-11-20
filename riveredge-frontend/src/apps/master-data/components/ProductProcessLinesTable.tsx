@@ -430,20 +430,21 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
       },
       {
         title: t('app.master-data.manufacturing.standardTime'),
-        width: 280,
+        key: 'standardTime',
+        width: 312,
         render: (_: unknown, row: ProductProcessLine, index: number) => (
-          <Space.Compact style={{ width: '100%' }}>
+          <Space.Compact style={{ display: 'inline-flex', flexWrap: 'nowrap', maxWidth: '100%' }}>
             <InputNumber
               min={0}
               step={0.01}
               precision={2}
-              style={{ width: 72 }}
+              style={{ width: 76 }}
               disabled={disabled}
               value={row.standardTime}
               onChange={(v) => patchLine(index, { standardTime: v ?? undefined })}
             />
             <Select
-              style={{ width: 64 }}
+              style={{ width: 68 }}
               disabled={disabled}
               value={normalizeTimeUnit(row.standardTimeUnit)}
               options={TIME_UNIT_OPTIONS.map((o) => ({
@@ -467,7 +468,7 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
               min={1}
               step={1}
               precision={0}
-              style={{ width: 72 }}
+              style={{ width: 76 }}
               disabled={disabled}
               value={row.standardTimeQty ?? 1}
               onChange={(v) =>
@@ -587,23 +588,6 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
           />
         ),
       },
-      ...(allowOperationJump
-        ? [
-            {
-              title: t('app.master-data.operationSequence.nodeOperation'),
-              width: 72,
-              align: 'center' as const,
-              render: (_: unknown, row: ProductProcessLine, index: number) => (
-                <Switch
-                  size="small"
-                  disabled={disabled}
-                  checked={Boolean(row.isNodeOperation)}
-                  onChange={(v) => patchLine(index, { isNodeOperation: v })}
-                />
-              ),
-            },
-          ]
-        : []),
       {
         title: t('app.master-data.operationSequence.plannedOutsource'),
         width: 88,
@@ -695,16 +679,19 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
                       ? t('field.operation.overReportModeFixed')
                       : t('field.operation.overReportModePercent'),
               }))}
-              onChange={(v) =>
+              onChange={(v) => {
+                let nextValue = v === 'none' ? 0 : row.overReportValue ?? 0
+                if (v === 'percent' && nextValue > 100) nextValue = 100
                 patchLine(index, {
                   overReportMode: v,
-                  overReportValue: v === 'none' ? 0 : row.overReportValue ?? 0,
+                  overReportValue: nextValue,
                 })
-              }
+              }}
             />
             <InputNumber
               size="small"
               min={0}
+              max={(row.overReportMode ?? 'none') === 'percent' ? 100 : undefined}
               style={{ width: 80, flexShrink: 0 }}
               disabled={disabled || (row.overReportMode ?? 'none') === 'none'}
               value={row.overReportValue ?? 0}
@@ -771,7 +758,7 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
       size="small"
       rowKey="operationUuid"
       pagination={false}
-      scroll={{ x: allowOperationJump ? 1620 : 1548 }}
+      scroll={{ x: 1580 }}
       locale={{ emptyText: t('app.master-data.productProcess.noLines') }}
       dataSource={lines}
       columns={columns}

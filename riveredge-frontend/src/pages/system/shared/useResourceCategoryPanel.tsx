@@ -13,19 +13,32 @@ import { twoColumnLeftPanelWidthStorageKey } from '../../../components/layout-te
 import {
   deleteResourceCategory,
   listResourceCategories,
+  loadFunctionCategoryPresets,
   RESOURCE_CATEGORY_ALL_KEY,
   RESOURCE_CATEGORY_UNCATEGORIZED_KEY,
-  resolveResourceCategoryListFilter,
+  supportsFunctionCategoryPresets,
+  type APIRelatedDocumentGroupCount,
   type ResourceCategory,
   type ResourceCategoryListFilter,
   type ResourceCategoryType,
 } from '../../../services/resourceCategory';
+import {
+  API_TREE_DOC_ALL,
+  API_TREE_DOC_NONE,
+  API_TREE_DOC_SEP,
+  buildApiCategoryTreeDocKey,
+  groupCountsForCategory,
+  normalizeApiCategoryTreeSelectKey,
+  resolveApiCategoryTreeKey,
+} from '../apis/apiCategoryTree';
 import { ResourceCategoryFormModal } from './ResourceCategoryFormModal';
 
 export interface UseResourceCategoryPanelOptions {
   resourceType: ResourceCategoryType;
   /** 分类切换时同步传入下一筛选条件，避免 reload 早于 state 提交导致列表错位 */
   onSelectionChange?: (nextFilter: ResourceCategoryListFilter) => void;
+  /** 功能域预置完成并回填条目后刷新右侧列表 */
+  onFunctionPresetsApplied?: () => void;
 }
 
 export interface UseResourceCategoryPanelResult {
@@ -50,7 +63,7 @@ function stopTreeNodeActionEvent(event: React.MouseEvent | React.KeyboardEvent) 
 export function useResourceCategoryPanel(
   options: UseResourceCategoryPanelOptions,
 ): UseResourceCategoryPanelResult {
-  const { resourceType, onSelectionChange } = options;
+  const { resourceType, onSelectionChange, onFunctionPresetsApplied } = options;
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
 
@@ -65,6 +78,12 @@ export function useResourceCategoryPanel(
   const [formOpen, setFormOpen] = useState(false);
   const [formIsEdit, setFormIsEdit] = useState(false);
   const [editingCategory, setEditingCategory] = useState<ResourceCategory | null>(null);
+  const [loadFunctionPresetsLoading, setLoadFunctionPresetsLoading] = useState(false);
+  const [apiDocGroupCounts, setApiDocGroupCounts] = useState<APIRelatedDocumentGroupCount[]>([]);
+  const [apiDocOptionCodes, setApiDocOptionCodes] = useState<string[]>([]);
+
+  const showFunctionPresets = supportsFunctionCategoryPresets(resourceType);
+  const enableApiRelatedDocumentGroups = resourceType === 'api';
 
   const reloadCategories = useCallback(async () => {
     try {
@@ -73,13 +92,39 @@ export function useResourceCategoryPanel(
       setCategories(result.items);
       setTotalCount(result.total_count);
       setUncategorizedCount(result.uncategorized_count);
+      if (enableApiRelatedDocumentGroups) {
+        setApiDocGroupCounts(result.related_document_group_counts ?? []);
+        setApiDocOptionCodes(
+          (result.related_document_options ?? []).map(item => item.code),
+        );
+      }
     } catch (error: unknown) {
       const err = error as { message?: string };
       messageApi.error(err?.message || t('pages.system.resourceCategory.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [messageApi, resourceType, t]);
+  }, [enableApiRelatedDocumentGroups, messageApi, resourceType, t]);
+
+  const handleLoadFunctionPresets = useCallback(async () => {
+    try {
+      setLoadFunctionPresetsLoading(true);
+      const result = await loadFunctionCategoryPresets(resourceType);
+      messageApi.success(
+        t('pages.system.resourceCategory.loadFunctionPresetsSuccess', {
+          categories: result.categories_created,
+          items: result.items_categorized,
+        }),
+      );
+      await reloadCategories();
+      onFunctionPresetsApplied?.();
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      messageApi.error(err?.message || t('pages.system.resourceCategory.loadFunctionPresetsFailed'));
+    } finally {
+      setLoadFunctionPresetsLoading(false);
+    }
+  }, [messageApi, onFunctionPresetsApplied, reloadCategories, resourceType, t]);
 
   useEffect(() => {
     void reloadCategories();
@@ -105,7 +150,7 @@ export function useResourceCategoryPanel(
         if (selectedCategoryKey === category.uuid) {
           const nextKey = RESOURCE_CATEGORY_ALL_KEY;
           setSelectedCategoryKey(nextKey);
-          onSelectionChange?.(resolveResourceCategoryListFilter(nextKey));
+          onSelectionChange?.(resolveApiCategoryTreeKey(nextKey));
         }
         await reloadCategories();
       } catch (error: unknown) {
@@ -193,6 +238,43 @@ export function useResourceCategoryPanel(
     [confirmDeleteCategory, handleEditCategory, t],
   );
 
+  const buildApiRelatedDocumentChildren = useCallback(
+    (categoryKey: string, categoryUuid: string | null, categoryTotal: number): DataNode[] => {
+      const rows = groupCountsForCategory(apiDocGroupCounts, categoryUuid);
+      const byDoc = new Map<string, number>();
+      for (const row of rows) {
+        const doc = String(row.related_document_code || '').trim();
+        byDoc.set(doc, (byDoc.get(doc) || 0) + row.count);
+      }
+      const children: DataNode[] = [
+        {
+          title: withCount(t('pages.system.resourceCategory.all'), categoryTotal),
+          key: buildApiCategoryTreeDocKey(categoryKey, API_TREE_DOC_ALL),
+          isLeaf: true,
+        },
+      ];
+      for (const code of apiDocOptionCodes) {
+        const count = byDoc.get(code);
+        if (!count) continue;
+        children.push({
+          title: withCount(t(`pages.system.apis.relatedDocument.${code}`, code), count),
+          key: buildApiCategoryTreeDocKey(categoryKey, code),
+          isLeaf: true,
+        });
+      }
+      const noneCount = byDoc.get('') || 0;
+      if (noneCount > 0) {
+        children.push({
+          title: withCount(t('pages.system.apis.relatedDocumentNone'), noneCount),
+          key: buildApiCategoryTreeDocKey(categoryKey, API_TREE_DOC_NONE),
+          isLeaf: true,
+        });
+      }
+      return children;
+    },
+    [apiDocGroupCounts, apiDocOptionCodes, t],
+  );
+
   const treeData = useMemo((): DataNode[] => {
     const keyword = searchValue.trim().toLowerCase();
     const filteredCategories = categories.filter(category => {
@@ -215,42 +297,103 @@ export function useResourceCategoryPanel(
         key: RESOURCE_CATEGORY_ALL_KEY,
         icon: <FolderOutlined />,
         children: [
-          ...filteredCategories.map(category => ({
-            title: renderCategoryTitle(category),
-            key: category.uuid,
-            icon: <FolderOutlined />,
-            isLeaf: true,
-          })),
-          {
-            title: uncategorizedLabel,
-            key: RESOURCE_CATEGORY_UNCATEGORIZED_KEY,
-            icon: <FolderOutlined />,
-            isLeaf: true,
-          },
+          ...filteredCategories.map(category =>
+            enableApiRelatedDocumentGroups
+              ? {
+                  title: renderCategoryTitle(category),
+                  key: category.uuid,
+                  icon: <FolderOutlined />,
+                  isLeaf: false,
+                  children: buildApiRelatedDocumentChildren(
+                    category.uuid,
+                    category.uuid,
+                    category.item_count,
+                  ),
+                }
+              : {
+                  title: renderCategoryTitle(category),
+                  key: category.uuid,
+                  icon: <FolderOutlined />,
+                  isLeaf: true,
+                },
+          ),
+          enableApiRelatedDocumentGroups
+            ? {
+                title: uncategorizedLabel,
+                key: RESOURCE_CATEGORY_UNCATEGORIZED_KEY,
+                icon: <FolderOutlined />,
+                isLeaf: false,
+                children: buildApiRelatedDocumentChildren(
+                  RESOURCE_CATEGORY_UNCATEGORIZED_KEY,
+                  null,
+                  uncategorizedCount,
+                ),
+              }
+            : {
+                title: uncategorizedLabel,
+                key: RESOURCE_CATEGORY_UNCATEGORIZED_KEY,
+                icon: <FolderOutlined />,
+                isLeaf: true,
+              },
         ],
       },
     ];
-  }, [categories, renderCategoryTitle, searchValue, t, totalCount, uncategorizedCount]);
+  }, [
+    buildApiRelatedDocumentChildren,
+    categories,
+    enableApiRelatedDocumentGroups,
+    renderCategoryTitle,
+    searchValue,
+    t,
+    totalCount,
+    uncategorizedCount,
+  ]);
 
   const [contextMenuCategory, setContextMenuCategory] = useState<ResourceCategory | null>(null);
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
 
-  const handleTreeSelect = useCallback<NonNullable<TreeProps['onSelect']>>(
+  const handleTreeSelect = useCallback<TreeProps['onSelect']>(
     keys => {
       const key = keys[0];
       if (!key) return;
-      const nextKey = String(key);
+      const rawKey = String(key);
+      // 仅接口库有「关联单据」二级树；审批/消息/打印/数据集必须保留纯 UUID，
+      // 否则 list/create 会把 uuid::doc::__all__ 当成 category_uuid（第 37 位冒号校验失败）。
+      const nextKey = enableApiRelatedDocumentGroups
+        ? normalizeApiCategoryTreeSelectKey(rawKey)
+        : rawKey;
       if (nextKey === selectedCategoryKey) return;
       setSelectedCategoryKey(nextKey);
-      onSelectionChange?.(resolveResourceCategoryListFilter(nextKey));
+      onSelectionChange?.(resolveApiCategoryTreeKey(nextKey));
     },
-    [onSelectionChange, selectedCategoryKey],
+    [enableApiRelatedDocumentGroups, onSelectionChange, selectedCategoryKey],
   );
 
+  // resolveApiCategoryTreeKey 对纯 UUID / all / uncategorized 与 resolveResourceCategoryListFilter 等价，
+  // 且能拆掉误残留的 uuid::doc:: 复合键（HMR 后 state 未重置时仍可筛）。
   const listFilter = useMemo(
-    () => resolveResourceCategoryListFilter(selectedCategoryKey),
+    () => resolveApiCategoryTreeKey(selectedCategoryKey),
     [selectedCategoryKey],
   );
+
+  useEffect(() => {
+    if (enableApiRelatedDocumentGroups) return;
+    if (!selectedCategoryKey.includes(API_TREE_DOC_SEP)) return;
+    const sanitized = selectedCategoryKey.split(API_TREE_DOC_SEP, 2)[0] || RESOURCE_CATEGORY_ALL_KEY;
+    setSelectedCategoryKey(sanitized);
+  }, [enableApiRelatedDocumentGroups, selectedCategoryKey]);
+
+  useEffect(() => {
+    if (!enableApiRelatedDocumentGroups) return;
+    setExpandedKeys(prev => {
+      const next = new Set<React.Key>([...prev, RESOURCE_CATEGORY_ALL_KEY]);
+      for (const category of categories) {
+        next.add(category.uuid);
+      }
+      next.add(RESOURCE_CATEGORY_UNCATEGORIZED_KEY);
+      return Array.from(next);
+    });
+  }, [categories, enableApiRelatedDocumentGroups, apiDocGroupCounts]);
 
   const categorySelectOptions = useMemo(
     () =>
@@ -279,6 +422,18 @@ export function useResourceCategoryPanel(
       >
         {t('pages.system.resourceCategory.createButton')}
       </Button>,
+      ...(showFunctionPresets
+        ? [
+            <Button
+              key="load-function-presets"
+              block
+              loading={loadFunctionPresetsLoading}
+              onClick={() => void handleLoadFunctionPresets()}
+            >
+              {t('pages.system.resourceCategory.loadFunctionPresetsButton')}
+            </Button>,
+          ]
+        : []),
     ],
     tree: {
       treeData,
@@ -313,7 +468,7 @@ export function useResourceCategoryPanel(
         category={editingCategory}
         onSuccess={() => {
           void reloadCategories();
-          onSelectionChange?.(resolveResourceCategoryListFilter(selectedCategoryKey));
+          onSelectionChange?.(resolveApiCategoryTreeKey(selectedCategoryKey));
         }}
       />
       {contextMenuCategory && contextMenuPos ? (

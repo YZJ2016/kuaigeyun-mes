@@ -51,8 +51,10 @@ export interface PartnerPriceBookCreate {
   currencyCode?: string;
   taxRate?: number;
   unit?: string;
-  effectiveFrom?: string;
-  effectiveTo?: string;
+  /** null/省略 = 不限，一直生效 */
+  effectiveFrom?: string | null;
+  /** null/省略 = 不限，一直生效 */
+  effectiveTo?: string | null;
   remark?: string;
   isActive?: boolean;
   /** 无编号映射时可提交，保存后回写 MaterialCodeAlias */

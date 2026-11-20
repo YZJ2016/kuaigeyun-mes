@@ -1,9 +1,12 @@
 import type { Material, MaterialUnit, MaterialUnits } from '../apps/master-data/types/material';
+import { isFloatingMaterialUnit } from '../apps/master-data/utils/materialConversionType';
 
 export type MaterialScenario = 'purchase' | 'sale' | 'production' | 'inventory';
 
 type MaterialUnitLike = Pick<Material, 'baseUnit' | 'units'> & {
   base_unit?: string;
+  inventoryUnit?: string;
+  inventory_unit?: string;
   units?: MaterialUnits | string | null;
 };
 
@@ -76,7 +79,18 @@ export function resolveMaterialScenarioUnit(
   scenario: MaterialScenario,
 ): string {
   const baseUnit = readBaseUnit(material);
-  if (scenario === 'inventory') return baseUnit;
+  if (scenario === 'inventory') {
+    const invField = String(material?.inventoryUnit ?? material?.inventory_unit ?? '').trim();
+    if (invField) return invField;
+    const unitsCfg = parseMaterialUnitsConfig(material?.units);
+    const mappedInv = unitsCfg?.scenarios?.inventory;
+    if (mappedInv != null && String(mappedInv).trim()) {
+      const unit = String(mappedInv).trim();
+      const allowed = collectAllowedUnits(baseUnit, unitsCfg);
+      if (allowed.has(unit)) return unit;
+    }
+    return baseUnit;
+  }
 
   const unitsCfg = parseMaterialUnitsConfig(material?.units);
   const mapped = unitsCfg?.scenarios?.[scenario];
@@ -95,7 +109,13 @@ export function resolveMaterialScenarioUnit(
 export function resolveUnitToBaseFactor(
   material: MaterialUnitLike | null | undefined,
   unitName?: string | null,
-): number {
+  lineConversionRate?: number | null,
+): number | null {
+  if (lineConversionRate != null) {
+    const rate = Number(lineConversionRate);
+    if (Number.isFinite(rate) && rate > 0) return rate;
+  }
+
   const target = String(unitName ?? '').trim();
   const baseUnit = readBaseUnit(material);
   if (!target || !baseUnit || target === baseUnit) return 1;
@@ -105,10 +125,12 @@ export function resolveUnitToBaseFactor(
   const matched = units.find((u) => String(u.unit ?? '').trim() === target);
   if (!matched) return 1;
 
+  if (isFloatingMaterialUnit(matched)) return null;
+
   const numerator = Number(matched.numerator ?? 1);
   const denominator = Number(matched.denominator ?? 1);
   if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || numerator <= 0 || denominator <= 0) {
-    return 1;
+    return null;
   }
   return numerator / denominator;
 }
@@ -122,7 +144,7 @@ export function convertToBaseQuantity(
   if (!Number.isFinite(qty) || qty <= 0) return qty;
   const unitName = fromUnit ?? resolveMaterialScenarioUnit(material, 'production');
   const factor = resolveUnitToBaseFactor(material, unitName);
-  if (factor <= 0) return qty;
+  if (factor == null || factor <= 0) return qty;
   return qty * factor;
 }
 
@@ -137,7 +159,7 @@ export function convertFromBaseQuantity(
   const baseUnit = readBaseUnit(material);
   if (!unitName || unitName === baseUnit) return qty;
   const factor = resolveUnitToBaseFactor(material, unitName);
-  if (factor <= 0) return qty;
+  if (factor == null || factor <= 0) return qty;
   return qty / factor;
 }
 

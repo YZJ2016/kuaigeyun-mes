@@ -9,9 +9,8 @@ import {
   ProFormText,
   ProFormTreeSelect,
 } from '@ant-design/pro-components';
-import { Tabs, theme } from 'antd';
+import { Form, Tabs, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
-import type { TFunction } from 'i18next';
 import { searchUserDisplay } from '../../../../../services/user';
 import { formatUserDisplayLabel } from '../../../../../utils/userDisplay';
 import { getRoleList } from '../../../../../services/role';
@@ -21,7 +20,7 @@ import type { ConditionItem } from '../../../../../types/approvalFlowSchema';
 
 function departmentTreeSelectData(
   items: DepartmentTreeItem[],
-  t: TFunction,
+  t: (key: string) => string,
 ): Array<{ title: string; value: string; key: string; children?: ReturnType<typeof departmentTreeSelectData> }> {
   return items.map((item) => ({
     title: resolvePresetDepartmentName(item, t),
@@ -42,6 +41,7 @@ const APPROVER_OPTIONS = (t: (k: string) => string) => [
 
 interface ApprovalNodeFormProps {
   conditionFieldOptions?: { label: string; value: string }[];
+  editableFieldOptions?: { label: string; value: string }[];
 }
 
 function ApprovalNodeApproverFields({ t }: { t: (key: string) => string }) {
@@ -157,18 +157,54 @@ function ApprovalNodeApproverFields({ t }: { t: (key: string) => string }) {
   );
 }
 
-function ApprovalNodeActionFields({ t }: { t: (key: string) => string }) {
+function ApprovalNodeActionFields({
+  t,
+  editableFieldOptions = [],
+}: {
+  t: (key: string) => string;
+  editableFieldOptions?: { label: string; value: string }[];
+}) {
   return (
     <>
-      <ProFormSwitch name="allowEditDuringApproval" label={t('pages.approval.designer.allowEditDuringApproval')} />
+      <ProFormSwitch
+        name="allowEditDuringApproval"
+        label={t('pages.approval.designer.allowEditDuringApproval')}
+        initialValue
+      />
       <ProFormDependency name={['allowEditDuringApproval']}>
         {({ allowEditDuringApproval }) =>
           allowEditDuringApproval ? (
-            <ProFormSwitch
-              name="refreshContextOnEdit"
-              label={t('pages.approval.designer.refreshContextOnEdit')}
-              initialValue
-            />
+            <>
+              <ProFormSwitch
+                name="editableFieldsUseAll"
+                label={t('pages.approval.designer.editableFieldsUseAll')}
+                tooltip={t('pages.approval.designer.editableFieldsModalTip')}
+                initialValue={false}
+              />
+              <ProFormDependency name={['editableFieldsUseAll']}>
+                {({ editableFieldsUseAll }) =>
+                  editableFieldsUseAll ? null : (
+                    <ProFormSelect
+                      name="editableFields"
+                      label={t('pages.approval.designer.editableFields')}
+                      tooltip={t('pages.approval.designer.editableFieldsModalTip')}
+                      mode="multiple"
+                      options={editableFieldOptions}
+                      fieldProps={{
+                        optionFilterProp: 'label',
+                        showSearch: true,
+                        style: { width: '100%' },
+                      }}
+                    />
+                  )
+                }
+              </ProFormDependency>
+              <ProFormSwitch
+                name="refreshContextOnEdit"
+                label={t('pages.approval.designer.refreshContextOnEdit')}
+                initialValue
+              />
+            </>
           ) : null
         }
       </ProFormDependency>
@@ -249,7 +285,7 @@ function ApprovalNodeRecallRejectFields({ t }: { t: (key: string) => string }) {
   );
 }
 
-export const ApprovalNodeForm: React.FC<ApprovalNodeFormProps> = () => {
+export const ApprovalNodeForm: React.FC<ApprovalNodeFormProps> = ({ editableFieldOptions }) => {
   const { t } = useTranslation();
   return (
     <Tabs
@@ -264,7 +300,9 @@ export const ApprovalNodeForm: React.FC<ApprovalNodeFormProps> = () => {
         {
           key: 'actions',
           label: t('pages.approval.designer.tab.actions'),
-          children: <ApprovalNodeActionFields t={t} />,
+          children: (
+            <ApprovalNodeActionFields t={t} editableFieldOptions={editableFieldOptions} />
+          ),
         },
         {
           key: 'recallReject',
@@ -321,12 +359,52 @@ export const CcNodeForm: React.FC = () => {
   );
 };
 
+interface ConditionBranchTarget {
+  nodeId: string;
+  label: string;
+}
+
 interface ConditionNodeFormProps {
   branchCount: number;
   fieldOptions: { label: string; value: string }[];
+  /** 与出边顺序一致，第 i 条分支名称对应第 i 个下游节点 */
+  branchTargets?: ConditionBranchTarget[];
 }
 
-export const ConditionNodeForm: React.FC<ConditionNodeFormProps> = ({ branchCount, fieldOptions }) => {
+/**
+ * 同一条件节点只保留一条默认分支。
+ * 必须用 ProFormList 相对字段名 `isDefault` 注册；裸 Switch + 绝对路径 setFieldValue
+ * 不会进 List 序列化，onValuesChange 写回节点后开关会弹回关闭。
+ */
+const ConditionDefaultBranchSwitch: React.FC<{ index: number }> = ({ index }) => {
+  const { t } = useTranslation();
+  const form = Form.useFormInstance();
+  return (
+    <ProFormSwitch
+      name="isDefault"
+      label={t('pages.approval.designer.branchDefault')}
+      extra={t('pages.approval.designer.branchDefaultHint')}
+      fieldProps={{
+        onChange: (next: boolean) => {
+          if (!next) return;
+          const list = form.getFieldValue('conditions');
+          if (!Array.isArray(list)) return;
+          list.forEach((_, i) => {
+            if (i !== index) {
+              form.setFieldValue(['conditions', i, 'isDefault'], false);
+            }
+          });
+        },
+      }}
+    />
+  );
+};
+
+export const ConditionNodeForm: React.FC<ConditionNodeFormProps> = ({
+  branchCount,
+  fieldOptions,
+  branchTargets = [],
+}) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
   const routeModeOptions = [
@@ -419,14 +497,29 @@ export const ConditionNodeForm: React.FC<ConditionNodeFormProps> = ({ branchCoun
             >
               {(_meta, index) =>
                 isManual ? (
-                  <ProFormText
-                    name="label"
-                    label={t('pages.approval.designer.branchName')}
-                    rules={[{ required: true, message: t('pages.approval.designer.branchNameRequired') }]}
-                  />
+                  <>
+                    <ProFormText
+                      name="label"
+                      label={t('pages.approval.designer.branchName')}
+                      rules={[{ required: true, message: t('pages.approval.designer.branchNameRequired') }]}
+                    />
+                    <div style={{ marginBottom: token.marginSM }}>
+                      <div style={{ marginBottom: 4, color: token.colorTextSecondary }}>
+                        {t('pages.approval.designer.branchTarget')}
+                      </div>
+                      <div>{branchTargets[index]?.label || ''}</div>
+                    </div>
+                    <ConditionDefaultBranchSwitch index={index} />
+                  </>
                 ) : (
                   <>
                     <ProFormText name="label" label={t('pages.approval.designer.branchName')} />
+                    <div style={{ marginBottom: token.marginSM }}>
+                      <div style={{ marginBottom: 4, color: token.colorTextSecondary }}>
+                        {t('pages.approval.designer.branchTarget')}
+                      </div>
+                      <div>{branchTargets[index]?.label || ''}</div>
+                    </div>
                     <ProFormSwitch
                       name="else"
                       label={t('pages.approval.designer.conditionElseBranch')}
@@ -504,6 +597,18 @@ export function mergeFormToNodeData(
     // 表单临时字段不得残留进 nodeDataMap，否则保存时旧 approvers 会盖掉新 approverIds
     delete v.approvers;
     delete v.roles;
+  }
+  if (nodeType === 'approval' && 'editableFieldsUseAll' in v) {
+    // 关「全部」时必须显式写出 editableFields 数组，否则 merge 盖不掉节点上残留的 '*'
+    if (v.editableFieldsUseAll === true) {
+      v.editableFields = '*';
+    } else {
+      const raw = v.editableFields;
+      v.editableFields = Array.isArray(raw)
+        ? raw.map(String).filter((x) => x && x !== '*')
+        : [];
+    }
+    delete v.editableFieldsUseAll;
   }
   return v;
 }

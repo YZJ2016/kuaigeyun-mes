@@ -17,7 +17,12 @@ export interface PartnerInvoiceAndExtendedFields {
   legalRepresentative?: string;
   enterpriseTypeCode?: string;
   paymentTermsDays?: number | string | null;
-  settlementMethodCode?: string;
+  defaultPaymentMethodCode?: string;
+  settlementTermsCode?: string;
+  /** 默认币种，采购/销售单据表头带出 */
+  defaultCurrencyCode?: string;
+  /** 默认汇率，单据表头带出；空则本币按 1 */
+  defaultExchangeRate?: number | string | null;
   financeContactName?: string;
   financeContactPhone?: string;
   financeContactEmail?: string;
@@ -80,6 +85,10 @@ export interface Customer extends PartnerInvoiceAndExtendedFields {
   creditLimit?: number | string;
   /** 应收确认策略覆盖，空=跟随组织参数中心 */
   revenueRecognitionOverride?: string | null;
+  /** 苍穹伙伴类型 type：1–5 */
+  partnerType?: string | null;
+  /** 苍穹业务职能 bizfunction */
+  bizFunction?: string | null;
   salesmanId?: number;
   salesmanName?: string;
   poolStatus?: 'pool' | 'owned' | string;
@@ -115,6 +124,8 @@ export interface CustomerCreate extends PartnerInvoiceAndExtendedFields {
   estimatedAnnualPurchase?: number;
   creditLimit?: number;
   revenueRecognitionOverride?: string | null;
+  partnerType?: string | null;
+  bizFunction?: string | null;
   salesmanId?: number;
   projectDescription?: string;
   intentMaterialName?: string;
@@ -141,6 +152,8 @@ export interface CustomerUpdate extends PartnerInvoiceAndExtendedFields {
   estimatedAnnualPurchase?: number;
   creditLimit?: number;
   revenueRecognitionOverride?: string | null;
+  partnerType?: string | null;
+  bizFunction?: string | null;
   salesmanId?: number | null;
   projectDescription?: string;
   intentMaterialName?: string;
