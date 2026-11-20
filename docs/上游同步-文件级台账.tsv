@@ -1,10 +1,25 @@
 # 上游同步文件级台账（scripts/sync_upstream_audit.py 维护，勿手改列结构）
 # 列：upstream_path	sha_at_eval	verdict	note
 # verdict: tracked|applied|superset|deferred|domain-out
-	DELETED	applied	R2簇3 fe_extra:cf-json-date/schema-percent/sync-modal/tenant-selector依赖/api-bulk/batch-ops/pull-query/audit-inline/inventoryLedger/partner-prefill/e2e6件
+"docs/\344\276\233\345\272\224\345\225\206.md"	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+"docs/\345\212\237\350\203\275\346\270\205\345\215\225.md"	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+"docs/\345\215\225\345\205\254\347\275\221IP\345\217\214\346\234\272Caddy\345\217\215\345\220\221\344\273\243\347\220\206.md"	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+"docs/\345\215\263\346\227\266\345\272\223\345\255\230.md"	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+"docs/\345\256\242\346\210\267\344\277\241\346\201\257.md"	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+"docs/\346\212\245\345\267\245.md"	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+"docs/\346\212\245\345\267\245\346\200\235\350\267\257.md"	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+"docs/\346\212\245\345\267\245\346\226\260\346\200\235\350\267\257.md"	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+"docs/\346\226\207\344\273\266\350\267\257\345\276\204.md"	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+"docs/\351\203\250\347\275\262\346\214\207\345\215\227.md"	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+"docs/\351\224\200\345\224\256\350\256\242\345\215\225.md"	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+"docs/apps/haoligo/\345\216\202\345\256\266\345\244\226\345\215\217\350\264\246\345\217\267\351\205\215\347\275\256\350\257\264\346\230\216.md"	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+"docs/apps/haoligo/\350\256\276\345\244\207\345\220\210\345\220\214\344\270\216\350\256\276\345\244\207\345\272\224\344\273\230\346\254\276\344\275\277\347\224\250\350\257\264\346\230\216.md"	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+"docs/apps/kuaioa/\345\267\245\350\265\204\347\273\223\347\256\227\344\275\277\347\224\250\350\257\264\346\230\216.md"	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+"docs/apps/kuaivision/\347\216\260\345\234\272\350\201\224\350\260\203\346\211\213\345\206\214.md"	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+"docs/apps/kuaizhizao/MES\351\234\200\346\261\202\351\200\202\351\205\215\344\270\216\347\274\272\351\241\271\345\210\206\346\236\220-2026.07.24.md"	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
 "docs/core/\346\234\215\345\212\241\351\207\207\350\264\255\345\201\232\345\215\225\350\257\264\346\230\216.md"	DELETED	tracked	seed from 6abba1dbd5
 "docs/core/\350\264\250\351\207\217\344\275\223\347\263\273PRD.md"	DELETED	tracked	seed from 6abba1dbd5
-"docs/core/\351\207\221\350\235\266\345\274\272\344\270\200\350\207\264\345\256\236\346\226\275-SOP.md"	DELETED	tracked	seed from 2ba9fe60cf
+"docs/core/\351\207\221\350\235\266\345\274\272\344\270\200\350\207\264\345\256\236\346\226\275-SOP.md"	92f1f17334a9d1d85fa6384ae787990a03e0d6dd	applied	R2:文档取上游tip
 "docs/funide-oa/\350\264\250\351\207\217\344\275\223\347\263\273PRD.md"	DELETED	tracked	seed from a2473e9b42
 "docs/legal/\350\275\257\344\273\266\346\272\220\344\273\243\347\240\201\344\275\277\347\224\250\344\270\216\347\231\275\346\240\207\346\216\210\346\235\203\344\271\246.md"	DELETED	tracked	seed from 2c945a39fb
 "docs/sales/\351\224\200\345\224\256\344\272\244\344\273\230\345\205\250\346\265\201\347\250\213\347\256\241\347\220\206\344\277\241\346\201\257\345\214\226\345\273\272\350\256\276\346\226\271\346\241\210.md"	DELETED	tracked	seed from 4a7f11604c
@@ -14,6 +29,7 @@
 .cursor/memory/README.md	DELETED	tracked	seed from 0513e907f5
 .cursor/memory/features/aoci-mcp-three-repos.md	DELETED	tracked	seed from fa5ce815bc
 .cursor/memory/features/aoci-safe-inventory-orphan.md	DELETED	tracked	seed from 46508115c7
+.cursor/memory/features/app-pro-migration-compose.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
 .cursor/memory/features/approval-flow-withdraw-revoke-policy.md	DELETED	tracked	seed from 7aab065f41
 .cursor/memory/features/audit-flow-preview-modal-transform.md	DELETED	tracked	seed from 899c9ea0b6
 .cursor/memory/features/audit-hub-approve-button-visible.md	DELETED	tracked	seed from 872b76152e
@@ -25,6 +41,7 @@
 .cursor/memory/features/document-amount-summary-precision.md	DELETED	tracked	seed from b74aba704c
 .cursor/memory/features/document-ledger-recognition.md	DELETED	tracked	seed from b12cc66e71
 .cursor/memory/features/document-line-partner-material-snapshot.md	DELETED	tracked	seed from a62d32cff6
+.cursor/memory/features/document-push-kuaiconnect.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
 .cursor/memory/features/drawing-mgmt-integrate-download.md	DELETED	tracked	seed from b12cc66e71
 .cursor/memory/features/equip-ops-scheme-bind-clients.md	DELETED	tracked	seed from 978a1fb9e5
 .cursor/memory/features/equipment-attachment-online-preview.md	DELETED	tracked	seed from 9edda14493
@@ -43,6 +60,7 @@
 .cursor/memory/features/haoligo-output-record-production-dept.md	DELETED	tracked	seed from a62d32cff6
 .cursor/memory/features/inbound-confirm-preview-warehouse-display.md	DELETED	tracked	seed from 9edda14493
 .cursor/memory/features/inbound-sync-kuaiconnect.md	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
+.cursor/memory/features/installed-apps-list-timeout.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
 .cursor/memory/features/inventory-sync-empty-batch-no.md	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
 .cursor/memory/features/kuaiai-insights-in-hub.md	DELETED	tracked	seed from 40599c81ed
 .cursor/memory/features/kuaiai-pulse-offline.md	DELETED	tracked	seed from 40599c81ed
@@ -81,6 +99,7 @@
 .cursor/memory/features/purchase-return-ap-offset.md	DELETED	tracked	seed from b12cc66e71
 .cursor/memory/features/purchase-return-pull-from-receipt.md	DELETED	tracked	seed from b12cc66e71
 .cursor/memory/features/quality-inspection-revoke-edit.md	DELETED	tracked	seed from b12cc66e71
+.cursor/memory/features/quotation-delete-series-latest-heal.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
 .cursor/memory/features/rd-deliverable-type-dictionary.md	DELETED	tracked	seed from 6c946f0717
 .cursor/memory/features/sales-order-list-perf-menu-badge.md	DELETED	tracked	seed from b74aba704c
 .cursor/memory/features/sales-order-payment-method-cycle.md	DELETED	tracked	seed from b12cc66e71
@@ -128,6 +147,21 @@ README.md	c0fee2a70a17b9e8d523ff246c55bf6cebf58d5e	tracked	seed from 2cb998d625
 aoci.code.txt	DELETED	tracked	seed from 002ff82055
 aoci.meta.txt	DELETED	tracked	seed from fa5ce815bc
 aoci.txt	DELETED	tracked	seed from fa5ce815bc
+docs/aoci-git-push-sop.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+docs/apps/kuaiai/EXTERNAL-AGENT-WORKBUDDY.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+docs/apps/kuaiai/MASCOT-PROMPTS.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+docs/apps/kuaiai/RAG-RETRIEVAL.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+docs/apps/kuaiai/ROADMAP.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+docs/apps/kuaicaiwu/general-ledger.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+docs/apps/kuaiiot/COMPLIANCE.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+docs/apps/kuaiiot/EDGE-AGENT-RUNTIME.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+docs/apps/kuaiiot/KUAIREPORT-LINK.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+docs/apps/kuaiiot/ROADMAP.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+docs/apps/kuaivision/ROADMAP.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+docs/apps/kuaizhizao/FIFO-AUDIT-EVIDENCE.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+docs/apps/kuaizhizao/delivery-project-p1-backlog.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+docs/apps/kuaizhizao/fai.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
+docs/apps/kuaizhizao/quality-system.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
 docs/apps/master-data/drawings.md	DELETED	superset	R2簇4:本地文件,上游tip无此路径,保留
 docs/apps/master-data/sop.md	DELETED	superset	R2簇4:本地文件,上游tip无此路径,保留
 docs/screenshots/system/architecture.png	d92632669f670467723a94f0e06866a58144bda1	tracked	seed from c16a17ebba
@@ -1466,6 +1500,7 @@ riveredge-backend/tests/apps/kuaicaiwu/services/test_trial_balance_leaf_totals.p
 riveredge-backend/tests/apps/kuaicaiwu/test_finance_list_unpaid_refund_filter.py	18079cdc29fd0ba2b861a404244b58dca2224bf4	tracked	seed from b12cc66e71
 riveredge-backend/tests/apps/kuaicaiwu/test_purchase_return_finance_outcome.py	096db262f2feddc949fa540f4549d39a396c9d76	tracked	seed from b12cc66e71
 riveredge-backend/tests/apps/kuaiconnect/services/document_push/test_kingdee_outbound_avb_precheck_service.py	248761389920c15dccfb970004a70eceb59bb34c	applied	三确认共用金蝶可用量预检，仅无感外推会跑时执行；报价改删与四页钉住仍缓置，billentry 与 im 批量更新仍缺依赖
+riveredge-backend/tests/apps/kuaiconnect/services/document_push/test_kingdee_purchase_receipt_revoke_service.py	5825173be48025dcc0540cbc642c781679cc9bcd	deferred	R2:上游测试针对上游OutsourceService/inventory_service/report_enhancements/operation_jump_rules/sales_order_purchase_push/PurchaseReceiptService内部函数签名，本地实现已分叉，随对应src簇落地
 riveredge-backend/tests/apps/kuaiconnect/services/document_push/test_kingdee_purchase_receipt_unit.py	98b879cdfc9d6fbb0d2c2ce4623dd79c37a2d909	tracked	seed from d32d1e031d
 riveredge-backend/tests/apps/kuaiconnect/services/inbound_sync/test_inventory_aux_unit_from_row.py	c9cc4be979945c6f02fbe5eb3e7f86356792e4e2	deferred	R2簇5:缓置(详见台账)
 riveredge-backend/tests/apps/kuaiconnect/services/inbound_sync/test_settle_sync_run_outcome.py	61c4d5dbd5b0306f366895b9dc4d08ee72c7315f	deferred	R2簇5:缓置(详见台账)
@@ -1496,11 +1531,17 @@ riveredge-backend/tests/apps/kuaizhizao/services/test_document_push_service.py	0
 riveredge-backend/tests/apps/kuaizhizao/services/test_finished_goods_inbound_quota.py	d2098eee2fdaae08196cddd6494cd294e5527416	tracked	seed from 93b3cb5998
 riveredge-backend/tests/apps/kuaizhizao/services/test_fqc_inbound_quality_contract.py	9d94441ae0	superset	R2-迁移: 本地模型/列已存在等价实现
 riveredge-backend/tests/apps/kuaizhizao/services/test_gb2828_sampling.py	1036bcb2d5da4488a505092ca8073b1f68685bb6	tracked	seed from 905787348a
+riveredge-backend/tests/apps/kuaizhizao/services/test_inbound_revoke_default_batch.py	77bc1f00ce157f61a9631ac655b8453303c13576	deferred	R2:上游测试针对上游OutsourceService/inventory_service/report_enhancements/operation_jump_rules/sales_order_purchase_push/PurchaseReceiptService内部函数签名，本地实现已分叉，随对应src簇落地
+riveredge-backend/tests/apps/kuaizhizao/services/test_inventory_balance_group_key.py	412090c13194beafafc9dc2b11857f7661c082dd	deferred	R2:上游测试针对上游OutsourceService/inventory_service/report_enhancements/operation_jump_rules/sales_order_purchase_push/PurchaseReceiptService内部函数签名，本地实现已分叉，随对应src簇落地
 riveredge-backend/tests/apps/kuaizhizao/services/test_inventory_batch_aux_deduct.py	37126d0ada7e6fc609bb7e0e376f1a65edf91796	tracked	seed from 95c4869063
 riveredge-backend/tests/apps/kuaizhizao/services/test_inventory_report_movement_quantities.py	9fc03de3ed	deferred	R2-测试: 出库正量归集+doc标签待摘
 riveredge-backend/tests/apps/kuaizhizao/services/test_kingdee_sales_purchase_inventory_push.py	e13f4213b8fb1fb6fd15a41d0c547d9e7880bc14	tracked	seed from a0b353ce7e
 riveredge-backend/tests/apps/kuaizhizao/services/test_mode_a_lifecycle.py	39f89d3ab61e094e626578b412f64d5c2b40b308	tracked	seed from 0513e907f5
+riveredge-backend/tests/apps/kuaizhizao/services/test_operation_jump_gates.py	6eb55f4374cafa71b8723b5a23d37649d0eeecf4	deferred	R2:上游测试针对上游OutsourceService/inventory_service/report_enhancements/operation_jump_rules/sales_order_purchase_push/PurchaseReceiptService内部函数签名，本地实现已分叉，随对应src簇落地
 riveredge-backend/tests/apps/kuaizhizao/services/test_other_outbound_update_items.py	de10d3790cad4210ba9878884ac67d655fbad2bf	tracked	seed from e451b48dc2
+riveredge-backend/tests/apps/kuaizhizao/services/test_outsource_flow_incoming_gate.py	94a586bc34c0df1effa05422104ecfe987226a95	deferred	R2:上游测试针对上游OutsourceService/inventory_service/report_enhancements/operation_jump_rules/sales_order_purchase_push/PurchaseReceiptService内部函数签名，本地实现已分叉，随对应src簇落地
+riveredge-backend/tests/apps/kuaizhizao/services/test_outsource_order_lifecycle.py	8159855435f0f5910d66faccdb947f82cdc831a6	deferred	R2:上游测试针对上游OutsourceService/inventory_service/report_enhancements/operation_jump_rules/sales_order_purchase_push/PurchaseReceiptService内部函数签名，本地实现已分叉，随对应src簇落地
+riveredge-backend/tests/apps/kuaizhizao/services/test_outsource_order_progress.py	a88f03c8b2a82e9cdeb03da7845d20d949a6263c	deferred	R2:上游测试针对上游OutsourceService/inventory_service/report_enhancements/operation_jump_rules/sales_order_purchase_push/PurchaseReceiptService内部函数签名，本地实现已分叉，随对应src簇落地
 riveredge-backend/tests/apps/kuaizhizao/services/test_over_report_rules.py	1e33dd2861	applied	R2-测试回归簇: 落地1例,余2例待over-report簇(validate_over_report_value_for_mode)
 riveredge-backend/tests/apps/kuaizhizao/services/test_packing_profile_cartonization.py	48de21cd86e44e133b8b1d6359ccd29f0762b1ec	tracked	seed from b12cc66e71
 riveredge-backend/tests/apps/kuaizhizao/services/test_payment_application_invoice_status.py	b7278279615c40a9a4f440fc22b7aa600468c4cb	tracked	seed from ec29267f5b
@@ -1517,13 +1558,16 @@ riveredge-backend/tests/apps/kuaizhizao/services/test_purchase_requisition_po_pl
 riveredge-backend/tests/apps/kuaizhizao/services/test_quality_auto_push_iqc_inbound.py	b8188be40cfb157ddc8c1d2dade6549337146eb4	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/tests/apps/kuaizhizao/services/test_quality_inspection_auto_approve.py	9d94441ae0	superset	R2-迁移: 本地模型/列已存在等价实现
 riveredge-backend/tests/apps/kuaizhizao/services/test_quality_linked_document_read.py	9d94441ae0	superset	R2-迁移: 本地模型/列已存在等价实现
+riveredge-backend/tests/apps/kuaizhizao/services/test_require_line_location.py	9951471704b2f47b848b297dc82bb3fe2f5c0a43	deferred	R2:上游测试针对上游OutsourceService/inventory_service/report_enhancements/operation_jump_rules/sales_order_purchase_push/PurchaseReceiptService内部函数签名，本地实现已分叉，随对应src簇落地
 riveredge-backend/tests/apps/kuaizhizao/services/test_rework_order_capabilities.py	4edd09df9d8e066b8054cf390361d108540e32ca	tracked	seed from e16f2f2939
 riveredge-backend/tests/apps/kuaizhizao/services/test_rework_order_signoff_lifecycle.py	9f38c6cf725bf911b847ce9d1813743cb53d6710	tracked	seed from e16f2f2939
 riveredge-backend/tests/apps/kuaizhizao/services/test_rework_signoff_chain.py	bdc92608a6042aff8f73282ebe95be213d7b8079	tracked	seed from e16f2f2939
 riveredge-backend/tests/apps/kuaizhizao/services/test_sales_order_downstream_active.py	a46b1eb6c180c1aed7b28252e330aa4d654ad909	tracked	seed from e451b48dc2
+riveredge-backend/tests/apps/kuaizhizao/services/test_sales_order_purchase_push_batch.py	d31181239fbaec91ef03fc15f3d8a5ace7fa8c24	deferred	R2:上游测试针对上游OutsourceService/inventory_service/report_enhancements/operation_jump_rules/sales_order_purchase_push/PurchaseReceiptService内部函数签名，本地实现已分叉，随对应src簇落地
 riveredge-backend/tests/apps/kuaizhizao/services/test_stock_serial_validation.py	350b6b07675ce267224dc9959964b99ec0564ffe	tracked	seed from 5b1b9828e4
 riveredge-backend/tests/apps/kuaizhizao/services/test_trial_balance_leaf_totals.py	690659f8ad3029a1f102e1cfc0ada0132eeed0ba	tracked	seed from 57a37e2749
 riveredge-backend/tests/apps/kuaizhizao/services/test_warehouse_kingdee_alignment.py	DELETED	applied	D依赖簇续:支撑件+前端
+riveredge-backend/tests/apps/kuaizhizao/services/test_warehouse_movement_detail_filter.py	d0c97ceba60b69a0d65e8b340040a2d632ed45ce	deferred	R2:上游测试针对上游OutsourceService/inventory_service/report_enhancements/operation_jump_rules/sales_order_purchase_push/PurchaseReceiptService内部函数签名，本地实现已分叉，随对应src簇落地
 riveredge-backend/tests/apps/kuaizhizao/services/test_work_order_inbound_preview_qualified.py	d6d4581a800e187eb4722e4252aef78b6ec11a48	tracked	seed from b12cc66e71
 riveredge-backend/tests/apps/kuaizhizao/services/test_work_order_inbound_quota_fqc.py	86e3d8187c	superset	R2-迁移: 本地模型/列已存在等价实现
 riveredge-backend/tests/apps/kuaizhizao/test_eight_d_collaboration_gate.py	75ea96b726dfbf239d3a7a2372a4059d1dba04e8	tracked	seed from 2a5b2caf14
@@ -1668,7 +1712,7 @@ riveredge-frontend/src/apps/kuaizhizao/components/DocumentAttachmentCenterPane.t
 riveredge-frontend/src/apps/kuaizhizao/components/DocumentAttachmentsReadonly.tsx	7d08bc0dfff952ed858e38d5cec4d3cf8e6d7f84	tracked	seed from 2c945a39fb
 riveredge-frontend/src/apps/kuaizhizao/components/DocumentLineAttachmentsCell.tsx	2212ee8490566007e03a624b9fa7d8f0326ce7d4	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/components/DocumentLineTotalStock.tsx	496c52c176200f32103de9ddecb067dc5781809f	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
-riveredge-frontend/src/apps/kuaizhizao/components/DocumentPushApiDefaultsModal.tsx			
+riveredge-frontend/src/apps/kuaizhizao/components/DocumentPushApiDefaultsModal.tsx	70a1169246a8fb7f6c92146be476f296450f8c14	applied	R2:与上游tip一致
 riveredge-frontend/src/apps/kuaizhizao/components/DocumentPushBatchPanel.tsx	7c2ffc4caad6bd204ea00f4a69f95c32c77b947e	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/apps/kuaizhizao/components/EquipmentPersonSelect.tsx	5b609d42cda89048409fdd2234dd11aa73751650	tracked	seed from 2c945a39fb
 riveredge-frontend/src/apps/kuaizhizao/components/InspectionPlanFormModal.tsx	80bbd98f7e1d8507d1e00084035483a869d67ceb	tracked	seed from 905787348a
@@ -1683,7 +1727,7 @@ riveredge-frontend/src/apps/kuaizhizao/components/MaterialInventoryIndicator.tsx
 riveredge-frontend/src/apps/kuaizhizao/components/MergeFinanceDocsModal.tsx	cbae0209734741e9da2d79419e0db775da2d4aa7	tracked	seed from c588744e04
 riveredge-frontend/src/apps/kuaizhizao/components/OutsourceIssueFormContent.tsx	cf9fb75f737d85a5beb0f398b10a940e9e6aecb0	tracked	seed from 5b1b9828e4
 riveredge-frontend/src/apps/kuaizhizao/components/OutsourceOrderProgressKit.tsx	6c18b1f583fb86d7239dbb2c9dc9c5fa0a3a12a4	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
-riveredge-frontend/src/apps/kuaizhizao/components/OutsourceReceiptFormContent.tsx			
+riveredge-frontend/src/apps/kuaizhizao/components/OutsourceReceiptFormContent.tsx	1c9bd1e66c5a243131fda0131f2a56c7f0573f45	applied	R2:与上游tip一致
 riveredge-frontend/src/apps/kuaizhizao/components/ReportableQuantityPanel.tsx	5ed14cdabf94ce8f25c03684fc0494dcbe5e12a4	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/apps/kuaizhizao/components/ReworkOrderCreateModal.tsx	858e3683ae340a2dba107a37d904b2128a252aaa	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/apps/kuaizhizao/components/ReworkOrderProfileFormBlocks.tsx	6e076466e71e191f9924022dd4b848949b167765	tracked	seed from e16f2f2939
@@ -1727,11 +1771,17 @@ riveredge-frontend/src/apps/kuaizhizao/pages/after-sales-service/tickets/compone
 riveredge-frontend/src/apps/kuaizhizao/pages/after-sales-service/tickets/index.tsx	5453f4e404e0c2600ef2f5ad1fb9cbd2bda410b0	applied	R2 fe_pages簇：自定义字段接入+行删并批量删+物流/售后/退料增量，取上游tip版
 riveredge-frontend/src/apps/kuaizhizao/pages/app-management/flow-data-generate/EquipmentOpsGeneratePanel.tsx	DELETED	tracked	seed from 0b8630adfd
 riveredge-frontend/src/apps/kuaizhizao/pages/app-management/flow-data-generate/index.tsx	DELETED	tracked	seed from 0b8630adfd
+riveredge-frontend/src/apps/kuaizhizao/pages/delivery-project/issues/index.tsx	fd7eacabdb9adc014178944779ffbf7b70279696	superset	R2:本地保留行级删除/工位写保护/门禁等超集能力，上游tip为删减版
+riveredge-frontend/src/apps/kuaizhizao/pages/delivery-project/node-reports/index.tsx	789be02f62aa81c3581cbcedf490507d954b8437	superset	R2:本地保留行级删除/工位写保护/门禁等超集能力，上游tip为删减版
 riveredge-frontend/src/apps/kuaizhizao/pages/delivery-project/process-templates/index.tsx	3b2850328afae82b6c03f84862de29516aa97724	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
+riveredge-frontend/src/apps/kuaizhizao/pages/delivery-project/projects/index.tsx	2d95981e3d0651489ead72dd21d78662dbdbccba	superset	R2:本地保留行级删除/工位写保护/门禁等超集能力，上游tip为删减版
 riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/dashboard/index.tsx	0c564442f704f5558cbc4e7d49650b8902c58d59	tracked	seed from d81b4b70bf
+riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/equipment-acceptances/index.tsx	f59a56c04b858e34d4b408e658e7da0313e02e9c	superset	R2:本地保留行级删除/工位写保护/门禁等超集能力，上游tip为删减版
 riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/equipment-board/index.tsx	1600bde435b530001b25515791f520c1708872b3	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/equipment-faults/index.tsx	d51af2043f0b91613138c084540d5dd432cb5bc4	tracked	seed from 2c945a39fb
+riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/equipment-line-rebinds/index.tsx	569a4cf1fd7e9b3dddf70d2cc31e5825b47c367f	superset	R2:本地保留行级删除/工位写保护/门禁等超集能力，上游tip为删减版
 riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/equipment-repairs/index.tsx	93c318152680cdffda7f3806f9b9fcc866884cba	tracked	seed from 2c945a39fb
+riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/equipment-scrap/index.tsx	1bcd5b999768339b8793832eda8c814635c63349	superset	R2:本地保留行级删除/工位写保护/门禁等超集能力，上游tip为删减版
 riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/equipment-status/index.less	675782007dc682312f05f59f0c24f918daa5d57e	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/equipment-status/index.tsx	e129e1d75a17ed0b5216107c84f14c7ce0b3b089	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/equipment/detail/index.tsx	1ed2bf0f70f91c96e241672f5faf8c5c7ebc11fe	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
@@ -1749,6 +1799,8 @@ riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/mold-maintenan
 riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/mold-maintenances/index.tsx	70f3d1bf16d17954828e588c8916171bd1ad5fcd	tracked	seed from 2c945a39fb
 riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/mold-repair-schemes/index.tsx	f4ceeb79e939ac620945da8eca532ab73c779b80	tracked	seed from b12cc66e71
 riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/mold-repairs/index.tsx	77994edb453957618758ee3bcc08b161df0711c2	tracked	seed from 2c945a39fb
+riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/mold-returns/index.tsx	c38d8cda639bf71ef35669d0bb090bee5753a65b	superset	R2:本地保留行级删除/工位写保护/门禁等超集能力，上游tip为删减版
+riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/mold-scrap-applications/index.tsx	3e4bdfc7d3d62c366d0a295ebec1189efc6a1115	superset	R2:本地保留行级删除/工位写保护/门禁等超集能力，上游tip为删减版
 riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/mold-trials/index.tsx	0e4b3b63eb66e5b8665135d5ba0c7053ca13b211	tracked	seed from 2c945a39fb
 riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/molds/detail/index.tsx	f8b485ad59608afd82643fd3e77cd3d8049f7502	tracked	seed from 2c945a39fb
 riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/route-patrols/index.tsx	67a54c89757cee1bb99564b689e2c20c0f15b77e	tracked	seed from b12cc66e71
@@ -1834,6 +1886,9 @@ riveredge-frontend/src/apps/kuaizhizao/pages/logistics-management/shared/Vehicle
 riveredge-frontend/src/apps/kuaizhizao/pages/logistics-management/vehicles/index.tsx	a81a351563e93b68c8cd4f9e2f8a38262dff7fc5	applied	R2 fe_pages簇：自定义字段接入+行删并批量删+物流/售后/退料增量，取上游tip版
 riveredge-frontend/src/apps/kuaizhizao/pages/outsource-management/outsource-orders/index.tsx	98594d308ccc954cbef2048e5037bd0473214cb3	tracked	seed from 93b3cb5998
 riveredge-frontend/src/apps/kuaizhizao/pages/outsource-management/outsource-work-orders/index.tsx	3cb21f60a40e394d9fd9c34aa2bff9dbb6d81147	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
+riveredge-frontend/src/apps/kuaizhizao/pages/outsource-management/settlements/index.tsx	de71d9b0433691d329ce97bebe0073d3134bf417	superset	R2:本地保留行级删除/工位写保护/门禁等超集能力，上游tip为删减版
+riveredge-frontend/src/apps/kuaizhizao/pages/performance/employee-configs/index.tsx	4c50bb4d1ecf142e7c87a4f97705b74aa26a51ab	superset	R2:本地保留行级删除/工位写保护/门禁等超集能力，上游tip为删减版
+riveredge-frontend/src/apps/kuaizhizao/pages/performance/holidays/index.tsx	d2197752fb1d18b0a5495afc0d106fd73f9e1320	superset	R2:本地保留行级删除/工位写保护/门禁等超集能力，上游tip为删减版
 riveredge-frontend/src/apps/kuaizhizao/pages/performance/hourly-rates/index.tsx	8a19cc10d93105b7a339c73e20bc63036bef7f71	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/performance/kpi-definitions/index.tsx	5e9bca0268e9cebf59aa454b2a30e0c8a77e12d6	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/performance/shift-rosters/ShiftRosterDowntimePanel.tsx	3132ded061f1ab2e7528634543ec3a04ca7c26a9	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
@@ -1853,8 +1908,10 @@ riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/packing-bindin
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/quality-exceptions/index.tsx	46cc3288ee468f8ad6ca94a4064ed0b84e3399d5	tracked	seed from 777aa1a468
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/reporting/ReportingSyncHistoryModal.tsx	747d8a953dcb50334fe2b7dc9fa205845255a4dd	applied	R2簇5:三方合并/本地适配
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/reporting/index.tsx	09461648ac4d1692e1101576a21fb0ff9a62b1d3	tracked	seed from 905787348a
+riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/reporting/kiosk.tsx	ad649922c999bd833be54aaebcf4affa144846c2	superset	R2:本地保留行级删除/工位写保护/门禁等超集能力，上游tip为删减版
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/reporting/reportingSyncConfig.ts	12769901d695a4cdef36cf378bf1d38a5b5d224b	tracked	seed from a0b353ce7e
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/rework-orders/index.tsx	1a0b2c0e42ad7bf26e1217b05cd85a7532fd868c	tracked	seed from 93b3cb5998
+riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/rework-position-plan-templates/ReworkPositionPlanTemplatesScreen.tsx	f9655b2cadf5fa1d9a833fd8792424dc5e2c1de1	superset	R2:本地保留行级删除/工位写保护/门禁等超集能力，上游tip为删减版
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/WorkOrderBatchPickingModal.tsx	DELETED	tracked	seed from 6abba1dbd5
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/WorkOrderFormPage.tsx	2a348f688059bcb872657bec07fdd64694e05da5	tracked	seed from 93b3cb5998
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/components/WorkOrderBomLinesDetail.tsx	b5eca6cc3ec3311dccf6be5c327d25ee39b07ca5	tracked	seed from 5b1b9828e4
@@ -1913,6 +1970,7 @@ riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/components/quali
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/components/qualityTableColumns.tsx	7dce7b532467f76573e0031673b9180613d1d103	superset	R2质量簇：buildQualityInspectionListPushProgressColumn本地已在
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/corrective-actions/index.tsx	f15db6abd51f2be643e1ce679a3a5d7aa22043ec	deferred	R2质量簇：quality-qms API与后端路由本地全无，待QMS功能包整体落地
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/drawing-balloon-sheets/index.tsx	c53c7695d1	applied	R2-前端增量簇: 行删收敛批量删+persistenceId升版
+riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/eight-d-reports/index.tsx	d1eab23b1449b7ff5f6d972e15cdbc9b637ec08e	superset	R2:本地保留行级删除/工位写保护/门禁等超集能力，上游tip为删减版
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/eight-d-reports/workbench/EightDWorkbench.tsx	0bf00850e9aae12547a7e12144530b3ee0cb5afe	tracked	seed from 2a5b2caf14
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/external-audits/index.tsx	4fe97ac41e20ca0b4e408aeec2e3afc344d20ca8	deferred	R2质量簇：quality-qms API与后端路由本地全无，待QMS功能包整体落地
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/fai-orders/index.tsx	0724101172925d007f0148de21b21f8fd789b67d	tracked	seed from 93b3cb5998
@@ -1985,16 +2043,19 @@ riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/shared/salesDocume
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/shipment-notices/index.tsx	57ad2310cce159dbadda2a68ed5c1a08f40b6a8d	tracked	seed from 4d124a088e
 riveredge-frontend/src/apps/kuaizhizao/pages/shared/documentReturnListImport.ts	05531d0b6f2e51173607ab1df4a6c512e7dab52c	tracked	seed from 4d124a088e
 riveredge-frontend/src/apps/kuaizhizao/pages/supplier-evaluations/index.tsx	DELETED	applied	13be286f11续:前端+财务适配+迁移
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/assembly-orders/index.tsx	38e489fa7eea81ecbeb33acf07bc31119e9e839b	applied	R2 fe收尾：批配中心自定义字段/生产退料取单行仓位/半成品入库自定义字段富化/装拆单customFieldTableName/连接器市场取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/assembly-templates/AssemblyTemplatesTab.tsx	c53c7695d1	applied	R2-前端增量簇: 行删收敛批量删+persistenceId升版
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/barcode-mapping-rules/index.tsx	7a487d872234752b86c4abcabc9fd13983a9b458	tracked	seed from df7d635797
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/batch-inventory-query/index.tsx	e1a5c1248da84db24868fcc12a9a9de75f4babd1	tracked	seed from 4a7f11604c
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/batching-center/BatchingTaskQueue.tsx	4cfbf8f855778b47bb416697c25cb7dfcc407a8f	tracked	seed from 5b1b9828e4
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/batching-center/LineSidePrepSplitView.tsx	2c67aabdda	applied	R2-前端增量簇
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/batching-center/index.tsx	4152e7434c8f839cb6a5223a382f01a0d279e1f9	tracked	seed from b12cc66e71
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/batching-center/materialCenterDetail.tsx	15cd6052681174927535876e090e98e3f0ba4af7	applied	R2 fe收尾：批配中心自定义字段/生产退料取单行仓位/半成品入库自定义字段富化/装拆单customFieldTableName/连接器市场取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/customer-material-registration/index.tsx	bee33ba209814547b507df13b7313271432648d1	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/delivery-notes/components/DeliveryNoticeDetailDrawer.tsx	9d94441ae0	applied	R2-前端增量簇
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/delivery-notes/deliveryNoteListExport.ts	e2351d2779b92d26465fb8b2595d8bcab1564741	tracked	seed from 4d124a088e
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/delivery-notes/index.tsx	e65ded7b5ad8d8b4d309d84f2fba1f2c3f1f303d	tracked	seed from 4d124a088e
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/disassembly-orders/index.tsx	1f3fdb89706caa5b66f96794c4ab4d581ac30405	applied	R2 fe收尾：批配中心自定义字段/生产退料取单行仓位/半成品入库自定义字段富化/装拆单customFieldTableName/连接器市场取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/documentPush/FinishedGoodsReceiptDocumentPushPanel.tsx	DELETED	applied	D依赖簇续:支撑件+前端
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/documentPush/ProductionPickingDocumentPushPanel.tsx	DELETED	applied	D依赖簇续:支撑件+前端
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/documentPush/SalesDeliveryDocumentPushPanel.tsx	DELETED	applied	D依赖簇续:支撑件+前端
@@ -2002,6 +2063,7 @@ riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/Finish
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/FinishedGoodsReceiptDocumentPushPanel.tsx	2a112d4fd43d1c3d4488f7e2b1f4a43342f13d9c	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/InboundOutsourcePullEntryPage.tsx	acbec60c500ebb0d79a38673933b5f5783f8e3cd	tracked	seed from 5b1b9828e4
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/InboundPoPullEntryPage.tsx	51d6eeb977d28e00a0fdcca7c7e52089dc2b769b	tracked	seed from 1d968cd27b
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/InboundProductionReturnPullEntryPage.tsx	d3ae2d29c2bb91ed5ec586d4ac881365f2e3c1ae	applied	R2 fe收尾：批配中心自定义字段/生产退料取单行仓位/半成品入库自定义字段富化/装拆单customFieldTableName/连接器市场取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/InboundQuickPullModals.tsx	0050fe46082df9a667ff7f702c70da0beb1c3788	tracked	seed from 1d968cd27b
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/InboundReceiptNoticePullEntryPage.tsx	4abc92c77087d7cb3176d2388cfc86586e2ad41c	tracked	seed from 3958bb1524
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/InboundWorkOrderPullEntryPage.tsx	a77ff80f26834c577e17c7fbec40c461671797b2	tracked	seed from 93b3cb5998
@@ -2009,6 +2071,7 @@ riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/OtherI
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/PurchaseInboundLineWhCells.tsx	2e90d9a7ae	superset	R2: 本地已有等价/更深实现
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/PurchaseReceiptCreateModal.tsx	c54288d6e547163536c1c7d983ac990a9f647de1	tracked	seed from 4bd853a94f
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/PurchaseReceiptDocumentPushPanel.tsx	566320384e783ba7898be2e3994a2d9917ddb1df	tracked	seed from 2c945a39fb
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/PurchaseReceiptEditModal.tsx	DELETED	superset	R2:本地保留行级删除/工位写保护/门禁等超集能力，上游tip为删减版
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/components/InboundDetailDrawer.tsx	14d41d22d4aa7fe25c105069b2e696e8de2692a6	applied	91c8157e1e强制重推+推送开关(含前置c0a917fc45基座)
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundEntryShared.tsx	66c9f46b15009c16a892d2df95155d3ccc5f9b24	tracked	seed from 1d968cd27b
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundHubDeepLink.ts	282f15a0fd	applied	R2-前端增量簇
@@ -2016,6 +2079,7 @@ riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboun
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundHubRunConfirm.ts	41c3a02f72	applied	R2-前端增量簇
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundHubTypes.ts	2e02d3ceca562f992be3b306cb18eb143cc84d0a	tracked	seed from 4bd853a94f
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundItemTracking.ts	f7b097a0f8d38f7f60cf5113a55a19af18eafac3	tracked	seed from 3958bb1524
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundListAggregate.ts	cc03a230b4134bf6482e8217628dde0fd57dbcf9	applied	R2 fe收尾：批配中心自定义字段/生产退料取单行仓位/半成品入库自定义字段富化/装拆单customFieldTableName/连接器市场取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundPaths.ts	01feb99552ccbc5e910c3c3741447f06f5846475	tracked	seed from 3958bb1524
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundPoReceiptEntryUtils.ts	39c614e5c97f191a167bb2ef5c7d044b95f1214b	tracked	seed from 57a37e2749
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundPullEntryTypes.ts	2f3ff3e9770d43e81ae2b011a42f3bb2138f1576	tracked	seed from 1d968cd27b
@@ -2025,6 +2089,7 @@ riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inventory-tran
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inventory/index.tsx	a11aba6dfb6b6018e1eae25587222394751e82dd	tracked	seed from 905787348a
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/material-borrows/index.tsx	48ab7b42784daaa69a7a613c779ddad2d7a125d6	tracked	seed from 4d124a088e
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/material-returns/index.tsx	d1ef6d34c6332f665003941df5ddc2134333a348	applied	R2 fe_pages簇：自定义字段接入+行删并批量删+物流/售后/退料增量，取上游tip版
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/other-inbound/OtherInboundConfirmPreviewModal.tsx	DELETED	superset	R2:本地保留行级删除/工位写保护/门禁等超集能力，上游tip为删减版
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/other-inbound/OtherInboundDocumentPushPanel.tsx	9132f4e4138d4b8f3da4c246ac56cab743b49ac4	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/other-inbound/index.tsx	2284a0fb75c1f65d4a37d497c1e854dad7d8e9ee	tracked	seed from a0b353ce7e
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/other-outbound/OtherOutboundDocumentPushPanel.tsx	74eef4b3915319aa33099d7e633ebedd6b49a966	applied	R2：与上游tip blob一致，本地已同步
@@ -2467,7 +2532,7 @@ riveredge-frontend/src/components/uni-wh-dropdown/useWarehouseHasLocations.ts	5e
 riveredge-frontend/src/components/uni-wh-dropdown/warehouseLocationProbe.ts	fb2b20276fdfb6f9687ad5c6d31748e343102886	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-frontend/src/config/printTemplateSchemas.ts	6debc73a0e365c6acdffb767a7567758b32fd0e9	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/config/reactQuery.ts	d9ff05f165c379d07e82be34003debf5630fb87c	applied	R2：与上游tip blob一致，本地已同步
-riveredge-frontend/src/configs/apiLibraryContract.ts			
+riveredge-frontend/src/configs/apiLibraryContract.ts	4ad37c01aecfad945153964af780b29346d0657f	applied	R2:与上游tip一致
 riveredge-frontend/src/constants/documentStatusColors.ts	d779610f163a9e40cdeaea9961beec0e7da97e28	tracked	seed from 37409d3b29
 riveredge-frontend/src/constants/fieldPermissionResources.ts	8b37cd082c03f3d756ac3d3a7e7b2f7decc2c2c1	tracked	seed from 2c945a39fb
 riveredge-frontend/src/constants/kuaiaiAssistantTab.ts	1981c901cb9d62764fe535aaba7cb7854285cf84	applied	R2：与上游tip blob一致，本地已同步
@@ -2503,7 +2568,9 @@ riveredge-frontend/src/pages/system/apis/ApiTestDrawer.tsx	3a266f6aff79727fef9d0
 riveredge-frontend/src/pages/system/apis/apiCategoryTree.ts	18eb9b92d69cd16212f53a0a1569964f27e7037c	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/pages/system/apis/apiTestResultPreview.ts	0f49daf0ae44a82938427c97a2281e49e6acad70	tracked	seed from 7fa73e053a
 riveredge-frontend/src/pages/system/apis/list/index.tsx	70d818ce09cb2d48791c9801b59384fd4e1a8b09	tracked	seed from 3958bb1524
+riveredge-frontend/src/pages/system/application-connections/AppConnectorMarket.tsx	ef6a3261bfc4dbb5db8716abf534ea242a7251d5	applied	R2 fe收尾：批配中心自定义字段/生产退料取单行仓位/半成品入库自定义字段富化/装拆单customFieldTableName/连接器市场取上游tip
 riveredge-frontend/src/pages/system/application-connections/WeComDeploymentGuideBlock.tsx	439f6d81ec0d9bf45bbb0a88a87338087e23c65f	tracked	seed from 3958bb1524
+riveredge-frontend/src/pages/system/application-connections/connectors.tsx	99a3fb4e1826fbda5c1adf997c788078503e636a	applied	R2 fe收尾：批配中心自定义字段/生产退料取单行仓位/半成品入库自定义字段富化/装拆单customFieldTableName/连接器市场取上游tip
 riveredge-frontend/src/pages/system/application-connections/list/index.tsx	35254e0da9fb5a3093eee4dc9785754f90e57688	tracked	seed from 905787348a
 riveredge-frontend/src/pages/system/applications/list/index.tsx	2764c9d50e297f6501600123c39dd8fd8ead9ebd	tracked	seed from 5f085a19c9
 riveredge-frontend/src/pages/system/approval-processes/designer/index.tsx	0adb3944cc8b421f84dfcb6936654cdf2dc7ded7	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
@@ -2545,7 +2612,7 @@ riveredge-frontend/src/services/approvalProcess.ts	5c11ce7628e2500ea539e6c594b2b
 riveredge-frontend/src/services/auth.ts	0f395e8a814d2dcc83e6c6d219a7184f078df1bb	applied	R2簇5:三方合并/本地适配
 riveredge-frontend/src/services/businessBoardTitle.ts	dd4287f23bbd9ed4710da3e28f2a669d07d58044	tracked	seed from ddd31709d6
 riveredge-frontend/src/services/businessConfig.ts	e08b45040d5474b1ed001f115a64dc6fc416f215	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
-riveredge-frontend/src/services/codeRule.ts			
+riveredge-frontend/src/services/codeRule.ts	1b51938f4b2b04d2e56369ec579b6ea04fe058c3	applied	R2:与上游tip一致
 riveredge-frontend/src/services/customField.ts	83b550039f07e941e7079d952953c4daa48e43dd	tracked	seed from 826acd7181
 riveredge-frontend/src/services/dashboard.ts	523ad59abf370ace28b6d8b0f2bbc3d9797fb188	tracked	seed from c346cff13b
 riveredge-frontend/src/services/deepseekChat.ts	595e7dab5021046991cf53d955f6fceb592770c0	tracked	seed from 6c946f0717
@@ -2583,7 +2650,7 @@ riveredge-frontend/src/utils/errorRecovery.ts	41d093a4fd70b75273631c183e8b20b8b1
 riveredge-frontend/src/utils/exportRecordsXlsx.ts	95951ee18283587efb62284d5f3a8bb27c3f575a	tracked	seed from 8c111dd65f
 riveredge-frontend/src/utils/fieldMaskPermission.ts	286ddcead2a6da93c49f2a561e6378467896f62a	tracked	seed from 2c945a39fb
 riveredge-frontend/src/utils/fieldPermissionI18n.ts	3e261cc74c8cd0103922e14c7a9e943c460ff941	tracked	seed from 2c945a39fb
-riveredge-frontend/src/utils/fileDownload.ts			
+riveredge-frontend/src/utils/fileDownload.ts	0faab853bc22b3d508b6978ec6acb70db100e059	applied	R2:与上游tip一致
 riveredge-frontend/src/utils/formListItems.ts	95a60bc0476846a4dcec74dad3b30b06a04d9920	tracked	seed from 3958bb1524
 riveredge-frontend/src/utils/format.ts	c7d956481114b0bededec37ad3323688d8b805e4	tracked	seed from d81b4b70bf
 riveredge-frontend/src/utils/globalLifecycleI18n.ts	e51612a012fe120d3713595d25f9ede9747bd3e3	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
@@ -2613,3 +2680,4 @@ riveredge-frontend/src/utils/userDisplay.ts	c1d47fe81a50b56e83935c93affbc07c45aa
 riveredge-frontend/src/vite-env.d.ts	6232bdf5f89c14048bf36fd63651a1b16c4bcb76	tracked	seed from ddd31709d6
 riveredge-frontend/vite.config.ts	c24e43bf04ac91b9caddd6ad2c23ad1e1d93e94c	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 test-report/purchase.md	DELETED	tracked	seed from 31efc2b64c
+test-report/sales.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件

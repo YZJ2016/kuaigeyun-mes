@@ -62,6 +62,7 @@ const toList = (r: unknown) => {
 export type InboundListEnrichers = {
   enrichPurchaseReceiptRecordsWithCustomFields: (rows: InboundHubOrder[]) => Promise<InboundHubOrder[]>;
   enrichFinishedGoodsReceiptRecordsWithCustomFields: (rows: InboundHubOrder[]) => Promise<InboundHubOrder[]>;
+  enrichSemiFinishedGoodsReceiptRecordsWithCustomFields: (rows: InboundHubOrder[]) => Promise<InboundHubOrder[]>;
   enrichProductionReturnRecordsWithCustomFields: (rows: InboundHubOrder[]) => Promise<InboundHubOrder[]>;
 };
 
@@ -249,12 +250,15 @@ export async function fetchInboundHubList(
         }) as InboundHubOrder,
     ),
   );
-  const semiData = toList(semiRes).items.map(
-    (item) =>
-      ({
-        ...(item as Record<string, unknown>),
-        receipt_type: 'semi_finished_goods' as const,
-      }) as InboundHubOrder,
+  const semiListed = toList(semiRes);
+  const semiData = await enrichers.enrichSemiFinishedGoodsReceiptRecordsWithCustomFields(
+    semiListed.items.map(
+      (item) =>
+        ({
+          ...(item as Record<string, unknown>),
+          receipt_type: 'semi_finished_goods' as const,
+        }) as InboundHubOrder,
+    ),
   );
   const returnListed = toList(returnRes);
   const returnData = await enrichers.enrichProductionReturnRecordsWithCustomFields(

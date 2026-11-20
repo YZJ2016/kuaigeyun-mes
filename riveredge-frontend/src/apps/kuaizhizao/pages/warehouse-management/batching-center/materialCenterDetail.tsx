@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Descriptions, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -22,6 +22,13 @@ import { warehouseApi } from '../../../services/warehouse-execution';
 import { formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { getBatchingOrderLifecycle, getBatchingOrderStageName } from '../../../utils/batchingOrderLifecycle';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
+
+const BATCHING_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_batching_orders';
 
 export type MaterialCenterDetailKind =
   | 'batching_order'
@@ -281,6 +288,28 @@ export function MaterialCenterDetailDrawer({
 }: MaterialCenterDetailDrawerProps) {
   const { t } = useTranslation();
 
+  const {
+    customFields: batchingListCustomFields,
+    customFieldValues: batchingDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadBatchingFieldValuesForDetail,
+    resetDetailFieldValues: resetBatchingDetailFieldValues,
+  } = useCustomFieldsForList<Record<string, unknown>>({
+    tableName: BATCHING_ORDER_CUSTOM_FIELD_TABLE,
+  });
+
+  useEffect(() => {
+    if (!open || kind !== 'batching_order') {
+      resetBatchingDetailFieldValues();
+      return;
+    }
+    const id = Number(detail?.id);
+    if (!(id > 0)) {
+      resetBatchingDetailFieldValues();
+      return;
+    }
+    void loadBatchingFieldValuesForDetail(id);
+  }, [detail?.id, kind, loadBatchingFieldValuesForDetail, open, resetBatchingDetailFieldValues]);
+
   const basicColumns = useMemo(
     () => (kind ? buildBasicColumns(t, kind) : []),
     [kind, t],
@@ -321,12 +350,25 @@ export function MaterialCenterDetailDrawer({
     basicColumns, detail
   );
 
+  const supplementary =
+    kind === 'batching_order'
+    && detail
+    && hasCustomFieldsDetailContent(batchingListCustomFields, batchingDetailCustomFieldValues) ? (
+      <CustomFieldsDetailSection
+        customFields={batchingListCustomFields}
+        customFieldValues={batchingDetailCustomFieldValues}
+      />
+    ) : undefined;
+
   return (
     <DetailDrawerTemplate
       title={title}
       open={open}
       loading={loading}
-      onClose={onClose}
+      onClose={() => {
+        resetBatchingDetailFieldValues();
+        onClose();
+      }}
       size={DRAWER_CONFIG.HALF_WIDTH}
       basic={
         detail ? (
@@ -338,6 +380,7 @@ export function MaterialCenterDetailDrawer({
         ) : undefined
       }
       collaboration={collaboration}
+      supplementary={supplementary}
       lines={
         linesRows.length > 0 ? (
           <>

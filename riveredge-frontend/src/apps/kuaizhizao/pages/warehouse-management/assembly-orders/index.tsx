@@ -13,7 +13,7 @@ const AssemblyOrdersPage: React.FC = () => {
   const assemblyConfig = useMemo(
     () => ({
       headerTitle: t('app.kuaizhizao.assemblyOrder.headerTitle'),
-      persistenceId: 'apps.kuaizhizao.pages.warehouse-management.assembly-orders-width-v4',
+      persistenceId: 'apps.kuaizhizao.pages.warehouse-management.assembly-orders-width-v5',
       createButtonText: t('app.kuaizhizao.assemblyOrder.createButton'),
       createModalTitle: t('app.kuaizhizao.assemblyOrder.createModalTitle'),
       detailTitlePrefix: t('app.kuaizhizao.assemblyOrder.detailTitlePrefix'),
@@ -33,6 +33,7 @@ const AssemblyOrdersPage: React.FC = () => {
       getLifecycle: getAssemblyOrderLifecycle,
       enableTemplateApply: true,
       stockConsumeKind: 'items' as const,
+      customFieldTableName: 'apps_kuaizhizao_assembly_orders',
     }),
     [t],
   );

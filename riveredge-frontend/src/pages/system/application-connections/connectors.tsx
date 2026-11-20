@@ -96,7 +96,7 @@ export function isKingdeeCosmicOpenApiType(type: string): type is KingdeeCosmicO
   return (KINGDEE_COSMIC_OPENAPI_TYPES as readonly string[]).includes(type);
 }
 
-/** OpenAI 兼容 LLM 应用连接类型（可多条不同 model；在应用连接器按角色选用） */
+/** OpenAI 兼容 LLM 应用连接类型（可多条不同 model；选用在 KU-AI → 模型设置） */
 export const LLM_CONNECTION_TYPES = [
   'deepseek',
   'openai',
@@ -156,6 +156,9 @@ export function isSiteIntegrationConnector(type: string): type is LlmConnectionT
   return isLlmConnectionType(type);
 }
 
+/** ready=可测连接/深对接；planned=市场占位，尚无同步或厂商 runtime */
+export type ConnectorIntegrationDepth = 'ready' | 'planned';
+
 export interface AppConnectorDefinition {
   id: string;
   name: string;
@@ -166,6 +169,47 @@ export interface AppConnectorDefinition {
   defaultConfig?: Record<string, any>;
   /** 市场卡片标题旁展示「实验室」徽章（与分类 Tag 并列） */
   marketLabBadge?: boolean;
+  /** 显式覆盖；缺省由 resolveConnectorIntegrationDepth 推断 */
+  integrationDepth?: ConnectorIntegrationDepth;
+}
+
+/** 已具备连接测试或入站/出站深对接的应用连接 type */
+const READY_CONNECTOR_TYPES = new Set<string>([
+  ...KINGDEE_COSMIC_OPENAPI_TYPES,
+  'kingdee_galaxy',
+  'wecom',
+  'dingtalk',
+  'feishu',
+  ...LLM_CONNECTION_TYPES,
+  KUAIAI_OCR_CONNECTION_TYPE,
+  KUAIAI_WORKBUDDY_CONNECTION_TYPE,
+  'amap',
+  'kuaidi100',
+  'kdniao',
+  'rest_api',
+  'webhook',
+  'OAuth',
+  'API',
+]);
+
+export function resolveConnectorIntegrationDepth(
+  connector: Pick<AppConnectorDefinition, 'type' | 'category' | 'integrationDepth'>,
+): ConnectorIntegrationDepth {
+  if (connector.integrationDepth === 'ready' || connector.integrationDepth === 'planned') {
+    return connector.integrationDepth;
+  }
+  const type = String(connector.type || '').trim();
+  if (READY_CONNECTOR_TYPES.has(type)) return 'ready';
+  // 数据源类不在本市场；ERP 未列入 ready 的一律规划中
+  if (connector.category === 'erp') return 'planned';
+  if (
+    connector.category === 'collaboration' ||
+    connector.category === 'ai' ||
+    connector.category === 'storage'
+  ) {
+    return READY_CONNECTOR_TYPES.has(type) ? 'ready' : 'planned';
+  }
+  return 'planned';
 }
 
 export function resolveErpVendorGroup(
@@ -211,7 +255,14 @@ export const APP_CONNECTOR_DEFINITIONS: AppConnectorDefinition[] = [
     category: 'collaboration',
     description: '企业微信自建应用（登录、消息、通讯录同步）',
     icon: <MessageOutlined />,
-    defaultConfig: { corp_id: '', corp_secret: '', agent_id: '', token: '', encoding_aes_key: '' },
+    defaultConfig: {
+      corp_id: '',
+      corp_secret: '',
+      agent_id: '',
+      base_url: '',
+      token: '',
+      encoding_aes_key: '',
+    },
   },
   {
     id: 'dingtalk',
@@ -839,15 +890,6 @@ export const APP_CONNECTOR_DEFINITIONS: AppConnectorDefinition[] = [
     defaultConfig: { base_url: '', app_key: '', app_secret: '' },
   },
   {
-    id: 'mqtt',
-    name: 'MQTT Broker',
-    type: 'mqtt',
-    category: 'iot',
-    description: '客户自备 MQTT Broker 连接配置',
-    icon: <RocketOutlined />,
-    defaultConfig: { host: '', port: 1883, username: '', password: '', use_tls: false },
-  },
-  {
     id: 'thingsboard',
     name: 'ThingsBoard',
     type: 'thingsboard',
@@ -1032,7 +1074,7 @@ export const APP_CONNECTOR_DEFINITIONS: AppConnectorDefinition[] = [
     icon: <HddOutlined />,
     defaultConfig: { host: '', share: '', username: '', password: '', domain: '', port: 445 },
   },
-  // AI（应用连接列表行；可建多条不同 model；在应用连接器按角色选用）
+  // AI（应用连接列表行；可建多条不同 model；选用在 KU-AI → 模型设置）
   {
     id: 'deepseek',
     name: 'DeepSeek',

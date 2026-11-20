@@ -9,7 +9,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal, Card, Row, Col, Input, Space, Typography, Spin, Tag, theme } from 'antd';
+import { App, Modal, Card, Row, Col, Input, Space, Typography, Spin, Tag, theme } from 'antd';
 import { MarkerTag } from '../../../constants/statusBadges';
 import {
   SearchOutlined,
@@ -39,6 +39,7 @@ import {
   isKuaiaiOcrConnectionType,
   isKuaiaiWorkbuddyConnectionType,
   isLlmConnectionType,
+  resolveConnectorIntegrationDepth,
   resolveErpDeploymentKind,
   resolveErpVendorGroup,
 } from './connectors';
@@ -162,6 +163,7 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
 }) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
+  const { modal } = App.useApp();
   const [category, setCategory] = useState<string>(initialCategory);
   const [search, setSearch] = useState('');
   const [connectors, setConnectors] = useState<AppConnectorDefinition[]>(APP_CONNECTOR_DEFINITIONS);
@@ -271,8 +273,23 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
   }, [category, filteredConnectors]);
 
   const handleSelect = (connector: AppConnectorDefinition) => {
-    onSelect(connector);
-    onClose();
+    const depth = resolveConnectorIntegrationDepth(connector);
+    const proceed = () => {
+      onSelect(connector);
+      onClose();
+    };
+    if (depth === 'planned') {
+      modal.warning({
+        title: t('pages.system.applicationConnections.marketPlannedTitle'),
+        content: t('pages.system.applicationConnections.marketPlannedContent'),
+        okText: t('pages.system.applicationConnections.marketPlannedContinue'),
+        onOk: () => {
+          proceed();
+        },
+      });
+      return;
+    }
+    proceed();
   };
 
   const connectorTypeKey = (id: string) =>
@@ -303,6 +320,7 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
       resolveConnectorMarketCardAccent(connector.id) ??
       CATEGORY_MARKET_ACCENT[connector.category] ??
       token.colorPrimary;
+    const isPlanned = resolveConnectorIntegrationDepth(connector) === 'planned';
     return (
       <Col key={connector.id} xs={24} sm={12} md={8}>
         <Card
@@ -329,11 +347,17 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
                 </div>
                 {(connector.marketLabBadge ||
                   isKuaiaiWorkbuddyConnectionType(connector.type) ||
+                  isPlanned ||
                   showCategoryTag ||
                   keyConfigured) && (
                   <div className="app-connector-market-card-tags">
                     {connector.marketLabBadge || isKuaiaiWorkbuddyConnectionType(connector.type) ? (
                       <MarkerTag color="default">{t('app.kuaiai.hub.labBadge')}</MarkerTag>
+                    ) : null}
+                    {isPlanned ? (
+                      <MarkerTag color="warning">
+                        {t('pages.system.applicationConnections.marketPlannedBadge')}
+                      </MarkerTag>
                     ) : null}
                     {showCategoryTag ? (
                       <MarkerTag color={connector.category === 'ai' ? 'purple' : 'blue'}>
