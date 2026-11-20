@@ -86,6 +86,7 @@ export type PurchaseReceiptOrderPullLine = {
   order_code?: string;
   supplier_id?: number;
   supplier_name?: string;
+  buyer_name?: string | null;
   material_id?: number;
   material_code?: string;
   material_name?: string;
@@ -94,10 +95,15 @@ export type PurchaseReceiptOrderPullLine = {
   suggested_quantity?: number;
   pushed_quantity?: number;
   remaining_quantity?: number;
+  suggested_aux_quantity?: number | null;
+  pushed_aux_quantity?: number | null;
+  remaining_aux_quantity?: number | null;
+  aux_unit?: string | null;
   /** 来源单据日期（采购订单日） */
   document_date?: string | null;
   order_date?: string | null;
   required_date?: string | null;
+  line_notes?: string | null;
   warehouse_id?: number | null;
   warehouse_name?: string | null;
 };
@@ -129,6 +135,13 @@ export type SalesDeliveryOrderPullLine = {
   order_code?: string;
   customer_id?: number;
   customer_name?: string;
+  customer_contact?: string | null;
+  customer_phone?: string | null;
+  revenue_recognition?: string | null;
+  currency_code?: string | null;
+  exchange_rate?: number | null;
+  shipping_address?: string | null;
+  shipping_method?: string | null;
   material_id?: number;
   material_code?: string;
   material_name?: string;
@@ -137,13 +150,17 @@ export type SalesDeliveryOrderPullLine = {
   warehouse_id?: number | null;
   warehouse_name?: string | null;
   suggested_quantity?: number;
+  current_stock?: number;
   pushed_quantity?: number;
   remaining_quantity?: number;
   unit_price?: number;
   tax_rate?: number;
   price_type?: string;
   line_amount?: number;
+  document_date?: string | null;
+  order_date?: string | null;
   required_date?: string | null;
+  line_notes?: string | null;
 };
 
 export type SalesDeliveryNoticePullLine = {
@@ -162,8 +179,10 @@ export type SalesDeliveryNoticePullLine = {
   warehouse_id?: number | null;
   warehouse_name?: string | null;
   suggested_quantity?: number;
+  current_stock?: number;
   pushed_quantity?: number;
   remaining_quantity?: number;
+  price_type?: string;
 };
 
 export type WorkOrderFinishedGoodsPullLine = {
@@ -693,6 +712,25 @@ export const warehouseApi = {
         method: 'PUT',
         data: payload,
       }),
+    previewBlankFromWorkOrders: async (work_order_ids: number[]) =>
+      apiRequest<{
+        items: Array<{
+          work_order_id: number;
+          work_order_code: string;
+          work_order_quantity: number;
+          received_quantity: number;
+          receipt_quantity: number;
+          material_id: number;
+          material_code: string;
+          material_name: string;
+          material_spec?: string;
+          material_unit: string;
+        }>;
+        message?: string;
+      }>('/apps/kuaizhizao/finished-goods-receipts/preview-blank-from-work-orders', {
+        method: 'POST',
+        data: { work_order_ids },
+      }),
     /** 批量入库：从多个工单下推创建成品入库单 */
     batchReceipt: async (params: {
       work_order_ids: number[];
@@ -771,6 +809,16 @@ export const warehouseApi = {
       },
     ) => apiRequest(`/apps/kuaizhizao/sales-deliveries/${id}/confirm`, { method: 'POST', data: data ?? {} }),
     withdraw: async (id: string) => apiRequest(`/apps/kuaizhizao/sales-deliveries/${id}/withdraw`, { method: 'POST' }),
+    commit: async (id: number) =>
+      apiRequest(`/core/uni-audit/sales_delivery/${id}/submit`, { method: 'POST' }),
+    submitForReview: async (id: number) =>
+      apiRequest(`/core/uni-audit/sales_delivery/${id}/submit_review`, { method: 'POST' }),
+    withdrawSubmit: async (id: number) =>
+      apiRequest(`/core/uni-audit/sales_delivery/${id}/withdraw`, { method: 'POST' }),
+    approve: async (id: number) =>
+      apiRequest(`/core/uni-audit/sales_delivery/${id}/approve`, { method: 'POST' }),
+    revokeApproval: async (id: number) =>
+      apiRequest(`/core/uni-audit/sales_delivery/${id}/revoke`, { method: 'POST' }),
     getPushBinding: async () =>
       apiRequest<{
         targets?: Array<{
@@ -842,6 +890,8 @@ export const warehouseApi = {
       skip?: number;
       limit?: number;
       keyword?: string;
+      date_from?: string;
+      date_to?: string;
       sales_order_id?: number;
       pullable_only?: boolean;
     }): Promise<{ data: SalesDeliveryOrderPullLine[]; total: number }> =>
@@ -852,7 +902,11 @@ export const warehouseApi = {
     pullFromSalesOrderItems: async (
       selectedItemIds: number[],
       deliveryQuantities?: Record<number, number>,
-      options?: { lineWarehouses?: Record<number, number> },
+      options?: {
+        lineWarehouses?: Record<number, number>;
+        lineLocationIds?: Record<number, number>;
+        pushMode?: 'draft' | 'confirm';
+      },
     ): Promise<{
       success: boolean;
       message: string;
@@ -868,6 +922,10 @@ export const warehouseApi = {
           ...(options?.lineWarehouses && Object.keys(options.lineWarehouses).length > 0
             ? { line_warehouses: options.lineWarehouses }
             : {}),
+          ...(options?.lineLocationIds && Object.keys(options.lineLocationIds).length > 0
+            ? { line_location_ids: options.lineLocationIds }
+            : {}),
+          push_mode: options?.pushMode ?? 'draft',
         },
       }),
     listShipmentNoticePullLines: async (params: {
@@ -883,7 +941,10 @@ export const warehouseApi = {
       }),
     pullFromShipmentNoticeItems: async (
       selectedItemIds: number[],
-      options?: { lineWarehouses?: Record<number, number> },
+      options?: {
+        lineWarehouses?: Record<number, number>;
+        pushMode?: 'draft' | 'confirm';
+      },
     ): Promise<{
       success: boolean;
       message: string;
@@ -898,6 +959,7 @@ export const warehouseApi = {
           ...(options?.lineWarehouses && Object.keys(options.lineWarehouses).length > 0
             ? { line_warehouses: options.lineWarehouses }
             : {}),
+          push_mode: options?.pushMode ?? 'draft',
         },
       }),
   },
@@ -1263,6 +1325,16 @@ export const warehouseApi = {
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-receipts/${id}`, { method: 'GET' }),
     confirm: async (id: string, data?: any) => apiRequest(`/apps/kuaizhizao/purchase-receipts/${id}/confirm`, { method: 'POST', data }),
     withdraw: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-receipts/${id}/withdraw`, { method: 'POST' }),
+    commit: async (id: number) =>
+      apiRequest(`/core/uni-audit/purchase_receipt/${id}/submit`, { method: 'POST' }),
+    submitForReview: async (id: number) =>
+      apiRequest(`/core/uni-audit/purchase_receipt/${id}/submit_review`, { method: 'POST' }),
+    withdrawSubmit: async (id: number) =>
+      apiRequest(`/core/uni-audit/purchase_receipt/${id}/withdraw`, { method: 'POST' }),
+    approve: async (id: number) =>
+      apiRequest(`/core/uni-audit/purchase_receipt/${id}/approve`, { method: 'POST' }),
+    revokeApproval: async (id: number) =>
+      apiRequest(`/core/uni-audit/purchase_receipt/${id}/revoke`, { method: 'POST' }),
     getPushBinding: async () =>
       apiRequest<{
         targets?: Array<{

@@ -104,7 +104,6 @@ import {
   filterWarehouseTrackingColumns,
   isMaterialBatchEntryEnabled,
   isMaterialSerialEntryEnabled,
-  isOutboundConfirmBatchLineEnabled,
   useWarehouseTrackingFlags,
 } from '../shared/warehouseTrackingFlags';
 import {
@@ -180,7 +179,7 @@ function salesDeliveryCreateBatchLineEnabled(
   trackingFlags: ReturnType<typeof useWarehouseTrackingFlags>,
   batchManaged?: boolean | null,
 ): boolean {
-  return isOutboundConfirmBatchLineEnabled('sales_delivery', trackingFlags, batchManaged);
+  return isMaterialBatchEntryEnabled(trackingFlags, batchManaged);
 }
 
 /** 物料默认仓库列表按 priority 取首个有效仓 */
@@ -202,6 +201,23 @@ export type SalesDeliveryCreateModalProps = {
   onSuccess?: () => void;
   /** 有值则为编辑，表单布局与新建一致 */
   editingId?: number | null;
+  initialDraft?: SalesDeliveryCreateDraft | null;
+};
+
+export type SalesDeliveryCreateDraft = {
+  salesOrderId?: number | null;
+  salesOrderCode?: string;
+  customerId?: number;
+  customerName?: string;
+  customerContact?: string;
+  customerPhone?: string;
+  revenueRecognition?: string;
+  currencyCode?: string;
+  exchangeRate?: number;
+  shippingAddress?: string;
+  shippingMethod?: string;
+  priceType?: string;
+  items: Array<Record<string, unknown>>;
 };
 
 /** 库位：订阅物料+仓库，展示库位库存并有货优先；出入库库位必填 */
@@ -621,6 +637,19 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
           ? Number(initialDraft.customerId)
           : undefined,
       customer_name: String(initialDraft.customerName ?? ''),
+      customer_contact: String(initialDraft.customerContact ?? '').trim() || undefined,
+      customer_phone: String(initialDraft.customerPhone ?? '').trim() || undefined,
+      revenue_recognition:
+        initialDraft.revenueRecognition != null && String(initialDraft.revenueRecognition).trim()
+          ? String(initialDraft.revenueRecognition).trim()
+          : blankCreateSeed.revenue_recognition,
+      currency_code: String(initialDraft.currencyCode ?? blankCreateSeed.currency_code).trim() || 'CNY',
+      exchange_rate:
+        initialDraft.exchangeRate != null && Number.isFinite(Number(initialDraft.exchangeRate))
+          ? Number(initialDraft.exchangeRate)
+          : blankCreateSeed.exchange_rate,
+      shipping_address: String(initialDraft.shippingAddress ?? '').trim() || undefined,
+      shipping_method: String(initialDraft.shippingMethod ?? '').trim() || undefined,
       price_type: initialDraft.priceType ?? DEFAULT_SALES_PRICE_TYPE,
       items,
     };
@@ -1464,7 +1493,6 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
           : !!(material as Material | null)?.batchManaged;
       const materialId = Number(it.material_id) || 0;
       const batchLine = salesDeliveryCreateBatchLineEnabled(trackingFlags, batchManaged);
-      const batchStrict = isMaterialBatchEntryEnabled(trackingFlags, batchManaged);
       const batchKey =
         materialId > 0 && lineWhId > 0 ? batchOptionsCacheKey(materialId, lineWhId) : '';
       const batchOpts = batchKey ? batchOptionsByKey[batchKey] ?? [] : [];

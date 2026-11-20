@@ -2092,7 +2092,7 @@ riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/Finish
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/InboundOutsourcePullEntryPage.tsx	acbec60c500ebb0d79a38673933b5f5783f8e3cd	tracked	seed from 5b1b9828e4
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/InboundPoPullEntryPage.tsx	51d6eeb977d28e00a0fdcca7c7e52089dc2b769b	tracked	seed from 1d968cd27b
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/InboundProductionReturnPullEntryPage.tsx	d3ae2d29c2bb91ed5ec586d4ac881365f2e3c1ae	applied	R2 fe收尾：批配中心自定义字段/生产退料取单行仓位/半成品入库自定义字段富化/装拆单customFieldTableName/连接器市场取上游tip
-riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/InboundQuickPullModals.tsx	af2a00ad1013014810c3fb85188c587a64485340	deferred	R2:MERGE-须三方合并（本地行缓存/po-compose/IQC门禁/批量分配序列号/uni-audit提交等本地逻辑）
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/InboundQuickPullModals.tsx	af2a00ad1013014810c3fb85188c587a64485340	applied	R2:MERGE已三方合并-上游新增字段/端点并入本地(aux量/customer/buyer/line_notes/current_stock/单据日期/price_type/previewBlank/uni-audit commit-approve/lineLocationIds/pushMode/receipt退货拉单);本地保留targets?可选+action_apis+push_enabled+po-compose单PO限制+salesDeliveryDraft直推流暂不接线
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/InboundReceiptNoticePullEntryPage.tsx	4abc92c77087d7cb3176d2388cfc86586e2ad41c	tracked	seed from 3958bb1524
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/InboundWorkOrderPullEntryPage.tsx	a77ff80f26834c577e17c7fbec40c461671797b2	tracked	seed from 93b3cb5998
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/OtherInboundEditModal.tsx	cb545d588213269915d610ce3a1150a479200499	tracked	seed from 4d124a088e
@@ -2110,7 +2110,7 @@ riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboun
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundListAggregate.ts	cc03a230b4134bf6482e8217628dde0fd57dbcf9	applied	R2 fe收尾：批配中心自定义字段/生产退料取单行仓位/半成品入库自定义字段富化/装拆单customFieldTableName/连接器市场取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundPaths.ts	01feb99552ccbc5e910c3c3741447f06f5846475	tracked	seed from 3958bb1524
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundPoReceiptEntryUtils.ts	39c614e5c97f191a167bb2ef5c7d044b95f1214b	tracked	seed from 57a37e2749
-riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundPullEntryTypes.ts	932f4d1edf6ad85400324109debcec1d1701bd7b	deferred	R2:MERGE-须三方合并（本地行缓存/po-compose/IQC门禁/批量分配序列号/uni-audit提交等本地逻辑）
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundPullEntryTypes.ts	932f4d1edf6ad85400324109debcec1d1701bd7b	applied	R2:MERGE已三方合并-上游新增字段/端点并入本地(aux量/customer/buyer/line_notes/current_stock/单据日期/price_type/previewBlank/uni-audit commit-approve/lineLocationIds/pushMode/receipt退货拉单);本地保留targets?可选+action_apis+push_enabled+po-compose单PO限制+salesDeliveryDraft直推流暂不接线
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/index.tsx	f648c5976a006f6fc864b4dd2cc8b0a15878c2d3	applied	91c8157e1e强制重推+推送开关(含前置c0a917fc45基座)
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inventory-alert/index.tsx	c53c7695d1	applied	R2-前端增量簇: 行删收敛批量删+persistenceId升版
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inventory-transfer/index.tsx	a8df7f0260f02ae55d0b7fb058792a12579149f7	tracked	seed from 899307f4d6
@@ -2127,12 +2127,12 @@ riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/Outbo
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/OutboundConfirmPreviewModal.tsx			
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/OutboundHubEditModal.tsx	c2ccdfd53958824df235e587704f600c4728c656	tracked	seed from 57a37e2749
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/OutboundOutsourcePullEntryPage.tsx	d37fccc2aece5c4c9dc7bf37873ee60b0c8448a4	tracked	seed from 899307f4d6
-riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/OutboundQuickPullModals.tsx	e680187ce2baa26ee7bc8d20bf9e92160680efe9	deferred	R2:MERGE-须三方合并（本地行缓存/po-compose/IQC门禁/批量分配序列号/uni-audit提交等本地逻辑）
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/OutboundQuickPullModals.tsx	e680187ce2baa26ee7bc8d20bf9e92160680efe9	superset	R2:MERGE三方合并后净变更=0（上游非冲突块本地已有）；唯一净差为上游salesDeliveryDraft建单草稿交接流，依赖SalesDeliveryCreateModal initialDraft+index.tsx接线，本仓保留直推pullFromSalesOrderItems流
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/OutboundSalesOrderPullEntryPage.tsx	40fe7c45c99cf2bde6c06db42ef49c4439c8148e	tracked	seed from 6abba1dbd5
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/OutboundWorkOrderPullEntryPage.tsx	0586e1cbe0820d24206b744fa44241d6dfeeabf3	tracked	seed from 3050130eb5
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/ProductionPickingCreateModal.tsx	4f94ec8fc12fcb119826432ae70310e11702d0ea	tracked	seed from e451b48dc2
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/ProductionPickingDocumentPushPanel.tsx	55175848dc2c1ec5a72ba5451b349f288308eddc	applied	R2：与上游tip blob一致，本地已同步
-riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/SalesDeliveryCreateModal.tsx	595cf6c141a93201145942499574c79fb98c4da7	deferred	R2:MERGE-须三方合并（本地行缓存/po-compose/IQC门禁/批量分配序列号/uni-audit提交等本地逻辑）
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/SalesDeliveryCreateModal.tsx	595cf6c141a93201145942499574c79fb98c4da7	applied	R2:MERGE已三方合并-上游新增字段/端点并入本地(aux量/customer/buyer/line_notes/current_stock/单据日期/price_type/previewBlank/uni-audit commit-approve/lineLocationIds/pushMode/receipt退货拉单);本地保留targets?可选+action_apis+push_enabled+po-compose单PO限制+salesDeliveryDraft直推流暂不接线
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/SalesDeliveryDocumentPushPanel.tsx	2632f0a7a086484e92899b87f8bd67d4cfda223d	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/SplitByWarehouseModal.tsx	84d31aecf3bc52114268cd8fec3571e51079b67b	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/components/OutboundDetailDrawer.tsx	899fa102a2d41a0fc510e4a8877aaae9c4a1b3af	tracked	seed from 6abba1dbd5
@@ -2222,7 +2222,7 @@ riveredge-frontend/src/apps/kuaizhizao/services/sales-review.ts	d7bd7089e290e85e
 riveredge-frontend/src/apps/kuaizhizao/services/shipment-notice.ts	c1a9000822a0c8f2621e834523520ddedfd87122	tracked	seed from 6abba1dbd5
 riveredge-frontend/src/apps/kuaizhizao/services/statistics/aging.ts	34a379d802260260e312e90fd46e6a202200a416	tracked	seed from a60f3e9039
 riveredge-frontend/src/apps/kuaizhizao/services/traceability.ts	2034b45ec5b548050ff562cd00843b93be2aa275	tracked	seed from b74aba704c
-riveredge-frontend/src/apps/kuaizhizao/services/warehouse-execution.ts	c6bdf75a6d9e54d0dac98ac24a58d9a0d04da2ae	deferred	R2:MERGE-须三方合并（本地行缓存/po-compose/IQC门禁/批量分配序列号/uni-audit提交等本地逻辑）
+riveredge-frontend/src/apps/kuaizhizao/services/warehouse-execution.ts	c6bdf75a6d9e54d0dac98ac24a58d9a0d04da2ae	applied	R2:MERGE已三方合并-上游新增字段/端点并入本地(aux量/customer/buyer/line_notes/current_stock/单据日期/price_type/previewBlank/uni-audit commit-approve/lineLocationIds/pushMode/receipt退货拉单);本地保留targets?可选+action_apis+push_enabled+po-compose单PO限制+salesDeliveryDraft直推流暂不接线
 riveredge-frontend/src/apps/kuaizhizao/services/work-order.ts	4d236a258226bf0b8d007e494904d78a93a4dc88	tracked	seed from 93b3cb5998
 riveredge-frontend/src/apps/kuaizhizao/types/finance/payable.ts	4d5feb5bb643b940eef5a33050cdd26453293173	tracked	seed from b12cc66e71
 riveredge-frontend/src/apps/kuaizhizao/types/finance/purchase-invoice.ts	dbe407c1039e0c1f51a8455dec1d2056dccae93c	applied	财务A/B适配至kuaicaiwu；保留本地创建自动送审/已审核口径；忠实保留源应付已审核或待审时早退导致优惠调整不生成；迁移20261122000001尚未执行；财务pytest191通过+聚焦9通过，时区0。前端tsc2743存量诊断，浏览器未验。

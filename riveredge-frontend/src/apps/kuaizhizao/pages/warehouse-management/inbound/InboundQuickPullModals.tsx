@@ -8,6 +8,7 @@ import {
   isPullOpenLineSelectable,
   isPullableScope,
   loadPullSourceReferenceOptions,
+  readPullOpenLineHandoffAuxQty,
   renderPullCapabilityTag,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
@@ -207,11 +208,14 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
         }
         const purchaseOrderId = Number(selectedRows[0].order_id);
         const quantities: Record<number, number> = {};
+        const auxQuantities: Record<number, number> = {};
         for (const row of selectedRows) {
           const lineId = Number(row.id);
           if (!(lineId > 0)) continue;
           const qty = Number(row.remaining_quantity ?? row.suggested_quantity ?? 0);
           if (qty > 0) quantities[lineId] = qty;
+          const handoffAux = readPullOpenLineHandoffAuxQty(row);
+          if (handoffAux != null) auxQuantities[lineId] = handoffAux;
         }
         if (!Object.keys(quantities).length) {
           messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.po.selectLinesFirst'));
@@ -222,6 +226,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           purchaseReceiptPoCompose: {
             purchaseOrderId,
             quantities,
+            auxQuantities,
             batchNumbers: {},
             lineWh: {},
             lineLoc: {},
