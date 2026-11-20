@@ -2613,7 +2613,7 @@ riveredge-frontend/src/pages/system/config-center/index.tsx	11ebb124186d12db2acd
 riveredge-frontend/src/pages/system/custom-fields/list/index.tsx	5d2201d48896ebcbb033484cb26a7fa7a6229ef9	tracked	seed from df7d635797
 riveredge-frontend/src/pages/system/dashboard/DashboardUpdateLogModal.tsx	4d9b745f9c81386a9b4c5a63218249c0f3bacfb1	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/pages/system/dashboard/analysis/BusinessBoardPage.tsx	09aedf0410beeb30cadadf6e5c97c89b292a018c	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
-riveredge-frontend/src/pages/system/dashboard/platformUpdateLog.ts	e75469c6f42c87df6c553ad53d89d73a412044a7	deferred	R2:上游新增1166条更新日志含未摘域（finance/kuaiconnect/QMS/pro），须按摘取域过滤后追加，整取会虚报
+riveredge-frontend/src/pages/system/dashboard/platformUpdateLog.ts	e75469c6f42c87df6c553ad53d89d73a412044a7	applied	过滤摘取：追加24条已摘域更新日志（付款申请下推/采购拉单/委外收货/收发存/code-rule/副量等），zh键齐；finance/kuaiconnect/QMS等未摘域1143条未导入
 riveredge-frontend/src/pages/system/dashboard/platformUpdateLogDedicated.ts	65888821852fdf7845e3a2b011d452cfcc64694c	tracked	seed from 2c945a39fb
 riveredge-frontend/src/pages/system/datasets/list/index.tsx	964b28fb21d716505c6a70609ce8ada98dd40dc7	tracked	seed from 3958bb1524
 riveredge-frontend/src/pages/system/departments/components/DepartmentFormModal.tsx	4699a50adda3187724f4a1a35afefbed9276f827	superset	R2预审：本地已有等价/更深实现，不摘

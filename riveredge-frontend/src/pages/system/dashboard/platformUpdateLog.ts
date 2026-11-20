@@ -43,6 +43,208 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  * titleKey / descriptionKey 对应 pages.dashboard.updateLog.entries.{id}.*
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
+{
+    id: 'payment-application-detail-line-preview-ref-r01',
+    date: '2026-11-20',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.payment-application-detail-line-preview-ref-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-detail-line-preview-ref-r01.description',
+  },
+{
+    id: 'outsource-order-process-issue-continue-r01',
+    date: '2026-11-20',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.outsource-order-process-issue-continue-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outsource-order-process-issue-continue-r01.description',
+  },
+{
+    id: 'purchase-order-receipt-progress-sync-r01',
+    date: '2026-11-20',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-order-receipt-progress-sync-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-receipt-progress-sync-r01.description',
+  },
+{
+    id: 'sales-delivery-pull-so-header-fields-r01',
+    date: '2026-11-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-delivery-pull-so-header-fields-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-delivery-pull-so-header-fields-r01.description',
+  },
+{
+    id: 'requisition-po-push-remaining-aux-r01',
+    date: '2026-11-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.requisition-po-push-remaining-aux-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.requisition-po-push-remaining-aux-r01.description',
+  },
+{
+    id: 'process-outsource-wo-release-receipt-r02',
+    date: '2026-11-20',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.process-outsource-wo-release-receipt-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.process-outsource-wo-release-receipt-r02.description',
+  },
+{
+    id: 'wo-pull-from-so-line-occupancy-r01',
+    date: '2026-11-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.wo-pull-from-so-line-occupancy-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.wo-pull-from-so-line-occupancy-r01.description',
+  },
+{
+    id: 'material-inventory-category-clearable-r01',
+    date: '2026-11-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-inventory-category-clearable-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-inventory-category-clearable-r01.description',
+  },
+{
+    id: 'code-rule-date-site-timezone-r01',
+    date: '2026-11-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.code-rule-date-site-timezone-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.code-rule-date-site-timezone-r01.description',
+  },
+{
+    id: 'po-pull-from-so-partial-remaining-r01',
+    date: '2026-11-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.po-pull-from-so-partial-remaining-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.po-pull-from-so-partial-remaining-r01.description',
+  },
+{
+    id: 'purchase-receipt-po-pull-handoff-aux-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-po-pull-handoff-aux-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-po-pull-handoff-aux-r01.description',
+  },
+{
+    id: 'payment-application-form-payable-line-materials-r01',
+    date: '2026-11-19',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.payment-application-form-payable-line-materials-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-form-payable-line-materials-r01.description',
+  },
+{
+    id: 'payment-application-payable-pull-columns-r02',
+    date: '2026-11-19',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.payment-application-payable-pull-columns-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-payable-pull-columns-r02.description',
+  },
+{
+    id: 'payment-application-header-amount-sync-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-header-amount-sync-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-header-amount-sync-r01.description',
+  },
+{
+    id: 'payment-application-lines-summary-col-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-lines-summary-col-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-lines-summary-col-r01.description',
+  },
+{
+    id: 'payment-application-pull-open-edit-r01',
+    date: '2026-11-19',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-pull-open-edit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-pull-open-edit-r01.description',
+  },
+{
+    id: 'payment-application-pull-skip-payee-draft-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.payment-application-pull-skip-payee-draft-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-pull-skip-payee-draft-r01.description',
+  },
+{
+    id: 'payment-application-pull-payment-reason-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.payment-application-pull-payment-reason-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-pull-payment-reason-r01.description',
+  },
+{
+    id: 'payment-application-po-pull-dept-applicant-amount-r01',
+    date: '2026-11-19',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.payment-application-po-pull-dept-applicant-amount-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-po-pull-dept-applicant-amount-r01.description',
+  },
+{
+    id: 'purchase-order-pull-sales-order-code-desc-r01',
+    date: '2026-11-19',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-order-pull-sales-order-code-desc-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-pull-sales-order-code-desc-r01.description',
+  },
+{
+    id: 'purchase-receipt-po-pull-aux-after-confirm-r01',
+    date: '2026-11-19',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-po-pull-aux-after-confirm-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-po-pull-aux-after-confirm-r01.description',
+  },
+{
+    id: 'outsource-order-receipt-audit-cols-r01',
+    date: '2026-11-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.outsource-order-receipt-audit-cols-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outsource-order-receipt-audit-cols-r01.description',
+  },
+{
+    id: 'purchase-order-sales-order-pull-perf-r01',
+    date: '2026-11-16',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-sales-order-pull-perf-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.purchase-order-sales-order-pull-perf-r01.description',
+  },
+{
+    id: 'payment-application-source-material-lines-r01',
+    date: '2026-10-28',
+    type: 'feature',
+    titleKey:
+      'pages.dashboard.updateLog.entries.payment-application-source-material-lines-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-source-material-lines-r01.description',
+  },
   {
     id: 'master-data-inbound-sync-domains-r01',
     date: '2026-11-20',
