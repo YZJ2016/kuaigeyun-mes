@@ -4803,12 +4803,6 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 # 节点时间记录失败不影响主流程，记录日志
                 logger.warning(f"记录工单下达节点时间失败: {e}")
 
-            await self._ensure_planned_outsource_drafts(
-                tenant_id=tenant_id,
-                work_order_id=work_order_id,
-                created_by=released_by,
-            )
-
             from apps.kuaizhizao.services.kuaizhizao_business_notification import (
                 ACTION_RELEASED,
                 DOC_WORK_ORDER,

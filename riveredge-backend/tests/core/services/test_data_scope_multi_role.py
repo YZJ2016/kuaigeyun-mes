@@ -343,3 +343,103 @@ def test_host_reference_data_scope_maps_follow_up_customer_dropdown():
         )
         is None
     )
+
+
+@pytest.mark.asyncio
+async def test_apply_single_role_department_filters_sales_order_by_salesman_pool():
+    """单角色 scope_department + 销售订单：必须对 queryset 施加 salesman_id 部门成员过滤。"""
+    from tortoise.expressions import Q
+
+    from apps.kuaizhizao.authorization.data_scope_setup import register_kuaizhizao_data_scope_profiles
+
+    register_kuaizhizao_data_scope_profiles()
+
+    qs = MagicMock()
+    filtered = MagicMock()
+    qs.filter.return_value = filtered
+
+    role = SimpleNamespace(uuid="role-sales", role_type="internal", external_partner_type=None)
+    dept_policy = SimpleNamespace(
+        role_uuid="role-sales",
+        scope_type="scope_department",
+        scope_payload=None,
+    )
+    resource = "kuaizhizao:sales-order"
+    dept_user_ids = [10, 11, 12]
+    access = _access(
+        roles=[role],
+        role_resource_keys={"role-sales": frozenset({resource})},
+    )
+
+    with patch(
+        "core.services.authorization.effective_access_service.EffectiveAccessService.get",
+        new=AsyncMock(return_value=access),
+    ), patch.object(
+        DataScopeService,
+        "_load_policies",
+        new=AsyncMock(return_value=[dept_policy]),
+    ), patch.object(
+        DataScopeService,
+        "_department_context",
+        new=AsyncMock(return_value=(["dept-uuid-a"], dept_user_ids)),
+    ), patch(
+        "core.services.authorization.data_scope_service.model_has_field",
+        return_value=False,
+    ):
+        result = await DataScopeService.apply(
+            qs,
+            tenant_id=1,
+            user=SimpleNamespace(id=10),
+            resource=resource,
+        )
+
+    assert result is filtered
+    qs.filter.assert_called_once()
+    filter_q = qs.filter.call_args[0][0]
+    assert isinstance(filter_q, Q)
+    assert filter_q.filters.get("salesman_id__in") == dept_user_ids
+
+
+@pytest.mark.asyncio
+async def test_apply_department_isolation_breaks_if_second_role_has_no_policy():
+    """双角色同资源：一角色本部门、另一厂内角色无策略行 → apply 不加 filter（数据不隔离）。"""
+    qs = MagicMock()
+    qs.filter.return_value = qs
+
+    role_dept = SimpleNamespace(uuid="role-dept", role_type="internal", external_partner_type=None)
+    role_open = SimpleNamespace(uuid="role-open", role_type="internal", external_partner_type=None)
+    dept_policy = SimpleNamespace(
+        role_uuid="role-dept",
+        scope_type="scope_department",
+        scope_payload=None,
+    )
+    resource = "kuaizhizao:sales-order"
+    access = _access(
+        roles=[role_dept, role_open],
+        role_resource_keys={
+            "role-dept": frozenset({resource}),
+            "role-open": frozenset({resource}),
+        },
+    )
+
+    with patch(
+        "core.services.authorization.effective_access_service.EffectiveAccessService.get",
+        new=AsyncMock(return_value=access),
+    ), patch.object(
+        DataScopeService,
+        "_load_policies",
+        new=AsyncMock(return_value=[dept_policy]),
+    ), patch.object(
+        DataScopeService,
+        "_department_context",
+        new=AsyncMock(return_value=(["dept-uuid"], [10, 11])),
+    ):
+        result = await DataScopeService.apply(
+            qs,
+            tenant_id=1,
+            user=SimpleNamespace(id=10),
+            resource=resource,
+        )
+
+    assert result is qs
+    qs.filter.assert_not_called()

@@ -120,6 +120,103 @@ async def batch_pushed_purchase_qty_by_material(
     return result
 
 
+def merge_exact_and_material_purchase_occupancy(
+    items_by_order: Dict[int, List[Any]],
+    exact_occupied: Dict[int, Decimal],
+    material_by_order: Dict[int, Dict[int, Decimal]],
+) -> Dict[int, Decimal]:
+    """行精确占用 + 物料池余量 FIFO 摊到销售明细（不超行订单量）。"""
+    occupied: Dict[int, Decimal] = {
+        int(lid): Decimal(str(qty or 0)) for lid, qty in (exact_occupied or {}).items()
+    }
+    for oid, order_items in items_by_order.items():
+        order_id = int(oid)
+        pool = dict(material_by_order.get(order_id) or {})
+        for it in order_items or []:
+            lid = int(getattr(it, "id", 0) or 0)
+            mid = int(getattr(it, "material_id", 0) or 0)
+            already = occupied.get(lid, Decimal("0"))
+            if lid <= 0 or mid <= 0 or already <= 0:
+                continue
+            pool[mid] = max(Decimal("0"), pool.get(mid, Decimal("0")) - already)
+        for it in sorted(order_items or [], key=lambda row: int(getattr(row, "id", 0) or 0)):
+            lid = int(getattr(it, "id", 0) or 0)
+            mid = int(getattr(it, "material_id", 0) or 0)
+            line_qty = Decimal(str(getattr(it, "order_quantity", 0) or 0))
+            if lid <= 0 or mid <= 0 or line_qty <= 0:
+                continue
+            already = occupied.get(lid, Decimal("0"))
+            room = line_qty - already
+            if room <= 0:
+                continue
+            avail = pool.get(mid, Decimal("0"))
+            if avail <= 0:
+                continue
+            take = min(room, avail)
+            occupied[lid] = already + take
+            pool[mid] = avail - take
+    return occupied
+
+
+async def batch_pushed_purchase_qty_by_sales_order_item(
+    tenant_id: int,
+    items_by_order: Dict[int, List[Any]],
+) -> Dict[int, Decimal]:
+    """sales_order_item.id → 已下推采购占用（主数量，含草稿；删除的采购订单不计）。
+
+    优先认采购订单行 ``source_id=销售明细 id``；其余按物料池（PR+PO 头/关联/行）
+    与工单相同的行序 FIFO 摊到明细，避免只挂钩单头的采购漏计到行。
+    """
+    if not items_by_order:
+        return {}
+
+    item_ids: List[int] = []
+    for items in items_by_order.values():
+        for it in items or []:
+            iid = int(getattr(it, "id", 0) or 0)
+            if iid > 0:
+                item_ids.append(iid)
+    if not item_ids:
+        return {}
+
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
+
+    exact_occupied: Dict[int, Decimal] = {}
+    pois = await PurchaseOrderItem.filter(
+        tenant_id=tenant_id,
+        source_id__in=item_ids,
+        deleted_at__isnull=True,
+    ).all()
+    if pois:
+        order_ids = {int(pi.order_id) for pi in pois if pi.order_id}
+        live_order_ids = set(
+            await PurchaseOrder.filter(
+                tenant_id=tenant_id,
+                id__in=list(order_ids),
+                deleted_at__isnull=True,
+            ).values_list("id", flat=True)
+        )
+        for pi in pois:
+            if int(pi.order_id or 0) not in live_order_ids:
+                continue
+            if not _is_sales_order_source(pi.source_type):
+                continue
+            sid = int(pi.source_id or 0)
+            if sid <= 0 or sid not in set(item_ids):
+                continue
+            qty = Decimal(str(pi.ordered_quantity or 0))
+            if qty <= 0:
+                continue
+            exact_occupied[sid] = exact_occupied.get(sid, Decimal("0")) + qty
+
+    material_by_order = await batch_pushed_purchase_qty_by_material(
+        tenant_id, list(items_by_order.keys())
+    )
+    return merge_exact_and_material_purchase_occupancy(
+        items_by_order, exact_occupied, material_by_order
+    )
+
+
 def material_is_buy_eligible(material: Any) -> bool:
     return SOURCE_TYPE_BUY in material_source_types_set(material)
 
@@ -139,6 +236,58 @@ def _order_qty_by_material(items: List[Any]) -> Dict[int, Decimal]:
             str(getattr(it, "order_quantity", 0) or 0)
         )
     return totals
+
+
+async def batch_pushed_work_order_qty_by_sales_order_item(
+    tenant_id: int,
+    items_by_order: Dict[int, List[Any]],
+) -> Dict[int, Decimal]:
+    """
+    sales_order_item.id → 已下推工单主数量（排除已取消工单）。
+
+    工单表仅存 sales_order_id + product_id，多行同料合并工单时按行 id 顺序 FIFO 分摊占用。
+    """
+    if not items_by_order:
+        return {}
+
+    from apps.kuaizhizao.models.work_order import WorkOrder
+
+    order_ids = [int(oid) for oid in items_by_order.keys() if oid]
+    wo_by_order_material: Dict[int, Dict[int, Decimal]] = {oid: {} for oid in order_ids}
+    if order_ids:
+        rows = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            sales_order_id__in=order_ids,
+            deleted_at__isnull=True,
+        ).exclude(status__in=["cancelled", "CANCELLED", "已取消"]).values_list(
+            "sales_order_id", "product_id", "quantity"
+        )
+        for so_id, product_id, qty in rows:
+            oid = int(so_id or 0)
+            mid = int(product_id or 0)
+            if oid not in wo_by_order_material or mid <= 0:
+                continue
+            bucket = wo_by_order_material.setdefault(oid, {})
+            bucket[mid] = bucket.get(mid, Decimal("0")) + Decimal(str(qty or 0))
+
+    occupied: Dict[int, Decimal] = {}
+    for oid, order_items in items_by_order.items():
+        order_id = int(oid)
+        wo_pool = dict(wo_by_order_material.get(order_id) or {})
+        for it in sorted(order_items, key=lambda row: int(getattr(row, "id", 0) or 0)):
+            lid = int(getattr(it, "id", 0) or 0)
+            mid = int(getattr(it, "material_id", 0) or 0)
+            line_qty = Decimal(str(getattr(it, "order_quantity", 0) or 0))
+            if lid <= 0 or line_qty <= 0:
+                continue
+            pool = wo_pool.get(mid, Decimal("0"))
+            take = min(line_qty, pool) if pool > 0 else Decimal("0")
+            if take > 0:
+                occupied[lid] = take
+                wo_pool[mid] = pool - take
+            else:
+                occupied[lid] = Decimal("0")
+    return occupied
 
 
 async def batch_pushed_work_order_qty_by_material(
@@ -303,6 +452,11 @@ async def collect_sales_order_buy_push_lines(
     fulfill_by_material = fulfill_map.get(sales_order_id) or {}
     pushed_map = await batch_pushed_purchase_qty_by_material(tenant_id, [sales_order_id])
     pushed_by_material = pushed_map.get(sales_order_id) or {}
+    items_map = {sales_order_id: items}
+    pushed_by_item, wo_by_item = await asyncio.gather(
+        batch_pushed_purchase_qty_by_sales_order_item(tenant_id, items_map),
+        batch_pushed_work_order_qty_by_sales_order_item(tenant_id, items_map),
+    )
 
     remaining_cursor: Dict[int, Decimal] = {
         mid: qty for mid, qty in fulfill_by_material.items() if mid in buy_ids
@@ -319,8 +473,12 @@ async def collect_sales_order_buy_push_lines(
         qty = Decimal(str(getattr(it, "order_quantity", 0) or 0))
         if qty <= 0:
             continue
-        remain = remaining_cursor.get(mid, Decimal("0"))
-        max_qty = min(qty, remain) if remain > 0 else Decimal("0")
+        item_purchase = pushed_by_item.get(item_id, Decimal("0"))
+        item_wo = wo_by_item.get(item_id, Decimal("0"))
+        item_fulfilled = item_purchase + item_wo
+        line_rem = max(Decimal("0"), qty - item_fulfilled)
+        material_rem = remaining_cursor.get(mid, Decimal("0"))
+        max_qty = min(line_rem, material_rem) if line_rem > 0 and material_rem > 0 else Decimal("0")
         if selected_quantities and item_id in selected_quantities:
             override = Decimal(str(selected_quantities[item_id]))
             if override < 0:
@@ -328,7 +486,7 @@ async def collect_sales_order_buy_push_lines(
             max_qty = min(max_qty, override)
         if max_qty <= 0:
             continue
-        remaining_cursor[mid] = remain - max_qty
+        remaining_cursor[mid] = material_rem - max_qty
         material = material_by_id.get(mid)
         from apps.kuaizhizao.utils.material_source_helper import (
             resolve_default_supplier_id_from_material,
@@ -381,7 +539,9 @@ async def collect_sales_order_buy_push_lines(
                     or "件"
                 ),
                 "quantity": qty,
-                "pushed_quantity": pushed_by_material.get(mid, Decimal("0")),
+                "pushed_quantity": item_fulfilled,
+                "pushed_work_order_quantity": item_wo,
+                "pushed_purchase_quantity": item_purchase,
                 "max_push_quantity": max_qty,
                 "required_date": getattr(it, "delivery_date", None),
                 "supplier_id": int(supplier_id) if supplier_id else None,
@@ -883,6 +1043,175 @@ async def push_to_purchase_order(
     }
 
 
+def _purchase_pull_audited_status_values() -> Tuple[str, ...]:
+    from apps.kuaizhizao.constants import LEGACY_AUDITED_VALUES, DemandStatus
+
+    return tuple(
+        dict.fromkeys(
+            (
+                *LEGACY_AUDITED_VALUES,
+                DemandStatus.AUDITED.value,
+                DemandStatus.CONFIRMED.value,
+            )
+        )
+    )
+
+
+async def list_purchase_order_sales_order_pull_lines(
+    tenant_id: int,
+    *,
+    skip: int = 0,
+    limit: int = 20,
+    keyword: Optional[str] = None,
+    sales_order_id: Optional[int] = None,
+    pullable_only: bool = True,
+) -> Dict[str, Any]:
+    """开口销售订单外购行，供采购订单跨单取单。
+
+    批量算共享余量与默认供应商；禁止对每张 SO 调 collect（含价目 N+1）。
+    """
+    if await require_purchase_requisition_for_tenant(tenant_id):
+        return {"data": [], "total": 0}
+
+    from apps.kuaizhizao.models.sales_order import SalesOrder
+    from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+    from apps.kuaizhizao.utils.material_source_helper import (
+        resolve_default_supplier_id_from_material,
+        resolve_default_supplier_name_from_material,
+    )
+    from apps.kuaizhizao.utils.pull_open_line_quantity import enrich_pull_line_from_source_item
+
+    so_query = SalesOrder.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+        status__in=list(_purchase_pull_audited_status_values()),
+    )
+    if sales_order_id is not None:
+        so_query = so_query.filter(id=int(sales_order_id))
+    orders = await so_query.only(
+        "id", "order_code", "status", "customer_name", "order_date"
+    )
+    if not orders:
+        return {"data": [], "total": 0}
+
+    order_by_id = {int(o.id): o for o in orders}
+    items = await SalesOrderItem.filter(
+        tenant_id=tenant_id, sales_order_id__in=list(order_by_id.keys())
+    ).all()
+    items_by_order: Dict[int, List[Any]] = {}
+    for it in items:
+        items_by_order.setdefault(int(it.sales_order_id), []).append(it)
+
+    material_by_id, fulfill_by_order, pushed_purchase_by_item, pushed_wo_by_item = (
+        await asyncio.gather(
+            _load_materials_for_items(tenant_id, items_by_order),
+            batch_remaining_fulfillable_qty_by_material(tenant_id, items_by_order),
+            batch_pushed_purchase_qty_by_sales_order_item(tenant_id, items_by_order),
+            batch_pushed_work_order_qty_by_sales_order_item(tenant_id, items_by_order),
+        )
+    )
+    buy_ids = {
+        mid for mid, m in material_by_id.items() if material_is_buy_eligible(m)
+    }
+    from apps.kuaizhizao.utils.pull_open_line_quantity import build_partial_push_qty_triplet
+
+    kw = (keyword or "").strip().lower()
+    lines: List[Dict[str, Any]] = []
+    for oid, order_items in items_by_order.items():
+        order = order_by_id.get(oid)
+        if not order:
+            continue
+        remaining_cursor: Dict[int, Decimal] = {
+            mid: qty
+            for mid, qty in (fulfill_by_order.get(oid) or {}).items()
+            if mid in buy_ids
+        }
+        for it in sorted(order_items, key=lambda row: int(getattr(row, "id", 0) or 0)):
+            item_id = int(it.id) if it.id is not None else 0
+            if item_id <= 0:
+                continue
+            mid = int(getattr(it, "material_id", 0) or 0)
+            if mid not in buy_ids:
+                continue
+            qty_dec = Decimal(str(it.order_quantity or 0))
+            if qty_dec <= 0:
+                continue
+            item_purchase = pushed_purchase_by_item.get(item_id, Decimal("0"))
+            item_wo = pushed_wo_by_item.get(item_id, Decimal("0"))
+            item_fulfilled = item_purchase + item_wo
+            line_rem = max(Decimal("0"), qty_dec - item_fulfilled)
+            if pullable_only and line_rem <= 0:
+                continue
+            material_rem = remaining_cursor.get(mid, Decimal("0"))
+            max_qty = (
+                min(line_rem, material_rem)
+                if line_rem > 0 and material_rem > 0
+                else Decimal("0")
+            )
+            if pullable_only and max_qty <= 0:
+                continue
+            remaining_cursor[mid] = material_rem - max_qty
+            material_code = str(it.material_code or "").strip()
+            material_name = str(it.material_name or "").strip()
+            material_spec = str(it.material_spec or "").strip()
+            order_code = str(order.order_code or "").strip()
+            customer_name = str(getattr(order, "customer_name", None) or "").strip()
+            if kw:
+                haystack = " ".join(
+                    [order_code, customer_name, material_code, material_name, material_spec]
+                ).lower()
+                if kw not in haystack:
+                    continue
+            qty = float(qty_dec)
+            remaining = float(max_qty)
+            _, pushed, _ = build_partial_push_qty_triplet(qty_dec, item_fulfilled)
+            material = material_by_id.get(mid)
+            supplier_id = resolve_default_supplier_id_from_material(material)
+            supplier_name = resolve_default_supplier_name_from_material(material) or ""
+            order_date = (
+                order.order_date.isoformat()
+                if getattr(order, "order_date", None)
+                else None
+            )
+            line: Dict[str, Any] = {
+                "id": item_id,
+                "sales_order_id": oid,
+                "order_code": order.order_code,
+                "document_date": order_date,
+                "order_date": order_date,
+                "customer_name": getattr(order, "customer_name", None),
+                "material_id": it.material_id,
+                "material_code": material_code,
+                "material_name": material_name,
+                "material_spec": material_spec or None,
+                "unit": it.material_unit or "件",
+                "supplier_id": int(supplier_id) if supplier_id else None,
+                "supplier_name": str(supplier_name or "") or None,
+                "pushed_work_order_quantity": float(item_wo),
+                "pushed_purchase_quantity": float(item_purchase),
+            }
+            enrich_pull_line_from_source_item(
+                line,
+                it,
+                suggested_primary=qty,
+                pushed_primary=pushed,
+                remaining_primary=remaining,
+                occupied_aux_pushed=0,
+            )
+            lines.append(line)
+    lines.sort(
+        key=lambda r: (
+            str(r.get("order_code") or ""),
+            str(r.get("material_code") or ""),
+            int(r.get("id") or 0),
+        ),
+        reverse=True,
+    )
+    from apps.kuaizhizao.utils.inventory_helper import paginate_pull_lines_with_stock
+
+    return await paginate_pull_lines_with_stock(tenant_id, lines, skip, limit)
+
+
 async def list_sales_orders_for_purchase_order_pull(
     tenant_id: int,
     *,
@@ -944,6 +1273,7 @@ async def list_sales_orders_for_purchase_order_pull(
                 "total_quantity": float(order.total_quantity or 0),
             }
         )
+    rows.sort(key=lambda r: str(r.get("order_code") or ""), reverse=True)
     total = len(rows)
     page_rows = rows[skip : skip + limit] if skip < len(rows) else []
     return {"data": page_rows, "total": total, "success": True}

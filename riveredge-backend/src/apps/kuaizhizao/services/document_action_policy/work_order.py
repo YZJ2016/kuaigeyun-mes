@@ -200,7 +200,7 @@ def derive_work_order_capabilities(
     push_inbound_allowed = (
         not is_frozen
         and not is_terminal
-        and (is_in_progress or is_completed)
+        and (is_released or is_in_progress or is_completed)
     )
     push_inbound_reason = None
     if is_frozen:

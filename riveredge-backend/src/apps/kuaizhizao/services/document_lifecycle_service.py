@@ -2870,9 +2870,103 @@ def get_outsource_work_order_lifecycle(record: Any) -> Dict[str, Any]:
     }
 
 
+OUTSOURCE_ORDER_MAIN_STAGES = [
+    {"key": "draft", "label": "草稿"},
+    {"key": "released", "label": "已下达"},
+    {"key": "in_progress", "label": "执行中"},
+    {"key": "completed", "label": "已完成"},
+]
+
+
+def _outsource_order_next_step_suggestions(record: Any, stage_key: str) -> List[str]:
+    """工序委外后续动作（与委外管理菜单、采购入库关联一致）。"""
+    if stage_key == "cancelled":
+        return []
+    if stage_key == "draft":
+        return ["下达"]
+    has_receipt = bool(getattr(record, "purchase_receipt_id", None))
+    try:
+        out_qty = Decimal(str(getattr(record, "outsource_quantity", 0) or 0))
+        recv_qty = Decimal(str(getattr(record, "received_quantity", 0) or 0))
+    except Exception:
+        out_qty = Decimal("0")
+        recv_qty = Decimal("0")
+    receipt_open = not has_receipt or (out_qty > 0 and recv_qty < out_qty)
+    if stage_key == "released":
+        steps: List[str] = []
+        can_revoke = (
+            not has_receipt
+            and recv_qty <= 0
+            and not getattr(record, "actual_start_date", None)
+        )
+        if can_revoke:
+            steps.append("撤回下达")
+        if receipt_open:
+            steps.append("委外入库")
+        steps.append("开始执行")
+        return steps
+    if stage_key == "in_progress":
+        steps = []
+        if receipt_open:
+            steps.append("委外入库")
+        steps.append("工序发料")
+        if out_qty > 0 and recv_qty < out_qty:
+            steps.append("登记收货")
+        steps.append("完成")
+        return steps
+    if stage_key == "completed":
+        return ["委外结算"]
+    return []
+
+
 def get_outsource_order_lifecycle(record: Any) -> Dict[str, Any]:
-    """委外单生命周期（复用工单逻辑）"""
-    return get_work_order_lifecycle(record)
+    """工序委外单生命周期：草稿→已下达→执行中→已完成（禁止误用工单报工/领料子阶段）。"""
+    status = _norm(getattr(record, "status", None))
+    status_map = {
+        "draft": "draft",
+        "released": "released",
+        "in_progress": "in_progress",
+        "completed": "completed",
+        "cancelled": "cancelled",
+        "草稿": "draft",
+        "已下达": "released",
+        "执行中": "in_progress",
+        "已完成": "completed",
+        "已取消": "cancelled",
+    }
+    key = status_map.get(status, "draft")
+    stage_defs = OUTSOURCE_ORDER_MAIN_STAGES
+    is_exception = key == "cancelled"
+    if is_exception:
+        main_stages = [
+            {"key": "draft", "label": "草稿", "status": "pending"},
+            {"key": "released", "label": "已下达", "status": "pending"},
+            {"key": "in_progress", "label": "执行中", "status": "pending"},
+            {"key": "cancelled", "label": "已取消", "status": "active"},
+        ]
+        stage_name = "已取消"
+    else:
+        main_stages = _build_main_stages(stage_defs, key, is_exception=False)
+        stage_name = next((s["label"] for s in stage_defs if s["key"] == key), key)
+
+    suggestions = _outsource_order_next_step_suggestions(record, key if not is_exception else "cancelled")
+    return {
+        "current_stage_key": key if not is_exception else "cancelled",
+        "current_stage_name": stage_name,
+        "status": (
+            "exception"
+            if is_exception
+            else "success"
+            if key == "completed"
+            else "active"
+            if key == "in_progress"
+            else "normal"
+        ),
+        "main_stages": main_stages,
+        "sub_stages": None,
+        "next_step_suggestions": suggestions,
+        "milestones": [],
+    }
 
 
 ASSEMBLY_ORDER_MAIN_STAGES = [

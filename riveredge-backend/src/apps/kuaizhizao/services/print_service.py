@@ -839,6 +839,34 @@ class DocumentPrintService:
             )
         return None
 
+    _PURCHASE_RECEIPT_ASSET_TEMPLATE_CODES = (
+        "PURCHASE_RECEIPT_PRINT_003",
+        "PURCHASE_RECEIPT_ASSET_PRINT_001",
+    )
+    _PURCHASE_RECEIPT_STANDARD_TEMPLATE_CODES = (
+        "PURCHASE_RECEIPT_PRINT_001",
+    )
+
+    @classmethod
+    async def _resolve_purchase_receipt_print_template_code(
+        cls,
+        tenant_id: int,
+        document_data: Dict[str, Any],
+    ) -> Optional[str]:
+        """资产/标准采购入库：按订单类型优先专用模板；未选手动模板时才生效。"""
+        order_type = str(document_data.get("order_type") or "").strip()
+        if order_type in {"资产采购", "asset", "ASSET"}:
+            codes = cls._PURCHASE_RECEIPT_ASSET_TEMPLATE_CODES
+        elif order_type in {"标准采购", "standard", "STANDARD"}:
+            codes = cls._PURCHASE_RECEIPT_STANDARD_TEMPLATE_CODES
+        else:
+            return None
+        for code in codes:
+            tpl = await cls._find_print_template(tenant_id, template_code=code)
+            if tpl:
+                return str(tpl.code)
+        return None
+
     async def _finalize_print_payload(
         self,
         *,
@@ -903,6 +931,91 @@ class DocumentPrintService:
         """
         i18n = await PrintLocalization.for_tenant(tenant_id)
         document_data = await self._get_document_data(tenant_id, document_type, document_id, i18n=i18n)
+        from apps.kuaizhizao.services.document_action_policy.print_unaudited_gate import (
+            assert_allow_print_unaudited_or_raise,
+        )
+        from apps.kuaizhizao.services.document_action_policy.types import (
+            CAPABILITY_REASON_MESSAGES,
+        )
+
+        await assert_allow_print_unaudited_or_raise(
+            tenant_id,
+            document_data,
+            default_message=CAPABILITY_REASON_MESSAGES.get(
+                "document.print.unaudited_denied",
+                "未审核单据不可打印（系统参数已关闭未审核打印）",
+            ),
+        )
+        try:
+            from apps.kuaizhizao.services.print_template_presets import (
+                upgrade_print_numeric_column_precision,
+                upgrade_print_sign_field_bindings,
+                upgrade_print_site_name_header,
+            )
+
+            await upgrade_print_site_name_header(tenant_id)
+            await upgrade_print_sign_field_bindings(tenant_id)
+            await upgrade_print_numeric_column_precision(tenant_id)
+        except Exception as e:
+            logger.warning("打印模板签核/数值小数位升级失败 tenant={}: {}", tenant_id, e)
+        if document_type == "purchase_requisition":
+            try:
+                from apps.kuaizhizao.services.print_template_presets import (
+                    upgrade_purchase_requisition_print_line_no,
+                )
+
+                await upgrade_purchase_requisition_print_line_no(tenant_id)
+            except Exception as e:
+                logger.warning("采购申请打印补行号失败 tenant={}: {}", tenant_id, e)
+        if document_type == "payment_application":
+            try:
+                from apps.kuaizhizao.services.print_template_presets import (
+                    upgrade_payment_application_print_template,
+                )
+
+                await upgrade_payment_application_print_template(tenant_id)
+            except Exception as e:
+                logger.warning("付款申请打印模板升级失败 tenant={}: {}", tenant_id, e)
+        if document_type == "purchase_order":
+            try:
+                from apps.kuaizhizao.services.print_template_presets import (
+                    upgrade_purchase_order_print_tax_inclusive_amount,
+                )
+
+                await upgrade_purchase_order_print_tax_inclusive_amount(tenant_id)
+            except Exception as e:
+                logger.warning("采购订单打印补含税金额失败 tenant={}: {}", tenant_id, e)
+        if document_type == "other_expense":
+            try:
+                from apps.kuaizhizao.services.print_template_presets import (
+                    upgrade_other_expense_print_detail_columns,
+                )
+
+                await upgrade_other_expense_print_detail_columns(tenant_id)
+            except Exception as e:
+                logger.warning(
+                    "其他费用支出打印明细列序升级失败 tenant={}: {}", tenant_id, e
+                )
+        if document_type == "quotation":
+            try:
+                from apps.kuaizhizao.services.print_template_presets import (
+                    upgrade_quotation_print_valid_until,
+                )
+
+                await upgrade_quotation_print_valid_until(tenant_id)
+            except Exception as e:
+                logger.warning("报价单打印补有效期失败 tenant={}: {}", tenant_id, e)
+        if (
+            document_type == "purchase_receipt"
+            and not template_uuid
+            and not template_code
+        ):
+            resolved = await self._resolve_purchase_receipt_print_template_code(
+                tenant_id,
+                document_data,
+            )
+            if resolved:
+                template_code = resolved
         return await self._render_prepared_document(
             tenant_id=tenant_id,
             document_type=document_type,
@@ -2061,6 +2174,7 @@ class DocumentPrintService:
         ]
         return {
             "document_type": "purchase_receipt",
+            "order_type": order_type,
             "code": receipt.receipt_code,
             "purchase_order_code": receipt.purchase_order_code,
             "supplier_name": receipt.supplier_name,

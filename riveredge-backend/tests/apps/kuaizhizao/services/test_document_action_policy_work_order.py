@@ -61,6 +61,18 @@ def test_released_can_revoke_without_downstream():
     assert caps.revoke.allowed
 
 
+def test_released_can_push_finished_goods_receipt():
+    caps = derive_work_order_capabilities(_wo(status="released"))
+    assert caps.push_finished_goods_receipt.allowed
+    caps_cn = derive_work_order_capabilities(_wo(status="已下达"))
+    assert caps_cn.push_finished_goods_receipt.allowed
+
+
+def test_draft_cannot_push_finished_goods_receipt():
+    caps = derive_work_order_capabilities(_wo(status="draft"))
+    assert not caps.push_finished_goods_receipt.allowed
+
+
 def test_released_cannot_revoke_with_downstream():
     caps = derive_work_order_capabilities(_wo(status="released"), has_downstream_documents=True)
     assert not caps.revoke.allowed

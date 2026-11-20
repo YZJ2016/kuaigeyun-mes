@@ -496,8 +496,8 @@ riveredge-backend/src/apps/kuaizhizao/api/management.py	f15c45fc70c657f816d3cfdb
 riveredge-backend/src/apps/kuaizhizao/api/material_calls/material_calls.py	e7b23e35b3ba39151b98128a7c5fb7b5b6da7e80	applied	本轮积压API快修：复用现有权限解析/依赖，4文件逐个注册smoke与拒绝不执行业务回归通过；未更改权限码/manifest，权限扫描的裸purchase-order为HEAD已有问题
 riveredge-backend/src/apps/kuaizhizao/api/mold_ops/documents.py	7e1d1aa025fa11c30a3e5493858f9bff2e106176	tracked	seed from 5f085a19c9
 riveredge-backend/src/apps/kuaizhizao/api/other_expense_applications/other_expense_applications.py	d5ab11666f8a4e68eb62c642f2b0b136e010b1e8	tracked	seed from 154977d948
-riveredge-backend/src/apps/kuaizhizao/api/other_expenses/other_expenses.py	d29d685072c74efdf14fe2582a88326091ea661f	deferred	R2:MERGE-须三方合并（本地含kuaicaiwu重路由/source_type快照/能力表/租户事务等本地逻辑，直取会破坏现有功能）
-riveredge-backend/src/apps/kuaizhizao/api/other_incomes/other_incomes.py	054ae2ba7190a31289b330d2ba311e6d3af6c2cf	deferred	R2:MERGE-须三方合并（本地含kuaicaiwu重路由/source_type快照/能力表/租户事务等本地逻辑，直取会破坏现有功能）
+riveredge-backend/src/apps/kuaizhizao/api/other_expenses/other_expenses.py	d29d685072c74efdf14fe2582a88326091ea661f	domain-out	R2:本地无kuaizhizao侧other_expense/other_income实现(财务权威在apps.kuaicaiwu),上游kuaizhizao直推+服务构成平行财务路径,按no-duplicate不落地
+riveredge-backend/src/apps/kuaizhizao/api/other_incomes/other_incomes.py	054ae2ba7190a31289b330d2ba311e6d3af6c2cf	domain-out	R2:本地无kuaizhizao侧other_expense/other_income实现(财务权威在apps.kuaicaiwu),上游kuaizhizao直推+服务构成平行财务路径,按no-duplicate不落地
 riveredge-backend/src/apps/kuaizhizao/api/payment_applications/payment_applications.py	c031530e1c30c3a11b404a392a415c8d2de956b8	tracked	seed from 1d968cd27b
 riveredge-backend/src/apps/kuaizhizao/api/productions/production_control_api.py	3a72ce5047ebadce734f816252b66daeb1beb7e7	applied	本轮积压API快修：复用现有权限解析/依赖，4文件逐个注册smoke与拒绝不执行业务回归通过；未更改权限码/manifest，权限扫描的裸purchase-order为HEAD已有问题
 riveredge-backend/src/apps/kuaizhizao/api/productions/productions.py	04e6419f480cb870413dad6870686a4f59ea68c9	tracked	seed from 154977d948
@@ -946,10 +946,10 @@ riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/shipment_n
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/types.py	affd49c9495c3010cdc38c54322f7ac8c29dbe5a	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/warehouse_inbound_hub.py	de5f6f1890a28559a1c2ffa8880d3d998d3294e8	tracked	seed from 899307f4d6
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/warehouse_outbound_hub.py	160acf1d11d7a6f8137373370be738e6edab4c7e	tracked	seed from 899307f4d6
-riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/work_order.py	1743d7cca817c2ebe26c4c82b24d5e648a685fae	deferred	R2:MERGE-须三方合并（本地含kuaicaiwu重路由/source_type快照/能力表/租户事务等本地逻辑，直取会破坏现有功能）
+riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/work_order.py	1743d7cca817c2ebe26c4c82b24d5e648a685fae	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
 riveredge-backend/src/apps/kuaizhizao/services/document_attachment_center_service.py	7db57b9c735e943e5e6993ef06e1389805cc3972	tracked	seed from d892f36d03
 riveredge-backend/src/apps/kuaizhizao/services/document_header_amount_contract.py	53bce88d703ef8aa222c23b2ed8bb3170b71aeab	applied	f40f54e336调度窗+价税簇
-riveredge-backend/src/apps/kuaizhizao/services/document_lifecycle_service.py	c12ea1801904fcb28a21258df3371fb08eee29df	deferred	R2:MERGE-须三方合并（本地含kuaicaiwu重路由/source_type快照/能力表/租户事务等本地逻辑，直取会破坏现有功能）
+riveredge-backend/src/apps/kuaizhizao/services/document_lifecycle_service.py	c12ea1801904fcb28a21258df3371fb08eee29df	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
 riveredge-backend/src/apps/kuaizhizao/services/document_line_material_attachment_source_service.py	f9d5b55cd120b41c37ffd76dea400b26a8656d09	tracked	seed from a60f3e9039
 riveredge-backend/src/apps/kuaizhizao/services/document_push_mapping.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/services/document_push_pipeline.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
@@ -957,7 +957,7 @@ riveredge-backend/src/apps/kuaizhizao/services/document_push_pull_service.py	754
 riveredge-backend/src/apps/kuaizhizao/services/document_push_reconcile_service.py	DELETED	applied	959f65b743 reconcile本体
 riveredge-backend/src/apps/kuaizhizao/services/document_push_service.py	0df2c796bd8e28d0095b037067a53ef1a3801fa0	applied	91c8157e1e强制重推+推送开关(含前置c0a917fc45基座)
 riveredge-backend/src/apps/kuaizhizao/services/document_push_silent.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
-riveredge-backend/src/apps/kuaizhizao/services/document_recognition.py	f7d9994dc2ea748b1065380feb7b9a8e30804b8e	deferred	R2:MERGE-须三方合并（本地含kuaicaiwu重路由/source_type快照/能力表/租户事务等本地逻辑，直取会破坏现有功能）
+riveredge-backend/src/apps/kuaizhizao/services/document_recognition.py	f7d9994dc2ea748b1065380feb7b9a8e30804b8e	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
 riveredge-backend/src/apps/kuaizhizao/services/document_relation_new_service.py	da86b3282edf06a67cc5a7a9bacf68ef4b5579d1	tracked	seed from e451b48dc2
 riveredge-backend/src/apps/kuaizhizao/services/document_relation_service.py	92c772788a0e6c2b3b5b806d5a37c4018e6976ca	tracked	seed from 2dd7241cfd
 riveredge-backend/src/apps/kuaizhizao/services/eight_d_collaboration_service.py	c5f1d4473059b451605697b2f3acbb6ce4abf020	tracked	seed from 2a5b2caf14
@@ -1046,23 +1046,23 @@ riveredge-backend/src/apps/kuaizhizao/services/other_expense_application_pull_se
 riveredge-backend/src/apps/kuaizhizao/services/other_expense_application_push_service.py	c35d2950d1cfb170419b7d8ac50f0859cf5f8ac6	domain-out	本地无 OtherExpenseApplication 实体域（其他费用申请整体域外，finance 侧）
 riveredge-backend/src/apps/kuaizhizao/services/other_expense_application_service.py	9022a3276c05097f4c4f58800d82f315fed73fcc	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaizhizao/services/other_expense_audit_service.py	54862c74d2313e8a50cd8c98d4ee25cc0cde1c46	tracked	seed from d81b4b70bf
-riveredge-backend/src/apps/kuaizhizao/services/other_expense_service.py	2a86d6e0b5fcf74a973fb06be2b07bade1e72558	deferred	R2:MERGE-须三方合并（本地含kuaicaiwu重路由/source_type快照/能力表/租户事务等本地逻辑，直取会破坏现有功能）
+riveredge-backend/src/apps/kuaizhizao/services/other_expense_service.py	2a86d6e0b5fcf74a973fb06be2b07bade1e72558	domain-out	R2:本地无kuaizhizao侧other_expense/other_income实现(财务权威在apps.kuaicaiwu),上游kuaizhizao直推+服务构成平行财务路径,按no-duplicate不落地
 riveredge-backend/src/apps/kuaizhizao/services/other_inbound_sync_service.py	a51bdde878168ea87b4a39b4d5ee2a507e04d56e	tracked	seed from a0b353ce7e
 riveredge-backend/src/apps/kuaizhizao/services/other_income_audit_service.py	7fcff2c4a469dd64f07cd9c5b9ee8cb3cda183be	tracked	seed from d81b4b70bf
-riveredge-backend/src/apps/kuaizhizao/services/other_income_service.py	af128b5c6c5ba26191486762fc5b46d1594e7789	deferred	R2:MERGE-须三方合并（本地含kuaicaiwu重路由/source_type快照/能力表/租户事务等本地逻辑，直取会破坏现有功能）
+riveredge-backend/src/apps/kuaizhizao/services/other_income_service.py	af128b5c6c5ba26191486762fc5b46d1594e7789	domain-out	R2:本地无kuaizhizao侧other_expense/other_income实现(财务权威在apps.kuaicaiwu),上游kuaizhizao直推+服务构成平行财务路径,按no-duplicate不落地
 riveredge-backend/src/apps/kuaizhizao/services/other_outbound_sync_service.py	c4c2664278d3bf0ac18e8adbc801f87195c8f1a9	tracked	seed from a0b353ce7e
 riveredge-backend/src/apps/kuaizhizao/services/other_voucher_codes.py	95273e7aa5c386ac19a41967420c04565c0121d5	domain-out	本地无 OtherExpenseApplication 实体域（其他费用申请整体域外，finance 侧）
 riveredge-backend/src/apps/kuaizhizao/services/outsource_collaboration_service.py	380e936ec1cf16c3530a0c2c7716da8a539a13cf	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/outsource_cost_service.py	ab80759dbe6c36c1f8b3774115490f825fbf48f3	tracked	seed from 432bd5f7fd
 riveredge-backend/src/apps/kuaizhizao/services/outsource_inspection_service.py	ab8d149b8fc494391ed812064b6946abbf05c517	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaizhizao/services/outsource_material_deduction_service.py	78e873080ff5c510ecbb9f14cd623a2e4f41f138	tracked	seed from 4d124a088e
-riveredge-backend/src/apps/kuaizhizao/services/outsource_material_issue_service.py	00859a23697e1c50c763befcc91a24f5e8a874d3	deferred	R2:MERGE-须三方合并（本地含kuaicaiwu重路由/source_type快照/能力表/租户事务等本地逻辑，直取会破坏现有功能）
+riveredge-backend/src/apps/kuaizhizao/services/outsource_material_issue_service.py	00859a23697e1c50c763befcc91a24f5e8a874d3	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
 riveredge-backend/src/apps/kuaizhizao/services/outsource_material_receipt_service.py	992c3de4cd722ef6dd66120c6f7176903c324513	tracked	seed from 31efc2b64c
 riveredge-backend/src/apps/kuaizhizao/services/outsource_material_return_service.py	2f58f9fc5a577ac0900ecffe2e3d3be1c942aca6	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/outsource_order_issue_bridge.py	35a304afd358c78d6a7032a5886c4992dd02472a	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/kuaizhizao/services/outsource_order_receipt_finance.py	6c3b63c7b416e261892e297d5ffef8dda0392c55	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/kuaizhizao/services/outsource_product_return_service.py	37b9476d42286c9594c00320ffef7ac5c0a78281	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
-riveredge-backend/src/apps/kuaizhizao/services/outsource_service.py	564b5fe946f76ccb15ec0e0d3067f33497b5a46c	deferred	R2:MERGE-须三方合并（本地含kuaicaiwu重路由/source_type快照/能力表/租户事务等本地逻辑，直取会破坏现有功能）
+riveredge-backend/src/apps/kuaizhizao/services/outsource_service.py	564b5fe946f76ccb15ec0e0d3067f33497b5a46c	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
 riveredge-backend/src/apps/kuaizhizao/services/outsource_settlement_credit_service.py	aff1d101bff5ca4e21df66b35a45fef4afcc0edf	tracked	seed from 4d124a088e
 riveredge-backend/src/apps/kuaizhizao/services/outsource_settlement_finance_bridge.py	1a982c856a06673512bf5db7ffe1ccf544104909	tracked	seed from 4d124a088e
 riveredge-backend/src/apps/kuaizhizao/services/outsource_settlement_service.py	f5d17ea26923bc5cb939b4fac4d6bbd29281e8bb	tracked	seed from 432bd5f7fd
@@ -1079,7 +1079,7 @@ riveredge-backend/src/apps/kuaizhizao/services/payment_application_purchase_orde
 riveredge-backend/src/apps/kuaizhizao/services/payment_application_push_service.py	e908acadb97494abe9979ab0e12d9e7858454e86	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/services/payment_application_service.py	bd9dcbf3e840fc31d6a976a1b30089603b9ecf9d	superset	R2:本地已含适配内容/本地实现超前
 riveredge-backend/src/apps/kuaizhizao/services/plan_source_line_fulfillment.py	14799a96d0585b30a49cb81a1cbd230b84d41ead	superset	R2:本地已含适配内容/本地实现超前
-riveredge-backend/src/apps/kuaizhizao/services/print_service.py	a5301b0e9d42921f969cc6867d7bc9d56d133ace	deferred	R2:MERGE-须三方合并（本地含kuaicaiwu重路由/source_type快照/能力表/租户事务等本地逻辑，直取会破坏现有功能）
+riveredge-backend/src/apps/kuaizhizao/services/print_service.py	a5301b0e9d42921f969cc6867d7bc9d56d133ace	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
 riveredge-backend/src/apps/kuaizhizao/services/print_template_presets.py	4bd5b068005af4f9b0ad390314b990f65d37e17a	tracked	seed from 37409d3b29
 riveredge-backend/src/apps/kuaizhizao/services/process_inspection_service.py	69012e2c892ceab57af2d41832c3d9a87033da57	tracked	seed from 905787348a
 riveredge-backend/src/apps/kuaizhizao/services/production_control_service.py	7a09fa64ba8d47ecea7d55bd9d6cce2c60502582	applied	R2：与上游tip blob一致，本地已同步
@@ -1128,12 +1128,12 @@ riveredge-backend/src/apps/kuaizhizao/services/sales_contract_service.py	0319e01
 riveredge-backend/src/apps/kuaizhizao/services/sales_delivery_sync_service.py	a5af3f59306b3051ba900046c8319ac0692532ca	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/services/sales_order_change_service.py	73b1342e89b8e28dce05647469f07fbcb9831eb1	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaizhizao/services/sales_order_code_sync.py	15274875d7ea4e38176a8be76e7fa876af8241b5	tracked	seed from e451b48dc2
-riveredge-backend/src/apps/kuaizhizao/services/sales_order_purchase_push.py	84a93c2effce93bcecc5ce13d660b2b137313522	deferred	R2:MERGE-须三方合并（本地含kuaicaiwu重路由/source_type快照/能力表/租户事务等本地逻辑，直取会破坏现有功能）
+riveredge-backend/src/apps/kuaizhizao/services/sales_order_purchase_push.py	84a93c2effce93bcecc5ce13d660b2b137313522	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
 riveredge-backend/src/apps/kuaizhizao/services/sales_order_service.py	880313e7b9cfdacc65351dbe7253fca5c2efc1a5	superset	R2:本地已含适配内容/本地实现超前
 riveredge-backend/src/apps/kuaizhizao/services/sales_order_sync_service.py	62495c7a7959206039ced3056883969bbb3636df	deferred	R2:上游迁入apps.kuaizhizao.finance/kuaiconnect包，本地保持kuaicaiwu+无kuaiconnect，须逆映射或随财务/连接包整体落地
 riveredge-backend/src/apps/kuaizhizao/services/sales_review_service.py	64db3c82cee80be9b26fa88c66bff43c6f1cc4d9	tracked	seed from 57a37e2749
 riveredge-backend/src/apps/kuaizhizao/services/sales_service.py	700896141993702eb599d97323ada2b07473359d	tracked	seed from 154977d948
-riveredge-backend/src/apps/kuaizhizao/services/semi_finished_goods_receipt_service.py	62954ecd7a61ac63aba209640fc3fd364bdd7c24	deferred	R2:MERGE-须三方合并（本地含kuaicaiwu重路由/source_type快照/能力表/租户事务等本地逻辑，直取会破坏现有功能）
+riveredge-backend/src/apps/kuaizhizao/services/semi_finished_goods_receipt_service.py	62954ecd7a61ac63aba209640fc3fd364bdd7c24	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
 riveredge-backend/src/apps/kuaizhizao/services/shipment_notice_service.py	c9d7427396022c3b15f663ab0d4462585f38fb51	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaizhizao/services/spare_part_service.py	0a18625c1d89a62b34b263aa1971aa98f9563cce	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/services/spot_check_reminder_service.py	79e6418980dcb84dce971a5d7e757d5e9414c69e	tracked	seed from 978a1fb9e5
@@ -1147,7 +1147,7 @@ riveredge-backend/src/apps/kuaizhizao/services/warehouse_list_core.py	5d3cf9707f
 riveredge-backend/src/apps/kuaizhizao/services/warehouse_service.py	cc1d82baa53c41976bb8dc108d82a20d4d292104	deferred	R2:依赖未落地的uni-audit簇/副数量aux ORM/上游签名分叉/财务包
 riveredge-backend/src/apps/kuaizhizao/services/warehouse_wo_outsource_pull_service.py	222c4850eafc6d7bc69db6297febf357bd87bf83	tracked	seed from 5b1b9828e4
 riveredge-backend/src/apps/kuaizhizao/services/work_order_bom_line_service.py	dbebd0ad922e1fff09f2c878f662654aa16c16c1	tracked	seed from 5b1b9828e4
-riveredge-backend/src/apps/kuaizhizao/services/work_order_service.py	5aa526d15bc389346df7abd144d013f23ade77ba	deferred	R2:MERGE-须三方合并（本地含kuaicaiwu重路由/source_type快照/能力表/租户事务等本地逻辑，直取会破坏现有功能）
+riveredge-backend/src/apps/kuaizhizao/services/work_order_service.py	5aa526d15bc389346df7abd144d013f23ade77ba	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
 riveredge-backend/src/apps/kuaizhizao/services/work_order_sync_service.py	3d91631c613e6d1c87eec14f5f797bb2734e7ec9	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-backend/src/apps/kuaizhizao/utils/bom_helper.py	e8cd29b50f57bb1dad200609c75413c3171bd07f	tracked	seed from 18c0e4ce1a
 riveredge-backend/src/apps/kuaizhizao/utils/document_amount_write.py	284b9a7bd6e6fd45fd6a33a321291268eea0dd03	tracked	seed from 4d124a088e
@@ -1166,7 +1166,7 @@ riveredge-backend/src/apps/kuaizhizao/utils/mrp_bom_snapshot.py	330b777fbea99e85
 riveredge-backend/src/apps/kuaizhizao/utils/mrp_scheduling_helper.py	9c107b0904d0671f57bf8f5c0e3bce23af960d44	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/kuaizhizao/utils/outsource_work_order_state.py	140fc919186385ef88d9c0691c0d994f09ed29e9	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/utils/picking_posting.py	37bdf8ff2678b378dfa59d60ad12edc7f8bf6524	applied	R2：与上游tip blob一致，本地已同步
-riveredge-backend/src/apps/kuaizhizao/utils/pull_open_line_quantity.py	133106f6bcaf7451748b89d57a3b7f3805190f87	deferred	R2:依赖未落地的uni-audit簇/副数量aux ORM/上游签名分叉/财务包
+riveredge-backend/src/apps/kuaizhizao/utils/pull_open_line_quantity.py	133106f6bcaf7451748b89d57a3b7f3805190f87	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
 riveredge-backend/src/apps/kuaizhizao/utils/pull_query_date_filter.py	300295d2a8524e87f0be848e89334401735de2f1	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/utils/purchase_arrival_warning.py	0d4372b01f71f9052009d4a30eea97c661eb6b3d	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/utils/purchase_order_line_amounts.py	73a8d62ca6c842cefdd2c5eaa0409cfc14207ee5	applied	13be286f11联调修复簇
@@ -1536,7 +1536,7 @@ riveredge-backend/tests/apps/kuaizhizao/services/test_document_action_policy_pac
 riveredge-backend/tests/apps/kuaizhizao/services/test_document_action_policy_quotation.py	01a154f755f08e0fcabd8151f38279bc959784c6	tracked	seed from 93b3cb5998
 riveredge-backend/tests/apps/kuaizhizao/services/test_document_action_policy_sales_order.py	36b526e7a24ad7d2109c625f11a94101c6a4d097	tracked	seed from 2c945a39fb
 riveredge-backend/tests/apps/kuaizhizao/services/test_document_action_policy_shipment_notice.py	4bd737675f113f95b2ce5adc1d841c4d7d44f5b8	tracked	seed from 899307f4d6
-riveredge-backend/tests/apps/kuaizhizao/services/test_document_action_policy_work_order.py	24e1563db983897e941304639ab4b5127bce8e94	deferred	R2:MERGE-须三方合并（本地含kuaicaiwu重路由/source_type快照/能力表/租户事务等本地逻辑，直取会破坏现有功能）
+riveredge-backend/tests/apps/kuaizhizao/services/test_document_action_policy_work_order.py	24e1563db983897e941304639ab4b5127bce8e94	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
 riveredge-backend/tests/apps/kuaizhizao/services/test_document_push_service.py	0d50786d66ae292d0fa8d68a24d01b3641d93399	tracked	seed from 2e8ecad990
 riveredge-backend/tests/apps/kuaizhizao/services/test_finance_settlement_source_sort.py	9ff119fed0314cbd8b362fb6e8531c434f57f2b7	deferred	R2:依赖未落地的uni-audit簇/副数量aux ORM/上游签名分叉/财务包
 riveredge-backend/tests/apps/kuaizhizao/services/test_finished_goods_inbound_quota.py	d2098eee2fdaae08196cddd6494cd294e5527416	tracked	seed from 93b3cb5998
@@ -1622,7 +1622,7 @@ riveredge-backend/tests/core/services/approval/test_approval_document_view.py	03
 riveredge-backend/tests/core/services/approval/test_approval_viewer_actions.py	2df6305fcc2b4b79647a8a1fe305bc38c7c0f36d	tracked	seed from 872b76152e
 riveredge-backend/tests/core/services/approval/test_audit_capability_gate_rejected.py	7ab791e6e6da36af48e4598ce072ff87c4c92580	tracked	seed from 872b76152e
 riveredge-backend/tests/core/services/approval/test_audit_flow_four_scenarios.py	a280910df6d6c7f152f622eca69e06ab256a0883	tracked	seed from 872b76152e
-riveredge-backend/tests/core/services/approval/test_audit_phase.py	af9de56807f192aec853061d890ee6c17bba6322	deferred	R2:MERGE-须三方合并（本地含kuaicaiwu重路由/source_type快照/能力表/租户事务等本地逻辑，直取会破坏现有功能）
+riveredge-backend/tests/core/services/approval/test_audit_phase.py	af9de56807f192aec853061d890ee6c17bba6322	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
 riveredge-backend/tests/core/services/approval/test_condition_branch_decision.py	ff57afe58ada0bc73bd5a6d9926aadf46f8715bd	applied	R2：与上游tip blob一致，本地已同步
 riveredge-backend/tests/core/services/approval/test_finance_completion_handlers.py	43b0a3514e904928284430e99de1ffea19921a29	deferred	R2:上游迁入apps.kuaizhizao.finance/kuaiconnect包，本地保持kuaicaiwu+无kuaiconnect，须逆映射或随财务/连接包整体落地
 riveredge-backend/tests/core/services/approval/test_multi_approver.py	c7c6a8cb45232af90404794bdd938f2afbfe1924	deferred	R2:上游迁入apps.kuaizhizao.finance/kuaiconnect包，本地保持kuaicaiwu+无kuaiconnect，须逆映射或随财务/连接包整体落地
@@ -1661,7 +1661,7 @@ riveredge-backend/tests/core/services/messaging/test_approval_wecom_card_service
 riveredge-backend/tests/core/services/messaging/test_approval_wecom_push_service.py	8547c28aa39708bcc6489cad0613387b9cda5ee6	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/tests/core/services/messaging/test_wecom_recipient_resolve.py	e41189e8a12f6e083ef2f21c78c3efceafa9de58	tracked	seed from d84fe20715
 riveredge-backend/tests/core/services/test_approval_nodes_overview_path.py	e54ef8bf2cdcc57d1310e39fce87925688bc1ed4	tracked	seed from 7aab065f41
-riveredge-backend/tests/core/services/test_data_scope_multi_role.py	92f0d99e297624bc8a4e81e16b3e8812abed7772	deferred	R2:MERGE-须三方合并（本地含kuaicaiwu重路由/source_type快照/能力表/租户事务等本地逻辑，直取会破坏现有功能）
+riveredge-backend/tests/core/services/test_data_scope_multi_role.py	92f0d99e297624bc8a4e81e16b3e8812abed7772	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
 riveredge-backend/tests/core/services/test_tenant_restore_primary_key_conflicts.py	d8aff40e5a34c89e590efc2eb56b522e06440c28	tracked	seed from 0b8630adfd
 riveredge-backend/tests/core/services/test_user_administrator_management.py	1ecaad806e58f567cf153fd6ce3ef7cd48b70443	tracked	seed from 1dd09b4fce
 riveredge-backend/tests/core/utils/test_content_disposition.py	e9f0b01bfcc363422b9f9b1469a87438d620d5c5	applied	R2簇5 core/sync:摘取上游tip实现
@@ -2097,7 +2097,7 @@ riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/Inboun
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/InboundWorkOrderPullEntryPage.tsx	a77ff80f26834c577e17c7fbec40c461671797b2	tracked	seed from 93b3cb5998
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/OtherInboundEditModal.tsx	cb545d588213269915d610ce3a1150a479200499	tracked	seed from 4d124a088e
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/PurchaseInboundLineWhCells.tsx	2e90d9a7ae	superset	R2: 本地已有等价/更深实现
-riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/PurchaseReceiptCreateModal.tsx	ea8fd3b6382ea54653720bf0fb30303b69fd28be	deferred	R2:MERGE-须三方合并（本地行缓存/po-compose/IQC门禁/批量分配序列号/uni-audit提交等本地逻辑）
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/PurchaseReceiptCreateModal.tsx	ea8fd3b6382ea54653720bf0fb30303b69fd28be	applied	R2:MERGE已三方合并-并入上游auxQuantities分批取单副数量交接(handoffAux覆盖aux_quantity);本地po-compose重写版结构保留
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/PurchaseReceiptDocumentPushPanel.tsx	566320384e783ba7898be2e3994a2d9917ddb1df	tracked	seed from 2c945a39fb
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/PurchaseReceiptEditModal.tsx	DELETED	superset	R2:本地保留行级删除/工位写保护/门禁等超集能力，上游tip为删减版
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/components/InboundDetailDrawer.tsx	14d41d22d4aa7fe25c105069b2e696e8de2692a6	applied	91c8157e1e强制重推+推送开关(含前置c0a917fc45基座)

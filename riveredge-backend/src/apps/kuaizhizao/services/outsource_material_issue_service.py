@@ -60,6 +60,123 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
             update={"lifecycle": get_outsource_material_issue_lifecycle(issue, milestones=[])}
         )
 
+    async def create_material_issue_for_outsource_order(
+        self,
+        tenant_id: int,
+        issue_data: OutsourceMaterialIssueCreate,
+        *,
+        outsource_order,
+        created_by: int,
+    ) -> OutsourceMaterialIssueResponse:
+        from apps.kuaizhizao.services.document_action_policy.outsource_order import (
+            assert_outsource_order_push_issue,
+        )
+
+        assert_outsource_order_push_issue(outsource_order)
+        if not issue_data.outsource_order_id:
+            issue_data = issue_data.model_copy(
+                update={
+                    "outsource_order_id": int(outsource_order.id),
+                    "outsource_order_code": str(outsource_order.code or ""),
+                }
+            )
+        if issue_data.quantity <= 0:
+            raise ValidationError("发料数量必须大于 0")
+        if not issue_data.warehouse_id or int(issue_data.warehouse_id) <= 0:
+            raise ValidationError(
+                f"物料 {issue_data.material_code or issue_data.material_name} 须指定出库仓库"
+            )
+        user_info = await self.get_user_info(created_by)
+        from apps.kuaizhizao.models.work_order import WorkOrder
+
+        work_order = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            id=int(outsource_order.work_order_id),
+            deleted_at__isnull=True,
+        ).first()
+        if not work_order:
+            raise NotFoundError("工单不存在")
+
+        await self._assert_outsource_order_issue_pending(
+            tenant_id=tenant_id,
+            outsource_order=outsource_order,
+            material_id=int(issue_data.material_id),
+            quantity=Decimal(str(issue_data.quantity)),
+            material_label=str(
+                issue_data.material_code or issue_data.material_name or issue_data.material_id
+            ),
+        )
+
+        async with in_transaction():
+            code = issue_data.code
+            if not code:
+                today = today_site_str()
+                existing_codes = await OutsourceMaterialIssue.filter(
+                    tenant_id=tenant_id,
+                    code__startswith=f"OWI-{today}",
+                    deleted_at__isnull=True,
+                ).order_by("-code").limit(1).values_list("code", flat=True)
+                if existing_codes:
+                    last_seq = int(existing_codes[0].split("-")[-1]) if existing_codes[0].split("-")[-1].isdigit() else 0
+                    seq = last_seq + 1
+                else:
+                    seq = 1
+                code = f"OWI-{today}-{seq:04d}"
+            now = resolve_business_datetime(issue_data.issued_at)
+            resolved_issued_by = (
+                int(issue_data.issued_by) if getattr(issue_data, "issued_by", None) and int(issue_data.issued_by) > 0 else created_by
+            )
+            resolved_issued_by_name = (
+                str(getattr(issue_data, "issued_by_name", None) or "").strip() or user_info["name"]
+            )
+            material_issue = await OutsourceMaterialIssue.create(
+                tenant_id=tenant_id,
+                uuid=str(uuid.uuid4()),
+                code=code,
+                outsource_order_id=int(outsource_order.id),
+                outsource_order_code=str(outsource_order.code or ""),
+                material_id=issue_data.material_id,
+                material_code=issue_data.material_code,
+                material_name=issue_data.material_name,
+                quantity=issue_data.quantity,
+                unit=issue_data.unit,
+                warehouse_id=issue_data.warehouse_id,
+                warehouse_name=issue_data.warehouse_name,
+                location_id=issue_data.location_id,
+                location_name=issue_data.location_name,
+                batch_number=issue_data.batch_number,
+                status="completed",
+                issued_at=now,
+                issued_by=resolved_issued_by,
+                issued_by_name=resolved_issued_by_name,
+                remarks=issue_data.remarks,
+                created_by=created_by,
+                created_by_name=user_info["name"],
+            )
+            from apps.kuaizhizao.services.inventory_service import InventoryService
+
+            await InventoryService.decrease_stock(
+                tenant_id=tenant_id,
+                material_id=issue_data.material_id,
+                quantity=issue_data.quantity,
+                warehouse_id=issue_data.warehouse_id,
+                batch_no=getattr(issue_data, "batch_number", None),
+                source_type="outsource_material_issue",
+                source_doc_id=material_issue.id,
+                source_doc_code=code,
+                movement_type="outsource_issue",
+                from_warehouse_id=issue_data.warehouse_id,
+                from_warehouse_name=issue_data.warehouse_name,
+                work_order_id=int(work_order.id),
+                work_order_code=str(work_order.code or ""),
+                operator_id=created_by,
+                operator_name=user_info["name"],
+                idempotency_key=f"outsource_material_issue:{material_issue.id}:dec",
+            )
+            await material_issue.refresh_from_db()
+            response = OutsourceMaterialIssueResponse.model_validate(material_issue)
+            return self._attach_lifecycle(material_issue, response)
+
     async def create_material_issue(
         self,
         tenant_id: int,
@@ -220,6 +337,167 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
         if (source_type or "").strip() in ("Phantom", "Service"):
             return False
         return resolve_issue_method(issue_method, source_type) != ISSUE_METHOD_NONE
+
+    async def _net_issued_qty_by_outsource_order(
+        self,
+        tenant_id: int,
+        outsource_order_id: int,
+    ) -> Dict[int, Decimal]:
+        issues = await OutsourceMaterialIssue.filter(
+            tenant_id=tenant_id,
+            outsource_order_id=int(outsource_order_id),
+            deleted_at__isnull=True,
+        ).all()
+        net: Dict[int, Decimal] = {}
+        for issue in issues:
+            mid = int(issue.material_id)
+            net[mid] = net.get(mid, Decimal("0")) + Decimal(str(issue.quantity or 0))
+        return net
+
+    async def _bom_required_qty_for_outsource_order(
+        self,
+        tenant_id: int,
+        outsource_order,
+    ) -> Dict[int, Decimal]:
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
+
+        work_order = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            id=int(outsource_order.work_order_id),
+            deleted_at__isnull=True,
+        ).first()
+        if not work_order or not work_order.product_id:
+            return {}
+        scale_qty = float(outsource_order.outsource_quantity or 0)
+        if scale_qty <= 0:
+            return {}
+        try:
+            reqs = await calculate_material_requirements_from_bom(
+                tenant_id=tenant_id,
+                material_id=int(work_order.product_id),
+                required_quantity=scale_qty,
+                only_approved=True,
+                for_kitting_analysis=True,
+            )
+        except NotFoundError:
+            return {}
+        required: Dict[int, Decimal] = {}
+        for r in reqs:
+            if not self._should_issue_for_outsource(
+                getattr(r, "issue_method", None),
+                getattr(r, "component_type", None),
+            ):
+                continue
+            mid = int(r.component_id)
+            qty = Decimal(str(r.net_requirement or r.gross_requirement or 0))
+            required[mid] = required.get(mid, Decimal("0")) + qty
+        return required
+
+    async def _assert_outsource_order_issue_pending(
+        self,
+        *,
+        tenant_id: int,
+        outsource_order,
+        material_id: int,
+        quantity: Decimal,
+        material_label: str,
+    ) -> None:
+        """BOM 内物料按待发上限校验；手工行与委外工单发料规则一致。"""
+        required_map = await self._bom_required_qty_for_outsource_order(
+            tenant_id, outsource_order
+        )
+        required = required_map.get(int(material_id))
+        if required is None:
+            return
+        net_issued = (
+            await self._net_issued_qty_by_outsource_order(tenant_id, int(outsource_order.id))
+        ).get(int(material_id), Decimal("0"))
+        pending = max(Decimal("0"), required - net_issued)
+        if quantity > pending:
+            raise ValidationError(
+                f"物料 {material_label} 发料数量 {quantity} 不能超过待发数量 {pending}"
+            )
+
+    async def _net_issued_qty_by_material(
+        self,
+        tenant_id: int,
+        outsource_work_order_id: int,
+    ) -> Dict[int, Decimal]:
+        """按物料净发数量：已发 − 已退（退料后可再发）。"""
+        issues = await OutsourceMaterialIssue.filter(
+            tenant_id=tenant_id,
+            outsource_work_order_id=outsource_work_order_id,
+            deleted_at__isnull=True,
+        ).all()
+        returns = await OutsourceMaterialReturn.filter(
+            tenant_id=tenant_id,
+            outsource_work_order_id=outsource_work_order_id,
+            deleted_at__isnull=True,
+            status="completed",
+        ).all()
+        net: Dict[int, Decimal] = {}
+        for issue in issues:
+            mid = int(issue.material_id)
+            net[mid] = net.get(mid, Decimal("0")) + Decimal(str(issue.quantity or 0))
+        for row in returns:
+            mid = int(row.material_id)
+            net[mid] = net.get(mid, Decimal("0")) - Decimal(str(row.quantity or 0))
+        return {mid: max(Decimal("0"), qty) for mid, qty in net.items()}
+
+    async def _bom_required_qty_by_material(
+        self,
+        tenant_id: int,
+        outsource_work_order: OutsourceWorkOrder,
+    ) -> Dict[int, Decimal]:
+        from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
+
+        if not outsource_work_order.product_id:
+            return {}
+        try:
+            reqs = await calculate_material_requirements_from_bom(
+                tenant_id=tenant_id,
+                material_id=outsource_work_order.product_id,
+                required_quantity=float(outsource_work_order.quantity or 0),
+                only_approved=True,
+                for_kitting_analysis=True,
+            )
+        except NotFoundError:
+            return {}
+        required: Dict[int, Decimal] = {}
+        for r in reqs:
+            if not self._should_issue_for_outsource(
+                getattr(r, "issue_method", None),
+                getattr(r, "component_type", None),
+            ):
+                continue
+            mid = int(r.component_id)
+            qty = Decimal(str(r.net_requirement or r.gross_requirement or 0))
+            required[mid] = required.get(mid, Decimal("0")) + qty
+        return required
+
+    async def _assert_issue_quantity_within_bom_pending(
+        self,
+        *,
+        tenant_id: int,
+        outsource_work_order: OutsourceWorkOrder,
+        material_id: int,
+        quantity: Decimal,
+        material_label: str,
+    ) -> None:
+        """BOM 内物料硬卡待发上限；BOM 外手工行不按配方卡（仍受库存扣减约束）。"""
+        required_map = await self._bom_required_qty_by_material(tenant_id, outsource_work_order)
+        required = required_map.get(int(material_id))
+        if required is None:
+            return
+        net_issued = (
+            await self._net_issued_qty_by_material(tenant_id, int(outsource_work_order.id))
+        ).get(int(material_id), Decimal("0"))
+        pending = max(Decimal("0"), required - net_issued)
+        if quantity > pending:
+            raise ValidationError(
+                f"物料 {material_label} 发料数量 {quantity} 不能超过待发数量 {pending}"
+            )
 
     async def get_issue_preview(
         self,

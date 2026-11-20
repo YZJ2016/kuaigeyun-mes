@@ -142,3 +142,21 @@ def test_purchase_inquiry_draft_after_submit_is_pending_phase():
     )
     assert audit["phase"] == "pending"
     assert set(audit["allowed_actions"]) == {"approve", "reject", "withdraw"}
+
+
+def test_partner_statement_draft_is_submit_review_only():
+    audit = derive_audit_phase("partner_statement", "Draft", "草稿", enabled=True)
+    assert audit["phase"] == "draft"
+    assert audit["allowed_actions"] == ["submit_review"]
+
+
+def test_partner_statement_confirmed_before_review_is_submitted_phase():
+    audit = derive_audit_phase("partner_statement", "Confirmed", "草稿", enabled=True)
+    assert audit["phase"] == "submitted"
+    assert set(audit["allowed_actions"]) == {"submit_review", "withdraw"}
+
+
+def test_partner_statement_confirmed_rejected_resubmit_review():
+    audit = derive_audit_phase("partner_statement", "Confirmed", "驳回", enabled=True)
+    assert audit["phase"] == "rejected"
+    assert audit["allowed_actions"] == ["submit_review"]

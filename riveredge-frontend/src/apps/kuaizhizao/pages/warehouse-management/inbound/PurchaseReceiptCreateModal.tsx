@@ -751,10 +751,22 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
                 return fromLine > 0 ? fromLine : headerTaxPct;
               })();
               const pushQty = Number(poCompose.quantities[lineId]) || 0;
-              const dual = documentLineDualQuantityForPush(it as unknown as Record<string, unknown>, {
-                sourcePrimaryQty: Number(it.ordered_quantity) || 0,
-                pushPrimaryQty: pushQty,
-              });
+              // 分批第二次取单：副数量以取单 remaining_aux 为准，禁止仅按整单 ordered 比例重算
+              const handoffAuxRaw = poCompose.auxQuantities?.[lineId];
+              const dualFromOrdered = documentLineDualQuantityForPush(
+                it as unknown as Record<string, unknown>,
+                {
+                  sourcePrimaryQty: Number(it.ordered_quantity) || 0,
+                  pushPrimaryQty: pushQty,
+                },
+              );
+              const dual =
+                handoffAuxRaw != null && Number.isFinite(Number(handoffAuxRaw))
+                  ? {
+                      ...dualFromOrdered,
+                      aux_quantity: Number(handoffAuxRaw),
+                    }
+                  : dualFromOrdered;
               return {
                 purchase_order_item_id: lineId,
                 material_id: it.material_id,

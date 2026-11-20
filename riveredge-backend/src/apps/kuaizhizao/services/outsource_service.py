@@ -601,8 +601,22 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
         order_clause = order_by if order_by else "-created_at"
         outsource_orders = await query.offset(skip).limit(limit).order_by(order_clause).all()
 
+        from apps.kuaizhizao.services.document_lifecycle_service import get_outsource_order_lifecycle
+
+        from apps.kuaizhizao.services.document_action_policy.outsource_order import (
+            derive_outsource_order_push_issue_cap,
+        )
+
+        rows: list[dict] = []
+        for row in outsource_orders:
+            item = OutsourceOrderListResponse.model_validate(row).model_dump()
+            item["lifecycle"] = get_outsource_order_lifecycle(row)
+            item["capabilities"] = {
+                "push_outsource_issue": derive_outsource_order_push_issue_cap(row).model_dump(),
+            }
+            rows.append(item)
         return {
-            "data": [OutsourceOrderListResponse.model_validate(os).model_dump() for os in outsource_orders],
+            "data": rows,
             "total": total,
             "success": True,
         }

@@ -182,19 +182,36 @@ async def resolve_payable_recognition_for_purchase_invoice(
     tenant_id: int,
     invoice: Any,
 ) -> str:
-    """进项发票自动应付门控：优先读关联采购订单/入库单上的 payable_recognition。"""
+    """进项发票自动应付门控：优先读关联入库单 payable_recognition，再看采购订单/组织默认。"""
     from apps.kuaizhizao.models.purchase_order import PurchaseOrder
     from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
     from apps.kuaicaiwu.models.payable import Payable
     from apps.kuaicaiwu.constants.finance_source_types import PAYABLE_SOURCE_PURCHASE_RECEIPT
+    from apps.kuaizhizao.models.document_relation import DocumentRelation
 
-    po_id = getattr(invoice, "purchase_order_id", None)
-    if po_id:
-        po = await PurchaseOrder.get_or_none(
-            tenant_id=tenant_id, id=int(po_id), deleted_at__isnull=True
+    invoice_id = int(getattr(invoice, "id", 0) or 0)
+
+    async def _strategy_from_receipt_id(receipt_id: int) -> str | None:
+        receipt = await PurchaseReceipt.get_or_none(
+            tenant_id=tenant_id, id=int(receipt_id), deleted_at__isnull=True
         )
-        if po is not None:
-            return payable_recognition_from_doc(po)
+        if receipt is None:
+            return None
+        return payable_recognition_from_doc(receipt)
+
+    # 真源在入库行：订单头可能仍是「入库立账」，不得先于入库关联覆盖
+    if invoice_id > 0:
+        rels = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="purchase_receipt",
+            target_type="purchase_invoice",
+            target_id=invoice_id,
+        ).all()
+        for rel in rels:
+            if rel.source_id:
+                strat = await _strategy_from_receipt_id(int(rel.source_id))
+                if strat is not None:
+                    return strat
 
     payable_id = getattr(invoice, "payable_id", None)
     if payable_id:
@@ -206,27 +223,17 @@ async def resolve_payable_recognition_for_purchase_invoice(
             "purchase_receipt",
             "PurchaseReceipt",
         ):
-            receipt = await PurchaseReceipt.get_or_none(
-                tenant_id=tenant_id, id=int(payable.source_id), deleted_at__isnull=True
-            )
-            if receipt is not None:
-                return payable_recognition_from_doc(receipt)
+            strat = await _strategy_from_receipt_id(int(payable.source_id))
+            if strat is not None:
+                return strat
 
-    from apps.kuaizhizao.models.document_relation import DocumentRelation
-
-    # DocumentRelation 无 deleted_at；加载建票约定 source=入库 → target=发票
-    rel = await DocumentRelation.filter(
-        tenant_id=tenant_id,
-        source_type="purchase_receipt",
-        target_type="purchase_invoice",
-        target_id=int(invoice.id),
-    ).first()
-    if rel and rel.source_id:
-        receipt = await PurchaseReceipt.get_or_none(
-            tenant_id=tenant_id, id=int(rel.source_id), deleted_at__isnull=True
+    po_id = getattr(invoice, "purchase_order_id", None)
+    if po_id:
+        po = await PurchaseOrder.get_or_none(
+            tenant_id=tenant_id, id=int(po_id), deleted_at__isnull=True
         )
-        if receipt is not None:
-            return payable_recognition_from_doc(receipt)
+        if po is not None:
+            return payable_recognition_from_doc(po)
 
     supplier_id = getattr(invoice, "supplier_id", None)
     return await default_payable_recognition(

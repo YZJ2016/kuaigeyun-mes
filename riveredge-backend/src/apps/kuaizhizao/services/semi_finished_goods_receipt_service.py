@@ -826,12 +826,15 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
         from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
         from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 
+        from apps.kuaizhizao.services.document_action_policy.work_order import (
+            assert_work_order_capability,
+        )
+
         async with in_transaction():
             work_order = await WorkOrder.get_or_none(tenant_id=tenant_id, id=work_order_id)
             if not work_order:
                 raise NotFoundError(f"工单不存在: {work_order_id}")
-            if work_order.status not in WORK_ORDER_INBOUND_ALLOWED_STATUSES:
-                raise BusinessLogicError(f"工单状态为 {work_order.status}，无法创建入库单")
+            assert_work_order_capability(work_order, "push_finished_goods_receipt")
 
             if receipt_quantity is None:
                 qc_records = await FinishedGoodsInspection.filter(
