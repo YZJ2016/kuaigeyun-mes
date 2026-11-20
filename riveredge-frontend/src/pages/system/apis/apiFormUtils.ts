@@ -2,6 +2,10 @@ import {
   isEmptyJsonValue,
   normalizeJsonFieldValue,
 } from '../../../components/custom-fields/customFieldJsonUtils';
+import {
+  normalizeOutboundFieldMappings,
+  type OutboundFieldMappingRow,
+} from './outboundFieldMappings';
 
 /** 键值对行（Headers / Params 表单） */
 export interface ApiKeyValueRow {
@@ -71,17 +75,37 @@ function looksLikeExecuteBillQueryBody(body: Record<string, unknown>): boolean {
   );
 }
 
-/** 新建/空请求体默认带分页；已有 pageNo 但缺少 pageSize 时补 1000 */
-export function applyRequestBodyFormDefaults(value: unknown): unknown {
+function looksLikeOnlyPagingBody(body: Record<string, unknown>): boolean {
+  const keys = Object.keys(body);
+  if (!keys.length) return true;
+  return keys.every(
+    (key) =>
+      (REQUEST_BODY_PAGE_NO_KEYS as readonly string[]).includes(key) ||
+      (REQUEST_BODY_PAGE_SIZE_KEYS as readonly string[]).includes(key),
+  );
+}
+
+/** 入站空体默认带分页；出站不注入 pageNo/pageSize，仅分页的旧样例清空为 {} */
+export function applyRequestBodyFormDefaults(
+  value: unknown,
+  syncDirection?: 'pull' | 'push' | 'bidirectional',
+): unknown {
   const normalized = normalizeJsonFieldValue(value);
+  const isPush = syncDirection === 'push';
   if (isEmptyJsonValue(normalized)) {
-    return { pageNo: 1, pageSize: DEFAULT_API_REQUEST_PAGE_SIZE };
+    return isPush ? {} : { pageNo: 1, pageSize: DEFAULT_API_REQUEST_PAGE_SIZE };
   }
   if (!normalized || typeof normalized !== 'object' || Array.isArray(normalized)) {
     return normalized;
   }
   const body = { ...(normalized as Record<string, unknown>) };
   if (looksLikeExecuteBillQueryBody(body)) return body;
+
+  // 出站：不要默认分页参数；历史误存的 pageNo/pageSize 样例直接清空
+  if (isPush) {
+    if (looksLikeOnlyPagingBody(body)) return {};
+    return body;
+  }
 
   const pageNoKey = hasOwnKey(body, REQUEST_BODY_PAGE_NO_KEYS);
   const pageSizeKey = hasOwnKey(body, REQUEST_BODY_PAGE_SIZE_KEYS);
@@ -128,6 +152,7 @@ export interface ApiFormRawValues {
   }>;
   related_document_code?: string;
   api_interface_type?: 'standard' | 'custom';
+  outbound_field_mappings?: OutboundFieldMappingRow[];
 }
 
 export interface ApiFormSubmitValues {
@@ -149,10 +174,12 @@ export interface ApiFormSubmitValues {
   source_type_conversion_map?: Array<{ field_name: string; mapping: Record<string, string> }> | null;
   related_document_code?: string | null;
   api_interface_type: 'standard' | 'custom';
+  outbound_field_mappings?: OutboundFieldMappingRow[] | null;
 }
 
 /** 表单原始值 → 提交 API 的结构 */
 export function transformApiFormValues(values: ApiFormRawValues): ApiFormSubmitValues {
+  const syncDirection = values.sync_direction || 'pull';
   return {
     name: values.name,
     code: values.code,
@@ -161,17 +188,33 @@ export function transformApiFormValues(values: ApiFormRawValues): ApiFormSubmitV
     category_uuid: values.category_uuid ?? null,
     path: values.path,
     method: values.method,
-    sync_direction: values.sync_direction || 'pull',
+    sync_direction: syncDirection,
     is_active: values.is_active,
     is_system: values.is_system,
     request_headers: keyValueListToObject(values.request_headers),
     request_params: keyValueListToObject(values.request_params),
-    request_body: normalizeApiJsonObject(values.request_body),
+    request_body: (() => {
+      const body = normalizeApiJsonObject(values.request_body);
+      // 出站提交时若仍是分页样例，不落库
+      if (
+        syncDirection === 'push' &&
+        Object.keys(body).length > 0 &&
+        Object.keys(body).every(
+          (key) =>
+            (REQUEST_BODY_PAGE_NO_KEYS as readonly string[]).includes(key) ||
+            (REQUEST_BODY_PAGE_SIZE_KEYS as readonly string[]).includes(key),
+        )
+      ) {
+        return {};
+      }
+      return body;
+    })(),
     response_format: normalizeApiJsonObject(values.response_format),
     response_example: normalizeApiJsonObject(values.response_example),
     related_document_code: values.related_document_code?.trim() || null,
     api_interface_type: values.api_interface_type || 'custom',
     source_type_conversion_map: (() => {
+      if (syncDirection === 'push') return null;
       const entries = values.source_type_conversion_map_entries?.filter(
         (e) => e?.field_name?.trim() && e?.source?.trim() && e?.target?.trim(),
       ) ?? [];
@@ -190,5 +233,33 @@ export function transformApiFormValues(values: ApiFormRawValues): ApiFormSubmitV
       }
       return Object.entries(grouped).map(([field_name, mapping]) => ({ field_name, mapping }));
     })(),
+    outbound_field_mappings:
+      syncDirection === 'push' || syncDirection === 'bidirectional'
+        ? (() => {
+            const mapped = normalizeOutboundFieldMappings(values.outbound_field_mappings);
+            if (!mapped) return null;
+            const headerTable = 'apps_kuaizhizao_purchase_receipts';
+            const entryTable = 'apps_kuaizhizao_purchase_receipt_items';
+            return mapped.map((row) => {
+              let next = { ...row };
+              if (!next.source_table) {
+                next.source_table =
+                  next.level === 'entry' ? entryTable : headerTable;
+              }
+              const raw = next.default_value;
+              if (raw === 'true') next = { ...next, default_value: true };
+              else if (raw === 'false') next = { ...next, default_value: false };
+              else if (
+                raw !== '' &&
+                raw != null &&
+                typeof raw === 'string' &&
+                /^-?\d+(\.\d+)?$/.test(raw)
+              ) {
+                next = { ...next, default_value: Number(raw) };
+              }
+              return next;
+            });
+          })()
+        : null,
   };
 }

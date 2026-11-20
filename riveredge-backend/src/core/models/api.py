@@ -49,6 +49,11 @@ class API(BaseModel):
     )
     # SOURCE_TYPE_CONVERSION: 接口级来源编码到系统来源类型的配置。
     source_type_conversion_map = fields.JSONField(null=True, description="来源类型编码转换映射（如金蝶 FErpClsID: 1->Buy）")
+    # 出站：本地字段 → 对方字段（含默认值）；push 单据推送时优先按此组装
+    outbound_field_mappings = fields.JSONField(
+        null=True,
+        description="出站字段映射 [{enabled,level,local_field,remote_field,default_value}]",
+    )
 
     integration_config: fields.ForeignKeyNullableRelation["IntegrationConfig"] = fields.ForeignKeyField(
         "models.IntegrationConfig",

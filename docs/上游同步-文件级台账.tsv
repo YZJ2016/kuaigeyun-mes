@@ -470,7 +470,7 @@ riveredge-backend/migrations/models/986_20261103004500_other_outbound_item_line_
 riveredge-backend/migrations/models/987_20261103113000_dual_inventory_unit_ledger.py	5ad6beb1d6653a57d9e37dc70b4b86574d2d0c25	applied	R2簇2迁移:20261123命名落位(不执行)
 riveredge-backend/migrations/models/987_20261103120000_seed_equipment_inspection_scheme_code_rule.py	ccbec5d8408a9a2aa75625f54e736106c4ef1bb8	applied	R2簇2迁移:20261123命名落位(不执行)
 riveredge-backend/migrations/models/988_20261103143000_seed_missing_code_rules_batch.py	0b70f65331417f179e7b3c2564560565bc2bd4b7	applied	R2簇2迁移:20261123命名落位;剔除other_expense_application与haoligo规则(域未落地)
-riveredge-backend/migrations/models/988_20261103150000_api_outbound_field_mappings.py	8879801749735553ea167957fb5f2279b01b240f	deferred	特性增量未核验/未落地，随对应域批次复核（预审A包）
+riveredge-backend/migrations/models/988_20261103150000_api_outbound_field_mappings.py	8879801749735553ea167957fb5f2279b01b240f	applied	摘取：出站字段映射全链落地——model列+迁移988→20261123000039+编辑器/映射工具/表单接线；本地schema/服务/目录此前已在
 riveredge-backend/migrations/models/988_20261103160000_ledger_aux_quantity.py	5d9e5bf7ea9152c63ea8cd888df2c3577346c9d3	applied	R2簇2迁移:20261123命名落位(不执行)
 riveredge-backend/migrations/models/989_20261103150100_purchase_receipt_push_code_fields.py	8ee070103a8fa50c897768d4c21a197d0c602796	deferred	特性增量未核验/未落地，随对应域批次复核（预审A包）
 riveredge-backend/migrations/models/989_20261103152000_rebackfill_material_base_unit_to_name.py	6d61fe3ac3c493b964588d8c0c5c8ffd28ec9f25	applied	R2簇2迁移:20261123命名落位(不执行)
@@ -1451,7 +1451,7 @@ riveredge-backend/src/core/config/system_dictionaries.py	7a73228cc264a160196d166
 riveredge-backend/src/core/domain/security/password_policy.py	6c68f57e1f798245db572f21963157dcb62678d2	applied	C密码策略/默认与临时重置整簇；应用扫描按目录项容忍OSError但整目录不可枚举上抛；63聚焦测试包含用户与菜单同步；生成口令不写日志
 riveredge-backend/src/core/middleware/operation_log_middleware.py	eba310c6b35703d8ea2fdd759da759b64a0415a8	tracked	seed from 31efc2b64c
 riveredge-backend/src/core/middleware/request_timeout_middleware.py	661f7e46af78221f27f64374478026f1c4f88a7b	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
-riveredge-backend/src/core/models/api.py	de8451cbe1d34ea504932b5d4d55ed43c5ddee28	tracked	seed from df7d635797
+riveredge-backend/src/core/models/api.py	de8451cbe1d34ea504932b5d4d55ed43c5ddee28	applied	摘取：出站字段映射全链落地——model列+迁移988→20261123000039+编辑器/映射工具/表单接线；本地schema/服务/目录此前已在
 riveredge-backend/src/core/models/approval_process.py	6259f4adf6e3c59ae07f8a0542013a4b5869e629	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/core/models/approval_wecom_card.py	f61f0402040271932bacf4c20c2e41e23c3e90ef	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/core/models/custom_field_value.py	ba0224a922894782e9569cc94ad4eb0f4b5eeee0	applied	R2：与上游tip blob一致，本地已同步
@@ -2833,14 +2833,14 @@ riveredge-frontend/src/pages/infra/tenants/detail/index.tsx	80fb77d7276eb3fcbe60
 riveredge-frontend/src/pages/infra/tenants/list/index.tsx	79ebee8abbadc1900e01fe318d4efe79a245d31b	tracked	seed from e75380e080
 riveredge-frontend/src/pages/login/index.tsx	a810d49948460fa99f5f4b2f3addae98d5156f1e	tracked	seed from 1d968cd27b
 riveredge-frontend/src/pages/master-data/supply-chain/suppliers/supplierSyncFields.ts	DELETED	superset	本地独有文件（a8faaea与tip均无此路径），无上游可比版本
-riveredge-frontend/src/pages/system/apis/ApiFormModal.tsx	2de5acb7b57c638b67d47bf6b75c4ef8664ce841	deferred	测试/脚本/文档随所属特性域待评或安全可摘但暂登记（预审A包）
+riveredge-frontend/src/pages/system/apis/ApiFormModal.tsx	2de5acb7b57c638b67d47bf6b75c4ef8664ce841	applied	摘取：出站字段映射全链落地——model列+迁移988→20261123000039+编辑器/映射工具/表单接线；本地schema/服务/目录此前已在
 riveredge-frontend/src/pages/system/apis/ApiTestDrawer.tsx	3a266f6aff79727fef9d0740d5c4fad08a8fd7f3	superset	R2预审：本地已有等价/更深实现，不摘
-riveredge-frontend/src/pages/system/apis/OutboundFieldMappingEditor.tsx	be1d485fa7b007a4ef44165969b7f7c243f64195	deferred	测试/脚本/文档随所属特性域待评或安全可摘但暂登记（预审A包）
+riveredge-frontend/src/pages/system/apis/OutboundFieldMappingEditor.tsx	be1d485fa7b007a4ef44165969b7f7c243f64195	applied	摘取：出站字段映射全链落地——model列+迁移988→20261123000039+编辑器/映射工具/表单接线；本地schema/服务/目录此前已在
 riveredge-frontend/src/pages/system/apis/apiCategoryTree.ts	18eb9b92d69cd16212f53a0a1569964f27e7037c	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
-riveredge-frontend/src/pages/system/apis/apiFormUtils.ts	a7cca2a6b7e1132b449b98d9c9689ceb19940699	deferred	测试/脚本/文档随所属特性域待评或安全可摘但暂登记（预审A包）
+riveredge-frontend/src/pages/system/apis/apiFormUtils.ts	a7cca2a6b7e1132b449b98d9c9689ceb19940699	applied	摘取：出站字段映射全链落地——model列+迁移988→20261123000039+编辑器/映射工具/表单接线；本地schema/服务/目录此前已在
 riveredge-frontend/src/pages/system/apis/apiTestResultPreview.ts	0f49daf0ae44a82938427c97a2281e49e6acad70	tracked	seed from 7fa73e053a
 riveredge-frontend/src/pages/system/apis/list/index.tsx	70d818ce09cb2d48791c9801b59384fd4e1a8b09	tracked	seed from 3958bb1524
-riveredge-frontend/src/pages/system/apis/outboundFieldMappings.ts	0a797cf9835c782ddb3409f90d821cf93e76ea65	deferred	测试/脚本/文档随所属特性域待评或安全可摘但暂登记（预审A包）
+riveredge-frontend/src/pages/system/apis/outboundFieldMappings.ts	0a797cf9835c782ddb3409f90d821cf93e76ea65	applied	摘取：出站字段映射全链落地——model列+迁移988→20261123000039+编辑器/映射工具/表单接线；本地schema/服务/目录此前已在
 riveredge-frontend/src/pages/system/application-connections/AppConnectorMarket.tsx	ef6a3261bfc4dbb5db8716abf534ea242a7251d5	applied	R2 fe收尾：批配中心自定义字段/生产退料取单行仓位/半成品入库自定义字段富化/装拆单customFieldTableName/连接器市场取上游tip
 riveredge-frontend/src/pages/system/application-connections/WeComDeploymentGuideBlock.tsx	439f6d81ec0d9bf45bbb0a88a87338087e23c65f	tracked	seed from 3958bb1524
 riveredge-frontend/src/pages/system/application-connections/connectors.tsx	99a3fb4e1826fbda5c1adf997c788078503e636a	applied	R2 fe收尾：批配中心自定义字段/生产退料取单行仓位/半成品入库自定义字段富化/装拆单customFieldTableName/连接器市场取上游tip

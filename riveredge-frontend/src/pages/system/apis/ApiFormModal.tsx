@@ -16,6 +16,7 @@ import { Col, Row, Tabs } from 'antd';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import { API_INTERFACE_TYPE_OPTIONS } from '../../../configs/apiLibraryContract';
 import { getAPIRelatedDocumentOptions } from '../../../services/apiManagement';
+import { OutboundFieldMappingEditor } from './OutboundFieldMappingEditor';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
 import type { DataConnectionGroupOption, IntegrationConfig } from '../../../services/integrationConfig';
 import { KingdeeExecuteBillQueryBodyEditor } from './KingdeeExecuteBillQueryBodyEditor';
@@ -227,46 +228,63 @@ export const ApiFormModal: React.FC<ApiFormModalProps> = ({
         label: t('pages.system.apis.tabBody'),
         children: (
           <>
-            {/* SOURCE_TYPE_CONVERSION: 接口编辑页维护来源编码映射。 */}
-            <ProFormList
-              name="source_type_conversion_map_entries"
-              label={t('pages.system.apis.sourceTypeConversionLabel')}
-              tooltip={t('pages.system.apis.sourceTypeConversionHint')}
-              creatorButtonProps={{ creatorButtonText: t('components.syncFromSource.addConversionRow') }}
-              className="api-form-kv-list"
-              itemRender={({ listDom, action }) => (
-                <div className="api-form-kv-list-item">
-                  <div className="api-form-kv-list-item__fields">{listDom}</div>
-                  <div className="api-form-kv-list-item__actions">{action}</div>
-                </div>
-              )}
-              min={0}
-            >
-              <Row gutter={8} align="middle">
-                <Col span={7}>
-                  <ProFormText
-                    name="field_name"
-                    label={t('pages.system.apis.sourceFieldLabel')}
-                    fieldProps={{ placeholder: t('pages.system.apis.sourceFieldPlaceholder') }}
-                  />
-                </Col>
-                <Col span={8}>
-                  <ProFormText
-                    name="source"
-                    label={t('components.syncFromSource.srcCode')}
-                    fieldProps={{ placeholder: t('pages.system.apis.sourceCodeHint') }}
-                  />
-                </Col>
-                <Col span={8}>
-                  <ProFormText
-                    name="target"
-                    label={t('components.syncFromSource.dstType')}
-                    fieldProps={{ placeholder: t('pages.system.apis.targetTypeHint') }}
-                  />
-                </Col>
-              </Row>
-            </ProFormList>
-            <ProFormDependency name={['connection_uuid', 'path']}>
+            <ProFormDependency name={['sync_direction', 'path']}>
+              {({ sync_direction, path }) => {
+                const showOutbound =
+                  sync_direction === 'push' || sync_direction === 'bidirectional';
+                if (!showOutbound) return null;
+                return <OutboundFieldMappingEditor path={path} />;
+              }}
+            </ProFormDependency>
+            {/* 来源类型编码转换仅入站/双向；出站不展示 */}
+            <ProFormDependency name={['sync_direction']}>
+              {({ sync_direction }) => {
+                if (sync_direction === 'push') return null;
+                return (
+                  <ProFormList
+                    name="source_type_conversion_map_entries"
+                    label={t('pages.system.apis.sourceTypeConversionLabel')}
+                    tooltip={t('pages.system.apis.sourceTypeConversionHint')}
+                    creatorButtonProps={{
+                      creatorButtonText: t('components.syncFromSource.addConversionRow'),
+                    }}
+                    className="api-form-kv-list"
+                    itemRender={({ listDom, action }) => (
+                      <div className="api-form-kv-list-item">
+                        <div className="api-form-kv-list-item__fields">{listDom}</div>
+                        <div className="api-form-kv-list-item__actions">{action}</div>
+                      </div>
+                    )}
+                    min={0}
+                  >
+                    <Row gutter={8} align="middle">
+                      <Col span={7}>
+                        <ProFormText
+                          name="field_name"
+                          label={t('pages.system.apis.sourceFieldLabel')}
+                          fieldProps={{ placeholder: t('pages.system.apis.sourceFieldPlaceholder') }}
+                        />
+                      </Col>
+                      <Col span={8}>
+                        <ProFormText
+                          name="source"
+                          label={t('components.syncFromSource.srcCode')}
+                          fieldProps={{ placeholder: t('pages.system.apis.sourceCodeHint') }}
+                        />
+                      </Col>
+                      <Col span={8}>
+                        <ProFormText
+                          name="target"
+                          label={t('components.syncFromSource.dstType')}
+                          fieldProps={{ placeholder: t('pages.system.apis.targetTypeHint') }}
+                        />
+                      </Col>
+                    </Row>
+                  </ProFormList>
+                );
+              }}
+            </ProFormDependency>
+            <ProFormDependency name={['connection_uuid', 'path', 'sync_direction']}>
             {(values) => {
               const connectionType = connectionItems.find(
                 (item) => item.uuid === values.connection_uuid,
@@ -295,7 +313,11 @@ export const ApiFormModal: React.FC<ApiFormModalProps> = ({
                 <ApiJsonFormField
                   name="request_body"
                   label={t('pages.system.apis.labelRequestBody')}
-                  placeholder={t('pages.system.apis.bodyJsonPlaceholder')}
+                  placeholder={
+                    values.sync_direction === 'push'
+                      ? t('pages.system.apis.bodyJsonPlaceholderPush')
+                      : t('pages.system.apis.bodyJsonPlaceholder')
+                  }
                 />
               );
             }}
@@ -513,8 +535,17 @@ export function normalizeApiFormInitialValues(
     response_format?: Record<string, unknown> | null;
     response_example?: Record<string, unknown> | null;
     source_type_conversion_map?: Array<{ field_name: string; mapping: Record<string, string> }> | null;
+    outbound_field_mappings?: Array<{
+      enabled?: boolean;
+      level?: 'header' | 'entry';
+      source_table?: string;
+      local_field?: string;
+      remote_field?: string;
+      default_value?: string | number | boolean | null;
+    }> | null;
   }>,
 ): Partial<ApiFormRawValues> {
+  const syncDirection = detail.sync_direction || 'pull';
   return {
     name: detail.name,
     code: detail.code,
@@ -523,14 +554,15 @@ export function normalizeApiFormInitialValues(
     category_uuid: detail.category_uuid || undefined,
     path: detail.path,
     method: detail.method,
-    sync_direction: detail.sync_direction || 'pull',
+    sync_direction: syncDirection,
     related_document_code: detail.related_document_code || undefined,
     api_interface_type: detail.api_interface_type || 'custom',
     is_active: detail.is_active,
     is_system: detail.is_system,
     request_headers: objectToKeyValueList(detail.request_headers ?? undefined),
     request_params: objectToKeyValueList(detail.request_params ?? undefined),
-    request_body: applyRequestBodyFormDefaults(detail.request_body) ?? undefined,
+    request_body:
+      applyRequestBodyFormDefaults(detail.request_body, syncDirection) ?? undefined,
     response_format: normalizeJsonFieldValue(detail.response_format) ?? undefined,
     response_example: normalizeJsonFieldValue(detail.response_example) ?? undefined,
     source_type_conversion_map_entries: detail.source_type_conversion_map
@@ -538,6 +570,21 @@ export function normalizeApiFormInitialValues(
           field_name: e.field_name,
           source: Object.keys(e.mapping ?? {}).join(','),
           target: Object.values(e.mapping ?? {}).join(','),
+        }))
+      : undefined,
+    outbound_field_mappings: Array.isArray(detail.outbound_field_mappings)
+      ? detail.outbound_field_mappings.map((row) => ({
+          enabled: row.enabled !== false,
+          level: row.level === 'entry' ? 'entry' : 'header',
+          source_table: row.source_table || '',
+          local_field: row.local_field || '',
+          remote_field: row.remote_field || '',
+          default_value:
+            row.default_value === true ||
+            row.default_value === false ||
+            typeof row.default_value === 'number'
+              ? String(row.default_value)
+              : (row.default_value ?? ''),
         }))
       : undefined,
   };
