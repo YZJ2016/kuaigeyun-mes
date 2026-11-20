@@ -18,93 +18,87 @@
 "docs/apps/kuaioa/\345\267\245\350\265\204\347\273\223\347\256\227\344\275\277\347\224\250\350\257\264\346\230\216.md"	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
 "docs/apps/kuaivision/\347\216\260\345\234\272\350\201\224\350\260\203\346\211\213\345\206\214.md"	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
 "docs/apps/kuaizhizao/MES\351\234\200\346\261\202\351\200\202\351\205\215\344\270\216\347\274\272\351\241\271\345\210\206\346\236\220-2026.07.24.md"	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
-"docs/core/\346\234\215\345\212\241\351\207\207\350\264\255\345\201\232\345\215\225\350\257\264\346\230\216.md"			
-"docs/core/\350\264\250\351\207\217\344\275\223\347\263\273PRD.md"			
 "docs/core/\351\207\221\350\235\266\345\274\272\344\270\200\350\207\264\345\256\236\346\226\275-SOP.md"	92f1f17334a9d1d85fa6384ae787990a03e0d6dd	applied	R2:文档取上游tip
-"docs/funide-oa/\350\264\250\351\207\217\344\275\223\347\263\273PRD.md"			
-"docs/legal/\350\275\257\344\273\266\346\272\220\344\273\243\347\240\201\344\275\277\347\224\250\344\270\216\347\231\275\346\240\207\346\216\210\346\235\203\344\271\246.md"			
-"docs/sales/\351\224\200\345\224\256\344\272\244\344\273\230\345\205\250\346\265\201\347\250\213\347\256\241\347\220\206\344\277\241\346\201\257\345\214\226\345\273\272\350\256\276\346\226\271\346\241\210.md"			
-"docs/sales/\351\224\200\345\224\256\347\256\241\347\220\206\350\275\257\344\273\266\351\234\200\346\261\202-\347\263\273\347\273\237\350\203\275\345\212\233\345\257\271\347\205\247\350\257\264\346\230\216.md"			
-.aoci/baseline.json			
-.aoci/config.json			
-.cursor/memory/README.md			
-.cursor/memory/features/aoci-mcp-three-repos.md			
-.cursor/memory/features/aoci-safe-inventory-orphan.md			
+.aoci/baseline.json	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.aoci/config.json	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/README.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/aoci-mcp-three-repos.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/aoci-safe-inventory-orphan.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 .cursor/memory/features/app-pro-migration-compose.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
-.cursor/memory/features/approval-flow-withdraw-revoke-policy.md			
-.cursor/memory/features/audit-flow-preview-modal-transform.md			
-.cursor/memory/features/audit-hub-approve-button-visible.md			
-.cursor/memory/features/audit-reject-targets.md			
-.cursor/memory/features/audit-revoke-reopen-final-node.md			
-.cursor/memory/features/business-board-visit-mode.md			
-.cursor/memory/features/dashboard-todo-rbac-filter.md			
-.cursor/memory/features/data-backup-restore-id-align.md			
-.cursor/memory/features/document-amount-summary-precision.md			
-.cursor/memory/features/document-ledger-recognition.md			
-.cursor/memory/features/document-line-partner-material-snapshot.md			
+.cursor/memory/features/approval-flow-withdraw-revoke-policy.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/audit-flow-preview-modal-transform.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/audit-hub-approve-button-visible.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/audit-reject-targets.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/audit-revoke-reopen-final-node.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/business-board-visit-mode.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/dashboard-todo-rbac-filter.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/data-backup-restore-id-align.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/document-amount-summary-precision.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/document-ledger-recognition.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/document-line-partner-material-snapshot.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 .cursor/memory/features/document-push-kuaiconnect.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
-.cursor/memory/features/drawing-mgmt-integrate-download.md			
-.cursor/memory/features/equip-ops-scheme-bind-clients.md			
-.cursor/memory/features/equipment-attachment-online-preview.md			
-.cursor/memory/features/equipment-ops-data-generate.md			
-.cursor/memory/features/equipment-spot-check-plan.md			
-.cursor/memory/features/fast-deploy-scripts.md			
-.cursor/memory/features/finance-host-orm-management-registry.md			
-.cursor/memory/features/flow-data-generate-operator-modes.md			
-.cursor/memory/features/funide-oa-drawing-distribution-party.md			
-.cursor/memory/features/funide-oa-firmware-software-description.md			
-.cursor/memory/features/funide-oa-rd-electronics-structure-menu.md			
-.cursor/memory/features/gl-nonleaf-opening-residual.md			
-.cursor/memory/features/haoligo-ledger-batch-export.md			
-.cursor/memory/features/haoligo-monthly-ledger-submit-finance.md			
-.cursor/memory/features/haoligo-order-tracking-workflow.md			
-.cursor/memory/features/haoligo-output-record-production-dept.md			
-.cursor/memory/features/inbound-confirm-preview-warehouse-display.md			
+.cursor/memory/features/drawing-mgmt-integrate-download.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/equip-ops-scheme-bind-clients.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/equipment-attachment-online-preview.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/equipment-ops-data-generate.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/equipment-spot-check-plan.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/fast-deploy-scripts.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/finance-host-orm-management-registry.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/flow-data-generate-operator-modes.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/funide-oa-drawing-distribution-party.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/funide-oa-firmware-software-description.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/funide-oa-rd-electronics-structure-menu.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/gl-nonleaf-opening-residual.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/haoligo-ledger-batch-export.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/haoligo-monthly-ledger-submit-finance.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/haoligo-order-tracking-workflow.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/haoligo-output-record-production-dept.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/inbound-confirm-preview-warehouse-display.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 .cursor/memory/features/inbound-sync-kuaiconnect.md	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
 .cursor/memory/features/installed-apps-list-timeout.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
 .cursor/memory/features/inventory-sync-empty-batch-no.md	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
-.cursor/memory/features/kuaiai-insights-in-hub.md			
-.cursor/memory/features/kuaiai-pulse-offline.md			
-.cursor/memory/features/kuaiai-trust-offline.md			
-.cursor/memory/features/kuaioa-annual-payroll-stats-import.md			
-.cursor/memory/features/kuaioa-attendance-line-roster.md			
-.cursor/memory/features/kuaioa-employee-movement-recipient.md			
-.cursor/memory/features/kuaioa-living-payout-permission-split.md			
-.cursor/memory/features/kuaizhizao-finance-api-companion.md			
-.cursor/memory/features/leave-attendance-employee-match.md			
-.cursor/memory/features/maintenance-plan-scheme-bind.md			
-.cursor/memory/features/material-dual-unit-floating-conversion.md			
-.cursor/memory/features/material-unit-display-name.md			
-.cursor/memory/features/menu-config-disk-manifest-source.md			
-.cursor/memory/features/menu-takeover-single-source.md			
-.cursor/memory/features/mobile-approval-uni-audit-parity.md			
-.cursor/memory/features/modal-portal-click-isolation.md			
-.cursor/memory/features/mrp-work-order-bom-snapshot.md			
-.cursor/memory/features/non-bom-production-picking.md			
-.cursor/memory/features/numeric-precision-decimal-places-6.md			
-.cursor/memory/features/oss-pro-decouple-startup.md			
-.cursor/memory/features/packing-binding-standard-flow.md			
-.cursor/memory/features/partner-price-book-bulk-register.md			
-.cursor/memory/features/partner-settlement-fields-split.md			
-.cursor/memory/features/partner-statement-ledger-posting.md			
-.cursor/memory/features/payment-application-procurement.md			
-.cursor/memory/features/planning-procurement-automation.md			
+.cursor/memory/features/kuaiai-insights-in-hub.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/kuaiai-pulse-offline.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/kuaiai-trust-offline.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/kuaioa-annual-payroll-stats-import.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/kuaioa-attendance-line-roster.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/kuaioa-employee-movement-recipient.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/kuaioa-living-payout-permission-split.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/kuaizhizao-finance-api-companion.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/leave-attendance-employee-match.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/maintenance-plan-scheme-bind.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/material-dual-unit-floating-conversion.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/material-unit-display-name.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/menu-config-disk-manifest-source.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/menu-takeover-single-source.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/mobile-approval-uni-audit-parity.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/modal-portal-click-isolation.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/mrp-work-order-bom-snapshot.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/non-bom-production-picking.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/numeric-precision-decimal-places-6.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/oss-pro-decouple-startup.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/packing-binding-standard-flow.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/partner-price-book-bulk-register.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/partner-settlement-fields-split.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/partner-statement-ledger-posting.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/payment-application-procurement.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/planning-procurement-automation.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 .cursor/memory/features/purchase-inquiry-demand-party.md	b0880ffd6409cb20b35743365052ab8b18a9c2a0	tracked	seed from d81b4b70bf
 .cursor/memory/features/purchase-inquiry-vendor-system-pdf.md	f8a634feec24c9f3af7a05546202698d295be06e	tracked	seed from d892f36d03
-.cursor/memory/features/purchase-order-settlement-fields.md			
-.cursor/memory/features/purchase-receipt-blank-create.md			
-.cursor/memory/features/purchase-receipt-line-finance-occupancy.md			
-.cursor/memory/features/purchase-requisition-lifecycle-pin-mode-a.md			
-.cursor/memory/features/purchase-requisition-line-delivery-carry.md			
-.cursor/memory/features/purchase-requisition-push-progress-heal.md			
-.cursor/memory/features/purchase-return-ap-offset.md			
-.cursor/memory/features/purchase-return-pull-from-receipt.md			
-.cursor/memory/features/quality-inspection-revoke-edit.md			
+.cursor/memory/features/purchase-order-settlement-fields.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/purchase-receipt-blank-create.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/purchase-receipt-line-finance-occupancy.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/purchase-requisition-lifecycle-pin-mode-a.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/purchase-requisition-line-delivery-carry.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/purchase-requisition-push-progress-heal.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/purchase-return-ap-offset.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/purchase-return-pull-from-receipt.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/quality-inspection-revoke-edit.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 .cursor/memory/features/quotation-delete-series-latest-heal.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
-.cursor/memory/features/rd-deliverable-type-dictionary.md			
-.cursor/memory/features/sales-order-list-perf-menu-badge.md			
-.cursor/memory/features/sales-order-payment-method-cycle.md			
-.cursor/memory/features/spare-part-inventory-single-location.md			
+.cursor/memory/features/rd-deliverable-type-dictionary.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/sales-order-list-perf-menu-badge.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/sales-order-payment-method-cycle.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/spare-part-inventory-single-location.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 .cursor/memory/features/sync-bom-line-key-derived.md	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
 .cursor/memory/features/sync-from-source-cosmic-incremental.md	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
 .cursor/memory/features/sync-from-source-multi-source-merge.md	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
@@ -112,42 +106,42 @@
 .cursor/memory/features/sync-material-group-empty-pull.md	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
 .cursor/memory/features/sync-material-source-type-conversion.md	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
 .cursor/memory/features/sync-push-hub-master-data.md	DELETED	superset	R2簇4:本地文件,上游tip无此路径,保留
-.cursor/memory/features/tenant-bootstrap-initialization.md			
-.cursor/memory/features/tool-scheme-item-quick-create.md			
+.cursor/memory/features/tenant-bootstrap-initialization.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/tool-scheme-item-quick-create.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 .cursor/memory/features/unit-material-sync-decouple.md	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
-.cursor/memory/features/warehouse-type-gift-quantity-only.md			
-.cursor/memory/features/wecom-push-from-pc-messages.md			
-.cursor/memory/features/work-order-inbound-batch-pushable-qty.md			
-.cursor/memory/principles/aoci-git-commit.md			
-.cursor/memory/principles/feature-delivery.md			
-.cursor/memory/principles/host-module-takeover-source.md			
-.cursor/memory/principles/three-repo-map.md			
-.cursor/rules/aoci-git-commit.mdc			
-.cursor/rules/build-push-aoci.mdc			
-.cursor/rules/feature-delivery-checklist.mdc			
-.cursor/rules/git-push-sop.mdc			
-.cursor/rules/host-module-takeover-source.mdc			
-.cursor/rules/manifest-unique-source.mdc			
+.cursor/memory/features/warehouse-type-gift-quantity-only.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/wecom-push-from-pc-messages.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/features/work-order-inbound-batch-pushable-qty.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/principles/aoci-git-commit.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/principles/feature-delivery.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/principles/host-module-takeover-source.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/memory/principles/three-repo-map.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/rules/aoci-git-commit.mdc	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/rules/build-push-aoci.mdc	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/rules/feature-delivery-checklist.mdc	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/rules/git-push-sop.mdc	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/rules/host-module-takeover-source.mdc	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/rules/manifest-unique-source.mdc	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 .cursor/rules/master-data-detail-drawer-contract.mdc	DELETED	superset	R2簇4:本地文件,上游tip无此路径,保留
-.cursor/rules/model-audit-write.mdc			
-.cursor/rules/no-fallback-patches.mdc			
-.cursor/rules/no-middle-dot-separator.mdc			
-.cursor/rules/no-person-name-box.mdc			
-.cursor/rules/no-speculative-shortcuts.mdc			
-.cursor/rules/unitable-list-stabilize.mdc			
+.cursor/rules/model-audit-write.mdc	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/rules/no-fallback-patches.mdc	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/rules/no-middle-dot-separator.mdc	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/rules/no-person-name-box.mdc	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/rules/no-speculative-shortcuts.mdc	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.cursor/rules/unitable-list-stabilize.mdc	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 .gitignore	f4cbcb2fd09587e2e59e1e677de97e583cdaf0c5	tracked	seed from 2c945a39fb
-.merge-tmp/log.ours.ts			
-.merge-tmp/log.theirs.ts			
-.merge-tmp/panel.ours.tsx			
-.merge-tmp/panel.theirs.tsx			
-.merge-tmp/patch_merge.py			
-.merge-tmp/pr.theirs.py			
-.tmp_cf_gap.py			
-AGENTS.md			
+.merge-tmp/log.ours.ts	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.merge-tmp/log.theirs.ts	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.merge-tmp/panel.ours.tsx	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.merge-tmp/panel.theirs.tsx	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.merge-tmp/patch_merge.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.merge-tmp/pr.theirs.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+.tmp_cf_gap.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+AGENTS.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 README.md	c0fee2a70a17b9e8d523ff246c55bf6cebf58d5e	tracked	seed from 2cb998d625
-aoci.code.txt			
-aoci.meta.txt			
-aoci.txt			
+aoci.code.txt	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+aoci.meta.txt	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+aoci.txt	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 docs/aoci-git-push-sop.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
 docs/apps/kuaiai/EXTERNAL-AGENT-WORKBUDDY.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
 docs/apps/kuaiai/MASCOT-PROMPTS.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
@@ -165,6 +159,12 @@ docs/apps/kuaizhizao/fai.md	DELETED	superset	R2:本地新增文档/记忆笔记�
 docs/apps/kuaizhizao/quality-system.md	DELETED	superset	R2:本地新增文档/记忆笔记，上游tip无对应文件
 docs/apps/master-data/drawings.md	DELETED	superset	R2簇4:本地文件,上游tip无此路径,保留
 docs/apps/master-data/sop.md	DELETED	superset	R2簇4:本地文件,上游tip无此路径,保留
+docs/core/服务采购做单说明.md	2843e86b71f1306971708709db521a9fe2e1cbcc	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+docs/core/质量体系PRD.md	d366f224412d14413d2173a322cce069fca95286	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+docs/funide-oa/质量体系PRD.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+docs/legal/软件源代码使用与白标授权书.md	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+docs/sales/销售交付全流程管理信息化建设方案.md	da0998ba6e04e21ce1d22115d408b21279a9d809	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+docs/sales/销售管理软件需求-系统能力对照说明.md	87f937b564f91906cddfa2037d20e1a2a417d406	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 docs/screenshots/system/architecture.png	d92632669f670467723a94f0e06866a58144bda1	tracked	seed from c16a17ebba
 docs/screenshots/system/render_architecture.py	734a9d2c0a8e5fab5d9e603a3ff3f26d0e52334b	tracked	seed from c16a17ebba
 docs/screenshots/wechat/wechat.png	c91b13c20c	domain-out	R2-运维: fast-deploy本地独立维护/截图资产
@@ -185,7 +185,7 @@ fast-deploy/lib/wizard.sh	f978467013	domain-out	R2-运维: fast-deploy本地独�
 fast-deploy/linux/systemd-exec-backend.sh	e152743b8a078173ecc5770c50b8593d9a6bd2fb	tracked	seed from c3953509e9
 fast-deploy/linux/systemd-exec-taskiq-scheduler.sh	8700bd8a16	domain-out	R2-运维: fast-deploy本地独立维护/截图资产
 fast-deploy/linux/systemd-exec-taskiq-worker.sh	934eab86ba	domain-out	R2-运维: fast-deploy本地独立维护/截图资产
-fast-deploy/promote-prod-branch.sh			
+fast-deploy/promote-prod-branch.sh	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 fast-deploy/publish.aoci.sh	b9db4ce357863020fb29e531d3045632e9070592	tracked	seed from 905787348a
 fast-deploy/push.sh	ee42a71b71517f72dddb4d0bec4bd36898f60769	tracked	seed from 905787348a
 fast-deploy/scripts/prod_clone_purchase_receipt_asset_print_template.py	99053c39f8352e2f6a07342edbaea80f904ba3e9	domain-out	R2:生产运维脚本域外
@@ -244,8 +244,8 @@ riveredge-backend/migrations/models/1042_20261116140000_other_outbound_borrow_se
 riveredge-backend/migrations/models/1043_20261116143000_material_return_item_serial_numbers.py	345c9f148f1084151922e917d7806dea1787a497	tracked	seed from 5b1b9828e4
 riveredge-backend/migrations/models/1052_20261119160000_purchase_invoice_discount_amount.py	2a788b4eaede12ad0b7258d9439899c6d846af76	applied	财务A/B适配至kuaicaiwu；保留本地创建自动送审/已审核口径；忠实保留源应付已审核或待审时早退导致优惠调整不生成；迁移20261122000001尚未执行；财务pytest191通过+聚焦9通过，时区0。前端tsc2743存量诊断，浏览器未验。
 riveredge-backend/migrations/models/20261123000035_sync_binding_schedule_window.py	6fe2f04c01867b0eab5c067566bcb8d9c684df23	applied	R2簇5迁移:调度窗列 22+绑定表 IF NOT EXISTS守卫;20261123命名落位(不执行)
-riveredge-backend/migrations/models/874_20261013170000_maintenance_scheme_params.py			
-riveredge-backend/migrations/models/875_20261013180000_spot_check_plan_tasks.py			
+riveredge-backend/migrations/models/874_20261013170000_maintenance_scheme_params.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/migrations/models/875_20261013180000_spot_check_plan_tasks.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 riveredge-backend/migrations/models/888_20261015200000_numeric_precision_decimal_places_6.py	1740a7f0f0675082cb1d690adb5717a7a77f28e7	tracked	seed from b74aba704c
 riveredge-backend/migrations/models/896_20261018210000_product_firmware_software_description.py	1eedd266fac939be4f2b2bcf56998cb567582a9f	tracked	seed from d84fe20715
 riveredge-backend/migrations/models/897_20261019100000_trial_flow_project_id_nullable.py	3b3009039855ad0c7df69fd009b24b53199f2cf3	tracked	seed from c69cef14ed
@@ -367,7 +367,7 @@ riveredge-backend/migrations/models/992_20261105114500_backfill_picking_requisit
 riveredge-backend/migrations/models/993_20261105013000_backfill_purchase_invoice_payable_trace_links.py	86d336e84519d612105cb6cbf2403169b2043a32	tracked	seed from 3958bb1524
 riveredge-backend/migrations/models/994_20261105030000_payroll_line_high_temp_subsidy.py	61990c98b5b56ff1fd0a6666e9ab9d6cf36bf60f	tracked	seed from 3958bb1524
 riveredge-backend/migrations/models/995_20261105180000_payment_offset_prepayment_lines.py	048769d1fd4c44b1789c463d7c44c174e1622597	tracked	seed from 95c4869063
-riveredge-backend/migrations/models/996_20261107003000_purchase_order_line_tax_price_type.py			
+riveredge-backend/migrations/models/996_20261107003000_purchase_order_line_tax_price_type.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 riveredge-backend/migrations/models/996_20261107163000_purchase_receipt_review_draft.py	cfb00f4195f1a850513a5401476983f55cee7483	tracked	seed from d81b4b70bf
 riveredge-backend/migrations/models/997_20261107093000_core_apis_pk_uuid_unique.py	0718b0cfce80e633ef4a325eb6e2bd8b16d79652	tracked	seed from 05fb1f835e
 riveredge-backend/migrations/models/997_20261107170000_receipt_notice_review_status.py	38dbf2f1222f678cbb4c022a450f14d9cd3cc246	tracked	seed from d81b4b70bf
@@ -454,24 +454,24 @@ riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/warehouse_location_
 riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/warehouse_sync_service.py	4fd5734e32c56512233f4de5994a488e0d6f5c6b	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
 riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/work_order_sync_service.py	e3309fe9f29003ed337d639eb59f0ca8332503a5	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
 riveredge-backend/src/apps/kuaiems/manifest.json	5ef0dd94364e247a47c958f326329cc8c22cad0d	tracked	seed from 46508115c7
-riveredge-backend/src/apps/kuaiplm/models/bom_collaboration.py			
-riveredge-backend/src/apps/kuaiplm/models/material_review.py			
-riveredge-backend/src/apps/kuaiplm/models/mold_sample_order.py			
-riveredge-backend/src/apps/kuaiplm/models/prototype_build_sheet.py			
-riveredge-backend/src/apps/kuaiplm/models/sample_process.py			
-riveredge-backend/src/apps/kuaiplm/models/trial_flow.py			
-riveredge-backend/src/apps/kuaiplm/schemas/bom_collaboration.py			
-riveredge-backend/src/apps/kuaiplm/schemas/material_review.py			
-riveredge-backend/src/apps/kuaiplm/schemas/mold_sample_order.py			
-riveredge-backend/src/apps/kuaiplm/schemas/prototype_build_sheet.py			
-riveredge-backend/src/apps/kuaiplm/schemas/sample_process.py			
-riveredge-backend/src/apps/kuaiplm/schemas/trial_flow.py			
-riveredge-backend/src/apps/kuaiplm/services/bom_collaboration_service.py			
-riveredge-backend/src/apps/kuaiplm/services/material_review_service.py			
-riveredge-backend/src/apps/kuaiplm/services/mold_sample_order_service.py			
-riveredge-backend/src/apps/kuaiplm/services/prototype_build_sheet_service.py			
-riveredge-backend/src/apps/kuaiplm/services/sample_process_service.py			
-riveredge-backend/src/apps/kuaiplm/services/trial_flow_service.py			
+riveredge-backend/src/apps/kuaiplm/models/bom_collaboration.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaiplm/models/material_review.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaiplm/models/mold_sample_order.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaiplm/models/prototype_build_sheet.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaiplm/models/sample_process.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaiplm/models/trial_flow.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaiplm/schemas/bom_collaboration.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaiplm/schemas/material_review.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaiplm/schemas/mold_sample_order.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaiplm/schemas/prototype_build_sheet.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaiplm/schemas/sample_process.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaiplm/schemas/trial_flow.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaiplm/services/bom_collaboration_service.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaiplm/services/material_review_service.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaiplm/services/mold_sample_order_service.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaiplm/services/prototype_build_sheet_service.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaiplm/services/sample_process_service.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaiplm/services/trial_flow_service.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 riveredge-backend/src/apps/kuaiqms/manifest.json	2870e2477b6a7711c5ba2c467283f65050c555f3	tracked	seed from a2473e9b42
 riveredge-backend/src/apps/kuaizhizao/api/__init__.py	0e74b92a5bb1db88d705e4686db2c41c0c16819e	tracked	seed from 2c76a942c2
 riveredge-backend/src/apps/kuaizhizao/api/_inbound_sync_run_log.py	16f390b4a2c274f5a9a54399a507d3b873ef802d	tracked	seed from a0b353ce7e
@@ -489,7 +489,7 @@ riveredge-backend/src/apps/kuaizhizao/api/equipment/equipment.py	ec46b43dfb3bee6
 riveredge-backend/src/apps/kuaizhizao/api/equipment_faults/equipment_faults.py	70ec8623666a2f31285ac078c48ea10c96e68117	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/api/equipment_inspections/spare_parts.py	213203250f4e546b3b5b10c32e2ab1fa88db0528	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/api/equipment_ops/documents.py	5eb83908f277ba3af1ac70ba0daecf31dbce5f49	tracked	seed from 37409d3b29
-riveredge-backend/src/apps/kuaizhizao/api/equipment_spot_check_plans/equipment_spot_check_plans.py			
+riveredge-backend/src/apps/kuaizhizao/api/equipment_spot_check_plans/equipment_spot_check_plans.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 riveredge-backend/src/apps/kuaizhizao/api/finance_misc_categories/finance_misc_categories.py	856afae6ce84186234a7a65017499a27e19d8b25	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/api/maintenance_plans/maintenance_plans.py	925ee3b79002c453362d1de7da1ad02a308d1595	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/apps/kuaizhizao/api/management.py	f15c45fc70c657f816d3cfdb6f6721073cf3df2f	tracked	seed from 0b8630adfd
@@ -750,7 +750,7 @@ riveredge-backend/src/apps/kuaizhizao/models/demand_computation_item.py	52575a8f
 riveredge-backend/src/apps/kuaizhizao/models/document_relation.py	843a3ba1ac6fe6edb5a29f8369c514d0eca04c98	tracked	seed from 5f085a19c9
 riveredge-backend/src/apps/kuaizhizao/models/equipment_fault.py	1c7c5d38f489b37061d34bfbe26c1bdae47614c7	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/models/equipment_ops.py	efef09a63db39d0bb897b302b5cfcf83de663f08	tracked	seed from 2c945a39fb
-riveredge-backend/src/apps/kuaizhizao/models/equipment_spot_check_plan.py			
+riveredge-backend/src/apps/kuaizhizao/models/equipment_spot_check_plan.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 riveredge-backend/src/apps/kuaizhizao/models/finished_goods_inspection.py	fb058384bdbce473d6da47fcf0460c64566472f3	applied	R2：与上游tip blob一致，本地已同步
 riveredge-backend/src/apps/kuaizhizao/models/finished_goods_receipt_item.py	96b80015acfbacbb3ea78294f549749f398b8db1	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/kuaizhizao/models/finished_goods_receipt_sync_binding.py	0f7cceebb306836854c3fe85b8d3d60be056526d	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
@@ -854,7 +854,7 @@ riveredge-backend/src/apps/kuaizhizao/schemas/equipment.py	10cbc6215290f9b9001cc
 riveredge-backend/src/apps/kuaizhizao/schemas/equipment_extra.py	8d82ca9263aa6612209be6894cd5c5890fc5997d	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/schemas/equipment_fault.py	10fe662197a72180eb74ea21422b2c9903c807d3	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/schemas/equipment_ops.py	f903e738d9ac3f21046f0b1e188f4157465d8f5f	tracked	seed from 2c945a39fb
-riveredge-backend/src/apps/kuaizhizao/schemas/equipment_spot_check_plan.py			
+riveredge-backend/src/apps/kuaizhizao/schemas/equipment_spot_check_plan.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 riveredge-backend/src/apps/kuaizhizao/schemas/finished_goods_receipt_sync.py	4af089bae8d511b2cbd1e5b38894fff7ed92d270	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/schemas/inventory_sync.py	e6b59e51f35aba2bf64451a2731ba2c1995fe1a9	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/schemas/inventory_transfer.py	d91042ec461e8c1af629eb0eea0f14e2af84ca4c	tracked	seed from a60f3e9039
@@ -964,10 +964,10 @@ riveredge-backend/src/apps/kuaizhizao/services/eight_d_collaboration_service.py	
 riveredge-backend/src/apps/kuaizhizao/services/equipment_board_service.py	17ac43dc65bbb7017a980be1aedd9e00f45c3d5a	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/equipment_fault_service.py	31bd6fb085eb2b64f4e1dae98d48bf9c4a97f2c1	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/services/equipment_mobile_notification.py	519768f7728ba05fdfe92510f55eb52d6b234553	tracked	seed from d81b4b70bf
-riveredge-backend/src/apps/kuaizhizao/services/equipment_ops_data_generate_service.py			
+riveredge-backend/src/apps/kuaizhizao/services/equipment_ops_data_generate_service.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 riveredge-backend/src/apps/kuaizhizao/services/equipment_ops_service.py	c546ed4659d0382fb5d2e7d0c40813f1fa08ed58	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/services/equipment_service.py	3992e2cb32bc26e0ffb464dbb7b9dcc9948105a4	tracked	seed from 2c945a39fb
-riveredge-backend/src/apps/kuaizhizao/services/equipment_spot_check_plan_service.py			
+riveredge-backend/src/apps/kuaizhizao/services/equipment_spot_check_plan_service.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 riveredge-backend/src/apps/kuaizhizao/services/equipment_status_guard.py	7702b82d66a9ae4fe66903b837a1fba60855c57a	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/services/equipment_status_monitor_service.py	2c1ce08176bf9cf30365de91c81726136de1e80b	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/services/equipment_supervision_service.py	a0bba5775d0150a463dc1b04f61f7bacca0a9a67	tracked	seed from d81b4b70bf
@@ -976,19 +976,19 @@ riveredge-backend/src/apps/kuaizhizao/services/feishu_work_order_push_service.py
 riveredge-backend/src/apps/kuaizhizao/services/finance_settlement_source_query.py	4861667ec4ae6b326c94f9031b55f4ddaed31319	superset	R2:本地已含适配内容/本地实现超前
 riveredge-backend/src/apps/kuaizhizao/services/finished_goods_inspection_service.py	1adb3cfd4a11160756e875d10e77794150a921cf	tracked	seed from 905787348a
 riveredge-backend/src/apps/kuaizhizao/services/finished_goods_receipt_sync_service.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
-riveredge-backend/src/apps/kuaizhizao/services/flow_data_generate_service.py			
-riveredge-backend/src/apps/kuaizhizao/services/flow_sim/__init__.py			
-riveredge-backend/src/apps/kuaizhizao/services/flow_sim/clock.py			
-riveredge-backend/src/apps/kuaizhizao/services/flow_sim/engine.py			
-riveredge-backend/src/apps/kuaizhizao/services/flow_sim/kit.py			
-riveredge-backend/src/apps/kuaizhizao/services/flow_sim/modes.py			
-riveredge-backend/src/apps/kuaizhizao/services/flow_sim/scenarios.py			
-riveredge-backend/src/apps/kuaizhizao/services/flow_sim/steps/__init__.py			
-riveredge-backend/src/apps/kuaizhizao/services/flow_sim/steps/mrp_push.py			
-riveredge-backend/src/apps/kuaizhizao/services/flow_sim/steps/owo_fulfill.py			
-riveredge-backend/src/apps/kuaizhizao/services/flow_sim/steps/purchase_inbound.py			
-riveredge-backend/src/apps/kuaizhizao/services/flow_sim/steps/ship.py			
-riveredge-backend/src/apps/kuaizhizao/services/flow_sim/steps/wo_complete.py			
+riveredge-backend/src/apps/kuaizhizao/services/flow_data_generate_service.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaizhizao/services/flow_sim/__init__.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaizhizao/services/flow_sim/clock.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaizhizao/services/flow_sim/engine.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaizhizao/services/flow_sim/kit.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaizhizao/services/flow_sim/modes.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaizhizao/services/flow_sim/scenarios.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaizhizao/services/flow_sim/steps/__init__.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaizhizao/services/flow_sim/steps/mrp_push.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaizhizao/services/flow_sim/steps/owo_fulfill.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaizhizao/services/flow_sim/steps/purchase_inbound.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaizhizao/services/flow_sim/steps/ship.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-backend/src/apps/kuaizhizao/services/flow_sim/steps/wo_complete.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 riveredge-backend/src/apps/kuaizhizao/services/freight_bill_service.py	fb5573ffa956b5b47e19e6488cf4895c8fa1fe83	tracked	seed from 1eb300325a
 riveredge-backend/src/apps/kuaizhizao/services/gb2828_sampling.py	b810b248a876f1e156ce6fe24b8c96fb1cef2256	applied	E域GB2828簇(源905787348a/1efec0da1d等)
 riveredge-backend/src/apps/kuaizhizao/services/incoming_inspection_service.py	c9530906ccda090595ca8b8d0ec7915e0e6b61e0	tracked	seed from 905787348a
@@ -1701,7 +1701,7 @@ riveredge-frontend/scripts/perf_menu_baseline.md	de1ce10f898589108c2f1b9d12d4db9
 riveredge-frontend/scripts/scan_document_dual_quantity_integration.py	a88387ce91bb3b409f677c16e296c6167daf59ac	tracked	seed from b12cc66e71
 riveredge-frontend/scripts/scan_document_import_export_ssot.py	b6c95cf864ff5af9d064d06919effcaff412d2f8	tracked	seed from 8c111dd65f
 riveredge-frontend/scripts/scan_purchase_amount_contract.py	dfb48d375f7d4d6e4a0b176ad3cbba0cef29be3d	tracked	seed from 5b1b9828e4
-riveredge-frontend/scripts/tmp_dead_check.mjs			
+riveredge-frontend/scripts/tmp_dead_check.mjs	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 riveredge-frontend/src/api/document-push.ts	DELETED	applied	D依赖簇续:支撑件+前端
 riveredge-frontend/src/api/warehouse-execution.ts	DELETED	applied	D依赖簇续:支撑件+前端
 riveredge-frontend/src/app.tsx	45f3edefe13e595344a35c7f7b0626d624e14333	tracked	seed from 3050130eb5
@@ -1790,8 +1790,8 @@ riveredge-frontend/src/apps/kuaizhizao/pages/after-sales-service/spare-part-requ
 riveredge-frontend/src/apps/kuaizhizao/pages/after-sales-service/spare-part-requisitions/index.tsx	5aa5188d7184c583cbb950e4371e413b91d4a1fc	applied	R2 fe_pages簇：自定义字段接入+行删并批量删+物流/售后/退料增量，取上游tip版
 riveredge-frontend/src/apps/kuaizhizao/pages/after-sales-service/tickets/components/AfterSalesTicketDetailDrawer.tsx	9f4ecd29d36c6d8c76d73c476ea6c23f4602d9e7	applied	R2 fe_pages簇：自定义字段接入+行删并批量删+物流/售后/退料增量，取上游tip版
 riveredge-frontend/src/apps/kuaizhizao/pages/after-sales-service/tickets/index.tsx	5453f4e404e0c2600ef2f5ad1fb9cbd2bda410b0	applied	R2 fe_pages簇：自定义字段接入+行删并批量删+物流/售后/退料增量，取上游tip版
-riveredge-frontend/src/apps/kuaizhizao/pages/app-management/flow-data-generate/EquipmentOpsGeneratePanel.tsx			
-riveredge-frontend/src/apps/kuaizhizao/pages/app-management/flow-data-generate/index.tsx			
+riveredge-frontend/src/apps/kuaizhizao/pages/app-management/flow-data-generate/EquipmentOpsGeneratePanel.tsx	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-frontend/src/apps/kuaizhizao/pages/app-management/flow-data-generate/index.tsx	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 riveredge-frontend/src/apps/kuaizhizao/pages/delivery-project/issues/index.tsx	fd7eacabdb9adc014178944779ffbf7b70279696	superset	R2:本地保留行级删除/工位写保护/门禁等超集能力，上游tip为删减版
 riveredge-frontend/src/apps/kuaizhizao/pages/delivery-project/node-reports/index.tsx	789be02f62aa81c3581cbcedf490507d954b8437	superset	R2:本地保留行级删除/工位写保护/门禁等超集能力，上游tip为删减版
 riveredge-frontend/src/apps/kuaizhizao/pages/delivery-project/process-templates/index.tsx	3b2850328afae82b6c03f84862de29516aa97724	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
@@ -1831,8 +1831,8 @@ riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/shared/equipme
 riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterImportTemplates.ts	1dd40a70841282903459b505a7a3a0c4c8256577	tracked	seed from d81b4b70bf
 riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/shared/opsDocumentOpenCreate.ts	f1862459a44cfd8dfffd6a9306aea5891c83f6f5	tracked	seed from 2c945a39fb
 riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/spare-parts/index.tsx	04b27a4ce4f96234791c9d8b9a48c3332e573b14	tracked	seed from b12cc66e71
-riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/spot-check-plan-calendar/index.tsx			
-riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/spot-check-plans/index.tsx			
+riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/spot-check-plan-calendar/index.tsx	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
+riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/spot-check-plans/index.tsx	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/spot-checks/index.tsx	c6a1ccd08fc2306458ae6508cbd538256a9fc0f2	tracked	seed from 2c945a39fb
 riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/tool-borrows/index.tsx	31e537edcfacb1acf8865afca7051702f3a65c2d	tracked	seed from 2c945a39fb
 riveredge-frontend/src/apps/kuaizhizao/pages/equipment-management/tool-calibrations/index.tsx	2e357471d188d8ed87447a28032ae4a8f860beaf	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
@@ -1935,7 +1935,7 @@ riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/reporting/kios
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/reporting/reportingSyncConfig.ts	12769901d695a4cdef36cf378bf1d38a5b5d224b	tracked	seed from a0b353ce7e
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/rework-orders/index.tsx	1a0b2c0e42ad7bf26e1217b05cd85a7532fd868c	tracked	seed from 93b3cb5998
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/rework-position-plan-templates/ReworkPositionPlanTemplatesScreen.tsx	f9655b2cadf5fa1d9a833fd8792424dc5e2c1de1	superset	R2:本地保留行级删除/工位写保护/门禁等超集能力，上游tip为删减版
-riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/WorkOrderBatchPickingModal.tsx			
+riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/WorkOrderBatchPickingModal.tsx	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/WorkOrderFormPage.tsx	2a348f688059bcb872657bec07fdd64694e05da5	tracked	seed from 93b3cb5998
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/components/WorkOrderBomLinesDetail.tsx	b5eca6cc3ec3311dccf6be5c327d25ee39b07ca5	tracked	seed from 5b1b9828e4
 riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/components/WorkOrderDetailDrawer.tsx	655287cf1ae03193f8263180729fd9da9b1df8a6	applied	R2：与上游tip blob一致，本地已同步
@@ -2124,7 +2124,7 @@ riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/other-outbound
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/other-outbound/index.tsx	703291aa05df147b5986eb5c88237f3cbc186e67	tracked	seed from 2e8ecad990
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/other-outbound/otherOutboundReasonTypeLabels.ts	56bd73968b9a072d1a6b2cc0c8a7ca163ef133fc	tracked	seed from a0b353ce7e
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/OutboundBatchAllocationField.tsx	f8c572d14c840bb88b8d1e505d10da21771368b5	tracked	seed from 899307f4d6
-riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/OutboundConfirmPreviewModal.tsx			
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/OutboundConfirmPreviewModal.tsx	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/OutboundHubEditModal.tsx	c2ccdfd53958824df235e587704f600c4728c656	tracked	seed from 57a37e2749
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/OutboundOutsourcePullEntryPage.tsx	d37fccc2aece5c4c9dc7bf37873ee60b0c8448a4	tracked	seed from 899307f4d6
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/OutboundQuickPullModals.tsx	e680187ce2baa26ee7bc8d20bf9e92160680efe9	superset	R2:MERGE三方合并后净变更=0（上游非冲突块本地已有）；唯一净差为上游salesDeliveryDraft建单草稿交接流，依赖SalesDeliveryCreateModal initialDraft+index.tsx接线，本仓保留直推pullFromSalesOrderItems流
@@ -2169,7 +2169,7 @@ riveredge-frontend/src/apps/kuaizhizao/services/demand.ts	8cd5a952bcb4c9c9b41e2a
 riveredge-frontend/src/apps/kuaizhizao/services/document-push.ts	18411d77d6a694448d1282b8706f23712168a65e	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/apps/kuaizhizao/services/document-relation.ts	93d34134bfc98dfd43701414a327c85d186bcfe9	tracked	seed from d892f36d03
 riveredge-frontend/src/apps/kuaizhizao/services/documentLineMaterialAttachments.ts	c63a841caa26388e68475b0c9e328b321fab33fa	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
-riveredge-frontend/src/apps/kuaizhizao/services/equipment-ops-data-generate.ts			
+riveredge-frontend/src/apps/kuaizhizao/services/equipment-ops-data-generate.ts	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 riveredge-frontend/src/apps/kuaizhizao/services/equipment.ts	9859da1247d436ab9ee19ce5a822af933f3e9e04	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/services/finance/bank-account.ts	fa4cc0387db1ec7b4e83dde88dea2dc7d9438a81	tracked	seed from 2c76a942c2
 riveredge-frontend/src/apps/kuaizhizao/services/finance/document-reconciliation.ts	22fdf1181880a6c96dca155430e49387aff55e7f	tracked	seed from 2c76a942c2
