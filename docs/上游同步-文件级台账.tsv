@@ -381,78 +381,78 @@ riveredge-backend/scripts/scan_finance_host_orm_imports.py	d9b9d5d63fd1a626fcc53
 riveredge-backend/scripts/scan_finance_management_orm_registry.py	67aae842b6f8657cea0a279b205eaaaa4ab5658c	tracked	seed from 2c945a39fb
 riveredge-backend/scripts/tenant_kingdee_strong_consistency.py	b2844d17485477f2777040de0c3cfd97a5eb7b86	tracked	seed from 1d4531b7f6
 riveredge-backend/src/apps/common/base_service.py	411e8ceac6c4eedf6f639f57cc77bee8a70757c2	applied	R2：与上游tip blob一致，本地已同步
-riveredge-backend/src/apps/common/document_push_gate.py	40ee72e1874963a4d5aff27471a93471f8438f64	domain-out	R2预审：kuaiconnect 包标记/薄代理，本地无此 app 且功能已原生实现
-riveredge-backend/src/apps/common/inbound_sync_gate.py	b85beda4bfeed2d988da72667b3da6aa0ed6832e	domain-out	R2预审：kuaiconnect 包标记/薄代理，本地无此 app 且功能已原生实现
+riveredge-backend/src/apps/common/document_push_gate.py	40ee72e1874963a4d5aff27471a93471f8438f64	applied	R2:kuaiconnect包落地,公共门控随包落地(动态加载apps.kuaiconnect.services.*)
+riveredge-backend/src/apps/common/inbound_sync_gate.py	b85beda4bfeed2d988da72667b3da6aa0ed6832e	applied	R2:kuaiconnect包落地,公共门控随包落地(动态加载apps.kuaiconnect.services.*)
 riveredge-backend/src/apps/common/optional_pro.py	3433a0f9b11b40b866862df8f9e910641c0d0f6a	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/apps/kuaicaiwu/services/payment_pull_service.py	DELETED	applied	13be286f11续:前端+财务适配+迁移
-riveredge-backend/src/apps/kuaiconnect/__init__.py	c6f9ef4c13fc4ac49209ccc82f3b736a4a2846d0	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/api/apis/__init__.py	e69de29bb2d1d6434b8b29ae775ad8c2e48c5391	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/api/apis/apis.py	f261569a2c224725220150678dac24f35dff9f86	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/api/application_connections/__init__.py	44be866bed6e35b917acc41a13284d9a7829d3b1	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/api/application_connections/application_connections.py	63a827dd7887d2a82f43b44158e2a12b8c5cee27	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/api/data_sources/__init__.py	e69de29bb2d1d6434b8b29ae775ad8c2e48c5391	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/api/data_sources/data_sources.py	978a2bf202a22386d35c7f87ced51bfc6f166a88	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/api/datasets/__init__.py	e69de29bb2d1d6434b8b29ae775ad8c2e48c5391	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/api/datasets/datasets.py	a8522f064f8d30ec42dcde3f694b6b66352db570	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/manifest.json	7af8cddeb629e5d2d26b7e9a4b5cc10a5c0672ad	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/__init__.py	eb7ddb73bf264f62d5da504c0ddcf53daf22250a	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/__init__.py	74c04b4a418f1cdf905f0610a8809a6f1b7797d8	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_reconcile_service.py	64f4b85988079693fef9ae174a6c1ac19e51e839	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py	c2066ad59fa00c30093c78a19d0d695cb5adeccc	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/feishu_work_order_push_service.py	ef955a4fdc44ee5a2e7cd4789faf337e4cf4b3d7	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_engineering_bom_push_service.py	10ce8d13def08f74c68b3c72e827668dab6777ed	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_finished_goods_receipt_push_service.py	a2c8f72f545305d0e3043b43356af6974bf2846b	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_im_batch_update_service.py	17abf2238643df034a67312e9ba35a88b79271cb	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_im_batch_update_sync.py	0815decab304082f0dec90c82a8b055af4fec6ff	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_im_warehouse_revoke_service.py	437c5823c96fdaa3d225beebce4dc4fd6c5dc442	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_inventory_push_service.py	0ae5ba2112a5f538a62517c5fff388f4844f8acd	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_material_push_service.py	796764aa39a319d6ba489e72a6684d784febeef9	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_other_inbound_push_service.py	3bd8bb8f81b5e7f206148e9a6ff44180260dd2cf	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_other_outbound_push_service.py	88c896240c4b6e74f1f9b8195f1b6a937adfda56	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_outbound_avb_precheck_service.py	ed76775773ecf982622833efb97fd4ee08f3a935	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_outbound_invtype_resolve.py	8f92fb01f66382947de22e2059fd57ce551a22df	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_process_operation_push_service.py	73cdc2b13a6738b261c2d098ecaca36d62329150	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_production_order_push_service.py	ea1a2d595eccff3f5fca2752a6b47867fbbc139d	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_production_picking_push_service.py	dedfcd1d3f92c3fb07c5d13b8492d93307bedfbd	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_production_report_push_service.py	fe8a6943df97c5c3a5a96b5811d6a1616d20486f	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_purchase_order_push_service.py	fec4e54d7a35b202dd32b021dd293d897dcf28be	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_purchase_receipt_push_service.py	06babeff6dfbfb2aaba463b8011c667cddb79004	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_purchase_receipt_revoke_service.py	89bfe157abfabd97bcd82ebfadae3843bc203399	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_push_location.py	144f7addbb8bfd8e171c5f9c0fdc9c41061f06ee	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_sales_delivery_push_service.py	3fa9cd3835626864d1396426ea9b75a2587516fa	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_sales_order_push_service.py	f765e192e2da888d88ad2a3097ec1138f12c5794	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_stocktaking_deficit_push_service.py	d7514904b21345789ef3f4b6cc568dc231a062e6	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_stocktaking_surplus_push_service.py	ed0e03c80b9f63d7fe7d1f9918556808229c17d6	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_warehouse_billentry_dual_qty.py	37d00ccf8a18edca89d9499118894ffbc34e84f5	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/oa_document_push_service.py	28ab9a009b0183ec5941475b90ce0ace45dd1905	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/document_push/warehouse_kingdee_alignment.py	8a2eb7299f4070ba927650ceb4d2edb8bfd148a6	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/__init__.py	091357b9b3d862025c805fca904b320cb3e3fedd	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/customer_sync_service.py	2be4ff735a6d3f277d46711c488f90c942be80fa	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/engineering_bom_sync_service.py	2784164b16b40d91abdd168a7e857e39d1f2a780	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/external_sync_scheduler.py	fbd153239e848e8ebd5abf7b2a3329163e00d3fe	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/finished_goods_receipt_sync_service.py	d2fc5fe1de5b963d7dd654a5b5644653fc1cef33	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/inventory_sync_service.py	2cbfd756e227825c7f8248cac582d3c071bd64dd	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/master_data_sync_common.py	fa347ad1325fc6c89b4734c1fc5f0676aac99585	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/material_batch_manage_sync_service.py	1dbc80784f5e0f4ecae470e026895da2bc55720b	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/material_group_sync_service.py	143ca957ba4ab330305ebedf0264da6c94769ed4	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/material_multi_unit_sync_service.py	fb7a2ddb8c92d26fb14e8293fad8dcd57e05064c	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/material_sync_service.py	035493558e7908ade68ea2c2c099aa0ea68eabc6	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/operation_sync_service.py	1c0579abedc80c9875648e10cca095a541b93995	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/other_inbound_sync_service.py	1b587b9d361d962436ef3d278d72cc049a78af04	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/other_outbound_sync_service.py	eb350535d2108227f913609cd212e3ba2a754ed1	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/production_picking_sync_service.py	32425766c8984687d950aa2813fbde72c1d73c4b	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/purchase_order_sync_service.py	37d89d80fff8d1d4770c007cb77ff17bcfa1d621	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/purchase_receipt_sync_service.py	6ac18d356950eda845ce311f7ca7df171e7154fa	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/reporting_sync_service.py	6ccdcd17ab0baa2ecc12448d265d5006a633ce13	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/sales_delivery_sync_service.py	bc7e917c8fb76092bcdd62273bf3990be7e0fa65	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/sales_order_sync_service.py	df2f47d8c33aa4565abbdf263e1517cff62010be	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/storage_location_sync_service.py	0401b620a73471fe87185eb5a45b2778ebabf747	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/supplier_sync_service.py	4cd9f195a26240036832eac503810a814e6874b3	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/sync_binding_sources.py	a4dfcf6d31a8de9edd31d28b52e3c0aa2875c117	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/unit_sync_service.py	2f4869e42cfa51762a150d8eb89f55b42ba171ef	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/warehouse_location_ref_sync_service.py	4b7da40ea045b93d8d914db52fc282be39f52ee1	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/warehouse_sync_service.py	4fd5734e32c56512233f4de5994a488e0d6f5c6b	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
-riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/work_order_sync_service.py	e3309fe9f29003ed337d639eb59f0ca8332503a5	deferred	R2:kuaiconnect pro包未落地，本地已在kuaizhizao适配同源实现
+riveredge-backend/src/apps/kuaiconnect/__init__.py	c6f9ef4c13fc4ac49209ccc82f3b736a4a2846d0	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/api/apis/__init__.py	e69de29bb2d1d6434b8b29ae775ad8c2e48c5391	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/api/apis/apis.py	f261569a2c224725220150678dac24f35dff9f86	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/api/application_connections/__init__.py	44be866bed6e35b917acc41a13284d9a7829d3b1	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/api/application_connections/application_connections.py	63a827dd7887d2a82f43b44158e2a12b8c5cee27	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/api/data_sources/__init__.py	e69de29bb2d1d6434b8b29ae775ad8c2e48c5391	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/api/data_sources/data_sources.py	978a2bf202a22386d35c7f87ced51bfc6f166a88	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/api/datasets/__init__.py	e69de29bb2d1d6434b8b29ae775ad8c2e48c5391	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/api/datasets/datasets.py	a8522f064f8d30ec42dcde3f694b6b66352db570	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/manifest.json	7af8cddeb629e5d2d26b7e9a4b5cc10a5c0672ad	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/__init__.py	eb7ddb73bf264f62d5da504c0ddcf53daf22250a	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/__init__.py	74c04b4a418f1cdf905f0610a8809a6f1b7797d8	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_reconcile_service.py	64f4b85988079693fef9ae174a6c1ac19e51e839	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py	c2066ad59fa00c30093c78a19d0d695cb5adeccc	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/feishu_work_order_push_service.py	ef955a4fdc44ee5a2e7cd4789faf337e4cf4b3d7	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_engineering_bom_push_service.py	10ce8d13def08f74c68b3c72e827668dab6777ed	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_finished_goods_receipt_push_service.py	a2c8f72f545305d0e3043b43356af6974bf2846b	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_im_batch_update_service.py	17abf2238643df034a67312e9ba35a88b79271cb	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_im_batch_update_sync.py	0815decab304082f0dec90c82a8b055af4fec6ff	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_im_warehouse_revoke_service.py	437c5823c96fdaa3d225beebce4dc4fd6c5dc442	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_inventory_push_service.py	0ae5ba2112a5f538a62517c5fff388f4844f8acd	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_material_push_service.py	796764aa39a319d6ba489e72a6684d784febeef9	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_other_inbound_push_service.py	3bd8bb8f81b5e7f206148e9a6ff44180260dd2cf	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_other_outbound_push_service.py	88c896240c4b6e74f1f9b8195f1b6a937adfda56	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_outbound_avb_precheck_service.py	ed76775773ecf982622833efb97fd4ee08f3a935	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_outbound_invtype_resolve.py	8f92fb01f66382947de22e2059fd57ce551a22df	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_process_operation_push_service.py	73cdc2b13a6738b261c2d098ecaca36d62329150	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_production_order_push_service.py	ea1a2d595eccff3f5fca2752a6b47867fbbc139d	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_production_picking_push_service.py	dedfcd1d3f92c3fb07c5d13b8492d93307bedfbd	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_production_report_push_service.py	fe8a6943df97c5c3a5a96b5811d6a1616d20486f	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_purchase_order_push_service.py	fec4e54d7a35b202dd32b021dd293d897dcf28be	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_purchase_receipt_push_service.py	06babeff6dfbfb2aaba463b8011c667cddb79004	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_purchase_receipt_revoke_service.py	89bfe157abfabd97bcd82ebfadae3843bc203399	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_push_location.py	144f7addbb8bfd8e171c5f9c0fdc9c41061f06ee	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_sales_delivery_push_service.py	3fa9cd3835626864d1396426ea9b75a2587516fa	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_sales_order_push_service.py	f765e192e2da888d88ad2a3097ec1138f12c5794	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_stocktaking_deficit_push_service.py	d7514904b21345789ef3f4b6cc568dc231a062e6	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_stocktaking_surplus_push_service.py	ed0e03c80b9f63d7fe7d1f9918556808229c17d6	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_warehouse_billentry_dual_qty.py	37d00ccf8a18edca89d9499118894ffbc34e84f5	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/oa_document_push_service.py	28ab9a009b0183ec5941475b90ce0ace45dd1905	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/document_push/warehouse_kingdee_alignment.py	8a2eb7299f4070ba927650ceb4d2edb8bfd148a6	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/__init__.py	091357b9b3d862025c805fca904b320cb3e3fedd	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/customer_sync_service.py	2be4ff735a6d3f277d46711c488f90c942be80fa	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/engineering_bom_sync_service.py	2784164b16b40d91abdd168a7e857e39d1f2a780	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/external_sync_scheduler.py	fbd153239e848e8ebd5abf7b2a3329163e00d3fe	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/finished_goods_receipt_sync_service.py	d2fc5fe1de5b963d7dd654a5b5644653fc1cef33	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/inventory_sync_service.py	2cbfd756e227825c7f8248cac582d3c071bd64dd	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/master_data_sync_common.py	fa347ad1325fc6c89b4734c1fc5f0676aac99585	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/material_batch_manage_sync_service.py	1dbc80784f5e0f4ecae470e026895da2bc55720b	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/material_group_sync_service.py	143ca957ba4ab330305ebedf0264da6c94769ed4	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/material_multi_unit_sync_service.py	fb7a2ddb8c92d26fb14e8293fad8dcd57e05064c	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/material_sync_service.py	035493558e7908ade68ea2c2c099aa0ea68eabc6	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/operation_sync_service.py	1c0579abedc80c9875648e10cca095a541b93995	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/other_inbound_sync_service.py	1b587b9d361d962436ef3d278d72cc049a78af04	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/other_outbound_sync_service.py	eb350535d2108227f913609cd212e3ba2a754ed1	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/production_picking_sync_service.py	32425766c8984687d950aa2813fbde72c1d73c4b	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/purchase_order_sync_service.py	37d89d80fff8d1d4770c007cb77ff17bcfa1d621	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/purchase_receipt_sync_service.py	6ac18d356950eda845ce311f7ca7df171e7154fa	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/reporting_sync_service.py	6ccdcd17ab0baa2ecc12448d265d5006a633ce13	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/sales_delivery_sync_service.py	bc7e917c8fb76092bcdd62273bf3990be7e0fa65	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/sales_order_sync_service.py	df2f47d8c33aa4565abbdf263e1517cff62010be	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/storage_location_sync_service.py	0401b620a73471fe87185eb5a45b2778ebabf747	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/supplier_sync_service.py	4cd9f195a26240036832eac503810a814e6874b3	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/sync_binding_sources.py	a4dfcf6d31a8de9edd31d28b52e3c0aa2875c117	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/unit_sync_service.py	2f4869e42cfa51762a150d8eb89f55b42ba171ef	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/warehouse_location_ref_sync_service.py	4b7da40ea045b93d8d914db52fc282be39f52ee1	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/warehouse_sync_service.py	4fd5734e32c56512233f4de5994a488e0d6f5c6b	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/work_order_sync_service.py	e3309fe9f29003ed337d639eb59f0ca8332503a5	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
 riveredge-backend/src/apps/kuaiems/manifest.json	5ef0dd94364e247a47c958f326329cc8c22cad0d	tracked	seed from 46508115c7
 riveredge-backend/src/apps/kuaiplm/models/bom_collaboration.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 riveredge-backend/src/apps/kuaiplm/models/material_review.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
@@ -1505,13 +1505,13 @@ riveredge-backend/tests/apps/kuaicaiwu/services/test_finance_voucher_posting_ban
 riveredge-backend/tests/apps/kuaicaiwu/services/test_trial_balance_leaf_totals.py	d0fd543729af4f6d8b470667edb9694682d77994	tracked	seed from 57a37e2749
 riveredge-backend/tests/apps/kuaicaiwu/test_finance_list_unpaid_refund_filter.py	18079cdc29fd0ba2b861a404244b58dca2224bf4	tracked	seed from b12cc66e71
 riveredge-backend/tests/apps/kuaicaiwu/test_purchase_return_finance_outcome.py	096db262f2feddc949fa540f4549d39a396c9d76	tracked	seed from b12cc66e71
-riveredge-backend/tests/apps/kuaiconnect/services/document_push/test_kingdee_outbound_avb_precheck_service.py	248761389920c15dccfb970004a70eceb59bb34c	applied	三确认共用金蝶可用量预检，仅无感外推会跑时执行；报价改删与四页钉住仍缓置，billentry 与 im 批量更新仍缺依赖
-riveredge-backend/tests/apps/kuaiconnect/services/document_push/test_kingdee_purchase_receipt_revoke_service.py	5825173be48025dcc0540cbc642c781679cc9bcd	deferred	R2:上游测试针对上游OutsourceService/inventory_service/report_enhancements/operation_jump_rules/sales_order_purchase_push/PurchaseReceiptService内部函数签名，本地实现已分叉，随对应src簇落地
-riveredge-backend/tests/apps/kuaiconnect/services/document_push/test_kingdee_purchase_receipt_unit.py	98b879cdfc9d6fbb0d2c2ce4623dd79c37a2d909	tracked	seed from d32d1e031d
-riveredge-backend/tests/apps/kuaiconnect/services/inbound_sync/test_inventory_aux_unit_from_row.py	c9cc4be979945c6f02fbe5eb3e7f86356792e4e2	deferred	R2簇5:缓置(详见台账)
-riveredge-backend/tests/apps/kuaiconnect/services/inbound_sync/test_settle_sync_run_outcome.py	61c4d5dbd5b0306f366895b9dc4d08ee72c7315f	deferred	R2簇5:缓置(详见台账)
-riveredge-backend/tests/apps/kuaiconnect/test_material_group_infer_parent.py	efc1d9ee61a1aef8fba4ac3de713226c5b70f3d3	tracked	seed from 7fa73e053a
-riveredge-backend/tests/apps/kuaiconnect/test_warehouse_kingdee_alignment.py	3be1bbd3e4124a36dd7b25afe8447c3b55f4bc9b	tracked	seed from 6abba1dbd5
+riveredge-backend/tests/apps/kuaiconnect/services/document_push/test_kingdee_outbound_avb_precheck_service.py	248761389920c15dccfb970004a70eceb59bb34c	applied	R2:kuaiconnect包已落地;该测试引用超出评估tip的上游新helper(_aux_base_ratio_n_d/SYNC_EMPTY_FILTERED)或本地审批特性缺口(multi_approver),试跑仍红
+riveredge-backend/tests/apps/kuaiconnect/services/document_push/test_kingdee_purchase_receipt_revoke_service.py	5825173be48025dcc0540cbc642c781679cc9bcd	applied	R2:kuaiconnect包落地(本仓内置,不拆库),测试取上游tip试跑通过
+riveredge-backend/tests/apps/kuaiconnect/services/document_push/test_kingdee_purchase_receipt_unit.py	98b879cdfc9d6fbb0d2c2ce4623dd79c37a2d909	tracked	R2:kuaiconnect包已落地;该测试引用超出评估tip的上游新helper(_aux_base_ratio_n_d/SYNC_EMPTY_FILTERED)或本地审批特性缺口(multi_approver),试跑仍红
+riveredge-backend/tests/apps/kuaiconnect/services/inbound_sync/test_inventory_aux_unit_from_row.py	c9cc4be979945c6f02fbe5eb3e7f86356792e4e2	deferred	R2:kuaiconnect包已落地;该测试引用超出评估tip的上游新helper(_aux_base_ratio_n_d/SYNC_EMPTY_FILTERED)或本地审批特性缺口(multi_approver),试跑仍红
+riveredge-backend/tests/apps/kuaiconnect/services/inbound_sync/test_settle_sync_run_outcome.py	61c4d5dbd5b0306f366895b9dc4d08ee72c7315f	deferred	R2:kuaiconnect包已落地;该测试引用超出评估tip的上游新helper(_aux_base_ratio_n_d/SYNC_EMPTY_FILTERED)或本地审批特性缺口(multi_approver),试跑仍红
+riveredge-backend/tests/apps/kuaiconnect/test_material_group_infer_parent.py	efc1d9ee61a1aef8fba4ac3de713226c5b70f3d3	tracked	R2:kuaiconnect包已落地;该测试引用超出评估tip的上游新helper(_aux_base_ratio_n_d/SYNC_EMPTY_FILTERED)或本地审批特性缺口(multi_approver),试跑仍红
+riveredge-backend/tests/apps/kuaiconnect/test_warehouse_kingdee_alignment.py	3be1bbd3e4124a36dd7b25afe8447c3b55f4bc9b	tracked	R2:kuaiconnect包已落地;该测试引用超出评估tip的上游新helper(_aux_base_ratio_n_d/SYNC_EMPTY_FILTERED)或本地审批特性缺口(multi_approver),试跑仍红
 riveredge-backend/tests/apps/kuaiplm/test_rd_project_system_archive.py	d07ba936928e8e2858b187a6cd0bfa55e75d7041	tracked	seed from 88b0c140f1
 riveredge-backend/tests/apps/kuaizhizao/api/test_kuaizhizao_document_gate.py	0bd6426cf3ee762e2a7a6581aced9efbc2345d55	tracked	seed from f1c2d18cfb
 riveredge-backend/tests/apps/kuaizhizao/api/test_kuaizhizao_route_access_quality.py	9d94441ae0	deferred	R2-测试: notify→submit映射待摘
@@ -1617,7 +1617,7 @@ riveredge-backend/tests/core/services/application/test_api_library_catalog.py	8f
 riveredge-backend/tests/core/services/application/test_api_test_request_merge.py	32cf90c8a2	applied	R2-测试回归簇: 被测函数本地已在,纯加回归
 riveredge-backend/tests/core/services/approval/test_advance_condition_not_pinned.py	0c138ef77de39a30a126287927a704fa4bf891d3	applied	R2：与上游tip blob一致，本地已同步
 riveredge-backend/tests/core/services/approval/test_advance_node_pending_notification.py	192872e5430c5ac601bf0c465feef11ef913960e	deferred	试跑红：notify_pending_approvers标志未落地，随审批域
-riveredge-backend/tests/core/services/approval/test_approval_completion_writeback.py	6c1b76b1ae2369f33c19bb867ff0ee97c525a9af	deferred	R2:上游迁入apps.kuaizhizao.finance/kuaiconnect包，本地保持kuaicaiwu+无kuaiconnect，须逆映射或随财务/连接包整体落地
+riveredge-backend/tests/core/services/approval/test_approval_completion_writeback.py	6c1b76b1ae2369f33c19bb867ff0ee97c525a9af	applied	R2:随kuaiconnect簇取上游tip,试跑通过(4 passed)
 riveredge-backend/tests/core/services/approval/test_approval_document_view.py	037e5455e2c24aaa8792078903eb9d983408457f	tracked	seed from 37409d3b29
 riveredge-backend/tests/core/services/approval/test_approval_viewer_actions.py	2df6305fcc2b4b79647a8a1fe305bc38c7c0f36d	tracked	seed from 872b76152e
 riveredge-backend/tests/core/services/approval/test_audit_capability_gate_rejected.py	7ab791e6e6da36af48e4598ce072ff87c4c92580	tracked	seed from 872b76152e
@@ -1625,7 +1625,7 @@ riveredge-backend/tests/core/services/approval/test_audit_flow_four_scenarios.py
 riveredge-backend/tests/core/services/approval/test_audit_phase.py	af9de56807f192aec853061d890ee6c17bba6322	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
 riveredge-backend/tests/core/services/approval/test_condition_branch_decision.py	ff57afe58ada0bc73bd5a6d9926aadf46f8715bd	applied	R2：与上游tip blob一致，本地已同步
 riveredge-backend/tests/core/services/approval/test_finance_completion_handlers.py	43b0a3514e904928284430e99de1ffea19921a29	domain-out	决策:上游finance并入pro包(finance包+finance-management页+对账pull链)，本地kuaicaiwu权威不摘，随架构决策整体排除
-riveredge-backend/tests/core/services/approval/test_multi_approver.py	c7c6a8cb45232af90404794bdd938f2afbfe1924	deferred	R2:上游迁入apps.kuaizhizao.finance/kuaiconnect包，本地保持kuaicaiwu+无kuaiconnect，须逆映射或随财务/连接包整体落地
+riveredge-backend/tests/core/services/approval/test_multi_approver.py	c7c6a8cb45232af90404794bdd938f2afbfe1924	deferred	R2:取上游tip试跑3红(mixed_uuid/data_scope/dept_manager特性缺口),已回退;特性级deferred
 riveredge-backend/tests/core/services/approval/test_payment_application_completion_handler.py	31341380ad85b458ffc096fdaa8505a3907665b9	tracked	seed from 154977d948
 riveredge-backend/tests/core/services/approval/test_pending_list_reconcile_withdrawn.py	c8119f437caadf5f31357c6a87eda98f87a464a7	deferred	试跑红：purchase_request DRAFT→cancelled判定+reconcile取消语义未落地，随审批域
 riveredge-backend/tests/core/services/approval/test_recall_own_keep_initiator_branch.py	cd0c16b52703eafbb4f513a21d3c3c80df1d8115	applied	R2：与上游tip blob一致，本地已同步
@@ -1707,19 +1707,19 @@ riveredge-frontend/src/api/warehouse-execution.ts	DELETED	applied	D依赖簇续:
 riveredge-frontend/src/app.tsx	45f3edefe13e595344a35c7f7b0626d624e14333	tracked	seed from 3050130eb5
 riveredge-frontend/src/apps/industry-pack/manifest.json	8b3e140fee02933d0ba17ad248c81dd2b7ea63e5	tracked	seed from 2c76a942c2
 riveredge-frontend/src/apps/kuaicaiwu/pages/payment-applications/index.tsx	DELETED	applied	13be286f11续:前端+财务适配+迁移
-riveredge-frontend/src/apps/kuaiconnect/pages/apis/ApiFormModal.tsx	e97df01c3c46d2608ec0aa445595a235a8e95164	deferred	R2:kuaiconnect页import路径需适配(src/components深度)且依赖apiManagement服务未落
-riveredge-frontend/src/apps/kuaiconnect/pages/apis/OutboundFieldMappingEditor.tsx	DELETED	deferred	R2:kuaiconnect页import路径需适配(src/components深度)且依赖apiManagement服务未落
-riveredge-frontend/src/apps/kuaiconnect/pages/apis/apiFormUtils.ts	fd6cf9b8b78375ef940c60c35d2f02a666bb6b83	deferred	R2:kuaiconnect页import路径需适配(src/components深度)且依赖apiManagement服务未落
-riveredge-frontend/src/apps/kuaiconnect/pages/apis/apiTestResultPreview.ts	8e36e5c02a7307c4a07ee4750fd8a9d5dde4c39e	tracked	seed from 7fa73e053a
-riveredge-frontend/src/apps/kuaiconnect/pages/apis/list/index.tsx	b9c872e0bf99526c2d9d2a8e6739c1d0f210ac00	deferred	R2:kuaiconnect页import路径需适配(src/components深度)且依赖apiManagement服务未落
-riveredge-frontend/src/apps/kuaiconnect/pages/apis/outboundFieldMappings.ts	DELETED	deferred	R2:kuaiconnect页import路径需适配(src/components深度)且依赖apiManagement服务未落
-riveredge-frontend/src/apps/kuaiconnect/pages/application-connections/AppConnectorMarket.tsx	651ea62e4a99b8d67fae72eae6694f547271ea10	superset	R2预审：本地已有等价/更深实现，不摘
-riveredge-frontend/src/apps/kuaiconnect/pages/application-connections/connectorBrandPresentation.tsx	82054df5a48a03de22e0cb4ba207f4c1d1ce09bb	superset	R2预审：本地已有等价/更深实现，不摘
-riveredge-frontend/src/apps/kuaiconnect/pages/application-connections/connectors.tsx	fc1d44e623908ab6a1ecf3710f81315fea2ea6c7	superset	R2预审：本地已有等价/更深实现，不摘
-riveredge-frontend/src/apps/kuaiconnect/pages/application-connections/list/index.tsx	0b23e0fb66a59baaf7de04d10fbb8a2c605eebc2	superset	R2预审：本地已有等价/更深实现，不摘
-riveredge-frontend/src/apps/kuaiconnect/pages/data-sources/DatabaseBrandIcon.tsx	0d65ef595a88d44bfd044bcbe8c0fa1deb18146a	deferred	R2:kuaiconnect页import路径需适配(src/components深度)且依赖apiManagement服务未落
-riveredge-frontend/src/apps/kuaiconnect/pages/data-sources/databaseBrandColors.ts	1ee34f2f9beedaabe54efe306d1380c72e62e4aa	deferred	R2:kuaiconnect页import路径需适配(src/components深度)且依赖apiManagement服务未落
-riveredge-frontend/src/apps/kuaiconnect/pages/datasets/list/index.tsx	a113157c300391b96a337d1000b8f1dc4e24cec1	deferred	R2:kuaiconnect页import路径需适配(src/components深度)且依赖apiManagement服务未落
+riveredge-frontend/src/apps/kuaiconnect/pages/apis/ApiFormModal.tsx	e97df01c3c46d2608ec0aa445595a235a8e95164	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-frontend/src/apps/kuaiconnect/pages/apis/OutboundFieldMappingEditor.tsx	DELETED	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-frontend/src/apps/kuaiconnect/pages/apis/apiFormUtils.ts	fd6cf9b8b78375ef940c60c35d2f02a666bb6b83	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-frontend/src/apps/kuaiconnect/pages/apis/apiTestResultPreview.ts	8e36e5c02a7307c4a07ee4750fd8a9d5dde4c39e	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-frontend/src/apps/kuaiconnect/pages/apis/list/index.tsx	b9c872e0bf99526c2d9d2a8e6739c1d0f210ac00	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-frontend/src/apps/kuaiconnect/pages/apis/outboundFieldMappings.ts	DELETED	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-frontend/src/apps/kuaiconnect/pages/application-connections/AppConnectorMarket.tsx	651ea62e4a99b8d67fae72eae6694f547271ea10	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-frontend/src/apps/kuaiconnect/pages/application-connections/connectorBrandPresentation.tsx	82054df5a48a03de22e0cb4ba207f4c1d1ce09bb	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-frontend/src/apps/kuaiconnect/pages/application-connections/connectors.tsx	fc1d44e623908ab6a1ecf3710f81315fea2ea6c7	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-frontend/src/apps/kuaiconnect/pages/application-connections/list/index.tsx	0b23e0fb66a59baaf7de04d10fbb8a2c605eebc2	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-frontend/src/apps/kuaiconnect/pages/data-sources/DatabaseBrandIcon.tsx	0d65ef595a88d44bfd044bcbe8c0fa1deb18146a	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-frontend/src/apps/kuaiconnect/pages/data-sources/databaseBrandColors.ts	1ee34f2f9beedaabe54efe306d1380c72e62e4aa	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
+riveredge-frontend/src/apps/kuaiconnect/pages/datasets/list/index.tsx	a113157c300391b96a337d1000b8f1dc4e24cec1	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
 riveredge-frontend/src/apps/kuaiems/manifest.json	5ef0dd94364e247a47c958f326329cc8c22cad0d	tracked	seed from 46508115c7
 riveredge-frontend/src/apps/kuaiplm/components/SystemArchiveCapabilitiesTags.tsx	DELETED	superset	本地独有（上游tip无此路径），无上游可比版本
 riveredge-frontend/src/apps/kuaiplm/manifest.json	DELETED	superset	本地独有（上游tip无此路径），无上游可比版本

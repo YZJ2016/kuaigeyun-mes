@@ -16,6 +16,7 @@ import {
   App,
   Popconfirm,
   Button,
+  Progress,
   Tag,
   Space,
 } from 'antd'
@@ -23,6 +24,7 @@ import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTab
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment'
 import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation'
 import {
+  ClearOutlined,
   DatabaseOutlined,
 } from '@ant-design/icons'
 import { UniTable } from '../../../../components/uni-table'
@@ -30,6 +32,7 @@ import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer'
 import { getApiErrorMessage } from '../../../../utils/errorHandler'
 import {
   getAPIList,
+  getAPIListAllMatching,
   getAPIByUuid,
   createAPI,
   updateAPI,
@@ -47,7 +50,14 @@ import {
   pickSearchTriStateBoolean,
 } from '../../../../utils/tableQueryKey'
 import { rowActionKind, rowActionLabelKeep } from '../../../../components/uni-action'
-import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import {
+  buildApiImportTemplate,
+  dedupeApisByNormalizedCode,
+  exportApisToXlsx,
+  importApisFromSpreadsheet,
+  planApiCodeDedup,
+} from '../../../../utils/apiImportExport'
+import { ImportResultModalContent } from '../../../../utils/importResultModalContent';
 import { todaySiteDateString } from '../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
@@ -70,11 +80,12 @@ import { TwoColumnLayout } from '../../../../components/layout-templates';
  */
 const APIListPage: React.FC = () => {
   const { t } = useTranslation()
-  const { message: messageApi } = App.useApp()
+  const { message: messageApi, modal: modalApi } = App.useApp()
   const connectionPerms = useResourcePermissions('system:application-connection')
   const apiPerms = useResourcePermissions('system:api')
   const actionRef = useRef<ActionType>(null)
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
+  const [dedupeLoading, setDedupeLoading] = useState(false)
 
   const reloadList = useCallback(() => {
     actionRef.current?.reload()
@@ -152,6 +163,7 @@ const APIListPage: React.FC = () => {
     setFormInitialValues({
       method: 'GET',
       sync_direction: 'pull',
+      api_interface_type: 'custom',
       is_active: true,
       is_system: false,
       category_uuid: presetCategoryUuid,
@@ -465,6 +477,71 @@ const APIListPage: React.FC = () => {
     }
   }
 
+  /** 按规范化 code 清理导入产生的重复接口 */
+  const handleDedupeByCode = async () => {
+    if (dedupeLoading) return
+    setDedupeLoading(true)
+    try {
+      const all = await getAPIListAllMatching()
+      const plan = planApiCodeDedup(all)
+      if (plan.removeCount === 0) {
+        messageApi.info(
+          plan.skippedSystemCount > 0
+            ? t('pages.system.apis.dedupeOnlySystemLeft', { count: plan.skippedSystemCount })
+            : t('pages.system.apis.dedupeNoDuplicates'),
+        )
+        return
+      }
+      modalApi.confirm({
+        title: t('pages.system.apis.dedupeConfirmTitle'),
+        content: t('pages.system.apis.dedupeConfirmContent', {
+          groups: plan.groups.length,
+          remove: plan.removeCount,
+          skipped: plan.skippedSystemCount,
+        }),
+        okText: t('pages.system.apis.dedupeConfirmOk'),
+        cancelText: t('common.cancel'),
+        onOk: async () => {
+          const hide = messageApi.loading(t('pages.system.apis.dedupeRunning'), 0)
+          try {
+            const result = await dedupeApisByNormalizedCode()
+            hide()
+            if (result.failed > 0) {
+              messageApi.warning(
+                t('pages.system.apis.dedupeDonePartial', {
+                  deleted: result.deleted,
+                  failed: result.failed,
+                  groups: result.groupCount,
+                }),
+              )
+            } else {
+              messageApi.success(
+                t('pages.system.apis.dedupeDone', {
+                  deleted: result.deleted,
+                  groups: result.groupCount,
+                }),
+              )
+            }
+            setSelectedRowKeys([])
+            actionRef.current?.reload()
+            void reloadCategories()
+          } catch (error: unknown) {
+            hide()
+            messageApi.error(
+              getApiErrorMessage(error) || t('pages.system.apis.dedupeFailed'),
+            )
+          }
+        },
+      })
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error) || t('pages.system.apis.dedupeFailed'))
+    } finally {
+      setDedupeLoading(false)
+    }
+  }
+
+  const apiImportTemplate = useMemo(() => buildApiImportTemplate(t), [t])
+
   const columns = useMemo<ProColumns<API>[]>(() => alignProColumns<API>([
     {
       title: t('pages.system.apis.columnName'),
@@ -534,6 +611,31 @@ const APIListPage: React.FC = () => {
           colors[direction] || 'default',
         )
       },
+    },
+    {
+      title: t('pages.system.apis.columnRelatedDocument'),
+      dataIndex: 'related_document_code',
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      render: (_, record) => {
+        const code = record.related_document_code?.trim()
+        if (!code) return '-'
+        return t(`pages.system.apis.relatedDocument.${code}`, code)
+      },
+    },
+    {
+      title: t('pages.system.apis.columnApiInterfaceType'),
+      dataIndex: 'api_interface_type',
+      width: 112,
+      minWidth: 112,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      render: (_, record) =>
+        t(`pages.system.apis.apiInterfaceType.${record.api_interface_type || 'custom'}`),
     },
     {
       title: t('pages.system.apis.columnConnection'),
@@ -694,15 +796,31 @@ const APIListPage: React.FC = () => {
           deleteConfirmTitle={t('pages.system.apis.batchDeleteTitle')}
           deleteConfirmDescription={(c) => t('pages.system.apis.batchDeleteDescription', { count: c })}
           toolBarActionsAfterDelete={
-            apiPerms.canCreate
+            apiPerms.canCreate || apiPerms.canDelete
               ? [
-                  <Button
-                    key="api-library"
-                    icon={<DatabaseOutlined />}
-                    onClick={() => setLibraryModalOpen(true)}
-                  >
-                    {t('pages.system.apis.libraryButton')}
-                  </Button>,
+                  ...(apiPerms.canCreate
+                    ? [
+                        <Button
+                          key="api-library"
+                          icon={<DatabaseOutlined />}
+                          onClick={() => setLibraryModalOpen(true)}
+                        >
+                          {t('pages.system.apis.libraryButton')}
+                        </Button>,
+                      ]
+                    : []),
+                  ...(apiPerms.canDelete
+                    ? [
+                        <Button
+                          key="api-dedupe"
+                          icon={<ClearOutlined />}
+                          loading={dedupeLoading}
+                          onClick={() => void handleDedupeByCode()}
+                        >
+                          {t('pages.system.apis.dedupeButton')}
+                        </Button>,
+                      ]
+                    : []),
                 ]
               : undefined
           }
@@ -710,146 +828,113 @@ const APIListPage: React.FC = () => {
           onCreate={handleCreate}
           createButtonText={t('pages.system.apis.createButton')}
           showImportButton
-          importHeaders={[
-            t('pages.system.apis.columnName'),
-            t('pages.system.apis.columnCode'),
-            t('pages.system.apis.columnPath'),
-            t('pages.system.apis.columnMethod'),
-            t('pages.system.apis.columnSyncDirection'),
-            t('common.remark'),
-            t('pages.system.apis.columnActive'),
-          ]}
-          importExampleRow={[
-            '示例接口',
-            'example_api',
-            '/api/v1/example',
-            'GET',
-            'pull',
-            '',
-            'true',
-          ]}
-          importFieldMap={{
-            [t('pages.system.apis.columnName')]: 'name',
-            接口名称: 'name',
-            name: 'name',
-            [t('pages.system.apis.columnCode')]: 'code',
-            接口代码: 'code',
-            code: 'code',
-            [t('pages.system.apis.columnPath')]: 'path',
-            接口路径: 'path',
-            path: 'path',
-            [t('pages.system.apis.columnMethod')]: 'method',
-            请求方法: 'method',
-            method: 'method',
-            [t('pages.system.apis.columnSyncDirection')]: 'sync_direction',
-            同步方向: 'sync_direction',
-            sync_direction: 'sync_direction',
-            [t('common.remark')]: 'description',
-            描述: 'description',
-            description: 'description',
-            [t('pages.system.apis.columnActive')]: 'is_active',
-            启用状态: 'is_active',
-            is_active: 'is_active',
-          }}
+          importHeaders={apiImportTemplate.importHeaders}
+          importExampleRow={apiImportTemplate.importExampleRow}
+          importFieldMap={apiImportTemplate.importHeaderMap}
           onImport={async data => {
             if (!data || data.length < 2) {
               messageApi.warning(t('pages.system.apis.fillImportData'))
               return
             }
-            const headers = (data[0] || []).map((h: any) =>
-              String(h || '')
-                .replace(/^\*/, '')
-                .trim()
-            )
-            const rows = data
-              .slice(2)
-              .filter((row: any[]) => row.some((c: any) => c != null && String(c).trim()))
-            const fieldMap: Record<string, string> = {
-              [t('pages.system.apis.columnName')]: 'name',
-              接口名称: 'name',
-              name: 'name',
-              [t('pages.system.apis.columnCode')]: 'code',
-              接口代码: 'code',
-              code: 'code',
-              [t('pages.system.apis.columnPath')]: 'path',
-              接口路径: 'path',
-              path: 'path',
-              [t('pages.system.apis.columnMethod')]: 'method',
-              请求方法: 'method',
-              method: 'method',
-              [t('pages.system.apis.columnSyncDirection')]: 'sync_direction',
-              同步方向: 'sync_direction',
-              sync_direction: 'sync_direction',
-              [t('common.remark')]: 'description',
-              描述: 'description',
-              description: 'description',
-              [t('pages.system.apis.columnActive')]: 'is_active',
-              启用状态: 'is_active',
-              is_active: 'is_active',
-            }
-            const syncDirectionLabelMap: Record<string, 'pull' | 'push' | 'bidirectional'> = {
-              pull: 'pull',
-              push: 'push',
-              bidirectional: 'bidirectional',
-              [t('pages.system.apis.syncDirection.pull')]: 'pull',
-              [t('pages.system.apis.syncDirection.push')]: 'push',
-              [t('pages.system.apis.syncDirection.bidirectional')]: 'bidirectional',
-              入站同步: 'pull',
-              出站同步: 'push',
-              双向同步: 'bidirectional',
-            }
-            let done = 0
-            for (const row of rows) {
-              const obj: Record<string, any> = {}
-              headers.forEach((h, i) => {
-                const field = fieldMap[h] || fieldMap[h?.trim()]
-                if (field && row[i] != null) obj[field] = row[i]
+            const progressModal = modalApi.info({
+              title: t('pages.system.apis.importProgressTitle'),
+              content: (
+                <div>
+                  <Progress percent={0} status="active" />
+                  <p style={{ marginTop: 16 }}>{t('pages.system.apis.importProgressPreparing')}</p>
+                </div>
+              ),
+              okButtonProps: { style: { display: 'none' } },
+              closable: false,
+              mask: { closable: false },
+              keyboard: false,
+            })
+            try {
+              const result = await importApisFromSpreadsheet({
+                t,
+                data,
+                connections: connectionItems,
+                onProgress: (done, totalRows, partial) => {
+                  const percent =
+                    totalRows > 0 ? Math.min(100, Math.round((done / totalRows) * 100)) : 0
+                  progressModal.update({
+                    content: (
+                      <div>
+                        <Progress percent={percent} status="active" />
+                        <p style={{ marginTop: 16 }}>
+                          {t('pages.system.apis.importProgressLine', {
+                            done,
+                            total: totalRows,
+                          })}
+                        </p>
+                        <p style={{ marginTop: 8, color: 'rgba(0,0,0,0.65)' }}>
+                          {t('pages.system.apis.importProgressCounts', {
+                            created: partial.created,
+                            updated: partial.updated,
+                            failed: partial.failed,
+                          })}
+                        </p>
+                      </div>
+                    ),
+                  })
+                },
               })
-              if (obj.name && obj.code && obj.path && obj.method) {
-                const rawDirection = String(obj.sync_direction || 'pull').trim()
-                const syncDirection =
-                  syncDirectionLabelMap[rawDirection] ||
-                  syncDirectionLabelMap[rawDirection.toLowerCase()] ||
-                  'pull'
-                await createAPI({
-                  name: String(obj.name),
-                  code: String(obj.code)
-                    .replace(/[^a-z0-9_]/g, '_')
-                    .toLowerCase(),
-                  path: String(obj.path),
-                  method: String(obj.method).toUpperCase() || 'GET',
-                  sync_direction: syncDirection,
-                  description: obj.description ? String(obj.description) : undefined,
-                  is_active:
-                    obj.is_active !== 'false' && obj.is_active !== '0' && obj.is_active !== '',
-                  is_system: false,
-                } as CreateAPIData)
-                done++
+              progressModal.destroy()
+              const successCount = result.created + result.updated
+              if (successCount === 0 && result.failed === 0) {
+                messageApi.warning(t('pages.system.apis.fillImportData'))
+                return
               }
+              if (result.failed > 0) {
+                modalApi.warning({
+                  title: t('pages.system.apis.importResultTitle'),
+                  width: 720,
+                  content: (
+                    <ImportResultModalContent
+                      successCount={successCount}
+                      failureCount={result.failed}
+                      errors={result.errors.map(e => ({
+                        row: e.row,
+                        error: e.code ? `[${e.code}] ${e.error}` : e.error,
+                      }))}
+                    />
+                  ),
+                })
+              } else {
+                messageApi.success(
+                  t('pages.system.apis.importBackupResult', {
+                    created: result.created,
+                    updated: result.updated,
+                    failed: result.failed,
+                  }),
+                )
+              }
+              actionRef.current?.reload()
+              reloadCategories()
+            } catch (error: any) {
+              progressModal.destroy()
+              messageApi.error(getApiErrorMessage(error) || t('pages.system.apis.importFailed'))
             }
-            messageApi.success(t('pages.system.apis.importSuccessCount', { count: done }))
-            actionRef.current?.reload()
           }}
           showExportButton
           onExport={async (type, keys, pageData) => {
-            let items: API[] = []
-            if (type === 'selected' && keys?.length) {
-              items = await Promise.all(keys.map(k => getAPIByUuid(String(k))))
-            } else if (type === 'currentPage' && pageData?.length) {
-              items = pageData
-            } else {
-              const res = await getAPIList({ page: 1, page_size: 10000 })
-              items = res.items
+            try {
+              const count = await exportApisToXlsx({
+                t,
+                type,
+                keys: keys as Array<string | number> | undefined,
+                pageData: pageData as API[] | undefined,
+                connections: connectionItems,
+                fileName: `apis-${todaySiteDateString()}.xlsx`,
+              })
+              if (count === 0) {
+                messageApi.warning(t('common.exportNoData'))
+                return
+              }
+              messageApi.success(t('pages.system.apis.exportSuccessCount', { count }))
+            } catch (error: any) {
+              messageApi.error(getApiErrorMessage(error) || t('pages.system.apis.exportFailed'))
             }
-            if (items.length === 0) {
-              messageApi.warning(t('common.exportNoData'))
-              return
-            }
-            await downloadRecordsAsXlsx(
-              items as Array<Record<string, unknown>>,
-              `apis-${todaySiteDateString()}.xlsx`,
-            );
-            messageApi.success(t('pages.system.apis.exportSuccess'))
           }}
           pagination={{
             defaultPageSize: 20,

@@ -2,7 +2,7 @@
  * 新建/编辑接口弹窗（Postman 式布局）
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ProFormDependency,
@@ -14,6 +14,8 @@ import {
 } from '@ant-design/pro-components';
 import { Col, Row, Tabs } from 'antd';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
+import { API_INTERFACE_TYPE_OPTIONS } from '../../../configs/apiLibraryContract';
+import { getAPIRelatedDocumentOptions } from '../../../services/apiManagement';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
 import type { DataConnectionGroupOption, IntegrationConfig } from '../../../services/integrationConfig';
 import { KingdeeExecuteBillQueryBodyEditor } from './KingdeeExecuteBillQueryBodyEditor';
@@ -154,6 +156,27 @@ export const ApiFormModal: React.FC<ApiFormModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('params');
+  const [relatedDocumentOptions, setRelatedDocumentOptions] = useState<
+    Array<{ label: string; value: string }>
+  >([]);
+
+  useEffect(() => {
+    if (!open) return;
+    void getAPIRelatedDocumentOptions()
+      .then((items) =>
+        setRelatedDocumentOptions(items.map((item) => ({ label: item.label, value: item.code }))),
+      )
+      .catch(() => setRelatedDocumentOptions([]));
+  }, [open]);
+
+  const apiInterfaceTypeOptions = useMemo(
+    () =>
+      API_INTERFACE_TYPE_OPTIONS.map((item) => ({
+        label: t(item.labelKey),
+        value: item.value,
+      })),
+    [t],
+  );
 
   const handleFinish = async (values: ApiFormRawValues) => {
     await onFinish(transformApiFormValues(values));
@@ -368,6 +391,24 @@ export const ApiFormModal: React.FC<ApiFormModalProps> = ({
             />
           </Col>
         )}
+        <Col span={12}>
+          <SafeProFormSelect
+            name="related_document_code"
+            label={t('pages.system.apis.labelRelatedDocument')}
+            options={relatedDocumentOptions}
+            allowClear
+            placeholder={t('pages.system.apis.relatedDocumentPlaceholder')}
+          />
+        </Col>
+        <Col span={12}>
+          <SafeProFormSelect
+            name="api_interface_type"
+            label={t('pages.system.apis.labelApiInterfaceType')}
+            rules={[{ required: true, message: t('pages.system.apis.apiInterfaceTypeRequired') }]}
+            options={apiInterfaceTypeOptions}
+            placeholder={t('pages.system.apis.apiInterfaceTypePlaceholder')}
+          />
+        </Col>
         <Col span={24}>
           <div className="api-form-url-bar">
             <Row gutter={8} align="bottom">
@@ -462,6 +503,8 @@ export function normalizeApiFormInitialValues(
     path: string;
     method: string;
     sync_direction?: 'pull' | 'push' | 'bidirectional';
+    related_document_code?: string | null;
+    api_interface_type?: 'standard' | 'custom';
     is_active?: boolean;
     is_system?: boolean;
     request_headers?: Record<string, unknown>;
@@ -481,6 +524,8 @@ export function normalizeApiFormInitialValues(
     path: detail.path,
     method: detail.method,
     sync_direction: detail.sync_direction || 'pull',
+    related_document_code: detail.related_document_code || undefined,
+    api_interface_type: detail.api_interface_type || 'custom',
     is_active: detail.is_active,
     is_system: detail.is_system,
     request_headers: objectToKeyValueList(detail.request_headers ?? undefined),

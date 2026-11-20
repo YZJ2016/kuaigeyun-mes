@@ -126,6 +126,8 @@ export interface ApiFormRawValues {
     source?: string;
     target?: string;
   }>;
+  related_document_code?: string;
+  api_interface_type?: 'standard' | 'custom';
 }
 
 export interface ApiFormSubmitValues {
@@ -145,6 +147,8 @@ export interface ApiFormSubmitValues {
   response_format: Record<string, unknown>;
   response_example: Record<string, unknown>;
   source_type_conversion_map?: Array<{ field_name: string; mapping: Record<string, string> }> | null;
+  related_document_code?: string | null;
+  api_interface_type: 'standard' | 'custom';
 }
 
 /** 表单原始值 → 提交 API 的结构 */
@@ -165,6 +169,8 @@ export function transformApiFormValues(values: ApiFormRawValues): ApiFormSubmitV
     request_body: normalizeApiJsonObject(values.request_body),
     response_format: normalizeApiJsonObject(values.response_format),
     response_example: normalizeApiJsonObject(values.response_example),
+    related_document_code: values.related_document_code?.trim() || null,
+    api_interface_type: values.api_interface_type || 'custom',
     source_type_conversion_map: (() => {
       const entries = values.source_type_conversion_map_entries?.filter(
         (e) => e?.field_name?.trim() && e?.source?.trim() && e?.target?.trim(),

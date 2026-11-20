@@ -1,0 +1,304 @@
+"""物料单位从数据接口/数据集独立同步。"""
+
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional
+
+from tortoise.expressions import Q
+
+from infra.exceptions.exceptions import ValidationError
+from infra.models.user import User
+
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
+from apps.master_data.models.master_data_sync_binding import MaterialUnitSyncBinding
+from apps.master_data.models.unit import MaterialUnit
+from apps.master_data.schemas.master_data_sync import (
+    MasterDataSyncBindingOut,
+    MasterDataSyncBindingUpsert,
+    MasterDataSyncFromSourceOut,
+    MasterDataSyncFromSourceRequest,
+)
+from apps.kuaiconnect.services.inbound_sync.master_data_sync_common import (
+    apply_sync_extras_after_write,
+    cell_str,
+    fetch_sync_rows,
+    map_sync_rows,
+    mark_binding_failure,
+    mark_binding_success,
+    mark_external_sync_record,
+    normalize_schedule_interval,
+    normalize_sync_mode,
+    resolve_incremental_since,
+    resolve_sync_sources,
+    serialize_binding_row,
+    sources_from_upsert_body,
+    upsert_sync_binding,
+    resolve_schedule_window_for_sync_request,
+    resolve_upsert_schedule_from_body,
+)
+from apps.kuaiconnect.services.inbound_sync.sync_binding_sources import fetch_mapped_rows_from_sources
+from core.services.integration.kingdee_cosmic_paths import collapse_material_rows_to_unique_units
+from core.utils.timezone_utils import resolve_business_datetime
+
+UNIT_SYNC_STRING_FIELDS = frozenset({"description"})
+UNIT_SYNC_BOOL_FIELDS = frozenset({"is_active"})
+UNIT_SYNC_INT_FIELDS = frozenset({"sort_order"})
+
+
+class MaterialUnitSyncService:
+    MATCH_KEY = "code"
+
+    def serialize_binding(self, row: Optional[MaterialUnitSyncBinding]) -> MasterDataSyncBindingOut:
+        data = serialize_binding_row(row, default_match_key=self.MATCH_KEY)
+        return MasterDataSyncBindingOut(**data)
+
+    async def upsert_binding(
+        self,
+        tenant_id: int,
+        body: MasterDataSyncBindingUpsert,
+    ) -> MasterDataSyncBindingOut:
+        if body.sources is not None and len(body.sources) == 0:
+            await MaterialUnitSyncBinding.filter(tenant_id=tenant_id).delete()
+            return MasterDataSyncBindingOut(match_key_field=self.MATCH_KEY)
+
+        sources = sources_from_upsert_body(body)
+        match_key = (body.match_key_field or self.MATCH_KEY).strip() or self.MATCH_KEY
+        sync_mode = normalize_sync_mode(body.sync_mode)
+        interval, w_start, w_end = await resolve_upsert_schedule_from_body(
+            MaterialUnitSyncBinding, tenant_id, body
+        )
+        row = await upsert_sync_binding(
+            MaterialUnitSyncBinding,
+            tenant_id,
+            sources=sources,
+            match_key_field=match_key,
+            sync_mode=sync_mode,
+            schedule_interval_minutes=interval,
+            schedule_window_start=w_start,
+            schedule_window_end=w_end,
+        )
+        return self.serialize_binding(row)
+
+    async def get_binding(self, tenant_id: int) -> MasterDataSyncBindingOut:
+        row = await MaterialUnitSyncBinding.filter(tenant_id=tenant_id).first()
+        return self.serialize_binding(row)
+
+    async def has_binding(self, tenant_id: int) -> bool:
+        row = await MaterialUnitSyncBinding.filter(tenant_id=tenant_id).first()
+        from apps.kuaiconnect.services.inbound_sync.sync_binding_sources import sources_from_row
+
+        return bool(sources_from_row(row))
+
+    async def sync_from_source(
+        self,
+        tenant_id: int,
+        current_user: Optional[User],
+        request: Optional[MasterDataSyncFromSourceRequest] = None,
+    ) -> MasterDataSyncFromSourceOut:
+        req = request or MasterDataSyncFromSourceRequest()
+        sources, match_key, binding = await resolve_sync_sources(
+            MaterialUnitSyncBinding,
+            tenant_id,
+            req,
+            default_match_key=self.MATCH_KEY,
+        )
+
+        binding = binding or await MaterialUnitSyncBinding.filter(tenant_id=tenant_id).first()
+        sync_mode = normalize_sync_mode(
+            req.sync_mode or (binding.sync_mode if binding else None)
+        )
+        interval = normalize_schedule_interval(
+            req.schedule_interval_minutes
+            if req.schedule_interval_minutes is not None
+            else (binding.schedule_interval_minutes if binding else None)
+        )
+
+        w_start, w_end = resolve_schedule_window_for_sync_request(req, binding)
+
+        if req.save_binding:
+            await self.upsert_binding(
+                tenant_id,
+                MasterDataSyncBindingUpsert(
+                    sources=req.sources,
+                    match_key_field=match_key,
+                    sync_mode=sync_mode,
+                    schedule_interval_minutes=interval,
+                    schedule_window_start=w_start,
+                    schedule_window_end=w_end,
+                ),
+            )
+            binding = await MaterialUnitSyncBinding.filter(tenant_id=tenant_id).first()
+
+        since = resolve_incremental_since(
+            binding,
+            sync_mode=sync_mode,
+            request_incremental=req.incremental,
+        )
+        try:
+            # 单位源常走物料 batchQuery：先按基础单位去重再映射，避免把物料编码写成单位编码。
+            # 去重不得在接口分页阶段做（否则会误判翻页结束）；仅在本服务写入前执行。
+            rows, source_errors, _fetched = await fetch_mapped_rows_from_sources(
+                tenant_id,
+                sources,
+                since=since,
+                active_only=req.active_only,
+                transform_raw_rows=collapse_material_rows_to_unique_units,
+            )
+            result = await self._upsert_units(tenant_id, current_user, rows, match_key)
+            if source_errors:
+                result.errors = (source_errors + list(result.errors))[:20]
+            if binding:
+                if result.failed and not (result.created or result.updated):
+                    await mark_binding_failure(binding, "; ".join(result.errors) or "单位同步失败")
+                else:
+                    await mark_binding_success(binding)
+            return result
+        except Exception as exc:
+            if binding:
+                await mark_binding_failure(binding, str(exc))
+            raise
+
+    async def _upsert_units(
+        self,
+        tenant_id: int,
+        current_user: Optional[User],
+        rows: List[Dict[str, Any]],
+        match_key: str,
+    ) -> MasterDataSyncFromSourceOut:
+        created = 0
+        updated = 0
+        skipped = 0
+        failed = 0
+        errors: List[str] = []
+        sync_at = resolve_business_datetime()
+
+        pending: List[tuple[str, str, bool, Dict[str, Any]]] = []
+        seen_codes: set[str] = set()
+        for row in rows:
+            # 物料源行：优先取基础单位；已映射行则用 code/name
+            code = cell_str(
+                row.get(match_key)
+                or row.get("code")
+                or row.get("baseunit_number")
+                or row.get("baseunit.number")
+                or row.get("measureunitid_number")
+            )
+            name = cell_str(
+                row.get("name")
+                or row.get("baseunit_name")
+                or row.get("baseunit.name")
+                or row.get("measureunitid_name")
+                or code
+            )
+            if not code:
+                skipped += 1
+                errors.append("存在缺少单位编码的行，已跳过")
+                continue
+            if not name:
+                skipped += 1
+                errors.append(f"单位 {code} 缺少名称，已跳过")
+                continue
+            dedupe_key = code.casefold()
+            if dedupe_key in seen_codes:
+                skipped += 1
+                continue
+            seen_codes.add(dedupe_key)
+            is_active_raw = row.get("is_active")
+            is_active = True
+            if is_active_raw is not None and str(is_active_raw).strip():
+                is_active = str(is_active_raw).strip().lower() not in (
+                    "0",
+                    "false",
+                    "no",
+                    "n",
+                    "否",
+                    "停用",
+                    "inactive",
+                    "disabled",
+                )
+            pending.append((code, name, is_active, row))
+
+        if not pending:
+            return MasterDataSyncFromSourceOut(
+                created=created,
+                updated=updated,
+                skipped=skipped,
+                failed=failed,
+                errors=errors[:20],
+            )
+
+        codes = [item[0] for item in pending]
+        names = [item[1] for item in pending]
+        existing_rows = await MaterialUnit.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).filter(Q(code__in=codes) | Q(name__in=names)).all()
+        existing_by_code = {item.code: item for item in existing_rows}
+        existing_by_name = {item.name: item for item in existing_rows}
+
+        for code, name, is_active, mapped_row in pending:
+            try:
+                # 同名优先复用本地单位（如预设「吨」），避免金蝶 FNumber=001 另插一条
+                existing = existing_by_code.get(code) or existing_by_name.get(name)
+                if existing:
+                    existing.name = name
+                    existing.is_active = is_active
+                    apply_update_audit(existing, current_user)
+                    await existing.save(
+                        update_fields=[
+                            "name",
+                            "is_active",
+                            "updated_at",
+                            "updated_by",
+                            "updated_by_name",
+                        ],
+                    )
+                    await apply_sync_extras_after_write(
+                        tenant_id=tenant_id,
+                        record=existing,
+                        mapped_row=mapped_row,
+                        record_table="",
+                        fields_by_code={},
+                        string_fields=UNIT_SYNC_STRING_FIELDS,
+                        bool_fields=UNIT_SYNC_BOOL_FIELDS,
+                        int_fields=UNIT_SYNC_INT_FIELDS,
+                    )
+                    await mark_external_sync_record(existing)
+                    existing_by_code[existing.code] = existing
+                    existing_by_name[existing.name] = existing
+                    updated += 1
+                else:
+                    payload: Dict[str, Any] = {
+                        "code": code,
+                        "name": name,
+                        "is_active": is_active,
+                        "is_system": False,
+                        "sort_order": 0,
+                        "external_sync_at": sync_at,
+                    }
+                    apply_create_audit(payload, current_user)
+                    unit = await MaterialUnit.create(tenant_id=tenant_id, **payload)
+                    await apply_sync_extras_after_write(
+                        tenant_id=tenant_id,
+                        record=unit,
+                        mapped_row=mapped_row,
+                        record_table="",
+                        fields_by_code={},
+                        string_fields=UNIT_SYNC_STRING_FIELDS,
+                        bool_fields=UNIT_SYNC_BOOL_FIELDS,
+                        int_fields=UNIT_SYNC_INT_FIELDS,
+                    )
+                    existing_by_code[unit.code] = unit
+                    existing_by_name[unit.name] = unit
+                    created += 1
+            except Exception as exc:
+                failed += 1
+                errors.append(f"单位 {code}：{exc}")
+
+        return MasterDataSyncFromSourceOut(
+            created=created,
+            updated=updated,
+            skipped=skipped,
+            failed=failed,
+            errors=errors[:20],
+        )

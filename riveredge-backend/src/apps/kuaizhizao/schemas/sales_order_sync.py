@@ -6,7 +6,7 @@ from typing import Dict, List, Optional
 from pydantic import Field
 
 from core.schemas.base import BaseSchema
-from core.schemas.sync_binding_contract import SyncSourceItem
+from core.schemas.sync_binding_contract import DocumentPushTargetItem, SyncSourceItem
 
 
 class SalesOrderSyncBindingOut(BaseSchema):
@@ -38,6 +38,27 @@ class SalesOrderSyncBindingUpsert(BaseSchema):
     schedule_window_end: Optional[str] = None
 
 
+class SalesOrderPushBindingOut(BaseSchema):
+    """targets_configured 为 false 表示尚未保存过出站目标；为 true 时按 targets 展示（可为空列表）。"""
+
+    targets: List[DocumentPushTargetItem] = Field(default_factory=list)
+    trigger_actions: List[str] = Field(default_factory=list)
+    connection_code: Optional[str] = None
+    save_api_uuid: Optional[str] = None
+    sync_mode: str = "manual_full"
+    schedule_interval_minutes: int = 15
+    targets_configured: bool = False
+
+
+class SalesOrderPushBindingUpsert(BaseSchema):
+    targets: List[DocumentPushTargetItem] = Field(default_factory=list)
+    trigger_actions: List[str] = Field(default_factory=list)
+    connection_code: Optional[str] = None
+    save_api_uuid: Optional[str] = None
+    sync_mode: Optional[str] = None
+    schedule_interval_minutes: Optional[int] = None
+
+
 class SalesOrderSyncFromSourceRequest(BaseSchema):
     sources: Optional[List[SyncSourceItem]] = None
     source_type: Optional[str] = None
@@ -61,5 +82,7 @@ class SalesOrderSyncFromSourceOut(BaseSchema):
     skipped: int = 0
     failed: int = 0
     fetched: int = 0
+    after_filter: int = 0
+    empty_reason: Optional[str] = None
     mode: str = "full"
     errors: List[str] = Field(default_factory=list)

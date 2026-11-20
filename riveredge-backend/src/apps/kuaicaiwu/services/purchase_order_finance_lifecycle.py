@@ -58,7 +58,7 @@ def purchase_order_shows_payment_settlement(order: object) -> bool:
 
 async def _sum_prepayment_unsettled_for_order(tenant_id: int, order_id: int) -> Decimal:
     """采购订单关联已确认预付付款单的待核销余额（未核销=已付现金尚未冲应付）。"""
-    from apps.kuaizhizao.finance.models.payment import Payment
+    from apps.kuaicaiwu.models.payment import Payment
     from apps.kuaizhizao.models.document_relation import DocumentRelation
 
     payment_ids = await DocumentRelation.filter(
@@ -86,7 +86,7 @@ async def batch_sum_prepayment_unsettled_by_order_ids(
     order_ids: List[int],
 ) -> Dict[int, Decimal]:
     """批量：订单 → 预付付款单待核销合计。"""
-    from apps.kuaizhizao.finance.models.payment import Payment
+    from apps.kuaicaiwu.models.payment import Payment
     from apps.kuaizhizao.models.document_relation import DocumentRelation
 
     if not order_ids:
@@ -129,7 +129,7 @@ async def batch_purchase_order_payment_settlement(
     """列表批量解析付款状态（含预付付款单，未入库也可展示）。"""
     if not finance_orm_ready():
         return {}
-    from apps.kuaizhizao.finance.services.purchase_settlement import (
+    from apps.kuaicaiwu.services.purchase_settlement import (
         purchase_order_settlement_gross,
     )
 
