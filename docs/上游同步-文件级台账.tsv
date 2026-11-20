@@ -647,7 +647,7 @@ riveredge-backend/src/apps/kuaizhizao/api/sales_reviews/sales_reviews.py	19a3924
 riveredge-backend/src/apps/kuaizhizao/api/shipment_notices/shipment_notices.py	d2632318249ee6c0e209fb0de1e7e6224b8452a8	applied	宽区间补登：上游tip已落地（同文/等价映射/预审A包复核）
 riveredge-backend/src/apps/kuaizhizao/api/tool_ops/documents.py	8564d697bf829e00d58571d760d378afd269465a	tracked	seed from 5f085a19c9
 riveredge-backend/src/apps/kuaizhizao/api/tools/tools.py	0025db9cb899a8d3dd5d4b32b095629ad4d2c368	tracked	seed from 2c945a39fb
-riveredge-backend/src/apps/kuaizhizao/api/visual_scheduling/visual_scheduling.py	585de4b3f271516646d3da04eb0be92c3f83ee32	deferred	排产策略目录/交期预估与选线适配簇：前端dueEstimate已断链待整簇移植（含greedy_engine+26KB手工合并）
+riveredge-backend/src/apps/kuaizhizao/api/visual_scheduling/visual_scheduling.py	585de4b3f271516646d3da04eb0be92c3f83ee32	deferred	部分摘取：due-estimate端点已落（expected_date适配本地demand_item.delivery_date）；策略目录/normalize+产线校验合并仍待摘
 riveredge-backend/src/apps/kuaizhizao/api/wave_pickings/wave_pickings.py	b9dfffd38138c86012b183aca94c51e1791d7073	applied	本轮积压API快修：复用现有权限解析/依赖，4文件逐个注册smoke与拒绝不执行业务回归通过；未更改权限码/manifest，权限扫描的裸purchase-order为HEAD已有问题
 riveredge-backend/src/apps/kuaizhizao/bootstrap.py	8a7789543321f1a0b6d5219d68d3b2974251d220	tracked	seed from 31efc2b64c
 riveredge-backend/src/apps/kuaizhizao/constants/__init__.py	9b672cedc430953028b342295159b98b2566de35	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
@@ -1029,7 +1029,7 @@ riveredge-backend/src/apps/kuaizhizao/schemas/shipment_notice.py	f99946b4ac5a6ab
 riveredge-backend/src/apps/kuaizhizao/schemas/supplier_evaluation.py	2643e3ae9a7c80dc6637946cf77ce6f096df1fbb	applied	13be286f11联调修复簇
 riveredge-backend/src/apps/kuaizhizao/schemas/tool.py	dd3a24e78c5bb57a4e820782f002ce546cc63062	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/schemas/tool_ops.py	7caa7df817e0e0ff89de0c463dc1a5d795d3a06e	tracked	seed from 5f085a19c9
-riveredge-backend/src/apps/kuaizhizao/schemas/visual_scheduling.py	834cef5b33d16fd19b2283a0465d72c747f20111	deferred	排产策略目录/交期预估与选线适配簇：前端dueEstimate已断链待整簇移植（含greedy_engine+26KB手工合并）
+riveredge-backend/src/apps/kuaizhizao/schemas/visual_scheduling.py	834cef5b33d16fd19b2283a0465d72c747f20111	deferred	部分摘取：due-estimate端点已落（expected_date适配本地demand_item.delivery_date）；策略目录/normalize+产线校验合并仍待摘
 riveredge-backend/src/apps/kuaizhizao/schemas/warehouse.py	a745f86c7c7a6439a9f56ae08c15b61e1ba92269	tracked	seed from 4bd853a94f
 riveredge-backend/src/apps/kuaizhizao/schemas/work_order.py	d2e2f3da2ba424b9c44450ac55dbeb8947e47224	tracked	seed from 18c0e4ce1a
 riveredge-backend/src/apps/kuaizhizao/schemas/work_order_sync.py	f04609e2feecdf3e20b53bb2a52087111afe8ad0	applied	f40f54e336调度窗+价税簇

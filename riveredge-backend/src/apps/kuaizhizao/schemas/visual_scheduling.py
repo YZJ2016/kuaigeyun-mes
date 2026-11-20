@@ -2,6 +2,7 @@
 
 
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 
@@ -430,3 +431,22 @@ class SchedulingDeepLinkMixin(BaseSchema):
 
     scheduling_notice: Optional[str] = Field(None, description="提示文案")
 
+
+
+class SchedulingDueEstimateItem(BaseSchema):
+    work_order_id: int
+    work_order_code: Optional[str] = None
+    expected_date: Optional[datetime] = Field(None, description="期望交期（需求行交货日期）")
+    committed_date: Optional[datetime] = Field(None, description="承诺交期（计划完工）")
+    estimated_date: Optional[datetime] = Field(
+        None, description="预估交期（仅已排计划完工；无计划则空）"
+    )
+    variance_days: Optional[int] = Field(
+        None, description="预估相对期望的天数差；正=延后"
+    )
+    status: Optional[str] = None
+
+
+class SchedulingDueEstimateResponse(BaseSchema):
+    items: List[SchedulingDueEstimateItem] = Field(default_factory=list)
+    generated_at: Optional[datetime] = None

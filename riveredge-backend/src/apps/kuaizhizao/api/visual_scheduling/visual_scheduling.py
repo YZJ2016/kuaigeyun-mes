@@ -4,10 +4,14 @@ from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
+from tortoise.timezone import now as tz_now
 
 from core.api.deps import get_current_tenant, get_current_user
 from core.api.deps.access import require_permission_codes
+from core.utils.timezone_utils import to_site_timezone
 from infra.models.user import User
+from apps.kuaizhizao.models.work_order import WorkOrder
+from apps.kuaizhizao.models.demand_item import DemandItem
 from apps.kuaizhizao.schemas.visual_scheduling import (
     VisualSchedulingScanResponse,
     VisualSchedulingValidateRequest,
@@ -18,6 +22,8 @@ from apps.kuaizhizao.schemas.visual_scheduling import (
     SchedulingAutoRescheduleResponse,
     SchedulingOperationBackfillRequest,
     SchedulingOperationBackfillResponse,
+    SchedulingDueEstimateItem,
+    SchedulingDueEstimateResponse,
 )
 from apps.kuaizhizao.services.visual_scheduling_service import VisualSchedulingService
 from apps.kuaizhizao.services.scheduling_rate_coverage_service import check_scheduling_rate_coverage
@@ -136,6 +142,66 @@ async def backfill_operation_settings(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+
+
+@router.get(
+    "/due-estimate",
+    response_model=SchedulingDueEstimateResponse,
+    summary="Read-only due date estimate (expected/committed/estimated)",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-scheduling:read"))],
+)
+async def due_estimate(
+    work_order_ids: Optional[str] = Query(None, description="逗号分隔工单 ID"),
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+) -> SchedulingDueEstimateResponse:
+    del current_user
+    ids = _parse_work_order_ids(work_order_ids) or []
+    if not ids:
+        return SchedulingDueEstimateResponse(items=[], generated_at=tz_now())
+    wos = await WorkOrder.filter(
+        tenant_id=tenant_id,
+        id__in=ids[:100],
+        deleted_at__isnull=True,
+    ).all()
+    by_id = {int(w.id): w for w in wos}
+    # 本地工单无 required_date，期望交期真源为需求行交货日期（demand_item_id -> DemandItem.delivery_date）
+    demand_item_ids = {int(w.demand_item_id) for w in wos if w.demand_item_id}
+    delivery_by_item = {}
+    if demand_item_ids:
+        demand_items = await DemandItem.filter(
+            tenant_id=tenant_id,
+            id__in=list(demand_item_ids),
+        ).all()
+        delivery_by_item = {int(i.id): i.delivery_date for i in demand_items}
+    items: List[SchedulingDueEstimateItem] = []
+    for wid in ids[:100]:
+        wo = by_id.get(int(wid))
+        if not wo:
+            continue
+        expected = (
+            delivery_by_item.get(int(wo.demand_item_id)) if wo.demand_item_id else None
+        )
+        # 差异按站点日历日；日期字段交 BaseSchema 序列化，禁止裸 strftime
+        planned_site = (
+            to_site_timezone(wo.planned_end_date) if wo.planned_end_date else None
+        )
+        variance = None
+        if expected and planned_site:
+            variance = (planned_site.date() - expected).days
+        items.append(
+            SchedulingDueEstimateItem(
+                work_order_id=int(wo.id),
+                work_order_code=wo.code,
+                expected_date=expected,
+                committed_date=wo.planned_end_date,
+                # 预估仅取已排计划完工；无计划则空，禁止用期望交期冒充
+                estimated_date=wo.planned_end_date,
+                variance_days=variance,
+                status=wo.status,
+            )
+        )
+    return SchedulingDueEstimateResponse(items=items, generated_at=tz_now())
 
 
 @router.post(
