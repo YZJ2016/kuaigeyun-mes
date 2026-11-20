@@ -44,6 +44,103 @@ LEGACY_INBOUND_REVOKE_DOC_TYPE_LABELS: Dict[str, str] = {
 }
 LEGACY_INBOUND_REVOKE_SOURCE_TYPES = frozenset(LEGACY_INBOUND_REVOKE_DOC_TYPE_LABELS.keys())
 
+# 其他出库撤回：increase 回补；历史误写 movement_type=other_outbound，须按 source 识别为入库
+OTHER_OUTBOUND_WITHDRAW_MOVEMENT_TYPES = frozenset({
+    "other_outbound_withdraw",
+})
+OTHER_OUTBOUND_WITHDRAW_SOURCE_TYPES = frozenset({
+    "other_outbound_revoke",
+    "other_outbound_withdraw",
+})
+
+# 收发存/入出库明细：移动类型决定入/出，禁止仅靠 quantity 正负（历史/旁路过账可能为正数出库）
+REPORT_OUTBOUND_MOVEMENT_TYPES = frozenset({
+    "staging_to_line",
+    "production_issue",
+    "backflush_consume",
+    "scrap",
+    "defect_scrap",
+    "defect_scrap_writeoff",
+    "defect_quarantine",
+    "defect_quarantine_revoke",
+    "outsource_issue",
+    "other_outbound",
+    "sales_delivery",
+    "purchase_return",
+    "assembly_consume",
+    "disassembly_consume",
+})
+REPORT_INBOUND_MOVEMENT_TYPES = frozenset({
+    "production_return",
+    "semi_fg_receipt",
+    "fg_receipt",
+    "other_inbound",
+    "outsource_receipt",
+    "assembly_receipt",
+    "disassembly_receipt",
+    "sales_delivery_withdraw",
+    "other_outbound_withdraw",
+    "purchase_receipt",
+    "purchase_return_withdraw",
+})
+
+# 收发存/入出库明细/台账：移动类型 → 展示中文（禁止落库码原样展示）
+INVENTORY_MOVEMENT_REPORT_TYPE_LABELS: Dict[str, str] = {
+    "staging_to_line": "线边备料",
+    "production_issue": "生产领料",
+    "production_return": "生产退料",
+    "backflush_consume": "报工倒冲",
+    "semi_fg_receipt": "半成品入库",
+    "fg_receipt": "成品入库",
+    "fg_receipt_withdraw": "成品入库撤回",
+    "semi_fg_receipt_withdraw": "半成品入库撤回",
+    "purchase_receipt_withdraw": "采购入库撤回",
+    "other_inbound_withdraw": "其他入库撤回",
+    "scrap": "报废",
+    "defect_scrap": "不良报废",
+    "defect_scrap_writeoff": "不良核销",
+    "defect_quarantine": "不良隔离",
+    "defect_quarantine_revoke": "不良隔离撤回",
+    "transfer": "调拨",
+    "outsource_issue": "委外发料",
+    "outsource_receipt": "委外收货",
+    "adjust": "库存调整",
+    "other_inbound": "其他入库",
+    "other_outbound": "其他出库",
+    "other_outbound_withdraw": "其他出库撤回",
+    "purchase_receipt": "采购入库",
+    "purchase_return": "采购退货",
+    "purchase_return_withdraw": "采购退货撤回",
+    "assembly_consume": "组装领料",
+    "assembly_receipt": "组装入库",
+    "disassembly_consume": "拆卸领料",
+    "disassembly_receipt": "拆卸入库",
+    "sales_delivery": "销售出库",
+    "sales_delivery_withdraw": "销售出库撤回",
+    "adjust": "库存调整",
+}
+
+# movement_type 缺失或历史码时，按来源单据类型回退中文
+INVENTORY_SOURCE_DOC_REPORT_TYPE_LABELS: Dict[str, str] = {
+    "sales_delivery": "销售出库",
+    "sales_delivery_withdraw": "销售出库撤回",
+    "purchase_receipt": "采购入库",
+    "purchase_receipt_revoke": "采购入库撤回",
+    "other_outbound": "其他出库",
+    "other_outbound_revoke": "其他出库撤回",
+    "other_outbound_withdraw": "其他出库撤回",
+    "other_inbound": "其他入库",
+    "inventory_transfer": "调拨",
+    "inventory_repair": "库存调整",
+    "finished_goods_receipt": "成品入库",
+    "semi_finished_goods_receipt": "半成品入库",
+    "purchase_return": "采购退货",
+    "purchase_return_withdraw": "采购退货撤回",
+    "outsource_material_issue": "委外发料",
+    "outsource_material_receipt": "委外收货",
+    "stocktaking": "盘点",
+}
+
 
 def _is_legacy_inbound_revoke_mislabeled(
     movement_type: str,
@@ -55,6 +152,16 @@ def _is_legacy_inbound_revoke_mislabeled(
         and quantity < 0
         and movement_type == "other_outbound"
     )
+
+
+def _is_other_outbound_withdraw_movement(
+    movement_type: str,
+    source_doc_type: str,
+) -> bool:
+    """其他出库撤回回补：含历史误写 movement_type=other_outbound。"""
+    if movement_type in OTHER_OUTBOUND_WITHDRAW_MOVEMENT_TYPES:
+        return True
+    return source_doc_type in OTHER_OUTBOUND_WITHDRAW_SOURCE_TYPES
 
 
 def resolve_inventory_movement_report_quantities(
@@ -76,6 +183,23 @@ def resolve_inventory_movement_report_quantities(
         return qty, 0.0
     if src in LEGACY_INBOUND_REVOKE_SOURCE_TYPES and qty < 0 and mt in ("semi_fg_receipt", "fg_receipt"):
         return qty, 0.0
+    # 其他出库撤回：回补为正数入库；禁止因 movement_type=other_outbound 被 abs 成出库
+    if _is_other_outbound_withdraw_movement(mt, src):
+        if qty == 0:
+            return 0.0, 0.0
+        if qty > 0:
+            return abs(qty), 0.0
+        return 0.0, abs(qty)
+    if mt in REPORT_OUTBOUND_MOVEMENT_TYPES:
+        if qty == 0:
+            return 0.0, 0.0
+        return 0.0, abs(qty)
+    if mt in REPORT_INBOUND_MOVEMENT_TYPES:
+        if qty == 0:
+            return 0.0, 0.0
+        if qty < 0 and mt not in INBOUND_WITHDRAW_MOVEMENT_TYPES:
+            return qty, 0.0
+        return abs(qty) if qty > 0 else qty, 0.0
     if qty > 0:
         return qty, 0.0
     if qty < 0:
@@ -100,8 +224,59 @@ def resolve_inventory_movement_report_doc_type(
         return LEGACY_INBOUND_REVOKE_DOC_TYPE_LABELS[src]
     if src in LEGACY_INBOUND_REVOKE_SOURCE_TYPES and qty < 0 and mt in ("semi_fg_receipt", "fg_receipt"):
         return LEGACY_INBOUND_REVOKE_DOC_TYPE_LABELS[src]
-    labels = default_labels or {}
-    return labels.get(mt, mt or "库存移动")
+    if _is_other_outbound_withdraw_movement(mt, src):
+        return "其他出库撤回"
+    labels = default_labels or INVENTORY_MOVEMENT_REPORT_TYPE_LABELS
+    if mt and mt in labels:
+        return labels[mt]
+    if src and src in INVENTORY_SOURCE_DOC_REPORT_TYPE_LABELS:
+        return INVENTORY_SOURCE_DOC_REPORT_TYPE_LABELS[src]
+    if src and src in labels:
+        return labels[src]
+    return mt or src or "库存移动"
+
+
+def inventory_balance_group_location_code(location_code: Optional[str]) -> str:
+    loc = str(location_code or "").strip()
+    if loc.upper() == "DEFAULT":
+        return ""
+    return loc
+
+
+def inventory_material_balance_group_key(row: Dict[str, Any]) -> tuple:
+    """即时库存汇总：物料 + 仓库 ID + 库位（禁止 warehouse_name 参与分组）。"""
+    wh_id_raw = row.get("warehouse_id")
+    try:
+        warehouse_id_key = int(wh_id_raw) if wh_id_raw is not None else 0
+    except (TypeError, ValueError):
+        warehouse_id_key = 0
+    if warehouse_id_key < 0:
+        warehouse_id_key = 0
+    location_code = inventory_balance_group_location_code(row.get("location_code"))
+    return (row.get("material_id"), warehouse_id_key, location_code)
+
+
+def filter_inventory_movement_events_by_direction(
+    events: List[dict],
+    direction: str,
+) -> List[dict]:
+    """
+    入库/出库明细专用：仅保留单侧数量行，禁止入出库串表。
+    收发存汇总/台账仍用全量 events（本函数不参与）。
+    """
+    if direction not in {"inbound", "outbound"}:
+        raise ValueError(f"invalid direction: {direction}")
+    if direction == "inbound":
+        return [
+            ev
+            for ev in events
+            if float(ev.get("qty_in") or 0) != 0 and float(ev.get("qty_out") or 0) == 0
+        ]
+    return [
+        ev
+        for ev in events
+        if float(ev.get("qty_out") or 0) > 0 and float(ev.get("qty_in") or 0) == 0
+    ]
 
 
 async def customer_received_by_customer_id(

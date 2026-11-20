@@ -80,3 +80,39 @@ def test_legacy_purchase_receipt_revoke_not_outbound_qty():
     )
     assert qty_in == -3.0
     assert qty_out == 0.0
+
+
+def test_other_outbound_positive_qty_still_outbound_not_inbound():
+    qty_in, qty_out = resolve_inventory_movement_report_quantities(
+        movement_type="other_outbound",
+        quantity=4.0,
+    )
+    assert qty_in == 0.0
+    assert qty_out == 4.0
+
+
+def test_sales_delivery_positive_qty_counts_outbound_only():
+    qty_in, qty_out = resolve_inventory_movement_report_quantities(
+        movement_type="sales_delivery",
+        quantity=6.0,
+    )
+    assert qty_in == 0.0
+    assert qty_out == 6.0
+
+
+def test_sales_delivery_doc_type_label_chinese():
+    label = resolve_inventory_movement_report_doc_type(
+        movement_type="sales_delivery",
+        source_doc_type="sales_delivery",
+        quantity=-2.0,
+    )
+    assert label == "销售出库"
+
+
+def test_unknown_movement_falls_back_source_doc_label():
+    label = resolve_inventory_movement_report_doc_type(
+        movement_type="",
+        source_doc_type="other_outbound",
+        quantity=-1.0,
+    )
+    assert label == "其他出库"

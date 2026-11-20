@@ -9,6 +9,7 @@ from apps.kuaizhizao.services.document_action_policy.outsource_work_order import
 from apps.kuaizhizao.utils.outsource_work_order_state import (
     apply_outsource_work_order_execution_start,
     apply_outsource_work_order_receipt_completion,
+    apply_outsource_work_order_receipt_reopen,
     outsource_work_order_has_execution_activity,
     resolve_outsource_work_order_product_unit,
     resolve_outsource_work_order_received_delta,
@@ -41,6 +42,56 @@ def test_receipt_completion_when_fully_received():
     assert changed is True
     assert owo.status == "completed"
     assert owo.actual_end_date == datetime(2026, 7, 31, 18, 0, 0)
+
+
+def test_receipt_reopen_after_product_return():
+    owo = _Owo(
+        status="completed",
+        quantity=Decimal("100"),
+        received_quantity=Decimal("80"),
+        actual_end_date=datetime(2026, 7, 31, 18, 0, 0),
+    )
+    changed = apply_outsource_work_order_receipt_reopen(owo)
+    assert changed is True
+    assert owo.status == "in_progress"
+    assert owo.actual_end_date is None
+
+
+def test_receipt_reopen_skipped_when_still_full():
+    owo = _Owo(status="completed", quantity=Decimal("100"), received_quantity=Decimal("100"))
+    assert apply_outsource_work_order_receipt_reopen(owo) is False
+    assert owo.status == "completed"
+
+
+def test_completed_allows_product_return_not_receipt():
+    caps = derive_outsource_work_order_capabilities(
+        _Owo(
+            status="completed",
+            issued_quantity=10,
+            received_quantity=100,
+            quantity=100,
+            is_frozen=False,
+        )
+    )
+    assert caps.push_outsource_product_return.allowed is True
+    assert caps.push_outsource_material_return.allowed is True
+    assert caps.push_outsource_receipt.allowed is False
+    assert caps.push_outsource_issue.allowed is False
+
+
+def test_reopened_in_progress_allows_receipt_again():
+    owo = _Owo(
+        status="completed",
+        quantity=Decimal("100"),
+        received_quantity=Decimal("70"),
+        issued_quantity=Decimal("10"),
+        is_frozen=False,
+    )
+    apply_outsource_work_order_receipt_reopen(owo)
+    caps = derive_outsource_work_order_capabilities(owo)
+    assert owo.status == "in_progress"
+    assert caps.push_outsource_receipt.allowed is True
+    assert caps.push_outsource_issue.allowed is True
 
 
 def test_has_execution_activity():
