@@ -138,7 +138,7 @@ export const InstallExecutionTaskFormModal: React.FC<Props> = ({
       <ProFormItem
         name="attachments"
         label={t('app.kuaizhizao.installExecution.taskPhotos')}
-        style={{ width: '100%' }}
+        colProps={{ span: 24 }}
       >
         <LineAttachmentsUpload
           category="install_execution_task_attachments"

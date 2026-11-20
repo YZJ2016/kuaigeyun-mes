@@ -170,7 +170,7 @@ export async function getFileByUuid(fileUuid: string): Promise<File> {
  * @returns 上传后的文件信息
  */
 export async function uploadFile(
-  file: globalThis.File | Blob,
+  file: File | Blob,
   options?: {
     category?: string;
     tags?: string[];

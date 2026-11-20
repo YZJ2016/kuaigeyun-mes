@@ -514,6 +514,7 @@ class PermissionSyncService:
 
             execute_grants = 0
             baseline_grants = 0
+            display_grants = 0
             if not dry_run:
                 execute_grants = await cls._propagate_quality_inspection_execute_grants(
                     conn, tenant_id=tenant_id
@@ -560,6 +561,7 @@ class PermissionSyncService:
                 "type_repaired": type_repaired,
                 "execute_grants": execute_grants,
                 "baseline_grants": baseline_grants,
+                "display_grants": display_grants,
                 "dry_run": 1 if dry_run else 0,
             }
             cls._last_run_stats[tenant_id] = result

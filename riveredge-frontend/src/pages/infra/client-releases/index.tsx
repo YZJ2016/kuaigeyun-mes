@@ -347,6 +347,7 @@ const ClientReleasesPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
+          showAdvancedSearch
           showCreateButton
           createButtonText={t('pages.infra.clientReleases.createButton')}
           onCreate={handleCreate}
