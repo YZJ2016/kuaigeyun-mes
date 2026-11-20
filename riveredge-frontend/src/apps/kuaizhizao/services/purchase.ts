@@ -158,6 +158,10 @@ export interface PurchaseOrder {
   review_remarks?: string;
   buyer_id?: number;
   buyer_name?: string;
+  department_id?: number | null;
+  department_name?: string | null;
+  created_by?: number;
+  created_by_name?: string | null;
   notes?: string;
   items_count?: number;
   downstream_push_progress?: number;
@@ -628,6 +632,40 @@ export async function listPurchaseOrderSalesOrderPullOrders(params: {
   pullable_only?: boolean;
 }): Promise<{ data: PurchaseOrderSalesOrderPullCandidate[]; total: number; success?: boolean }> {
   return apiRequest('/apps/kuaizhizao/purchase-orders/sales-order-pull-orders', {
+    method: 'GET',
+    params,
+  });
+}
+
+export type PurchaseOrderSalesOrderPullLine = {
+  id: number;
+  sales_order_id: number;
+  order_code?: string;
+  document_date?: string | null;
+  order_date?: string | null;
+  customer_name?: string | null;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  suggested_quantity?: number;
+  pushed_quantity?: number;
+  pushed_work_order_quantity?: number;
+  pushed_purchase_quantity?: number;
+  remaining_quantity?: number;
+  supplier_id?: number | null;
+  supplier_name?: string | null;
+};
+
+export async function listPurchaseOrderSalesOrderPullLines(params: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  sales_order_id?: number;
+  pullable_only?: boolean;
+}): Promise<{ data: PurchaseOrderSalesOrderPullLine[]; total: number }> {
+  return apiRequest('/apps/kuaizhizao/purchase-orders/sales-order-pull-lines', {
     method: 'GET',
     params,
   });

@@ -2,7 +2,7 @@
  * 付款申请单
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 import {
   ModalForm,
@@ -160,13 +160,24 @@ import {
   type PaymentApplicationLine,
   type PaymentApplicationPurchaseOrderSource,
 } from '../../../services/payment-application';
-import { getPurchaseOrder, type PurchaseOrderItem } from '../../../services/purchase';
+import { getPurchaseOrder } from '../../../services/purchase';
 import {
   PurchaseDepartmentFormField,
   resolvePurchaseDepartmentPayload,
   usePurchaseDepartmentOptions,
 } from '../shared/PurchaseDepartmentFormField';
 import { resolvePaymentApplicationSettlementDisplay } from './paymentApplicationListStatus';
+import {
+  fetchPayableLineMaterialPreviewItems,
+  isPurchaseOrderSourceType,
+  mapPurchaseOrderItemsToPreview,
+  resolvePaymentApplicationLineMaterialPreview,
+} from './paymentApplicationLineMaterialsPreview';
+import {
+  PaymentApplicationFormPayableMaterialPreviewsProvider,
+  resolveFormPaymentApplicationLineRow,
+  usePaymentApplicationPayableMaterialPreviewMap,
+} from './PaymentApplicationFormPayableMaterialPreviews';
 
 const RESOURCE = 'kuaizhizao:payment-application';
 
@@ -186,65 +197,6 @@ const PAYMENT_APPLICATION_DETAIL_LINE_WIDTH = {
   requestAmount: 128,
   paidAmount: 128,
 } as const;
-
-function isPurchaseOrderSourceType(sourceType: unknown): boolean {
-  const raw = String(sourceType ?? '')
-    .trim()
-    .toLowerCase()
-    .replace(/-/g, '_');
-  return raw === 'purchase_order' || raw === 'purchaseorder';
-}
-
-function mapPurchaseOrderItemsToPreview(
-  items: PurchaseOrderItem[] | PaymentApplicationPurchaseOrderSource['items'] | undefined,
-): DocumentLineMaterialPreviewItem[] {
-  if (!items?.length) return [];
-  const out: DocumentLineMaterialPreviewItem[] = [];
-  for (const it of items) {
-    const row = it as Record<string, unknown>;
-    const materialName = String(row.materialName ?? row.material_name ?? '').trim();
-    const materialCode = String(row.materialCode ?? row.material_code ?? '').trim();
-    const materialSpec = String(row.materialSpec ?? row.material_spec ?? '').trim();
-    if (!materialName && !materialCode) continue;
-    out.push({
-      material_name: materialName || materialCode,
-      material_code: materialCode || undefined,
-      material_spec: materialSpec || undefined,
-    });
-  }
-  return out;
-}
-
-function resolvePaymentApplicationLineMaterialPreview(
-  row: PaymentApplicationLine,
-  purchaseOrderSources: PaymentApplicationPurchaseOrderSource[] | undefined,
-  poPreviewByOrderId: Record<number, DocumentLineMaterialPreviewItem[]>,
-): DocumentLineMaterialPreviewItem[] {
-  const name = String(row.materialName ?? '').trim();
-  if (name) {
-    return [
-      {
-        material_name: name,
-        material_spec: row.materialSpec ?? undefined,
-      },
-    ];
-  }
-  if (!isPurchaseOrderSourceType(row.sourceType)) {
-    return [];
-  }
-  const sid = row.sourceId != null ? Number(row.sourceId) : 0;
-  const code = String(row.sourceCode ?? '').trim();
-  const po =
-    (sid > 0 ? purchaseOrderSources?.find((p) => Number(p.id) === sid) : undefined) ??
-    (code ? purchaseOrderSources?.find((p) => String(p.orderCode).trim() === code) : undefined);
-  if (po?.items?.length) {
-    return mapPurchaseOrderItemsToPreview(po.items);
-  }
-  if (sid > 0 && poPreviewByOrderId[sid]?.length) {
-    return poPreviewByOrderId[sid];
-  }
-  return [];
-}
 
 const PAYMENT_APPLICATION_DETAIL_LINES_MIN_WIDTH = Object.values(
   PAYMENT_APPLICATION_DETAIL_LINE_WIDTH,
@@ -292,6 +244,28 @@ function sumPaymentApplicationFormLineAmounts(items: unknown): number {
     const amount = Number(row.requestAmount);
     return acc + (Number.isFinite(amount) ? amount : 0);
   }, 0);
+}
+
+function resolvePaymentApplicationHeaderRequestAmount(items: unknown): number | undefined {
+  const rows = normalizeFormListItems<Record<string, unknown>>(items);
+  if (!rows.length) {
+    return undefined;
+  }
+  const sum = sumPaymentApplicationFormLineAmounts(items);
+  return sum > 0 ? sum : undefined;
+}
+
+/** 明细变动后回写表头申请金额（只读展示），避免误触表头→明细分摊 */
+function PaymentApplicationLineItemsHeaderSync({
+  syncHeaderFromLines,
+}: {
+  syncHeaderFromLines: () => void;
+}) {
+  const items = Form.useWatch('items');
+  useLayoutEffect(() => {
+    syncHeaderFromLines();
+  }, [items, syncHeaderFromLines]);
+  return null;
 }
 
 function resolvePaymentApplicationFormLineOrderAmount(row: Record<string, unknown>): number {
@@ -388,11 +362,58 @@ function applyHeaderAmountToPrepaymentLines(
   });
 }
 
-/** 明细表 6 列业务字段 + 订单/申请金额列 + 操作列 */
-const PAYMENT_APPLICATION_LINE_SUMMARY_LABEL_COL_SPAN = 6;
-const PAYMENT_APPLICATION_LINE_ORDER_AMOUNT_COL_INDEX = 6;
-const PAYMENT_APPLICATION_LINE_REQUEST_AMOUNT_COL_INDEX = 7;
-const PAYMENT_APPLICATION_LINE_OP_COL_INDEX = 8;
+/** 明细表 5 列业务字段 + 订单总金额 + 申请金额 + 操作列 */
+const PAYMENT_APPLICATION_LINE_SUMMARY_LABEL_COL_SPAN = 5;
+const PAYMENT_APPLICATION_LINE_ORDER_AMOUNT_COL_INDEX = 5;
+const PAYMENT_APPLICATION_LINE_REQUEST_AMOUNT_COL_INDEX = 6;
+const PAYMENT_APPLICATION_LINE_OP_COL_INDEX = 7;
+const PAYMENT_APPLICATION_FORM_LINE_MATERIALS_WIDTH = 280;
+
+function PaymentApplicationFormLineMaterialsCell({
+  field,
+  formRef,
+}: {
+  field: FormListFieldData;
+  formRef: React.RefObject<ProFormInstance | undefined>;
+}) {
+  const { t } = useTranslation();
+  const payablePreviewByPayableId = usePaymentApplicationPayableMaterialPreviewMap();
+  return (
+    <>
+      <Form.Item name={[field.name, 'materialName']} hidden>
+        <Input />
+      </Form.Item>
+      <Form.Item name={[field.name, 'materialSpec']} hidden>
+        <Input />
+      </Form.Item>
+      <Form.Item name={[field.name, 'quantity']} hidden>
+        <Input />
+      </Form.Item>
+      <Form.Item name={[field.name, 'materialUnit']} hidden>
+        <Input />
+      </Form.Item>
+      <Form.Item name={[field.name, 'sourceLineId']} hidden>
+        <Input />
+      </Form.Item>
+      <Form.Item shouldUpdate style={{ margin: 0 }}>
+        {() => {
+          const row = resolveFormPaymentApplicationLineRow(
+            formRef.current?.getFieldValue('items'),
+            field.name,
+          );
+          const preview = resolvePaymentApplicationLineMaterialPreview(row, {
+            poPreviewByOrderId: {},
+            payablePreviewByPayableId,
+          });
+          if (!preview.length) {
+            return '—';
+          }
+          return renderDocumentLineMaterialsPreview(preview, t);
+        }}
+      </Form.Item>
+    </>
+  );
+}
 
 function PaymentApplicationLinesSummaryRow() {
   const { t } = useTranslation();
@@ -462,19 +483,20 @@ const PaymentApplicationsPage: React.FC = () => {
   const [formPageLoading, setFormPageLoading] = useState(false);
   const { message: messageApi } = App.useApp();
   const linkedDetail = useLinkedDocumentDetail();
-  const [pullPayableOpen, setPullPayableOpen] = useState(false);
-  const [pullPayableSupplierId, setPullPayableSupplierId] = useState<number | null>(null);
-  const [pullPayableRows, setPullPayableRows] = useState<
-    Array<{ payableId: number; payableCode: string; maxRequestAmount: number }>
-  >([]);
-  const [pullPayableSelected, setPullPayableSelected] = useState<number[]>([]);
-  const [pullPayableLoading, setPullPayableLoading] = useState(false);
-  const [pullPayableSubmitting, setPullPayableSubmitting] = useState(false);
   const actionRef = useRef<ActionType>();
   const tableRowsRef = useRef<PaymentApplication[]>([]);
+  const handlePaymentApplicationPulled = useCallback(
+    (applicationId?: number) => {
+      actionRef.current?.reload();
+      const id = Number(applicationId);
+      if (Number.isFinite(id) && id > 0) {
+        navigate(paymentApplicationEditPath(id));
+      }
+    },
+    [navigate],
+  );
   const { menuItems: pullCreateMenuItems, renderPullModals } = usePaymentApplicationPullMenus({
-    onCreated: () => actionRef.current?.reload(),
-    onOpenPayablePull: () => setPullPayableOpen(true),
+    onCreated: handlePaymentApplicationPulled,
   });
   const perms = useResourcePermissions(RESOURCE);
   const {
@@ -681,6 +703,9 @@ const PaymentApplicationsPage: React.FC = () => {
   const [poLinePreviewByOrderId, setPoLinePreviewByOrderId] = useState<
     Record<number, DocumentLineMaterialPreviewItem[]>
   >({});
+  const [payableLinePreviewByPayableId, setPayableLinePreviewByPayableId] = useState<
+    Record<number, DocumentLineMaterialPreviewItem[]>
+  >({});
   const [editId, setEditId] = useState<number | null>(null);
   const [editingStatus, setEditingStatus] = useState<string | null>(null);
   const commitAfterSaveRef = useRef(false);
@@ -690,10 +715,31 @@ const PaymentApplicationsPage: React.FC = () => {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const formRef = useRef<ProFormInstance>();
   const pushPaymentFormRef = useRef<ProFormInstance>();
+  const skipHeaderDrivenLineUpdateRef = useRef(false);
   const getApplicationKind = useCallback(
     () => formApplicationKind(formRef.current?.getFieldValue('applicationKind')),
     [],
   );
+  const syncHeaderRequestAmountFromLineItems = useCallback(() => {
+    const form = formRef.current;
+    if (!form) {
+      return;
+    }
+    const next = resolvePaymentApplicationHeaderRequestAmount(form.getFieldValue('items'));
+    const current = form.getFieldValue('headerRequestAmount');
+    if (current === next) {
+      return;
+    }
+    if (
+      typeof current === 'number'
+      && typeof next === 'number'
+      && Math.abs(current - next) < 0.0001
+    ) {
+      return;
+    }
+    skipHeaderDrivenLineUpdateRef.current = true;
+    form.setFieldsValue({ headerRequestAmount: next });
+  }, []);
   const formLinePull = usePaymentApplicationFormLinePull({ formRef, getApplicationKind });
   /** 复制新建：在 Tab 表单页挂载前缓存初值，由 initPaymentApplicationCreateForm 写入 */
   const pendingEditValuesRef = useRef<Record<string, unknown> | null>(null);
@@ -762,6 +808,7 @@ const PaymentApplicationsPage: React.FC = () => {
   useEffect(() => {
     if (!detailOpen || !detail?.items?.length) {
       setPoLinePreviewByOrderId({});
+      setPayableLinePreviewByPayableId({});
       return;
     }
     const sources = detail.purchaseOrderSources ?? [];
@@ -782,27 +829,51 @@ const PaymentApplicationsPage: React.FC = () => {
       if (sid <= 0 || seeded[sid]?.length) continue;
       needFetch.add(sid);
     }
-    if (!needFetch.size) {
+    const needPayableFetch = new Set<number>();
+    for (const row of detail.items) {
+      if (String(row.materialName ?? '').trim()) continue;
+      const payableId = Number(row.payableId ?? 0);
+      if (payableId > 0 && String(row.sourceType ?? '').trim() === 'payable') {
+        needPayableFetch.add(payableId);
+      }
+    }
+    if (!needFetch.size && !needPayableFetch.size) {
       return;
     }
     let cancelled = false;
     void (async () => {
-      const fetched: Record<number, DocumentLineMaterialPreviewItem[]> = {};
-      await Promise.all(
-        [...needFetch].map(async (id) => {
+      const poFetched: Record<number, DocumentLineMaterialPreviewItem[]> = {};
+      const payableFetched: Record<number, DocumentLineMaterialPreviewItem[]> = {};
+      await Promise.all([
+        ...[...needFetch].map(async (id) => {
           try {
             const po = await getPurchaseOrder(id);
             const mapped = mapPurchaseOrderItemsToPreview(po.items);
             if (mapped.length) {
-              fetched[id] = mapped;
+              poFetched[id] = mapped;
             }
           } catch {
             /* 无读权限或单据已删：保持占位 */
           }
         }),
-      );
+        ...[...needPayableFetch].map(async (payableId) => {
+          try {
+            const preview = await fetchPayableLineMaterialPreviewItems(payableId);
+            if (preview.length) {
+              payableFetched[payableId] = preview;
+            }
+          } catch {
+            /* 无读权限或单据已删：保持占位 */
+          }
+        }),
+      ]);
       if (cancelled) return;
-      setPoLinePreviewByOrderId((prev) => ({ ...prev, ...fetched }));
+      if (Object.keys(poFetched).length) {
+        setPoLinePreviewByOrderId((prev) => ({ ...prev, ...poFetched }));
+      }
+      if (Object.keys(payableFetched).length) {
+        setPayableLinePreviewByPayableId((prev) => ({ ...prev, ...payableFetched }));
+      }
     })();
     return () => {
       cancelled = true;
@@ -1352,13 +1423,11 @@ const PaymentApplicationsPage: React.FC = () => {
   const handlePaymentFormValuesChange = useCallback(
     (changedValues: Record<string, unknown>, allValues: Record<string, unknown>) => {
       if (Object.prototype.hasOwnProperty.call(changedValues, 'items')) {
-        const sum = sumPaymentApplicationFormLineAmounts(allValues.items);
-        const rows = normalizeFormListItems<Record<string, unknown>>(allValues.items);
-        if (rows.length > 0) {
-          formRef.current?.setFieldsValue({
-            headerRequestAmount: sum > 0 ? sum : undefined,
-          });
-        }
+        syncHeaderRequestAmountFromLineItems();
+        return;
+      }
+      if (skipHeaderDrivenLineUpdateRef.current) {
+        skipHeaderDrivenLineUpdateRef.current = false;
         return;
       }
       if (!Object.prototype.hasOwnProperty.call(changedValues, 'headerRequestAmount')) {
@@ -1389,7 +1458,7 @@ const PaymentApplicationsPage: React.FC = () => {
         items: [{ ...rows[0], requestAmount: nextAmount }],
       });
     },
-    [formRef],
+    [formRef, syncHeaderRequestAmountFromLineItems],
   );
 
   const triggerPaymentApplicationCommit = useCallback(() => {
@@ -1476,6 +1545,9 @@ const PaymentApplicationsPage: React.FC = () => {
                 }}
                 onValuesChange={handlePaymentFormValuesChange}
               >
+        <PaymentApplicationLineItemsHeaderSync
+          syncHeaderFromLines={syncHeaderRequestAmountFromLineItems}
+        />
         <Row gutter={16}>
           <Col span={8}>
             <ProFormSelect
@@ -1488,7 +1560,7 @@ const PaymentApplicationsPage: React.FC = () => {
                 optionFilterProp: 'label',
                 onChange: (v) => {
                   void onSupplierChange(Number(v));
-                  formRef.current?.setFieldsValue({ items: [] });
+                  formRef.current?.setFieldsValue({ items: [], headerRequestAmount: undefined });
                 },
               }}
             />
@@ -1594,6 +1666,17 @@ const PaymentApplicationsPage: React.FC = () => {
             }
           </ProFormDependency>
         </Row>
+        <Row gutter={16}>
+          <Col span={24}>
+            <ProFormTextArea
+              name="paymentReason"
+              label={t('app.kuaizhizao.paymentApplication.paymentReason')}
+              rules={[{ required: true, whitespace: true, message: t('common.required') }]}
+              fieldProps={{ rows: 2 }}
+            />
+          </Col>
+        </Row>
+        <PaymentApplicationFormPayableMaterialPreviewsProvider>
         <UniTableDetail
           name="items"
           title={t('app.kuaizhizao.paymentApplication.lines')}
@@ -1652,54 +1735,12 @@ const PaymentApplicationsPage: React.FC = () => {
               ),
             },
             {
-              title: t('app.kuaizhizao.paymentApplication.materialName'),
-              dataIndex: 'materialName',
-              width: 140,
+              title: t('app.kuaizhizao.common.colLineMaterials'),
+              key: 'lineMaterials',
+              width: PAYMENT_APPLICATION_FORM_LINE_MATERIALS_WIDTH,
+              ellipsis: false,
               render: (_: unknown, field: FormListFieldData) => (
-                <>
-                  <Form.Item name={[field.name, 'materialName']} hidden>
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name={[field.name, 'materialSpec']} hidden>
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name={[field.name, 'quantity']} hidden>
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name={[field.name, 'materialUnit']} hidden>
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name={[field.name, 'sourceLineId']} hidden>
-                    <Input />
-                  </Form.Item>
-                  <Form.Item shouldUpdate style={{ margin: 0 }}>
-                    {() => {
-                      const name = formRef.current?.getFieldValue([
-                        'items',
-                        field.name,
-                        'materialName',
-                      ]);
-                      return String(name || '—');
-                    }}
-                  </Form.Item>
-                </>
-              ),
-            },
-            {
-              title: t('app.kuaizhizao.paymentApplication.materialSpec'),
-              dataIndex: 'materialSpec',
-              width: 120,
-              render: (_: unknown, field: FormListFieldData) => (
-                <Form.Item shouldUpdate style={{ margin: 0 }}>
-                  {() => {
-                    const spec = formRef.current?.getFieldValue([
-                      'items',
-                      field.name,
-                      'materialSpec',
-                    ]);
-                    return String(spec || '—');
-                  }}
-                </Form.Item>
+                <PaymentApplicationFormLineMaterialsCell field={field} formRef={formRef} />
               ),
             },
             {
@@ -1811,6 +1852,7 @@ const PaymentApplicationsPage: React.FC = () => {
             },
           ]}
         />
+        </PaymentApplicationFormPayableMaterialPreviewsProvider>
         <PaymentApplicationSupplierPayeeSection />
         <Row gutter={16}>
           <Col span={24}>
@@ -2299,11 +2341,11 @@ const PaymentApplicationsPage: React.FC = () => {
                     width: PAYMENT_APPLICATION_DETAIL_LINE_WIDTH.lineMaterials,
                     ellipsis: false,
                     render: (_, row) => {
-                      const preview = resolvePaymentApplicationLineMaterialPreview(
-                        row,
-                        detail.purchaseOrderSources,
-                        poLinePreviewByOrderId,
-                      );
+                      const preview = resolvePaymentApplicationLineMaterialPreview(row, {
+                        purchaseOrderSources: detail.purchaseOrderSources,
+                        poPreviewByOrderId: poLinePreviewByOrderId,
+                        payablePreviewByPayableId: payableLinePreviewByPayableId,
+                      });
                       const node = renderDocumentLineMaterialsPreview(preview, t);
                       return preview.length > 0 ? node : '—';
                     },
@@ -2345,98 +2387,6 @@ const PaymentApplicationsPage: React.FC = () => {
           </>
         ) : null}
       </DetailDrawerTemplate>
-
-      <Modal
-        open={pullPayableOpen}
-        title={resolveKuaizhizaoDocumentAction(t, 'payment_application.pull_from_payable').label}
-        width={720}
-        confirmLoading={pullPayableSubmitting}
-        onCancel={() => {
-          setPullPayableOpen(false);
-          setPullPayableSelected([]);
-        }}
-        onOk={async () => {
-          if (!pullPayableSupplierId || pullPayableSelected.length === 0) {
-            messageApi.warning(t('common.required'));
-            return;
-          }
-          setPullPayableSubmitting(true);
-          try {
-            const supplier = supplierOptions.find((s) => s.id === pullPayableSupplierId);
-            const items: PaymentApplicationLine[] = pullPayableSelected.map((payableId, index) => {
-              const opt = pullPayableRows.find((p) => p.payableId === payableId);
-              return {
-                sourceType: 'payable',
-                sourceId: payableId,
-                sourceCode: opt?.payableCode,
-                payableId,
-                payableCode: opt?.payableCode,
-                lineKind: 'goods',
-                requestAmount: opt?.maxRequestAmount ?? 0,
-                lineNo: index + 1,
-              };
-            });
-            await createPaymentApplication({
-              supplierId: pullPayableSupplierId,
-              supplierName: supplier?.name,
-              items,
-            });
-            messageApi.success(t('common.createSuccess'));
-            setPullPayableOpen(false);
-            setPullPayableSelected([]);
-            actionRef.current?.reload();
-          } catch (e) {
-            messageApi.error(getApiErrorMessage(e, t('app.kuaizhizao.paymentApplication.createFailed')));
-          } finally {
-            setPullPayableSubmitting(false);
-          }
-        }}
-      >
-        <Select
-          style={{ width: '100%', marginBottom: 12 }}
-          placeholder={t('app.kuaizhizao.paymentApplication.supplierName')}
-          options={supplierOptions.map((s) => ({ label: s.name, value: s.id }))}
-          value={pullPayableSupplierId ?? undefined}
-          showSearch
-          optionFilterProp="label"
-          onChange={async (supplierId: number) => {
-            setPullPayableSupplierId(supplierId);
-            setPullPayableSelected([]);
-            setPullPayableLoading(true);
-            try {
-              const res = await listPayablesForPaymentApplication(supplierId, { limit: 200 });
-              setPullPayableRows(
-                (res.data ?? []).map((row) => ({
-                  payableId: Number(row.payable_id),
-                  payableCode: String(row.payable_code ?? ''),
-                  maxRequestAmount: Number(row.max_request_amount ?? 0),
-                })),
-              );
-            } finally {
-              setPullPayableLoading(false);
-            }
-          }}
-        />
-        <Table
-          size="small"
-          loading={pullPayableLoading}
-          rowKey="payableId"
-          pagination={false}
-          dataSource={pullPayableRows}
-          rowSelection={{
-            selectedRowKeys: pullPayableSelected,
-            onChange: (keys) => setPullPayableSelected(keys.map((k) => Number(k))),
-          }}
-          columns={[
-            { title: t('app.kuaizhizao.paymentApplication.payableCode'), dataIndex: 'payableCode' },
-            {
-              title: t('app.kuaizhizao.paymentApplication.requestAmount'),
-              dataIndex: 'maxRequestAmount',
-              render: (v) => formatCurrencyAmount(v),
-            },
-          ]}
-        />
-      </Modal>
 
       <ModalForm
         key={detail ? `push-payment-${detail.id}` : 'push-payment'}

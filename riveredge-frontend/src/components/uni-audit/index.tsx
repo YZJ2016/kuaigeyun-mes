@@ -145,8 +145,11 @@ function inferResourceByNodeKey(nodeKey?: string): string {
     receivable: 'kuaicaiwu:receivable',
     payable: 'kuaicaiwu:payable',
     purchase_invoice: 'kuaicaiwu:purchase-invoice',
+    partner_statement: 'kuaicaiwu:partner-statement',
+    fund_transfer: 'kuaicaiwu:fund-transfer',
     other_income: 'kuaicaiwu:other-income',
     other_expense: 'kuaicaiwu:other-expense',
+    other_expense_application: 'kuaicaiwu:other-expense-application',
     payment_application: 'kuaizhizao:payment-application',
     bom_change: 'kuaiplm:change',
     process_route_change: 'kuaiplm:change',
@@ -362,6 +365,21 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     }
     return submitActionLabel;
   })();
+
+  const purchaseOrderPhase = auditState?.phase;
+  const withdrawActionTitle = (() => {
+    if (migratedSaveSubmitCopy) {
+      if (purchaseOrderPhase === 'pending') return '撤回审核';
+      if (resolvedEntityType === 'partner_statement') {
+        const biz = String(record?.[statusField] ?? '').trim();
+        if (biz === 'Confirmed') return '撤销确认';
+      }
+      return '撤销提交';
+    }
+    return '撤回提交';
+  })();
+  const revokeActionTitle = migratedSaveSubmitCopy ? '反审核' : rowActionLabel('revoke');
+  const recallActionTitle = migratedSaveSubmitCopy ? '撤回审核' : '撤销审核';
 
   const resolvedEndpoints = {
     ...DEFAULT_ENDPOINTS,
@@ -654,6 +672,32 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
         loading: loadingAction === 'submit' || initiatorLoading,
         disabled: (isBusy && loadingAction !== 'submit') || initiatorLoading,
         onClick: () => void beginSubmit(),
+      }),
+    );
+  }
+
+  if (showWithdraw && channelByAction.withdraw) {
+    inlineButtons.push(
+      renderActionButton('revoke', {
+        key: 'audit-withdraw',
+        label: withdrawActionTitle,
+        labelKeep: migratedSaveSubmitCopy,
+        loading: loadingAction === 'withdraw',
+        disabled: isBusy && loadingAction !== 'withdraw',
+        onClick: () => openActionModal('withdraw'),
+      }),
+    );
+  }
+
+  if (showSubmitReview && channelByAction.submit_review) {
+    inlineButtons.push(
+      renderActionButton('submit', {
+        key: 'audit-submit-review',
+        label: '提交审核',
+        labelKeep: true,
+        loading: loadingAction === 'submit_review' || initiatorLoading,
+        disabled: (isBusy && loadingAction !== 'submit_review') || initiatorLoading,
+        onClick: () => void beginSubmitReview(),
       }),
     );
   }

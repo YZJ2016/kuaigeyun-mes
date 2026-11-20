@@ -1,8 +1,8 @@
 /**
  * 付款申请列表「新建」旁下拉：多来源上拉创建（应付/采购订单/入库/对账单/其他费用支出）
  */
-import React, { useCallback, useMemo, useRef } from 'react';
-import { App } from 'antd';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { App, Select } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import {
@@ -11,19 +11,33 @@ import {
   filterByPullScope,
   isPullRowBlockedByPartnerLock,
   paginatePullRows,
-  renderPullQueryDocStatus,
   resolvePullQueryAnchorPartnerKey,
   UNI_PULL_QUERY_MAX_FETCH_LIMIT,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import { purchaseOrderCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
-import { formatBusinessDateOnly, formatCurrencyAmount } from '../../../../../utils/format';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import {
+  KUAIZHIZAO_DOC_HOST,
+  loadSupplierFormReferenceList,
+} from '../../../../../utils/documentFormReferenceLoad';
 import {
   buildKuaizhizaoPullCreateMenuItems,
   resolveKuaizhizaoDocumentAction,
 } from '../../../constants/documentActionRegistry';
 import { listPurchaseOrders } from '../../../services/purchase';
+import { resolvePurchaseReceiptDisplayAmount } from '../shared/purchaseOrderAmounts';
+import {
+  buildPaymentApplicationPoPullQueryColumns,
+  mapPurchaseOrderToPaymentApplicationPullRow,
+  type PaymentApplicationPoPullRow,
+} from './paymentApplicationPoPullQueryColumns';
+import { buildPaymentApplicationSourcePullQueryColumns } from './paymentApplicationSourcePullQueryColumns';
+import {
+  buildPaymentApplicationPayablePullQueryColumns,
+  mapPayablePullLineToPaymentApplicationPayableRow,
+  type PaymentApplicationPayablePullRow,
+} from './paymentApplicationPayablePullQueryColumns';
 import { warehouseApi } from '../../../services/warehouse-execution';
 import { partnerStatementService } from '../../../../kuaicaiwu/services/finance/partnerStatement';
 import { otherExpenseService, type OtherExpenseVoucher } from '../../../../kuaicaiwu/services/finance/other-expense';
@@ -70,8 +84,8 @@ type ExpenseWithFinance = OtherExpenseVoucher & {
 };
 
 type Props = {
-  onCreated: () => void;
-  onOpenPayablePull: () => void;
+  /** 下推建单成功后回调；传入新建付款申请 id 时由列表页跳转编辑 Tab */
+  onCreated: (applicationId?: number) => void;
 };
 
 function isPurchaseReceiptPosted(status: string): boolean {
@@ -86,10 +100,16 @@ function isPurchaseReceiptPosted(status: string): boolean {
   );
 }
 
-export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }: Props) {
+export function usePaymentApplicationPullMenus({ onCreated }: Props) {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const [payablePullSupplierId, setPayablePullSupplierId] = useState<number | null>(null);
+  const [payableSupplierOptions, setPayableSupplierOptions] = useState<
+    Array<{ id: number; name: string }>
+  >([]);
+  const [payableSuppliersLoading, setPayableSuppliersLoading] = useState(false);
   const closePoRef = useRef<(() => void) | null>(null);
+  const closePayableRef = useRef<(() => void) | null>(null);
   const closeReceiptRef = useRef<(() => void) | null>(null);
   const closeStatementRef = useRef<(() => void) | null>(null);
   const closeExpenseRef = useRef<(() => void) | null>(null);
@@ -107,6 +127,10 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
     t,
     'payment_application.pull_from_other_expense',
   );
+  const pullFromPayableAction = resolveKuaizhizaoDocumentAction(
+    t,
+    'payment_application.pull_from_payable',
+  );
 
   const scopeOptions = useMemo(
     () => [
@@ -116,35 +140,10 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
     [t],
   );
 
-  const columns: ColumnsType<PullRow> = useMemo(
-    () => [
-      { title: t('common.code'), dataIndex: 'code', width: 160, ellipsis: true },
-      {
-        title: t('components.uniPullQuery.documentDateColumn'),
-        dataIndex: 'documentDate',
-        width: 112,
-        sorter: (a, b) =>
-          String(a.documentDate || '').localeCompare(String(b.documentDate || '')),
-        defaultSortOrder: 'descend',
-        render: (v?: string | null) => (v ? formatBusinessDateOnly(String(v)) : '-'),
-      },
-      { title: t('app.kuaicaiwu.common.supplier'), dataIndex: 'partnerName', ellipsis: true },
-      {
-        title: t('app.kuaizhizao.paymentApplication.requestAmount'),
-        dataIndex: 'amount',
-        width: 120,
-        align: 'right',
-        render: (v?: number) => (v != null && v > 0 ? formatCurrencyAmount(v) : '—'),
-      },
-      {
-        title: t('common.status'),
-        dataIndex: 'status',
-        width: 100,
-        render: (v) => renderPullQueryDocStatus(t, v),
-      },
-    ],
-    [t],
-  );
+  const poPullColumns = useMemo(() => buildPaymentApplicationPoPullQueryColumns(t), [t]);
+
+  const columns = useMemo(() => buildPaymentApplicationSourcePullQueryColumns(t), [t]);
+  const payablePullColumns = useMemo(() => buildPaymentApplicationPayablePullQueryColumns(t), [t]);
 
   const isPullable = useCallback((row: PullRow) => row.pullable === true, []);
 
@@ -184,10 +183,95 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
     [messageApi, t, warnPullSourceNotSelectable],
   );
 
-  const basePoRowDisabled = useCallback((row: PullRow) => !isPullable(row), [isPullable]);
+  const basePoRowDisabled = useCallback(
+    (row: PaymentApplicationPoPullRow) => !isPullable(row),
+    [isPullable],
+  );
   const baseReceiptRowDisabled = useCallback((row: PullRow) => !isPullable(row), [isPullable]);
 
-  const pullFromPoQuery = useUniPullQuery<PullRow>({
+  const ensurePayableSupplierOptions = useCallback(async () => {
+    if (payableSupplierOptions.length) {
+      return;
+    }
+    setPayableSuppliersLoading(true);
+    try {
+      const list = await loadSupplierFormReferenceList(KUAIZHIZAO_DOC_HOST.paymentApplication);
+      setPayableSupplierOptions(list.map((s) => ({ id: s.id, name: s.name })));
+    } catch (e) {
+      messageApi.error(getApiErrorMessage(e, t('common.loadFailed')));
+    } finally {
+      setPayableSuppliersLoading(false);
+    }
+  }, [messageApi, payableSupplierOptions.length, t]);
+
+  const pullFromPayableQuery = useUniPullQuery<PaymentApplicationPayablePullRow>({
+    rowKey: 'id',
+    selectionType: 'checkbox',
+    scopeOptions,
+    defaultScope: 'pullable',
+    isRowDisabled: (row) => !isPullable(row),
+    loadData: async ({ keyword, page, pageSize, scope }) => {
+      if (!payablePullSupplierId) {
+        return { data: [], total: 0 };
+      }
+      try {
+        const res = await listPayablesForPaymentApplication(payablePullSupplierId, {
+          limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
+          keyword: keyword.trim() || undefined,
+        });
+        const disableReason = t('app.kuaizhizao.paymentApplication.pullSourceNotSelectable');
+        const rows = (res.data ?? []).map((row) =>
+          mapPayablePullLineToPaymentApplicationPayableRow(row, disableReason),
+        );
+        return paginatePullRows(filterByPullScope(rows, scope, isPullable), page, pageSize);
+      } catch (e) {
+        messageApi.error(getApiErrorMessage(e, t('common.loadFailed')));
+        return { data: [], total: 0 };
+      }
+    },
+    onConfirm: async (keys, rows) => {
+      if (!payablePullSupplierId) {
+        messageApi.warning(t('app.kuaizhizao.paymentApplication.selectSupplierFirst'));
+        return;
+      }
+      const selectedRows = selectedPullRows(keys, rows);
+      if (!selectedRows.length) {
+        messageApi.warning(t('common.required'));
+        return;
+      }
+      const supplier = payableSupplierOptions.find((s) => s.id === payablePullSupplierId);
+      const items = selectedRows.map((row, index) => ({
+        sourceType: 'payable',
+        sourceId: row.id,
+        sourceCode: row.code,
+        payableId: row.id,
+        payableCode: row.code,
+        lineKind: 'goods',
+        requestAmount: Number(row.amount ?? 0),
+        lineNo: index + 1,
+      }));
+      try {
+        const created = await createPaymentApplication({
+          supplierId: payablePullSupplierId,
+          supplierName: supplier?.name,
+          items,
+        });
+        messageApi.success(t('common.createSuccess'));
+        closePayableRef.current?.();
+        setPayablePullSupplierId(null);
+        onCreated(created.id);
+      } catch (e) {
+        messageApi.error(getApiErrorMessage(e, t('app.kuaizhizao.paymentApplication.createFailed')));
+      }
+    },
+  });
+  closePayableRef.current = pullFromPayableQuery.closeModal;
+
+  const openPullFromPayable = useCallback(() => {
+    void ensurePayableSupplierOptions().then(() => pullFromPayableQuery.openModal());
+  }, [ensurePayableSupplierOptions, pullFromPayableQuery]);
+
+  const pullFromPoQuery = useUniPullQuery<PaymentApplicationPoPullRow>({
     rowKey: 'id',
     selectionType: 'checkbox',
     scopeOptions,
@@ -201,26 +285,7 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
           keyword: keyword.trim() || undefined,
         });
         const items = res.data ?? [];
-        const rows: PullRow[] = items.map((o) => {
-          const cap = o.capabilities?.push_payment_application;
-          const prepay = Number(o.prepayment_amount ?? 0);
-          const reasonCode = cap?.reason ? String(cap.reason) : '';
-          const orderDate = o.order_date ? String(o.order_date).slice(0, 10) : null;
-          return {
-            id: Number(o.id),
-            code: String(o.order_code ?? o.id),
-            documentDate: orderDate,
-            supplierId: Number(o.supplier_id ?? 0) || undefined,
-            partnerName: String(o.supplier_name ?? ''),
-            // 仅展示预付额度，禁止用订单总额冒充可请款（否则「全部单据」上看似有金额却选不了）
-            amount: prepay > 0 ? prepay : undefined,
-            status: String(o.status ?? o.review_status ?? ''),
-            pullable: cap?.allowed === true,
-            disableReason: reasonCode
-              ? purchaseOrderCapabilityReasonMessage(reasonCode, t)
-              : t('app.kuaizhizao.paymentApplication.pullFromPoNeedPrepay'),
-          };
-        });
+        const rows = items.map((o) => mapPurchaseOrderToPaymentApplicationPullRow(o, t));
         return paginatePullRows(filterByPullScope(rows, scope, isPullable), page, pageSize);
       } catch (e) {
         messageApi.error(getApiErrorMessage(e, t('common.loadFailed')));
@@ -247,7 +312,7 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
           }),
         );
         closePoRef.current?.();
-        onCreated();
+        onCreated(Number(app.id));
       } catch (e) {
         messageApi.error(getApiErrorMessage(e, t('app.kuaizhizao.paymentApplication.createFailed')));
       }
@@ -329,7 +394,7 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
           }),
         );
         closeReceiptRef.current?.();
-        onCreated();
+        onCreated(Number(app.id));
       } catch (e) {
         messageApi.error(getApiErrorMessage(e, t('app.kuaizhizao.paymentApplication.createFailed')));
       }
@@ -339,7 +404,7 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
 
   const pullFromStatementQuery = useUniPullQuery<PullRow>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     scopeOptions,
     defaultScope: 'pullable',
     isRowDisabled: (row) => !isPullable(row),
@@ -372,50 +437,61 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
       }
     },
     onConfirm: async (keys, rows) => {
-      const selected = rows.find((r) => String(r.id) === String(keys[0]));
-      if (!selected?.id) {
+      const selectedRows = selectedPullRows(keys, rows);
+      if (!selectedRows.length) {
         messageApi.warning(t('common.required'));
         return;
       }
       try {
-        const stmt = await partnerStatementService.get(selected.id);
-        if (stmt.partner_type !== 'Supplier') {
-          messageApi.warning(t('app.kuaicaiwu.partnerStatement.detail.pushSupplierOnly'));
+        let lastCode = '';
+        let lastId: number | undefined;
+        let created = 0;
+        for (const selected of selectedRows) {
+          const stmt = await partnerStatementService.get(selected.id);
+          if (stmt.partner_type !== 'Supplier') {
+            messageApi.warning(t('app.kuaicaiwu.partnerStatement.detail.pushSupplierOnly'));
+            continue;
+          }
+          const lines = stmt.transaction_details?.lines || [];
+          const payableItems = lines
+            .filter(
+              (ln) =>
+                String(ln.doc_type || '').trim() === '应付单'
+                && ln.doc_id != null
+                && Number(ln.tree_level ?? 0) === 0
+                && Number(ln.statement_amount ?? ln.debit ?? 0) > 0,
+            )
+            .map((ln) => ({
+              doc_type: 'payable',
+              doc_id: Number(ln.doc_id),
+              amount: Number(
+                ln.statement_amount ?? ln.remaining_amount ?? ln.doc_amount ?? ln.debit ?? 0,
+              ),
+            }))
+            .filter((it) => it.amount > 0);
+          if (!payableItems.length) {
+            messageApi.warning(t('app.kuaicaiwu.partnerStatement.detail.pushSelectPayable'));
+            continue;
+          }
+          const app = await pullPaymentApplicationFromReconciliation({
+            supplierId: stmt.partner_id,
+            items: payableItems,
+          });
+          lastCode = app.applicationCode;
+          lastId = Number(app.id);
+          created += 1;
+        }
+        if (!created) {
           return;
         }
-        const lines = stmt.transaction_details?.lines || [];
-        const payableItems = lines
-          .filter(
-            (ln) =>
-              String(ln.doc_type || '').trim() === '应付单'
-              && ln.doc_id != null
-              && Number(ln.tree_level ?? 0) === 0
-              && Number(ln.statement_amount ?? ln.debit ?? 0) > 0,
-          )
-          .map((ln) => ({
-            doc_type: 'payable',
-            doc_id: Number(ln.doc_id),
-            amount: Number(
-              ln.statement_amount ?? ln.remaining_amount ?? ln.doc_amount ?? ln.debit ?? 0,
-            ),
-          }))
-          .filter((it) => it.amount > 0);
-        if (!payableItems.length) {
-          messageApi.warning(t('app.kuaicaiwu.partnerStatement.detail.pushSelectPayable'));
-          return;
-        }
-        const app = await pullPaymentApplicationFromReconciliation({
-          supplierId: stmt.partner_id,
-          items: payableItems,
-        });
         messageApi.success(
           t('app.kuaizhizao.paymentApplication.createFromSourceSuccess', {
-            code: app.applicationCode,
+            code: lastCode,
             source: pullFromStatementAction.sourceLabel,
           }),
         );
         closeStatementRef.current?.();
-        onCreated();
+        onCreated(lastId);
       } catch (e) {
         messageApi.error(getApiErrorMessage(e, t('app.kuaizhizao.paymentApplication.createFailed')));
       }
@@ -425,7 +501,7 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
 
   const pullFromExpenseQuery = useUniPullQuery<PullRow>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     scopeOptions,
     defaultScope: 'pullable',
     isRowDisabled: (row) => !isPullable(row),
@@ -456,50 +532,61 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
       }
     },
     onConfirm: async (keys, rows) => {
-      const selected = rows.find((r) => String(r.id) === String(keys[0]));
-      if (!selected?.id) {
+      const selectedRows = selectedPullRows(keys, rows);
+      if (!selectedRows.length) {
         messageApi.warning(t('common.required'));
         return;
       }
       try {
-        const detail = (await otherExpenseService.get(selected.id)) as ExpenseWithFinance;
-        const payableId = Number(detail.payable_id || 0);
-        const supplierId = Number(detail.counterparty_id || 0);
-        if (!payableId || !supplierId) {
-          messageApi.warning(t('app.kuaizhizao.paymentApplication.otherExpenseNoPayable'));
+        let lastCode = '';
+        let lastId: number | undefined;
+        let created = 0;
+        for (const selected of selectedRows) {
+          const detail = (await otherExpenseService.get(selected.id)) as ExpenseWithFinance;
+          const payableId = Number(detail.payable_id || 0);
+          const supplierId = Number(detail.counterparty_id || 0);
+          if (!payableId || !supplierId) {
+            messageApi.warning(t('app.kuaizhizao.paymentApplication.otherExpenseNoPayable'));
+            continue;
+          }
+          const payables = await listPayablesForPaymentApplication(supplierId, { limit: 200 });
+          const match = (payables.data ?? []).find((row) => Number(row.payable_id) === payableId);
+          const amount = Number(match?.max_request_amount ?? detail.total_amount ?? 0);
+          if (!(amount > 0)) {
+            messageApi.warning(t('app.kuaizhizao.paymentApplication.otherExpenseNoOpenAmount'));
+            continue;
+          }
+          const app = await createPaymentApplication({
+            supplierId,
+            supplierName: String(detail.counterparty_name ?? selected.partnerName ?? ''),
+            items: [
+              {
+                sourceType: 'other_expense',
+                sourceId: selected.id,
+                sourceCode: selected.code,
+                payableId,
+                payableCode: String(detail.payable_code ?? match?.payable_code ?? ''),
+                lineKind: 'goods',
+                requestAmount: amount,
+                lineNo: 1,
+              },
+            ],
+          });
+          lastCode = app.applicationCode;
+          lastId = Number(app.id);
+          created += 1;
+        }
+        if (!created) {
           return;
         }
-        const payables = await listPayablesForPaymentApplication(supplierId, { limit: 200 });
-        const match = (payables.data ?? []).find((row) => Number(row.payable_id) === payableId);
-        const amount = Number(match?.max_request_amount ?? detail.total_amount ?? 0);
-        if (!(amount > 0)) {
-          messageApi.warning(t('app.kuaizhizao.paymentApplication.otherExpenseNoOpenAmount'));
-          return;
-        }
-        const app = await createPaymentApplication({
-          supplierId,
-          supplierName: String(detail.counterparty_name ?? selected.partnerName ?? ''),
-          items: [
-            {
-              sourceType: 'other_expense',
-              sourceId: selected.id,
-              sourceCode: selected.code,
-              payableId,
-              payableCode: String(detail.payable_code ?? match?.payable_code ?? ''),
-              lineKind: 'goods',
-              requestAmount: amount,
-              lineNo: 1,
-            },
-          ],
-        });
         messageApi.success(
           t('app.kuaizhizao.paymentApplication.createFromSourceSuccess', {
-            code: app.applicationCode,
+            code: lastCode,
             source: pullFromExpenseAction.sourceLabel,
           }),
         );
         closeExpenseRef.current?.();
-        onCreated();
+        onCreated(lastId);
       } catch (e) {
         messageApi.error(getApiErrorMessage(e, t('app.kuaizhizao.paymentApplication.createFailed')));
       }
@@ -513,7 +600,7 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
         {
           key: 'pull-from-payable',
           actionKey: 'payment_application.pull_from_payable',
-          onClick: onOpenPayablePull,
+          onClick: openPullFromPayable,
         },
         {
           key: 'pull-from-po',
@@ -536,25 +623,77 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
           onClick: pullFromExpenseQuery.openModal,
         },
       ]),
+    [openPullFromPayable, pullFromPoQuery.openModal, pullFromReceiptQuery.openModal, pullFromStatementQuery.openModal, t],
+  );
+
+  const payablePullFilterExtra = useMemo(
+    () => (
+      <Select
+        style={{ minWidth: 260 }}
+        placeholder={t('app.kuaizhizao.paymentApplication.supplierName')}
+        loading={payableSuppliersLoading}
+        showSearch
+        optionFilterProp="label"
+        options={payableSupplierOptions.map((s) => ({ label: s.name, value: s.id }))}
+        value={payablePullSupplierId ?? undefined}
+        onChange={(v) => {
+          setPayablePullSupplierId(Number(v));
+          pullFromPayableQuery.reloadCurrent();
+        }}
+      />
+    ),
     [
-      onOpenPayablePull,
-      pullFromExpenseQuery.openModal,
-      pullFromPoQuery.openModal,
-      pullFromReceiptQuery.openModal,
-      pullFromStatementQuery.openModal,
+      payablePullSupplierId,
+      payableSupplierOptions,
+      payableSuppliersLoading,
+      pullFromPayableQuery,
       t,
     ],
   );
 
   const renderPullModals = () => (
-    <>
-      <UniPullQueryModal<PullRow>
+  <>
+      <UniPullQueryModal<PaymentApplicationPayablePullRow>
+        open={pullFromPayableQuery.open}
+        title={pullFromPayableAction.label}
+        onCancel={() => {
+          pullFromPayableQuery.closeModal();
+          setPayablePullSupplierId(null);
+        }}
+        onOk={() => void pullFromPayableQuery.handleConfirm()}
+        rowKey="id"
+        columns={payablePullColumns}
+        dataSource={pullFromPayableQuery.dataSource}
+        loading={pullFromPayableQuery.loading}
+        confirmLoading={pullFromPayableQuery.confirmLoading}
+        selectionType={pullFromPayableQuery.selectionType}
+        selectedRowKeys={pullFromPayableQuery.selectedRowKeys}
+        selectedRows={pullFromPayableQuery.selectedRows}
+        onSelectedRowKeysChange={pullFromPayableQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromPayableQuery.isRowDisabled}
+        onDisabledRowClick={warnPullSourceNotSelectable}
+        searchDraft={pullFromPayableQuery.searchDraft}
+        onSearchDraftChange={pullFromPayableQuery.setSearchDraft}
+        onSearchApply={pullFromPayableQuery.handleSearchApply}
+        onSearchClear={pullFromPayableQuery.handleSearchClear}
+        appliedKeyword={pullFromPayableQuery.appliedKeyword}
+        page={pullFromPayableQuery.page}
+        pageSize={pullFromPayableQuery.pageSize}
+        total={pullFromPayableQuery.total}
+        onPageChange={pullFromPayableQuery.handlePageChange}
+        scopeOptions={pullFromPayableQuery.scopeOptions}
+        scope={pullFromPayableQuery.scope}
+        onScopeChange={pullFromPayableQuery.handleScopeChange}
+        filterExtra={payablePullFilterExtra}
+        filterExtraPlacement="block"
+      />
+      <UniPullQueryModal<PaymentApplicationPoPullRow>
         open={pullFromPoQuery.open}
         title={pullFromPoAction.label}
         onCancel={pullFromPoQuery.closeModal}
         onOk={() => void pullFromPoQuery.handleConfirm()}
         rowKey="id"
-        columns={columns}
+        columns={poPullColumns}
         dataSource={pullFromPoQuery.dataSource}
         loading={pullFromPoQuery.loading}
         confirmLoading={pullFromPoQuery.confirmLoading}

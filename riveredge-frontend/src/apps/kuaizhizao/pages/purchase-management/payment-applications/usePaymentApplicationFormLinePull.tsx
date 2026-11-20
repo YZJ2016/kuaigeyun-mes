@@ -4,36 +4,30 @@
 import React, { useCallback, useMemo, useRef } from 'react';
 import type { ProFormInstance } from '@ant-design/pro-components';
 import { App } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import {
   UniPullQueryModal,
   filterByPullScope,
   paginatePullRows,
-  renderPullQueryDocStatus,
   UNI_PULL_QUERY_MAX_FETCH_LIMIT,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
-import { purchaseOrderCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
-import { formatBusinessDateOnly, formatCurrencyAmount } from '../../../../../utils/format';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { listPurchaseOrders } from '../../../services/purchase';
-import { resolvePurchaseOrderDisplayAmount } from '../shared/purchaseOrderAmounts';
+import {
+  buildPaymentApplicationPoPullQueryColumns,
+  mapPurchaseOrderToPaymentApplicationPullRow,
+  type PaymentApplicationPoPullRow,
+} from './paymentApplicationPoPullQueryColumns';
+import {
+  buildPaymentApplicationPayablePullQueryColumns,
+  mapPayablePullLineToPaymentApplicationPayableRow,
+  type PaymentApplicationPayablePullRow,
+} from './paymentApplicationPayablePullQueryColumns';
 import { listPayablesForPaymentApplication } from '../../../services/payment-application';
 import { collectPaymentApplicationItemsFromPurchaseOrderRows } from './paymentApplicationPoPullMerge';
-
-type PullRow = {
-  id: number;
-  code: string;
-  documentDate?: string | null;
-  partnerName?: string;
-  amount?: number;
-  status?: string;
-  pullable?: boolean;
-  disableReason?: string;
-};
 
 type Props = {
   formRef: React.RefObject<ProFormInstance | undefined>;
@@ -75,37 +69,17 @@ export function usePaymentApplicationFormLinePull({ formRef, getApplicationKind 
     [t],
   );
 
-  const columns: ColumnsType<PullRow> = useMemo(
-    () => [
-      { title: t('common.code'), dataIndex: 'code', width: 160, ellipsis: true },
-      {
-        title: t('components.uniPullQuery.documentDateColumn'),
-        dataIndex: 'documentDate',
-        width: 112,
-        render: (v?: string | null) => (v ? formatBusinessDateOnly(String(v)) : '—'),
-      },
-      { title: t('app.kuaicaiwu.common.supplier'), dataIndex: 'partnerName', ellipsis: true },
-      {
-        title: t('app.kuaizhizao.paymentApplication.requestAmount'),
-        dataIndex: 'amount',
-        width: 120,
-        align: 'right',
-        render: (v?: number) => (v != null && v > 0 ? formatCurrencyAmount(v) : '—'),
-      },
-      {
-        title: t('common.status'),
-        dataIndex: 'status',
-        width: 100,
-        render: (v) => renderPullQueryDocStatus(t, v),
-      },
-    ],
-    [t],
+  const payablePullColumns = useMemo(() => buildPaymentApplicationPayablePullQueryColumns(t), [t]);
+
+  const poPullColumns = useMemo(() => buildPaymentApplicationPoPullQueryColumns(t), [t]);
+
+  const isPullable = useCallback(
+    (row: PaymentApplicationPayablePullRow) => row.pullable === true,
+    [],
   );
 
-  const isPullable = useCallback((row: PullRow) => row.pullable === true, []);
-
   const warnDisabledRow = useCallback(
-    (row: PullRow) => {
+    (row: PaymentApplicationPayablePullRow) => {
       const reason = String(row.disableReason || '').trim();
       if (reason) {
         messageApi.warning(reason);
@@ -126,7 +100,7 @@ export function usePaymentApplicationFormLinePull({ formRef, getApplicationKind 
     [formRef],
   );
 
-  const pullPayableQuery = useUniPullQuery<PullRow>({
+  const pullPayableQuery = useUniPullQuery<PaymentApplicationPayablePullRow>({
     rowKey: 'id',
     selectionType: 'checkbox',
     scopeOptions,
@@ -142,18 +116,10 @@ export function usePaymentApplicationFormLinePull({ formRef, getApplicationKind 
           limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
           keyword: keyword.trim() || undefined,
         });
-        const rows: PullRow[] = (res.data ?? []).map((row) => {
-          const payableId = Number(row.payable_id);
-          const maxAmt = Number(row.max_request_amount ?? 0);
-          return {
-            id: payableId,
-            code: String(row.payable_code ?? payableId),
-            amount: maxAmt > 0 ? maxAmt : undefined,
-            partnerName: String(row.supplier_name ?? ''),
-            pullable: payableId > 0 && maxAmt > 0,
-            disableReason: t('app.kuaizhizao.paymentApplication.pullSourceNotSelectable'),
-          };
-        });
+        const disableReason = t('app.kuaizhizao.paymentApplication.pullSourceNotSelectable');
+        const rows = (res.data ?? []).map((row) =>
+          mapPayablePullLineToPaymentApplicationPayableRow(row, disableReason),
+        );
         return paginatePullRows(filterByPullScope(rows, scope, isPullable), page, pageSize);
       } catch (e) {
         messageApi.error(getApiErrorMessage(e, t('common.loadFailed')));
@@ -197,7 +163,7 @@ export function usePaymentApplicationFormLinePull({ formRef, getApplicationKind 
   });
   closePayableRef.current = pullPayableQuery.closeModal;
 
-  const pullPoQuery = useUniPullQuery<PullRow>({
+  const pullPoQuery = useUniPullQuery<PaymentApplicationPoPullRow>({
     rowKey: 'id',
     selectionType: 'checkbox',
     scopeOptions,
@@ -216,28 +182,9 @@ export function usePaymentApplicationFormLinePull({ formRef, getApplicationKind 
           supplier_id: supplierId,
         });
         const items = res.data ?? [];
-        const rows: PullRow[] = items
+        const rows = items
           .filter((o) => Number(o.supplier_id) === supplierId)
-          .map((o) => {
-            const cap = o.capabilities?.push_payment_application;
-            const prepay = Number(o.prepayment_amount ?? 0);
-            const orderTotal = resolvePurchaseOrderDisplayAmount(o);
-            const displayAmount = prepay > 0 ? prepay : orderTotal;
-            const orderDate = o.order_date ? String(o.order_date).slice(0, 10) : null;
-            const reasonCode = cap?.reason ? String(cap.reason) : '';
-            return {
-              id: Number(o.id),
-              code: String(o.order_code ?? o.id),
-              documentDate: orderDate,
-              partnerName: String(o.supplier_name ?? ''),
-              amount: displayAmount > 0 ? displayAmount : undefined,
-              status: String(o.status ?? o.review_status ?? ''),
-              pullable: cap?.allowed === true,
-              disableReason: reasonCode
-                ? purchaseOrderCapabilityReasonMessage(reasonCode, t)
-                : t('app.kuaizhizao.paymentApplication.pullFromPoNotSelectable'),
-            };
-          });
+          .map((o) => mapPurchaseOrderToPaymentApplicationPullRow(o, t));
         return paginatePullRows(filterByPullScope(rows, scope, isPullable), page, pageSize);
       } catch (e) {
         messageApi.error(getApiErrorMessage(e, t('common.loadFailed')));
@@ -294,13 +241,13 @@ export function usePaymentApplicationFormLinePull({ formRef, getApplicationKind 
 
   const renderPullModals = () => (
     <>
-      <UniPullQueryModal<PullRow>
+      <UniPullQueryModal<PaymentApplicationPayablePullRow>
         open={pullPayableQuery.open}
         title={pullFromPayableAction.label}
         onCancel={pullPayableQuery.closeModal}
         onOk={() => void pullPayableQuery.handleConfirm()}
         rowKey="id"
-        columns={columns}
+        columns={payablePullColumns}
         dataSource={pullPayableQuery.dataSource}
         loading={pullPayableQuery.loading}
         confirmLoading={pullPayableQuery.confirmLoading}
@@ -323,13 +270,13 @@ export function usePaymentApplicationFormLinePull({ formRef, getApplicationKind 
         scope={pullPayableQuery.scope}
         onScopeChange={pullPayableQuery.handleScopeChange}
       />
-      <UniPullQueryModal<PullRow>
+      <UniPullQueryModal<PaymentApplicationPoPullRow>
         open={pullPoQuery.open}
         title={pullFromPoAction.label}
         onCancel={pullPoQuery.closeModal}
         onOk={() => void pullPoQuery.handleConfirm()}
         rowKey="id"
-        columns={columns}
+        columns={poPullColumns}
         dataSource={pullPoQuery.dataSource}
         loading={pullPoQuery.loading}
         confirmLoading={pullPoQuery.confirmLoading}
