@@ -2042,6 +2042,22 @@ async def _require_line_location(
     return int(loc.id), code
 
 
+async def _require_outbound_line_location(
+    tenant_id: int,
+    warehouse_id: int,
+    location_id: Optional[int],
+    *,
+    material_label: str,
+) -> tuple[int, str]:
+    return await _require_line_location(
+        tenant_id,
+        warehouse_id,
+        location_id,
+        material_label=material_label,
+        direction_label="出库",
+    )
+
+
 async def _resolve_line_location_into_mapping(
     tenant_id: int,
     *,
@@ -11145,18 +11161,27 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 if batch_no is not None:
                     item_dict["batch_number"] = batch_no
                 material_label = item_dict.get("material_name") or item_dict.get("material_code") or "未知物料"
+                await _resolve_line_location_into_mapping(
+                    tenant_id,
+                    warehouse_id=getattr(item_data, "warehouse_id", None) or item_dict.get("warehouse_id"),
+                    location_id=getattr(item_data, "location_id", None) or item_dict.get("location_id"),
+                    location_code=getattr(item_data, "location_code", None) or item_dict.get("location_code"),
+                    material_label=material_label,
+                    direction_label="入库",
+                    target=item_dict,
+                )
                 if not service_purchase_create:
                     _validate_location_if_required(
                         location_required=location_required,
-                        location_id=getattr(item_data, 'location_id', None),
-                        location_code=getattr(item_data, 'location_code', None),
+                        location_id=item_dict.get("location_id"),
+                        location_code=item_dict.get("location_code"),
                         scene="采购入库",
                         material_label=material_label,
                     )
                     await _validate_purchase_line_warehouse_location_match(
                         tenant_id,
-                        warehouse_id=getattr(item_data, "warehouse_id", None),
-                        location_id=getattr(item_data, "location_id", None),
+                        warehouse_id=getattr(item_data, "warehouse_id", None) or item_dict.get("warehouse_id"),
+                        location_id=item_dict.get("location_id"),
                         material_label=material_label,
                     )
 

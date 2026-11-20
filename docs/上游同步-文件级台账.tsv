@@ -1890,7 +1890,7 @@ riveredge-backend/tests/apps/kuaizhizao/services/test_purchase_requisition_po_pl
 riveredge-backend/tests/apps/kuaizhizao/services/test_quality_auto_push_iqc_inbound.py	b8188be40cfb157ddc8c1d2dade6549337146eb4	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/tests/apps/kuaizhizao/services/test_quality_inspection_auto_approve.py	b2e9bc477f3b4699f3342e64b51fe8471040d534	applied	宽区间历史补登：上游tip内容已落地（预审B包复核）
 riveredge-backend/tests/apps/kuaizhizao/services/test_quality_linked_document_read.py	987b398b27207aaed8d9e1b1f612c1844ffd4e84	applied	宽区间历史补登：上游tip内容已落地（预审B包复核）
-riveredge-backend/tests/apps/kuaizhizao/services/test_require_line_location.py	9951471704b2f47b848b297dc82bb3fe2f5c0a43	deferred	上游测试试跑仍红（特性实缺：test_require_line_location），维持deferred
+riveredge-backend/tests/apps/kuaizhizao/services/test_require_line_location.py	9951471704b2f47b848b297dc82bb3fe2f5c0a43	applied	库位契约AST测试落地：补_require_outbound_line_location包装+create_purchase_receipt先解析后校验链
 riveredge-backend/tests/apps/kuaizhizao/services/test_rework_order_capabilities.py	4edd09df9d8e066b8054cf390361d108540e32ca	tracked	seed from e16f2f2939
 riveredge-backend/tests/apps/kuaizhizao/services/test_rework_order_signoff_lifecycle.py	9f38c6cf725bf911b847ce9d1813743cb53d6710	tracked	seed from e16f2f2939
 riveredge-backend/tests/apps/kuaizhizao/services/test_rework_signoff_audit.py	ac074f912c8c76dde9a4154b13ecfcdea97f488f	applied	返工会签办理台+权限树全选簇：①workbench 页直取（本地 index.tsx 懒加载+路由早已注册而页面缺失的真实断链）；配套补 work_orders.py 4 个 signoff 动作路由+ReworkSignoffActBody（service/orchestrator 方法早已存在）；②FunctionGrantTree 整换上游（节点全选/取消全选+授权码小写归一，父组件已一致）+roles-permissions.less 样式块；③两测试移植 5 passed
