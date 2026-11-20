@@ -40,6 +40,10 @@ export interface ShipmentNoticeCapabilities {
   notify: ActionCapability;
   withdraw: ActionCapability;
   print: ActionCapability;
+  submit?: ActionCapability;
+  withdraw_submit?: ActionCapability;
+  approve?: ActionCapability;
+  revoke_approval?: ActionCapability;
 }
 
 export interface ShipmentNotice {
@@ -87,8 +91,22 @@ export interface ShipmentNoticeItem {
 }
 
 export interface ShipmentNoticeNotifyPayload {
+  /** 整单默认仓（兼容）；优先传 line_warehouses */
   warehouse_id?: number;
   warehouse_name?: string;
+  /** 明细行出库仓库 {shipment_notice_item_id: warehouse_id} */
+  line_warehouses?: Record<string, number>;
+  line_warehouse_names?: Record<string, string>;
+  /** 明细行库位 */
+  line_location_ids?: Record<string, number>;
+  line_location_codes?: Record<string, string>;
+  /** draft=保存为草稿；confirm=提交审核（免审则已通过） */
+  push_mode?: 'draft' | 'confirm';
+}
+
+export interface ShipmentNoticeNotifyPreviewPayload {
+  warehouse_id?: number;
+  line_warehouses?: Record<string, number>;
 }
 
 export interface ShipmentNoticePushPreviewResponse {
@@ -114,16 +132,20 @@ export interface ShipmentNoticeNotifyPreviewResponse {
   summary: string;
   notice_code?: string;
   warehouse_required?: boolean;
+  line_warehouse_required?: boolean;
   warehouse_id?: number | null;
   items: {
     item_id?: number;
     sales_order_item_id?: number | null;
+    material_id?: number | null;
     material_code: string;
     material_name: string;
     quantity: number;
     pushed_quantity?: number;
     max_push_quantity?: number;
     notice_quantity?: number;
+    warehouse_id?: number | null;
+    warehouse_name?: string | null;
   }[];
   tip?: string;
   has_blocking_issues?: boolean;
@@ -141,10 +163,10 @@ export const shipmentNoticeApi = {
   get: async (id: string) => apiRequest(`/apps/kuaizhizao/shipment-notices/${id}`, { method: 'GET' }),
   notify: async (id: string, data?: ShipmentNoticeNotifyPayload) =>
     apiRequest(`/apps/kuaizhizao/shipment-notices/${id}/notify`, { method: 'POST', data: data ?? {} }),
-  previewNotify: async (id: string, params?: { warehouse_id?: number }) =>
+  previewNotify: async (id: string, data?: ShipmentNoticeNotifyPreviewPayload) =>
     apiRequest<ShipmentNoticeNotifyPreviewResponse>(`/apps/kuaizhizao/shipment-notices/${id}/notify/preview`, {
-      method: 'GET',
-      params,
+      method: 'POST',
+      data: data ?? {},
     }),
   withdraw: async (id: string) =>
     apiRequest(`/apps/kuaizhizao/shipment-notices/${id}/withdraw`, { method: 'POST' }),

@@ -18,7 +18,7 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useDocumentHighlightDeepLink } from '../../../../../hooks/useDocumentHighlightDeepLink';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, Row, Col, Typography, Dropdown, Spin, Empty, Descriptions, Alert } from 'antd';
 import { ArrowLeftOutlined, PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, AppstoreAddOutlined, ImportOutlined, MoreOutlined, DownOutlined, PrinterOutlined } from '@ant-design/icons';
 import { theme as AntdTheme } from 'antd';
@@ -61,7 +61,10 @@ const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
 );
 import type { Material } from '../../../../master-data/types/material';
-import { buildDocumentLineDualQuantityPairColumns } from '../../../../../components/quantity-with-unit';
+import {
+  buildDocumentLineAuxQuantityDetailColumn,
+  buildDocumentLineDualQuantityPairColumns,
+} from '../../../../../components/quantity-with-unit';
 import { pickDocumentLineDualQuantityFields } from '../../../../../utils/materialDualQuantity';
 import { DocumentAmountSummaryWatch } from '../../../components/document-amount-summary/DocumentAmountSummary';
 import { computeSimpleDocumentLineTotal } from '../../../utils/documentLineAmounts';
@@ -70,6 +73,13 @@ import {
   resolveDocumentCurrencyInputPrefix,
 } from '../../../utils/documentCurrencyDisplay';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
+import {
+  UniWhDropdown,
+  UniWhLocationOrWholeAuto,
+  lineLocationSelectionRequired,
+} from '../../../../../components/uni-wh-dropdown';
+import { getPopupContainerInModal } from '../../../../../utils/modalEventIsolation';
+import { DOCUMENT_DETAIL_CONTROL_SIZE } from '../../../components/document-detail-table/documentDetailTable';
 import {
   ListPageTemplate,
   DetailDrawerTemplate,
@@ -90,7 +100,7 @@ import {
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
-import { shipmentNoticeApi, type ShipmentNotice, type ShipmentNoticeItem, type ShipmentNoticeNotifyPreviewResponse, type ShipmentNoticeListParams } from '../../../services/shipment-notice';
+import { shipmentNoticeApi, type ShipmentNotice, type ShipmentNoticeItem, type ShipmentNoticeNotifyPreviewResponse, type ShipmentNoticeNotifyPreviewPayload, type ShipmentNoticeListParams } from '../../../services/shipment-notice';
 import {
   listSalesOrders,
   getSalesOrder,
@@ -167,6 +177,52 @@ const SHIPMENT_NOTICE_LIST_PATH = '/apps/kuaizhizao/sales-management/shipment-no
 const SHIPMENT_NOTICE_CREATE_PATH = `${SHIPMENT_NOTICE_LIST_PATH}/new`;
 const shipmentNoticeEditPath = (id: number) => `${SHIPMENT_NOTICE_LIST_PATH}/${id}/edit`;
 const SHIPMENT_NOTICE_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_shipment_notices';
+
+type NotifyLineWhState = {
+  warehouse_id?: number;
+  warehouse_name?: string;
+  location_id?: number;
+  location_code?: string;
+};
+
+function NotifyPreviewLocationCell({
+  materialId,
+  warehouseId,
+  locationId,
+  disabled,
+  onChange,
+  t,
+}: {
+  materialId?: number;
+  warehouseId?: number;
+  locationId?: number;
+  disabled?: boolean;
+  onChange: (next: { location_id?: number; location_code?: string }) => void;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+}) {
+  return (
+    <UniWhLocationOrWholeAuto
+      warehouseId={warehouseId}
+      materialId={materialId && materialId > 0 ? materialId : undefined}
+      value={locationId}
+      showStock={!!(materialId && materialId > 0 && warehouseId && warehouseId > 0)}
+      sortByStock={!!(materialId && materialId > 0 && warehouseId && warehouseId > 0)}
+      allowClear={false}
+      size={DOCUMENT_DETAIL_CONTROL_SIZE}
+      getPopupContainer={getPopupContainerInModal}
+      disabled={disabled}
+      selectWarehouseFirstPlaceholder={t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse')}
+      selectLocationPlaceholder={t('app.kuaizhizao.warehouseOutbound.msg.selectLocation')}
+      onChange={(val, loc) => {
+        const nextId = Number(val);
+        onChange({
+          location_id: Number.isFinite(nextId) && nextId > 0 ? nextId : undefined,
+          location_code: loc?.code ?? '',
+        });
+      }}
+    />
+  );
+}
 
 interface ShipmentNoticeDetail extends ShipmentNotice {
   items?: { id?: number; material_id?: number; material_code: string; material_name: string; material_unit: string; notice_quantity: number; unit_price?: number; total_amount?: number }[];
@@ -340,9 +396,9 @@ const ShipmentNoticesPage: React.FC = () => {
   const [notifyPreviewConfirming, setNotifyPreviewConfirming] = useState(false);
   const [notifyPreviewData, setNotifyPreviewData] = useState<ShipmentNoticeNotifyPreviewResponse | null>(null);
   const [notifyPreviewTarget, setNotifyPreviewTarget] = useState<ShipmentNotice | null>(null);
-  const [notifyPreviewWarehouseId, setNotifyPreviewWarehouseId] = useState<number | undefined>();
-  const [notifyPreviewWarehouseName, setNotifyPreviewWarehouseName] = useState('');
-  const notifyPreviewWarehouseFormRef = useRef<ProFormInstance>();
+  const [notifyLineWh, setNotifyLineWh] = useState<Record<number, NotifyLineWhState>>({});
+  const [notifyBatchWarehouseId, setNotifyBatchWarehouseId] = useState<number | undefined>();
+  const notifyLineWhRef = useRef<Record<number, NotifyLineWhState>>({});
 
   const selectedNoticesForBatch = useMemo(
     () =>
@@ -1056,8 +1112,12 @@ const ShipmentNoticesPage: React.FC = () => {
   const executeNotify = useCallback(async (
     record: ShipmentNotice,
     warehouse?: {
-      warehouse_id: number;
+      warehouse_id?: number;
       warehouse_name?: string;
+      line_warehouses?: Record<string, number>;
+      line_warehouse_names?: Record<string, string>;
+      line_location_ids?: Record<string, number>;
+      line_location_codes?: Record<string, string>;
       push_mode?: 'draft' | 'confirm';
     },
   ) => {
@@ -1079,18 +1139,68 @@ const ShipmentNoticesPage: React.FC = () => {
     setNotifyPreviewOpen(false);
     setNotifyPreviewData(null);
     setNotifyPreviewTarget(null);
-    setNotifyPreviewWarehouseId(undefined);
-    setNotifyPreviewWarehouseName('');
+    setNotifyLineWh({});
+    notifyLineWhRef.current = {};
+    setNotifyBatchWarehouseId(undefined);
   }, []);
 
+  const buildNotifyPreviewPayload = useCallback(
+    (lineMap: Record<number, NotifyLineWhState>, headerWarehouseId?: number): ShipmentNoticeNotifyPreviewPayload => {
+      const line_warehouses: Record<string, number> = {};
+      for (const [id, row] of Object.entries(lineMap)) {
+        const wh = Number(row.warehouse_id);
+        if (Number.isFinite(wh) && wh > 0) {
+          line_warehouses[id] = wh;
+        }
+      }
+      return {
+        warehouse_id: headerWarehouseId && headerWarehouseId > 0 ? headerWarehouseId : undefined,
+        line_warehouses: Object.keys(line_warehouses).length ? line_warehouses : undefined,
+      };
+    },
+    [],
+  );
+
+  const seedNotifyLineWhFromPreview = useCallback(
+    (res: ShipmentNoticeNotifyPreviewResponse, headerFallback?: { warehouse_id?: number; warehouse_name?: string }) => {
+      const prev = notifyLineWhRef.current;
+      const next = { ...prev };
+      let changed = false;
+      for (const row of res.items || []) {
+        const id = Number(row.item_id);
+        if (!(id > 0)) continue;
+        if (next[id]?.warehouse_id) continue;
+        const suggested =
+          row.warehouse_id != null && Number(row.warehouse_id) > 0
+            ? Number(row.warehouse_id)
+            : headerFallback?.warehouse_id && headerFallback.warehouse_id > 0
+              ? headerFallback.warehouse_id
+              : undefined;
+        if (!suggested) continue;
+        next[id] = {
+          ...next[id],
+          warehouse_id: suggested,
+          warehouse_name: row.warehouse_name || headerFallback?.warehouse_name || next[id]?.warehouse_name,
+        };
+        changed = true;
+      }
+      if (!changed) return;
+      notifyLineWhRef.current = next;
+      setNotifyLineWh(next);
+    },
+    [],
+  );
+
   const loadNotifyPreview = useCallback(
-    async (record: ShipmentNotice, warehouseId?: number) => {
+    async (record: ShipmentNotice, payload?: ShipmentNoticeNotifyPreviewPayload) => {
       setNotifyPreviewLoading(true);
       try {
-        const res = await shipmentNoticeApi.previewNotify(record.id!.toString(), {
-          warehouse_id: warehouseId,
-        });
+        const res = await shipmentNoticeApi.previewNotify(record.id!.toString(), payload);
         setNotifyPreviewData(res);
+        seedNotifyLineWhFromPreview(res, {
+          warehouse_id: record.warehouse_id ? Number(record.warehouse_id) : undefined,
+          warehouse_name: record.warehouse_name || undefined,
+        });
       } catch (error: any) {
         messageApi.error(error?.message || error?.detail || t('app.kuaizhizao.shipmentNotice.notifyPreviewFailed'));
         resetNotifyPreviewModal();
@@ -1098,7 +1208,7 @@ const ShipmentNoticesPage: React.FC = () => {
         setNotifyPreviewLoading(false);
       }
     },
-    [messageApi, resetNotifyPreviewModal, t],
+    [messageApi, resetNotifyPreviewModal, seedNotifyLineWhFromPreview, t],
   );
 
   const handleNotify = useCallback(
@@ -1107,48 +1217,127 @@ const ShipmentNoticesPage: React.FC = () => {
       setNotifyPreviewConfirming(false);
       setNotifyPreviewData(null);
       setNotifyPreviewTarget(record);
-      const whId = record.warehouse_id ? Number(record.warehouse_id) : undefined;
-      setNotifyPreviewWarehouseId(whId);
-      setNotifyPreviewWarehouseName(record.warehouse_name || '');
-      setTimeout(() => {
-        notifyPreviewWarehouseFormRef.current?.setFieldsValue({
-          warehouse_id: whId,
-          warehouse_name: record.warehouse_name || '',
-        });
-      }, 0);
-      void loadNotifyPreview(record, whId);
+      setNotifyLineWh({});
+      notifyLineWhRef.current = {};
+      setNotifyBatchWarehouseId(undefined);
+      const headerWh = record.warehouse_id ? Number(record.warehouse_id) : undefined;
+      void loadNotifyPreview(
+        record,
+        buildNotifyPreviewPayload({}, headerWh),
+      );
     },
-    [loadNotifyPreview],
+    [buildNotifyPreviewPayload, loadNotifyPreview],
   );
 
-  const handleNotifyPreviewWarehouseChange = useCallback(
-    (warehouseId: number | undefined, warehouseName?: string) => {
-      if (!notifyPreviewTarget?.id) return;
-      setNotifyPreviewWarehouseId(warehouseId);
-      setNotifyPreviewWarehouseName(warehouseName || '');
-      notifyPreviewWarehouseFormRef.current?.setFieldsValue({
-        warehouse_name: warehouseName || '',
-      });
-      if (warehouseId && warehouseId > 0) {
-        void loadNotifyPreview(notifyPreviewTarget, warehouseId);
+  const patchNotifyLineWh = useCallback((itemId: number, patch: NotifyLineWhState) => {
+    const next = {
+      ...notifyLineWhRef.current,
+      [itemId]: {
+        ...notifyLineWhRef.current[itemId],
+        ...patch,
+      },
+    };
+    notifyLineWhRef.current = next;
+    setNotifyLineWh(next);
+  }, []);
+
+  const applyNotifyBatchWarehouse = useCallback(
+    (warehouseId: number, warehouseName?: string) => {
+      setNotifyBatchWarehouseId(warehouseId);
+      const items = notifyPreviewData?.items || [];
+      if (!items.length) {
+        messageApi.warning(t('app.kuaizhizao.warehouseOutbound.pull.batchWarehouseNoLines'));
+        return;
       }
+      const next = { ...notifyLineWhRef.current };
+      for (const row of items) {
+        const id = Number(row.item_id);
+        if (!(id > 0)) continue;
+        next[id] = {
+          warehouse_id: warehouseId,
+          warehouse_name: warehouseName || '',
+          location_id: undefined,
+          location_code: undefined,
+        };
+      }
+      notifyLineWhRef.current = next;
+      setNotifyLineWh(next);
+      messageApi.success(
+        t('app.kuaizhizao.warehouseOutbound.pull.batchWarehouseApplied', { count: items.length }),
+      );
     },
-    [loadNotifyPreview, notifyPreviewTarget],
+    [messageApi, notifyPreviewData?.items, t],
   );
+
+  const notifyLinesReady = useMemo(() => {
+    const items = notifyPreviewData?.items || [];
+    if (!items.length) return false;
+    return items.every((row) => {
+      const id = Number(row.item_id);
+      const wh = notifyLineWh[id]?.warehouse_id;
+      return Number.isFinite(Number(wh)) && Number(wh) > 0;
+    });
+  }, [notifyLineWh, notifyPreviewData?.items]);
 
   const handleNotifyPreviewConfirm = useCallback(async (pushMode: 'draft' | 'confirm') => {
     if (!notifyPreviewTarget?.id || !notifyPreviewData) return;
     if (notifyPreviewData.has_blocking_issues) return;
-    const warehouseId = notifyPreviewWarehouseId ?? notifyPreviewData.warehouse_id ?? notifyPreviewTarget.warehouse_id;
-    if (!warehouseId || Number(warehouseId) <= 0) {
-      messageApi.warning(t('app.kuaizhizao.shipmentNotice.selectOutboundWarehouse'));
-      return;
+    const items = notifyPreviewData.items || [];
+    const line_warehouses: Record<string, number> = {};
+    const line_warehouse_names: Record<string, string> = {};
+    const line_location_ids: Record<string, number> = {};
+    const line_location_codes: Record<string, string> = {};
+
+    for (const row of items) {
+      const id = Number(row.item_id);
+      if (!(id > 0)) continue;
+      const state = notifyLineWh[id] || {};
+      const wh = Number(state.warehouse_id);
+      if (!(Number.isFinite(wh) && wh > 0)) {
+        messageApi.warning(
+          t('app.kuaizhizao.warehouseOutbound.pull.selectWarehouseForMaterial', {
+            material: row.material_code || row.material_name || id,
+          }),
+        );
+        return;
+      }
+      line_warehouses[String(id)] = wh;
+      if (state.warehouse_name) {
+        line_warehouse_names[String(id)] = state.warehouse_name;
+      }
+      const locId = Number(state.location_id);
+      const locCode = String(state.location_code || '').trim();
+      const needLoc = await lineLocationSelectionRequired(
+        wh,
+        Number.isFinite(locId) && locId > 0 ? locId : undefined,
+        locCode || undefined,
+      );
+      if (needLoc) {
+        messageApi.warning(
+          t('app.kuaizhizao.warehouseOutbound.msg.selectLocationForMaterial', {
+            material: row.material_code || row.material_name || id,
+          }),
+        );
+        return;
+      }
+      if (Number.isFinite(locId) && locId > 0) {
+        line_location_ids[String(id)] = locId;
+      }
+      if (locCode) {
+        line_location_codes[String(id)] = locCode;
+      }
     }
+
+    const firstWh = Object.values(line_warehouses)[0];
     setNotifyPreviewConfirming(true);
     try {
       await executeNotify(notifyPreviewTarget, {
-        warehouse_id: Number(warehouseId),
-        warehouse_name: notifyPreviewWarehouseName || notifyPreviewTarget.warehouse_name || undefined,
+        warehouse_id: firstWh,
+        warehouse_name: line_warehouse_names[String(Object.keys(line_warehouses)[0])] || undefined,
+        line_warehouses,
+        line_warehouse_names: Object.keys(line_warehouse_names).length ? line_warehouse_names : undefined,
+        line_location_ids: Object.keys(line_location_ids).length ? line_location_ids : undefined,
+        line_location_codes: Object.keys(line_location_codes).length ? line_location_codes : undefined,
         push_mode: pushMode,
       });
       resetNotifyPreviewModal();
@@ -1161,10 +1350,9 @@ const ShipmentNoticesPage: React.FC = () => {
   }, [
     executeNotify,
     messageApi,
+    notifyLineWh,
     notifyPreviewData,
     notifyPreviewTarget,
-    notifyPreviewWarehouseId,
-    notifyPreviewWarehouseName,
     resetNotifyPreviewModal,
     t,
   ]);
@@ -2592,6 +2780,7 @@ const ShipmentNoticesPage: React.FC = () => {
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 150 },
                   { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
                   { title: t('common.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right', render: formatQuantity },
+                  buildDocumentLineAuxQuantityDetailColumn({ t, width: 120 }),
                   {
                     title: t(
                       'app.kuaizhizao.salesOrder.unitPrice',
@@ -2665,7 +2854,7 @@ const ShipmentNoticesPage: React.FC = () => {
       <Modal
         title={t('app.kuaizhizao.shipmentNotice.notifyWarehouse')}
         open={notifyPreviewOpen}
-        width={1100}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         onCancel={() => {
           if (notifyPreviewConfirming) return;
           resetNotifyPreviewModal();
@@ -2681,7 +2870,7 @@ const ShipmentNoticesPage: React.FC = () => {
             <Button
               loading={notifyPreviewConfirming}
               disabled={
-                notifyPreviewLoading || !notifyPreviewData || !!notifyPreviewData?.has_blocking_issues
+                notifyPreviewLoading || !notifyPreviewData || !notifyLinesReady || !!notifyPreviewData?.has_blocking_issues
               }
               onClick={() => void handleNotifyPreviewConfirm('draft')}
             >
@@ -2691,7 +2880,7 @@ const ShipmentNoticesPage: React.FC = () => {
               type="primary"
               loading={notifyPreviewConfirming}
               disabled={
-                notifyPreviewLoading || !notifyPreviewData || !!notifyPreviewData?.has_blocking_issues
+                notifyPreviewLoading || !notifyPreviewData || !notifyLinesReady || !!notifyPreviewData?.has_blocking_issues
               }
               onClick={() => void handleNotifyPreviewConfirm('confirm')}
             >
@@ -2732,38 +2921,98 @@ const ShipmentNoticesPage: React.FC = () => {
                 }
               />
             ) : null}
-            {notifyPreviewData.warehouse_required || !notifyPreviewTarget?.warehouse_id ? (
-              <div style={{ marginBottom: 16 }}>
-                <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
-                  {t('app.kuaizhizao.shipmentNotice.notifyWarehouseSelectContent', {
-                    code: notifyPreviewTarget?.notice_code ?? notifyPreviewData.notice_code ?? '',
-                  })}
-                </Typography.Text>
-                <ProForm formRef={notifyPreviewWarehouseFormRef} submitter={false} layout="vertical">
-                  <UniWarehouseSelect
-                    name="warehouse_id"
-                    label={t('app.kuaizhizao.shipmentNotice.outboundWarehouse')}
-                    required
-                    onChange={(val, wh) => handleNotifyPreviewWarehouseChange(Number(val), wh?.name)}
-                  />
-                  <ProFormText name="warehouse_name" hidden />
-                </ProForm>
-              </div>
-            ) : null}
+            <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <Typography.Text type="secondary">
+                {t('app.kuaizhizao.shipmentNotice.notifyLineWarehouseHint')}
+              </Typography.Text>
+              <UniWhDropdown
+                hostResource={SHIPMENT_NOTICE_RESOURCE}
+                value={notifyBatchWarehouseId}
+                allowClear
+                size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                style={{ width: 220 }}
+                placeholder={t('app.kuaizhizao.warehouseOutbound.pull.batchWarehousePlaceholder')}
+                getPopupContainer={getPopupContainerInModal}
+                onChange={(val, wh) => {
+                  if (val == null) {
+                    setNotifyBatchWarehouseId(undefined);
+                    return;
+                  }
+                  const nextId = Number(val);
+                  if (Number.isFinite(nextId) && nextId > 0) {
+                    applyNotifyBatchWarehouse(nextId, wh?.name);
+                  }
+                }}
+              />
+            </div>
             {notifyPreviewData.items?.length > 0 ? (
               <Table
                 size="small"
                 dataSource={notifyPreviewData.items}
                 rowKey={(row) => String(row.item_id)}
                 pagination={false}
-                scroll={{ x: 960 }}
+                scroll={{ x: 1180 }}
                 columns={[
-                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('common.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 140, ellipsis: true },
+                  { title: t('common.quantity'), dataIndex: 'quantity', width: 80, align: 'right', render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colShipQty'), dataIndex: 'notice_quantity', width: 90, align: 'right', render: formatQuantity },
-                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colShippedQty'), dataIndex: 'pushed_quantity', width: 80, align: 'right', render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colShippableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
+                  {
+                    title: t('app.kuaizhizao.warehouseOutbound.col.warehouse'),
+                    key: 'warehouse',
+                    width: 200,
+                    render: (_: unknown, row) => {
+                      const id = Number(row.item_id);
+                      const materialId = Number(row.material_id || 0);
+                      const state = notifyLineWh[id] || {};
+                      return (
+                        <UniWhDropdown
+                          hostResource={SHIPMENT_NOTICE_RESOURCE}
+                          materialId={materialId > 0 ? materialId : undefined}
+                          showStock={materialId > 0}
+                          sortByStock={materialId > 0}
+                          value={state.warehouse_id}
+                          size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                          placeholder={t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse')}
+                          getPopupContainer={getPopupContainerInModal}
+                          onChange={(val, wh) => {
+                            const nextId = Number(val);
+                            if (!(Number.isFinite(nextId) && nextId > 0)) return;
+                            patchNotifyLineWh(id, {
+                              warehouse_id: nextId,
+                              warehouse_name: wh?.name || '',
+                              location_id: undefined,
+                              location_code: undefined,
+                            });
+                          }}
+                        />
+                      );
+                    },
+                  },
+                  {
+                    title: t('app.kuaizhizao.warehouseOutbound.col.location'),
+                    key: 'location',
+                    width: 180,
+                    render: (_: unknown, row) => {
+                      const id = Number(row.item_id);
+                      const materialId = Number(row.material_id || 0);
+                      const state = notifyLineWh[id] || {};
+                      return (
+                        <NotifyPreviewLocationCell
+                          materialId={materialId > 0 ? materialId : undefined}
+                          warehouseId={state.warehouse_id}
+                          locationId={state.location_id}
+                          disabled={notifyPreviewConfirming}
+                          t={t}
+                          onChange={(next) => {
+                            patchNotifyLineWh(id, next);
+                          }}
+                        />
+                      );
+                    },
+                  },
                 ]}
               />
             ) : (
