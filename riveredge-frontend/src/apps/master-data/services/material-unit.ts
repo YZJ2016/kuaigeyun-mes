@@ -13,6 +13,15 @@ import type {
 
 const BASE = '/apps/master-data/materials';
 
+/** 与后端 units / unit-conversions 列表 Query(le=500) 对齐 */
+export const UNIT_LIST_LIMIT_MAX = 500;
+
+function clampUnitListLimit(limit: unknown): number | undefined {
+  const n = typeof limit === 'number' ? limit : typeof limit === 'string' ? Number(limit) : NaN;
+  if (!Number.isFinite(n)) return undefined;
+  return Math.max(1, Math.min(UNIT_LIST_LIMIT_MAX, Math.trunc(n)));
+}
+
 export const materialUnitApi = {
   list: async (params?: {
     skip?: number;
@@ -22,7 +31,10 @@ export const materialUnitApi = {
     sort_by?: string;
     sort_order?: string;
   }): Promise<{ items: MaterialUnit[]; total: number }> => {
-    const res = await api.get<{ items: MaterialUnit[]; total: number }>(`${BASE}/units`, { params });
+    const limit = clampUnitListLimit(params?.limit);
+    const res = await api.get<{ items: MaterialUnit[]; total: number }>(`${BASE}/units`, {
+      params: limit != null ? { ...params, limit } : params,
+    });
     if (Array.isArray(res)) return { items: res, total: res.length };
     return { items: res?.items ?? [], total: res?.total ?? 0 };
   },
@@ -45,9 +57,10 @@ export const materialUnitApi = {
     keyword?: string;
     is_active?: boolean;
   }): Promise<{ items: MaterialUnitConversion[]; total: number }> => {
+    const limit = clampUnitListLimit(params?.limit);
     const res = await api.get<{ items: MaterialUnitConversion[]; total: number }>(
       `${BASE}/unit-conversions`,
-      { params },
+      { params: limit != null ? { ...params, limit } : params },
     );
     if (Array.isArray(res)) return { items: res, total: res.length };
     return { items: res?.items ?? [], total: res?.total ?? 0 };

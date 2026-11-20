@@ -1,4 +1,4 @@
-"""主数据同步绑定（客户 / 供应商 / 仓库 / 物料 / 单位 / 分组）。"""
+"""主数据同步绑定（客户 / 供应商 / 仓库 / 库位 / 物料 / 单位 / 分组）。"""
 
 from tortoise import fields
 
@@ -92,6 +92,68 @@ class WarehouseSyncBinding(BaseModel):
     last_error = fields.TextField(null=True, description="最近一次同步错误")
 
 
+class StorageLocationSyncBinding(BaseModel):
+    """每个租户一条：库位同步来源与字段映射（对齐苍穹 bd_location，可不挂库区）。"""
+
+    id = fields.IntField(pk=True, description="主键")
+
+    class Meta:
+        table = "apps_master_data_storage_location_sync_binding"
+        table_description = "主数据 - 库位同步绑定"
+        indexes = [("tenant_id",)]
+
+    source_type = fields.CharField(max_length=20, null=True, description="来源类型：api | dataset")
+    api_uuid = fields.CharField(max_length=36, null=True, description="数据接口 UUID")
+    dataset_uuid = fields.CharField(max_length=36, null=True, description="数据集 UUID")
+    field_mapping = fields.JSONField(null=True, description="来源列 -> 目标字段")
+    sources = fields.JSONField(null=True, description="多来源：kind + 接口/数据集 + field_mapping")
+    match_key_field = fields.CharField(max_length=64, default="code", description="匹配键目标字段")
+    sync_mode = fields.CharField(
+        max_length=32,
+        default="manual_full",
+        description="manual_full | scheduled_full | scheduled_incremental",
+    )
+    schedule_interval_minutes = fields.IntField(default=15, description="定时同步间隔（分钟）")
+    schedule_window_start = fields.CharField(max_length=5, null=True, description="定时同步允许时段开始 HH:mm")
+    schedule_window_end = fields.CharField(max_length=5, null=True, description="定时同步允许时段结束 HH:mm")
+    last_success_at = fields.DatetimeField(null=True, description="最近一次成功同步时间")
+    last_attempt_at = fields.DatetimeField(null=True, description="最近一次尝试同步时间")
+    last_error = fields.TextField(null=True, description="最近一次同步错误")
+
+
+class WarehouseLocationRefSyncBinding(BaseModel):
+    """每个租户一条：仓库库位关系同步（苍穹 bd_warelocareference → 库位 warehouse_id）。"""
+
+    id = fields.IntField(pk=True, description="主键")
+
+    class Meta:
+        table = "apps_master_data_warehouse_location_ref_sync_binding"
+        table_description = "主数据 - 仓库库位关系同步绑定"
+        indexes = [("tenant_id",)]
+
+    source_type = fields.CharField(max_length=20, null=True, description="来源类型：api | dataset")
+    api_uuid = fields.CharField(max_length=36, null=True, description="数据接口 UUID")
+    dataset_uuid = fields.CharField(max_length=36, null=True, description="数据集 UUID")
+    field_mapping = fields.JSONField(null=True, description="来源列 -> 目标字段")
+    sources = fields.JSONField(null=True, description="多来源：kind + 接口/数据集 + field_mapping")
+    match_key_field = fields.CharField(
+        max_length=64,
+        default="location_code",
+        description="匹配键目标字段（库位编码）",
+    )
+    sync_mode = fields.CharField(
+        max_length=32,
+        default="manual_full",
+        description="manual_full | scheduled_full | scheduled_incremental",
+    )
+    schedule_interval_minutes = fields.IntField(default=15, description="定时同步间隔（分钟）")
+    schedule_window_start = fields.CharField(max_length=5, null=True, description="定时同步允许时段开始 HH:mm")
+    schedule_window_end = fields.CharField(max_length=5, null=True, description="定时同步允许时段结束 HH:mm")
+    last_success_at = fields.DatetimeField(null=True, description="最近一次成功同步时间")
+    last_attempt_at = fields.DatetimeField(null=True, description="最近一次尝试同步时间")
+    last_error = fields.TextField(null=True, description="最近一次同步错误")
+
+
 class MaterialSyncBinding(BaseModel):
     """每个租户一条：物料同步来源与字段映射。"""
 
@@ -108,6 +170,72 @@ class MaterialSyncBinding(BaseModel):
     field_mapping = fields.JSONField(null=True, description="来源列 -> 目标字段")
     sources = fields.JSONField(null=True, description="多来源：kind + 接口/数据集 + field_mapping")
     match_key_field = fields.CharField(max_length=64, default="main_code", description="匹配键目标字段")
+    sync_mode = fields.CharField(
+        max_length=32,
+        default="manual_full",
+        description="manual_full | scheduled_full | scheduled_incremental",
+    )
+    schedule_interval_minutes = fields.IntField(default=15, description="定时同步间隔（分钟）")
+    schedule_window_start = fields.CharField(max_length=5, null=True, description="定时同步允许时段开始 HH:mm")
+    schedule_window_end = fields.CharField(max_length=5, null=True, description="定时同步允许时段结束 HH:mm")
+    last_success_at = fields.DatetimeField(null=True, description="最近一次成功同步时间")
+    last_attempt_at = fields.DatetimeField(null=True, description="最近一次尝试同步时间")
+    last_error = fields.TextField(null=True, description="最近一次同步错误")
+
+
+class MaterialMultiUnitSyncBinding(BaseModel):
+    """每个租户一条：物料辅单位（多计量单位）同步来源与字段映射。"""
+
+    id = fields.IntField(pk=True, description="主键")
+
+    class Meta:
+        table = "apps_master_data_material_multi_unit_sync_binding"
+        table_description = "主数据 - 物料多单位同步绑定"
+        indexes = [("tenant_id",)]
+
+    source_type = fields.CharField(max_length=20, null=True, description="来源类型：api | dataset")
+    api_uuid = fields.CharField(max_length=36, null=True, description="数据接口 UUID")
+    dataset_uuid = fields.CharField(max_length=36, null=True, description="数据集 UUID")
+    field_mapping = fields.JSONField(null=True, description="来源列 -> 目标字段")
+    sources = fields.JSONField(null=True, description="多来源：kind + 接口/数据集 + field_mapping")
+    match_key_field = fields.CharField(
+        max_length=64,
+        default="material_code",
+        description="匹配键目标字段（物料编码）",
+    )
+    sync_mode = fields.CharField(
+        max_length=32,
+        default="manual_full",
+        description="manual_full | scheduled_full | scheduled_incremental",
+    )
+    schedule_interval_minutes = fields.IntField(default=15, description="定时同步间隔（分钟）")
+    schedule_window_start = fields.CharField(max_length=5, null=True, description="定时同步允许时段开始 HH:mm")
+    schedule_window_end = fields.CharField(max_length=5, null=True, description="定时同步允许时段结束 HH:mm")
+    last_success_at = fields.DatetimeField(null=True, description="最近一次成功同步时间")
+    last_attempt_at = fields.DatetimeField(null=True, description="最近一次尝试同步时间")
+    last_error = fields.TextField(null=True, description="最近一次同步错误")
+
+
+class MaterialBatchManageSyncBinding(BaseModel):
+    """每个租户一条：物料批号管理开关同步（金蝶物料库存信息 enablelot）。"""
+
+    id = fields.IntField(pk=True, description="主键")
+
+    class Meta:
+        table = "apps_master_data_material_batch_manage_sync_binding"
+        table_description = "主数据 - 物料批号管理同步绑定"
+        indexes = [("tenant_id",)]
+
+    source_type = fields.CharField(max_length=20, null=True, description="来源类型：api | dataset")
+    api_uuid = fields.CharField(max_length=36, null=True, description="数据接口 UUID")
+    dataset_uuid = fields.CharField(max_length=36, null=True, description="数据集 UUID")
+    field_mapping = fields.JSONField(null=True, description="来源列 -> 目标字段")
+    sources = fields.JSONField(null=True, description="多来源：kind + 接口/数据集 + field_mapping")
+    match_key_field = fields.CharField(
+        max_length=64,
+        default="material_code",
+        description="匹配键目标字段（物料编码）",
+    )
     sync_mode = fields.CharField(
         max_length=32,
         default="manual_full",

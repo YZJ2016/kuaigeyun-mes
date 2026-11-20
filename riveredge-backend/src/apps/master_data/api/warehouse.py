@@ -759,3 +759,105 @@ async def get_warehouse_tree(
     """
     return await WarehouseService.get_warehouse_tree(tenant_id, is_active)
 
+
+
+warehouse_location_ref_sync_service = None
+
+
+def _warehouse_location_ref_sync_service():
+    global warehouse_location_ref_sync_service
+    if warehouse_location_ref_sync_service is None:
+        from apps.master_data.services.warehouse_location_ref_sync_service import (
+            WarehouseLocationRefSyncService,
+        )
+        warehouse_location_ref_sync_service = WarehouseLocationRefSyncService()
+    return warehouse_location_ref_sync_service
+
+
+@router.get(
+    "/warehouses/location-ref/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="仓库库位关系同步绑定配置",
+    dependencies=[Depends(require_master_data_module_access("warehouse"))],
+)
+async def get_warehouse_location_ref_sync_binding(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    return await _warehouse_location_ref_sync_service().get_binding(tenant_id)
+
+
+@router.put(
+    "/warehouses/location-ref/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="保存仓库库位关系同步绑定配置",
+    dependencies=[Depends(require_master_data_module_access("warehouse"))],
+)
+async def put_warehouse_location_ref_sync_binding(
+    body: MasterDataSyncBindingUpsert,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        return await _warehouse_location_ref_sync_service().upsert_binding(tenant_id, body)
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.get(
+    "/warehouses/location-ref/sync-run-history",
+    summary="仓库库位关系入站同步运行历史（core_sync_run_logs）",
+    dependencies=[Depends(require_master_data_module_access("warehouse"))],
+)
+async def list_warehouse_location_ref_sync_run_history(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+):
+    from apps.kuaizhizao.api.document_push.document_push import (
+        DocumentPushRunHistoryItem,
+        DocumentPushRunHistoryListResponse,
+    )
+    from core.services.data.sync_run_history_service import (
+        list_inbound_entity_sync_run_history_rows,
+    )
+
+    rows, total = await list_inbound_entity_sync_run_history_rows(
+        tenant_id, "warehouse_location_ref", skip=skip, limit=limit
+    )
+    return DocumentPushRunHistoryListResponse(
+        data=[DocumentPushRunHistoryItem.model_validate(row) for row in rows],
+        total=total,
+        success=True,
+    )
+
+
+@router.post(
+    "/warehouses/location-ref/sync-from-source",
+    response_model=MasterDataSyncFromSourceOut,
+    summary="从数据接口或数据集同步仓库库位关系（写入库位所属仓库）",
+    dependencies=[Depends(require_master_data_module_access("warehouse"))],
+)
+async def sync_warehouse_location_refs_from_source(
+    body: MasterDataSyncFromSourceRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    stream: bool = Query(False, description="为 true 时以 NDJSON 流式返回进度"),
+):
+    from apps.master_data.api._sync_from_source_run_log import (
+        master_data_sync_from_source_with_run_log,
+    )
+    from apps.master_data.models.master_data_sync_binding import (
+        WarehouseLocationRefSyncBinding,
+    )
+
+    try:
+        return await master_data_sync_from_source_with_run_log(
+            tenant_id=tenant_id,
+            entity_type="warehouse_location_ref",
+            binding_model=WarehouseLocationRefSyncBinding,
+            stream=stream,
+            run_sync=lambda: _warehouse_location_ref_sync_service().sync_from_source(
+                tenant_id, current_user, body
+            ),
+        )
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))

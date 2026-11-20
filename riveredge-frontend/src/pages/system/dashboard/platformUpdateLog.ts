@@ -44,6 +44,20 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'master-data-inbound-sync-domains-r01',
+    date: '2026-11-20',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.master-data-inbound-sync-domains-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.master-data-inbound-sync-domains-r01.description',
+  },
+  {
+    id: 'work-group-performance-weight-r01',
+    date: '2026-11-20',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.work-group-performance-weight-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.work-group-performance-weight-r01.description',
+  },
+  {
     id: 'menu-morph-icon-dependencies-r01',
     date: '2026-11-19',
     type: 'fix',

@@ -300,6 +300,8 @@ export function resolveMasterCrudListParams(
   sort?: Record<string, unknown>,
   options?: {
     activeField?: string;
+    defaultSortField?: string;
+    defaultSortOrder?: 'asc' | 'desc';
     extra?: (search: Record<string, unknown>) => Record<string, string | number | boolean | undefined>;
   },
 ): Record<string, string | number | boolean | undefined> {
@@ -314,7 +316,11 @@ export function resolveMasterCrudListParams(
     'updated_at_range',
     'updatedAtRange',
   ]);
-  const { sort_field, sort_order } = resolveMasterCrudSort(sort);
+  let { sort_field, sort_order } = resolveMasterCrudSort(sort);
+  if (!sort_field && options?.defaultSortField) {
+    sort_field = options.defaultSortField;
+    sort_order = options.defaultSortOrder ?? 'asc';
+  }
 
   const is_active = pickSearchTriStateBoolean(searchFormValues, activeField);
 

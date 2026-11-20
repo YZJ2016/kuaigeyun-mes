@@ -30278,8 +30278,10 @@ export default {
   'field.workGroup.memberEmployeeRequired': '请选择员工',
   'field.workGroup.performanceWeight': '绩效权重',
   'field.workGroup.performanceWeightPlaceholder': '请输入权重（如 0.4 表示 40%）',
+  'field.workGroup.performanceWeightRequired': '请输入绩效权重',
   'field.workGroup.performanceWeightHint':
     '绩效权重合计上限为 {{limit}}；添加或删除成员时自动平均分配；手动调整某人权重后，其余成员自动均分剩余额度；单人与合计均不得超过上限。',
+  'field.workGroup.performanceWeightNegative': '绩效权重不能为负数',
   'field.workGroup.performanceWeightOverLimit': '单人绩效权重不得超过 {{limit}}',
   'field.workGroup.performanceWeightSumExceeded':
     '成员绩效权重合计为 {{sum}}，不得超过上限 {{limit}}',
@@ -48615,6 +48617,14 @@ export default {
   'field.user.resetPasswordSuccessSimple': '密码已重置为默认密码 {{password}}',
   'pages.dashboard.updateLog.entries.purchase-requisition-po-pull-qty-r01.title':
     '采购申请转采购订单取单数量对齐',
+  'pages.dashboard.updateLog.entries.master-data-inbound-sync-domains-r01.title':
+    '主数据新增多单位、批号管理与库位关系同步',
+  'pages.dashboard.updateLog.entries.master-data-inbound-sync-domains-r01.description':
+    '物料管理支持从数据接口或数据集同步辅单位换算与批号管理开关；仓库列表新增库位关系同步，可按字段映射写入库位所属仓库。',
+  'pages.dashboard.updateLog.entries.work-group-performance-weight-r01.title':
+    '工作小组成员支持绩效权重',
+  'pages.dashboard.updateLog.entries.work-group-performance-weight-r01.description':
+    '工作小组成员可配置绩效权重，合计受限自动均分，用于绩效统计按比例分摊。',
   'pages.dashboard.updateLog.entries.menu-morph-icon-dependencies-r01.title':
     '修复侧栏动态图标依赖缺失',
   'pages.dashboard.updateLog.entries.menu-morph-icon-dependencies-r01.description':

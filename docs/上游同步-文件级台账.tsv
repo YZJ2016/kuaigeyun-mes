@@ -1108,14 +1108,14 @@ riveredge-backend/src/apps/master_data/api/_sync_from_source_run_log.py	135fb775
 riveredge-backend/src/apps/master_data/api/drawing_distributions.py	93d717bb3fb15b88e3ede25b7fe477818914ae6d	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/master_data/api/drawing_loans.py	582a7c34d95b9fc50dd223dbb2e47196622c9687	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/master_data/api/management.py	1cfe2c4f47d3c8a8d17109e26a578ab4467b37cd	tracked	seed from 5f085a19c9
-riveredge-backend/src/apps/master_data/api/material.py	1afde47eec24337d643cc96ed056c1ae804fca50	tracked	seed from 2c945a39fb
+riveredge-backend/src/apps/master_data/api/material.py	1afde47eec24337d643cc96ed056c1ae804fca50	applied	R2簇4 master-data:适配本地(禁kuaiconnect薄代理/inbound_sync_gate)
 riveredge-backend/src/apps/master_data/api/partner_price_book.py	8d47321d6d86b850f6235d79e18d679d63216ddc	tracked	seed from 154977d948
 riveredge-backend/src/apps/master_data/api/process.py	7b9f1184236b8b3d33f8fd6cabea6b0be43fe6c3	tracked	seed from a0b353ce7e
 riveredge-backend/src/apps/master_data/api/router.py	470bac8b547409c55db858622e61ec12d01c4e28	tracked	seed from a0b353ce7e
 riveredge-backend/src/apps/master_data/api/supply_chain.py	853f6973fc20277d5ef0dde7d5c9fc6bdccf2427	tracked	seed from a0b353ce7e
 riveredge-backend/src/apps/master_data/api/sync_run_history.py	35a9508eeeb5f33be462139c58ef5a46a5942894	tracked	seed from a0b353ce7e
 riveredge-backend/src/apps/master_data/api/units.py	ae69dc0b62daa5c7d2ef926a6587317ae6989ff7	tracked	seed from a0b353ce7e
-riveredge-backend/src/apps/master_data/api/warehouse.py	a22a97e54d9df900a6f7b4b7a9ffe137877fa239	tracked	seed from 905787348a
+riveredge-backend/src/apps/master_data/api/warehouse.py	a22a97e54d9df900a6f7b4b7a9ffe137877fa239	applied	R2簇4 master-data:适配本地(禁kuaiconnect薄代理/inbound_sync_gate)
 riveredge-backend/src/apps/master_data/config/partner_address_type_codes.py	a9eb748576fc954b0988115bca44fd27074f6ecb	tracked	seed from 37409d3b29
 riveredge-backend/src/apps/master_data/config/partner_settlement_codes.py	935aa0c127006921fd1053cfcb55a65d43fd7f2a	tracked	seed from 154977d948
 riveredge-backend/src/apps/master_data/constants/material_conversion_type.py	ae8f9a8313edf1dd078dd3d6c752633a43a3bea4	tracked	seed from b12cc66e71
@@ -1124,7 +1124,7 @@ riveredge-backend/src/apps/master_data/constants/warehouse_type.py	22245abd66197
 riveredge-backend/src/apps/master_data/manifest.json	a84a5192f4e6d6d3e2322f61c57d0c31e87e791c	tracked	seed from 5f085a19c9
 riveredge-backend/src/apps/master_data/models/__init__.py	ece7ea0543f941c07784baf9bd7255b22e360381	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/master_data/models/customer.py	7e0dbaa8b8af3241589d2508675faf5df44fa7de	tracked	seed from 37409d3b29
-riveredge-backend/src/apps/master_data/models/master_data_sync_binding.py	0630f06db39e89aded4ab0d0bfb9f786812b2a82	applied	f40f54e336调度窗+价税簇
+riveredge-backend/src/apps/master_data/models/master_data_sync_binding.py	0630f06db39e89aded4ab0d0bfb9f786812b2a82	applied	R2簇4 master-data:摘取上游tip实现
 riveredge-backend/src/apps/master_data/models/material.py	ea1fbf7f002134fcfe1b2b6dead852eb3653caef	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/master_data/models/material_batch.py	d5ac33cb82ca4fa2fbe223ec894b3d7e02871730	tracked	seed from 57a37e2749
 riveredge-backend/src/apps/master_data/models/material_code_alias.py	3a148a18adaf4f394b421b8be6d913026f8ccb42	applied	13be286f11联调修复簇
@@ -1152,7 +1152,7 @@ riveredge-backend/src/apps/master_data/services/material_defaults_pricing.py	17b
 riveredge-backend/src/apps/master_data/services/material_field_mask_service.py	e7336202b970fb5eb54d108e72474756071f3206	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/master_data/services/material_group_sync_service.py	59273dedeec546f80e105ce376b2f2124a32ef86	tracked	seed from d025413d18
 riveredge-backend/src/apps/master_data/services/material_product_process_service.py	15fbc6f6b20f0611b63f160baf95ba3c71082234	tracked	seed from 93b3cb5998
-riveredge-backend/src/apps/master_data/services/material_service.py	d28bfcb4cbd236c00b69507dc8a80fdfe35bf1e7	applied	13be286f11联调修复簇
+riveredge-backend/src/apps/master_data/services/material_service.py	d28bfcb4cbd236c00b69507dc8a80fdfe35bf1e7	applied	R2簇4 master-data:适配本地(禁kuaiconnect薄代理/inbound_sync_gate)
 riveredge-backend/src/apps/master_data/services/material_sync_service.py	069b3a60e190b38464e1fd57295b745d5e95a7da	applied	manual_force skip bypass only
 riveredge-backend/src/apps/master_data/services/operation_sync_service.py	e0380ffef7bfcbd60b85b47b5c5a19979815f3de	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-backend/src/apps/master_data/services/partner_material_price_defaults.py	9f7f7af799d712d80e4eedf1fe1be6cc793eb9d3	applied	13be286f11联调修复簇
@@ -1263,7 +1263,7 @@ riveredge-backend/src/core/services/data/data_dictionary_service.py	dc894ba4a072
 riveredge-backend/src/core/services/data/external_sync_scheduler.py	9443d568e283e8a15c7c7a1bdc6bc05a7ffe1f7f	applied	f40f54e336调度窗+价税簇
 riveredge-backend/src/core/services/data/sync_binding_sources.py	3f6cc1e0df5e0cb440432ed6e356197587222c02	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-backend/src/core/services/data/sync_from_source_fetch.py	0bce23fd10de3de32e2291c7f0d37cc11b0c58a6	tracked	seed from d025413d18
-riveredge-backend/src/core/services/data/sync_run_history_service.py	064d37971805578cae8cb8994f2bfa5068319afd	tracked	seed from 905787348a
+riveredge-backend/src/core/services/data/sync_run_history_service.py	064d37971805578cae8cb8994f2bfa5068319afd	applied	R2簇4 master-data:摘取上游tip实现
 riveredge-backend/src/core/services/data/sync_source_rows.py	64e859e10262a3926590cff4fd0a45712e3e3bd0	tracked	seed from 7fa73e053a
 riveredge-backend/src/core/services/data/sync_trigger_kind.py	430fa827813e3ad2517363d33d3d5baaafc35564	applied	D依赖簇续:支撑件+前端
 riveredge-backend/src/core/services/default/default_values_service.py	e0801958834a5d04b9bdf7d3d4be455af6256da1	tracked	seed from e16f2f2939
@@ -2035,7 +2035,7 @@ riveredge-frontend/src/apps/master-data/materialSyncConfig.ts	7adb4f4c199bf10eb3
 riveredge-frontend/src/apps/master-data/operationSyncConfig.ts	01819195ba96ab1d643c5a2799dffedb0de5a6f5	tracked	seed from a0b353ce7e
 riveredge-frontend/src/apps/master-data/pages/materials/bom/designer.tsx	abd1bc253f07ff7a7895c8e967845d1cd8a71e6a	tracked	seed from df7d635797
 riveredge-frontend/src/apps/master-data/pages/materials/bom/index.tsx	b78e7737b581016331686d83354147a20b01c294	tracked	seed from 905787348a
-riveredge-frontend/src/apps/master-data/pages/materials/management.tsx	3362efb2240af30f3691cf83dd7e0373a3190ca7	applied	959f65b743 header totals + 1pct tax option
+riveredge-frontend/src/apps/master-data/pages/materials/management.tsx	3362efb2240af30f3691cf83dd7e0373a3190ca7	applied	R2簇4 master-data:适配本地(禁kuaiconnect薄代理/inbound_sync_gate)
 riveredge-frontend/src/apps/master-data/pages/materials/materialSyncFields.ts	dab3e0353588d7fccab4991a7428fedf335ff554	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-frontend/src/apps/master-data/pages/process/drawings/DrawingIntegratedPanels.tsx	33afd2a078e3e3c09561ce3a6c5fe747199822b1	tracked	seed from b12cc66e71
 riveredge-frontend/src/apps/master-data/pages/process/drawings/index.tsx	86560f95bb84d9bb401721fee93581e908a58680	tracked	seed from 31efc2b64c
@@ -2052,7 +2052,7 @@ riveredge-frontend/src/apps/master-data/pages/supply-chain/suppliers/index.tsx	5
 riveredge-frontend/src/apps/master-data/pages/supply-chain/suppliers/supplierSyncFields.ts	e403975a60570ff516480b6ae32875922838ffa0	tracked	seed from b12cc66e71
 riveredge-frontend/src/apps/master-data/pages/warehouse/storage-locations/index.tsx	46b882de6ca9ef3286bac09018d6b40628461af7	tracked	seed from 57a37e2749
 riveredge-frontend/src/apps/master-data/pages/warehouse/storage-locations/storageLocationSyncFields.ts	93ec479c0a7d5ea057585036976db8aa775e1584	tracked	seed from 57a37e2749
-riveredge-frontend/src/apps/master-data/pages/warehouse/warehouses/index.tsx	77a666112bd3c17256d2b5526439ff81e2e9004d	tracked	seed from b12cc66e71
+riveredge-frontend/src/apps/master-data/pages/warehouse/warehouses/index.tsx	77a666112bd3c17256d2b5526439ff81e2e9004d	applied	R2簇4 master-data:适配本地(禁kuaiconnect薄代理/inbound_sync_gate)
 riveredge-frontend/src/apps/master-data/routePrefetch.ts	3d889b183ec74dbf1d6a3a0d8e88ce3bf4b0043a	tracked	seed from 93b3cb5998
 riveredge-frontend/src/apps/master-data/schemas/customer.ts	e5db57288c5090926a8f3cd639b373ae51104448	tracked	seed from b12cc66e71
 riveredge-frontend/src/apps/master-data/schemas/partner-form-shared.ts	59608e7acdf5768f6ec133fb35c8d9740eba6cc9	tracked	seed from 37409d3b29
@@ -2061,11 +2061,11 @@ riveredge-frontend/src/apps/master-data/schemas/supplier.ts	7d3e94681a506351df1a
 riveredge-frontend/src/apps/master-data/schemas/warehouse.ts	8cc3a96ee26c4e270fdfb39be715d081dae90b6d	tracked	seed from b12cc66e71
 riveredge-frontend/src/apps/master-data/services/drawingDistribution.ts	8db3a6d3af32780d37807e5eca8cb9d6d29b3893	tracked	seed from b12cc66e71
 riveredge-frontend/src/apps/master-data/services/drawingLoan.ts	9519296e46fd2411f08654db5b54dfac4800536a	tracked	seed from b12cc66e71
-riveredge-frontend/src/apps/master-data/services/material.ts	8b98fa8d43c5dd4da95e64bcd93fa71e5ea2f93f	tracked	seed from 7fa73e053a
+riveredge-frontend/src/apps/master-data/services/material.ts	8b98fa8d43c5dd4da95e64bcd93fa71e5ea2f93f	applied	R2簇4 master-data:摘取上游tip实现
 riveredge-frontend/src/apps/master-data/services/partner-price-book.ts	d9df9839333fe77b83061b1fb414c2ad27cbe98d	tracked	seed from 37409d3b29
 riveredge-frontend/src/apps/master-data/services/productProcess.ts	97760e9d970c9df3c738ee5f30ca489d3c982416	tracked	seed from 93b3cb5998
 riveredge-frontend/src/apps/master-data/services/supply-chain.ts	b8eda38a4145058ac23147626b8d45495bcd693c	tracked	seed from d025413d18
-riveredge-frontend/src/apps/master-data/services/warehouse.ts	17271d16ede4f449424792baf940339eedb2edeb	tracked	seed from 905787348a
+riveredge-frontend/src/apps/master-data/services/warehouse.ts	17271d16ede4f449424792baf940339eedb2edeb	applied	R2簇4 master-data:摘取上游tip实现
 riveredge-frontend/src/apps/master-data/storageLocationSyncConfig.ts	99437e8546af185bd6595e8f73ec387948c3f22a	tracked	seed from 57a37e2749
 riveredge-frontend/src/apps/master-data/supplierSyncConfig.ts	8a03819891b0600ad9902a3cbb8cf47ab06e877b	tracked	seed from a0b353ce7e
 riveredge-frontend/src/apps/master-data/types/material.ts	dfae300fe5c5280b526de340e4cc028379e2e67a	tracked	seed from 93b3cb5998
@@ -2408,3 +2408,39 @@ riveredge-frontend/src/utils/userDisplay.ts	c1d47fe81a50b56e83935c93affbc07c45aa
 riveredge-frontend/src/vite-env.d.ts	6232bdf5f89c14048bf36fd63651a1b16c4bcb76	tracked	seed from ddd31709d6
 riveredge-frontend/vite.config.ts	c24e43bf04ac91b9caddd6ad2c23ad1e1d93e94c	tracked	seed from 905787348a
 test-report/purchase.md	DELETED	tracked	seed from 31efc2b64c
+riveredge-backend/src/apps/master_data/schemas/work_group_schemas.py	e97446fc3dbc99016afe142b051c53e9eb46d9f6	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-backend/src/apps/master_data/services/master_data_list_core.py	9fc3f397734ea2b9046d10b429f08ffecfb15eaa	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-backend/src/apps/master_data/services/material_batch_service.py	1147ed5a3716850e21f2e315ec2e355c68442ea9	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-backend/src/apps/master_data/services/performance_service.py	e3781ff232fb198e4b50c3f5c383676dd95b606d	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-backend/src/apps/master_data/services/sync_association_service.py	5d7c341d44fd9c31967de8b90ccb2fa647649777	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-backend/src/apps/master_data/utils/material_inventory_unit_validation.py	6e7c2fd7e16a007c9041479734bb15bed659858c	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-backend/tests/apps/master_data/services/test_canonicalize_business_unit_name.py	43a169dfe0b947ffa72d3d601a24297e67e57d22	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-frontend/src/apps/master-data/components/MaterialDedupAssistant.tsx	75e1a2f986db532daa8a967507a44389b5fb9659	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-frontend/src/apps/master-data/components/StorageLocationFormModal.tsx	8bf2cecf90b616c7344f2062af5715d5d75082e0	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-frontend/src/apps/master-data/components/WorkGroupFormModal.tsx	5af2fcb4ad986e402a054342818c90843b2ca60b	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-frontend/src/apps/master-data/components/MaterialBatchManageSyncFromSourceModal.tsx	f34172da0b874eaccb97f36c261d20fb27eac9fd	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-frontend/src/apps/master-data/components/MaterialMultiUnitSyncFromSourceModal.tsx	bdc7cf3058d468073672e1d3f2f3d948a97861bc	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-frontend/src/apps/master-data/components/WarehouseLocationRefSyncFromSourceModal.tsx	135a7bfc93e1840ffbc2a1c13c553f31dd3c70f0	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-frontend/src/apps/master-data/hooks/useMaterialUnitOptions.ts	c7d891facdbcf0c05acca3fa0a228bbec13e47b5	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-frontend/src/apps/master-data/materialBatchManageSyncConfig.ts	d646a4b1b16bd0ce11a93a997fc0432270b769f9	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-frontend/src/apps/master-data/materialMultiUnitSyncConfig.ts	b01e0b31bccf470a1cf9df38e7c1f3d9d53845f8	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-frontend/src/apps/master-data/warehouseLocationRefSyncConfig.ts	712de8da67f3820afb68c3c9973d8cb4e88022f7	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-frontend/src/apps/master-data/pages/materials/materialBatchManageSyncFields.ts	53e65a3135d7f209fd80e31672fa0114ad3ceebb	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-frontend/src/apps/master-data/pages/materials/materialMultiUnitSyncFields.ts	db7b300d8a6e76baeaa4b46e2748b78287aa03eb	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-frontend/src/apps/master-data/pages/warehouse/warehouses/warehouseLocationRefSyncFields.ts	9445855bc5c180ef98b6546b658a77e93cd986dd	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-frontend/src/apps/master-data/pages/materials/units/index.tsx	1faf6c08bc3c555e5975a4b0b83b5fb27ac25b80	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-frontend/src/apps/master-data/schemas/operation.ts	783fd39f84b3c2038d225fbd920a93d32d2da4fe	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-frontend/src/apps/master-data/schemas/route.ts	9a4035dc899c9dea72d6ab5ee72bab176126d3cb	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-frontend/src/apps/master-data/services/material-unit.ts	ad6e08e4aab35a0ae47bfa681a6e571149e2f59c	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-frontend/src/apps/master-data/utils/masterListCore.ts	3820cf1d9479ab26d8f4f10669cc440a7c65c721	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-frontend/src/apps/master-data/utils/workGroupPerformanceWeight.ts	c5ae40adc691c01bad23bfe2f2ab8b0ac64de978	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-backend/src/apps/master_data/services/material_multi_unit_sync_service.py	fb7a2ddb8c92d26fb14e8293fad8dcd57e05064c	applied	R2簇4 master-data:适配本地(禁kuaiconnect薄代理/inbound_sync_gate);impl移植自kuaiconnect/inbound_sync
+riveredge-backend/src/apps/master_data/services/material_batch_manage_sync_service.py	1dbc80784f5e0f4ecae470e026895da2bc55720b	applied	R2簇4 master-data:适配本地(禁kuaiconnect薄代理/inbound_sync_gate);impl移植自kuaiconnect/inbound_sync
+riveredge-backend/src/apps/master_data/services/warehouse_location_ref_sync_service.py	4b7da40ea045b93d8d914db52fc282be39f52ee1	applied	R2簇4 master-data:适配本地(禁kuaiconnect薄代理/inbound_sync_gate);impl移植自kuaiconnect/inbound_sync
+riveredge-frontend/src/apps/master-data/pages/process/sop/execution.tsx	4dadad8dd3b23a5c80b45fde8b619a31c6295567	superset	R2簇4:本地实现超前上游(antd6 title=已先行)
+riveredge-backend/src/apps/master_data/scripts/__init__.py	DELETED	superset	R2簇4:本地文件,上游tip无此路径,保留
+riveredge-backend/src/apps/master_data/scripts/activate_all_customers_suppliers.py	DELETED	superset	R2簇4:本地文件,上游tip无此路径,保留
+.cursor/memory/features/sync-push-hub-master-data.md	DELETED	superset	R2簇4:本地文件,上游tip无此路径,保留
+.cursor/rules/master-data-detail-drawer-contract.mdc	DELETED	superset	R2簇4:本地文件,上游tip无此路径,保留
+docs/apps/master-data/drawings.md	DELETED	superset	R2簇4:本地文件,上游tip无此路径,保留
+docs/apps/master-data/sop.md	DELETED	superset	R2簇4:本地文件,上游tip无此路径,保留

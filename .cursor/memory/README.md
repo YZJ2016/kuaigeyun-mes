@@ -42,6 +42,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 架构、调用链、D/E 边界、PC/Mobile/Station | `principles/mes-vault-index.md` → Vault `architecture-map.md` |
 | 即时库存同步、batch_no 非空、无批号 | `features/inventory-sync-empty-batch-no.md` |
 | 同步/推送 Hub、外推、DocumentPush、preferIds、`:sync` / `:push` | `features/sync-push-hub-master-data.md` |
+| 多单位/批号管理/库位关系同步、其他同步下拉、location-ref | `features/master-data-inbound-sync-domains.md` |
 | SyncFromSource、多源映射、只补缺字段、match_key 合并 | `features/sync-from-source-multi-source-merge.md` |
 | 通知仓库 504、服务器暂时不可用、NestedTransaction 死锁 | `features/notify-warehouse-nested-tx-deadlock.md` |
 | BOM 外领料、allow_non_bom_production_issue、工单取单加料 | `features/non-bom-production-picking.md` |
@@ -242,6 +243,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/sync-material-group-empty-pull.md` | 物料分组空拉与 FormId/createorg | sync-from-source | 已交付 |
 | `features/sync-from-source-nested-detail-expand.md` | 入站同步：嵌套明细统一摊平 | sync-from-source | 已交付 |
 | `features/sync-bom-line-key-derived.md` | BOM 匹配键 line_key 由父件+子件派生 | sync-from-source | 已交付 |
+| `features/master-data-inbound-sync-domains.md` | 主数据入站同步三域（多单位/批号/库位关系） | sync-from-source | 已交付 |
 | `features/sync-from-source-cosmic-incremental.md` | 入站同步：苍穹增量水位 + 无变更跳过 | sync-from-source | 已交付 |
 | `features/cosmic-warehouse-createorg.md` | 苍穹仓库列表自动带 createorg_number | sync-from-source | 已交付 |
 | `features/list-api-import-limit.md` | 单据导入物料列表分页不超过 2000 | master-data-ui | 已交付 |

@@ -95,6 +95,7 @@ export const operationFormSchema: FieldConfig[] = [
     placeholderKey: 'field.operation.overReportValuePlaceholder',
     colSpan: 12,
     fieldProps: { min: 0, precision: 4, style: { width: '100%' } },
+    percentModeField: 'overReportMode',
     extraKey: 'field.operation.overReportValueExtra',
     extraAsTooltip: true,
   },

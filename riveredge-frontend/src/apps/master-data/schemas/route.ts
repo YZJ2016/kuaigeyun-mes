@@ -50,6 +50,7 @@ export const routeFormSchema: FieldConfig[] = [
     placeholderKey: 'field.operation.overReportValuePlaceholder',
     colSpan: 8,
     fieldProps: { min: 0, precision: 4, style: { width: '100%' } },
+    percentModeField: 'overReportMode',
     extraKey: 'field.route.overReportValueExtra',
     extraAsTooltip: true,
   },

@@ -270,23 +270,112 @@ export async function listWarehouseSyncRunHistory(params: {
   );
 }
 
-export async function syncWarehousesFromSource(payload: {
-  source_type?: 'api' | 'dataset';
-  api_uuid?: string;
-  dataset_uuid?: string;
-  field_mapping?: Record<string, string>;
-  save_binding?: boolean;
-  sync_mode?: string;
-  schedule_interval_minutes?: number;
-  incremental?: boolean;
-  active_only?: boolean;
-}): Promise<WarehouseSyncFromSourceResult> {
-  return apiRequest<WarehouseSyncFromSourceResult>(
+export async function syncWarehousesFromSource(
+  payload: {
+    source_type?: 'api' | 'dataset';
+    api_uuid?: string;
+    dataset_uuid?: string;
+    field_mapping?: Record<string, string>;
+    save_binding?: boolean;
+    sync_mode?: string;
+    schedule_interval_minutes?: number;
+    incremental?: boolean;
+    active_only?: boolean;
+  },
+  onProgress?: (message: string) => void,
+): Promise<WarehouseSyncFromSourceResult> {
+  const { apiRequestSyncNdjson } = await import(
+    '../../../components/sync-from-source-modal/apiRequestSyncNdjson'
+  );
+  return apiRequestSyncNdjson<WarehouseSyncFromSourceResult>(
     '/apps/master-data/warehouse/warehouses/sync-from-source',
     {
-      method: 'POST',
       data: payload,
       timeoutMs: 600_000,
+      onProgress,
+    },
+  );
+}
+
+export type StorageLocationSyncBinding = WarehouseSyncBinding;
+export type StorageLocationSyncFromSourceResult = WarehouseSyncFromSourceResult;
+
+export async function getStorageLocationSyncBinding(): Promise<StorageLocationSyncBinding> {
+  return api.get('/apps/master-data/warehouse/storage-locations/sync-binding');
+}
+
+export async function syncStorageLocationsFromSource(
+  payload: {
+    source_type?: 'api' | 'dataset';
+    api_uuid?: string;
+    dataset_uuid?: string;
+    field_mapping?: Record<string, string>;
+    save_binding?: boolean;
+    sync_mode?: string;
+    schedule_interval_minutes?: number;
+    incremental?: boolean;
+    active_only?: boolean;
+  },
+  onProgress?: (message: string) => void,
+): Promise<StorageLocationSyncFromSourceResult> {
+  const { apiRequestSyncNdjson } = await import(
+    '../../../components/sync-from-source-modal/apiRequestSyncNdjson'
+  );
+  return apiRequestSyncNdjson<StorageLocationSyncFromSourceResult>(
+    '/apps/master-data/warehouse/storage-locations/sync-from-source',
+    {
+      data: payload,
+      timeoutMs: 600_000,
+      onProgress,
+    },
+  );
+}
+
+export type WarehouseLocationRefSyncBinding = WarehouseSyncBinding;
+export type WarehouseLocationRefSyncFromSourceResult = WarehouseSyncFromSourceResult;
+
+export async function getWarehouseLocationRefSyncBinding(): Promise<WarehouseLocationRefSyncBinding> {
+  return api.get('/apps/master-data/warehouse/warehouses/location-ref/sync-binding');
+}
+
+export async function listWarehouseLocationRefSyncRunHistory(params: {
+  skip?: number;
+  limit?: number;
+}): Promise<DocumentPushRunHistoryListResponse> {
+  return apiRequest(
+    '/apps/master-data/warehouse/warehouses/location-ref/sync-run-history',
+    {
+      params: {
+        skip: params.skip ?? 0,
+        limit: params.limit ?? 20,
+      },
+    },
+  );
+}
+
+export async function syncWarehouseLocationRefsFromSource(
+  payload: {
+    source_type?: 'api' | 'dataset';
+    api_uuid?: string;
+    dataset_uuid?: string;
+    field_mapping?: Record<string, string>;
+    save_binding?: boolean;
+    sync_mode?: string;
+    schedule_interval_minutes?: number;
+    incremental?: boolean;
+    active_only?: boolean;
+  },
+  onProgress?: (message: string) => void,
+): Promise<WarehouseLocationRefSyncFromSourceResult> {
+  const { apiRequestSyncNdjson } = await import(
+    '../../../components/sync-from-source-modal/apiRequestSyncNdjson'
+  );
+  return apiRequestSyncNdjson<WarehouseLocationRefSyncFromSourceResult>(
+    '/apps/master-data/warehouse/warehouses/location-ref/sync-from-source',
+    {
+      data: payload,
+      timeoutMs: 600_000,
+      onProgress,
     },
   );
 }

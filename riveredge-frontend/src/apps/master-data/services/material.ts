@@ -5,6 +5,7 @@
  */
 
 import { api, apiRequest } from '../../../services/api';
+import type { DocumentPushRunHistoryListResponse } from '../../kuaizhizao/services/document-push';
 import type { MasterDataSyncBinding, MasterDataSyncFromSourceResult } from './supply-chain';
 import type {
   MaterialGroup,
@@ -114,6 +115,12 @@ function normalizeMaterialRow(item: Material): Material {
   if (row.baseUnit === undefined && row.base_unit !== undefined) {
     row.baseUnit = row.base_unit
   }
+  if (row.isGiftable === undefined && row.is_giftable !== undefined) {
+    row.isGiftable = !!row.is_giftable
+  }
+  if (row.is_giftable === undefined && row.isGiftable !== undefined) {
+    row.is_giftable = !!row.isGiftable
+  }
   return row as Material
 }
 
@@ -145,6 +152,14 @@ function mapBomFromApi(raw: Record<string, unknown>): BOM {
     tenantId: (raw.tenant_id ?? raw.tenantId) as number,
     materialId: (raw.material_id ?? raw.materialId) as number,
     componentId: (raw.component_id ?? raw.componentId) as number,
+    installPosition: (raw.install_position ?? raw.installPosition) as string | null | undefined,
+    materialWarehouseId: optionalNumberId(raw.material_warehouse_id ?? raw.materialWarehouseId),
+    manufacturingDepartmentId: optionalNumberId(
+      raw.manufacturing_department_id ?? raw.manufacturingDepartmentId,
+    ),
+    attachments: raw.attachments,
+    warehouseId: optionalNumberId(raw.warehouse_id ?? raw.warehouseId),
+    isOutsource: (raw.is_outsource ?? raw.isOutsource) === true,
     quantity: Number(raw.quantity),
     baseQuantity: Number(raw.base_quantity ?? raw.baseQuantity ?? 1),
     unit: (raw.unit as string) ?? undefined,
@@ -715,6 +730,8 @@ export const bomApi = {
       is_default: !!(item.is_default ?? item.isDefault),
       is_obsolete: !!(item.is_obsolete ?? item.isObsolete),
       item_count: item.item_count ?? item.itemCount ?? 0,
+      material_code: item.material_code ?? item.materialCode ?? null,
+      material_name: item.material_name ?? item.materialName ?? null,
     }));
     return {
       data,
@@ -1522,6 +1539,86 @@ export const materialSourceApi = {
 
 export async function getMaterialSyncBinding(): Promise<MasterDataSyncBinding> {
   return api.get('/apps/master-data/materials/sync-binding');
+}
+
+export async function getMaterialMultiUnitSyncBinding(): Promise<MasterDataSyncBinding> {
+  return api.get('/apps/master-data/materials/multi-unit/sync-binding');
+}
+
+export async function listMaterialMultiUnitSyncRunHistory(params: {
+  skip?: number;
+  limit?: number;
+}): Promise<DocumentPushRunHistoryListResponse> {
+  return apiRequest<DocumentPushRunHistoryListResponse>(
+    '/apps/master-data/materials/multi-unit/sync-run-history',
+    {
+      params: {
+        skip: params.skip ?? 0,
+        limit: params.limit ?? 20,
+      },
+    },
+  );
+}
+
+export async function syncMaterialMultiUnitsFromSource(payload: {
+  source_type?: 'api' | 'dataset';
+  api_uuid?: string;
+  dataset_uuid?: string;
+  field_mapping?: Record<string, string>;
+  save_binding?: boolean;
+  sync_mode?: string;
+  schedule_interval_minutes?: number;
+  incremental?: boolean;
+  active_only?: boolean;
+}): Promise<MasterDataSyncFromSourceResult> {
+  return apiRequest<MasterDataSyncFromSourceResult>(
+    '/apps/master-data/materials/multi-unit/sync-from-source',
+    {
+      method: 'POST',
+      data: payload,
+      timeoutMs: 600_000,
+    },
+  );
+}
+
+export async function getMaterialBatchManageSyncBinding(): Promise<MasterDataSyncBinding> {
+  return api.get('/apps/master-data/materials/batch-manage/sync-binding');
+}
+
+export async function listMaterialBatchManageSyncRunHistory(params: {
+  skip?: number;
+  limit?: number;
+}): Promise<DocumentPushRunHistoryListResponse> {
+  return apiRequest<DocumentPushRunHistoryListResponse>(
+    '/apps/master-data/materials/batch-manage/sync-run-history',
+    {
+      params: {
+        skip: params.skip ?? 0,
+        limit: params.limit ?? 20,
+      },
+    },
+  );
+}
+
+export async function syncMaterialBatchManageFromSource(payload: {
+  source_type?: 'api' | 'dataset';
+  api_uuid?: string;
+  dataset_uuid?: string;
+  field_mapping?: Record<string, string>;
+  save_binding?: boolean;
+  sync_mode?: string;
+  schedule_interval_minutes?: number;
+  incremental?: boolean;
+  active_only?: boolean;
+}): Promise<MasterDataSyncFromSourceResult> {
+  return apiRequest<MasterDataSyncFromSourceResult>(
+    '/apps/master-data/materials/batch-manage/sync-from-source',
+    {
+      method: 'POST',
+      data: payload,
+      timeoutMs: 600_000,
+    },
+  );
 }
 
 export async function syncMaterialsFromSource(

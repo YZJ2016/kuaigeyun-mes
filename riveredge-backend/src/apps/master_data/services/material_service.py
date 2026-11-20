@@ -177,6 +177,92 @@ def _has_auxiliary_unit(units: Any) -> bool:
     return False
 
 
+def _apply_inventory_unit_on_write(
+    material_data: dict,
+    *,
+    fallback_base_unit: Optional[str] = None,
+) -> None:
+    from apps.master_data.utils.material_inventory_unit_validation import (
+        sync_inventory_unit_to_units_json,
+        validate_material_inventory_unit,
+    )
+    from apps.kuaizhizao.utils.material_unit_utils import _parse_material_units_cfg
+
+    base = str(material_data.get("base_unit") or fallback_base_unit or "").strip()
+    if not base:
+        return
+    inv_in = material_data.get("inventory_unit")
+    if inv_in is None:
+        parsed = _parse_material_units_cfg(material_data.get("units"))
+        if parsed:
+            inv_in = (parsed.get("scenarios") or {}).get("inventory")
+    inv = validate_material_inventory_unit(
+        base_unit=base,
+        inventory_unit=inv_in,
+        units_cfg=material_data.get("units"),
+    )
+    material_data["inventory_unit"] = inv
+    if material_data.get("units") is not None:
+        material_data["units"] = sync_inventory_unit_to_units_json(
+            base_unit=base,
+            inventory_unit=inv,
+            units_cfg=material_data["units"],
+        )
+
+
+def _normalize_material_units_json(units: Any) -> Any:
+    """规范化副单位换算类型与固定换算分子分母。"""
+    from apps.master_data.constants.material_conversion_type import (
+        CONVERSION_TYPE_FIXED,
+        CONVERSION_TYPE_FLOATING,
+        normalize_material_conversion_type,
+    )
+
+    if isinstance(units, str):
+        text = units.strip()
+        if not text:
+            return units
+        try:
+            parsed = json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            return units
+        return _normalize_material_units_json(parsed)
+    if not isinstance(units, dict):
+        return units
+    rows = units.get("units")
+    if not isinstance(rows, list):
+        return units
+    normalized_rows = []
+    for row in rows:
+        if not isinstance(row, dict):
+            normalized_rows.append(row)
+            continue
+        cleaned = dict(row)
+        conv = normalize_material_conversion_type(
+            cleaned.get("conversionType") or cleaned.get("conversion_type")
+        )
+        cleaned["conversionType"] = conv
+        if conv == CONVERSION_TYPE_FLOATING:
+            cleaned.pop("numerator", None)
+            cleaned.pop("denominator", None)
+        else:
+            try:
+                num = int(cleaned.get("numerator", 1) or 1)
+                den = int(cleaned.get("denominator", 1) or 1)
+            except (TypeError, ValueError):
+                num, den = 1, 1
+            if num <= 0:
+                num = 1
+            if den <= 0:
+                den = 1
+            cleaned["numerator"] = num
+            cleaned["denominator"] = den
+        normalized_rows.append(cleaned)
+    out = dict(units)
+    out["units"] = normalized_rows
+    return out
+
+
 def _drop_hidden_unit_scenarios(units: Any) -> Any:
     """没有辅助单位时删掉 scenarios。场景单位只跟辅助单位一起保存。"""
     if isinstance(units, str):
@@ -234,6 +320,15 @@ def _normalize_material_logistics_fields(material_data: Dict[str, Any], *, for_c
         if key in material_data and material_data[key] is not None:
             val = str(material_data[key]).strip()
             material_data[key] = val if val else None
+
+    if "inventory_category" in material_data:
+        from apps.master_data.constants.material_inventory_category import (
+            require_canonical_material_inventory_category_optional,
+        )
+
+        material_data["inventory_category"] = require_canonical_material_inventory_category_optional(
+            material_data.get("inventory_category"),
+        )
 
     if "shelf_life_managed" in material_data:
         if not material_data.get("shelf_life_managed"):
@@ -620,28 +715,16 @@ async def _material_tree_root_queryset(query):
     )
 
 
-def _material_orm_matches_keyword(material, keyword: str) -> bool:
+def _material_orm_matches_keyword(
+    material,
+    keyword: str,
+    *,
+    search_mode: str = "fuzzy",
+) -> bool:
     """判断物料行是否匹配列表关键词（含 SKU 子编码 code）。"""
-    kw = keyword.strip().lower()
-    if not kw:
-        return True
-    for val in (
-        material.main_code,
-        material.name,
-        material.specification,
-        getattr(material, "code", None),
-    ):
-        if val and kw in str(val).lower():
-            return True
-    attrs = getattr(material, "variant_attributes", None)
-    if attrs:
-        try:
-            attrs_text = json.dumps(attrs, ensure_ascii=False).lower()
-            if kw in attrs_text:
-                return True
-        except (TypeError, ValueError):
-            pass
-    return False
+    from apps.master_data.services.material_code_search_mode import material_row_matches_keyword
+
+    return material_row_matches_keyword(material, keyword, search_mode)  # type: ignore[arg-type]
 
 
 def _partner_id_from_code_mapping_payload(payload: Dict[str, Any], *keys: str) -> Optional[int]:
@@ -663,6 +746,13 @@ def _material_to_response_data(material) -> Dict[str, Any]:
     """
     pr = getattr(material, "process_route", None)
     from apps.kuaizhizao.services.inspection_policy_service import normalize_material_inspection_stages
+    from apps.kuaizhizao.services.over_report_rules import (
+        clamp_over_report_value_for_mode,
+        normalize_over_report_mode,
+    )
+
+    _orm = normalize_over_report_mode(getattr(material, "over_report_mode", None) or "none")
+    _orv = clamp_over_report_value_for_mode(_orm, getattr(material, "over_report_value", None) or 0)
 
     return {
         "id": material.id,
@@ -674,6 +764,7 @@ def _material_to_response_data(material) -> Dict[str, Any]:
         "group_id": getattr(material, "group_id", None),
         "specification": getattr(material, "specification", None),
         "base_unit": material.base_unit,
+        "inventory_unit": getattr(material, "inventory_unit", None) or material.base_unit,
         "units": getattr(material, "units", None),
         "batch_managed": getattr(material, "batch_managed", False),
         "default_batch_rule_id": getattr(material, "default_batch_rule_id", None),
@@ -685,6 +776,7 @@ def _material_to_response_data(material) -> Dict[str, Any]:
         "brand": getattr(material, "brand", None),
         "model": getattr(material, "model", None),
         "texture": getattr(material, "texture", None),
+        "inventory_category": getattr(material, "inventory_category", None),
         "images": getattr(material, "images", None),
         "weight": getattr(material, "weight", None),
         "volume": getattr(material, "volume", None),
@@ -706,6 +798,8 @@ def _material_to_response_data(material) -> Dict[str, Any]:
             legacy_mode=getattr(material, "inspection_mode", None),
             legacy_plan_id=getattr(material, "default_inspection_plan_id", None),
         ),
+        "over_report_mode": _orm,
+        "over_report_value": _orv,
         "process_route_id": getattr(material, "process_route_id", None) or (getattr(pr, "id", None) if pr else None),
         "process_route_name": getattr(pr, "name", None) if pr else None,
         "created_at": material.created_at,
@@ -1351,7 +1445,10 @@ class MaterialService:
         _normalize_material_logistics_fields(material_data, for_create=True)
         _apply_canonical_material_source_type(material_data)
         if "units" in material_data:
-            material_data["units"] = _drop_hidden_unit_scenarios(material_data.get("units"))
+            material_data["units"] = _drop_hidden_unit_scenarios(
+                _normalize_material_units_json(material_data.get("units"))
+            )
+        _apply_inventory_unit_on_write(material_data)
         material_data["source_type"] = require_canonical_material_source_type(
             material_data.get("source_type"),
             material_code=material_data.get("main_code") or material_data.get("code"),
@@ -2328,6 +2425,7 @@ class MaterialService:
         limit: int,
         db_sort: str,
         desc: bool,
+        search_mode: str = "fuzzy",
     ) -> MaterialListResponse:
         """
         树形列表：分页主行（variant_attributes 为空），属性 SKU 挂到 children。
@@ -2386,7 +2484,9 @@ class MaterialService:
             )
             for child in children:
                 if keyword_norm and child.main_code not in root_matched_codes:
-                    if not _material_orm_matches_keyword(child, keyword_norm):
+                    if not _material_orm_matches_keyword(
+                        child, keyword_norm, search_mode=search_mode
+                    ):
                         continue
                 children_by_main[child.main_code].append(child)
 
@@ -2431,6 +2531,7 @@ class MaterialService:
         limit: int = 100,
         group_id: Optional[int] = None,
         is_active: Optional[bool] = None,
+        batch_managed: Optional[bool] = None,
         keyword: Optional[str] = None,
         code: Optional[str] = None,
         name: Optional[str] = None,
@@ -2439,6 +2540,7 @@ class MaterialService:
         brand: Optional[str] = None,
         model: Optional[str] = None,
         base_unit: Optional[str] = None,
+        batch_no: Optional[str] = None,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = None,
         no_group: Optional[bool] = None,
@@ -2459,6 +2561,7 @@ class MaterialService:
             limit: 限制数量
             group_id: 物料分组ID（可选，用于过滤）
             is_active: 是否启用（可选）
+            batch_managed: 是否启用批号管理（可选）
             keyword: 搜索关键词（物料编码、名称或规格）
             code: 物料编码（精确匹配）
             name: 物料名称（模糊匹配）
@@ -2467,6 +2570,7 @@ class MaterialService:
             brand: 品牌（可选，模糊匹配）
             model: 型号（可选，模糊匹配）
             base_unit: 基础单位（可选，精确匹配）
+            batch_no: 批号（可选，模糊匹配批号台账，返回拥有该批号的物料）
             ids: 按物料主键批量精确查询（可选，用于 BOM 等场景补齐名称）
 
         Returns:
@@ -2512,33 +2616,29 @@ class MaterialService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
 
+        if batch_managed is not None:
+            query = query.filter(batch_managed=batch_managed)
+
         if source_type is not None:
             query = query.filter(source_type=source_type)
 
         if base_unit is not None:
             query = query.filter(base_unit=base_unit)
 
+        from infra.services.business_config_service import BusinessConfigService
+
+        search_mode = await BusinessConfigService().get_material_code_search_mode(tenant_id)
+
         # 添加搜索条件（支持主编码和部门编码搜索）
         if keyword:
-            # 主编码、名称、规格；部门编码见下方别名表
-            main_code_query = (
-                Q(main_code__icontains=keyword)
-                | Q(name__icontains=keyword)
-                | Q(specification__icontains=keyword)
-                | Q(code__icontains=keyword)
-            )
-            # 如果有关键词，也尝试通过部门编码搜索
-            code_aliases = await MaterialCodeAlias.filter(
+            from apps.master_data.services.material_code_search_mode import apply_material_keyword_filter
+
+            query = await apply_material_keyword_filter(
+                query,
                 tenant_id=tenant_id,
-                code__icontains=keyword,
-                deleted_at__isnull=True
-            ).values_list("material_id", flat=True)
-            
-            if code_aliases:
-                # 如果找到部门编码匹配，添加到查询条件
-                query = query.filter(main_code_query | Q(id__in=code_aliases))
-            else:
-                query = query.filter(main_code_query)
+                keyword=keyword,
+                mode=search_mode,  # type: ignore[arg-type]
+            )
 
         if code:
             # 首先尝试通过主编码匹配
@@ -2549,8 +2649,9 @@ class MaterialService:
             if material_by_code:
                 # 如果找到物料，只返回该物料
                 query = query.filter(id=material_by_code.id)
+            elif search_mode == "prefix":
+                query = query.filter(main_code__istartswith=code)
             else:
-                # 如果未找到，尝试模糊匹配主编码
                 query = query.filter(main_code__icontains=code)
 
         if name:
@@ -2568,6 +2669,21 @@ class MaterialService:
         if model:
             # 模糊匹配型号
             query = query.filter(model__icontains=model)
+
+        if batch_no:
+            from apps.master_data.models.material_batch import MaterialBatch
+
+            bn = str(batch_no or "").strip()
+            if bn:
+                material_ids = await MaterialBatch.filter(
+                    tenant_id=tenant_id,
+                    batch_no__icontains=bn,
+                    deleted_at__isnull=True,
+                ).values_list("material_id", flat=True)
+                unique_material_ids = list(dict.fromkeys(int(mid) for mid in material_ids if mid))
+                if not unique_material_ids:
+                    return MaterialListResponse(items=[], total=0)
+                query = query.filter(id__in=unique_material_ids)
 
         from apps.master_data.services.master_data_list_core import (
             apply_master_crud_created_date_range,
@@ -2608,6 +2724,7 @@ class MaterialService:
                 limit=limit,
                 db_sort=db_sort,
                 desc=desc,
+                search_mode=search_mode,
             )
 
         # 获取总数
@@ -2919,7 +3036,28 @@ class MaterialService:
         _normalize_material_logistics_fields(update_data, for_create=False)
         _apply_canonical_material_source_type(update_data)
         if "units" in update_data:
-            update_data["units"] = _drop_hidden_unit_scenarios(update_data.get("units"))
+            update_data["units"] = _drop_hidden_unit_scenarios(
+                _normalize_material_units_json(update_data.get("units"))
+            )
+        if {"inventory_unit", "units", "base_unit"} & set(update_data.keys()):
+            _apply_inventory_unit_on_write(
+                update_data,
+                fallback_base_unit=str(material.base_unit or ""),
+            )
+
+        if "over_report_mode" in update_data or "over_report_value" in update_data:
+            from apps.kuaizhizao.services.over_report_rules import validate_over_report_value_for_mode
+
+            final_mode = update_data.get(
+                "over_report_mode", getattr(material, "over_report_mode", None)
+            ) or "none"
+            final_value = update_data.get(
+                "over_report_value", getattr(material, "over_report_value", None)
+            )
+            try:
+                validate_over_report_value_for_mode(final_mode, final_value)
+            except ValueError as exc:
+                raise ValidationError(str(exc)) from exc
         
         for key, value in update_data.items():
             setattr(material, key, value)
@@ -2948,6 +3086,13 @@ class MaterialService:
 
         apply_update_audit(material, current_user)
         await material.save()
+
+        if bool(getattr(material, "shelf_life_managed", False)) and (
+            "shelf_life_managed" in update_data or "shelf_life_days" in update_data
+        ):
+            from apps.master_data.services.material_batch_service import MaterialBatchService
+
+            await MaterialBatchService.backfill_expiry_for_material(tenant_id, int(material.id))
 
         from apps.master_data.services.material_product_process_service import (
             MaterialProductProcessService,
@@ -3560,6 +3705,20 @@ class MaterialService:
                 over_value = getattr(it, "over_report_value", None)
                 if over_value is not None:
                     patch["over_report_value"] = over_value
+
+                if "over_report_mode" in patch or "over_report_value" in patch:
+                    from apps.kuaizhizao.services.over_report_rules import validate_over_report_value_for_mode
+
+                    final_mode = patch.get(
+                        "over_report_mode", getattr(material, "over_report_mode", None)
+                    ) or "none"
+                    final_value = patch.get(
+                        "over_report_value", getattr(material, "over_report_value", None)
+                    )
+                    try:
+                        validate_over_report_value_for_mode(final_mode, final_value)
+                    except ValueError as exc:
+                        raise ValidationError(str(exc)) from exc
 
                 if not patch:
                     raise ValidationError("至少指定一项质检选项字段")
@@ -4235,6 +4394,14 @@ class MaterialService:
         return ver
 
     @staticmethod
+    def _bom_version_header_fields(data: BOMBatchCreate) -> Dict[str, Any]:
+        return {
+            "material_warehouse_id": getattr(data, "material_warehouse_id", None),
+            "manufacturing_department_id": getattr(data, "manufacturing_department_id", None),
+            "attachments": getattr(data, "attachments", None),
+        }
+
+    @staticmethod
     def _assert_bom_components_have_source_type(components: List[Material]) -> None:
         """BOM 子件须在物料主数据已维护来源类型，禁止在 BOM 保存/审核时静默回写或兜底。"""
         missing_labels: List[str] = []
@@ -4329,6 +4496,16 @@ class MaterialService:
             raise ValidationError(f"子物料 {missing_ids} 不存在")
         
         MaterialService._assert_bom_components_have_source_type(list(components))
+        component_by_id = {c.id: c for c in components}
+        from apps.master_data.schemas.material_schemas import (
+            assert_bom_items_outsource_policy,
+            resolve_bom_line_is_outsource,
+        )
+
+        try:
+            assert_bom_items_outsource_policy(data.items, component_by_id)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
         
         # 检查主物料和子物料不能相同
         if data.material_id in component_ids:
@@ -4384,12 +4561,18 @@ class MaterialService:
             data.bom_code,
             version,
         )
+        version_header = MaterialService._bom_version_header_fields(data)
         async with in_transaction():
             for item in data.items:
+                component = component_by_id[item.component_id]
                 bom_payload = {
                     "tenant_id": tenant_id,
                     "material_id": data.material_id,
                     "component_id": item.component_id,
+                    "install_position": getattr(item, "install_position", None),
+                    "warehouse_id": getattr(item, "warehouse_id", None),
+                    "is_outsource": resolve_bom_line_is_outsource(item, component.source_type),
+                    **version_header,
                     "quantity": item.quantity,
                     "base_quantity": version_base_qty,
                     "unit": item.unit,
@@ -4612,8 +4795,12 @@ class MaterialService:
                    MAX(b.approval_status) AS approval_status,
                    BOOL_OR(b.is_default) AS is_default,
                    BOOL_OR(b.is_obsolete) AS is_obsolete,
-                   COUNT(*)::int AS item_count
+                   COUNT(*)::int AS item_count,
+                   MAX(COALESCE(NULLIF(m.main_code, ''), NULLIF(m.code, ''), '')) AS material_code,
+                   MAX(COALESCE(m.name, '')) AS material_name
             FROM "{table}" b
+            LEFT JOIN "{mat_table}" m
+              ON m.id = b.material_id AND m.tenant_id = b.tenant_id AND m.deleted_at IS NULL
             WHERE b.tenant_id = $1 AND b.deleted_at IS NULL{obsolete_sql}{view_sql}{filter_sql}
             GROUP BY b.material_id, b.version
         '''
@@ -5409,9 +5596,11 @@ class MaterialService:
         
         groups = await group_query.prefetch_related("process_route").order_by("code").all()
 
+        # 与苍穹物料列表默认「可用」口径一致：树角标只计启用物料
         material_rows = await Material.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
+            is_active=True,
         ).values("group_id", "main_code", "variant_attributes")
         
         # 构建分组映射（按父分组ID分组）
@@ -5531,19 +5720,40 @@ class MaterialService:
         # 验证子件数量是否大于0（已在Schema验证）
         # 验证损耗率（已在Schema验证）
         
-        # 步骤3：检测重复子件（同一父件下，非配置位且非替代料时子件编码不能重复；配置位/替代料同组内可有多行）
-        parent_component_map = defaultdict(set)  # 父件ID -> 子件ID集合（排除配置位、替代料）
+        # 步骤3：检测重复子件（非配置位/非替代料：同子件可多行，但重复时 install_position 须区分）
+        from apps.master_data.schemas.material_schemas import (
+            assert_bom_non_alternative_items_unique_by_position,
+            normalize_bom_install_position,
+        )
+
+        parent_items_for_dup: Dict[int, List[Any]] = defaultdict(list)
         for item in data.items:
             parent_id = code_to_material[item.parent_code]
             component_id = code_to_material[item.component_code]
             is_cfg = getattr(item, "is_configurable", False) or False
             is_alt = getattr(item, "is_alternative", False) or False
-            if not is_cfg and not is_alt and component_id in parent_component_map[parent_id]:
-                raise ValidationError(
-                    f"父件 {item.parent_code} 下，子件 {item.component_code} 重复"
-                )
-            if not is_cfg and not is_alt:
-                parent_component_map[parent_id].add(component_id)
+            if is_cfg or is_alt:
+                continue
+            parent_items_for_dup[parent_id].append(
+                type(
+                    "BomImportDupRow",
+                    (),
+                    {
+                        "component_id": component_id,
+                        "install_position": normalize_bom_install_position(
+                            getattr(item, "install_position", None)
+                        )
+                        or None,
+                        "is_alternative": False,
+                    },
+                )()
+            )
+        for parent_id, dup_rows in parent_items_for_dup.items():
+            try:
+                assert_bom_non_alternative_items_unique_by_position(dup_rows)
+            except ValueError as exc:
+                parent_code = material_id_to_code.get(parent_id, str(parent_id))
+                raise ValidationError(f"父件 {parent_code} 下子件重复：{exc}") from exc
         
         # 步骤4：检测循环依赖（批次边 + 库内有效 BOM，父→子）
         # 先解析各父件目标版本，仅剔除将被全量替换的 (parent, version) 边
@@ -5740,6 +5950,10 @@ class MaterialService:
                         tenant_id=tenant_id,
                         material_id=parent_id,
                         component_id=component_id,
+                        install_position=normalize_bom_install_position(
+                            getattr(item, "install_position", None)
+                        )
+                        or None,
                         quantity=item.quantity,
                         base_quantity=parent_base_qty,
                         unit=item.unit,
@@ -7253,6 +7467,16 @@ class MaterialService:
         if missing:
             raise ValidationError(f"子物料 {missing} 不存在")
         MaterialService._assert_bom_components_have_source_type(list(components))
+        component_by_id = {c.id: c for c in components}
+        from apps.master_data.schemas.material_schemas import (
+            assert_bom_items_outsource_policy,
+            resolve_bom_line_is_outsource,
+        )
+
+        try:
+            assert_bom_items_outsource_policy(data.items, component_by_id)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
 
         exclude_ids = {int(b.id) for b in existing}
         for item in data.items:
@@ -7287,6 +7511,7 @@ class MaterialService:
         version_bom_name = MaterialService.resolve_version_bom_name(
             data.bom_name, material, bom_code, version
         )
+        version_header = MaterialService._bom_version_header_fields(data)
         bom_list: List[BOM] = []
         async with in_transaction():
             if existing:
@@ -7297,10 +7522,15 @@ class MaterialService:
                     deleted_at__isnull=True,
                 ).update(deleted_at=now_utc())
             for item in data.items:
+                component = component_by_id[item.component_id]
                 payload = {
                     "tenant_id": tenant_id,
                     "material_id": material_id,
                     "component_id": item.component_id,
+                    "install_position": getattr(item, "install_position", None),
+                    "warehouse_id": getattr(item, "warehouse_id", None),
+                    "is_outsource": resolve_bom_line_is_outsource(item, component.source_type),
+                    **version_header,
                     "quantity": item.quantity,
                     "base_quantity": version_base_qty,
                     "unit": item.unit,

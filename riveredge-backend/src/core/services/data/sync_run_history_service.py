@@ -8,6 +8,53 @@ from tortoise import Tortoise
 
 from apps.kuaizhizao.api._kuaizhizao_document_gate import resolve_history_inbound_entity_type
 
+_INBOUND_HISTORY_SELECT_COLUMNS = """
+    id,
+    entity_type,
+    mode,
+    status,
+    created,
+    updated,
+    skipped,
+    failed,
+    fetched,
+    truncated,
+    duration_ms,
+    error_summary,
+    started_at,
+    finished_at,
+    created_at,
+    trigger_kind
+"""
+
+
+async def list_inbound_entity_sync_run_history_rows(
+    tenant_id: int,
+    entity_type: str,
+    *,
+    skip: int = 0,
+    limit: int = 20,
+) -> Tuple[List[Dict[str, Any]], int]:
+    """按 entity_type 只读列表（主数据入站同步 Modal 用）。"""
+    et = str(entity_type or "").strip()
+    conn = Tortoise.get_connection("default")
+    count_rows = await conn.execute_query_dict(
+        "SELECT COUNT(*) AS total FROM core_sync_run_logs WHERE tenant_id = $1 AND entity_type = $2",
+        [tenant_id, et],
+    )
+    rows = await conn.execute_query_dict(
+        f"""
+        SELECT {_INBOUND_HISTORY_SELECT_COLUMNS}
+        FROM core_sync_run_logs
+        WHERE tenant_id = $1 AND entity_type = $2
+        ORDER BY created_at DESC
+        OFFSET $3 LIMIT $4
+        """,
+        [tenant_id, et, skip, limit],
+    )
+    total = int(count_rows[0]["total"]) if count_rows else 0
+    return rows, total
+
 
 async def list_sync_run_history_rows(
     tenant_id: int,
@@ -61,7 +108,8 @@ async def list_sync_run_history_rows(
             created_at,
             category,
             connector_type,
-            target_profile
+            target_profile,
+            trigger_kind
         FROM core_sync_run_logs
         WHERE {where_sql}
         ORDER BY created_at DESC

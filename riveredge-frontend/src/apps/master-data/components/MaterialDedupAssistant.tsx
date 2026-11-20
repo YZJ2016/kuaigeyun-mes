@@ -143,14 +143,29 @@ function matchesToMessages(
 
 export interface MaterialDedupConfigTriggerProps {
   customFields?: CustomField[]
+  /** 不渲染独立按钮，仅挂载配置 Modal（由外层工具下拉打开） */
+  hideTrigger?: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 /** 列表工具栏：打开防重字段配置 */
-export function MaterialDedupConfigTrigger({ customFields = [] }: MaterialDedupConfigTriggerProps) {
+export function MaterialDedupConfigTrigger({
+  customFields = [],
+  hideTrigger = false,
+  open: openProp,
+  onOpenChange,
+}: MaterialDedupConfigTriggerProps) {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const { matchFields, setMatchFields } = useMaterialDedupMatchFields()
-  const [open, setOpen] = useState(false)
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
+  const controlled = openProp !== undefined
+  const open = controlled ? Boolean(openProp) : uncontrolledOpen
+  const setOpen = (next: boolean) => {
+    if (!controlled) setUncontrolledOpen(next)
+    onOpenChange?.(next)
+  }
   const [draft, setDraft] = useState<string[]>(matchFields)
   const [saving, setSaving] = useState(false)
 
@@ -201,9 +216,11 @@ export function MaterialDedupConfigTrigger({ customFields = [] }: MaterialDedupC
 
   return (
     <>
-      <Button onClick={() => setOpen(true)}>
-        {t(`${I18N}.trigger`)}
-      </Button>
+      {!hideTrigger && (
+        <Button onClick={() => setOpen(true)}>
+          {t(`${I18N}.trigger`)}
+        </Button>
+      )}
       <Modal
         title={t(`${I18N}.configTitle`)}
         open={open}

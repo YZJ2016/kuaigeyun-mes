@@ -29,7 +29,9 @@ _REST_MODE_PRESETS: Dict[str, List[int]] = {
     "single": [6],  # 周日
 }
 
+# holiday-cn 同源多 CDN：国内常出现 cdn.jsdelivr / GitHub raw 被重置，fastly 节点更可达。
 _HOLIDAY_CN_URLS = (
+    "https://fastly.jsdelivr.net/gh/NateScarlet/holiday-cn@master/{year}.json",
     "https://cdn.jsdelivr.net/gh/NateScarlet/holiday-cn@master/{year}.json",
     "https://raw.githubusercontent.com/NateScarlet/holiday-cn/master/{year}.json",
 )
@@ -42,7 +44,7 @@ class PerformanceService:
 
     @staticmethod
     async def _fetch_holiday_cn_year(year: int) -> Dict[str, Any]:
-        """拉取 holiday-cn 单年 JSON；jsDelivr 优先，失败再试 GitHub raw。"""
+        """拉取 holiday-cn 单年 JSON；优先 fastly.jsDelivr，再试其它同源镜像。"""
         from infra.infrastructure.http import get_http_client
 
         client = get_http_client()

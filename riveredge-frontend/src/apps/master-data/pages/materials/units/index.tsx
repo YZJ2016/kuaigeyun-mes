@@ -35,7 +35,11 @@ import {
 } from '../../../../../utils/tableQueryKey';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
-import { materialUnitApi, getMaterialUnitSyncBinding } from '../../../services/material-unit';
+import {
+  materialUnitApi,
+  getMaterialUnitSyncBinding,
+  UNIT_LIST_LIMIT_MAX,
+} from '../../../services/material-unit';
 import type { MaterialUnit, MaterialUnitConversion } from '../../../types/material-unit';
 import { masterCrudCreatedUpdatedSnakeColumns } from '../../../utils/materialListCore';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
@@ -580,8 +584,9 @@ const UnitsPage: React.FC = () => {
       } else if (type === 'currentPage' && pageData) {
         exportData = pageData;
       } else {
-        exportData = await fetchAllListItems((p) =>
-          materialUnitApi.list({ ...p, ...lastUnitListParamsRef.current }),
+        exportData = await fetchAllListItems(
+          (p) => materialUnitApi.list({ ...p, ...lastUnitListParamsRef.current }),
+          { pageSize: UNIT_LIST_LIMIT_MAX },
         );
       }
       if (!exportData.length) {
@@ -631,8 +636,9 @@ const UnitsPage: React.FC = () => {
       } else if (type === 'currentPage' && pageData) {
         exportData = pageData;
       } else {
-        exportData = await fetchAllListItems((p) =>
-          materialUnitApi.listConversions({ ...p, ...lastConvListParamsRef.current }),
+        exportData = await fetchAllListItems(
+          (p) => materialUnitApi.listConversions({ ...p, ...lastConvListParamsRef.current }),
+          { pageSize: UNIT_LIST_LIMIT_MAX },
         );
       }
       if (!exportData.length) {

@@ -11,9 +11,10 @@ import { useLocation } from 'react-router-dom';
 import { usePagePermissionResource } from '../../../../../hooks/usePagePermissionResource';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, List, Modal, Popconfirm, Table, Tooltip, Typography } from 'antd';
+import { App, Button, List, Modal, Popconfirm, Space, Table, Tooltip, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
+import { UniSyncButton } from '../../../../../components/uni-sync';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
@@ -44,6 +45,7 @@ import {
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { WarehouseFormModal } from '../../../components/WarehouseFormModal';
 import WarehouseSyncFromSourceModal from '../../../components/WarehouseSyncFromSourceModal';
+import WarehouseLocationRefSyncFromSourceModal from '../../../components/WarehouseLocationRefSyncFromSourceModal';
 import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-modal/SyncFreshnessBadge';
 import {
   ExternalSyncSourceIcon,
@@ -99,6 +101,7 @@ const WarehousesPage: React.FC = () => {
   const [selectedPresetNames, setSelectedPresetNames] = useState<string[]>([]);
   const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [locationRefSyncModalVisible, setLocationRefSyncModalVisible] = useState(false);
   const [syncFreshnessKey, setSyncFreshnessKey] = useState(0);
   const loadWarehouseSyncBinding = useCallback(() => getWarehouseSyncBinding(), []);
 
@@ -857,12 +860,18 @@ const WarehousesPage: React.FC = () => {
         syncToolbarExtra={
           canCreate
             ? (syncButton) => (
-                <SyncFreshnessBadge
-                  getBinding={loadWarehouseSyncBinding}
-                  refreshKey={syncFreshnessKey}
-                >
-                  {syncButton}
-                </SyncFreshnessBadge>
+                <Space size={8} wrap>
+                  <SyncFreshnessBadge
+                    getBinding={loadWarehouseSyncBinding}
+                    refreshKey={syncFreshnessKey}
+                  >
+                    {syncButton}
+                  </SyncFreshnessBadge>
+                  <UniSyncButton
+                    buttonText={t('app.master-data.warehouses.locationSync')}
+                    onSync={() => setLocationRefSyncModalVisible(true)}
+                  />
+                </Space>
               )
             : undefined
         }
@@ -994,6 +1003,11 @@ const WarehousesPage: React.FC = () => {
         open={syncModalVisible}
         onClose={() => setSyncModalVisible(false)}
         onComplete={handleSyncComplete}
+      />
+
+      <WarehouseLocationRefSyncFromSourceModal
+        open={locationRefSyncModalVisible}
+        onClose={() => setLocationRefSyncModalVisible(false)}
       />
 
       {/* 加载预设预览 Modal：可勾选子项后确认 */}

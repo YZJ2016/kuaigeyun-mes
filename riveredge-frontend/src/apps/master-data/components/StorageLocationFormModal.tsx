@@ -1,17 +1,24 @@
 /**
  * 库位新建/编辑弹窗
+ * 可挂库区，或直挂仓库（所属仓库 + 可选库区）。
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProFormInstance } from '@ant-design/pro-components';
 import { App, theme } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../components/layout-templates/constants';
-import { storageLocationApi, storageAreaApi } from '../services/warehouse';
+import { storageLocationApi, storageAreaApi, warehouseApi } from '../services/warehouse';
 import { testGenerateCode, generateCode, getCodeRulePageConfig } from '../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
-import type { StorageLocation, StorageLocationCreate, StorageLocationUpdate, StorageArea } from '../types/warehouse';
+import type {
+  StorageLocation,
+  StorageLocationCreate,
+  StorageLocationUpdate,
+  StorageArea,
+  Warehouse,
+} from '../types/warehouse';
 import { SchemaFormRenderer } from '../../../components/schema-form';
 import { storageLocationFormSchema } from '../schemas/storage-location';
 import { useCustomFields } from '../../../hooks/useCustomFields';
@@ -43,7 +50,9 @@ export const StorageLocationFormModal: React.FC<StorageLocationFormModalProps> =
   const [formLoading, setFormLoading] = useState(false);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [storageAreas, setStorageAreas] = useState<StorageArea[]>([]);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<number | null>(null);
   const [storageAreaQuickCreateVisible, setStorageAreaQuickCreateVisible] = useState(false);
 
   const {
@@ -62,6 +71,15 @@ export const StorageLocationFormModal: React.FC<StorageLocationFormModalProps> =
       ? zIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET
       : token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET;
 
+  const reloadWarehouses = useCallback(async () => {
+    try {
+      const result = await warehouseApi.list({ limit: 1000, is_active: true });
+      setWarehouses(result.items);
+    } catch (error) {
+      console.error('加载仓库列表失败:', error);
+    }
+  }, []);
+
   const reloadStorageAreas = useCallback(async () => {
     try {
       const result = await storageAreaApi.list({ limit: 1000, is_active: true });
@@ -73,13 +91,15 @@ export const StorageLocationFormModal: React.FC<StorageLocationFormModalProps> =
 
   useEffect(() => {
     if (!open) return;
+    void reloadWarehouses();
     void reloadStorageAreas();
-  }, [open, reloadStorageAreas]);
+  }, [open, reloadWarehouses, reloadStorageAreas]);
 
   useEffect(() => {
     if (!open) return;
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({ isActive: true });
+    setSelectedWarehouseId(null);
     resetFieldValues();
     if (!editUuid) {
       (async () => {
@@ -116,10 +136,16 @@ export const StorageLocationFormModal: React.FC<StorageLocationFormModalProps> =
     storageLocationApi
       .get(editUuid)
       .then(async (detail) => {
+        const warehouseId =
+          detail.warehouseId ??
+          storageAreas.find((s) => s.id === detail.storageAreaId)?.warehouseId ??
+          null;
+        setSelectedWarehouseId(warehouseId != null ? Number(warehouseId) : null);
         formRef.current?.setFieldsValue({
           code: detail.code,
           name: detail.name,
-          storageAreaId: detail.storageAreaId,
+          warehouseId: warehouseId ?? undefined,
+          storageAreaId: detail.storageAreaId ?? undefined,
           description: detail.description,
           isActive: detail.isActive ?? true,
         });
@@ -131,13 +157,49 @@ export const StorageLocationFormModal: React.FC<StorageLocationFormModalProps> =
       });
   }, [open, editUuid]);
 
+  const handleValuesChange = (changed: Record<string, unknown>, all: Record<string, unknown>) => {
+    if ('warehouseId' in changed) {
+      const nextWh =
+        changed.warehouseId != null && Number(changed.warehouseId) > 0
+          ? Number(changed.warehouseId)
+          : null;
+      setSelectedWarehouseId(nextWh);
+      const areaId = all.storageAreaId != null ? Number(all.storageAreaId) : null;
+      if (areaId != null) {
+        const area = storageAreas.find((s) => s.id === areaId);
+        if (!area || (nextWh != null && Number(area.warehouseId) !== nextWh)) {
+          formRef.current?.setFieldsValue({ storageAreaId: undefined });
+        }
+      }
+    }
+    if ('storageAreaId' in changed) {
+      const areaId =
+        changed.storageAreaId != null && Number(changed.storageAreaId) > 0
+          ? Number(changed.storageAreaId)
+          : null;
+      if (areaId != null) {
+        const area = storageAreas.find((s) => s.id === areaId);
+        if (area?.warehouseId != null) {
+          const wh = Number(area.warehouseId);
+          setSelectedWarehouseId(wh);
+          formRef.current?.setFieldsValue({ warehouseId: wh });
+        }
+      }
+    }
+  };
+
   const handleSubmit = async (values: any) => {
     try {
       setFormLoading(true);
       const { customData, standardValues } = extractFormValues(values);
+      const payload = {
+        ...standardValues,
+        warehouseId: standardValues.warehouseId ?? null,
+        storageAreaId: standardValues.storageAreaId ?? null,
+      };
 
       if (isEdit && editUuid) {
-        await storageLocationApi.update(editUuid, standardValues as StorageLocationUpdate);
+        await storageLocationApi.update(editUuid, payload as StorageLocationUpdate);
         messageApi.success(t('common.updateSuccess'));
         const updated = await storageLocationApi.get(editUuid);
         await saveCustomFieldValues(updated.id, customData);
@@ -147,17 +209,17 @@ export const StorageLocationFormModal: React.FC<StorageLocationFormModalProps> =
         if (
           ruleCodeToUse &&
           (isAutoGenerateEnabled(PAGE_CODE) || effectiveRuleCode) &&
-          (standardValues.code === previewCode || !standardValues.code)
+          (payload.code === previewCode || !payload.code)
         ) {
           try {
             const codeResponse = await generateCode({ rule_code: ruleCodeToUse });
-            standardValues.code = codeResponse.code;
+            payload.code = codeResponse.code;
           } catch {}
         }
-        if (standardValues.isActive === undefined) {
-          standardValues.isActive = true;
+        if (payload.isActive === undefined) {
+          payload.isActive = true;
         }
-        const created = await storageLocationApi.create(standardValues as StorageLocationCreate);
+        const created = await storageLocationApi.create(payload as StorageLocationCreate);
         await saveCustomFieldValues(created.id, customData);
         messageApi.success(t('common.createSuccess'));
         onSuccess(created);
@@ -166,6 +228,7 @@ export const StorageLocationFormModal: React.FC<StorageLocationFormModalProps> =
       formRef.current?.resetFields();
       setPreviewCode(null);
       setEffectiveRuleCode(null);
+      setSelectedWarehouseId(null);
       resetFieldValues();
     } catch (error: any) {
       messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
@@ -179,6 +242,7 @@ export const StorageLocationFormModal: React.FC<StorageLocationFormModalProps> =
     formRef.current?.resetFields();
     setPreviewCode(null);
     setEffectiveRuleCode(null);
+    setSelectedWarehouseId(null);
     resetFieldValues();
   };
 
@@ -187,13 +251,30 @@ export const StorageLocationFormModal: React.FC<StorageLocationFormModalProps> =
       if (prev.some((s) => s.id === storageArea.id)) return prev;
       return [...prev, storageArea];
     });
-    formRef.current?.setFieldsValue({ storageAreaId: storageArea.id });
+    if (storageArea.warehouseId != null) {
+      setSelectedWarehouseId(Number(storageArea.warehouseId));
+      formRef.current?.setFieldsValue({
+        warehouseId: storageArea.warehouseId,
+        storageAreaId: storageArea.id,
+      });
+    } else {
+      formRef.current?.setFieldsValue({ storageAreaId: storageArea.id });
+    }
     setStorageAreaQuickCreateVisible(false);
     void reloadStorageAreas();
   };
 
+  const filteredAreas = useMemo(() => {
+    if (selectedWarehouseId == null) return storageAreas;
+    return storageAreas.filter((s) => Number(s.warehouseId) === selectedWarehouseId);
+  }, [storageAreas, selectedWarehouseId]);
+
   const optionsMap = {
-    storageAreaId: storageAreas.map((s) => ({
+    warehouseId: warehouses.map((w) => ({
+      label: `${w.code} - ${w.name}`,
+      value: w.id,
+    })),
+    storageAreaId: filteredAreas.map((s) => ({
       label: `${s.code} - ${s.name}`,
       value: s.id,
     })),
@@ -214,6 +295,7 @@ export const StorageLocationFormModal: React.FC<StorageLocationFormModalProps> =
         layout="vertical"
         grid
         zIndex={zIndex}
+        onValuesChange={handleValuesChange}
       >
         <SchemaFormRenderer
           schema={storageLocationFormSchema}

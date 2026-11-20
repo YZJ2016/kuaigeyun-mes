@@ -5,11 +5,10 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProFormInstance, ProFormList, ProFormSelect, ProFormDigit, ProFormGroup } from '@ant-design/pro-components';
-import { App, theme } from 'antd';
+import { App, Typography, theme } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
 import { workGroupApi } from '../services/factory';
-import { useGlobalStore } from '../../../stores';
 import { getUserList, searchUserDisplay } from '../../../services/user';
 import { canPickUsersForDisplay, canReadUserDirectory, formatUserDisplayLabel } from '../../../utils/userDisplay';
 import { renderUserPickOptionLabel, type UserRoleBadgeItem } from '../../../components/user-role-badges';
@@ -19,6 +18,7 @@ import type { WorkGroup, WorkGroupCreate, WorkGroupUpdate, WorkGroupMemberItem }
 import { SchemaFormRenderer } from '../../../components/schema-form';
 import { workGroupFormSchemaBasic, workGroupFormSchemaRest } from '../schemas/workGroup';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
+import { WORK_GROUP_PERFORMANCE_WEIGHT_MAX } from '../utils/workGroupPerformanceWeight';
 
 const PAGE_CODE = 'master-data-factory-work-group';
 
@@ -157,9 +157,26 @@ export const WorkGroupFormModal: React.FC<WorkGroupFormModalProps> = ({
         employeeId: m.employeeId ?? m.employee_id,
         employeeName: employeeById.get(m.employeeId ?? m.employee_id)?.fullName
           || employeeById.get(m.employeeId ?? m.employee_id)?.label,
-        performanceWeight: Number(m.performanceWeight ?? m.performance_weight ?? 1),
+        performanceWeight: Number(m.performanceWeight ?? m.performance_weight ?? 0),
         sortOrder: i,
       })).filter((m: WorkGroupMemberItem) => m.employeeId);
+
+      const negative = members.find((m) => Number(m.performanceWeight) < 0);
+      if (negative) {
+        messageApi.error(t('field.workGroup.performanceWeightNegative'));
+        return;
+      }
+      const overMax = members.find(
+        (m) => Number(m.performanceWeight) > WORK_GROUP_PERFORMANCE_WEIGHT_MAX,
+      );
+      if (overMax) {
+        messageApi.error(
+          t('field.workGroup.performanceWeightOverLimit', {
+            limit: WORK_GROUP_PERFORMANCE_WEIGHT_MAX,
+          }),
+        );
+        return;
+      }
 
       const payload = {
         code: values.code,
@@ -244,6 +261,9 @@ export const WorkGroupFormModal: React.FC<WorkGroupFormModalProps> = ({
           border: `1px solid ${token.colorBorderSecondary}`,
         }}
       >
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+          {t('field.workGroup.performanceWeightHint')}
+        </Typography.Paragraph>
         <ProFormList
           name="members"
           label={t('field.workGroup.members')}
@@ -280,10 +300,20 @@ export const WorkGroupFormModal: React.FC<WorkGroupFormModalProps> = ({
               label={t('field.workGroup.performanceWeight')}
               placeholder={t('field.workGroup.performanceWeightPlaceholder')}
               min={0}
-              max={10}
-              step={0.1}
-              fieldProps={{ precision: 2 }}
-              initialValue={1}
+              max={WORK_GROUP_PERFORMANCE_WEIGHT_MAX}
+              step={0.01}
+              fieldProps={{ precision: 4 }}
+              rules={[
+                {
+                  required: true,
+                  message: t('field.workGroup.performanceWeightRequired'),
+                },
+                {
+                  type: 'number',
+                  min: 0,
+                  message: t('field.workGroup.performanceWeightNegative'),
+                },
+              ]}
               colProps={{ span: 12 }}
             />
           </ProFormGroup>

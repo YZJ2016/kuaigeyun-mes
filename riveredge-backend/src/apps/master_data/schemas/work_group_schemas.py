@@ -5,9 +5,28 @@
 """
 
 from pydantic import BaseModel, Field, validator, ConfigDict
-from typing import Optional, List
+from typing import Optional, List, Sequence
 from datetime import datetime
 from decimal import Decimal
+
+# 与 WorkGroupMember.performance_weight Decimal(6,4) 对齐
+WORK_GROUP_PERFORMANCE_WEIGHT_MAX = Decimal("9999.9999")
+
+
+def assert_work_group_members_weight_valid(
+    members: Optional[Sequence["WorkGroupMemberItem"]],
+) -> None:
+    """权重为相对比例，只禁止负数；分配时按权重/权重合计。"""
+    if not members:
+        return
+    for m in members:
+        w = m.performance_weight if m.performance_weight is not None else Decimal("0")
+        if w < 0:
+            raise ValueError("绩效权重不能为负数")
+        if w > WORK_GROUP_PERFORMANCE_WEIGHT_MAX:
+            raise ValueError(
+                f"绩效权重 {w} 超出允许最大值 {WORK_GROUP_PERFORMANCE_WEIGHT_MAX}"
+            )
 
 
 class WorkGroupMemberItem(BaseModel):
@@ -15,7 +34,13 @@ class WorkGroupMemberItem(BaseModel):
 
     employee_id: int = Field(..., alias="employeeId", description="员工ID")
     employee_name: Optional[str] = Field(None, alias="employeeName", description="员工姓名")
-    performance_weight: Decimal = Field(1, alias="performanceWeight", description="绩效权重")
+    performance_weight: Decimal = Field(
+        Decimal("1"),
+        ge=0,
+        le=WORK_GROUP_PERFORMANCE_WEIGHT_MAX,
+        alias="performanceWeight",
+        description="绩效权重（相对比例，如 2:3:5；分配时按权重/权重合计）",
+    )
     sort_order: int = Field(0, alias="sortOrder", description="排序")
 
     model_config = ConfigDict(populate_by_name=True)
@@ -66,6 +91,11 @@ class WorkGroupCreate(WorkGroupBase):
 
     model_config = ConfigDict(populate_by_name=True)
 
+    @validator("members")
+    def validate_members_weights(cls, v):
+        assert_work_group_members_weight_valid(v)
+        return v
+
 
 class WorkGroupUpdate(BaseModel):
     """更新工作小组 Schema"""
@@ -89,6 +119,11 @@ class WorkGroupUpdate(BaseModel):
         if v is not None and (not v or not v.strip()):
             raise ValueError("工作小组名称不能为空")
         return v.strip() if v else None
+
+    @validator("members")
+    def validate_members_weights(cls, v):
+        assert_work_group_members_weight_valid(v)
+        return v
 
 
 class WorkGroupResponse(WorkGroupBase):

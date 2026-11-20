@@ -22,25 +22,40 @@ from apps.master_data.schemas.master_data_sync import (
     MasterDataSyncFromSourceOut,
     MasterDataSyncFromSourceRequest,
 )
-from apps.master_data.services.customer_sync_service import CustomerSyncService
-from apps.master_data.services.material_group_sync_service import MaterialGroupSyncService
-from apps.master_data.services.master_data_sync_common import cell_str
-from apps.master_data.services.supplier_sync_service import SupplierSyncService
-from apps.master_data.services.unit_sync_service import MaterialUnitSyncService
 from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.models.sales_order_sync_binding import SalesOrderSyncBinding
+from core.services.data.sync_trigger_kind import SYNC_TRIGGER_KIND_TRIGGER, sync_run_trigger_kind
 
-# 客户/供应商/物料：单据前置按成功水位增量（无水位仍全量）；禁止每次硬全量重扫
+
+async def _prerequisite_sync_from_source(
+    service: Any,
+    tenant_id: int,
+    actor: Any,
+    request: Any,
+    /,
+    **kwargs: Any,
+):
+    with sync_run_trigger_kind(SYNC_TRIGGER_KIND_TRIGGER):
+        return await service.sync_from_source(tenant_id, actor, request, **kwargs)
+
+
+def cell_str(value: Any) -> str:
+    """本地轻量规范化；不依赖 kuaiconnect inbound_sync（推送码解析等只读路径）。"""
+    if value is None:
+        return ""
+    return str(value).strip()
+
+# 客户/供应商/物料/单位/分组：单据前置一律按成功水位增量（无水位仍首次全量）。
+# 禁止强制全量：单位同步底层常走物料 batchQuery，全量会拖死源站与本机。
+# 缺编码时由单据步骤报错，再到主数据页做一次「仅手动全量」补齐。
 _PREREQUISITE_SYNC_REQUEST = MasterDataSyncFromSourceRequest(
     incremental=True,
     active_only=True,
 )
-# 单位/物料分组体量小，仍全量，避免物料增量行引用到未变更的旧分组缺失
-_MASTER_DEP_FULL_SYNC_REQUEST = MasterDataSyncFromSourceRequest(
-    incremental=False,
+_MASTER_DEP_INCREMENTAL_SYNC_REQUEST = MasterDataSyncFromSourceRequest(
+    incremental=True,
     active_only=True,
 )
-# 物料与客商同策略：有水位增量，缺码时由单据同步显式报错，再去主数据页全量补齐
 _MATERIAL_PREREQUISITE_SYNC_REQUEST = MasterDataSyncFromSourceRequest(
     incremental=True,
     active_only=True,
@@ -61,19 +76,23 @@ async def run_material_prerequisite_syncs(
     tenant_id: int,
     current_user: User,
 ) -> List[str]:
-    """物料同步前：按已保存绑定依次全量同步单位、物料分组。"""
+    """物料同步前：按已保存绑定依次增量同步单位、物料分组（无水位则首次全量）。"""
+    from apps.common.inbound_sync_gate import inbound_sync_service
+
     errors: List[str] = []
-    unit_service = MaterialUnitSyncService()
+    unit_service = inbound_sync_service("unit_sync_service", "MaterialUnitSyncService")
     if await unit_service.has_binding(tenant_id):
-        unit_result = await unit_service.sync_from_source(
-            tenant_id, current_user, _MASTER_DEP_FULL_SYNC_REQUEST
+        unit_result = await _prerequisite_sync_from_source(
+            unit_service, tenant_id, current_user, _MASTER_DEP_INCREMENTAL_SYNC_REQUEST
         )
         errors.extend(_merge_prerequisite_errors("单位同步", unit_result))
 
-    group_service = MaterialGroupSyncService()
+    group_service = inbound_sync_service(
+        "material_group_sync_service", "MaterialGroupSyncService"
+    )
     if await group_service.has_binding(tenant_id):
-        group_result = await group_service.sync_from_source(
-            tenant_id, current_user, _MASTER_DEP_FULL_SYNC_REQUEST
+        group_result = await _prerequisite_sync_from_source(
+            group_service, tenant_id, current_user, _MASTER_DEP_INCREMENTAL_SYNC_REQUEST
         )
         errors.extend(_merge_prerequisite_errors("物料分组同步", group_result))
 
@@ -84,22 +103,34 @@ async def run_sales_order_prerequisite_syncs(
     tenant_id: int,
     current_user: User,
 ) -> List[str]:
-    """销售订单同步前：客户（增量）→ 单位/分组（全量）→ 物料（增量）。"""
+    """销售订单同步前：客户（增量）→ 单位（增量）→ 物料（增量）。
+
+    故意不同步物料分组（bd_materialgroup）；分组仍由物料主数据页等路径处理。
+    """
+    from apps.common.inbound_sync_gate import inbound_sync_service
+
     errors: List[str] = []
 
     customer_binding = await CustomerSyncBinding.filter(tenant_id=tenant_id).first()
     if customer_binding and (customer_binding.source_type or "").strip():
-        customer_result = await CustomerSyncService().sync_from_source(
-            tenant_id, current_user, _PREREQUISITE_SYNC_REQUEST
+        customer_result = await _prerequisite_sync_from_source(
+            inbound_sync_service("customer_sync_service", "CustomerSyncService"),
+            tenant_id,
+            current_user,
+            _PREREQUISITE_SYNC_REQUEST,
         )
         errors.extend(_merge_prerequisite_errors("客户同步", customer_result))
 
     material_binding = await MaterialSyncBinding.filter(tenant_id=tenant_id).first()
     if material_binding and (material_binding.source_type or "").strip():
-        from apps.master_data.services.material_sync_service import MaterialSyncService
-
-        errors.extend(await run_material_prerequisite_syncs(tenant_id, current_user))
-        material_result = await MaterialSyncService().sync_from_source(
+        unit_service = inbound_sync_service("unit_sync_service", "MaterialUnitSyncService")
+        if await unit_service.has_binding(tenant_id):
+            unit_result = await _prerequisite_sync_from_source(
+                unit_service, tenant_id, current_user, _MASTER_DEP_INCREMENTAL_SYNC_REQUEST
+            )
+            errors.extend(_merge_prerequisite_errors("单位同步", unit_result))
+        material_result = await _prerequisite_sync_from_source(
+            inbound_sync_service("material_sync_service", "MaterialSyncService"),
             tenant_id,
             current_user,
             _MATERIAL_PREREQUISITE_SYNC_REQUEST,
@@ -114,22 +145,26 @@ async def run_purchase_order_prerequisite_syncs(
     tenant_id: int,
     current_user: User,
 ) -> List[str]:
-    """采购订单同步前：供应商（增量）→ 单位/分组（全量）→ 物料（增量）。"""
+    """采购订单同步前：供应商（增量）→ 单位/分组（增量）→ 物料（增量）。"""
+    from apps.common.inbound_sync_gate import inbound_sync_service
+
     errors: List[str] = []
 
     supplier_binding = await SupplierSyncBinding.filter(tenant_id=tenant_id).first()
     if supplier_binding and (supplier_binding.source_type or "").strip():
-        supplier_result = await SupplierSyncService().sync_from_source(
-            tenant_id, current_user, _PREREQUISITE_SYNC_REQUEST
+        supplier_result = await _prerequisite_sync_from_source(
+            inbound_sync_service("supplier_sync_service", "SupplierSyncService"),
+            tenant_id,
+            current_user,
+            _PREREQUISITE_SYNC_REQUEST,
         )
         errors.extend(_merge_prerequisite_errors("供应商同步", supplier_result))
 
     material_binding = await MaterialSyncBinding.filter(tenant_id=tenant_id).first()
     if material_binding and (material_binding.source_type or "").strip():
-        from apps.master_data.services.material_sync_service import MaterialSyncService
-
         errors.extend(await run_material_prerequisite_syncs(tenant_id, current_user))
-        material_result = await MaterialSyncService().sync_from_source(
+        material_result = await _prerequisite_sync_from_source(
+            inbound_sync_service("material_sync_service", "MaterialSyncService"),
             tenant_id,
             current_user,
             _MATERIAL_PREREQUISITE_SYNC_REQUEST,
@@ -144,15 +179,16 @@ async def run_work_order_prerequisite_syncs(
     tenant_id: int,
     current_user: User,
 ) -> List[str]:
-    """生产工单同步前：单位/分组（全量）→ 物料（增量）→ 销售订单。"""
+    """生产工单同步前：单位/分组（增量）→ 物料（增量）→ 销售订单。"""
+    from apps.common.inbound_sync_gate import inbound_sync_service
+
     errors: List[str] = []
 
     material_binding = await MaterialSyncBinding.filter(tenant_id=tenant_id).first()
     if material_binding and (material_binding.source_type or "").strip():
-        from apps.master_data.services.material_sync_service import MaterialSyncService
-
         errors.extend(await run_material_prerequisite_syncs(tenant_id, current_user))
-        material_result = await MaterialSyncService().sync_from_source(
+        material_result = await _prerequisite_sync_from_source(
+            inbound_sync_service("material_sync_service", "MaterialSyncService"),
             tenant_id,
             current_user,
             _MATERIAL_PREREQUISITE_SYNC_REQUEST,
@@ -163,9 +199,9 @@ async def run_work_order_prerequisite_syncs(
     sales_order_binding = await SalesOrderSyncBinding.filter(tenant_id=tenant_id).first()
     if sales_order_binding and (sales_order_binding.source_type or "").strip():
         from apps.kuaizhizao.schemas.sales_order_sync import SalesOrderSyncFromSourceRequest
-        from apps.kuaizhizao.services.sales_order_sync_service import SalesOrderSyncService
 
-        sales_order_result = await SalesOrderSyncService().sync_from_source(
+        sales_order_result = await _prerequisite_sync_from_source(
+            inbound_sync_service("sales_order_sync_service", "SalesOrderSyncService"),
             tenant_id,
             int(current_user.id),
             SalesOrderSyncFromSourceRequest(
@@ -189,16 +225,24 @@ async def find_material_by_code(tenant_id: int, material_code: str) -> Optional[
     ).filter(Q(main_code=code) | Q(code=code)).first()
 
 
+def _material_unit_business_value(unit: MaterialUnit) -> str:
+    """业务字段存单位名称（见 material-unit-display-name）；名称为空时回落编码。"""
+    name = cell_str(getattr(unit, "name", None))
+    if name:
+        return name
+    return cell_str(getattr(unit, "code", None))
+
+
 async def resolve_material_base_unit(
     tenant_id: int,
     unit_code: str = "",
     unit_name: str = "",
 ) -> str:
     """
-    将外部单位解析为本地 MaterialUnit.code（物料/单据真源）。
+    将外部单位解析为本地 MaterialUnit.**name**（物料/单据业务真源）。
 
-    金蝶常见 FNumber=001、FName=吨；本系统预设编码为「吨」。
-    有名称时优先按名称对齐本地单位，避免把金蝶内部编码写入物料。
+    金蝶常见 FNumber=001、FName=吨；目录仍保留 code，但写入物料 base_unit 必须是名称，
+    禁止把金蝶内部编码（如 004）写进业务字段导致列表直出编码。
     """
     code = cell_str(unit_code)
     name = cell_str(unit_name)
@@ -237,12 +281,45 @@ async def resolve_material_base_unit(
             f"基础单位 {label} 不存在，请先在单位管理加载预设或完成单位同步"
             "（金蝶请将单位编码映射到名称，或同时映射基础单位名称）"
         )
-    return unit.code
+    return _material_unit_business_value(unit)
 
 
 async def resolve_material_unit_code(tenant_id: int, unit_code: str) -> str:
-    """兼容旧调用：仅编码解析。"""
+    """兼容旧调用：按编码/名称解析后返回业务单位名称。"""
     return await resolve_material_base_unit(tenant_id, unit_code=unit_code)
+
+
+async def canonicalize_business_unit_name(
+    tenant_id: int,
+    raw: Optional[str],
+    *,
+    default: str = "个",
+) -> str:
+    """单据/物料业务字段写入前：把单位编码或名称统一成目录名称。
+
+    已是名称则原样返回；命中目录编码则换成 name；目录无此值时保留原文（不静默改成「个」）。
+    空值用 default。
+    """
+    text = cell_str(raw)
+    if not text:
+        return default
+    try:
+        return await resolve_material_base_unit(
+            tenant_id, unit_code=text, unit_name=text
+        )
+    except ValidationError:
+        return text
+
+
+async def material_snapshot_unit_name(
+    tenant_id: int,
+    material: Any,
+    *,
+    default: str = "个",
+) -> str:
+    """从物料快照基础单位，保证写入单据的是单位名称。"""
+    raw = getattr(material, "base_unit", None) if material is not None else None
+    return await canonicalize_business_unit_name(tenant_id, raw, default=default)
 
 
 async def resolve_material_group_id(tenant_id: int, group_code: str) -> int:
@@ -284,7 +361,7 @@ def resolve_material_base_unit_from_lookup(
     unit_code: str = "",
     unit_name: str = "",
 ) -> str:
-    """与 resolve_material_base_unit 相同规则，走内存映射，避免逐条查库。"""
+    """与 resolve_material_base_unit 相同规则，走内存映射，避免逐条查库；返回名称。"""
     code = cell_str(unit_code)
     name = cell_str(unit_name)
     if not code and not name:
@@ -310,7 +387,7 @@ def resolve_material_base_unit_from_lookup(
             f"基础单位 {label} 不存在，请先在单位管理加载预设或完成单位同步"
             "（金蝶请将单位编码映射到名称，或同时映射基础单位名称）"
         )
-    return unit.code
+    return _material_unit_business_value(unit)
 
 
 async def load_material_group_id_lookup(tenant_id: int) -> Dict[str, int]:

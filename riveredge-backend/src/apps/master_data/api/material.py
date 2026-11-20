@@ -2534,3 +2534,205 @@ async def check_source_config_completeness(
             detail=f"检查失败: {str(e)}"
         )
 
+
+
+material_multi_unit_sync_service = None
+material_batch_manage_sync_service = None
+
+
+def _material_multi_unit_sync_service():
+    global material_multi_unit_sync_service
+    if material_multi_unit_sync_service is None:
+        from apps.master_data.services.material_multi_unit_sync_service import (
+            MaterialMultiUnitSyncService,
+        )
+        material_multi_unit_sync_service = MaterialMultiUnitSyncService()
+    return material_multi_unit_sync_service
+
+
+def _material_batch_manage_sync_service():
+    global material_batch_manage_sync_service
+    if material_batch_manage_sync_service is None:
+        from apps.master_data.services.material_batch_manage_sync_service import (
+            MaterialBatchManageSyncService,
+        )
+        material_batch_manage_sync_service = MaterialBatchManageSyncService()
+    return material_batch_manage_sync_service
+
+
+@router.get(
+    "/multi-unit/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="物料多单位同步绑定配置",
+    dependencies=[Depends(require_master_data_module_access("material"))],
+)
+async def get_material_multi_unit_sync_binding(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    return await _material_multi_unit_sync_service().get_binding(tenant_id)
+
+
+@router.put(
+    "/multi-unit/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="保存物料多单位同步绑定配置",
+    dependencies=[Depends(require_master_data_module_access("material"))],
+)
+async def put_material_multi_unit_sync_binding(
+    body: MasterDataSyncBindingUpsert,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        return await _material_multi_unit_sync_service().upsert_binding(tenant_id, body)
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.get(
+    "/multi-unit/sync-run-history",
+    summary="物料多单位入站同步运行历史（core_sync_run_logs）",
+    dependencies=[Depends(require_master_data_module_access("material"))],
+)
+async def list_material_multi_unit_sync_run_history(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+):
+    from apps.kuaizhizao.api.document_push.document_push import (
+        DocumentPushRunHistoryItem,
+        DocumentPushRunHistoryListResponse,
+    )
+    from core.services.data.sync_run_history_service import (
+        list_inbound_entity_sync_run_history_rows,
+    )
+
+    rows, total = await list_inbound_entity_sync_run_history_rows(
+        tenant_id, "material_multi_unit", skip=skip, limit=limit
+    )
+    return DocumentPushRunHistoryListResponse(
+        data=[DocumentPushRunHistoryItem.model_validate(row) for row in rows],
+        total=total,
+        success=True,
+    )
+
+
+@router.post(
+    "/multi-unit/sync-from-source",
+    response_model=MasterDataSyncFromSourceOut,
+    summary="从数据接口或数据集同步物料辅单位换算",
+    dependencies=[Depends(require_master_data_module_access("material"))],
+)
+async def sync_material_multi_units_from_source(
+    body: MasterDataSyncFromSourceRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    stream: bool = Query(False, description="为 true 时以 NDJSON 流式返回进度"),
+):
+    from apps.master_data.api._sync_from_source_run_log import (
+        master_data_sync_from_source_with_run_log,
+    )
+    from apps.master_data.models.master_data_sync_binding import (
+        MaterialMultiUnitSyncBinding,
+    )
+
+    try:
+        return await master_data_sync_from_source_with_run_log(
+            tenant_id=tenant_id,
+            entity_type="material_multi_unit",
+            binding_model=MaterialMultiUnitSyncBinding,
+            stream=stream,
+            run_sync=lambda: _material_multi_unit_sync_service().sync_from_source(
+                tenant_id, current_user, body
+            ),
+        )
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.get(
+    "/batch-manage/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="物料批号管理同步绑定配置",
+    dependencies=[Depends(require_master_data_module_access("material"))],
+)
+async def get_material_batch_manage_sync_binding(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    return await _material_batch_manage_sync_service().get_binding(tenant_id)
+
+
+@router.put(
+    "/batch-manage/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="保存物料批号管理同步绑定配置",
+    dependencies=[Depends(require_master_data_module_access("material"))],
+)
+async def put_material_batch_manage_sync_binding(
+    body: MasterDataSyncBindingUpsert,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        return await _material_batch_manage_sync_service().upsert_binding(tenant_id, body)
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.get(
+    "/batch-manage/sync-run-history",
+    summary="物料批号管理入站同步运行历史（core_sync_run_logs）",
+    dependencies=[Depends(require_master_data_module_access("material"))],
+)
+async def list_material_batch_manage_sync_run_history(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+):
+    from apps.kuaizhizao.api.document_push.document_push import (
+        DocumentPushRunHistoryItem,
+        DocumentPushRunHistoryListResponse,
+    )
+    from core.services.data.sync_run_history_service import (
+        list_inbound_entity_sync_run_history_rows,
+    )
+
+    rows, total = await list_inbound_entity_sync_run_history_rows(
+        tenant_id, "material_batch_manage", skip=skip, limit=limit
+    )
+    return DocumentPushRunHistoryListResponse(
+        data=[DocumentPushRunHistoryItem.model_validate(row) for row in rows],
+        total=total,
+        success=True,
+    )
+
+
+@router.post(
+    "/batch-manage/sync-from-source",
+    response_model=MasterDataSyncFromSourceOut,
+    summary="从金蝶物料库存信息同步批号管理开关",
+    dependencies=[Depends(require_master_data_module_access("material"))],
+)
+async def sync_material_batch_manage_from_source(
+    body: MasterDataSyncFromSourceRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    stream: bool = Query(False, description="为 true 时以 NDJSON 流式返回进度"),
+):
+    from apps.master_data.api._sync_from_source_run_log import (
+        master_data_sync_from_source_with_run_log,
+    )
+    from apps.master_data.models.master_data_sync_binding import (
+        MaterialBatchManageSyncBinding,
+    )
+
+    try:
+        return await master_data_sync_from_source_with_run_log(
+            tenant_id=tenant_id,
+            entity_type="material_batch_manage",
+            binding_model=MaterialBatchManageSyncBinding,
+            stream=stream,
+            run_sync=lambda: _material_batch_manage_sync_service().sync_from_source(
+                tenant_id, current_user, body
+            ),
+        )
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))

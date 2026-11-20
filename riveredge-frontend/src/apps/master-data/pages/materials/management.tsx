@@ -32,6 +32,7 @@ import {
   Row,
   Col,
   Divider,
+  Dropdown,
   Tooltip,
   Table,
   Skeleton,
@@ -43,6 +44,7 @@ import {
   ArrowLeftOutlined,
   EditOutlined,
   DeleteOutlined,
+  DownOutlined,
   PlusOutlined,
   FolderFilled,
   FolderOpenFilled,
@@ -98,6 +100,49 @@ function renderMaterialGroupFolderIcon(props: { expanded: boolean; isLeaf: boole
   )
 }
 
+/** 物料列表右侧「其他同步」：随 UniTable 窄栏收成图标按钮 */
+function MaterialOtherSyncDropdown(props: {
+  onMultiUnitSync: () => void
+  onBatchManageSync: () => void
+}) {
+  const { t } = useTranslation()
+  const iconOnly = useUniTableDataActionIconOnly()
+  const label = t('app.master-data.materials.otherSyncMenu')
+  const trigger = (
+    <Button icon={<SyncOutlined />} aria-label={label}>
+      {iconOnly ? null : (
+        <>
+          {label}
+          <DownOutlined style={{ fontSize: 10, marginLeft: 4, opacity: 0.75 }} />
+        </>
+      )}
+    </Button>
+  )
+  return (
+    <Dropdown
+      trigger={['click']}
+      menu={{
+        items: [
+          {
+            key: 'multiUnitSync',
+            icon: <SyncOutlined />,
+            label: t('app.master-data.materials.multiUnitSyncMenu'),
+            onClick: props.onMultiUnitSync,
+          },
+          {
+            key: 'batchManageSync',
+            icon: <TagsOutlined />,
+            label: t('app.master-data.materials.batchManageSyncMenu'),
+            onClick: props.onBatchManageSync,
+          },
+        ],
+      }}
+    >
+      {iconOnly ? <Tooltip title={label}>{trigger}</Tooltip> : trigger}
+    </Dropdown>
+  )
+}
+
 // 导入现有组件
 import SafeProFormSelect from '../../../../components/safe-pro-form-select'
 import { UniTable, type UniTableRequestMeta} from '../../../../components/uni-table'
@@ -122,9 +167,12 @@ import { MaterialForm } from '../../components/MaterialForm'
 import MaterialSyncFromSourceModal from '../../components/MaterialSyncFromSourceModal'
 import MaterialGroupSyncFromSourceModal from '../../components/MaterialGroupSyncFromSourceModal'
 import MaterialDocumentPushPanel from '../../components/MaterialDocumentPushPanel'
+import MaterialMultiUnitSyncFromSourceModal from '../../components/MaterialMultiUnitSyncFromSourceModal'
+import MaterialBatchManageSyncFromSourceModal from '../../components/MaterialBatchManageSyncFromSourceModal'
 import { SyncFreshnessBadge } from '../../../../components/sync-from-source-modal/SyncFreshnessBadge'
 import { SyncPushHubButton } from '../../../../components/sync-push-hub'
 import { useToolbarSyncPushFlags } from '../../../../hooks/useToolbarSyncPushFlags'
+import { useUniTableDataActionIconOnly } from '../../../../components/uni-table/dataActionIconOnlyContext'
 import { MaterialGroupFormModal } from '../../components/MaterialGroupFormModal'
 import { DEFAULT_MATERIAL_BASE_UNIT } from '../../constants/materialDefaults'
 import {
@@ -680,6 +728,8 @@ const MaterialsManagementPage: React.FC = () => {
   const [activeImportKind, setActiveImportKind] = useState<MaterialSplitImportKind | null>(null)
   const [importModalVisible, setImportModalVisible] = useState(false)
   const [groupSyncModalVisible, setGroupSyncModalVisible] = useState(false)
+  const [multiUnitSyncModalVisible, setMultiUnitSyncModalVisible] = useState(false)
+  const [batchManageSyncModalVisible, setBatchManageSyncModalVisible] = useState(false)
   const [syncFreshnessKey, setSyncFreshnessKey] = useState(0)
   const [groupSyncFreshnessKey, setGroupSyncFreshnessKey] = useState(0)
   const loadMaterialSyncBinding = useCallback(() => getMaterialSyncBinding(), [])
@@ -1263,6 +1313,14 @@ const MaterialsManagementPage: React.FC = () => {
     void loadMaterialGroups()
     actionRef.current?.reload()
   }, [loadMaterialGroups])
+
+  const handleMultiUnitSyncComplete = useCallback(() => {
+    actionRef.current?.reload()
+  }, [])
+
+  const handleBatchManageSyncComplete = useCallback(() => {
+    actionRef.current?.reload()
+  }, [])
 
   useEffect(() => {
     if (isFormPage) return
@@ -4226,7 +4284,7 @@ const MaterialsManagementPage: React.FC = () => {
             record,
             renderMasterYesNoTag(
               t,
-              record.batchManaged,
+              record.batchManaged ?? (record as { batch_managed?: boolean }).batch_managed,
               'common.yes',
               'common.no',
             ),
@@ -4690,7 +4748,8 @@ const MaterialsManagementPage: React.FC = () => {
                 syncToolbarExtra={
                   toolbarSyncPush.hubVisible
                     ? () => (
-                        <SyncPushHubButton
+                        <Space size={8} wrap>
+                          <SyncPushHubButton
                           syncEnabled={toolbarSyncPush.syncEnabled}
                           pushEnabled={toolbarSyncPush.pushEnabled}
                           historySourceType="material"
@@ -4728,6 +4787,13 @@ const MaterialsManagementPage: React.FC = () => {
                             />
                           )}
                         />
+                          {toolbarSyncPush.syncEnabled ? (
+                            <MaterialOtherSyncDropdown
+                              onMultiUnitSync={() => setMultiUnitSyncModalVisible(true)}
+                              onBatchManageSync={() => setBatchManageSyncModalVisible(true)}
+                            />
+                          ) : null}
+                        </Space>
                       )
                     : undefined
                 }
@@ -5809,6 +5875,17 @@ const MaterialsManagementPage: React.FC = () => {
         open={groupSyncModalVisible}
         onClose={() => setGroupSyncModalVisible(false)}
         onComplete={handleGroupSyncComplete}
+      />
+
+      <MaterialMultiUnitSyncFromSourceModal
+        open={multiUnitSyncModalVisible}
+        onClose={() => setMultiUnitSyncModalVisible(false)}
+        onComplete={handleMultiUnitSyncComplete}
+      />
+      <MaterialBatchManageSyncFromSourceModal
+        open={batchManageSyncModalVisible}
+        onClose={() => setBatchManageSyncModalVisible(false)}
+        onComplete={handleBatchManageSyncComplete}
       />
 
     </>
