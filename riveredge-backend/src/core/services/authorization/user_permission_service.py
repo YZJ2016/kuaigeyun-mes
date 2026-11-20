@@ -127,12 +127,10 @@ class UserPermissionService:
         Returns:
             bool: 如果用户具有权限则返回True，否则返回False
         """
-        # 如果是组织管理员或平台管理员，默认拥有所有权限
         user = await User.get_or_none(id=user_id)
-        if user:
-            if user.is_tenant_admin or user.is_infra_admin:
-                return True
-        
+        if user and await UserPermissionService.is_admin_bypass(user, tenant_id):
+            return True
+
         # 获取用户的所有权限
         user_permissions = await UserPermissionService.get_user_permissions(
             user_id=user_id,

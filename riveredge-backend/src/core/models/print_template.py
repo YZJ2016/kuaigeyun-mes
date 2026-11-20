@@ -5,8 +5,11 @@
 """
 
 from tortoise import fields
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, TYPE_CHECKING
 from .base import BaseModel
+
+if TYPE_CHECKING:
+    from .resource_category import ResourceCategory
 
 
 class PrintTemplate(BaseModel):
@@ -38,6 +41,13 @@ class PrintTemplate(BaseModel):
     # Inngest 关联（可选）
     inngest_function_id = fields.CharField(max_length=100, null=True, description="Inngest 函数ID（如果通过 Inngest 执行打印）")
     
+    category: fields.ForeignKeyNullableRelation["ResourceCategory"] = fields.ForeignKeyField(
+        "models.ResourceCategory",
+        related_name="print_templates",
+        null=True,
+        description="所属分类（可选）",
+    )
+
     # 模板状态
     is_active = fields.BooleanField(default=True, description="是否启用")
     is_default = fields.BooleanField(default=False, description="是否默认模板")
@@ -62,6 +72,7 @@ class PrintTemplate(BaseModel):
             ("is_active",),
             ("is_default",),
             ("created_at",),
+            ("category_id",),
         ]
         unique_together = [("tenant_id", "code")]
     

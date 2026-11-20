@@ -33,12 +33,20 @@ def extract_wecom_user_id(user: User) -> str | None:
 _extract_wecom_user_id = extract_wecom_user_id
 
 
-def encode_wecom_oauth_state(*, tenant_id: int, redirect: str | None = None) -> str:
-    payload = {
+def encode_wecom_oauth_state(
+    *,
+    tenant_id: int,
+    redirect: str | None = None,
+    discover: bool = False,
+) -> str:
+    payload: dict[str, Any] = {
         "t": tenant_id,
         "r": (redirect or "").strip(),
         "n": secrets.token_urlsafe(8),
     }
+    if discover:
+        # 同 Corp 多应用：授权后按 wecom_userid 跨组织反查唯一绑定
+        payload["d"] = 1
     raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
 
@@ -64,7 +72,30 @@ def decode_wecom_oauth_state(state: str) -> dict[str, Any]:
         "tenant_id": tenant_id_int,
         "redirect": redirect.strip() if isinstance(redirect, str) else "",
         "nonce": payload.get("n"),
+        "discover": payload.get("d") == 1,
     }
+
+
+async def find_users_bound_to_wecom_userid_across_tenants(
+    *,
+    wecom_userid: str,
+    tenant_ids: list[int] | None = None,
+) -> list[User]:
+    """跨组织查找已绑定该企微 UserId 的启用用户（每组织至多一条）。"""
+    target = (wecom_userid or "").strip().lower()
+    if not target:
+        return []
+    query = User.filter(is_active=True, deleted_at__isnull=True)
+    if tenant_ids is not None:
+        if not tenant_ids:
+            return []
+        query = query.filter(tenant_id__in=list(tenant_ids))
+    matched: list[User] = []
+    for user in await query:
+        bound = _extract_wecom_user_id(user)
+        if bound and bound.lower() == target:
+            matched.append(user)
+    return matched
 
 
 async def build_wecom_oauth_authorize_url(
@@ -105,9 +136,14 @@ async def resolve_wecom_user_id_from_code(*, tenant_id: int, code: str) -> str:
     data = resp.json()
     if data.get("errcode") != 0:
         logger.warning("企微 OAuth getuserinfo 失败 tenant={}: {}", tenant_id, data)
+        errcode = data.get("errcode")
+        if errcode == 40029:
+            detail = "企业微信登录凭证已失效或已被使用，请关闭应用后重新打开"
+        else:
+            detail = data.get("errmsg") or "企业微信身份验证失败"
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=data.get("errmsg") or "企业微信身份验证失败",
+            detail=detail,
         )
     userid = data.get("userid") or data.get("UserId")
     if not isinstance(userid, str) or not userid.strip():

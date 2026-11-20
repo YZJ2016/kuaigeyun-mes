@@ -79,6 +79,17 @@ class AuthServiceImpl(AuthServiceInterface):
             request=request,
         )
 
+    async def set_login_default_tenant(
+        self,
+        current_user: Any,
+        target_tenant_id: Optional[int],
+    ) -> list[dict]:
+        """设置多账户登录默认进入组织；None 表示每次登录再选"""
+        return await self._auth_service.set_login_default_tenant(
+            current_user=current_user,
+            target_tenant_id=target_tenant_id,
+        )
+
     async def generate_login_result(
         self,
         user: User,

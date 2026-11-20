@@ -4,7 +4,7 @@
 提供职位的 CRUD 操作。
 """
 
-from typing import Optional, List
+from typing import Optional, List, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 from pydantic import BaseModel, Field
 
@@ -17,6 +17,7 @@ from core.schemas.position import (
     PositionListItem,
 )
 from core.services.authorization.position_service import PositionService
+from core.services.authorization.position_import_service import PositionImportService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
@@ -301,6 +302,29 @@ async def update_position(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(e)
         )
+
+
+class PositionImportRequestSchema(BaseModel):
+    data: List[List[Any]] = Field(
+        ...,
+        description="二维数组（表头、示例行、数据行）",
+    )
+
+
+@router.post("/batch-import")
+async def import_positions(
+    request: PositionImportRequestSchema,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await PositionImportService.import_positions_from_data(
+            tenant_id=tenant_id,
+            data=request.data,
+            current_user_id=current_user.id,
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 
 @router.delete("/{position_uuid}", status_code=status.HTTP_204_NO_CONTENT)

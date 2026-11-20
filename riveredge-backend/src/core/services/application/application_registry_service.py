@@ -102,7 +102,8 @@ class ApplicationRegistryService:
 
                 apps.append(app_data)
 
-            logger.debug(f"从数据库发现 {len(apps)} 个活跃应用")
+            apps = cls._append_runtime_api_companions(apps)
+            logger.debug(f"从数据库发现 {len(apps)} 个活跃应用（含 API 伴生）")
 
             if not apps:
                 total = await conn.fetchval(
@@ -199,6 +200,10 @@ class ApplicationRegistryService:
                 # 将应用代码中的连字符转换为下划线，以匹配Python模块命名规范
                 module_code = app_code.replace('-', '_')
                 route_module_path = f"apps.{module_code}.api.router"
+                if module_code == "kuaicaiwu":
+                    bridge = "apps.kuaizhizao.finance.api.kuaicaiwu_app_router"
+                    if cls._module_exists(bridge):
+                        route_module_path = bridge
 
                 # 检查模块是否存在
                 if cls._module_exists(route_module_path):
@@ -356,6 +361,44 @@ class ApplicationRegistryService:
         await cls.initialize()
     
     @classmethod
+    def _append_runtime_api_companions(
+        cls, apps: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """宿主已启用时补上 API/ORM 伴生（磁盘已 compose，不必伴生 is_active）。"""
+        from core.services.application.enabled_apps import apply_runtime_api_companions
+        from apps.common.optional_pro import pro_app_available
+
+        present = {str(a.get("code") or "") for a in apps if a.get("code")}
+        needed = apply_runtime_api_companions(present) - present
+        if not needed:
+            return apps
+        out = list(apps)
+        for code in sorted(needed):
+            if code in cls._placeholder_app_codes or not pro_app_available(code):
+                continue
+            out.append(
+                {
+                    "uuid": None,
+                    "code": code,
+                    "name": code,
+                    "description": None,
+                    "version": None,
+                    "changelog": None,
+                    "route_path": f"/apps/{code}",
+                    "entry_point": None,
+                    "menu_config": None,
+                    "is_system": False,
+                    "is_active": True,
+                    "is_installed": True,
+                    "created_at": None,
+                    "updated_at": None,
+                    "_runtime_api_companion": True,
+                }
+            )
+            logger.info("路由发现补齐 API 伴生应用: {}", code)
+        return out
+
+    @classmethod
     async def register_single_app(cls, app_code: str) -> bool:
         """
         注册单个应用的路由，并按启用集重建 Tortoise ORM。
@@ -365,13 +408,21 @@ class ApplicationRegistryService:
 
         ORM 重建失败必须抛出，不得吞掉后继续挂路由（否则会出现
         ``default_connection ... cannot be None``）。
+
+        伴生应用（如快制造启用后的 kuaicaiwu）允许仅磁盘包就绪、应用中心未启用。
         """
         from infra.infrastructure.database.database import (
             get_db_connection,
             reload_tortoise_for_enabled_apps,
         )
+        from core.services.application.enabled_apps import (
+            clear_enabled_apps_cache,
+            resolve_enabled_app_codes,
+        )
+        from apps.common.optional_pro import pro_app_available
 
         # 启用后先重建 ORM，再挂路由（否则会 default_connection is None）
+        clear_enabled_apps_cache()
         await reload_tortoise_for_enabled_apps()
 
         conn = await get_db_connection()
@@ -393,15 +444,35 @@ class ApplicationRegistryService:
                 app_code,
             )
 
-            if not rows:
-                all_rows = await conn.fetch(
-                    "SELECT tenant_id, code, is_active, is_installed FROM core_applications WHERE code = $1",
-                    app_code,
-                )
-                logger.warning(f"应用 {app_code} 不存在或未启用；全部记录={all_rows}")
-                return False
-
-            app_data = dict(rows[0])
+            if rows:
+                app_data = dict(rows[0])
+            else:
+                enabled = await resolve_enabled_app_codes()
+                if app_code not in enabled or not pro_app_available(app_code):
+                    all_rows = await conn.fetch(
+                        "SELECT tenant_id, code, is_active, is_installed FROM core_applications WHERE code = $1",
+                        app_code,
+                    )
+                    logger.warning(f"应用 {app_code} 不存在或未启用；全部记录={all_rows}")
+                    return False
+                app_data = {
+                    "uuid": None,
+                    "code": app_code,
+                    "name": app_code,
+                    "description": None,
+                    "version": None,
+                    "changelog": None,
+                    "route_path": f"/apps/{app_code}",
+                    "entry_point": None,
+                    "menu_config": None,
+                    "is_system": False,
+                    "is_active": True,
+                    "is_installed": True,
+                    "created_at": None,
+                    "updated_at": None,
+                    "_runtime_api_companion": True,
+                }
+                logger.info("以 API 伴生身份注册应用路由: {}", app_code)
         finally:
             await conn.close()
 
@@ -439,6 +510,20 @@ class ApplicationRegistryService:
             app_code: 应用代码
         """
         try:
+            from core.services.application.enabled_apps import (
+                clear_enabled_apps_cache,
+                resolve_enabled_app_codes,
+            )
+
+            clear_enabled_apps_cache()
+            still_needed = app_code in await resolve_enabled_app_codes()
+            if still_needed:
+                logger.info(
+                    "应用 {} 仍为启用集/API 伴生所需，跳过路由注销",
+                    app_code,
+                )
+                return
+
             # 从缓存中移除
             if app_code in cls._registered_routes:
                 del cls._registered_routes[app_code]

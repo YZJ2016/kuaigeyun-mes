@@ -32,7 +32,8 @@ class ApprovalProcessBase(BaseModel):
 
 class ApprovalProcessCreate(ApprovalProcessBase):
     """创建审批流程 Schema"""
-    pass
+
+    category_uuid: Optional[UUID] = Field(None, description="所属分类 UUID（可选）")
 
 
 class ApprovalProcessUpdate(BaseModel):
@@ -42,6 +43,7 @@ class ApprovalProcessUpdate(BaseModel):
     nodes: Optional[Dict[str, Any]] = Field(None, description="流程节点配置")
     config: Optional[Dict[str, Any]] = Field(None, description="流程配置")
     is_active: Optional[bool] = Field(None, description="是否启用")
+    category_uuid: Optional[UUID] = Field(None, description="所属分类 UUID（可选，传 null 清除分类）")
 
     @field_validator("nodes", "config", mode="before")
     @classmethod
@@ -63,6 +65,8 @@ class ApprovalProcessResponse(ApprovalProcessBase):
     draft_nodes: Optional[Dict[str, Any]] = Field(None, description="草稿节点")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    category_uuid: Optional[UUID] = Field(None, description="所属分类 UUID")
+    category_name: Optional[str] = Field(None, description="所属分类名称")
 
     @field_validator("draft_nodes", mode="before")
     @classmethod

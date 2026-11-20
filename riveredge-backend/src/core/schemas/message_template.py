@@ -33,7 +33,8 @@ class MessageTemplateBase(BaseModel):
 
 class MessageTemplateCreate(MessageTemplateBase):
     """创建消息模板 Schema"""
-    pass
+
+    category_uuid: Optional[UUID] = Field(None, description="所属分类 UUID（可选）")
 
 
 class MessageTemplateUpdate(BaseModel):
@@ -46,6 +47,7 @@ class MessageTemplateUpdate(BaseModel):
     content: Optional[str] = Field(None, description="模板内容")
     variables: Optional[Dict[str, Any]] = Field(None, description="模板变量定义")
     is_active: Optional[bool] = Field(None, description="是否启用")
+    category_uuid: Optional[UUID] = Field(None, description="所属分类 UUID（可选，传 null 清除分类）")
 
 
 class MessageTemplateResponse(MessageTemplateBase):
@@ -54,7 +56,9 @@ class MessageTemplateResponse(MessageTemplateBase):
     tenant_id: int = Field(..., description="组织ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
-    
+    category_uuid: Optional[UUID] = Field(None, description="所属分类 UUID")
+    category_name: Optional[str] = Field(None, description="所属分类名称")
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -87,7 +91,6 @@ class SendMessageRequest(BaseModel):
     entity_type: Optional[str] = Field(None, max_length=100, description="业务实体类型")
     entity_id: Optional[int] = Field(None, description="业务实体ID")
     entity_uuid: Optional[str] = Field(None, max_length=36, description="业务实体UUID")
-    attachment: Optional[MessageAttachment] = Field(None, description="可选附件；不传则与原来一样")
 
 
 class SendMessageResponse(BaseModel):

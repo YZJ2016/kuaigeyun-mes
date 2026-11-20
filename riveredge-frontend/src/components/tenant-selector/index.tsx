@@ -15,16 +15,32 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getTenantList, TenantStatus } from '../../services/tenant';
-import { getMyTenants, switchTenant, tenantNameFromLoginResponse } from '../../services/auth';
+import {
+  getMyTenants,
+  setDefaultTenant,
+  switchTenant,
+  tenantNameFromLoginResponse,
+  type TenantSwitchOption,
+} from '../../services/auth';
 import { setTenantId, getTenantId, isInfraSuperAdminUser, setToken, setUserInfo } from '../../utils/auth';
-import { applyTenantSwitchSideEffects } from '../../utils/applyTenantSwitch';
+import {
+  applyTenantSwitchSideEffects,
+  prepareTenantSwitchNetwork,
+} from '../../utils/applyTenantSwitch';
 import { isRequestCancellation } from '../../utils/requestCancellation';
 import { useGlobalStore } from '../../stores';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { MarkerTag } from '../../constants/statusBadges';
+import TenantSelectionModal from '../tenant-selection-modal';
+import './index.less';
 
 interface TenantOption {
   id: number;
   name: string;
+  /** 多账户登录默认进入组织 */
+  isDefault?: boolean;
+  domain?: string;
+  status?: string;
 }
 
 interface TenantSelectorProps {
@@ -42,8 +58,24 @@ function rememberTenantLabel(id: string | number | null | undefined, name: strin
   knownTenantLabels.set(idStr, label);
 }
 
+function mapMyTenantsToOptions(tenants: TenantSwitchOption[]): TenantOption[] {
+  return tenants
+    .map((tenant) => ({
+      id: Number(tenant.id),
+      name: tenant.name,
+      isDefault: tenant.is_default === true,
+      domain: tenant.domain,
+      status: tenant.status,
+    }))
+    .sort((a, b) => a.id - b.id);
+}
+
 /** 下拉可视高度：约 11 行选项（主+子演示组织一屏内看完） */
 const TENANT_SELECTOR_LIST_HEIGHT = 11 * 32;
+
+const SET_DEFAULT_OPTION_VALUE = '__set_login_default__';
+/** 独立分隔行：勿把 border 画在「设置默认组织」选项内，否则 hover 背景会连分割线一起盖住 */
+const SET_DEFAULT_DIVIDER_VALUE = '__set_login_default_divider__';
 
 /**
  * 组织选择器组件
@@ -58,6 +90,8 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
   const isInfraSuperAdmin = isInfraSuperAdminUser(currentUser);
   const currentTenantId = currentUser?.tenant_id ?? getTenantId();
   const [switching, setSwitching] = React.useState(false);
+  const [setDefaultModalOpen, setSetDefaultModalOpen] = React.useState(false);
+  const [settingDefaultId, setSettingDefaultId] = React.useState<number | null>(null);
   const switchingRef = React.useRef(false);
   const optionsErrorNotifiedRef = React.useRef(false);
   /** 多组织切换能力：queryClient.clear 后 options 短暂为空时仍保持 Select，避免退回只读胶囊 */
@@ -88,10 +122,7 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
           .map((tenant) => ({ id: Number(tenant.id), name: tenant.name }))
           .sort((a, b) => a.id - b.id);
       }
-      const tenants = await getMyTenants();
-      return tenants
-        .map((tenant) => ({ id: Number(tenant.id), name: tenant.name }))
-        .sort((a, b) => a.id - b.id);
+      return mapMyTenantsToOptions(await getMyTenants());
     },
     enabled: !!currentUser,
   });
@@ -131,6 +162,7 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
     const mapped = tenantOptions.map((tenant) => ({
       value: String(tenant.id),
       label: tenant.name,
+      isDefault: tenant.isDefault === true,
     }));
     if (
       currentTenantIdStr &&
@@ -139,11 +171,43 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
       const cached =
         currentTenantName || knownTenantLabels.get(currentTenantIdStr) || '';
       if (cached) {
-        mapped.push({ value: currentTenantIdStr, label: cached });
+        mapped.push({ value: currentTenantIdStr, label: cached, isDefault: false });
       }
     }
     return mapped.sort((a, b) => Number(a.value) - Number(b.value));
   })();
+
+  const canManageLoginDefault = !isInfraSuperAdmin && selectOptions.length > 1;
+
+  const selectOptionsWithFooter = canManageLoginDefault
+    ? [
+        ...selectOptions,
+        {
+          value: SET_DEFAULT_DIVIDER_VALUE,
+          label: '',
+          disabled: true,
+          className: 'tenant-selector-default-divider',
+        },
+        {
+          value: SET_DEFAULT_OPTION_VALUE,
+          label: t('ui.action.setDefaultTenantEntry'),
+          isDefault: false,
+          className: 'tenant-selector-set-default-option',
+        },
+      ]
+    : selectOptions;
+
+  const defaultModalTenants = tenantOptions
+    .filter((tenant) => Number.isFinite(tenant.id) && tenant.id > 0)
+    .map((tenant) => ({
+      id: tenant.id,
+      name: tenant.name,
+      domain: tenant.domain || '-',
+      status: tenant.status || 'active',
+      is_default: tenant.isDefault === true,
+    }));
+
+  const currentDefaultTenantId = tenantOptions.find((tenant) => tenant.isDefault)?.id;
 
   const resolveTenantLabel = (
     value: string | number | null | undefined,
@@ -162,13 +226,48 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
     return knownTenantLabels.get(valueStr);
   };
 
+  const handleSetLoginDefault = async (tenantId: number | null) => {
+    if (!canManageLoginDefault || settingDefaultId != null) return;
+    try {
+      setSettingDefaultId(tenantId ?? -1);
+      const updated = await setDefaultTenant(tenantId);
+      queryClient.setQueryData(
+        ['tenant-selector-options', isInfraSuperAdmin],
+        mapMyTenantsToOptions(updated),
+      );
+      message.success(
+        tenantId == null
+          ? t('ui.message.clearDefaultTenantSuccess')
+          : t('ui.message.setDefaultTenantSuccess'),
+      );
+      setSetDefaultModalOpen(false);
+    } catch (err: unknown) {
+      if (!isRequestCancellation(err)) {
+        const msg = err instanceof Error ? err.message : t('ui.message.setDefaultTenantFailed');
+        message.error(msg);
+      }
+    } finally {
+      setSettingDefaultId(null);
+    }
+  };
+
   const handleTenantChange = async (tenantId: string) => {
+    if (tenantId === SET_DEFAULT_DIVIDER_VALUE) {
+      return;
+    }
+    if (tenantId === SET_DEFAULT_OPTION_VALUE) {
+      setSetDefaultModalOpen(true);
+      return;
+    }
+
     const nextId = Number(tenantId);
     if (!Number.isFinite(nextId) || nextId === currentTenantId || switchingRef.current) return;
 
     try {
       switchingRef.current = true;
       setSwitching(true);
+      // 先掐断旧组织在途请求，再换票/清缓存，避免与壳层重拉叠满连接池导致 502
+      prepareTenantSwitchNetwork();
 
       if (isInfraSuperAdmin) {
         const selected = tenantOptions.find((tenant) => Number(tenant.id) === nextId);
@@ -211,7 +310,12 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
       await applyTenantSwitchSideEffects(queryClient, navigate);
     } catch (err: any) {
       if (!isRequestCancellation(err)) {
-        message.error(err?.message || t('pages.login.tenantSelectFailed'));
+        const status = err?.response?.status;
+        const msg =
+          status === 502 || status === 503 || status === 504
+            ? t('errors.serviceUnreachable.content')
+            : err?.message || t('pages.login.tenantSelectFailed');
+        message.error(msg);
       }
     } finally {
       switchingRef.current = false;
@@ -292,9 +396,60 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
             }}
             size="small"
             className="tenant-selector-select"
+            classNames={{ popup: { root: 'tenant-selector-dropdown' } }}
             suffixIcon={<SwapOutlined />}
             listHeight={TENANT_SELECTOR_LIST_HEIGHT}
-            options={selectOptions}
+            options={selectOptionsWithFooter}
+            optionRender={(option) => {
+              if (option.value === SET_DEFAULT_DIVIDER_VALUE) {
+                return (
+                  <div
+                    aria-hidden
+                    style={{
+                      height: 1,
+                      margin: '4px 0',
+                      background: token.colorSplit,
+                    }}
+                  />
+                );
+              }
+              if (option.value === SET_DEFAULT_OPTION_VALUE) {
+                return (
+                  <div style={{ color: token.colorPrimary, fontWeight: 500 }}>
+                    {option.label}
+                  </div>
+                );
+              }
+              const isDefault = option.data?.isDefault === true;
+              return (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                    minWidth: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      flex: '1 1 auto',
+                      minWidth: 0,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {option.label}
+                  </span>
+                  {isDefault ? (
+                    <MarkerTag color="blue" style={{ marginInlineEnd: 0, flex: '0 0 auto' }}>
+                      {t('components.tenantSelection.default')}
+                    </MarkerTag>
+                  ) : null}
+                </div>
+              );
+            }}
             labelRender={(props) => {
               const resolved = resolveTenantLabel(props.value, props.label);
               if (resolved) {
@@ -317,6 +472,25 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
             }
           />
         )}
+        {canManageLoginDefault ? (
+          <TenantSelectionModal
+            mode="setDefault"
+            open={setDefaultModalOpen}
+            tenants={defaultModalTenants}
+            defaultTenantId={currentDefaultTenantId}
+            title={t('components.tenantSelection.setDefaultTitle')}
+            hint={t('components.tenantSelection.setDefaultHint')}
+            closable
+            confirmingTenantId={settingDefaultId}
+            onSelect={(tenantId) => {
+              void handleSetLoginDefault(tenantId);
+            }}
+            onCancel={() => {
+              if (settingDefaultId != null) return;
+              setSetDefaultModalOpen(false);
+            }}
+          />
+        ) : null}
       </div>
     );
   }

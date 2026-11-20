@@ -74,9 +74,20 @@ async def build_wecom_deployment_guide(
     request_base_url: str | None,
     corp_id: str | None = None,
     agent_id: int | None = None,
+    public_base_url: str | None = None,
 ) -> dict[str, Any]:
     """生成企微管理后台对照用的 URL 说明（不含密钥）。"""
-    origin = build_public_origin(request_base_url).rstrip("/")
+    from core.services.integration.wecom_public_base_url import (
+        normalize_wecom_public_base_url,
+        resolve_wecom_public_base_url,
+    )
+
+    # 编辑表单可传 public_base_url；否则读连接器 base_url / 环境 BASE_URL
+    origin = normalize_wecom_public_base_url(public_base_url)
+    if not origin:
+        origin = await resolve_wecom_public_base_url(tenant_id)
+    if not origin:
+        origin = build_public_origin(request_base_url).rstrip("/")
     if not origin and request_base_url:
         origin = str(request_base_url).rstrip("/")
 
@@ -84,6 +95,18 @@ async def build_wecom_deployment_guide(
     tenant_domain = (tenant.domain or "").strip().lower() if tenant else ""
 
     oauth_callback = f"{origin}/login?provider=wecom_work" if origin else ""
+    # 企微「应用主页」须指向手机 H5（与 riveredge-app/mobile/docs/H5.md 一致）
+    # 多自建应用同站时用路径型 /mobile/wecom/<CorpId>/<AgentId>（部分企微版本会丢掉主页 query）
+    mobile_home = ""
+    if origin:
+        corp = (corp_id or "").strip()
+        if corp and agent_id is not None:
+            mobile_home = (
+                f"{origin}/mobile/wecom/{quote(corp, safe='')}/{int(agent_id)}"
+            )
+        else:
+            mobile_home = f"{origin}/mobile/?tenant_id={int(tenant_id)}"
+    mobile_oauth_redirect = f"{origin}/mobile/" if origin else ""
     tenant_entry = f"{origin}/{tenant_domain}" if origin and tenant_domain else ""
     login_with_agent = ""
     if origin and corp_id and agent_id is not None:
@@ -99,11 +122,19 @@ async def build_wecom_deployment_guide(
         parsed = urlparse(origin)
         trusted_host = parsed.hostname or ""
 
+    # 模板可更新卡要求企微后台配置「接收消息」；按租户区分路径
+    receive_callback = (
+        f"{origin}/api/v1/integrations/wecom/receive/{int(tenant_id)}" if origin else ""
+    )
+
     return {
         "origin": origin,
         "tenant_domain": tenant_domain,
         "oauth_callback_url": oauth_callback,
-        "workbench_home_url": tenant_entry,
+        "mobile_oauth_redirect_url": mobile_oauth_redirect,
+        "workbench_home_url": mobile_home,
+        "pc_tenant_entry_url": tenant_entry,
         "login_with_agent_url": login_with_agent,
         "trusted_domain": trusted_host,
+        "receive_message_url": receive_callback,
     }

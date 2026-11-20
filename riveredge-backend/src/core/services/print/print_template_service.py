@@ -6,6 +6,7 @@
 
 import re
 from typing import Optional, List, Any, Set
+from uuid import UUID
 from datetime import datetime
 
 from tortoise.exceptions import IntegrityError
@@ -26,7 +27,12 @@ from core.schemas.print_template import (
     PrintTemplateRenderRequest,
     PrintTemplateCompileRequest,
     PrintTemplateCompilePreviewRequest,
+    PrintTemplateResponse,
 )
+from core.models.resource_category import RESOURCE_TYPE_PRINT_TEMPLATE
+from core.services.resource.resource_category_service import ResourceCategoryService
+from core.services.resource.resource_category_refs import read_category_uuid_name
+from core.services.resource.collab_function_category_service import CollabFunctionCategoryService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
 from core.utils.timezone_utils import resolve_business_datetime
@@ -422,6 +428,16 @@ class PrintTemplateService:
     """
     
     @staticmethod
+    def build_print_template_response(print_template: PrintTemplate) -> PrintTemplateResponse:
+        category_uuid, category_name = read_category_uuid_name(print_template)
+        payload = print_template.__dict__.copy()
+        if "id" in payload:
+            del payload["id"]
+        payload["category_uuid"] = category_uuid
+        payload["category_name"] = category_name
+        return PrintTemplateResponse.model_validate(payload)
+
+    @staticmethod
     async def create_print_template(
         tenant_id: int,
         data: PrintTemplateCreate
@@ -447,8 +463,22 @@ class PrintTemplateService:
             except NotFoundError:
                 raise ValidationError(f"关联的打印设备不存在: {device_uuid}")
 
-        payload = data.model_dump()
+        payload = data.model_dump(exclude={"category_uuid"})
+        category_id = None
+        if data.category_uuid:
+            category_id = await ResourceCategoryService().resolve_category_id(
+                tenant_id,
+                RESOURCE_TYPE_PRINT_TEMPLATE,
+                data.category_uuid,
+            )
         base_code = payload.get("code") or (payload.get("config") or {}).get("document_type")
+        if category_id is None:
+            doc_type = (payload.get("config") or {}).get("document_type")
+            category_id = await CollabFunctionCategoryService().resolve_category_id_for_print(
+                tenant_id,
+                document_type=doc_type,
+                template_code=base_code,
+            )
         if not base_code:
             raise ValidationError("模板代码不能为空")
 
@@ -461,10 +491,11 @@ class PrintTemplateService:
                 )
                 print_template = await PrintTemplate.create(
                     tenant_id=tenant_id,
+                    category_id=category_id,
                     **payload,
                     using_db=conn,
                 )
-            # TODO: 可选接入 Taskiq（如 print/render 事件 + dispatcher 注册处理器）
+            await print_template.fetch_related("category")
             return print_template
         except IntegrityError as e:
             logger.error("创建打印模板唯一约束冲突: tenant_id={} base_code={}", tenant_id, base_code)
@@ -480,6 +511,10 @@ class PrintTemplateService:
         加载打印模板预设数据。
         缺失则创建；exact code 且非可视化则升级。
         """
+        await CollabFunctionCategoryService().ensure_function_categories(
+            tenant_id,
+            RESOURCE_TYPE_PRINT_TEMPLATE,
+        )
         from core.services.print.print_template_visual import is_visual_designer_config
         from core.services.system.installed_feature_scope import (
             print_template_visible_for_installed_apps,
@@ -548,6 +583,10 @@ class PrintTemplateService:
             from apps.haoligo.services.print_template_presets import load_haoligo_print_template_presets
 
             count += await load_haoligo_print_template_presets(tenant_id)
+        await CollabFunctionCategoryService().backfill_resource_categories(
+            tenant_id,
+            RESOURCE_TYPE_PRINT_TEMPLATE,
+        )
         return count
     
     @staticmethod
@@ -576,6 +615,8 @@ class PrintTemplateService:
         
         if not print_template:
             raise NotFoundError("打印模板不存在")
+
+        await print_template.fetch_related("category")
         
         return print_template
     
@@ -589,6 +630,8 @@ class PrintTemplateService:
         document_type: Optional[str] = None,
         keyword: Optional[str] = None,
         installed_app_codes: Optional[Set[str]] = None,
+        category_uuid: Optional[UUID] = None,
+        no_category: bool = False,
     ) -> List[PrintTemplate]:
         """
         获取打印模板列表
@@ -626,8 +669,18 @@ class PrintTemplateService:
 
         query = apply_keyword_icontains(query, keyword, ["name", "code", "description"])
 
+        if no_category:
+            query = query.filter(category_id__isnull=True)
+        elif category_uuid:
+            category_id = await ResourceCategoryService().resolve_category_id(
+                tenant_id,
+                RESOURCE_TYPE_PRINT_TEMPLATE,
+                category_uuid,
+            )
+            query = query.filter(category_id=category_id)
+
         if installed_app_codes is None:
-            return await query.order_by("-created_at").offset(skip).limit(limit).all()
+            return await query.order_by("-created_at").offset(skip).limit(limit).prefetch_related("category").all()
 
         scan_cap = 4000
         rows = await query.order_by("-created_at").limit(scan_cap).all()
@@ -636,7 +689,15 @@ class PrintTemplateService:
             for r in rows
             if print_template_visible_for_installed_apps(r.config, installed_app_codes)
         ]
-        return filtered[skip : skip + limit]
+        sliced = filtered[skip : skip + limit]
+        if not sliced:
+            return sliced
+        enriched = await PrintTemplate.filter(
+            tenant_id=tenant_id,
+            id__in=[row.id for row in sliced],
+        ).prefetch_related("category").all()
+        by_id = {row.id: row for row in enriched}
+        return [by_id[row.id] for row in sliced if row.id in by_id]
     
     @staticmethod
     async def update_print_template(
@@ -659,8 +720,17 @@ class PrintTemplateService:
             NotFoundError: 当打印模板不存在时抛出
         """
         print_template = await PrintTemplateService.get_print_template_by_uuid(tenant_id, uuid)
-        
-        update_data = data.model_dump(exclude_unset=True)
+
+        update_data = data.model_dump(exclude_unset=True, exclude={"category_uuid"})
+        if "category_uuid" in data.model_fields_set:
+            if data.category_uuid is None:
+                print_template.category_id = None
+            else:
+                print_template.category_id = await ResourceCategoryService().resolve_category_id(
+                    tenant_id,
+                    RESOURCE_TYPE_PRINT_TEMPLATE,
+                    data.category_uuid,
+                )
         
         # 如果更新了 config 中的 device_uuid，验证打印设备是否存在
         if 'config' in update_data and update_data['config'] and update_data['config'].get("device_uuid"):
@@ -706,7 +776,8 @@ class PrintTemplateService:
                         device_uuid=new_device_uuid
                     )
                 )
-        
+
+        await print_template.fetch_related("category")
         return print_template
     
     @staticmethod
@@ -1289,7 +1360,7 @@ class PrintTemplateService:
                     font_size = str(ts.get("fontSize") or "13px").strip()
                     header_font_size = str(ts.get("headerFontSize") or font_size).strip()
                     header_font_weight = str(ts.get("headerFontWeight") or "600").strip()
-                    header_bg = str(ts.get("headerBgColor") or "#f8fafc").strip()
+                    header_bg = str(ts.get("headerBgColor") or "#ffffff").strip()
                     header_tc = str(ts.get("headerTextColor") or "#475569").strip()
                     body_tc = str(ts.get("bodyTextColor") or "#334155").strip()
                     header_ta = str(ts.get("headerTextAlign") or "left").strip().lower()
@@ -1502,7 +1573,8 @@ class PrintTemplateService:
         parts.append(
             "  body { margin: 0 !important; padding: 0 !important; "
             f"font-family: {_PRINT_TEMPLATE_BODY_FONT_STACK}; "
-            "line-height: 1.5; color: #334155; }")
+            "font-size: 12px; line-height: 1.5; color: #334155; }"
+        )
         parts.append(
             "  table:not(.print-detail-table) { width: 100%; border-collapse: collapse; "
             "margin-bottom: 8px; table-layout: auto; border: 1px solid #e2e8f0; }"
@@ -1513,14 +1585,20 @@ class PrintTemplateService:
         )
         parts.append(
             "  th, td { border: 1px solid #e2e8f0; padding: 8px 12px; word-break: break-word; "
-            "text-align: left; vertical-align: top; font-size: 13px; }"
+            "text-align: left; vertical-align: top; font-size: 12px; }"
         )
         parts.append(
             "  .print-detail-table th, .print-detail-table td { min-width: 0; overflow-wrap: anywhere; }"
         )
         parts.append("  th { background-color: #f8fafc; font-weight: 600; color: #475569; }")
         parts.append("  thead { display: table-header-group; }")
-        parts.append("  tr, td, th { page-break-inside: avoid; }")
+        # 勿对全部 tr/td/th 禁止内部分页：明细行多或单元格内容长时 Chromium printToPDF 易崩溃
+        parts.append(
+            "  .print-detail-table tr { page-break-inside: avoid; break-inside: avoid; }"
+        )
+        parts.append(
+            "  .print-detail-table td, .print-detail-table th { page-break-inside: auto; break-inside: auto; }"
+        )
         parts.append("  img { max-width: 100%; height: auto; display: block; }")
         parts.append(
             "  .print-detail-image-frame {"

@@ -5,8 +5,11 @@
 """
 
 from tortoise import fields
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, TYPE_CHECKING
 from .base import BaseModel
+
+if TYPE_CHECKING:
+    from .resource_category import ResourceCategory
 
 
 class MessageTemplate(BaseModel):
@@ -31,6 +34,13 @@ class MessageTemplate(BaseModel):
     content = fields.TextField(description="模板内容（支持变量）")
     variables = fields.JSONField(null=True, description="模板变量定义（JSON格式）")
     
+    category: fields.ForeignKeyNullableRelation["ResourceCategory"] = fields.ForeignKeyField(
+        "models.ResourceCategory",
+        related_name="message_templates",
+        null=True,
+        description="所属分类（可选）",
+    )
+
     is_active = fields.BooleanField(default=True, description="是否启用")
     
     # 软删除字段
@@ -47,6 +57,7 @@ class MessageTemplate(BaseModel):
             ("uuid",),
             ("code",),
             ("created_at",),
+            ("category_id",),
         ]
         unique_together = [("tenant_id", "code")]
     

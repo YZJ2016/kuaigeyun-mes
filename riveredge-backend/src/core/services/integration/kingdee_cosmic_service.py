@@ -127,20 +127,43 @@ def _secret_diag(secret: str) -> str:
 
 
 def build_kingdee_cosmic_token_cache_key(config: Dict[str, Any]) -> str:
-    """按连接器身份字段生成缓存键；密钥变更会使指纹变化从而自动失效。"""
+    """按 RiverEdge 租户+连接器 + ERP 身份生成缓存键。
+
+    必须含 ``_tenant_id`` / ``_connector_uuid``（见 IntegrationConfig.get_config），
+    避免 SaaS 多租户即便 ERP 账密相同也共用/互清 Token。
+    密钥变更会使指纹变化从而自动失效。
+    """
     try:
         base_url = normalize_kingdee_cosmic_base_url(
             _config_str(config, "base_url", "url")
         )
     except ValueError:
         base_url = _config_str(config, "base_url", "url")
+    tenant_id = str(config.get("_tenant_id") or config.get("tenant_id") or "").strip()
+    connector_uuid = str(
+        config.get("_connector_uuid")
+        or config.get("connector_uuid")
+        or config.get("integration_uuid")
+        or ""
+    ).strip()
     client_id = _config_str(config, "client_id", "app_id")
     account_id = _config_str(config, "account_id", "accountId", "acct_id")
     username = _config_str(config, "username")
     identity = _config_str(config, "x_acgw_identity", "x-acgw-identity")
     secret = _config_str(config, "client_secret", "app_secret")
     secret_fp = hashlib.sha256(secret.encode("utf-8")).hexdigest()[:16] if secret else ""
-    raw = "|".join([base_url, client_id, account_id, username, identity, secret_fp])
+    raw = "|".join(
+        [
+            tenant_id,
+            connector_uuid,
+            base_url,
+            client_id,
+            account_id,
+            username,
+            identity,
+            secret_fp,
+        ]
+    )
     digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
     return f"{_TOKEN_CACHE_PREFIX}:{digest}"
 

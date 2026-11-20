@@ -14,7 +14,15 @@ from tortoise.expressions import Q
 
 from core.models.approval_process import ApprovalProcess
 from core.models.approval_instance import ApprovalInstance
-from core.schemas.approval_process import ApprovalProcessCreate, ApprovalProcessUpdate
+from core.schemas.approval_process import (
+    ApprovalProcessCreate,
+    ApprovalProcessUpdate,
+    ApprovalProcessResponse,
+)
+from core.models.resource_category import RESOURCE_TYPE_APPROVAL_PROCESS
+from core.services.resource.resource_category_service import ResourceCategoryService
+from core.services.resource.resource_category_refs import read_category_uuid_name
+from core.services.resource.collab_function_category_service import CollabFunctionCategoryService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from core.config.audit_registry import all_entries as _audit_entries, entry_by_node_key, is_auditable_node_key
 from core.schemas.approval_flow_schema import normalize_and_validate_flow
@@ -126,14 +134,89 @@ class ApprovalProcessService:
 
     @staticmethod
     async def create_audit_process_for_node(tenant_id: int, node_key: str) -> ApprovalProcess:
-        """为 manifest 可审核单据按需创建默认流程（code = node_key）。"""
+        """为 manifest 可审核单据按需创建默认流程（code = node_key）。
+
+        唯一约束是 ``(tenant_id, code)``，不含 deleted_at：软删残留会挡住新建。
+        配置中心 list 会批量 ensure，遇软删须复活而非抛「代码已存在」拖垮整表。
+        """
         if not is_auditable_node_key(node_key):
             raise ValidationError(f"单据节点 {node_key} 未在 manifest.audit 中声明")
         existing = await ApprovalProcessService.get_approval_process_by_code(tenant_id, node_key)
         if existing:
             return existing
+
+        soft_deleted = await ApprovalProcess.filter(
+            tenant_id=tenant_id,
+            code=node_key,
+            deleted_at__isnull=False,
+        ).order_by("-deleted_at").first()
+        if soft_deleted:
+            data = ApprovalProcessService.build_audit_process_create_data(node_key)
+            soft_deleted.deleted_at = None
+            soft_deleted.name = data.name
+            soft_deleted.description = data.description
+            soft_deleted.nodes = normalize_and_validate_flow(data.nodes)
+            soft_deleted.config = data.config or {}
+            soft_deleted.is_active = False
+            await soft_deleted.save()
+            logger.info(
+                "复活软删审批流程 tenant={} code={} id={}",
+                tenant_id,
+                node_key,
+                soft_deleted.id,
+            )
+            return soft_deleted
+
         data = ApprovalProcessService.build_audit_process_create_data(node_key)
-        return await ApprovalProcessService.create_approval_process(tenant_id, data)
+        try:
+            return await ApprovalProcessService.create_approval_process(tenant_id, data)
+        except ValidationError:
+            # 并发 ensure / 竞态：另一请求已插入同 code，或软删残留刚被其它请求复活
+            raced = await ApprovalProcessService.get_approval_process_by_code(tenant_id, node_key)
+            if raced:
+                return raced
+            soft = await ApprovalProcess.filter(
+                tenant_id=tenant_id,
+                code=node_key,
+                deleted_at__isnull=False,
+            ).order_by("-deleted_at").first()
+            if soft:
+                soft.deleted_at = None
+                soft.name = data.name
+                soft.description = data.description
+                soft.nodes = normalize_and_validate_flow(data.nodes)
+                soft.config = data.config or {}
+                soft.is_active = False
+                await soft.save()
+                return soft
+            raise
+
+    @staticmethod
+    def build_approval_process_response(
+        approval_process: ApprovalProcess,
+    ) -> ApprovalProcessResponse:
+        category_uuid, category_name = read_category_uuid_name(approval_process)
+        payload = {
+            key: getattr(approval_process, key)
+            for key in (
+                "uuid",
+                "tenant_id",
+                "name",
+                "code",
+                "description",
+                "nodes",
+                "config",
+                "is_active",
+                "version",
+                "published_version",
+                "draft_nodes",
+                "created_at",
+                "updated_at",
+            )
+        }
+        payload["category_uuid"] = category_uuid
+        payload["category_name"] = category_name
+        return ApprovalProcessResponse.model_validate(payload)
 
     @staticmethod
     async def create_approval_process(
@@ -154,7 +237,19 @@ class ApprovalProcessService:
             ValidationError: 当流程代码已存在时抛出
         """
         try:
-            payload = data.model_dump()
+            payload = data.model_dump(exclude={"category_uuid"})
+            category_id = None
+            if data.category_uuid:
+                category_id = await ResourceCategoryService().resolve_category_id(
+                    tenant_id,
+                    RESOURCE_TYPE_APPROVAL_PROCESS,
+                    data.category_uuid,
+                )
+            elif data.code:
+                category_id = await CollabFunctionCategoryService().resolve_category_id_for_approval(
+                    tenant_id,
+                    data.code,
+                )
             canonical_name = ApprovalProcessService._resolve_canonical_name(
                 payload.get("code"),
                 payload.get("name"),
@@ -177,13 +272,44 @@ class ApprovalProcessService:
                 payload["nodes"] = normalize_and_validate_flow(raw_nodes)
             approval_process = ApprovalProcess(
                 tenant_id=tenant_id,
+                category_id=category_id,
                 **payload
             )
             await approval_process.save()
-
+            await approval_process.fetch_related("category")
             return approval_process
-        except IntegrityError:
-            raise ValidationError(f"审批流程代码 {data.code} 已存在")
+        except IntegrityError as exc:
+            detail = str(exc)
+            # COPY 显式 id 后序列未对齐会撞 pkey，不能误报成「代码已存在」
+            if "pkey" in detail.lower() or "_pkey" in detail.lower():
+                raise ValidationError(
+                    f"审批流程主键冲突（常见于备份恢复后序列未对齐）: {detail}"
+                ) from exc
+            raced = await ApprovalProcessService.get_approval_process_by_code(
+                tenant_id, data.code
+            )
+            if raced:
+                return raced
+            soft = await ApprovalProcess.filter(
+                tenant_id=tenant_id,
+                code=data.code,
+                deleted_at__isnull=False,
+            ).order_by("-deleted_at").first()
+            if soft:
+                # 直接复活：勿经 create_audit_process_for_node（非 manifest 节点会 ValidationError）
+                soft.deleted_at = None
+                soft.name = payload.get("name") or data.name
+                soft.description = payload.get("description") or soft.name
+                soft.nodes = payload.get("nodes") or normalize_and_validate_flow(
+                    data.nodes or ApprovalProcessService._default_skeleton_nodes()
+                )
+                soft.config = payload.get("config") or data.config or {}
+                soft.is_active = False
+                soft.category_id = category_id
+                await soft.save()
+                await soft.fetch_related("category")
+                return soft
+            raise ValidationError(f"审批流程代码 {data.code} 已存在") from exc
     
     @staticmethod
     async def get_approval_process_by_uuid(
@@ -211,7 +337,8 @@ class ApprovalProcessService:
         
         if not approval_process:
             raise NotFoundError("审批流程不存在")
-        
+
+        await approval_process.fetch_related("category")
         return approval_process
     
     @staticmethod
@@ -252,6 +379,8 @@ class ApprovalProcessService:
         keyword: Optional[str] = None,
         installed_app_codes: Optional[Set[str]] = None,
         for_audit_config: bool = False,
+        category_uuid: Optional[UUID] = None,
+        no_category: bool = False,
     ) -> List[ApprovalProcess]:
         """
         获取审批流程列表
@@ -278,6 +407,16 @@ class ApprovalProcessService:
 
         query = ApprovalProcessService._apply_approval_process_keyword(query, keyword)
 
+        if no_category:
+            query = query.filter(category_id__isnull=True)
+        elif category_uuid:
+            category_id = await ResourceCategoryService().resolve_category_id(
+                tenant_id,
+                RESOURCE_TYPE_APPROVAL_PROCESS,
+                category_uuid,
+            )
+            query = query.filter(category_id=category_id)
+
         if installed_app_codes is not None:
             from core.config.audit_registry import all_entries
             from core.services.system.installed_feature_scope import (
@@ -295,7 +434,8 @@ class ApprovalProcessService:
             if hidden_codes:
                 query = query.filter(~Q(code__in=hidden_codes))
         
-        return await query.order_by("-created_at").offset(skip).limit(limit).all()
+        rows = await query.order_by("-created_at").offset(skip).limit(limit).prefetch_related("category").all()
+        return rows
     
     @staticmethod
     async def update_approval_process(
@@ -319,7 +459,19 @@ class ApprovalProcessService:
         """
         approval_process = await ApprovalProcessService.get_approval_process_by_uuid(tenant_id, uuid)
         
-        update_data = data.model_dump(exclude_unset=True)
+        update_data = data.model_dump(
+            exclude_unset=True,
+            exclude={"category_uuid"},
+        )
+        if "category_uuid" in data.model_fields_set:
+            if data.category_uuid is None:
+                approval_process.category_id = None
+            else:
+                approval_process.category_id = await ResourceCategoryService().resolve_category_id(
+                    tenant_id,
+                    RESOURCE_TYPE_APPROVAL_PROCESS,
+                    data.category_uuid,
+                )
         if "name" in update_data:
             canonical_name = ApprovalProcessService._resolve_canonical_name(
                 getattr(approval_process, "code", None),
@@ -346,7 +498,7 @@ class ApprovalProcessService:
         
         await approval_process.save()
         await ApprovalProcessService._normalize_process_name_if_needed(approval_process)
-
+        await approval_process.fetch_related("category")
         return approval_process
     
     @staticmethod

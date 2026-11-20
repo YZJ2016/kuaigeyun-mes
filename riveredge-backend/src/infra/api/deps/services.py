@@ -137,6 +137,14 @@ def get_auth_service_with_fallback() -> Any:
                 request=request,
             )
 
+        async def set_login_default_tenant(
+            self, current_user: Any, target_tenant_id: Any = None
+        ) -> list[dict]:
+            return await self._auth_service.set_login_default_tenant(
+                current_user=current_user,
+                target_tenant_id=target_tenant_id,
+            )
+
         async def generate_login_result(self, user: Any, request: Any = None, tenant_id: Any = None) -> Dict[str, Any]:
             return await self._auth_service.generate_login_result(
                 user,

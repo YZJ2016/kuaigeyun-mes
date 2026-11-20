@@ -5,6 +5,7 @@
 """
 
 from typing import Optional, List, Any, Dict
+from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from loguru import logger
 from pydantic import ValidationError as PydanticValidationError
@@ -14,7 +15,17 @@ from core.schemas.approval_process import (
     ApprovalProcessUpdate,
     ApprovalProcessResponse,
 )
+from core.schemas.resource_category import (
+    ResourceCategoryCreate,
+    ResourceCategoryUpdate,
+    ResourceCategoryResponse,
+    ResourceCategoryListResponse,
+)
 from core.services.approval.approval_process_service import ApprovalProcessService
+from core.services.resource.resource_category_service import ResourceCategoryService
+from core.services.resource.collab_function_category_service import CollabFunctionCategoryService
+from core.models.resource_category import RESOURCE_TYPE_APPROVAL_PROCESS
+from core.services.resource.resource_category_refs import read_category_uuid_name
 from core.api.deps.deps import get_current_tenant
 from core.services.system.installed_feature_scope import get_installed_application_codes
 from infra.api.deps.deps import get_current_user as soil_get_current_user
@@ -63,6 +74,9 @@ def _to_response_model(approval_process: Any) -> ApprovalProcessResponse:
         "created_at": approval_process.created_at,
         "updated_at": approval_process.updated_at,
     }
+    category_uuid, category_name = read_category_uuid_name(approval_process)
+    payload["category_uuid"] = category_uuid
+    payload["category_name"] = category_name
     return ApprovalProcessResponse.model_validate(payload)
 
 
@@ -107,6 +121,8 @@ async def list_approval_processes(
     is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
     keyword: Optional[str] = Query(None, description="模糊搜索（名称、代码、描述）"),
     for_audit_config: bool = Query(False, description="配置中心审核设置：返回全部审核开关流程"),
+    category_uuid: Optional[UUID] = Query(None, description="分类 UUID 筛选"),
+    no_category: bool = Query(False, description="仅未分类"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
@@ -124,6 +140,11 @@ async def list_approval_processes(
         List[ApprovalProcessResponse]: 审批流程列表
     """
     try:
+        if category_uuid and no_category:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="category_uuid 与 no_category 不能同时使用",
+            )
         approval_processes = await ApprovalProcessService.list_approval_processes(
             tenant_id=tenant_id,
             skip=skip,
@@ -132,6 +153,8 @@ async def list_approval_processes(
             keyword=keyword,
             installed_app_codes=await get_installed_application_codes(tenant_id),
             for_audit_config=for_audit_config,
+            category_uuid=category_uuid,
+            no_category=no_category,
         )
     except Exception as e:
         logger.exception(
@@ -227,12 +250,143 @@ async def get_editable_fields(
     entity_type: str = Query(..., description="实体类型"),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """审核中改单：按 entity_type 返回默认可编辑字段。"""
-    from core.config.audit_editable_fields import editable_fields_for_entity
+    """审核中改单：按 entity_type 返回可编辑字段目录（含 label/type）。"""
+    from core.config.audit_editable_fields import editable_fields_catalog_for_entity
 
     _ = tenant_id
-    spec = editable_fields_for_entity(entity_type)
-    return {"entity_type": entity_type, "fields": spec}
+    return {"entity_type": entity_type, "fields": editable_fields_catalog_for_entity(entity_type)}
+
+
+@router.get("/categories", response_model=ResourceCategoryListResponse)
+async def list_approval_process_categories(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取审批流程分类列表"""
+    try:
+        result = await ResourceCategoryService().list_categories(
+            tenant_id, RESOURCE_TYPE_APPROVAL_PROCESS
+        )
+        return ResourceCategoryListResponse(**result)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取审批流程分类失败: {str(e)}",
+        )
+
+
+@router.post("/categories", response_model=ResourceCategoryResponse, status_code=status.HTTP_201_CREATED)
+async def create_approval_process_category(
+    data: ResourceCategoryCreate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """创建审批流程分类"""
+    try:
+        category = await ResourceCategoryService().create_category(
+            tenant_id, RESOURCE_TYPE_APPROVAL_PROCESS, data
+        )
+        return ResourceCategoryService()._build_response(category, 0)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"创建审批流程分类失败: {str(e)}",
+        )
+
+
+@router.get("/categories/{category_uuid}", response_model=ResourceCategoryResponse)
+async def get_approval_process_category(
+    category_uuid: UUID,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取审批流程分类详情"""
+    try:
+        category = await ResourceCategoryService().get_category_by_uuid(
+            tenant_id, RESOURCE_TYPE_APPROVAL_PROCESS, category_uuid
+        )
+        count = await ResourceCategoryService()._count_items(
+            tenant_id, RESOURCE_TYPE_APPROVAL_PROCESS, category.id
+        )
+        return ResourceCategoryService()._build_response(category, count)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取审批流程分类失败: {str(e)}",
+        )
+
+
+@router.put("/categories/{category_uuid}", response_model=ResourceCategoryResponse)
+async def update_approval_process_category(
+    category_uuid: UUID,
+    data: ResourceCategoryUpdate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """更新审批流程分类"""
+    try:
+        category = await ResourceCategoryService().update_category(
+            tenant_id, RESOURCE_TYPE_APPROVAL_PROCESS, category_uuid, data
+        )
+        count = await ResourceCategoryService()._count_items(
+            tenant_id, RESOURCE_TYPE_APPROVAL_PROCESS, category.id
+        )
+        return ResourceCategoryService()._build_response(category, count)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"更新审批流程分类失败: {str(e)}",
+        )
+
+
+@router.post("/categories/load-function-presets")
+async def load_approval_process_function_categories(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """按功能域预置审批流程分类，并回填未分类流程。"""
+    try:
+        return await CollabFunctionCategoryService().load_function_presets(
+            tenant_id,
+            RESOURCE_TYPE_APPROVAL_PROCESS,
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"预置审批流程分类失败: {str(e)}",
+        )
+
+
+@router.delete("/categories/{category_uuid}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_approval_process_category(
+    category_uuid: UUID,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除审批流程分类（分类下流程变为未分类）"""
+    try:
+        await ResourceCategoryService().delete_category(
+            tenant_id, RESOURCE_TYPE_APPROVAL_PROCESS, category_uuid
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"删除审批流程分类失败: {str(e)}",
+        )
 
 
 @router.get("/{uuid}", response_model=ApprovalProcessResponse)

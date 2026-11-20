@@ -11,6 +11,7 @@ from uuid import UUID
 
 ApiSyncDirection = Literal["pull", "push", "bidirectional"]
 VALID_API_SYNC_DIRECTIONS = frozenset({"pull", "push", "bidirectional"})
+ApiInterfaceType = Literal["standard", "custom"]
 
 
 def normalize_api_sync_direction(value: Optional[str]) -> ApiSyncDirection:
@@ -42,18 +43,46 @@ class APIBase(BaseModel):
         None,
         description='来源类型编码转换映射（如金蝶 FErpClsID: {"1":"Buy"}），用于物料同步时自动转换编码',
     )
+    outbound_field_mappings: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description="出站字段映射：enabled/level/local_field/remote_field/default_value",
+    )
     is_active: bool = Field(True, description="是否启用")
     is_system: bool = Field(False, description="是否系统接口")
+    related_document_code: Optional[str] = Field(
+        None,
+        max_length=64,
+        description="关联 MES 单据 source_type（可选）",
+    )
+    api_interface_type: ApiInterfaceType = Field(
+        default="custom",
+        description="接口类型：standard 标准API、custom 自定义API",
+    )
 
     @field_validator("sync_direction", mode="before")
     @classmethod
     def _validate_sync_direction(cls, value: Optional[str]) -> ApiSyncDirection:
         return normalize_api_sync_direction(value)
 
+    @field_validator("api_interface_type", mode="before")
+    @classmethod
+    def _validate_api_interface_type(cls, value: Optional[str]) -> ApiInterfaceType:
+        from core.config.api_library_contract import normalize_api_interface_type
+
+        return normalize_api_interface_type(value)
+
 
 class APICreate(APIBase):
     """创建接口 Schema"""
-    pass
+
+    @field_validator("related_document_code", mode="before")
+    @classmethod
+    def _validate_related_document(cls, value: Optional[str]) -> Optional[str]:
+        from core.config.api_library_contract import normalize_api_related_document_code
+
+        if value is None or str(value).strip() == "":
+            return None
+        return normalize_api_related_document_code(value)
 
 
 class APIUpdate(BaseModel):
@@ -78,7 +107,20 @@ class APIUpdate(BaseModel):
         None,
         description='来源类型编码转换映射（如金蝶 FErpClsID: {"1":"Buy"}），用于物料同步时自动转换编码',
     )
+    outbound_field_mappings: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description="出站字段映射：enabled/level/local_field/remote_field/default_value",
+    )
     is_active: Optional[bool] = Field(None, description="是否启用")
+    related_document_code: Optional[str] = Field(
+        None,
+        max_length=64,
+        description="关联 MES 单据 source_type（可选，传 null 清除）",
+    )
+    api_interface_type: Optional[ApiInterfaceType] = Field(
+        None,
+        description="接口类型：standard 标准API、custom 自定义API",
+    )
 
     @field_validator("sync_direction", mode="before")
     @classmethod
@@ -86,6 +128,24 @@ class APIUpdate(BaseModel):
         if value is None:
             return None
         return normalize_api_sync_direction(value)
+
+    @field_validator("related_document_code", mode="before")
+    @classmethod
+    def _validate_related_document(cls, value: Optional[str]) -> Optional[str]:
+        from core.config.api_library_contract import normalize_api_related_document_code
+
+        if value is None or str(value).strip() == "":
+            return None
+        return normalize_api_related_document_code(value)
+
+    @field_validator("api_interface_type", mode="before")
+    @classmethod
+    def _validate_api_interface_type(cls, value: Optional[str]) -> Optional[ApiInterfaceType]:
+        if value is None or str(value).strip() == "":
+            return None
+        from core.config.api_library_contract import normalize_api_interface_type
+
+        return normalize_api_interface_type(value)
 
 
 class APIResponse(APIBase):
@@ -100,6 +160,28 @@ class APIResponse(APIBase):
     updated_at: datetime = Field(..., description="更新时间")
     
     model_config = ConfigDict(from_attributes=True)
+
+
+class APIRelatedDocumentOption(BaseModel):
+    code: str = Field(..., description="关联单据 source_type 编码")
+    label: str = Field(..., description="展示名称")
+
+
+class APIRelatedDocumentOptionsResponse(BaseModel):
+    items: List[APIRelatedDocumentOption] = Field(default_factory=list)
+
+
+class APIRelatedDocumentGroupCount(BaseModel):
+    category_uuid: Optional[UUID] = Field(None, description="分类 UUID；空表示未分类")
+    related_document_code: Optional[str] = Field(
+        None,
+        description="关联单据编码；空表示未填写",
+    )
+    count: int = Field(..., ge=0, description="接口数量")
+
+
+class APIRelatedDocumentGroupCountsResponse(BaseModel):
+    items: List[APIRelatedDocumentGroupCount] = Field(default_factory=list)
 
 
 class APITestRequest(BaseModel):
@@ -142,6 +224,34 @@ class KingdeeExecuteBillQueryFormCatalogItem(BaseModel):
 
 class KingdeeExecuteBillQueryCatalogResponse(BaseModel):
     items: List[KingdeeExecuteBillQueryFormCatalogItem] = Field(default_factory=list)
+
+
+class OutboundSourceFieldOption(BaseModel):
+    field: str = Field(..., description="本地字段名")
+    label: str = Field(..., description="字段中文名")
+
+
+class OutboundSourceTableItem(BaseModel):
+    profile_code: Optional[str] = Field(None, description="业务档案编码")
+    profile_name: Optional[str] = Field(None, description="业务档案名称")
+    table: str = Field(..., description="本地表名")
+    label: str = Field(..., description="表显示名")
+    level: Literal["header", "entry"] = Field("header", description="建议映射层级")
+    fields: List[OutboundSourceFieldOption] = Field(default_factory=list, description="表字段")
+
+
+class OutboundSourceProfileItem(BaseModel):
+    code: str
+    name: str
+    match_paths: List[str] = Field(default_factory=list)
+
+
+class OutboundSourceCatalogResponse(BaseModel):
+    profiles: List[OutboundSourceProfileItem] = Field(default_factory=list)
+    tables: List[OutboundSourceTableItem] = Field(default_factory=list)
+    recommended_profile: Optional[str] = Field(
+        None, description="按接口路径推荐的本地单据/实体 code"
+    )
 
 
 class ApiLibraryItemPreview(BaseModel):
@@ -220,4 +330,36 @@ class SubmitOfficialApiLibraryResponse(BaseModel):
     name: str = Field(..., description="接口包名称")
     api_count: int = Field(..., description="提交接口数")
     status: str = Field(..., description="状态")
+
+
+class APIBulkUpsertFailedItem(BaseModel):
+    """批量导入失败项（index 与请求 items 下标对齐，从 0 起）"""
+
+    index: int = Field(..., description="请求 items 下标（从 0 起）")
+    code: Optional[str] = Field(None, description="接口代码（若有）")
+    reason: str = Field(..., description="失败原因")
+
+
+class APIBulkUpsertRequest(BaseModel):
+    """批量按 code upsert 接口（导入分片；单次最多 200）"""
+
+    items: List[APICreate] = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="待导入接口列表（单次最多 200）",
+    )
+
+
+class APIBulkUpsertResponse(BaseModel):
+    """批量 upsert 结果"""
+
+    created_count: int = Field(..., description="新建数量")
+    updated_count: int = Field(..., description="更新数量")
+    failed_count: int = Field(..., description="失败数量")
+    requested_count: int = Field(..., description="请求条目数")
+    failed_items: List[APIBulkUpsertFailedItem] = Field(
+        default_factory=list,
+        description="失败明细",
+    )
 

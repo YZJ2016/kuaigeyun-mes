@@ -12,10 +12,15 @@ from core.schemas.api import (
     APICreate,
     APIUpdate,
     APIResponse,
+    APIRelatedDocumentOptionsResponse,
+    APIRelatedDocumentGroupCountsResponse,
+    APIBulkUpsertRequest,
+    APIBulkUpsertResponse,
     APITestRequest,
     APITestResponse,
     APIProbeRequest,
     KingdeeExecuteBillQueryCatalogResponse,
+    OutboundSourceCatalogResponse,
     ApiLibraryListResponse,
     InstallApiLibraryPackRequest,
     InstallApiLibraryPackResponse,
@@ -126,6 +131,8 @@ async def list_apis(
     sort_order: Optional[str] = Query(None, description="排序方向：asc 或 desc"),
     category_uuid: Optional[UUID] = Query(None, description="分类 UUID 筛选"),
     no_category: bool = Query(False, description="仅未分类"),
+    related_document_code: Optional[str] = Query(None, description="关联单据筛选"),
+    no_related_document: bool = Query(False, description="仅未填写关联单据"),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -159,6 +166,11 @@ async def list_apis(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="category_uuid 与 no_category 不能同时使用",
             )
+        if related_document_code and no_related_document:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="related_document_code 与 no_related_document 不能同时使用",
+            )
         apis, total = await APIService().list_apis(
             tenant_id=tenant_id,
             page=page,
@@ -171,6 +183,8 @@ async def list_apis(
             sort_order=sort_order,
             category_uuid=category_uuid,
             no_category=no_category,
+            related_document_code=related_document_code,
+            no_related_document=no_related_document,
         )
         
         return {
@@ -199,7 +213,13 @@ async def list_api_categories(
     """获取接口分类列表"""
     try:
         result = await ResourceCategoryService().list_categories(tenant_id, RESOURCE_TYPE_API)
-        return ResourceCategoryListResponse(**result)
+        doc_group_counts = await APIService().get_api_related_document_group_counts(tenant_id)
+        doc_options = APIService.list_related_document_options()
+        return ResourceCategoryListResponse(
+            **result,
+            related_document_group_counts=doc_group_counts,
+            related_document_options=doc_options,
+        )
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except Exception as e:
@@ -452,6 +472,59 @@ async def get_kingdee_execute_bill_query_catalog(
     return KingdeeExecuteBillQueryCatalogResponse(items=list_kingdee_execute_bill_query_catalog())
 
 
+@router.get(
+    "/outbound-source-catalog",
+    response_model=OutboundSourceCatalogResponse,
+)
+async def get_outbound_source_catalog(
+    path: Optional[str] = Query(None, description="接口路径，用于匹配推荐单据"),
+    current_user: User = Depends(soil_get_current_user),
+):
+    """出站字段映射：本地单据表与字段目录（顶部选一次单据，行内再选字段）。"""
+    from core.services.integration.outbound_source_catalog import list_outbound_source_catalog
+
+    return OutboundSourceCatalogResponse(**list_outbound_source_catalog(path))
+
+
+@router.post(
+    "/actions/bulk-upsert",
+    response_model=APIBulkUpsertResponse,
+    summary="批量按 code 导入/还原接口（分片 upsert）",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "system:api:create",
+                "system:api:update",
+                require_all=False,
+            )
+        )
+    ],
+)
+async def bulk_upsert_apis(
+    data: APIBulkUpsertRequest,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    接口导入分片写入：按 code 存在则更新、否则新建。
+
+    - 单次最多 200 条；前端按分片循环调用。
+    - 单条失败不回滚已成功行，失败原因见 failed_items。
+    """
+    try:
+        return await APIService().bulk_upsert_apis(tenant_id, list(data.items))
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"批量导入接口失败: {str(e)}",
+        )
+
+
 @router.post("/actions/probe-draft", response_model=APITestResponse)
 async def probe_api_draft(
     data: APIProbeRequest,
@@ -479,6 +552,27 @@ async def probe_api_draft(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"探测接口失败: {str(exc)}",
         )
+
+
+@router.get("/related-document-options", response_model=APIRelatedDocumentOptionsResponse)
+async def list_api_related_document_options(
+    current_user: User = Depends(soil_get_current_user),
+):
+    """接口库「关联单据」下拉选项（与 document_push source_type 对齐）。"""
+    return APIRelatedDocumentOptionsResponse(items=APIService.list_related_document_options())
+
+
+@router.get(
+    "/related-document-group-counts",
+    response_model=APIRelatedDocumentGroupCountsResponse,
+)
+async def list_api_related_document_group_counts(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """左栏二级分组：分类 × 关联单据数量。"""
+    items = await APIService().get_api_related_document_group_counts(tenant_id)
+    return APIRelatedDocumentGroupCountsResponse(items=items)
 
 
 @router.get("/{api_uuid}", response_model=APIResponse)

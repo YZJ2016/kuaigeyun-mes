@@ -58,8 +58,13 @@ class LicenseCenterService:
         seg2 = secrets.token_hex(4).upper()
         return f"RVR-{app_segment}-{seg1}-{seg2}"
 
+    _tables_ready: bool = False
+
     @classmethod
     async def _ensure_table(cls) -> None:
+        # 进程内只跑一次 DDL；列表热路径不得每次 CREATE/ALTER/INDEX
+        if cls._tables_ready:
+            return
         conn = await get_db_connection()
         try:
             await conn.execute(
@@ -118,6 +123,7 @@ class LicenseCenterService:
                 ON {cls.ACTIVATION_TABLE_NAME}(license_uuid);
                 """
             )
+            cls._tables_ready = True
         finally:
             await conn.close()
 

@@ -1221,7 +1221,7 @@ riveredge-backend/src/core/schemas/position.py	fdb1a27e0f051f86123cfce708a818db2
 riveredge-backend/src/core/schemas/sync_binding_contract.py	778592163879a2e3d200776fd3265de753ab5cee	tracked	seed from 4a9d6d3e63
 riveredge-backend/src/core/schemas/user.py	f998bc89a7fb655413fb4d4958f9d66cff81a15a	tracked	seed from 46508115c7
 riveredge-backend/src/core/services/application/api_library_catalog.py	7ee3ef0600bc214ca6b72db129f792435e89608e	applied	客户org-scope tip整取 落 apps/master_data
-riveredge-backend/src/core/services/application/api_service.py	d9a7516bf271bc6879748f9c4db10a15f53d9578	applied	4ba2d15ae8契约簇;force_rewrite/expand未接调用点随调度窗簇
+riveredge-backend/src/core/services/application/api_service.py	d9a7516bf271bc6879748f9c4db10a15f53d9578	deferred	R2簇5:缓置(详见台账)
 riveredge-backend/src/core/services/application/api_sync_binding_refs.py	7e37f2cbec72865dfbc3413b9d7168cc3afe8da5	tracked	seed from df7d635797
 riveredge-backend/src/core/services/application/api_test_request_merge.py	badda1f96617e6efd699d749b0aee9e5e17a005c	applied	4ba2d15ae8契约簇;force_rewrite/expand未接调用点随调度窗簇
 riveredge-backend/src/core/services/application/application_service.py	b5411b8aadaf5d36c40190bef2a197905ccef3e8	applied	C密码策略/默认与临时重置整簇；应用扫描按目录项容忍OSError但整目录不可枚举上抛；63聚焦测试包含用户与菜单同步；生成口令不写日志
@@ -1230,9 +1230,9 @@ riveredge-backend/src/core/services/approval/approval_audit_scope.py	cdd56eef297
 riveredge-backend/src/core/services/approval/approval_document_view.py	64a26237c6a3fffef604d3311938ac7091f3a08e	tracked	seed from 2dd7241cfd
 riveredge-backend/src/core/services/approval/approval_edit_guard.py	4eefecbd1f3d604719368ce404ed28cb951cdb08	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-backend/src/core/services/approval/approval_flow_policy.py	9b6f6978a888e7828d98d8d3b60c215e68e762c4	tracked	seed from 37409d3b29
-riveredge-backend/src/core/services/approval/approval_hierarchy_department.py	b6f50904d5ae37015ded56619fa25cc345d46907	tracked	seed from ec29267f5b
+riveredge-backend/src/core/services/approval/approval_hierarchy_department.py	b6f50904d5ae37015ded56619fa25cc345d46907	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/core/services/approval/approval_instance_service.py	3d3a4d92ac005a8c781d1b7001ae74b744dc3e72	tracked	seed from 4bd853a94f
-riveredge-backend/src/core/services/approval/approval_process_service.py	33a33cd274e1c28176d38ad3cd107665fb6945b4	tracked	seed from 1eb300325a
+riveredge-backend/src/core/services/approval/approval_process_service.py	33a33cd274e1c28176d38ad3cd107665fb6945b4	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/core/services/approval/approval_viewer_actions.py	ad5e9beea54751158eaf8ccc9953bff469edc561	tracked	seed from 872b76152e
 riveredge-backend/src/core/services/approval/audit_capability_gate.py	8179f9b57b1e3a6ae99bfd641642dd6e265a26bf	tracked	seed from 872b76152e
 riveredge-backend/src/core/services/approval/audit_phase.py	816ae33f128b1c017c00a1c4db5d66661a9b4cfc	tracked	seed from 57a37e2749
@@ -1255,7 +1255,7 @@ riveredge-backend/src/core/services/authorization/role_service.py	d66c506ed1435a
 riveredge-backend/src/core/services/business/business_notification_service.py	438622d971cbc547c98d2bebb6d78e3a42b69e93	tracked	seed from 63395aa98e
 riveredge-backend/src/core/services/business/code_generation_service.py	392004c222295f78062bc431dddc462c0194228b	tracked	seed from 63395aa98e
 riveredge-backend/src/core/services/business/custom_field_service.py	fb7067a85f1c7c58512e3bd2c9b883e75a218720	tracked	seed from 8c111dd65f
-riveredge-backend/src/core/services/business/notification_document_url.py	d3dca52b5a23cc418b90696a3bc92c37a1a7928b	tracked	seed from d84fe20715
+riveredge-backend/src/core/services/business/notification_document_url.py	d3dca52b5a23cc418b90696a3bc92c37a1a7928b	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/core/services/business/reminder_dispatch_service.py	9ad7748c390c3f544038311bdef375f52269d307	tracked	seed from 31efc2b64c
 riveredge-backend/src/core/services/business/reminder_event_service.py	c31926bd42afd1b1e8cce3c75c8a7d61ea0924ea	tracked	seed from 31efc2b64c
 riveredge-backend/src/core/services/custom_field/custom_field_page_discovery.py	b5826ee82825c9066a6b657dd41a27bc077211e6	superset	R2预审：本地已有等价/更深实现，不摘
@@ -1283,7 +1283,7 @@ riveredge-backend/src/core/services/integration/document_push_mapping.py	dd7d2ec
 riveredge-backend/src/core/services/integration/document_push_pipeline.py	a8f3f807929087bc3f87f40184dee72400a52a2a	tracked	seed from 2c945a39fb
 riveredge-backend/src/core/services/integration/document_push_readiness.py	df2e15352d7a9ba679eb6fe0bde09457ed3a76dd	tracked	seed from 2c945a39fb
 riveredge-backend/src/core/services/integration/document_push_silent.py	578fa73c5e6a6f6cb1a7d6b2fdb9e22c12fafbdf	tracked	seed from 4bd853a94f
-riveredge-backend/src/core/services/integration/erp_adapters/kingdee_active_rows.py	5d38fb6a901b1b2df62878586f7fe8d1bd4c7e3e	deferred	erp_adapters共享helper,上游仅__init__re-export无消费方,本地各服务已内联等价
+riveredge-backend/src/core/services/integration/erp_adapters/kingdee_active_rows.py	5d38fb6a901b1b2df62878586f7fe8d1bd4c7e3e	deferred	R2簇5:缓置(详见台账)
 riveredge-backend/src/core/services/integration/feishu_im_push_adapter.py	988cd7cb3d13eada9fea3085ffb55967be877a9b	tracked	seed from a0b353ce7e
 riveredge-backend/src/core/services/integration/feishu_integration.py	613150492cfa0c61cb849c99d529afd8fde74312	tracked	seed from a67b4ad1a7
 riveredge-backend/src/core/services/integration/feishu_oauth_service.py	cc67accffff535c56cddd39495ec99297ded52bb	tracked	seed from a67b4ad1a7
@@ -1307,22 +1307,22 @@ riveredge-backend/src/core/services/integration/kingdee_galaxy_push_adapter.py	2
 riveredge-backend/src/core/services/integration/kingdee_warehouse_document_push_config.py	2f6266c41a727c95a276353175046df15ae15669	tracked	seed from a0b353ce7e
 riveredge-backend/src/core/services/integration/kingdee_warehouse_push_routing.py	48ab01b124df8eaea2843b961a8974ef89f77d2f	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-backend/src/core/services/integration/wecom_callback_crypto.py	9c33c5f625e5a9e41c4f84d7b40a08996e283b44	tracked	seed from 3958bb1524
-riveredge-backend/src/core/services/integration/wecom_connector_guidance.py	c04f44605db293699ec8d4926d8f71ce2dfb0038	tracked	seed from 3958bb1524
+riveredge-backend/src/core/services/integration/wecom_connector_guidance.py	c04f44605db293699ec8d4926d8f71ce2dfb0038	applied	R2簇5:三方合并/本地适配
 riveredge-backend/src/core/services/integration/wecom_contact_sync_service.py	947ffa8e6b965d11ff4ecedbebfc65b6b2e19f36	tracked	seed from 46508115c7
-riveredge-backend/src/core/services/integration/wecom_integration.py	e090ccfce6e66530d4a32354f2f594beddf2be04	tracked	seed from a67b4ad1a7
-riveredge-backend/src/core/services/integration/wecom_oauth_service.py	1633372f3d5ec7b151653573f07f0916a141e7cd	tracked	seed from a67b4ad1a7
+riveredge-backend/src/core/services/integration/wecom_integration.py	e090ccfce6e66530d4a32354f2f594beddf2be04	applied	R2簇5:三方合并/本地适配
+riveredge-backend/src/core/services/integration/wecom_oauth_service.py	1633372f3d5ec7b151653573f07f0916a141e7cd	applied	R2簇5:三方合并/本地适配
 riveredge-backend/src/core/services/integration/wecom_tenant_resolve.py	e6d5700dda31ef1a435c08a63a561f1c7bc2d7c9	tracked	seed from a67b4ad1a7
 riveredge-backend/src/core/services/messaging/approval_wecom_card_service.py	36a244df35ab9ef660b4a5235de7a1de6b54bbbb	tracked	seed from 3958bb1524
-riveredge-backend/src/core/services/messaging/approval_wecom_push_service.py	5d79492971283405cd28803beab90a1b6b376393	tracked	seed from 4bd853a94f
+riveredge-backend/src/core/services/messaging/approval_wecom_push_service.py	5d79492971283405cd28803beab90a1b6b376393	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/core/services/messaging/message_config_service.py	8b93e08ce1390dc68e713f0eacfcface4dd5c051	tracked	seed from 2e8ecad990
 riveredge-backend/src/core/services/messaging/message_service.py	8f366868473a72c306f11e507da7e8c8fcbefb84	tracked	seed from 2e8ecad990
-riveredge-backend/src/core/services/messaging/message_template_service.py	479e733ad5b89ef0e40cd7cda290f60551a16275	tracked	seed from 978a1fb9e5
+riveredge-backend/src/core/services/messaging/message_template_service.py	479e733ad5b89ef0e40cd7cda290f60551a16275	applied	R2簇5:三方合并/本地适配
 riveredge-backend/src/core/services/messaging/wecom_message_service.py	ad5cc8dcf2a2c90ca0dc5e8e9936a4362ca1210e	tracked	seed from 3958bb1524
 riveredge-backend/src/core/services/onboarding/onboarding_service.py	455bdd6fc98d0d6ca05af5e11ffecf93d7e366d8	tracked	seed from 432bd5f7fd
 riveredge-backend/src/core/services/organization/department_service.py	079d4642229867aa5ee871aec87755b4344eb45d	tracked	seed from 46508115c7
 riveredge-backend/src/core/services/pdf/__init__.py	9af977e2b003300f4f6a5f410244a00e6eb1d150	tracked	seed from 6781d4687b
 riveredge-backend/src/core/services/pdf/playwright_engine.py	89a42bd9d64f95035e41063b60a6dadbd04bc6ab	tracked	seed from 176c2d2aeb
-riveredge-backend/src/core/services/print/print_template_service.py	ac42afbe52bbcd2a881f59ad234b77e238b325aa	tracked	seed from 777aa1a468
+riveredge-backend/src/core/services/print/print_template_service.py	ac42afbe52bbcd2a881f59ad234b77e238b325aa	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/core/services/realtime/socketio_server.py	ecead35eb7fdd34a3ec89bf73eea065193173e29	tracked	seed from 31efc2b64c
 riveredge-backend/src/core/services/reference/tenant_model_display_provider.py	1904f8255af1afb01f192ff28e13c8e9fdc193f5	tracked	seed from d81b4b70bf
 riveredge-backend/src/core/services/scheduling/scheduled_job_handlers.py	8a34f9c834a1fd840cc353a542148aff72860814	tracked	seed from 6abba1dbd5
@@ -1331,7 +1331,7 @@ riveredge-backend/src/core/services/system/installed_feature_scope.py	614bf57c63
 riveredge-backend/src/core/services/system/menu_service.py	19c2fbc5cf562d6297f8fdd2c62b1206aa1addfc	tracked	seed from 432bd5f7fd
 riveredge-backend/src/core/services/system/tenant_restore_heal.py	204a3fa342353de39b2bc747a4fa5f6f2702fa8f	tracked	seed from 1eb300325a
 riveredge-backend/src/core/services/tenant/tenant_init_data_service.py	e994eedef60448ea1d25a58ce939c79b0b5f9611	tracked	seed from 1eb300325a
-riveredge-backend/src/core/services/user/user_department_assignment_service.py	af8226f340d94b0851af763cff4ad563cf1a57af	tracked	seed from ec29267f5b
+riveredge-backend/src/core/services/user/user_department_assignment_service.py	af8226f340d94b0851af763cff4ad563cf1a57af	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/core/services/user/user_display_service.py	76ef8f2be5c6267b271f35ddee4160cc8385ce8b	tracked	seed from d81b4b70bf
 riveredge-backend/src/core/services/user/user_service.py	b2ed2919cde5b9911df0a08f4b797f420528cfe3	applied	C密码策略/默认与临时重置整簇；应用扫描按目录项容忍OSError但整目录不可枚举上抛；63聚焦测试包含用户与菜单同步；生成口令不写日志
 riveredge-backend/src/core/tasks/data_backup_handlers.py	f0de096d35102561843b3eb0ceaa6e3cd70d5bdc	tracked	seed from 1eb300325a
@@ -1345,7 +1345,7 @@ riveredge-backend/src/core/utils/price_precision.py	3969f8636c475b82da2803a2df41
 riveredge-backend/src/core/utils/search_utils.py	5050f7081d6e0d4ccbc7b66020b14714309564cd	tracked	seed from d81b4b70bf
 riveredge-backend/src/core/utils/sync_schedule_window.py	93df19f90ac514f8563cd838111a4d04fb14466b	applied	f40f54e336调度窗+价税簇
 riveredge-backend/src/core/workflows/functions/message_sender.py	27852e26985e025b65cb99794481c6f79b94d514	tracked	seed from d84fe20715
-riveredge-backend/src/infra/api/auth/auth.py	d63620ae32b4a8e4c3d7603762c76fa3982aa752	tracked	seed from 57a37e2749
+riveredge-backend/src/infra/api/auth/auth.py	d63620ae32b4a8e4c3d7603762c76fa3982aa752	applied	R2簇5:三方合并/本地适配
 riveredge-backend/src/infra/config/infra_config.py	e95d4f3e51e7fa05420838464f671a6c1f5cef7b	tracked	seed from 57a37e2749
 riveredge-backend/src/infra/domain/security/security.py	832fac2af9cf001fba1b68211bfd33d49885d75e	tracked	seed from 31efc2b64c
 riveredge-backend/src/infra/domain/tenant/tenant_access.py	a9b8c0103d955710ec9068f97d9f73a4468ab317	tracked	seed from 1eb300325a
@@ -2444,3 +2444,88 @@ riveredge-backend/src/apps/master_data/scripts/activate_all_customers_suppliers.
 .cursor/rules/master-data-detail-drawer-contract.mdc	DELETED	superset	R2簇4:本地文件,上游tip无此路径,保留
 docs/apps/master-data/drawings.md	DELETED	superset	R2簇4:本地文件,上游tip无此路径,保留
 docs/apps/master-data/sop.md	DELETED	superset	R2簇4:本地文件,上游tip无此路径,保留
+riveredge-backend/src/apps/kuaizhizao/models/inventory_sync_binding.py	c6e7befe7eff74e53e6cde3c95f40ee77be7e671	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/apps/kuaizhizao/models/purchase_order_sync_binding.py	8cdd55908cbe8ad3c460416bee638405d97b8b10	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/apps/kuaizhizao/models/reporting_sync_binding.py	955ef111471d1fe7c994bf40e4254a13491da505	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/apps/kuaizhizao/models/sales_order_sync_binding.py	e3ba009449aacd9a9cf1855893425e0847d32a10	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/apps/kuaizhizao/models/work_order_sync_binding.py	0367eda381d2595fbdff676c3e248ce38346d5e6	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/api/apis/apis.py	d6d64e85be8847e24bca6bc209bed5a6a356c61d	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/api/approval_processes/approval_processes.py	46b4091639a5f9638ba0e7209d3961b119ae5c54	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/api/messages/message_templates.py	bb634f5c90ece8814b1086912bb448a7f3b99f46	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/api/positions/positions.py	944a8b06e3958fc7e1027536ba9365670a532b74	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/api/print_templates/print_templates.py	a392642516f96b6d028d7d0ec53d0c7705e55a5d	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/config/audit_editable_fields.py	7a61585872b0adbf946e51fd8590aaf2a9e26cfa	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/models/approval_process.py	6259f4adf6e3c59ae07f8a0542013a4b5869e629	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/models/integration_config.py	e93b156b319bac1957d5e67abc5bc89d169c0499	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/models/message_template.py	d8cbf62ecfec0605ec871cdb1b36c767c7d1f0bb	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/models/print_template.py	fc7b3aa17f9ff36d26fa662c39e8880d032b36c0	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/models/resource_category.py	729d94b42a6a7ed201824ea528568016041f1333	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/schemas/api.py	377001178c01af0bbda6029af59ee10100e9590d	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/schemas/approval_process.py	db36cea0984a716ae5e711978dfbfa8edebd0631	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/schemas/custom_field.py	5234bfa400c5e813afe5ed0bf1adced5f8b173e0	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/schemas/print_template.py	acbad67322efbb3937941883d6755122a28b149a	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/schemas/resource_category.py	a5bf84e4a453424a55b0d188c74222edc6d81613	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/schemas/user_display.py	a5c6071c106d55029233da327dfa36a4b5e5585b	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/services/application/application_registry_service.py	e40947b787e2d00571539ee1cf106a74993f0791	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/services/authorization/user_permission_service.py	5c3291fd75d6fedb355625604dfdaff475c29be1	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/services/integration/outbound_field_mappings.py	18c9f7f9a3930cb8585ecbc401b6331e032a181c	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/services/resource/resource_category_service.py	f5e6d5cc9547dbba0d8ab4106fafd0f537fdda48	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/utils/quantity_precision.py	f9f4ae7ad33596186ea536500d6ac89af89ad4c2	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/infra/api/deps/services.py	579e51313037396c1ec6a948589dcffbf9835a1b	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/infra/infrastructure/http/client.py	853059338c2bf49419859ce3f75463dcf43b2619	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/infra/schemas/auth.py	bf1753bd4017944f02cf6e459daf58319b02e3df	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/infra/services/interfaces/implementations/auth_service_impl.py	682f63e24fab82a1ce43cdfecf2f8a3088124f9f	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/infra/services/license_center_service.py	fdb9fb16ab4a2777dfac96437ef193d8d9e3f1d0	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/tests/core/services/integration/test_kingdee_cosmic_token_cache.py	25ef13a319245fa8137bc0338f0de279f919c66b	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/tests/core/services/integration/test_request_dynamic_tokens.py	4a8f5729372b67818676131385ec7857684c3b2c	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/tests/core/utils/test_content_disposition.py	e9f0b01bfcc363422b9f9b1469a87438d620d5c5	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/config/collab_function_categories.py	2185b24a831825c51adcf96fdd64e5c14c9d47eb	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/models/user_department_assignment.py	ae070ae2bdb794e6fa8ee33f1b0efa2ebeb5a7e0	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/services/authorization/position_import_service.py	5d283d36d1cb68f97ce082318d894050843dcd7f	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/services/integration/request_dynamic_tokens.py	d4f9a8af36aa9a321ac9d0de6d690823527b279d	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/services/integration/wecom_public_base_url.py	cab170d0960994e7d0540899193cf7e611df72d5	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/services/resource/collab_function_category_service.py	ba1f13ef162235229d948e350c92772cbfc32057	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/services/resource/resource_category_refs.py	f5a014e3d1f8e075eff1dfa6790376601882f889	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/services/user/user_import_field_utils.py	1947a8a0ebd98150a62cf201621d72143ddc9f15	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/utils/content_disposition.py	8837aa8b725207575385576f72716f5de4d9878d	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/utils/oauth_binding_flags.py	cbb2ed085fa00bfb08b1e493960f59032c7a36ee	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/docs/core/ledger-dual-unit-contract.md	3b3004130a9c392b4360619e0981ae487a814dee	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/schemas/message_template.py	e55b4da072cc902d033956803feac7a95e17d85f	applied	R2簇5:三方合并/本地适配
+riveredge-backend/src/core/services/integration/kingdee_cosmic_service.py	fdb0351f12def2bea27712efa3d5f7dd4f0e917f	applied	R2簇5:三方合并/本地适配
+riveredge-backend/src/core/services/integration/kingdee_since_filter.py	d7a20cc60c622784ea15629bc3a81a998291ad13	applied	R2簇5:三方合并/本地适配
+riveredge-backend/src/infra/services/auth_service.py	37e6b64b4e9b8b2a25c73a46b3c2b97adc452529	applied	R2簇5:三方合并/本地适配
+riveredge-backend/src/core/services/integration/outbound_source_catalog.py	804c0924a8c7b789d4dd264d4367aa4695f1db68	applied	R2簇5:三方合并/本地适配
+riveredge-frontend/src/components/tenant-selector/index.tsx	d7a3845c581a2dc69354ffe533dfa550d798614d	applied	R2簇5:三方合并/本地适配
+riveredge-frontend/src/components/tenant-selection-modal/index.tsx	5ff99961aaa1321399aab70657556b93b4de0a1d	applied	R2簇5:三方合并/本地适配
+riveredge-frontend/src/services/auth.ts	0f395e8a814d2dcc83e6c6d219a7184f078df1bb	applied	R2簇5:三方合并/本地适配
+riveredge-frontend/src/utils/applyTenantSwitch.ts	64dd801ef5a1473c5588ba4271acef8675c1a43a	applied	R2簇5:三方合并/本地适配
+riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/reporting/ReportingSyncHistoryModal.tsx	747d8a953dcb50334fe2b7dc9fa205845255a4dd	applied	R2簇5:三方合并/本地适配
+riveredge-backend/src/core/services/integration/erp_adapters/__init__.py	92aebbba220551dce0dc5d6c35e5ca81a5342261	deferred	R2簇5:缓置(详见台账)
+riveredge-backend/tests/core/services/approval/test_advance_node_pending_notification.py	192872e5430c5ac601bf0c465feef11ef913960e	deferred	R2簇5:缓置(详见台账)
+riveredge-backend/tests/core/services/approval/test_pending_list_reconcile_withdrawn.py	c8119f437caadf5f31357c6a87eda98f87a464a7	deferred	R2簇5:缓置(详见台账)
+riveredge-backend/tests/core/services/integration/test_collapse_material_rows_to_unique_units.py	7fa9363168dc1b6a34e572214317900969a66938	deferred	R2簇5:缓置(详见台账)
+riveredge-backend/tests/core/config/test_affiliate_material_list_document_pick.py	eed9b3fdb18ac435ef9147f42b74660ce6c21b13	deferred	R2簇5:缓置(详见台账)
+riveredge-backend/tests/core/services/integration/test_kingdee_active_rows_adapter.py	fd4cab5bc238206f6001912c457c0b0f3e191525	deferred	R2簇5:缓置(详见台账)
+riveredge-backend/tests/core/services/integration/test_document_push_codes.py	a6b9da180cd331cbd5ae58cc1c2f9d52e9debd53	deferred	R2簇5:缓置(详见台账)
+riveredge-backend/tests/apps/kuaiconnect/services/inbound_sync/test_inventory_aux_unit_from_row.py	c9cc4be979945c6f02fbe5eb3e7f86356792e4e2	deferred	R2簇5:缓置(详见台账)
+riveredge-backend/tests/apps/kuaiconnect/services/inbound_sync/test_settle_sync_run_outcome.py	61c4d5dbd5b0306f366895b9dc4d08ee72c7315f	deferred	R2簇5:缓置(详见台账)
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/material_batch_manage_sync_service.py	1dbc80784f5e0f4ecae470e026895da2bc55720b	domain-out	R2簇5:kuaiconnect薄代理域,impl已移植本地master_data(簇4)
+riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/material_multi_unit_sync_service.py	fb7a2ddb8c92d26fb14e8293fad8dcd57e05064c	domain-out	R2簇5:kuaiconnect薄代理域,impl已移植本地master_data(簇4)
+.cursor/memory/features/inbound-sync-kuaiconnect.md	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
+.cursor/memory/features/inventory-sync-empty-batch-no.md	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
+.cursor/memory/features/sync-bom-line-key-derived.md	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
+.cursor/memory/features/sync-from-source-cosmic-incremental.md	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
+.cursor/memory/features/sync-from-source-multi-source-merge.md	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
+.cursor/memory/features/sync-from-source-nested-detail-expand.md	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
+.cursor/memory/features/sync-material-group-empty-pull.md	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
+.cursor/memory/features/sync-material-source-type-conversion.md	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
+.cursor/memory/features/unit-material-sync-decouple.md	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
+riveredge-backend/src/apps/kuaizhizao/scripts/sync_equipment_card_print_template.py	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
+riveredge-backend/src/apps/kuaizhizao/scripts/sync_mold_card_print_template.py	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
+riveredge-backend/src/core/scripts/__init__.py	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
+riveredge-backend/src/core/scripts/fix_equipment_mold_tool_code_rules.py	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
+riveredge-backend/src/core/scripts/init_system_menus.py	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
+riveredge-backend/src/core/scripts/openapi_tags.py	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
+riveredge-backend/src/core/services/mobile_submission_outbox_service.py	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
+riveredge-backend/migrations/models/20261123000035_sync_binding_schedule_window.py	6fe2f04c01867b0eab5c067566bcb8d9c684df23	applied	R2簇5迁移:调度窗列 22+绑定表 IF NOT EXISTS守卫;20261123命名落位(不执行)
+riveredge-backend/migrations/models/1017_20261110080000_sync_binding_schedule_window.py	6fe2f04c01867b0eab5c067566bcb8d9c684df23	applied	R2簇5迁移:落位本地20261123000035(不执行)

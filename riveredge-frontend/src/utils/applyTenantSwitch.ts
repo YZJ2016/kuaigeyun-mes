@@ -11,7 +11,7 @@ import { clearAllSessionTabs } from '../stores/sessionTabsCache';
 import { clearTabsData } from '../stores/tabsStorage';
 import { applyAppShellFromLocalCache, abandonAppShellRefreshInFlight, refreshAppShellFromApi } from './appShellSessionInit';
 import { resolvePostLoginHomePath } from './tenantHomePath';
-import { isRequestCancellation } from './requestCancellation';
+import { abortAllInflightApiRequests, isRequestCancellation } from './requestCancellation';
 import { getUserInfo } from './auth';
 import { isPureStationAccount, STATION_ENTRY_PATH } from './stationAccess';
 
@@ -19,6 +19,14 @@ let tenantSwitchGeneration = 0;
 
 export function getTenantSwitchGeneration(): number {
   return tenantSwitchGeneration;
+}
+
+/**
+ * 切换组织前必须先中断在途 HTTP（不仅是 React Query cancelQueries）。
+ * 供顶栏组织选择器在打 switch-tenant 之前调用，避免旧请求与换票叠打连接池。
+ */
+export function prepareTenantSwitchNetwork(): void {
+  abortAllInflightApiRequests();
 }
 
 /** 组织选择器列表与当前租户无关（超管=平台列表，普通用户=账号可切换列表），清业务缓存后必须立刻回填 */
@@ -35,6 +43,8 @@ export async function applyTenantSwitchSideEffects(
     .getQueriesData<unknown>({ queryKey: [TENANT_SELECTOR_OPTIONS_QUERY_ROOT] })
     .filter(([, data]) => data != null);
 
+  // 仅 cancelQueries 拦不住未接 RQ signal 的 fetch；先 abort 在途 apiRequest
+  abortAllInflightApiRequests();
   await queryClient.cancelQueries();
   if (generation !== tenantSwitchGeneration) return;
 

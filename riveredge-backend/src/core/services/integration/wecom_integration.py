@@ -113,3 +113,10 @@ async def list_wecom_users(
     if not isinstance(userlist, list):
         return []
     return [u for u in userlist if isinstance(u, dict)]
+
+
+# 兼容旧 import 路径；真源在 wecom_public_base_url（须放在本模块函数定义之后，避免循环导入）
+from core.services.integration.wecom_public_base_url import (  # noqa: E402
+    normalize_wecom_public_base_url,
+    resolve_wecom_public_base_url,
+)

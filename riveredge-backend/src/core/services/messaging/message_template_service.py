@@ -12,7 +12,15 @@ from tortoise.exceptions import IntegrityError
 
 from core.models.message_template import MessageTemplate
 from core.utils.search_utils import apply_keyword_icontains
-from core.schemas.message_template import MessageTemplateCreate, MessageTemplateUpdate
+from core.schemas.message_template import (
+    MessageTemplateCreate,
+    MessageTemplateUpdate,
+    MessageTemplateResponse,
+)
+from core.models.resource_category import RESOURCE_TYPE_MESSAGE_TEMPLATE
+from core.services.resource.resource_category_service import ResourceCategoryService
+from core.services.resource.resource_category_refs import read_category_uuid_name
+from core.services.resource.collab_function_category_service import CollabFunctionCategoryService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from core.utils.timezone_utils import resolve_business_datetime
 
@@ -23,6 +31,18 @@ class MessageTemplateService:
     
     提供消息模板的 CRUD 操作。
     """
+
+    @staticmethod
+    def build_message_template_response(
+        message_template: MessageTemplate,
+    ) -> MessageTemplateResponse:
+        category_uuid, category_name = read_category_uuid_name(message_template)
+        payload = message_template.__dict__.copy()
+        if "id" in payload:
+            del payload["id"]
+        payload["category_uuid"] = category_uuid
+        payload["category_name"] = category_name
+        return MessageTemplateResponse.model_validate(payload)
     
     @staticmethod
     async def create_message_template(
@@ -43,11 +63,26 @@ class MessageTemplateService:
             ValidationError: 当模板代码已存在时抛出
         """
         try:
+            create_data = data.model_dump(exclude={"category_uuid"})
+            category_id = None
+            if data.category_uuid:
+                category_id = await ResourceCategoryService().resolve_category_id(
+                    tenant_id,
+                    RESOURCE_TYPE_MESSAGE_TEMPLATE,
+                    data.category_uuid,
+                )
+            elif data.code:
+                category_id = await CollabFunctionCategoryService().resolve_category_id_for_message(
+                    tenant_id,
+                    data.code,
+                )
             message_template = MessageTemplate(
                 tenant_id=tenant_id,
-                **data.model_dump()
+                category_id=category_id,
+                **create_data,
             )
             await message_template.save()
+            await message_template.fetch_related("category")
             return message_template
         except IntegrityError:
             raise ValidationError(f"消息模板代码 {data.code} 已存在")
@@ -78,7 +113,8 @@ class MessageTemplateService:
         
         if not message_template:
             raise NotFoundError(f"消息模板不存在: {uuid}")
-        
+
+        await message_template.fetch_related("category")
         return message_template
 
     @staticmethod
@@ -119,6 +155,8 @@ class MessageTemplateService:
         is_active: Optional[bool] = None,
         keyword: Optional[str] = None,
         installed_app_codes: Optional[Set[str]] = None,
+        category_uuid: Optional[UUID] = None,
+        no_category: bool = False,
     ) -> List[MessageTemplate]:
         """
         获取消息模板列表
@@ -146,8 +184,18 @@ class MessageTemplateService:
 
         query = apply_keyword_icontains(query, keyword, ["name", "code", "description", "subject"])
 
+        if no_category:
+            query = query.filter(category_id__isnull=True)
+        elif category_uuid:
+            category_id = await ResourceCategoryService().resolve_category_id(
+                tenant_id,
+                RESOURCE_TYPE_MESSAGE_TEMPLATE,
+                category_uuid,
+            )
+            query = query.filter(category_id=category_id)
+
         if installed_app_codes is None:
-            return await query.order_by("-created_at").offset(skip).limit(limit).all()
+            return await query.order_by("-created_at").offset(skip).limit(limit).prefetch_related("category").all()
 
         from core.services.system.installed_feature_scope import (
             message_template_code_visible_for_installed_apps,
@@ -160,7 +208,15 @@ class MessageTemplateService:
             for r in rows
             if message_template_code_visible_for_installed_apps(str(r.code or ""), installed_app_codes)
         ]
-        return filtered[skip : skip + limit]
+        sliced = filtered[skip : skip + limit]
+        if not sliced:
+            return sliced
+        enriched = await MessageTemplate.filter(
+            tenant_id=tenant_id,
+            id__in=[row.id for row in sliced],
+        ).prefetch_related("category").all()
+        by_id = {row.id: row for row in enriched}
+        return [by_id[row.id] for row in sliced if row.id in by_id]
     
     @staticmethod
     async def update_message_template(
@@ -183,12 +239,22 @@ class MessageTemplateService:
             NotFoundError: 当消息模板不存在时抛出
         """
         message_template = await MessageTemplateService.get_message_template_by_uuid(tenant_id, uuid)
-        
-        update_data = data.model_dump(exclude_unset=True)
+
+        update_data = data.model_dump(exclude_unset=True, exclude={"category_uuid"})
+        if "category_uuid" in data.model_fields_set:
+            if data.category_uuid is None:
+                message_template.category_id = None
+            else:
+                message_template.category_id = await ResourceCategoryService().resolve_category_id(
+                    tenant_id,
+                    RESOURCE_TYPE_MESSAGE_TEMPLATE,
+                    data.category_uuid,
+                )
         for key, value in update_data.items():
             setattr(message_template, key, value)
-        
+
         await message_template.save()
+        await message_template.fetch_related("category")
         return message_template
     
     @staticmethod
@@ -1470,6 +1536,10 @@ class MessageTemplateService:
         existing_codes = set(await MessageTemplate.filter(
             tenant_id=tenant_id, deleted_at__isnull=True,
         ).values_list("code", flat=True))
+        await CollabFunctionCategoryService().ensure_function_categories(
+            tenant_id,
+            RESOURCE_TYPE_MESSAGE_TEMPLATE,
+        )
         created = 0
         for item in MessageTemplateService.PRESET_MESSAGE_TEMPLATES:
             code = str(item.get("code") or "").strip()
@@ -1498,5 +1568,9 @@ class MessageTemplateService:
                         tenant_id=tenant_id, code=code, deleted_at__isnull=True,
                     ).exists():
                         raise
+        await CollabFunctionCategoryService().backfill_resource_categories(
+            tenant_id,
+            RESOURCE_TYPE_MESSAGE_TEMPLATE,
+        )
         return created
 

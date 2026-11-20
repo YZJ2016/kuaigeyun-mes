@@ -19,6 +19,7 @@ class UserDisplayItem(BaseModel):
     uuid: str
     username: str
     full_name: Optional[str] = None
+    employee_number: Optional[str] = Field(None, description="金蝶人员工号")
     label: str = Field(..., description="下拉与只读展示用文案")
     avatar: Optional[str] = Field(None, description="头像文件 UUID（文件管理），无则空")
     department_uuid: Optional[str] = None

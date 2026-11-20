@@ -55,6 +55,7 @@ class TenantInfo(BaseModel):
         name: 组织名称
         domain: 组织域名
         status: 组织状态
+        is_default: 是否为多账户登录默认进入组织
     """
     
     id: int = Field(..., description="组织 ID（内部使用）")
@@ -62,6 +63,16 @@ class TenantInfo(BaseModel):
     name: str = Field(..., description="组织名称")
     domain: str = Field(..., description="组织域名")
     status: str = Field(..., description="组织状态")
+    is_default: bool = Field(default=False, description="是否为多账户登录默认进入组织")
+
+
+class SetDefaultTenantRequest(BaseModel):
+    """设置多账户登录默认进入组织；tenant_id 为空表示每次登录再选。"""
+
+    tenant_id: Optional[int] = Field(
+        None,
+        description="目标组织 ID；不传或 null 表示清除默认、每次登录再选",
+    )
 
 
 class LoginResponse(BaseModel):

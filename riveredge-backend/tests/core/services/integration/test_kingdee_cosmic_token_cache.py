@@ -68,6 +68,23 @@ def test_token_cache_key_stable_and_changes_with_secret():
     assert key_user != key1
 
 
+def test_token_cache_key_isolates_riveredge_tenant_and_connector():
+    """同 ERP 账密、不同 RiverEdge 租户/连接器不得共用缓存键。"""
+    base = _sample_config(_tenant_id=8, _connector_uuid="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+    other_tenant = _sample_config(
+        _tenant_id=19, _connector_uuid="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    )
+    other_connector = _sample_config(
+        _tenant_id=8, _connector_uuid="bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+    )
+    key_a = cosmic.build_kingdee_cosmic_token_cache_key(base)
+    assert key_a != cosmic.build_kingdee_cosmic_token_cache_key(other_tenant)
+    assert key_a != cosmic.build_kingdee_cosmic_token_cache_key(other_connector)
+    assert key_a == cosmic.build_kingdee_cosmic_token_cache_key(
+        _sample_config(_tenant_id=8, _connector_uuid="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+    )
+
+
 @pytest.mark.asyncio
 async def test_login_reuses_cached_token_without_second_get_token():
     cfg = _sample_config()

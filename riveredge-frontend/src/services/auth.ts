@@ -61,6 +61,7 @@ export interface LoginResponse {
     name: string;
     domain: string;
     status: string;
+    is_default?: boolean;
   }>;
   default_tenant_id?: number;
   requires_tenant_selection?: boolean;
@@ -75,6 +76,8 @@ export interface TenantSwitchOption {
   name: string;
   domain: string;
   status: string;
+  /** 多账户登录默认进入组织 */
+  is_default?: boolean;
 }
 
 /**
@@ -141,6 +144,17 @@ export async function getMyTenants(): Promise<TenantSwitchOption[]> {
  */
 export async function switchTenant(tenant_id: number): Promise<LoginResponse> {
   return apiRequest<LoginResponse>('/auth/switch-tenant', {
+    method: 'POST',
+    data: { tenant_id },
+  });
+}
+
+/**
+ * 设置多账户登录默认进入组织（不切换当前会话）。
+ * tenant_id 为 null 表示清除默认，每次登录再选。
+ */
+export async function setDefaultTenant(tenant_id: number | null): Promise<TenantSwitchOption[]> {
+  return apiRequest<TenantSwitchOption[]>('/auth/default-tenant', {
     method: 'POST',
     data: { tenant_id },
   });

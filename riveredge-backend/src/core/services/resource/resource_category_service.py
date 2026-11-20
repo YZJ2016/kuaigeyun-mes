@@ -8,10 +8,16 @@ from uuid import UUID
 from tortoise.models import Model
 
 from core.models.api import API
+from core.models.approval_process import ApprovalProcess
 from core.models.dataset import Dataset
+from core.models.message_template import MessageTemplate
+from core.models.print_template import PrintTemplate
 from core.models.resource_category import (
     RESOURCE_TYPE_API,
+    RESOURCE_TYPE_APPROVAL_PROCESS,
     RESOURCE_TYPE_DATASET,
+    RESOURCE_TYPE_MESSAGE_TEMPLATE,
+    RESOURCE_TYPE_PRINT_TEMPLATE,
     RESOURCE_TYPES,
     ResourceCategory,
 )
@@ -25,7 +31,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
 class ResourceCategoryService:
-    """接口/数据集分类 CRUD"""
+    """资源分类 CRUD（接口/数据集/审批流程/消息模板/打印模板）"""
 
     @staticmethod
     def _resource_model(resource_type: str) -> Type[Model]:
@@ -33,6 +39,12 @@ class ResourceCategoryService:
             return API
         if resource_type == RESOURCE_TYPE_DATASET:
             return Dataset
+        if resource_type == RESOURCE_TYPE_APPROVAL_PROCESS:
+            return ApprovalProcess
+        if resource_type == RESOURCE_TYPE_MESSAGE_TEMPLATE:
+            return MessageTemplate
+        if resource_type == RESOURCE_TYPE_PRINT_TEMPLATE:
+            return PrintTemplate
         raise ValidationError(f"不支持的资源类型: {resource_type}")
 
     @staticmethod

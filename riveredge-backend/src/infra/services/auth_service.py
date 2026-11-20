@@ -169,6 +169,16 @@ class AuthService:
             return seed
         return await self._expand_candidates_by_phone(seed)
 
+    @staticmethod
+    def _pick_login_default_user(users: list[User]) -> User | None:
+        """同实体多组织：优先 is_login_default，否则按 id 升序第一条。"""
+        if not users:
+            return None
+        marked = [u for u in users if bool(getattr(u, "is_login_default", False))]
+        if marked:
+            return min(marked, key=lambda u: int(u.id or 0))
+        return min(users, key=lambda u: int(u.id or 0))
+
     async def _tenants_payload_from_users(self, users: list[User]) -> list[dict]:
         """由用户行生成可登录组织列表（仅可运营组织）。"""
         tenant_ids = [u.tenant_id for u in users if u.tenant_id is not None]
@@ -179,6 +189,12 @@ class AuthService:
         operational_ids = await filter_operational_tenant_ids(set(tenant_ids))
         if not operational_ids:
             return []
+        # is_default 仅认显式 is_login_default（用户点过「设为默认」）；勿把 id 兜底标成默认
+        users_by_tenant = {
+            int(u.tenant_id): u
+            for u in users
+            if u.tenant_id is not None and int(u.tenant_id) in operational_ids
+        }
         tenants = await Tenant.filter(id__in=operational_ids).order_by("id").all()
         return [
             {
@@ -187,6 +203,9 @@ class AuthService:
                 "name": tenant.name,
                 "domain": tenant.domain,
                 "status": tenant.status.value,
+                "is_default": bool(
+                    getattr(users_by_tenant.get(int(tenant.id)), "is_login_default", False)
+                ),
             }
             for tenant in tenants
         ]
@@ -229,7 +248,8 @@ class AuthService:
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="账号密码正确，但没有可登录的组织（组织已删除或未激活）",
                 )
-            return valid[0], valid
+            primary = self._pick_login_default_user(valid)
+            return primary or valid[0], valid
 
         candidates = await self._collect_login_candidates(username_or_phone, None)
         if not candidates:
@@ -252,7 +272,8 @@ class AuthService:
                 detail="账号密码正确，但没有可登录的组织（组织已删除或未激活）",
             )
 
-        return valid[0], valid
+        primary = self._pick_login_default_user(valid)
+        return primary or valid[0], valid
 
     async def _find_login_candidate_users(
         self,
@@ -351,6 +372,64 @@ class AuthService:
             tenant_id=target_tenant_id,
             record_login_audit=False,
         )
+
+    async def set_login_default_tenant(
+        self,
+        current_user: User,
+        target_tenant_id: Optional[int],
+    ) -> list[dict]:
+        """
+        设置多账户登录默认进入组织。
+        target_tenant_id 有值：将该组织标为默认；为 None：清除标记，每次登录再选。
+        """
+        if bool(getattr(current_user, "is_infra_admin", False)):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="平台管理员请在组织管理中设置平台默认登录组织",
+            )
+
+        from infra.domain.security.login_phone_disambiguation import (
+            filter_same_entity_users,
+            phones_same_entity,
+        )
+
+        q = Q(username=current_user.username)
+        if current_user.phone:
+            q = q | Q(phone=current_user.phone)
+        candidate_users = await User.filter(
+            q,
+            is_active=True,
+            deleted_at__isnull=True,
+        ).all()
+        candidate_users = filter_same_entity_users(current_user, candidate_users)
+        candidate_users = await self._filter_users_with_active_tenant(candidate_users)
+
+        if target_tenant_id is None:
+            for peer in candidate_users:
+                if bool(getattr(peer, "is_login_default", False)):
+                    peer.is_login_default = False
+                    await peer.save(update_fields=["is_login_default", "updated_at"])
+            return await self._tenants_payload_from_users(candidate_users)
+
+        target_user = next((u for u in candidate_users if u.tenant_id == target_tenant_id), None)
+        if not target_user:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="当前账号不属于目标组织，无法设为默认",
+            )
+        if not phones_same_entity(current_user.phone, target_user.phone):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="当前账号与目标组织绑定的手机号不一致，无法设为默认",
+            )
+
+        for peer in candidate_users:
+            want = peer.id == target_user.id
+            if bool(getattr(peer, "is_login_default", False)) != want:
+                peer.is_login_default = want
+                await peer.save(update_fields=["is_login_default", "updated_at"])
+
+        return await self._tenants_payload_from_users(candidate_users)
     
     async def register(
         self,
@@ -1046,10 +1125,13 @@ class AuthService:
                             "name": tenant.name,
                             "domain": tenant.domain,
                             "status": tenant.status.value,
+                            "is_default": True,
                         }
                     ]
 
-        requires_tenant_selection = len(user_tenants_list) > 1
+        # 已显式设过登录默认组织时直接进默认账套，不再弹选组织
+        has_explicit_login_default = any(bool(t.get("is_default")) for t in user_tenants_list)
+        requires_tenant_selection = len(user_tenants_list) > 1 and not has_explicit_login_default
 
         tenant_name = None
         tenant_plan = None
@@ -1077,6 +1159,7 @@ class AuthService:
                         "name": tenant.name,
                         "domain": tenant.domain,
                         "status": tenant.status.value,
+                        "is_default": True,
                     }
                 ]
 
@@ -1152,7 +1235,10 @@ class AuthService:
                 "roles": roles,
             },
             "tenants": user_tenants_list if user_tenants_list else None,
-            "default_tenant_id": final_tenant_id,
+            "default_tenant_id": next(
+                (t["id"] for t in user_tenants_list if t.get("is_default")),
+                final_tenant_id,
+            ),
             "requires_tenant_selection": requires_tenant_selection,
             "requires_phone_verification": False,
         }

@@ -38,7 +38,8 @@ class PrintTemplateBase(BaseModel):
 
 class PrintTemplateCreate(PrintTemplateBase):
     """创建打印模板 Schema"""
-    pass
+
+    category_uuid: Optional[UUID] = Field(None, description="所属分类 UUID（可选）")
 
 
 class PrintTemplateUpdate(BaseModel):
@@ -49,6 +50,7 @@ class PrintTemplateUpdate(BaseModel):
     config: Optional[Dict[str, Any]] = Field(None, description="模板配置")
     is_active: Optional[bool] = Field(None, description="是否启用")
     is_default: Optional[bool] = Field(None, description="是否默认模板")
+    category_uuid: Optional[UUID] = Field(None, description="所属分类 UUID（可选，传 null 清除分类）")
 
     @field_validator("config", mode="before")
     @classmethod
@@ -101,7 +103,9 @@ class PrintTemplateResponse(PrintTemplateBase):
     last_used_at: Optional[datetime] = Field(None, description="最后使用时间")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
-    
+    category_uuid: Optional[UUID] = Field(None, description="所属分类 UUID")
+    category_name: Optional[str] = Field(None, description="所属分类名称")
+
     model_config = ConfigDict(from_attributes=True)
 
 

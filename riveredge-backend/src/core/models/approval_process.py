@@ -5,8 +5,11 @@
 """
 
 from tortoise import fields
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, TYPE_CHECKING
 from .base import BaseModel
+
+if TYPE_CHECKING:
+    from .resource_category import ResourceCategory
 
 
 class ApprovalProcess(BaseModel):
@@ -29,6 +32,13 @@ class ApprovalProcess(BaseModel):
     nodes = fields.JSONField(description="流程节点配置（JSON格式，ProFlow 设计）")
     config = fields.JSONField(description="流程配置（JSON格式）")
     
+    category: fields.ForeignKeyNullableRelation["ResourceCategory"] = fields.ForeignKeyField(
+        "models.ResourceCategory",
+        related_name="approval_processes",
+        null=True,
+        description="所属分类（可选）",
+    )
+
     # 流程状态
     is_active = fields.BooleanField(default=True, description="是否启用")
 
@@ -50,6 +60,7 @@ class ApprovalProcess(BaseModel):
             ("code",),
             ("is_active",),
             ("created_at",),
+            ("category_id",),
         ]
         unique_together = [("tenant_id", "code")]
     

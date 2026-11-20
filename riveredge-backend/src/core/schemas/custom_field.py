@@ -184,6 +184,10 @@ class CustomFieldPageConfigResponse(BaseModel):
     table_name_label: str = Field(..., description="表名显示标签")
     module: str = Field(..., description="模块名称")
     module_icon: Optional[str] = Field(None, description="模块图标")
+    app_code: Optional[str] = Field(
+        None,
+        description="归属应用 code；导航接管页（如 kuaipd 宿主路径）须显式声明，否则按 page_path 推断",
+    )
     
     model_config = ConfigDict(from_attributes=True)
 

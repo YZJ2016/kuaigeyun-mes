@@ -25,6 +25,7 @@ from infra.schemas.auth import (
     CurrentUserResponse, 
     TenantInfo,
     SwitchTenantRequest,
+    SetDefaultTenantRequest,
     SendVerificationCodeRequest, 
     SendVerificationCodeResponse, 
     BatchAccessCheckRequest, 
@@ -46,6 +47,7 @@ from core.services.integration.wecom_oauth_service import (
     build_wecom_oauth_authorize_url,
     decode_wecom_oauth_state,
     encode_wecom_oauth_state,
+    find_users_bound_to_wecom_userid_across_tenants,
     resolve_user_for_wecom_login,
     resolve_wecom_user_id_from_code,
 )
@@ -142,6 +144,14 @@ class WeComBootstrapTenantResponse(BaseModel):
     tenant_domain: str | None = Field(
         None,
         description="命中组织时的组织域名（路径入口）",
+    )
+    shared_corp_id: str | None = Field(
+        None,
+        description="全站启用连接器共用同一 CorpId 时返回，可走发现授权",
+    )
+    bootstrap_tenant_id: int | None = Field(
+        None,
+        description="发现授权用的租户（取其 Agent 换 code）；唯一命中时与 tenant_id 相同",
     )
 
 
@@ -365,12 +375,20 @@ async def wecom_authorize_url(
     redirect_uri: str = Query(..., min_length=1, description="OAuth 回调地址（前端页面 URL）"),
     tenant_id: int = Query(..., ge=1, description="组织 ID"),
     redirect: str | None = Query(None, description="登录成功后前端跳转路径"),
+    discover: bool = Query(
+        False,
+        description="同 Corp 多应用发现授权：回调后按企微 UserId 跨组织反查唯一绑定",
+    ),
 ):
     """
     获取企业微信 OAuth 授权地址（依赖租户已配置 type=wecom 应用连接器）。
     """
     post_login_redirect = (redirect or "").strip()
-    state = encode_wecom_oauth_state(tenant_id=tenant_id, redirect=post_login_redirect)
+    state = encode_wecom_oauth_state(
+        tenant_id=tenant_id,
+        redirect=post_login_redirect,
+        discover=discover,
+    )
     authorize_url = await build_wecom_oauth_authorize_url(
         tenant_id=tenant_id,
         redirect_uri=redirect_uri.strip(),
@@ -385,14 +403,16 @@ async def wecom_bootstrap_tenant(
     agent_id: int | None = Query(None, ge=1, description="企业微信 AgentId"),
 ):
     """
-    企微移动端 H5 打开且 URL 无 tenant_id 时：若全站仅有一个启用且凭证完整的企微组织，返回该组织 ID，供静默 OAuth。
-    多组织时不猜测，由前端依赖本地记忆或 URL 参数。
+    企微移动端 H5 打开且 URL 无 tenant_id 时：
+    - corp+agent 唯一命中 → 返回 tenant_id
+    - 全站唯一启用组织 → 返回 tenant_id
+    - 同 Corp 多组织 → 返回 bootstrap_tenant_id 供发现授权（回调按绑定反查）
     """
     from core.services.integration.wecom_tenant_resolve import (
         list_wecom_enabled_tenant_ids,
         resolve_tenant_by_wecom_corp_agent,
+        summarize_wecom_bootstrap_without_entry,
     )
-    from infra.models.tenant import Tenant
 
     if corp_id or agent_id is not None:
         resolved = None
@@ -405,6 +425,7 @@ async def wecom_bootstrap_tenant(
                 tenant_id=resolved.tenant_id,
                 candidates_count=1,
                 tenant_domain=resolved.tenant_domain or None,
+                bootstrap_tenant_id=resolved.tenant_id,
             )
         enabled = await list_wecom_enabled_tenant_ids()
         return WeComBootstrapTenantResponse(
@@ -412,20 +433,13 @@ async def wecom_bootstrap_tenant(
             candidates_count=len(enabled),
         )
 
-    tenant_ids = await list_wecom_enabled_tenant_ids()
-
-    if len(tenant_ids) == 1:
-        tid = tenant_ids[0]
-        tenant = await Tenant.get_or_none(id=tid)
-        domain = (tenant.domain or "").strip() if tenant else ""
-        return WeComBootstrapTenantResponse(
-            tenant_id=tid,
-            candidates_count=1,
-            tenant_domain=domain or None,
-        )
+    summary = await summarize_wecom_bootstrap_without_entry()
     return WeComBootstrapTenantResponse(
-        tenant_id=None,
-        candidates_count=len(tenant_ids),
+        tenant_id=summary.tenant_id,
+        candidates_count=summary.candidates_count,
+        tenant_domain=summary.tenant_domain,
+        shared_corp_id=summary.shared_corp_id,
+        bootstrap_tenant_id=summary.bootstrap_tenant_id,
     )
 
 
@@ -493,11 +507,16 @@ async def wecom_callback(
 ):
     """
     企业微信 OAuth 回调：用 code 换取 userid，匹配本地用户并签发 JWT。
+    发现授权（state.d=1）：跨组织按已绑定 UserId 唯一命中则进对应组织。
     """
+    from core.services.integration.wecom_tenant_resolve import list_wecom_enabled_tenant_ids
+
     tenant_id = data.tenant_id
+    discover = False
     if data.state:
         decoded = decode_wecom_oauth_state(data.state)
         tenant_id = decoded["tenant_id"]
+        discover = bool(decoded.get("discover"))
     if tenant_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -505,6 +524,29 @@ async def wecom_callback(
         )
 
     wecom_userid = await resolve_wecom_user_id_from_code(tenant_id=tenant_id, code=data.code)
+
+    if discover:
+        enabled_ids = await list_wecom_enabled_tenant_ids()
+        bound_users = await find_users_bound_to_wecom_userid_across_tenants(
+            wecom_userid=wecom_userid,
+            tenant_ids=enabled_ids,
+        )
+        if len(bound_users) == 1:
+            user = bound_users[0]
+            result = await auth_service.generate_login_result(
+                user, request, int(user.tenant_id)
+            )
+            return LoginResponse(**result)
+        if len(bound_users) > 1:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "该企业微信账号已绑定多个组织，请在企微管理后台把应用主页改为"
+                    "「应用连接」部署说明中的路径型地址后再打开"
+                ),
+            )
+        # 未绑定：在发现用租户上尝试手机号/邮箱自动绑定（与单组织路径一致）
+
     user = await resolve_user_for_wecom_login(tenant_id=tenant_id, wecom_userid=wecom_userid)
 
     result = await auth_service.generate_login_result(user, request, tenant_id)
@@ -1011,6 +1053,21 @@ async def switch_tenant(
         request=request,
     )
     return LoginResponse(**result)
+
+
+@router.post("/default-tenant", response_model=list[TenantInfo])
+async def set_default_tenant(
+    data: SetDefaultTenantRequest,
+    current_user: User = Depends(get_current_user),
+    auth_service: Any = Depends(get_auth_service_with_fallback),
+):
+    """
+    将指定组织设为多账户登录默认进入组织（不切换当前会话）。
+    """
+    return await auth_service.set_login_default_tenant(
+        current_user=current_user,
+        target_tenant_id=data.tenant_id,
+    )
 
 
 @router.post("/check-access", response_model=list[AccessCheckResult])

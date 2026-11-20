@@ -7,6 +7,8 @@ from typing import Optional, List
 from datetime import datetime
 from uuid import UUID
 
+from core.schemas.api import APIRelatedDocumentGroupCount, APIRelatedDocumentOption
+
 
 class ResourceCategoryBase(BaseModel):
     """资源分类基础 Schema"""
@@ -53,3 +55,11 @@ class ResourceCategoryListResponse(BaseModel):
     items: List[ResourceCategoryResponse] = Field(default_factory=list)
     total_count: int = Field(0, description="全部资源数量")
     uncategorized_count: int = Field(0, description="未分类资源数量")
+    related_document_group_counts: Optional[List[APIRelatedDocumentGroupCount]] = Field(
+        None,
+        description="仅接口库：分类 × 关联单据数量（左栏二级分组）",
+    )
+    related_document_options: Optional[List[APIRelatedDocumentOption]] = Field(
+        None,
+        description="仅接口库：关联单据下拉选项",
+    )

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from urllib.parse import quote
 
-from infra.config.infra_config import infra_settings
 from infra.models.tenant import Tenant
 
 # trigger_document → PC 列表路径（组织入口 redirect 目标）
@@ -28,7 +27,10 @@ async def ensure_notification_document_url(
     if str(vars_payload.get("document_url") or "").strip():
         return
 
-    origin = (infra_settings.BASE_URL or "").strip().rstrip("/")
+    from core.services.integration.wecom_public_base_url import resolve_wecom_public_base_url
+
+    # 与审批企微卡片一致：优先连接器 base_url，否则环境 BASE_URL
+    origin = await resolve_wecom_public_base_url(tenant_id)
     if not origin:
         return
 

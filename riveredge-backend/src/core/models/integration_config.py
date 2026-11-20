@@ -72,21 +72,29 @@ class IntegrationConfig(BaseModel):
     
     def get_config(self) -> Dict[str, Any]:
         """
-        获取配置信息
-        
-        Returns:
-            Dict[str, Any]: 配置信息字典
+        获取出站运行时配置（浅拷贝）。
+
+        附带 ``_tenant_id`` / ``_connector_uuid``，供苍穹 Token 缓存等按租户+连接器隔离。
+        下划线键不得写回 ``config`` JSON（``set_config`` 会剥离）。
         """
-        return self.config or {}
-    
+        cfg = dict(self.config or {})
+        cfg["_tenant_id"] = self.tenant_id
+        cfg["_connector_uuid"] = str(self.uuid or "")
+        return cfg
+
     def set_config(self, config: Dict[str, Any]) -> None:
         """
-        设置配置信息
-        
+        设置配置信息（剥离运行时隔离键，避免污染落库 JSON）。
+
         Args:
             config: 配置信息字典
         """
-        self.config = config
+        raw = config or {}
+        self.config = {
+            key: value
+            for key, value in raw.items()
+            if not str(key).startswith("_")
+        }
     
     def update_connection_status(self, is_connected: bool, error: Optional[str] = None) -> None:
         """
