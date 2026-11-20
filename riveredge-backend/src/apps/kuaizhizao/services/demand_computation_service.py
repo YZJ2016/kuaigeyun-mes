@@ -6168,6 +6168,7 @@ class DemandComputationService(AppBaseService):
                 continue
             remaining = remaining_by_material.get(mid, 0.0)
             pushed_qty = self._purchase_pushed_qty_for_material(mid, suggested, exclusions)
+            material = material_by_id.get(mid)
             supplier_id = resolve_default_supplier_id_from_source_config(
                 item.material_source_config
             )
@@ -6175,7 +6176,6 @@ class DemandComputationService(AppBaseService):
                 supplier_id = resolve_default_supplier_id_from_material(material)
             if push_as_confirm and not supplier_id and remaining > 0:
                 skipped_without_supplier += 1
-            material = material_by_id.get(mid)
             material_code = str(item.material_code or "").strip()
             material_name = str(item.material_name or "").strip()
             if material:

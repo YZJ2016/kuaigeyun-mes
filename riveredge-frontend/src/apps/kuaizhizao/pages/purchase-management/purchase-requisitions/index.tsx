@@ -951,7 +951,12 @@ const PurchaseRequisitionsPage: React.FC = () => {
 
   useEffect(() => {
     if (!isFormPage) return;
-    const initKey = isCreatePage ? 'create' : `edit-${editRouteId}`;
+    const flow = new URLSearchParams(location.search || '').get('flow');
+    const initKey = isCreatePage
+      ? flow
+        ? `create:flow:${flow}`
+        : 'create'
+      : `edit-${editRouteId}`;
     if (formPageInitKeyRef.current === initKey) {
       if (isCreatePage) {
         const form = createFormRef.current;
@@ -981,7 +986,15 @@ const PurchaseRequisitionsPage: React.FC = () => {
     } else if (editRouteId != null) {
       void loadPurchaseRequisitionEditForm(editRouteId);
     }
-  }, [isFormPage, isCreatePage, editRouteId, initPurchaseRequisitionCreateForm, loadPurchaseRequisitionEditForm, fillBlankPurchaseRequisitionCode]);
+  }, [
+    isFormPage,
+    isCreatePage,
+    editRouteId,
+    location.search,
+    initPurchaseRequisitionCreateForm,
+    loadPurchaseRequisitionEditForm,
+    fillBlankPurchaseRequisitionCode,
+  ]);
 
   useEffect(() => {
     if (!isFormPage || !prFormDraftKey) return;

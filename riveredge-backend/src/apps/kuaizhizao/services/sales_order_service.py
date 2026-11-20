@@ -1416,12 +1416,15 @@ class SalesOrderService:
         )
         if action in ("delete", "revoke_approval"):
             from apps.kuaizhizao.services.sales_order_code_sync import (
+                filter_sales_order_capability_blocking_documents,
                 format_sales_order_downstream_labels,
                 list_sales_order_active_downstream_documents,
             )
 
-            downstream_docs = await list_sales_order_active_downstream_documents(
-                tenant_id, int(order.id)
+            downstream_docs = filter_sales_order_capability_blocking_documents(
+                await list_sales_order_active_downstream_documents(
+                    tenant_id, int(order.id)
+                )
             )
             ctx["has_downstream_documents"] = bool(downstream_docs)
             try:

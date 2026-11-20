@@ -84,7 +84,7 @@ async def sales_order_downstream_by_ids(
                 _mark(int(oid))
 
     # 直连下推采购订单/采购申请等无 sales_order_id FK，靠 DocumentRelation
-    rel_source_ids = await DocumentRelation.filter(
+    relation_rows = await DocumentRelation.filter(
         tenant_id=tenant_id,
         source_type="sales_order",
         source_id__in=sales_order_ids,
@@ -96,8 +96,11 @@ async def sales_order_downstream_by_ids(
             "shipment_notice",
             "sales_delivery",
         ),
-    ).values_list("source_id", flat=True)
-    for oid in rel_source_ids:
+    ).values("source_id", "target_type")
+    for row in relation_rows:
+        if str(row.get("target_type") or "") in _SALES_ORDER_CAPABILITY_NONBLOCKING_DOWNSTREAM_TYPES:
+            continue
+        oid = row.get("source_id")
         if oid is not None:
             _mark(int(oid))
     return result
@@ -117,6 +120,11 @@ _SALES_ORDER_DOWNSTREAM_TYPE_LABELS: Dict[str, str] = {
 
 # 销售订单删除时会级联处理的伴随单据，不作为「不可删除」的下游拦截
 _SALES_ORDER_DELETE_IGNORE_DOWNSTREAM_TYPES = frozenset({"demand"})
+
+# 反审核/删单/改号门禁：仅剩需求计算头单时由撤回计算处理，不算有效下游
+_SALES_ORDER_CAPABILITY_NONBLOCKING_DOWNSTREAM_TYPES = frozenset(
+    {"demand", "demand_computation"}
+)
 
 
 def _flatten_active_downstream_nodes(
@@ -230,6 +238,20 @@ async def list_sales_order_active_downstream_documents(
     return docs
 
 
+def filter_sales_order_capability_blocking_documents(
+    docs: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """capabilities 门禁用：过滤不阻断反审核/删单的伴随单（如孤立需求计算头）。"""
+    if not docs:
+        return []
+    return [
+        d
+        for d in docs
+        if str(d.get("document_type") or "")
+        not in _SALES_ORDER_CAPABILITY_NONBLOCKING_DOWNSTREAM_TYPES
+    ]
+
+
 def format_sales_order_downstream_labels(docs: List[Dict[str, Any]], *, limit: int = 5) -> str:
     parts: List[str] = []
     for doc in docs[:limit]:
@@ -246,7 +268,7 @@ def format_sales_order_downstream_labels(docs: List[Dict[str, Any]], *, limit: i
 
 async def sales_order_has_downstream_documents(tenant_id: int, sales_order_id: int) -> bool:
     docs = await list_sales_order_active_downstream_documents(tenant_id, sales_order_id)
-    return bool(docs)
+    return bool(filter_sales_order_capability_blocking_documents(docs))
 
 
 async def resolve_sales_order_code_editable(

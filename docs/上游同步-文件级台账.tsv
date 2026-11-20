@@ -912,7 +912,7 @@ riveredge-backend/src/apps/kuaizhizao/services/contract_milestone_billing_servic
 riveredge-backend/src/apps/kuaizhizao/services/data_compensation_service.py	29cef85f82499c85371d8155b33c43dc651ed8d6	tracked	seed from 4bd853a94f
 riveredge-backend/src/apps/kuaizhizao/services/defect_record_service.py	d684777f0939f9b6fcf909401a6423c410538f55	tracked	seed from 1efec0da1d
 riveredge-backend/src/apps/kuaizhizao/services/delivery_notice_service.py	33ade687684e8004086a86dd4bc4e57d1234c15d	tracked	seed from 4d124a088e
-riveredge-backend/src/apps/kuaizhizao/services/demand_computation_service.py	e937e5d96b457ab1f57efd7be14a2d124554d3f7	tracked	seed from 0b8630adfd
+riveredge-backend/src/apps/kuaizhizao/services/demand_computation_service.py	e6ac1467fd3d646c68c29b445f31fc09b9d13be1	applied	R3 68c4b0ed7e：material赋值前移到供应商解析前（未赋值变量修复）
 riveredge-backend/src/apps/kuaizhizao/services/demand_replan_impact_service.py	32bf84560c5c3563145cfbe7f9cd7f8b5a02a207	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/demand_replanning_orchestrator_service.py	1533885faf4d7e185c4f39142de8a6228d2eb2ac	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/demand_service.py	e3974f02ffd54ff70a20387e45c9325509ceca9a	tracked	seed from 154977d948
@@ -1127,9 +1127,9 @@ riveredge-backend/src/apps/kuaizhizao/services/rework_signoff_orchestrator.py	c5
 riveredge-backend/src/apps/kuaizhizao/services/sales_contract_service.py	0319e01bddbe7348198a1a4afdce42348ec970eb	applied	f40f54e336调度窗+价税簇
 riveredge-backend/src/apps/kuaizhizao/services/sales_delivery_sync_service.py	a5af3f59306b3051ba900046c8319ac0692532ca	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/services/sales_order_change_service.py	73b1342e89b8e28dce05647469f07fbcb9831eb1	tracked	seed from 154977d948
-riveredge-backend/src/apps/kuaizhizao/services/sales_order_code_sync.py	15274875d7ea4e38176a8be76e7fa876af8241b5	tracked	seed from e451b48dc2
+riveredge-backend/src/apps/kuaizhizao/services/sales_order_code_sync.py	0fbf9b794861a3e6628b9f9c5f8bee6ac1774e62	applied	R3 68c4b0ed7e：合并摘取——demand/demand_computation不作capability阻断下游（孤儿MRP头不拦反审）
 riveredge-backend/src/apps/kuaizhizao/services/sales_order_purchase_push.py	84a93c2effce93bcecc5ce13d660b2b137313522	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
-riveredge-backend/src/apps/kuaizhizao/services/sales_order_service.py	880313e7b9cfdacc65351dbe7253fca5c2efc1a5	superset	R2:本地已含适配内容/本地实现超前
+riveredge-backend/src/apps/kuaizhizao/services/sales_order_service.py	9d519975da55a12f96bbb7134118c2f2850991b0	applied	R3 68c4b0ed7e：delete/revoke_ability下游检测套filter_sales_order_capability_blocking_documents
 riveredge-backend/src/apps/kuaizhizao/services/sales_order_sync_service.py	62495c7a7959206039ced3056883969bbb3636df	superset	superset:上游区间零增量；本地kuaicaiwu版保持
 riveredge-backend/src/apps/kuaizhizao/services/sales_review_service.py	64db3c82cee80be9b26fa88c66bff43c6f1cc4d9	tracked	seed from 57a37e2749
 riveredge-backend/src/apps/kuaizhizao/services/sales_service.py	700896141993702eb599d97323ada2b07473359d	tracked	seed from 154977d948
@@ -1577,7 +1577,7 @@ riveredge-backend/tests/apps/kuaizhizao/services/test_require_line_location.py	9
 riveredge-backend/tests/apps/kuaizhizao/services/test_rework_order_capabilities.py	4edd09df9d8e066b8054cf390361d108540e32ca	tracked	seed from e16f2f2939
 riveredge-backend/tests/apps/kuaizhizao/services/test_rework_order_signoff_lifecycle.py	9f38c6cf725bf911b847ce9d1813743cb53d6710	tracked	seed from e16f2f2939
 riveredge-backend/tests/apps/kuaizhizao/services/test_rework_signoff_chain.py	bdc92608a6042aff8f73282ebe95be213d7b8079	tracked	seed from e16f2f2939
-riveredge-backend/tests/apps/kuaizhizao/services/test_sales_order_downstream_active.py	a46b1eb6c180c1aed7b28252e330aa4d654ad909	tracked	seed from e451b48dc2
+riveredge-backend/tests/apps/kuaizhizao/services/test_sales_order_downstream_active.py	cf3ae1d7e10f34228a4986df09e4cd6bdd601f93	applied	R3 68c4b0ed7e：+3新测；上游另2用例依赖未移植batch_peer_deleted_flags路径未摘
 riveredge-backend/tests/apps/kuaizhizao/services/test_sales_order_purchase_push_batch.py	d31181239fbaec91ef03fc15f3d8a5ace7fa8c24	deferred	R2:上游测试针对上游OutsourceService/inventory_service/report_enhancements/operation_jump_rules/sales_order_purchase_push/PurchaseReceiptService内部函数签名，本地实现已分叉，随对应src簇落地
 riveredge-backend/tests/apps/kuaizhizao/services/test_stock_serial_validation.py	350b6b07675ce267224dc9959964b99ec0564ffe	tracked	seed from 5b1b9828e4
 riveredge-backend/tests/apps/kuaizhizao/services/test_trial_balance_leaf_totals.py	690659f8ad3029a1f102e1cfc0ada0132eeed0ba	tracked	seed from 57a37e2749
@@ -1968,7 +1968,7 @@ riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-orders
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-requisitions/components/PurchaseRequisitionDetailDrawer.tsx	e5a94122b0238182b00cf2a016a82f57cc00196b	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-requisitions/components/PurchaseRequisitionFormFieldSettings.tsx	f9ec6dc7e4be6b65a43d62e310cd90fc7c48160e	tracked	seed from 5f085a19c9
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-requisitions/components/PurchaseRequisitionLineStock.tsx	fb20f4f6313d4efe28e17dc3e37f2460d5b79f87	tracked	seed from 93b3cb5998
-riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-requisitions/index.tsx	f82c88e56d2ede8968c47282959ec3bb524245d6	applied	R2:MERGE已三方合并-取单列拆分(建议/已转工单/已转采购/可发货量)+采购申请复制建单(location.state purchaseRequisitionCopy)+行dualQty字段透传;补zh-CN两条上游引用未定义key
+riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-requisitions/index.tsx	8fc20e69825695494a64197f0910730341b79bd7	applied	R3 68c4b0ed7e：initKey按flow区分+location.search依赖修常驻页空白；documentFlowSourceType段本地无对应结构N/A
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-requisitions/purchaseRequisitionFormFieldPrefs.ts	9cd5bd613ab946fd683af110e9782bac8b068585	tracked	seed from 5f085a19c9
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-returns/index.tsx	cc6cf042b12fed8ba623f60298949a1a3f90c41b	tracked	seed from 3958bb1524
 riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/receipt-notices/index.tsx	f03ed85590e91e53416e59378e2daac8e347112c	tracked	seed from 4d124a088e
