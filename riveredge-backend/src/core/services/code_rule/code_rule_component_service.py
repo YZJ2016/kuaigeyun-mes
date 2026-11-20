@@ -12,12 +12,13 @@ from typing import List, Dict, Any, Optional
 from datetime import date, datetime
 import re
 from loguru import logger
-from core.utils.timezone_utils import resolve_business_datetime
+from core.utils.timezone_utils import resolve_business_datetime, to_site_timezone
 
 # 编码日期组件优先使用的上下文业务日（造数/补录历史单据）
 _CODE_DATE_CONTEXT_KEYS = (
     "quotation_date",
     "order_date",
+    "requisition_date",
     "business_date",
     "doc_date",
     "receipt_date",
@@ -47,6 +48,11 @@ def resolve_code_render_datetime(context: Optional[Dict[str, Any]] = None) -> da
                     continue
                 return resolve_business_datetime(datetime(d.year, d.month, d.day, 12, 0, 0))
     return resolve_business_datetime()
+
+
+def format_code_rule_date(dt: datetime, strftime_format: str) -> str:
+    """编码规则日期段：按站点墙钟日历格式化（禁止对 UTC instant 直接 strftime）。"""
+    return to_site_timezone(dt).strftime(strftime_format)
 
 
 class CodeRuleComponentService:
@@ -285,7 +291,7 @@ class CodeRuleComponentService:
                         "YY": "%y",
                     }
                     strftime_format = format_map.get(preset_format, "%Y%m%d")
-                    parts.append(now.strftime(strftime_format))
+                    parts.append(format_code_rule_date(now, strftime_format))
                 else:
                     custom_format = comp.get("custom_format", "yMd")
                     # 将自定义格式转换为strftime格式
@@ -293,7 +299,7 @@ class CodeRuleComponentService:
                     strftime_format = custom_format.replace("yyyy", "%Y").replace("yy", "%y").replace("y", "%Y")
                     strftime_format = strftime_format.replace("MM", "%m").replace("M", "%m")
                     strftime_format = strftime_format.replace("dd", "%d").replace("d", "%d")
-                    parts.append(now.strftime(strftime_format))
+                    parts.append(format_code_rule_date(now, strftime_format))
             
             elif comp_type == "fixed_text":
                 text = comp.get("text", "")

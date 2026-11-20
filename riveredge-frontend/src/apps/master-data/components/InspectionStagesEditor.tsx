@@ -80,6 +80,24 @@ export function normalizeStagesInput(raw?: InspectionStagesValue | Record<string
   return base;
 }
 
+/** 方案质检但未选默认方案的场景键（用于表单校验）。 */
+export function findStagesMissingPlan(
+  raw: InspectionStagesValue | Record<string, any> | null | undefined,
+  keys: readonly StageKey[],
+): StageKey[] {
+  const stages = normalizeStagesInput(raw);
+  return keys.filter((k) => {
+    const p = stages[k];
+    if (!p || p.mode !== 'plan') return false;
+    return !(p.planId != null && Number(p.planId) > 0);
+  });
+}
+
+export function stageHasPlanSelected(policy?: StagePolicy | null): boolean {
+  if (!policy || policy.mode !== 'plan') return true;
+  return policy.planId != null && Number(policy.planId) > 0;
+}
+
 export function stagesFromLegacy(
   inspectionMode?: string,
   defaultInspectionPlanId?: number | null,
@@ -279,26 +297,31 @@ export const InspectionStagesEditor: React.FC<InspectionStagesEditorProps> = ({
     return typedOpts;
   };
 
-  const renderPlanDropdown = (stage: StageKey) => (
-    <UniDropdown
-      allowClear
-      showSearch
-      optionFilterProp="label"
-      style={{ width: '100%' }}
-      placeholder={
-        scope === 'operation'
-          ? t('field.operation.defaultInspectionPlanPlaceholder')
-          : t('common.pleaseSelect', { defaultValue: '请选择' })
-      }
-      value={stages[stage]?.planId ?? undefined}
-      options={planOptionsForStage(stage)}
-      quickCreate={{
-        label: t('field.operation.quickAddInspectionPlan'),
-        onClick: () => openQuickAdd(stage),
-      }}
-      onChange={(planId) => patchStage(stage, { planId: (planId as number) ?? null })}
-    />
-  );
+  const renderPlanDropdown = (stage: StageKey) => {
+    const planMissing = !stageHasPlanSelected(stages[stage]);
+    return (
+      <UniDropdown
+        // 方案质检时默认方案必填，禁止清空为空
+        allowClear={false}
+        showSearch
+        optionFilterProp="label"
+        status={planMissing ? 'error' : undefined}
+        style={{ width: '100%' }}
+        placeholder={
+          scope === 'operation'
+            ? t('field.operation.defaultInspectionPlanPlaceholder')
+            : t('app.master-data.materialForm.defaultInspectionPlanRequiredPlaceholder')
+        }
+        value={stages[stage]?.planId ?? undefined}
+        options={planOptionsForStage(stage)}
+        quickCreate={{
+          label: t('field.operation.quickAddInspectionPlan'),
+          onClick: () => openQuickAdd(stage),
+        }}
+        onChange={(planId) => patchStage(stage, { planId: (planId as number) ?? null })}
+      />
+    );
+  };
 
   const stageLabel = (key: StageKey) => {
     if (scope === 'operation' && key === 'ipqc') {
@@ -363,6 +386,7 @@ export const InspectionStagesEditor: React.FC<InspectionStagesEditorProps> = ({
           {ipqcMode === 'plan' ? (
             <div>
               <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>
+                <span style={{ color: '#ff4d4f', marginRight: 4 }}>*</span>
                 {t('field.operation.defaultInspectionPlan')}
               </Typography.Text>
               {renderPlanDropdown('ipqc')}
@@ -426,7 +450,14 @@ export const InspectionStagesEditor: React.FC<InspectionStagesEditorProps> = ({
             render: (stage: StageKey) => {
               const mode = stages[stage]?.mode || 'none';
               if (mode !== 'plan') return '—';
-              return renderPlanDropdown(stage);
+              return (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ color: '#ff4d4f', lineHeight: 1 }} aria-hidden>
+                    *
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>{renderPlanDropdown(stage)}</div>
+                </div>
+              );
             },
           },
           {

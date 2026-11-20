@@ -17,11 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert, Tag, Space, Switch, Card, theme, Upload, Typography, Tooltip } from 'antd';
 import { UniTableStackedPrimaryCell } from '../../../components/uni-table/stackedPrimaryColumn';
-import type { CustomField } from '../../../services/customField';
 import { useCustomFields } from '../../../hooks/useCustomFields';
-import { useUserFieldMasks } from '../../../hooks/useUserFieldMasks';
-import { resolveFieldMaskLevel } from '../../../utils/fieldMaskPermission';
-import { MASTER_DATA_MATERIAL_FIELD_RESOURCE } from '../../../constants/fieldPermissionResources';
 import { CustomFieldsFormSection } from '../../../components/custom-fields';
 import { MaterialDedupCreateGuard } from './MaterialDedupAssistant';
 import { FormModalTemplate, DocumentFormPageLayout, DocumentFormPageHeaderActions, DetailDrawerSection, useStackedOverlayZIndex } from '../../../components/layout-templates';
@@ -71,6 +67,9 @@ import { testGenerateCode } from '../../../services/codeRule';
 import { MaterialUnitQuickSelect } from './MaterialUnitQuickSelect';
 import { useMaterialUnitOptions } from '../hooks/useMaterialUnitOptions';
 import { useResourcePermissions } from '../../../hooks/useResourcePermissions';
+import { useUserFieldMasks } from '../../../hooks/useUserFieldMasks';
+import { resolveFieldMaskLevel } from '../../../utils/fieldMaskPermission';
+import { MASTER_DATA_MATERIAL_FIELD_RESOURCE } from '../../../constants/fieldPermissionResources';
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../components/price-type-switch/PriceTypeSwitch';
 import { convertUnitPriceByPriceType } from '../utils/resolve-partner-material-price';
 import {
@@ -94,6 +93,13 @@ import {
   buildMaterialSourceTypeOptions,
   getMaterialSourceTypeLabel,
 } from '../utils/materialSourceType';
+import { buildMaterialInventoryCategoryOptions } from '../utils/materialInventoryCategory';
+import { MaterialUnitRoleBadge } from '../../../components/quantity-with-unit/MaterialUnitRoleBadge';
+import {
+  CONVERSION_TYPE_FIXED,
+  CONVERSION_TYPE_FLOATING,
+  normalizeMaterialConversionType,
+} from '../utils/materialConversionType';
 import { MaterialGroupFormModal } from './MaterialGroupFormModal';
 import { RouteFormModal } from './RouteFormModal';
 import { SupplierFormModal } from './SupplierFormModal';
@@ -102,10 +108,13 @@ import { DEFAULT_MATERIAL_BASE_UNIT } from '../constants/materialDefaults';
 import { QualityMasterDataHint } from '../../kuaizhizao/pages/quality-management/components/QualityMasterDataHint';
 import {
   InspectionStagesEditor,
+  MATERIAL_STAGE_KEYS,
+  findStagesMissingPlan,
   legacyFromStages,
   materialStagesToApiPayload,
   normalizeStagesInput,
   stagesFromLegacy,
+  type InspectionStagesValue,
 } from './InspectionStagesEditor';
 const { Panel } = Collapse;
 
@@ -1004,6 +1013,25 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       // 处理物料来源数据（兼容处理：同时设置 camelCase 和 snake_case）
       // 受控 Select 可能使 onFinish 的 values 缺 sourceTypes，需合并 getFieldsValue(true)
       const allFormValuesForSource = formRef.current?.getFieldsValue?.(true) || {};
+      {
+        const stagesForValidate =
+          values.inspectionStages ?? allFormValuesForSource.inspectionStages;
+        const missingPlans = findStagesMissingPlan(stagesForValidate, MATERIAL_STAGE_KEYS);
+        if (missingPlans.length) {
+          const stageLabelKeys: Record<(typeof MATERIAL_STAGE_KEYS)[number], string> = {
+            iqc: 'app.master-data.materialForm.inspectionStageIqc',
+            osqc: 'app.master-data.materialForm.inspectionStageOsqc',
+            fqc: 'app.master-data.materialForm.inspectionStageFqc',
+            oqc: 'app.master-data.materialForm.inspectionStageOqc',
+          };
+          const msg = t('app.master-data.materialForm.inspectionPlanRequiredWhenPlanMode', {
+            stage: missingPlans.map((k) => t(stageLabelKeys[k])).join('、'),
+          });
+          messageApi.error(msg);
+          setActiveTab('inspection');
+          throw new Error(msg);
+        }
+      }
       const rawSourceTypes =
         values.sourceTypes ?? allFormValuesForSource.sourceTypes;
       const sourceTypes = normalizeSourceTypeValues(
@@ -1205,25 +1233,6 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         delete processedDefaults.marketProcessFee;
         delete processedDefaults.marketQtyFactor;
       }
-      if (
-        !hideDefaultSupplierField &&
-        sourceTypes.includes('Buy') &&
-        !filteredSourceConfig.default_supplier_id &&
-        processedDefaults.defaultSuppliers?.length
-      ) {
-        const first = processedDefaults.defaultSuppliers[0];
-        const sid = first?.supplierId ?? first?.supplier_id;
-        if (sid) {
-          filteredSourceConfig.default_supplier_id = sid;
-          const name = first?.supplierName ?? first?.supplier_name;
-          if (name) {
-            filteredSourceConfig.default_supplier_name = name;
-          } else {
-            const supplier = suppliers.find((s) => s.id === sid);
-            if (supplier) filteredSourceConfig.default_supplier_name = supplier.name;
-          }
-        }
-      }
 
       // 将 ID 数组转换为对象数组
       if (
@@ -1245,7 +1254,26 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         processedDefaults.defaultSuppliers = existingDefaults.defaultSuppliers;
         delete processedDefaults.defaultSupplierIds;
       }
-      
+      if (
+        !hideDefaultSupplierField &&
+        sourceTypes.includes('Buy') &&
+        !filteredSourceConfig.default_supplier_id &&
+        processedDefaults.defaultSuppliers?.length
+      ) {
+        const first = processedDefaults.defaultSuppliers[0];
+        const sid = first?.supplierId ?? first?.supplier_id;
+        if (sid) {
+          filteredSourceConfig.default_supplier_id = sid;
+          const name = first?.supplierName ?? first?.supplier_name;
+          if (name) {
+            filteredSourceConfig.default_supplier_name = name;
+          } else {
+            const supplier = suppliers.find((s) => s.id === sid);
+            if (supplier) filteredSourceConfig.default_supplier_name = supplier.name;
+          }
+        }
+      }
+
       if (formDefaults.defaultCustomerIds && Array.isArray(formDefaults.defaultCustomerIds)) {
         processedDefaults.defaultCustomers = formDefaults.defaultCustomerIds.map((id: number) => {
           const customer = customers.find(c => c.id === id);
@@ -1367,6 +1395,11 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         brand: restValues.brand,
         model: restValues.model,
         texture: restValues.texture,
+        inventory_category:
+          restValues.inventoryCategory == null ||
+          String(restValues.inventoryCategory ?? '').trim() === ''
+            ? null
+            : String(restValues.inventoryCategory).trim(),
         weight: restValues.weight ?? 0,
         volume: restValues.volume ?? 0,
         barcode: restValues.barcode?.trim() || undefined,
@@ -1413,27 +1446,29 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         source_type: sourceType,
         sourceType: sourceType,
         source_config: filteredSourceConfig,
-        // 质检选项（分场景 IQC/FQC/OQC + legacy 同步）
-        inspection_stages: materialStagesToApiPayload(
-          normalizeStagesInput(
-            values.inspectionStages ||
-              stagesFromLegacy(values.inspectionMode, values.defaultInspectionPlanId),
-          ),
-        ),
+        // 质检选项（分场景 IQC/OSQC/FQC/OQC + legacy 同步）
+        // 与 sourceTypes 相同：受控分场景编辑器可能不在 onFinish.values 中，须合并 getFieldsValue(true)
         ...(() => {
-          const leg = legacyFromStages(
-            normalizeStagesInput(
-              values.inspectionStages ||
-                stagesFromLegacy(values.inspectionMode, values.defaultInspectionPlanId),
-            ),
-          );
+          const stagesRaw =
+            values.inspectionStages ??
+            allFormValuesForSource.inspectionStages ??
+            stagesFromLegacy(
+              values.inspectionMode ?? allFormValuesForSource.inspectionMode,
+              values.defaultInspectionPlanId ??
+                allFormValuesForSource.defaultInspectionPlanId,
+            );
+          const stagesNorm = normalizeStagesInput(stagesRaw);
+          const leg = legacyFromStages(stagesNorm);
           return {
+            inspection_stages: materialStagesToApiPayload(stagesNorm),
             inspection_mode: leg.inspectionMode,
             default_inspection_plan_id: leg.defaultInspectionPlanId ?? null,
           };
         })(),
-        over_report_mode: values.overReportMode || 'none',
-        over_report_value: values.overReportValue ?? 0,
+        over_report_mode:
+          values.overReportMode ?? allFormValuesForSource.overReportMode ?? 'none',
+        over_report_value:
+          values.overReportValue ?? allFormValuesForSource.overReportValue ?? 0,
         over_receipt_tolerance_pct:
           values.overReceiptTolerancePct === undefined || values.overReceiptTolerancePct === ''
             ? null
@@ -1588,10 +1623,68 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           : {}),
       } as typeof vals;
     }
+    // 编辑：质检表单字段为 inspectionStages（camel）。
+    // - 仅有 inspection_stages（snake）→ normalize 写入 camel，勿当「已有」跳过
+    // - 两者皆无（如 BOM 弹窗漏传）→ 从 material 详情补齐，避免回显全 none
+    if (isEdit && material) {
+      const valsRec = vals as
+        | {
+            inspectionStages?: unknown;
+            inspection_stages?: unknown;
+            inspectionMode?: unknown;
+            defaultInspectionPlanId?: unknown;
+            overReportMode?: unknown;
+            overReportValue?: unknown;
+          }
+        | undefined;
+      const camelStages = valsRec?.inspectionStages;
+      const snakeStages = valsRec?.inspection_stages;
+      if (camelStages == null && snakeStages != null) {
+        const stagesNorm = normalizeStagesInput(snakeStages as InspectionStagesValue);
+        const leg = legacyFromStages(stagesNorm);
+        vals = {
+          ...(vals as object),
+          inspectionStages: stagesNorm,
+          inspectionMode: valsRec?.inspectionMode ?? leg.inspectionMode,
+          defaultInspectionPlanId:
+            valsRec?.defaultInspectionPlanId ?? leg.defaultInspectionPlanId ?? undefined,
+        } as typeof vals;
+      } else if (camelStages == null && snakeStages == null) {
+        const m = material as Material & Record<string, unknown>;
+        const mode =
+          (m.inspectionMode as string | undefined) ??
+          (m.inspection_mode as string | undefined) ??
+          'none';
+        const planId =
+          (m.defaultInspectionPlanId as number | null | undefined) ??
+          (m.default_inspection_plan_id as number | null | undefined) ??
+          null;
+        vals = {
+          ...(vals as object),
+          inspectionMode: mode,
+          inspectionStages: normalizeStagesInput(
+            (m.inspectionStages as InspectionStagesValue | undefined) ??
+              (m.inspection_stages as InspectionStagesValue | undefined) ??
+              stagesFromLegacy(mode, planId),
+          ),
+          defaultInspectionPlanId: planId ?? undefined,
+          overReportMode:
+            (m.overReportMode as string | undefined) ??
+            (m.over_report_mode as string | undefined) ??
+            'none',
+          overReportValue: Number(
+            (m.overReportValue as number | undefined) ??
+              (m.over_report_value as number | undefined) ??
+              0,
+          ),
+        } as typeof vals;
+      }
+    }
     return vals;
   }, [
     isEdit,
     initialValues,
+    material,
     warehouseTrackingFetched,
     warehouseTrackingFlags.batchManagement,
     warehouseTrackingFlags.serialManagement,
@@ -1772,6 +1865,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
                 material={material}
                 isEdit={isEdit}
                 suspendedModalReturnPath={pageSuspendPath}
+                nestedModalZIndex={nestedQuickCreateZIndex}
               />
             ),
           },
@@ -1945,7 +2039,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
               layout="vertical"
               submitter={false}
               scrollToFirstError
-              onFinish={async (values) => { await handleSubmit(values); }}
+              onFinish={handleSubmit}
               onFinishFailed={({ errorFields }) => {
                 const first = errorFields?.[0];
                 const text = first?.errors?.filter(Boolean)[0];
@@ -1965,7 +2059,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           title={formTitle}
           open={open}
           onClose={onClose}
-          onFinish={async (values) => { await handleSubmit(values); }}
+          onFinish={handleSubmit}
           isEdit={isEdit}
           loading={loading}
           width={MODAL_CONFIG.LARGE_WIDTH}
@@ -2030,13 +2124,15 @@ interface MaterialInspectionTabProps {
   material?: Material;
   isEdit: boolean;
   suspendedModalReturnPath?: string;
+  /** 宿主物料弹窗之上的嵌套快速新建 zIndex（质检方案 / 检验步骤） */
+  nestedModalZIndex?: number;
 }
 
 interface BasicInfoTabProps {
   part: 1 | 2;
   formRef: any;
   material?: Material;
-  materialGroups: Array<Pick<MaterialGroup, 'id' | 'code' | 'name' | 'alias'>>;
+  materialGroups: MaterialGroup[];
   isEdit: boolean;
   suspendedModalReturnPath?: string;
   customFields?: CustomField[];
@@ -2048,8 +2144,11 @@ interface BasicInfoTabProps {
   nestedModalZIndex?: number;
 }
 
-const MaterialInspectionTab: React.FC<MaterialInspectionTabProps> = () => {
+const MaterialInspectionTab: React.FC<MaterialInspectionTabProps> = ({
+  nestedModalZIndex,
+}) => {
   const { t } = useTranslation();
+  const form = Form.useFormInstance();
 
   return (
     <div style={{ padding: '0 0 16px 0' }}>
@@ -2057,8 +2156,36 @@ const MaterialInspectionTab: React.FC<MaterialInspectionTabProps> = () => {
       <ProFormItem
         name="inspectionStages"
         label={t('app.master-data.materialForm.inspectionStagesTitle')}
+        rules={[
+          {
+            validator: async (_, value) => {
+              const missing = findStagesMissingPlan(value, MATERIAL_STAGE_KEYS);
+              if (!missing.length) return;
+              const stageLabelKeys: Record<(typeof MATERIAL_STAGE_KEYS)[number], string> = {
+                iqc: 'app.master-data.materialForm.inspectionStageIqc',
+                osqc: 'app.master-data.materialForm.inspectionStageOsqc',
+                fqc: 'app.master-data.materialForm.inspectionStageFqc',
+                oqc: 'app.master-data.materialForm.inspectionStageOqc',
+              };
+              throw new Error(
+                t('app.master-data.materialForm.inspectionPlanRequiredWhenPlanMode', {
+                  stage: missing.map((k) => t(stageLabelKeys[k])).join('、'),
+                }),
+              );
+            },
+          },
+        ]}
+        getValueFromEvent={(next) => {
+          const stages = normalizeStagesInput(next);
+          const leg = legacyFromStages(stages);
+          form.setFieldsValue({
+            inspectionMode: leg.inspectionMode,
+            defaultInspectionPlanId: leg.defaultInspectionPlanId ?? undefined,
+          });
+          return stages;
+        }}
       >
-        <InspectionStagesEditor scope="material" />
+        <InspectionStagesEditor scope="material" nestedModalZIndex={nestedModalZIndex} />
       </ProFormItem>
       <ProFormItem name="inspectionMode" hidden />
       <ProFormItem name="defaultInspectionPlanId" hidden />
@@ -2070,22 +2197,46 @@ const MaterialInspectionTab: React.FC<MaterialInspectionTabProps> = () => {
           { label: t('field.operation.overReportModeFixed'), value: 'fixed' },
           { label: t('field.operation.overReportModePercent'), value: 'percent' },
         ]}
-        fieldProps={{ style: { width: 280 } }}
+        fieldProps={{
+          style: { width: 280 },
+          onChange: (mode: string) => {
+            if (mode === 'none') {
+              form.setFieldsValue({ overReportValue: 0 });
+            } else if (mode === 'percent') {
+              const cur = Number(form.getFieldValue('overReportValue') ?? 0);
+              if (cur > 100) form.setFieldsValue({ overReportValue: 100 });
+            }
+          },
+        }}
       />
-      <ProFormDigit
-        name="overReportValue"
-        label={t('field.operation.overReportValue')}
-        min={0}
-        fieldProps={{ precision: 4, style: { width: 280 } }}
-        extra={t('field.operation.overReportValueExtra')}
-      />
+      <ProFormDependency name={['overReportMode']}>
+        {({ overReportMode }) => (
+          <ProFormDigit
+            name="overReportValue"
+            label={t('field.operation.overReportValue')}
+            min={0}
+            max={overReportMode === 'percent' ? 100 : undefined}
+            fieldProps={{
+              precision: 4,
+              style: { width: 280 },
+              max: overReportMode === 'percent' ? 100 : undefined,
+            }}
+            extra={t('field.operation.overReportValueExtra')}
+          />
+        )}
+      </ProFormDependency>
     </div>
   );
 };
 
 /**
  * 多单位编辑区（Form.Item 受控子组件，value/onChange 为唯一数据源）
+ *
+ * 使用场景列 / 场景单位映射：数据与裁剪逻辑保留，前端入口默认关闭，避免填错；
+ * 需要恢复时将 SHOW_MATERIAL_UNIT_SCENARIO_UI 改为 true。
  */
+const SHOW_MATERIAL_UNIT_SCENARIO_UI = false;
+
 interface MaterialUnitsEditorProps {
   value?: MaterialUnits;
   onChange?: (value: MaterialUnits) => void;
@@ -2143,7 +2294,7 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
   const handleAddUnit = () => {
     commitUnits([
       ...units,
-      { unit: '', numerator: 1, denominator: 1, scenarios: [] },
+      { unit: '', conversionType: CONVERSION_TYPE_FIXED, numerator: 1, denominator: 1, scenarios: [] },
     ]);
   };
 
@@ -2153,7 +2304,19 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
 
   const handleUnitChange = (index: number, field: keyof MaterialUnit, fieldValue: unknown) => {
     const nextUnits = [...units];
-    nextUnits[index] = { ...nextUnits[index], [field]: fieldValue };
+    const row = { ...nextUnits[index], [field]: fieldValue };
+    if (field === 'conversionType') {
+      const conv = normalizeMaterialConversionType(String(fieldValue));
+      row.conversionType = conv;
+      if (conv === CONVERSION_TYPE_FLOATING) {
+        delete row.numerator;
+        delete row.denominator;
+      } else {
+        row.numerator = row.numerator ?? 1;
+        row.denominator = row.denominator ?? 1;
+      }
+    }
+    nextUnits[index] = row;
     commitUnits(nextUnits);
   };
 
@@ -2163,24 +2326,48 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
 
   const allUnits = baseUnit ? [baseUnit, ...units.map(u => u.unit).filter(Boolean)] : [];
 
+  const inventoryUnitChoices = useMemo(() => {
+    const names: string[] = [];
+    if (baseUnit) names.push(baseUnit);
+    for (const row of units) {
+      const name = String(row.unit ?? '').trim();
+      if (!name || names.includes(name)) continue;
+      if (normalizeMaterialConversionType(row.conversionType) === CONVERSION_TYPE_FLOATING) {
+        continue;
+      }
+      names.push(name);
+    }
+    return names;
+  }, [baseUnit, units]);
+
   const columns = [
     {
       title: t('app.master-data.materialForm.unitName'),
       dataIndex: 'unit',
       width: 132,
       render: (_: unknown, record: MaterialUnit, index: number) => (
-        <Select
+        <MaterialUnitQuickSelect
           value={record.unit}
           placeholder={t('app.master-data.materialForm.unitPlaceholder')}
-          onChange={(unitValue: string) => handleUnitChange(index, 'unit', unitValue)}
+          onChange={(unitValue) => handleUnitChange(index, 'unit', unitValue)}
           style={{ width: '100%' }}
-          showSearch
           allowClear
-          loading={loadingUnits}
-          options={unitOptions}
-          filterOption={(input, option) =>
-            (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-          }
+        />
+      ),
+    },
+    {
+      title: t('app.master-data.materialForm.conversionType'),
+      dataIndex: 'conversionType',
+      width: 128,
+      render: (_: unknown, record: MaterialUnit, index: number) => (
+        <Select
+          value={normalizeMaterialConversionType(record.conversionType)}
+          onChange={(v: string) => handleUnitChange(index, 'conversionType', v)}
+          style={{ width: '100%' }}
+          options={[
+            { label: t('app.master-data.materialForm.conversionTypeFixed'), value: CONVERSION_TYPE_FIXED },
+            { label: t('app.master-data.materialForm.conversionTypeFloating'), value: CONVERSION_TYPE_FLOATING },
+          ]}
         />
       ),
     },
@@ -2189,18 +2376,32 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
       dataIndex: 'conversion',
       width: 360,
       render: (_: unknown, record: MaterialUnit, index: number) => {
+        if (normalizeMaterialConversionType(record.conversionType) === CONVERSION_TYPE_FLOATING) {
+          return (
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {t('app.master-data.materialForm.conversionFloatingHint')}
+            </Typography.Text>
+          );
+        }
         const numerator = record.numerator || 1;
         const denominator = record.denominator || 1;
         const conversionRate = numerator / denominator;
         const isInteger = Number.isInteger(conversionRate);
+        // 预览：1 主单位 = (分子/分母) 副单位，例如 12/1 → 1箱 = 12瓶
+        const auxLabel = String(record.unit ?? '').trim() || t('app.master-data.materialForm.auxUnitShort');
+        const rateText = isInteger ? String(conversionRate) : `${numerator}/${denominator}`;
         const previewText = baseUnit
-          ? `= ${isInteger ? conversionRate : `${numerator}/${denominator}`} ${baseUnit}`
+          ? t('app.master-data.materialForm.conversionPreview', {
+              aux: auxLabel,
+              rate: rateText,
+              base: baseUnit,
+            })
           : '';
 
         return (
           <Space.Compact block className="material-units-conversion-row">
             <Input
-              style={{ width: '24%' }}
+              style={{ width: '22%' }}
               type="number"
               value={numerator}
               placeholder={t('app.master-data.materialForm.numerator')}
@@ -2219,7 +2420,7 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
               tabIndex={-1}
             />
             <Input
-              style={{ width: '24%' }}
+              style={{ width: '22%' }}
               type="number"
               value={denominator}
               placeholder={t('app.master-data.materialForm.denominator')}
@@ -2232,18 +2433,21 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
             />
             <Input
               className="material-units-conversion-preview"
-              style={{ width: '44%' }}
+              style={{ width: '48%' }}
               value={previewText}
               readOnly
               tabIndex={-1}
+              title={previewText || undefined}
             />
           </Space.Compact>
         );
       },
     },
+    // 使用场景列（入口由 SHOW_MATERIAL_UNIT_SCENARIO_UI 控制，逻辑保留）
     {
       title: t('app.master-data.materialForm.useScenario'),
       dataIndex: 'scenarios',
+      hidden: !SHOW_MATERIAL_UNIT_SCENARIO_UI,
       render: (_: unknown, record: MaterialUnit, index: number) => (
         <Select
           mode="multiple"
@@ -2279,24 +2483,13 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
         </div>
       ),
     },
-  ];
+  ].filter((col) => !(col as { hidden?: boolean }).hidden);
 
   return (
     <div style={{ width: '100%', display: 'block', boxSizing: 'border-box' }}>
       <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
         <div style={{ fontWeight: 500 }}>{t('app.master-data.materialForm.multiUnit')}</div>
-        {baseUnit && (
-          <div style={{
-            padding: '4px 12px',
-            background: '#e6f7ff',
-            borderRadius: '4px',
-            border: '1px solid #91d5ff',
-            fontSize: '12px',
-            color: '#1890ff',
-          }}>
-            {t('app.master-data.materialForm.baseUnitColon')}<strong>{baseUnit}</strong>
-          </div>
-        )}
+        {baseUnit ? <MaterialUnitRoleBadge role="primary" unit={baseUnit} /> : null}
       </div>
       <Table
         className="material-units-table"
@@ -2316,7 +2509,8 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
           </Button>
         )}
       />
-      {units.length > 0 && allUnits.length > 0 && (
+      {/* 场景单位映射：入口关闭，数据裁剪与读写仍走 units.scenarios */}
+      {SHOW_MATERIAL_UNIT_SCENARIO_UI && units.length > 0 && allUnits.length > 0 && (
         <div style={{ marginTop: 16 }}>
           <div style={{ marginBottom: 8, fontWeight: 500 }}>{t('app.master-data.materialForm.scenarioUnitMappingOptional')}</div>
           <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>
@@ -2373,10 +2567,16 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
             </Col>
             <Col span={6}>
               <div style={{ marginBottom: 8 }}>{t('app.master-data.materialForm.inventoryUnit')}</div>
-              <Input
-                value={baseUnit || ''}
-                disabled
+              <Select
+                value={scenarios.inventory ?? baseUnit ?? undefined}
+                onChange={(unitValue: string) => handleScenarioChange('inventory', unitValue)}
                 placeholder={t('app.master-data.materialForm.baseUnitLabel')}
+                style={{ width: '100%' }}
+                showSearch
+                options={inventoryUnitChoices.map((u) => ({ label: u, value: u }))}
+                filterOption={(input, option) =>
+                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                }
               />
             </Col>
           </Row>
@@ -2415,6 +2615,7 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
+  const inventoryCategoryOptions = useMemo(() => buildMaterialInventoryCategoryOptions(t), [t]);
   const [batchRules, setBatchRules] = useState<{ id: number; name: string; code: string }[]>([]);
   const [serialRules, setSerialRules] = useState<{ id: number; name: string; code: string }[]>([]);
   const [batchRuleQuickAddOpen, setBatchRuleQuickAddOpen] = useState(false);
@@ -2489,6 +2690,14 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
               placeholder={t('app.master-data.materialForm.referenceCostPlaceholder')}
               min={0}
               fieldProps={{ precision: 4 }}
+            />
+          </div>
+          <div className="material-form-basic-grid__cell">
+            <ProFormText
+              name="texture"
+              label={t('app.master-data.materialForm.texture')}
+              placeholder={t('app.master-data.materialForm.texturePlaceholder')}
+              rules={[{ max: 100, message: t('app.master-data.materialForm.textureMax') }]}
             />
           </div>
           <div className="material-form-basic-grid__cell">
@@ -2644,11 +2853,12 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
           />
         </div>
         <div className="material-form-basic-grid__cell">
-          <ProFormText
-            name="texture"
-            label={t('app.master-data.materialForm.texture')}
-            placeholder={t('app.master-data.materialForm.texturePlaceholder')}
-            rules={[{ max: 100, message: t('app.master-data.materialForm.textureMax') }]}
+          <ProFormSelect
+            name="inventoryCategory"
+            label={t('app.master-data.materialForm.inventoryCategory.label')}
+            placeholder={t('app.master-data.materialForm.inventoryCategory.placeholder')}
+            options={inventoryCategoryOptions}
+            fieldProps={{ showSearch: true, allowClear: true, optionFilterProp: 'label' }}
           />
         </div>
       </div>
@@ -2658,7 +2868,7 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
         gridColumns={4}
       />
       <Collapse
-        bordered={false}
+        variant="borderless"
         defaultActiveKey={[]}
         className="material-form-more-collapse"
         expandIconPlacement="start"
@@ -3999,8 +4209,9 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
                         .filter((area) => defaultWarehouseIds.includes(area.warehouseId))
                         .map((area) => area.id),
                     );
-                    filteredLocations = storageLocations.filter((loc) =>
-                      allowedAreaIds.has(loc.storageAreaId),
+                    filteredLocations = storageLocations.filter(
+                      (loc) =>
+                        !loc.storageAreaId || allowedAreaIds.has(loc.storageAreaId),
                     );
                   }
                   const locationOptions = filteredLocations.map((loc) => ({
@@ -4351,11 +4562,11 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
       bordered
       style={{
         marginBottom: 16,
-        backgroundColor: '#fafafa',
+        backgroundColor: token.colorFillAlter,
         borderColor: token.colorBorder,
         borderRadius: token.borderRadius,
       }}
-      styles={{ body: { padding: 16 } }}
+      styles={{ body: { padding: 16, backgroundColor: token.colorFillAlter } }}
     >
       <Row gutter={16}>
         <Col span={12}>
