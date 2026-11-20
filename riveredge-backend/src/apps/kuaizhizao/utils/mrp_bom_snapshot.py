@@ -147,7 +147,9 @@ async def build_mrp_bom_snapshot_for_material(
 
 def bom_expand_kwargs_from_work_order(work_order: WorkOrder) -> Dict[str, Any]:
     """供 calculate_material_requirements_from_bom / expand_bom 使用的参数；无快照则返回空 dict。"""
-    global_v = getattr(work_order, "bom_version", None)
+    global_v = getattr(work_order, "bom_version", None) or getattr(
+        work_order, "product_bom_version", None
+    )
     mbv_raw = getattr(work_order, "material_bom_versions", None)
     mbv = normalize_material_bom_versions(mbv_raw)
     bom_id = getattr(work_order, "bom_id", None)

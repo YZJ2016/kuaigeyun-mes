@@ -377,3 +377,68 @@ class QualityAutomationService:
             if "均已存在检验单" in msg or "没有需要 OQC" in msg:
                 return
             logger.warning(f"销售出库 {delivery_id} 自动创建 OQC 失败: {e}")
+
+    async def maybe_auto_push_purchase_receipt_from_iqc(
+        self,
+        tenant_id: int,
+        inspection_id: int,
+        created_by: int,
+    ) -> None:
+        """来料检验达到可下推入库条件时，按组织配置自动下推采购入库草稿。"""
+        cfg = await get_quality_effective_config(tenant_id)
+        if not cfg["stage_enabled"]["iqc"]:
+            return
+        if not cfg["module_enabled"]["incoming"]:
+            return
+        if not cfg["auto_push"]["purchase_receipt_after_iqc_pass"]:
+            return
+        try:
+            from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+            from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+                derive_quality_inspection_capabilities,
+            )
+            from apps.kuaizhizao.services.quality_service import IncomingInspectionService
+
+            inspection = await IncomingInspection.get_or_none(
+                tenant_id=tenant_id,
+                id=int(inspection_id),
+                deleted_at__isnull=True,
+            )
+            if not inspection:
+                return
+
+            svc = IncomingInspectionService()
+            ctx = await svc._iqc_push_inbound_context(tenant_id, int(inspection_id))
+            caps = derive_quality_inspection_capabilities(inspection, **ctx)
+            if not caps.push_inbound.allowed:
+                logger.info(
+                    f"来料检验 {inspection_id} 自动下推采购入库跳过: {caps.push_inbound.reason}"
+                )
+                return
+
+            preview = await svc.preview_push_to_purchase_receipt(tenant_id, int(inspection_id))
+            if preview.get("has_blocking_issues"):
+                logger.warning(
+                    f"来料检验 {inspection_id} 自动下推采购入库跳过: {preview.get('blocking_reason')}"
+                )
+                return
+            items = preview.get("items") or []
+            if not items:
+                return
+            max_push = float(items[0].get("max_push_quantity") or 0)
+            if max_push <= 0:
+                return
+
+            result = await svc.push_to_purchase_receipt(
+                tenant_id,
+                int(inspection_id),
+                int(created_by),
+                quantity=max_push,
+            )
+            receipt_code = result.get("receipt_code") if isinstance(result, dict) else None
+            logger.info(
+                f"来料检验 {inspection_id} 自动下推采购入库"
+                + (f" {receipt_code}" if receipt_code else "")
+            )
+        except Exception as e:
+            logger.warning(f"来料检验 {inspection_id} 自动下推采购入库失败: {e}")

@@ -199,21 +199,22 @@ class OutsourceCollaborationService(BaseService):
             qualified_quantity = completion_data.get('qualified_quantity', 0)
             unqualified_quantity = completion_data.get('unqualified_quantity', 0)
             
-            # 验证数量
+            # 验证数量（仅作申请快照；已收/合格真源由委外收货写路径维护，禁止覆盖）
             if completed_quantity != qualified_quantity + unqualified_quantity:
                 raise ValidationError("完成数量必须等于合格数量加不合格数量")
-            
-            # 更新委外工单（等待验收）：已收仅累计合格品
-            outsource_work_order.received_quantity = qualified_quantity
-            outsource_work_order.qualified_quantity = qualified_quantity
-            outsource_work_order.unqualified_quantity = unqualified_quantity
-            
-            if completion_data.get('remarks'):
-                if outsource_work_order.remarks:
-                    outsource_work_order.remarks += f"\n[完工申请 {to_api_isoformat(resolve_business_datetime())}] {completion_data['remarks']}"
-                else:
-                    outsource_work_order.remarks = f"[完工申请 {to_api_isoformat(resolve_business_datetime())}] {completion_data['remarks']}"
-            
+
+            stamp = to_api_isoformat(resolve_business_datetime())
+            apply_note = (
+                f"[完工申请 {stamp}] 完成={completed_quantity} "
+                f"合格={qualified_quantity} 不合格={unqualified_quantity}"
+            )
+            if completion_data.get("remarks"):
+                apply_note = f"{apply_note} {completion_data['remarks']}"
+            if outsource_work_order.remarks:
+                outsource_work_order.remarks += f"\n{apply_note}"
+            else:
+                outsource_work_order.remarks = apply_note
+
             await outsource_work_order.save()
             
             # TODO: 发送通知给采购人员（等待验收）

@@ -119,6 +119,11 @@ async def get_quality_effective_config(tenant_id: int) -> QualityEffectiveConfig
             "oqc_on_shipment_notice_notify": bool(q.get("auto_create_oqc_on_shipment_notice_notify", False)),
             "oqc_on_sales_delivery": bool(q.get("auto_create_oqc_on_sales_delivery", False)),
         },
+        "auto_push": {
+            "purchase_receipt_after_iqc_pass": bool(
+                q.get("auto_push_purchase_receipt_after_iqc_pass", False)
+            ),
+        },
         "gate": {
             "require_iqc_before_receipt_confirm": bool(q.get("require_incoming_inspection_for_receipt", False)),
             "require_iqc_before_customer_material_confirm": bool(
@@ -145,8 +150,9 @@ def validate_quality_business_parameters(quality_params: Dict[str, Any]) -> None
     iqc_auto = bool(quality_params.get("auto_create_iqc_on_purchase_receipt", False))
     iqc_gate = bool(quality_params.get("require_incoming_inspection_for_receipt", False))
     cm_iqc_gate = bool(quality_params.get("require_incoming_inspection_for_customer_material", False))
-    if not incoming and (iqc_auto or iqc_gate or cm_iqc_gate):
-        raise ValidationError("未启用来料检验时，不能开启来料自动建单或收货门禁")
+    iqc_auto_push = bool(quality_params.get("auto_push_purchase_receipt_after_iqc_pass", False))
+    if not incoming and (iqc_auto or iqc_gate or cm_iqc_gate or iqc_auto_push):
+        raise ValidationError("未启用来料检验时，不能开启来料自动建单、自动下推入库或收货门禁")
     outsource = bool(quality_params.get("outsource_inspection", True))
     osqc_auto = bool(quality_params.get("auto_create_osqc_on_outsource_receipt", False))
     osqc_gate = bool(quality_params.get("require_outsource_inspection_for_receipt", False))
@@ -622,15 +628,21 @@ async def assert_master_data_inspection_stages_allowed(
             ("oqc", "出货检验", cfg["stage_enabled"]["oqc"]),
         )
         for key, label, ok in checks:
-            if normalize_stage_policy(norm.get(key))["mode"] != "none" and not ok:
+            pol = normalize_stage_policy(norm.get(key))
+            if pol["mode"] != "none" and not ok:
                 raise ConflictError(f"组织未启用{label}环节，无法将该场景的质检模式设为简易或方案质检")
+            if pol["mode"] == "plan" and not pol.get("plan_id"):
+                raise ConflictError(f"{label}为方案质检时须选择默认质检方案")
         stage_plan_ids.extend(_collect_stage_plan_ids_from_material(norm))
 
     if operation_stages:
         norm = normalize_operation_inspection_stages(operation_stages)
-        if normalize_stage_policy(norm.get("ipqc"))["mode"] != "none":
+        ipqc_pol = normalize_stage_policy(norm.get("ipqc"))
+        if ipqc_pol["mode"] != "none":
             if not (cfg["stage_enabled"]["ipqc"] and cfg["module_enabled"]["process"]):
                 raise ConflictError("组织未启用过程检验环节，无法将工序 IPQC 设为简易或方案质检")
+        if ipqc_pol["mode"] == "plan" and not ipqc_pol.get("plan_id"):
+            raise ConflictError("过程检验为方案质检时须选择默认质检方案")
         stage_plan_ids.extend(_collect_stage_plan_ids_from_operation(norm))
 
     if stage_plan_ids:

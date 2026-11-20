@@ -9,6 +9,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Dict, List, Optional
 
+from tortoise import Tortoise
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
 
@@ -28,7 +29,10 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
 
 from apps.kuaizhizao.utils.outsource_settlement_helpers import receipt_base_qty
-from apps.kuaizhizao.utils.outsource_work_order_state import resolve_outsource_work_order_product_unit
+from apps.kuaizhizao.utils.outsource_work_order_state import (
+    apply_outsource_work_order_receipt_reopen,
+    resolve_outsource_work_order_product_unit,
+)
 from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 
 
@@ -107,6 +111,10 @@ class OutsourceProductReturnService(AppBaseService[OutsourceProductReturn]):
                     returnable_quantity=returnable,
                     warehouse_id=receipt.warehouse_id,
                     warehouse_name=receipt.warehouse_name,
+                    location_id=receipt.location_id,
+                    location_name=receipt.location_name,
+                    batch_number=receipt.batch_number,
+                    product_id=int(owo.product_id) if owo.product_id else None,
                 )
             )
 
@@ -171,11 +179,13 @@ class OutsourceProductReturnService(AppBaseService[OutsourceProductReturn]):
         created_by: int,
     ) -> OutsourceProductReturnResponse:
         async with in_transaction():
+            conn = Tortoise.get_connection("default")
+            await conn.execute_query("SET LOCAL lock_timeout = '8000'")
             owo = await OutsourceWorkOrder.filter(
                 tenant_id=tenant_id,
                 id=return_data.outsource_work_order_id,
                 deleted_at__isnull=True,
-            ).first()
+            ).select_for_update().first()
             if not owo:
                 raise NotFoundError(f"委外工单ID {return_data.outsource_work_order_id} 不存在")
 
@@ -185,11 +195,60 @@ class OutsourceProductReturnService(AppBaseService[OutsourceProductReturn]):
 
             assert_outsource_work_order_capability(owo, "push_outsource_product_return")
 
+            if return_data.quantity <= 0:
+                raise ValidationError("退货数量必须大于 0")
+
             receipt = await self._resolve_receipt_for_return(tenant_id, return_data)
             await self._validate_return_quantity(tenant_id, return_data, receipt)
 
             if not receipt.warehouse_id:
                 raise ValidationError("关联收货单缺少仓库信息，无法扣减库存")
+
+            from apps.kuaizhizao.services.warehouse_service import (
+                _get_warehouse_policy_flags,
+                _resolve_line_location_pair,
+                _validate_batch_serial_policy,
+                _validate_location_if_required,
+            )
+            from apps.master_data.models.material import Material
+
+            product_id = owo.product_id
+            if not product_id:
+                raise ValidationError("委外工单缺少产品信息，无法扣减库存")
+
+            material_label = str(owo.product_name or owo.product_code or product_id)
+            location_required, _auto_out = await _get_warehouse_policy_flags(tenant_id)
+            del _auto_out
+            loc_id, loc_code = await _resolve_line_location_pair(
+                tenant_id,
+                warehouse_id=int(receipt.warehouse_id),
+                location_id=receipt.location_id,
+                location_code=receipt.location_name,
+                material_label=material_label,
+                direction_label="出库",
+            )
+            _validate_location_if_required(
+                location_required=location_required,
+                location_id=loc_id,
+                location_code=loc_code,
+                scene="委外退货",
+                material_label=material_label,
+            )
+
+            material = await Material.filter(
+                tenant_id=tenant_id,
+                id=int(product_id),
+                deleted_at__isnull=True,
+            ).first()
+            if material:
+                await _validate_batch_serial_policy(
+                    tenant_id,
+                    material,
+                    receipt.batch_number,
+                    None,
+                    return_data.quantity,
+                    "委外退货",
+                )
 
             code = return_data.code
             if not code:
@@ -252,6 +311,7 @@ class OutsourceProductReturnService(AppBaseService[OutsourceProductReturn]):
                 Decimal("0"),
                 (owo.qualified_quantity or Decimal("0")) - return_data.quantity,
             )
+            apply_outsource_work_order_receipt_reopen(owo)
             await owo.save()
 
             from apps.kuaizhizao.services.inventory_service import InventoryService

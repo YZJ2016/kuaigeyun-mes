@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import List, Optional, Tuple
 
+from apps.kuaizhizao.constants.rework_signoff_chain import REWORK_SIGNOFF_CHAIN_AA
+
 # 多部门会签型：走审批节点链
 REWORK_BUSINESS_MULTI_SIGNOFF = "multi_signoff"
 # 简化执行型：制造闭环（现有默认）
@@ -30,16 +32,5 @@ def is_signoff_rework_business(business_type: Optional[str]) -> bool:
     return (business_type or "").strip().lower() in SIGNOFF_REWORK_BUSINESS_TYPES
 
 
-# 会签部门默认序（通用职能码，可被租户流程节点覆盖）
-REWORK_SIGNOFF_DEPT_DEFAULTS: List[Tuple[str, str]] = [
-    ("sales", "销售"),
-    ("rd", "研发"),
-    ("quality", "质量"),
-    ("manufacturing", "制造"),
-    ("purchasing", "采购"),
-    ("leadership", "领导"),
-    ("planning", "计划"),
-    ("warehouse", "仓库"),
-    ("manufacturing_exec", "制造执行"),
-    ("finance", "财务"),
-]
+# A-A 默认链。A-B 见 rework_signoff_chain.REWORK_SIGNOFF_CHAIN_AB。编排只认该模块。
+REWORK_SIGNOFF_DEPT_DEFAULTS: List[Tuple[str, str]] = list(REWORK_SIGNOFF_CHAIN_AA)

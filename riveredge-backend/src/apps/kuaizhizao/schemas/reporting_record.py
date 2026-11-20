@@ -42,9 +42,14 @@ class ReportingRecordBase(BaseSchema):
     work_hours: Decimal = Field(..., description="工时（小时）")
     work_start_time: Optional[datetime] = Field(None, description="工序开始时间")
     work_end_time: Optional[datetime] = Field(None, description="工序完成时间")
-    status: str = Field("pending", description="审核状态")
+    status: str = Field("draft", description="业务状态（draft/approved）")
+    review_status: Optional[str] = Field(
+        "草稿",
+        description="审核状态（草稿/SUBMITTED/待审核/审核通过/审核驳回）",
+    )
     reported_at: datetime = Field(..., description="报工时间")
     remarks: Optional[str] = Field(None, description="备注")
+
     device_info: Optional[Any] = Field(None, description="设备信息")
     sop_parameters: Optional[Any] = Field(None, description="SOP参数数据（JSON格式，存储报工时收集的SOP参数）")
     inbound_warehouse_id: Optional[int] = Field(None, description="末道工序入库仓库 ID")
@@ -113,10 +118,12 @@ class ReportingRecordUpdate(BaseModel):
     team_name: Optional[str] = Field(None, max_length=100, description="工作小组名称")
     remarks: Optional[str] = Field(None, description="备注")
     sop_parameters: Optional[Any] = Field(None, description="SOP参数数据（JSON格式）")
-    status: Optional[str] = Field(None, description="审核状态")
+    status: Optional[str] = Field(None, description="业务状态（draft/approved）")
+    review_status: Optional[str] = Field(None, description="审核状态")
     approved_by: Optional[int] = Field(None, description="审核人ID")
     approved_by_name: Optional[str] = Field(None, description="审核人姓名")
     rejection_reason: Optional[str] = Field(None, description="驳回原因")
+
 
 
 class ReportingPostActionNotice(BaseModel):
@@ -153,6 +160,10 @@ class ReportingRecordResponse(ReportingRecordBase):
     approved_by: Optional[int] = Field(None, description="审核人ID")
     approved_by_name: Optional[str] = Field(None, description="审核人姓名")
     rejection_reason: Optional[str] = Field(None, description="驳回原因")
+    unqualified_remaining: Optional[Decimal] = Field(
+        None,
+        description="待登记不合格剩余（报工不合格−已登记不良台账−直开报废；用于报废/不良入口门禁）",
+    )
     inbound_warehouse_id: Optional[int] = Field(None, description="末道工序入库仓库 ID")
     inbound_warehouse_name: Optional[str] = Field(None, description="末道工序入库仓库名称")
     device_info: Optional[Any] = Field(None, description="设备信息")
@@ -205,6 +216,10 @@ class ReportingRecordListResponse(BaseSchema):
     reported_quantity: Decimal = Field(..., description="报工数量")
     qualified_quantity: Decimal = Field(..., description="合格数量")
     unqualified_quantity: Decimal = Field(..., description="不合格数量")
+    unqualified_remaining: Optional[Decimal] = Field(
+        None,
+        description="待登记不合格剩余（报工不合格−已登记不良台账−直开报废；用于报废/不良入口门禁）",
+    )
     work_hours: Decimal = Field(..., description="工时（小时）")
     work_start_time: Optional[datetime] = Field(None, description="工序开始时间")
     work_end_time: Optional[datetime] = Field(None, description="工序完成时间")

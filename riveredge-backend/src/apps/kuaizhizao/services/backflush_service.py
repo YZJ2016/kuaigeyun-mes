@@ -53,20 +53,21 @@ class BackflushService(AppBaseService[BackflushRecord]):
         self,
         tenant_id: int,
         product_id: int,
-        report_quantity: float
+        report_quantity: float,
+        *,
+        work_order: Optional[WorkOrder] = None,
     ) -> List[Dict[str, Any]]:
         """
-        根据BOM计算物料消耗量
+        根据BOM计算物料消耗量（仅 issue_method=backflush）。
 
-        Args:
-            tenant_id: 组织ID
-            product_id: 产品（成品）物料ID
-            report_quantity: 报工数量
-
-        Returns:
-            物料消耗列表，每项包含 component_id, component_code, component_name,
-            bom_quantity, required_quantity, unit
+        有工单时带入 BOM 版本快照，与齐套/领料展开口径一致。
         """
+        bom_kwargs: Dict[str, Any] = {}
+        if work_order is not None:
+            from apps.kuaizhizao.utils.mrp_bom_snapshot import bom_expand_kwargs_from_work_order
+
+            bom_kwargs = bom_expand_kwargs_from_work_order(work_order)
+
         try:
             requirements = await calculate_material_requirements_from_bom(
                 tenant_id=tenant_id,
@@ -74,6 +75,7 @@ class BackflushService(AppBaseService[BackflushRecord]):
                 required_quantity=report_quantity,
                 only_approved=True,
                 for_kitting_analysis=True,
+                **bom_kwargs,
             )
         except NotFoundError:
             logger.debug(f"产品 {product_id} 无BOM或BOM未审核，跳过倒冲")
@@ -82,16 +84,18 @@ class BackflushService(AppBaseService[BackflushRecord]):
         from apps.kuaizhizao.utils.issue_method_resolver import is_backflush_material
 
         consumption_list = []
+        qty = float(report_quantity or 0)
         for req in requirements:
             if not is_backflush_material(getattr(req, "issue_method", None), req.component_type):
                 continue
+            gross = float(req.gross_requirement or 0)
             consumption_list.append({
                 "component_id": req.component_id,
                 "component_code": req.component_code,
                 "component_name": req.component_name,
                 "component_type": req.component_type,
-                "bom_quantity": float(req.gross_requirement) / report_quantity if report_quantity else 0,
-                "required_quantity": float(req.gross_requirement),
+                "bom_quantity": (gross / qty) if qty else 0,
+                "required_quantity": gross,
                 "unit": req.unit or "件",
             })
         return consumption_list
@@ -293,38 +297,78 @@ class BackflushService(AppBaseService[BackflushRecord]):
         if not work_order:
             raise NotFoundError(f"工单不存在: {work_order_id}")
 
-        existing_ok = await BackflushRecord.filter(
+        # 模型状态为 completed（非 success）；已成功的物料不得二次扣减
+        existing_rows = await BackflushRecord.filter(
             tenant_id=tenant_id,
             report_id=report_id,
-            status="success",
             deleted_at__isnull=True,
-        ).exists()
-        if existing_ok:
-            logger.info(f"报工 {report_id} 已成功倒冲，跳过重复执行")
-            return await BackflushRecord.filter(
-                tenant_id=tenant_id, report_id=report_id, deleted_at__isnull=True
-            ).all()
+        ).all()
+        completed_material_ids = {
+            int(r.material_id)
+            for r in existing_rows
+            if (r.status or "").strip() == "completed" and r.material_id
+        }
 
         consumption_list = await self.calculate_consumption(
             tenant_id=tenant_id,
             product_id=work_order.product_id,
-            report_quantity=report_quantity
+            report_quantity=report_quantity,
+            work_order=work_order,
         )
         if not consumption_list:
-            logger.info(f"工单 {work_order.code} 报工无BOM物料消耗，跳过倒冲")
-            return []
+            logger.info(f"工单 {work_order.code} 报工无倒冲物料消耗，跳过倒冲")
+            return existing_rows or []
+
+        consumption_list = [
+            c
+            for c in consumption_list
+            if int(c.get("component_id") or 0) not in completed_material_ids
+        ]
+        if not consumption_list:
+            logger.info(f"报工 {report_id} 倒冲物料均已 completed，跳过重复执行")
+            return existing_rows
 
         line_side_warehouses = await self._get_line_side_warehouses_for_work_order(
             tenant_id=tenant_id,
             work_order=work_order
         )
+        audit_kwargs = await self._audit_kwargs_for_operator(processed_by)
+
         if not line_side_warehouses:
-            logger.warning(f"工单 {work_order.code} 未关联线边仓，跳过倒冲")
-            return []
+            logger.warning(f"工单 {work_order.code} 未关联线边仓，倒冲记失败待补偿")
+            failed_rows: List[BackflushRecord] = []
+            async with in_transaction():
+                for cons in consumption_list:
+                    failed_rows.append(
+                        await BackflushRecord.create(
+                            tenant_id=tenant_id,
+                            uuid=self._generate_uuid(),
+                            work_order_id=work_order_id,
+                            work_order_code=work_order.code,
+                            operation_id=operation_id,
+                            operation_code=operation_code or "",
+                            report_id=report_id,
+                            report_quantity=Decimal(str(report_quantity)),
+                            material_id=cons["component_id"],
+                            material_code=cons["component_code"],
+                            material_name=cons["component_name"],
+                            material_unit=cons.get("unit") or "件",
+                            batch_no=None,
+                            warehouse_id=0,
+                            warehouse_name="",
+                            warehouse_type="line_side",
+                            bom_quantity=Decimal(str(cons["bom_quantity"])),
+                            backflush_quantity=Decimal(str(cons["required_quantity"])),
+                            status="failed",
+                            error_message="工单未关联线边仓，无法倒冲扣减；请配置车间/工作中心对应线边仓后重试",
+                            processed_at=now_utc(),
+                            **audit_kwargs,
+                        )
+                    )
+            return failed_rows
 
         warehouse_ids = [w.id for w in line_side_warehouses]
         warehouse_map = {w.id: w for w in line_side_warehouses}
-        audit_kwargs = await self._audit_kwargs_for_operator(processed_by)
 
         records = []
         async with in_transaction():

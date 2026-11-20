@@ -12,15 +12,28 @@ from infra.exceptions.exceptions import BusinessLogicError
 
 
 def test_pending_update_delete():
-    caps = derive_reporting_record_capabilities(SimpleNamespace(status="pending"))
-    assert caps.update.allowed
-    assert caps.delete.allowed
+    caps = derive_reporting_record_capabilities(
+        SimpleNamespace(status="draft", review_status="待审核")
+    )
+    assert not caps.update.allowed
+    assert not caps.delete.allowed
     assert caps.approve.allowed
     assert not caps.revoke_approval.allowed
 
 
+def test_draft_update_delete():
+    caps = derive_reporting_record_capabilities(
+        SimpleNamespace(status="draft", review_status="草稿")
+    )
+    assert caps.update.allowed
+    assert caps.delete.allowed
+    assert caps.submit.allowed
+    assert not caps.approve.allowed
+    assert not caps.revoke_approval.allowed
+
+
 def test_approved_revoke():
-    caps = derive_reporting_record_capabilities(SimpleNamespace(status="approved"))
+    caps = derive_reporting_record_capabilities(SimpleNamespace(status="approved", review_status="审核通过"))
     assert caps.revoke_approval.allowed
     assert not caps.approve.allowed
     assert not caps.update.allowed
@@ -33,7 +46,7 @@ def test_assert_revoke_on_pending_raises():
 
 def test_approved_revoke_blocked_when_sales_outbound():
     caps = derive_reporting_record_capabilities(
-        SimpleNamespace(status="approved"),
+        SimpleNamespace(status="approved", review_status="审核通过"),
         has_posted_sales_outbound=True,
     )
     assert not caps.revoke_approval.allowed
@@ -44,7 +57,7 @@ def test_approved_revoke_blocked_when_sales_outbound():
 
 def test_approved_revoke_blocked_when_approved_inbound():
     caps = derive_reporting_record_capabilities(
-        SimpleNamespace(status="approved"),
+        SimpleNamespace(status="approved", review_status="审核通过"),
         has_approved_inbound_downstream=True,
     )
     assert not caps.revoke_approval.allowed
@@ -55,7 +68,7 @@ def test_approved_revoke_blocked_when_approved_inbound():
 
 def test_outbound_takes_precedence_over_inbound_reason():
     caps = derive_reporting_record_capabilities(
-        SimpleNamespace(status="approved"),
+        SimpleNamespace(status="approved", review_status="审核通过"),
         has_posted_sales_outbound=True,
         has_approved_inbound_downstream=True,
     )
@@ -64,10 +77,10 @@ def test_outbound_takes_precedence_over_inbound_reason():
 
 def test_pending_delete_blocked_when_sales_outbound():
     caps = derive_reporting_record_capabilities(
-        SimpleNamespace(status="pending"),
+        SimpleNamespace(status="draft", review_status="待审核"),
         has_posted_sales_outbound=True,
     )
-    assert caps.update.allowed
+    assert not caps.update.allowed
     assert not caps.delete.allowed
     assert caps.approve.allowed
 
@@ -75,7 +88,7 @@ def test_pending_delete_blocked_when_sales_outbound():
 def test_assert_revoke_raises_when_sales_outbound():
     with pytest.raises(BusinessLogicError, match="已出库"):
         assert_reporting_record_capability(
-            SimpleNamespace(status="approved"),
+            SimpleNamespace(status="approved", review_status="审核通过"),
             "revoke_approval",
             has_posted_sales_outbound=True,
         )
@@ -84,7 +97,7 @@ def test_assert_revoke_raises_when_sales_outbound():
 def test_assert_revoke_raises_when_approved_inbound():
     with pytest.raises(BusinessLogicError, match="入库"):
         assert_reporting_record_capability(
-            SimpleNamespace(status="approved"),
+            SimpleNamespace(status="approved", review_status="审核通过"),
             "revoke_approval",
             has_approved_inbound_downstream=True,
         )

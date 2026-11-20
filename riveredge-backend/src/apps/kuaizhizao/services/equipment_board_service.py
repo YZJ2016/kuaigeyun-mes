@@ -10,6 +10,7 @@ from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Sequence, Set
 
 from apps.kuaizhizao.models.equipment import Equipment
+from apps.kuaizhizao.models.equipment_status_monitor import EquipmentStatusMonitor
 from apps.kuaizhizao.models.equipment_fault import EquipmentFault, EquipmentRepair
 from apps.kuaizhizao.models.equipment_ops import (
     EquipmentInspectionScheme,
@@ -27,6 +28,14 @@ _FAULT_OPEN = ("待处理", "处理中")
 _SPOT_DONE = ("待审核", "已审核")
 _EQUIP_EXCLUDED = ("报废", "停用", "scrapped", "disabled")
 _ALERT_LIMIT = 30
+_STATUS_ROW_LIMIT = 80
+_STATUS_SORT_RANK = {
+    "故障": 0,
+    "维修中": 1,
+    "待机": 2,
+    "运行中": 3,
+    "正常": 4,
+}
 
 
 async def list_equipment_board_plants(tenant_id: int) -> List[Dict[str, Any]]:
@@ -73,11 +82,110 @@ def _site_today() -> date:
     return to_site_date(resolve_business_datetime())
 
 
+async def _latest_monitors_for_equipment(
+    tenant_id: int,
+    equipment_ids: Sequence[int],
+) -> Dict[int, EquipmentStatusMonitor]:
+    if not equipment_ids:
+        return {}
+    rows = await EquipmentStatusMonitor.filter(
+        tenant_id=tenant_id,
+        equipment_id__in=list(equipment_ids),
+        deleted_at__isnull=True,
+    ).order_by("-monitored_at", "-id")
+    picked: Dict[int, EquipmentStatusMonitor] = {}
+    for row in rows:
+        eid = row.equipment_id
+        if eid is not None and eid not in picked:
+            picked[eid] = row
+    return picked
+
+
+def _production_fields_from_monitor(
+    mon: Optional[EquipmentStatusMonitor],
+    eq: Equipment,
+) -> Dict[str, Any]:
+    """从状态监控 other_parameters / 台账 technical_parameters 取产量米数与规格。"""
+    other = mon.other_parameters if mon and isinstance(mon.other_parameters, dict) else {}
+    tech = eq.technical_parameters if isinstance(getattr(eq, "technical_parameters", None), dict) else {}
+
+    def _pick_meters(src: dict) -> Optional[float]:
+        for key in ("production_meters", "drawn_meters", "产量米数"):
+            if key not in src or src[key] is None:
+                continue
+            try:
+                return float(src[key])
+            except (TypeError, ValueError):
+                continue
+        return None
+
+    def _pick_spec(src: dict) -> Optional[str]:
+        for key in ("specification", "规格"):
+            val = src.get(key)
+            if val is None:
+                continue
+            text = str(val).strip()
+            if text:
+                return text
+        diameter = src.get("wire_diameter_mm")
+        if diameter is None:
+            return None
+        try:
+            return f"Φ{float(diameter):g}mm"
+        except (TypeError, ValueError):
+            return None
+
+    meters = _pick_meters(other)
+    if meters is None:
+        meters = _pick_meters(tech)
+    spec = _pick_spec(other)
+    if not spec:
+        spec = _pick_spec(tech)
+    return {
+        "production_meters": meters,
+        "specification": spec,
+    }
+
+
+def _build_status_rows(
+    equipments: Sequence[Equipment],
+    latest: Dict[int, EquipmentStatusMonitor],
+    *,
+    limit: int,
+) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for eq in equipments:
+        mon = latest.get(eq.id)
+        status = str(eq.status or "正常").strip() or "正常"
+        prod = _production_fields_from_monitor(mon, eq)
+        rows.append(
+            {
+                "equipment_id": eq.id,
+                "code": eq.code or "",
+                "name": eq.name or "",
+                "status": status,
+                "is_online": bool(mon.is_online) if mon else False,
+                "runtime_hours": float(mon.runtime_hours) if mon and mon.runtime_hours is not None else None,
+                "production_meters": prod.get("production_meters"),
+                "specification": prod.get("specification"),
+                "monitored_at": to_api_isoformat(mon.monitored_at) if mon and mon.monitored_at else None,
+            }
+        )
+    rows.sort(
+        key=lambda r: (
+            _STATUS_SORT_RANK.get(str(r.get("status") or ""), 9),
+            str(r.get("code") or ""),
+        )
+    )
+    return rows[: max(1, limit)]
+
+
 async def get_equipment_board(
     tenant_id: int,
     *,
     plant_id: Optional[int] = None,
     alert_limit: int = _ALERT_LIMIT,
+    status_row_limit: int = _STATUS_ROW_LIMIT,
     scheme_domain: str = "equipment",
 ) -> Dict[str, Any]:
     now = resolve_business_datetime()
@@ -97,6 +205,7 @@ async def get_equipment_board(
                 "domain": domain,
                 "metrics": _empty_metrics(),
                 "status_breakdown": [],
+                "status_rows": [],
                 "alerts": [],
                 "as_of": to_api_isoformat(now),
                 "spot_check_date": today.isoformat(),
@@ -116,6 +225,7 @@ async def get_equipment_board(
             "domain": domain,
             "metrics": _empty_metrics(),
             "status_breakdown": [],
+            "status_rows": [],
             "alerts": [],
             "as_of": to_api_isoformat(now),
             "spot_check_date": today.isoformat(),
@@ -209,6 +319,13 @@ async def get_equipment_board(
         domain=domain,
     )
 
+    latest_monitors = await _latest_monitors_for_equipment(tenant_id, equipment_ids)
+    status_rows = _build_status_rows(
+        equipments,
+        latest_monitors,
+        limit=status_row_limit,
+    )
+
     return {
         "plant": plant_meta,
         "domain": domain,
@@ -228,6 +345,7 @@ async def get_equipment_board(
             {"status": k, "count": v}
             for k, v in sorted(status_counts.items(), key=lambda x: (-x[1], x[0]))
         ],
+        "status_rows": status_rows,
         "alerts": alerts,
         "as_of": to_api_isoformat(now),
         "spot_check_date": today.isoformat(),
@@ -239,6 +357,7 @@ async def get_equipment_board_with_visit(
     *,
     plant_id: Optional[int] = None,
     alert_limit: int = _ALERT_LIMIT,
+    status_row_limit: int = _STATUS_ROW_LIMIT,
     scheme_domain: str = "equipment",
     visit_mode: bool = False,
 ) -> Dict[str, Any]:
@@ -247,6 +366,7 @@ async def get_equipment_board_with_visit(
         tenant_id,
         plant_id=plant_id,
         alert_limit=alert_limit,
+        status_row_limit=status_row_limit,
         scheme_domain=scheme_domain,
     )
     source_metrics = dict(board.get("metrics") or {})

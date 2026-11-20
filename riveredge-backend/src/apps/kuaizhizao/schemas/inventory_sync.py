@@ -62,6 +62,8 @@ class InventorySyncFromSourceOut(BaseSchema):
     skipped: int = 0
     failed: int = 0
     fetched: int = 0
+    after_filter: int = 0
+    empty_reason: Optional[str] = None
     mode: str = "full"
     """达到单次最大拉取页数，源端还有数据未拉完。"""
     truncated: bool = False

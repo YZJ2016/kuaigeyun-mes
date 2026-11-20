@@ -103,6 +103,7 @@ from apps.kuaizhizao.schemas.rework_order import (
     ReworkOrderFromWorkOrderRequest,
     ReworkFromWorkOrderPreviewResponse,
     ReworkReportingCreate,
+    ReworkOrderAssignRequest,
     ReworkReportingOptionsResponse,
     ReworkAdvanceNextRequest,
     ReworkRequestCompleteRequest,
@@ -1806,6 +1807,27 @@ async def get_rework_order_reporting_options(
     return await ReworkOrderService().get_rework_reporting_options(
         tenant_id=tenant_id,
         rework_order_id=rework_order_id,
+    )
+
+
+@router.patch(
+    "/rework-orders/{rework_order_id}/assign",
+    response_model=ReworkOrderResponse,
+    summary="Assign workers/team on rework order operation",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:rework-order:update"))],
+)
+async def assign_rework_order_endpoint(
+    rework_order_id: int,
+    body: ReworkOrderAssignRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReworkOrderResponse:
+    """指派返工工序人员或班组；同步头表主责操作员。"""
+    return await ReworkOrderService().assign_rework_order(
+        tenant_id=tenant_id,
+        rework_order_id=rework_order_id,
+        request=body,
+        assigned_by=current_user.id,
     )
 
 

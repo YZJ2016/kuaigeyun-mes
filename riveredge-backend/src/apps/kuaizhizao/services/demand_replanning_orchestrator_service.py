@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from apps.kuaizhizao.models.demand_change_event import DemandChangeEvent
@@ -15,7 +14,9 @@ from apps.kuaizhizao.models.demand_replan_task import DemandReplanTask
 from apps.kuaizhizao.models.demand_computation import DemandComputation
 from apps.kuaizhizao.services.demand_computation_service import DemandComputationService
 from apps.kuaizhizao.constants.demand_computation_status import (
+    DEMAND_COMPUTATION_STATUS_PENDING,
     RECOMPUTABLE_COMPUTATION_STATUSES,
+    REPLAN_RUNNABLE_COMPUTATION_STATUSES,
 )
 from apps.kuaizhizao.services.demand_replan_impact_service import (
     DemandReplanImpactService,
@@ -48,7 +49,7 @@ class DemandReplanningOrchestratorService:
 
         impacts = await DemandImpactRecord.filter(tenant_id=tenant_id, event_id=event_id).all()
         raw_computation_ids = [int(i.impact_id) for i in impacts if i.impact_type == "computation"]
-        computation_ids = await DemandReplanImpactService.filter_recomputable_computation_ids(
+        computation_ids = await DemandReplanImpactService.filter_replan_runnable_computation_ids(
             tenant_id,
             raw_computation_ids,
         )
@@ -100,6 +101,41 @@ class DemandReplanningOrchestratorService:
             "task_scope": task.task_scope,
         }
 
+    async def _run_one_computation(
+        self,
+        *,
+        tenant_id: int,
+        computation_id: int,
+        operator_id: int,
+        task_code: str,
+    ) -> None:
+        """待执行走首次运算；完成/失败走重算（含快照）。"""
+        computation = await DemandComputation.get_or_none(
+            tenant_id=tenant_id, id=computation_id
+        )
+        if not computation:
+            raise NotFoundError(f"需求计算不存在: {computation_id}")
+        status = str(computation.computation_status or "").strip()
+        if status == DEMAND_COMPUTATION_STATUS_PENDING:
+            await self._computation_service.execute_computation(
+                tenant_id=tenant_id,
+                computation_id=computation_id,
+                operator_id=operator_id,
+            )
+            return
+        if status in RECOMPUTABLE_COMPUTATION_STATUSES:
+            await self._computation_service.recompute_computation(
+                tenant_id=tenant_id,
+                computation_id=computation_id,
+                operator_id=operator_id,
+                trigger="event_replan",
+                trigger_message=f"重算任务 {task_code}",
+            )
+            return
+        raise BusinessLogicError(
+            f"需求计算 {computation_id} 当前状态「{status}」不可纳入变更执行"
+        )
+
     async def execute_task(
         self,
         tenant_id: int,
@@ -130,22 +166,24 @@ class DemandReplanningOrchestratorService:
         scope = task.task_scope or {}
         target_ids: List[int]
         if task.mode == "full_regen":
-            target_ids = await DemandReplanImpactService.filter_recomputable_computation_ids(
+            target_ids = await DemandReplanImpactService.filter_replan_runnable_computation_ids(
                 tenant_id,
                 await DemandComputation.filter(
                     tenant_id=tenant_id,
-                    computation_status__in=list(RECOMPUTABLE_COMPUTATION_STATUSES),
+                    computation_status__in=list(REPLAN_RUNNABLE_COMPUTATION_STATUSES),
                 ).values_list("id", flat=True),
             )
         else:
             scope_ids = [int(i) for i in (scope.get("computation_ids") or [])]
-            target_ids = await DemandReplanImpactService.filter_recomputable_computation_ids(
+            target_ids = await DemandReplanImpactService.filter_replan_runnable_computation_ids(
                 tenant_id,
                 scope_ids,
             )
 
         if not target_ids:
-            err_msg = "未找到可重算的需求计算（须为已完成或失败状态，且上游已下推需求计算）"
+            err_msg = (
+                "未找到可执行的需求计算（须为待执行、已完成或失败状态，且上游已关联需求计算）"
+            )
             await DemandReplanTask.filter(tenant_id=tenant_id, id=task_id).update(
                 status="failed",
                 finished_at=resolve_business_datetime(),
@@ -160,7 +198,9 @@ class DemandReplanningOrchestratorService:
             )
             event = await DemandChangeEvent.get_or_none(tenant_id=tenant_id, id=task.event_id)
             if event:
-                await DemandChangeEvent.filter(tenant_id=tenant_id, id=event.id).update(event_status="failed")
+                await DemandChangeEvent.filter(tenant_id=tenant_id, id=event.id).update(
+                    event_status="failed"
+                )
             return {
                 "task_id": task_id,
                 "status": "failed",
@@ -177,18 +217,29 @@ class DemandReplanningOrchestratorService:
         failed: List[Dict[str, Any]] = []
         for computation_id in target_ids:
             try:
-                await self._computation_service.recompute_computation(
+                await self._run_one_computation(
                     tenant_id=tenant_id,
                     computation_id=computation_id,
                     operator_id=operator_id,
-                    trigger="event_replan",
-                    trigger_message=f"重算任务 {task.task_code}",
+                    task_code=task.task_code,
                 )
                 success_ids.append(computation_id)
             except Exception as exc:
                 failed.append({"computation_id": computation_id, "error": str(exc)})
 
-        status = "completed" if not failed else ("failed" if not success_ids else "completed")
+        # 任一项失败则任务记 failed，事件不关单，便于重试；全部成功才 closed
+        if not failed:
+            status = "completed"
+            event_status = "closed"
+            err_message = None
+        else:
+            status = "failed"
+            event_status = "failed"
+            if not success_ids:
+                err_message = failed[0]["error"][:500]
+            else:
+                err_message = f"部分失败: {failed[0]['error'][:200]}"
+
         result_summary = {
             "target_count": len(target_ids),
             "success_count": len(success_ids),
@@ -200,26 +251,18 @@ class DemandReplanningOrchestratorService:
             status=status,
             finished_at=resolve_business_datetime(),
             result_summary=result_summary,
-            error_message=(
-                failed[0]["error"][:500]
-                if failed and not success_ids
-                else (f"部分失败: {failed[0]['error'][:200]}" if failed else None)
-            ),
+            error_message=err_message,
         )
 
         event = await DemandChangeEvent.get_or_none(tenant_id=tenant_id, id=task.event_id)
         if event:
             await DemandChangeEvent.filter(tenant_id=tenant_id, id=event.id).update(
-                event_status="closed" if status == "completed" else "failed"
+                event_status=event_status
             )
 
         return {
             "task_id": task_id,
             "status": status,
-            "error_message": (
-                failed[0]["error"][:500]
-                if failed and not success_ids
-                else (f"部分失败: {failed[0]['error'][:200]}" if failed else None)
-            ),
+            "error_message": err_message,
             "result_summary": result_summary,
         }

@@ -11,6 +11,8 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 
+from tortoise.expressions import Q
+
 from core.utils.timezone_utils import make_aware, now_utc
 from loguru import logger
 
@@ -662,18 +664,25 @@ class BatchingCenterService:
         else:
             query = query.filter(status__in=["draft", "picking"])
 
+        # 手工建单无工单：须与「开放工单关联单」一并列出，禁止 work_order_id__in 把 NULL 滤掉
         eligible_wo_ids = await WorkOrder.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             status__in=self._OPEN_BATCHING_WO_STATUSES,
         ).values_list("id", flat=True)
         eligible_ids = [int(x) for x in eligible_wo_ids if x is not None]
-        if not eligible_ids:
-            return [], 0
-        query = query.filter(work_order_id__in=eligible_ids)
+        if eligible_ids:
+            query = query.filter(
+                Q(work_order_id__isnull=True) | Q(work_order_id__in=eligible_ids)
+            )
+        else:
+            query = query.filter(work_order_id__isnull=True)
 
         if work_order_code:
-            query = query.filter(work_order_code__icontains=work_order_code.strip())
+            kw = work_order_code.strip()
+            query = query.filter(
+                Q(work_order_code__icontains=kw) | Q(code__icontains=kw)
+            )
 
         if priority:
             order_ids_for_priority = await WorkOrder.filter(
@@ -684,6 +693,7 @@ class BatchingCenterService:
             pid_list = list(order_ids_for_priority)
             if not pid_list:
                 return [], 0
+            # 按工单优先级筛选时不含手工无工单备料单
             query = query.filter(work_order_id__in=pid_list)
 
         total = await query.count()

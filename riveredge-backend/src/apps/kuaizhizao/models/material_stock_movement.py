@@ -34,13 +34,25 @@ class MaterialStockMovement(BaseModel):
     # outsource_receipt | adjust | ...
     movement_type = fields.CharField(max_length=50, description="移动类型")
     quantity = fields.DecimalField(
-        max_digits=18, decimal_places=4, description="有符号数量（出库负、入库正）"
+        max_digits=18, decimal_places=4, description="有符号库存单位数量（出库负、入库正）"
+    )
+    base_quantity = fields.DecimalField(
+        max_digits=18, decimal_places=4, null=True, description="有符号基本单位数量（出库负、入库正）"
+    )
+    aux_quantity = fields.DecimalField(
+        max_digits=18, decimal_places=4, null=True, description="有符号辅助单位数量（出库负、入库正）"
     )
     qty_before = fields.DecimalField(
-        max_digits=18, decimal_places=4, null=True, description="变动前余额"
+        max_digits=18, decimal_places=4, null=True, description="变动前库存单位余额"
     )
     qty_after = fields.DecimalField(
-        max_digits=18, decimal_places=4, null=True, description="变动后余额"
+        max_digits=18, decimal_places=4, null=True, description="变动后库存单位余额"
+    )
+    base_qty_before = fields.DecimalField(
+        max_digits=18, decimal_places=4, null=True, description="变动前基本单位余额"
+    )
+    base_qty_after = fields.DecimalField(
+        max_digits=18, decimal_places=4, null=True, description="变动后基本单位余额"
     )
 
     from_warehouse_id = fields.IntField(null=True, description="来源仓库ID")

@@ -35,5 +35,10 @@ RECOMPUTABLE_COMPUTATION_STATUSES: frozenset[str] = frozenset({
     DEMAND_COMPUTATION_STATUS_FAILED,
 })
 
+# 需求变更重算任务可纳入范围：待执行走首次执行，完成/失败走重算（排除计算中）
+REPLAN_RUNNABLE_COMPUTATION_STATUSES: frozenset[str] = frozenset(
+    EXECUTABLE_COMPUTATION_STATUSES | RECOMPUTABLE_COMPUTATION_STATUSES
+)
+
 # 运算期间服务中断的回正说明
 INTERRUPTED_COMPUTATION_ERROR_MESSAGE = "运算期间服务中断，计算未完成，请重新执行"

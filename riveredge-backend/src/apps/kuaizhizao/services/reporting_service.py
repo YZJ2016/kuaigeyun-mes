@@ -272,9 +272,9 @@ async def _compute_operation_reportable_remaining(
     """本次可报上限：min(计划剩余, 物料剩余)，与拉源 reportable_quantity_max 一致。"""
     from apps.kuaizhizao.models.process_inspection import ProcessInspection
     from apps.kuaizhizao.services.over_report_rules import (
-        first_operation_material_incoming,
+        max_completed_quantity_for_plan,
         remaining_completed_headroom,
-        tuple_from_model,
+        resolve_effective_over_report_async,
     )
     from apps.kuaizhizao.services.operation_jump_rules import resolve_material_incoming_qty
     from apps.kuaizhizao.services.operation_transfer_service import (
@@ -287,7 +287,9 @@ async def _compute_operation_reportable_remaining(
     from apps.kuaizhizao.services.inspection_policy_service import get_quality_effective_config
 
     plan_qty = Decimal(str(work_order.quantity or 0))
-    om, ov = tuple_from_model(work_order_operation)
+    om, ov = await resolve_effective_over_report_async(
+        tenant_id, work_order, work_order_operation
+    )
     completed = Decimal(str(work_order_operation.completed_quantity or 0))
     plan_remaining = remaining_completed_headroom(plan_qty, completed, om, ov)
 
@@ -303,7 +305,8 @@ async def _compute_operation_reportable_remaining(
             break
 
     if op_index == 0:
-        adjacent_prev = first_operation_material_incoming(plan_qty, work_order_operation)
+        # 与计划剩余同一套有效超报（含工序档案回落）
+        adjacent_prev = max_completed_quantity_for_plan(plan_qty, om, ov)
     else:
         adjacent_prev = await resolve_operation_transfer_qualified(
             tenant_id, int(work_order.id), ops[op_index - 1]
@@ -1377,20 +1380,35 @@ class ReportingService(AppBaseService[ReportingRecord]):
     ) -> None:
         """审核通过后外推：唯一入口 DocumentPushService（禁止直连金蝶服务）。"""
         try:
-            from apps.kuaizhizao.services.document_push_service import (
-                RPT_KD_PROFILE,
-                DocumentPushService,
-            )
-            from apps.kuaizhizao.services.kingdee_production_report_push_service import (
-                KingdeeProductionReportPushService,
+            from apps.common.optional_pro import pro_orm_ready
+
+            if not pro_orm_ready("kuaiconnect"):
+                logger.info(
+                    "报工审核通过后外推跳过：快连接未就绪 tenant_id={} record_id={}",
+                    tenant_id,
+                    getattr(record, "id", None),
+                )
+                return
+
+            from apps.common.document_push_gate import (
+                document_push_service,
+                load_document_push_attr,
             )
 
-            result = await DocumentPushService().push(
+            rpt_profile = load_document_push_attr(
+                "document_push_service", "RPT_KD_PROFILE"
+            )
+            KingdeeProductionReportPushService = load_document_push_attr(
+                "kingdee_production_report_push_service",
+                "KingdeeProductionReportPushService",
+            )
+
+            result = await document_push_service().push(
                 tenant_id=tenant_id,
                 acting_user_id=int(acting_user_id),
                 source_type="reporting_record",
                 source_id=int(record.id),
-                target_profile=RPT_KD_PROFILE,
+                target_profile=rpt_profile,
             )
             # fail_on_error：业务配置要求失败则阻断审核成功路径
             if isinstance(result, dict) and not result.get("success") and not result.get("skipped"):
@@ -1434,9 +1452,13 @@ class ReportingService(AppBaseService[ReportingRecord]):
         if record.status != "approved":
             raise BusinessLogicError("仅已审核通过的报工记录可重推外部生产汇报单")
 
-        from apps.kuaizhizao.services.document_push_service import (
-            RPT_KD_PROFILE,
-            DocumentPushService,
+        from apps.common.document_push_gate import (
+            document_push_service,
+            load_document_push_attr,
+        )
+
+        rpt_profile = load_document_push_attr(
+            "document_push_service", "RPT_KD_PROFILE"
         )
 
         await ReportingRecord.filter(id=record_id).update(
@@ -1445,12 +1467,12 @@ class ReportingService(AppBaseService[ReportingRecord]):
             kingdee_push_next_at=None,
             kingdee_push_last_error=None,
         )
-        return await DocumentPushService().push(
+        return await document_push_service().push(
             tenant_id=tenant_id,
             acting_user_id=int(acting_user_id),
             source_type="reporting_record",
             source_id=int(record_id),
-            target_profile=RPT_KD_PROFILE,
+            target_profile=rpt_profile,
         )
 
     async def create_reporting_record(
@@ -1478,8 +1500,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
         """
         trigger_direct_inbound = False
         reporting_record_id_for_auto: Optional[int] = None
-        approval_instance_on_create = None
         post_commit_backflush = False
+
         post_commit_mold = False
         post_commit_qc = False
         created_reporting_record = None
@@ -1694,11 +1716,12 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     "该工序为委外工序，请通过委外接收完成数量，不可厂内报工"
                 )
 
-            if (
-                not work_order_operation.assigned_worker_id
-                and not getattr(work_order_operation, "assigned_team_id", None)
-            ):
-                raise ValidationError("该工序尚未派工，请先派工后再报工")
+            if await BusinessConfigService().require_operation_dispatch(tenant_id):
+                if (
+                    not work_order_operation.assigned_worker_id
+                    and not getattr(work_order_operation, "assigned_team_id", None)
+                ):
+                    raise ValidationError("该工序尚未派工，请先派工后再报工")
 
             # 报工会将 pending 工序隐式置为 in_progress，等同开工，须同样校验领料
             if work_order_operation.status == "pending":
@@ -1712,20 +1735,31 @@ class ReportingService(AppBaseService[ReportingRecord]):
             # 根据报工类型验证数据（核心功能，新增）
             reporting_type = work_order_operation.reporting_type or "quantity"
 
-            # 工序跳转规则：工单或工序任一方允许跳转则放宽；节点工序在允许跳转时仍不可跳过
+            # 跳转门禁：唯一认工单头 allow_operation_jump
             from apps.kuaizhizao.services.operation_jump_rules import (
-                effective_allow_jump,
-                validate_reporting_respects_node_operations,
+                validate_reporting_respects_jump_gates,
             )
 
-            allow_jump = effective_allow_jump(work_order, work_order_operation)
             reported_quantity_dec = Decimal(str(reporting_data.reported_quantity))
 
             if reporting_type == "status":
-                from apps.kuaizhizao.services.over_report_rules import status_reporting_complete_delta
+                from apps.kuaizhizao.services.over_report_rules import (
+                    max_completed_quantity_for_plan,
+                    resolve_effective_over_report_async,
+                    to_decimal as _or_to_decimal,
+                )
 
                 if reported_quantity_dec > 0:
-                    delta = status_reporting_complete_delta(work_order, work_order_operation)
+                    om_s, ov_s = await resolve_effective_over_report_async(
+                        tenant_id, work_order, work_order_operation
+                    )
+                    target_s = max_completed_quantity_for_plan(
+                        work_order.quantity, om_s, ov_s
+                    )
+                    current_s = _or_to_decimal(
+                        getattr(work_order_operation, "completed_quantity", None)
+                    )
+                    delta = max(_or_to_decimal(0), target_s - current_s)
                     if delta <= 0:
                         raise BusinessLogicError("按状态报工：工序已达完成上限，无需重复报工")
                     reporting_data.reported_quantity = delta
@@ -1748,49 +1782,14 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     reporting_data.qualified_quantity = Decimal("0")
                     reporting_data.unqualified_quantity = Decimal("0")
 
-            if not allow_jump:
-                # 不允许跳转：检查前序工序（须排除软删除行，否则下工单时删掉的工序仍会挡住报工）
-                previous_operations = await WorkOrderOperation.filter(
-                    tenant_id=tenant_id,
-                    work_order_id=reporting_data.work_order_id,
-                    sequence__lt=work_order_operation.sequence,
-                    deleted_at__isnull=True,
-                ).order_by('-sequence').limit(1).all()
-
-                if previous_operations:
-                    previous_operation = previous_operations[0]
-
-                    # 按状态报工且报「完成」：紧邻上道须已 completed
-                    if reporting_type == "status" and reported_quantity_dec > 0:
-                        if previous_operation.status != "completed":
-                            raise BusinessLogicError(
-                                f"工序跳转规则：请先完成前序工序「{previous_operation.operation_name}」后，再将当前工序报为完成"
-                            )
-                    
-                    # 检查前序工序转入量：累计完成不可超过上道合格转出（不允许跳转时）
-                    from apps.kuaizhizao.services.operation_jump_rules import qualified_transfer_quantity_async
-
-                    previous_transfer = await qualified_transfer_quantity_async(
-                        tenant_id,
-                        reporting_data.work_order_id,
-                        previous_operation,
-                    )
-                    current_completed = Decimal(str(work_order_operation.completed_quantity or 0))
-                    new_completed = current_completed + reported_quantity_dec
-
-                    if reporting_type == "quantity" and new_completed > previous_transfer:
-                        raise BusinessLogicError(
-                            f"工序跳转规则：当前工序累计报工数量（{new_completed}）不能超过"
-                            f"前序工序「{previous_operation.operation_name}」的合格产出（{previous_transfer}）"
-                        )
-            else:
-                await validate_reporting_respects_node_operations(
-                    tenant_id=tenant_id,
-                    work_order_id=reporting_data.work_order_id,
-                    work_order_operation=work_order_operation,
-                    reporting_type=reporting_type,
-                    reported_quantity=reported_quantity_dec,
-                )
+            await validate_reporting_respects_jump_gates(
+                tenant_id=tenant_id,
+                work_order_id=reporting_data.work_order_id,
+                work_order_operation=work_order_operation,
+                reporting_type=reporting_type,
+                reported_quantity=reported_quantity_dec,
+                work_order=work_order,
+            )
 
             # 工时合法性：允许为空/0（按标准工时×数量推导）；不允许负数
             wh = Decimal(str(getattr(reporting_data, "work_hours", 0) or 0))
@@ -1808,11 +1807,13 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if reporting_type == "quantity":
                 from apps.kuaizhizao.services.over_report_rules import (
                     max_completed_quantity_for_plan,
-                    tuple_from_model,
+                    resolve_effective_over_report_async,
                 )
 
                 plan_qty = work_order.quantity or Decimal("0")
-                om, ov = tuple_from_model(work_order_operation)
+                om, ov = await resolve_effective_over_report_async(
+                    tenant_id, work_order, work_order_operation
+                )
                 max_completed = max_completed_quantity_for_plan(plan_qty, om, ov)
                 current_completed = Decimal(str(work_order_operation.completed_quantity or 0))
                 allowed_additional = await _compute_operation_reportable_remaining(
@@ -1863,17 +1864,24 @@ class ReportingService(AppBaseService[ReportingRecord]):
             approved_at = None
             approved_by = None
             approved_by_name = None
-
-            if should_auto_approve and reporting_data.status == 'pending':
-                reporting_data.status = 'approved'
-                approved_at = resolve_business_datetime()
-                approved_by = reported_by
-                approved_by_name = recorder_name or reporting_data.worker_name or "自动审核"
-            elif reporting_data.status == "approved" and approved_at is None:
-                # 调用方直接落已审核时，补齐审核时间，确保后续质检自动建单能触发
+            # 保存只落草稿；免审/自动审在创建后走内部一次性提审生效
+            create_status = "draft"
+            create_review_status = "草稿"
+            if getattr(reporting_data, "status", None) == "approved":
+                # 调用方显式落已生效（系统路径）
+                create_status = "approved"
+                create_review_status = "审核通过"
                 approved_at = resolve_business_datetime()
                 approved_by = reported_by
                 approved_by_name = recorder_name or reporting_data.worker_name or "系统"
+            elif should_auto_approve:
+                create_status = "approved"
+                create_review_status = "审核通过"
+                approved_at = resolve_business_datetime()
+                approved_by = reported_by
+                approved_by_name = recorder_name or reporting_data.worker_name or "自动审核"
+            reporting_data.status = create_status
+
 
             # 关键主数据标识以后端查询结果为准，避免前端篡改编码/名称
             trusted_work_order_code = getattr(work_order, "code", None) or reporting_data.work_order_code
@@ -1930,7 +1938,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 work_end_time=coerce_business_datetime_to_utc(
                     getattr(reporting_data, "work_end_time", None)
                 ),
-                status=reporting_data.status,
+                status=create_status,
+                review_status=create_review_status,
                 reported_at=reporting_data.reported_at,
                 remarks=reporting_data.remarks,
                 device_info=reporting_data.device_info,
@@ -1943,25 +1952,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 approved_by_name=approved_by_name,
             )
 
-            if reporting_record.status == "pending" and reporting_audit_required:
-                from core.services.approval.audit_flow_guard import start_document_approval_or_raise
-
-                approval_instance_on_create = await start_document_approval_or_raise(
-                    tenant_id=tenant_id,
-                    user_id=reported_by,
-                    node_key="reporting_record",
-                    entity_type="reporting_record",
-                    entity_id=int(reporting_record.id),
-                    entity_uuid=str(reporting_record.uuid),
-                    title=f"报工审批: {trusted_work_order_code}",
-                    content=(
-                        f"工序: {trusted_operation_name}, "
-                        f"数量: {reporting_data.reported_quantity}"
-                    ),
-                    doc_label="报工记录",
-                )
-
             # 更新工单工序状态和进度（核心功能，新增）
+
             if work_order_operation.status == 'pending':
                 work_order_operation.status = 'in_progress'
                 work_order_operation.actual_start_date = work_order_operation.actual_start_date or resolve_business_datetime()
@@ -2148,6 +2140,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
                         downgrade_warehouse_id=getattr(
                             pending_defect, "downgrade_warehouse_id", None
                         ),
+                        location_id=getattr(pending_defect, "location_id", None),
+                        location_code=getattr(pending_defect, "location_code", None),
                     )
             except Exception as defect_disp_err:
                 logger.error(
@@ -2231,21 +2225,25 @@ class ReportingService(AppBaseService[ReportingRecord]):
         else:
             inbound_result = None
 
-        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
-
-        if (
-            approval_instance_on_create
-            and approval_instance_finished_on_submit(approval_instance_on_create)
-            and reporting_record.status == "pending"
-        ):
-            return await self.approve_reporting_record(
-                tenant_id, reporting_record.id, reported_by, is_auto_approve=True
-            )
-
         await self._sync_pending_inbound_receipts_if_needed(
             tenant_id=tenant_id,
             work_order_id=reporting_record.work_order_id,
         )
+        if str(getattr(reporting_record, "status", "") or "").strip() == "draft":
+            from apps.kuaizhizao.services.manual_create_auto_lifecycle import (
+                apply_manual_create_auto_submit,
+            )
+
+            applied = await apply_manual_create_auto_submit(
+                tenant_id=tenant_id,
+                node_key="reporting_record",
+                entity_id=int(reporting_record.id),
+                operator_id=reported_by,
+            )
+            if applied:
+                reporting_record = await ReportingRecord.get(
+                    tenant_id=tenant_id, id=int(reporting_record.id)
+                )
         if reporting_record.status == "approved":
             await self._refresh_performance_after_approved_reporting(
                 tenant_id, reporting_record
@@ -2287,6 +2285,16 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
         resp = ReportingRecordResponse.model_validate(record)
         from core.services.approval.audit_record_enricher import enrich_record
+        from apps.kuaizhizao.services.defect_record_service import DefectRecordService
+
+        remaining_map = await DefectRecordService().batch_reporting_unqualified_remaining(
+            tenant_id,
+            {int(record.id): record.unqualified_quantity or Decimal("0")},
+        )
+        resp.unqualified_remaining = remaining_map.get(
+            int(record.id),
+            max(Decimal("0"), Decimal(str(record.unqualified_quantity or 0))),
+        )
 
         enriched = await enrich_record(tenant_id, "reporting_record", resp)
         has_outbound = await self._work_order_has_posted_sales_outbound(
@@ -2432,7 +2440,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             from apps.kuaizhizao.services.over_report_rules import first_operation_material_incoming
 
-            prev_transfer = first_operation_material_incoming(plan_qty, wo_ops[0])
+            prev_transfer = first_operation_material_incoming(plan_qty, wo_ops[0], wo)
             for op_index, op in enumerate(wo_ops):
                 master_id = int(op.operation_id) if op.operation_id is not None else 0
                 mode = "none"
@@ -2560,6 +2568,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
         reported_at_end: Optional[datetime] = None,
         keyword: Optional[str] = None,
         order_by: Optional[str] = None,
+        viewer_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         获取报工记录列表
@@ -2658,17 +2667,33 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     "material_spec": spec_by_product.get(int(wo.product_id)) if wo.product_id else None,
                 }
 
+        from apps.kuaizhizao.services.defect_record_service import DefectRecordService
+
+        remaining_by_rid = await DefectRecordService().batch_reporting_unqualified_remaining(
+            tenant_id,
+            {
+                int(r.id): (r.unqualified_quantity or Decimal("0"))
+                for r in records
+                if getattr(r, "id", None)
+            },
+        )
         rows = []
         for record in records:
             resp = ReportingRecordListResponse.model_validate(record)
             resp.lifecycle = get_reporting_record_lifecycle(record)
+            resp.unqualified_remaining = remaining_by_rid.get(
+                int(record.id),
+                max(Decimal("0"), Decimal(str(record.unqualified_quantity or 0))),
+            )
             product_info = wo_product_map.get(int(record.work_order_id)) if record.work_order_id else None
             if product_info:
                 resp.product_name = product_info.get("product_name")
                 resp.product_code = product_info.get("product_code")
                 resp.material_spec = product_info.get("material_spec")
             rows.append(resp)
-        rows = await enrich_items(tenant_id, "reporting_record", rows)
+        rows = await enrich_items(
+            tenant_id, "reporting_record", rows, viewer_id=viewer_id
+        )
         outbound_by_wo = await self.batch_work_orders_have_posted_sales_outbound(
             tenant_id, wo_ids
         )
@@ -2725,8 +2750,10 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if not record:
                 raise NotFoundError(f"报工记录不存在: {record_id}")
 
-            if record.status != 'pending':
-                raise ValidationError("只能审核待审核状态的报工记录")
+            assert_reporting_record_capability(
+                record,
+                "approve" if not rejection_reason else "reject",
+            )
 
             audit_required = await BusinessConfigService().check_audit_required(
                 tenant_id, "reporting_record"
@@ -2756,7 +2783,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 raise ValidationError("驳回原因不能为空")
 
             if rejection_reason:
-                record.status = 'rejected'
+                record.status = 'draft'
+                record.review_status = '审核驳回'
                 record.rejection_reason = str(rejection_reason).strip()
             else:
                 # 人工审核：报工人 / 录入人 / 小组成员不可自审通过；关审自动通过不拦截
@@ -2793,6 +2821,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                             "报工人/录入人或小组成员不能审核通过自己的报工记录"
                         )
                 record.status = 'approved'
+                record.review_status = '审核通过'
                 # 状态切回通过时，清理历史驳回原因，避免脏字段残留
                 record.rejection_reason = None
 
@@ -2949,6 +2978,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             # 更新记录状态：一律草稿，须重新提交再审
             record.status = 'draft'
+            record.review_status = '草稿'
             record.approved_at = None
             record.approved_by = None
             record.approved_by_name = None
@@ -2983,6 +3013,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 )
                 if restore and restore.status == "draft":
                     restore.status = "approved"
+                    restore.review_status = "审核通过"
                     restore.approved_at = prev_approved_at
                     restore.approved_by = prev_approved_by
                     restore.approved_by_name = prev_approved_by_name
@@ -2999,24 +3030,77 @@ class ReportingService(AppBaseService[ReportingRecord]):
         logger.info(f"撤回报工审核成功：报工记录ID {record_id}，操作人 {revoked_by}")
         return response
 
+    async def commit_reporting_record(
+        self,
+        tenant_id: int,
+        record_id: int,
+        submitted_by: int,
+    ) -> ReportingRecordResponse:
+        """草稿/已驳回 → 已提交（review_status=SUBMITTED）。页面「提交」走此方法。"""
+        from apps.kuaizhizao.constants import DocumentStatus, is_submitted_status
+
+        record = await ReportingRecord.get_or_none(id=record_id, tenant_id=tenant_id)
+        if not record:
+            raise NotFoundError(f"报工记录不存在: {record_id}")
+        if is_submitted_status(record.review_status):
+            return ReportingRecordResponse.model_validate(record)
+        assert_reporting_record_capability(record, "submit")
+        record.review_status = DocumentStatus.SUBMITTED
+        record.rejection_reason = None
+        await record.save()
+        return ReportingRecordResponse.model_validate(record)
+
+    async def submit_reporting_record_for_review(
+        self,
+        tenant_id: int,
+        record_id: int,
+        submitted_by: int,
+    ) -> ReportingRecordResponse:
+        """仅已提交可提交审核。"""
+        from apps.kuaizhizao.constants import is_submitted_status
+
+        record = await ReportingRecord.get_or_none(id=record_id, tenant_id=tenant_id)
+        if not record:
+            raise NotFoundError(f"报工记录不存在: {record_id}")
+        if not is_submitted_status(record.review_status):
+            raise BusinessLogicError("请先提交报工记录，再提交审核")
+        return await self._enter_reporting_record_review(
+            tenant_id, record_id, submitted_by, record
+        )
+
     async def submit_reporting_record(
         self,
         tenant_id: int,
         record_id: int,
         submitted_by: int,
     ) -> ReportingRecordResponse:
-        """草稿/驳回报工重新提交审核并启动审批流。"""
+        """内部一键：草稿直接进入待审核或免审通过。页面提交走 commit。"""
         record = await ReportingRecord.get_or_none(id=record_id, tenant_id=tenant_id)
         if not record:
             raise NotFoundError(f"报工记录不存在: {record_id}")
-        assert_reporting_record_capability(record, "submit")
+        status = str(record.status or "").strip()
+        if status not in ("draft", "草稿"):
+            raise BusinessLogicError(f"当前状态不可提交审核: {status or '-'}")
+        return await self._enter_reporting_record_review(
+            tenant_id, record_id, submitted_by, record
+        )
+
+    async def _enter_reporting_record_review(
+        self,
+        tenant_id: int,
+        record_id: int,
+        submitted_by: int,
+        record: ReportingRecord,
+    ) -> ReportingRecordResponse:
+        review = str(record.review_status or "").strip()
+        if review == "待审核":
+            return ReportingRecordResponse.model_validate(record)
 
         audit_required = await BusinessConfigService().check_audit_required(
             tenant_id, "reporting_record"
         )
         if not audit_required:
-            # 关审：draft/rejected → pending → approved（对齐 audit_transition 自动审）
-            record.status = "pending"
+            record.review_status = "待审核"
             record.rejection_reason = None
             await record.save()
             return await self.approve_reporting_record(
@@ -3045,7 +3129,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             ),
             doc_label="报工记录",
         )
-        record.status = "pending"
+        record.review_status = "待审核"
         record.rejection_reason = None
         await record.save()
         if approval_instance_finished_on_submit(instance):
@@ -3055,6 +3139,40 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 submitted_by,
                 is_auto_approve=True,
             )
+        return ReportingRecordResponse.model_validate(record)
+
+    async def withdraw_reporting_submit(
+        self,
+        tenant_id: int,
+        record_id: int,
+        operator_id: int,
+    ) -> ReportingRecordResponse:
+        """撤销提交（SUBMITTED→草稿）或撤回审核（待审核→SUBMITTED）。"""
+        from apps.kuaizhizao.constants import DocumentStatus, is_submitted_status
+
+        record = await ReportingRecord.get_or_none(id=record_id, tenant_id=tenant_id)
+        if not record:
+            raise NotFoundError(f"报工记录不存在: {record_id}")
+        assert_reporting_record_capability(record, "withdraw_submit")
+
+        if is_submitted_status(record.review_status):
+            record.review_status = "草稿"
+            await record.save()
+            return ReportingRecordResponse.model_validate(record)
+
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        cancelled = await ApprovalInstanceService.cancel_approval(
+            tenant_id=tenant_id,
+            entity_type="reporting_record",
+            entity_id=record_id,
+            operator_id=operator_id,
+        )
+        if not cancelled:
+            raise BusinessLogicError("撤回失败：无法取消审批流程，请重试")
+        record.review_status = DocumentStatus.SUBMITTED
+        record.rejection_reason = None
+        await record.save()
         return ReportingRecordResponse.model_validate(record)
 
     async def batch_revoke_reporting_approval(
@@ -3633,11 +3751,23 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if not work_order:
                 raise NotFoundError(f"工单不存在: {reporting_record.work_order_id}")
 
-            # 验证报废数量不能超过报工记录的不合格数量
-            if scrap_data.scrap_quantity > reporting_record.unqualified_quantity:
-                raise ValidationError(
-                    f"报废数量({scrap_data.scrap_quantity})不能超过报工记录的不合格数量({reporting_record.unqualified_quantity})"
-                )
+            # 与不良台账共用报工不合格额度：已返修/已登记/已直开报废占用后不可再开报废
+            from apps.kuaizhizao.services.defect_record_service import DefectRecordService
+
+            defect_svc = DefectRecordService()
+            remaining, registered, standalone_scraps = await defect_svc.get_reporting_unqualified_remaining(
+                tenant_id,
+                int(reporting_record_id),
+                reporting_record.unqualified_quantity or Decimal("0"),
+            )
+            defect_svc._assert_reporting_unqualified_budget(
+                scrap_data.scrap_quantity,
+                remaining=remaining,
+                unqualified_quantity=reporting_record.unqualified_quantity or Decimal("0"),
+                registered_defects=registered,
+                standalone_scraps=standalone_scraps,
+                quantity_label="报废数量",
+            )
 
             # 生成报废单编码
             today = today_site_str()
@@ -3726,10 +3856,22 @@ class ReportingService(AppBaseService[ReportingRecord]):
         if not quality_params.get("defect_handling", False):
             raise BusinessLogicError("当前组织未开启不良品处理，禁止创建不良品记录")
 
-        if defect_data.defect_quantity > reporting_record.unqualified_quantity:
-            raise ValidationError(
-                f"不良品数量({defect_data.defect_quantity})不能超过报工记录的不合格数量({reporting_record.unqualified_quantity})"
-            )
+        from apps.kuaizhizao.services.defect_record_service import DefectRecordService
+
+        defect_svc = DefectRecordService()
+        remaining, registered, standalone_scraps = await defect_svc.get_reporting_unqualified_remaining(
+            tenant_id,
+            int(reporting_record.id),
+            reporting_record.unqualified_quantity or Decimal("0"),
+        )
+        defect_svc._assert_reporting_unqualified_budget(
+            defect_data.defect_quantity,
+            remaining=remaining,
+            unqualified_quantity=reporting_record.unqualified_quantity or Decimal("0"),
+            registered_defects=registered,
+            standalone_scraps=standalone_scraps,
+            quantity_label="不良品数量",
+        )
 
         today = today_site_str()
         code = await self.generate_code(
@@ -3835,6 +3977,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
             stock_warehouse_id=getattr(defect_data, "stock_warehouse_id", None),
             downgrade_material_id=getattr(defect_data, "downgrade_material_id", None),
             downgrade_warehouse_id=getattr(defect_data, "downgrade_warehouse_id", None),
+            location_id=getattr(defect_data, "location_id", None),
+            location_code=getattr(defect_data, "location_code", None),
         )
 
         return DefectRecordResponse.model_validate(defect_record)

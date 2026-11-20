@@ -4,6 +4,7 @@ from typing import Tuple
 class DemandStatus(str, Enum):
     """需求/销售订单状态（含关闭等终态，与 DocumentStatus 对齐）"""
     DRAFT = "DRAFT"
+    SUBMITTED = "SUBMITTED"  # 已提交，尚未进入审核
     PENDING_REVIEW = "PENDING_REVIEW"
     AUDITED = "AUDITED"
     REJECTED = "REJECTED"
@@ -26,6 +27,7 @@ class DocumentStatus(str, Enum):
     扩展执行类单据状态：RELEASED/IN_PROGRESS/COMPLETED
     """
     DRAFT = "DRAFT"
+    SUBMITTED = "SUBMITTED"  # 已提交，尚未进入审核
     PENDING_REVIEW = "PENDING_REVIEW"
     AUDITED = "AUDITED"
     REJECTED = "REJECTED"
@@ -51,6 +53,7 @@ ORDER_PUSHABLE_STATUSES = LEGACY_AUDITED_VALUES + ("IN_PROGRESS", "进行中")
 # 状态别名：中文/旧值 <-> 枚举，用于状态流转规则匹配与读取兼容
 STATE_ALIASES: dict[str, str] = {
     "草稿": DocumentStatus.DRAFT.value,
+    "SUBMITTED": DocumentStatus.SUBMITTED.value,
     "待审核": DocumentStatus.PENDING_REVIEW.value,
     "已审核": DocumentStatus.AUDITED.value,
     "已驳回": DocumentStatus.REJECTED.value,
@@ -77,6 +80,8 @@ STATE_ALIASES: dict[str, str] = {
 
 # review_status 别名：中文 <-> ReviewStatus 枚举
 REVIEW_STATUS_ALIASES: dict[str, str] = {
+    "草稿": ReviewStatus.DRAFT.value,
+    "draft": ReviewStatus.DRAFT.value,
     "待审核": ReviewStatus.PENDING.value,
     "审核通过": ReviewStatus.APPROVED.value,
     "审核驳回": ReviewStatus.REJECTED.value,
@@ -97,6 +102,12 @@ def is_draft_status(status: str) -> bool:
     """判断是否为草稿状态（兼容中文与枚举）"""
     n = normalize_status(status) if status else ""
     return n == DocumentStatus.DRAFT.value
+
+
+def is_submitted_status(status: str) -> bool:
+    """已提交、尚未进入审核。"""
+    n = normalize_status(status) if status else ""
+    return n == DocumentStatus.SUBMITTED.value
 
 
 def is_pending_review_status(status: str) -> bool:

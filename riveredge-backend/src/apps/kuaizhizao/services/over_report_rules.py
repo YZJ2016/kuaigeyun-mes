@@ -39,10 +39,78 @@ def tuple_from_model(obj: Any, mode_attr: str = "over_report_mode", value_attr: 
     return m, v
 
 
+def is_line_over_report_explicit(fields_set: Any, mode: Any, value: Any) -> bool:
+    """
+    工序行是否「显式覆盖」上层超报。
+
+    前端常把默认 none/0 一并写入 payload，若仅凭 fields_set 判显式，
+    会把工单头/路线 percent|fixed 盖成 none，导致头上配置了超报却不能报。
+    仅当行上模式为 fixed/percent 时才视为显式覆盖。
+    """
+    if not fields_set:
+        return False
+    if not (set(fields_set) & {"over_report_mode", "over_report_value"}):
+        return False
+    return normalize_over_report_mode(mode) != OVER_REPORT_NONE
+
+
+def effective_over_report_for_reporting(
+    work_order: Any,
+    work_order_operation: Any,
+) -> Tuple[str, Decimal]:
+    """
+    报工上限：优先工序行快照；行为 none 时回落工单头。
+
+    与开单 merge 一致：行默认 none 表示继承，不是「强制不允许超报」。
+    若头也为 none，调用方可用 resolve_effective_over_report_async 再回落工序档案。
+    """
+    om, ov = tuple_from_model(work_order_operation)
+    if om != OVER_REPORT_NONE:
+        return om, ov
+    return tuple_from_model(work_order)
+
+
+async def resolve_effective_over_report_async(
+    tenant_id: int,
+    work_order: Any,
+    work_order_operation: Any,
+) -> Tuple[str, Decimal]:
+    """
+    报工有效超报：工序行 → 工单头 → 工序档案（GX 等主数据）。
+
+    开单若误把行快照写成 none，仍认工序档案上的 percent/fixed。
+    """
+    om, ov = effective_over_report_for_reporting(work_order, work_order_operation)
+    if om != OVER_REPORT_NONE:
+        return om, ov
+    mid = getattr(work_order_operation, "operation_id", None)
+    if not mid:
+        return om, ov
+    try:
+        from apps.master_data.models.process import Operation
+
+        master = await Operation.get_or_none(
+            id=int(mid),
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+    except Exception:
+        return om, ov
+    return tuple_from_model(master)
+
+
 def extra_has_over_report_keys(extra: Any) -> bool:
     if not isinstance(extra, dict):
         return False
     return "over_report_mode" in extra or "overReportMode" in extra
+
+
+def is_route_step_over_report_explicit(extra: Any) -> bool:
+    """路线步骤仅当显式配了 fixed/percent 才覆盖工序档案；默认 none 键不盖档案。"""
+    if not extra_has_over_report_keys(extra):
+        return False
+    mode, _ = parse_over_report_from_extra(extra)
+    return mode != OVER_REPORT_NONE
 
 
 def parse_over_report_from_extra(extra: Any) -> Tuple[str, Decimal]:
@@ -105,6 +173,17 @@ def clamp_over_report_value_for_mode(mode: str, value: Any) -> Decimal:
     return v
 
 
+def validate_over_report_value_for_mode(mode: Optional[str], value: Any) -> Decimal:
+    """写入校验：percent 须为 0–100 百分数；值不可为负。返回规范化后的 Decimal。"""
+    md = normalize_over_report_mode(mode)
+    v = to_decimal(value)
+    if v < 0:
+        raise ValueError("超报值不能为负数")
+    if md == OVER_REPORT_PERCENT and v > Decimal("100"):
+        raise ValueError("按比例超报时，超报值须在 0–100 之间（百分数）")
+    return v
+
+
 def max_completed_quantity_for_plan(plan_qty: Any, mode: str, value: Decimal) -> Decimal:
     plan = to_decimal(plan_qty)
     if plan < 0:
@@ -124,7 +203,7 @@ def max_completed_quantity_for_plan(plan_qty: Any, mode: str, value: Decimal) ->
 def status_reporting_target_quantity(work_order: Any, work_order_operation: Any) -> Decimal:
     """按状态报工标记完成时，本道工序应达到的累计完成/合格数量（含超报上限）。"""
     plan_qty = to_decimal(getattr(work_order, "quantity", None))
-    om, ov = tuple_from_model(work_order_operation)
+    om, ov = effective_over_report_for_reporting(work_order, work_order_operation)
     return max_completed_quantity_for_plan(plan_qty, om, ov)
 
 
@@ -147,12 +226,20 @@ def remaining_completed_headroom(
     return max(Decimal("0"), cap - current)
 
 
-def first_operation_material_incoming(plan_qty: Any, work_order_operation: Any) -> Decimal:
+def first_operation_material_incoming(
+    plan_qty: Any,
+    work_order_operation: Any,
+    work_order: Any = None,
+) -> Decimal:
     """
     首道在制起点：工单计划数量按本道超报规则抬高。
 
     若首道转入仍用裸计划数，则「计划剩余可报」含超报、「物料剩余」不含，
     min() 后「本次可报」永远卡在计划数，工序超报配置形同失效。
+    有工单对象时与报工上限同一套 effective（行 none → 工单头）。
     """
-    om, ov = tuple_from_model(work_order_operation)
+    if work_order is not None:
+        om, ov = effective_over_report_for_reporting(work_order, work_order_operation)
+    else:
+        om, ov = tuple_from_model(work_order_operation)
     return max_completed_quantity_for_plan(plan_qty, om, ov)

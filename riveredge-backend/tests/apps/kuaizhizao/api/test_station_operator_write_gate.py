@@ -803,6 +803,7 @@ PC_ONLY_WRITE_ROUTES: frozenset[tuple[str, str]] = frozenset({
     ("POST", "/work-orders/{work_order_id}/unsplit"),
     ("POST", "/work-orders/{work_order_id}/withdraw-manual-complete"),
     ("POST", "/rework-orders"),
+    ("PATCH", "/rework-orders/{rework_order_id}/assign"),
     ("POST", "/rework-orders/{rework_order_id}/advance-next"),
     ("POST", "/rework-orders/{rework_order_id}/approve"),
     ("POST", "/rework-orders/{rework_order_id}/cancel"),

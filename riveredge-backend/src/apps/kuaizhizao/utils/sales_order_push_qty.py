@@ -366,3 +366,172 @@ async def batch_sales_committed_by_material(
             continue
         result[mid] += Decimal(str(row.get("remaining_quantity") or 0))
     return dict(result)
+
+
+def compute_backorder_aux_qty(item: ItemLike) -> Decimal:
+    """欠发辅量：以行 aux_quantity 为上限（无 delivered_aux 字段）。"""
+    if isinstance(item, Mapping):
+        aux = item.get("aux_quantity")
+    else:
+        aux = getattr(item, "aux_quantity", None)
+    if aux is None:
+        return Decimal("0")
+    return max(Decimal("0"), Decimal(str(aux)))
+
+
+async def batch_notice_occupied_aux_by_order_item(
+    tenant_id: int,
+    sales_order_ids: Sequence[int],
+    *,
+    exclude_notice_id: Optional[int] = None,
+) -> Dict[int, Dict[int, Decimal]]:
+    if not sales_order_ids:
+        return {}
+    from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+
+    so_item_rows = await SalesOrderItem.filter(
+        tenant_id=tenant_id,
+        sales_order_id__in=list(sales_order_ids),
+    ).values("id", "sales_order_id")
+    item_to_order = {
+        int(r["id"]): int(r["sales_order_id"])
+        for r in so_item_rows
+        if r.get("id") is not None and r.get("sales_order_id") is not None
+    }
+    result: Dict[int, Dict[int, Decimal]] = defaultdict(lambda: defaultdict(lambda: Decimal("0")))
+    if not item_to_order:
+        return {}
+
+    notice_items = await ShipmentNoticeItem.filter(
+        tenant_id=tenant_id,
+        sales_order_item_id__in=list(item_to_order.keys()),
+    ).values("notice_id", "sales_order_item_id", "aux_quantity")
+    notice_ids = {int(r["notice_id"]) for r in notice_items if r.get("notice_id") is not None}
+    notice_rows = (
+        await ShipmentNotice.filter(
+            tenant_id=tenant_id,
+            id__in=list(notice_ids),
+            deleted_at__isnull=True,
+        ).exclude(status__in=list(CANCELLED_NOTICE_STATUSES)).values("id", "status")
+        if notice_ids
+        else []
+    )
+    open_notice_ids: Set[int] = set()
+    for row in notice_rows:
+        status = str(row.get("status") or "").strip()
+        if status not in OPEN_NOTICE_STATUSES:
+            continue
+        nid = int(row.get("id") or 0)
+        if nid <= 0:
+            continue
+        if exclude_notice_id is not None and nid == int(exclude_notice_id):
+            continue
+        open_notice_ids.add(nid)
+    if not open_notice_ids:
+        return {}
+
+    for ni in notice_items:
+        if int(ni.get("notice_id") or 0) not in open_notice_ids:
+            continue
+        so_item_id = ni.get("sales_order_item_id")
+        if so_item_id is None:
+            continue
+        qty = Decimal(str(ni.get("aux_quantity") or 0))
+        if qty <= 0:
+            continue
+        oid = item_to_order.get(int(so_item_id), 0)
+        if oid <= 0:
+            continue
+        result[oid][int(so_item_id)] += qty
+
+    return {oid: dict(inner) for oid, inner in result.items()}
+
+
+async def batch_delivery_occupied_aux_by_order_item(
+    tenant_id: int,
+    sales_order_ids: Sequence[int],
+) -> Dict[int, Dict[int, Decimal]]:
+    if not sales_order_ids:
+        return {}
+    delivery_rows = await SalesDelivery.filter(
+        tenant_id=tenant_id,
+        sales_order_id__in=list(sales_order_ids),
+        deleted_at__isnull=True,
+    ).exclude(status__in=list(CANCELLED_DELIVERY_STATUSES)).values("id", "sales_order_id", "status")
+
+    open_delivery_ids: List[int] = []
+    delivery_order: Dict[int, int] = {}
+    for row in delivery_rows:
+        status = str(row.get("status") or "").strip()
+        if status in CLOSED_DELIVERY_STATUSES:
+            continue
+        did = int(row.get("id") or 0)
+        if did <= 0:
+            continue
+        open_delivery_ids.append(did)
+        delivery_order[did] = int(row.get("sales_order_id") or 0)
+
+    by_item: Dict[int, Dict[int, Decimal]] = defaultdict(lambda: defaultdict(lambda: Decimal("0")))
+    if not open_delivery_ids:
+        return {}
+
+    item_rows = await SalesDeliveryItem.filter(
+        tenant_id=tenant_id,
+        delivery_id__in=open_delivery_ids,
+    ).values("delivery_id", "sales_order_item_id", "aux_quantity")
+
+    for row in item_rows:
+        qty = Decimal(str(row.get("aux_quantity") or 0))
+        if qty <= 0:
+            continue
+        oid = delivery_order.get(int(row.get("delivery_id") or 0), 0)
+        if oid <= 0:
+            continue
+        so_item_id = row.get("sales_order_item_id")
+        if so_item_id is not None and int(so_item_id) > 0:
+            by_item[oid][int(so_item_id)] += qty
+
+    return {oid: dict(inner) for oid, inner in by_item.items()}
+
+
+async def batch_pushable_aux_qty_by_order_item(
+    tenant_id: int,
+    order_items: Sequence[ItemLike],
+    *,
+    exclude_notice_id: Optional[int] = None,
+) -> Dict[int, Dict[int, Decimal]]:
+    """sales_order_id -> {sales_order_item_id -> pushable_aux_qty}。"""
+    if not order_items:
+        return {}
+
+    order_ids = sorted({_sales_order_id(it) for it in order_items if _sales_order_id(it) > 0})
+    notice_occ = await batch_notice_occupied_aux_by_order_item(
+        tenant_id, order_ids, exclude_notice_id=exclude_notice_id
+    )
+    delivery_occ = await batch_delivery_occupied_aux_by_order_item(tenant_id, order_ids)
+
+    items_by_order: Dict[int, List[ItemLike]] = defaultdict(list)
+    for it in order_items:
+        oid = _sales_order_id(it)
+        if oid > 0:
+            items_by_order[oid].append(it)
+
+    result: Dict[int, Dict[int, Decimal]] = {}
+    for oid, lines in items_by_order.items():
+        notice_map = notice_occ.get(oid, {})
+        delivery_map = delivery_occ.get(oid, {})
+        per_item: Dict[int, Decimal] = {}
+        for ln in lines:
+            iid = _item_id(ln)
+            if iid <= 0:
+                continue
+            if compute_backorder_aux_qty(ln) <= 0:
+                continue
+            pushable = compute_pushable_qty(
+                compute_backorder_aux_qty(ln),
+                notice_map.get(iid, Decimal("0")),
+                delivery_map.get(iid, Decimal("0")),
+            )
+            per_item[iid] = pushable
+        result[oid] = per_item
+    return result

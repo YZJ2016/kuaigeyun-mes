@@ -1569,6 +1569,15 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 is_auto_approve=True,
             )
 
+        if str(getattr(updated_inspection, "status", "") or "").strip() == "已审核":
+            from apps.kuaizhizao.services.quality_automation_service import (
+                QualityAutomationService,
+            )
+
+            await QualityAutomationService().maybe_auto_push_purchase_receipt_from_iqc(
+                tenant_id, inspection_id, inspected_by
+            )
+
         return updated_inspection
 
     async def _pushed_purchase_return_qty_by_inspection_ids(
@@ -2264,7 +2273,17 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             )
 
             updated_inspection = await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
-            return updated_inspection
+            approved_ok = status == "已审核"
+
+        if approved_ok:
+            from apps.kuaizhizao.services.quality_automation_service import (
+                QualityAutomationService,
+            )
+
+            await QualityAutomationService().maybe_auto_push_purchase_receipt_from_iqc(
+                tenant_id, inspection_id, approved_by
+            )
+        return updated_inspection
 
     async def revoke_approval(
         self, tenant_id: int, inspection_id: int, user_id: int

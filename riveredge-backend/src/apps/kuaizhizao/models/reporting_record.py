@@ -32,7 +32,8 @@ class ReportingRecord(BaseModel):
         work_hours: 工时（小时）
         work_start_time: 工序开始时间
         work_end_time: 工序完成时间
-        status: 审核状态（pending/approved/rejected）
+        status: 业务状态（draft/approved；已提交写在 review_status）
+        review_status: 审核状态（草稿/SUBMITTED/待审核/审核通过/审核驳回）
         reported_at: 报工时间
         approved_at: 审核时间
         approved_by: 审核人ID
@@ -44,6 +45,7 @@ class ReportingRecord(BaseModel):
         updated_at: 更新时间（继承自BaseModel）
         deleted_at: 删除时间（软删除）
     """
+
 
     class Meta:
         """
@@ -113,13 +115,19 @@ class ReportingRecord(BaseModel):
     work_start_time = fields.DatetimeField(null=True, description="工序开始时间")
     work_end_time = fields.DatetimeField(null=True, description="工序完成时间")
 
-    # 审核状态
-    status = fields.CharField(max_length=20, description="审核状态", default="pending")
+    # 业务状态（draft=未生效 / approved=已生效）；已提交写在 review_status
+    status = fields.CharField(max_length=20, description="业务状态（draft/approved）", default="draft")
+    review_status = fields.CharField(
+        max_length=20,
+        description="审核状态（草稿/SUBMITTED/待审核/审核通过/审核驳回）",
+        default="草稿",
+    )
     reported_at = fields.DatetimeField(description="报工时间")
     approved_at = fields.DatetimeField(null=True, description="审核时间")
     approved_by = fields.IntField(null=True, description="审核人ID")
     approved_by_name = fields.CharField(max_length=100, null=True, description="审核人姓名")
     rejection_reason = fields.TextField(null=True, description="驳回原因")
+
 
     # 备注和设备信息
     inbound_warehouse_id = fields.IntField(null=True, description="末道工序入库仓库 ID")

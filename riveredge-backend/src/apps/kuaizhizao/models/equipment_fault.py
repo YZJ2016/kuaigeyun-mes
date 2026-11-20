@@ -179,6 +179,7 @@ class EquipmentRepair(BaseModel):
     arrival_at = fields.DatetimeField(null=True, description="到场扫码时间")
     arrival_by_id = fields.IntField(null=True, description="到场签到人ID")
     arrival_by_name = fields.CharField(max_length=100, null=True, description="到场签到人姓名")
+    started_at = fields.DatetimeField(null=True, description="维修开始时间（接取/到场）")
     completed_at = fields.DatetimeField(null=True, description="完工时间")
     
     # 状态
@@ -193,4 +194,45 @@ class EquipmentRepair(BaseModel):
     def __str__(self):
         """字符串表示"""
         return f"{self.repair_no} - {self.equipment_name}"
+
+
+class EquipmentRepairParticipant(BaseModel):
+    """
+    设备维修参与人：主责 / 协作；转派后原主责记为已转派。
+    """
+
+    class Meta:
+        table = "apps_kuaizhizao_equipment_repair_participants"
+        table_description = "快格轻制造 - 设备维修参与人"
+        indexes = [
+            ("tenant_id",),
+            ("repair_id",),
+            ("user_id",),
+            ("status",),
+        ]
+
+    id = fields.IntField(pk=True, description="主键ID")
+    repair_id = fields.IntField(description="维修单ID")
+    repair_uuid = fields.CharField(max_length=36, description="维修单UUID")
+    user_id = fields.IntField(description="参与人用户ID")
+    user_name = fields.CharField(max_length=100, description="参与人姓名")
+    role = fields.CharField(
+        max_length=20,
+        default="主责",
+        description="角色（主责/协作）",
+    )
+    status = fields.CharField(
+        max_length=20,
+        default="进行中",
+        description="状态（进行中/已转派/已完成/已退出）",
+    )
+    joined_at = fields.DatetimeField(description="介入/接取开始时间")
+    left_at = fields.DatetimeField(null=True, description="离开/转派/完修时间")
+    reassigned_to_id = fields.IntField(null=True, description="转派目标用户ID")
+    reassigned_to_name = fields.CharField(max_length=100, null=True, description="转派目标姓名")
+    remark = fields.CharField(max_length=500, null=True, description="备注")
+    deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
+
+    def __str__(self):
+        return f"repair#{self.repair_id} {self.role}:{self.user_name}({self.status})"
 

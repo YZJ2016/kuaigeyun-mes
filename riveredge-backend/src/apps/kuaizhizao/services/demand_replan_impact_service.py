@@ -20,7 +20,9 @@ from apps.kuaizhizao.models.work_order import WorkOrder
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date
 
 from apps.kuaizhizao.constants.demand_computation_status import (
+    DEMAND_COMPUTATION_STATUS_PENDING,
     RECOMPUTABLE_COMPUTATION_STATUSES,
+    REPLAN_RUNNABLE_COMPUTATION_STATUSES,
 )
 
 
@@ -88,6 +90,22 @@ class DemandReplanImpactService:
             tenant_id=tenant_id,
             id__in=normalized,
             computation_status__in=list(RECOMPUTABLE_COMPUTATION_STATUSES),
+        ).values_list("id", flat=True)
+        return sorted(int(i) for i in rows)
+
+    @staticmethod
+    async def filter_replan_runnable_computation_ids(
+        tenant_id: int,
+        computation_ids: Set[int] | List[int],
+    ) -> List[int]:
+        """需求变更任务可执行范围：待执行 / 完成 / 失败（排除计算中）。"""
+        normalized = sorted({int(i) for i in computation_ids if i is not None})
+        if not normalized:
+            return []
+        rows = await DemandComputation.filter(
+            tenant_id=tenant_id,
+            id__in=normalized,
+            computation_status__in=list(REPLAN_RUNNABLE_COMPUTATION_STATUSES),
         ).values_list("id", flat=True)
         return sorted(int(i) for i in rows)
 
@@ -251,10 +269,11 @@ class DemandReplanImpactService:
         computation_ids.update(
             await self.collect_computation_ids_for_demands(tenant_id, demand_ids)
         )
-        recomputable_ids = set(
-            await self.filter_recomputable_computation_ids(tenant_id, computation_ids)
+        # 纳入待执行单：变更任务执行时走首次运算，避免「未找到可重算」空跑
+        runnable_ids = set(
+            await self.filter_replan_runnable_computation_ids(tenant_id, computation_ids)
         )
-        computation_ids = recomputable_ids
+        computation_ids = runnable_ids
 
         if computation_ids:
             items = await DemandComputationItem.filter(
@@ -262,18 +281,27 @@ class DemandReplanImpactService:
                 computation_id__in=list(computation_ids),
             ).values_list("material_id", flat=True)
             material_ids.update(int(mid) for mid in items if mid)
-            for cid, ccode in await DemandComputation.filter(
+            status_rows = await DemandComputation.filter(
                 tenant_id=tenant_id,
                 id__in=list(computation_ids),
-            ).values_list("id", "computation_code"):
+            ).values_list("id", "computation_code", "computation_status")
+            for cid, ccode, cstatus in status_rows:
+                is_pending = str(cstatus or "").strip() == DEMAND_COMPUTATION_STATUS_PENDING
                 records.append(
                     {
                         "impact_type": "computation",
                         "impact_id": int(cid),
                         "impact_code": ccode,
                         "impact_scope": "direct",
-                        "impact_reason": "需求计算输入已变化，建议重算",
-                        "impact_payload": {"demand_ids": list(demand_ids)},
+                        "impact_reason": (
+                            "需求计算尚未执行，建议执行运算"
+                            if is_pending
+                            else "需求计算输入已变化，建议重算"
+                        ),
+                        "impact_payload": {
+                            "demand_ids": list(demand_ids),
+                            "computation_status": cstatus,
+                        },
                         "risk_level": risk_level,
                         "needs_approval": needs_approval,
                         "frozen_horizon_hit": frozen_hit,

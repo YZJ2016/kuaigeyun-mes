@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional, Tuple
 
+from apps.kuaizhizao.services.qms_clause_presets.ansiesd_s2020 import (
+    ANSI_ESD_S20_20_2021_PRESET,
+    ANSI_ESD_S20_20_2021_STANDARD,
+)
 from apps.kuaizhizao.services.qms_clause_presets.iatf16949 import (
     IATF16949_2016_PRESET,
     IATF16949_2016_STANDARD,
@@ -25,6 +29,11 @@ PRESET_REGISTRY: Dict[str, Tuple[str, str, List[ClausePresetItem]]] = {
     ISO14001_2015_STANDARD: ("ISO 14001:2015 环境管理体系", "iso14001", ISO14001_2015_PRESET),
     ISO45001_2018_STANDARD: ("ISO 45001:2018 职业健康安全管理体系", "iso45001", ISO45001_2018_PRESET),
     IATF16949_2016_STANDARD: ("IATF 16949:2016 汽车质量管理体系", "iatf16949", IATF16949_2016_PRESET),
+    ANSI_ESD_S20_20_2021_STANDARD: (
+        "ANSI/ESD S20.20:2021 防静电管理体系",
+        "ansiesd",
+        ANSI_ESD_S20_20_2021_PRESET,
+    ),
 }
 
 

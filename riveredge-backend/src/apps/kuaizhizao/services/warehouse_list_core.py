@@ -144,11 +144,12 @@ ASSEMBLY_ORDER_KEYWORD_FIELDS = [
 DISASSEMBLY_ORDER_KEYWORD_FIELDS = ASSEMBLY_ORDER_KEYWORD_FIELDS
 
 INVENTORY_MATERIAL_BALANCE_SORTABLE_FIELDS = frozenset({
-    "material_code", "material_name", "warehouse_name", "quantity", "in_transit_quantity",
+    "material_code", "material_name", "warehouse_name", "primary_quantity", "quantity",
+    "in_transit_quantity",
     "status", "brand", "texture", "model", "material_unit",
 })
 INVENTORY_BATCH_LINE_SORTABLE_FIELDS = frozenset({
-    "material_code", "material_name", "batch_no", "warehouse_name", "quantity",
+    "material_code", "material_name", "batch_no", "warehouse_name", "primary_quantity", "quantity",
     "in_transit_quantity", "production_date", "expiry_date", "status", "supplier_batch_no",
 })
 LINE_SIDE_INVENTORY_SORTABLE_FIELDS = frozenset({
@@ -212,7 +213,7 @@ def sort_inventory_report_rows(
     reverse = order_clause.startswith("-")
     field = order_clause.lstrip("-")
     numeric_fields = frozenset({
-        "quantity", "in_transit_quantity", "reserved_quantity", "current_quantity",
+        "quantity", "primary_quantity", "secondary_quantity", "in_transit_quantity", "reserved_quantity", "current_quantity",
         "threshold_value", "suggested_quantity", "safety_stock", "picking_score", "priority",
     })
 

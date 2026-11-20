@@ -125,6 +125,8 @@ class SalesOrderChangePagedListResponse(BaseModel):
 class PurchaseOrderChangeListResponse(OrderChangeListResponse):
     supplier_id: int
     supplier_name: str
+    department_id: Optional[int] = None
+    department_name: Optional[str] = None
 
 
 class PurchaseOrderChangePagedListResponse(BaseModel):
@@ -160,6 +162,8 @@ class SalesOrderChangeWithItemsResponse(OrderChangeWithItemsResponse):
 class PurchaseOrderChangeWithItemsResponse(OrderChangeWithItemsResponse):
     supplier_id: int
     supplier_name: str
+    department_id: Optional[int] = None
+    department_name: Optional[str] = None
 
 
 class ChangeImpactPreviewResponse(BaseModel):

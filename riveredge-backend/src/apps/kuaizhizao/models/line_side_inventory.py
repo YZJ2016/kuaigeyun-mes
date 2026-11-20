@@ -61,8 +61,14 @@ class LineSideInventory(BaseModel):
     production_date = fields.DateField(null=True, description="生产日期")
     expiry_date = fields.DateField(null=True, description="有效期")
     
-    # 库存数量
-    quantity = fields.DecimalField(max_digits=18, decimal_places=4, default=0, description="库存数量")
+    # 库存数量（库存单位 / 基本单位双计量）
+    quantity = fields.DecimalField(max_digits=18, decimal_places=4, default=0, description="库存单位数量")
+    base_quantity = fields.DecimalField(
+        max_digits=18, decimal_places=4, default=0, description="基本单位数量"
+    )
+    aux_quantity = fields.DecimalField(
+        max_digits=18, decimal_places=4, default=0, description="辅助单位数量"
+    )
     reserved_quantity = fields.DecimalField(max_digits=18, decimal_places=4, default=0, description="预留数量")
     
     # 工单关联（可选，用于预留）

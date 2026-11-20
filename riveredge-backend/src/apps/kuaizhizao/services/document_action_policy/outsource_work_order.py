@@ -17,6 +17,8 @@ from apps.kuaizhizao.utils.outsource_work_order_state import (
 )
 
 _PUSH_ACTIVE_STATUSES = frozenset({"released", "in_progress"})
+# 满收结案后仍允许退料/退货；退货重开后再收/再发。
+_RETURN_ACTIVE_STATUSES = frozenset({"released", "in_progress", "completed"})
 _TERMINAL_STATUSES = frozenset({"completed", "cancelled"})
 
 
@@ -32,14 +34,16 @@ def _push_cap(
     record: Any,
     not_allowed_reason: str,
     frozen_reason: str,
+    *,
+    allowed_statuses: frozenset[str] = _PUSH_ACTIVE_STATUSES,
 ) -> ActionCapability:
     status = _norm(getattr(record, "status", None))
     is_frozen = bool(getattr(record, "is_frozen", False))
-    push_allowed = not is_frozen and status in _PUSH_ACTIVE_STATUSES
+    push_allowed = not is_frozen and status in allowed_statuses
     push_reason = None
     if is_frozen:
         push_reason = frozen_reason
-    elif status in _TERMINAL_STATUSES:
+    elif status == "cancelled":
         push_reason = not_allowed_reason
     elif not push_allowed:
         push_reason = not_allowed_reason
@@ -102,11 +106,13 @@ def derive_outsource_work_order_capabilities(record: Any) -> OutsourceWorkOrderC
             record,
             "outsource_work_order.push_outsource_material_return.not_allowed",
             "outsource_work_order.push_outsource_material_return.frozen",
+            allowed_statuses=_RETURN_ACTIVE_STATUSES,
         ),
         push_outsource_product_return=_push_cap(
             record,
             "outsource_work_order.push_outsource_product_return.not_allowed",
             "outsource_work_order.push_outsource_product_return.frozen",
+            allowed_statuses=_RETURN_ACTIVE_STATUSES,
         ),
         cancel=_cap(cancel_allowed, cancel_reason),
         close=_cap(close_allowed, close_reason),

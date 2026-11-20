@@ -7,6 +7,12 @@ from typing import Any, Optional
 
 from infra.exceptions.exceptions import BusinessLogicError
 
+from apps.kuaizhizao.constants import is_submitted_status
+from apps.kuaizhizao.constants.rework_business_types import (
+    REWORK_BUSINESS_INVENTORY_VERIFY,
+    REWORK_BUSINESS_MULTI_SIGNOFF,
+)
+from apps.kuaizhizao.constants.rework_signoff_chain import SIGNOFF_FLOW_KEY
 from apps.kuaizhizao.services.document_action_policy.types import (
     ActionCapability,
     CAPABILITY_REASON_MESSAGES,
@@ -25,7 +31,12 @@ _CAPABILITY_CONTEXT_KEYS = frozenset({
     "has_completed_operation",
     "awaiting_route_decision",
     "verification_passed",
+    "has_operation_links",
 })
+
+_REVIEW_APPROVED = frozenset({"审核通过", "已通过", "已审核", "approved", "通过", "APPROVED"})
+_REVIEW_REJECTED = frozenset({"审核驳回", "已驳回", "rejected", "REJECTED", "驳回"})
+_REVIEW_PENDING = frozenset({"待审核", "pending_review", "pending_approval", "pending", "PENDING"})
 
 
 def capability_kwargs_from_context(ctx: dict[str, Any]) -> dict[str, Any]:
@@ -48,6 +59,38 @@ def _dec(value: Any) -> Decimal:
         return Decimal("0")
 
 
+def _review_approved(review_status: Any) -> bool:
+    raw = _norm(review_status)
+    return raw in _REVIEW_APPROVED or raw.lower() in _REVIEW_APPROVED
+
+
+def _review_rejected(review_status: Any) -> bool:
+    raw = _norm(review_status)
+    return raw in _REVIEW_REJECTED or raw.lower() in _REVIEW_REJECTED
+
+
+def _review_pending(review_status: Any) -> bool:
+    raw = _norm(review_status)
+    return raw in _REVIEW_PENDING or raw.lower() in _REVIEW_PENDING
+
+
+def _review_editable(review_status: Any) -> bool:
+    raw = _norm(review_status)
+    return raw in {"", "草稿", "draft", "DRAFT"} or _review_rejected(review_status)
+
+
+def _signoff_flow_active(record: Any) -> bool:
+    """会签部门链已发起且未关闭：各部门仍须填报（含领导审批通过之后）。"""
+    payload = getattr(record, "extension_payload", None) or {}
+    if not isinstance(payload, dict):
+        return False
+    flow = payload.get(SIGNOFF_FLOW_KEY)
+    if not isinstance(flow, dict):
+        return False
+    key = _norm(flow.get("current_node_key"))
+    return bool(key) and key != "closed"
+
+
 def derive_rework_order_capabilities(
     record: Any,
     *,
@@ -56,37 +99,110 @@ def derive_rework_order_capabilities(
     has_completed_operation: bool = False,
     awaiting_route_decision: bool = False,
     verification_passed: bool = False,
+    has_operation_links: bool = False,
 ) -> ReworkOrderCapabilities:
     status = _norm(getattr(record, "status", None))
+    review = getattr(record, "review_status", None)
     routing_mode = _norm(getattr(record, "routing_mode", ROUTING_MODE_DYNAMIC))
     business_type = _norm(getattr(record, "business_type", None)) or "simple_exec"
     verification_required = bool(getattr(record, "verification_required", False))
     is_terminal = status in _TERMINAL
+    is_draft = status == "draft"
+    is_signoff = business_type in (REWORK_BUSINESS_MULTI_SIGNOFF, REWORK_BUSINESS_INVENTORY_VERIFY)
+    is_multi_signoff = business_type == REWORK_BUSINESS_MULTI_SIGNOFF
+    review_committed = is_submitted_status(review)
+    editable_review = _review_editable(review)
+    # 部门链进行中允许保存本节点字段；不能只认 SUBMITTED，否则领导通过后计划/仓库无法填报
+    signoff_dept_fill = is_signoff and is_draft and _signoff_flow_active(record)
 
-    update_allowed = status == "draft"
-    update_cap = _cap(update_allowed, "rework_order.update.not_draft" if not update_allowed else None)
+    update_allowed = (is_draft and not review_committed and editable_review) or signoff_dept_fill
+    if signoff_dept_fill:
+        update_reason = None
+    elif review_committed:
+        update_reason = "rework_order.update.submitted"
+    elif not update_allowed:
+        update_reason = "rework_order.update.not_draft"
+    else:
+        update_reason = None
+    update_cap = _cap(update_allowed, update_reason)
 
-    delete_allowed = status in ("draft", "cancelled") or (status == "released" and not has_reports)
-    delete_cap = _cap(
-        delete_allowed,
-        "rework_order.delete.not_allowed" if not delete_allowed else None,
-    )
+    delete_allowed = False
+    delete_reason = "rework_order.delete.not_allowed"
+    if review_committed:
+        delete_reason = "rework_order.delete.submitted"
+    elif status in ("draft", "cancelled") or (status == "released" and not has_reports):
+        delete_allowed = True
+        delete_reason = None
+    delete_cap = _cap(delete_allowed, delete_reason)
 
-    # 简化执行：草稿可下达；会签型/库存验证：审核通过后可下达
-    if business_type in ("multi_signoff", "inventory_verify"):
-        release_allowed = status == "approved"
-        release_reason = (
-            None
-            if release_allowed
-            else (
-                "rework_order.release.awaiting_approval"
-                if status in ("draft", "pending")
-                else "rework_order.release.not_draft"
-            )
+    if is_signoff:
+        if not is_draft:
+            submit_reason = "rework_order.submit.not_draft"
+        elif not editable_review:
+            submit_reason = "rework_order.submit.not_draft"
+        else:
+            submit_reason = None
+        submit_cap = _cap(submit_reason is None, submit_reason)
+        submit_review_allowed = is_draft and review_committed
+        submit_review_cap = _cap(
+            submit_review_allowed,
+            None if submit_review_allowed else "rework_order.submit_review.not_allowed",
+        )
+        withdraw_submit_allowed = is_draft and (review_committed or _review_pending(review))
+        withdraw_submit_cap = _cap(
+            withdraw_submit_allowed,
+            None if withdraw_submit_allowed else "rework_order.withdraw_submit.not_allowed",
+        )
+        # 会签链运行中 review 常为已提交；节点待审时仍须允许审批人操作
+        approve_allowed = is_draft and _review_pending(review) and (
+            is_multi_signoff or not review_committed
+        )
+        approve_cap = _cap(
+            approve_allowed,
+            None if approve_allowed else "rework_order.approve.not_pending",
+        )
+        revoke_allowed = is_draft and _review_approved(review)
+        revoke_cap = _cap(
+            revoke_allowed,
+            None if revoke_allowed else "rework_order.revoke_approval.not_allowed",
         )
     else:
-        release_allowed = status == "draft"
-        release_reason = "rework_order.release.not_draft" if not release_allowed else None
+        deny_signoff = _cap(False, "rework_order.submit.not_signoff")
+        submit_cap = deny_signoff
+        submit_review_cap = deny_signoff
+        withdraw_submit_cap = _cap(False, "rework_order.withdraw_submit.not_allowed")
+        approve_cap = _cap(False, "rework_order.approve.not_pending")
+        revoke_cap = _cap(False, "rework_order.revoke_approval.not_allowed")
+
+    # 多部门会签：走工作台/会签链，不提供宿主工序路线「下达」
+    # 库存验证：审核通过且已配置工序路线后可下达
+    # 简化执行：草稿且已配置工序路线（通常来自原工单）可下达
+    if is_multi_signoff:
+        release_allowed = False
+        release_reason = "rework_order.release.signoff_workflow"
+    elif business_type == REWORK_BUSINESS_INVENTORY_VERIFY:
+        if not is_draft:
+            release_allowed = False
+            release_reason = "rework_order.release.not_draft"
+        elif not _review_approved(review):
+            release_allowed = False
+            release_reason = "rework_order.release.awaiting_approval"
+        elif not has_operation_links:
+            release_allowed = False
+            release_reason = "rework_order.release.no_route"
+        else:
+            release_allowed = True
+            release_reason = None
+    else:
+        if not is_draft:
+            release_allowed = False
+            release_reason = "rework_order.release.not_draft"
+        elif not has_operation_links:
+            release_allowed = False
+            release_reason = "rework_order.release.no_route"
+        else:
+            release_allowed = True
+            release_reason = None
     release_cap = _cap(release_allowed, release_reason)
 
     execute_allowed = status in ("released", "in_progress") and not awaiting_route_decision
@@ -97,6 +213,17 @@ def derive_rework_order_capabilities(
         else "rework_order.execute.not_allowed"
         if not execute_allowed
         else None,
+    )
+
+    assign_allowed = status in (
+        "draft",
+        "released",
+        "in_progress",
+        "on_hold",
+    )
+    assign_cap = _cap(
+        assign_allowed,
+        "rework_order.assign.not_allowed" if not assign_allowed else None,
     )
 
     advance_allowed = (
@@ -135,7 +262,7 @@ def derive_rework_order_capabilities(
         status == "pending_verification" and not verification_required
     )
     finance_signed = bool(getattr(record, "finance_signed_at", None))
-    if business_type in ("multi_signoff", "inventory_verify"):
+    if is_signoff:
         finance_sign_allowed = base_close_ready and not finance_signed
         finance_sign_cap = _cap(
             finance_sign_allowed,
@@ -188,7 +315,7 @@ def derive_rework_order_capabilities(
 
     cancel_allowed = False
     cancel_reason = "rework_order.cancel.not_allowed"
-    if status == "draft":
+    if status == "draft" and not review_committed and editable_review:
         cancel_allowed = True
         cancel_reason = None
     elif status == "released" and not has_reports:
@@ -208,8 +335,14 @@ def derive_rework_order_capabilities(
     return ReworkOrderCapabilities(
         update=update_cap,
         delete=delete_cap,
+        submit=submit_cap,
+        submit_review=submit_review_cap,
+        withdraw_submit=withdraw_submit_cap,
+        approve=approve_cap,
+        revoke_approval=revoke_cap,
         release=release_cap,
         execute=execute_cap,
+        assign=assign_cap,
         advance_next=advance_cap,
         request_complete=request_complete_cap,
         quality_release=quality_release_cap,
@@ -229,8 +362,15 @@ def assert_rework_order_capability(record: Any, action: str, caps: Optional[Rewo
     cap_map = {
         "update": resolved.update,
         "delete": resolved.delete,
+        "submit": resolved.submit,
+        "submit_review": resolved.submit_review,
+        "withdraw_submit": resolved.withdraw_submit,
+        "approve": resolved.approve,
+        "reject": resolved.approve,
+        "revoke_approval": resolved.revoke_approval,
         "release": resolved.release,
         "execute": resolved.execute,
+        "assign": resolved.assign,
         "advance_next": resolved.advance_next,
         "request_complete": resolved.request_complete,
         "quality_release": resolved.quality_release,

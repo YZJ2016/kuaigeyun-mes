@@ -5,8 +5,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from apps.kuaizhizao.services import outsource_product_return_service as module
+from apps.kuaizhizao.services import warehouse_service
 from apps.kuaizhizao.services.inventory_service import InventoryService
 from apps.kuaizhizao.services.document_action_policy import outsource_work_order as policy
+from apps.master_data.models.material import Material
 
 
 @pytest.mark.asyncio
@@ -15,8 +17,20 @@ async def test_return_uses_same_operator_for_document_and_stock(monkeypatch):
     async def transaction():
         yield None
     monkeypatch.setattr(module, "in_transaction", transaction)
-    work = SimpleNamespace(product_id=1, received_quantity=Decimal(10), qualified_quantity=Decimal(10), save=AsyncMock())
+    conn = MagicMock(); conn.execute_query = AsyncMock()
+    monkeypatch.setattr(module.Tortoise, "get_connection", lambda alias: conn)
+    monkeypatch.setattr(
+        warehouse_service, "_get_warehouse_policy_flags", AsyncMock(return_value=(False, False))
+    )
+    monkeypatch.setattr(
+        warehouse_service, "_resolve_line_location_pair", AsyncMock(return_value=(None, None))
+    )
+    monkeypatch.setattr(warehouse_service, "_validate_location_if_required", lambda **kw: None)
+    material_query = MagicMock(); material_query.first = AsyncMock(return_value=None)
+    monkeypatch.setattr(Material, "filter", lambda **kw: material_query)
+    work = SimpleNamespace(product_id=1, product_name="fixture", product_code="fixture", received_quantity=Decimal(10), qualified_quantity=Decimal(10), save=AsyncMock())
     query = MagicMock(); query.first = AsyncMock(return_value=work)
+    query.select_for_update = MagicMock(return_value=query)
     monkeypatch.setattr(module.OutsourceWorkOrder, "filter", lambda **kw: query)
     returns = MagicMock(); returns.first = AsyncMock(return_value=None)
     monkeypatch.setattr(module.OutsourceProductReturn, "filter", lambda **kw: returns)
@@ -28,7 +42,7 @@ async def test_return_uses_same_operator_for_document_and_stock(monkeypatch):
     decrease = AsyncMock()
     monkeypatch.setattr(InventoryService, "decrease_stock", decrease)
     obj = module.OutsourceProductReturnService()
-    monkeypatch.setattr(obj, "_resolve_receipt_for_return", AsyncMock(return_value=SimpleNamespace(id=8, warehouse_id=1, batch_number="batch")))
+    monkeypatch.setattr(obj, "_resolve_receipt_for_return", AsyncMock(return_value=SimpleNamespace(id=8, warehouse_id=1, batch_number="batch", location_id=None, location_name=None)))
     monkeypatch.setattr(obj, "_validate_return_quantity", AsyncMock())
     monkeypatch.setattr(obj, "get_user_info", AsyncMock(return_value={"name": "退货经办人"}))
     data = SimpleNamespace(code="fixture", outsource_work_order_id=1, outsource_work_order_code="fixture", quantity=Decimal(2), unit="pcs", return_reason="fixture", remarks="fixture")

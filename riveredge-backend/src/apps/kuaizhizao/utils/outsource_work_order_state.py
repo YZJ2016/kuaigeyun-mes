@@ -50,6 +50,23 @@ def apply_outsource_work_order_receipt_completion(record: Any, *, now: datetime 
     return True
 
 
+def apply_outsource_work_order_receipt_reopen(record: Any) -> bool:
+    """
+    产品退货后已收不足计划：completed → in_progress，清空 actual_end_date，允许再收。
+    返回是否发生状态变更。
+    """
+    status = str(getattr(record, "status", "") or "").strip()
+    if status != "completed":
+        return False
+    qty = _dec(getattr(record, "quantity", 0))
+    received = _dec(getattr(record, "received_quantity", 0))
+    if qty <= 0 or received >= qty:
+        return False
+    record.status = "in_progress"
+    record.actual_end_date = None
+    return True
+
+
 def outsource_work_order_has_execution_activity(record: Any) -> bool:
     """是否已有发料或收货活动。"""
     return _dec(getattr(record, "issued_quantity", 0)) > 0 or _dec(getattr(record, "received_quantity", 0)) > 0

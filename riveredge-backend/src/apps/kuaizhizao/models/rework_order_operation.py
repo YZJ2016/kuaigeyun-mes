@@ -65,5 +65,24 @@ class ReworkOrderOperation(BaseModel):
     decided_by_name = fields.CharField(max_length=100, null=True, description="决策人姓名")
     decided_at = fields.DatetimeField(null=True, description="决策时间")
 
+    # 派工（对齐工单工序；主责兼容头表 operator_*）
+    assigned_worker_id = fields.IntField(
+        null=True, description="分配的员工ID（主责，取 assigned_worker_ids 首项）"
+    )
+    assigned_worker_name = fields.CharField(
+        max_length=500, null=True, description="分配的员工姓名（多人以顿号分隔）"
+    )
+    assigned_worker_ids = fields.JSONField(
+        default=list,
+        description="分配的员工ID列表",
+    )
+    assigned_team_id = fields.IntField(null=True, description="分配的工作小组ID")
+    assigned_team_name = fields.CharField(
+        max_length=100, null=True, description="分配的工作小组名称"
+    )
+    assigned_at = fields.DatetimeField(null=True, description="分配时间")
+    assigned_by = fields.IntField(null=True, description="分配人ID")
+    assigned_by_name = fields.CharField(max_length=100, null=True, description="分配人姓名")
+
     def __str__(self):
         return f"返工单#{self.rework_order_id} - 工序#{self.work_order_operation_id}"

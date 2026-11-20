@@ -9,6 +9,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Dict, List, Optional
 
+from tortoise import Tortoise
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
 
@@ -156,11 +157,13 @@ class OutsourceMaterialReturnService(AppBaseService[OutsourceMaterialReturn]):
         created_by: int,
     ) -> OutsourceMaterialReturnResponse:
         async with in_transaction():
+            conn = Tortoise.get_connection("default")
+            await conn.execute_query("SET LOCAL lock_timeout = '8000'")
             owo = await OutsourceWorkOrder.filter(
                 tenant_id=tenant_id,
                 id=return_data.outsource_work_order_id,
                 deleted_at__isnull=True,
-            ).first()
+            ).select_for_update().first()
             if not owo:
                 raise NotFoundError(f"委外工单ID {return_data.outsource_work_order_id} 不存在")
 
@@ -169,6 +172,9 @@ class OutsourceMaterialReturnService(AppBaseService[OutsourceMaterialReturn]):
             )
 
             assert_outsource_work_order_capability(owo, "push_outsource_material_return")
+
+            if return_data.quantity <= 0:
+                raise ValidationError("退料数量必须大于 0")
 
             await self._validate_return_quantity(tenant_id, return_data)
 

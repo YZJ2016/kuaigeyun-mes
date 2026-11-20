@@ -85,6 +85,8 @@ class DefectRecordCreateFromReporting(BaseModel):
     stock_warehouse_id: Optional[int] = Field(None, description="报废扣减或让步放行仓库ID")
     downgrade_material_id: Optional[int] = Field(None, description="降级回用目标原料物料ID")
     downgrade_warehouse_id: Optional[int] = Field(None, description="降级回用入库仓库ID")
+    location_id: Optional[int] = Field(None, description="处置入库/隔离库位ID")
+    location_code: Optional[str] = Field(None, description="处置入库/隔离库位编码")
     remarks: Optional[str] = Field(None, description="备注")
 
 
@@ -103,6 +105,8 @@ class DefectRecordCreateFromInspection(BaseModel):
     stock_warehouse_id: Optional[int] = Field(None, description="报废扣减或让步放行仓库ID")
     downgrade_material_id: Optional[int] = Field(None, description="降级回用目标原料物料ID")
     downgrade_warehouse_id: Optional[int] = Field(None, description="降级回用入库仓库ID")
+    location_id: Optional[int] = Field(None, description="处置入库/隔离库位ID")
+    location_code: Optional[str] = Field(None, description="处置入库/隔离库位编码")
     remarks: Optional[str] = Field(None, description="备注")
 
 
@@ -186,6 +190,7 @@ class DefectRecordListResponse(BaseModel):
     id: int = Field(..., description="不良品记录ID")
     uuid: str = Field(..., description="业务ID")
     code: str = Field(..., description="不良品记录编码")
+    reporting_record_id: Optional[int] = Field(None, description="报工记录ID（关联ReportingRecord）")
     incoming_inspection_id: Optional[int] = Field(None, description="来料检验单ID")
     incoming_inspection_code: Optional[str] = Field(None, description="来料检验单编码")
     process_inspection_id: Optional[int] = Field(None, description="过程检验单ID")

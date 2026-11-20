@@ -9,7 +9,10 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 
-from apps.kuaizhizao.services.document_action_policy.types import ActionCapability
+from apps.kuaizhizao.services.document_action_policy.types import (
+    ActionCapability,
+    ReworkOrderCapabilities,
+)
 
 
 class ReworkOrderBase(BaseModel):
@@ -142,25 +145,25 @@ class ReworkOrderOperationItem(BaseModel):
     decided_at: Optional[datetime] = Field(None, description="决策时间")
     is_start: bool = Field(False, description="是否为起始工序")
     is_current: bool = Field(False, description="是否为当前激活工序")
+    assigned_worker_id: Optional[int] = Field(None, description="主责指派人员ID")
+    assigned_worker_name: Optional[str] = Field(None, description="指派人员姓名")
+    assigned_worker_ids: Optional[List[int]] = Field(None, description="指派人员ID列表")
+    assigned_team_id: Optional[int] = Field(None, description="指派班组ID")
+    assigned_team_name: Optional[str] = Field(None, description="指派班组名称")
 
 
-class ReworkOrderCapabilities(BaseModel):
-    """返工单业务态 capabilities"""
-    update: ActionCapability
-    delete: ActionCapability
-    release: ActionCapability
-    execute: ActionCapability
-    advance_next: ActionCapability
-    request_complete: ActionCapability
-    quality_release: ActionCapability
-    finance_sign: ActionCapability
-    pqc_check: ActionCapability
-    oqc_notify: ActionCapability
-    close: ActionCapability
-    cancel: ActionCapability
-    hold: ActionCapability
-    resume: ActionCapability
-    print: ActionCapability
+class ReworkOrderAssignRequest(BaseModel):
+    """返工单指派人员/班组"""
+    assigned_worker_ids: Optional[List[int]] = Field(
+        None, description="指派人员 ID 列表（可多人）"
+    )
+    assigned_worker_id: Optional[int] = Field(
+        None, description="主责人员 ID（未传列表时使用）"
+    )
+    assigned_team_id: Optional[int] = Field(None, description="指派班组 ID")
+    work_order_operation_link_id: Optional[int] = Field(
+        None, description="指定返工工序行；默认当前激活或起始行"
+    )
 
 
 class ReworkOrderCreate(ReworkOrderBase):
@@ -243,8 +246,13 @@ class ReworkOrderResponse(ReworkOrderBase):
     verification_required: bool = Field(False, description="是否需要复检")
     start_work_order_operation_id: Optional[int] = Field(None, description="起始工序 ID")
     current_operation_link_id: Optional[int] = Field(None, description="当前激活工序行 ID")
-    status: str = Field(..., description="返工状态")
+    status: str = Field(..., description="返工业务状态")
+    review_status: Optional[str] = Field(
+        "草稿",
+        description="审核状态（草稿/SUBMITTED/待审核/已通过/已驳回）",
+    )
     completed_quantity: Optional[Decimal] = Field(None, description="完修数量")
+
     actual_start_date: Optional[datetime] = Field(None, description="实际开始日期")
     actual_end_date: Optional[datetime] = Field(None, description="实际结束日期")
     completion_requested_at: Optional[datetime] = Field(None, description="申请完修时间")
@@ -276,6 +284,13 @@ class ReworkOrderResponse(ReworkOrderBase):
     position_plans: Optional[List[ReworkOrderPositionPlanItem]] = Field(None, description="排位策划")
     signoffs: Optional[List[ReworkOrderSignoffItem]] = Field(None, description="会签行")
     capabilities: Optional[ReworkOrderCapabilities] = Field(None, description="业务态 capabilities")
+    current_node_key: Optional[str] = Field(None, description="会签当前节点")
+    current_node_name: Optional[str] = Field(None, description="会签当前节点名称")
+    signoff_overdue: bool = Field(False, description="当前节点已跨日未办")
+    rework_path_type: Optional[str] = Field(None, description="返工路径 aa/ab")
+    signoff_approval_audit_node_key: Optional[str] = Field(
+        None, description="当前节点审批配置 node_key（待审时前端审批条使用）"
+    )
 
 
 class ReworkOrderListResponse(BaseModel):
@@ -310,6 +325,7 @@ class ReworkOrderListResponse(BaseModel):
     start_operation_code: Optional[str] = Field(None, description="起始工序编码")
     start_operation_name: Optional[str] = Field(None, description="起始工序名称")
     status: str
+    review_status: Optional[str] = Field(None, description="审核状态")
     planned_start_date: Optional[datetime]
     planned_end_date: Optional[datetime]
     work_center_name: Optional[str]
@@ -323,6 +339,11 @@ class ReworkOrderListResponse(BaseModel):
     updated_by_name: Optional[str] = None
     lifecycle: Optional[dict] = Field(None, description="生命周期")
     capabilities: Optional[ReworkOrderCapabilities] = Field(None, description="业务态 capabilities")
+    current_node_key: Optional[str] = Field(None, description="会签当前节点")
+    current_node_name: Optional[str] = Field(None, description="会签当前节点名称")
+    signoff_overdue: bool = Field(False, description="当前节点已跨日未办")
+    rework_path_type: Optional[str] = Field(None, description="返工路径 aa/ab")
+    need_warehouse_in: Optional[bool] = Field(None, description="是否入库")
 
 
 class ReworkOrderFromWorkOrderRequest(BaseModel):
@@ -345,6 +366,11 @@ class ReworkOrderFromWorkOrderRequest(BaseModel):
     planned_end_date: Optional[datetime] = Field(None, description="计划结束时间")
     remarks: Optional[str] = Field(None, description="备注")
     product_line_code: Optional[str] = Field(None, max_length=50, description="产品线代码")
+    assigned_worker_ids: Optional[List[int]] = Field(None, description="创建时指派人员")
+    assigned_worker_id: Optional[int] = Field(None, description="创建时主责人员")
+    assigned_team_id: Optional[int] = Field(None, description="创建时指派班组")
+    operator_id: Optional[int] = Field(None, description="操作员ID（兼容）")
+    operator_name: Optional[str] = Field(None, description="操作员姓名（兼容）")
 
 
 class ReworkFromWorkOrderPreviewResponse(BaseModel):

@@ -9,7 +9,7 @@ Date: 2026-01-05
 
 import uuid
 from datetime import datetime, date, time
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Set
 from decimal import Decimal
 
 from core.utils.timezone_utils import resolve_business_datetime, today_site_str
@@ -43,6 +43,7 @@ from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
 from apps.kuaizhizao.schemas.rework_order import (
+    ReworkOrderAssignRequest,
     ReworkOrderCreate,
     ReworkOrderUpdate,
     ReworkOrderResponse,
@@ -67,13 +68,24 @@ from apps.kuaizhizao.schemas.rework_order import (
     ReworkHoldRequest,
     ReworkOrderFormProfile,
 )
+from apps.kuaizhizao.services.work_order_service import _parse_assigned_worker_ids
 from apps.kuaizhizao.schemas.reporting_record import ReportingRecordResponse
 from core.services.application.industry_extension_runtime_service import (
     IndustryExtensionRuntimeService,
 )
 from apps.kuaizhizao.services.document_action_policy.rework_order import (
+    _signoff_flow_active,
     capability_kwargs_from_context,
     derive_rework_order_capabilities,
+)
+from apps.kuaizhizao.constants.rework_signoff_audit import (
+    SIGNOFF_AUDIT_SKIP_DEPT_CODES,
+    signoff_audit_node_key,
+)
+from apps.kuaizhizao.constants.rework_signoff_chain import (
+    SIGNOFF_FLOW_KEY,
+    chain_version_from_flow,
+    node_label,
 )
 from apps.kuaizhizao.services.rework_order_workflow import (
     activate_operation_link,
@@ -133,6 +145,39 @@ def _dec(value) -> Decimal:
         return Decimal(str(value or 0))
     except Exception:
         return Decimal("0")
+
+
+def _link_assignee_user_ids(link: ReworkOrderOperation) -> List[int]:
+    return _parse_assigned_worker_ids(
+        getattr(link, "assigned_worker_ids", None),
+        getattr(link, "assigned_worker_id", None),
+    )
+
+
+async def _rework_order_ids_assigned_to_worker(tenant_id: int, worker_id: int) -> Set[int]:
+    """本人派工 + 所在班组被指派的返工工序对应返工单。"""
+    ids_primary = await ReworkOrderOperation.filter(
+        tenant_id=tenant_id,
+        assigned_worker_id=worker_id,
+    ).values_list("rework_order_id", flat=True)
+    ids_multi = await ReworkOrderOperation.filter(
+        tenant_id=tenant_id,
+        assigned_worker_ids__contains=[worker_id],
+    ).values_list("rework_order_id", flat=True)
+    from apps.master_data.models.factory import WorkGroupMember
+
+    team_ids = await WorkGroupMember.filter(
+        tenant_id=tenant_id,
+        employee_id=worker_id,
+        deleted_at__isnull=True,
+    ).values_list("work_group_id", flat=True)
+    ids_team: List[int] = []
+    if team_ids:
+        ids_team = await ReworkOrderOperation.filter(
+            tenant_id=tenant_id,
+            assigned_team_id__in=list(team_ids),
+        ).values_list("rework_order_id", flat=True)
+    return set(ids_primary) | set(ids_multi) | set(ids_team)
 
 
 class ReworkOrderService(AppBaseService[ReworkOrder]):
@@ -416,6 +461,167 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             quantity=qty,
         )
 
+    async def _resolve_assign_target_link(
+        self,
+        tenant_id: int,
+        rework_order: ReworkOrder,
+        *,
+        work_order_operation_link_id: Optional[int] = None,
+    ) -> ReworkOrderOperation:
+        if work_order_operation_link_id is not None:
+            link = await ReworkOrderOperation.get_or_none(
+                tenant_id=tenant_id,
+                id=work_order_operation_link_id,
+                rework_order_id=rework_order.id,
+            )
+            if not link:
+                raise ValidationError("返工工序行不存在或不属于该返工单")
+            return link
+        if rework_order.current_operation_link_id:
+            link = await ReworkOrderOperation.get_or_none(
+                tenant_id=tenant_id,
+                id=rework_order.current_operation_link_id,
+                rework_order_id=rework_order.id,
+            )
+            if link:
+                return link
+        start_link = await ReworkOrderOperation.filter(
+            tenant_id=tenant_id,
+            rework_order_id=rework_order.id,
+        ).order_by("sequence", "id").first()
+        if not start_link:
+            raise BusinessLogicError("返工单未配置工序路线，无法指派")
+        return start_link
+
+    async def _apply_assignment_to_link(
+        self,
+        tenant_id: int,
+        rework_order: ReworkOrder,
+        link: ReworkOrderOperation,
+        *,
+        worker_ids: List[int],
+        team_id: Optional[int],
+        actor_id: int,
+        actor_name: str,
+    ) -> None:
+        names: List[str] = []
+        for uid in worker_ids:
+            info = await self.get_user_info(uid)
+            names.append(info.get("name") or f"用户{uid}")
+        team_name = None
+        if team_id is not None:
+            from apps.master_data.models.factory import WorkGroup
+
+            team = await WorkGroup.get_or_none(
+                tenant_id=tenant_id, id=team_id, deleted_at__isnull=True
+            )
+            if not team:
+                raise ValidationError(f"工作小组不存在: {team_id}")
+            team_name = team.name
+
+        link.assigned_worker_ids = worker_ids
+        link.assigned_worker_id = worker_ids[0] if worker_ids else None
+        link.assigned_worker_name = "、".join(names) if names else None
+        link.assigned_team_id = team_id
+        link.assigned_team_name = team_name
+        link.assigned_at = resolve_business_datetime()
+        link.assigned_by = actor_id
+        link.assigned_by_name = actor_name
+        await link.save()
+
+        if worker_ids:
+            rework_order.operator_id = worker_ids[0]
+            rework_order.operator_name = names[0] if names else None
+        elif team_id is not None:
+            rework_order.operator_id = None
+            rework_order.operator_name = team_name
+        else:
+            rework_order.operator_id = None
+            rework_order.operator_name = None
+        rework_order.updated_by = actor_id
+        rework_order.updated_by_name = actor_name
+        await rework_order.save()
+
+    async def assign_rework_order(
+        self,
+        tenant_id: int,
+        rework_order_id: int,
+        request: ReworkOrderAssignRequest,
+        assigned_by: int,
+    ) -> ReworkOrderResponse:
+        rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
+        ctx = await compute_capability_context(tenant_id, rework_order)
+        caps = derive_rework_order_capabilities(
+            rework_order, **capability_kwargs_from_context(ctx)
+        )
+        from apps.kuaizhizao.services.document_action_policy.rework_order import (
+            assert_rework_order_capability,
+        )
+
+        assert_rework_order_capability(rework_order, "assign", caps)
+
+        worker_ids = _parse_assigned_worker_ids(
+            request.assigned_worker_ids, request.assigned_worker_id
+        )
+        team_id = request.assigned_team_id
+        if team_id is not None:
+            try:
+                team_id = int(team_id)
+            except (TypeError, ValueError):
+                team_id = None
+            if team_id is not None and team_id <= 0:
+                team_id = None
+        if not worker_ids and team_id is None:
+            raise ValidationError("请至少指派一名人员或一个班组")
+
+        link = await self._resolve_assign_target_link(
+            tenant_id,
+            rework_order,
+            work_order_operation_link_id=request.work_order_operation_link_id,
+        )
+        user_info = await self.get_user_info(assigned_by)
+        await self._apply_assignment_to_link(
+            tenant_id,
+            rework_order,
+            link,
+            worker_ids=worker_ids,
+            team_id=team_id,
+            actor_id=assigned_by,
+            actor_name=user_info.get("name") or "",
+        )
+        return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+
+    async def _assert_rework_reporter_allowed(
+        self,
+        tenant_id: int,
+        link: ReworkOrderOperation,
+        *,
+        worker_id: int,
+        reported_by: int,
+        allow_proxy_report: bool,
+    ) -> None:
+        assignees = _link_assignee_user_ids(link)
+        team_id = getattr(link, "assigned_team_id", None)
+        if not assignees and not team_id:
+            raise BusinessLogicError("该返工工序尚未指派，请先指派后再报工")
+
+        allowed_ids = set(assignees)
+        if team_id:
+            from apps.master_data.models.factory import WorkGroupMember
+
+            member_ids = await WorkGroupMember.filter(
+                tenant_id=tenant_id,
+                work_group_id=int(team_id),
+                deleted_at__isnull=True,
+            ).values_list("employee_id", flat=True)
+            allowed_ids |= {int(x) for x in member_ids if x}
+
+        if int(worker_id) not in allowed_ids:
+            raise BusinessLogicError("报工人员不在当前返工工序指派范围内")
+
+        if int(worker_id) != int(reported_by) and not allow_proxy_report:
+            raise BusinessLogicError("代他人返工报工需要报工指派权限")
+
     async def _enrich_rework_order_response(
         self,
         tenant_id: int,
@@ -428,6 +634,36 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             **capability_kwargs_from_context(ctx),
         )
         resp.capabilities = caps
+        payload = getattr(rework_order, "extension_payload", None) or {}
+        if not isinstance(payload, dict):
+            payload = {}
+        resp.rework_path_type = self._rework_path_type_from_payload(payload)
+        if isinstance(resp, ReworkOrderListResponse):
+            resp.need_warehouse_in = getattr(rework_order, "need_warehouse_in", None)
+        flow = payload.get("signoff_flow")
+        path_type = resp.rework_path_type
+        chain_ver = (
+            chain_version_from_flow(flow)
+            if isinstance(flow, dict)
+            else None
+        )
+        if isinstance(flow, dict):
+            resp.current_node_key = flow.get("current_node_key")
+            resp.current_node_name = flow.get("current_node_name")
+            node_key = str(flow.get("current_node_key") or "").strip()
+            if node_key and node_key != "closed":
+                resp.current_node_name = node_label(
+                    path_type,
+                    node_key,
+                    chain_version=chain_ver,
+                )
+            entered = str(flow.get("node_entered_at") or "")[:10]
+            today = today_site_str()[:10] if entered else ""
+            resp.signoff_overdue = bool(entered and today and entered < today and flow.get("current_node_key") not in {"", "closed"})
+            pending_node = str(flow.get("approval_pending_node") or "").strip()
+            review_raw = str(getattr(rework_order, "review_status", None) or "").strip()
+            if pending_node and review_raw in {"待审核", "pending", "PENDING_REVIEW", "pending_approval"}:
+                resp.signoff_approval_audit_node_key = signoff_audit_node_key(pending_node)
         if isinstance(resp, ReworkOrderResponse):
             items = await build_operation_items(tenant_id, rework_order)
             resp.rework_operations = [ReworkOrderOperationItem.model_validate(i) for i in items]
@@ -439,13 +675,22 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                 )
             # heal 可能改写 verification_inspection_id，回填最新值
             resp.verification_inspection_id = rework_order.verification_inspection_id
-            await self._attach_signoff_children(tenant_id, resp, rework_order.id)
+            await self._attach_signoff_children(
+                tenant_id,
+                resp,
+                rework_order.id,
+                rework_path_type=path_type,
+                chain_version=chain_ver,
+            )
 
     async def _attach_signoff_children(
         self,
         tenant_id: int,
         resp: ReworkOrderResponse,
         rework_order_id: int,
+        *,
+        rework_path_type: Optional[str] = None,
+        chain_version: Optional[int] = None,
     ) -> None:
         mats = await ReworkOrderMaterialReq.filter(
             tenant_id=tenant_id, rework_order_id=rework_order_id, deleted_at__isnull=True
@@ -462,7 +707,18 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         resp.material_reqs = [ReworkOrderMaterialReqItem.model_validate(r) for r in mats]
         resp.scrap_lines = [ReworkOrderScrapLineItem.model_validate(r) for r in scraps]
         resp.position_plans = [ReworkOrderPositionPlanItem.model_validate(r) for r in plans]
-        resp.signoffs = [ReworkOrderSignoffItem.model_validate(r) for r in signs]
+        signoff_items: List[ReworkOrderSignoffItem] = []
+        for row in signs:
+            item = ReworkOrderSignoffItem.model_validate(row)
+            code = str(item.dept_code or "").strip()
+            if code:
+                item.dept_name = node_label(
+                    rework_path_type,
+                    code,
+                    chain_version=chain_version,
+                )
+            signoff_items.append(item)
+        resp.signoffs = signoff_items
 
     async def _seed_default_signoffs(
         self,
@@ -714,12 +970,19 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
 
         # 编码生成、校验、用户信息查询均放在事务外，避免长事务与嵌套事务
         if not rework_order_data.code:
-            today = today_site_str()
-            code = await self.generate_code(
-                tenant_id=tenant_id,
-                code_type="REWORK_ORDER_CODE",
-                prefix=f"返工-{today}"
-            )
+            plc = (getattr(rework_order_data, "product_line_code", None) or "").strip()
+            bt = str(getattr(rework_order_data, "business_type", None) or "").strip().lower()
+            if plc:
+                # 规则真源：FR + 产品线 + YY + 3 位流水；须把产品线传入 context
+                code = await self.generate_code(
+                    tenant_id=tenant_id,
+                    code_type="REWORK_ORDER_CODE",
+                    product_line_code=plc,
+                )
+            elif is_signoff_rework_business(bt):
+                raise ValidationError("会签型返工单须填写产品线码以生成 FR 单号")
+            else:
+                raise ValidationError("返工单须填写产品线码以生成 FR 单号")
         else:
             code = rework_order_data.code
             existing = await ReworkOrder.filter(
@@ -915,6 +1178,35 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         )
 
         await InventoryVerifyReminderService.sync_after_order_saved(tenant_id, rework_order)
+
+        # 创建时若带操作员，同步写到起始工序行指派
+        op_id = getattr(rework_order_data, "operator_id", None)
+        if op_id and start_work_order_operation_id is not None:
+            try:
+                resp = await self.assign_rework_order(
+                    tenant_id,
+                    rework_order.id,
+                    ReworkOrderAssignRequest(assigned_worker_id=int(op_id)),
+                    assigned_by=created_by,
+                )
+            except (ValidationError, BusinessLogicError) as exc:
+                logger.warning(
+                    "返工单创建后同步指派失败 rework={} err={}",
+                    rework_order.id,
+                    exc,
+                )
+        from apps.kuaizhizao.services.manual_create_auto_lifecycle import (
+            apply_manual_create_auto_submit,
+        )
+
+        applied = await apply_manual_create_auto_submit(
+            tenant_id=tenant_id,
+            node_key="rework_order",
+            entity_id=int(rework_order.id),
+            operator_id=created_by,
+        )
+        if applied:
+            return await self.get_rework_order_by_id(tenant_id, int(rework_order.id))
         return resp
 
     async def create_rework_order_from_work_order(
@@ -952,17 +1244,13 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         if original_work_order.status not in ["completed", "in_progress"]:
             raise BusinessLogicError(f"只有已完成或进行中的工单才能创建返工单，当前工单状态: {original_work_order.status}")
 
-        existing_count = await ReworkOrder.filter(
-            tenant_id=tenant_id,
-            original_work_order_id=work_order_id,
-            deleted_at__isnull=True
-        ).count()
-        sequence = existing_count + 1
-
+        plc = (getattr(request_data, "product_line_code", None) or "").strip()
+        if not plc:
+            raise ValidationError("返工单须填写产品线码以生成 FR 单号")
         code = await self.generate_code(
             tenant_id=tenant_id,
             code_type="REWORK_ORDER_CODE",
-            prefix=f"返工-{original_work_order.code}-{sequence:03d}"
+            product_line_code=plc,
         )
 
         start_op_id = request_data.start_work_order_operation_id
@@ -1021,13 +1309,32 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             start_work_order_operation_id=request_data.start_work_order_operation_id,
             predefined_operation_ids=request_data.predefined_operation_ids,
             remarks=request_data.remarks,
+            operator_id=getattr(request_data, "operator_id", None),
+            operator_name=getattr(request_data, "operator_name", None),
         )
 
-        return await self.create_rework_order(
+        created = await self.create_rework_order(
             tenant_id=tenant_id,
             rework_order_data=rework_order_data,
             created_by=created_by
         )
+        assign_worker_ids = _parse_assigned_worker_ids(
+            getattr(request_data, "assigned_worker_ids", None),
+            getattr(request_data, "assigned_worker_id", None)
+            or getattr(request_data, "operator_id", None),
+        )
+        assign_team_id = getattr(request_data, "assigned_team_id", None)
+        if assign_worker_ids or assign_team_id:
+            return await self.assign_rework_order(
+                tenant_id,
+                created.id,
+                ReworkOrderAssignRequest(
+                    assigned_worker_ids=assign_worker_ids or None,
+                    assigned_team_id=assign_team_id,
+                ),
+                assigned_by=created_by,
+            )
+        return created
 
     async def get_rework_order_by_id(
         self,
@@ -1118,6 +1425,12 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         planned_start_to: Optional[date] = None,
         created_start_date: Optional[date] = None,
         created_end_date: Optional[date] = None,
+        created_by: Optional[int] = None,
+        product_code: Optional[str] = None,
+        quantity_min: Optional[Decimal] = None,
+        quantity_max: Optional[Decimal] = None,
+        need_warehouse_in: Optional[bool] = None,
+        assigned_worker_id: Optional[int] = None,
         order_by: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
@@ -1132,6 +1445,7 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             product_name: 产品名称（模糊搜索）
             status: 返工单状态
             rework_type: 返工类型
+            assigned_worker_id: 指派给我（含班组成员）
 
         Returns:
             List[ReworkOrderListResponse]: 返工单列表
@@ -1148,6 +1462,16 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             current_user=current_user,
             resource="kuaizhizao:rework-order",
         )
+        if assigned_worker_id is not None:
+            try:
+                awid = int(assigned_worker_id)
+            except (TypeError, ValueError):
+                awid = 0
+            if awid > 0:
+                assigned_ids = await _rework_order_ids_assigned_to_worker(tenant_id, awid)
+                if not assigned_ids:
+                    return {"data": [], "total": 0, "success": True}
+                query = query.filter(id__in=list(assigned_ids))
 
         # 应用过滤条件
         kw = (keyword or "").strip()
@@ -1193,6 +1517,22 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             query = query.filter(created_at__gte=datetime.combine(created_start_date, time.min))
         if created_end_date is not None:
             query = query.filter(created_at__lte=datetime.combine(created_end_date, time.max))
+        if created_by is not None:
+            try:
+                cb = int(created_by)
+            except (TypeError, ValueError):
+                cb = 0
+            if cb > 0:
+                query = query.filter(created_by=cb)
+        pc = (product_code or "").strip()
+        if pc:
+            query = query.filter(product_code__icontains=pc)
+        if quantity_min is not None:
+            query = query.filter(quantity__gte=quantity_min)
+        if quantity_max is not None:
+            query = query.filter(quantity__lte=quantity_max)
+        if need_warehouse_in is not None:
+            query = query.filter(need_warehouse_in=bool(need_warehouse_in))
 
         total = await query.count()
         order_clause = order_by if order_by else "-created_at"
@@ -1244,7 +1584,7 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             deleted_at__isnull=True,
         ).all()
         if not mats:
-            return
+            raise ValidationError("会签型返工须先维护物料需求行，并由采购填写物料到位时间")
         missing = [m for m in mats if not m.required_at]
         if missing:
             codes = ", ".join(
@@ -1252,6 +1592,55 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             )
             suffix = f" 等 {len(missing)} 行" if len(missing) > 5 else ""
             raise ValidationError(f"采购会签须填写物料分项到位时间：{codes}{suffix}")
+
+    async def validate_signoff_commit_readiness(
+        self, tenant_id: int, rework_order_id: int, rework_order: Any
+    ) -> None:
+        """会签型发起人「提交」：仅头表必填；制造排位/报废/采购到位在各部门工作台填报后再校验。"""
+        bt = str(getattr(rework_order, "business_type", None) or "").strip().lower()
+        if not is_signoff_rework_business(bt):
+            return
+        if not str(getattr(rework_order, "rework_reason", None) or "").strip():
+            raise ValidationError("提交前须填写返工原因")
+
+    async def validate_ie_position_scrap_readiness(
+        self, tenant_id: int, rework_order_id: int, rework_order: Any
+    ) -> None:
+        """IE 节点办结：返工排位策划与报废确认。"""
+        plan_count = await ReworkOrderPositionPlan.filter(
+            tenant_id=tenant_id,
+            rework_order_id=rework_order_id,
+            deleted_at__isnull=True,
+        ).count()
+        if plan_count < 1:
+            raise ValidationError("须至少填写一行返工排位策划")
+        scrap_count = await ReworkOrderScrapLine.filter(
+            tenant_id=tenant_id,
+            rework_order_id=rework_order_id,
+            deleted_at__isnull=True,
+        ).count()
+        if not bool(getattr(rework_order, "no_scrap_confirmed", False)) and scrap_count < 1:
+            raise ValidationError("须勾选「无报废确认」或至少填写一行报废明细")
+
+    async def validate_signoff_submit_readiness(
+        self, tenant_id: int, rework_order_id: int, rework_order: Any
+    ) -> None:
+        """会签型「提交审核」前：A-B 研发差异、排位策划、报废确认。"""
+        bt = str(getattr(rework_order, "business_type", None) or "").strip().lower()
+        if not is_signoff_rework_business(bt):
+            return
+        path_type = self._rework_path_type_from_payload(
+            getattr(rework_order, "extension_payload", None)
+        )
+        if path_type == "ab":
+            payload = getattr(rework_order, "extension_payload", None) or {}
+            if not isinstance(payload, dict):
+                payload = {}
+            required_rd_keys = ("target_product_code", "rd_material_diff")
+            blank = [k for k in required_rd_keys if not str(payload.get(k) or "").strip()]
+            if blank:
+                raise ValidationError("A-B 返工须填写目标型号与研发料号差异说明")
+        await self.validate_ie_position_scrap_readiness(tenant_id, rework_order_id, rework_order)
 
     async def update_rework_order(
         self,
@@ -1289,7 +1678,13 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             position_plans = update_data.pop("position_plans", None)
             predefined_operation_ids = update_data.pop("predefined_operation_ids", None)
 
-            if rework_order.status == "pending":
+            review = str(getattr(rework_order, "review_status", None) or "").strip()
+            if rework_order.status == "draft" and review in (
+                "待审核",
+                "pending",
+                "pending_review",
+                "pending_approval",
+            ):
                 if (
                     scrap_lines is not None
                     or position_plans is not None
@@ -1307,8 +1702,47 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                     )
                 return await self.get_rework_order_by_id(tenant_id, rework_order_id)
 
-            if rework_order.status != "draft":
+            from apps.kuaizhizao.constants import is_submitted_status
+
+            bt = str(getattr(rework_order, "business_type", None) or "").strip().lower()
+            # 与 capabilities 一致：部门链进行中（含领导已通过后）允许本节点填报
+            signoff_fill = (
+                rework_order.status == "draft"
+                and is_signoff_rework_business(bt)
+                and _signoff_flow_active(rework_order)
+            )
+            if signoff_fill:
+                frozen_keys = frozenset(
+                    {
+                        "code",
+                        "product_id",
+                        "product_code",
+                        "product_name",
+                        "quantity",
+                        "rework_type",
+                        "business_type",
+                        "product_line_code",
+                        "original_work_order_id",
+                        "original_work_order_uuid",
+                    }
+                )
+                blocked = [k for k in update_data if k in frozen_keys]
+                if blocked:
+                    raise BusinessLogicError("已提交后会签填报期不可修改单号、产品与数量等发起信息")
+            elif rework_order.status != "draft":
                 raise BusinessLogicError("仅草稿态返工单允许修改")
+            elif is_submitted_status(review) or review not in (
+                "",
+                "草稿",
+                "draft",
+                "DRAFT",
+                "已驳回",
+                "审核驳回",
+                "rejected",
+                "REJECTED",
+            ):
+                raise BusinessLogicError("已提交或审核中的返工单不可修改，请先撤销提交或撤回审核")
+
             if "business_type" in update_data:
                 bt = str(update_data.get("business_type") or "").strip().lower()
                 if bt not in REWORK_BUSINESS_TYPES:
@@ -1459,7 +1893,7 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             tenant_id=tenant_id,
             rework_order_id=rework_order.id,
             deleted_at__isnull=True,
-            status__in=["pending", "approved"],
+            status__in=["draft", "approved"],
         ).all()
         has_start_report = any(
             r.operation_id == rework_order.start_work_order_operation_id for r in reports
@@ -1469,6 +1903,7 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             for r in reports
             if r.status == "approved"
         )
+
         remaining = max(Decimal("0"), Decimal(str(rework_order.quantity or 0)) - total_qualified)
         return has_start_report, total_qualified, remaining
 
@@ -1521,7 +1956,7 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             tenant_id=tenant_id,
             rework_order_id=rework_order_id,
             deleted_at__isnull=True,
-            status__in=["pending", "approved"],
+            status__in=["draft", "approved"],
         ).all()
         reported_by_op: dict[int, Decimal] = {}
         qualified_by_op: dict[int, Decimal] = {}
@@ -1530,6 +1965,7 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             reported_by_op[op_id] = reported_by_op.get(op_id, Decimal("0")) + _dec(record.reported_quantity)
             if record.status == "approved":
                 qualified_by_op[op_id] = qualified_by_op.get(op_id, Decimal("0")) + _dec(record.qualified_quantity)
+
 
         await sync_link_quantities_from_reports(tenant_id, current_link)
         remaining = max(Decimal("0"), _dec(current_link.input_quantity) - _dec(current_link.qualified_quantity))
@@ -1587,6 +2023,8 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         reporting_data: ReworkReportingCreate,
         reported_by: int,
         client_channel: Optional[str] = None,
+        *,
+        allow_proxy_report: bool = False,
     ) -> ReportingRecordResponse:
         rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
         ctx = await compute_capability_context(tenant_id, rework_order)
@@ -1601,6 +2039,14 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             raise BusinessLogicError("当前无激活工序，无法报工")
         if reporting_data.work_order_operation_id != current_link.work_order_operation_id:
             raise BusinessLogicError("报工必须落在当前激活工序上")
+
+        await self._assert_rework_reporter_allowed(
+            tenant_id,
+            current_link,
+            worker_id=int(reporting_data.worker_id),
+            reported_by=int(reported_by),
+            allow_proxy_report=allow_proxy_report,
+        )
 
         work_order = await WorkOrder.get_or_none(
             tenant_id=tenant_id,
@@ -1646,12 +2092,14 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         auto_approve = reporting_params.get("auto_approve", False)
         should_auto_approve = (not reporting_audit_required) or bool(auto_approve)
 
-        status = "pending"
+        status = "draft"
+        review_status = "草稿"
         approved_at = None
         approved_by = None
         approved_by_name = None
         if should_auto_approve:
             status = "approved"
+            review_status = "审核通过"
             approved_at = resolve_business_datetime()
             approved_by = reported_by
             approved_by_name = recorder_name or reporting_data.worker_name
@@ -1694,12 +2142,14 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                 unqualified_quantity=unqualified_qty,
                 work_hours=wh,
                 status=status,
+                review_status=review_status,
                 reported_at=reporting_data.reported_at,
                 remarks=reporting_data.remarks,
                 approved_at=approved_at,
                 approved_by=approved_by,
                 approved_by_name=approved_by_name,
             )
+
 
             if status == "approved":
                 await after_rework_report_approved(
@@ -1720,11 +2170,6 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
 
     async def release_rework_order(self, tenant_id: int, rework_order_id: int, released_by: int) -> ReworkOrderResponse:
         rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
-        bt = str(getattr(rework_order, "business_type", None) or REWORK_BUSINESS_TYPE_DEFAULT).strip().lower()
-        if is_signoff_rework_business(bt) and rework_order.status == "draft":
-            raise BusinessLogicError("会签型返工单须先提交审核，不能直接下达")
-        if is_signoff_rework_business(bt) and rework_order.status == "pending":
-            raise BusinessLogicError("返工单审核中，通过后方可下达")
         user_info = await self.get_user_info(released_by)
         await release_rework_order(
             tenant_id,
@@ -1735,26 +2180,248 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         )
         return await self.get_rework_order_by_id(tenant_id, rework_order_id)
 
+    async def commit_rework_order(
+        self, tenant_id: int, rework_order_id: int, submitted_by: int
+    ) -> ReworkOrderResponse:
+        """会签型：草稿/已驳回 → 已提交。页面「提交」走此方法。"""
+        from apps.kuaizhizao.constants import DocumentStatus, is_submitted_status
+        from apps.kuaizhizao.services.document_action_policy.rework_order import (
+            assert_rework_order_capability,
+        )
+
+        rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
+        if is_signoff_rework_business(getattr(rework_order, "business_type", None)):
+            from apps.kuaizhizao.services.rework_signoff_orchestrator import ReworkSignoffOrchestrator
+
+            orchestrator = ReworkSignoffOrchestrator(self)
+            already_submitted = is_submitted_status(rework_order.review_status)
+            has_flow = bool(orchestrator._flow(rework_order))
+            if already_submitted and has_flow:
+                return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+            # 早先的提交只把审核态写成已提交，没有建部门链。业务态仍是草稿时，这次提交补上链条。
+            chain_not_started = (
+                already_submitted
+                and not has_flow
+                and str(rework_order.status or "").strip() == "draft"
+            )
+            if not chain_not_started:
+                assert_rework_order_capability(rework_order, "submit")
+            await orchestrator.start(tenant_id, rework_order, submitted_by)
+            return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+        if is_submitted_status(rework_order.review_status):
+            return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+        assert_rework_order_capability(rework_order, "submit")
+        await self.validate_signoff_commit_readiness(tenant_id, rework_order_id, rework_order)
+        user_info = await self.get_user_info(submitted_by)
+        rework_order.review_status = DocumentStatus.SUBMITTED
+        rework_order.updated_by = submitted_by
+        rework_order.updated_by_name = user_info["name"]
+        await rework_order.save()
+        return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+
+    async def _pending_signoff_node_from_instance(self, tenant_id: int, order_id: int) -> Optional[str]:
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        inst = await ApprovalInstanceService.get_instance_by_entity(
+            tenant_id=tenant_id,
+            entity_type="rework_order",
+            entity_id=order_id,
+        )
+        if not inst:
+            return None
+        data = inst.data if isinstance(inst.data, dict) else {}
+        key = str(data.get("signoff_node_key") or "").strip()
+        return key or None
+
+    async def try_gate_signoff_node_approval(
+        self,
+        tenant_id: int,
+        order: Any,
+        node_key: str,
+        actor_id: int,
+        *,
+        notes: Optional[str] = None,
+    ) -> bool:
+        """
+        节点办结前审批门禁。返回 True 表示已挂起（待审或刚发起），不得继续推进。
+        """
+        from apps.kuaizhizao.constants.rework_business_types import is_signoff_rework_business
+        from core.services.approval.audit_binding_service import AuditBindingService
+        from core.services.approval.audit_flow_guard import get_approval_gate_status
+
+        code = str(node_key or "").strip()
+        if not code or code in SIGNOFF_AUDIT_SKIP_DEPT_CODES:
+            return False
+        if not is_signoff_rework_business(getattr(order, "business_type", None)):
+            return False
+
+        audit_key = signoff_audit_node_key(code)
+        if not await AuditBindingService.is_audit_enabled(tenant_id, audit_key):
+            return False
+
+        gate = await get_approval_gate_status(
+            tenant_id=tenant_id,
+            entity_type="rework_order",
+            entity_id=int(order.id),
+        )
+        inst_node = await self._pending_signoff_node_from_instance(tenant_id, int(order.id))
+        if gate.get("has_pending_flow") and inst_node == code:
+            raise BusinessLogicError("本节点审批进行中，请待审批人在待办或本页审批通过后再办结")
+        if gate.get("flow_completed_approved") and inst_node == code:
+            return False
+
+        await self._start_signoff_node_approval(
+            tenant_id,
+            order,
+            code,
+            actor_id,
+            notes=notes,
+            audit_node_key=audit_key,
+        )
+        return True
+
+    async def _start_signoff_node_approval(
+        self,
+        tenant_id: int,
+        order: Any,
+        node_key: str,
+        actor_id: int,
+        *,
+        notes: Optional[str],
+        audit_node_key: str,
+    ) -> None:
+        from apps.kuaizhizao.constants.rework_signoff_chain import node_label
+        from apps.kuaizhizao.services.rework_signoff_orchestrator import ReworkSignoffOrchestrator
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        path = ReworkSignoffOrchestrator(self)._path(order)
+        ver = ReworkSignoffOrchestrator(self)._chain_version(order)
+        node_name = node_label(path, node_key, chain_version=ver)
+        user_info = await self.get_user_info(actor_id)
+        payload = getattr(order, "extension_payload", None) or {}
+        if not isinstance(payload, dict):
+            payload = {}
+        flow = dict(payload.get(SIGNOFF_FLOW_KEY) or {})
+        flow["approval_pending_node"] = node_key
+        if notes:
+            flow["approval_submit_notes"] = notes
+        payload[SIGNOFF_FLOW_KEY] = flow
+        order.extension_payload = payload
+
+        title = f"返工单 {order.code} · {node_name}"
+        content = notes or str(getattr(order, "rework_reason", None) or order.code)
+        instance = await ApprovalInstanceService.start_approval_for_node(
+            tenant_id=tenant_id,
+            user_id=actor_id,
+            node_key=audit_node_key,
+            entity_type="rework_order",
+            entity_id=int(order.id),
+            entity_uuid=str(order.uuid),
+            title=title,
+            content=content,
+            send_notification=True,
+            extra_data={"signoff_node_key": node_key, "signoff_node_name": node_name},
+        )
+        if instance is None:
+            raise ValidationError(
+                f"节点「{node_name}」审核已开启但未绑定审批流程，"
+                f"请在配置中心为 {audit_node_key} 配置并启用流程"
+            )
+        order.review_status = "待审核"
+        order.updated_by = actor_id
+        order.updated_by_name = user_info["name"]
+        await order.save()
+        if approval_instance_finished_on_submit(instance):
+            await self.approve_rework_order(tenant_id, int(order.id), actor_id)
+
+    async def complete_signoff_node(
+        self, tenant_id: int, rework_order_id: int, actor_id: int, notes: Optional[str] = None
+    ) -> ReworkOrderResponse:
+        from apps.kuaizhizao.services.rework_signoff_orchestrator import ReworkSignoffOrchestrator
+
+        order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
+        await ReworkSignoffOrchestrator(self).complete(tenant_id, order, actor_id, notes)
+        return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+
+    async def return_signoff_node(
+        self, tenant_id: int, rework_order_id: int, actor_id: int, notes: str
+    ) -> ReworkOrderResponse:
+        from apps.kuaizhizao.services.rework_signoff_orchestrator import ReworkSignoffOrchestrator
+
+        order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
+        await ReworkSignoffOrchestrator(self).return_node(tenant_id, order, actor_id, notes)
+        return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+
+    async def assign_signoff_node(
+        self, tenant_id: int, rework_order_id: int, dept_code: str, user_id: int, actor_id: int
+    ) -> ReworkOrderResponse:
+        from apps.kuaizhizao.services.rework_signoff_orchestrator import ReworkSignoffOrchestrator
+
+        order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
+        await ReworkSignoffOrchestrator(self).assign(tenant_id, order, dept_code, user_id, actor_id)
+        return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+
+    async def save_signoff_section(
+        self,
+        tenant_id: int,
+        rework_order_id: int,
+        node_key: str,
+        sub_section_key: str,
+        actor_id: int,
+    ) -> ReworkOrderResponse:
+        from apps.kuaizhizao.services.rework_signoff_orchestrator import ReworkSignoffOrchestrator
+
+        order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
+        await ReworkSignoffOrchestrator(self).mark_section_done(
+            tenant_id, order, node_key, sub_section_key, actor_id
+        )
+        return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+
+    async def submit_rework_order_for_review(
+        self, tenant_id: int, rework_order_id: int, submitted_by: int
+    ) -> ReworkOrderResponse:
+        from apps.kuaizhizao.constants import is_submitted_status
+
+        rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
+        if str(rework_order.status or "").strip() != "draft" or not is_submitted_status(
+            rework_order.review_status
+        ):
+            raise BusinessLogicError("请先提交返工单，再提交审核")
+        return await self._enter_rework_order_review(
+            tenant_id, rework_order_id, submitted_by, rework_order
+        )
+
     async def submit_rework_order(
         self, tenant_id: int, rework_order_id: int, submitted_by: int
     ) -> ReworkOrderResponse:
-        """多部门会签型：草稿提交审核。"""
-        from core.services.approval.approval_instance_service import ApprovalInstanceService
-        from core.services.approval.audit_binding_service import AuditBindingService
-
+        """内部一键：草稿直接进入待审核或免审通过。页面提交走 commit。"""
         rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
         if rework_order.status != "draft":
             raise BusinessLogicError("仅草稿可提交审核")
         bt = str(getattr(rework_order, "business_type", None) or "").strip().lower()
         if not is_signoff_rework_business(bt):
             raise BusinessLogicError("仅会签型/库存验证返工单需要提交审核；简化执行请直接下达")
+        await self.validate_signoff_submit_readiness(tenant_id, rework_order_id, rework_order)
+        return await self._enter_rework_order_review(
+            tenant_id, rework_order_id, submitted_by, rework_order
+        )
 
-        scrap_count = await ReworkOrderScrapLine.filter(
-            tenant_id=tenant_id, rework_order_id=rework_order_id, deleted_at__isnull=True
-        ).count()
-        if not bool(getattr(rework_order, "no_scrap_confirmed", False)) and scrap_count < 1:
-            raise ValidationError("会签型返工须勾选「无报废确认」或至少填写一行报废明细")
+    async def _enter_rework_order_review(
+        self,
+        tenant_id: int,
+        rework_order_id: int,
+        submitted_by: int,
+        rework_order: Any,
+    ) -> ReworkOrderResponse:
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+        from core.services.approval.audit_binding_service import AuditBindingService
 
+        review = str(rework_order.review_status or "").strip()
+        if review == "待审核":
+            return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+
+        bt = str(getattr(rework_order, "business_type", None) or "").strip().lower()
         user_info = await self.get_user_info(submitted_by)
         await self._seed_default_signoffs(
             tenant_id,
@@ -1765,46 +2432,129 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                 getattr(rework_order, "extension_payload", None)
             ),
         )
-        rework_order.status = "pending"
-        rework_order.updated_by = submitted_by
-        rework_order.updated_by_name = user_info["name"]
-        await rework_order.save()
 
         approval_instance = None
         audit_node = rework_audit_node_key(bt)
-        if await AuditBindingService.is_audit_enabled(tenant_id, audit_node):
-            approval_instance = await ApprovalInstanceService.start_approval_for_node(
-                tenant_id=tenant_id,
-                user_id=submitted_by,
-                node_key=audit_node,
-                entity_type="rework_order",
-                entity_id=rework_order.id,
-                entity_uuid=str(rework_order.uuid),
-                title=f"返工单会签 {rework_order.code}",
-                content=rework_order.rework_reason or rework_order.code,
-                business_type=bt,
-                send_notification=True,
+        audit_enabled = await AuditBindingService.is_audit_enabled(tenant_id, audit_node)
+        if not audit_enabled:
+            rework_order.review_status = "已通过"
+            rework_order.updated_by = submitted_by
+            rework_order.updated_by_name = user_info["name"]
+            await rework_order.save()
+            return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+
+        approval_instance = await ApprovalInstanceService.start_approval_for_node(
+            tenant_id=tenant_id,
+            user_id=submitted_by,
+            node_key=audit_node,
+            entity_type="rework_order",
+            entity_id=rework_order.id,
+            entity_uuid=str(rework_order.uuid),
+            title=f"返工单会签 {rework_order.code}",
+            content=rework_order.rework_reason or rework_order.code,
+            business_type=bt,
+            send_notification=True,
+        )
+        if approval_instance is None:
+            raise ValidationError(
+                f"审核已开启但未找到可用审批流程，请检查 {audit_node} 绑定"
             )
-            if approval_instance is None:
-                raise ValidationError(
-                    f"审核已开启但未找到可用审批流程，请检查 {audit_node} 绑定"
-                )
+        rework_order.review_status = "待审核"
+        rework_order.updated_by = submitted_by
+        rework_order.updated_by_name = user_info["name"]
+        await rework_order.save()
         from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
 
-        if approval_instance and approval_instance_finished_on_submit(approval_instance):
+        if approval_instance_finished_on_submit(approval_instance):
             return await self.approve_rework_order(tenant_id, rework_order_id, submitted_by)
+        return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+
+    async def withdraw_rework_submit(
+        self, tenant_id: int, rework_order_id: int, operator_id: int
+    ) -> ReworkOrderResponse:
+        from apps.kuaizhizao.constants import DocumentStatus, is_submitted_status
+        from apps.kuaizhizao.services.document_action_policy.rework_order import (
+            assert_rework_order_capability,
+        )
+
+        rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
+        assert_rework_order_capability(rework_order, "withdraw_submit")
+        user_info = await self.get_user_info(operator_id)
+        if is_submitted_status(rework_order.review_status):
+            rework_order.review_status = "草稿"
+            rework_order.updated_by = operator_id
+            rework_order.updated_by_name = user_info["name"]
+            await rework_order.save()
+            return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        cancelled = await ApprovalInstanceService.cancel_approval(
+            tenant_id=tenant_id,
+            entity_type="rework_order",
+            entity_id=rework_order_id,
+            operator_id=operator_id,
+        )
+        if not cancelled:
+            raise BusinessLogicError("撤回失败：无法取消审批流程，请重试")
+        payload = getattr(rework_order, "extension_payload", None) or {}
+        if isinstance(payload, dict):
+            flow = dict(payload.get(SIGNOFF_FLOW_KEY) or {})
+            flow.pop("approval_pending_node", None)
+            flow.pop("approval_submit_notes", None)
+            payload[SIGNOFF_FLOW_KEY] = flow
+            rework_order.extension_payload = payload
+        rework_order.review_status = DocumentStatus.SUBMITTED
+        rework_order.updated_by = operator_id
+        rework_order.updated_by_name = user_info["name"]
+        await rework_order.save()
         return await self.get_rework_order_by_id(tenant_id, rework_order_id)
 
     async def approve_rework_order(
         self, tenant_id: int, rework_order_id: int, actor_id: int
     ) -> ReworkOrderResponse:
-        """会签通过后进入可下达（approved）。"""
+        """会签通过后保持草稿业务态，review_status=已通过，可下达。"""
         from core.services.approval.audit_binding_service import AuditBindingService
+        from apps.kuaizhizao.services.document_action_policy.rework_order import (
+            assert_rework_order_capability,
+        )
 
         rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
-        if rework_order.status != "pending":
-            raise BusinessLogicError("仅待审返工单可通过")
-        audit_node = rework_audit_node_key(str(getattr(rework_order, "business_type", None) or ""))
+        assert_rework_order_capability(rework_order, "approve")
+        bt = str(getattr(rework_order, "business_type", None) or "").strip().lower()
+        signoff_node = await self._pending_signoff_node_from_instance(tenant_id, rework_order_id)
+        if is_signoff_rework_business(bt) and signoff_node:
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+            )
+            from apps.kuaizhizao.services.rework_signoff_orchestrator import ReworkSignoffOrchestrator
+
+            gate = await get_approval_gate_status(
+                tenant_id=tenant_id,
+                entity_type="rework_order",
+                entity_id=rework_order_id,
+            )
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="返工单会签节点",
+                verb="审核",
+            )
+            user_info = await self.get_user_info(actor_id)
+            flow = (getattr(rework_order, "extension_payload", None) or {}).get(SIGNOFF_FLOW_KEY) or {}
+            notes = str(flow.get("approval_submit_notes") or "") if isinstance(flow, dict) else None
+            orch = ReworkSignoffOrchestrator(self)
+            await orch.advance_after_signoff_approval(
+                tenant_id, rework_order, signoff_node, actor_id, notes=notes or None
+            )
+            rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
+            rework_order.review_status = DocumentStatus.SUBMITTED.value
+            rework_order.updated_by = actor_id
+            rework_order.updated_by_name = user_info["name"]
+            await rework_order.save()
+            return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+
+        audit_node = rework_audit_node_key(bt)
         if await AuditBindingService.is_audit_enabled(tenant_id, audit_node):
             from core.services.approval.audit_flow_guard import (
                 assert_manual_approval_action_allowed,
@@ -1821,11 +2571,11 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                 doc_label="返工单",
                 verb="审核",
             )
-        bt = str(getattr(rework_order, "business_type", None) or "").strip().lower()
         if is_signoff_rework_business(bt):
             await self.validate_material_req_required_at(tenant_id, rework_order_id)
         user_info = await self.get_user_info(actor_id)
-        rework_order.status = "approved"
+        rework_order.status = "draft"
+        rework_order.review_status = "已通过"
         rework_order.updated_by = actor_id
         rework_order.updated_by_name = user_info["name"]
         await rework_order.save()
@@ -1836,11 +2586,47 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
     ) -> ReworkOrderResponse:
         """会签驳回退回草稿。"""
         from core.services.approval.audit_binding_service import AuditBindingService
+        from apps.kuaizhizao.services.document_action_policy.rework_order import (
+            assert_rework_order_capability,
+        )
 
         rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
-        if rework_order.status != "pending":
-            raise BusinessLogicError("仅待审返工单可驳回")
-        audit_node = rework_audit_node_key(str(getattr(rework_order, "business_type", None) or ""))
+        assert_rework_order_capability(rework_order, "reject")
+        bt = str(getattr(rework_order, "business_type", None) or "").strip().lower()
+        signoff_node = await self._pending_signoff_node_from_instance(tenant_id, rework_order_id)
+        if is_signoff_rework_business(bt) and signoff_node:
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+            )
+
+            gate = await get_approval_gate_status(
+                tenant_id=tenant_id,
+                entity_type="rework_order",
+                entity_id=rework_order_id,
+            )
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="返工单会签节点",
+                verb="驳回",
+            )
+            user_info = await self.get_user_info(actor_id)
+            payload = getattr(rework_order, "extension_payload", None) or {}
+            if not isinstance(payload, dict):
+                payload = {}
+            flow = dict(payload.get(SIGNOFF_FLOW_KEY) or {})
+            flow.pop("approval_pending_node", None)
+            flow.pop("approval_submit_notes", None)
+            payload[SIGNOFF_FLOW_KEY] = flow
+            rework_order.extension_payload = payload
+            rework_order.status = "draft"
+            rework_order.review_status = "已驳回"
+            rework_order.updated_by = actor_id
+            rework_order.updated_by_name = user_info["name"]
+            await rework_order.save()
+            return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+
+        audit_node = rework_audit_node_key(bt)
         if await AuditBindingService.is_audit_enabled(tenant_id, audit_node):
             from core.services.approval.audit_flow_guard import (
                 assert_manual_approval_action_allowed,
@@ -1859,7 +2645,31 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             )
         user_info = await self.get_user_info(actor_id)
         rework_order.status = "draft"
+        rework_order.review_status = "已驳回"
         rework_order.updated_by = actor_id
+        rework_order.updated_by_name = user_info["name"]
+        await rework_order.save()
+        return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+
+    async def revoke_rework_approval(
+        self, tenant_id: int, rework_order_id: int, operator_id: int
+    ) -> ReworkOrderResponse:
+        from apps.kuaizhizao.services.document_action_policy.rework_order import (
+            assert_rework_order_capability,
+        )
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
+        assert_rework_order_capability(rework_order, "revoke_approval")
+        await ApprovalInstanceService.cancel_approval(
+            tenant_id=tenant_id,
+            entity_type="rework_order",
+            entity_id=rework_order_id,
+            operator_id=operator_id,
+        )
+        user_info = await self.get_user_info(operator_id)
+        rework_order.review_status = "草稿"
+        rework_order.updated_by = operator_id
         rework_order.updated_by_name = user_info["name"]
         await rework_order.save()
         return await self.get_rework_order_by_id(tenant_id, rework_order_id)

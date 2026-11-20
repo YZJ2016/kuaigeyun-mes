@@ -118,20 +118,28 @@ aoci.meta.txt	DELETED	tracked	seed from fa5ce815bc
 aoci.txt	DELETED	tracked	seed from fa5ce815bc
 docs/screenshots/system/architecture.png	d92632669f670467723a94f0e06866a58144bda1	tracked	seed from c16a17ebba
 docs/screenshots/system/render_architecture.py	734a9d2c0a8e5fab5d9e603a3ff3f26d0e52334b	tracked	seed from c16a17ebba
+docs/screenshots/wechat/wechat.png	c91b13c20c	domain-out	R2-运维: fast-deploy本地独立维护/截图资产
 fast-deploy/README.md	cd60c1d07f31c511b3e391058f35f899476b00b6	tracked	seed from 1d968cd27b
 fast-deploy/build.web.sh	1e77f32d372b6f3e451cb54bcd1c536a293640ce	tracked	seed from 905787348a
+fast-deploy/clean-workspace.sh	95efae8f6d	domain-out	R2-运维: fast-deploy本地独立维护/截图资产
 fast-deploy/config/deploy.env.example	95a93db86b0fb9290630af13241fad1f0d8a3cb8	tracked	seed from 1d968cd27b
+fast-deploy/config/install-scripts.json	e1650484c4	domain-out	R2-运维: fast-deploy本地独立维护/截图资产
 fast-deploy/deploy.sh	c4b974e77812cf1c2c480f152b670fd998634d0e	tracked	seed from fa5ce815bc
+fast-deploy/launch.dev.sh	8700bd8a16	domain-out	R2-运维: fast-deploy本地独立维护/截图资产
 fast-deploy/lib/aoci_repo.sh	bb44572daf8267ec632b20f88695d7e810684618	tracked	seed from 905787348a
 fast-deploy/lib/blue_green.sh	bf32ce070f6a4e52346aea58b5080e37b4c9432d	tracked	seed from e817c50d24
 fast-deploy/lib/build_web_git.sh	622287eb3888830952ed4b5f1aca6deb747afc8d	tracked	seed from fa5ce815bc
 fast-deploy/lib/common.ps1	e78373e4219a189e24004b936ff5ee2d960ae93f	tracked	seed from fa5ce815bc
 fast-deploy/lib/common.sh	03149ae48ca4854a0005ce820eba9f8a52e28c7e	tracked	seed from 905787348a
 fast-deploy/lib/low_spec_mode.sh	5fd037a762886e960e14306caf62a6b58370cfc6	applied	本轮明确部署快修部分适配：低配启动等待360，compose清理后校验并fail closed，Windows Node/uv/Caddy检测及ZIP/可执行校验和curl参数遮蔽；保留本地蓝绿/worker/下载版本/镜像/命名策略；bash及compose回归通过，未做Windows实机或真实部署
+fast-deploy/lib/wizard.sh	f978467013	domain-out	R2-运维: fast-deploy本地独立维护/截图资产
 fast-deploy/linux/systemd-exec-backend.sh	e152743b8a078173ecc5770c50b8593d9a6bd2fb	tracked	seed from c3953509e9
+fast-deploy/linux/systemd-exec-taskiq-scheduler.sh	8700bd8a16	domain-out	R2-运维: fast-deploy本地独立维护/截图资产
+fast-deploy/linux/systemd-exec-taskiq-worker.sh	934eab86ba	domain-out	R2-运维: fast-deploy本地独立维护/截图资产
 fast-deploy/promote-prod-branch.sh	DELETED	tracked	seed from 1d968cd27b
 fast-deploy/publish.aoci.sh	b9db4ce357863020fb29e531d3045632e9070592	tracked	seed from 905787348a
 fast-deploy/push.sh	ee42a71b71517f72dddb4d0bec4bd36898f60769	tracked	seed from 905787348a
+fast-deploy/scripts/verify_caddy_download_urls.py	0ea3994534	domain-out	R2-运维: fast-deploy本地独立维护/截图资产
 fast-deploy/tools/workspace/compose.py	21b1b96b8a3ce01a5646ba08efdaaba71e6d12f5	applied	本轮明确部署快修部分适配：低配启动等待360，compose清理后校验并fail closed，Windows Node/uv/Caddy检测及ZIP/可执行校验和curl参数遮蔽；保留本地蓝绿/worker/下载版本/镜像/命名策略；bash及compose回归通过，未做Windows实机或真实部署
 fast-deploy/windows/install-component.ps1	03fcb8f4c095fb6f52de544029a43ae6e2b54220	applied	本轮明确部署快修部分适配：低配启动等待360，compose清理后校验并fail closed，Windows Node/uv/Caddy检测及ZIP/可执行校验和curl参数遮蔽；保留本地蓝绿/worker/下载版本/镜像/命名策略；bash及compose回归通过，未做Windows实机或真实部署
 riveredge-backend/.env.example	8cc220de122b19cf008142e015f5becf457bda94	tracked	seed from b12cc66e71
@@ -149,6 +157,7 @@ riveredge-backend/migrations/models/1010_20261107233000_shipment_notice_review_s
 riveredge-backend/migrations/models/1011_20261107235000_sales_delivery_review_draft.py	8f8dfa5ecad131c75abfb7c5f0b2d021bd564bb9	tracked	seed from 899307f4d6
 riveredge-backend/migrations/models/1012_20261107234500_purchase_receipt_item_tax_rate.py	3baa7f01f80870f1ee906db175ad50ab435697a3	tracked	seed from 899307f4d6
 riveredge-backend/migrations/models/1013_20261107235500_demand_review_draft.py	b18e7c1bab2139de3fd08de424c506e3fd797fb1	tracked	seed from 899307f4d6
+riveredge-backend/migrations/models/1016_20261109143000_packing_binding_lines_audit_cols.py	9622a5a304	superset	R2-迁移: 本地模型/列已存在等价实现
 riveredge-backend/migrations/models/1020_20261110163000_purchase_order_item_display_unit_price.py	bc82b81f05b6d166d3f5882c5c75c5b7f0ca238b	tracked	seed from db319377bb
 riveredge-backend/migrations/models/1022_20261110180000_production_picking_item_warehouse_nullable.py	01ae76725ee7f2e5e4bffc3c718b34dca8677095	tracked	seed from 6abba1dbd5
 riveredge-backend/migrations/models/1023_20261110193000_sales_delivery_price_type_tax_rate.py	3e10d670687c34dff432b9726ae4f2c26b81c867	tracked	seed from 6abba1dbd5
@@ -167,6 +176,7 @@ riveredge-backend/migrations/models/1036_20261115170000_bom_warehouse_outsource_
 riveredge-backend/migrations/models/1037_20261115180000_work_order_form_bom_op_lines.py	76af4dabc0c53e26ff523b5f9271229747af2a7e	tracked	seed from 93b3cb5998
 riveredge-backend/migrations/models/1038_20261115190000_process_outsource_issue_receipt_ledger.py	3fc452e995a8ac260529e7f83bee042caa0ca706	tracked	seed from 93b3cb5998
 riveredge-backend/migrations/models/1039_20261115200000_finished_goods_receipt_item_work_order.py	0c25ec30b3ffb63403499381bd1b615f46ac89c3	tracked	seed from 93b3cb5998
+riveredge-backend/migrations/models/1040_20261116120000_other_inbound_item_serial_numbers.py	9c9f0d99bf	superset	R2-迁移: 本地模型/列已存在等价实现
 riveredge-backend/migrations/models/1042_20261116140000_other_outbound_borrow_serial_numbers.py	351d3ae5039c45e46f00816caae494603f490758	tracked	seed from 5b1b9828e4
 riveredge-backend/migrations/models/1043_20261116143000_material_return_item_serial_numbers.py	345c9f148f1084151922e917d7806dea1787a497	tracked	seed from 5b1b9828e4
 riveredge-backend/migrations/models/1052_20261119160000_purchase_invoice_discount_amount.py	2a788b4eaede12ad0b7258d9439899c6d846af76	applied	财务A/B适配至kuaicaiwu；保留本地创建自动送审/已审核口径；忠实保留源应付已审核或待审时早退导致优惠调整不生成；迁移20261122000001尚未执行；财务pytest191通过+聚焦9通过，时区0。前端tsc2743存量诊断，浏览器未验。
@@ -192,7 +202,9 @@ riveredge-backend/migrations/models/909_20261021233000_haoligo_order_tracking_wo
 riveredge-backend/migrations/models/910_20261021234000_purchase_receipt_item_spec_model_backfill.py	92d3f670dbc627338d1b0eb5b7051d856c33deb4	tracked	seed from a62d32cff6
 riveredge-backend/migrations/models/911_20261021235000_haoligo_equipment_output_production_department.py	76822485d25756599f4635887a4352e8219d6cf6	tracked	seed from a62d32cff6
 riveredge-backend/migrations/models/912_20261022100000_material_inventory_category.py	c6b21b853bbc62e4903cfe4449b863f745acf429	tracked	seed from b12cc66e71
+riveredge-backend/migrations/models/912_20261022170000_inventory_sync_binding_sync_direction.py	d17e5f9d8e	superset	R2-迁移: 本地模型/列已存在等价实现
 riveredge-backend/migrations/models/913_20261022140000_document_line_dual_quantity.py	fcb16e1ce1370fb7e2445c9fba24a09864f04b72	tracked	seed from b12cc66e71
+riveredge-backend/migrations/models/913_20261026020000_haoligo_horizontal_injection_output.py	1fa6e303be	domain-out	R2-迁移: haoligo定制域本地不存在
 riveredge-backend/migrations/models/914_20261022150000_document_line_dual_quantity_extend.py	4a94b761c62df079e0b157b9fb71e534c20c0446	tracked	seed from b12cc66e71
 riveredge-backend/migrations/models/915_20261022153000_document_line_dual_quantity_more.py	d23253af04f8e28916e3320d5a1330d1aad8e821	tracked	seed from b12cc66e71
 riveredge-backend/migrations/models/916_20261022160000_partner_statement_ledger_posting.py	9c64f9d25cbdae62b3ee9561444ece8b56b7a7fa	tracked	seed from b12cc66e71
@@ -213,12 +225,15 @@ riveredge-backend/migrations/models/929_20261025200000_payment_counterparty_acco
 riveredge-backend/migrations/models/930_20261025210000_payment_employee_advance.py	d5885af2a76199a317d0a05cb38b9532f24a024a	tracked	seed from e75380e080
 riveredge-backend/migrations/models/931_20261025220000_tenant_show_pro_badge.py	0c5f70f62d727fbb8e00ae30fc5a9f5775d9d98c	tracked	seed from e75380e080
 riveredge-backend/migrations/models/932_20261025230000_kuaicaiwu_fund_transfers.py	1012f46bcfa7f2ba59737f217cb1e5efdfacbbdd	tracked	seed from 1efec0da1d
+riveredge-backend/migrations/models/933_20261026010000_payment_advance_records_audit_cols.py	1fa6e303be	superset	R2-迁移: 本地模型/列已存在等价实现
+riveredge-backend/migrations/models/934_20261026063000_haoligo_horizontal_injection_output_audit_cols.py	9ca16bd0f4	domain-out	R2-迁移: haoligo定制域本地不存在
 riveredge-backend/migrations/models/935_20261026110000_purchase_receipt_sync_binding.py	43ace0bfb4b0c6edd222cef1177237ab0e29415c	tracked	seed from 4bd853a94f
 riveredge-backend/migrations/models/936_20261026111000_purchase_receipt_sync_binding_audit_cols.py	88e7cd8e560debddd6c49b7e58b90b9ced4dbd14	tracked	seed from 4bd853a94f
 riveredge-backend/migrations/models/937_20261026120000_purchase_receipt_po_nullable.py	1f8f934730f98eca00f73a0fa768d9952bcbbca1	tracked	seed from 4bd853a94f
 riveredge-backend/migrations/models/938_20261026123000_purchase_receipt_kingdee_fields.py	93430c07db255b97375c81885e5d00ea4680359e	tracked	seed from 4bd853a94f
 riveredge-backend/migrations/models/939_20261026140000_inspection_sampling_transfer_states.py	d62aba5452927b49d869a35d6e1cc885a3488cd3	tracked	seed from 905787348a
 riveredge-backend/migrations/models/940_20261027100000_other_outbound_sync_binding.py	7aa16f4e283186050c8e7afdd9893018653f04de	tracked	seed from a0b353ce7e
+riveredge-backend/migrations/models/940_20261031190000_haoligo_salary_base_structure.py	dd68693d39	domain-out	R2-迁移: haoligo定制域本地不存在
 riveredge-backend/migrations/models/941_20261027102000_other_outbound_kingdee_header_fields.py	84ad2e49f07d3f11aa0a3bc47e3faed73770f933	tracked	seed from a0b353ce7e
 riveredge-backend/migrations/models/942_20261027103000_other_inbound_sync_binding.py	747d17dad9d20ce7fd863ac7457c7564f3ba5d11	tracked	seed from a0b353ce7e
 riveredge-backend/migrations/models/943_20261027120000_payment_require_voucher_backfill.py	ad84c1d13d3b59de18794127dc8699d39af9cb7a	tracked	seed from beef6118ba
@@ -234,6 +249,12 @@ riveredge-backend/migrations/models/952_20261028130000_backfill_draft_review_sal
 riveredge-backend/migrations/models/953_20261028140000_kuaioa_employee_hire_introducer.py	b9d2318a13574ba90d19a6689bab96c4bf8ea552	tracked	seed from 57a37e2749
 riveredge-backend/migrations/models/955_20261028190000_kuaioa_minimum_wage_end_current.py	17d00e25dd80c80fd8edac95040224e74743d3a8	tracked	seed from 029aa6f542
 riveredge-backend/migrations/models/960_20261113120000_payment_application_department.py	81c2a0d693ff175030c3a02bdadfa51f9b000cd3	tracked	seed from 37409d3b29
+riveredge-backend/migrations/models/961_20261029120000_fg_pp_sync_binding.py	a0ccb13d08	superset	R2-迁移: 本地模型/列已存在等价实现
+riveredge-backend/migrations/models/962_20261029103000_storage_location_warehouse_optional.py	520cde9e49	superset	R2-迁移: 本地模型/列已存在等价实现
+riveredge-backend/migrations/models/963_20261030120000_purchase_receipt_tax_net.py	2e90d9a7ae	superset	R2-迁移: 本地模型/列已存在等价实现
+riveredge-backend/migrations/models/964_20261029120000_storage_location_source_location_code.py	520cde9e49	superset	R2-迁移: 本地模型/列已存在等价实现
+riveredge-backend/migrations/models/965_20261029130000_backfill_material_batch_expiry_shelf_life.py	520cde9e49	superset	R2-迁移: 本地模型/列已存在等价实现
+riveredge-backend/migrations/models/967_20261031210000_haoligo_salary_base_night_subsidy.py	dd68693d39	domain-out	R2-迁移: haoligo定制域本地不存在
 riveredge-backend/migrations/models/970_20261114110000_partner_addresses_json.py	93f806ec10e8bb0557b6a119e6bc1ba14c51041b	tracked	seed from 37409d3b29
 riveredge-backend/migrations/models/971_20261101030000_inventory_transfer_item_serial_numbers.py	a4c1c1c00a2ba909a40f2d1b9db055fa4d5b9be6	tracked	seed from a60f3e9039
 riveredge-backend/migrations/models/972_20261101040000_partner_price_book_tier_prices.py	9328101a6c5f5dc65b1caa1e06cb9aab3d083edc	tracked	seed from a60f3e9039
@@ -244,6 +265,7 @@ riveredge-backend/migrations/models/976_20261101160000_qms_corrective_action.py	
 riveredge-backend/migrations/models/977_20261101180000_qms_objectives_legal_external.py	de84449bbc881af6bad26cc1873a1a8176938ec3	tracked	seed from a2473e9b42
 riveredge-backend/migrations/models/977_20261110080000_sync_binding_schedule_window.py	DELETED	applied	f40f54e336调度窗+价税簇
 riveredge-backend/migrations/models/978_20261121120000_warehouse_push_sync_bindings_trigger_kind.py	DELETED	applied	D依赖簇续:支撑件+前端
+riveredge-backend/migrations/models/979_20261102103000_sales_delivery_sync_binding.py	6c83770a65	superset	R2-迁移: 本地模型/列已存在等价实现
 riveredge-backend/migrations/models/979_20261122000000_inspection_sampling_transfer_states.py	DELETED	applied	E域GB2828簇(源905787348a/1efec0da1d等)
 riveredge-backend/migrations/models/990_20261104070000_user_kingdee_org_fields.py	914fa99c8e25b03ef697a812f4e78be1a236e124	deferred	仅employee_number列/索引已拆至20261122000002_user_employee_number.py；该上游迁移其余supervisor/person_category/employment_status/部门任职表属组织整簇，未取；本地未执行upgrade
 riveredge-backend/migrations/models/991_20261104120000_payment_pull_lines.py	fd508f0232702d041c59cd382500935245fcb1d6	tracked	seed from 3958bb1524
@@ -392,7 +414,7 @@ riveredge-backend/src/apps/kuaizhizao/api/purchase_requisitions/purchase_requisi
 riveredge-backend/src/apps/kuaizhizao/api/purchases/purchases.py	76bb1818f612ca0a52005fad4b9f9d5e868d27fe	tracked	seed from a0b353ce7e
 riveredge-backend/src/apps/kuaizhizao/api/quotations/quotations.py	257e9f0e10990753577519246bb7a85dbad5e86e	tracked	seed from 57a37e2749
 riveredge-backend/src/apps/kuaizhizao/api/receipt_notices/receipt_notices.py	4e778ca897b22edb6ed84aa79f51b336978ed786	tracked	seed from d81b4b70bf
-riveredge-backend/src/apps/kuaizhizao/api/reports/reports.py	d6638fa9dff63c9338a9799d6b8b960736344742	tracked	seed from 3958bb1524
+riveredge-backend/src/apps/kuaizhizao/api/reports/reports.py	d6638fa9dff63c9338a9799d6b8b960736344742	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/api/router.py	6120123b4a6ae9c984447ba89fe6b3df5a939274	tracked	seed from 2c76a942c2
 riveredge-backend/src/apps/kuaizhizao/api/routes_mobile.py	bca455360652ff6ed7196f97efea128c5b1b789e	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/api/sales_contracts/sales_contracts.py	597ea4e54acd9f376027da23096db2b4d1ddf984	tracked	seed from 905787348a
@@ -403,13 +425,16 @@ riveredge-backend/src/apps/kuaizhizao/api/tool_ops/documents.py	8564d697bf829e00
 riveredge-backend/src/apps/kuaizhizao/api/tools/tools.py	0025db9cb899a8d3dd5d4b32b095629ad4d2c368	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/api/wave_pickings/wave_pickings.py	b9dfffd38138c86012b183aca94c51e1791d7073	applied	本轮积压API快修：复用现有权限解析/依赖，4文件逐个注册smoke与拒绝不执行业务回归通过；未更改权限码/manifest，权限扫描的裸purchase-order为HEAD已有问题
 riveredge-backend/src/apps/kuaizhizao/bootstrap.py	8a7789543321f1a0b6d5219d68d3b2974251d220	tracked	seed from 31efc2b64c
-riveredge-backend/src/apps/kuaizhizao/constants/__init__.py	9b672cedc430953028b342295159b98b2566de35	tracked	seed from 872b76152e
+riveredge-backend/src/apps/kuaizhizao/constants/__init__.py	9b672cedc430953028b342295159b98b2566de35	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
+riveredge-backend/src/apps/kuaizhizao/constants/demand_computation_status.py	24ac64df244ce869bfb44739fd86ed8c3c498a13	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/constants/maintenance_scheme.py	575b527bc0cacd49cf517202ffc3755a9d68c7e0	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/constants/price_settlement.py	3123e327ca71e1d583b0352ec1a06e59ea9a6f67	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/constants/price_type.py	62c5abd6f504ed6dc13e5c43d8849d70f6bbeb85	tracked	seed from e520cafd37
 riveredge-backend/src/apps/kuaizhizao/constants/purchase_order_type.py	f36b1e56d8771933ccd556265922024a34083288	tracked	seed from 6abba1dbd5
-riveredge-backend/src/apps/kuaizhizao/constants/rework_business_types.py	045c20ca9b0cf5d6e6e513a5dc07d0db2bd81483	tracked	seed from e16f2f2939
-riveredge-backend/src/apps/kuaizhizao/constants/rework_signoff_chain.py	2837a849f18b42ee6c9a1708bd2d52623e9eb288	tracked	seed from e16f2f2939
+riveredge-backend/src/apps/kuaizhizao/constants/rework_business_types.py	045c20ca9b0cf5d6e6e513a5dc07d0db2bd81483	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
+riveredge-backend/src/apps/kuaizhizao/constants/rework_signoff_audit.py	9110b1e836dc996123a234896690b14b03466db0	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
+riveredge-backend/src/apps/kuaizhizao/constants/rework_signoff_chain.py	2837a849f18b42ee6c9a1708bd2d52623e9eb288	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
+riveredge-backend/src/apps/kuaizhizao/constants/rework_signoff_sections.py	1a6ab9b9675c2dd9830e3758b87357825e48973e	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/finance/__init__.py	636ae3d4ab00b7b8034a4cb6c0499f2ad2e74288	tracked	seed from 2c76a942c2
 riveredge-backend/src/apps/kuaizhizao/finance/api/__init__.py	12e943deb02db0e926c722a923d9f72899bec4e9	tracked	seed from 2c76a942c2
 riveredge-backend/src/apps/kuaizhizao/finance/api/_kuaicaiwu_route_access.py	b7669fead6e376c36920c37005917a12c893dbf9	tracked	seed from 2c76a942c2
@@ -618,7 +643,9 @@ riveredge-backend/src/apps/kuaizhizao/manifest.json	b783b9e2e62d70c470aa4cee1c3f
 riveredge-backend/src/apps/kuaizhizao/models/__init__.py	c1c4b6216ab93160e79e826f334022badb25bf30	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/kuaizhizao/models/delivery_notice_item.py	c66c8c506281c72c6387768c9fd68b4ccf16d954	tracked	seed from a62d32cff6
 riveredge-backend/src/apps/kuaizhizao/models/demand.py	10e030d1434b751b67ffddfb7564ef526c61b547	tracked	seed from 899307f4d6
+riveredge-backend/src/apps/kuaizhizao/models/demand_computation_item.py	52575a8f2174cdeb088b02fd5b93b9de86ad3d07	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/models/document_relation.py	843a3ba1ac6fe6edb5a29f8369c514d0eca04c98	tracked	seed from 5f085a19c9
+riveredge-backend/src/apps/kuaizhizao/models/equipment_fault.py	1c7c5d38f489b37061d34bfbe26c1bdae47614c7	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/models/equipment_ops.py	efef09a63db39d0bb897b302b5cfcf83de663f08	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/models/equipment_spot_check_plan.py	DELETED	tracked	seed from 978a1fb9e5
 riveredge-backend/src/apps/kuaizhizao/models/finished_goods_inspection.py	fb058384bdbce473d6da47fcf0460c64566472f3	tracked	seed from a62d32cff6
@@ -628,9 +655,11 @@ riveredge-backend/src/apps/kuaizhizao/models/incoming_inspection.py	8e1d522d50d7
 riveredge-backend/src/apps/kuaizhizao/models/inspection_sampling_transfer.py	0808572b5af8f3425a7f11fd2eadba501d07848f	applied	E域GB2828簇(源905787348a/1efec0da1d等)
 riveredge-backend/src/apps/kuaizhizao/models/inspection_step_spec.py	DELETED	applied	E域GB2828簇(源905787348a/1efec0da1d等)
 riveredge-backend/src/apps/kuaizhizao/models/inventory_transfer.py	d735d33c85c3e2c4431d4c1f4121337fa42df69f	tracked	seed from a60f3e9039
+riveredge-backend/src/apps/kuaizhizao/models/line_side_inventory.py	c8d6cf3e825e82f37cc6dd262e90d06da19246f1	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/models/maintenance_plan.py	cc7385d09ef3cda4355737040dec1c8e59deea66	tracked	seed from 46508115c7
 riveredge-backend/src/apps/kuaizhizao/models/material_borrow_item.py	60281b47d9f76edd7931a01dec923ef9981e73b1	tracked	seed from 5b1b9828e4
 riveredge-backend/src/apps/kuaizhizao/models/material_return_item.py	de89b4951af42f2b26ae2894d3c2366d5e7b3f58	tracked	seed from 5b1b9828e4
+riveredge-backend/src/apps/kuaizhizao/models/material_stock_movement.py	f08b7dba0743cd2cdb3f427dcf8f485317ab5dc5	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/models/mixins/document_line_dual_quantity.py	f839bad4b15dd0d982129a24140cb82f5a8ed360	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/models/mixins/document_line_partner_material.py	94403ce51f8475cec297602dfc87564fee19bfe8	tracked	seed from a62d32cff6
 riveredge-backend/src/apps/kuaizhizao/models/oqc_inspection.py	dfca686a03204c81abf86c1754e45a6a2e7e2623	tracked	seed from a62d32cff6
@@ -679,6 +708,9 @@ riveredge-backend/src/apps/kuaizhizao/models/quality_patrol.py	752bc357aabd690ff
 riveredge-backend/src/apps/kuaizhizao/models/quotation_item.py	ecd431cffcc19c0c9523d7b0c5e02d07f89ffa6f	tracked	seed from a60f3e9039
 riveredge-backend/src/apps/kuaizhizao/models/receipt_notice.py	541a95f65dda6480f9466b1f8c3a7c89ca3e1089	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/models/receipt_notice_item.py	8f0825b937650e12aae72b5554d0262552968457	tracked	seed from a62d32cff6
+riveredge-backend/src/apps/kuaizhizao/models/reporting_record.py	b834215654a211156e39a50868748f949e4cb437	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
+riveredge-backend/src/apps/kuaizhizao/models/rework_order.py	eccfcb684cf2881e12ab03ee997859f3154b8467	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
+riveredge-backend/src/apps/kuaizhizao/models/rework_order_operation.py	3293b8d4b4cd705fd5c651281d929b0db8355bd6	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/models/sales_contract_item.py	7f08b59a98d8b7da5c7be8cc4a72eca54f3f17f9	tracked	seed from a62d32cff6
 riveredge-backend/src/apps/kuaizhizao/models/sales_delivery.py	f10355799ed4d056953f0a5e10e46792b9c29d64	tracked	seed from 6abba1dbd5
 riveredge-backend/src/apps/kuaizhizao/models/sales_delivery_item.py	db0d803d8fabc1449f7214fb189d288f4e2368e9	tracked	seed from 57a37e2749
@@ -700,8 +732,11 @@ riveredge-backend/src/apps/kuaizhizao/models/work_order_operation.py	d676e314a1f
 riveredge-backend/src/apps/kuaizhizao/orm_models.py	e7e5ee5d5102c284bdd27883df1cf994320a0a6e	tracked	seed from 4bd853a94f
 riveredge-backend/src/apps/kuaizhizao/print/designer_presets.py	7abfc8b52bf2e719cb0e522cd4b22bf3e4df6af3	tracked	seed from 37409d3b29
 riveredge-backend/src/apps/kuaizhizao/print/preset_templates.py	3fd474f4ea07087f625c3ed20f6186eff6bd0d2d	tracked	seed from ec29267f5b
+riveredge-backend/src/apps/kuaizhizao/print/purchase_receipt_red_voucher_template.py	f073b61c0252b2b04f2d69b31644a9f9425f50d0	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
+riveredge-backend/src/apps/kuaizhizao/print/red_voucher_presets.py	16c51e95fc16ef8a5717ba8baf63582744f6f1ef	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/print/styles.py	b9f2e3376402e24dc801d3072a8473b65274665a	tracked	seed from 777aa1a468
 riveredge-backend/src/apps/kuaizhizao/reference_display/setup.py	0e7042c2b502c186e9052750d28f997c090599e4	tracked	seed from 57a37e2749
+riveredge-backend/src/apps/kuaizhizao/schemas/defect_record.py	6cb05673ab3b03f32df2c4d5cef9eaee059cfa94	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/schemas/demand.py	3a4955f9df244591939c571323b18d5c3733d4e6	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/kuaizhizao/schemas/demand_computation.py	628ae7b8f789e83ee24b1f29a1e702156ed51cea	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/kuaizhizao/schemas/document_line_dual_quantity.py	725e1f3fa0c5f27d10599008a2f5651a234840b8	tracked	seed from b12cc66e71
@@ -713,11 +748,14 @@ riveredge-backend/src/apps/kuaizhizao/schemas/equipment_fault.py	10fe662197a7218
 riveredge-backend/src/apps/kuaizhizao/schemas/equipment_ops.py	f903e738d9ac3f21046f0b1e188f4157465d8f5f	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/schemas/equipment_spot_check_plan.py	DELETED	tracked	seed from 978a1fb9e5
 riveredge-backend/src/apps/kuaizhizao/schemas/finished_goods_receipt_sync.py	4af089bae8d511b2cbd1e5b38894fff7ed92d270	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
+riveredge-backend/src/apps/kuaizhizao/schemas/inventory_sync.py	e6b59e51f35aba2bf64451a2731ba2c1995fe1a9	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/schemas/inventory_transfer.py	d91042ec461e8c1af629eb0eea0f14e2af84ca4c	tracked	seed from a60f3e9039
+riveredge-backend/src/apps/kuaizhizao/schemas/kingdee_consistency.py	205ffaefb1ff65c5c13459e2380e69c8d518b7d4	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/schemas/ledger_dual_quantity.py	b8d005c8047bab7947f1a4ff8190b5968f22ba19	tracked	seed from 52b1abf2e3
 riveredge-backend/src/apps/kuaizhizao/schemas/maintenance_plan.py	55cb70753f838e0ddae74b12fc3ab14acbf512bb	tracked	seed from 46508115c7
 riveredge-backend/src/apps/kuaizhizao/schemas/material_call.py	ebd400d6e9a9017f42cd0960df2d3f16dd679aa3	tracked	seed from 899307f4d6
 riveredge-backend/src/apps/kuaizhizao/schemas/mold_ops.py	ad8c6173f0211316b42ff519b0a64dbaa5cb547b	tracked	seed from 5f085a19c9
+riveredge-backend/src/apps/kuaizhizao/schemas/order_change.py	21ab67af661cacc20065a4ac24ce641c764b1ea6	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/schemas/other_expense_application.py	69ebf0332cc5654ec6a60b78c4aed806a4a23be8	tracked	seed from 406a8f8797
 riveredge-backend/src/apps/kuaizhizao/schemas/other_inbound_sync.py	27b5fa69d68d3baa7cb531dddabe9216168c820a	tracked	seed from a0b353ce7e
 riveredge-backend/src/apps/kuaizhizao/schemas/other_outbound_sync.py	68cf207ee5f52920d658c2bc2e3ddfa697041658	tracked	seed from a0b353ce7e
@@ -740,8 +778,9 @@ riveredge-backend/src/apps/kuaizhizao/schemas/quality_patrol.py	eafa33db53419ef0
 riveredge-backend/src/apps/kuaizhizao/schemas/quality_qms.py	be12fa0e312f5d10978fa1a21f218e29170cd914	tracked	seed from a2473e9b42
 riveredge-backend/src/apps/kuaizhizao/schemas/quotation.py	017d7b68952f03d8af9d2c7450302a07b3a76f8e	tracked	seed from a60f3e9039
 riveredge-backend/src/apps/kuaizhizao/schemas/receipt_notice.py	759cec52b3442f410ddb35ff584fa4cb5ddd400b	tracked	seed from d81b4b70bf
+riveredge-backend/src/apps/kuaizhizao/schemas/reporting_record.py	99b0c38acbe6e76eab4e1bd737f8967d9a064634	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/schemas/reporting_sync.py	31628b220398ea946c921471bfb206b30694f1f6	applied	f40f54e336调度窗+价税簇
-riveredge-backend/src/apps/kuaizhizao/schemas/rework_order.py	cdae7eb259dd807a9fcf9c1bfebba94e952f079a	tracked	seed from e16f2f2939
+riveredge-backend/src/apps/kuaizhizao/schemas/rework_order.py	cdae7eb259dd807a9fcf9c1bfebba94e952f079a	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/schemas/sales.py	7c2aedee7cc19777acb9d40636ea1c911a7b246f	tracked	seed from a62d32cff6
 riveredge-backend/src/apps/kuaizhizao/schemas/sales_contract.py	a475b784fb517a86790fcedffcbc7aab8d7ca244	tracked	seed from 905787348a
 riveredge-backend/src/apps/kuaizhizao/schemas/sales_delivery_sync.py	a65bd6612778a0f253f3f5e0217caa30c39f1b45	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
@@ -756,12 +795,16 @@ riveredge-backend/src/apps/kuaizhizao/schemas/tool_ops.py	7caa7df817e0e0ff89de0c
 riveredge-backend/src/apps/kuaizhizao/schemas/warehouse.py	a745f86c7c7a6439a9f56ae08c15b61e1ba92269	tracked	seed from 4bd853a94f
 riveredge-backend/src/apps/kuaizhizao/schemas/work_order.py	d2e2f3da2ba424b9c44450ac55dbeb8947e47224	tracked	seed from 18c0e4ce1a
 riveredge-backend/src/apps/kuaizhizao/schemas/work_order_sync.py	f04609e2feecdf3e20b53bb2a52087111afe8ad0	applied	f40f54e336调度窗+价税簇
+riveredge-backend/src/apps/kuaizhizao/services/backflush_service.py	467f2ca88b8cd51752efec1f73d401a02c43c1c0	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
+riveredge-backend/src/apps/kuaizhizao/services/batching_center_service.py	1d224c98392cbba3cf2f563eb89351408e5a2a1d	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/batching_order_service.py	ee708f3579a4d0771890bbc2b660c409fe50f90f	tracked	seed from 899307f4d6
 riveredge-backend/src/apps/kuaizhizao/services/contract_milestone_billing_service.py	75772026f951e0e91eee25f4e0d496b777ca4675	tracked	seed from 4bd853a94f
 riveredge-backend/src/apps/kuaizhizao/services/data_compensation_service.py	29cef85f82499c85371d8155b33c43dc651ed8d6	tracked	seed from 4bd853a94f
 riveredge-backend/src/apps/kuaizhizao/services/defect_record_service.py	d684777f0939f9b6fcf909401a6423c410538f55	tracked	seed from 1efec0da1d
 riveredge-backend/src/apps/kuaizhizao/services/delivery_notice_service.py	33ade687684e8004086a86dd4bc4e57d1234c15d	tracked	seed from 4d124a088e
 riveredge-backend/src/apps/kuaizhizao/services/demand_computation_service.py	e937e5d96b457ab1f57efd7be14a2d124554d3f7	tracked	seed from 0b8630adfd
+riveredge-backend/src/apps/kuaizhizao/services/demand_replan_impact_service.py	32bf84560c5c3563145cfbe7f9cd7f8b5a02a207	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
+riveredge-backend/src/apps/kuaizhizao/services/demand_replanning_orchestrator_service.py	1533885faf4d7e185c4f39142de8a6228d2eb2ac	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/demand_service.py	e3974f02ffd54ff70a20387e45c9325509ceca9a	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/demand.py	e74dbdc26a5ca6374c922ef5c8f54c3c03392839	tracked	seed from 899307f4d6
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/enricher.py	e640b78381da19c0b09c795fa9c0ecdc02ee1415	applied	13be286f11联调修复簇
@@ -770,6 +813,7 @@ riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/other_expe
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/other_expense_application.py	496403495327070461b2abb6a2a59d4ede77ea38	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/other_income.py	8ca2ebec9456b48fe3ca009d116306264ebabf8d	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/outsource_order.py	8c56b74caf00130576607d1608b07a98ecbc4caa	tracked	seed from 93b3cb5998
+riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/outsource_work_order.py	ba7f24797a2f8507ce872b2719f7f834c74dd1f4	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/packing_binding.py	f6aada73d6a7386092e66247f50e53eb9076114d	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/payment_application.py	86936e1597be8bda154071fbdfb916bcc36b3ba7	tracked	seed from 2c76a942c2
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/print_unaudited_gate.py	8b8f0df0518c0f80d52f86bd2f4389d8e6041320	tracked	seed from 93b3cb5998
@@ -780,15 +824,16 @@ riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/purchase_r
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/purchase_return.py	93f1fe8a4b63c97dfaf0fe97ee64623d61602a1d	tracked	seed from 57a37e2749
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/quotation.py	6325ec1c5fe2213053090f31508cc925d0a26576	applied	ea1f4da58e刷新反馈+读加速+门禁加固
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/receipt_notice.py	ca246ededda2a59889afc0976fc0ff96bd1fa45c	tracked	seed from d81b4b70bf
+riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/reporting_record.py	fea28e3b04d00a2233a659ce10e109cc77fa4dd5	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/review_submission_gate.py	97b3167cbd778a53ba1aa75b43fde78992d55d5b	tracked	seed from 57a37e2749
-riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/rework_order.py	16fdf3fdff1b4c607cacc3952f4f62af72986002	tracked	seed from e16f2f2939
+riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/rework_order.py	16fdf3fdff1b4c607cacc3952f4f62af72986002	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/sales_contract.py	1649f113fba83e5ed3518f6150195336395dd147	tracked	seed from 872b76152e
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/sales_forecast.py	7170569605918258720e677018abfde8701ce0cd	tracked	seed from 57a37e2749
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/sales_order.py	2ad509b0a0573c59faa5d681d87fb8ee7a4772cc	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/sales_order_change.py	a3e920cfe13608a71e26287b682525c241ae1315	tracked	seed from 872b76152e
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/sales_return.py	9349f75735132a4b61e5bd28f9d1b63e17dee4a9	tracked	seed from 57a37e2749
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/shipment_notice.py	6b270809f45540b68dd731e9892e9549c96df099	tracked	seed from 899307f4d6
-riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/types.py	affd49c9495c3010cdc38c54322f7ac8c29dbe5a	applied	ea1f4da58e刷新反馈+读加速+门禁加固
+riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/types.py	affd49c9495c3010cdc38c54322f7ac8c29dbe5a	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/warehouse_inbound_hub.py	de5f6f1890a28559a1c2ffa8880d3d998d3294e8	tracked	seed from 899307f4d6
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/warehouse_outbound_hub.py	160acf1d11d7a6f8137373370be738e6edab4c7e	tracked	seed from 899307f4d6
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/work_order.py	2427aea8d35ae01340eaf5c5a05db41ed7ef187f	tracked	seed from 5b1b9828e4
@@ -806,6 +851,7 @@ riveredge-backend/src/apps/kuaizhizao/services/document_recognition.py	86054a2cd
 riveredge-backend/src/apps/kuaizhizao/services/document_relation_new_service.py	da86b3282edf06a67cc5a7a9bacf68ef4b5579d1	tracked	seed from e451b48dc2
 riveredge-backend/src/apps/kuaizhizao/services/document_relation_service.py	92c772788a0e6c2b3b5b806d5a37c4018e6976ca	tracked	seed from 2dd7241cfd
 riveredge-backend/src/apps/kuaizhizao/services/eight_d_collaboration_service.py	c5f1d4473059b451605697b2f3acbb6ce4abf020	tracked	seed from 2a5b2caf14
+riveredge-backend/src/apps/kuaizhizao/services/equipment_board_service.py	17ac43dc65bbb7017a980be1aedd9e00f45c3d5a	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/equipment_fault_service.py	31bd6fb085eb2b64f4e1dae98d48bf9c4a97f2c1	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/services/equipment_mobile_notification.py	519768f7728ba05fdfe92510f55eb52d6b234553	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/services/equipment_ops_data_generate_service.py	DELETED	tracked	seed from 0b8630adfd
@@ -838,13 +884,14 @@ riveredge-backend/src/apps/kuaizhizao/services/gb2828_sampling.py	b810b248a876f1
 riveredge-backend/src/apps/kuaizhizao/services/incoming_inspection_service.py	c9530906ccda090595ca8b8d0ec7915e0e6b61e0	tracked	seed from 905787348a
 riveredge-backend/src/apps/kuaizhizao/services/initial_data_service.py	f8aa02cecc3983e1eddd53ff4fc8578e525a7107	tracked	seed from 4bd853a94f
 riveredge-backend/src/apps/kuaizhizao/services/inspection_plan_service.py	4bfefdb4023aa29acb61d50356ed4906257067a1	applied	E域GB2828簇(源905787348a/1efec0da1d等)
-riveredge-backend/src/apps/kuaizhizao/services/inspection_policy_service.py	a8f8c63354a9953b3026406adb4e866d9700e556	applied	E域GB2828簇(源905787348a/1efec0da1d等)
+riveredge-backend/src/apps/kuaizhizao/services/inspection_policy_service.py	a8f8c63354a9953b3026406adb4e866d9700e556	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/inspection_sampling_transfer_service.py	e4857ea35c8a2652f8c018d3c95dcb5a22e6771d	applied	E域GB2828簇(源905787348a/1efec0da1d等)
 riveredge-backend/src/apps/kuaizhizao/services/inspection_step_spec.py	726d3893650a3208f3430a4a42b13f265395105e	tracked	seed from 905787348a
 riveredge-backend/src/apps/kuaizhizao/services/inventory_alert_service.py	cdbd71f4264c4f434b4722af8c258a148f4d9113	tracked	seed from ec29267f5b
 riveredge-backend/src/apps/kuaizhizao/services/inventory_service.py	18eabdc6fc24720cdfee4891dfaada1f473e8300	tracked	seed from 52b1abf2e3
 riveredge-backend/src/apps/kuaizhizao/services/inventory_sync_service.py	e7764ab683e411eb7759ef18c4f44f0a61a90fa0	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-backend/src/apps/kuaizhizao/services/inventory_transfer_service.py	c0a8128b0becf9cfd1c51a9b58de6b5922728991	tracked	seed from 3050130eb5
+riveredge-backend/src/apps/kuaizhizao/services/kingdee_consistency_orchestrator.py	33b62cf2406accbc22f113f9894649b6d5a632dd	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/kingdee_cosmic_push_adapter.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/services/kingdee_engineering_bom_push_service.py	f164a97e6e8d9cf61a2fe1c7daedd697dd820f8c	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-backend/src/apps/kuaizhizao/services/kingdee_finished_goods_receipt_push_service.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
@@ -878,11 +925,14 @@ riveredge-backend/src/apps/kuaizhizao/services/menu_badge_counts_extended.py	557
 riveredge-backend/src/apps/kuaizhizao/services/menu_badge_counts_service.py	4b232def781abb45ff44ec41fb47000adb0395df	tracked	seed from 432bd5f7fd
 riveredge-backend/src/apps/kuaizhizao/services/misc_voucher_finance_bridge.py	e9e826c9a5dc4b2098890d313e7bdff7eded7962	tracked	seed from 432bd5f7fd
 riveredge-backend/src/apps/kuaizhizao/services/misc_voucher_posting_service.py	26a1c6eb714b015375667a128144cb0fbca7a22b	tracked	seed from 2c945a39fb
+riveredge-backend/src/apps/kuaizhizao/services/mobile_home_service.py	53d1fc65d3ba4eac67c10d986c35cd106043b27c	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/mold_ops_service.py	c3a028f4683c0d6cca9c5a7c97de65599d97b31f	tracked	seed from 5f085a19c9
 riveredge-backend/src/apps/kuaizhizao/services/oa_document_push_service.py	d955ad8a79227395ee576e27073ac63578c321a3	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-backend/src/apps/kuaizhizao/services/operation_jump_rules.py	030a863b18307fd3f19bc5b3473ce3f7baf86564	deferred	红区缓置：上游删节点工序门禁(is_node_operation)与行级allow_jump OR放宽；本地保留两套生产顺序控制，落地即丢现有功能。可选：(a)仅摘兼容壳保留门禁 (b)产品确认废弃节点工序后整簇切换
 riveredge-backend/src/apps/kuaizhizao/services/oqc_inspection_service.py	c2ac26ad75b6e71e9ac6e10174511d483dc805c7	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaizhizao/services/order_change/helpers.py	d100965b67c8d4ff2838c317c441e8e2d62620ab	tracked	seed from 4d124a088e
+riveredge-backend/src/apps/kuaizhizao/services/other_expense_application_pull_service.py	2fc88732bebae002cdcde57a73966c7b0d0393a8	domain-out	本地无 OtherExpenseApplication 实体域（其他费用申请整体域外，finance 侧）
+riveredge-backend/src/apps/kuaizhizao/services/other_expense_application_push_service.py	c35d2950d1cfb170419b7d8ac50f0859cf5f8ac6	domain-out	本地无 OtherExpenseApplication 实体域（其他费用申请整体域外，finance 侧）
 riveredge-backend/src/apps/kuaizhizao/services/other_expense_application_service.py	9022a3276c05097f4c4f58800d82f315fed73fcc	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaizhizao/services/other_expense_audit_service.py	54862c74d2313e8a50cd8c98d4ee25cc0cde1c46	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/services/other_expense_service.py	380a07abf246431a8802b18687c4566201b45161	tracked	seed from 154977d948
@@ -890,18 +940,23 @@ riveredge-backend/src/apps/kuaizhizao/services/other_inbound_sync_service.py	a51
 riveredge-backend/src/apps/kuaizhizao/services/other_income_audit_service.py	7fcff2c4a469dd64f07cd9c5b9ee8cb3cda183be	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/services/other_income_service.py	bf496be5eb1e0b75bcf1fe3dc05c76feb300b608	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaizhizao/services/other_outbound_sync_service.py	c4c2664278d3bf0ac18e8adbc801f87195c8f1a9	tracked	seed from a0b353ce7e
+riveredge-backend/src/apps/kuaizhizao/services/other_voucher_codes.py	95273e7aa5c386ac19a41967420c04565c0121d5	domain-out	本地无 OtherExpenseApplication 实体域（其他费用申请整体域外，finance 侧）
+riveredge-backend/src/apps/kuaizhizao/services/outsource_collaboration_service.py	380e936ec1cf16c3530a0c2c7716da8a539a13cf	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/outsource_cost_service.py	ab80759dbe6c36c1f8b3774115490f825fbf48f3	tracked	seed from 432bd5f7fd
 riveredge-backend/src/apps/kuaizhizao/services/outsource_inspection_service.py	ab8d149b8fc494391ed812064b6946abbf05c517	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaizhizao/services/outsource_material_deduction_service.py	78e873080ff5c510ecbb9f14cd623a2e4f41f138	tracked	seed from 4d124a088e
 riveredge-backend/src/apps/kuaizhizao/services/outsource_material_issue_service.py	b00927d3eda47e25356781f4926717998ed255f7	tracked	seed from 432bd5f7fd
 riveredge-backend/src/apps/kuaizhizao/services/outsource_material_receipt_service.py	992c3de4cd722ef6dd66120c6f7176903c324513	tracked	seed from 31efc2b64c
+riveredge-backend/src/apps/kuaizhizao/services/outsource_material_return_service.py	2f58f9fc5a577ac0900ecffe2e3d3be1c942aca6	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/outsource_order_issue_bridge.py	35a304afd358c78d6a7032a5886c4992dd02472a	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/kuaizhizao/services/outsource_order_receipt_finance.py	6c3b63c7b416e261892e297d5ffef8dda0392c55	tracked	seed from 93b3cb5998
+riveredge-backend/src/apps/kuaizhizao/services/outsource_product_return_service.py	37b9476d42286c9594c00320ffef7ac5c0a78281	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/outsource_service.py	559e6bd03406d0a528b254e969cb64729fcff07f	tracked	seed from 4d124a088e
 riveredge-backend/src/apps/kuaizhizao/services/outsource_settlement_credit_service.py	aff1d101bff5ca4e21df66b35a45fef4afcc0edf	tracked	seed from 4d124a088e
 riveredge-backend/src/apps/kuaizhizao/services/outsource_settlement_finance_bridge.py	1a982c856a06673512bf5db7ffe1ccf544104909	tracked	seed from 4d124a088e
 riveredge-backend/src/apps/kuaizhizao/services/outsource_settlement_service.py	f5d17ea26923bc5cb939b4fac4d6bbd29281e8bb	tracked	seed from 432bd5f7fd
 riveredge-backend/src/apps/kuaizhizao/services/outsource_work_order_service.py	a8064fdc321995ec9e01364d05e3056ce71fd32e	tracked	seed from 4d124a088e
+riveredge-backend/src/apps/kuaizhizao/services/over_report_rules.py	745d373650a50f29db7f30531a9cc114c3884395	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/packing_binding_service.py	efe7af6ade72c6729f15b1d8d1cfe496296f624b	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/services/packing_hu_operations.py	da3966c97ed3e60bcad583bdbb8abbc4adfb8f2d	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/services/packing_profile_service.py	0779cdb314d5fcbb2884fe0f05486ef85384a7e1	tracked	seed from b12cc66e71
@@ -933,9 +988,12 @@ riveredge-backend/src/apps/kuaizhizao/services/purchase_requisition_service.py	4
 riveredge-backend/src/apps/kuaizhizao/services/purchase_requisition_stock_service.py	e33ffcbc20cceab7c8fa7db247c5dd7d4e865337	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/kuaizhizao/services/purchase_service.py	90240187745ebbcdf4d0069e0a1b63eadab56892	deferred	本次新增hunk为副数量全景B2；本地缺aux ORM写读闭环，不引入伪字段/第二套helper；既有主数量与本地硬化保留；主数量工具在本地既有文件扩回归验证
 riveredge-backend/src/apps/kuaizhizao/services/qms_audit_nc_service.py	0cda9ffab9f6a1dc2fe7f6f6d73f736b62bed946	tracked	seed from a2473e9b42
+riveredge-backend/src/apps/kuaizhizao/services/qms_clause_presets/__init__.py	b3aeb0bb5997d172ba930717797276f9b4cdbdcd	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
+riveredge-backend/src/apps/kuaizhizao/services/qms_clause_presets/ansiesd_s2020.py	a7134d3ebb7d52dd0ac42fd5fdf00d8ad74d735b	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/qms_corrective_action_service.py	7cf4b14f37f72ef09b4d58e217cda2c3ef25159d	tracked	seed from a2473e9b42
 riveredge-backend/src/apps/kuaizhizao/services/qms_iso_clause_service.py	4bdf2b18a3d03429da358b7a01e547e711fb8aa8	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-backend/src/apps/kuaizhizao/services/qms_phase5_service.py	7f3c897caa640cd4ef3f7176befd285e85a7794d	tracked	seed from a2473e9b42
+riveredge-backend/src/apps/kuaizhizao/services/quality_automation_service.py	b29ae7db413ddc39eb7383bd68d13aa862b2bc17	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/quality_complaint_service.py	2f7f8962e6b7bb819e44b24f5309af101d4e04b4	tracked	seed from a2473e9b42
 riveredge-backend/src/apps/kuaizhizao/services/quality_cost_service.py	9d24e1baf39a00a9d50255b4713d44fb3b2083bf	tracked	seed from 432bd5f7fd
 riveredge-backend/src/apps/kuaizhizao/services/quality_improvement_service.py	1ddf0d4c7ec2dc1352dc4c0c1a1e72b6bf002445	tracked	seed from 2a5b2caf14
@@ -943,18 +1001,18 @@ riveredge-backend/src/apps/kuaizhizao/services/quality_inspection_helpers.py	e1c
 riveredge-backend/src/apps/kuaizhizao/services/quality_inspection_lifecycle.py	1fac537e399f47016dc91b6240a752b33cd2f1d7	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/services/quality_patrol_service.py	34d48ec9140277c6a0c3be3e1d1f222f647462ee	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaizhizao/services/quality_qms_service.py	6296a251bb59d1de3ec6362e4db0a95c54c43d9e	tracked	seed from a2473e9b42
-riveredge-backend/src/apps/kuaizhizao/services/quality_service.py	f37d77b74f50f2c831b943e504b34fd623f2c813	applied	E域GB2828簇(源905787348a/1efec0da1d等)
+riveredge-backend/src/apps/kuaizhizao/services/quality_service.py	f37d77b74f50f2c831b943e504b34fd623f2c813	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/quotation_service.py	de05bdcd3edbb75fa36f9df69f8f81c58393d4f2	applied	f40f54e336调度窗+价税簇
 riveredge-backend/src/apps/kuaizhizao/services/receipt_notice_service.py	75f01dc040d1e309482f1d04b22db9979aaa9127	tracked	seed from 1eb300325a
 riveredge-backend/src/apps/kuaizhizao/services/replenishment_suggestion_service.py	30679fcf87504b3829679a84528382e451cc7db2	tracked	seed from 57a37e2749
 riveredge-backend/src/apps/kuaizhizao/services/report_enhancements.py	d60e94039a6e53176c43865906f6454609590fe9	tracked	seed from 2dd7241cfd
 riveredge-backend/src/apps/kuaizhizao/services/report_service.py	14300e14dee75a0ce1e63b9a2e606664cfe5c920	tracked	seed from 3958bb1524
-riveredge-backend/src/apps/kuaizhizao/services/reporting_service.py	02898b1399fc326b3c8d5998fd73d384e0b5217f	tracked	seed from 154977d948
+riveredge-backend/src/apps/kuaizhizao/services/reporting_service.py	02898b1399fc326b3c8d5998fd73d384e0b5217f	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/reporting_sync_service.py	d68c324e5d710e93e243e4e1cd92b45d2efac1ad	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-backend/src/apps/kuaizhizao/services/reset_data_service.py	7f9e1e8718aa3c9724c0bdf6df4ccf0b1a788c90	tracked	seed from 5f085a19c9
-riveredge-backend/src/apps/kuaizhizao/services/rework_order_service.py	3f158ffff0430e140999bbe0522c3b862b07f3b8	tracked	seed from 1eb300325a
-riveredge-backend/src/apps/kuaizhizao/services/rework_order_workflow.py	7d64ebc458ec4c332067d92c87ce8d7654cbd18d	tracked	seed from e16f2f2939
-riveredge-backend/src/apps/kuaizhizao/services/rework_signoff_orchestrator.py	c548cbcbfa558c0fd4d5807ebcba0acc2b63226d	tracked	seed from e16f2f2939
+riveredge-backend/src/apps/kuaizhizao/services/rework_order_service.py	3f158ffff0430e140999bbe0522c3b862b07f3b8	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
+riveredge-backend/src/apps/kuaizhizao/services/rework_order_workflow.py	7d64ebc458ec4c332067d92c87ce8d7654cbd18d	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
+riveredge-backend/src/apps/kuaizhizao/services/rework_signoff_orchestrator.py	c548cbcbfa558c0fd4d5807ebcba0acc2b63226d	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/sales_contract_service.py	0319e01bddbe7348198a1a4afdce42348ec970eb	applied	f40f54e336调度窗+价税簇
 riveredge-backend/src/apps/kuaizhizao/services/sales_delivery_sync_service.py	a5af3f59306b3051ba900046c8319ac0692532ca	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/services/sales_order_change_service.py	73b1342e89b8e28dce05647469f07fbcb9831eb1	tracked	seed from 154977d948
@@ -974,6 +1032,7 @@ riveredge-backend/src/apps/kuaizhizao/services/supplier_evaluation_service.py	44
 riveredge-backend/src/apps/kuaizhizao/services/tool_ops_service.py	0651b6bfd2a14a16198676d37a28ea022819e2f0	tracked	seed from 5f085a19c9
 riveredge-backend/src/apps/kuaizhizao/services/tool_service.py	6732e768d2c81363d7c2d9e82bead63dbe392d98	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/services/warehouse_kingdee_alignment.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
+riveredge-backend/src/apps/kuaizhizao/services/warehouse_list_core.py	5d3cf9707f2bb73abeedd5be3d19eb25d36684fb	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/warehouse_service.py	d130c7c0db8b6814b28351be519bdb2e4135858c	deferred	本次新增hunk为副数量全景B2；本地缺aux ORM写读闭环，不引入伪字段/第二套helper；既有主数量与本地硬化保留；主数量工具在本地既有文件扩回归验证
 riveredge-backend/src/apps/kuaizhizao/services/warehouse_wo_outsource_pull_service.py	222c4850eafc6d7bc69db6297febf357bd87bf83	tracked	seed from 5b1b9828e4
 riveredge-backend/src/apps/kuaizhizao/services/work_order_bom_line_service.py	dbebd0ad922e1fff09f2c878f662654aa16c16c1	tracked	seed from 5b1b9828e4
@@ -992,8 +1051,9 @@ riveredge-backend/src/apps/kuaizhizao/utils/list_item_material_keyword.py	21ae6c
 riveredge-backend/src/apps/kuaizhizao/utils/material_dual_quantity_utils.py	b9bd4692a923a0d4eff0162a3be4ccd5c194f60c	tracked	seed from 899307f4d6
 riveredge-backend/src/apps/kuaizhizao/utils/material_source_helper.py	1ea792d1ac3a3438c6d98042cdfebaba601c3aa5	tracked	seed from 0b8630adfd
 riveredge-backend/src/apps/kuaizhizao/utils/material_unit_utils.py	4d66cb6ef994d5ab6937500c13db0e0b94004c0a	applied	added resolve_material_inventory_unit only; inventory scenario and price factor unchanged
-riveredge-backend/src/apps/kuaizhizao/utils/mrp_bom_snapshot.py	330b777fbea99e85ac7d48ea686dd8a6502e766f	tracked	seed from 18c0e4ce1a
+riveredge-backend/src/apps/kuaizhizao/utils/mrp_bom_snapshot.py	330b777fbea99e85ac7d48ea686dd8a6502e766f	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/utils/mrp_scheduling_helper.py	9c107b0904d0671f57bf8f5c0e3bce23af960d44	tracked	seed from 93b3cb5998
+riveredge-backend/src/apps/kuaizhizao/utils/outsource_work_order_state.py	140fc919186385ef88d9c0691c0d994f09ed29e9	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/utils/picking_posting.py	37bdf8ff2678b378dfa59d60ad12edc7f8bf6524	tracked	seed from 3050130eb5
 riveredge-backend/src/apps/kuaizhizao/utils/pull_open_line_quantity.py	5f2977e50a9648b290d51f213e63884fa4312ab9	applied	B1仅主数量真实占用/分组合并与草稿队列UX；不伪造aux ORM；补真实取单测试并修复日期NameError；63聚焦通过
 riveredge-backend/src/apps/kuaizhizao/utils/pull_query_date_filter.py	300295d2a8524e87f0be848e89334401735de2f1	tracked	seed from b12cc66e71
@@ -1001,6 +1061,7 @@ riveredge-backend/src/apps/kuaizhizao/utils/purchase_arrival_warning.py	0d4372b0
 riveredge-backend/src/apps/kuaizhizao/utils/purchase_order_line_amounts.py	73a8d62ca6c842cefdd2c5eaa0409cfc14207ee5	applied	13be286f11联调修复簇
 riveredge-backend/src/apps/kuaizhizao/utils/purchase_return_qty.py	84cd6c6aa5399dd9363c5a6b2492cd622cafc65f	deferred	本次新增hunk为副数量全景B2；本地缺aux ORM写读闭环，不引入伪字段/第二套helper；既有主数量与本地硬化保留；主数量工具在本地既有文件扩回归验证
 riveredge-backend/src/apps/kuaizhizao/utils/sales_order_attachment_carry.py	628183c369a4ba52f1ce5457dd1bfcf61473d910	tracked	seed from d892f36d03
+riveredge-backend/src/apps/kuaizhizao/utils/sales_order_push_qty.py	af7bf59c7ec25c10104c6dc602055c150ef5b571	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/utils/sales_price_amount.py	4f8d0089ce12dffd805c766b9f723a3e07ed65be	tracked	seed from 6abba1dbd5
 riveredge-backend/src/apps/kuaizhizao/workflows/functions/__init__.py	e9c1902661513ab4f5f08bf074f22a1bf48cd000	tracked	seed from 68ec1717a3
 riveredge-backend/src/apps/kuaizhizao/workflows/functions/demand_computation_automation_workflow.py	c10106fe52596b0c0501d1aea66f6cc8c05d6d3b	tracked	seed from 31efc2b64c
@@ -1100,6 +1161,7 @@ riveredge-backend/src/core/config/custom_field_pages.py	40a5e8eba611c718351db0a2
 riveredge-backend/src/core/config/field_permission_resource_registry.py	2980cc5b606416d36c6f8ca4d22a6259a634eecc	tracked	seed from 2c945a39fb
 riveredge-backend/src/core/config/finance_recognition.py	d8d0827841d258dfd1c2254f6af80252734b80d9	tracked	seed from b12cc66e71
 riveredge-backend/src/core/config/kingdee_cosmic_mfg_api_presets.json	e86ad5c5a33970fba98839254cd064c1c2d0f5ff	applied	4ba2d15ae8契约簇;force_rewrite/expand未接调用点随调度窗簇
+riveredge-backend/src/core/config/rework_order_funide_profile.py	3dcb60c3052a1be56d76c4cc6b2faaac645330cf	domain-out	客户品牌行业种子(funide)，通用产品规则不入产品源码；form_profile 回退段已剔除，通用行业配置经 IndustryExtensionRuntimeService 解析
 riveredge-backend/src/core/config/scheduled_job_registry.py	88b3a043103895f63cd07926168dae0f9060dd3f	tracked	seed from 6abba1dbd5
 riveredge-backend/src/core/config/system_dictionaries.py	7a73228cc264a160196d1666cb3262b769788848	tracked	seed from 6abba1dbd5
 riveredge-backend/src/core/domain/security/password_policy.py	6c68f57e1f798245db572f21963157dcb62678d2	applied	C密码策略/默认与临时重置整簇；应用扫描按目录项容忍OSError但整目录不可枚举上抛；63聚焦测试包含用户与菜单同步；生成口令不写日志
@@ -1263,6 +1325,7 @@ riveredge-backend/src/server/main.py	20c69b316a9ae4ca67457560b2993306ef192007	tr
 riveredge-backend/tests/apps/funide_oa/test_trial_flow_profile_augment.py	eb8b40e7c77e8d29220733d8d021c3dd67a633ec	tracked	seed from c69cef14ed
 riveredge-backend/tests/apps/kuaiai/test_catalog_registry.py	8917a89dbec78d689313a3dfca9e086d05ba6380	tracked	seed from 40599c81ed
 riveredge-backend/tests/apps/kuaicaiwu/services/gl/test_coa_service.py	d2b9afdddb5f113755ce47b7d9977a6c958da890	tracked	seed from 57a37e2749
+riveredge-backend/tests/apps/kuaicaiwu/services/test_balance_aggregate.py	42fb8fe9f4	deferred	R2-测试: 期初轧差逻辑待同步
 riveredge-backend/tests/apps/kuaicaiwu/services/test_finance_tax.py	525d906fc7cc781e37d4ab0e94324d8f26ed36db	tracked	seed from 3958bb1524
 riveredge-backend/tests/apps/kuaicaiwu/services/test_finance_voucher_posting_bank_precheck.py	56f88bd5c2bbdf0cbf79616adf7682b1c06a8968	tracked	seed from 2a5b2caf14
 riveredge-backend/tests/apps/kuaicaiwu/services/test_trial_balance_leaf_totals.py	d0fd543729af4f6d8b470667edb9694682d77994	tracked	seed from 57a37e2749
@@ -1274,6 +1337,7 @@ riveredge-backend/tests/apps/kuaiconnect/test_material_group_infer_parent.py	efc
 riveredge-backend/tests/apps/kuaiconnect/test_warehouse_kingdee_alignment.py	3be1bbd3e4124a36dd7b25afe8447c3b55f4bc9b	tracked	seed from 6abba1dbd5
 riveredge-backend/tests/apps/kuaiplm/test_rd_project_system_archive.py	d07ba936928e8e2858b187a6cd0bfa55e75d7041	tracked	seed from 88b0c140f1
 riveredge-backend/tests/apps/kuaizhizao/api/test_kuaizhizao_document_gate.py	0bd6426cf3ee762e2a7a6581aced9efbc2345d55	tracked	seed from f1c2d18cfb
+riveredge-backend/tests/apps/kuaizhizao/api/test_kuaizhizao_route_access_quality.py	9d94441ae0	deferred	R2-测试: notify→submit映射待摘
 riveredge-backend/tests/apps/kuaizhizao/api/test_purchase_order_display_route_access.py	a55aa63e8dd4eb7f239941ce8d82debd66d94f24	tracked	seed from c83c6d5589
 riveredge-backend/tests/apps/kuaizhizao/constants/test_purchase_order_type.py	ac2099700afd20c52990b227d11e5a5b00371ff0	tracked	seed from 6abba1dbd5
 riveredge-backend/tests/apps/kuaizhizao/finance/services/test_allow_negative_balance.py	cceae78e80360206608635b22e62994e23c928df	tracked	seed from 2a5b2caf14
@@ -1293,11 +1357,14 @@ riveredge-backend/tests/apps/kuaizhizao/services/test_document_action_policy_sal
 riveredge-backend/tests/apps/kuaizhizao/services/test_document_action_policy_shipment_notice.py	4bd737675f113f95b2ce5adc1d841c4d7d44f5b8	tracked	seed from 899307f4d6
 riveredge-backend/tests/apps/kuaizhizao/services/test_document_push_service.py	0d50786d66ae292d0fa8d68a24d01b3641d93399	tracked	seed from 2e8ecad990
 riveredge-backend/tests/apps/kuaizhizao/services/test_finished_goods_inbound_quota.py	d2098eee2fdaae08196cddd6494cd294e5527416	tracked	seed from 93b3cb5998
+riveredge-backend/tests/apps/kuaizhizao/services/test_fqc_inbound_quality_contract.py	9d94441ae0	superset	R2-迁移: 本地模型/列已存在等价实现
 riveredge-backend/tests/apps/kuaizhizao/services/test_gb2828_sampling.py	1036bcb2d5da4488a505092ca8073b1f68685bb6	tracked	seed from 905787348a
 riveredge-backend/tests/apps/kuaizhizao/services/test_inventory_batch_aux_deduct.py	37126d0ada7e6fc609bb7e0e376f1a65edf91796	tracked	seed from 95c4869063
+riveredge-backend/tests/apps/kuaizhizao/services/test_inventory_report_movement_quantities.py	9fc03de3ed	deferred	R2-测试: 出库正量归集+doc标签待摘
 riveredge-backend/tests/apps/kuaizhizao/services/test_kingdee_sales_purchase_inventory_push.py	e13f4213b8fb1fb6fd15a41d0c547d9e7880bc14	tracked	seed from a0b353ce7e
 riveredge-backend/tests/apps/kuaizhizao/services/test_mode_a_lifecycle.py	39f89d3ab61e094e626578b412f64d5c2b40b308	tracked	seed from 0513e907f5
 riveredge-backend/tests/apps/kuaizhizao/services/test_other_outbound_update_items.py	de10d3790cad4210ba9878884ac67d655fbad2bf	tracked	seed from e451b48dc2
+riveredge-backend/tests/apps/kuaizhizao/services/test_over_report_rules.py	1e33dd2861	applied	R2-测试回归簇: 落地1例,余2例待over-report簇(validate_over_report_value_for_mode)
 riveredge-backend/tests/apps/kuaizhizao/services/test_packing_profile_cartonization.py	48de21cd86e44e133b8b1d6359ccd29f0762b1ec	tracked	seed from b12cc66e71
 riveredge-backend/tests/apps/kuaizhizao/services/test_payment_application_invoice_status.py	b7278279615c40a9a4f440fc22b7aa600468c4cb	tracked	seed from ec29267f5b
 riveredge-backend/tests/apps/kuaizhizao/services/test_payment_application_line_materials.py	df3755b781901526f5edc58727374dbf4efc3f6d	tracked	seed from 95c4869063
@@ -1310,6 +1377,8 @@ riveredge-backend/tests/apps/kuaizhizao/services/test_purchase_order_price_settl
 riveredge-backend/tests/apps/kuaizhizao/services/test_purchase_receipt_zero_tax.py	2cda61d04f71ff2fb6fdf1ab88645b580bbec712	tracked	seed from e451b48dc2
 riveredge-backend/tests/apps/kuaizhizao/services/test_purchase_requisition_conversion_status.py	0c61719665978c56734f3dabdc0bd241e6e4d970	tracked	seed from f1c2d18cfb
 riveredge-backend/tests/apps/kuaizhizao/services/test_purchase_requisition_po_plan_merge.py	10ef19c5c738cb96d69d1f5c6f5c182aa35e59b6	applied	13be286f11续:前端+财务适配+迁移
+riveredge-backend/tests/apps/kuaizhizao/services/test_quality_inspection_auto_approve.py	9d94441ae0	superset	R2-迁移: 本地模型/列已存在等价实现
+riveredge-backend/tests/apps/kuaizhizao/services/test_quality_linked_document_read.py	9d94441ae0	superset	R2-迁移: 本地模型/列已存在等价实现
 riveredge-backend/tests/apps/kuaizhizao/services/test_rework_order_capabilities.py	4edd09df9d8e066b8054cf390361d108540e32ca	tracked	seed from e16f2f2939
 riveredge-backend/tests/apps/kuaizhizao/services/test_rework_order_signoff_lifecycle.py	9f38c6cf725bf911b847ce9d1813743cb53d6710	tracked	seed from e16f2f2939
 riveredge-backend/tests/apps/kuaizhizao/services/test_rework_signoff_chain.py	bdc92608a6042aff8f73282ebe95be213d7b8079	tracked	seed from e16f2f2939
@@ -1318,6 +1387,7 @@ riveredge-backend/tests/apps/kuaizhizao/services/test_stock_serial_validation.py
 riveredge-backend/tests/apps/kuaizhizao/services/test_trial_balance_leaf_totals.py	690659f8ad3029a1f102e1cfc0ada0132eeed0ba	tracked	seed from 57a37e2749
 riveredge-backend/tests/apps/kuaizhizao/services/test_warehouse_kingdee_alignment.py	DELETED	applied	D依赖簇续:支撑件+前端
 riveredge-backend/tests/apps/kuaizhizao/services/test_work_order_inbound_preview_qualified.py	d6d4581a800e187eb4722e4252aef78b6ec11a48	tracked	seed from b12cc66e71
+riveredge-backend/tests/apps/kuaizhizao/services/test_work_order_inbound_quota_fqc.py	86e3d8187c	superset	R2-迁移: 本地模型/列已存在等价实现
 riveredge-backend/tests/apps/kuaizhizao/test_eight_d_collaboration_gate.py	75ea96b726dfbf239d3a7a2372a4059d1dba04e8	tracked	seed from 2a5b2caf14
 riveredge-backend/tests/apps/kuaizhizao/test_html_to_pdf_isolation.py	c42d57665d4ba0fc5b49561330be856509d609aa	tracked	seed from 176c2d2aeb
 riveredge-backend/tests/apps/kuaizhizao/utils/test_document_amount_write.py	6d346ce699252df0274d317fc2cd28bb387a582c	tracked	seed from 4d124a088e
@@ -1325,6 +1395,7 @@ riveredge-backend/tests/apps/kuaizhizao/utils/test_document_source_types.py	fecd
 riveredge-backend/tests/apps/kuaizhizao/utils/test_ledger_dual_quantity_utils.py	ff2d1be9450cf80cb43a5fd63cf3c9b7348bd638	tracked	seed from 52b1abf2e3
 riveredge-backend/tests/apps/kuaizhizao/utils/test_mrp_bom_snapshot.py	7882a386d8ba7f9f30f16e46227de5716b0c1b40	tracked	seed from 18c0e4ce1a
 riveredge-backend/tests/apps/kuaizhizao/utils/test_mrp_scheduling_helper.py	852996e87c957fec9683c1d82407fd1e221a0837	tracked	seed from 93b3cb5998
+riveredge-backend/tests/apps/kuaizhizao/utils/test_outsource_work_order_state.py	11e8cb33be	deferred	R2-测试: 委外receipt_reopen状态机待摘
 riveredge-backend/tests/apps/kuaizhizao/utils/test_picking_over_issue.py	dbdbe2f21ade23ff1e4b899a3f0c1595a8f8db0e	tracked	seed from 3050130eb5
 riveredge-backend/tests/apps/kuaizhizao/utils/test_pull_open_line_quantity.py	8d77a8426a9aa8c25f0626629383f814b3871db2	deferred	本次新增hunk为副数量全景B2；本地缺aux ORM写读闭环，不引入伪字段/第二套helper；既有主数量与本地硬化保留；主数量工具在本地既有文件扩回归验证
 riveredge-backend/tests/apps/kuaizhizao/utils/test_purchase_return_qty_receipt_item.py	b7d2de2b80732193beff5bd17d3bb5fdee42ed8e	tracked	seed from b12cc66e71
@@ -1332,13 +1403,17 @@ riveredge-backend/tests/apps/kuaizhizao/utils/test_purchase_return_replenish_qty
 riveredge-backend/tests/apps/kuaizhizao/utils/test_source_config_normalize.py	5c698abd132d74368c04189d6bf6759c8802c240	tracked	seed from 37409d3b29
 riveredge-backend/tests/apps/master_data/schemas/test_bom_install_position.py	21cc0c4c5bc5e811ce104508c61c39a9353803fa	tracked	seed from 93b3cb5998
 riveredge-backend/tests/apps/master_data/schemas/test_bom_outsource_policy.py	728899a7b5e3e3d48a22430826968a7f291741a3	tracked	seed from 93b3cb5998
+riveredge-backend/tests/apps/master_data/services/test_material_batch_expiry.py	520cde9e49	deferred	R2-测试: effective_expiry_date待摘
 riveredge-backend/tests/apps/master_data/services/test_partner_material_price_defaults.py	388157d7a8f138c9171db862ad1774f7c3bd9bce	tracked	seed from 93b3cb5998
 riveredge-backend/tests/apps/master_data/services/test_partner_material_price_resolver_tier.py	a702c59397f6b7d0f5868febe7e1755a00c0984d	tracked	seed from 154977d948
 riveredge-backend/tests/apps/master_data/services/test_partner_price_tier_utils.py	08f7bd46761ce5170c7defd7df33368bb572b275	tracked	seed from a60f3e9039
 riveredge-backend/tests/apps/master_data/test_sync_values_equal.py	d0f8d534307a703b36d600c798659a919fa4c031	applied	4ba2d15ae8契约簇;force_rewrite/expand未接调用点随调度窗簇
+riveredge-backend/tests/apps/master_data/utils/test_kingdee_location_number.py	282f15a0fd	applied	R2-测试回归簇: 被测函数本地已在,纯加回归
+riveredge-backend/tests/core/config/test_affiliate_storage_location_read.py	ef05d62736	superset	R2-迁移: 本地模型/列已存在等价实现
 riveredge-backend/tests/core/config/test_audit_registry_rework_order.py	3a6403f8c5bec80e4416e5103a92e62fa3d88fd8	tracked	seed from e16f2f2939
 riveredge-backend/tests/core/config/test_field_permission_resource_registry.py	d305a7f08d48b9e298b24decd8ac1f08b43c54ac	tracked	seed from 2c945a39fb
 riveredge-backend/tests/core/services/application/test_api_library_catalog.py	8f7c0f3d4eb3530659ce83c911ca26dcaadccc49	applied	客户org-scope tip整取 落 apps/master_data
+riveredge-backend/tests/core/services/application/test_api_test_request_merge.py	32cf90c8a2	applied	R2-测试回归簇: 被测函数本地已在,纯加回归
 riveredge-backend/tests/core/services/approval/test_advance_condition_not_pinned.py	0c138ef77de39a30a126287927a704fa4bf891d3	tracked	seed from dbc4b6f803
 riveredge-backend/tests/core/services/approval/test_approval_document_view.py	037e5455e2c24aaa8792078903eb9d983408457f	tracked	seed from 37409d3b29
 riveredge-backend/tests/core/services/approval/test_approval_viewer_actions.py	2df6305fcc2b4b79647a8a1fe305bc38c7c0f36d	tracked	seed from 872b76152e
@@ -1354,6 +1429,7 @@ riveredge-backend/tests/core/services/approval/test_review_submission_state.py	c
 riveredge-backend/tests/core/services/approval/test_revoke_reopen_seed_final_approvers.py	1da516afe37ff38a4614de8b3b0a562c640d7d35	tracked	seed from c69cef14ed
 riveredge-backend/tests/core/services/approval/test_subsequent_recall_gate_reachable.py	594959ff83eb3689a42589ab34b34fa129857732	tracked	seed from 7aab065f41
 riveredge-backend/tests/core/services/data/test_data_dictionary_label.py	477805fdefe3c2f75e74edcb9de067700705261d	tracked	seed from 6abba1dbd5
+riveredge-backend/tests/core/services/data/test_sync_match_key_coverage.py	32cf90c8a2	superset	R2-迁移: 本地模型/列已存在等价实现
 riveredge-backend/tests/core/services/data/test_sync_source_rows.py	a38200985d9e8f04c318510964328b510caf872b	tracked	seed from 7fa73e053a
 riveredge-backend/tests/core/services/integration/test_connector_request.py	016ccdff3eab01fa7adcf8ac698e74012cf477da	tracked	seed from d025413d18
 riveredge-backend/tests/core/services/integration/test_kingdee_cosmic_batch_operate_parse.py	5abbd83022dc74113338bf69a63a88b08bb644bd	tracked	seed from 6abba1dbd5
@@ -1366,6 +1442,7 @@ riveredge-backend/tests/core/services/integration/test_kingdee_cosmic_since_filt
 riveredge-backend/tests/core/services/integration/test_kingdee_cosmic_supplier_active.py	8ea8f6109d5ea774087f54317af511726e037736	applied	4ba2d15ae8契约簇;force_rewrite/expand未接调用点随调度窗簇
 riveredge-backend/tests/core/services/integration/test_kingdee_cosmic_supplier_org_scope.py	d44236614fb763011751f1bf2e7d7b46ac7b1b6e	applied	org-scope 簇 tip 版整取
 riveredge-backend/tests/core/services/integration/test_kingdee_galaxy_material_active.py	9b2a7ef5bd2120d6314bd88967c050e05fcd4404	applied	tip整取
+riveredge-backend/tests/core/services/integration/test_kingdee_warehouse_document_push_config.py	3f8d606f7c	applied	R2-测试回归簇: 被测函数本地已在,纯加回归
 riveredge-backend/tests/core/services/integration/test_wecom_connector_unique.py	3e69293a0fa578fe22fb0e1b0482e2ba2bd1b7fc	tracked	seed from d84fe20715
 riveredge-backend/tests/core/services/integration/test_wecom_tenant_resolve.py	c57724bb7aee7726382f0c88fa66a587b22be9ea	tracked	seed from d84fe20715
 riveredge-backend/tests/core/services/messaging/test_approval_wecom_card_service.py	234f76c060b0112070eacc7e91d2f83431a7cd82	tracked	seed from 3958bb1524
@@ -1610,21 +1687,26 @@ riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/components/quali
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/components/qualityMeta.ts	9771084dfa4f10c4ad3d4f890659c79f6108f648	tracked	seed from 905787348a
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/components/qualityTableColumns.tsx	7dce7b532467f76573e0031673b9180613d1d103	tracked	seed from a62d32cff6
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/corrective-actions/index.tsx	f15db6abd51f2be643e1ce679a3a5d7aa22043ec	tracked	seed from a2473e9b42
+riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/drawing-balloon-sheets/index.tsx	c53c7695d1	applied	R2-前端增量簇: 行删收敛批量删+persistenceId升版
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/eight-d-reports/workbench/EightDWorkbench.tsx	0bf00850e9aae12547a7e12144530b3ee0cb5afe	tracked	seed from 2a5b2caf14
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/external-audits/index.tsx	4fe97ac41e20ca0b4e408aeec2e3afc344d20ca8	tracked	seed from a2473e9b42
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/fai-orders/index.tsx	0724101172925d007f0148de21b21f8fd789b67d	tracked	seed from 93b3cb5998
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/finished-goods-inspection/index.tsx	f4cddb9a392a134f69ffa4347b9135d69754f1d2	tracked	seed from 93b3cb5998
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/incoming-inspection/index.tsx	19faa21f6692f2a77fc58e034755875acf89475d	tracked	seed from 1efec0da1d
+riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/inspection-center/index.tsx	9d94441ae0	applied	R2-前端增量簇
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/inspection-plans/index.tsx	11cef1acc44236fd452b36276ba319718c20061b	tracked	seed from 777aa1a468
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/internal-audits/InternalAuditChecklistPanel.tsx	9b34ce6b7342379b9547a14b8432b540cca6178b	tracked	seed from a2473e9b42
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/internal-audits/index.tsx	087e3e92fb83a92b3ba46146bf999625a3378ee3	tracked	seed from a2473e9b42
+riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/iso-clauses/index.tsx	9d94441ae0	superset	R2: 本地已有等价/更深实现
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/legal-regulations/index.tsx	f42dc4d37f43490c09c38b32da4605a19abb9570	tracked	seed from a2473e9b42
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/management-reviews/ManagementReviewResolutionsPanel.tsx	4cff4bd05c6ee5bb9b96796d36c0c855477532b2	tracked	seed from a2473e9b42
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/management-reviews/index.tsx	4759d533cedce8c0a0cd9ebcc0370adb91af6b47	tracked	seed from a2473e9b42
+riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/nonconforming-ledger/ncLedgerSource.tsx	050638b809	applied	R2-前端增量簇
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/nonconformity-reports/index.tsx	79972abbc2c84c563b3e9bd553decee9d7237f12	tracked	seed from a2473e9b42
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/oqc-inspection/index.tsx	fa2762db8a5cf416add3a4cf88f4c55db4a21328	tracked	seed from 93b3cb5998
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/outsource-inspection/index.tsx	db52b5629166e46fc3833818e897084af271f520	tracked	seed from a62d32cff6
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/process-inspection/index.tsx	b9088e5f2fd937c7e964591f235c6d77d25419bf	tracked	seed from 31efc2b64c
+riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/qc-sop/index.tsx	7a4f8e4230	superset	R2: 本地已有等价/更深实现
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/qms/qmsMeta.ts	f38bfeee53c5aefb32b438f3b7b880b28a5d40c4	tracked	seed from a2473e9b42
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/quality-complaints/index.tsx	66ed998878b9e722e8a59d51dfefe96999c1a58e	tracked	seed from 5b1b9828e4
 riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/quality-objectives/index.tsx	21763ee66119927e7f305818f56ab9ecbb2a336e	tracked	seed from a2473e9b42
@@ -1668,11 +1750,14 @@ riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/shared/salesDocume
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/shipment-notices/index.tsx	57ad2310cce159dbadda2a68ed5c1a08f40b6a8d	tracked	seed from 4d124a088e
 riveredge-frontend/src/apps/kuaizhizao/pages/shared/documentReturnListImport.ts	05531d0b6f2e51173607ab1df4a6c512e7dab52c	tracked	seed from 4d124a088e
 riveredge-frontend/src/apps/kuaizhizao/pages/supplier-evaluations/index.tsx	DELETED	applied	13be286f11续:前端+财务适配+迁移
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/assembly-templates/AssemblyTemplatesTab.tsx	c53c7695d1	applied	R2-前端增量簇: 行删收敛批量删+persistenceId升版
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/barcode-mapping-rules/index.tsx	7a487d872234752b86c4abcabc9fd13983a9b458	tracked	seed from df7d635797
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/batch-inventory-query/index.tsx	e1a5c1248da84db24868fcc12a9a9de75f4babd1	tracked	seed from 4a7f11604c
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/batching-center/BatchingTaskQueue.tsx	4cfbf8f855778b47bb416697c25cb7dfcc407a8f	tracked	seed from 5b1b9828e4
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/batching-center/LineSidePrepSplitView.tsx	2c67aabdda	applied	R2-前端增量簇
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/batching-center/index.tsx	4152e7434c8f839cb6a5223a382f01a0d279e1f9	tracked	seed from b12cc66e71
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/customer-material-registration/index.tsx	bee33ba209814547b507df13b7313271432648d1	tracked	seed from 4d124a088e
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/delivery-notes/components/DeliveryNoticeDetailDrawer.tsx	9d94441ae0	applied	R2-前端增量簇
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/delivery-notes/deliveryNoteListExport.ts	e2351d2779b92d26465fb8b2595d8bcab1564741	tracked	seed from 4d124a088e
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/delivery-notes/index.tsx	e65ded7b5ad8d8b4d309d84f2fba1f2c3f1f303d	tracked	seed from 4d124a088e
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/documentPush/FinishedGoodsReceiptDocumentPushPanel.tsx	DELETED	applied	D依赖簇续:支撑件+前端
@@ -1686,17 +1771,21 @@ riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/Inboun
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/InboundReceiptNoticePullEntryPage.tsx	4abc92c77087d7cb3176d2388cfc86586e2ad41c	tracked	seed from 3958bb1524
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/InboundWorkOrderPullEntryPage.tsx	a77ff80f26834c577e17c7fbec40c461671797b2	tracked	seed from 93b3cb5998
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/OtherInboundEditModal.tsx	cb545d588213269915d610ce3a1150a479200499	tracked	seed from 4d124a088e
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/PurchaseInboundLineWhCells.tsx	2e90d9a7ae	superset	R2: 本地已有等价/更深实现
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/PurchaseReceiptCreateModal.tsx	c54288d6e547163536c1c7d983ac990a9f647de1	tracked	seed from 4bd853a94f
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/PurchaseReceiptDocumentPushPanel.tsx	566320384e783ba7898be2e3994a2d9917ddb1df	tracked	seed from 2c945a39fb
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/components/InboundDetailDrawer.tsx	14d41d22d4aa7fe25c105069b2e696e8de2692a6	applied	91c8157e1e强制重推+推送开关(含前置c0a917fc45基座)
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundEntryShared.tsx	66c9f46b15009c16a892d2df95155d3ccc5f9b24	tracked	seed from 1d968cd27b
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundHubDeepLink.ts	282f15a0fd	applied	R2-前端增量簇
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundHubNormalize.ts	3b03d4e52389133d8e505f3326c830f8f51468ac	tracked	seed from b74aba704c
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundHubRunConfirm.ts	41c3a02f72	applied	R2-前端增量簇
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundHubTypes.ts	2e02d3ceca562f992be3b306cb18eb143cc84d0a	tracked	seed from 4bd853a94f
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundItemTracking.ts	f7b097a0f8d38f7f60cf5113a55a19af18eafac3	tracked	seed from 3958bb1524
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundPaths.ts	01feb99552ccbc5e910c3c3741447f06f5846475	tracked	seed from 3958bb1524
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundPoReceiptEntryUtils.ts	39c614e5c97f191a167bb2ef5c7d044b95f1214b	tracked	seed from 57a37e2749
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundPullEntryTypes.ts	2f3ff3e9770d43e81ae2b011a42f3bb2138f1576	tracked	seed from 1d968cd27b
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/index.tsx	f648c5976a006f6fc864b4dd2cc8b0a15878c2d3	applied	91c8157e1e强制重推+推送开关(含前置c0a917fc45基座)
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inventory-alert/index.tsx	c53c7695d1	applied	R2-前端增量簇: 行删收敛批量删+persistenceId升版
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inventory-transfer/index.tsx	a8df7f0260f02ae55d0b7fb058792a12579149f7	tracked	seed from 899307f4d6
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inventory/index.tsx	a11aba6dfb6b6018e1eae25587222394751e82dd	tracked	seed from 905787348a
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/material-borrows/index.tsx	48ab7b42784daaa69a7a613c779ddad2d7a125d6	tracked	seed from 4d124a088e
@@ -1724,19 +1813,24 @@ riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/outbo
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/outboundConfirmInventoryOptions.ts	6ba58fb324b7c0d0760595627dd12ca7e45ae11f	tracked	seed from 57a37e2749
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/outboundHubRunConfirm.ts	31afb5401451d2d05139c97874590faf11bcf278	tracked	seed from 4d124a088e
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/outboundHubTypes.ts	8f2b790449f78a25718cbdc10d6e16a1a11d57cd	tracked	seed from 899307f4d6
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/outboundHubWithdraw.ts	05d001dd6d	applied	R2-前端增量簇
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/outboundItemTracking.ts	cd51598a1c5af8fdc85cc3d35a5cf594c96ab963	tracked	seed from 57a37e2749
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/outboundListAggregate.ts	eda3c9f86a	applied	R2-前端增量簇
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/outboundPullEntryTypes.ts	b0e5045219a3c51efcde304d7bdd37d55e62b937	tracked	seed from 93b3cb5998
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/replenishment-suggestions/index.tsx	222191f5f4414b3ecbe065395398abf28b36f1ec	tracked	seed from 57a37e2749
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/reports/SlowMovingInventory.tsx	05ef258f766373f3d572a7d8f6febb09918ad9d7	tracked	seed from 5b1b9828e4
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/shared/assemblyDisassemblyOrdersPage.tsx	dd45164979269a96f2d633d61e49aa8a6426924f	tracked	seed from 5b1b9828e4
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/shared/externalWithdrawMessage.ts	05d001dd6d	superset	R2: 本地已有等价/更深实现
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/shared/imKingdeeWarehousePushBinding.ts	0ad1f4188e043cbcd6397745caa9185b3703b0b2	tracked	seed from 4a9d6d3e63
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/shared/inboundDocumentConfirm.ts	37739c9081ea4bd4ee03b8746ed56a21145175d8	tracked	seed from 4d124a088e
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/shared/outboundConfirmFromDetail.ts	27c103d73dff03f7dc41ccf1a01618f55d84fe9d	tracked	seed from 6abba1dbd5
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/shared/outboundHubDetail.ts	ce7f5cb28f3ffb7f3a882d3ca54e6f9314d1f4e5	tracked	seed from 4d124a088e
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/shared/prefetchInboundConfirmBatchNumbers.ts	01ef0734c2	superset	R2: 本地已有等价/更深实现
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/shared/pullEntryFormDraft.ts	9c918423f7d797efc6f9e081746b8437867ec53c	tracked	seed from 3958bb1524
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/shared/purchaseReceiptWarehouseAmounts.ts	964c5117a5e8ace1c6ef1b65904b4a3a7c29b4fc	tracked	seed from 5b1b9828e4
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/shared/warehouseAmountDisplay.tsx	9d6e150e260bf0261001c53a5797466abf5d1826	tracked	seed from d81b4b70bf
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/shared/warehouseDocListExport.ts	db6baa8f6a9e64d49daa3d2c4fe7e2bf983d3c3e	tracked	seed from 4d124a088e
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/shared/warehouseDocListFieldRank.ts	eda3c9f86a	applied	R2-前端增量簇
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/shared/warehouseLineDetailColumns.tsx	c1a716f422f4d82d9ca9348bd46b070f6a02b3d8	applied	f40f54e336调度窗+价税簇
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/shared/warehouseTrackingFlags.ts	91b35e7e855a6495503007c9616c022cc743fa27	tracked	seed from 5b1b9828e4
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/stocktaking/StocktakingSurplusDocumentPushPanel.tsx	9841a8497f48c1eedd0ea932b7a1b0092952056f	tracked	seed from 2e8ecad990
@@ -2134,6 +2228,7 @@ riveredge-frontend/src/pages/system/dashboard/platformUpdateLogDedicated.ts	6588
 riveredge-frontend/src/pages/system/datasets/list/index.tsx	964b28fb21d716505c6a70609ce8ada98dd40dc7	tracked	seed from 3958bb1524
 riveredge-frontend/src/pages/system/departments/components/DepartmentFormModal.tsx	4699a50adda3187724f4a1a35afefbed9276f827	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-frontend/src/pages/system/departments/list/index.tsx	31f5ac16fa84b28840e8dfdda32731ad82de6e02	tracked	seed from 46508115c7
+riveredge-frontend/src/pages/system/menus/index.tsx	05d001dd6d	applied	R2-前端小件簇: 编辑中剔除自身子树防父级循环
 riveredge-frontend/src/pages/system/messages/config/index.tsx	90b31ca67cd7cabb24e4705a0ebb2331d329af1d	tracked	seed from 4bd853a94f
 riveredge-frontend/src/pages/system/messages/template/index.tsx	ff725fd95d12be7ab854eff685dd3f6cc4832f23	tracked	seed from 3958bb1524
 riveredge-frontend/src/pages/system/positions/list/index.tsx	d4d05f2a4a02c4f5568469e816341935fd444362	tracked	seed from 46508115c7
@@ -2192,6 +2287,8 @@ riveredge-frontend/src/utils/materialScenarioUnit.ts	ceaa622e3ae5d2f65bd99e0a468
 riveredge-frontend/src/utils/modalEventIsolation.ts	39910c12707c857a8e5503043ec3cc2c1e06ea7a	tracked	seed from 3eba91c55b
 riveredge-frontend/src/utils/notifyDataRefreshed.ts	1a1f8150057188f9b981f8fc1c46b00b0afe4c95	tracked	seed from f1c2d18cfb
 riveredge-frontend/src/utils/numericFieldLimits.ts	14bebfa4b89bd502a0d3ad9c6e91df9632d6c246	tracked	seed from b74aba704c
+riveredge-frontend/src/utils/presetEntityI18n.ts	05d001dd6d	applied	R2-前端小件簇: 部门名以库内真源为准+预设目录预览resolver
+riveredge-frontend/src/utils/printResponseHelpers.ts	a0ccb13d08	applied	R2-前端小件簇: 多单据打印HTML拼接joinPrintHtmlDocuments
 riveredge-frontend/src/utils/referenceDisplay.ts	cf7f82cbd8f907d4f5466941dbc89822758a4697	tracked	seed from 37409d3b29
 riveredge-frontend/src/utils/spreadsheetCellPlainString.ts	93f504a33474c8a2bdd13ec0c1dfa7afeb6a1847	tracked	seed from 8c111dd65f
 riveredge-frontend/src/utils/spreadsheetImportTemplate.ts	b7fba0c488695e9a8f867ad03f16ce7aac190814	tracked	seed from 57a37e2749
@@ -2202,60 +2299,3 @@ riveredge-frontend/src/utils/userDisplay.ts	c1d47fe81a50b56e83935c93affbc07c45aa
 riveredge-frontend/src/vite-env.d.ts	6232bdf5f89c14048bf36fd63651a1b16c4bcb76	tracked	seed from ddd31709d6
 riveredge-frontend/vite.config.ts	c24e43bf04ac91b9caddd6ad2c23ad1e1d93e94c	tracked	seed from 905787348a
 test-report/purchase.md	DELETED	tracked	seed from 31efc2b64c
-riveredge-frontend/src/pages/system/menus/index.tsx	05d001dd6d	applied	R2-前端小件簇: 编辑中剔除自身子树防父级循环
-riveredge-frontend/src/utils/printResponseHelpers.ts	a0ccb13d08	applied	R2-前端小件簇: 多单据打印HTML拼接joinPrintHtmlDocuments
-riveredge-frontend/src/utils/presetEntityI18n.ts	05d001dd6d	applied	R2-前端小件簇: 部门名以库内真源为准+预设目录预览resolver
-riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/iso-clauses/index.tsx	9d94441ae0	superset	R2: 本地已有等价/更深实现
-riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/qc-sop/index.tsx	7a4f8e4230	superset	R2: 本地已有等价/更深实现
-riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/PurchaseInboundLineWhCells.tsx	2e90d9a7ae	superset	R2: 本地已有等价/更深实现
-riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/shared/externalWithdrawMessage.ts	05d001dd6d	superset	R2: 本地已有等价/更深实现
-riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/shared/prefetchInboundConfirmBatchNumbers.ts	01ef0734c2	superset	R2: 本地已有等价/更深实现
-riveredge-backend/migrations/models/1016_20261109143000_packing_binding_lines_audit_cols.py	9622a5a304	superset	R2-迁移: 本地模型/列已存在等价实现
-riveredge-backend/migrations/models/1040_20261116120000_other_inbound_item_serial_numbers.py	9c9f0d99bf	superset	R2-迁移: 本地模型/列已存在等价实现
-riveredge-backend/migrations/models/912_20261022170000_inventory_sync_binding_sync_direction.py	d17e5f9d8e	superset	R2-迁移: 本地模型/列已存在等价实现
-riveredge-backend/migrations/models/933_20261026010000_payment_advance_records_audit_cols.py	1fa6e303be	superset	R2-迁移: 本地模型/列已存在等价实现
-riveredge-backend/migrations/models/961_20261029120000_fg_pp_sync_binding.py	a0ccb13d08	superset	R2-迁移: 本地模型/列已存在等价实现
-riveredge-backend/migrations/models/962_20261029103000_storage_location_warehouse_optional.py	520cde9e49	superset	R2-迁移: 本地模型/列已存在等价实现
-riveredge-backend/migrations/models/963_20261030120000_purchase_receipt_tax_net.py	2e90d9a7ae	superset	R2-迁移: 本地模型/列已存在等价实现
-riveredge-backend/migrations/models/964_20261029120000_storage_location_source_location_code.py	520cde9e49	superset	R2-迁移: 本地模型/列已存在等价实现
-riveredge-backend/migrations/models/965_20261029130000_backfill_material_batch_expiry_shelf_life.py	520cde9e49	superset	R2-迁移: 本地模型/列已存在等价实现
-riveredge-backend/migrations/models/979_20261102103000_sales_delivery_sync_binding.py	6c83770a65	superset	R2-迁移: 本地模型/列已存在等价实现
-riveredge-backend/tests/apps/kuaizhizao/services/test_fqc_inbound_quality_contract.py	9d94441ae0	superset	R2-迁移: 本地模型/列已存在等价实现
-riveredge-backend/tests/apps/kuaizhizao/services/test_quality_inspection_auto_approve.py	9d94441ae0	superset	R2-迁移: 本地模型/列已存在等价实现
-riveredge-backend/tests/apps/kuaizhizao/services/test_quality_linked_document_read.py	9d94441ae0	superset	R2-迁移: 本地模型/列已存在等价实现
-riveredge-backend/tests/apps/kuaizhizao/services/test_work_order_inbound_quota_fqc.py	86e3d8187c	superset	R2-迁移: 本地模型/列已存在等价实现
-riveredge-backend/tests/core/config/test_affiliate_storage_location_read.py	ef05d62736	superset	R2-迁移: 本地模型/列已存在等价实现
-riveredge-backend/tests/core/services/data/test_sync_match_key_coverage.py	32cf90c8a2	superset	R2-迁移: 本地模型/列已存在等价实现
-riveredge-backend/migrations/models/913_20261026020000_haoligo_horizontal_injection_output.py	1fa6e303be	domain-out	R2-迁移: haoligo定制域本地不存在
-riveredge-backend/migrations/models/934_20261026063000_haoligo_horizontal_injection_output_audit_cols.py	9ca16bd0f4	domain-out	R2-迁移: haoligo定制域本地不存在
-riveredge-backend/migrations/models/940_20261031190000_haoligo_salary_base_structure.py	dd68693d39	domain-out	R2-迁移: haoligo定制域本地不存在
-riveredge-backend/migrations/models/967_20261031210000_haoligo_salary_base_night_subsidy.py	dd68693d39	domain-out	R2-迁移: haoligo定制域本地不存在
-docs/screenshots/wechat/wechat.png	c91b13c20c	domain-out	R2-运维: fast-deploy本地独立维护/截图资产
-fast-deploy/clean-workspace.sh	95efae8f6d	domain-out	R2-运维: fast-deploy本地独立维护/截图资产
-fast-deploy/config/install-scripts.json	e1650484c4	domain-out	R2-运维: fast-deploy本地独立维护/截图资产
-fast-deploy/launch.dev.sh	8700bd8a16	domain-out	R2-运维: fast-deploy本地独立维护/截图资产
-fast-deploy/lib/wizard.sh	f978467013	domain-out	R2-运维: fast-deploy本地独立维护/截图资产
-fast-deploy/linux/systemd-exec-taskiq-scheduler.sh	8700bd8a16	domain-out	R2-运维: fast-deploy本地独立维护/截图资产
-fast-deploy/linux/systemd-exec-taskiq-worker.sh	934eab86ba	domain-out	R2-运维: fast-deploy本地独立维护/截图资产
-fast-deploy/scripts/verify_caddy_download_urls.py	0ea3994534	domain-out	R2-运维: fast-deploy本地独立维护/截图资产
-riveredge-backend/tests/apps/master_data/utils/test_kingdee_location_number.py	282f15a0fd	applied	R2-测试回归簇: 被测函数本地已在,纯加回归
-riveredge-backend/tests/core/services/integration/test_kingdee_warehouse_document_push_config.py	3f8d606f7c	applied	R2-测试回归簇: 被测函数本地已在,纯加回归
-riveredge-backend/tests/core/services/application/test_api_test_request_merge.py	32cf90c8a2	applied	R2-测试回归簇: 被测函数本地已在,纯加回归
-riveredge-backend/tests/apps/kuaizhizao/services/test_over_report_rules.py	1e33dd2861	applied	R2-测试回归簇: 落地1例,余2例待over-report簇(validate_over_report_value_for_mode)
-riveredge-backend/tests/apps/kuaicaiwu/services/test_balance_aggregate.py	42fb8fe9f4	deferred	R2-测试: 期初轧差逻辑待同步
-riveredge-backend/tests/apps/kuaizhizao/api/test_kuaizhizao_route_access_quality.py	9d94441ae0	deferred	R2-测试: notify→submit映射待摘
-riveredge-backend/tests/apps/kuaizhizao/services/test_inventory_report_movement_quantities.py	9fc03de3ed	deferred	R2-测试: 出库正量归集+doc标签待摘
-riveredge-backend/tests/apps/master_data/services/test_material_batch_expiry.py	520cde9e49	deferred	R2-测试: effective_expiry_date待摘
-riveredge-backend/tests/apps/kuaizhizao/utils/test_outsource_work_order_state.py	11e8cb33be	deferred	R2-测试: 委外receipt_reopen状态机待摘
-riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/assembly-templates/AssemblyTemplatesTab.tsx	c53c7695d1	applied	R2-前端增量簇: 行删收敛批量删+persistenceId升版
-riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inventory-alert/index.tsx	c53c7695d1	applied	R2-前端增量簇: 行删收敛批量删+persistenceId升版
-riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/drawing-balloon-sheets/index.tsx	c53c7695d1	applied	R2-前端增量簇: 行删收敛批量删+persistenceId升版
-riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/delivery-notes/components/DeliveryNoticeDetailDrawer.tsx	9d94441ae0	applied	R2-前端增量簇
-riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/batching-center/LineSidePrepSplitView.tsx	2c67aabdda	applied	R2-前端增量簇
-riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/nonconforming-ledger/ncLedgerSource.tsx	050638b809	applied	R2-前端增量簇
-riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/inspection-center/index.tsx	9d94441ae0	applied	R2-前端增量簇
-riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/shared/warehouseDocListFieldRank.ts	eda3c9f86a	applied	R2-前端增量簇
-riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundHubDeepLink.ts	282f15a0fd	applied	R2-前端增量簇
-riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundHubRunConfirm.ts	41c3a02f72	applied	R2-前端增量簇
-riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/outboundHubWithdraw.ts	05d001dd6d	applied	R2-前端增量簇
-riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/outbound/outboundListAggregate.ts	eda3c9f86a	applied	R2-前端增量簇

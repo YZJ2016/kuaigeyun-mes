@@ -29,6 +29,7 @@ def test_capability_kwargs_from_context_ignores_non_policy_keys():
         "has_completed_operation": True,
         "awaiting_route_decision": False,
         "verification_passed": False,
+        "has_operation_links": True,
         "links": [object()],
         "current_link": object(),
     }
@@ -38,14 +39,33 @@ def test_capability_kwargs_from_context_ignores_non_policy_keys():
         "has_completed_operation": True,
         "awaiting_route_decision": False,
         "verification_passed": False,
+        "has_operation_links": True,
     }
 
 
 def test_release_allowed_only_in_draft():
-    caps = derive_rework_order_capabilities(_record(status="draft"))
+    caps = derive_rework_order_capabilities(_record(status="draft"), has_operation_links=True)
     assert caps.release.allowed is True
-    caps_released = derive_rework_order_capabilities(_record(status="released"))
+    caps_released = derive_rework_order_capabilities(_record(status="released"), has_operation_links=True)
     assert caps_released.release.allowed is False
+
+
+def test_simple_exec_release_requires_operation_links():
+    caps = derive_rework_order_capabilities(
+        _record(status="draft", business_type="simple_exec"),
+        has_operation_links=False,
+    )
+    assert caps.release.allowed is False
+    assert caps.release.reason == "rework_order.release.no_route"
+
+
+def test_multi_signoff_release_disabled():
+    caps = derive_rework_order_capabilities(
+        _record(status="draft", business_type="multi_signoff", review_status="审核通过"),
+        has_operation_links=True,
+    )
+    assert caps.release.allowed is False
+    assert caps.release.reason == "rework_order.release.signoff_workflow"
 
 
 def test_dynamic_advance_when_awaiting_decision():

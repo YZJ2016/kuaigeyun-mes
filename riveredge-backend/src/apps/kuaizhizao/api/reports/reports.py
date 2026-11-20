@@ -24,6 +24,13 @@ from apps.kuaizhizao.schemas.inventory_sync import (
     InventorySyncBindingUpsert,
     InventorySyncFromSourceRequest,
 )
+from apps.kuaizhizao.schemas.kingdee_consistency import (
+    KingdeeConsistencyAuditOut,
+    KingdeeConsistencyInventoryOut,
+    KingdeeConsistencyInventoryRequest,
+    KingdeeConsistencyMasterDataOut,
+    KingdeeConsistencyMasterDataRequest,
+)
 
 # 初始化服务实例
 report_service = ReportService()
@@ -833,6 +840,80 @@ async def put_inventory_sync_binding(
         return await InventorySyncService().upsert_binding(tenant_id, body)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.get(
+    "/kingdee-consistency/audit",
+    response_model=KingdeeConsistencyAuditOut,
+    summary="金蝶强一致审计（红灯/重复仓/空仓位只读）",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-reports-inventory-summary:read"
+            )
+        )
+    ],
+)
+async def audit_kingdee_consistency(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    from apps.kuaizhizao.services.kingdee_consistency_orchestrator import KingdeeConsistencyOrchestrator
+
+    return await KingdeeConsistencyOrchestrator.audit(tenant_id)
+
+
+@router.post(
+    "/kingdee-consistency/sync-master-data",
+    response_model=KingdeeConsistencyMasterDataOut,
+    summary="按依赖序执行主数据 sync-from-source（与定时任务同序，含仓位关系）",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-reports-inventory-summary:read"
+            )
+        )
+    ],
+)
+async def orchestrate_kingdee_master_data_sync(
+    body: KingdeeConsistencyMasterDataRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    from apps.kuaizhizao.services.kingdee_consistency_orchestrator import KingdeeConsistencyOrchestrator
+
+    return await KingdeeConsistencyOrchestrator.run_master_data_chain(
+        tenant_id,
+        current_user,
+        incremental=bool(body.incremental),
+        skip_unconfigured_bindings=bool(body.skip_unconfigured_bindings),
+    )
+
+
+@router.post(
+    "/kingdee-consistency/sync-inventory",
+    response_model=KingdeeConsistencyInventoryOut,
+    summary="红灯清零后执行即时库存 sync-from-source（写 run log，禁止旁路改批次）",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-reports-inventory-summary:read"
+            )
+        )
+    ],
+)
+async def orchestrate_kingdee_inventory_sync(
+    body: KingdeeConsistencyInventoryRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    from apps.kuaizhizao.services.kingdee_consistency_orchestrator import KingdeeConsistencyOrchestrator
+
+    return await KingdeeConsistencyOrchestrator.run_inventory_sync(
+        tenant_id,
+        current_user,
+        incremental=bool(body.incremental),
+        active_only=bool(body.active_only),
+    )
 
 
 @router.post(

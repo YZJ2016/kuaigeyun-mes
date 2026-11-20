@@ -28,11 +28,13 @@ from apps.kuaizhizao.schemas.rework_order import (
     ReworkRequestCompleteRequest,
 )
 from apps.kuaizhizao.models.rework_order_signoff import ReworkOrderSignoff
+from apps.kuaizhizao.constants.rework_business_types import REWORK_BUSINESS_MULTI_SIGNOFF
 from apps.kuaizhizao.services.document_action_policy.rework_order import (
     assert_rework_order_capability,
     capability_kwargs_from_context,
     derive_rework_order_capabilities,
 )
+from apps.kuaizhizao.services.document_action_policy.types import CAPABILITY_REASON_MESSAGES
 from apps.kuaizhizao.utils.rework_order_constants import (
     OPERATION_ROLE_DYNAMIC,
     OPERATION_ROLE_PLANNED,
@@ -126,6 +128,7 @@ async def compute_capability_context(
     rework_order: ReworkOrder,
 ) -> Dict[str, Any]:
     links = await load_operation_links(tenant_id, rework_order.id)
+    has_operation_links = len(links) > 0
     for link in links:
         await sync_link_quantities_from_reports(tenant_id, link)
 
@@ -133,7 +136,7 @@ async def compute_capability_context(
         tenant_id=tenant_id,
         rework_order_id=rework_order.id,
         deleted_at__isnull=True,
-        status__in=["pending", "approved"],
+        status__in=["draft", "approved"],
     ).exists()
 
     current_link = next((l for l in links if l.id == rework_order.current_operation_link_id), None)
@@ -173,6 +176,7 @@ async def compute_capability_context(
         "has_completed_operation": has_completed_operation,
         "awaiting_route_decision": awaiting_route_decision,
         "verification_passed": verification_passed,
+        "has_operation_links": has_operation_links,
         "links": links,
         "current_link": current_link,
     }
@@ -261,9 +265,27 @@ async def release_rework_order(
     caps = derive_rework_order_capabilities(rework_order, **capability_kwargs_from_context(ctx))
     assert_rework_order_capability(rework_order, "release", caps)
 
+    bt = str(rework_order.business_type or "").strip().lower()
+    if bt == REWORK_BUSINESS_MULTI_SIGNOFF:
+        raise BusinessLogicError(
+            CAPABILITY_REASON_MESSAGES["rework_order.release.signoff_workflow"]
+        )
+
     links = ctx["links"]
     if not links:
-        raise BusinessLogicError("返工单未配置工序路线，无法下达")
+        start_id = rework_order.start_work_order_operation_id
+        if start_id and rework_order.original_work_order_id:
+            await sync_route_on_create(
+                tenant_id,
+                int(rework_order.id),
+                routing_mode=str(rework_order.routing_mode or ROUTING_MODE_DYNAMIC),
+                start_work_order_operation_id=int(start_id),
+                predefined_operation_ids=None,
+                quantity=_dec(rework_order.quantity),
+            )
+            links = await load_operation_links(tenant_id, rework_order.id)
+    if not links:
+        raise BusinessLogicError(CAPABILITY_REASON_MESSAGES["rework_order.release.no_route"])
 
     start_link = links[0]
     async with in_transaction():
@@ -1118,6 +1140,9 @@ async def build_operation_items(
     for link in links:
         op = op_map.get(link.work_order_operation_id)
         await sync_link_quantities_from_reports(tenant_id, link)
+        worker_ids = getattr(link, "assigned_worker_ids", None) or []
+        if not isinstance(worker_ids, list):
+            worker_ids = []
         items.append(
             {
                 "id": link.id,
@@ -1137,6 +1162,11 @@ async def build_operation_items(
                 "decided_at": link.decided_at,
                 "is_start": link.role == OPERATION_ROLE_START or link.sequence == 0,
                 "is_current": link.id == rework_order.current_operation_link_id,
+                "assigned_worker_id": getattr(link, "assigned_worker_id", None),
+                "assigned_worker_name": getattr(link, "assigned_worker_name", None),
+                "assigned_worker_ids": worker_ids,
+                "assigned_team_id": getattr(link, "assigned_team_id", None),
+                "assigned_team_name": getattr(link, "assigned_team_name", None),
             }
         )
     return items

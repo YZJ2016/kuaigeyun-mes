@@ -32,7 +32,8 @@ class ReworkOrder(BaseModel):
         rework_type: 返工类型（返工、返修、报废）
         route_id: 返工工艺路线ID（关联物料）
         route_name: 返工工艺路线名称
-        status: 返工状态（draft/released/in_progress/completed/cancelled）
+        status: 返工业务状态（draft/released/in_progress/…；已提交写在 review_status）
+        review_status: 审核状态（草稿/SUBMITTED/待审核/已通过/已驳回）
         planned_start_date: 计划开始日期
         planned_end_date: 计划结束日期
         actual_start_date: 实际开始日期
@@ -47,6 +48,7 @@ class ReworkOrder(BaseModel):
         updated_at: 更新时间（继承自BaseModel）
         deleted_at: 删除时间（软删除）
     """
+
 
     class Meta:
         """
@@ -178,11 +180,16 @@ class ReworkOrder(BaseModel):
     source_inspection_id = fields.IntField(null=True, description="来源成品检验单 ID")
     verification_inspection_id = fields.IntField(null=True, description="完修复检单 ID")
 
-    # 返工状态
+    # 返工业务状态（会签型审核通过后仍保持 draft，下达后进入 released…）
     status = fields.CharField(
         max_length=30,
         default="draft",
         description="返工状态（draft/released/in_progress/pending_verification/quality_released/closed/cancelled/on_hold）",
+    )
+    review_status = fields.CharField(
+        max_length=20,
+        description="审核状态（草稿/SUBMITTED/待审核/已通过/已驳回）",
+        default="草稿",
     )
 
     # 计划时间
