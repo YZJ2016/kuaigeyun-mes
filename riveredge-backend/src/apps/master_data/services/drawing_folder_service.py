@@ -159,7 +159,9 @@ class DrawingFolderService:
         tenant_id: int,
         drawing_type: Optional[str] = None,
         exclude_drawing_types: Optional[Sequence[str]] = None,
+        current_user: Optional[User] = None,
     ) -> tuple[List[DrawingFolderResponse], int, int]:
+        from apps.master_data.services.drawing_security import DrawingSecurityService
         rows = await DrawingFolder.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
@@ -181,6 +183,11 @@ class DrawingFolderService:
             tenant_id=tenant_id,
             deleted_at__isnull=True,
         )
+        allowed_levels = await DrawingSecurityService.allowed_security_levels(
+            tenant_id, current_user
+        )
+        if allowed_levels is not None:
+            drawing_query = drawing_query.filter(security_level__in=allowed_levels)
         if drawing_type:
             drawing_query = drawing_query.filter(drawing_type=drawing_type)
         if exclude_drawing_types:

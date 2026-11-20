@@ -368,7 +368,7 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
     },
     "parameters.automation.manual_create_auto_submit": {"type": "boolean"},
 
-    "parameters.master_data.drawing_max_upload_size_mb": {"type": "number", "min": 1, "max": 100},
+    "parameters.master_data.drawing_max_upload_size_mb": {"type": "number", "min": 1, "max": 200},
     "parameters.master_data.allow_material_quick_create": {"type": "boolean"},
     "parameters.master_data.material_code_search_mode": {
         "type": "select",
@@ -798,7 +798,7 @@ def _global_max_upload_size_mb() -> int:
     return max(1, int(infra_settings.MAX_FILE_SIZE // (1024 * 1024)))
 
 
-def coerce_drawing_max_upload_size_mb(raw: Any, *, default: int = 100) -> int:
+def coerce_drawing_max_upload_size_mb(raw: Any, *, default: int = 200) -> int:
     """图纸主文件上传大小（MB），钳制在 1～平台 MAX_FILE_SIZE。"""
     global_max_mb = _global_max_upload_size_mb()
     try:
@@ -1328,7 +1328,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "bom_multi_version_allowed": True,
     },
     "master_data": {
-        "drawing_max_upload_size_mb": 100,
+        "drawing_max_upload_size_mb": 200,
         "allow_material_quick_create": True,
         "material_code_search_mode": "fuzzy",
     },
@@ -2107,7 +2107,7 @@ class BusinessConfigService:
         return v if v in ("current_user", "operation_assigned", "auto") else "auto"
 
     async def get_drawing_max_upload_size_bytes(self, tenant_id: int) -> int:
-        """图纸 engineering_drawing 分类上传大小上限（字节，默认 100MB）。"""
+        """图纸 engineering_drawing 分类上传大小上限（字节，默认 200MB，可配至平台硬上限）。"""
         config = await self.get_business_config(tenant_id)
         mb = coerce_drawing_max_upload_size_mb(
             config["parameters"].get("master_data", {}).get("drawing_max_upload_size_mb")

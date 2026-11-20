@@ -18,6 +18,9 @@ SECURITY_LEVEL_RANK = {
 SECURITY_LEVELS = frozenset(SECURITY_LEVEL_RANK)
 DEFAULT_DRAWING_SECURITY_LEVEL = "internal"
 DEFAULT_USER_CLEARANCE = "public"
+"""已授予图纸模块读权限且无单独密级行时，与默认图纸密级 internal 对齐。"""
+DEFAULT_CLEARANCE_FOR_DRAWING_READER = "internal"
+DRAWING_MODULE_READ_PERMISSION = "master-data:process:drawing:read"
 PRINT_LOAN_REQUIRED_LEVELS = frozenset({"secret", "confidential"})
 SECURITY_LEVEL_LABELS = {
     "public": "公开",
@@ -39,7 +42,7 @@ class DrawingSecurityService:
     async def allowed_security_levels(
         tenant_id: int, user: Optional[User]
     ) -> Optional[List[str]]:
-        """管理员不过滤；其余返回 rank ≤ 授权的密级列表。无授权行按 public。"""
+        """管理员不过滤；其余返回 rank ≤ 授权的密级列表。无密级行：无图纸读权限按 public，有图纸读权限按 internal。"""
         if user is not None and await UserPermissionService.is_admin_bypass(user, tenant_id):
             return None
         rank = await DrawingSecurityService.user_clearance_rank(tenant_id, user)
@@ -51,6 +54,13 @@ class DrawingSecurityService:
             return SECURITY_LEVEL_RANK[DEFAULT_USER_CLEARANCE]
         row = await DrawingUserClearance.get_or_none(tenant_id=tenant_id, user_id=int(user.id))
         if not row:
+            has_drawing_read = await UserPermissionService.has_permission(
+                user_id=int(user.id),
+                tenant_id=tenant_id,
+                permission_code=DRAWING_MODULE_READ_PERMISSION,
+            )
+            if has_drawing_read:
+                return SECURITY_LEVEL_RANK[DEFAULT_CLEARANCE_FOR_DRAWING_READER]
             return SECURITY_LEVEL_RANK[DEFAULT_USER_CLEARANCE]
         if row.security_level not in SECURITY_LEVEL_RANK:
             raise ValidationError(f"密级授权配置无效: {row.security_level}")

@@ -42,6 +42,7 @@ def _http_exception(status_code: int, message: str) -> FastAPIHTTPException:
 @router.get("/tree", response_model=DrawingFolderTreeResponse, response_model_by_alias=True, summary="Drawing folder tree")
 async def list_drawing_folder_tree(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
+    current_user: Annotated[User, Depends(get_current_user)],
     drawing_type: Optional[str] = Query(None, alias="drawingType"),
     exclude_drawing_types: Optional[str] = Query(None, alias="excludeDrawingTypes"),
 ):
@@ -52,6 +53,7 @@ async def list_drawing_folder_tree(
         tenant_id,
         drawing_type=drawing_type,
         exclude_drawing_types=exclude_types,
+        current_user=current_user,
     )
     return DrawingFolderTreeResponse(
         data=data,

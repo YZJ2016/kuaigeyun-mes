@@ -425,7 +425,7 @@ class InfraSettings(BaseSettings):
         default="",
         description="可选：部署机上 PostgreSQL 客户端目录（仅旧版二进制恢复）；留空则用 PATH。备份创建不依赖此项",
     )
-    MAX_FILE_SIZE: int = Field(default=100 * 1024 * 1024, description="最大文件大小（字节）")
+    MAX_FILE_SIZE: int = Field(default=200 * 1024 * 1024, description="最大文件大小（字节）")
     
     # 安全增强配置
     SECURITY_STRICT_MODE: bool = Field(default=True, description="是否启用严格安全模式")

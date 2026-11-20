@@ -1768,6 +1768,13 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.purchase-receipt-amount-qty-price-r01.description',
   },
   {
+    id: 'drawing-upload-size-migrate-200-r01',
+    date: '2026-11-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-upload-size-migrate-200-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.drawing-upload-size-migrate-200-r01.description',
+  },
+  {
     id: 'payment-app-approval-completion-writeback-r01',
     date: '2026-11-01',
     type: 'fix',
@@ -1834,6 +1841,14 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     titleKey: 'pages.dashboard.updateLog.entries.purchase-return-edit-quantity-submit-r01.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.purchase-return-edit-quantity-submit-r01.description',
+  },
+  {
+    id: 'drawing-list-clearance-default-r01',
+    date: '2026-10-22',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-list-clearance-default-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.drawing-list-clearance-default-r01.description',
   },
   {
     id: 'kuaiplm-process-menu-peer-sync-r01',

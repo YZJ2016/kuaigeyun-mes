@@ -293,7 +293,7 @@ fast-deploy/scripts/prod_rollback_purchase_receipt_asset_print_template.py	1a329
 fast-deploy/scripts/verify_caddy_download_urls.py	268de0bd85fa3ac7cbbfdaf68766ca5f085a3859	domain-out	本地独立维护域/客户定制域不引入（fast-deploy链/haoligo/自维护截图）
 fast-deploy/tools/workspace/compose.py	21b1b96b8a3ce01a5646ba08efdaaba71e6d12f5	applied	本轮明确部署快修部分适配：低配启动等待360，compose清理后校验并fail closed，Windows Node/uv/Caddy检测及ZIP/可执行校验和curl参数遮蔽；保留本地蓝绿/worker/下载版本/镜像/命名策略；bash及compose回归通过，未做Windows实机或真实部署
 fast-deploy/windows/install-component.ps1	03fcb8f4c095fb6f52de544029a43ae6e2b54220	applied	本轮明确部署快修部分适配：低配启动等待360，compose清理后校验并fail closed，Windows Node/uv/Caddy检测及ZIP/可执行校验和curl参数遮蔽；保留本地蓝绿/worker/下载版本/镜像/命名策略；bash及compose回归通过，未做Windows实机或真实部署
-riveredge-backend/.env.example	8cc220de122b19cf008142e015f5becf457bda94	tracked	seed from b12cc66e71
+riveredge-backend/.env.example	8cc220de122b19cf008142e015f5becf457bda94	applied	图纸200MB簇：MAX_FILE_SIZE默认100→200MB（图纸上限钳制真源）；其余差异为星技谷品牌/邮箱/5173端口本地分叉保留
 riveredge-backend/docs/core/ledger-dual-unit-contract.md	3b3004130a9c392b4360619e0981ae487a814dee	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/migrations/models/1000_20261107194500_invoice_review_status.py	375fccdad6c7cb080622cd3aef5bc2494f0e2fbc	tracked	seed from d81b4b70bf
 riveredge-backend/migrations/models/1000_20261114160000_payroll_settlement_scope.py	acb47d8ea0a77a2f97113d6ce446d670a72a5f2e	domain-out	haoligo薪酬域(上游亦死列)
@@ -347,7 +347,7 @@ riveredge-backend/migrations/models/1042_20261116140000_other_outbound_borrow_se
 riveredge-backend/migrations/models/1043_20261116143000_material_return_item_serial_numbers.py	345c9f148f1084151922e917d7806dea1787a497	tracked	seed from 5b1b9828e4
 riveredge-backend/migrations/models/1044_20261116150000_wo_op_assigned_production_line.py	dcc3d3d46c61ebc67249fea94f4a2ff7c2434753	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
 riveredge-backend/migrations/models/1045_20261116160000_clear_deleted_user_department_links.py	af4df2e43e7fbcff52995f2cf65a06c87c6dc37c	applied	清除已删用户残留部门任职/负责人引用，移植为20261123000037
-riveredge-backend/migrations/models/1046_20261116170000_drawing_upload_size_default_200mb.py	16f89653bbdb55b5152e37058d651135206ca0aa	deferred	特性增量未核验/未落地，随对应域批次复核（预审A包）
+riveredge-backend/migrations/models/1046_20261116170000_drawing_upload_size_default_200mb.py	16f89653bbdb55b5152e37058d651135206ca0aa	applied	图纸域摘取：密级回落读权限internal/文件夹树按allowed_security_levels过滤/tree端点透传current_user/上传上限默认100→200MB(4 hunk)；迁移1046→20261123000045。三服务文件与上游字节一致
 riveredge-backend/migrations/models/1047_20261117001000_outsource_order_receipt_audit_cols.py	098db2a9e5b4a17018606d59b39b34c65dc13c3b	deferred	特性增量未核验/未落地，随对应域批次复核（预审A包）
 riveredge-backend/migrations/models/1048_20261117123000_ind_relay_line_products.py	e352e57bafd5f2dbf9b998cf589091778b6d639f	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
 riveredge-backend/migrations/models/1048_20261118080000_customer_return_visit_status.py	fb09310230b6cf22f285e1f1ccbc91562bd2e219	deferred	特性增量未核验/未落地，随对应域批次复核（预审A包）
@@ -1369,9 +1369,9 @@ riveredge-backend/src/apps/master_data/scripts/__init__.py	DELETED	superset	R2�
 riveredge-backend/src/apps/master_data/scripts/activate_all_customers_suppliers.py	DELETED	superset	R2簇4:本地文件,上游tip无此路径,保留
 riveredge-backend/src/apps/master_data/services/customer_sync_service.py	950fb32773daf4b6539582f70b43b59355d54752	applied	manual_force skip bypass only
 riveredge-backend/src/apps/master_data/services/drawing_distribution_service.py	3cc51f798cc292c40dd5e97e07eb6d750a1e8b38	tracked	seed from b12cc66e71
-riveredge-backend/src/apps/master_data/services/drawing_folder_service.py	0115ab6605a77f7fbb696d5e85612c42c0e435eb	deferred	特性增量未核验/未落地，随对应域批次复核（预审A包）
+riveredge-backend/src/apps/master_data/services/drawing_folder_service.py	0115ab6605a77f7fbb696d5e85612c42c0e435eb	applied	图纸域摘取：密级回落读权限internal/文件夹树按allowed_security_levels过滤/tree端点透传current_user/上传上限默认100→200MB(4 hunk)；迁移1046→20261123000045。三服务文件与上游字节一致
 riveredge-backend/src/apps/master_data/services/drawing_loan_service.py	f6c5eb6f909838a9337e1f1e6cccfb1fb92eedcb	tracked	seed from b12cc66e71
-riveredge-backend/src/apps/master_data/services/drawing_security.py	113d5adc428315a256585c12fd777346ccff0171	deferred	特性增量未核验/未落地，随对应域批次复核（预审A包）
+riveredge-backend/src/apps/master_data/services/drawing_security.py	113d5adc428315a256585c12fd777346ccff0171	applied	图纸域摘取：密级回落读权限internal/文件夹树按allowed_security_levels过滤/tree端点透传current_user/上传上限默认100→200MB(4 hunk)；迁移1046→20261123000045。三服务文件与上游字节一致
 riveredge-backend/src/apps/master_data/services/drawing_service.py	3bdd6c7a5023b3c95314865664a79302d742cb7d	tracked	seed from 31efc2b64c
 riveredge-backend/src/apps/master_data/services/engineering_bom_sync_service.py	d1be9d61bf18178a77ffb74f29aa2e053bde83f0	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-backend/src/apps/master_data/services/master_data_list_core.py	9fc3f397734ea2b9046d10b429f08ffecfb15eaa	applied	R2簇4 master-data:摘取上游tip实现
@@ -1631,7 +1631,7 @@ riveredge-backend/src/core/utils/sync_schedule_window.py	93df19f90ac514f8563cd83
 riveredge-backend/src/core/workflows/functions/message_sender.py	27852e26985e025b65cb99794481c6f79b94d514	tracked	seed from d84fe20715
 riveredge-backend/src/infra/api/auth/auth.py	d63620ae32b4a8e4c3d7603762c76fa3982aa752	applied	R2簇5:三方合并/本地适配
 riveredge-backend/src/infra/api/deps/services.py	579e51313037396c1ec6a948589dcffbf9835a1b	applied	R2簇5 core/sync:摘取上游tip实现
-riveredge-backend/src/infra/config/infra_config.py	e95d4f3e51e7fa05420838464f671a6c1f5cef7b	tracked	seed from 57a37e2749
+riveredge-backend/src/infra/config/infra_config.py	e95d4f3e51e7fa05420838464f671a6c1f5cef7b	applied	图纸200MB簇：MAX_FILE_SIZE默认100→200MB（图纸上限钳制真源）；其余差异为星技谷品牌/邮箱/5173端口本地分叉保留
 riveredge-backend/src/infra/domain/security/security.py	832fac2af9cf001fba1b68211bfd33d49885d75e	tracked	seed from 31efc2b64c
 riveredge-backend/src/infra/domain/tenant/tenant_access.py	a9b8c0103d955710ec9068f97d9f73a4468ab317	tracked	seed from 1eb300325a
 riveredge-backend/src/infra/infrastructure/database/database.py	3f63a1523a26209f95862f484b3cc92f2c55bd98	tracked	seed from 3050130eb5
