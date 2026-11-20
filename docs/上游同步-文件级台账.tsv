@@ -461,11 +461,11 @@ riveredge-backend/migrations/models/978_20261121120000_warehouse_push_sync_bindi
 riveredge-backend/migrations/models/979_20261102103000_sales_delivery_sync_binding.py	7911b3c1cd292028d63ecc1c79165299d333c69d	superset	上游增量本地已超集/同义覆盖（明细见预审B包）
 riveredge-backend/migrations/models/979_20261122000000_inspection_sampling_transfer_states.py	DELETED	applied	E域GB2828簇(源905787348a/1efec0da1d等)
 riveredge-backend/migrations/models/980_20261102161000_api_related_document_and_type.py	7154e8ea98a1103591d3e10cbd883ed7e6c0ecd8	applied	R2簇2迁移:20261123命名落位(不执行)
-riveredge-backend/migrations/models/981_20261102170000_finished_goods_receipt_blank_work_order.py	e5ffb2b4b4ff510483942d0852f1290169e48945	applied	R2簇2迁移:20261123命名落位(不执行)
-riveredge-backend/migrations/models/982_20261102170500_production_picking_blank_work_order.py	212fadc22449e6ea7d2aee76565050af4a173e2e	applied	R2簇2迁移:20261123命名落位(不执行)
+riveredge-backend/migrations/models/981_20261102170000_finished_goods_receipt_blank_work_order.py	e5ffb2b4b4ff510483942d0852f1290169e48945	applied	摘取：空白建单模型对齐（三模型与上游字节一致）+迁移981/982/985→20261123000040-42+schema可空/领用部门；schema其余增量仍deferred
+riveredge-backend/migrations/models/982_20261102170500_production_picking_blank_work_order.py	212fadc22449e6ea7d2aee76565050af4a173e2e	applied	摘取：空白建单模型对齐（三模型与上游字节一致）+迁移981/982/985→20261123000040-42+schema可空/领用部门；schema其余增量仍deferred
 riveredge-backend/migrations/models/983_20261102180000_purchase_order_type_receipt.py	161d40c370ac3d467ef33d4f10cdf72fa3cab3c7	applied	R2簇2迁移:20261123命名落位(不执行)
 riveredge-backend/migrations/models/984_20261102190000_sync_run_log_trigger_kind.py	5c2a2273ad0c321b42e30b7968e027d5651c70c1	applied	R2簇2迁移:20261123命名落位(不执行)
-riveredge-backend/migrations/models/985_20261102224500_production_picking_pick_department.py	9154b59fea72314b2b77f5a85905affe3913600d	applied	R2簇2迁移:20261123命名落位(不执行)
+riveredge-backend/migrations/models/985_20261102224500_production_picking_pick_department.py	9154b59fea72314b2b77f5a85905affe3913600d	applied	摘取：空白建单模型对齐（三模型与上游字节一致）+迁移981/982/985→20261123000040-42+schema可空/领用部门；schema其余增量仍deferred
 riveredge-backend/migrations/models/986_20261103004500_other_outbound_item_line_warehouse.py	12c91d88ecc686d125964d417c876e865e1df10b	applied	R2簇2迁移:20261123命名落位(不执行)
 riveredge-backend/migrations/models/987_20261103113000_dual_inventory_unit_ledger.py	5ad6beb1d6653a57d9e37dc70b4b86574d2d0c25	applied	R2簇2迁移:20261123命名落位(不执行)
 riveredge-backend/migrations/models/987_20261103120000_seed_equipment_inspection_scheme_code_rule.py	ccbec5d8408a9a2aa75625f54e736106c4ef1bb8	applied	R2簇2迁移:20261123命名落位(不执行)
@@ -876,7 +876,7 @@ riveredge-backend/src/apps/kuaizhizao/models/equipment_fault.py	1c7c5d38f489b370
 riveredge-backend/src/apps/kuaizhizao/models/equipment_ops.py	efef09a63db39d0bb897b302b5cfcf83de663f08	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/models/equipment_spot_check_plan.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 riveredge-backend/src/apps/kuaizhizao/models/finished_goods_inspection.py	fb058384bdbce473d6da47fcf0460c64566472f3	applied	R2：与上游tip blob一致，本地已同步
-riveredge-backend/src/apps/kuaizhizao/models/finished_goods_receipt.py	1b44583e6cecaebdfb99f3228170e20a64716d23	deferred	特性增量未核验/未落地，随对应域批次复核（预审A包）
+riveredge-backend/src/apps/kuaizhizao/models/finished_goods_receipt.py	1b44583e6cecaebdfb99f3228170e20a64716d23	applied	摘取：空白建单模型对齐（三模型与上游字节一致）+迁移981/982/985→20261123000040-42+schema可空/领用部门；schema其余增量仍deferred
 riveredge-backend/src/apps/kuaizhizao/models/finished_goods_receipt_item.py	96b80015acfbacbb3ea78294f549749f398b8db1	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/kuaizhizao/models/finished_goods_receipt_sync_binding.py	0f7cceebb306836854c3fe85b8d3d60be056526d	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/models/incoming_inspection.py	8e1d522d50d753bec26e86a51df8216c34f1bf5c	tracked	seed from a62d32cff6
@@ -909,7 +909,7 @@ riveredge-backend/src/apps/kuaizhizao/models/packing_binding_line.py	95ddd3fdae2
 riveredge-backend/src/apps/kuaizhizao/models/packing_profile.py	b92330980c9a923af56426565e6eccd9e7a66922	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/models/payment_application.py	8702ba2428f79ca9893237ea99099b93380df1ea	tracked	seed from 37409d3b29
 riveredge-backend/src/apps/kuaizhizao/models/process_inspection.py	c846f85583de65e877a08b77adda2a65fc3a57a5	applied	R2：与上游tip blob一致，本地已同步
-riveredge-backend/src/apps/kuaizhizao/models/production_picking.py	e0ab97316c00af9d1ac6c0c905293b925182cb79	deferred	特性增量未核验/未落地，随对应域批次复核（预审A包）
+riveredge-backend/src/apps/kuaizhizao/models/production_picking.py	e0ab97316c00af9d1ac6c0c905293b925182cb79	applied	摘取：空白建单模型对齐（三模型与上游字节一致）+迁移981/982/985→20261123000040-42+schema可空/领用部门；schema其余增量仍deferred
 riveredge-backend/src/apps/kuaizhizao/models/production_picking_item.py	e5472a90966bbd6a3fb768ccc5a60eb4b217f995	tracked	seed from 6abba1dbd5
 riveredge-backend/src/apps/kuaizhizao/models/production_picking_sync_binding.py	39f97de77eb313817e104b47c7800777683a1405	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/models/purchase_demand_party.py	2e6fbcfe5202f8b620656673900c2dea6beb0f56	tracked	seed from d892f36d03
@@ -955,7 +955,7 @@ riveredge-backend/src/apps/kuaizhizao/models/sales_order_sync_binding.py	e3ba009
 riveredge-backend/src/apps/kuaizhizao/models/sales_return.py	0b379e0b73203d8eb111406f9c733b3fdf63a9a0	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/models/sales_return_item.py	3905765ffdbaf60f6a2ecc7bc18f8bb5fceb37cf	tracked	seed from a62d32cff6
 riveredge-backend/src/apps/kuaizhizao/models/sales_review_item.py	8425d4efaa25938246304663910cc0762cb22d05	applied	R2：与上游tip blob一致，本地已同步
-riveredge-backend/src/apps/kuaizhizao/models/semi_finished_goods_receipt.py	76f55ac163afc7d401d2f924da8ee2d85967d7b0	deferred	特性增量未核验/未落地，随对应域批次复核（预审A包）
+riveredge-backend/src/apps/kuaizhizao/models/semi_finished_goods_receipt.py	76f55ac163afc7d401d2f924da8ee2d85967d7b0	applied	摘取：空白建单模型对齐（三模型与上游字节一致）+迁移981/982/985→20261123000040-42+schema可空/领用部门；schema其余增量仍deferred
 riveredge-backend/src/apps/kuaizhizao/models/shipment_notice.py	9dfcdc62ea5e0076f340a5b6ff372819d53b8abd	tracked	seed from 899307f4d6
 riveredge-backend/src/apps/kuaizhizao/models/shipment_notice_item.py	3ad68b67e2c83075d2fa9204562738ac96f6096e	tracked	seed from a62d32cff6
 riveredge-backend/src/apps/kuaizhizao/models/supplier_evaluation.py	2c1c5684f0bdb5e7ac25e3989d23f36af9766a49	applied	13be286f11联调修复簇
@@ -1030,7 +1030,7 @@ riveredge-backend/src/apps/kuaizhizao/schemas/supplier_evaluation.py	2643e3ae9a7
 riveredge-backend/src/apps/kuaizhizao/schemas/tool.py	dd3a24e78c5bb57a4e820782f002ce546cc63062	tracked	seed from 2c945a39fb
 riveredge-backend/src/apps/kuaizhizao/schemas/tool_ops.py	7caa7df817e0e0ff89de0c463dc1a5d795d3a06e	tracked	seed from 5f085a19c9
 riveredge-backend/src/apps/kuaizhizao/schemas/visual_scheduling.py	834cef5b33d16fd19b2283a0465d72c747f20111	deferred	部分摘取：due-estimate端点已落（expected_date适配本地demand_item.delivery_date）；策略目录/normalize+产线校验合并仍待摘
-riveredge-backend/src/apps/kuaizhizao/schemas/warehouse.py	a745f86c7c7a6439a9f56ae08c15b61e1ba92269	tracked	seed from 4bd853a94f
+riveredge-backend/src/apps/kuaizhizao/schemas/warehouse.py	a745f86c7c7a6439a9f56ae08c15b61e1ba92269	deferred	部分摘取：ProductionPickingBase已对齐（可空+领用部门）；文件其余70+hunk随仓储域批次复核
 riveredge-backend/src/apps/kuaizhizao/schemas/work_order.py	d2e2f3da2ba424b9c44450ac55dbeb8947e47224	tracked	seed from 18c0e4ce1a
 riveredge-backend/src/apps/kuaizhizao/schemas/work_order_sync.py	f04609e2feecdf3e20b53bb2a52087111afe8ad0	applied	f40f54e336调度窗+价税簇
 riveredge-backend/src/apps/kuaizhizao/scripts/__init__.py	DELETED	superset	上游已删/无对应，本地保留独有治理与记忆库资产（.cursor/.aoci/openapi等）

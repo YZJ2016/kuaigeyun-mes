@@ -19,16 +19,19 @@ class ProductionPicking(BaseModel):
     """
     tenant_id = fields.IntField(description="租户ID")
     picking_code = fields.CharField(max_length=50, db_index=True, description="领料单编码")  # 租户内未删除唯一，见迁移 462
-    work_order_id = fields.IntField(description="工单ID")
-    work_order_code = fields.CharField(max_length=500, description="工单编码（多工单合并时可拼接）")
+    work_order_id = fields.IntField(null=True, description="工单ID（空白建单可空）")
+    work_order_code = fields.CharField(max_length=500, default="", description="工单编码（多工单合并时可拼接）")
     workshop_id = fields.IntField(null=True, description="车间ID")
     workshop_name = fields.CharField(max_length=100, null=True, description="车间名称")
     status = fields.CharField(max_length=20, default="待领料", description="领料状态")
 
-    # 领料人信息
-    picker_id = fields.IntField(null=True, description="领料人ID")
-    picker_name = fields.CharField(max_length=100, null=True, description="领料人姓名")
-    picking_time = fields.DatetimeField(null=True, description="领料时间")
+    # 领用人 / 领用部门
+    picker_id = fields.IntField(null=True, description="领用人ID")
+    picker_name = fields.CharField(max_length=100, null=True, description="领用人姓名")
+    picking_time = fields.DatetimeField(null=True, description="制单日期/领料业务日")
+    pick_department_id = fields.IntField(null=True, description="领用部门ID")
+    pick_department_code = fields.CharField(max_length=64, null=True, description="领用部门编码")
+    pick_department_name = fields.CharField(max_length=100, null=True, description="领用部门名称")
 
     # 审核信息
     reviewer_id = fields.IntField(null=True, description="审核人ID")

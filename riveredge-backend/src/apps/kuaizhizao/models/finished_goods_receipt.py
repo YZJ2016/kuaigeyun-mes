@@ -19,8 +19,8 @@ class FinishedGoodsReceipt(BaseModel):
     """
     tenant_id = fields.IntField(description="租户ID")
     receipt_code = fields.CharField(max_length=50, db_index=True, description="入库单编码")  # 租户内未删除唯一，见迁移 462
-    work_order_id = fields.IntField(description="工单ID")
-    work_order_code = fields.CharField(max_length=50, description="工单编码")
+    work_order_id = fields.IntField(null=True, description="工单ID（空白建单可空）")
+    work_order_code = fields.CharField(max_length=50, default="", description="工单编码")
 
     # 销售订单信息（MTO模式）
     sales_order_id = fields.IntField(null=True, description="销售订单ID")
