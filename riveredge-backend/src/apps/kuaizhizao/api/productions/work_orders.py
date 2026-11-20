@@ -18,7 +18,7 @@ from apps.kuaizhizao.api.deps import (
     get_station_business_operator,
     require_station_operator_session,
 )
-from core.api.deps.access import require_permission_codes
+from core.api.deps.access import require_permission_codes, require_read_or_display
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 
@@ -2147,6 +2147,29 @@ async def list_work_order_outsource_options(
     )
 
 
+@router.get(
+    "/work-orders/outsource-operation-pull-lines",
+    summary="Open work order operation lines for outsource order pull",
+    dependencies=[Depends(require_read_or_display("kuaizhizao:outsource-order"))],
+)
+async def list_work_order_outsource_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="工单/工序/物料关键字"),
+    outsourceable_only: bool = Query(True, description="仅可委外行"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await OutsourceService().list_work_order_outsource_pull_lines(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+        outsourceable_only=outsourceable_only,
+    )
+
+
 @router.post("/work-orders/{work_order_id}/outsource", response_model=OutsourceOrderResponse, summary="Create outsourced operation from work order")
 async def create_outsource_order_from_work_order(
     work_order_id: int,
@@ -2247,7 +2270,7 @@ async def list_outsource_orders(
     )
 
 
-@router.get("/outsource-orders/{outsource_order_id}", response_model=OutsourceOrderResponse, summary="Get outsourced operation")
+@router.get("/outsource-orders/{outsource_order_id:int}", response_model=OutsourceOrderResponse, summary="Get outsourced operation")
 async def get_outsource_order(
     outsource_order_id: int,
     current_user: User = Depends(get_current_user),
@@ -2264,7 +2287,7 @@ async def get_outsource_order(
     )
 
 
-@router.put("/outsource-orders/{outsource_order_id}", response_model=OutsourceOrderResponse, summary="Update outsourced operation")
+@router.put("/outsource-orders/{outsource_order_id:int}", response_model=OutsourceOrderResponse, summary="Update outsourced operation")
 async def update_outsource_order(
     outsource_order_id: int,
     outsource_order: OutsourceOrderUpdate,
@@ -2285,7 +2308,7 @@ async def update_outsource_order(
     )
 
 
-@router.delete("/outsource-orders/{outsource_order_id}", summary="Delete outsourced operation")
+@router.delete("/outsource-orders/{outsource_order_id:int}", summary="Delete outsourced operation")
 async def delete_outsource_order(
     outsource_order_id: int,
     current_user: User = Depends(get_current_user),
@@ -2308,7 +2331,7 @@ async def delete_outsource_order(
     )
 
 
-@router.post("/outsource-orders/{outsource_order_id}/link-purchase-receipt", response_model=OutsourceOrderResponse, summary="Link purchase receipt")
+@router.post("/outsource-orders/{outsource_order_id:int}/link-purchase-receipt", response_model=OutsourceOrderResponse, summary="Link purchase receipt")
 async def link_purchase_receipt_to_outsource_order(
     outsource_order_id: int,
     purchase_receipt_id: int = Query(..., description="采购入库单ID"),

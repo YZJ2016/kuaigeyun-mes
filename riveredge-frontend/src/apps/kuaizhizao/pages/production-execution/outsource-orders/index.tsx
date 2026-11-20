@@ -22,7 +22,6 @@ import {
   ProFormDigit,
   ProFormTextArea,
   ProFormItem,
-  ProFormText,
   ProFormDependency,
 } from '@ant-design/pro-components';
 import {
@@ -36,8 +35,6 @@ import {
   Dropdown,
   Empty,
   Spin,
-  Alert,
-  Card,
   theme as AntdTheme,
 } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
@@ -48,8 +45,6 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import {
   UniPullQueryModal,
-  filterByPullScope,
-  paginatePullRows,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -94,6 +89,8 @@ import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { OutsourceOrderReceiptBatchesSection, type OutsourceOrderReceiptBatchRow } from '../../../components/OutsourceOrderReceiptBatchesSection';
+import { buildOutsourceCreateFormDefaults } from '../../../utils/outsourceCreateFormDefaults';
+import { OutsourceOrderCreateFromSourceForm } from '../../../components/OutsourceOrderCreateFromSourceForm';
 const OUTSOURCE_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_outsource_orders';
 const OUTSOURCE_ORDER_HOST_RESOURCE = 'kuaizhizao:outsource-order';
 
@@ -146,6 +143,9 @@ interface PullOutsourceOperationCandidate {
   already_outsourced_quantity: number;
   outsourceable_quantity: number;
   occupied_quantity: number;
+  default_outsource_supplier_id?: number | null;
+  planned_start_date?: string | null;
+  planned_end_date?: string | null;
 }
 
 interface Supplier {
@@ -242,13 +242,28 @@ export const OutsourceOrdersTable: React.FC = () => {
       setCreateLockedOperation(operation);
       setCreateMaxOutsourceQty(Number(operation.outsourceable_quantity ?? 0));
       setCreateModalVisible(true);
-      createFormRef.current?.resetFields();
-      createFormRef.current?.setFieldsValue({
-        work_order_operation_id: operation.work_order_operation_id,
-      });
     },
     [],
   );
+
+  useEffect(() => {
+    if (!createModalVisible || !createLockedOperation) return;
+    createFormRef.current?.resetFields();
+    createFormRef.current?.setFieldsValue(
+      buildOutsourceCreateFormDefaults(createLockedOperation, supplierList),
+    );
+  }, [createModalVisible, createLockedOperation]);
+
+  useEffect(() => {
+    if (!createModalVisible || !createLockedOperation) return;
+    const sid = createLockedOperation.default_outsource_supplier_id;
+    if (sid == null || !supplierList.length) return;
+    const current = createFormRef.current?.getFieldValue('supplier_id');
+    if (current != null && current !== '') return;
+    if (supplierList.some((s) => Number(s.id) === Number(sid))) {
+      createFormRef.current?.setFieldsValue({ supplier_id: sid });
+    }
+  }, [createModalVisible, createLockedOperation, supplierList]);
 
   const openOutsourceCreateFromSource = useCallback(
     async (workOrderId: number, workOrderOperationId: number) => {
@@ -281,6 +296,12 @@ export const OutsourceOrdersTable: React.FC = () => {
           outsourceable_quantity: Number(matched.outsourceable_quantity ?? 0),
           occupied_quantity:
             Number(matched.completed_quantity ?? 0) + Number(matched.already_outsourced_quantity ?? 0),
+          default_outsource_supplier_id:
+            matched.default_outsource_supplier_id != null
+              ? Number(matched.default_outsource_supplier_id)
+              : undefined,
+          planned_start_date: matched.planned_start_date ?? undefined,
+          planned_end_date: matched.planned_end_date ?? undefined,
         };
         openCreateModalFromPullContext(workOrder, operationRow);
       } catch (error: unknown) {
@@ -309,66 +330,44 @@ export const OutsourceOrdersTable: React.FC = () => {
     scopeOptions: pullFromWorkOrderScopeOptions,
     defaultScope: 'outsourceable',
     loadData: async ({ keyword, page, pageSize, scope }) => {
-      const normalizedKeyword = keyword.trim().toLowerCase();
-      const chunkSize = 100;
-      const maxRows = 1000;
-      const workOrders: Array<{ id: number; code?: string; name?: string; product_name?: string; quantity?: number }> = [];
-      let skip = 0;
-      while (workOrders.length < maxRows) {
-        const res = await workOrderApi.list({
-          status: 'in_progress',
-          code: normalizedKeyword || undefined,
-          skip,
-          limit: chunkSize,
+      let res: Awaited<ReturnType<typeof outsourceOrderApi.listWorkOrderOperationPullLines>>;
+      try {
+        res = await outsourceOrderApi.listWorkOrderOperationPullLines({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          keyword: keyword.trim() || undefined,
+          outsourceable_only: scope !== 'all',
         });
-        const chunk = Array.isArray(res) ? res : (res as any)?.data ?? (res as any)?.items ?? [];
-        if (!Array.isArray(chunk) || chunk.length === 0) break;
-        workOrders.push(...chunk);
-        if (chunk.length < chunkSize) break;
-        skip += chunkSize;
+      } catch (error: unknown) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.outsourceOrder.pullPreviewFailed')));
+        return { data: [], total: 0 };
       }
-      const rows = (
-        await Promise.all(
-          workOrders.map(async (workOrder) => {
-            if (!workOrder?.id) return [];
-            const optionsRes = await outsourceOrderApi.getOutsourceOptions(String(workOrder.id));
-            const options = Array.isArray(optionsRes) ? optionsRes : [];
-            return options.map((opt: any) => ({
-              pull_row_key: `${workOrder.id}-${opt.work_order_operation_id}`,
-              work_order_id: Number(workOrder.id),
-              work_order_code: workOrder.code,
-              work_order_name: workOrder.name,
-              product_name: workOrder.product_name,
-              work_order_operation_id: Number(opt.work_order_operation_id),
-              operation_code: opt.operation_code,
-              operation_name: opt.operation_name,
-              sequence: opt.sequence,
-              max_quantity: Number(opt.max_quantity ?? 0),
-              completed_quantity: Number(opt.completed_quantity ?? 0),
-              already_outsourced_quantity: Number(opt.already_outsourced_quantity ?? 0),
-              outsourceable_quantity: Number(opt.outsourceable_quantity ?? 0),
-              occupied_quantity:
-                Number(opt.completed_quantity ?? 0) + Number(opt.already_outsourced_quantity ?? 0),
-            }));
-          }),
-        )
-      ).flat();
-      const keywordFiltered = normalizedKeyword
-        ? rows.filter((row) => {
-          const workOrderCode = String(row.work_order_code || '').toLowerCase();
-          const workOrderName = String(row.work_order_name || '').toLowerCase();
-          const operationCode = String(row.operation_code || '').toLowerCase();
-          const operationName = String(row.operation_name || '').toLowerCase();
-          return (
-            workOrderCode.includes(normalizedKeyword)
-            || workOrderName.includes(normalizedKeyword)
-            || operationCode.includes(normalizedKeyword)
-            || operationName.includes(normalizedKeyword)
-          );
-        })
-        : rows;
-      const filteredRows = filterByPullScope(keywordFiltered, scope, isPullOutsourceOperationSelectable);
-      return paginatePullRows(filteredRows, page, pageSize);
+      const rows = (res?.data ?? []).map((row) => ({
+        pull_row_key: String(row.pull_row_key ?? ''),
+        work_order_id: Number(row.work_order_id),
+        work_order_code: row.work_order_code as string | undefined,
+        work_order_name: row.work_order_name as string | undefined,
+        product_name: row.product_name as string | undefined,
+        work_order_operation_id: Number(row.work_order_operation_id),
+        operation_code: row.operation_code as string | undefined,
+        operation_name: row.operation_name as string | undefined,
+        sequence: row.sequence as number | undefined,
+        max_quantity: Number(row.max_quantity ?? 0),
+        completed_quantity: Number(row.completed_quantity ?? 0),
+        already_outsourced_quantity: Number(row.already_outsourced_quantity ?? 0),
+        outsourceable_quantity: Number(row.outsourceable_quantity ?? 0),
+        occupied_quantity: Number(row.occupied_quantity ?? 0),
+        default_outsource_supplier_id:
+          row.default_outsource_supplier_id != null
+            ? Number(row.default_outsource_supplier_id)
+            : undefined,
+        planned_start_date: (row.planned_start_date as string | null | undefined) ?? undefined,
+        planned_end_date: (row.planned_end_date as string | null | undefined) ?? undefined,
+      })) as PullOutsourceOperationCandidate[];
+      return {
+        data: rows,
+        total: res?.total ?? rows.length,
+      };
     },
     isRowDisabled: (record) => !isPullOutsourceOperationSelectable(record),
     onConfirm: async (_selectedKeys, selectedRows) => {
@@ -401,7 +400,7 @@ export const OutsourceOrdersTable: React.FC = () => {
       throw new Error('exceed qty');
     }
     try {
-      await outsourceOrderApi.createFromWorkOrder(String(createWorkOrder.id), {
+      const created = (await outsourceOrderApi.createFromWorkOrder(String(createWorkOrder.id), {
         work_order_operation_id: createLockedOperation.work_order_operation_id,
         supplier_id: values.supplier_id,
         outsource_quantity: outsourceQty,
@@ -409,7 +408,7 @@ export const OutsourceOrdersTable: React.FC = () => {
         planned_start_date: toApiDateTimeString(values.planned_start_date),
         planned_end_date: toApiDateTimeString(values.planned_end_date),
         remarks: values.remarks,
-      });
+      })) as OutsourceOrder;
       messageApi.success(t('app.kuaizhizao.outsourceOrder.createSuccess'));
       setCreateModalVisible(false);
       setCreateWorkOrder(null);
@@ -417,8 +416,11 @@ export const OutsourceOrdersTable: React.FC = () => {
       setCreateMaxOutsourceQty(0);
       createFormRef.current?.resetFields();
       invalidateMenuBadgeCounts();
-      actionRef.current?.reload();
       setStatsVersion((v) => v + 1);
+      actionRef.current?.reload();
+      if (created?.id != null) {
+        await handleEditFromRecord(created);
+      }
     } catch (error: any) {
       messageApi.error(error?.message || t('app.kuaizhizao.outsourceOrder.createFailed'));
       throw error;
@@ -1180,101 +1182,21 @@ export const OutsourceOrdersTable: React.FC = () => {
         }}
         onFinish={handleSubmitCreate}
         formRef={createFormRef}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        grid
         {...MODAL_CONFIG}
       >
         {createWorkOrder && createLockedOperation ? (
-          <>
-            <Alert
-              type="info"
-              showIcon
-              style={{ marginBottom: 16 }}
-              title={t('app.kuaizhizao.outsourceOrder.formSourceLocked')}
-            />
-            <Card size="small" style={{ marginBottom: 16 }}>
-              <Descriptions column={2} size="small">
-                <Descriptions.Item label={t('app.kuaizhizao.outsourceOrder.colWorkOrderCode')}>
-                  {createWorkOrder.code || '—'}
-                </Descriptions.Item>
-                <Descriptions.Item label={t('app.kuaizhizao.workReporting.colWorkOrderName')}>
-                  {createWorkOrder.name || '—'}
-                </Descriptions.Item>
-                <Descriptions.Item label={t('app.kuaizhizao.outsourceOrder.colOperationName')} span={2}>
-                  {`${createLockedOperation.operation_name || '—'} (${createLockedOperation.operation_code || '—'})`}
-                </Descriptions.Item>
-              </Descriptions>
-            </Card>
-            <ProFormText name="work_order_operation_id" hidden />
-            <ProFormItem
-              name="supplier_id"
-              label={t('app.kuaizhizao.outsourceOrder.fieldSupplier')}
-              rules={[{ required: true, message: t('app.kuaizhizao.outsourceOrder.ruleSelectSupplier') }]}
-            >
-              <UniDropdown
-                placeholder={t('app.kuaizhizao.outsourceOrder.placeholderSupplier')}
-                showSearch
-                allowClear
-                style={{ width: '100%' }}
-                options={supplierList.map((s: Supplier) => ({
-                  label: `${s.code} - ${s.name}`,
-                  value: s.id,
-                }))}
-                quickCreate={{ label: t('app.kuaizhizao.outsourceOrder.supplierManage'), onClick: () => navigate('/apps/master-data/supply-chain/suppliers') }}
-              />
-            </ProFormItem>
-            <ProFormDigit
-              name="outsource_quantity"
-              label={t('app.kuaizhizao.outsourceOrder.fieldOutsourceQty')}
-              placeholder={t('app.kuaizhizao.outsourceOrder.placeholderOutsourceQty')}
-              rules={[
-                { required: true, message: t('app.kuaizhizao.outsourceOrder.ruleEnterOutsourceQty') },
-                {
-                  validator: async (_, value) => {
-                    if (value == null || value === '') return;
-                    const qty = Number(value);
-                    if (!Number.isFinite(qty) || qty <= 0) {
-                      throw new Error(t('app.kuaizhizao.outsourceOrder.ruleEnterOutsourceQty'));
-                    }
-                    if (qty > createMaxOutsourceQty) {
-                      throw new Error(t('app.kuaizhizao.outsourceOrder.ruleEnterOutsourceQty'));
-                    }
-                  },
-                },
-              ]}
-              min={0}
-              max={createMaxOutsourceQty > 0 ? createMaxOutsourceQty : undefined}
-              fieldProps={{ precision: 2 }}
-              extra={t('app.kuaizhizao.salesOrder.colPushableQty') + `: ${createMaxOutsourceQty}`}
-            />
-            <ProFormDigit
-              name="unit_price"
-              label={t('app.kuaizhizao.outsourceOrder.fieldUnitPrice')}
-              placeholder={t('app.kuaizhizao.outsourceOrder.placeholderUnitPrice')}
-              min={0}
-              fieldProps={{ precision: 2 }}
-            />
-            <ProFormDatePicker
-              name="planned_start_date"
-              label={t('app.kuaizhizao.outsourceOrder.fieldPlannedStart')}
-              placeholder={t('app.kuaizhizao.outsourceOrder.placeholderPlannedStart')}
-              formItemProps={formDateFormItemProps}
-              fieldProps={{ showTime: true }}
-            />
-            <ProFormDatePicker
-              name="planned_end_date"
-              label={t('app.kuaizhizao.outsourceOrder.fieldPlannedEnd')}
-              placeholder={t('app.kuaizhizao.outsourceOrder.placeholderPlannedEnd')}
-              formItemProps={formDateFormItemProps}
-              fieldProps={buildFutureDateShortcutFieldProps({
-                showTime: true,
-              })}
-            />
-            <ProFormTextArea
-              name="remarks"
-              label={t('common.remark')}
-              placeholder={t('app.kuaizhizao.outsourceOrder.placeholderRemarks')}
-              fieldProps={{ rows: 3 }}
-            />
-          </>
+          <OutsourceOrderCreateFromSourceForm
+            t={t}
+            navigate={navigate}
+            workOrder={createWorkOrder}
+            lockedOperation={createLockedOperation}
+            maxOutsourceQty={createMaxOutsourceQty}
+            supplierList={supplierList}
+            formRef={createFormRef}
+            formDateFormItemProps={formDateFormItemProps}
+          />
         ) : null}
       </FormModalTemplate>
 

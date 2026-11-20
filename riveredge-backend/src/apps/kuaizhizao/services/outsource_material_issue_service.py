@@ -37,6 +37,14 @@ from apps.kuaizhizao.utils.outsource_work_order_state import apply_outsource_wor
 from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 
 
+def _normalize_issue_serial_nos(issue_data: OutsourceMaterialIssueCreate) -> Optional[list[str]]:
+    raw = getattr(issue_data, "serial_numbers", None)
+    if not raw:
+        return None
+    cleaned = [str(s).strip() for s in raw if str(s).strip()]
+    return cleaned or None
+
+
 class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
     """
     委外发料服务类
@@ -161,6 +169,7 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
                 quantity=issue_data.quantity,
                 warehouse_id=issue_data.warehouse_id,
                 batch_no=getattr(issue_data, "batch_number", None),
+                serial_nos=_normalize_issue_serial_nos(issue_data),
                 source_type="outsource_material_issue",
                 source_doc_id=material_issue.id,
                 source_doc_code=code,
@@ -305,6 +314,7 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
                 quantity=issue_data.quantity,
                 warehouse_id=issue_data.warehouse_id,
                 batch_no=getattr(issue_data, "batch_number", None),
+                serial_nos=_normalize_issue_serial_nos(issue_data),
                 source_type="outsource_material_issue",
                 source_doc_id=material_issue.id,
                 source_doc_code=code,
@@ -585,6 +595,10 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
             outsource_work_order_id=owo.id,
             outsource_work_order_code=owo.code,
             product_name=owo.product_name,
+            supplier_code=str(owo.supplier_code or "") or None,
+            supplier_name=str(owo.supplier_name or "") or None,
+            planned_start_date=owo.planned_start_date,
+            planned_end_date=owo.planned_end_date,
             quantity=owo.quantity or Decimal("0"),
             lines=lines,
             message=message,
@@ -602,12 +616,17 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
             raise ValidationError("请至少填写一条发料明细")
 
         created: List[OutsourceMaterialIssueResponse] = []
+        from apps.kuaizhizao.services.warehouse_wo_outsource_pull_service import (
+            _resolve_material_warehouse,
+        )
+
         for line in batch_data.lines:
             wh_id = line.warehouse_id or batch_data.warehouse_id
             wh_name = line.warehouse_name or batch_data.warehouse_name
             if not wh_id or int(wh_id) <= 0:
-                raise ValidationError(
-                    f"物料 {line.material_code or line.material_name} 须指定出库仓库"
+                label = str(line.material_code or line.material_name or line.material_id)
+                wh_id, wh_name = await _resolve_material_warehouse(
+                    tenant_id, int(line.material_id), label
                 )
             issue_data = OutsourceMaterialIssueCreate(
                 outsource_work_order_id=batch_data.outsource_work_order_id,
@@ -620,6 +639,7 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
                 warehouse_id=wh_id,
                 warehouse_name=wh_name,
                 batch_number=line.batch_number,
+                serial_numbers=line.serial_numbers,
                 issued_at=batch_data.issued_at,
                 issued_by=batch_data.issued_by,
                 issued_by_name=batch_data.issued_by_name,

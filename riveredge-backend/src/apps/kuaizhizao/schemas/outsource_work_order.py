@@ -141,6 +141,7 @@ class OutsourceMaterialIssueCreate(OutsourceMaterialIssueBase):
     """创建委外发料 Schema"""
     issued_by: Optional[int] = Field(None, description="发料人ID")
     issued_by_name: Optional[str] = Field(None, max_length=100, description="发料人姓名")
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表（库存过账用，不持久化）")
 
 
 class OutsourceMaterialIssueUpdate(BaseModel):
@@ -204,6 +205,10 @@ class OutsourceMaterialIssuePreviewResponse(BaseModel):
     outsource_work_order_id: int = Field(...)
     outsource_work_order_code: str = Field(...)
     product_name: str = Field(...)
+    supplier_code: Optional[str] = Field(None, description="委外供应商编码")
+    supplier_name: Optional[str] = Field(None, description="委外供应商名称")
+    planned_start_date: Optional[datetime] = Field(None, description="计划开始时间")
+    planned_end_date: Optional[datetime] = Field(None, description="计划结束时间")
     quantity: Decimal = Field(..., description="委外数量")
     lines: List[OutsourceMaterialIssuePreviewLine] = Field(default_factory=list)
     message: Optional[str] = Field(None, description="提示信息")
@@ -223,6 +228,7 @@ class OutsourceMaterialIssueLineCreate(BaseModel):
     warehouse_id: Optional[int] = Field(None, description="仓库ID")
     warehouse_name: Optional[str] = Field(None, description="仓库名称")
     batch_number: Optional[str] = Field(None, description="批次号")
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表（库存过账用）")
 
 
 class OutsourceMaterialIssueBatchCreate(BaseModel):

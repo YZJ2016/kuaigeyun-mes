@@ -7,6 +7,7 @@ Author: Luigi Lu
 Date: 2025-01-04
 """
 
+import asyncio
 import uuid
 from datetime import date, datetime, time
 from typing import Any, Dict, List, Optional
@@ -62,6 +63,36 @@ OUTSOURCE_ORDER_SORTABLE_FIELDS = frozenset({
     "created_at",
     "updated_at",
 })
+
+_OUTSOURCE_PULL_WO_STATUSES = frozenset(
+    {
+        "released",
+        "in_progress",
+        "已下达",
+        "执行中",
+        "进行中",
+    }
+)
+
+
+def _outsource_pull_line_matches_keyword(
+    keyword: Optional[str],
+    *,
+    work_order: WorkOrder,
+    operation: WorkOrderOperation,
+) -> bool:
+    kw = str(keyword or "").strip().lower()
+    if not kw:
+        return True
+    parts = (
+        work_order.code,
+        work_order.name,
+        work_order.product_code,
+        work_order.product_name,
+        operation.operation_code,
+        operation.operation_name,
+    )
+    return any(kw in str(part or "").strip().lower() for part in parts)
 
 
 class OutsourceService(AppBaseService[OutsourceOrder]):
@@ -138,9 +169,154 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
                     operation_name=operation.operation_name,
                     sequence=operation.sequence,
                     **breakdown,
+                    default_outsource_supplier_id=(
+                        int(operation.default_outsource_supplier_id)
+                        if operation.default_outsource_supplier_id
+                        else None
+                    ),
+                    planned_start_date=operation.planned_start_date,
+                    planned_end_date=operation.planned_end_date,
                 )
             )
         return options
+
+    async def list_work_order_outsource_pull_lines(
+        self,
+        tenant_id: int,
+        *,
+        current_user: Optional[User] = None,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        outsourceable_only: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        工序委外取单：执行中/已下达工单 × 工序开口行，服务端分页。
+        与工单列表同一套范围与数据范围，避免前端 N+1 请求 outsource-options。
+        """
+        wo_group_q = Q(group_role__isnull=True) | Q(
+            group_role__in=["root", "component", "outsource_component"]
+        )
+        query = (
+            WorkOrder.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                parent_work_order_id__isnull=True,
+                status__in=list(_OUTSOURCE_PULL_WO_STATUSES),
+            )
+            .filter(wo_group_q)
+            .order_by("-created_at", "-id")
+        )
+        from apps.kuaizhizao.services.kuaizhizao_data_scope import apply_kuaizhizao_list_scope
+
+        query = await apply_kuaizhizao_list_scope(
+            query,
+            tenant_id=tenant_id,
+            current_user=current_user,
+            resource="kuaizhizao:work-order",
+        )
+        work_orders = await query.all()
+        wo_ids = [int(wo.id) for wo in work_orders if wo.id is not None]
+        if not wo_ids:
+            return {"data": [], "total": 0, "success": True}
+
+        operations, outsource_rows = await asyncio.gather(
+            WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                work_order_id__in=wo_ids,
+                deleted_at__isnull=True,
+            ).order_by("sequence", "id").all(),
+            OutsourceOrder.filter(
+                tenant_id=tenant_id,
+                work_order_id__in=wo_ids,
+                deleted_at__isnull=True,
+            ).exclude(status="cancelled").all(),
+        )
+
+        operations_by_wo: Dict[int, List[WorkOrderOperation]] = defaultdict(list)
+        for op in operations:
+            operations_by_wo[int(op.work_order_id)].append(op)
+        outsourced_by_op: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+        for row in outsource_rows:
+            op_id = int(row.work_order_operation_id or 0)
+            outsourced_by_op[op_id] += Decimal(str(row.outsource_quantity or 0))
+
+        product_ids = sorted({int(wo.product_id) for wo in work_orders if wo.product_id})
+        spec_by_product_id: Dict[int, Optional[str]] = {}
+        if product_ids:
+            from apps.master_data.models.material import Material
+
+            materials = await Material.filter(
+                tenant_id=tenant_id,
+                id__in=product_ids,
+                deleted_at__isnull=True,
+            ).only("id", "specification").all()
+            for material in materials:
+                spec = (getattr(material, "specification", None) or "").strip() or None
+                spec_by_product_id[int(material.id)] = spec
+
+        lines: List[Dict[str, Any]] = []
+        for work_order in work_orders:
+            wo_id = int(work_order.id)
+            for operation in operations_by_wo.get(wo_id, []):
+                breakdown = self._compute_outsourceable_breakdown(
+                    work_order,
+                    operation,
+                    outsourced_by_op.get(operation.id, Decimal("0")),
+                )
+                outsourceable = float(breakdown["outsourceable_quantity"] or 0)
+                if outsourceable_only and outsourceable <= 0:
+                    continue
+                if not _outsource_pull_line_matches_keyword(
+                    keyword, work_order=work_order, operation=operation
+                ):
+                    continue
+                completed = float(breakdown["completed_quantity"] or 0)
+                already = float(breakdown["already_outsourced_quantity"] or 0)
+                lines.append(
+                    {
+                        "pull_row_key": f"{wo_id}-{int(operation.id)}",
+                        "work_order_id": wo_id,
+                        "work_order_code": work_order.code,
+                        "work_order_name": work_order.name,
+                        "product_name": work_order.product_name,
+                        "material_code": work_order.product_code,
+                        "material_name": work_order.product_name,
+                        "specification": (
+                            spec_by_product_id.get(int(work_order.product_id))
+                            if work_order.product_id
+                            else None
+                        ),
+                        "quantity": float(work_order.quantity or 0),
+                        "work_order_operation_id": int(operation.id),
+                        "operation_code": operation.operation_code,
+                        "operation_name": operation.operation_name,
+                        "sequence": int(operation.sequence or 0),
+                        "max_quantity": float(breakdown["max_quantity"] or 0),
+                        "completed_quantity": completed,
+                        "already_outsourced_quantity": already,
+                        "outsourceable_quantity": outsourceable,
+                        "occupied_quantity": completed + already,
+                        "default_outsource_supplier_id": (
+                            int(operation.default_outsource_supplier_id)
+                            if operation.default_outsource_supplier_id
+                            else None
+                        ),
+                        "planned_start_date": operation.planned_start_date,
+                        "planned_end_date": operation.planned_end_date,
+                    }
+                )
+
+        lines.sort(
+            key=lambda row: (
+                str(row.get("work_order_code") or ""),
+                int(row.get("sequence") or 0),
+                int(row.get("work_order_operation_id") or 0),
+            )
+        )
+        total = len(lines)
+        page = lines[skip : skip + limit]
+        return {"data": page, "total": total, "success": True}
 
     @serialize_stock_create("outsource_order")
     async def create_outsource_order(

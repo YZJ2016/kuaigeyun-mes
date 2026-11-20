@@ -507,7 +507,7 @@ riveredge-backend/src/apps/kuaizhizao/api/productions/quality_improvement.py	6bd
 riveredge-backend/src/apps/kuaizhizao/api/productions/quality_qms.py	b61f09a52429422364bbd55e30831f6018082ea0	tracked	seed from a2473e9b42
 riveredge-backend/src/apps/kuaizhizao/api/productions/reporting.py	8afddebb06b41f72377877d687056034149a9d0e	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaizhizao/api/productions/warehouse_execution.py	1a68bf618bbd0597ddc40daf10ffffc51da45fd0	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
-riveredge-backend/src/apps/kuaizhizao/api/productions/work_orders.py	6dc78a0012de85d2eefcecca54f7f718dcf535ea	tracked	seed from a0b353ce7e
+riveredge-backend/src/apps/kuaizhizao/api/productions/work_orders.py	0f37f1c01d4948b2ad8516186630b9d78185ca42	applied	簇O工序委外：工单工序取单行服务端端点+服务+取单换源新建表单落地（payable_recognition本地不支持已剔除）
 riveredge-backend/src/apps/kuaizhizao/api/pull_query_params.py	e74320fde6bc7966091e33adae8657d3d98b1d64	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/api/purchase_arrival/purchase_arrival.py	8d462ae4155341d70780a50e8eaf2533d857942c	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/api/purchase_demand_parties/purchase_demand_parties.py	b0d80b52bc43ea773e4aa6673c04ebb144396c04	tracked	seed from d892f36d03
@@ -869,8 +869,8 @@ riveredge-backend/src/apps/kuaizhizao/schemas/other_inbound_sync.py	27b5fa69d68d
 riveredge-backend/src/apps/kuaizhizao/schemas/other_outbound_sync.py	68cf207ee5f52920d658c2bc2e3ddfa697041658	tracked	seed from a0b353ce7e
 riveredge-backend/src/apps/kuaizhizao/schemas/other_voucher.py	a7803a56ae22dcc282cd01fa7700c0b7143fe914	tracked	seed from 406a8f8797
 riveredge-backend/src/apps/kuaizhizao/schemas/outsource_inspection.py	adf111be6253cc95ca134765fe536d1d88082815	applied	R2：与上游tip blob一致，本地已同步
-riveredge-backend/src/apps/kuaizhizao/schemas/outsource_order.py	63e73b049a1cab16c3d41727e9f60dfeded6c8e5	tracked	seed from 93b3cb5998
-riveredge-backend/src/apps/kuaizhizao/schemas/outsource_work_order.py	9a104df8d4b5cf1180186340a5e67e0c82f2f7af	tracked	seed from 406a8f8797
+riveredge-backend/src/apps/kuaizhizao/schemas/outsource_order.py	f1c098b46ea52f7ac34752d8866b5f174f927e7a	applied	簇O工序委外：工单工序取单行服务端端点+服务+取单换源新建表单落地（payable_recognition本地不支持已剔除）
+riveredge-backend/src/apps/kuaizhizao/schemas/outsource_work_order.py	8c31b474afebcf3eb481574b000c7ed53eb2e790	applied	簇O工序委外：工单工序取单行服务端端点+服务+取单换源新建表单落地（payable_recognition本地不支持已剔除）
 riveredge-backend/src/apps/kuaizhizao/schemas/packing_binding.py	61a4374dd65c1fd82f20eeca0b5e4b096d1cc1d9	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/schemas/payment_application.py	b7b9ba9a0a386690ce7bb5969414eca271dba20f	tracked	seed from 1d968cd27b
 riveredge-backend/src/apps/kuaizhizao/schemas/production_picking_sync.py	2f1c35711e90835f82fe98d67011d8068cb47a06	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
@@ -1059,7 +1059,7 @@ riveredge-backend/src/apps/kuaizhizao/services/outsource_material_deduction_serv
 riveredge-backend/src/apps/kuaizhizao/services/outsource_material_issue_service.py	00859a23697e1c50c763befcc91a24f5e8a874d3	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
 riveredge-backend/src/apps/kuaizhizao/services/outsource_material_receipt_service.py	992c3de4cd722ef6dd66120c6f7176903c324513	tracked	seed from 31efc2b64c
 riveredge-backend/src/apps/kuaizhizao/services/outsource_material_return_service.py	2f58f9fc5a577ac0900ecffe2e3d3be1c942aca6	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
-riveredge-backend/src/apps/kuaizhizao/services/outsource_order_issue_bridge.py	35a304afd358c78d6a7032a5886c4992dd02472a	tracked	seed from 93b3cb5998
+riveredge-backend/src/apps/kuaizhizao/services/outsource_order_issue_bridge.py	31bcb2c7918df0296b23bf4421d0ac94a2c2ccd0	domain-out	OO工序发料桥/模态依赖上游/outsource-orders/{id}/process-issue路由；本地走OWO发料架构，无对应后端端点
 riveredge-backend/src/apps/kuaizhizao/services/outsource_order_receipt_finance.py	6c3b63c7b416e261892e297d5ffef8dda0392c55	tracked	seed from 93b3cb5998
 riveredge-backend/src/apps/kuaizhizao/services/outsource_product_return_service.py	37b9476d42286c9594c00320ffef7ac5c0a78281	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/outsource_service.py	564b5fe946f76ccb15ec0e0d3067f33497b5a46c	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
@@ -1557,6 +1557,7 @@ riveredge-backend/tests/apps/kuaizhizao/services/test_outsource_order_issue_brid
 riveredge-backend/tests/apps/kuaizhizao/services/test_outsource_order_lifecycle.py	8159855435f0f5910d66faccdb947f82cdc831a6	applied	上游测试取tip并全绿（依赖特性已随服务簇落地）
 riveredge-backend/tests/apps/kuaizhizao/services/test_outsource_order_progress.py	a88f03c8b2a82e9cdeb03da7845d20d949a6263c	deferred	上游测试试跑仍红（特性实缺：test_outsource_order_progress），维持deferred
 riveredge-backend/tests/apps/kuaizhizao/services/test_outsource_order_push_issue_cap.py	d563a7e33858c84230d7bc51eced8f401dc4c1fd	applied	上游测试取tip并全绿（依赖特性已随服务簇落地）
+riveredge-backend/tests/apps/kuaizhizao/services/test_outsource_pull_lines.py	e7c4a6e01985d4f6772923d80f58daf20dd986a7	applied	簇O工序委外：工单工序取单行服务端端点+服务+取单换源新建表单落地（payable_recognition本地不支持已剔除）
 riveredge-backend/tests/apps/kuaizhizao/services/test_over_report_rules.py	1e33dd2861	applied	R2-测试回归簇: 落地1例,余2例待over-report簇(validate_over_report_value_for_mode)
 riveredge-backend/tests/apps/kuaizhizao/services/test_packing_profile_cartonization.py	48de21cd86e44e133b8b1d6359ccd29f0762b1ec	tracked	seed from b12cc66e71
 riveredge-backend/tests/apps/kuaizhizao/services/test_payment_application_invoice_status.py	b7278279615c40a9a4f440fc22b7aa600468c4cb	tracked	seed from ec29267f5b
@@ -1748,7 +1749,9 @@ riveredge-frontend/src/apps/kuaizhizao/components/LineAttachmentsUpload.tsx	efcc
 riveredge-frontend/src/apps/kuaizhizao/components/MaterialAttachmentsPickerModal.tsx	33ce16f1555f5eb6d6fe7c755163337c746cb186	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/components/MaterialInventoryIndicator.tsx	874f86c94d601493b3b8873d576c62334a6f5cbd	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/apps/kuaizhizao/components/MergeFinanceDocsModal.tsx	cbae0209734741e9da2d79419e0db775da2d4aa7	tracked	seed from c588744e04
-riveredge-frontend/src/apps/kuaizhizao/components/OutsourceIssueFormContent.tsx	cf9fb75f737d85a5beb0f398b10a940e9e6aecb0	tracked	seed from 5b1b9828e4
+riveredge-frontend/src/apps/kuaizhizao/components/OutsourceIssueFormContent.tsx	e7d9f930c0a99d420e036cd6bdebbd979edcf41c	deferred	本地刻意精简共享发料表单的批次/序列号追踪（OWO拉料入口页已自管追踪流），上游追踪增强不并集
+riveredge-frontend/src/apps/kuaizhizao/components/OutsourceOrderCreateFromSourceForm.tsx	0783f67a1c5f1352365ce5cb14613fb572e2aab5	applied	簇O工序委外：工单工序取单行服务端端点+服务+取单换源新建表单落地（payable_recognition本地不支持已剔除）
+riveredge-frontend/src/apps/kuaizhizao/components/OutsourceOrderProcessIssueModal.tsx	a87dc73a5ee15abc8e237647fb194a5273186566	domain-out	OO工序发料桥/模态依赖上游/outsource-orders/{id}/process-issue路由；本地走OWO发料架构，无对应后端端点
 riveredge-frontend/src/apps/kuaizhizao/components/OutsourceOrderProgressKit.tsx	6c18b1f583fb86d7239dbb2c9dc9c5fa0a3a12a4	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/components/OutsourceOrderReceiptBatchesSection.tsx	fb790fd4d89fcfb27fc11482a9ccc2349ad7b28b	applied	R2:MERGE已三方合并-委外单入库批次列段(ReceiptBatchesSection新组件+receipt_batches字段+详情替换Empty);本地未启用ProgressKit/linked-detail故未取其import
 riveredge-frontend/src/apps/kuaizhizao/components/OutsourceReceiptFormContent.tsx	1c9bd1e66c5a243131fda0131f2a56c7f0573f45	applied	R2:与上游tip一致
@@ -2250,6 +2253,7 @@ riveredge-frontend/src/apps/kuaizhizao/utils/maintenanceWorkflowLines.ts	fe4f5f8
 riveredge-frontend/src/apps/kuaizhizao/utils/orderChangeLifecycle.ts	d96d087eb4c716cba8d78575556dceea182e2039	tracked	seed from d81b4b70bf
 riveredge-frontend/src/apps/kuaizhizao/utils/orderChangeLinePricing.ts	0d197bf26b3ef6eefef76332d24bdbb2802cd049	tracked	seed from a60f3e9039
 riveredge-frontend/src/apps/kuaizhizao/utils/otherOutboundLifecycle.ts	81f32d831af3556520185df9fbc5d3c9a5193ecd	tracked	seed from a0b353ce7e
+riveredge-frontend/src/apps/kuaizhizao/utils/outsourceCreateFormDefaults.ts	ca9a624c4262695b53f71725e7cbc41376811a8f	applied	簇O工序委外：工单工序取单行服务端端点+服务+取单换源新建表单落地（payable_recognition本地不支持已剔除）
 riveredge-frontend/src/apps/kuaizhizao/utils/outsourceOrderLifecycle.ts	eced9dbd556cd9426713e34f863b8bd6410ea503	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/utils/outsourceOrderRegisterReceiptQuantities.ts	e99f93434d01c9c27de5eb69e623ed3039978f62	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/utils/partnerPayeeAccounts.ts	58361c4b680de297861b8c5edc20800614085d94	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip

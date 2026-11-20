@@ -436,6 +436,18 @@ export const outsourceOrderApi = {
     return apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/outsource-options`, { method: 'GET' });
   },
 
+  listWorkOrderOperationPullLines: async (params?: {
+    skip?: number;
+    limit?: number;
+    keyword?: string;
+    outsourceable_only?: boolean;
+  }) => {
+    return apiRequest<{ data: Record<string, unknown>[]; total: number; success: boolean }>(
+      '/apps/kuaizhizao/work-orders/outsource-operation-pull-lines',
+      { method: 'GET', params, timeoutMs: 120_000 },
+    );
+  },
+
   // 关联采购入库单
   linkPurchaseReceipt: async (outsourceOrderId: string, purchaseReceiptId: number) => {
     return apiRequest(`/apps/kuaizhizao/outsource-orders/${outsourceOrderId}/link-purchase-receipt`, {

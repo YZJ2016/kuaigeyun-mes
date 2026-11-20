@@ -79,6 +79,11 @@ class OutsourceOptionResponse(BaseModel):
     completed_quantity: Decimal = Field(..., description="已报工完成数量")
     already_outsourced_quantity: Decimal = Field(..., description="已创建委外单数量（未取消）")
     outsourceable_quantity: Decimal = Field(..., description="可委外数量")
+    default_outsource_supplier_id: Optional[int] = Field(
+        None, description="工序默认委外供应商（计划委外落章）"
+    )
+    planned_start_date: Optional[datetime] = Field(None, description="工序计划开始时间")
+    planned_end_date: Optional[datetime] = Field(None, description="工序计划结束时间")
 
 
 class OutsourceOrderCreateFromWorkOrder(BaseModel):
