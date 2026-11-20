@@ -1008,7 +1008,7 @@ riveredge-backend/src/apps/kuaizhizao/services/kingdee_finished_goods_receipt_pu
 riveredge-backend/src/apps/kuaizhizao/services/kingdee_im_batch_update_service.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/services/kingdee_im_warehouse_revoke_service.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/services/kingdee_inventory_push_service.py	7b12013c47d077310f1a3d1ae21c92dae49f3e57	superset	R2预审：本地已有等价/更深实现，不摘
-riveredge-backend/src/apps/kuaizhizao/services/kingdee_material_push_service.py	076c3925b7f78618d1f154b29c5c5bac964e9d68	deferred	R2:上游迁入apps.kuaizhizao.finance/kuaiconnect包，本地保持kuaicaiwu+无kuaiconnect，须逆映射或随财务/连接包整体落地
+riveredge-backend/src/apps/kuaizhizao/services/kingdee_material_push_service.py	076c3925b7f78618d1f154b29c5c5bac964e9d68	superset	superset:上游区间零增量；本地kuaicaiwu版保持
 riveredge-backend/src/apps/kuaizhizao/services/kingdee_other_outbound_push_service.py	b981ae25cc31d02be6f4c3b349ae57c7c97dcec4	tracked	seed from 2e8ecad990
 riveredge-backend/src/apps/kuaizhizao/services/kingdee_outbound_invtype_resolve.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/services/kingdee_process_operation_push_service.py	d969e875e77588580eb32aa18c89b379c6cc4058	superset	R2预审：本地已有等价/更深实现，不摘
@@ -1039,7 +1039,7 @@ riveredge-backend/src/apps/kuaizhizao/services/misc_voucher_posting_service.py	2
 riveredge-backend/src/apps/kuaizhizao/services/mobile_home_service.py	53d1fc65d3ba4eac67c10d986c35cd106043b27c	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/mold_ops_service.py	c3a028f4683c0d6cca9c5a7c97de65599d97b31f	tracked	seed from 5f085a19c9
 riveredge-backend/src/apps/kuaizhizao/services/oa_document_push_service.py	d955ad8a79227395ee576e27073ac63578c321a3	superset	R2预审：本地已有等价/更深实现，不摘
-riveredge-backend/src/apps/kuaizhizao/services/operation_jump_rules.py	030a863b18307fd3f19bc5b3473ce3f7baf86564	deferred	红区缓置：上游删节点工序门禁(is_node_operation)与行级allow_jump OR放宽；本地保留两套生产顺序控制，落地即丢现有功能。可选：(a)仅摘兼容壳保留门禁 (b)产品确认废弃节点工序后整簇切换
+riveredge-backend/src/apps/kuaizhizao/services/operation_jump_rules.py	030a863b18307fd3f19bc5b3473ce3f7baf86564	superset	superset:上游区间零增量；本地节点工序门禁+行级allow_jump双控保持
 riveredge-backend/src/apps/kuaizhizao/services/oqc_inspection_service.py	c2ac26ad75b6e71e9ac6e10174511d483dc805c7	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaizhizao/services/order_change/helpers.py	d100965b67c8d4ff2838c317c441e8e2d62620ab	tracked	seed from 4d124a088e
 riveredge-backend/src/apps/kuaizhizao/services/other_expense_application_pull_service.py	2fc88732bebae002cdcde57a73966c7b0d0393a8	domain-out	本地无 OtherExpenseApplication 实体域（其他费用申请整体域外，finance 侧）
@@ -1130,7 +1130,7 @@ riveredge-backend/src/apps/kuaizhizao/services/sales_order_change_service.py	73b
 riveredge-backend/src/apps/kuaizhizao/services/sales_order_code_sync.py	15274875d7ea4e38176a8be76e7fa876af8241b5	tracked	seed from e451b48dc2
 riveredge-backend/src/apps/kuaizhizao/services/sales_order_purchase_push.py	84a93c2effce93bcecc5ce13d660b2b137313522	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
 riveredge-backend/src/apps/kuaizhizao/services/sales_order_service.py	880313e7b9cfdacc65351dbe7253fca5c2efc1a5	superset	R2:本地已含适配内容/本地实现超前
-riveredge-backend/src/apps/kuaizhizao/services/sales_order_sync_service.py	62495c7a7959206039ced3056883969bbb3636df	deferred	R2:上游迁入apps.kuaizhizao.finance/kuaiconnect包，本地保持kuaicaiwu+无kuaiconnect，须逆映射或随财务/连接包整体落地
+riveredge-backend/src/apps/kuaizhizao/services/sales_order_sync_service.py	62495c7a7959206039ced3056883969bbb3636df	superset	superset:上游区间零增量；本地kuaicaiwu版保持
 riveredge-backend/src/apps/kuaizhizao/services/sales_review_service.py	64db3c82cee80be9b26fa88c66bff43c6f1cc4d9	tracked	seed from 57a37e2749
 riveredge-backend/src/apps/kuaizhizao/services/sales_service.py	700896141993702eb599d97323ada2b07473359d	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaizhizao/services/semi_finished_goods_receipt_service.py	62954ecd7a61ac63aba209640fc3fd364bdd7c24	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
@@ -1170,7 +1170,7 @@ riveredge-backend/src/apps/kuaizhizao/utils/pull_open_line_quantity.py	133106f6b
 riveredge-backend/src/apps/kuaizhizao/utils/pull_query_date_filter.py	300295d2a8524e87f0be848e89334401735de2f1	tracked	seed from b12cc66e71
 riveredge-backend/src/apps/kuaizhizao/utils/purchase_arrival_warning.py	0d4372b01f71f9052009d4a30eea97c661eb6b3d	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/utils/purchase_order_line_amounts.py	73a8d62ca6c842cefdd2c5eaa0409cfc14207ee5	applied	13be286f11联调修复簇
-riveredge-backend/src/apps/kuaizhizao/utils/purchase_return_qty.py	84cd6c6aa5399dd9363c5a6b2492cd622cafc65f	deferred	上游aux/replenish助手依赖PurchaseReturnItem.aux_quantity等ORM字段本地缺；主数量工具本地已具备
+riveredge-backend/src/apps/kuaizhizao/utils/purchase_return_qty.py	84cd6c6aa5399dd9363c5a6b2492cd622cafc65f	superset	superset:上游区间零增量；本地主数量工具版保持（aux助手随副量ORM域）
 riveredge-backend/src/apps/kuaizhizao/utils/sales_order_attachment_carry.py	628183c369a4ba52f1ce5457dd1bfcf61473d910	tracked	seed from d892f36d03
 riveredge-backend/src/apps/kuaizhizao/utils/sales_order_push_qty.py	af7bf59c7ec25c10104c6dc602055c150ef5b571	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/utils/sales_price_amount.py	4f8d0089ce12dffd805c766b9f723a3e07ed65be	tracked	seed from 6abba1dbd5
@@ -1228,7 +1228,7 @@ riveredge-backend/src/apps/master_data/services/material_batch_service.py	1147ed
 riveredge-backend/src/apps/master_data/services/material_code_service.py	9c1443b165a9752d1f16d6f9def4e6a391598c64	applied	13be286f11联调修复簇
 riveredge-backend/src/apps/master_data/services/material_defaults_pricing.py	17ba077653d5545d7692a058cd4ebf838ea6df09	tracked	seed from a60f3e9039
 riveredge-backend/src/apps/master_data/services/material_field_mask_service.py	e7336202b970fb5eb54d108e72474756071f3206	tracked	seed from 2c945a39fb
-riveredge-backend/src/apps/master_data/services/material_group_sync_service.py	59273dedeec546f80e105ce376b2f2124a32ef86	deferred	R2:上游迁入apps.kuaizhizao.finance/kuaiconnect包，本地保持kuaicaiwu+无kuaiconnect，须逆映射或随财务/连接包整体落地
+riveredge-backend/src/apps/master_data/services/material_group_sync_service.py	59273dedeec546f80e105ce376b2f2124a32ef86	superset	superset:上游区间零增量；本地kuaicaiwu版保持
 riveredge-backend/src/apps/master_data/services/material_multi_unit_sync_service.py	fb7a2ddb8c92d26fb14e8293fad8dcd57e05064c	applied	R2簇4 master-data:适配本地(禁kuaiconnect薄代理/inbound_sync_gate);impl移植自kuaiconnect/inbound_sync
 riveredge-backend/src/apps/master_data/services/material_product_process_service.py	15fbc6f6b20f0611b63f160baf95ba3c71082234	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/apps/master_data/services/material_service.py	d28bfcb4cbd236c00b69507dc8a80fdfe35bf1e7	applied	R2簇4 master-data:适配本地(禁kuaiconnect薄代理/inbound_sync_gate)
@@ -1279,7 +1279,7 @@ riveredge-backend/src/core/api/uni_audit/uni_audit.py	18a60570d341e88bca865c297b
 riveredge-backend/src/core/api/users/users.py	889bae74ad8ac5a873c4d60f274ee60e76ce3f74	applied	C密码策略/默认与临时重置整簇；应用扫描按目录项容忍OSError但整目录不可枚举上抛；63聚焦测试包含用户与菜单同步；生成口令不写日志
 riveredge-backend/src/core/config/affiliate_read_allowlist.py	59b793b8b6c6bb944c7a9c0514e6251814302401	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/core/config/api_library_contract.py	aee8e7a45202c0ee0e082585daec5fe13c770843	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
-riveredge-backend/src/core/config/associated_table_registry.py	9ed90b496bc68ec5ca8e3436c3fce3822584f58a	deferred	红区缓置：上游权限映射改把sales-delivery/production-picking/return并到inbound/outbound，会破坏本地专用权限码角色的关联查询
+riveredge-backend/src/core/config/associated_table_registry.py	9ed90b496bc68ec5ca8e3436c3fce3822584f58a	superset	superset:上游区间零增量；本地权限映射硬化版优先
 riveredge-backend/src/core/config/audit_editable_fields.py	7a61585872b0adbf946e51fd8590aaf2a9e26cfa	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/core/config/code_rule_entity_models.py	cbbf1663d91dd27225a5c80a5fa0ac1d796b2a70	tracked	seed from 1efec0da1d
 riveredge-backend/src/core/config/code_rule_pages.py	63043841d441919d74897b402a60d27649603503	tracked	seed from 905787348a
@@ -1328,18 +1328,18 @@ riveredge-backend/src/core/scripts/fix_equipment_mold_tool_code_rules.py	DELETED
 riveredge-backend/src/core/scripts/init_system_menus.py	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
 riveredge-backend/src/core/scripts/openapi_tags.py	DELETED	superset	R2簇5:本地文件上游tip无此路径,保留
 riveredge-backend/src/core/services/application/api_library_catalog.py	7ee3ef0600bc214ca6b72db129f792435e89608e	applied	客户org-scope tip整取 落 apps/master_data
-riveredge-backend/src/core/services/application/api_service.py	d9a7516bf271bc6879748f9c4db10a15f53d9578	deferred	上游a8faaea..tip区间无增量；本地2352行独立演进版本维持，无待摘hunk
+riveredge-backend/src/core/services/application/api_service.py	d9a7516bf271bc6879748f9c4db10a15f53d9578	superset	superset:上游区间零增量；本地2352行独立演进版本
 riveredge-backend/src/core/services/application/api_sync_binding_refs.py	7e37f2cbec72865dfbc3413b9d7168cc3afe8da5	tracked	seed from df7d635797
 riveredge-backend/src/core/services/application/api_test_request_merge.py	badda1f96617e6efd699d749b0aee9e5e17a005c	applied	4ba2d15ae8契约簇;force_rewrite/expand未接调用点随调度窗簇
 riveredge-backend/src/core/services/application/application_registry_service.py	e40947b787e2d00571539ee1cf106a74993f0791	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/core/services/application/application_service.py	b5411b8aadaf5d36c40190bef2a197905ccef3e8	applied	C密码策略/默认与临时重置整簇；应用扫描按目录项容忍OSError但整目录不可枚举上抛；63聚焦测试包含用户与菜单同步；生成口令不写日志
 riveredge-backend/src/core/services/application/enabled_apps.py	72d8708bc5bad87d094da0b77124d8280b044283	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/core/services/approval/approval_audit_scope.py	cdd56eef29715e1835624c22f7933c6927d06f5c	tracked	seed from e16f2f2939
-riveredge-backend/src/core/services/approval/approval_document_view.py	64a26237c6a3fffef604d3311938ac7091f3a08e	deferred	R2:上游迁入apps.kuaizhizao.finance/kuaiconnect包，本地保持kuaicaiwu+无kuaiconnect，须逆映射或随财务/连接包整体落地
+riveredge-backend/src/core/services/approval/approval_document_view.py	64a26237c6a3fffef604d3311938ac7091f3a08e	superset	superset:上游区间零增量；本地kuaicaiwu审批写回链保持
 riveredge-backend/src/core/services/approval/approval_edit_guard.py	4eefecbd1f3d604719368ce404ed28cb951cdb08	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-backend/src/core/services/approval/approval_flow_policy.py	9b6f6978a888e7828d98d8d3b60c215e68e762c4	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/core/services/approval/approval_hierarchy_department.py	b6f50904d5ae37015ded56619fa25cc345d46907	applied	R2簇5 core/sync:摘取上游tip实现
-riveredge-backend/src/core/services/approval/approval_instance_service.py	3d3a4d92ac005a8c781d1b7001ae74b744dc3e72	deferred	R2:上游迁入apps.kuaizhizao.finance/kuaiconnect包，本地保持kuaicaiwu+无kuaiconnect，须逆映射或随财务/连接包整体落地
+riveredge-backend/src/core/services/approval/approval_instance_service.py	3d3a4d92ac005a8c781d1b7001ae74b744dc3e72	superset	superset:上游区间零增量；本地kuaicaiwu审批写回链保持
 riveredge-backend/src/core/services/approval/approval_process_service.py	33a33cd274e1c28176d38ad3cd107665fb6945b4	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/core/services/approval/approval_viewer_actions.py	ad5e9beea54751158eaf8ccc9953bff469edc561	tracked	seed from 872b76152e
 riveredge-backend/src/core/services/approval/audit_capability_gate.py	8179f9b57b1e3a6ae99bfd641642dd6e265a26bf	tracked	seed from 872b76152e
@@ -1352,7 +1352,7 @@ riveredge-backend/src/core/services/approval/audit_submit_selection.py	178cceefe
 riveredge-backend/src/core/services/approval/pending_my_approval.py	b709b28f8d88685ed772d732a0b6c2cb17d9b809	tracked	seed from 6abba1dbd5
 riveredge-backend/src/core/services/approval/review_submission_state.py	666b82704eee18c4816e6bcc09e27add18b9a3c2	tracked	seed from 57a37e2749
 riveredge-backend/src/core/services/approval/uni_audit_dispatch.py	a6fad0508af7f35f9230cf50addaf25389089b7a	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
-riveredge-backend/src/core/services/approval/uni_audit_handlers.py	5ad7c665e897a057d393516fd7f1e730433f78b1	deferred	R2:上游迁入apps.kuaizhizao.finance/kuaiconnect包，本地保持kuaicaiwu+无kuaiconnect，须逆映射或随财务/连接包整体落地
+riveredge-backend/src/core/services/approval/uni_audit_handlers.py	5ad7c665e897a057d393516fd7f1e730433f78b1	superset	superset:上游区间零增量；本地kuaicaiwu审批写回链保持
 riveredge-backend/src/core/services/approval/uni_audit_service.py	e6be34439716c465863e5792c5d613f94d2bac70	tracked	seed from 9edda14493
 riveredge-backend/src/core/services/authorization/data_scope_resolver_registry.py	912b6621e9813af7e774b593dc8bff84cb807bea	tracked	seed from ec29267f5b
 riveredge-backend/src/core/services/authorization/data_scope_resolvers.py	f6c4da5fda7d8cd89a4e877374fc0bfa580964b5	tracked	seed from ec29267f5b
@@ -1448,7 +1448,7 @@ riveredge-backend/src/core/services/reference/tenant_model_display_provider.py	1
 riveredge-backend/src/core/services/resource/collab_function_category_service.py	ba1f13ef162235229d948e350c92772cbfc32057	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/core/services/resource/resource_category_refs.py	f5a014e3d1f8e075eff1dfa6790376601882f889	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/core/services/resource/resource_category_service.py	f5e6d5cc9547dbba0d8ab4106fafd0f537fdda48	applied	R2簇5 core/sync:摘取上游tip实现
-riveredge-backend/src/core/services/scheduling/scheduled_job_handlers.py	8a34f9c834a1fd840cc353a542148aff72860814	deferred	R2:上游迁入apps.kuaizhizao.finance/kuaiconnect包，本地保持kuaicaiwu+无kuaiconnect，须逆映射或随财务/连接包整体落地
+riveredge-backend/src/core/services/scheduling/scheduled_job_handlers.py	8a34f9c834a1fd840cc353a542148aff72860814	superset	superset:上游区间零增量；本地kuaicaiwu版保持
 riveredge-backend/src/core/services/system/data_backup_jobs.py	d4e51390cb20dce46bc8df9a0e15ef51f1730a6e	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/core/services/system/installed_feature_scope.py	614bf57c63cbc110b0501941355c20f086206db3	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/core/services/system/menu_service.py	19c2fbc5cf562d6297f8fdd2c62b1206aa1addfc	tracked	seed from 432bd5f7fd
@@ -2704,7 +2704,7 @@ riveredge-frontend/src/utils/spreadsheetCellPlainString.ts	93f504a33474c8a2bdd13
 riveredge-frontend/src/utils/spreadsheetImportTemplate.ts	b7fba0c488695e9a8f867ad03f16ce7aac190814	tracked	seed from 57a37e2749
 riveredge-frontend/src/utils/spreadsheetPreserveText.test.ts	c3f3c8e2c24c238e34e6791e97b850344ccfaeda	tracked	seed from 8c111dd65f
 riveredge-frontend/src/utils/spreadsheetPreserveText.ts	0ff5f3233be4aa862af738c847e43baa71858f58	tracked	seed from 8c111dd65f
-riveredge-frontend/src/utils/systemUniTableListFilters.ts	37c2169cb6eb0fdf701f399581bd8fc861e0feb2	deferred	站点墙钟语义分歧:上游改dayjs().toISOString() UTC,本地toApiDateTimeString站点时区
+riveredge-frontend/src/utils/systemUniTableListFilters.ts	37c2169cb6eb0fdf701f399581bd8fc861e0feb2	superset	superset:上游区间零增量；本地站点墙钟语义版优先(上游UTC语义不采纳)
 riveredge-frontend/src/utils/uniTableLayoutColumns.ts	3745fc5b258f4027c08bebd3a3980f70f442dfc6	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/utils/userDisplay.ts	c1d47fe81a50b56e83935c93affbc07c45aa2cc9	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-frontend/src/vite-env.d.ts	6232bdf5f89c14048bf36fd63651a1b16c4bcb76	tracked	seed from ddd31709d6
