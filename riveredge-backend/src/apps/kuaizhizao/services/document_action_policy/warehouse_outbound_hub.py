@@ -39,7 +39,10 @@ _EDITABLE_PRE_POST_BY_TYPE = {
     }),
 }
 _REVIEW_APPROVED = frozenset({
-    "已通过", "审核通过", "approved", "APPROVED", "通过",
+    "已通过", "审核通过", "approved", "APPROVED", "通过", "已审核",
+})
+_REVIEW_REJECTED = frozenset({
+    "已驳回", "审核驳回", "rejected", "REJECTED", "驳回",
 })
 
 
@@ -54,6 +57,16 @@ def _norm(value: Any) -> str:
 def _is_review_approved(record: Any) -> bool:
     review = _norm(getattr(record, "review_status", None))
     return review in _REVIEW_APPROVED
+
+
+def _is_review_rejected(review: Any) -> bool:
+    raw = _norm(review)
+    return raw in _REVIEW_REJECTED
+
+
+def _is_review_editable(review: Any) -> bool:
+    raw = _norm(review)
+    return raw in {"", "草稿", "draft", "DRAFT"} or _is_review_rejected(review)
 
 
 def _derive_delete_capability(
@@ -81,10 +94,12 @@ def derive_outbound_hub_capabilities(
     *,
     outbound_type: Optional[str] = None,
     audit_required: bool = False,
+    has_items: bool = True,
 ) -> OutboundHubCapabilities:
     ot = _norm(outbound_type or getattr(record, "outbound_type", None))
     status = _norm(getattr(record, "status", None))
     is_outsource_issue = ot == "outsource_issue"
+    review = getattr(record, "review_status", None)
 
     # 生产领料：仅「待领料」可确认（待审核/草稿须先走 UniAudit）
     if ot == "production_picking":
@@ -133,6 +148,42 @@ def derive_outbound_hub_capabilities(
         update_allowed = False
         update_reason = "outbound_hub.update.unsupported_type"
 
+    submit_cap: Optional[ActionCapability] = None
+    submit_review_cap: Optional[ActionCapability] = None
+    withdraw_submit_cap: Optional[ActionCapability] = None
+    approve_cap: Optional[ActionCapability] = None
+    revoke_cap: Optional[ActionCapability] = None
+    if ot == "production_picking" and audit_required:
+        draft_business = status in {"草稿", "draft"}
+        pending_audit = status == "待审核"
+        pending_pick = status == "待领料"
+        approved = _is_review_approved(record)
+        rejected = _is_review_rejected(review)
+        draft_review = _is_review_editable(review) and not rejected
+        submit_allowed = draft_business and has_items and draft_review
+        submit_cap = _cap(
+            submit_allowed,
+            None if submit_allowed else (
+                "production_picking.submit.no_items"
+                if not has_items
+                else "production_picking.submit.not_draft"
+            ),
+        )
+        withdraw_submit_allowed = pending_audit
+        withdraw_submit_cap = _cap(
+            withdraw_submit_allowed,
+            None if withdraw_submit_allowed else "production_picking.withdraw_submit.not_pending",
+        )
+        approve_cap = _cap(
+            pending_audit,
+            None if pending_audit else "production_picking.approve.not_pending",
+        )
+        revoke_allowed = pending_pick and approved
+        revoke_cap = _cap(
+            revoke_allowed,
+            None if revoke_allowed else "production_picking.revoke_approval.not_allowed",
+        )
+
     return OutboundHubCapabilities(
         confirm=_cap(confirm_allowed, confirm_reason),
         withdraw=_cap(withdraw_allowed, withdraw_reason),
@@ -144,6 +195,11 @@ def derive_outbound_hub_capabilities(
             audit_required=audit_required,
         ),
         update=_cap(update_allowed, update_reason),
+        submit=submit_cap,
+        submit_review=submit_review_cap,
+        withdraw_submit=withdraw_submit_cap,
+        approve=approve_cap,
+        revoke_approval=revoke_cap,
     )
 
 
@@ -153,9 +209,13 @@ def assert_outbound_hub_capability(
     *,
     outbound_type: Optional[str] = None,
     audit_required: bool = False,
+    has_items: bool = True,
 ) -> None:
     caps = derive_outbound_hub_capabilities(
-        record, outbound_type=outbound_type, audit_required=audit_required
+        record,
+        outbound_type=outbound_type,
+        audit_required=audit_required,
+        has_items=has_items,
     )
     cap_map = {
         "confirm": caps.confirm,
@@ -163,6 +223,11 @@ def assert_outbound_hub_capability(
         "print": caps.print,
         "delete": caps.delete,
         "update": caps.update,
+        "submit": caps.submit,
+        "submit_review": caps.submit_review,
+        "withdraw_submit": caps.withdraw_submit,
+        "approve": caps.approve,
+        "revoke_approval": caps.revoke_approval,
     }
     cap = cap_map.get(action)
     if cap is None:

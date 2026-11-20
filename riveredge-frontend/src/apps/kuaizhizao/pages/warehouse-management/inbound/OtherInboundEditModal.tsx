@@ -17,7 +17,10 @@ import {
 import { warehouseApi } from '../../../services/production';
 import { formatQuantity } from '../../../../../utils/format';
 import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
-import { appendWarehouseLineAmountColumns } from '../shared/warehouseAmountDisplay';
+import {
+  appendWarehouseLineAmountColumns,
+  KUAIZHIZAO_INBOUND_FIELD_RESOURCE,
+} from '../shared/warehouseAmountDisplay';
 import {
   isInboundEditable,
   inboundUpdateCapabilityReasonMessage,
@@ -479,6 +482,7 @@ export const OtherInboundEditModal: React.FC<OtherInboundEditModalProps> = ({
         t,
         // 其他入库：保留可编辑单价，不自动展示金额列、不叠只读单价列
         false,
+        KUAIZHIZAO_INBOUND_FIELD_RESOURCE,
         -3,
       ),
         trackingFlags,

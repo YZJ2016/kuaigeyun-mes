@@ -59,6 +59,12 @@ import {
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { outboundTypeToPrintDocumentType } from '../../../utils/kuaizhizaoPrintConfig';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import {
+  UniBatchMenuButton,
+  pickCapability,
+  runCapabilityBatchLoop,
+  type UniBatchMenuItem,
+} from '../../../../../components/uni-batch';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import {
   buildUniPushMenuItems,
@@ -94,11 +100,13 @@ import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import {
+  KUAIZHIZAO_OUTBOUND_FIELD_RESOURCE,
   WarehouseShowAmountSwitch,
   appendWarehouseLineAmountColumns,
   buildWarehouseTotalAmountListColumn,
   useWarehouseShowAmount,
 } from '../shared/warehouseAmountDisplay';
+import { PartyNameDisplay } from '../../../../../components/permission';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   DocumentPushProgressBar,
@@ -326,7 +334,10 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
   const outboundDeepLinkOpenedRef = useRef(false);
   const productionPickingAuditEnabled = useAuditRequired('production_picking', false);
   const salesDeliveryAuditEnabled = useAuditRequired('sales_delivery', false);
-  const outboundAuditColumnEnabled = productionPickingAuditEnabled || salesDeliveryAuditEnabled;
+  /** 固定「生产领料」页与销出固定页一致：始终挂审核功能区；混合出库 Hub 仍按配置开关 */
+  const showProductionPickingAuditActions =
+    fixedOutboundType === 'production_picking' || productionPickingAuditEnabled;
+  const outboundAuditColumnEnabled = showProductionPickingAuditActions || salesDeliveryAuditEnabled;
   const outboundAuditColumn = useMemo(
     () =>
       createListAuditPhaseColumn<OutboundOrder>({
@@ -824,6 +835,116 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
     [selectedRowKeys, resolveOutboundRowByKey],
   );
 
+  const resolveOutboundCapabilityRowId = useCallback(
+    (key: React.Key, record: OutboundOrder | undefined) => {
+      if (record?.id != null && Number(record.id) > 0) return Number(record.id);
+      const parsed = parseOutboundRowKey(key);
+      return parsed?.id && parsed.id > 0 ? parsed.id : null;
+    },
+    [parseOutboundRowKey],
+  );
+
+  const productionPickingToolbarAuditMenus = useMemo(() => {
+    if (fixedOutboundType !== 'production_picking') {
+      return { submitItems: [] as UniBatchMenuItem[], auditItems: [] as UniBatchMenuItem[] };
+    }
+    const rows = selectedOutboundForBatch.filter((row) => row.outbound_type === 'production_picking');
+    const reload = () => {
+      setSelectedRowKeys([]);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    };
+    const allowed = (row: OutboundOrder, key: string) => pickCapability(row, key)?.allowed === true;
+    const run = (
+      keys: React.Key[],
+      records: OutboundOrder[],
+      capabilityKey: string,
+      permAllowed: boolean,
+      onRun: (id: number) => Promise<unknown>,
+      notAllowedMessage?: string,
+    ) =>
+      runCapabilityBatchLoop({
+        keys,
+        records,
+        capabilityKey,
+        permAllowed,
+        resolveId: resolveOutboundCapabilityRowId,
+        notAllowedMessage,
+        onRun,
+        onSuccess: reload,
+        message: messageApi,
+        t,
+      });
+    const submitRows = rows.filter((row) => allowed(row, 'submit'));
+    const pendingRows = rows.filter((row) => allowed(row, 'withdraw_submit'));
+    const approveRows = rows.filter((row) => allowed(row, 'approve'));
+    const revokeRows = rows.filter((row) => allowed(row, 'revoke_approval'));
+    const canSubmit = outboundPerms.canAction?.('submit') ?? false;
+    const canApprove = outboundPerms.canAction?.('approve') ?? false;
+    const canRevoke = outboundPerms.canAction?.('revoke') ?? false;
+    const hasSelection = rows.length > 0;
+    const submitItems: UniBatchMenuItem[] = [
+      {
+        key: 'submit-review',
+        label: t('app.kuaizhizao.warehouseOutbound.toolbar.submitReview'),
+        disabled: hasSelection && !(canSubmit && submitRows.length > 0),
+        onClick: (keys) =>
+          run(
+            keys,
+            submitRows,
+            'submit',
+            canSubmit,
+            (id) => warehouseApi.productionPicking.submitForReview(id),
+            t('app.kuaizhizao.warehouseOutbound.picking.toolbar.submitReviewNotAllowed'),
+          ),
+      },
+    ];
+    const auditItems: UniBatchMenuItem[] = [
+      {
+        key: 'approve',
+        label: t('components.uniAction.audit'),
+        disabled: hasSelection && !(canApprove && approveRows.length > 0),
+        onClick: (keys) =>
+          run(keys, approveRows, 'approve', canApprove, (id) => warehouseApi.productionPicking.approve(id)),
+      },
+      {
+        key: 'withdraw-review',
+        label: t('app.kuaizhizao.warehouseOutbound.toolbar.withdrawReview'),
+        disabled: hasSelection && pendingRows.length === 0,
+        onClick: (keys) =>
+          run(
+            keys,
+            pendingRows,
+            'withdraw_submit',
+            canSubmit,
+            (id) => warehouseApi.productionPicking.withdrawSubmit(id),
+          ),
+      },
+      {
+        key: 'revoke',
+        label: t('app.kuaizhizao.warehouseOutbound.toolbar.revoke'),
+        disabled: hasSelection && !(canRevoke && revokeRows.length > 0),
+        onClick: (keys) =>
+          run(
+            keys,
+            revokeRows,
+            'revoke_approval',
+            canRevoke,
+            (id) => warehouseApi.productionPicking.revokeApproval(id),
+          ),
+      },
+    ];
+    return { submitItems, auditItems };
+  }, [
+    fixedOutboundType,
+    invalidateMenuBadgeCounts,
+    messageApi,
+    outboundPerms,
+    resolveOutboundCapabilityRowId,
+    selectedOutboundForBatch,
+    t,
+  ]);
+
   const showSalesDeliveryPush = useMemo(() => {
     if (hubScopedOutboundTypes?.length) {
       return hubScopedOutboundTypes.includes('sales_delivery');
@@ -1123,16 +1244,54 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
   /**
    * 表格列定义
    */
-  const getOutboundStackedPrimary = (record: OutboundOrder): string => {
-    if (record.outbound_type === 'sales_delivery' && record.customer_name) {
-      return String(record.customer_name);
-    }
+  const resolveOutboundStackedPrimary = (record: OutboundOrder): {
+    primary: string;
+    primaryContent?: React.ReactNode;
+  } => {
+    const fallback = t('app.kuaizhizao.warehouseOutbound.fallbackDoc');
     if (record.outbound_type === 'purchase_return' && record.supplier_name) {
-      return String(record.supplier_name);
+      const value = String(record.supplier_name);
+      return {
+        primary: value,
+        primaryContent: (
+          <PartyNameDisplay
+            resource={KUAIZHIZAO_OUTBOUND_FIELD_RESOURCE}
+            fieldName="supplier_name"
+            value={value}
+          />
+        ),
+      };
     }
-    if (record.work_order_code) return String(record.work_order_code);
-    if (record.customer_name) return String(record.customer_name);
-    return t('app.kuaizhizao.warehouseOutbound.fallbackDoc');
+    if (record.outbound_type === 'sales_delivery' && record.customer_name) {
+      const value = String(record.customer_name);
+      return {
+        primary: value,
+        primaryContent: (
+          <PartyNameDisplay
+            resource={KUAIZHIZAO_OUTBOUND_FIELD_RESOURCE}
+            fieldName="customer_name"
+            value={value}
+          />
+        ),
+      };
+    }
+    if (record.work_order_code) {
+      return { primary: String(record.work_order_code) };
+    }
+    if (record.customer_name) {
+      const value = String(record.customer_name);
+      return {
+        primary: value,
+        primaryContent: (
+          <PartyNameDisplay
+            resource={KUAIZHIZAO_OUTBOUND_FIELD_RESOURCE}
+            fieldName="customer_name"
+            value={value}
+          />
+        ),
+      };
+    }
+    return { primary: fallback };
   };
 
   const pickingDetailColumns = useMemo(
@@ -1198,6 +1357,7 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
         ],
         t,
         showAmount,
+        KUAIZHIZAO_OUTBOUND_FIELD_RESOURCE,
         -2,
       ),
     [t, showAmount],
@@ -1216,12 +1376,16 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
       ellipsis: false,
       fixed: 'left',
       hideInSearch: true,
-      render: (_, record) => (
-        <UniTableStackedPrimaryCell
-          primary={getOutboundStackedPrimary(record)}
-          secondary={String(record.delivery_code || record.picking_code || '')}
-        />
-      ),
+      render: (_, record) => {
+        const stacked = resolveOutboundStackedPrimary(record);
+        return (
+          <UniTableStackedPrimaryCell
+            primary={stacked.primary}
+            primaryContent={stacked.primaryContent}
+            secondary={String(record.delivery_code || record.picking_code || '')}
+          />
+        );
+      },
     },
     {
       title: t('app.kuaizhizao.warehouseOutbound.col.subjectDocNo'),
@@ -1289,7 +1453,11 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
       sorter: true,
       render: (_, record) => renderWarehouseHeaderQuantity(record, t),
     },
-    ...buildWarehouseTotalAmountListColumn<OutboundOrder>(t, showAmount).map((col) => ({
+    ...buildWarehouseTotalAmountListColumn<OutboundOrder>(
+      t,
+      showAmount,
+      KUAIZHIZAO_OUTBOUND_FIELD_RESOURCE,
+    ).map((col) => ({
       ...col,
       width: 110,
       minWidth: 110,
@@ -1423,7 +1591,7 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
               {t('app.kuaizhizao.packingBinding.title')}
             </Button>
           )}
-          {record.outbound_type === 'production_picking' && productionPickingAuditEnabled ? (
+          {record.outbound_type === 'production_picking' && showProductionPickingAuditActions ? (
             <UniWorkflowActions
               {...rowActionKind('skip')}
               key="pp-workflow"
@@ -1894,6 +2062,22 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
               />,
             );
           }
+          if (fixedOutboundType === 'production_picking') {
+            items.push(
+              <UniBatchMenuButton
+                key="production-picking-submit"
+                selectedRowKeys={selectedRowKeys}
+                menuItems={productionPickingToolbarAuditMenus.submitItems}
+                buttonText={t('common.submit')}
+              />,
+              <UniBatchMenuButton
+                key="production-picking-audit"
+                selectedRowKeys={selectedRowKeys}
+                menuItems={productionPickingToolbarAuditMenus.auditItems}
+                buttonText={t('components.uniAction.audit')}
+              />,
+            );
+          }
           return items;
         }}
         toolBarActionsAfterBatch={[
@@ -1969,7 +2153,7 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
                     }}
                   />
                 ) : null}
-                {currentOrder.outbound_type === 'production_picking' && productionPickingAuditEnabled ? (
+                {currentOrder.outbound_type === 'production_picking' && showProductionPickingAuditActions ? (
                   <UniWorkflowActions
                     record={currentOrder}
                     entityName={t('app.kuaizhizao.warehouseOutbound.picking.entityName')}

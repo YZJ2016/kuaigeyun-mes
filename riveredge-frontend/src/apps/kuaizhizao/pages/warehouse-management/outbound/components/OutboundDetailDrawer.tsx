@@ -25,6 +25,12 @@ import {
 import { getOutboundLifecycle } from '../../../../utils/outboundLifecycle';
 import { renderOutboundIssueTypeMarkerTag } from '../../shared/warehouseMarkerTags';
 import {
+  KUAIZHIZAO_OUTBOUND_FIELD_RESOURCE,
+  renderWarehouseAmountDisplay,
+  renderWarehousePartyNameDisplay,
+  useWarehouseShowAmount,
+} from '../../shared/warehouseAmountDisplay';
+import {
   outboundDocumentTrackingType,
   resolveOutboundHubDateRaw,
   resolveOutboundHubOperator,
@@ -81,6 +87,7 @@ export const OutboundDetailDrawer: React.FC<OutboundDetailDrawerProps> = ({
   const showError = Boolean(error) && !contentReady && !loading;
   const showLoading = loading || (!contentReady && !showError);
   const effective = order ?? PLACEHOLDER;
+  const [showAmount] = useWarehouseShowAmount();
   const trackingType = outboundDocumentTrackingType(effective);
   const tracking = useDocumentTracking(
     open && contentReady ? trackingType : undefined,
@@ -126,6 +133,26 @@ export const OutboundDetailDrawer: React.FC<OutboundDetailDrawerProps> = ({
               {
                 title: t('app.kuaizhizao.warehouseOutbound.col.customer'),
                 dataIndex: 'customer_name' as const,
+                render: (_: unknown, record: OutboundDetailRecord) =>
+                  renderWarehousePartyNameDisplay(
+                    record.customer_name,
+                    KUAIZHIZAO_OUTBOUND_FIELD_RESOURCE,
+                    'customer_name',
+                  ),
+              },
+            ]
+          : []),
+        ...(effective.supplier_name
+          ? [
+              {
+                title: t('app.kuaizhizao.warehouseInbound.field.supplier'),
+                dataIndex: 'supplier_name' as const,
+                render: (_: unknown, record: OutboundDetailRecord) =>
+                  renderWarehousePartyNameDisplay(
+                    record.supplier_name,
+                    KUAIZHIZAO_OUTBOUND_FIELD_RESOURCE,
+                    'supplier_name',
+                  ),
               },
             ]
           : []),
@@ -176,6 +203,21 @@ export const OutboundDetailDrawer: React.FC<OutboundDetailDrawerProps> = ({
             return sum;
           },
         },
+        ...(showAmount && effective.outbound_type === 'sales_delivery'
+          ? [
+              {
+                title: t('app.kuaizhizao.warehouseCommon.colAmount'),
+                dataIndex: 'total_amount' as const,
+                render: (_: unknown, record: OutboundDetailRecord) =>
+                  renderWarehouseAmountDisplay(
+                    record.total_amount,
+                    'amount',
+                    KUAIZHIZAO_OUTBOUND_FIELD_RESOURCE,
+                    'total_amount',
+                  ),
+              },
+            ]
+          : []),
         {
           title: t('app.kuaizhizao.warehouseOutbound.col.totalSku'),
           dataIndex: 'total_items',
@@ -202,7 +244,16 @@ export const OutboundDetailDrawer: React.FC<OutboundDetailDrawerProps> = ({
             ]
           : []),
       ] as ProDescriptionsItemProps<OutboundDetailRecord>[]),
-    [effective.customer_name, effective.outbound_type, effective.work_order_code, notesEditor, showNotes, t],
+    [
+      effective.customer_name,
+      effective.supplier_name,
+      effective.outbound_type,
+      effective.work_order_code,
+      notesEditor,
+      showAmount,
+      showNotes,
+      t,
+    ],
   );
 
   const items = (Array.isArray(effective.items) ? effective.items : []) as Array<Record<string, unknown>>;

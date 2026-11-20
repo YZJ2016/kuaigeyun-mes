@@ -339,6 +339,11 @@ class OutboundHubCapabilities(BaseModel):
     update: ActionCapability
     # 仅销售出库列表/详情附带；其它出库类型为 None
     push_delivery_notice: Optional[ActionCapability] = None
+    submit: Optional[ActionCapability] = None
+    submit_review: Optional[ActionCapability] = None
+    withdraw_submit: Optional[ActionCapability] = None
+    approve: Optional[ActionCapability] = None
+    revoke_approval: Optional[ActionCapability] = None
 
 
 class CustomerMaterialRegistrationCapabilities(BaseModel):
@@ -907,6 +912,11 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "outbound_hub.confirm.pending_audit": "单据待审核，通过后方可确认出库",
     "outbound_hub.confirm.outsource_issue": "委外发料不支持在此确认",
     "sales_delivery.confirm.not_audited": "销售出库单须审核通过后才能确认出库",
+    "production_picking.submit.not_draft": "只有草稿状态的生产领料单才能提交审核",
+    "production_picking.submit.no_items": "生产领料单无明细，无法提交审核",
+    "production_picking.withdraw_submit.not_pending": "只有待审核状态的生产领料单才能撤回提交",
+    "production_picking.approve.not_pending": "只能审核待审核状态的生产领料单",
+    "production_picking.revoke_approval.not_allowed": "只有待领料且已审核通过的单据才能反审核",
     "sales_delivery.submit.not_draft": "只有草稿或已驳回的销售出库单才能提交",
     "sales_delivery.submit.no_items": "销售出库单无明细，无法提交",
     "sales_delivery.submit_review.not_allowed": "请先提交销售出库单，再提交审核",

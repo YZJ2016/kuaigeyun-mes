@@ -123,6 +123,8 @@ export function UniTableStackedLineBadge({
 export interface UniTableStackedPrimaryCellProps {
   /** 上行主文案（如客户名、物料名） */
   primary: string;
+  /** 上行自定义展示（如客商名权限脱敏）；有值时替代 primary 文本行 */
+  primaryContent?: React.ReactNode;
   /** 下行次文案（如单号、编码） */
   secondary: string;
   /** 传入后次行按全局 *_code + *_id 约定自动挂关联抽屉，无需页面写 onSecondaryClick */
@@ -153,6 +155,7 @@ export interface UniTableStackedPrimaryCellProps {
 
 export function UniTableStackedPrimaryCell({
   primary,
+  primaryContent,
   secondary,
   record,
   secondaryKeys,
@@ -168,8 +171,8 @@ export function UniTableStackedPrimaryCell({
   secondaryBadge,
 }: UniTableStackedPrimaryCellProps) {
   const { token } = theme.useToken();
-  const primaryText = primary?.trim() ? primary.trim() : EMPTY_VALUE_PLACEHOLDER;
-  const secondaryText = secondary?.trim() ? secondary.trim() : EMPTY_VALUE_PLACEHOLDER;
+  const primaryText = String(primary ?? '').trim() || EMPTY_VALUE_PLACEHOLDER;
+  const secondaryText = String(secondary ?? '').trim() || EMPTY_VALUE_PLACEHOLDER;
   const linkedDoc =
     skipLinkedDocumentLink || !record
       ? null
@@ -212,9 +215,11 @@ export function UniTableStackedPrimaryCell({
         }}
       >
         {primaryBadge ? <UniTableStackedLineBadge>{primaryBadge}</UniTableStackedLineBadge> : null}
-        <span title={primaryText} style={primaryTextStyle}>
-          {primaryText}
-        </span>
+        {primaryContent ?? (
+          <span title={primaryText} style={primaryTextStyle}>
+            {primaryText}
+          </span>
+        )}
         {primaryExtra}
       </div>
       <div

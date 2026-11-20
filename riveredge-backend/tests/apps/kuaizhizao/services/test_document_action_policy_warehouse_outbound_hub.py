@@ -149,3 +149,37 @@ def test_other_outbound_pending_can_update():
         audit_required=False,
     )
     assert caps.update.allowed
+
+
+def test_production_picking_audit_capabilities():
+    draft = derive_outbound_hub_capabilities(
+        _r(status="草稿", review_status=""),
+        outbound_type="production_picking",
+        audit_required=True,
+        has_items=True,
+    )
+    assert draft.submit is not None
+    assert draft.submit.allowed
+    assert draft.approve is not None
+    assert not draft.approve.allowed
+
+    pending = derive_outbound_hub_capabilities(
+        _r(status="待审核", review_status="待审核"),
+        outbound_type="production_picking",
+        audit_required=True,
+    )
+    assert pending.submit is not None
+    assert not pending.submit.allowed
+    assert pending.withdraw_submit is not None
+    assert pending.withdraw_submit.allowed
+    assert pending.approve is not None
+    assert pending.approve.allowed
+
+    approved_pick = derive_outbound_hub_capabilities(
+        _r(status="待领料", review_status="已通过"),
+        outbound_type="production_picking",
+        audit_required=True,
+    )
+    assert approved_pick.confirm.allowed
+    assert approved_pick.revoke_approval is not None
+    assert approved_pick.revoke_approval.allowed

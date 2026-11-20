@@ -19848,6 +19848,8 @@ export default {
   'app.kuaizhizao.warehouseOutbound.toolbar.submitReviewNotAllowed': '所选销售出库单不能提交审核',
   'app.kuaizhizao.warehouseOutbound.toolbar.withdrawReview': '撤回审核',
   'app.kuaizhizao.warehouseOutbound.toolbar.revoke': '反审核',
+  'app.kuaizhizao.warehouseOutbound.picking.toolbar.submitReviewNotAllowed':
+    '所选生产领料单不能提交审核',
   'app.kuaizhizao.warehouseInbound.capability.purchase_receipt.confirm.not_audited': '采购入库单须审核通过后才能确认入库',
   'app.kuaizhizao.warehouseInbound.capability.purchase_receipt.submit.not_draft': '仅草稿或已驳回可提交',
   'app.kuaizhizao.warehouseInbound.capability.purchase_receipt.submit.no_items': '采购入库单无明细，无法提交',

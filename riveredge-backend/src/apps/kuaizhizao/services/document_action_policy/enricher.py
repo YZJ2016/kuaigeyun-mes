@@ -1819,12 +1819,18 @@ def enrich_outbound_hub_list_capabilities(
 ) -> List[T]:
     out: List[T] = []
     for record, resp in zip(records, responses):
+        rid = int(getattr(record, "id", 0) or 0)
+        has_items = True
+        if item_counts is not None:
+            has_items = int(item_counts.get(rid, 0) or 0) > 0
         caps = derive_outbound_hub_capabilities(
-            record, outbound_type=outbound_type, audit_required=audit_required
+            record,
+            outbound_type=outbound_type,
+            audit_required=audit_required,
+            has_items=has_items,
         )
         enriched = _attach_capabilities_to_response(resp, caps) if hasattr(resp, "model_copy") else resp
         update: Dict[str, Any] = {}
-        rid = int(getattr(record, "id", 0) or 0)
         if item_counts is not None:
             update["total_items"] = item_counts.get(rid, 0)
         if item_previews is not None:

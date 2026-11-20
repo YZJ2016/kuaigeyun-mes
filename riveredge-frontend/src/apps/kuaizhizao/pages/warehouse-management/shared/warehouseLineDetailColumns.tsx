@@ -12,7 +12,11 @@ import {
   buildDocumentLineAttachmentsDrawerColumn,
   DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY,
 } from '../../../components/documentLineAttachmentsColumns';
-import { appendWarehouseLineAmountColumns } from './warehouseAmountDisplay';
+import {
+  appendWarehouseLineAmountColumns,
+  KUAIZHIZAO_INBOUND_FIELD_RESOURCE,
+  KUAIZHIZAO_OUTBOUND_FIELD_RESOURCE,
+} from './warehouseAmountDisplay';
 import { filterWarehouseTrackingColumns, type WarehouseTrackingFlags } from './warehouseTrackingFlags';
 import type { InboundReceiptType } from '../inbound/inboundHubTypes';
 import { resolveInboundHubLineQuantity } from '../inbound/inboundHubNormalize';
@@ -86,6 +90,8 @@ export type BuildInboundHubDetailLineColumnsOptions = {
   receiptType: InboundReceiptType | undefined;
   trackingFlags: WarehouseTrackingFlags;
   showAmount: boolean;
+  /** 字段权限资源键；默认 kuaizhizao:inbound */
+  fieldResource?: string;
   /** 采购入库详情：行价税拆分与头表税率回退 */
   purchaseHeaderTaxRate?: number | null;
   renderUnitCell: (row: InboundHubDetailLineRow) => ReactNode;
@@ -192,8 +198,16 @@ function inboundTrackingTailCols(t: TFunction): ColumnsType<InboundHubDetailLine
 export function buildInboundHubDetailLineColumns(
   options: BuildInboundHubDetailLineColumnsOptions,
 ): ColumnsType<InboundHubDetailLineRow> {
-  const { t, receiptType, trackingFlags, showAmount, purchaseHeaderTaxRate, renderUnitCell, renderLineQuantity } =
-    options;
+  const {
+    t,
+    receiptType,
+    trackingFlags,
+    showAmount,
+    purchaseHeaderTaxRate,
+    renderUnitCell,
+    renderLineQuantity,
+    fieldResource = KUAIZHIZAO_INBOUND_FIELD_RESOURCE,
+  } = options;
   const materialCols = buildInboundDetailMaterialCols(t);
   const qtyRender =
     renderLineQuantity ??
@@ -204,6 +218,7 @@ export function buildInboundHubDetailLineColumns(
       filterWarehouseTrackingColumns([...cols, ...inboundTrackingTailCols(t)], trackingFlags),
       t,
       showAmount,
+      fieldResource,
       amountOffset,
     );
 
@@ -305,7 +320,8 @@ export function buildInboundHubDetailLineColumns(
         trackingFlags,
       ),
       t,
-      true,
+      showAmount,
+      fieldResource,
     );
   }
 
@@ -333,6 +349,8 @@ export type BuildOutboundHubDetailLineColumnsOptions = {
   outboundType: OutboundIssueType | undefined;
   trackingFlags: WarehouseTrackingFlags;
   showAmount: boolean;
+  /** 字段权限资源键；默认 kuaizhizao:outbound */
+  fieldResource?: string;
 };
 
 function outboundTrackingTailCols(t: TFunction): ColumnsType<Record<string, unknown>> {
@@ -372,7 +390,13 @@ function outboundTrackingTailCols(t: TFunction): ColumnsType<Record<string, unkn
 export function buildOutboundHubDetailLineColumns(
   options: BuildOutboundHubDetailLineColumnsOptions,
 ): ColumnsType<Record<string, unknown>> {
-  const { t, outboundType, trackingFlags, showAmount } = options;
+  const {
+    t,
+    outboundType,
+    trackingFlags,
+    showAmount,
+    fieldResource = KUAIZHIZAO_OUTBOUND_FIELD_RESOURCE,
+  } = options;
   const tail = filterWarehouseTrackingColumns(outboundTrackingTailCols(t), trackingFlags);
 
   if (outboundType === 'production_picking') {
@@ -423,6 +447,7 @@ export function buildOutboundHubDetailLineColumns(
       ),
       t,
       showAmount,
+      fieldResource,
       -2,
     );
     if (showAmount) {

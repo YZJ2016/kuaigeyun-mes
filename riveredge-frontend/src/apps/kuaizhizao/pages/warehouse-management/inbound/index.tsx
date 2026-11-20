@@ -106,8 +106,11 @@ import {
   WarehouseShowAmountSwitch,
   appendWarehouseLineAmountColumns,
   buildWarehouseTotalAmountListColumn,
+  KUAIZHIZAO_INBOUND_FIELD_RESOURCE,
+  renderWarehouseAmountDisplay,
   useWarehouseShowAmount,
 } from '../shared/warehouseAmountDisplay';
+import { readPurchaseReceiptHeaderInclAmount } from '../shared/purchaseReceiptWarehouseAmounts';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import {
@@ -2305,12 +2308,25 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
       sorter: true,
       render: (_, record) => renderWarehouseHeaderQuantity(record, t),
     },
-    ...buildWarehouseTotalAmountListColumn<InboundOrder>(t, showAmount).map((col) => ({
+    ...buildWarehouseTotalAmountListColumn<InboundOrder>(
+      t,
+      showAmount,
+      KUAIZHIZAO_INBOUND_FIELD_RESOURCE,
+    ).map((col) => ({
       ...col,
       width: 110,
       minWidth: 110,
       uniTableKeepWidth: true,
       resizable: false,
+      render: (_dom: unknown, record: InboundOrder) =>
+        renderWarehouseAmountDisplay(
+          record.receipt_type === 'purchase'
+            ? readPurchaseReceiptHeaderInclAmount(record)
+            : record.total_amount,
+          'amount',
+          KUAIZHIZAO_INBOUND_FIELD_RESOURCE,
+          'total_amount',
+        ),
     })),
     {
       title: t('app.kuaizhizao.warehouseInbound.col.receiptProgress'),
@@ -2769,6 +2785,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
         ],
         t,
         showAmount,
+        KUAIZHIZAO_INBOUND_FIELD_RESOURCE,
       );
     }
     if (currentOrder.receipt_type === 'purchase') {
@@ -2803,6 +2820,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
         ],
         t,
         showAmount,
+        KUAIZHIZAO_INBOUND_FIELD_RESOURCE,
         -3,
       );
     }
@@ -2855,7 +2873,8 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
           { title: t('app.kuaizhizao.warehouseInbound.col.batchNumber'), dataIndex: 'batch_number', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
         ],
         t,
-        true,
+        showAmount,
+        KUAIZHIZAO_INBOUND_FIELD_RESOURCE,
       );
     }
     return appendWarehouseLineAmountColumns(
@@ -2880,6 +2899,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
       ],
       t,
       showAmount,
+      KUAIZHIZAO_INBOUND_FIELD_RESOURCE,
     );
   }, [
     currentOrder,

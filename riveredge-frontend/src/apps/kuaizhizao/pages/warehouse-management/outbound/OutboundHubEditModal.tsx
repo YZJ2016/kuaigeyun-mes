@@ -42,7 +42,10 @@ import {
 } from './outboundBatchAllocation';
 import { formatQuantity } from '../../../../../utils/format';
 import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
-import { appendWarehouseLineAmountColumns } from '../shared/warehouseAmountDisplay';
+import {
+  appendWarehouseLineAmountColumns,
+  KUAIZHIZAO_OUTBOUND_FIELD_RESOURCE,
+} from '../shared/warehouseAmountDisplay';
 import {
   isOutboundEditable,
   outboundDocumentCode,
@@ -1019,7 +1022,9 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
           },
         ],
         t,
-        true,
+        // 其他出库不体现金额列；销售出库仍可按开关展示（编辑态固定展示金额）
+        isDelivery,
+        KUAIZHIZAO_OUTBOUND_FIELD_RESOURCE,
       ),
       trackingFlags,
       ),
@@ -1027,6 +1032,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
       t,
       trackingFlags,
       quantityDecimals,
+      isDelivery,
       editableDeliveryQuantities,
       editableDeliveryBatchAllocs,
       editableDeliverySerials,

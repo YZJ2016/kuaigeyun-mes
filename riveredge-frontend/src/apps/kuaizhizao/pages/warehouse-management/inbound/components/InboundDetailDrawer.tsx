@@ -28,6 +28,10 @@ import {
   DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY,
 } from '../../../../components/documentLineAttachmentsColumns';
 import { partnerDefaultPaymentMethodLabel } from '../../../../../master-data/utils/partner-static-labels';
+import {
+  KUAIZHIZAO_INBOUND_FIELD_RESOURCE,
+  renderWarehousePartyNameDisplay,
+} from '../../shared/warehouseAmountDisplay';
 import { payableLedgerRecognitionLabel } from '../../../../../../utils/documentLedgerRecognition';
 import { getInboundLifecycle } from '../../../../utils/inboundLifecycle';
 import { renderInboundReceiptTypeMarkerTag } from '../../shared/warehouseMarkerTags';
@@ -148,6 +152,12 @@ export const InboundDetailDrawer: React.FC<InboundDetailDrawerProps> = ({
               {
                 title: t('app.kuaizhizao.warehouseInbound.col.customer'),
                 dataIndex: 'customer_name' as const,
+                render: (_: unknown, record: InboundDetailRecord) =>
+                  renderWarehousePartyNameDisplay(
+                    record.customer_name,
+                    KUAIZHIZAO_INBOUND_FIELD_RESOURCE,
+                    'customer_name',
+                  ),
               },
             ]
           : []),
@@ -159,6 +169,12 @@ export const InboundDetailDrawer: React.FC<InboundDetailDrawerProps> = ({
                     ? t('app.kuaizhizao.warehouseInbound.field.outsourceSupplier')
                     : t('app.kuaizhizao.warehouseInbound.field.supplier'),
                 dataIndex: 'supplier_name' as const,
+                render: (_: unknown, record: InboundDetailRecord) =>
+                  renderWarehousePartyNameDisplay(
+                    record.supplier_name,
+                    KUAIZHIZAO_INBOUND_FIELD_RESOURCE,
+                    'supplier_name',
+                  ),
               },
             ]
           : []),

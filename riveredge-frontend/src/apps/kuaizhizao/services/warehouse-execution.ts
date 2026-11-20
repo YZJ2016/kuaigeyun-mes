@@ -423,6 +423,14 @@ export const warehouseApi = {
         method: 'POST',
         data: { selected_item_ids: selectedItemIds },
       }),
+    submitForReview: async (id: number) =>
+      apiRequest(`/core/uni-audit/production_picking/${id}/submit`, { method: 'POST' }),
+    withdrawSubmit: async (id: number) =>
+      apiRequest(`/core/uni-audit/production_picking/${id}/withdraw`, { method: 'POST' }),
+    approve: async (id: number) =>
+      apiRequest(`/core/uni-audit/production_picking/${id}/approve`, { method: 'POST' }),
+    revokeApproval: async (id: number) =>
+      apiRequest(`/core/uni-audit/production_picking/${id}/revoke`, { method: 'POST' }),
   },
   productionReturn: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/production-returns', { method: 'GET', params }),
