@@ -1,4 +1,5 @@
 import { apiRequest } from '../../../../services/api';
+import type { DocumentLineMaterialPreviewItem } from '../../../../components/document-line-materials-preview';
 
 export const OTHER_EXPENSE_RESOURCE = 'kuaicaiwu:other-expense';
 
@@ -30,6 +31,10 @@ export type OtherExpensePurchaseReceiptLinkCandidate = {
   source_status?: string;
   source_date?: string;
   amount?: number;
+  items?: DocumentLineMaterialPreviewItem[];
+  item_count?: number;
+  purchase_order_code?: string | null;
+  total_quantity?: number;
 };
 
 export type OtherExpenseVoucher = {

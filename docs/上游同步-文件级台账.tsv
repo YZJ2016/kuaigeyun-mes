@@ -715,7 +715,7 @@ riveredge-backend/src/apps/kuaizhizao/finance/services/purchase_order_finance_li
 riveredge-backend/src/apps/kuaizhizao/finance/services/purchase_receipt_finance_occupancy_backfill.py	d7693d76f627595d448cfeaef176d8e8cb3e102f	tracked	seed from 2c76a942c2
 riveredge-backend/src/apps/kuaizhizao/finance/services/purchase_receipt_finance_pull_lines.py	884908febf0f0c3d7ff3a90f8cb1238ea89f1bbf	tracked	seed from 1d968cd27b
 riveredge-backend/src/apps/kuaizhizao/finance/services/purchase_receipt_line_finance_occupancy_service.py	4728ca36226db0bceef7ba9c0d6c1b97dcdeb934	tracked	seed from 2c76a942c2
-riveredge-backend/src/apps/kuaizhizao/finance/services/purchase_settlement.py	3bdd9a74d248175de3e7a9ee53f4dd23ff26f7a8	tracked	seed from 37409d3b29
+riveredge-backend/src/apps/kuaizhizao/finance/services/purchase_settlement.py	1e71f5c5a57d4517e9a10a80b1e17d33d5b3bb69	applied	R3 440ae22ebb: _rollup_context抽取+batch_purchase_receipt_settlement_excl已移植至apps.kuaicaiwu/services/purchase_settlement.py(本地财务权威);上游kuaizhizao.finance文件本体不落地
 riveredge-backend/src/apps/kuaizhizao/finance/services/receipt_audit_service.py	857afa9e137910ce12a1828d55a88c86e41f4dd4	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/finance/services/receipt_pull_service.py	37c914af0376acae7a9ffb735416a234349c88ca	tracked	seed from 2c76a942c2
 riveredge-backend/src/apps/kuaizhizao/finance/services/receipt_refund_audit_service.py	3eb7e696553d633794968570cef76cc07bbd14be	tracked	seed from d81b4b70bf
@@ -1046,7 +1046,7 @@ riveredge-backend/src/apps/kuaizhizao/services/other_expense_application_pull_se
 riveredge-backend/src/apps/kuaizhizao/services/other_expense_application_push_service.py	c35d2950d1cfb170419b7d8ac50f0859cf5f8ac6	domain-out	本地无 OtherExpenseApplication 实体域（其他费用申请整体域外，finance 侧）
 riveredge-backend/src/apps/kuaizhizao/services/other_expense_application_service.py	9022a3276c05097f4c4f58800d82f315fed73fcc	tracked	seed from 154977d948
 riveredge-backend/src/apps/kuaizhizao/services/other_expense_audit_service.py	54862c74d2313e8a50cd8c98d4ee25cc0cde1c46	tracked	seed from d81b4b70bf
-riveredge-backend/src/apps/kuaizhizao/services/other_expense_service.py	2a86d6e0b5fcf74a973fb06be2b07bade1e72558	domain-out	R2:本地无kuaizhizao侧other_expense/other_income实现(财务权威在apps.kuaicaiwu),上游kuaizhizao直推+服务构成平行财务路径,按no-duplicate不落地
+riveredge-backend/src/apps/kuaizhizao/services/other_expense_service.py	f78cbcceb13dc289ac954fc9a6d012ff0e8ca8b2	domain-out	R3 440ae22ebb: 选单候选载荷(物料keyword过滤/未税amount/items/item_count/PO单号/数量)已移植至apps.kuaicaiwu/services/misc_voucher_service.py;kuaizhizao平行财务服务不落地
 riveredge-backend/src/apps/kuaizhizao/services/other_inbound_sync_service.py	a51bdde878168ea87b4a39b4d5ee2a507e04d56e	tracked	seed from a0b353ce7e
 riveredge-backend/src/apps/kuaizhizao/services/other_income_audit_service.py	7fcff2c4a469dd64f07cd9c5b9ee8cb3cda183be	tracked	seed from d81b4b70bf
 riveredge-backend/src/apps/kuaizhizao/services/other_income_service.py	af128b5c6c5ba26191486762fc5b46d1594e7789	domain-out	R2:本地无kuaizhizao侧other_expense/other_income实现(财务权威在apps.kuaicaiwu),上游kuaizhizao直推+服务构成平行财务路径,按no-duplicate不落地
@@ -1878,7 +1878,7 @@ riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/FinanceNo
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/FinanceRefundVoucherPage.tsx	9a73ee0058c572afaa9debde11bb84e035f0b812	domain-out	决策:上游finance并入pro包(finance包+finance-management页+对账pull链)，本地kuaicaiwu权威不摘，随架构决策整体排除
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/FinanceVoucherDetailDrawer.tsx	7ddf6c44b6d37809d1009af0746c1ee68c813294	tracked	seed from 93b3cb5998
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/MiscVoucherCounterpartyPayeeSection.tsx	928ca55ffb5253437cba4129601ba03b4f4b5a04	domain-out	决策:上游finance并入pro包(finance包+finance-management页+对账pull链)，本地kuaicaiwu权威不摘，随架构决策整体排除
-riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/MiscVoucherListPage.tsx	ef1a9e8e3793d354e99a6bddda7d09d3b6542940	applied	移植审核批跑+UniWorkflowActions 至 kuaicaiwu(保留本地 incomeSaveSubmitSplit 变体)
+riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/MiscVoucherListPage.tsx	224e627e289379c84aa76820595486b906caf646	applied	R3 440ae22ebb: 明细/采购订单/入库数量列+未税金额列移植至apps/kuaicaiwu同名页;kuaizhizao财务页域外
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/PartnerSupplierPayeeFormFields.tsx	f7fd4232fc8d0e9e90b175075a85f7615f536d58	domain-out	决策:上游finance并入pro包(finance包+finance-management页+对账pull链)，本地kuaicaiwu权威不摘，随架构决策整体排除
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/PaymentAdvancePayeeField.tsx	97549ab06aed26f7df88cd43860371537d7a0f2e	tracked	seed from e75380e080
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/PaymentCounterpartyFormSection.tsx	55fcf11622901dfd8bbbb19f183a5fc0c78276be	domain-out	决策:上游finance并入pro包(finance包+finance-management页+对账pull链)，本地kuaicaiwu权威不摘，随架构决策整体排除
@@ -2179,7 +2179,7 @@ riveredge-frontend/src/apps/kuaizhizao/services/finance/fund-transfer.ts	25158dd
 riveredge-frontend/src/apps/kuaizhizao/services/finance/gl.ts	8cfd5db8c761b1ff1eb471cab2e84abe6e54825b	tracked	seed from 2c76a942c2
 riveredge-frontend/src/apps/kuaizhizao/services/finance/note.ts	9ddaa6b03e99b539158628c076dbcefdefdb5efd	tracked	seed from 2c76a942c2
 riveredge-frontend/src/apps/kuaizhizao/services/finance/other-expense-application.ts	4e97ebcac186d53e3b43b1609db9860dd8ea9218	domain-out	决策:上游finance并入pro包(finance包+finance-management页+对账pull链)，本地kuaicaiwu权威不摘，随架构决策整体排除
-riveredge-frontend/src/apps/kuaizhizao/services/finance/other-expense.ts	c2367b656e75757c5d4ab2a87a346cada4ae7448	domain-out	决策:上游finance并入pro包(finance包+finance-management页+对账pull链)，本地kuaicaiwu权威不摘，随架构决策整体排除
+riveredge-frontend/src/apps/kuaizhizao/services/finance/other-expense.ts	1440513a01219f784b47b8ca33c8d43f623310ba	domain-out	R3 440ae22ebb: 候选类型字段(items/item_count/purchase_order_code/total_quantity)移植至kuaicaiwu other-expense.ts;上游文件本体不落地
 riveredge-frontend/src/apps/kuaizhizao/services/finance/other-income.ts	cc9e9bc0e2d8b084408af61298fdf03713e07d56	tracked	seed from d81b4b70bf
 riveredge-frontend/src/apps/kuaizhizao/services/finance/partnerStatement.ts	fadd20da6660bbfa5d31905e187536508b946aba	applied	新字段/RefreshPreview/updateHeader 类型入 kuaicaiwu services/finance
 riveredge-frontend/src/apps/kuaizhizao/services/finance/payable.ts	5afd439dcc43ffd69b2633e784d0b9ebc1ed57ab	tracked	seed from 2c76a942c2

@@ -53,7 +53,13 @@ import {
   renderPullQueryDocStatus,
   toUniPullQueryHttpParams,
   useUniPullQuery,
+  renderPullQueryEmptyValue,
+  renderPullQueryOptionalText,
 } from '../../../../../components/uni-pull-query';
+import {
+  DOCUMENT_LINE_MATERIALS_KEY,
+  renderDocumentLineMaterialsPreview,
+} from '../../../../../components/document-line-materials-preview';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import {
   mapAttachmentsToUploadList,
@@ -669,31 +675,59 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
       {
         title: t(`${i18nPrefix}.pull.col.receiptCode`),
         dataIndex: 'receipt_code',
-        width: 168,
+        width: 148,
         ellipsis: true,
         render: (_, row) => row.receipt_code || row.code,
       },
       {
-        title: t(`${i18nPrefix}.pull.col.supplier`),
-        dataIndex: 'supplier_name',
+        title: t('app.kuaizhizao.common.colLineMaterials'),
+        key: DOCUMENT_LINE_MATERIALS_KEY,
+        dataIndex: 'items',
+        ellipsis: false,
+        render: (_, row) => {
+          const items = row.items;
+          if (!items?.length) {
+            return renderPullQueryEmptyValue();
+          }
+          return renderDocumentLineMaterialsPreview(items, t);
+        },
+      },
+      {
+        title: t(`${i18nPrefix}.pull.col.purchaseOrderCode`),
+        dataIndex: 'purchase_order_code',
+        width: 136,
         ellipsis: true,
+        render: (v) => renderPullQueryOptionalText(v),
+      },
+      {
+        title: t(`${i18nPrefix}.pull.col.totalQuantity`),
+        dataIndex: 'total_quantity',
+        width: 96,
+        align: 'right',
+        render: (v) => {
+          const n = Number(v);
+          if (!Number.isFinite(n) || n === 0) {
+            return renderPullQueryEmptyValue();
+          }
+          return n;
+        },
       },
       {
         title: t(`${i18nPrefix}.pull.col.status`),
         dataIndex: 'source_status',
-        width: 100,
+        width: 96,
         render: (v) => renderPullQueryDocStatus(t, v),
       },
       {
         title: t(`${i18nPrefix}.pull.col.date`),
         dataIndex: 'source_date',
-        width: 120,
+        width: 112,
         ellipsis: true,
       },
       {
         title: t(`${i18nPrefix}.pull.col.amount`),
         dataIndex: 'amount',
-        width: 120,
+        width: 108,
         align: 'right',
         render: (v) => formatCurrencyAmount(v),
       },

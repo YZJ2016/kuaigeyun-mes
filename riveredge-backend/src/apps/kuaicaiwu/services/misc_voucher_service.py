@@ -261,7 +261,6 @@ class MiscVoucherService:
         if supplier_id <= 0:
             raise ValidationError("须指定供应商")
         from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
-        from tortoise.expressions import Q
 
         query = PurchaseReceipt.filter(
             tenant_id=tenant_id,
@@ -271,28 +270,75 @@ class MiscVoucherService:
         )
         kw = str(keyword or "").strip()
         if kw:
-            query = query.filter(
-                Q(receipt_code__icontains=kw) | Q(supplier_name__icontains=kw)
+            from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+            from apps.kuaizhizao.services.warehouse_list_core import (
+                PURCHASE_RECEIPT_KEYWORD_FIELDS,
+            )
+            from apps.kuaizhizao.utils.list_item_material_keyword import (
+                apply_query_header_or_line_material_keyword,
+            )
+
+            query = await apply_query_header_or_line_material_keyword(
+                query,
+                tenant_id=tenant_id,
+                kw=kw,
+                keyword_fields=PURCHASE_RECEIPT_KEYWORD_FIELDS,
+                item_model=PurchaseReceiptItem,
+                item_header_fk_field="receipt_id",
             )
         total = await query.count()
         receipts = await query.offset(skip).limit(limit).order_by("-created_at")
-        data = [
-            {
-                "id": int(r.id),
-                "code": str(r.receipt_code or r.id),
-                "receipt_code": str(r.receipt_code or r.id),
-                "supplier_id": int(r.supplier_id or 0) or None,
-                "supplier_name": r.supplier_name,
-                "source_status": r.status,
-                "source_date": str(
-                    getattr(r, "receipt_time", None)
-                    or getattr(r, "created_at", None)
-                    or ""
-                ),
-                "amount": float(r.total_amount or 0),
-            }
-            for r in receipts
-        ]
+        receipts_list = list(receipts)
+        from apps.kuaicaiwu.services.finance_tax import (
+            money_to_json_float,
+            quantize_money,
+        )
+        from apps.kuaicaiwu.services.purchase_settlement import (
+            batch_purchase_receipt_settlement_excl,
+        )
+
+        excl_map = await batch_purchase_receipt_settlement_excl(tenant_id, receipts_list)
+        receipt_ids = [int(r.id) for r in receipts_list]
+        from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            batch_document_item_counts,
+            batch_document_item_material_previews,
+        )
+
+        item_previews = await batch_document_item_material_previews(
+            tenant_id, PurchaseReceiptItem, "receipt_id", receipt_ids
+        )
+        item_counts = await batch_document_item_counts(
+            tenant_id, PurchaseReceiptItem, "receipt_id", receipt_ids
+        )
+        data = []
+        for r in receipts_list:
+            rid = int(r.id)
+            excl = excl_map.get(rid)
+            if excl is None:
+                excl = quantize_money(r.total_amount or 0)
+            data.append(
+                {
+                    "id": rid,
+                    "code": str(r.receipt_code or r.id),
+                    "receipt_code": str(r.receipt_code or r.id),
+                    "supplier_id": int(r.supplier_id or 0) or None,
+                    "supplier_name": r.supplier_name,
+                    "source_status": r.status,
+                    "source_date": str(
+                        getattr(r, "receipt_time", None)
+                        or getattr(r, "created_at", None)
+                        or ""
+                    ),
+                    "amount": money_to_json_float(excl),
+                    "items": item_previews.get(rid, []),
+                    "item_count": int(item_counts.get(rid, 0)),
+                    "purchase_order_code": (
+                        str(getattr(r, "purchase_order_code", None) or "").strip() or None
+                    ),
+                    "total_quantity": float(getattr(r, "total_quantity", 0) or 0),
+                }
+            )
         return {"data": data, "total": total, "success": True}
 
     def _assert_counterparty(self, data: Any) -> None:

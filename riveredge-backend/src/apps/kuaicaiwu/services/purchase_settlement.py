@@ -660,17 +660,21 @@ async def purchase_receipt_settlement_gross_async(
     return purchase_receipt_settlement_gross(receipt)
 
 
-async def batch_purchase_receipt_settlement_gross(
+async def _batch_purchase_receipt_settlement_rollup_context(
     tenant_id: int,
     receipts: Sequence[Any],
-) -> Dict[int, Decimal]:
-    """批量按明细 + PO 行重算价税合计（列表/详情展示与应付上限）。"""
-    if not receipts:
-        return {}
+) -> tuple[
+    Dict[int, Any],
+    Dict[int, list],
+    Dict[int, Any],
+    Dict[int, Any],
+    int,
+]:
+    """批量加载入库单明细与 PO 上下文，供未税/价税 rollup 共用。"""
     receipt_ids = [int(getattr(r, "id", 0) or 0) for r in receipts]
     receipt_ids = [rid for rid in receipt_ids if rid > 0]
     if not receipt_ids:
-        return {}
+        return {}, {}, {}, {}, 2
 
     from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
 
@@ -716,6 +720,63 @@ async def batch_purchase_receipt_settlement_gross(
     amount_places = await BusinessConfigService().get_amount_decimal_places(tenant_id)
 
     receipt_by_id = {int(getattr(r, "id", 0) or 0): r for r in receipts}
+    return (
+        receipt_by_id,
+        items_by_receipt,
+        poi_by_id,
+        purchase_order_by_id,
+        amount_places,
+    )
+
+
+async def batch_purchase_receipt_settlement_excl(
+    tenant_id: int,
+    receipts: Sequence[Any],
+) -> Dict[int, Decimal]:
+    """批量按明细唯一公式重算未税合计（展示与财务 rollup 同源）。"""
+    if not receipts:
+        return {}
+    (
+        receipt_by_id,
+        items_by_receipt,
+        poi_by_id,
+        purchase_order_by_id,
+        amount_places,
+    ) = await _batch_purchase_receipt_settlement_rollup_context(tenant_id, receipts)
+    if not receipt_by_id:
+        return {}
+    out: Dict[int, Decimal] = {}
+    for rid, lines in items_by_receipt.items():
+        receipt = receipt_by_id.get(rid)
+        if receipt is None:
+            continue
+        excl, _, _ = rollup_purchase_receipt_amounts_from_lines(
+            receipt,
+            lines,
+            poi_by_id,
+            purchase_order_by_id=purchase_order_by_id,
+            amount_places=amount_places,
+        )
+        out[rid] = excl
+    return out
+
+
+async def batch_purchase_receipt_settlement_gross(
+    tenant_id: int,
+    receipts: Sequence[Any],
+) -> Dict[int, Decimal]:
+    """批量按明细 + PO 行重算价税合计（列表/详情展示与应付上限）。"""
+    if not receipts:
+        return {}
+    (
+        receipt_by_id,
+        items_by_receipt,
+        poi_by_id,
+        purchase_order_by_id,
+        amount_places,
+    ) = await _batch_purchase_receipt_settlement_rollup_context(tenant_id, receipts)
+    if not receipt_by_id:
+        return {}
     out: Dict[int, Decimal] = {}
     for rid, lines in items_by_receipt.items():
         receipt = receipt_by_id.get(rid)
