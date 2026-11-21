@@ -143,26 +143,12 @@ def apply_unit_code_map(
 
 
 async def resolve_unit_catalog_code(tenant_id: int, unit_ref: str) -> Optional[str]:
-    """单位编码或名称 → 单位目录 code（常作金蝶 FNumber）。"""
+    """单位编码或名称 → 单位目录 code；未命中时回落原串（兼容旧调用）。"""
     raw = str(unit_ref or "").strip()
     if not raw:
         return None
-    try:
-        from apps.master_data.models.unit import MaterialUnit
-
-        unit = await MaterialUnit.filter(
-            tenant_id=tenant_id, code=raw, deleted_at__isnull=True
-        ).first()
-        if unit:
-            return str(unit.code).strip()
-        unit = await MaterialUnit.filter(
-            tenant_id=tenant_id, name=raw, deleted_at__isnull=True
-        ).first()
-        if unit:
-            return str(unit.code).strip()
-    except Exception as exc:
-        logger.warning("resolve unit catalog code failed ref={} err={}", raw, exc)
-    return raw
+    hit = await lookup_unit_catalog_code(tenant_id, raw)
+    return hit if hit else raw
 
 
 async def resolve_material_base_unit(tenant_id: int, product_code: Optional[str]) -> Optional[str]:
@@ -171,7 +157,6 @@ async def resolve_material_base_unit(tenant_id: int, product_code: Optional[str]
     if not code:
         return None
     try:
-        from apps.master_data.models.unit import MaterialUnit
         from apps.master_data.services.sync_association_service import find_material_by_code
 
         material = await find_material_by_code(tenant_id, code)
@@ -180,17 +165,8 @@ async def resolve_material_base_unit(tenant_id: int, product_code: Optional[str]
         base = str(getattr(material, "base_unit", None) or "").strip()
         if not base:
             return None
-        unit = await MaterialUnit.filter(
-            tenant_id=tenant_id, code=base, deleted_at__isnull=True
-        ).first()
-        if unit:
-            return str(unit.code).strip()
-        unit = await MaterialUnit.filter(
-            tenant_id=tenant_id, name=base, deleted_at__isnull=True
-        ).first()
-        if unit:
-            return str(unit.code).strip()
-        return base
+        hit = await lookup_unit_catalog_code(tenant_id, base)
+        return hit or base
     except Exception as exc:
         logger.warning("resolve material unit failed code={} err={}", code, exc)
     return None
@@ -254,31 +230,37 @@ async def resolve_unit_for_push(
     unit_hint: Optional[str] = None,
     base_unit_hint: Optional[str] = None,
     unit_code_map: Optional[Dict[str, Any]] = None,
+    allow_builtin_aliases: bool = True,
 ) -> Dict[str, str]:
     """解析推送用单位编码。
 
     真相链（禁止读 BusinessConfig 单位键）：
     业务单据 unit_hint / 物料主数据 MaterialUnit.code
     → Save 接口 source_type_conversion_map 单位条目
-    → BUILTIN_UNIT_ALIASES
+    →（可选）BUILTIN_UNIT_ALIASES
     → DEFAULT_UNIT_NUMBER
+
+    目录已命中的编码（例如同步下来的字面量 ``kg``）不得再被别名改写成 ``004``。
     """
-    unit = str(unit_hint or "").strip()
-    if not unit:
-        unit = await resolve_material_base_unit(tenant_id, product_code) or ""
-    if unit:
-        unit = await resolve_unit_catalog_code(tenant_id, unit) or unit
-    unit = apply_unit_code_map(unit, unit_code_map) if unit else ""
-    if not unit:
-        unit = DEFAULT_UNIT_NUMBER
+    hint = str(unit_hint or "").strip()
+    if not hint:
+        hint = await resolve_material_base_unit(tenant_id, product_code) or ""
+    unit = await resolve_push_unit_number(
+        tenant_id,
+        unit_refs=[hint],
+        unit_code_map=unit_code_map,
+        allow_builtin_aliases=allow_builtin_aliases,
+    )
 
     base_raw = str(base_unit_hint or "").strip()
     if not base_raw:
         base = unit
     else:
-        base = await resolve_unit_catalog_code(tenant_id, base_raw) or base_raw
-        base = apply_unit_code_map(base, unit_code_map) or unit
-        if not base:
-            base = unit
+        base = await resolve_push_unit_number(
+            tenant_id,
+            unit_refs=[base_raw],
+            unit_code_map=unit_code_map,
+            allow_builtin_aliases=allow_builtin_aliases,
+        )
 
     return {"unit_number": unit, "base_unit_number": base}
