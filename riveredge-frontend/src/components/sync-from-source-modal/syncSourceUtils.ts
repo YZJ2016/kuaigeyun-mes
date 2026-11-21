@@ -117,6 +117,17 @@ const KINGDEE_TARGET_ALIASES: Record<string, string[]> = {
     'materialgroup.name',
     'FMaterialGroup.FName',
   ],
+  default_tax_rate: [
+    'taxrate.taxrate',
+    'taxrate_taxrate',
+    'taxrate',
+    'taxrate.number',
+    'taxrate_number',
+    'taxrateid_number',
+    'FTaxRateId.FNumber',
+    'FTaxRateId_FNumber',
+    'FEntryTaxRate',
+  ],
   parent_code: [
     'parent_parent_number',
     'parent_number',

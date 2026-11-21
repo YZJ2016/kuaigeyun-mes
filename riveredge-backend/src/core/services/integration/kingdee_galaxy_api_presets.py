@@ -50,6 +50,7 @@ MATERIAL_QUERY_FIELD_KEYS = (
     "FBaseUnitId.FNumber,FBaseUnitId.FName,"
     "FMaterialGroup.FNumber,FMaterialGroup.FName,"
     "FErpClsID,"
+    "FTaxRateId.FNumber,"
     "FDocumentStatus,FForbidStatus"
 )
 MATERIAL_UNIT_NAME_MARKER = "FBaseUnitId.FName"

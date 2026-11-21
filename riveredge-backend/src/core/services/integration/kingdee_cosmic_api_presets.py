@@ -190,7 +190,8 @@ MATERIAL_GROUP_PRESET_CODE_SUFFIX = "query_material_group"
 UNIT_SYNC_MATERIAL_SELECT = "number,name,baseunit.number,baseunit.name"
 # 物料同步：编码/名称/规格/基础单位/分组（字段以本环境模型为准，可微调）
 MATERIAL_SYNC_SELECT = (
-    "number,name,modelnum,baseunit.number,baseunit.name,group.number,group.name,status,enable"
+    "number,name,modelnum,baseunit.number,baseunit.name,group.number,group.name,"
+    "status,enable,enableserial,taxrate.taxrate,taxrate.number"
 )
 GOODS_CLASS_QUERY_PATH = "kapi/v2/gmc/mdr_goodsclass/getMalGoodsClass"
 
@@ -673,7 +674,12 @@ def build_material_batch_query_preset() -> KingdeeCosmicApiPreset:
             "基础资料物料批量查询 /v2/basedata/bd_material/batchQuery。"
             f"请求 select={MATERIAL_SYNC_SELECT}，便于同步自动映射："
             "主编码←number，名称←name，规格←modelnum，"
-            "基础单位←baseunit.number/name，分组←group.number/name。"
+            "基础单位←baseunit.number/name，分组←group.number/name，"
+            "主档序列号←enableserial，默认税率(%)←taxrate.taxrate（或税率编码 taxrate.number 如 V13）。"
+            "启用批号管理请用「其他同步 → 批号管理同步」拉取 "
+            "sbd/bd_materialinventoryinfo/batchQuery 的 enablelot，主物料同步不再写入批号开关。"
+            "集团创建、子公司管理时，勿写 createorg_number（创建组织）；"
+            "若需与苍穹列表同范围，可在 data 按开放平台字段试 org_number（管理组织.编码）。"
             "字段名若与本环境模型不一致，请在接口管理中微调 select。"
         ),
         "path": f"kapi/v2/basedata/{BIZ_BD_MATERIAL}/batchQuery",

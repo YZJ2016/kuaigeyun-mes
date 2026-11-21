@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
 {
+    id: 'material-sync-default-tax-rate-r01',
+    date: '2026-11-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.material-sync-default-tax-rate-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-sync-default-tax-rate-r01.description',
+  },
+{
     id: 'aps-strategy-due-ocr-harden-r01',
     date: '2026-11-16',
     type: 'fix',

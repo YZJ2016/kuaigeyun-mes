@@ -39,6 +39,7 @@ export const MATERIAL_SYNC_AVAILABLE_TARGET_FIELDS: SyncTargetField[] = [
   { value: 'over_receipt_tolerance_pct', labelKey: 'app.master-data.materials.syncField.overReceiptTolerancePct' },
   { value: 'over_issue_tolerance_pct', labelKey: 'app.master-data.materials.syncField.overIssueTolerancePct' },
   { value: 'inspection_mode', labelKey: 'app.master-data.materials.syncField.inspectionMode' },
+  { value: 'default_tax_rate', labelKey: 'app.master-data.materials.syncField.defaultTaxRate' },
 ];
 
 export const MATERIAL_SYNC_REQUIRED_TARGETS = ['main_code', 'name', 'base_unit'];

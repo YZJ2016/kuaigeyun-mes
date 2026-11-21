@@ -28841,6 +28841,7 @@ export default {
   'app.master-data.materials.syncField.overReportMode': '超报模式',
   'app.master-data.materials.syncField.overReportValue': '超报值',
   'app.master-data.materials.syncField.inspectionMode': '质检模式',
+  'app.master-data.materials.syncField.defaultTaxRate': '默认税率(%)',
   'app.master-data.materials.documentPush.title': '推送物料',
   'app.master-data.materials.documentPush.hint': '按已添加的推送目标写出物料',
   'app.master-data.materials.documentPush.pipelineDesc': '物料 → 金蝶 BD_MATERIAL',
@@ -54436,6 +54437,10 @@ export default {
   'pages.dashboard.updateLog.entries.work-order-manual-bom-lines-r01.title': '工单子件无 BOM 可手工添加',
   'pages.dashboard.updateLog.entries.work-order-manual-bom-lines-r01.description':
     '新建或编辑工单时，填写计划数量后即按 BOM 预览展开子件（未选 BOM 版本时用默认版本）；无 BOM 可在子件明细页添加明细并保存，改数量或 BOM 版本时保留手工行。',
+  'pages.dashboard.updateLog.entries.material-sync-default-tax-rate-r01.title':
+    '云苍穹物料同步带出默认税率',
+  'pages.dashboard.updateLog.entries.material-sync-default-tax-rate-r01.description':
+    '物料从源同步时解析苍穹 taxrate.taxrate 或税率编码 V13，写入主数据默认值设置中的默认税率（%）；星空物料同步补充 FTaxRateId.FNumber 映射。',
   'pages.dashboard.updateLog.entries.aps-strategy-due-ocr-harden-r01.title':
     '修复排产向导与交期预估：失败可见、禁止冒充',
   'pages.dashboard.updateLog.entries.aps-strategy-due-ocr-harden-r01.description':

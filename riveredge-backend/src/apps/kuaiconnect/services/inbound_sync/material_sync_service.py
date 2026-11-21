@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 from infra.exceptions.exceptions import ValidationError
@@ -113,6 +115,112 @@ MATERIAL_SYNC_MAP_EMPTY_FALLBACKS: Dict[str, List[str]] = {
     "serial_managed": ["enableserial", "enableSerial", "FIsSNManage"],
 }
 
+# 写入物料 defaults.defaultTaxRate（整型百分比），非 Material 标量列
+MATERIAL_SYNC_DEFAULT_TAX_TARGET = "default_tax_rate"
+
+MATERIAL_SYNC_TAX_RATE_FALLBACK_SOURCE_KEYS = (
+    "default_tax_rate",
+    "taxrate_taxrate",
+    "taxrate.taxrate",
+    "taxrate",
+    "taxrate_number",
+    "taxrate.number",
+    "taxrateid_number",
+    "FTaxRateId_FNumber",
+    "FTaxRateId.FNumber",
+    "FEntryTaxRate",
+)
+
+_TAXRATEID_NUMBER_RE = re.compile(r"^V(?P<pct>\d+(?:\.\d+)?)$", re.IGNORECASE)
+
+
+def _tax_rate_percent_from_taxrateid_number(value: Any) -> Optional[int]:
+    text = cell_str(value)
+    if not text:
+        return None
+    m = _TAXRATEID_NUMBER_RE.match(text.strip())
+    if not m:
+        return None
+    from apps.kuaicaiwu.services.purchase_settlement import (
+        normalize_po_tax_rate_to_percent,
+    )
+
+    pct = normalize_po_tax_rate_to_percent(m.group("pct"))
+    if pct <= 0:
+        return None
+    if pct == pct.to_integral_value():
+        return int(pct)
+    return int(pct.quantize(Decimal("1")))
+
+
+def resolve_material_sync_default_tax_rate_percent(mapped_row: Dict[str, Any]) -> Optional[int]:
+    """解析同步行中的默认税率，统一为物料 defaults 的整型百分比（13 表示 13%）。"""
+    from apps.kuaicaiwu.services.purchase_settlement import (
+        normalize_po_tax_rate_to_percent,
+    )
+
+    raw: Any = None
+    if MATERIAL_SYNC_DEFAULT_TAX_TARGET in mapped_row:
+        candidate = mapped_row.get(MATERIAL_SYNC_DEFAULT_TAX_TARGET)
+        if candidate is not None and str(candidate).strip() != "":
+            raw = candidate
+    if raw is None:
+        for key in MATERIAL_SYNC_TAX_RATE_FALLBACK_SOURCE_KEYS:
+            if key == MATERIAL_SYNC_DEFAULT_TAX_TARGET:
+                continue
+            if key in mapped_row and mapped_row.get(key) not in (None, ""):
+                raw = mapped_row.get(key)
+                break
+    if raw is None:
+        return None
+    if isinstance(raw, str) and raw.strip().upper().startswith("V"):
+        parsed = _tax_rate_percent_from_taxrateid_number(raw)
+        if parsed is not None:
+            return parsed
+    pct = normalize_po_tax_rate_to_percent(raw)
+    if pct <= 0:
+        return None
+    if pct == pct.to_integral_value():
+        return int(pct)
+    return int(pct.quantize(Decimal("1")))
+
+
+def material_default_tax_rate_percent_stored(defaults: Any) -> Optional[int]:
+    from apps.master_data.services.partner_material_price_defaults import (
+        material_default_tax_rate,
+    )
+
+    stored = material_default_tax_rate(defaults if isinstance(defaults, dict) else {})
+    if stored <= 0:
+        return None
+    if stored == stored.to_integral_value():
+        return int(stored)
+    return int(stored.quantize(Decimal("1")))
+
+
+def merge_material_defaults_default_tax_rate(
+    existing_defaults: Any,
+    tax_pct: int,
+) -> Dict[str, Any]:
+    base = dict(existing_defaults) if isinstance(existing_defaults, dict) else {}
+    return {**base, "defaultTaxRate": int(tax_pct)}
+
+
+def _apply_material_default_tax_rate(
+    material: Material,
+    mapped_row: Dict[str, Any],
+    update_fields: List[str],
+) -> None:
+    tax_pct = resolve_material_sync_default_tax_rate_percent(mapped_row)
+    if tax_pct is None:
+        return
+    stored = material_default_tax_rate_percent_stored(material.defaults)
+    if stored == int(tax_pct):
+        return
+    material.defaults = merge_material_defaults_default_tax_rate(material.defaults, tax_pct)
+    if "defaults" not in update_fields:
+        update_fields.append("defaults")
+
 
 def _merge_material_sync_field_mapping(field_mapping: Dict[str, Any]) -> Dict[str, str]:
     """合并同步映射：启用状态 + 批号/序列号主档列（不被错误 batch_managed 映射挡住）。"""
@@ -127,6 +235,10 @@ def _merge_material_sync_field_mapping(field_mapping: Dict[str, Any]) -> Dict[st
         mapping["enablelot"] = "batch_managed"
     if "enableserial" not in mapping:
         mapping["enableserial"] = "serial_managed"
+    if "taxrate.taxrate" not in mapping:
+        mapping["taxrate.taxrate"] = MATERIAL_SYNC_DEFAULT_TAX_TARGET
+    if "FTaxRateId.FNumber" not in mapping:
+        mapping["FTaxRateId.FNumber"] = MATERIAL_SYNC_DEFAULT_TAX_TARGET
     return mapping
 
 
@@ -760,8 +872,17 @@ class MaterialSyncService:
                     has_custom_mapping = any(
                         str(key).startswith("custom:") for key in mapped_row.keys()
                     )
-                    if not has_custom_mapping and not sync_record_needs_update(
-                        existing, proposed, force=force_rewrite
+                    incoming_tax = resolve_material_sync_default_tax_rate_percent(mapped_row)
+                    defaults_tax_changed = False
+                    if incoming_tax is not None:
+                        stored_tax = material_default_tax_rate_percent_stored(existing.defaults)
+                        defaults_tax_changed = stored_tax != int(incoming_tax)
+                    if (
+                        not has_custom_mapping
+                        and not defaults_tax_changed
+                        and not sync_record_needs_update(
+                            existing, proposed, force=force_rewrite
+                        )
                     ):
                         skipped += 1
                         continue
@@ -777,6 +898,7 @@ class MaterialSyncService:
                         conversion_entries=conversion_entries,
                         source_field_names=source_field_names,
                     )
+                    _apply_material_default_tax_rate(existing, mapped_row, update_fields)
                     existing.external_sync_at = sync_at
                     existing.updated_at = sync_at
                     if current_user is not None:
@@ -831,6 +953,7 @@ class MaterialSyncService:
                         conversion_entries=conversion_entries,
                         source_field_names=source_field_names,
                     )
+                    _apply_material_default_tax_rate(material, mapped_row, [])
                     to_create.append(material)
             except Exception as exc:
                 failed += 1
