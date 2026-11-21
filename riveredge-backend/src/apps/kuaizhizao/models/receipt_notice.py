@@ -40,8 +40,9 @@ class ReceiptNotice(BaseModel):
     # 计划收货日期
     planned_receipt_date = fields.DateField(null=True, description="计划收货日期")
 
-    # 状态：待收货/已通知/已入库
+    # 状态：待收货/已通知/已入库。审核看 review_status，已提交不写进 status。
     status = fields.CharField(max_length=20, default="待收货", description="通知状态")
+    review_status = fields.CharField(max_length=20, default="草稿", description="审核状态")
     notified_at = fields.DatetimeField(null=True, description="通知仓库时间")
     purchase_receipt_id = fields.IntField(null=True, description="采购入库单ID（已入库时关联）")
     purchase_receipt_code = fields.CharField(max_length=50, null=True, description="采购入库单编码")

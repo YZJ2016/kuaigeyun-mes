@@ -38,8 +38,9 @@ class ShipmentNotice(BaseModel):
     planned_ship_date = fields.DateField(null=True, description="计划发货日期")
     shipping_address = fields.TextField(null=True, description="收货地址")
 
-    # 状态：待发货/已通知/已出库
+    # 状态：待发货/已通知/已出库。审核看 review_status，已提交不写进 status。
     status = fields.CharField(max_length=20, default="待发货", description="通知状态")
+    review_status = fields.CharField(max_length=20, default="草稿", description="审核状态")
     notified_at = fields.DatetimeField(null=True, description="通知仓库时间")
     sales_delivery_id = fields.IntField(
         null=True,
