@@ -15,11 +15,15 @@ def _iter_binding_specs() -> Sequence[Tuple[str, Type[Any], Tuple[str, ...]]]:
     from apps.master_data.models.master_data_sync_binding import (
         CustomerSyncBinding,
         EngineeringBomSyncBinding,
+        MaterialBatchManageSyncBinding,
         MaterialGroupSyncBinding,
+        MaterialMultiUnitSyncBinding,
         MaterialSyncBinding,
         MaterialUnitSyncBinding,
         OperationSyncBinding,
+        StorageLocationSyncBinding,
         SupplierSyncBinding,
+        WarehouseLocationRefSyncBinding,
         WarehouseSyncBinding,
     )
     from apps.kuaizhizao.models.finished_goods_receipt_sync_binding import (
@@ -42,7 +46,11 @@ def _iter_binding_specs() -> Sequence[Tuple[str, Type[Any], Tuple[str, ...]]]:
         ("客户同步", CustomerSyncBinding, ("api_uuid",)),
         ("供应商同步", SupplierSyncBinding, ("api_uuid",)),
         ("仓库同步", WarehouseSyncBinding, ("api_uuid",)),
+        ("库位同步", StorageLocationSyncBinding, ("api_uuid",)),
+        ("仓位参照同步", WarehouseLocationRefSyncBinding, ("api_uuid",)),
         ("物料同步", MaterialSyncBinding, ("api_uuid",)),
+        ("物料多单位同步", MaterialMultiUnitSyncBinding, ("api_uuid",)),
+        ("物料批号管理同步", MaterialBatchManageSyncBinding, ("api_uuid",)),
         ("计量单位同步", MaterialUnitSyncBinding, ("api_uuid",)),
         ("物料分组同步", MaterialGroupSyncBinding, ("api_uuid",)),
         ("工程BOM同步", EngineeringBomSyncBinding, ("api_uuid",)),

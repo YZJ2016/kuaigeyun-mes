@@ -1291,7 +1291,7 @@ riveredge-backend/src/apps/kuaizhizao/services/quality_complaint_service.py	2f7f
 riveredge-backend/src/apps/kuaizhizao/services/quality_cost_service.py	9d24e1baf39a00a9d50255b4713d44fb3b2083bf	superset	tracked审计：本地为上游超集/等价
 riveredge-backend/src/apps/kuaizhizao/services/quality_improvement_service.py	1ddf0d4c7ec2dc1352dc4c0c1a1e72b6bf002445	deferred	tracked审计：上游有本地缺，待摘取
 riveredge-backend/src/apps/kuaizhizao/services/quality_inspection_helpers.py	e1ca0503d405742d17c6ffac1150b905a6723cac	deferred	tracked审计：上游有本地缺，待摘取
-riveredge-backend/src/apps/kuaizhizao/services/quality_inspection_lifecycle.py	1fac537e399f47016dc91b6240a752b33cd2f1d7	deferred	tracked审计：上游有本地缺，待摘取
+riveredge-backend/src/apps/kuaizhizao/services/quality_inspection_lifecycle.py	1fac537e399f47016dc91b6240a752b33cd2f1d7	applied	tracked审计摘取：上游整取(撤回检验放宽至非待检验态,兼容历史单据)
 riveredge-backend/src/apps/kuaizhizao/services/quality_patrol_service.py	34d48ec9140277c6a0c3be3e1d1f222f647462ee	deferred	tracked审计：上游有本地缺，待摘取
 riveredge-backend/src/apps/kuaizhizao/services/quality_qms_service.py	6296a251bb59d1de3ec6362e4db0a95c54c43d9e	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-backend/src/apps/kuaizhizao/services/quality_service.py	f37d77b74f50f2c831b943e504b34fd623f2c813	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
@@ -1573,7 +1573,7 @@ riveredge-backend/src/core/scripts/openapi_tags.py	DELETED	superset	R2簇5:本�
 riveredge-backend/src/core/security/write_path_policy.py	7cc9472868b2cd1ec253831429386701c18b46b5	superset	本地超集：spec143/184硬化或本地功能字段（tenant隔离/attachment/serial_numbers/urgency/mqtt/OEE富schema/严格版本/序列号台账/脉冲计数Optional/关键写路径/unscoped清理/public_error脱敏/kuaicaiwu路径/STATION_TERMINAL/design动作/宽度64)
 riveredge-backend/src/core/services/application/api_library_catalog.py	7ee3ef0600bc214ca6b72db129f792435e89608e	applied	客户org-scope tip整取 落 apps/master_data
 riveredge-backend/src/core/services/application/api_service.py	d9a7516bf271bc6879748f9c4db10a15f53d9578	superset	superset:上游区间零增量；本地2352行独立演进版本
-riveredge-backend/src/core/services/application/api_sync_binding_refs.py	7e37f2cbec72865dfbc3413b9d7168cc3afe8da5	deferred	tracked审计：上游有本地缺，待摘取
+riveredge-backend/src/core/services/application/api_sync_binding_refs.py	7e37f2cbec72865dfbc3413b9d7168cc3afe8da5	applied	tracked审计摘取：上游整取(库位/仓位/多单位/批号管理4个同步绑定登记)
 riveredge-backend/src/core/services/application/api_test_request_merge.py	badda1f96617e6efd699d749b0aee9e5e17a005c	applied	4ba2d15ae8契约簇;force_rewrite/expand未接调用点随调度窗簇
 riveredge-backend/src/core/services/application/application_dedicated_binding_service.py	548e97527533c20da8ef947360ebc54ad3552e39	superset	spec-143 tenant_context 显式 scope（unscoped/with_tenant+审计）/trusted-proxy 加固/model_role连接架构/SQL租户注入白名单/附件下载/品牌名等本地硬化，上游为旧版
 riveredge-backend/src/core/services/application/application_registry_service.py	e40947b787e2d00571539ee1cf106a74993f0791	applied	R2簇5 core/sync:摘取上游tip实现

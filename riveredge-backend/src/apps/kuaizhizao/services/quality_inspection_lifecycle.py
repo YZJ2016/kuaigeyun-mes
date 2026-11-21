@@ -34,13 +34,19 @@ _MEASUREMENT_ATTR_BY_ENTITY: Dict[QualityInspectionEntityType, str] = {
 
 
 def can_revoke_quality_inspection_conduct(status: Any, inspection_result: Any) -> bool:
-    """是否允许撤回检验（须先撤销审核，不能从已审核直接撤回检验）。"""
+    """是否允许撤回检验（须先撤销审核，不能从已审核直接撤回检验）。
+
+    inspection_result 真源应为过程态「已检验」；兼容历史 OQC/委外/巡检误把合格判定写入该字段的单据。
+    """
     normalized_status = str(status or "").strip()
     if normalized_status == "已审核":
         return False
     if normalized_status not in _REVOKE_CONDUCT_ALLOWED_STATUSES:
         return False
-    return str(inspection_result or "").strip() == "已检验"
+    result = str(inspection_result or "").strip()
+    if result in ("", "待检验"):
+        return False
+    return True
 
 
 def build_quality_inspection_revoke_conduct_fields(
