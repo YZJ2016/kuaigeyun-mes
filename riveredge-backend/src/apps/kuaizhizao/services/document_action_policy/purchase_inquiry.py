@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 from infra.exceptions.exceptions import BusinessLogicError
 
-from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, is_rejected_status
+from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, is_rejected_status, is_submitted_status
 from apps.kuaizhizao.constants.purchase_inquiry import PurchaseInquiryStatus
 from apps.kuaizhizao.services.document_action_policy.types import (
     ActionCapability,
@@ -49,26 +49,39 @@ def derive_purchase_inquiry_capabilities(inquiry: Any) -> PurchaseInquiryCapabil
     st = _norm(status)
 
     review_rejected = _normalize_review_status(review_status) == ReviewStatus.REJECTED.value
-    update_allowed = st == PurchaseInquiryStatus.DRAFT.value or review_rejected or is_rejected_status(st)
-    update_cap = _cap(
-        update_allowed,
-        "purchase_inquiry.update.not_draft" if not update_allowed else None,
-    )
+    review_committed = is_submitted_status(str(review_status or ""))
+    review_pending = _is_review_awaiting_decision(review_status)
+    review_approved = _normalize_review_status(review_status) == ReviewStatus.APPROVED.value
+    business_draft = st == PurchaseInquiryStatus.DRAFT.value
+    review_open = _normalize_review_status(review_status) in {ReviewStatus.DRAFT.value, ""}
 
-    delete_cap = _cap(
-        st == PurchaseInquiryStatus.DRAFT.value,
-        "purchase_inquiry.delete.not_draft" if st != PurchaseInquiryStatus.DRAFT.value else None,
-    )
+    update_allowed = (business_draft and not review_committed) or review_rejected or is_rejected_status(st)
+    update_reason = None
+    if not update_allowed:
+        update_reason = (
+            "purchase_inquiry.update.submitted"
+            if review_committed
+            else "purchase_inquiry.update.not_draft"
+        )
+    update_cap = _cap(update_allowed, update_reason)
 
-    submit_allowed = st == PurchaseInquiryStatus.DRAFT.value or review_rejected or is_rejected_status(st)
+    delete_allowed = business_draft and not review_committed and not review_pending
+    delete_reason = None
+    if not delete_allowed:
+        delete_reason = (
+            "purchase_inquiry.delete.submitted"
+            if review_committed
+            else "purchase_inquiry.delete.not_draft"
+        )
+    delete_cap = _cap(delete_allowed, delete_reason)
+
+    submit_allowed = business_draft and (review_open or review_rejected or is_rejected_status(st))
     submit_cap = _cap(
         submit_allowed,
         "purchase_inquiry.submit.not_draft" if not submit_allowed else None,
     )
 
-    withdraw_submit_allowed = (
-        st == PurchaseInquiryStatus.DRAFT.value and _is_review_awaiting_decision(review_status)
-    )
+    withdraw_submit_allowed = business_draft and (review_committed or review_pending)
     withdraw_submit_cap = _cap(
         withdraw_submit_allowed,
         "purchase_inquiry.withdraw_submit.not_pending" if not withdraw_submit_allowed else None,
@@ -79,7 +92,11 @@ def derive_purchase_inquiry_capabilities(inquiry: Any) -> PurchaseInquiryCapabil
         "purchase_inquiry.approve.not_pending" if not _is_review_awaiting_decision(review_status) else None,
     )
 
-    revoke_cap = _cap(True)
+    revoke_allowed = business_draft and review_approved
+    revoke_cap = _cap(
+        revoke_allowed,
+        "purchase_inquiry.revoke_approval.not_approved" if not revoke_allowed else None,
+    )
 
     push_po_cap = _cap(
         st == PurchaseInquiryStatus.AWARDED.value,

@@ -464,6 +464,7 @@ def derive_sales_order_capabilities(
 
     return SalesOrderCapabilities(
         update=update_cap,
+        update_attachments=update_attachments_cap,
         delete=delete_cap,
         submit=submit_cap,
         approve=approve_cap,
@@ -530,6 +531,7 @@ def assert_sales_order_capability(
     )
     cap_map = {
         "update": caps.update,
+        "update_attachments": caps.update_attachments,
         "delete": caps.delete,
         "submit": caps.submit,
         "approve": caps.approve,

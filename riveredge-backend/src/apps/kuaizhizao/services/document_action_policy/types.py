@@ -35,6 +35,7 @@ class QuotationCapabilities(BaseModel):
 
 class SalesOrderCapabilities(BaseModel):
     update: ActionCapability
+    update_attachments: ActionCapability
     delete: ActionCapability
     submit: ActionCapability
     approve: ActionCapability
@@ -104,6 +105,10 @@ class ShipmentNoticeCapabilities(BaseModel):
     notify: ActionCapability
     withdraw: ActionCapability
     print: ActionCapability
+    submit: ActionCapability
+    withdraw_submit: ActionCapability
+    approve: ActionCapability
+    revoke_approval: ActionCapability
 
 
 class SalesDeliveryPullCapabilities(BaseModel):
@@ -121,6 +126,7 @@ class SalesReturnCapabilities(BaseModel):
     withdraw: ActionCapability
     print: ActionCapability
     submit: ActionCapability
+    submit_review: ActionCapability
     withdraw_submit: ActionCapability
     approve: ActionCapability
     revoke_approval: ActionCapability
@@ -177,6 +183,7 @@ class PurchaseRequisitionCapabilities(BaseModel):
     update: ActionCapability
     delete: ActionCapability
     submit: ActionCapability
+    withdraw_submit: ActionCapability
     approve: ActionCapability
     revoke_approval: ActionCapability
     push_purchase_order: ActionCapability
@@ -232,6 +239,10 @@ class ReceiptNoticeCapabilities(BaseModel):
     notify: ActionCapability
     withdraw: ActionCapability
     print: ActionCapability
+    submit: ActionCapability
+    withdraw_submit: ActionCapability
+    approve: ActionCapability
+    revoke_approval: ActionCapability
 
 
 class PurchaseReturnCapabilities(BaseModel):
@@ -249,6 +260,11 @@ class PurchaseReturnCapabilities(BaseModel):
 class WorkOrderCapabilities(BaseModel):
     update: ActionCapability
     delete: ActionCapability
+    submit: ActionCapability
+    submit_review: ActionCapability
+    withdraw_submit: ActionCapability
+    approve: ActionCapability
+    revoke_approval: ActionCapability
     release: ActionCapability
     revoke: ActionCapability
     withdraw_manual_complete: ActionCapability
@@ -329,6 +345,11 @@ class InboundHubCapabilities(BaseModel):
     print: ActionCapability
     push_payment_application: Optional[ActionCapability] = None
     push_purchase_return: Optional[ActionCapability] = None
+    submit: Optional[ActionCapability] = None
+    submit_review: Optional[ActionCapability] = None
+    withdraw_submit: Optional[ActionCapability] = None
+    approve: Optional[ActionCapability] = None
+    revoke_approval: Optional[ActionCapability] = None
 
 
 class OutboundHubCapabilities(BaseModel):
@@ -407,6 +428,7 @@ class EightDReportCapabilities(BaseModel):
 
 class NonconformingLedgerCapabilities(BaseModel):
     update_disposition: ActionCapability
+    revoke_disposition: ActionCapability
     start_8d: ActionCapability
     print: ActionCapability
 
@@ -448,8 +470,6 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "quotation.revision.not_allowed": "仅非草稿的最新系列版本可新建修订版",
     "quotation.print.not_allowed": "正式报价 PDF 须在审核通过、客户确认或已转单后生成",
     "document.print.unaudited_denied": "未审核单据不可打印（系统参数已关闭未审核打印）",
-    "quotation.print.requires_audit": "已开启「打印须审核」，未审核通过的报价单不可打印",
-    "sales_order.print.requires_audit": "已开启「打印须审核」，未审核通过的销售订单不可打印",
     "sales_order.update.not_allowed": "只能更新草稿或待审核的销售订单",
     "sales_order.update.locked": "销售订单已生效或执行中，禁止直接修改，请通过销售变更单变更",
     "sales_order.update_attachments.cancelled": "已取消的销售订单不可补充附件",
@@ -895,6 +915,7 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "exception_process.cancel.already_finished": "该异常处理流程已结束，无法取消",
     "packing_binding.deleted": "装箱绑定记录已删除",
     "packing_binding.sealed": "装箱已封箱，不可修改或删除",
+    "packing_binding.consumed": "装箱已核销，不可修改或删除",
     "inbound_hub.confirm.not_pending": "当前状态不可确认入库",
     "inbound_hub.confirm.use_single_preview": "委外退料/退货请使用单行确认预览",
     "inbound_hub.confirm.outsource_already_posted": "委外退料/退货已在取单建单时过账，无需在入库 Hub 再次确认",

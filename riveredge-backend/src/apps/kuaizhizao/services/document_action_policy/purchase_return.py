@@ -6,6 +6,7 @@ from typing import Any, Optional
 
 from infra.exceptions.exceptions import BusinessLogicError
 
+from apps.kuaizhizao.constants import is_submitted_status
 from apps.kuaizhizao.services.document_action_policy.types import (
     ActionCapability,
     CAPABILITY_REASON_MESSAGES,
@@ -90,23 +91,30 @@ def derive_purchase_return_capabilities(
 ) -> PurchaseReturnCapabilities:
     status = getattr(return_doc, "status", None)
     review_status = getattr(return_doc, "review_status", None)
+    review_committed = is_submitted_status(review_status)
 
     review_blocks_edit = audit_required and (
         is_effective_review_pending(review_status, review_submitted=review_submitted)
         or _is_review_approved(review_status)
     )
-    update_allowed = _is_editable_business_status(status) and not review_blocks_edit
-    if _is_review_rejected(review_status):
+    update_allowed = (
+        _is_editable_business_status(status) and not review_blocks_edit and not review_committed
+    )
+    if _is_review_rejected(review_status) and not review_committed:
         update_allowed = _is_editable_business_status(status)
     update_cap = _cap(
         update_allowed,
         "purchase_return.update.not_pending" if not update_allowed else None,
     )
 
-    delete_allowed = _is_pending(status) and (
-        not audit_required
-        or is_effective_review_draft(review_status, review_submitted=review_submitted)
-        or _is_review_rejected(review_status)
+    delete_allowed = (
+        not review_committed
+        and _is_pending(status)
+        and (
+            not audit_required
+            or is_effective_review_draft(review_status, review_submitted=review_submitted)
+            or _is_review_rejected(review_status)
+        )
     )
     delete_cap = _cap(
         delete_allowed,
@@ -142,6 +150,8 @@ def derive_purchase_return_capabilities(
         submit_reason = "purchase_return.submit.not_draft"
     elif not has_items:
         submit_reason = "purchase_return.submit.no_items"
+    elif review_committed:
+        submit_reason = "purchase_return.submit.not_draft"
     elif is_effective_review_pending(review_status, review_submitted=review_submitted) or _is_review_approved(
         review_status
     ):
@@ -157,15 +167,13 @@ def derive_purchase_return_capabilities(
             submit_reason = "purchase_return.submit.not_draft"
     submit_cap = _cap(submit_allowed, submit_reason)
 
+    review_can_withdraw = review_committed or is_effective_review_pending(
+        review_status, review_submitted=review_submitted
+    )
+    withdraw_submit_allowed = _is_editable_business_status(status) and review_can_withdraw
     withdraw_submit_cap = _cap(
-        _is_editable_business_status(status)
-        and is_effective_review_pending(review_status, review_submitted=review_submitted),
-        "purchase_return.withdraw_submit.not_pending"
-        if not (
-            _is_editable_business_status(status)
-            and is_effective_review_pending(review_status, review_submitted=review_submitted)
-        )
-        else None,
+        withdraw_submit_allowed,
+        "purchase_return.withdraw_submit.not_pending" if not withdraw_submit_allowed else None,
     )
 
     approve_cap = _cap(

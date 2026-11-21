@@ -156,6 +156,21 @@ def derive_sales_return_capabilities(
             submit_reason = "sales_return.submit.not_draft"
     submit_cap = _cap(submit_allowed, submit_reason)
 
+    review_committed = bool(review_submitted) or _is_review_pending(review_status)
+    submit_review_allowed = (
+        _is_editable_business_status(status) and has_items and review_committed
+    )
+    submit_review_cap = _cap(
+        submit_review_allowed,
+        None
+        if submit_review_allowed
+        else (
+            "sales_return.submit.no_items"
+            if not has_items
+            else "sales_return.submit_review.not_allowed"
+        ),
+    )
+
     withdraw_submit_cap = _cap(
         _is_editable_business_status(status)
         and is_effective_review_pending(review_status, review_submitted=review_submitted),
@@ -193,6 +208,7 @@ def derive_sales_return_capabilities(
         withdraw=withdraw_cap,
         print=print_cap,
         submit=submit_cap,
+        submit_review=submit_review_cap,
         withdraw_submit=withdraw_submit_cap,
         approve=approve_cap,
         revoke_approval=revoke_cap,
@@ -220,6 +236,7 @@ def assert_sales_return_capability(
         "withdraw": caps.withdraw,
         "print": caps.print,
         "submit": caps.submit,
+        "submit_review": caps.submit_review,
         "withdraw_submit": caps.withdraw_submit,
         "approve": caps.approve,
         "reject": caps.approve,
