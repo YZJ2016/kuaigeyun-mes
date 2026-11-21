@@ -5004,90 +5004,6 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
             return await self.get_work_order_by_id(tenant_id, work_order_id)
 
-    async def _ensure_planned_outsource_drafts(
-        self,
-        tenant_id: int,
-        work_order_id: int,
-        created_by: int,
-    ) -> None:
-        """下达时：计划委外工序若尚无有效委外单则自动建草稿。"""
-        from apps.kuaizhizao.models.outsource_order import OutsourceOrder
-        from apps.kuaizhizao.services.outsource_service import OutsourceService
-        from apps.kuaizhizao.utils.outsource_operation import OUTSOURCE_KIND_PLANNED
-        from apps.master_data.models.supplier import Supplier
-
-        ops = await WorkOrderOperation.filter(
-            tenant_id=tenant_id,
-            work_order_id=work_order_id,
-            deleted_at__isnull=True,
-            outsource_kind=OUTSOURCE_KIND_PLANNED,
-        ).order_by("sequence").all()
-        if not ops:
-            return
-
-        existing_op_ids = set(
-            await OutsourceOrder.filter(
-                tenant_id=tenant_id,
-                work_order_id=work_order_id,
-                work_order_operation_id__in=[op.id for op in ops],
-                deleted_at__isnull=True,
-            )
-            .exclude(status="cancelled")
-            .values_list("work_order_operation_id", flat=True)
-        )
-
-        work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
-        outsource_svc = OutsourceService()
-        pending_ops = [op for op in ops if op.id not in existing_op_ids]
-        missing_supplier: List[str] = []
-        ready: List[tuple] = []
-        for op in pending_ops:
-            supplier_id = op.default_outsource_supplier_id
-            if not supplier_id:
-                missing_supplier.append(op.operation_name or str(op.id))
-                continue
-            supplier = await Supplier.filter(
-                tenant_id=tenant_id,
-                id=int(supplier_id),
-                deleted_at__isnull=True,
-                is_active=True,
-            ).first()
-            if not supplier:
-                missing_supplier.append(op.operation_name or str(op.id))
-                continue
-            qty = Decimal(str(work_order.quantity or 0)) - Decimal(str(op.completed_quantity or 0))
-            if qty <= 0:
-                continue
-            ready.append((op, supplier, qty))
-        if missing_supplier:
-            raise ValidationError(
-                "计划委外工序缺少有效默认供应商，无法下达："
-                + "、".join(missing_supplier[:5])
-                + ("等" if len(missing_supplier) > 5 else "")
-            )
-        for op, supplier, qty in ready:
-            if not op.default_outsource_supplier_name:
-                op.default_outsource_supplier_name = supplier.name
-                await op.save(update_fields=["default_outsource_supplier_name", "updated_at"])
-            lead = int(op.outsource_lead_time_days or 1)
-            start = op.planned_start_date
-            end = op.planned_end_date
-            if start and not end:
-                from datetime import timedelta
-
-                end = start + timedelta(days=max(lead, 0))
-            await outsource_svc.create_outsource_order_from_work_order(
-                tenant_id=tenant_id,
-                work_order_id=work_order_id,
-                work_order_operation_id=int(op.id),
-                supplier_id=int(supplier.id),
-                outsource_quantity=qty,
-                created_by=created_by,
-                planned_start_date=start,
-                planned_end_date=end,
-                remarks="计划工序委外（下达自动创建）",
-            )
-
     async def update_work_order_status(
         self,
         tenant_id: int,
@@ -7075,38 +6991,17 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 label = op_status_labels.get(status, status)
                 raise BusinessLogicError(f'只能开工「待开工」状态的工序，当前为「{label}」')
 
-            # 检查跳转规则：工单或工序任一方允许跳转则放宽；节点工序在允许跳转时仍不可跳过
+            # 跳转门禁：唯一认工单头 allow_operation_jump
             from apps.kuaizhizao.services.operation_jump_rules import (
-                effective_allow_jump,
-                validate_start_respects_node_operations,
+                validate_start_respects_jump_gates,
             )
 
-            allow_jump = effective_allow_jump(work_order, work_order_operation)
-
-            if not allow_jump:
-                # 只检查上一道工序：上道须有可转下道数量（方案质检须检验放行）
-                previous_operations = await WorkOrderOperation.filter(
-                    tenant_id=tenant_id,
-                    work_order_id=work_order_id,
-                    sequence__lt=work_order_operation.sequence,
-                    deleted_at__isnull=True
-                ).order_by('-sequence').limit(1).all()
-
-                if previous_operations:
-                    from apps.kuaizhizao.services.operation_jump_rules import qualified_transfer_quantity_async
-
-                    prev_op = previous_operations[0]
-                    prev_transfer = await qualified_transfer_quantity_async(
-                        tenant_id, work_order_id, prev_op
-                    )
-                    if prev_transfer <= 0:
-                        raise BusinessLogicError(
-                            f"前序工序「{prev_op.operation_name}」尚无可转下道合格数量，不能开始当前工序"
-                        )
-            else:
-                await validate_start_respects_node_operations(
-                    tenant_id, work_order_id, work_order_operation
-                )
+            await validate_start_respects_jump_gates(
+                tenant_id,
+                work_order_id,
+                work_order_operation,
+                work_order=work_order,
+            )
 
             # 获取开始人信息
             user_info = await self.get_user_info(started_by)

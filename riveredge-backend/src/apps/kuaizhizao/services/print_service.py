@@ -36,6 +36,8 @@ from apps.kuaizhizao.services.document_lifecycle_service import _is_approved
 
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
+from apps.kuaizhizao.models.outsource_order import OutsourceOrder
+from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
 from apps.kuaizhizao.models.production_picking import ProductionPicking
 from apps.kuaizhizao.models.production_picking_item import ProductionPickingItem
 from apps.kuaizhizao.models.production_return import ProductionReturn
@@ -743,6 +745,8 @@ class DocumentPrintService:
     # 单据类型到模板代码的映射
     DOCUMENT_TEMPLATE_CODES = {
         "work_order": "WORK_ORDER_PRINT",
+        "outsource_order": "OUTSOURCE_ORDER_PRINT",
+        "outsource_work_order": "OUTSOURCE_WORK_ORDER_PRINT",
         "production_picking": "PRODUCTION_PICKING_PRINT",
         "production_return": "PRODUCTION_RETURN_PRINT",
         "finished_goods_receipt": "FINISHED_GOODS_RECEIPT_PRINT",
@@ -767,6 +771,61 @@ class DocumentPrintService:
         "equipment_card": "EQUIPMENT_CARD_PRINT",
         "mold_card": "MOLD_CARD_PRINT",
     }
+
+    @staticmethod
+    async def _resolve_print_numeric_formatters(tenant_id: int) -> Dict[str, Any]:
+        """打印数量/单价/金额：跟随配置中心 common.*_decimal_places（禁止裸 str(Decimal)）。
+
+        约定：单价默认 4 位、金额/税额默认 2 位；明细列 precision 与此对齐。
+        """
+        from core.utils.amount_precision import format_business_amount
+        from core.utils.price_precision import format_business_price
+        from core.utils.quantity_precision import format_business_quantity
+        from infra.services.business_config_service import BusinessConfigService
+
+        cfg = BusinessConfigService()
+        qty_places = await cfg.get_quantity_decimal_places(tenant_id)
+        price_places = await cfg.get_price_decimal_places(tenant_id)
+        amount_places = await cfg.get_amount_decimal_places(tenant_id)
+
+        def _is_blank_or_zero(value: Any) -> bool:
+            if value is None:
+                return True
+            raw = str(value).strip()
+            if raw in {"", "0", "0.0", "0.00", "0.000", "0.0000", "0.000000"}:
+                return True
+            try:
+                return Decimal(raw.replace(",", "")) == 0
+            except Exception:
+                return False
+
+        def fmt_qty(value: Any, *, blank_if_empty: bool = True) -> str:
+            if value is None or (isinstance(value, str) and not value.strip()):
+                return "" if blank_if_empty else format_business_quantity(0, qty_places)
+            return format_business_quantity(value, qty_places)
+
+        def fmt_price(value: Any, *, blank_zero: bool = False) -> str:
+            if value is None or (isinstance(value, str) and not str(value).strip()):
+                return ""
+            if blank_zero and _is_blank_or_zero(value):
+                return ""
+            return format_business_price(value, price_places)
+
+        def fmt_amount(value: Any, *, blank_zero: bool = False) -> str:
+            if value is None or (isinstance(value, str) and not str(value).strip()):
+                return ""
+            if blank_zero and _is_blank_or_zero(value):
+                return ""
+            return format_business_amount(value, amount_places)
+
+        return {
+            "fmt_qty": fmt_qty,
+            "fmt_price": fmt_price,
+            "fmt_amount": fmt_amount,
+            "quantity_decimal_places": qty_places,
+            "price_decimal_places": price_places,
+            "amount_decimal_places": amount_places,
+        }
 
     @staticmethod
     async def _find_print_template(
@@ -1249,7 +1308,29 @@ class DocumentPrintService:
             return self._finalize_print_context(
                 document_type, document, await self._format_work_order_data(document, loc)
             )
-        
+
+        elif document_type == "outsource_order":
+            document = await OutsourceOrder.get_or_none(
+                tenant_id=tenant_id, id=document_id, deleted_at__isnull=True
+            )
+            if not document:
+                raise NotFoundError(f"工序委外单不存在: {document_id}")
+            return self._finalize_print_context(
+                document_type, document, await self._format_outsource_order_data(document, loc)
+            )
+
+        elif document_type == "outsource_work_order":
+            document = await OutsourceWorkOrder.get_or_none(
+                tenant_id=tenant_id, id=document_id, deleted_at__isnull=True
+            )
+            if not document:
+                raise NotFoundError(f"工单委外单不存在: {document_id}")
+            return self._finalize_print_context(
+                document_type,
+                document,
+                await self._format_outsource_work_order_data(document, loc),
+            )
+
         elif document_type == "production_picking":
             document = await ProductionPicking.get_or_none(tenant_id=tenant_id, id=document_id)
             if not document:
@@ -1542,6 +1623,61 @@ class DocumentPrintService:
 
         else:
             raise ValidationError(f"不支持的单据类型: {document_type}")
+
+    async def _format_outsource_order_data(
+        self, order: OutsourceOrder, i18n: PrintLocalization
+    ) -> Dict[str, Any]:
+        """格式化工序委外单打印数据。"""
+        fmt = await self._resolve_print_numeric_formatters(order.tenant_id)
+        fmt_price, fmt_amount = fmt["fmt_price"], fmt["fmt_amount"]
+        return {
+            "document_type": "outsource_order",
+            "code": order.code,
+            "work_order_code": order.work_order_code,
+            "operation_code": order.operation_code,
+            "operation_name": order.operation_name,
+            "supplier_code": order.supplier_code,
+            "supplier_name": order.supplier_name,
+            "outsource_quantity": str(order.outsource_quantity),
+            "received_quantity": str(order.received_quantity),
+            "unit_price": fmt_price(order.unit_price),
+            "total_amount": fmt_amount(order.total_amount),
+            "planned_start_date": i18n.format_datetime(order.planned_start_date),
+            "planned_end_date": i18n.format_datetime(order.planned_end_date),
+            "status": i18n.document_status(order.status),
+            "status_code": order.status,
+            "remarks": order.remarks,
+            "created_by_name": order.created_by_name,
+            "created_at": i18n.format_datetime(order.created_at),
+        }
+
+    async def _format_outsource_work_order_data(
+        self, order: OutsourceWorkOrder, i18n: PrintLocalization
+    ) -> Dict[str, Any]:
+        """格式化工单委外单打印数据。"""
+        fmt = await self._resolve_print_numeric_formatters(order.tenant_id)
+        fmt_price, fmt_amount = fmt["fmt_price"], fmt["fmt_amount"]
+        return {
+            "document_type": "outsource_work_order",
+            "code": order.code,
+            "name": order.name,
+            "product_code": order.product_code,
+            "product_name": order.product_name,
+            "quantity": str(order.quantity),
+            "supplier_code": order.supplier_code,
+            "supplier_name": order.supplier_name,
+            "outsource_operation": order.outsource_operation,
+            "unit_price": fmt_price(order.unit_price),
+            "total_amount": fmt_amount(order.total_amount),
+            "priority": order.priority,
+            "planned_start_date": i18n.format_datetime(order.planned_start_date),
+            "planned_end_date": i18n.format_datetime(order.planned_end_date),
+            "status": i18n.document_status(order.status),
+            "status_code": order.status,
+            "remarks": order.remarks,
+            "created_by_name": order.created_by_name,
+            "created_at": i18n.format_datetime(order.created_at),
+        }
 
     async def _format_work_order_data(self, work_order: WorkOrder, i18n: PrintLocalization) -> Dict[str, Any]:
         """格式化工单数据，包含工序列表"""

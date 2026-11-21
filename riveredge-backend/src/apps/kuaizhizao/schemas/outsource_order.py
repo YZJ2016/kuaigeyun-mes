@@ -8,7 +8,7 @@ Date: 2025-01-04
 """
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 
@@ -53,6 +53,11 @@ class OutsourceOrderBase(BaseModel):
     purchase_receipt_id: Optional[int] = Field(None, description="采购入库单ID")
     purchase_receipt_code: Optional[str] = Field(None, description="采购入库单编码")
 
+    payable_recognition: Optional[str] = Field(
+        None,
+        description="应付立账策略（on_receipt/on_purchase_invoice/on_partner_statement/manual）",
+    )
+
     # 备注
     remarks: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
@@ -75,6 +80,15 @@ class OutsourceOptionResponse(BaseModel):
     operation_code: str = Field(..., description="工序编码")
     operation_name: str = Field(..., description="工序名称")
     sequence: int = Field(..., description="工序序号")
+    work_order_code: str = Field(..., description="工单编码")
+    material_code: str = Field(..., description="品号（工单产品编码）")
+    material_name: str = Field(..., description="品名（工单产品名称）")
+    specification: Optional[str] = Field(None, description="规格（物料主数据）")
+    quantity: Decimal = Field(..., description="工单计划数量")
+    prev_operation_reported_quantity: Decimal = Field(
+        ...,
+        description="上道工序报工/转入数量（工艺流转转入上限）",
+    )
     max_quantity: Decimal = Field(..., description="累计完成上限（含超报）")
     completed_quantity: Decimal = Field(..., description="已报工完成数量")
     already_outsourced_quantity: Decimal = Field(..., description="已创建委外单数量（未取消）")
@@ -98,7 +112,16 @@ class OutsourceOrderCreateFromWorkOrder(BaseModel):
     unit_price: Optional[Decimal] = Field(None, description="单价")
     planned_start_date: Optional[datetime] = Field(None, description="计划开始日期")
     planned_end_date: Optional[datetime] = Field(None, description="计划结束日期")
+    payable_recognition: Optional[str] = Field(None, description="应付立账策略")
     remarks: Optional[str] = Field(None, description="备注")
+
+
+class OutsourceOrderRegisterReceipt(BaseModel):
+    """登记工序委外收货数量（执行阶段）。"""
+
+    received_quantity: Decimal = Field(..., description="已接收数量")
+    qualified_quantity: Decimal = Field(..., description="合格数量")
+    unqualified_quantity: Decimal = Field(..., description="不合格数量")
 
 
 class OutsourceOrderUpdate(BaseModel):
@@ -144,6 +167,9 @@ class OutsourceOrderResponse(OutsourceOrderBase):
     updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    lifecycle: Optional[Dict[str, Any]] = Field(None, description="生命周期（后端计算）")
+    capabilities: Optional[Dict[str, Any]] = Field(None, description="动作能力（后端计算）")
+    receipt_batches: Optional[List[Dict[str, Any]]] = Field(None, description="收货批次")
 
 
 class OutsourceOrderListResponse(BaseModel):
@@ -174,3 +200,4 @@ class OutsourceOrderListResponse(BaseModel):
     created_by_name: Optional[str] = Field(None, description="创建人姓名")
     updated_by: Optional[int] = Field(None, description="更新人ID")
     updated_by_name: Optional[str] = Field(None, description="更新人姓名")
+    lifecycle: Optional[Dict[str, Any]] = Field(None, description="生命周期（后端计算）")

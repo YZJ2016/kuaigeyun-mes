@@ -21,7 +21,11 @@ from tortoise import Tortoise
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 from apps.common.base_service import AppBaseService
-from apps.kuaizhizao.models.outsource_work_order import OutsourceMaterialIssue, OutsourceWorkOrder
+from apps.kuaizhizao.models.outsource_work_order import (
+    OutsourceMaterialIssue,
+    OutsourceMaterialReturn,
+    OutsourceWorkOrder,
+)
 from apps.kuaizhizao.schemas.outsource_work_order import (
     OutsourceMaterialIssueCreate,
     OutsourceMaterialIssueUpdate,

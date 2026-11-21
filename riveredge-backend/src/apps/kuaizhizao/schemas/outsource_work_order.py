@@ -48,6 +48,11 @@ class OutsourceWorkOrderBase(BaseModel):
     planned_end_date: Optional[datetime] = Field(None, description="计划结束时间")
     remarks: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    payable_recognition: Optional[str] = Field(
+        None,
+        max_length=32,
+        description="立账策略（应付确认时点）",
+    )
 
 
 class OutsourceWorkOrderCreate(OutsourceWorkOrderBase):
@@ -120,8 +125,10 @@ class OutsourceMaterialIssueBase(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     code: Optional[str] = Field(None, description="委外发料单编码（可选，创建时自动生成）")
-    outsource_work_order_id: int = Field(..., description="委外工单ID")
-    outsource_work_order_code: str = Field(..., description="委外工单编码")
+    outsource_work_order_id: Optional[int] = Field(None, description="委外工单ID")
+    outsource_work_order_code: Optional[str] = Field(None, description="委外工单编码")
+    outsource_order_id: Optional[int] = Field(None, description="工序委外单ID")
+    outsource_order_code: Optional[str] = Field(None, description="工序委外单编码")
     material_id: int = Field(..., description="物料ID（原材料）")
     material_code: str = Field(..., description="物料编码")
     material_name: str = Field(..., description="物料名称")
@@ -202,8 +209,10 @@ class OutsourceMaterialIssuePreviewResponse(BaseModel):
     """委外发料预览响应"""
     model_config = ConfigDict(from_attributes=True)
 
-    outsource_work_order_id: int = Field(...)
-    outsource_work_order_code: str = Field(...)
+    outsource_work_order_id: Optional[int] = Field(None)
+    outsource_work_order_code: Optional[str] = Field(None)
+    outsource_order_id: Optional[int] = Field(None, description="工序委外单ID")
+    outsource_order_code: Optional[str] = Field(None, description="工序委外单编码")
     product_name: str = Field(...)
     supplier_code: Optional[str] = Field(None, description="委外供应商编码")
     supplier_name: Optional[str] = Field(None, description="委外供应商名称")
@@ -227,14 +236,18 @@ class OutsourceMaterialIssueLineCreate(BaseModel):
     unit: str = Field(..., description="单位")
     warehouse_id: Optional[int] = Field(None, description="仓库ID")
     warehouse_name: Optional[str] = Field(None, description="仓库名称")
+    location_id: Optional[int] = Field(None, description="库位ID")
+    location_name: Optional[str] = Field(None, description="库位名称")
     batch_number: Optional[str] = Field(None, description="批次号")
     serial_numbers: Optional[List[str]] = Field(None, description="序列号列表（库存过账用）")
 
 
 class OutsourceMaterialIssueBatchCreate(BaseModel):
     """委外发料批量创建"""
-    outsource_work_order_id: int = Field(..., description="委外工单ID")
-    outsource_work_order_code: str = Field(..., description="委外工单编码")
+    outsource_work_order_id: Optional[int] = Field(None, description="委外工单ID")
+    outsource_work_order_code: Optional[str] = Field(None, description="委外工单编码")
+    outsource_order_id: Optional[int] = Field(None, description="工序委外单ID")
+    outsource_order_code: Optional[str] = Field(None, description="工序委外单编码")
     warehouse_id: Optional[int] = Field(None, description="默认仓库ID")
     warehouse_name: Optional[str] = Field(None, description="默认仓库名称")
     issued_at: Optional[datetime] = Field(None, description="发料时间/制单日期")
@@ -278,6 +291,11 @@ class OutsourceMaterialReceiptBase(BaseModel):
     status: str = Field("draft", description="状态")
     received_at: Optional[datetime] = Field(None, description="收货时间")
     remarks: Optional[str] = Field(None, description="备注")
+    payable_recognition: Optional[str] = Field(
+        None,
+        max_length=32,
+        description="立账策略（应付确认时点）",
+    )
 
 
 class OutsourceMaterialReceiptCreate(OutsourceMaterialReceiptBase):
@@ -599,6 +617,10 @@ class OutsourceProductReturnPreviewLine(BaseModel):
     returnable_quantity: Decimal = Field(..., description="可退数量")
     warehouse_id: Optional[int] = Field(None, description="收货仓库ID")
     warehouse_name: Optional[str] = Field(None, description="收货仓库名称")
+    location_id: Optional[int] = Field(None, description="收货库位ID（扣减库存快照）")
+    location_name: Optional[str] = Field(None, description="收货库位名称")
+    batch_number: Optional[str] = Field(None, description="收货批号（扣减库存快照）")
+    product_id: Optional[int] = Field(None, description="委外产品物料ID")
 
 
 class OutsourceProductReturnPreviewResponse(BaseModel):

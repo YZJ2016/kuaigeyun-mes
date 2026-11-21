@@ -130,8 +130,10 @@ from apps.kuaizhizao.schemas.outsource_order import (
     OutsourceOrderUpdate,
     OutsourceOrderResponse,
     OutsourceOrderListResponse,
+    OutsourceOrderRegisterReceipt,
     OutsourceOptionResponse,
 )
+from apps.kuaizhizao.schemas.outsource_work_order import OutsourceMaterialIssueBatchCreate
 
 router = APIRouter(
     tags=["App - Kuaige Zhizao - Production Execution"],
@@ -2330,6 +2332,7 @@ async def create_outsource_order_from_work_order(
         planned_start_date=outsource_data.planned_start_date,
         planned_end_date=outsource_data.planned_end_date,
         remarks=outsource_data.remarks,
+        payable_recognition=outsource_data.payable_recognition,
         created_by=current_user.id
     )
 
@@ -2403,6 +2406,59 @@ async def list_outsource_orders(
         created_end_date=created_end_date,
         order_by=safe_order_by,
     )
+
+
+@router.get(
+    "/outsource-orders/{outsource_order_id:int}/print",
+    summary="Print outsource order",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:outsource-order:print"))],
+)
+async def print_outsource_order(
+    outsource_order_id: int,
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID（可选，优先于 template_code）"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式：json 或 html"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """打印工序委外单。"""
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+    from fastapi.responses import HTMLResponse
+
+    result = await DocumentPrintService().print_document(
+        tenant_id=tenant_id,
+        document_type="outsource_order",
+        document_id=outsource_order_id,
+        template_code=template_code,
+        template_uuid=template_uuid,
+        output_format=output_format,
+    )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+@router.get(
+    "/outsource-orders/{outsource_order_id:int}/print-variables",
+    summary="Outsource order print variables",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:outsource-order:print"))],
+)
+async def get_outsource_order_print_variables(
+    outsource_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """与 `_format_outsource_order_data` 一致。"""
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
+    try:
+        variables = await DocumentPrintService().get_document_variables_for_print(
+            tenant_id, "outsource_order", outsource_order_id
+        )
+        return {"success": True, "variables": variables}
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.get("/outsource-orders/{outsource_order_id:int}", response_model=OutsourceOrderResponse, summary="Get outsourced operation")
@@ -2484,6 +2540,153 @@ async def link_purchase_receipt_to_outsource_order(
         outsource_order_id=outsource_order_id,
         purchase_receipt_id=purchase_receipt_id,
         updated_by=current_user.id
+    )
+
+
+@router.post("/outsource-orders/{outsource_order_id:int}/release", response_model=OutsourceOrderResponse, summary="Release outsourced operation")
+async def release_outsource_order(
+    outsource_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceOrderResponse:
+    return await OutsourceService().release_outsource_order(
+        tenant_id=tenant_id,
+        outsource_order_id=outsource_order_id,
+        updated_by=current_user.id,
+    )
+
+
+@router.post(
+    "/outsource-orders/{outsource_order_id:int}/revoke-release",
+    response_model=OutsourceOrderResponse,
+    summary="Revoke outsourced operation release",
+)
+async def revoke_outsource_order_release(
+    outsource_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceOrderResponse:
+    return await OutsourceService().revoke_outsource_order_release(
+        tenant_id=tenant_id,
+        outsource_order_id=outsource_order_id,
+        updated_by=current_user.id,
+    )
+
+
+@router.get(
+    "/outsource-orders/{outsource_order_id:int}/issue-preview",
+    summary="Preview materials for process outsource issue",
+)
+async def preview_outsource_order_issue(
+    outsource_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.services.outsource_order_issue_bridge import OutsourceOrderIssueBridge
+
+    return await OutsourceOrderIssueBridge().get_issue_preview(tenant_id, outsource_order_id)
+
+
+@router.post(
+    "/outsource-orders/{outsource_order_id:int}/process-issue",
+    summary="Auto issue BOM pending and start process outsource",
+)
+async def process_issue_outsource_order(
+    outsource_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.services.outsource_order_issue_bridge import OutsourceOrderIssueBridge
+
+    return await OutsourceOrderIssueBridge().auto_issue_pending(
+        tenant_id, outsource_order_id, current_user.id
+    )
+
+
+@router.post(
+    "/outsource-orders/{outsource_order_id:int}/issue-batch",
+    summary="Issue materials for process outsource with warehouse and batch",
+)
+async def create_outsource_order_issue_batch(
+    outsource_order_id: int,
+    data: OutsourceMaterialIssueBatchCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.models.outsource_order import OutsourceOrder
+    from apps.kuaizhizao.services.outsource_order_issue_bridge import OutsourceOrderIssueBridge
+    if data.outsource_order_id is not None and int(data.outsource_order_id) != int(outsource_order_id):
+        raise HTTPException(status_code=400, detail="工序委外单ID不一致")
+    oo = await OutsourceOrder.filter(
+        tenant_id=tenant_id,
+        id=int(outsource_order_id),
+        deleted_at__isnull=True,
+    ).first()
+    if not oo:
+        raise NotFoundError(f"工序委外单不存在: {outsource_order_id}")
+    batch = data.model_copy(
+        update={
+            "outsource_order_id": int(outsource_order_id),
+            "outsource_order_code": str(oo.code or data.outsource_order_code or ""),
+        }
+    )
+    try:
+        return await OutsourceOrderIssueBridge().create_issues_batch(
+            tenant_id,
+            int(outsource_order_id),
+            batch,
+            current_user.id,
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/outsource-orders/{outsource_order_id:int}/start", response_model=OutsourceOrderResponse, summary="Start outsourced operation")
+async def start_outsource_order(
+    outsource_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceOrderResponse:
+    return await OutsourceService().start_outsource_order(
+        tenant_id=tenant_id,
+        outsource_order_id=outsource_order_id,
+        updated_by=current_user.id,
+    )
+
+
+@router.post(
+    "/outsource-orders/{outsource_order_id:int}/register-receipt",
+    response_model=OutsourceOrderResponse,
+    summary="Register outsourced operation receipt quantities",
+)
+async def register_outsource_order_receipt(
+    outsource_order_id: int,
+    body: OutsourceOrderRegisterReceipt,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceOrderResponse:
+    return await OutsourceService().register_outsource_order_receipt(
+        tenant_id=tenant_id,
+        outsource_order_id=outsource_order_id,
+        receipt_data=body,
+        updated_by=current_user.id,
+    )
+
+
+@router.post("/outsource-orders/{outsource_order_id:int}/complete", response_model=OutsourceOrderResponse, summary="Complete outsourced operation")
+async def complete_outsource_order(
+    outsource_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceOrderResponse:
+    return await OutsourceService().complete_outsource_order(
+        tenant_id=tenant_id,
+        outsource_order_id=outsource_order_id,
+        updated_by=current_user.id,
     )
 
 

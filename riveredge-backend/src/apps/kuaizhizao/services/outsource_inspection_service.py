@@ -115,6 +115,7 @@ class OutsourceInspectionService(AppBaseService[OutsourceInspection]):
         inspection_end_date: Optional[str] = None,
         created_start_date: Optional[str] = None,
         created_end_date: Optional[str] = None,
+        viewer_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         from apps.kuaizhizao.services.quality_service import (
             _apply_quality_inspection_list_filters,
@@ -166,7 +167,9 @@ class OutsourceInspectionService(AppBaseService[OutsourceInspection]):
             "total": total,
             "success": True,
         }
-        return await enrich_items_payload(tenant_id, "outsource_inspection", payload)
+        return await enrich_items_payload(
+            tenant_id, "outsource_inspection", payload, viewer_id=viewer_id
+        )
 
     async def update(
         self,
@@ -246,7 +249,8 @@ class OutsourceInspectionService(AppBaseService[OutsourceInspection]):
         inspector_info = await self.get_user_info(inspector_id) if inspector_id != user_id else user_info
         conduct_extra = _apply_template_conduct_to_payload(row, "other_checks", conduct_data)
 
-        row.inspection_result = payload.inspection_result
+        # C-03：inspection_result 为过程态「已检验」，判定走 quality_status（与 IQC 一致）
+        row.inspection_result = "已检验"
         row.quality_status = payload.quality_status
         row.qualified_quantity = qualified_quantity
         row.unqualified_quantity = unqualified_quantity
@@ -344,6 +348,35 @@ class OutsourceInspectionService(AppBaseService[OutsourceInspection]):
         row.updated_by = user_id
         row.updated_by_name = user_info["name"]
         await row.save()
+        return self._to_response(row)
+
+    async def revoke_approval(
+        self, tenant_id: int, inspection_id: int, user_id: int
+    ) -> OutsourceInspectionResponse:
+        """撤销委外检验审核（已审核 → 已检验）。"""
+        from apps.kuaizhizao.services.quality_service import _is_quality_audit_required
+        from core.services.approval.audit_transition import resolve_revoke_to_draft_landing_phase
+
+        row = await OutsourceInspection.get_or_none(
+            id=inspection_id, tenant_id=tenant_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError("委外检验单不存在")
+        assert_quality_inspection_capability(row, "revoke_approval")
+        audit_required = await _is_quality_audit_required(tenant_id, "outsource_inspection")
+        _ = resolve_revoke_to_draft_landing_phase(manual_audit_enabled=audit_required)
+        user_info = await self.get_user_info(user_id)
+        await OutsourceInspection.filter(id=inspection_id, tenant_id=tenant_id).update(
+            status="已检验",
+            review_status="",
+            reviewer_id=None,
+            reviewer_name=None,
+            review_time=None,
+            review_remarks=None,
+            updated_by=user_id,
+            updated_by_name=user_info["name"],
+        )
+        await row.refresh_from_db()
         return self._to_response(row)
 
     async def revoke_conduct(

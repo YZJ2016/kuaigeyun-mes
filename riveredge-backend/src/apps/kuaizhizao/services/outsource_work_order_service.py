@@ -285,6 +285,20 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
                 getattr(work_order_data, "total_amount", None),
             )
 
+            from apps.kuaizhizao.services.document_recognition import ensure_payable_recognition_on_create
+
+            wo_fields_set = getattr(work_order_data, "model_fields_set", set()) or set()
+            provided_pay = (
+                getattr(work_order_data, "payable_recognition", None)
+                if "payable_recognition" in wo_fields_set
+                else None
+            )
+            payable_recognition = await ensure_payable_recognition_on_create(
+                tenant_id,
+                supplier_id,
+                provided_pay,
+            )
+
             # 创建委外工单
             outsource_work_order = await OutsourceWorkOrder.create(
                 tenant_id=tenant_id,
@@ -298,6 +312,7 @@ class OutsourceWorkOrderService(AppBaseService[OutsourceWorkOrder]):
                 supplier_id=supplier_id,
                 supplier_code=supplier_code,
                 supplier_name=supplier_name,
+                payable_recognition=payable_recognition,
                 outsource_operation=outsource_operation,
                 unit_price=unit_price,
                 total_amount=total_amount,
