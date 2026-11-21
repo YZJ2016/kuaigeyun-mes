@@ -1501,7 +1501,7 @@ riveredge-backend/src/core/api/user_messages/user_messages.py	ec49300d882f8aace4
 riveredge-backend/src/core/api/users/users.py	889bae74ad8ac5a873c4d60f274ee60e76ce3f74	applied	C密码策略/默认与临时重置整簇；应用扫描按目录项容忍OSError但整目录不可枚举上抛；63聚焦测试包含用户与菜单同步；生成口令不写日志
 riveredge-backend/src/core/config/affiliate_read_allowlist.py	59b793b8b6c6bb944c7a9c0514e6251814302401	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/core/config/api_library_contract.py	aee8e7a45202c0ee0e082585daec5fe13c770843	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
-riveredge-backend/src/core/config/app_code_renames.py	811bf7face69c608fff36235a2d66867756d89ce	deferred	License分级策略分歧：上游将行业包与kuaipd/kuaiplm/kuaicaiwu/kuaioa/kuaiconnect全部并入PRO_APP_CODES收费目录并重排sort_order，本地保持行业包免费+4个PRO应用；License策略需产品决策（连同canonicalize_app_code别名机制上游亦无调用点）
+riveredge-backend/src/core/config/app_code_renames.py	811bf7face69c608fff36235a2d66867756d89ce	applied	摘取上游：pro-data-center→kuaiconnect改名映射+canonicalize_app_code/app_code_activation_aliases（产品决策2026-11-21）
 riveredge-backend/src/core/config/application_center_permissions.py	597ab5a462dddfc495f160de7bcccc5fc1e3b287	superset	本地超集：spec143/184硬化或本地功能字段（tenant隔离/attachment/serial_numbers/urgency/mqtt/OEE富schema/严格版本/序列号台账/脉冲计数Optional/关键写路径/unscoped清理/public_error脱敏/kuaicaiwu路径/STATION_TERMINAL/design动作/宽度64)
 riveredge-backend/src/core/config/associated_table_registry.py	9ed90b496bc68ec5ca8e3436c3fce3822584f58a	superset	superset:上游区间零增量；本地权限映射硬化版优先
 riveredge-backend/src/core/config/audit_editable_fields.py	7a61585872b0adbf946e51fd8590aaf2a9e26cfa	applied	R2簇5 core/sync:摘取上游tip实现
@@ -1515,12 +1515,12 @@ riveredge-backend/src/core/config/custom_field_pages.py	40a5e8eba611c718351db0a2
 riveredge-backend/src/core/config/field_permission_resource_registry.py	4c57f31fd806bc594c85b7e3dc43b83a47e06012	applied	R3 440ae22ebb+ff403441f2: kind模型整移植(amount/party_name策略类+列展开+40新增资源注册);本地资源全集上游覆盖无丢失
 riveredge-backend/src/core/config/finance_recognition.py	d8d0827841d258dfd1c2254f6af80252734b80d9	tracked	seed from b12cc66e71
 riveredge-backend/src/core/config/functional_domain_spec.py	ecdb181ea28b082111514f9b333eb67652533a14	superset	本地超集：spec143/184硬化或本地功能字段（tenant隔离/attachment/serial_numbers/urgency/mqtt/OEE富schema/严格版本/序列号台账/脉冲计数Optional/关键写路径/unscoped清理/public_error脱敏/kuaicaiwu路径/STATION_TERMINAL/design动作/宽度64)
-riveredge-backend/src/core/config/industry_app_catalog.py	d756ffe1c4092e8bf4f195cb490298384e8c8407	deferred	License分级策略分歧：上游将行业包与kuaipd/kuaiplm/kuaicaiwu/kuaioa/kuaiconnect全部并入PRO_APP_CODES收费目录并重排sort_order，本地保持行业包免费+4个PRO应用；License策略需产品决策（连同canonicalize_app_code别名机制上游亦无调用点）
+riveredge-backend/src/core/config/industry_app_catalog.py	d756ffe1c4092e8bf4f195cb490298384e8c8407	superset	本地License决策：维持4个PRO应用(kuaiai/kuaireport/kuaiiot/kuaivision)+行业包免费，不采上游9PRO/行业包全PRO（产品决策2026-11-21）
 riveredge-backend/src/core/config/integration_type_spec.py	b0f2abd6879c8e2871d4c77d2d664d9ca5110eb2	superset	本地超集：spec143/184硬化或本地功能字段（tenant隔离/attachment/serial_numbers/urgency/mqtt/OEE富schema/严格版本/序列号台账/脉冲计数Optional/关键写路径/unscoped清理/public_error脱敏/kuaicaiwu路径/STATION_TERMINAL/design动作/宽度64)
 riveredge-backend/src/core/config/kingdee_cosmic_mfg_api_presets.json	e86ad5c5a33970fba98839254cd064c1c2d0f5ff	applied	4ba2d15ae8契约簇;force_rewrite/expand未接调用点随调度窗簇
 riveredge-backend/src/core/config/menu_takeover.py	a4fc7ce8a2f1faea7f3123bb4e9344044e45c65d	applied	摘取：menu_takeover_service与上游字节一致（reconcile+is_consumer_effective+5处激活门禁）；config补META_TENANT_DISABLED/meta_blocks_menu_activation；menu_service写入路径+activate_application_menus_preserving_tenant_disabled+application_service三处接线；角色赋权路径exclude(tenant_disabled)；迁移1049→20261123000038
 riveredge-backend/src/core/config/permission_action_spec.py	f0975c431321b21dbfc182f4865f4d44536d1aa2	superset	本地超集：spec143/184硬化或本地功能字段（tenant隔离/attachment/serial_numbers/urgency/mqtt/OEE富schema/严格版本/序列号台账/脉冲计数Optional/关键写路径/unscoped清理/public_error脱敏/kuaicaiwu路径/STATION_TERMINAL/design动作/宽度64)
-riveredge-backend/src/core/config/pro_app_catalog.py	b9556135fc166edd923d868cc18e044af301d773	deferred	License分级策略分歧：上游将行业包与kuaipd/kuaiplm/kuaicaiwu/kuaioa/kuaiconnect全部并入PRO_APP_CODES收费目录并重排sort_order，本地保持行业包免费+4个PRO应用；License策略需产品决策（连同canonicalize_app_code别名机制上游亦无调用点）
+riveredge-backend/src/core/config/pro_app_catalog.py	b9556135fc166edd923d868cc18e044af301d773	superset	本地License决策：维持4个PRO应用(kuaiai/kuaireport/kuaiiot/kuaivision)+行业包免费，不采上游9PRO/行业包全PRO（产品决策2026-11-21）
 riveredge-backend/src/core/config/rework_order_funide_profile.py	3dcb60c3052a1be56d76c4cc6b2faaac645330cf	domain-out	客户品牌行业种子(funide)，通用产品规则不入产品源码；form_profile 回退段已剔除，通用行业配置经 IndustryExtensionRuntimeService 解析
 riveredge-backend/src/core/config/scheduled_job_registry.py	88b3a043103895f63cd07926168dae0f9060dd3f	tracked	seed from 6abba1dbd5
 riveredge-backend/src/core/config/system_dictionaries.py	7a73228cc264a160196d1666cb3262b769788848	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
@@ -3094,7 +3094,9 @@ riveredge-frontend/src/pages/system/application-connections/AppConnectorMarket.t
 riveredge-frontend/src/pages/system/application-connections/WeComDeploymentGuideBlock.tsx	439f6d81ec0d9bf45bbb0a88a87338087e23c65f	tracked	seed from 3958bb1524
 riveredge-frontend/src/pages/system/application-connections/connectors.tsx	99a3fb4e1826fbda5c1adf997c788078503e636a	applied	R2 fe收尾：批配中心自定义字段/生产退料取单行仓位/半成品入库自定义字段富化/装拆单customFieldTableName/连接器市场取上游tip
 riveredge-frontend/src/pages/system/application-connections/list/index.tsx	35254e0da9fb5a3093eee4dc9785754f90e57688	tracked	seed from 905787348a
+riveredge-frontend/src/pages/system/applications/industryAppCatalog.ts	3386c99bd8d3b29c73e83bd0a6c3117868528ffe	superset	本地License决策：维持4个PRO应用(kuaiai/kuaireport/kuaiiot/kuaivision)+行业包免费，不采上游9PRO/行业包全PRO（产品决策2026-11-21）
 riveredge-frontend/src/pages/system/applications/list/index.tsx	2764c9d50e297f6501600123c39dd8fd8ead9ebd	tracked	seed from 5f085a19c9
+riveredge-frontend/src/pages/system/applications/proAppCatalog.ts	6c8ac24d9b8480438f655103a4d8c2699bb08c10	superset	本地License决策：维持4个PRO应用(kuaiai/kuaireport/kuaiiot/kuaivision)+行业包免费，不采上游9PRO/行业包全PRO（产品决策2026-11-21）
 riveredge-frontend/src/pages/system/approval-processes/designer/index.tsx	0adb3944cc8b421f84dfcb6936654cdf2dc7ded7	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/pages/system/approval-processes/designer/properties/NodePropertyForms.tsx	c92be51dd1fdeb41841d06fe02d79ce899a46120	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/pages/system/approval-processes/instances/index.tsx	9a8562b31de3cd7bc027b6e7b8191b5f91d68bf4	tracked	seed from aeaec6dbb2
