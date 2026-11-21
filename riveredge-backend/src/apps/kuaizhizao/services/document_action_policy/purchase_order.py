@@ -164,7 +164,7 @@ def derive_purchase_order_capabilities(
     status = getattr(order, "status", None)
     review_status = getattr(order, "review_status", None)
 
-    from apps.kuaizhizao.constants import is_rejected_status
+    from apps.kuaizhizao.constants import is_rejected_status, is_submitted_status
     from apps.kuaizhizao.services.document_action_policy.review_submission_gate import (
         allows_delete_unsubmitted,
         allows_submit_unsubmitted,
@@ -200,7 +200,7 @@ def derive_purchase_order_capabilities(
         "purchase_order.submit.not_draft" if not submit_allowed else None,
     )
 
-    withdraw_ok = allows_approve_submitted_pending(
+    withdraw_ok = is_submitted_status(str(status or "")) or allows_approve_submitted_pending(
         status, review_status, review_submitted=review_submitted
     )
     withdraw_cap = _cap(

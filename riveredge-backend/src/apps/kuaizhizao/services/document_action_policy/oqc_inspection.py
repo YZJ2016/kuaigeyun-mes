@@ -1,4 +1,4 @@
-"""OQC 出货检验业务态 capabilities（与 quality_improvement_service 门禁一致）。"""
+"""OQC 出货检验业务态 capabilities（与 oqc_inspection_service 门禁一致）。"""
 
 from __future__ import annotations
 

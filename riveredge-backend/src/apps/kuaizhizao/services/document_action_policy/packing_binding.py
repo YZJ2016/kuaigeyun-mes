@@ -19,8 +19,18 @@ def _cap(allowed: bool, reason: Optional[str] = None) -> ActionCapability:
 
 def derive_packing_binding_capabilities(binding: Any) -> PackingBindingCapabilities:
     is_deleted = getattr(binding, "deleted_at", None) is not None
+    is_consumed = getattr(binding, "consumed_at", None) is not None
     seal_status = str(getattr(binding, "seal_status", None) or "bound").strip().lower()
     is_sealed = seal_status == "sealed"
+
+    if is_consumed:
+        consumed_deny = _cap(False, "packing_binding.consumed")
+        return PackingBindingCapabilities(
+            update=consumed_deny,
+            delete=consumed_deny,
+            print=_cap(True),
+            seal=consumed_deny,
+        )
 
     if is_deleted:
         deny = _cap(False, "packing_binding.deleted")
