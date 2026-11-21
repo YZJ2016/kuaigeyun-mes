@@ -344,6 +344,7 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
     "parameters.sales.price_deviation_approval_threshold_percent": {"type": "number", "min": 0, "max": 100},
     "parameters.sales.require_audit_before_print": {"type": "boolean"},
     "parameters.sales.require_shipment_notice_before_delivery": {"type": "boolean"},
+    "parameters.sales.auto_confirm_sales_delivery": {"type": "boolean"},
     "parameters.planning.auto_push_sales_to_computation_on_approve": {"type": "boolean"},
     "parameters.planning.auto_execute_computation_on_create": {"type": "boolean"},
     "parameters.planning.auto_push_purchase_on_computation_complete": {"type": "boolean"},
@@ -617,6 +618,7 @@ PARAMETER_KEYS = {
     "parameters.sales.price_deviation_approval_threshold_percent",
     "parameters.sales.require_audit_before_print",
     "parameters.sales.require_shipment_notice_before_delivery",
+    "parameters.sales.auto_confirm_sales_delivery",
     "parameters.sales.contract_expiry_alert_days",
     "parameters.sales.contract_auto_close_on_full_release",
     "parameters.sales.sales_review",
@@ -718,6 +720,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.sales.price_deviation_approval_threshold_percent",
     "parameters.sales.require_audit_before_print",
     "parameters.sales.require_shipment_notice_before_delivery",
+    "parameters.sales.auto_confirm_sales_delivery",
     "parameters.sales.contract_expiry_alert_days",
     "parameters.sales.contract_auto_close_on_full_release",
     "parameters.sales.sales_review",
@@ -1272,6 +1275,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "price_deviation_approval_threshold_percent": 0,
         "require_audit_before_print": False,
         "require_shipment_notice_before_delivery": False,
+        "auto_confirm_sales_delivery": False,
         "contract_expiry_alert_days": 30,
         "contract_auto_close_on_full_release": True,
         "contract_milestone_required": False,
@@ -1985,6 +1989,15 @@ class BusinessConfigService:
             config["parameters"]
             .get("procurement", {})
             .get("auto_push_receipt_notice_on_approve", False)
+        )
+
+    async def auto_confirm_sales_delivery(self, tenant_id: int) -> bool:
+        """销售出库单创建后是否自动确认出库过账（组织级开关，默认关闭）。"""
+        config = await self.get_business_config(tenant_id)
+        return bool(
+            config["parameters"]
+            .get("sales", {})
+            .get("auto_confirm_sales_delivery", False)
         )
 
     async def require_purchase_requisition(self, tenant_id: int) -> bool:

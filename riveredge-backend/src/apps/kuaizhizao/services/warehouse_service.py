@@ -7461,6 +7461,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         created_by: int,
         *,
         require_batch_serial_on_create: bool = True,
+        skip_manual_create_auto_submit: bool = False,
     ) -> SalesDeliveryResponse:
         """创建销售出库单
 
@@ -7488,7 +7489,10 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 raise BusinessLogicError(
                     "当前组织要求先发货通知后出库，出库明细须关联发货通知行，请从发货通知下推或加载"
                 )
-        location_required, auto_outbound_enabled = await _get_warehouse_policy_flags(tenant_id)
+        location_required, _warehouse_auto_outbound = await _get_warehouse_policy_flags(tenant_id)
+        auto_confirm_sales_delivery = await self.business_config_service.auto_confirm_sales_delivery(
+            tenant_id
+        )
         created_delivery_id: Optional[int] = None
 
         # 发货通知「通知仓库」等外层可能已开事务：复用外层，避免 Nested 死锁
@@ -7498,17 +7502,9 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             # 2. 检查是否需要审核
             audit_required = await self.business_config_service.check_audit_required(tenant_id, "sales_delivery")
             
-            # 确定初始状态
-            initial_status = delivery_data.status
-            initial_review_status = delivery_data.review_status
-            
-            if audit_required and initial_status in [None, "待审核", "草稿", "待出库"]:
-                initial_status = "待审核"
-                initial_review_status = "待审核"
-            if not audit_required and initial_status in [None, "待审核", "草稿", "待出库"]:
-                # 如果不需要审核，且未指定状态或指定为草稿/待审核/待出库，则直接设为待出库（即已通过审核，等待执行）
-                initial_status = "待出库"
-                initial_review_status = "已通过"
+            # 保存只落待出库草稿；提交 / 提交审核另走 commit 与 for_review（对齐上游 push_mode 模型）
+            initial_status = "待出库"
+            initial_review_status = "草稿"
             
             # 如果未提供delivery_code，则自动生成
             if delivery_data.delivery_code:
@@ -7818,48 +7814,104 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 user_id=created_by,
             )
 
-        # 未在创建时校验批号的单据（如发货通知下推）不能自动确认出库，否则 confirm 会因缺批号失败
+        # 未在创建时校验批号的单据（如发货通知下推）不能自动确认出库，否则 confirm 会因缺批号失败。
+        # 确认须在建单事务提交后执行（应收生成禁止与出库主事务嵌套）；失败则清理刚建的待出库单，
+        # 禁止「提示无库存/保存失败却仍残留单据」（对齐借料自动出库失败不留单的产品预期）。
         if (
-            auto_outbound_enabled
+            auto_confirm_sales_delivery
             and created_delivery_id
             and require_batch_serial_on_create
         ):
             delivery_obj = await SalesDelivery.get_or_none(tenant_id=tenant_id, id=created_delivery_id)
             if delivery_obj and delivery_obj.status == "待出库":
-                return await self.confirm_delivery(
-                    tenant_id=tenant_id,
-                    delivery_id=created_delivery_id,
-                    confirmed_by=created_by,
-                )
-        delivery_obj = await SalesDelivery.get(tenant_id=tenant_id, id=created_delivery_id)
-        if (delivery_obj.status or "").strip() == "待审核":
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
+                try:
+                    # 内部一键送审（免审则直接已通过），再确认出库
+                    await self.submit_sales_delivery(tenant_id, created_delivery_id, created_by)
+                    return await self.confirm_delivery(
+                        tenant_id=tenant_id,
+                        delivery_id=created_delivery_id,
+                        confirmed_by=created_by,
+                    )
+                except Exception:
+                    await self._discard_sales_delivery_after_failed_auto_confirm(
+                        tenant_id=tenant_id,
+                        delivery_id=created_delivery_id,
+                    )
+                    raise
 
-            instance = await ApprovalInstanceService.start_approval_for_node(
-                tenant_id=tenant_id,
-                user_id=created_by,
-                node_key="sales_delivery",
-                entity_type="sales_delivery",
-                entity_id=delivery_obj.id,
-                entity_uuid=str(delivery_obj.uuid),
-                title=f"销售出库审批: {delivery_obj.delivery_code}",
-                content=f"客户: {delivery_obj.customer_name}, 金额: {delivery_obj.total_amount}",
+        if not skip_manual_create_auto_submit:
+            from apps.kuaizhizao.services.manual_create_auto_lifecycle import (
+                apply_manual_create_auto_submit,
             )
-            if not instance:
-                raise BusinessLogicError(
-                    "销售出库审核已开启但未找到可用的审批流程，请在配置中心检查 sales_delivery 审批流程是否已激活"
-                )
-            from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
 
-            if approval_instance_finished_on_submit(instance):
-                approved = await self.approve_sales_delivery(
-                    tenant_id,
-                    created_delivery_id,
-                    created_by,
-                    is_auto_approve=True,
-                )
-                return approved
+            await apply_manual_create_auto_submit(
+                tenant_id=tenant_id,
+                node_key="sales_delivery",
+                entity_id=int(created_delivery_id),
+                operator_id=created_by,
+            )
+        delivery_obj = await SalesDelivery.get(tenant_id=tenant_id, id=created_delivery_id)
         return SalesDeliveryResponse.model_validate(delivery_obj)
+
+    async def _discard_sales_delivery_after_failed_auto_confirm(
+        self,
+        tenant_id: int,
+        delivery_id: int,
+    ) -> None:
+        """自动出库确认失败后清理刚创建的待出库单（及明细、关联 OQC），避免残留幽灵单据。"""
+        now = resolve_business_datetime()
+        try:
+            async with reuse_or_begin_transaction():
+                delivery = await SalesDelivery.get_or_none(
+                    tenant_id=tenant_id,
+                    id=delivery_id,
+                    deleted_at__isnull=True,
+                )
+                if not delivery:
+                    return
+                # 仅清理仍为待出库的建单失败产物；已部分过账则不擅自删除
+                if (delivery.status or "").strip() != "待出库":
+                    logger.warning(
+                        "自动出库失败后跳过清理销售出库 %s：当前状态=%s",
+                        delivery_id,
+                        delivery.status,
+                    )
+                    return
+                await SalesDeliveryItem.filter(
+                    tenant_id=tenant_id,
+                    delivery_id=delivery_id,
+                    deleted_at__isnull=True,
+                ).update(deleted_at=now)
+                delivery.deleted_at = now
+                await delivery.save(update_fields=["deleted_at"])
+
+                # 出库侧刚自动建的 OQC 一并软删，避免检验单挂已删出库
+                try:
+                    from apps.kuaizhizao.models.oqc_inspection import OQCInspection
+
+                    await OQCInspection.filter(
+                        tenant_id=tenant_id,
+                        source_type="sales_delivery",
+                        source_id=delivery_id,
+                        deleted_at__isnull=True,
+                    ).update(deleted_at=now)
+                except Exception as oqc_exc:
+                    logger.warning(
+                        "自动出库失败后清理关联 OQC 失败 delivery_id=%s: %s",
+                        delivery_id,
+                        oqc_exc,
+                    )
+            logger.info(
+                "自动出库失败已清理销售出库单 delivery_id=%s code=%s",
+                delivery_id,
+                getattr(delivery, "delivery_code", None),
+            )
+        except Exception as cleanup_exc:
+            logger.error(
+                "自动出库失败后清理销售出库单失败 delivery_id=%s: %s",
+                delivery_id,
+                cleanup_exc,
+            )
 
     async def get_sales_delivery_by_id(self, tenant_id: int, delivery_id: int) -> SalesDeliveryWithItemsResponse:
         """根据ID获取销售出库单（含明细）"""
@@ -8322,6 +8374,35 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             delivery.deleted_at = now
             await delivery.save()
 
+    @staticmethod
+    def _normalize_sales_delivery_push_mode(push_mode: Optional[str]) -> str:
+        mode = str(push_mode or "draft").strip().lower()
+        return "confirm" if mode == "confirm" else "draft"
+
+    async def _submit_sales_delivery_after_document_push(
+        self,
+        tenant_id: int,
+        delivery_id: int,
+        submitted_by: int,
+    ) -> SalesDeliveryResponse:
+        """销售订单/发货通知/预测等下推建单后送审：免审组织 review 为已通过，方可确认出库。"""
+        return await self.submit_sales_delivery(tenant_id, delivery_id, submitted_by)
+
+    async def _finalize_sales_delivery_after_document_push(
+        self,
+        tenant_id: int,
+        delivery_id: int,
+        submitted_by: int,
+        *,
+        push_mode: Optional[str] = None,
+    ) -> SalesDeliveryResponse:
+        """下推收尾：draft 仅保留草稿；confirm 走一键送审（免审则已通过）。默认 draft。"""
+        if self._normalize_sales_delivery_push_mode(push_mode) == "confirm":
+            return await self._submit_sales_delivery_after_document_push(
+                tenant_id, delivery_id, submitted_by
+            )
+        return await self.get_sales_delivery_by_id(tenant_id, delivery_id)
+
     async def submit_sales_delivery(
         self,
         tenant_id: int,
@@ -8749,6 +8830,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         warehouse_id: Optional[int] = None,
         warehouse_name: Optional[str] = None,
         notes: Optional[str] = None,
+        push_mode: Optional[str] = None,
     ) -> SalesDeliveryResponse:
         """
         从销售订单加载生成销售出库单（销售出库单加载功能）
@@ -8942,6 +9024,13 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             delivery_data=delivery_data,
             created_by=created_by,
             require_batch_serial_on_create=False,
+            skip_manual_create_auto_submit=True,
+        )
+        delivery = await self._finalize_sales_delivery_after_document_push(
+            tenant_id,
+            int(delivery.id),
+            created_by,
+            push_mode=push_mode,
         )
 
         # 已交货/剩余数量在「确认出库」时按实发数量回写订单明细（见 confirm_delivery）
@@ -9087,12 +9176,15 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         created_by: int,
         delivery_quantities: Optional[Dict[int, float]] = None,
         line_warehouses: Optional[Dict[int, int]] = None,
+        line_location_ids: Optional[Dict[int, int]] = None,
+        push_mode: Optional[str] = None,
     ) -> Dict[str, Any]:
         """按销售订单行 id 建销售出库单，可跨多张订单；同客户同仓合并一张。
 
         delivery_quantities: 可选 {item_id: qty}，与单头下推 pull_from_sales_order 同契约；
         未传则按可下推剩余全量出库。
         line_warehouses: 必填 {sales_order_item_id: warehouse_id}，由前端取单时选定。
+        push_mode: draft=保存为草稿；confirm=提交审核（免审则已通过）。默认 draft。
         """
         from apps.kuaizhizao.models.sales_order import SalesOrder
         from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
@@ -9244,6 +9336,13 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 ),
                 created_by=created_by,
                 require_batch_serial_on_create=False,
+                skip_manual_create_auto_submit=True,
+            )
+            created = await self._finalize_sales_delivery_after_document_push(
+                tenant_id,
+                int(created.id),
+                created_by,
+                push_mode=push_mode,
             )
             for oid in source_order_ids[1:]:
                 source = order_by_id[oid]
@@ -9415,10 +9514,12 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         item_ids: List[int],
         created_by: int,
         line_warehouses: Optional[Dict[int, int]] = None,
+        push_mode: Optional[str] = None,
     ) -> Dict[str, Any]:
         """按发货通知行 id 建销售出库单，可跨多张通知；同客户同仓合并一张。
 
         line_warehouses: 必填 {notice_item_id: warehouse_id}，由前端取单时选定。
+        push_mode: draft=保存为草稿；confirm=提交审核（免审则已通过）。默认 draft。
         """
         from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
         from apps.kuaizhizao.models.shipment_notice_item import ShipmentNoticeItem
@@ -9607,6 +9708,13 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 ),
                 created_by=created_by,
                 require_batch_serial_on_create=False,
+                skip_manual_create_auto_submit=True,
+            )
+            created = await self._finalize_sales_delivery_after_document_push(
+                tenant_id,
+                int(created.id),
+                created_by,
+                push_mode=push_mode,
             )
             for nid in source_notice_ids:
                 created_by_notice[nid] = created
@@ -9685,7 +9793,8 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         created_by: int,
         delivery_quantities: Optional[Dict[int, float]] = None,
         warehouse_id: Optional[int] = None,
-        warehouse_name: Optional[str] = None
+        warehouse_name: Optional[str] = None,
+        push_mode: Optional[str] = None,
     ) -> SalesDeliveryResponse:
         """
         从销售预测加载生成销售出库单（销售出库单加载功能）
@@ -9820,6 +9929,13 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             delivery_data=delivery_data,
             created_by=created_by,
             require_batch_serial_on_create=False,
+            skip_manual_create_auto_submit=True,
+        )
+        delivery = await self._finalize_sales_delivery_after_document_push(
+            tenant_id,
+            int(delivery.id),
+            created_by,
+            push_mode=push_mode,
         )
         
         return delivery

@@ -94,6 +94,10 @@ class ShipmentNoticeNotify(BaseSchema):
         None,
         description="明细行库位编码 {shipment_notice_item_id: location_code}",
     )
+    push_mode: Optional[str] = Field(
+        "draft",
+        description="生成销售出库：draft=保存为草稿；confirm=提交审核（免审则已通过）",
+    )
 
 
 class ShipmentNoticeNotifyPreviewRequest(BaseSchema):

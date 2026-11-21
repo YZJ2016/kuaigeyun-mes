@@ -3974,6 +3974,7 @@ async def pull_sales_deliveries_from_sales_order_items(
             current_user=current_user,
             sales_order_id=oid,
         )
+    push_mode = request.get("push_mode")
     try:
         return await SalesDeliveryService().create_sales_deliveries_from_sales_order_items(
             tenant_id=tenant_id,
@@ -3981,6 +3982,7 @@ async def pull_sales_deliveries_from_sales_order_items(
             created_by=current_user.id,
             delivery_quantities=delivery_quantities,
             line_warehouses=line_warehouses,
+            push_mode=str(push_mode).strip() if push_mode is not None else None,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -4041,12 +4043,14 @@ async def pull_sales_deliveries_from_shipment_notice_items(
                 line_warehouses[int(k)] = int(v)
             except (TypeError, ValueError):
                 continue
+    push_mode = request.get("push_mode")
     try:
         return await SalesDeliveryService().create_sales_deliveries_from_notice_items(
             tenant_id=tenant_id,
             item_ids=selected_ids,
             created_by=current_user.id,
             line_warehouses=line_warehouses,
+            push_mode=str(push_mode).strip() if push_mode is not None else None,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))

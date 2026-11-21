@@ -1582,13 +1582,22 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
                 price_type=price_type,
                 items=delivery_items,
                 status="待出库",
-                review_status="已通过",
             )
             delivery = await delivery_service.create_sales_delivery(
                 tenant_id=tenant_id,
                 delivery_data=delivery_data,
                 created_by=notified_by,
                 require_batch_serial_on_create=False,
+                skip_manual_create_auto_submit=True,
+            )
+            push_mode = None
+            if notify_data is not None:
+                push_mode = getattr(notify_data, "push_mode", None)
+            delivery = await delivery_service._finalize_sales_delivery_after_document_push(
+                tenant_id,
+                int(delivery.id),
+                notified_by,
+                push_mode=push_mode,
             )
             created_deliveries.append(delivery)
 
