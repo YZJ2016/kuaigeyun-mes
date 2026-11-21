@@ -93,6 +93,16 @@ export type RowActionVisualProfile =
   | 'view-lab-report'
   | 'download-lab-report'
   | 'download-firmware'
+  | 'drawing-where-used'
+  | 'drawing-distribute'
+  | 'drawing-loan'
+  | 'drawing-engineering-change'
+  | 'drawing-new-revision'
+  | 'drawing-checkout'
+  | 'drawing-checkin'
+  | 'drawing-undo-checkout'
+  | 'drawing-import-step-bom'
+  | 'packing-binding'
 
 /** 项目工作台：行内双字「工作台」；RBAC 默认 read */
 export function rowActionOpenWorkbench(
@@ -211,10 +221,140 @@ export function rowActionDownloadFirmware(
   }
 }
 
+/** 图纸反查：跨模块 RBAC 用 skip */
+export function rowActionDrawingWhereUsed(
+  permission: 'skip' | 'read' = 'skip',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'drawing-where-used',
+  }
+}
+
+/** 图纸发放 */
+export function rowActionDrawingDistribute(
+  permission: 'skip' | 'create' = 'skip',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'drawing-distribute',
+  }
+}
+
+/** 图纸借阅 */
+export function rowActionDrawingLoan(
+  permission: 'skip' | 'create' = 'skip',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'drawing-loan',
+  }
+}
+
+/** 图纸工程变更 */
+export function rowActionDrawingEngineeringChange(
+  permission: 'skip' | 'create' = 'skip',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'drawing-engineering-change',
+  }
+}
+
+/** 图纸升版 */
+export function rowActionDrawingNewRevision(
+  permission: 'create' | 'skip' = 'create',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'drawing-new-revision',
+  }
+}
+
+/** 图纸签出 */
+export function rowActionDrawingCheckout(
+  permission: 'update' | 'skip' = 'update',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'drawing-checkout',
+  }
+}
+
+/** 图纸签入 */
+export function rowActionDrawingCheckin(
+  permission: 'update' | 'skip' = 'update',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'drawing-checkin',
+  }
+}
+
+/** 图纸撤销签出 */
+export function rowActionDrawingUndoCheckout(
+  permission: 'update' | 'skip' = 'update',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'drawing-undo-checkout',
+  }
+}
+
+/** 图纸导入 STEP BOM */
+export function rowActionDrawingImportStepBom(
+  permission: 'import' | 'create' | 'skip' = 'import',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'drawing-import-step-bom',
+  }
+}
+
 export function rowActionKind(
   kind: RowActionPermissionKind,
 ): { [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind } {
   return { [ROW_ACTION_KIND_ATTR]: kind }
+}
+
+/** 出入库行「装箱绑定」：antd ContainerOutlined；页侧按装箱模块 canRead 门控，默认 skip */
+export function rowActionPackingBinding(
+  permission: 'skip' | 'read' = 'skip',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'packing-binding',
+  }
 }
 
 /** 单据行「添加跟进」：统一 CommentOutlined + RBAC（跨模块用 skip，本模块用 create） */
@@ -588,7 +728,17 @@ export function readActionVisualProfile(node: React.ReactNode): RowActionVisualP
     raw === 'reject-lab-report' ||
     raw === 'view-lab-report' ||
     raw === 'download-lab-report' ||
-    raw === 'download-firmware'
+    raw === 'download-firmware' ||
+    raw === 'drawing-where-used' ||
+    raw === 'drawing-distribute' ||
+    raw === 'drawing-loan' ||
+    raw === 'drawing-engineering-change' ||
+    raw === 'drawing-new-revision' ||
+    raw === 'drawing-checkout' ||
+    raw === 'drawing-checkin' ||
+    raw === 'drawing-undo-checkout' ||
+    raw === 'drawing-import-step-bom' ||
+    raw === 'packing-binding'
   ) {
     return raw
   }

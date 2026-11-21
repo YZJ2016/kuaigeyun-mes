@@ -75,6 +75,16 @@ const VISUAL_PROFILE_LABEL_FALLBACK: Record<RowActionVisualProfile, string> = {
   'view-lab-report': '查看报告',
   'download-lab-report': '下载报告',
   'download-firmware': '下载',
+  'drawing-where-used': '反查',
+  'drawing-distribute': '发放',
+  'drawing-loan': '借阅',
+  'drawing-engineering-change': '工程变更',
+  'drawing-new-revision': '升版',
+  'drawing-checkout': '签出',
+  'drawing-checkin': '签入',
+  'drawing-undo-checkout': '撤销签出',
+  'drawing-import-step-bom': '导入BOM',
+  'packing-binding': '装箱绑定',
 }
 
 const ROW_ACTION_I18N_KEY: Partial<Record<RowActionPermissionKind, string>> = {
@@ -139,6 +149,16 @@ const VISUAL_PROFILE_I18N_KEY: Record<RowActionVisualProfile, string> = {
   'view-lab-report': 'components.uniAction.viewLabReport',
   'download-lab-report': 'components.uniAction.downloadLabReport',
   'download-firmware': 'components.uniAction.downloadFirmware',
+  'drawing-where-used': 'components.uniAction.drawingWhereUsed',
+  'drawing-distribute': 'components.uniAction.drawingDistribute',
+  'drawing-loan': 'components.uniAction.drawingLoan',
+  'drawing-engineering-change': 'components.uniAction.drawingEngineeringChange',
+  'drawing-new-revision': 'components.uniAction.drawingNewRevision',
+  'drawing-checkout': 'components.uniAction.drawingCheckout',
+  'drawing-checkin': 'components.uniAction.drawingCheckin',
+  'drawing-undo-checkout': 'components.uniAction.drawingUndoCheckout',
+  'drawing-import-step-bom': 'components.uniAction.drawingImportStepBom',
+  'packing-binding': 'components.uniAction.packingBinding',
 }
 
 /** 行内操作排序（细于 detail/edit/delete 三分法；与 overflow 直出/折叠一致） */
@@ -206,6 +226,16 @@ const VISUAL_PROFILE_SORT_RANK: Record<RowActionVisualProfile, number> = {
   'view-lab-report': 206,
   'download-lab-report': 207,
   'download-firmware': 207,
+  'drawing-checkout': 21,
+  'drawing-checkin': 22,
+  'drawing-undo-checkout': 23,
+  'drawing-engineering-change': 72,
+  'drawing-new-revision': 73,
+  'drawing-where-used': 80,
+  'drawing-distribute': 81,
+  'drawing-loan': 82,
+  'drawing-import-step-bom': 301,
+  'packing-binding': 72,
 }
 
 export function rowActionLabel(kind: RowActionPermissionKind): string {

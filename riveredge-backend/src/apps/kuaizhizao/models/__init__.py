@@ -33,6 +33,7 @@ from .outsource_work_order import (
 )
 from .outsource_settlement import OutsourceSettlement, OutsourceSettlementItem
 from .work_order_operation import WorkOrderOperation
+from .work_order_bom_line import WorkOrderBomLine
 from .scrap_record import ScrapRecord
 from .defect_record import DefectRecord
 from .material_binding import MaterialBinding

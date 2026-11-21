@@ -43,6 +43,11 @@ import {
   HighlightOutlined,
   SwapOutlined,
   AppstoreOutlined,
+  NodeIndexOutlined,
+  BookOutlined,
+  PartitionOutlined,
+  DiffOutlined,
+  ContainerOutlined,
 } from '@ant-design/icons'
 import type { NormalizeActionContext } from './types'
 import {
@@ -105,6 +110,7 @@ const ROW_ACTION_SUCCESS_VISUAL_PROFILES = new Set<RowActionVisualProfile>([
   'collect-receipt',
   'make-payment',
   'run-computation',
+  'packing-binding',
 ])
 
 function rowActionClassName(
@@ -210,6 +216,36 @@ function defaultIconForRowActionWithKind(
   }
   if (readActionVisualProfile(node) === 'download-firmware') {
     return <DownloadOutlined />
+  }
+  if (readActionVisualProfile(node) === 'drawing-where-used') {
+    return <NodeIndexOutlined />
+  }
+  if (readActionVisualProfile(node) === 'drawing-distribute') {
+    return <SendOutlined />
+  }
+  if (readActionVisualProfile(node) === 'drawing-loan') {
+    return <BookOutlined />
+  }
+  if (readActionVisualProfile(node) === 'drawing-engineering-change') {
+    return <DiffOutlined />
+  }
+  if (readActionVisualProfile(node) === 'drawing-new-revision') {
+    return <CloudUploadOutlined />
+  }
+  if (readActionVisualProfile(node) === 'drawing-checkout') {
+    return <ExportOutlined />
+  }
+  if (readActionVisualProfile(node) === 'drawing-checkin') {
+    return <ImportOutlined />
+  }
+  if (readActionVisualProfile(node) === 'drawing-undo-checkout') {
+    return <RollbackOutlined />
+  }
+  if (readActionVisualProfile(node) === 'drawing-import-step-bom') {
+    return <PartitionOutlined />
+  }
+  if (readActionVisualProfile(node) === 'packing-binding') {
+    return <ContainerOutlined />
   }
   const explicit = readExplicitActionKind(node) ?? inheritedExplicit ?? null
   if (explicit === 'read' || explicit === 'display') return <EyeOutlined />

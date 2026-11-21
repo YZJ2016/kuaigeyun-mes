@@ -116,6 +116,44 @@ class WorkOrderBase(BaseSchema):
     effective_serial_no: Optional[str] = Field(None, description="有效序列号（确认优先，回落计划）")
 
 
+class WorkOrderBomLineBase(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., max_length=50, description="物料编码")
+    material_name: str = Field(..., max_length=200, description="物料名称")
+    material_spec: Optional[str] = Field(None, max_length=500, description="规格")
+    warehouse_id: Optional[int] = Field(None, description="仓库ID")
+    warehouse_name: Optional[str] = Field(None, max_length=200, description="仓库名称")
+    unit: Optional[str] = Field(None, max_length=50, description="单位")
+    required_quantity: Decimal = Field(..., description="应发量")
+    batch_no: Optional[str] = Field(None, max_length=100, description="批号")
+    bom_version: Optional[str] = Field(None, max_length=20, description="BOM版本")
+    line_remarks: Optional[str] = Field(None, description="行备注")
+    sequence: Optional[int] = Field(None, description="行序")
+
+
+class WorkOrderBomLineCreate(WorkOrderBomLineBase):
+    id: Optional[int] = Field(None, description="既有行ID（编辑时可选）")
+
+
+class WorkOrderBomLineResponse(WorkOrderBomLineBase):
+    id: Optional[int] = Field(None, description="行ID")
+    issued_quantity: Optional[Decimal] = Field(None, description="已发量（汇总只读）")
+    current_stock: Optional[Decimal] = Field(None, description="现有库存（只读展示）")
+
+
+class WorkOrderBomLinePreviewRequest(BaseModel):
+    product_id: int = Field(..., description="产品ID")
+    quantity: Decimal = Field(..., description="计划数量")
+    product_bom_version: Optional[str] = Field(None, description="成品BOM版本")
+    variant_attributes: Optional[dict] = Field(None, description="配置件属性")
+    configurable_selections: Optional[dict] = Field(None, description="配置位选择")
+    lines: Optional[List[WorkOrderBomLineCreate]] = Field(
+        None, description="当前表单行（重算时保留仓库/批号/备注）"
+    )
+
+
 class WorkOrderCreate(WorkOrderBase):
     """
     工单创建Schema
