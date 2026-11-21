@@ -152,8 +152,8 @@ async def resolve_material_incoming_qty(
     """
     本道可用的在制转入上限。
 
-    - 工单允许跳转：按计划数 + 本道超报（与首道口径一致）；
-    - 不允许跳转：取紧邻前序合格转出（无前序则同首道）。
+    - 工单允许跳转：按工单计划数（超报不占在制，须补领抬高）；
+    - 不允许跳转：取紧邻前序合格转出（无前序则同计划数）。
     """
     plan = plan_qty if plan_qty > 0 else Decimal("0")
     from apps.kuaizhizao.services.over_report_rules import first_operation_material_incoming

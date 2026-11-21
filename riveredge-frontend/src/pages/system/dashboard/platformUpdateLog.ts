@@ -44,6 +44,119 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
 {
+    id: 'price-book-material-default-tax-r01',
+    date: '2026-11-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.price-book-material-default-tax-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.price-book-material-default-tax-r01.description',
+  },
+{
+    id: 'sales-order-change-form-header-body-r01',
+    date: '2026-11-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-change-form-header-body-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-change-form-header-body-r01.description',
+  },
+{
+    id: 'sales-order-change-create-tab-flash-r01',
+    date: '2026-11-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-change-create-tab-flash-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-change-create-tab-flash-r01.description',
+  },
+{
+    id: 'sales-order-change-pull-confirm-ids-r01',
+    date: '2026-11-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-change-pull-confirm-ids-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-change-pull-confirm-ids-r01.description',
+  },
+{
+    id: 'sales-order-change-pull-create-nav-r01',
+    date: '2026-11-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-change-pull-create-nav-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-change-pull-create-nav-r01.description',
+  },
+{
+    id: 'over-report-material-picking-r01',
+    date: '2026-11-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.over-report-material-picking-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.over-report-material-picking-r01.description',
+  },
+{
+    id: 'reporting-quantity-panel-split-r01',
+    date: '2026-11-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.reporting-quantity-panel-split-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.reporting-quantity-panel-split-r01.description',
+  },
+{
+    id: 'work-order-over-report-first-op-seq-r01',
+    date: '2026-11-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-over-report-first-op-seq-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.work-order-over-report-first-op-seq-r01.description',
+  },
+{
+    id: 'warehouse-hub-detail-lifecycle-order-r01',
+    date: '2026-11-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-hub-detail-lifecycle-order-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.warehouse-hub-detail-lifecycle-order-r01.description',
+  },
+{
+    id: 'detail-drawer-title-truncate-r01',
+    date: '2026-11-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.detail-drawer-title-truncate-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.detail-drawer-title-truncate-r01.description',
+  },
+{
+    id: 'outbound-detail-edit-button-r01',
+    date: '2026-11-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.outbound-detail-edit-button-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.outbound-detail-edit-button-r01.description',
+  },
+{
+    id: 'production-picking-detail-spec-model-r01',
+    date: '2026-11-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.production-picking-detail-spec-model-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.production-picking-detail-spec-model-r01.description',
+  },
+{
+    id: 'work-order-split-print-r02',
+    date: '2026-11-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-split-print-r02.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.work-order-split-print-r02.description',
+  },
+{
+    id: 'work-order-split-print-r01',
+    date: '2026-11-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-split-print-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.work-order-split-print-r01.description',
+  },
+{
+    id: 'navigation-tree-disabled-app-filter-r01',
+    date: '2026-11-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.navigation-tree-disabled-app-filter-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.navigation-tree-disabled-app-filter-r01.description',
+  },
+{
     id: 'material-sync-default-tax-rate-r01',
     date: '2026-11-21',
     type: 'improvement',

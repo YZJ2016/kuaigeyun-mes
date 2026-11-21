@@ -719,6 +719,7 @@ def _build_production_picking_item_response(item: Any) -> ProductionPickingItemR
         "material_code": str(getattr(item, "material_code", "") or ""),
         "material_name": str(getattr(item, "material_name", "") or ""),
         "material_spec": getattr(item, "material_spec", None),
+        "material_model": getattr(item, "material_model", None),
         "material_unit": str(getattr(item, "material_unit", "") or ""),
         "required_quantity": float(getattr(item, "required_quantity", 0) or 0),
         "picked_quantity": float(getattr(item, "picked_quantity", 0) or 0),
@@ -2658,7 +2659,28 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         items = await ProductionPickingItem.filter(tenant_id=tenant_id, picking_id=picking_id).all()
         resp = ProductionPickingWithItemsResponse.model_validate(picking)
         resp.lifecycle = get_production_picking_lifecycle(picking)
-        resp.items = [_build_production_picking_item_response(i) for i in items]
+        material_by_id = await _load_materials_by_ids(
+            tenant_id,
+            [int(getattr(i, "material_id", 0) or 0) for i in items],
+        )
+        enriched_items: list[ProductionPickingItemResponse] = []
+        for line in items:
+            item_resp = _build_production_picking_item_response(line)
+            material = material_by_id.get(int(getattr(line, "material_id", 0) or 0))
+            if material is not None:
+                spec = str(item_resp.material_spec or "").strip() or str(
+                    getattr(material, "specification", "") or ""
+                ).strip()
+                model = str(getattr(material, "model", "") or "").strip()
+                updates: dict[str, str | None] = {}
+                if spec:
+                    updates["material_spec"] = spec
+                if model:
+                    updates["material_model"] = model
+                if updates:
+                    item_resp = item_resp.model_copy(update=updates)
+            enriched_items.append(item_resp)
+        resp.items = enriched_items
         req_total = float(sum(float(getattr(i, "required_quantity", 0) or 0) for i in items))
         picked_total = float(sum(float(getattr(i, "picked_quantity", 0) or 0) for i in items))
         resp.total_items = len(items)

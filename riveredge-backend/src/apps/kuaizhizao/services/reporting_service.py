@@ -305,13 +305,15 @@ async def _compute_operation_reportable_remaining(
             break
 
     if op_index == 0:
-        # 与计划剩余同一套有效超报（含工序档案回落）
-        adjacent_prev = max_completed_quantity_for_plan(plan_qty, om, ov)
+        adjacent_prev = plan_qty
     else:
         adjacent_prev = await resolve_operation_transfer_qualified(
             tenant_id, int(work_order.id), ops[op_index - 1]
         )
-    prev_transfer = await resolve_material_incoming_qty(
+    from apps.kuaizhizao.services.operation_jump_rules import work_order_allows_operation_jump
+    from apps.kuaizhizao.services.work_order_service import WorkOrderService
+
+    incoming = await resolve_material_incoming_qty(
         tenant_id,
         work_order,
         work_order_operation,
@@ -319,6 +321,10 @@ async def _compute_operation_reportable_remaining(
         adjacent_prev_transfer=adjacent_prev,
         ordered_operations=ops,
     )
+    if op_index == 0 or work_order_allows_operation_jump(work_order):
+        incoming = incoming + await WorkOrderService.resolve_material_incoming_picking_extra_units(
+            tenant_id, int(work_order.id), plan_qty
+        )
 
     master_id = int(work_order_operation.operation_id) if work_order_operation.operation_id else 0
     mode = "none"
@@ -367,18 +373,16 @@ async def _compute_operation_reportable_remaining(
         inspection_unqualified=insp_u,
         scrap_qty=scrap_qty,
     )
-    material_remaining = prev_transfer - material_consumed
+    material_remaining = incoming - material_consumed
     if material_remaining < 0:
         material_remaining = Decimal("0")
     remaining = min(plan_remaining, material_remaining)
 
-    # 「报工前必须确认领料」开启时，可报量再受正式领料可支撑产量约束
+    # 未叠补领超额时，可在此再做「报工前必须确认领料」硬门禁
     from infra.services.business_config_service import BusinessConfigService
 
     policy = await BusinessConfigService().get_work_order_picking_policy(tenant_id)
     if policy.get("require_confirmed_picking_before_reporting", False):
-        from apps.kuaizhizao.services.work_order_service import WorkOrderService
-
         max_from_pick = await WorkOrderService.resolve_max_reportable_qty_from_confirmed_picking(
             tenant_id, int(work_order.id)
         )
@@ -2438,8 +2442,14 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if not wo_ops:
                 continue
 
+            from apps.kuaizhizao.services.operation_jump_rules import work_order_allows_operation_jump
             from apps.kuaizhizao.services.over_report_rules import first_operation_material_incoming
+            from apps.kuaizhizao.services.work_order_service import WorkOrderService
 
+            wo_jump = work_order_allows_operation_jump(wo)
+            picking_extra = await WorkOrderService.resolve_material_incoming_picking_extra_units(
+                tenant_id, wo_id, plan_qty
+            )
             prev_transfer = first_operation_material_incoming(plan_qty, wo_ops[0], wo)
             for op_index, op in enumerate(wo_ops):
                 master_id = int(op.operation_id) if op.operation_id is not None else 0
@@ -2488,6 +2498,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     policy_cache=policy_cache,
                     inspections_by_op={master_id: op_inspections} if master_id else None,
                 )
+                if op_index == 0 or wo_jump:
+                    incoming = incoming + picking_extra
                 material_remaining = incoming - material_consumed
                 if material_remaining < 0:
                     material_remaining = Decimal("0")

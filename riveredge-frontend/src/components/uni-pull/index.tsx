@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Button, Dropdown, Space, Tooltip } from 'antd';
+import type { MenuProps } from 'antd';
 import type { ButtonProps } from 'antd';
 import { DownOutlined, FileSearchOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +11,30 @@ export interface UniPullMenuItem {
   onClick?: () => void;
   disabled?: boolean;
   type?: 'divider';
+}
+
+function buildPullDropdownMenu(
+  menuItems: UniPullMenuItem[],
+): MenuProps {
+  const handlers = new Map<string, () => void>();
+  for (const it of menuItems) {
+    if (it.type === 'divider' || it.disabled || !it.onClick) continue;
+    handlers.set(it.key, it.onClick);
+  }
+  return {
+    items: menuItems.map((it) =>
+      it.type === 'divider'
+        ? { type: 'divider' as const, key: it.key }
+        : {
+            key: it.key,
+            label: it.label,
+            disabled: it.disabled,
+          },
+    ),
+    onClick: ({ key }) => {
+      handlers.get(String(key))?.();
+    },
+  };
 }
 
 export interface UniPullCreateToolbarProps {
@@ -39,6 +64,7 @@ export const UniPullCreateToolbar: React.FC<UniPullCreateToolbarProps> = ({
     typeof createLabel === 'string'
       ? createLabel.replace(/\s*\(Alt\+N\)/gi, '').trimEnd()
       : createLabel;
+  const dropdownMenu = useMemo(() => buildPullDropdownMenu(menuItems), [menuItems]);
 
   return (
     <Space.Compact key={compactKey} className="uni-pull-create-toolbar">
@@ -49,18 +75,7 @@ export const UniPullCreateToolbar: React.FC<UniPullCreateToolbarProps> = ({
       </Tooltip>
       <Dropdown
         trigger={['click']}
-        menu={{
-          items: menuItems.map((it) =>
-            it.type === 'divider'
-              ? { type: 'divider' as const, key: it.key }
-              : {
-                  key: it.key,
-                  label: it.label,
-                  disabled: it.disabled,
-                  onClick: it.onClick,
-                },
-          ),
-        }}
+        menu={dropdownMenu}
       >
         <Button type="primary" size={size} icon={<DownOutlined />} />
       </Dropdown>
@@ -111,22 +126,13 @@ export const UniPullLoadButton: React.FC<UniPullLoadButtonProps> = ({
     );
   }
 
+  const dropdownMenu = useMemo(() => buildPullDropdownMenu(menuItems), [menuItems]);
+
   return (
   <Dropdown
     key={compactKey}
     trigger={['click']}
-    menu={{
-      items: menuItems.map((it) =>
-        it.type === 'divider'
-          ? { type: 'divider' as const, key: it.key }
-          : {
-              key: it.key,
-              label: it.label,
-              disabled: it.disabled,
-              onClick: it.onClick,
-            },
-      ),
-    }}
+    menu={dropdownMenu}
   >
     <Button type={type} color={color} variant={variant} icon={icon ?? <FileSearchOutlined />}>
       {resolvedLabel}

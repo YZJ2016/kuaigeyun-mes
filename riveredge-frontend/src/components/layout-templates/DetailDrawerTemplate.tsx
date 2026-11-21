@@ -90,6 +90,11 @@ export interface DetailDrawerTemplateProps<T extends Record<string, any> = Recor
   /** 协作区审核态数据源；有 audit 时在标题右侧展示审核状态 */
   collaborationAuditRecord?: AuditPhaseRecord | null;
   collaborationVisible?: boolean;
+  /**
+   * 生命周期（collaboration）与明细（lines）的上下顺序。
+   * 仓储出入库等先看清明细再将周期置后的场景用 afterLines。
+   */
+  collaborationPlacement?: 'beforeLines' | 'afterLines';
 
   /** 生命周期与明细之间的附加区块（如询价单受邀供应商） */
   supplementary?: ReactNode;
@@ -226,6 +231,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   collaborationTitleExtra,
   collaborationAuditRecord,
   collaborationVisible,
+  collaborationPlacement = 'beforeLines',
   supplementary,
   supplementaryTitle,
   supplementaryVisible,
@@ -416,6 +422,33 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
     </>
   );
 
+  const afterBasicSection =
+    showAfterBasic ? (
+      <DetailDrawerSection titleAccent title={afterBasicTitle}>
+        {afterBasic}
+      </DetailDrawerSection>
+    ) : null;
+  const collaborationSection = showCollaboration ? (
+    <DetailDrawerSection
+      titleAccent
+      title={collaborationSectionTitle}
+      titleExtra={resolvedCollaborationTitleExtra}
+    >
+      {stackedCollaboration}
+    </DetailDrawerSection>
+  ) : null;
+  const supplementarySection = showSupplementary ? (
+    <DetailDrawerSection titleAccent title={supplementaryTitle}>
+      {supplementary}
+    </DetailDrawerSection>
+  ) : null;
+  const linesSection = showLines ? (
+    <DetailDrawerSection titleAccent title={resolvedLinesTitle}>
+      <DetailDrawerLinesScroll>{lines}</DetailDrawerLinesScroll>
+    </DetailDrawerSection>
+  ) : null;
+  const linesBeforeCollaboration = collaborationPlacement !== 'afterLines';
+
   const sectionedBody = (
     <>
       {showBasic ? (
@@ -423,30 +456,20 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
           {withBasicSideExtra(basic, basicExtra)}
         </DetailDrawerSection>
       ) : null}
-      {showAfterBasic ? (
-        <DetailDrawerSection titleAccent title={afterBasicTitle}>
-          {afterBasic}
-        </DetailDrawerSection>
-      ) : null}
-      {showCollaboration ? (
-        <DetailDrawerSection
-          titleAccent
-          title={collaborationSectionTitle}
-          titleExtra={resolvedCollaborationTitleExtra}
-        >
-          {stackedCollaboration}
-        </DetailDrawerSection>
-      ) : null}
-      {showSupplementary ? (
-        <DetailDrawerSection titleAccent title={supplementaryTitle}>
-          {supplementary}
-        </DetailDrawerSection>
-      ) : null}
-      {showLines ? (
-        <DetailDrawerSection titleAccent title={resolvedLinesTitle}>
-          <DetailDrawerLinesScroll>{lines}</DetailDrawerLinesScroll>
-        </DetailDrawerSection>
-      ) : null}
+      {afterBasicSection}
+      {linesBeforeCollaboration ? (
+        <>
+          {collaborationSection}
+          {supplementarySection}
+          {linesSection}
+        </>
+      ) : (
+        <>
+          {supplementarySection}
+          {linesSection}
+          {collaborationSection}
+        </>
+      )}
       {showTimeline ? (
         <DetailDrawerSection titleAccent title={resolvedTimelineTitle}>
           {timeline}
@@ -556,22 +579,23 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
           ...drawerFloatingWrapperStyle,
           ...styles?.wrapper,
         },
-        // 标题优先占位且不换行；extra 可收缩，避免动作条把「图纸详情」挤成竖排单字列
+        // 标题占满剩余宽度；extra 按内容定宽。仅在标题与按钮真实抢位时才省略号，避免右侧有空仍截断单号。
         title: {
-          flex: '0 1 auto',
+          flex: '1 1 auto',
           minWidth: 72,
-          maxWidth: '42%',
           overflow: 'hidden',
           whiteSpace: 'nowrap',
           textOverflow: 'ellipsis',
           ...styles?.title,
         },
         extra: {
-          flex: '1 1 auto',
-          minWidth: 0,
+          flex: '0 0 auto',
+          maxWidth: '62%',
           overflow: 'hidden',
           display: 'flex',
           justifyContent: 'flex-end',
+          flexWrap: 'wrap',
+          gap: 8,
           ...styles?.extra,
         },
       }}

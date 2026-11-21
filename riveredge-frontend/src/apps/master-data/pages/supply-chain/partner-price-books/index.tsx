@@ -56,7 +56,11 @@ import type {
 import type { Material } from '../../../types/material';
 import { useMaterialUnitOptions } from '../../../hooks/useMaterialUnitOptions';
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
-import { convertUnitPriceByPriceType } from '../../../utils/resolve-partner-material-price';
+import {
+  convertUnitPriceByPriceType,
+  getMaterialDefaultTaxRate,
+  resolveMaterialForPricing,
+} from '../../../utils/resolve-partner-material-price';
 import { formatDateTime, formatPrice } from '../../../../../utils/format';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
@@ -1005,13 +1009,21 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
                 placeholder={t('app.master-data.materialForm.mainCodePlaceholder', '请选择物料')}
                 required
                 fillMapping={{ unit: 'baseUnit' }}
-                onChange={(materialId, material) => {
+                onChange={async (materialId, material) => {
                   const partnerId = form.getFieldValue('partnerId');
                   setMaterialAllowedUnits(getMaterialAllowedUnits(material));
-                  form.setFieldsValue({
+                  const patch: Record<string, unknown> = {
                     _masterMaterialUuid: material?.uuid,
                     variantPrices: [],
-                  });
+                  };
+                  if (material) {
+                    const full = await resolveMaterialForPricing(material);
+                    const taxRate = getMaterialDefaultTaxRate(full);
+                    if (Number.isFinite(taxRate) && taxRate > 0) {
+                      patch.taxRate = taxRate;
+                    }
+                  }
+                  form.setFieldsValue(patch);
                   refreshAliasPreview(partnerId, materialId);
                 }}
               />

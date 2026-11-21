@@ -126,6 +126,33 @@ export function getTowardPlanQuantity(operation: any): number {
   return Number(operation?.qualified_quantity ?? operation?.qualifiedQuantity ?? 0) || 0;
 }
 
+/** 与后端工单工序列表 ``idx == 0`` 对齐，不用 ``sequence <= 1``（工艺序号常为 10/20）。 */
+export function isFirstWorkOrderOperation(
+  operation: any,
+  orderedOperations?: any[] | null,
+): boolean {
+  const list = orderedOperations?.filter((row) => row != null);
+  if (list?.length) {
+    const sorted = [...list].sort((a, b) => {
+      const sa = Number(a.sequence ?? 0);
+      const sb = Number(b.sequence ?? 0);
+      if (sa !== sb) return sa - sb;
+      return Number(a.id ?? 0) - Number(b.id ?? 0);
+    });
+    const woOpId = Number(operation?.id ?? 0);
+    if (woOpId > 0) {
+      return Number(sorted[0]?.id ?? 0) === woOpId;
+    }
+    const masterId = Number(operation?.operation_id ?? operation?.operationId ?? 0);
+    if (masterId > 0) {
+      const firstMaster = Number(sorted[0]?.operation_id ?? sorted[0]?.operationId ?? 0);
+      return firstMaster === masterId;
+    }
+  }
+  const seq = Number(operation?.sequence ?? 1);
+  return seq <= 1;
+}
+
 /** 计划可报（剩余）：距「计划+超报」累计完成上限的剩余量 */
 export function getPlanRemainingReportableQuantity(
   operation: any,
@@ -137,7 +164,7 @@ export function getPlanRemainingReportableQuantity(
   return Math.max(0, cap - done);
 }
 
-/** 物料可报（剩余）：上道合格转出尚未在本工序消耗的数量（首道为计划+超报抬高后的在制起点） */
+/** 物料可报（剩余）：上道转入减本道消耗（首道/允许跳转默认计划数；超报段靠补领抬高，见后端 material_remaining） */
 export function getMaterialRemainingReportableQuantity(operation: any): number | null {
   const raw = operation?.material_remaining ?? operation?.materialRemaining;
   if (raw == null || raw === '') return null;
@@ -148,6 +175,10 @@ export interface ReportableQuantityBreakdown {
   planCap: number;
   operationCompleted: number;
   planRemaining: number;
+  /** 工单计划内还可报（不含超报段） */
+  standardPlanRemaining: number;
+  /** 超报段还可报（计划已满后仍可报部分） */
+  overReportRemaining: number;
   materialRemaining: number | null;
   /** 上道工序合格转出（本工序在制来源） */
   prevTransferQty: number | null;
@@ -159,6 +190,7 @@ export function getReportableQuantityBreakdown(
   operation: any,
   workOrderQuantity: number,
   workOrder?: any,
+  orderedOperations?: any[] | null,
 ): ReportableQuantityBreakdown {
   const planCap = getMaxReportableQuantityForOperation(operation, workOrderQuantity, workOrder);
   const operationCompleted =
@@ -171,25 +203,26 @@ export function getReportableQuantityBreakdown(
   // prev = material_remaining + material_consumed；消耗口径与后端一致
   const metrics = getOperationQualityMetrics(operation);
   const qualified = Number(operation?.qualified_quantity ?? operation?.qualifiedQuantity ?? 0) || 0;
-  const seq = Number(operation?.sequence ?? 1);
-  const isFirstOperation = seq <= 1;
+  const isFirstOperation = isFirstWorkOrderOperation(operation, orderedOperations);
   let materialConsumed = isFirstOperation ? qualified : operationCompleted;
   if (metrics.fromInspection && metrics.qualified + metrics.unqualified > 0) {
     materialConsumed = Math.max(0, operationCompleted - metrics.unqualified);
   }
-  // 首道在制起点 = 计划+超报；接口 material_remaining 会随改超报变旧，须按当前 planCap 重算
   let materialRemaining = getMaterialRemainingReportableQuantity(operation);
-  if (isFirstOperation) {
-    materialRemaining = Math.max(0, planCap - materialConsumed);
-  }
   const prevTransferQty =
     materialRemaining != null ? materialRemaining + materialConsumed : null;
   const effectiveRemaining =
     materialRemaining != null ? Math.min(planRemaining, materialRemaining) : planRemaining;
+  const planQty = Number(workOrderQuantity) || 0;
+  const towardPlan = getTowardPlanQuantity(operation);
+  const standardPlanRemaining = Math.max(0, Math.min(planRemaining, planQty - towardPlan));
+  const overReportRemaining = Math.max(0, planRemaining - standardPlanRemaining);
   return {
     planCap,
     operationCompleted,
     planRemaining,
+    standardPlanRemaining,
+    overReportRemaining,
     materialRemaining,
     prevTransferQty,
     effectiveRemaining,
@@ -216,9 +249,14 @@ export function getRemainingReportableQuantity(
   operation: any,
   workOrderQuantity: number,
   workOrder?: any,
+  orderedOperations?: any[] | null,
 ): number {
-  return getReportableQuantityBreakdown(operation, workOrderQuantity, workOrder)
-    .effectiveRemaining;
+  return getReportableQuantityBreakdown(
+    operation,
+    workOrderQuantity,
+    workOrder,
+    orderedOperations,
+  ).effectiveRemaining;
 }
 
 /** 工序卡片环形进度：方案质检按检验合格数/计划数，其余按报工合格数/计划数 */

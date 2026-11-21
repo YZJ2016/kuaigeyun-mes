@@ -31,6 +31,7 @@ import {
   UNI_PULL_QUERY_MAX_FETCH_LIMIT,
   pagePullCandidates,
   renderPullQueryDocStatus,
+  resolvePullConfirmNumericIds,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import {
@@ -88,9 +89,11 @@ import {
 } from '../../../utils/orderChangeLifecycle';
 import { formatOrderChangeCategory, ORDER_CHANGE_CATEGORY_LABELS } from '../../../utils/orderChangeCategory';
 import {
+  OrderChangeFormItemsTableScrollY,
   OrderChangeItemsTable,
   type OrderChangeItemsTablePricing,
 } from '../../../components/order-change/OrderChangeItemsTable';
+import { SalesOrderSourceOrderHeaderPanel } from '../../../components/order-change/SalesOrderSourceOrderHeaderPanel';
 import { OrderChangeImpactModal } from '../../../components/order-change/OrderChangeImpactModal';
 import { isSourceOrderEligibleForChange } from '../../../utils/orderChangeSourceOrder';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
@@ -191,6 +194,8 @@ const SalesOrderChangesPage: React.FC = () => {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingStatus, setEditingStatus] = useState<string | null>(null);
   const [creatingSourceOrderId, setCreatingSourceOrderId] = useState<number | null>(null);
+  const [sourceSalesOrder, setSourceSalesOrder] = useState<SalesOrder | null>(null);
+  const [sourceSalesOrderLoading, setSourceSalesOrderLoading] = useState(false);
   const commitAfterSaveRef = useRef(false);
   const [changePricing, setChangePricing] = useState<OrderChangeItemsTablePricing | undefined>();
   const [impactOpen, setImpactOpen] = useState(false);
@@ -267,16 +272,25 @@ const SalesOrderChangesPage: React.FC = () => {
       setEditingId(full.id!);
       setEditingStatus(full.status ?? null);
       setCreatingSourceOrderId(null);
+      setSourceSalesOrder(null);
+      setSourceSalesOrderLoading(
+        full.source_order_id != null && Number(full.source_order_id) > 0,
+      );
       let pricingAsOf = full.created_at ? dayjs(full.created_at) : dayjs();
       if (full.source_order_id != null && Number(full.source_order_id) > 0) {
         try {
-          const sourceOrder = await getSalesOrder(full.source_order_id, true, false, { view: 'options' });
+          const sourceOrder = await getSalesOrder(full.source_order_id, false, false, { view: 'options' });
+          setSourceSalesOrder(sourceOrder);
           if (sourceOrder.order_date) {
             pricingAsOf = dayjs(sourceOrder.order_date);
           }
         } catch {
-          /* 保留变更单创建时间 */
+          setSourceSalesOrder(null);
+        } finally {
+          setSourceSalesOrderLoading(false);
         }
+      } else {
+        setSourceSalesOrderLoading(false);
       }
       setChangePricing({
         side: 'sales',
@@ -420,6 +434,8 @@ const SalesOrderChangesPage: React.FC = () => {
       notes: '',
       attachments: [],
     });
+    setSourceSalesOrder(order);
+    setSourceSalesOrderLoading(false);
     resetChangeFormFieldValues();
   }, [editForm, resetChangeFormFieldValues, t]);
 
@@ -470,10 +486,21 @@ const SalesOrderChangesPage: React.FC = () => {
       }
     },
     onConfirm: async (keys, rows) => {
-      const selectedIds = rows
-        .filter((row) => isPullSalesOrderSelectable(row))
-        .map((row) => Number(row.id))
-        .filter((id) => id > 0);
+      const numericIds = resolvePullConfirmNumericIds(keys, rows, 'id');
+      if (!numericIds.length) {
+        message.warning(t('app.kuaizhizao.salesOrderChange.selectSalesOrder'));
+        return;
+      }
+      const rowById = new Map(
+        rows
+          .filter((row) => row.id != null)
+          .map((row) => [Number(row.id), row] as const),
+      );
+      const selectedIds = numericIds.filter((id) => {
+        const row = rowById.get(id);
+        if (!row) return true;
+        return isPullSalesOrderSelectable(row);
+      });
       if (!selectedIds.length) {
         message.warning(t('app.kuaizhizao.salesOrderChange.selectSalesOrder'));
         return;
@@ -534,20 +561,40 @@ const SalesOrderChangesPage: React.FC = () => {
   }, [pullFromSalesOrderQuery]);
   useNewShortcut(openCreate);
 
+  // 销售订单下推等入口可能只带 ?source_order_id= 落在列表路由，须转到 /new 才走建单初始化
+  useEffect(() => {
+    if (isFormPage) return;
+    const raw = searchParams.get('source_order_id');
+    if (!raw) return;
+    const sourceId = Number(raw);
+    if (!Number.isInteger(sourceId) || sourceId <= 0) return;
+    navigate(`${SALES_ORDER_CHANGE_CREATE_PATH}?source_order_id=${sourceId}`, { replace: true });
+  }, [isFormPage, navigate, searchParams]);
+
   useEffect(() => {
     if (!isFormPage) {
       formPageInitKeyRef.current = null;
+      setSourceSalesOrder(null);
+      setSourceSalesOrderLoading(false);
       return;
     }
+    const createSourceIdParam = searchParams.get('source_order_id');
     const initKey = isCreatePage
-      ? `create:${location.search}`
+      ? createSourceIdParam
+        ? `create:source:${createSourceIdParam}`
+        : creatingSourceOrderId != null
+          ? `create:source:${creatingSourceOrderId}`
+          : 'create:missing-source'
       : `edit:${editRouteId}`;
     if (formPageInitKeyRef.current === initKey) return;
     formPageInitKeyRef.current = initKey;
 
     if (isCreatePage) {
-      const sourceId = searchParams.get('source_order_id');
+      const sourceId = createSourceIdParam;
       if (!sourceId) {
+        if (creatingSourceOrderId != null) {
+          return;
+        }
         leaveSalesOrderChangeFormPage();
         return;
       }
@@ -561,8 +608,6 @@ const SalesOrderChangesPage: React.FC = () => {
           leaveSalesOrderChangeFormPage();
         })
         .finally(() => {
-          searchParams.delete('source_order_id');
-          setSearchParams(searchParams, { replace: true });
           setFormPageLoading(false);
         });
       return;
@@ -578,16 +623,15 @@ const SalesOrderChangesPage: React.FC = () => {
       })
       .finally(() => setFormPageLoading(false));
   }, [
+    creatingSourceOrderId,
     editRouteId,
     hydrateSalesOrderChangeEditForm,
     initCreateFromSourceOrder,
     isCreatePage,
     isFormPage,
     leaveSalesOrderChangeFormPage,
-    location.search,
     message,
     searchParams,
-    setSearchParams,
     t,
   ]);
 
@@ -1174,11 +1218,16 @@ const SalesOrderChangesPage: React.FC = () => {
         >
           <Spin spinning={formPageLoading}>
             <ProForm form={editForm} layout="vertical" submitter={false} onFinish={() => void handleSaveEdit()}>
+              <SalesOrderSourceOrderHeaderPanel
+                order={sourceSalesOrder}
+                loading={sourceSalesOrderLoading || formPageLoading}
+              />
               <OrderChangeItemsTable
                 items={editItems ?? []}
                 editable
                 onChange={setEditItems}
                 pricing={changePricing}
+                bodyMaxHeight={OrderChangeFormItemsTableScrollY}
               />
               <ProFormTextArea
                 name="change_reason"

@@ -12660,6 +12660,8 @@ export default {
   'app.kuaizhizao.salesOrderChange.colLifecycle': '执行状态',
   'app.kuaizhizao.salesOrderChange.colChangeReason': '变更原因',
   'app.kuaizhizao.salesOrderChange.createFromOrder': '选单创建',
+  'app.kuaizhizao.salesOrderChange.sourceOrderHeaderTitle': '原销售订单',
+  'app.kuaizhizao.salesOrderChange.sourceOrderMissing': '未加载到原销售订单',
   'app.kuaizhizao.salesOrderChange.lifecycleNextSubmitReview': '提交审核',
   'app.kuaizhizao.salesOrderChange.lifecyclePendingApply': '待生效',
   'app.kuaizhizao.salesOrderChange.lifecycleNextApprove': '审批通过',
@@ -17919,7 +17921,7 @@ export default {
   'app.kuaizhizao.workOrder.opColWorkshop': '车间',
   'app.kuaizhizao.workOrder.opColEquipment': '设备',
   'app.kuaizhizao.workOrder.opColWorkers': '作业人员',
-  'app.kuaizhizao.workOrder.opColStandardTime': '标准工时',
+  'app.kuaizhizao.workOrder.opColStandardTime': '标准工时(h/件)',
   'app.kuaizhizao.workOrder.opColPieceRate': '工价',
   'app.kuaizhizao.workOrder.opColWorkRequirement': '作业要求',
   'app.kuaizhizao.workOrder.formWarehouse': '仓库',
@@ -50344,6 +50346,10 @@ export default {
     '已超出本次可报（{{max}}），请调整合格数或不合格数。',
   'apps.kuaizhizao.workOrder.quickReport.exceedEffectiveSubmit':
     '报工数量不能超过本次可报（{{max}}）',
+  'apps.kuaizhizao.workOrder.quickReport.standardReportableQty': '可报数量',
+  'apps.kuaizhizao.workOrder.quickReport.overReportableQty': '可超报数量',
+  'apps.kuaizhizao.workOrder.quickReport.effectiveCappedByMaterialHint':
+    '超报只放开报工累计上限；剩余物料默认按工单计划数，超报段须先补领/追加正式发料后才会抬高。本次可报取计划可报与物料剩余较小值。',
   'app.kuaizhizao.customerFollowUp.activityTypePlaceholder': '请选择活动类型',
   'app.kuaizhizao.customerFollowUp.quickAddCustomer': '快速新增客户',
   'app.kuaizhizao.salesForecast.importTitle': '导入销售预测',
@@ -56084,4 +56090,64 @@ export default {
     '工作台采购申请待办仅显示本人待审',
   'pages.dashboard.updateLog.entries.dashboard-todo-purchase-requisition-assignee-only-r01.description':
     '采购申请待审核改由审批任务指派承载；有查看权限不再看到全租户待审单。已处理完的待办（任务非 pending）不会留在待办事项里。',
+  'pages.dashboard.updateLog.entries.price-book-material-default-tax-r01.title':
+    '价格本选料带出物料默认税率',
+  'pages.dashboard.updateLog.entries.price-book-material-default-tax-r01.description':
+    '新建或编辑客户/供应商价格本时，选内部物料后自动填入该物料主数据默认税率（%），仍可手工修改。需更新 Web 端。',
+  'pages.dashboard.updateLog.entries.sales-order-change-form-header-body-r01.title':
+    '销售变更单展示原销售订单表头',
+  'pages.dashboard.updateLog.entries.sales-order-change-form-header-body-r01.description':
+    '新建与编辑页只读展示原销售订单表头（单号、客户、日期、金额等），下方为变更明细表；明细表限高滚动且列头固定。需更新 Web 端。',
+  'pages.dashboard.updateLog.entries.sales-order-change-create-tab-flash-r01.title':
+    '修复销售变更单新建页 Tab 一闪关闭',
+  'pages.dashboard.updateLog.entries.sales-order-change-create-tab-flash-r01.description':
+    '从订单带出明细后不再清空地址栏 source_order_id 触发二次初始化；已加载源单时不再误判无来源并关闭新建 Tab。需更新 Web 端。',
+  'pages.dashboard.updateLog.entries.sales-order-change-pull-confirm-ids-r01.title':
+    '修复销售变更单取单确认无法跳转新建',
+  'pages.dashboard.updateLog.entries.sales-order-change-pull-confirm-ids-r01.description':
+    '取单弹窗点新建时按选中键解析销售订单 ID，避免跨页仅 keys 有值、rows 为空时无法跳转新建变更单。需更新 Web 端。',
+  'pages.dashboard.updateLog.entries.sales-order-change-pull-create-nav-r01.title':
+    '修复销售变更单从订单创建无法进入新建页',
+  'pages.dashboard.updateLog.entries.sales-order-change-pull-create-nav-r01.description':
+    '修正列表下拉取单与销售订单下推的跳转路径为销售变更单新建页，并修复 antd6 下拉菜单点击无效。需更新 Web 端。',
+  'pages.dashboard.updateLog.entries.over-report-material-picking-r01.title':
+    '超报与在制分离须补领抬高',
+  'pages.dashboard.updateLog.entries.over-report-material-picking-r01.description':
+    '工序卡片剩余物料默认按工单计划数，超报仅抬高报工上限；超产段在正式领料/补料可支撑产量增加后才扩展在制。需重启 API 并更新 Web 端。',
+  'pages.dashboard.updateLog.entries.reporting-quantity-panel-split-r01.title':
+    '报工弹窗区分可报与可超报数量',
+  'pages.dashboard.updateLog.entries.reporting-quantity-panel-split-r01.description':
+    '快捷报工与报工管理弹窗数量区首行展示可报数量、可超报数量与本次可报，辅助对照超报配置与录入上限。需更新 Web 端。',
+  'pages.dashboard.updateLog.entries.work-order-over-report-first-op-seq-r01.title':
+    '修复首道工序超报本次可报被卡死',
+  'pages.dashboard.updateLog.entries.work-order-over-report-first-op-seq-r01.description':
+    '报工弹窗首道判定改为路线排序第一道工序，不再用序号≤1；首道与允许跳转工单的物料剩余与计划+超报对齐，避免「剩余可报 1500、本次可报 1000」无法录入。需更新 Web 端。',
+  'pages.dashboard.updateLog.entries.warehouse-hub-detail-lifecycle-order-r01.title':
+    '出入库详情生命周期置于明细后',
+  'pages.dashboard.updateLog.entries.warehouse-hub-detail-lifecycle-order-r01.description':
+    '出库 Hub 与入库 Hub 详情抽屉区块顺序改为：基本信息、出库入库明细、生命周期、操作记录；与先看物料行再看流程状态的阅读习惯一致。需更新 Web 端。',
+  'pages.dashboard.updateLog.entries.detail-drawer-title-truncate-r01.title':
+    '详情抽屉标题不再过早截断',
+  'pages.dashboard.updateLog.entries.detail-drawer-title-truncate-r01.description':
+    'DetailDrawerTemplate 去掉标题区 42% 硬上限，标题占满剩余宽度；右侧操作区按内容定宽，仅在与标题真实抢位时才显示省略号。需更新 Web 端。',
+  'pages.dashboard.updateLog.entries.outbound-detail-edit-button-r01.title':
+    '出库详情抽屉编辑按钮显示修复',
+  'pages.dashboard.updateLog.entries.outbound-detail-edit-button-r01.description':
+    '生产领料等出库单详情右上角「编辑」误用裸 rowActionKind，只出现空方框；已改为 prepareRowActionButton，与入库详情一致显示图标与文案。需更新 Web 端。',
+  'pages.dashboard.updateLog.entries.production-picking-detail-spec-model-r01.title':
+    '生产领料详情明细显示规格型号',
+  'pages.dashboard.updateLog.entries.production-picking-detail-spec-model-r01.description':
+    '出库单详情中生产领料明细在物料名称后增加规格、型号列；详情接口按行快照与主数据补全型号展示。需更新 Web 端并重启后端。',
+  'pages.dashboard.updateLog.entries.work-order-split-print-r02.title':
+    '拆分子工单列表打印门控补齐',
+  'pages.dashboard.updateLog.entries.work-order-split-print-r02.description':
+    '工单树形列表中的拆分子行现会随列表一并返回打印 capabilities，勾选子工单后工具栏打印不再因缺字段常亮禁用；请重新构建前端并重启后端后验证。',
+  'pages.dashboard.updateLog.entries.work-order-split-print-r01.title':
+    '拆分工单支持打印',
+  'pages.dashboard.updateLog.entries.work-order-split-print-r01.description':
+    '工单列表勾选拆分子工单时，工具栏打印与条码能力与主工单一致；后端 capabilities 对拆分子行开放打印，打印仍走工单单据 ID。',
+  'pages.dashboard.updateLog.entries.navigation-tree-disabled-app-filter-r01.title':
+    '停用应用后侧栏不再展示其菜单',
+  'pages.dashboard.updateLog.entries.navigation-tree-disabled-app-filter-r01.description':
+    '侧栏 navigation-tree 仅纳入已安装且已启用的应用；应用在应用中心停用后会同步关闭该应用菜单（含路径挂在快报表下但未绑 application_uuid 的历史行），清单同步也不得因 preserve 策略把已停用应用菜单重新打开。',
 };

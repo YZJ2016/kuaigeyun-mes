@@ -70,6 +70,7 @@ export function buildOperationsForCreatePayload(
         ? { assigned_equipment_id: op.assigned_equipment_id }
         : {}),
       ...(op.workshop_id != null ? { workshop_id: op.workshop_id } : {}),
+      ...(op.setup_time != null ? { setup_time: op.setup_time } : {}),
     }))
   }
   return undefined

@@ -12,10 +12,21 @@ from apps.kuaizhizao.models.outsource_order import OutsourceOrder
 from apps.kuaizhizao.models.rework_order import ReworkOrder
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.schemas.work_order import WorkOrderListResponse
+from apps.kuaizhizao.services.document_action_policy.enricher import (
+    _attach_capabilities_to_response,
+)
+from apps.kuaizhizao.services.document_action_policy.work_order import (
+    derive_work_order_capabilities,
+)
+
 
 def _split_child_response(wo: WorkOrder) -> WorkOrderListResponse:
     item = WorkOrderListResponse.model_validate(wo)
-    return item.model_copy(update={"row_kind": "split", "parent_work_order_id": wo.parent_work_order_id})
+    item = item.model_copy(
+        update={"row_kind": "split", "parent_work_order_id": wo.parent_work_order_id}
+    )
+    caps = derive_work_order_capabilities(item)
+    return _attach_capabilities_to_response(item, caps)
 
 
 def _rework_child_response(

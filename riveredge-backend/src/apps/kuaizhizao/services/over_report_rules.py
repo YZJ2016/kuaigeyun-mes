@@ -228,18 +228,18 @@ def remaining_completed_headroom(
 
 def first_operation_material_incoming(
     plan_qty: Any,
-    work_order_operation: Any,
+    work_order_operation: Any = None,
     work_order: Any = None,
 ) -> Decimal:
     """
-    首道在制起点：工单计划数量按本道超报规则抬高。
+    首道在制起点：仅工单计划数量。
 
-    若首道转入仍用裸计划数，则「计划剩余可报」含超报、「物料剩余」不含，
-    min() 后「本次可报」永远卡在计划数，工序超报配置形同失效。
-    有工单对象时与报工上限同一套 effective（行 none → 工单头）。
+    超报只抬高报工累计完成上限，不默认抬高在制/剩余物料；
+    超报段须靠正式领料（含补料过账）在工单侧堆高可支撑产量后叠加（见
+    WorkOrderService.resolve_material_incoming_picking_extra_units）。
     """
-    if work_order is not None:
-        om, ov = effective_over_report_for_reporting(work_order, work_order_operation)
-    else:
-        om, ov = tuple_from_model(work_order_operation)
-    return max_completed_quantity_for_plan(plan_qty, om, ov)
+    _ = (work_order_operation, work_order)
+    plan = to_decimal(plan_qty)
+    if plan < 0:
+        plan = Decimal("0")
+    return plan

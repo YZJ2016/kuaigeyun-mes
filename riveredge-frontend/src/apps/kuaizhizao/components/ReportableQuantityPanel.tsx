@@ -1,9 +1,9 @@
 /**
- * 报工弹窗：工单计划 / 累计料损 / 补料 / 已报合格数 / 剩余可报 / 物料剩余 / 本次可报
+ * 报工弹窗：工单计划 / 可报数量 / 可超报数量 / 物料剩余 / 本次可报 等参考量
  */
 
 import React, { useMemo } from 'react';
-import { Col, Row, Statistic, theme } from 'antd';
+import { Col, Row, Statistic, Typography, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -13,6 +13,7 @@ import {
 import { warehouseApi } from '../services/warehouse-execution';
 import { formatQuantity } from '../../../utils/format';
 import { convertBaseQtyToProductionDisplay } from '../../../utils/materialScenarioUnit';
+
 export interface ReportableQuantityPanelProps {
   operation: any;
   /** 工单计划数量（基础单位） */
@@ -42,8 +43,18 @@ const ReportableQuantityPanel: React.FC<ReportableQuantityPanelProps> = ({
 }) => {
   const { token } = theme.useToken();
   const { t } = useTranslation();
-  const { planRemaining, materialRemaining, effectiveRemaining } =
-    getReportableQuantityBreakdown(operation, workOrderQuantity, workOrder ?? unitContext);
+  const {
+    standardPlanRemaining,
+    overReportRemaining,
+    materialRemaining,
+    effectiveRemaining,
+    planRemaining,
+  } = getReportableQuantityBreakdown(
+    operation,
+    workOrderQuantity,
+    workOrder ?? unitContext,
+    operations,
+  );
 
   const toDisplay = (baseQty: number) =>
     unitContext ? convertBaseQtyToProductionDisplay(baseQty, unitContext) : baseQty;
@@ -54,6 +65,8 @@ const ReportableQuantityPanel: React.FC<ReportableQuantityPanelProps> = ({
     const raw = productUnit || baseUnit;
     return raw ? ` ${raw}` : '';
   })();
+
+  const qtyText = (baseQty: number) => `${formatQuantity(toDisplay(baseQty))}${unitSuffix}`;
 
   const operationQualified =
     Number(operation?.qualified_quantity ?? operation?.qualifiedQuantity ?? 0) || 0;
@@ -93,16 +106,59 @@ const ReportableQuantityPanel: React.FC<ReportableQuantityPanelProps> = ({
     lineHeight: 1.2,
   };
 
-  const metrics: Array<{ key: string; title: string; value: number | string; valueStyle?: React.CSSProperties }> = [
+  type Metric = {
+    key: string;
+    title: string;
+    value: number | string;
+    valueStyle?: React.CSSProperties;
+    emphasis?: boolean;
+  };
+
+  const primaryMetrics: Metric[] = [
     {
       key: 'plan',
       title: t('apps.kuaizhizao.workOrder.quickReport.workOrderPlanQty'),
-      value: `${toDisplay(workOrderQuantity)}${unitSuffix}`,
+      value: qtyText(workOrderQuantity),
+    },
+    {
+      key: 'standard',
+      title: t('apps.kuaizhizao.workOrder.quickReport.standardReportableQty'),
+      value: qtyText(standardPlanRemaining),
+      valueStyle: { color: token.colorTextHeading },
+    },
+    {
+      key: 'over',
+      title: t('apps.kuaizhizao.workOrder.quickReport.overReportableQty'),
+      value: overReportRemaining > 0 ? qtyText(overReportRemaining) : `0${unitSuffix}`,
+      valueStyle: {
+        color: overReportRemaining > 0 ? token.colorWarning : token.colorTextTertiary,
+      },
+    },
+    {
+      key: 'materialRemaining',
+      title: t('apps.kuaizhizao.workOrder.quickReport.materialRemainingTitle'),
+      value:
+        materialRemaining == null ? '—' : qtyText(materialRemaining),
+    },
+    {
+      key: 'effective',
+      title: t('apps.kuaizhizao.workOrder.quickReport.effectiveReportableTitle'),
+      value: qtyText(effectiveRemaining),
+      valueStyle: { color: token.colorPrimary, fontSize: 20 },
+      emphasis: true,
+    },
+  ];
+
+  const secondaryMetrics: Metric[] = [
+    {
+      key: 'qualified',
+      title: t('apps.kuaizhizao.workOrder.quickReport.reportedQualifiedQty'),
+      value: qtyText(operationQualified),
     },
     {
       key: 'loss',
       title: t('apps.kuaizhizao.workOrder.quickReport.cumulativeMaterialLoss'),
-      value: `${formatQuantity(toDisplay(cumulativeLoss))}${unitSuffix}`,
+      value: qtyText(cumulativeLoss),
       valueStyle: {
         color: cumulativeLoss > 0 ? token.colorError : token.colorTextTertiary,
       },
@@ -110,36 +166,26 @@ const ReportableQuantityPanel: React.FC<ReportableQuantityPanelProps> = ({
     {
       key: 'replenish',
       title: t('apps.kuaizhizao.workOrder.quickReport.replenishmentQty'),
-      value: `${toDisplay(replenishmentQty)}${unitSuffix}`,
+      value: qtyText(replenishmentQty),
       valueStyle: {
         color: replenishmentQty > 0 ? token.colorWarning : token.colorTextTertiary,
       },
     },
-    {
-      key: 'qualified',
-      title: t('apps.kuaizhizao.workOrder.quickReport.reportedQualifiedQty'),
-      value: `${toDisplay(operationQualified)}${unitSuffix}`,
-    },
-    {
-      key: 'planRemaining',
-      title: t('apps.kuaizhizao.workOrder.quickReport.planRemainingTitle'),
-      value: `${toDisplay(planRemaining)}${unitSuffix}`,
-    },
-    {
-      key: 'materialRemaining',
-      title: t('apps.kuaizhizao.workOrder.quickReport.materialRemainingTitle'),
-      value:
-        materialRemaining == null
-          ? '—'
-          : `${toDisplay(materialRemaining)}${unitSuffix}`,
-    },
-    {
-      key: 'effective',
-      title: t('apps.kuaizhizao.workOrder.quickReport.effectiveReportableTitle'),
-      value: `${toDisplay(effectiveRemaining)}${unitSuffix}`,
-      valueStyle: { color: token.colorPrimary },
-    },
   ];
+
+  const renderMetricRow = (items: Metric[]) => (
+    <Row gutter={[12, 8]} wrap align="top">
+      {items.map((m) => (
+        <Col key={m.key} flex={m.emphasis ? '1.15 1 120px' : '1 1 88px'} style={{ minWidth: 0 }}>
+          <Statistic
+            title={<span style={statTitleStyle}>{m.title}</span>}
+            value={m.value}
+            styles={{ content: { ...statValueStyle, ...m.valueStyle } }}
+          />
+        </Col>
+      ))}
+    </Row>
+  );
 
   return (
     <div
@@ -150,17 +196,13 @@ const ReportableQuantityPanel: React.FC<ReportableQuantityPanelProps> = ({
         border: `1px solid ${token.colorBorderSecondary}`,
       }}
     >
-      <Row gutter={8} wrap={false} align="top">
-        {metrics.map((m) => (
-          <Col key={m.key} flex="1 1 0" style={{ minWidth: 0 }}>
-            <Statistic
-              title={<span style={statTitleStyle}>{m.title}</span>}
-              value={m.value}
-              styles={{ content: {...statValueStyle, ...m.valueStyle } }}
-            />
-          </Col>
-        ))}
-      </Row>
+      {renderMetricRow(primaryMetrics)}
+      <div style={{ marginTop: 10 }}>{renderMetricRow(secondaryMetrics)}</div>
+      {planRemaining > effectiveRemaining + 1e-9 ? (
+        <Typography.Text type="secondary" style={{ display: 'block', marginTop: 10, fontSize: 12 }}>
+          {t('apps.kuaizhizao.workOrder.quickReport.effectiveCappedByMaterialHint')}
+        </Typography.Text>
+      ) : null}
     </div>
   );
 };

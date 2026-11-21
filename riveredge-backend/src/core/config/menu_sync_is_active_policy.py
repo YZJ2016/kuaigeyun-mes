@@ -14,7 +14,10 @@ def resolve_sync_is_active_for_existing_row(
 
     - ``preserve_existing_is_active=True``：不覆盖（返回 ``None``，调用方跳过赋值）。
     - ``False``：采用本次同步传入的 ``is_active``。
+    - 应用已停用（``is_active=False``）时：一律写入 ``False``，不受 preserve 影响。
     """
+    if not is_active:
+        return False
     if preserve_existing_is_active:
         return None
     return is_active

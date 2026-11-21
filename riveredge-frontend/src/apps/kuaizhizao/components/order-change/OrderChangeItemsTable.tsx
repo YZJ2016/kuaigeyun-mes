@@ -30,6 +30,8 @@ interface OrderChangeItemsTableProps {
   editable?: boolean;
   onChange?: (items: OrderChangeItem[]) => void;
   pricing?: OrderChangeItemsTablePricing;
+  /** 表单页明细限高：表头列固定、表身在区域内纵向滚动 */
+  bodyMaxHeight?: number;
 }
 
 function resolveRowKey(row: OrderChangeItem): string {
@@ -77,11 +79,14 @@ function inferLineChangeTypeForSave(row: OrderChangeItem): string {
   return 'QUANTITY';
 }
 
+export const OrderChangeFormItemsTableScrollY = 320;
+
 export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({
   items,
   editable,
   onChange,
   pricing,
+  bodyMaxHeight,
 }) => {
   const { t } = useTranslation();
 
@@ -358,15 +363,23 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({
           </Button>
         ) : null}
       </div>
-      <Table
-        rowKey={resolveRowKey}
-        size="small"
-        pagination={false}
-        scroll={{ x: 1200 }}
-        dataSource={items}
-        columns={columns}
-        rowClassName={(row) => (row.change_type === 'LINE_CANCEL' ? 'order-change-row-cancelled' : '')}
-      />
+      <div
+        className={bodyMaxHeight != null ? 'order-change-items-table-frame' : undefined}
+        style={bodyMaxHeight != null ? { maxHeight: bodyMaxHeight + 48 } : undefined}
+      >
+        <Table
+          rowKey={resolveRowKey}
+          size="small"
+          pagination={false}
+          scroll={{
+            x: 1200,
+            ...(bodyMaxHeight != null ? { y: bodyMaxHeight } : {}),
+          }}
+          dataSource={items}
+          columns={columns}
+          rowClassName={(row) => (row.change_type === 'LINE_CANCEL' ? 'order-change-row-cancelled' : '')}
+        />
+      </div>
       {editable ? (
         <style>{`.order-change-row-cancelled td { opacity: 0.55; text-decoration: line-through; }`}</style>
       ) : null}

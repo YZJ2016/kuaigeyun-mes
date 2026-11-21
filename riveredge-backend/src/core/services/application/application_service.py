@@ -746,11 +746,30 @@ class ApplicationService:
                             application_uuid=str(uuid),
                         )
                     else:
-                        await Menu.filter(
-                            tenant_id=tenant_id,
-                            application_uuid=uuid,
-                            deleted_at__isnull=True,
-                        ).update(is_active=False)
+                        app_code = str(updated_app.get("code") or "").strip()
+                        app_route = str(updated_app.get("route_path") or "").strip()
+                        if not app_route and app_code:
+                            app_route = f"/apps/{app_code}"
+                        conn_menu = await get_db_connection()
+                        try:
+                            await conn_menu.execute(
+                                """
+                                UPDATE core_menus
+                                SET is_active = FALSE, updated_at = NOW()
+                                WHERE tenant_id = $1 AND deleted_at IS NULL
+                                  AND (
+                                    application_uuid = $2
+                                    OR ($3::text <> '' AND path LIKE $3)
+                                  )
+                                """,
+                                tenant_id,
+                                str(uuid),
+                                f"{app_route.rstrip('/')}%"
+                                if app_route
+                                else "",
+                            )
+                        finally:
+                            await conn_menu.close()
                     await MenuService._clear_menu_cache(tenant_id)
 
             # 返回更新后的应用信息
@@ -1280,12 +1299,25 @@ class ApplicationService:
         else:
             conn = await get_db_connection()
             try:
+                app_route = str(application.get("route_path") or "").strip()
+                if not app_route and app_code:
+                    app_route = f"/apps/{app_code}"
+                path_prefix = f"{app_route.rstrip('/')}%"
                 menu_update_query = """
                     UPDATE core_menus
                     SET is_active = FALSE, updated_at = NOW()
-                    WHERE tenant_id = $1 AND application_uuid = $2 AND deleted_at IS NULL
+                    WHERE tenant_id = $1 AND deleted_at IS NULL
+                      AND (
+                        application_uuid = $2
+                        OR ($3::text <> '' AND path LIKE $3)
+                      )
                 """
-                await conn.execute(menu_update_query, tenant_id, str(uuid))
+                await conn.execute(
+                    menu_update_query,
+                    tenant_id,
+                    str(uuid),
+                    path_prefix if app_route else "",
+                )
             finally:
                 await conn.close()
 

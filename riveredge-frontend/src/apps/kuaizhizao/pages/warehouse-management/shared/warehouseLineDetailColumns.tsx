@@ -404,6 +404,20 @@ export function buildOutboundHubDetailLineColumns(
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
       { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 150 },
       {
+        title: t('app.kuaizhizao.warehouseCommon.colSpec'),
+        dataIndex: 'material_spec',
+        width: 120,
+        ellipsis: true,
+        render: (v: unknown) => dash(v),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseInbound.col.model'),
+        dataIndex: 'material_model',
+        width: 100,
+        ellipsis: true,
+        render: (v: unknown) => dash(v),
+      },
+      {
         title: t('app.kuaizhizao.warehouseOutbound.col.requiredQty'),
         dataIndex: 'required_quantity',
         width: 100,

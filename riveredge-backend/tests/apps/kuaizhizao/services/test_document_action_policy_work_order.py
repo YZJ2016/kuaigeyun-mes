@@ -51,6 +51,13 @@ def test_non_work_order_row_denied():
     assert not caps.revoke.allowed
 
 
+def test_split_child_row_allows_print_only():
+    caps = derive_work_order_capabilities(_wo(row_kind="split", status="released"))
+    assert caps.print.allowed
+    assert not caps.release.allowed
+    assert not caps.update.allowed
+
+
 def test_assert_release_on_completed_raises():
     with pytest.raises(BusinessLogicError):
         assert_work_order_capability(_wo(status="completed"), "release")

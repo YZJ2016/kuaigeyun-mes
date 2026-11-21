@@ -2669,7 +2669,9 @@ const SalesOrdersPage: React.FC = () => {
   };
 
   const handlePushToSalesOrderChange = (id: number) => {
-    navigate(`/apps/kuaizhizao/sales-management/sales-order-changes?source_order_id=${id}`);
+    navigate(
+      `/apps/kuaizhizao/sales-management/sales-order-changes/new?source_order_id=${id}`,
+    );
   };
 
   /** 直推工单（含预览） */

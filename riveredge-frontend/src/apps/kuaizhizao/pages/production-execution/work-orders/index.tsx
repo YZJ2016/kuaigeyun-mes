@@ -110,6 +110,7 @@ import {
   resolveMergeableWorkOrderIdsFromRowKeys,
   resolveWorkOrderGroupIdFromListRow,
   resolveWorkOrderIdsFromListRowKeys,
+  isWorkOrderListRowPrintTarget,
   WORK_ORDER_LIST_STALE_MS,
   WORK_ORDER_LIST_UNITABLE_QUERY_KEY,
 } from './workOrderListTable'
@@ -1881,6 +1882,14 @@ const WorkOrdersPage: React.FC = () => {
     [selectedRowKeys, workOrderListRowIndexVersion],
   )
 
+  const selectedWorkOrdersForPrint = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => workOrderRowByKeyRef.current.get(String(key)))
+        .filter((row): row is WorkOrder => row != null && isWorkOrderListRowPrintTarget(row)),
+    [selectedRowKeys, workOrderListRowIndexVersion],
+  )
+
   const {
     customFields: workOrderListCustomFields,
     generateCustomFieldColumns: generateWorkOrderCustomFieldColumns,
@@ -2062,7 +2071,7 @@ const WorkOrdersPage: React.FC = () => {
               workshop_id: workshopIds[0],
             }
           })
-          .filter(Boolean) as ReturnType<typeof parseOperationSequence>
+          .filter(Boolean)
 
       const fromLines = mapLinesToOperations()
       if (fromLines.length > 0) {
@@ -2134,7 +2143,12 @@ const WorkOrdersPage: React.FC = () => {
     setCreateAddOperationsModalVisible(false)
     setCreateAddOperationUuids([])
     messageApi.success(`已添加 ${appendRows.length} 个工序`)
-  }, [createAddOperationUuids, messageApi, operationList, selectedOperations])
+  }, [
+    createAddOperationUuids,
+    messageApi,
+    operationList,
+    selectedOperations,
+  ])
   // 只显示自制件
   const [onlyShowMake, setOnlyShowMake] = useState(true)
   // 从文档加载的产品列表（销售订单/销售预测/需求）
@@ -2557,7 +2571,12 @@ const WorkOrdersPage: React.FC = () => {
         report_team_id: undefined,
       }
     }
-    const remBase = getRemainingReportableQuantity(quickReportingOperation, qtyBase)
+    const remBase = getRemainingReportableQuantity(
+      quickReportingOperation,
+      qtyBase,
+      quickReportingWorkOrder,
+      quickReportingRouteOperations,
+    )
     const rem = convertBaseQtyToProductionDisplay(remBase, quickReportingWorkOrder)
     return {
       ...resolveDefaultReportingQuantityFields(
@@ -2575,6 +2594,7 @@ const WorkOrdersPage: React.FC = () => {
     quickReportingModalVisible,
     quickReportingWorkOrder,
     quickReportingOperation,
+    quickReportingRouteOperations,
     executionConfig?.default_reporting_quantity_mode,
   ])
 
@@ -3952,7 +3972,12 @@ const WorkOrdersPage: React.FC = () => {
     }
     if (operation.reporting_type === 'quantity') {
       const woQty = Number(workOrder.quantity) || 0
-      const rem = getRemainingReportableQuantity(operation, woQty)
+      const rem = getRemainingReportableQuantity(
+        operation,
+        woQty,
+        workOrder,
+        expandedOperationsMap[workOrder.id],
+      )
       if (rem <= 0) {
         if (isReportBlockedByUpstreamQc(operation, woQty)) {
           messageApi.warning(t('app.kuaizhizao.workOrder.reportBlockedByPrevQc'))
@@ -3981,7 +4006,9 @@ const WorkOrdersPage: React.FC = () => {
       if (!isBlankNumericInput(v)) return
       const rem = getRemainingReportableQuantity(
         quickReportingOperation,
-        Number(quickReportingWorkOrder.quantity) || 0
+        Number(quickReportingWorkOrder.quantity) || 0,
+        quickReportingWorkOrder,
+        quickReportingRouteOperations,
       )
       const remDisplay = convertBaseQtyToProductionDisplay(rem, quickReportingWorkOrder)
       const fallback = resolveDefaultReportingQuantityFields(
@@ -3993,6 +4020,7 @@ const WorkOrdersPage: React.FC = () => {
   }, [
     quickReportingOperation,
     quickReportingWorkOrder,
+    quickReportingRouteOperations,
     executionConfig?.default_reporting_quantity_mode,
   ])
 
@@ -4085,6 +4113,8 @@ const WorkOrdersPage: React.FC = () => {
         const remBase = getRemainingReportableQuantity(
           quickReportingOperation,
           Number(quickReportingWorkOrder.quantity) || 0,
+          quickReportingWorkOrder,
+          quickReportingRouteOperations,
         )
         const rem = convertBaseQtyToProductionDisplay(remBase, quickReportingWorkOrder)
         if (rq > rem + 1e-9) {
@@ -6895,8 +6925,8 @@ const WorkOrdersPage: React.FC = () => {
             label: t('app.kuaizhizao.workOrder.batchGenerateQrcode'),
             icon: <QrcodeOutlined />,
             disabled:
-              selectedWorkOrdersForBatch.length > 0 &&
-              !workOrderBatchPrintAllowed(selectedWorkOrdersForBatch, workOrderPerms.canPrint),
+              selectedWorkOrdersForPrint.length > 0 &&
+              !workOrderBatchPrintAllowed(selectedWorkOrdersForPrint, workOrderPerms.canPrint),
             onClick: () => void handleBatchGenerateQRCode(),
           },
           {
@@ -8653,7 +8683,7 @@ const WorkOrdersPage: React.FC = () => {
                   <UniCapabilityBatchButton
                     key="work-order-print"
                     selectedRowKeys={selectedRowKeys}
-                    selectedRecords={selectedWorkOrdersForBatch}
+                    selectedRecords={selectedWorkOrdersForPrint}
                     capabilityKey="print"
                     permAllowed={workOrderPerms.canPrint}
                     batchAllowed={(records, perm) => workOrderBatchPrintAllowed(records, perm)}
@@ -9457,6 +9487,8 @@ const WorkOrdersPage: React.FC = () => {
                     ? getRemainingReportableQuantity(
                         quickReportingOperation,
                         Number(quickReportingWorkOrder.quantity) || 0,
+                        quickReportingWorkOrder,
+                        quickReportingRouteOperations,
                       )
                     : 0
                 const rem = quickReportingWorkOrder

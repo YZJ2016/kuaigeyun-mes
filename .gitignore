@@ -39,6 +39,7 @@ riveredge-mobile/dist/
 # CAD worker 由 postinstall 从 node_modules 拷贝，勿提交 13MB 解析包
 riveredge-frontend/static/cad-workers/
 riveredge-frontend/.vite/
+riveredge-frontend/scripts/.cache/
 *.log
 .logs/
 .tmp/

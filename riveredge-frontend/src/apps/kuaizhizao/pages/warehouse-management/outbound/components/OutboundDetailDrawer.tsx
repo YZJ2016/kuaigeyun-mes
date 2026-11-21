@@ -361,6 +361,7 @@ export const OutboundDetailDrawer: React.FC<OutboundDetailDrawerProps> = ({
       open={open}
       onClose={onClose}
       size={DRAWER_CONFIG.HALF_WIDTH}
+      collaborationPlacement="afterLines"
       zIndex={zIndex}
       loading={showLoading}
       plainBody={

@@ -958,6 +958,27 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         return max(Decimal("0"), max_units)
 
     @staticmethod
+    async def resolve_material_incoming_picking_extra_units(
+        tenant_id: int,
+        work_order_id: int,
+        plan_qty: Any,
+    ) -> Decimal:
+        """
+        正式领料相对计划量的超额可支撑产量（超报在制段）。
+
+        用于 remaining 物料：计划内 incoming=plan；超报段须补领/追加发料后才有 headroom。
+        """
+        plan = Decimal(str(plan_qty or 0))
+        if plan <= 0:
+            return Decimal("0")
+        max_pick = await WorkOrderService.resolve_max_reportable_qty_from_confirmed_picking(
+            tenant_id, work_order_id
+        )
+        if max_pick is None:
+            return Decimal("0")
+        return max(Decimal("0"), max_pick - plan)
+
+    @staticmethod
     async def assert_reporting_qty_within_confirmed_picking_if_required(
         tenant_id: int,
         work_order_id: int,
@@ -6117,13 +6138,22 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     continue
                 team_member_names.setdefault(int(row.work_group_id), []).append(name)
 
-        # 物料剩余：上道可转下道（首道为计划数+本道超报）- 本道已消耗。
+        # 物料剩余：上道可转下道（首道/允许跳转=计划数+补领超额）- 本道已消耗；超报不占默认在制。
         from apps.kuaizhizao.services.over_report_rules import first_operation_material_incoming
 
+        plan_dec = Decimal(str(plan_qty))
         prev_transfer = (
-            first_operation_material_incoming(Decimal(str(plan_qty)), operations[0])
+            first_operation_material_incoming(plan_dec, operations[0], work_order)
             if operations
-            else Decimal(str(plan_qty))
+            else plan_dec
+        )
+        from apps.kuaizhizao.services.operation_jump_rules import work_order_allows_operation_jump
+
+        wo_allows_jump = work_order_allows_operation_jump(work_order)
+        picking_extra_units = await WorkOrderService.resolve_material_incoming_picking_extra_units(
+            tenant_id,
+            int(work_order.id),
+            plan_dec,
         )
         result = []
         for idx, op in enumerate(operations):
@@ -6228,8 +6258,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 op_data["inspection_qualified_quantity"] = None
                 op_data["inspection_unqualified_quantity"] = None
 
-            # 物料剩余：上道可转下道（首道为计划数 + 本道超报抬高）- 本道已消耗。
-            # 允许跳转时不卡紧邻上道转入，仅受计划/超报/节点工序约束。
+            # 物料剩余：上道转入（首道/允许跳转=计划数）+ 补领超额 - 本道已消耗；报工超报不默认抬高在制。
             completed = op.completed_quantity or Decimal("0")
             insp_q = Decimal(str(op_data.get("inspection_qualified_quantity") or 0))
             insp_u = Decimal(str(op_data.get("inspection_unqualified_quantity") or 0))
@@ -6246,12 +6275,14 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 tenant_id,
                 work_order,
                 op,
-                plan_qty=Decimal(str(plan_qty)),
+                plan_qty=plan_dec,
                 adjacent_prev_transfer=prev_transfer,
                 ordered_operations=operations,
                 policy_cache=policy_cache,
                 inspections_by_op=inspections_by_op,
             )
+            if idx == 0 or wo_allows_jump:
+                incoming = incoming + picking_extra_units
             material_remaining = incoming - material_consumed
             if material_remaining < 0:
                 material_remaining = Decimal("0")

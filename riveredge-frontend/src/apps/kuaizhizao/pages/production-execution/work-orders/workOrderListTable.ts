@@ -59,6 +59,12 @@ export function resolveWorkOrderIdFromListRowKey(key: React.Key): number | null 
   return Number.isFinite(n) && n > 0 ? n : null
 }
 
+/** 列表打印 / 条码：主工单与拆分子工单（独立单据 ID） */
+export function isWorkOrderListRowPrintTarget(row: WorkOrderListRow): boolean {
+  const kind = row.row_kind ?? 'work_order'
+  return kind === 'work_order' || kind === 'split'
+}
+
 /** 批量操作：从列表 rowKey 解析可调用工单 API 的 ID（排除组行、返工、委外） */
 export function resolveWorkOrderIdsFromListRowKeys(
   keys: React.Key[],

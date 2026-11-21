@@ -58,7 +58,11 @@ import {
 } from '../../../constants/documentActionRegistry';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { outboundTypeToPrintDocumentType } from '../../../utils/kuaizhizaoPrintConfig';
-import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import {
+  prepareRowActionButton,
+  rowActionKind,
+  rowActionLabelKeep,
+} from '../../../../../components/uni-action';
 import {
   UniBatchMenuButton,
   pickCapability,
@@ -2144,14 +2148,13 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
             currentOrder ? (
               <Space>
                 {(isEditableProductionPicking(currentOrder) || isEditableSalesDelivery(currentOrder)) ? (
-                  <Button
-                    {...rowActionKind('update')}
-                    onClick={() => {
+                  prepareRowActionButton('update', {
+                    onClick: () => {
                       const order = currentOrder;
                       setDetailDrawerVisible(false);
                       handleEdit(order);
-                    }}
-                  />
+                    },
+                  })
                 ) : null}
                 {currentOrder.outbound_type === 'production_picking' && showProductionPickingAuditActions ? (
                   <UniWorkflowActions
