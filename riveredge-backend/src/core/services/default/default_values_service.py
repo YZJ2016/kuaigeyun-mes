@@ -262,6 +262,28 @@ class DefaultValuesService:
                 {"type": "form_field", "order": 4, "field_name": "version"},
             ]
 
+        # 返工单：FR + 产品线码 + 两位年 + 3 位流水（按产品线隔离；年变则前缀变，流水自然分段）
+        if page_code == "kuaizhizao-production-rework-order":
+            return [
+                {"type": "fixed_text", "order": 0, "text": "FR"},
+                {"type": "form_field", "order": 1, "field_name": "product_line_code"},
+                {
+                    "type": "date",
+                    "order": 2,
+                    "format_type": "preset",
+                    "preset_format": "YY",
+                },
+                {
+                    "type": "auto_counter",
+                    "order": 3,
+                    "digits": 3,
+                    "fixed_width": True,
+                    "reset_cycle": "never",
+                    "initial_value": 1,
+                    "scope_fields": ["product_line_code"],
+                },
+            ]
+
         components = []
         order = 0
 
@@ -421,6 +443,8 @@ class DefaultValuesService:
             description = "物料主编码规则，格式：分组编码 + 4位流水，不自动重置"
         elif page_code == "master-data-engineering-bom":
             description = "BOM编码规则，格式：BOM-物料编码-版本号"
+        elif page_code == "kuaizhizao-production-rework-order":
+            description = "返工单编码规则，格式：FR + 产品线码 + 两位年 + 3位流水（按产品线隔离）"
         else:
             description = (
                 f"{page_name}编码规则，格式：{abbreviation} + 日期（YYYYMMDD）+ 4位序号，每日重置"

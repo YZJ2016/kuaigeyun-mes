@@ -7,7 +7,13 @@ from typing import Any, Optional
 
 from infra.exceptions.exceptions import BusinessLogicError
 
-from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, is_draft_status, normalize_status
+from apps.kuaizhizao.constants import (
+    DocumentStatus,
+    ReviewStatus,
+    is_draft_status,
+    is_submitted_status,
+    normalize_status,
+)
 from apps.kuaizhizao.constants.order_change import OrderChangeApplyStatus, OrderChangeLineType
 from apps.kuaizhizao.services.document_action_policy.types import (
     ActionCapability,
@@ -42,26 +48,31 @@ def derive_purchase_order_change_capabilities(
     has_change_content: bool = True,
 ) -> PurchaseOrderChangeCapabilities:
     status = getattr(doc, "status", None)
-    is_draft = is_draft_status(status)
-    is_pending = _is_pending_review(status)
+    submitted = is_submitted_status(status)
+    is_draft = is_draft_status(status) and not submitted
+    is_pending = _is_pending_review(status) and not submitted
+    is_rejected = normalize_status(_norm_status(status)) == DocumentStatus.REJECTED.value
 
+    update_ok = is_draft or is_pending or is_rejected
     update_cap = _cap(
-        is_draft or is_pending,
-        "purchase_order_change.update.not_draft" if not (is_draft or is_pending) else None,
+        update_ok,
+        "purchase_order_change.update.not_draft" if not update_ok else None,
     )
     delete_cap = _cap(is_draft, "purchase_order_change.delete.not_draft" if not is_draft else None)
 
-    submit_allowed = is_draft and has_change_content
+    submit_base = is_draft or is_rejected
+    submit_allowed = submit_base and has_change_content
     submit_reason = (
         "purchase_order_change.submit.not_draft"
-        if not is_draft
-        else ("purchase_order_change.submit.no_changes" if is_draft and not has_change_content else None)
+        if not submit_base
+        else ("purchase_order_change.submit.no_changes" if not has_change_content else None)
     )
     submit_cap = _cap(submit_allowed, submit_reason)
 
+    withdraw_ok = submitted or is_pending
     withdraw_cap = _cap(
-        is_pending,
-        "purchase_order_change.withdraw_submit.not_pending" if not is_pending else None,
+        withdraw_ok,
+        "purchase_order_change.withdraw_submit.not_pending" if not withdraw_ok else None,
     )
 
     approve_cap = _cap(

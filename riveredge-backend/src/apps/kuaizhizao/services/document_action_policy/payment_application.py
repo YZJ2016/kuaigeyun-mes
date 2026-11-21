@@ -7,8 +7,16 @@ from typing import Any, Optional
 
 from infra.exceptions.exceptions import BusinessLogicError
 
-from apps.kuaizhizao.constants import is_draft_status, is_pending_review_status
-from apps.kuaizhizao.services.document_action_policy.types import ActionCapability
+from apps.kuaizhizao.constants import (
+    is_draft_status,
+    is_pending_review_status,
+    is_rejected_status,
+    is_submitted_status,
+)
+from apps.kuaizhizao.services.document_action_policy.types import (
+    CAPABILITY_REASON_MESSAGES,
+    ActionCapability,
+)
 
 
 def _cap(allowed: bool, reason: Optional[str] = None) -> ActionCapability:
@@ -33,18 +41,16 @@ def derive_payment_application_capabilities(
     remaining = getattr(app, "remaining_amount", 0) or 0
     paid = Decimal(str(getattr(app, "paid_amount", 0) or 0))
 
-    from apps.kuaizhizao.constants import is_rejected_status
-
+    submitted = is_submitted_status(status)
     update_ok = (
-        is_draft_status(status or "")
+        (is_draft_status(status or "") and not submitted)
         or is_pending_review_status(status or "")
         or is_rejected_status(status or "")
     )
-    # 草稿与已驳回可删（与提交门禁对齐；待审核不可删，须先撤回）
-    delete_ok = is_draft_status(status or "") or is_rejected_status(status or "")
-
-    submit_ok = is_draft_status(status or "") or is_rejected_status(status or "")
-    approve_ok = is_pending_review_status(status or "")
+    delete_ok = (is_draft_status(status or "") or is_rejected_status(status or "")) and not submitted
+    submit_ok = (is_draft_status(status or "") or is_rejected_status(status or "")) and not submitted
+    approve_ok = is_pending_review_status(status or "") and not submitted
+    withdraw_ok = submitted or approve_ok
 
     approved = _is_approved(status)
     push_ok = approved and float(remaining) > 0
@@ -64,7 +70,7 @@ def derive_payment_application_capabilities(
         "submit": _cap(submit_ok, "payment_application.submit.not_allowed" if not submit_ok else None),
         "approve": _cap(approve_ok, "payment_application.approve.not_allowed" if not approve_ok else None),
         "reject": _cap(approve_ok, "payment_application.approve.not_allowed" if not approve_ok else None),
-        "withdraw_submit": _cap(approve_ok, "payment_application.withdraw.not_allowed" if not approve_ok else None),
+        "withdraw_submit": _cap(withdraw_ok, "payment_application.withdraw.not_allowed" if not withdraw_ok else None),
         "revoke_approval": _cap(revoke_ok, revoke_reason),
         "push_payment": _cap(
             push_ok,
@@ -88,4 +94,4 @@ def assert_payment_application_capability(
     cap = caps.get(action)
     if not cap or not cap.allowed:
         reason = cap.reason if cap else "payment_application.action.not_allowed"
-        raise BusinessLogicError(reason)
+        raise BusinessLogicError(CAPABILITY_REASON_MESSAGES.get(reason or "", reason or "操作不允许"))
