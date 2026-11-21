@@ -34,7 +34,9 @@ class OtherInboundItem(DocumentLineDualQuantityMixin, BaseModel):
     unit_price = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="单价")
     total_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="金额")
 
-    # 库位信息
+    # 行级仓库/库位（对齐其他出库分录）
+    warehouse_id = fields.IntField(null=True, description="行入库仓库ID")
+    warehouse_name = fields.CharField(max_length=100, null=True, description="行入库仓库名称")
     location_id = fields.IntField(null=True, description="库位ID")
     location_code = fields.CharField(max_length=50, null=True, description="库位编码")
 
@@ -56,4 +58,5 @@ class OtherInboundItem(DocumentLineDualQuantityMixin, BaseModel):
             ("tenant_id", "inbound_id"),
             ("material_id",),
             ("location_id",),
+            ("warehouse_id",),
         ]

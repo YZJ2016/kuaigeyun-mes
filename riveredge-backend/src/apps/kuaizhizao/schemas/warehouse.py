@@ -197,8 +197,8 @@ class ProductionPickingItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema)
     required_quantity: float = Field(..., gt=0, description="需求数量")
     picked_quantity: float = Field(0, ge=0, description="已领料数量")
     remaining_quantity: float = Field(..., ge=0, description="剩余数量")
-    warehouse_id: int = Field(..., description="仓库ID")
-    warehouse_name: str = Field(..., max_length=100, description="仓库名称")
+    warehouse_id: Optional[int] = Field(None, description="仓库ID（确认出库前须指定）")
+    warehouse_name: Optional[str] = Field(None, max_length=100, description="仓库名称")
     location_id: Optional[int] = Field(None, description="库位ID")
     location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
     status: str = Field("待领料", max_length=20, description="领料状态")
@@ -484,6 +484,8 @@ class FinishedGoodsReceiptCreate(FinishedGoodsReceiptBase):
 
 
 class FinishedGoodsReceiptUpdate(FinishedGoodsReceiptBase):
+    warehouse_id: Optional[int] = Field(None, description="入库仓库ID")
+    warehouse_name: Optional[str] = Field(None, max_length=100, description="入库仓库名称")
     """成品入库单更新schema"""
     receipt_code: Optional[str] = Field(None, max_length=50, description="入库单编码")
 
@@ -541,6 +543,9 @@ class FinishedGoodsReceiptItemBase(DocumentLineDualQuantitySchemaMixin, BaseSche
     receipt_quantity: float = Field(..., gt=0, description="入库数量")
     qualified_quantity: float = Field(..., ge=0, description="合格数量")
     unqualified_quantity: float = Field(..., ge=0, description="不合格数量")
+    warehouse_id: Optional[int] = Field(None, description="行入库仓库ID（空白建单明细仓；缺省回落表头）")
+    warehouse_name: Optional[str] = Field(None, max_length=100, description="行入库仓库名称")
+
     location_id: Optional[int] = Field(None, description="库位ID")
     location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
     batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
@@ -656,6 +661,9 @@ class SemiFinishedGoodsReceiptItemBase(BaseSchema):
     receipt_quantity: float = Field(..., gt=0, description="入库数量")
     qualified_quantity: float = Field(..., ge=0, description="合格数量")
     unqualified_quantity: float = Field(..., ge=0, description="不合格数量")
+    warehouse_id: Optional[int] = Field(None, description="行入库仓库ID（空白建单明细仓；缺省回落表头）")
+    warehouse_name: Optional[str] = Field(None, max_length=100, description="行入库仓库名称")
+
     location_id: Optional[int] = Field(None, description="库位ID")
     location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
     batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
@@ -1527,6 +1535,9 @@ class OtherInboundItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     inbound_quantity: float = Field(..., gt=0, description="入库数量")
     unit_price: float = Field(0, ge=0, description="单价")
     total_amount: float = Field(0, ge=0, description="金额")
+    warehouse_id: Optional[int] = Field(None, description="行入库仓库ID")
+    warehouse_name: Optional[str] = Field(None, max_length=100, description="行入库仓库名称")
+
     location_id: Optional[int] = Field(None, description="库位ID")
     location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
     batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
@@ -1538,6 +1549,8 @@ class OtherInboundItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
 
 
 class OtherInboundItemCreate(OtherInboundItemBase):
+    warehouse_id: int = Field(..., description="行入库仓库ID")
+    warehouse_name: Optional[str] = Field(None, max_length=100, description="行入库仓库名称")
     """其他入库单明细创建 schema（编码/名称/金额可由服务端按 material_id 补全）"""
     material_code: Optional[str] = Field(None, max_length=50, description="物料编码")
     material_name: Optional[str] = Field(None, max_length=200, description="物料名称")
@@ -1688,6 +1701,9 @@ class OtherOutboundItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     outbound_quantity: float = Field(..., gt=0, description="出库数量")
     unit_price: float = Field(0, ge=0, description="单价")
     total_amount: float = Field(0, ge=0, description="金额")
+    warehouse_id: Optional[int] = Field(None, description="行出库仓库ID")
+    warehouse_name: Optional[str] = Field(None, max_length=100, description="行出库仓库名称")
+
     location_id: Optional[int] = Field(None, description="库位ID")
     location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
     batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
@@ -1699,6 +1715,8 @@ class OtherOutboundItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
 
 
 class OtherOutboundItemCreate(OtherOutboundItemBase):
+    warehouse_id: int = Field(..., description="行出库仓库ID")
+    warehouse_name: Optional[str] = Field(None, max_length=100, description="行出库仓库名称")
     """其他出库单明细创建 schema（编码/名称/金额可由服务端按 material_id 补全）"""
     material_code: Optional[str] = Field(None, max_length=50, description="物料编码")
     material_name: Optional[str] = Field(None, max_length=200, description="物料名称")

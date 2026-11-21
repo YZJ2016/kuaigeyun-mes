@@ -47,7 +47,9 @@ class SalesDeliveryItem(
         max_digits=12, decimal_places=4, null=True, description="赠品参考单价"
     )
 
-    # 库位信息
+    # 出库仓库/库位（对齐金蝶 im_saloutbill 分录 warehouse / location）
+    warehouse_id = fields.IntField(null=True, description="行出库仓库ID（可与表头不同）")
+    warehouse_name = fields.CharField(max_length=100, null=True, description="行出库仓库名称")
     location_id = fields.IntField(null=True, description="库位ID")
     location_code = fields.CharField(max_length=50, null=True, description="库位编码")
 
@@ -79,6 +81,7 @@ class SalesDeliveryItem(
             ("shipment_notice_item_id",),
             ("material_id",),
             ("location_id",),
+            ("warehouse_id",),
             ("demand_id",),  # 需求关联索引（销售出库与需求关联功能增强）
             ("demand_item_id",),
             ("batch_number",),  # 批次号索引（批号和序列号选择功能增强）

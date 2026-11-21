@@ -36,8 +36,8 @@ class ProductionPickingItem(DocumentLineDualQuantityMixin, BaseModel):
     remaining_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="剩余数量")
 
     # 库存信息
-    warehouse_id = fields.IntField(description="仓库ID")
-    warehouse_name = fields.CharField(max_length=100, description="仓库名称")
+    warehouse_id = fields.IntField(null=True, description="仓库ID")
+    warehouse_name = fields.CharField(max_length=100, null=True, description="仓库名称")
     location_id = fields.IntField(null=True, description="库位ID")
     location_code = fields.CharField(max_length=50, null=True, description="库位编码")
 
