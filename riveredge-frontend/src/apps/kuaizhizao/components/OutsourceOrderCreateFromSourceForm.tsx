@@ -8,6 +8,7 @@ import {
   ProFormDatePicker,
   ProFormDigit,
   ProFormItem,
+  ProFormSelect,
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
@@ -16,6 +17,7 @@ import type { TFunction } from 'i18next';
 import type { NavigateFunction } from 'react-router-dom';
 import { FormModalGridBlock } from '../../../components/layout-templates';
 import { UniDropdown } from '../../../components/uni-dropdown';
+import { buildPayableLedgerRecognitionOptions } from '../../../utils/documentLedgerRecognition';
 import { buildFutureDateShortcutFieldProps } from '../../../utils/futureDatePickerShortcuts';
 import type { FormItemProps } from 'antd';
 
@@ -151,6 +153,23 @@ export function OutsourceOrderCreateFromSourceForm({
         colProps={COL_THIRD}
         min={0}
         fieldProps={{ precision: 2, style: fullWidthControlStyle }}
+      />
+
+      <ProFormSelect
+        name="payable_recognition"
+        label={t('field.document.ledgerRecognition')}
+        colProps={COL_THIRD}
+        fieldProps={{ style: fullWidthControlStyle }}
+        options={buildPayableLedgerRecognitionOptions(t).map((opt) =>
+          opt.value === 'on_receipt'
+            ? { ...opt, label: t('app.kuaizhizao.outsourceOrder.payableOnReceiptOrReport') }
+            : opt.value === 'on_purchase_invoice'
+              ? { ...opt, label: t('app.kuaizhizao.outsourceOrder.payableOnInvoice') }
+              : opt.value === 'on_partner_statement'
+                ? { ...opt, label: t('app.kuaizhizao.outsourceOrder.payableOnMonthlyStatement') }
+                : opt,
+        )}
+        rules={[{ required: true, message: t('field.document.ledgerRecognitionRequired') }]}
       />
 
       <ProFormDatePicker

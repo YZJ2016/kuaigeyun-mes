@@ -47,6 +47,15 @@ import {
   UniPullQueryModal,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
+import { useOptionalLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
+import {
+  OutsourceOrderProgressButtons,
+  OutsourceOrderRegisterReceiptModal,
+  appendOutsourceOrderProgressRowActions,
+  useOutsourceOrderProgressHandlers,
+  type OutsourceOrderProgressRecord,
+} from '../../../components/OutsourceOrderProgressKit';
+import { OutsourceOrderProcessIssueModal } from '../../../components/OutsourceOrderProcessIssueModal';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import {
   ListPageTemplate,
@@ -62,7 +71,7 @@ import CodeField from '../../../../../components/code-field';
 import { outsourceOrderApi, workOrderApi } from '../../../services/production';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
-import { getOutsourceOrderLifecycle, buildOutsourceOrderLifecycleValueEnum, resolveOutsourceOrderListApiParams } from '../../../utils/outsourceOrderLifecycle';
+import { getOutsourceOrderLifecycle, buildOutsourceOrderLifecycleValueEnum, resolveOutsourceOrderListApiParams, isOutsourceOrderDraftEditable } from '../../../utils/outsourceOrderLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
@@ -210,12 +219,30 @@ export const OutsourceOrdersTable: React.FC = () => {
   const [outsourceOrderDetail, setOutsourceOrderDetail] = useState<OutsourceOrder | null>(null);
 
   const [ooTrackingRefreshKey, setOoTrackingRefreshKey] = useState(0);
+  const [registerReceiptTarget, setRegisterReceiptTarget] = useState<OutsourceOrderProgressRecord | null>(null);
+  const [processIssueTarget, setProcessIssueTarget] = useState<OutsourceOrderProgressRecord | null>(null);
+  const linkedDetail = useOptionalLinkedDocumentDetail();
 
   const outsourceOrderTracking = useDocumentTracking(
     detailDrawerVisible && outsourceOrderDetail?.id ? 'outsource_order' : undefined,
     outsourceOrderDetail?.id,
     ooTrackingRefreshKey,
   );
+
+  const refreshAfterOutsourceProgress = useCallback(
+    (updated: OutsourceOrderProgressRecord) => {
+      setStatsVersion((v) => v + 1);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+      if (outsourceOrderDetail?.id != null && updated.id === outsourceOrderDetail.id) {
+        setOutsourceOrderDetail(updated as OutsourceOrder);
+        setOoTrackingRefreshKey((k) => k + 1);
+      }
+    },
+    [invalidateMenuBadgeCounts, outsourceOrderDetail?.id],
+  );
+
+  const outsourceProgressHandlers = useOutsourceOrderProgressHandlers(t, refreshAfterOutsourceProgress);
 
   // 供应商列表
   const [supplierList, setSupplierList] = useState<Supplier[]>([]);
@@ -405,6 +432,7 @@ export const OutsourceOrdersTable: React.FC = () => {
         supplier_id: values.supplier_id,
         outsource_quantity: outsourceQty,
         unit_price: values.unit_price,
+        payable_recognition: values.payable_recognition,
         planned_start_date: toApiDateTimeString(values.planned_start_date),
         planned_end_date: toApiDateTimeString(values.planned_end_date),
         remarks: values.remarks,
@@ -723,6 +751,15 @@ export const OutsourceOrdersTable: React.FC = () => {
 
   const renderOoRowActionNodes = (record: OutsourceOrder): React.ReactNode[] => {
     const nodes: React.ReactNode[] = [];
+    appendOutsourceOrderProgressRowActions(nodes, {
+      record,
+      t,
+      navigate,
+      linkedDetail: linkedDetail ?? null,
+      handlers: outsourceProgressHandlers,
+      onOpenRegisterReceipt: (r) => setRegisterReceiptTarget(r),
+      onOpenProcessIssue: (r) => setProcessIssueTarget(r),
+    });
     nodes.push(
       <Button {...rowActionKind('read')}
         key="detail"
@@ -743,7 +780,7 @@ export const OutsourceOrdersTable: React.FC = () => {
         type="link"
         size="small"
         icon={<EditOutlined />}
-        disabled={record.status === 'completed' || record.status === 'cancelled'}
+        disabled={!isOutsourceOrderDraftEditable(record.status)}
         onClick={(e) => {
           e.stopPropagation();
           void handleEditFromRecord(record);
@@ -759,7 +796,7 @@ export const OutsourceOrdersTable: React.FC = () => {
         size="small"
         danger
         icon={<DeleteOutlined />}
-        disabled={record.status === 'completed' || record.status === 'in_progress'}
+        disabled={!isOutsourceOrderDraftEditable(record.status)}
         onClick={(e) => {
           e.stopPropagation();
           handleDeleteFromRecord(record);
@@ -1019,10 +1056,11 @@ export const OutsourceOrdersTable: React.FC = () => {
         key: 'option',
         fixed: 'right',
         hideInSearch: true,
+        uniActionRenderOptions: { directMax: 6, minPrimaryVisible: 4 },
         render: (_, record) => renderOoRowActionNodes(record),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [outsourceCustomFieldColumns, outsourceOrderLifecycleValueEnum, supplierSearchValueEnum, t],
+    [outsourceCustomFieldColumns, outsourceOrderLifecycleValueEnum, outsourceProgressHandlers, supplierSearchValueEnum, linkedDetail, navigate, t],
   );
 
   /**
@@ -1113,6 +1151,7 @@ export const OutsourceOrdersTable: React.FC = () => {
         createButtonText={createButtonLabel}
         onCreate={handleCreate}
         showDeleteButton={true}
+        deleteButtonText={t('common.delete')}
         onDelete={handleDelete}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.outsourceOrder.confirmBatchDelete', { count })}
         showAdvancedSearch={true}
@@ -1332,10 +1371,23 @@ export const OutsourceOrdersTable: React.FC = () => {
         size={DRAWER_CONFIG.HALF_WIDTH}
         extra={
           outsourceOrderDetail ? (
-            <Space>
+            <Space wrap>
+              <OutsourceOrderProgressButtons
+                record={outsourceOrderDetail}
+                t={t}
+                navigate={navigate}
+                linkedDetail={linkedDetail ?? null}
+                handlers={outsourceProgressHandlers}
+                onOpenRegisterReceipt={(r) => setRegisterReceiptTarget(r)}
+                onOpenProcessIssue={(r) => setProcessIssueTarget(r)}
+                closeDrawer={() => {
+                  setDetailDrawerVisible(false);
+                  setOutsourceOrderDetail(null);
+                }}
+              />
               <Button
                 icon={<EditOutlined />}
-                disabled={outsourceOrderDetail.status === 'completed' || outsourceOrderDetail.status === 'cancelled'}
+                disabled={!isOutsourceOrderDraftEditable(outsourceOrderDetail.status)}
                 onClick={() => void handleEditFromRecord(outsourceOrderDetail)}
               >
                 {t('common.edit')}
@@ -1344,7 +1396,7 @@ export const OutsourceOrdersTable: React.FC = () => {
               <Button
                 danger
                 icon={<DeleteOutlined />}
-                disabled={outsourceOrderDetail.status === 'completed' || outsourceOrderDetail.status === 'in_progress'}
+                disabled={!isOutsourceOrderDraftEditable(outsourceOrderDetail.status)}
                 onClick={(e) => e.stopPropagation()}
               >
                 {t('common.delete')}
@@ -1434,6 +1486,24 @@ export const OutsourceOrdersTable: React.FC = () => {
               }
             : undefined
         }
+      />
+
+      <OutsourceOrderRegisterReceiptModal
+        open={registerReceiptTarget != null}
+        record={registerReceiptTarget}
+        onClose={() => setRegisterReceiptTarget(null)}
+        onSaved={refreshAfterOutsourceProgress}
+        t={t}
+      />
+      <OutsourceOrderProcessIssueModal
+        open={processIssueTarget != null}
+        record={processIssueTarget}
+        onClose={() => setProcessIssueTarget(null)}
+        onSaved={(updated) => {
+          messageApi.success(t('app.kuaizhizao.outsourceOrder.processIssueSuccess'));
+          refreshAfterOutsourceProgress(updated);
+        }}
+        t={t}
       />
     </>
   );
