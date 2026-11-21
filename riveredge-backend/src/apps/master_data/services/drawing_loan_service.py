@@ -284,6 +284,7 @@ class DrawingLoanService:
         limit: int = 20,
         status: Optional[str] = None,
         keyword: Optional[str] = None,
+        drawing_uuid: Optional[str] = None,
     ) -> DrawingLoanListResponse:
         query = DrawingLoan.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if status:
@@ -293,6 +294,12 @@ class DrawingLoanService:
             query = query.filter(
                 Q(code__icontains=kw) | Q(name__icontains=kw) | Q(purpose__icontains=kw)
             )
+        if drawing_uuid and str(drawing_uuid).strip():
+            loan_ids = await DrawingLoanLine.filter(
+                tenant_id=tenant_id,
+                drawing_uuid=str(drawing_uuid).strip(),
+            ).values_list("loan_id", flat=True)
+            query = query.filter(id__in=list(loan_ids))
         total = await query.count()
         rows = await query.order_by("-created_at").offset(skip).limit(limit)
         return DrawingLoanListResponse(data=[_to_response(row) for row in rows], total=total)

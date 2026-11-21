@@ -1371,9 +1371,9 @@ riveredge-backend/src/apps/kuaizhizao/utils/working_time.py	34b631e7fc9eb8434117
 riveredge-backend/src/apps/kuaizhizao/workflows/functions/__init__.py	e9c1902661513ab4f5f08bf074f22a1bf48cd000	applied	R2：与上游tip blob一致，本地已同步
 riveredge-backend/src/apps/kuaizhizao/workflows/functions/demand_computation_automation_workflow.py	c10106fe52596b0c0501d1aea66f6cc8c05d6d3b	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/apps/master_data/api/_sync_from_source_run_log.py	135fb775585595e45762a5ec7f21fac12a04a736	deferred	tracked审计：上游有本地缺，待摘取
-riveredge-backend/src/apps/master_data/api/drawing_distributions.py	93d717bb3fb15b88e3ede25b7fe477818914ae6d	deferred	tracked审计：上游有本地缺，待摘取
+riveredge-backend/src/apps/master_data/api/drawing_distributions.py	93d717bb3fb15b88e3ede25b7fe477818914ae6d	applied	tracked审计摘取：上游整取(drawing_uuid过滤链)
 riveredge-backend/src/apps/master_data/api/drawing_folders.py	85432ea0147605b80f845a5e5e34543a29de09a1	applied	宽区间补登：上游tip已落地（同文/等价映射/预审A包复核）
-riveredge-backend/src/apps/master_data/api/drawing_loans.py	582a7c34d95b9fc50dd223dbb2e47196622c9687	deferred	tracked审计：上游有本地缺，待摘取
+riveredge-backend/src/apps/master_data/api/drawing_loans.py	582a7c34d95b9fc50dd223dbb2e47196622c9687	applied	tracked审计摘取：上游整取(drawing_uuid过滤链)
 riveredge-backend/src/apps/master_data/api/management.py	1cfe2c4f47d3c8a8d17109e26a578ab4467b37cd	applied	tracked审计：与上游tip逐字节一致
 riveredge-backend/src/apps/master_data/api/material.py	1afde47eec24337d643cc96ed056c1ae804fca50	applied	R2簇4 master-data:适配本地(禁kuaiconnect薄代理/inbound_sync_gate)
 riveredge-backend/src/apps/master_data/api/partner_price_book.py	8d47321d6d86b850f6235d79e18d679d63216ddc	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
@@ -1415,9 +1415,9 @@ riveredge-backend/src/apps/master_data/scripts/activate_all_customers_suppliers.
 riveredge-backend/src/apps/master_data/services/bom_change_service.py	bed0136556a4a8fdda91b315e48b53dac7522723	superset	本地等价实现：模块/路径/语义已在本地落定（kuaiplm本地app承接engineering_change_audit与plm深链、kuaireport真源、kuaiai路径、类型守卫/a11y/antd6 medium/泛型/uni-report特性/上游bug式差异）
 riveredge-backend/src/apps/master_data/services/customer_sync_service.py	950fb32773daf4b6539582f70b43b59355d54752	applied	manual_force skip bypass only
 riveredge-backend/src/apps/master_data/services/drawing_change_service.py	50196de2136da9e516623138f19a3d4cc05e9bdf	superset	本地等价实现：模块/路径/语义已在本地落定（kuaiplm本地app承接engineering_change_audit与plm深链、kuaireport真源、kuaiai路径、类型守卫/a11y/antd6 medium/泛型/uni-report特性/上游bug式差异）
-riveredge-backend/src/apps/master_data/services/drawing_distribution_service.py	3cc51f798cc292c40dd5e97e07eb6d750a1e8b38	deferred	tracked审计：上游有本地缺，待摘取
+riveredge-backend/src/apps/master_data/services/drawing_distribution_service.py	3cc51f798cc292c40dd5e97e07eb6d750a1e8b38	applied	tracked审计摘取：上游整取(drawing_uuid过滤链)
 riveredge-backend/src/apps/master_data/services/drawing_folder_service.py	0115ab6605a77f7fbb696d5e85612c42c0e435eb	applied	图纸域摘取：密级回落读权限internal/文件夹树按allowed_security_levels过滤/tree端点透传current_user/上传上限默认100→200MB(4 hunk)；迁移1046→20261123000045。三服务文件与上游字节一致
-riveredge-backend/src/apps/master_data/services/drawing_loan_service.py	f6c5eb6f909838a9337e1f1e6cccfb1fb92eedcb	deferred	tracked审计：上游有本地缺，待摘取
+riveredge-backend/src/apps/master_data/services/drawing_loan_service.py	f6c5eb6f909838a9337e1f1e6cccfb1fb92eedcb	applied	tracked审计摘取：上游整取(drawing_uuid过滤链)
 riveredge-backend/src/apps/master_data/services/drawing_security.py	113d5adc428315a256585c12fd777346ccff0171	applied	图纸域摘取：密级回落读权限internal/文件夹树按allowed_security_levels过滤/tree端点透传current_user/上传上限默认100→200MB(4 hunk)；迁移1046→20261123000045。三服务文件与上游字节一致
 riveredge-backend/src/apps/master_data/services/drawing_service.py	3bdd6c7a5023b3c95314865664a79302d742cb7d	deferred	tracked审计：上游有本地缺，待摘取
 riveredge-backend/src/apps/master_data/services/engineering_bom_sync_service.py	d1be9d61bf18178a77ffb74f29aa2e053bde83f0	superset	R2预审：本地已有等价/更深实现，不摘

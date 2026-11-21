@@ -71,9 +71,15 @@ async def list_loans(
     limit: int = Query(20, ge=1, le=200),
     status: Optional[str] = Query(None),
     keyword: Optional[str] = Query(None),
+    drawing_uuid: Optional[str] = Query(None, alias="drawingUuid"),
 ):
     return await DrawingLoanService.list_loans(
-        tenant_id, skip=skip, limit=limit, status=status, keyword=keyword
+        tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        keyword=keyword,
+        drawing_uuid=drawing_uuid,
     )
 
 

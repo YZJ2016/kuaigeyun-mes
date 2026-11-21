@@ -79,9 +79,15 @@ async def list_distributions(
     limit: int = Query(20, ge=1, le=200),
     status: Optional[str] = Query(None),
     keyword: Optional[str] = Query(None),
+    drawing_uuid: Optional[str] = Query(None, alias="drawingUuid"),
 ):
     return await DrawingDistributionService.list_distributions(
-        tenant_id, skip=skip, limit=limit, status=status, keyword=keyword
+        tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        keyword=keyword,
+        drawing_uuid=drawing_uuid,
     )
 
 

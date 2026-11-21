@@ -291,6 +291,7 @@ class DrawingDistributionService:
         limit: int = 20,
         status: Optional[str] = None,
         keyword: Optional[str] = None,
+        drawing_uuid: Optional[str] = None,
     ) -> DrawingDistributionListResponse:
         query = DrawingDistribution.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if status:
@@ -298,6 +299,12 @@ class DrawingDistributionService:
         if keyword and keyword.strip():
             kw = keyword.strip()
             query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw) | Q(remark__icontains=kw))
+        if drawing_uuid and str(drawing_uuid).strip():
+            dist_ids = await DrawingDistributionLine.filter(
+                tenant_id=tenant_id,
+                drawing_uuid=str(drawing_uuid).strip(),
+            ).values_list("distribution_id", flat=True)
+            query = query.filter(id__in=list(dist_ids))
         total = await query.count()
         rows = await query.order_by("-created_at").offset(skip).limit(limit)
         items = [_to_response(row) for row in rows]
