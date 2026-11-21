@@ -690,33 +690,49 @@ def project_row_by_select(row: Any, select_keys: List[str]) -> Any:
     return projected if projected else row
 
 
+def _material_row_base_unit_code(row: Dict[str, Any]) -> str:
+    return str(
+        row.get("baseunit_number")
+        or row.get("baseunit.number")
+        or row.get("measureunitid_number")
+        or row.get("measureunitid.number")
+        or ""
+    ).strip()
+
+
+def _material_row_base_unit_name(row: Dict[str, Any], code: str) -> str:
+    return str(
+        row.get("baseunit_name")
+        or row.get("baseunit.name")
+        or row.get("measureunitid_name")
+        or row.get("measureunitid.name")
+        or code
+        or ""
+    ).strip() or code
+
+
 def collapse_material_rows_to_unique_units(rows: List[Any]) -> List[Dict[str, Any]]:
     """
-    物料行 → 按基础单位编码去重。
-    单位同步源常是物料 batchQuery；同一 kg 会在每条物料上重复出现。
+    单位同步写入前去重：
+
+    - 物料 batchQuery / 多计量单位行：按 baseunit_* / measureunitid_* 抽单位并去重
+      （同一 kg 会在每条物料上重复出现）。
+    - 独立计量单位接口（星空 BD_UNIT 等，仅有 FNumber/FName）：无基础单位列时
+      **原样保留**，禁止再按物料字段过滤成 0 行。
     """
+    dict_rows = [row for row in rows if isinstance(row, dict)]
+    has_material_unit_cols = any(_material_row_base_unit_code(row) for row in dict_rows)
+    if not has_material_unit_cols:
+        # 星空 BD_UNIT / 已是单位行：交给后续 field_mapping（FNumber→code）
+        return dict_rows
+
     seen: set[str] = set()
     out: List[Dict[str, Any]] = []
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        code = (
-            row.get("baseunit_number")
-            or row.get("baseunit.number")
-            or row.get("measureunitid_number")
-            or row.get("measureunitid.number")
-        )
-        name = (
-            row.get("baseunit_name")
-            or row.get("baseunit.name")
-            or row.get("measureunitid_name")
-            or row.get("measureunitid.name")
-            or code
-        )
-        code_s = str(code or "").strip()
-        name_s = str(name or "").strip() or code_s
+    for row in dict_rows:
+        code_s = _material_row_base_unit_code(row)
         if not code_s:
             continue
+        name_s = _material_row_base_unit_name(row, code_s)
         key = code_s.casefold()
         if key in seen:
             continue

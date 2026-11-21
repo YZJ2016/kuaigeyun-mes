@@ -27,6 +27,25 @@ def _is_sales_order_source(source_type: Any) -> bool:
     return raw in {"sales_order", "salesorder"}
 
 
+def _is_purchase_order_doc_type(doc_type: Any) -> bool:
+    raw = str(doc_type or "").strip().lower().replace("-", "_")
+    return raw in {"purchase_order", "purchaseorder"}
+
+
+def _add_po_item_qty(
+    result: Dict[int, Dict[int, Decimal]],
+    sales_order_id: int,
+    material_id: int,
+    quantity: Any,
+) -> None:
+    oid = int(sales_order_id or 0)
+    mid = int(material_id or 0)
+    if oid not in result or mid <= 0:
+        return
+    bucket = result.setdefault(oid, {})
+    bucket[mid] = bucket.get(mid, Decimal("0")) + Decimal(str(quantity or 0))
+
+
 async def require_purchase_requisition_for_tenant(tenant_id: int) -> bool:
     from infra.services.business_config_service import BusinessConfigService
 
@@ -90,32 +109,85 @@ async def batch_pushed_purchase_qty_by_material(
         deleted_at__isnull=True,
     ).all()
     po_ids_by_order: Dict[int, List[int]] = {}
+    counted_po_ids: set[int] = set()
     for po in pos:
         if not _is_sales_order_source(po.source_type):
             continue
         oid = int(po.source_id or 0)
         if oid not in result:
             continue
-        po_ids_by_order.setdefault(oid, []).append(int(po.id))
+        pid = int(po.id)
+        po_ids_by_order.setdefault(oid, []).append(pid)
+        counted_po_ids.add(pid)
+
+    from apps.kuaizhizao.models.document_relation import DocumentRelation
 
     all_po_ids = [pid for ids in po_ids_by_order.values() for pid in ids]
+
+    def _ingest_po_items(po_items: List[Any], order_by_po: Dict[int, int]) -> None:
+        for item in po_items:
+            oid = order_by_po.get(int(item.order_id or 0))
+            if not oid:
+                continue
+            _add_po_item_qty(result, oid, int(item.material_id or 0), item.ordered_quantity)
+
     if all_po_ids:
         po_items = await PurchaseOrderItem.filter(
             tenant_id=tenant_id,
             order_id__in=all_po_ids,
+            deleted_at__isnull=True,
         ).all()
         po_order_by_id = {
             pid: oid for oid, ids in po_ids_by_order.items() for pid in ids
         }
-        for item in po_items:
-            oid = po_order_by_id.get(int(item.order_id))
-            mid = int(item.material_id or 0)
-            if not oid or mid <= 0:
-                continue
-            bucket = result.setdefault(oid, {})
-            bucket[mid] = bucket.get(mid, Decimal("0")) + Decimal(
-                str(item.ordered_quantity or 0)
-            )
+        _ingest_po_items(po_items, po_order_by_id)
+
+    # 头 source 缺失时：单据关联 + 行 source 仍应计入已转采购
+    # DocumentRelation 无 soft-delete 字段，禁止 deleted_at__isnull
+    extra_po_by_order: Dict[int, List[int]] = {}
+    rels = await DocumentRelation.filter(
+        tenant_id=tenant_id,
+        source_id__in=sales_order_ids,
+    ).all()
+    for rel in rels:
+        if not _is_sales_order_source(rel.source_type):
+            continue
+        if not _is_purchase_order_doc_type(rel.target_type):
+            continue
+        oid = int(rel.source_id or 0)
+        pid = int(rel.target_id or 0)
+        if oid not in result or pid <= 0 or pid in counted_po_ids:
+            continue
+        extra_po_by_order.setdefault(oid, []).append(pid)
+        counted_po_ids.add(pid)
+
+    extra_po_ids = sorted({pid for ids in extra_po_by_order.values() for pid in ids})
+    if extra_po_ids:
+        extra_items = await PurchaseOrderItem.filter(
+            tenant_id=tenant_id,
+            order_id__in=extra_po_ids,
+            deleted_at__isnull=True,
+        ).all()
+        extra_order_by_po = {
+            pid: oid for oid, ids in extra_po_by_order.items() for pid in ids
+        }
+        _ingest_po_items(extra_items, extra_order_by_po)
+
+    line_items = await PurchaseOrderItem.filter(
+        tenant_id=tenant_id,
+        source_id__in=sales_order_ids,
+        deleted_at__isnull=True,
+    ).all()
+    for item in line_items:
+        if not _is_sales_order_source(item.source_type):
+            continue
+        pid = int(item.order_id or 0)
+        if pid in counted_po_ids:
+            continue
+        oid = int(item.source_id or 0)
+        if oid not in result:
+            continue
+        _add_po_item_qty(result, oid, int(item.material_id or 0), item.ordered_quantity)
 
     return result
 
