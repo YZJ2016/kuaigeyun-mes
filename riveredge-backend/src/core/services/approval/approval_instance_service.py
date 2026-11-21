@@ -449,6 +449,15 @@ class ApprovalInstanceService:
         ctx = await build_audit_context(tenant_id, entity_type, entity_id)
         if ctx:
             data.data.update(ctx)
+        # 组织审批（直接上级/多级上级/提交人部门）锚定制单人，不跟点击提交人。
+        # 撤回后他人代提时，仍按单据 created_by 解析部门负责人。
+        owner_id = await ApprovalInstanceService._lookup_document_created_by(
+            tenant_id, entity_type, entity_id
+        )
+        if owner_id:
+            data.data["document_owner_id"] = int(owner_id)
+            if "created_by" not in data.data:
+                data.data["created_by"] = int(owner_id)
         return await ApprovalInstanceService.create_approval_instance(
             tenant_id=tenant_id,
             user_id=user_id,
@@ -1667,10 +1676,47 @@ class ApprovalInstanceService:
         entity_id: int,
     ) -> Optional[str]:
         """
-        业务单据是否已有审定结果（与流程任务脱节时的收敛依据）。
-        返回 approved / rejected / None（仍待审或单据不存在）。
+        业务单据相对审批流的收敛结果（任务仍 pending 时的自愈依据）。
+        返回 approved / rejected / cancelled / None（仍待审或无法判断）。
         """
         et = (entity_type or "").strip()
+        if et == "purchase_request":
+            from apps.kuaizhizao.constants import (
+                DocumentStatus,
+                is_draft_status,
+                is_pending_review_status,
+                is_rejected_status,
+                normalize_status,
+            )
+            from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
+
+            row = await PurchaseRequisition.get_or_none(
+                tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
+            )
+            if not row:
+                return "cancelled"
+            if is_pending_review_status(row.status):
+                return None
+            if is_rejected_status(row.status):
+                return "rejected"
+            norm = normalize_status(row.status or "")
+            if norm in (
+                DocumentStatus.AUDITED.value,
+                DocumentStatus.APPROVED.value,
+                DocumentStatus.CONFIRMED.value,
+                DocumentStatus.PARTIAL_CONVERTED.value,
+                DocumentStatus.FULL_CONVERTED.value,
+                DocumentStatus.COMPLETED.value,
+            ):
+                return "approved"
+            # 草稿 / 已取消等：提交人撤回后单据已离队，审批实例应取消
+            if is_draft_status(row.status) or norm in (
+                DocumentStatus.DRAFT.value,
+                DocumentStatus.CANCELLED.value,
+                DocumentStatus.CLOSED.value,
+            ):
+                return "cancelled"
+            return "cancelled"
         if et in ("sales_delivery", "production_picking"):
             return await ApprovalInstanceService._outbound_entity_decision(
                 tenant_id, et, entity_id
@@ -1742,8 +1788,8 @@ class ApprovalInstanceService:
         approver_id: int,
     ) -> int:
         """
-        清理「单据已审核、流程任务仍 pending」的历史脏数据。
-        根因曾是业务审核未走 UniAuditService 关流程；正向路径已修复，此处仅收敛存量。
+        清理「单据已离队/已审定、流程任务仍 pending」的历史脏数据。
+        含：业务已审未关流程、提交人撤回后实例仍 pending。
         """
         tasks = (
             await ApprovalTask.filter(
@@ -1785,15 +1831,24 @@ class ApprovalInstanceService:
             )
             if decision is None:
                 continue
-            task_status = "approved" if decision == "approved" else "rejected"
+            if decision not in ("approved", "rejected", "cancelled"):
+                continue
             await ApprovalTask.filter(
                 tenant_id=tenant_id,
                 approval_instance_id=inst.id,
                 status="pending",
-            ).update(status=task_status)
-            inst.status = "approved" if decision == "approved" else "rejected"
+            ).update(status=decision)
+            inst.status = decision
+            inst.current_approver_id = None
             inst.completed_at = resolve_business_datetime()
-            await inst.save(update_fields=["status", "completed_at", "updated_at"])
+            await inst.save(
+                update_fields=[
+                    "status",
+                    "current_approver_id",
+                    "completed_at",
+                    "updated_at",
+                ]
+            )
             closed += 1
             logger.info(
                 "已收敛孤儿审批任务 instance={} entity={}:{} decision={}",
@@ -2673,7 +2728,8 @@ class ApprovalInstanceService:
         await instance.save()
 
         await ApprovalInstanceService._create_node_tasks(
-            tenant_id, instance, prev_node, route_action_by=operator_id
+            tenant_id, instance, prev_node, route_action_by=operator_id,
+            notify_pending_approvers=True,
         )
 
         await ApprovalInstanceService._create_approval_history(
@@ -2696,6 +2752,7 @@ class ApprovalInstanceService:
         *,
         route_action_by: Optional[int] = None,
         on_missing_branch: str = "raise",
+        notify_pending_approvers: bool = False,
     ) -> List[ApprovalTask]:
         """
         为节点创建审批任务。start/end 不建任务；condition 不建任务，按条件选边后递归下一节点；cc 不建任务，发通知并推进到下一节点再递归。
@@ -2764,6 +2821,7 @@ class ApprovalInstanceService:
                 next_node,
                 route_action_by=route_action_by,
                 on_missing_branch=on_missing_branch,
+                notify_pending_approvers=notify_pending_approvers,
             )
 
         if node_type == "cc":
@@ -2811,6 +2869,7 @@ class ApprovalInstanceService:
                 instance,
                 next_node,
                 on_missing_branch=on_missing_branch,
+                notify_pending_approvers=notify_pending_approvers,
             )
 
         node_data = node.get("data") if isinstance(node.get("data"), dict) else {}
@@ -2858,6 +2917,7 @@ class ApprovalInstanceService:
                     instance,
                     node,
                     on_missing_branch=on_missing_branch,
+                    notify_pending_approvers=notify_pending_approvers,
                 )
             if empty_policy == "escalate_admin":
                 approvers = await ApprovalInstanceService._resolve_tenant_admin_approver_ids(
@@ -2903,6 +2963,7 @@ class ApprovalInstanceService:
                     instance,
                     node,
                     on_missing_branch=on_missing_branch,
+                    notify_pending_approvers=notify_pending_approvers,
                 )
             if empty_policy == "escalate_admin":
                 approvers = await ApprovalInstanceService._resolve_tenant_admin_approver_ids(
@@ -2913,6 +2974,50 @@ class ApprovalInstanceService:
                     f"审批节点 {node_id or ''} 无可用审批人，无法提交审核"
                 )
 
+        owner_id = await ApprovalInstanceService._document_creator_for_self_skip(instance)
+        if owner_id is not None and owner_id in approvers:
+            approvers = [uid for uid in approvers if int(uid) != owner_id]
+            if not approvers:
+                return await ApprovalInstanceService._auto_pass_empty_approval_node(
+                    tenant_id,
+                    instance,
+                    node,
+                    on_missing_branch=on_missing_branch,
+                    notify_pending_approvers=notify_pending_approvers,
+                    comment="审批人为单据制单人，自动跳过本人审批",
+                    action_by=owner_id,
+                )
+            await ApprovalInstanceService._create_approval_history(
+                tenant_id=tenant_id,
+                approval_instance_id=instance.id,
+                action="approve",
+                action_by=owner_id,
+                from_node=str(node_id),
+                to_node=None,
+                comment="制单人免本人审批，等待其他审批人",
+            )
+
+        # 本节点解析出的审批人若均已在前序审批节点通过，自动跳过（避免同人连审两级）
+        if await ApprovalInstanceService._node_would_auto_pass_same_prior_approver(
+            tenant_id,
+            node,
+            instance,
+            known_approvers=approvers,
+        ):
+            logger.info(
+                "审批节点 {} 审批人与前序已通过人相同，自动跳过: {}",
+                node_id,
+                approvers,
+            )
+            return await ApprovalInstanceService._auto_pass_empty_approval_node(
+                tenant_id,
+                instance,
+                node,
+                on_missing_branch=on_missing_branch,
+                notify_pending_approvers=notify_pending_approvers,
+                comment="与前序节点审批人相同，自动跳过",
+            )
+
         tasks = await ApprovalInstanceService._sync_node_approver_tasks(
             tenant_id, instance, node, approvers
         )
@@ -2920,6 +3025,17 @@ class ApprovalInstanceService:
         if approvers:
             instance.current_approver_id = approvers[0]
             await instance.save()
+
+        if (
+            notify_pending_approvers
+            and instance.status == "pending"
+            and approvers
+        ):
+            ApprovalInstanceService._spawn_pending_node_notifications(
+                tenant_id=tenant_id,
+                approval_instance_id=int(instance.id),
+                approver_ids=list(approvers),
+            )
 
         return tasks
 
@@ -2940,6 +3056,9 @@ class ApprovalInstanceService:
         node: dict,
         *,
         on_missing_branch: str = "raise",
+        notify_pending_approvers: bool = False,
+        comment: str = "空审批人自动通过",
+        action_by: Optional[int] = None,
     ) -> List[ApprovalTask]:
         """空审批人且策略为 auto_pass：记历史并推进到下一节点（或直接通过）。"""
         node_id = node.get("id")
@@ -2973,10 +3092,10 @@ class ApprovalInstanceService:
             tenant_id=tenant_id,
             approval_instance_id=instance.id,
             action="approve",
-            action_by=instance.submitter_id,
+            action_by=action_by if action_by is not None else instance.submitter_id,
             from_node=str(node_id) if node_id else None,
             to_node=None,
-            comment="空审批人自动通过",
+            comment=comment or "空审批人自动通过",
         )
         next_node = ApprovalInstanceService._get_next_node(
             instance.process.nodes if instance.process else {},
@@ -3010,6 +3129,7 @@ class ApprovalInstanceService:
             instance,
             next_node,
             on_missing_branch=on_missing_branch,
+            notify_pending_approvers=notify_pending_approvers,
         )
 
     @staticmethod
@@ -3026,6 +3146,8 @@ class ApprovalInstanceService:
         expected = approvers
         if expected is None:
             expected = await ApprovalInstanceService._resolve_node_approvers(node, instance)
+        owner_id = await ApprovalInstanceService._document_creator_for_self_skip(instance)
+        expected = [uid for uid in (expected or []) if int(uid) != owner_id]
         if not expected:
             return []
 
@@ -3111,6 +3233,141 @@ class ApprovalInstanceService:
             is_active=True,
         ).values_list("id", flat=True)
         return list(dict.fromkeys(int(uid) for uid in active_ids if uid is not None))
+
+    @staticmethod
+    async def _lookup_document_created_by(
+        tenant_id: int,
+        entity_type: str,
+        entity_id: int,
+    ) -> Optional[int]:
+        """
+        读取业务单据制单人（created_by；无则 applicant_id）。
+        供组织审批锚点；找不到返回 None，由调用方回落点击提交人。
+        """
+        et = str(entity_type or "").strip()
+        try:
+            eid = int(entity_id)
+        except (TypeError, ValueError):
+            return None
+        if not et or eid <= 0:
+            return None
+        try:
+            from core.services.approval.approval_document_view import (
+                DOCUMENT_LOADERS,
+                _to_plain,
+            )
+
+            loader = DOCUMENT_LOADERS.get(et)
+            if not loader:
+                return None
+            obj = await loader(tenant_id, eid)
+            plain = _to_plain(obj)
+        except Exception as exc:
+            logger.warning(
+                "读取单据制单人失败 entity_type={} entity_id={}: {}",
+                et,
+                eid,
+                exc,
+            )
+            return None
+        if not isinstance(plain, dict):
+            return None
+        for key in ("created_by", "applicant_id"):
+            raw = plain.get(key)
+            try:
+                uid = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if uid > 0:
+                return uid
+        return None
+
+    @staticmethod
+    async def _document_creator_for_self_skip(instance: ApprovalInstance) -> Optional[int]:
+        """仅凭单据制单人免本人审批，不把代提交人当成制单人。"""
+        data = getattr(instance, "data", None)
+        data = data if isinstance(data, dict) else {}
+        for key in ("document_owner_id", "created_by"):
+            raw = data.get(key)
+            if raw is not None and str(raw).isdigit() and int(raw) > 0:
+                return int(raw)
+        entity_type = str(data.get("entity_type") or "").strip()
+        entity_id = data.get("entity_id")
+        if entity_type and entity_id is not None and str(entity_id).isdigit():
+            return await ApprovalInstanceService._lookup_document_created_by(
+                int(instance.tenant_id), entity_type, int(entity_id)
+            )
+        return None
+
+    @staticmethod
+    async def _prior_approved_approver_ids(
+        tenant_id: int,
+        instance: ApprovalInstance,
+        *,
+        exclude_node_id: Optional[str] = None,
+        extra_user_ids: Optional[List[int]] = None,
+    ) -> set[int]:
+        """本实例中已在审批节点通过的审批人（可排除当前节点，可并入即将通过的人）。"""
+        rows = await ApprovalTask.filter(
+            tenant_id=tenant_id,
+            approval_instance_id=int(instance.id),
+            status="approved",
+        )
+        out: set[int] = set()
+        for row in rows:
+            if exclude_node_id and str(row.node_id or "") == str(exclude_node_id):
+                continue
+            try:
+                out.add(int(row.approver_id))
+            except (TypeError, ValueError):
+                continue
+        for uid in extra_user_ids or []:
+            try:
+                out.add(int(uid))
+            except (TypeError, ValueError):
+                continue
+        return out
+
+    @staticmethod
+    async def _node_would_auto_pass_same_prior_approver(
+        tenant_id: int,
+        node: dict,
+        instance: ApprovalInstance,
+        *,
+        known_approvers: Optional[List[int]] = None,
+        treating_as_approved: Optional[int] = None,
+    ) -> bool:
+        """
+        本节点解析审批人若均已在前序节点通过（或将视为刚通过），则应自动跳过。
+        用于：创建任务时跳过同人连审；前一节点通过时提前要求选后续分支。
+        """
+        node_type = node.get("type") or (node.get("data") or {}).get("type")
+        if str(node_type or "") != "approval":
+            return False
+        node_id = str(node.get("id") or "")
+        approvers = known_approvers
+        if approvers is None:
+            try:
+                approvers = await ApprovalInstanceService._resolve_node_approvers(
+                    node, instance
+                )
+            except ValidationError:
+                return False
+        if not approvers:
+            return False
+        owner_id = await ApprovalInstanceService._document_creator_for_self_skip(instance)
+        approvers = [uid for uid in approvers if int(uid) != owner_id]
+        if not approvers:
+            return True
+        prior = await ApprovalInstanceService._prior_approved_approver_ids(
+            tenant_id,
+            instance,
+            exclude_node_id=node_id or None,
+            extra_user_ids=[treating_as_approved] if treating_as_approved else None,
+        )
+        if not prior:
+            return False
+        return all(int(uid) in prior for uid in approvers)
 
     @staticmethod
     async def _resolve_managers_for_department_uuids(
@@ -4090,6 +4347,7 @@ class ApprovalInstanceService:
                         instance,
                         next_node,
                         route_action_by=route_action_by,
+                        notify_pending_approvers=True,
                     )
                 else:
                     instance.current_node = next_node.get("id")
@@ -4099,6 +4357,7 @@ class ApprovalInstanceService:
                         instance,
                         next_node,
                         route_action_by=route_action_by,
+                        notify_pending_approvers=True,
                     )
 
         if instance.status in ("approved", "rejected"):
@@ -4398,38 +4657,58 @@ class ApprovalInstanceService:
             logger.warning("催办通知失败: %s", e)
 
     @staticmethod
-    async def _send_approval_submitted_notification(
+    @staticmethod
+    async def _pending_approver_ids_for_instance(
         tenant_id: int,
         approval_instance: ApprovalInstance,
-        process: Optional[ApprovalProcess] = None,
+    ) -> List[int]:
+        """当前节点全部待办审批人（或签/会签多人）；无任务时回落 current_approver_id。"""
+        node_id = str(approval_instance.current_node or "").strip()
+        ids: List[int] = []
+        if node_id:
+            rows = await ApprovalTask.filter(
+                tenant_id=tenant_id,
+                approval_instance_id=approval_instance.id,
+                node_id=node_id,
+                status="pending",
+            ).values_list("approver_id", flat=True)
+            ids = [int(uid) for uid in rows if uid is not None]
+        if not ids and approval_instance.current_approver_id:
+            ids = [int(approval_instance.current_approver_id)]
+        # 保序去重
+        return list(dict.fromkeys(ids))
+
+    @staticmethod
+    async def _notify_pending_approvers(
+        *,
+        tenant_id: int,
+        approval_instance: ApprovalInstance,
+        process: ApprovalProcess,
+        submitter_name: str,
+        approver_ids: Optional[List[int]] = None,
     ) -> None:
-        """提交后仅通知当前审批人（待办）；不给提交人刷「已提交」以免打扰。"""
-        try:
-            if process is None:
-                await approval_instance.fetch_related("process")
-                process = approval_instance.process
-            if not process:
-                return
-            submitter = await User.filter(
-                id=approval_instance.submitter_id,
-                tenant_id=tenant_id,
-                deleted_at__isnull=True
-            ).first()
-            if not approval_instance.current_approver_id:
-                return
-            approver = await User.filter(
-                id=approval_instance.current_approver_id,
-                tenant_id=tenant_id,
-                deleted_at__isnull=True
-            ).first()
-            if not approver:
-                return
-            submitter_name = (
-                (submitter.full_name or submitter.username) if submitter else "—"
+        """向当前节点每位待办人发站内信+企微（或签指定多人时不得只推第一个）。"""
+        target_ids = (
+            list(dict.fromkeys(int(uid) for uid in (approver_ids or []) if uid is not None))
+            if approver_ids is not None
+            else await ApprovalInstanceService._pending_approver_ids_for_instance(
+                tenant_id, approval_instance
             )
+        )
+        if not target_ids:
+            return
+        users = await User.filter(
+            id__in=target_ids,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        by_id = {int(u.id): u for u in users}
+        for uid in target_ids:
+            if uid not in by_id:
+                continue
             await ApprovalInstanceService._send_internal_to_user(
                 tenant_id=tenant_id,
-                user_id=approver.id,
+                user_id=uid,
                 subject=f"待审批：{approval_instance.title}",
                 content=(
                     f"您有一个待审批的申请：{approval_instance.title}，"
@@ -4442,6 +4721,94 @@ class ApprovalInstanceService:
                     "submitter_name": submitter_name,
                     "process_name": process.name,
                 },
+            )
+
+    @staticmethod
+    def _spawn_pending_node_notifications(
+        *,
+        tenant_id: int,
+        approval_instance_id: int,
+        approver_ids: List[int],
+    ) -> None:
+        """节点推进后异步通知新待办人（站内信 + 企微）；须在写库完成后调用。"""
+        if not approver_ids:
+            return
+        ApprovalInstanceService._spawn_background(
+            ApprovalInstanceService._send_pending_node_notifications(
+                tenant_id=tenant_id,
+                approval_instance_id=approval_instance_id,
+                approver_ids=approver_ids,
+            )
+        )
+
+    @staticmethod
+    async def _send_pending_node_notifications(
+        *,
+        tenant_id: int,
+        approval_instance_id: int,
+        approver_ids: List[int],
+    ) -> None:
+        """上一节点完成后，通知本节点新建待办的审批人。"""
+        try:
+            instance = await ApprovalInstance.filter(
+                tenant_id=tenant_id,
+                id=approval_instance_id,
+                deleted_at__isnull=True,
+            ).first()
+            if not instance or instance.status != "pending":
+                return
+            await instance.fetch_related("process")
+            process = instance.process
+            if not process:
+                return
+            submitter = await User.filter(
+                id=instance.submitter_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).first()
+            submitter_name = (
+                (submitter.full_name or submitter.username) if submitter else "—"
+            )
+            await ApprovalInstanceService._notify_pending_approvers(
+                tenant_id=tenant_id,
+                approval_instance=instance,
+                process=process,
+                submitter_name=submitter_name,
+                approver_ids=approver_ids,
+            )
+        except Exception as e:
+            logger.error(
+                "发送审批节点待办通知失败 instance={}: {}",
+                approval_instance_id,
+                e,
+            )
+
+    @staticmethod
+    async def _send_approval_submitted_notification(
+        tenant_id: int,
+        approval_instance: ApprovalInstance,
+        process: Optional[ApprovalProcess] = None,
+    ) -> None:
+        """提交后通知当前节点全部待办审批人；不给提交人刷「已提交」以免打扰。"""
+        try:
+            if process is None:
+                await approval_instance.fetch_related("process")
+                process = approval_instance.process
+            if not process:
+                return
+            submitter = await User.filter(
+                id=approval_instance.submitter_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            ).first()
+            submitter_name = (
+                (submitter.full_name or submitter.username) if submitter else "—"
+            )
+            await ApprovalInstanceService._notify_pending_approvers(
+                tenant_id=tenant_id,
+                approval_instance=approval_instance,
+                process=process,
+                submitter_name=submitter_name,
             )
         except Exception as e:
             logger.error(f"发送审批提交通知失败: {str(e)}")
