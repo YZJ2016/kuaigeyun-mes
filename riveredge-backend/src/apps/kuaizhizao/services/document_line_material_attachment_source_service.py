@@ -87,18 +87,16 @@ class DocumentLineMaterialAttachmentSourceService:
             )
             for d in drawings:
                 file_uuid = str(getattr(d, "file_uuid", "") or "").strip()
-                if not file_uuid and getattr(d, "file", None):
-                    file_uuid = str(getattr(d.file, "uuid", "") or "").strip()
+                file_brief = getattr(d, "file", None)
+                if not file_uuid and file_brief is not None:
+                    file_uuid = str(getattr(file_brief, "uuid", "") or "").strip()
                 if not file_uuid:
                     continue
-                file_brief = getattr(d, "file", None)
                 name = (
                     (getattr(file_brief, "original_name", None) if file_brief else None)
-                    or f"{d.code}-{d.name}"
+                    or f"{getattr(d, 'code', '')}-{getattr(d, 'name', '')}"
                 )
-                content_type = (
-                    getattr(file_brief, "content_type", None) if file_brief else None
-                )
+                content_type = None
                 items.append(
                     DocumentLineMaterialAttachmentSourceItem(
                         key=f"engineering_drawing-{d.uuid}",

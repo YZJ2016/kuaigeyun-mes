@@ -12,6 +12,7 @@ from apps.kuaizhizao.constants import (
     is_draft_status,
     is_pending_review_status,
     is_rejected_status,
+    is_submitted_status,
     normalize_status,
 )
 from apps.kuaizhizao.services.document_action_policy.types import (
@@ -95,6 +96,7 @@ def derive_purchase_requisition_capabilities(
 ) -> PurchaseRequisitionCapabilities:
     status = getattr(req, "status", None)
     review_status = getattr(req, "review_status", None)
+    submitted = is_submitted_status(str(status or ""))
 
     from apps.kuaizhizao.services.document_action_policy.review_submission_gate import (
         allows_delete_unsubmitted,
@@ -102,7 +104,7 @@ def derive_purchase_requisition_capabilities(
         allows_approve_submitted_pending,
     )
 
-    update_allowed = (
+    update_allowed = (not submitted) and (
         is_draft_status(status or "")
         or is_pending_review_status(status or "")
         or is_rejected_status(status or "")
@@ -113,7 +115,7 @@ def derive_purchase_requisition_capabilities(
     )
 
     linked_po = bool(has_linked_purchase_order) or _status_implies_linked_purchase_order(status)
-    delete_status_ok = allows_delete_unsubmitted(
+    delete_status_ok = (not submitted) and allows_delete_unsubmitted(
         status, review_status, review_submitted=review_submitted
     )
     delete_allowed = delete_status_ok and not linked_po
@@ -124,8 +126,13 @@ def derive_purchase_requisition_capabilities(
         delete_reason = "purchase_requisition.delete.not_allowed"
     delete_cap = _cap(delete_allowed, delete_reason)
 
-    submit_allowed = allows_submit_unsubmitted(
+    submit_allowed = (not submitted) and allows_submit_unsubmitted(
         status, review_status, review_submitted=review_submitted
+    )
+    withdraw_allowed = submitted or is_pending_review_status(status or "")
+    withdraw_cap = _cap(
+        withdraw_allowed,
+        None if withdraw_allowed else "purchase_requisition.withdraw_submit.not_allowed",
     )
     submit_cap = _cap(
         submit_allowed,
@@ -168,6 +175,7 @@ def derive_purchase_requisition_capabilities(
         update=update_cap,
         delete=delete_cap,
         submit=submit_cap,
+        withdraw_submit=withdraw_cap,
         approve=approve_cap,
         revoke_approval=revoke_cap,
         push_purchase_order=push_po_cap,
@@ -192,6 +200,7 @@ def assert_purchase_requisition_capability(
         "update": caps.update,
         "delete": caps.delete,
         "submit": caps.submit,
+        "withdraw_submit": caps.withdraw_submit,
         "approve": caps.approve,
         "revoke_approval": caps.revoke_approval,
         "push_purchase_order": caps.push_purchase_order,

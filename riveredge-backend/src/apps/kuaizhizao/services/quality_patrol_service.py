@@ -175,6 +175,7 @@ class QualityPatrolService(AppBaseService[QualityPatrol]):
         inspection_end_date: Optional[str] = None,
         created_start_date: Optional[str] = None,
         created_end_date: Optional[str] = None,
+        viewer_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         from apps.kuaizhizao.services.quality_service import (
             _apply_quality_inspection_list_filters,
@@ -226,7 +227,9 @@ class QualityPatrolService(AppBaseService[QualityPatrol]):
             "total": total,
             "success": True,
         }
-        return await enrich_items_payload(tenant_id, "quality_patrol", payload)
+        return await enrich_items_payload(
+            tenant_id, "quality_patrol", payload, viewer_id=viewer_id
+        )
 
     async def update(
         self,
@@ -306,7 +309,8 @@ class QualityPatrolService(AppBaseService[QualityPatrol]):
         inspector_info = await self.get_user_info(inspector_id) if inspector_id != user_id else user_info
         conduct_extra = _apply_template_conduct_to_payload(row, "other_checks", conduct_data)
 
-        row.inspection_result = payload.inspection_result
+        # C-03：inspection_result 为过程态「已检验」，判定走 quality_status（与 IQC 一致）
+        row.inspection_result = "已检验"
         row.quality_status = payload.quality_status
         row.qualified_quantity = qualified_quantity
         row.unqualified_quantity = unqualified_quantity
@@ -350,7 +354,7 @@ class QualityPatrolService(AppBaseService[QualityPatrol]):
             doc_label="质量巡检",
         )
 
-        if row.quality_status == "不合格" or payload.inspection_result == "不合格":
+        if row.quality_status == "不合格":
             await _maybe_create_quality_exception_from_inspection(
                 tenant_id=tenant_id,
                 source_type="quality_patrol",

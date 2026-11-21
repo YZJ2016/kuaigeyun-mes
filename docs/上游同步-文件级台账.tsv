@@ -1101,7 +1101,7 @@ riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/print_unau
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/purchase_inquiry.py	921acb7964bb43c1f8f4bae315698ba3e88992ae	deferred	tracked审计：上游有本地缺，待摘取
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/purchase_order.py	d576a6731417aecc0f9fe79476a9e72e1be6d1a5	applied	13be286f11联调修复簇
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/purchase_order_change.py	7f992462bc28ab9745a26a0c5389df14292ab966	deferred	tracked审计：上游有本地缺，待摘取
-riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/purchase_requisition.py	f321ea8f5e4f7e8a2b6749dd3fdb16a84738dd58	deferred	tracked审计：上游有本地缺，待摘取
+riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/purchase_requisition.py	f321ea8f5e4f7e8a2b6749dd3fdb16a84738dd58	applied	tracked审计摘取：上游整取(submitted守卫+withdraw_submit能力位)
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/purchase_return.py	93f1fe8a4b63c97dfaf0fe97ee64623d61602a1d	deferred	tracked审计：上游有本地缺，待摘取
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/quotation.py	6325ec1c5fe2213053090f31508cc925d0a26576	applied	ea1f4da58e刷新反馈+读加速+门禁加固
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/receipt_notice.py	ca246ededda2a59889afc0976fc0ff96bd1fa45c	deferred	tracked审计：上游有本地缺，待摘取
@@ -1121,7 +1121,7 @@ riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/work_order
 riveredge-backend/src/apps/kuaizhizao/services/document_attachment_center_service.py	7db57b9c735e943e5e6993ef06e1389805cc3972	applied	tracked审计：与上游tip逐字节一致
 riveredge-backend/src/apps/kuaizhizao/services/document_header_amount_contract.py	53bce88d703ef8aa222c23b2ed8bb3170b71aeab	applied	f40f54e336调度窗+价税簇
 riveredge-backend/src/apps/kuaizhizao/services/document_lifecycle_service.py	c12ea1801904fcb28a21258df3371fb08eee29df	applied	R2:MERGE已三方合并-后端簇:委外生命周期独立阶段+建议、委外单列表lifecycle/capabilities、发料净额净算+工单直建发料、打印未审核门禁+模板升级+入库单模板解析、SO→PO行级拉单list_purchase_order_sales_order_pull_lines、半成品入库能力断言、PR开口行工具全量(pull_open_line_quantity 33→400);本地保留:工单下达自动建委外单(上游已删)、document_recognition kuaicaiwu财务import、PO头source_id=order.id
-riveredge-backend/src/apps/kuaizhizao/services/document_line_material_attachment_source_service.py	f9d5b55cd120b41c37ffd76dea400b26a8656d09	deferred	tracked审计：上游有本地缺，待摘取
+riveredge-backend/src/apps/kuaizhizao/services/document_line_material_attachment_source_service.py	f9d5b55cd120b41c37ffd76dea400b26a8656d09	applied	tracked审计摘取：上游整取(file_brief/content_type重构)
 riveredge-backend/src/apps/kuaizhizao/services/document_push_mapping.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/services/document_push_pipeline.py	DELETED	applied	D依赖簇:绑表+revoke+push(源6abba1dbd5/154977d948等)
 riveredge-backend/src/apps/kuaizhizao/services/document_push_pull_service.py	754f1ac113d6e8d1f948744274169de661d19a13	deferred	tracked审计：上游有本地缺，待摘取
@@ -1292,7 +1292,7 @@ riveredge-backend/src/apps/kuaizhizao/services/quality_cost_service.py	9d24e1baf
 riveredge-backend/src/apps/kuaizhizao/services/quality_improvement_service.py	1ddf0d4c7ec2dc1352dc4c0c1a1e72b6bf002445	deferred	tracked审计：上游有本地缺，待摘取
 riveredge-backend/src/apps/kuaizhizao/services/quality_inspection_helpers.py	e1ca0503d405742d17c6ffac1150b905a6723cac	deferred	tracked审计：上游有本地缺，待摘取
 riveredge-backend/src/apps/kuaizhizao/services/quality_inspection_lifecycle.py	1fac537e399f47016dc91b6240a752b33cd2f1d7	applied	tracked审计摘取：上游整取(撤回检验放宽至非待检验态,兼容历史单据)
-riveredge-backend/src/apps/kuaizhizao/services/quality_patrol_service.py	34d48ec9140277c6a0c3be3e1d1f222f647462ee	deferred	tracked审计：上游有本地缺，待摘取
+riveredge-backend/src/apps/kuaizhizao/services/quality_patrol_service.py	34d48ec9140277c6a0c3be3e1d1f222f647462ee	applied	tracked审计摘取：上游整取(viewer_id透传+C-03已检验过程态+不合格判定)
 riveredge-backend/src/apps/kuaizhizao/services/quality_qms_service.py	6296a251bb59d1de3ec6362e4db0a95c54c43d9e	applied	QMS体系域簇落地：新资源模型+服务+API扩展(85路由)+迁移remap为20261123000052-55，保本地annual_plan/legacy checklist/nonconforming处置语义
 riveredge-backend/src/apps/kuaizhizao/services/quality_service.py	f37d77b74f50f2c831b943e504b34fd623f2c813	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/quotation_service.py	de05bdcd3edbb75fa36f9df69f8f81c58393d4f2	applied	f40f54e336调度窗+价税簇
@@ -1700,7 +1700,7 @@ riveredge-backend/src/core/services/pdf/playwright_engine.py	89a42bd9d64f95035e4
 riveredge-backend/src/core/services/plugin_manager/plugin_discovery.py	0acf22286d3c10586ad3e6295283beff963a925f	superset	本地品牌/引用展示隐式鉴权语义：本地保留星技谷品牌与host_resource隐式鉴权（上游已改RiverEdge品牌+read|display严权模型），契约语义不同不取
 riveredge-backend/src/core/services/print/print_template_service.py	ac42afbe52bbcd2a881f59ad234b77e238b325aa	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/core/services/realtime/socketio_server.py	ecead35eb7fdd34a3ec89bf73eea065193173e29	deferred	tracked审计：上游有本地缺，待摘取
-riveredge-backend/src/core/services/reference/tenant_model_display_provider.py	1904f8255af1afb01f192ff28e13c8e9fdc193f5	deferred	tracked审计：上游有本地缺，待摘取
+riveredge-backend/src/core/services/reference/tenant_model_display_provider.py	1904f8255af1afb01f192ff28e13c8e9fdc193f5	applied	tracked审计摘取：上游整取(page_queryset_by_keyword共享分页)
 riveredge-backend/src/core/services/resource/collab_function_category_service.py	ba1f13ef162235229d948e350c92772cbfc32057	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/core/services/resource/resource_category_refs.py	f5a014e3d1f8e075eff1dfa6790376601882f889	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/core/services/resource/resource_category_service.py	f5e6d5cc9547dbba0d8ab4106fafd0f537fdda48	applied	R2簇5 core/sync:摘取上游tip实现
