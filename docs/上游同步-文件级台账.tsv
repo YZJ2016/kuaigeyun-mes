@@ -371,7 +371,7 @@ riveredge-backend/migrations/models/1049_20261118090000_menu_tenant_disabled_met
 riveredge-backend/migrations/models/1050_20261118170000_field_permission_two_kinds.py	2d9283512aaab7fdaf0c7105bb1390bea955b147	applied	字段权限kind数据迁移移植为20261123000036（既有按字段策略行收敛为amount/party_name kind行，簇P配套）
 riveredge-backend/migrations/models/1051_20261119110000_material_code_alias_partner_partial_unique.py	c9abf2212e67c77258378f9f02e01169b7ee4ebf	applied	同内容迁移已在本地按重编号落地(980/981)
 riveredge-backend/migrations/models/1052_20261119160000_purchase_invoice_discount_amount.py	2a788b4eaede12ad0b7258d9439899c6d846af76	applied	财务A/B适配至kuaicaiwu；保留本地创建自动送审/已审核口径；忠实保留源应付已审核或待审时早退导致优惠调整不生成；迁移20261122000001尚未执行；财务pytest191通过+聚焦9通过，时区0。前端tsc2743存量诊断，浏览器未验。
-riveredge-backend/migrations/models/1053_20261121100000_rename_spoke_wheel_to_ind_spoke_wheel.py	36170f7de38b5f4fffbd97a6888178aec10c55b9	deferred	spoke-wheel→ind-spoke-wheel 改名簇：本地仍 spoke-wheel/spoke_wheel 免费行业应用，须先协调 manifest/包名/权限码/前端路由再整体落地
+riveredge-backend/migrations/models/1053_20261121100000_rename_spoke_wheel_to_ind_spoke_wheel.py	36170f7de38b5f4fffbd97a6888178aec10c55b9	domain-out	用户决策：本地保持spoke-wheel免费行业应用口径，不取上游ind-spoke-wheel改名（涉manifest/包名/权限码/前端路由/license语义与迁移1053，永久分叉）
 riveredge-backend/migrations/models/20261123000035_sync_binding_schedule_window.py	6fe2f04c01867b0eab5c067566bcb8d9c684df23	applied	R2簇5迁移:调度窗列 22+绑定表 IF NOT EXISTS守卫;20261123命名落位(不执行)
 riveredge-backend/migrations/models/874_20261013170000_maintenance_scheme_params.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 riveredge-backend/migrations/models/875_20261013180000_spot_check_plan_tasks.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
@@ -518,7 +518,7 @@ riveredge-backend/scripts/tenant_kingdee_strong_consistency.py	b2844d17485477f27
 riveredge-backend/src/apps/common/base_service.py	411e8ceac6c4eedf6f639f57cc77bee8a70757c2	applied	R2：与上游tip blob一致，本地已同步
 riveredge-backend/src/apps/common/document_push_gate.py	40ee72e1874963a4d5aff27471a93471f8438f64	applied	R2:kuaiconnect包落地,公共门控随包落地(动态加载apps.kuaiconnect.services.*)
 riveredge-backend/src/apps/common/inbound_sync_gate.py	b85beda4bfeed2d988da72667b3da6aa0ed6832e	applied	R2:kuaiconnect包落地,公共门控随包落地(动态加载apps.kuaiconnect.services.*)
-riveredge-backend/src/apps/common/optional_pro.py	56ab438bc68d0075eb2d39658b136a713fe0b930	deferred	spoke-wheel→ind-spoke-wheel 改名簇：本地仍 spoke-wheel/spoke_wheel 免费行业应用，须先协调 manifest/包名/权限码/前端路由再整体落地
+riveredge-backend/src/apps/common/optional_pro.py	56ab438bc68d0075eb2d39658b136a713fe0b930	domain-out	用户决策：本地保持spoke-wheel免费行业应用口径，不取上游ind-spoke-wheel改名（涉manifest/包名/权限码/前端路由/license语义与迁移1053，永久分叉）
 riveredge-backend/src/apps/industry_pack/manifest.json	b50898ac3c473cd0c487c216acb947f7ffbbd556	superset	本地已等价或超集：split子行print capabilities本地已实现；document_lifecycle仅注释路径差异；menu_service本地已恒排除停用应用，加is_active=True有副作用不取；manifest依赖前端不存在的menu-entry-shell壳
 riveredge-backend/src/apps/kuaicaiwu/services/payment_pull_service.py	DELETED	applied	13be286f11续:前端+财务适配+迁移
 riveredge-backend/src/apps/kuaiconnect/__init__.py	c6f9ef4c13fc4ac49209ccc82f3b736a4a2846d0	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
@@ -1511,7 +1511,7 @@ riveredge-backend/src/core/api/user_messages/user_messages.py	ec49300d882f8aace4
 riveredge-backend/src/core/api/users/users.py	889bae74ad8ac5a873c4d60f274ee60e76ce3f74	applied	C密码策略/默认与临时重置整簇；应用扫描按目录项容忍OSError但整目录不可枚举上抛；63聚焦测试包含用户与菜单同步；生成口令不写日志
 riveredge-backend/src/core/config/affiliate_read_allowlist.py	59b793b8b6c6bb944c7a9c0514e6251814302401	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/core/config/api_library_contract.py	aee8e7a45202c0ee0e082585daec5fe13c770843	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
-riveredge-backend/src/core/config/app_code_renames.py	c264c84f4cd51c36997d1afafe90007d35373bcb	deferred	spoke-wheel→ind-spoke-wheel 改名簇：本地仍 spoke-wheel/spoke_wheel 免费行业应用，须先协调 manifest/包名/权限码/前端路由再整体落地
+riveredge-backend/src/core/config/app_code_renames.py	c264c84f4cd51c36997d1afafe90007d35373bcb	domain-out	用户决策：本地保持spoke-wheel免费行业应用口径，不取上游ind-spoke-wheel改名（涉manifest/包名/权限码/前端路由/license语义与迁移1053，永久分叉）
 riveredge-backend/src/core/config/application_center_permissions.py	597ab5a462dddfc495f160de7bcccc5fc1e3b287	superset	本地超集：spec143/184硬化或本地功能字段（tenant隔离/attachment/serial_numbers/urgency/mqtt/OEE富schema/严格版本/序列号台账/脉冲计数Optional/关键写路径/unscoped清理/public_error脱敏/kuaicaiwu路径/STATION_TERMINAL/design动作/宽度64)
 riveredge-backend/src/core/config/associated_table_registry.py	9ed90b496bc68ec5ca8e3436c3fce3822584f58a	superset	superset:上游区间零增量；本地权限映射硬化版优先
 riveredge-backend/src/core/config/audit_editable_fields.py	7a61585872b0adbf946e51fd8590aaf2a9e26cfa	applied	R2簇5 core/sync:摘取上游tip实现
@@ -1525,7 +1525,7 @@ riveredge-backend/src/core/config/custom_field_pages.py	40a5e8eba611c718351db0a2
 riveredge-backend/src/core/config/field_permission_resource_registry.py	4c57f31fd806bc594c85b7e3dc43b83a47e06012	applied	R3 440ae22ebb+ff403441f2: kind模型整移植(amount/party_name策略类+列展开+40新增资源注册);本地资源全集上游覆盖无丢失
 riveredge-backend/src/core/config/finance_recognition.py	d8d0827841d258dfd1c2254f6af80252734b80d9	applied	tracked审计：与上游tip逐字节一致
 riveredge-backend/src/core/config/functional_domain_spec.py	ecdb181ea28b082111514f9b333eb67652533a14	superset	本地超集：spec143/184硬化或本地功能字段（tenant隔离/attachment/serial_numbers/urgency/mqtt/OEE富schema/严格版本/序列号台账/脉冲计数Optional/关键写路径/unscoped清理/public_error脱敏/kuaicaiwu路径/STATION_TERMINAL/design动作/宽度64)
-riveredge-backend/src/core/config/industry_app_catalog.py	2c7612bef5d1e111e8a467783a287e0742a317e8	deferred	spoke-wheel→ind-spoke-wheel 改名簇：本地仍 spoke-wheel/spoke_wheel 免费行业应用，须先协调 manifest/包名/权限码/前端路由再整体落地
+riveredge-backend/src/core/config/industry_app_catalog.py	2c7612bef5d1e111e8a467783a287e0742a317e8	domain-out	用户决策：本地保持spoke-wheel免费行业应用口径，不取上游ind-spoke-wheel改名（涉manifest/包名/权限码/前端路由/license语义与迁移1053，永久分叉）
 riveredge-backend/src/core/config/integration_type_spec.py	b0f2abd6879c8e2871d4c77d2d664d9ca5110eb2	superset	本地超集：spec143/184硬化或本地功能字段（tenant隔离/attachment/serial_numbers/urgency/mqtt/OEE富schema/严格版本/序列号台账/脉冲计数Optional/关键写路径/unscoped清理/public_error脱敏/kuaicaiwu路径/STATION_TERMINAL/design动作/宽度64)
 riveredge-backend/src/core/config/kingdee_cosmic_mfg_api_presets.json	e86ad5c5a33970fba98839254cd064c1c2d0f5ff	applied	4ba2d15ae8契约簇;force_rewrite/expand未接调用点随调度窗簇
 riveredge-backend/src/core/config/menu_sync_is_active_policy.py	705c29cf54cd10d91ec15c52498584724844d15d	applied	适配落地：超报/在制口径簇、领料material_model、本地_load_materials_by_ids适配、应用停用按route path收口菜单、split子行capabilities、销售变更单取单链、报工面板、价格本税率、DetailDrawer/uni-pull/global.less/zh-CN/updateLog
@@ -1946,7 +1946,7 @@ riveredge-backend/tests/apps/master_data/test_sync_values_equal.py	d0f8d534307a7
 riveredge-backend/tests/apps/master_data/utils/test_kingdee_location_number.py	0299e12119348309cdc927f8914771c000d52c05	applied	宽区间历史补登：上游tip内容已落地（预审B包复核）
 riveredge-backend/tests/core/config/test_affiliate_material_list_document_pick.py	eed9b3fdb18ac435ef9147f42b74660ce6c21b13	applied	上游测试取入 passed
 riveredge-backend/tests/core/config/test_affiliate_storage_location_read.py	c6020e3c4017c459b50d2607a79cd1770035e85f	applied	宽区间历史补登：上游tip内容已落地（预审B包复核）
-riveredge-backend/tests/core/config/test_app_code_renames.py	dbec30df5b6d5d2538063f01ddd1dc0d222b5788	deferred	spoke-wheel→ind-spoke-wheel 改名簇：本地仍 spoke-wheel/spoke_wheel 免费行业应用，须先协调 manifest/包名/权限码/前端路由再整体落地
+riveredge-backend/tests/core/config/test_app_code_renames.py	dbec30df5b6d5d2538063f01ddd1dc0d222b5788	domain-out	用户决策：本地保持spoke-wheel免费行业应用口径，不取上游ind-spoke-wheel改名（涉manifest/包名/权限码/前端路由/license语义与迁移1053，永久分叉）
 riveredge-backend/tests/core/config/test_audit_registry_rework_order.py	3a6403f8c5bec80e4416e5103a92e62fa3d88fd8	deferred	tracked审计：上游有本地缺，待摘取
 riveredge-backend/tests/core/config/test_field_permission_resource_registry.py	71ec5a0f9f86a1422954da28b600d7e7bf7dbbf0	applied	R3: kind模型注册表测试整更新
 riveredge-backend/tests/core/services/application/test_api_library_catalog.py	8f7c0f3d4eb3530659ce83c911ca26dcaadccc49	applied	客户org-scope tip整取 落 apps/master_data
@@ -3205,8 +3205,8 @@ riveredge-frontend/src/pages/system/application-connections/AppConnectorMarket.t
 riveredge-frontend/src/pages/system/application-connections/WeComDeploymentGuideBlock.tsx	439f6d81ec0d9bf45bbb0a88a87338087e23c65f	deferred	tracked审计：上游有本地缺，待摘取
 riveredge-frontend/src/pages/system/application-connections/connectors.tsx	99a3fb4e1826fbda5c1adf997c788078503e636a	applied	R2 fe收尾：批配中心自定义字段/生产退料取单行仓位/半成品入库自定义字段富化/装拆单customFieldTableName/连接器市场取上游tip
 riveredge-frontend/src/pages/system/application-connections/list/index.tsx	35254e0da9fb5a3093eee4dc9785754f90e57688	deferred	tracked审计：上游有本地缺，待摘取
-riveredge-frontend/src/pages/system/applications/industryAppCatalog.ts	44ab6023fd934c04d2128e2bb71d3e5db9168cfa	deferred	spoke-wheel→ind-spoke-wheel 改名簇：本地仍 spoke-wheel/spoke_wheel 免费行业应用，须先协调 manifest/包名/权限码/前端路由再整体落地
-riveredge-frontend/src/pages/system/applications/list/index.tsx	763f103bcc4ad55965523542f664e8a7ca68d777	deferred	spoke-wheel→ind-spoke-wheel 改名簇：本地仍 spoke-wheel/spoke_wheel 免费行业应用，须先协调 manifest/包名/权限码/前端路由再整体落地
+riveredge-frontend/src/pages/system/applications/industryAppCatalog.ts	44ab6023fd934c04d2128e2bb71d3e5db9168cfa	domain-out	用户决策：本地保持spoke-wheel免费行业应用口径，不取上游ind-spoke-wheel改名（涉manifest/包名/权限码/前端路由/license语义与迁移1053，永久分叉）
+riveredge-frontend/src/pages/system/applications/list/index.tsx	763f103bcc4ad55965523542f664e8a7ca68d777	domain-out	用户决策：本地保持spoke-wheel免费行业应用口径，不取上游ind-spoke-wheel改名（涉manifest/包名/权限码/前端路由/license语义与迁移1053，永久分叉）
 riveredge-frontend/src/pages/system/applications/proAppCatalog.ts	6c8ac24d9b8480438f655103a4d8c2699bb08c10	superset	本地License决策：维持4个PRO应用(kuaiai/kuaireport/kuaiiot/kuaivision)+行业包免费，不采上游9PRO/行业包全PRO（产品决策2026-11-21）
 riveredge-frontend/src/pages/system/approval-processes/designer/index.tsx	0adb3944cc8b421f84dfcb6936654cdf2dc7ded7	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/pages/system/approval-processes/designer/properties/NodePropertyForms.tsx	c92be51dd1fdeb41841d06fe02d79ce899a46120	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
