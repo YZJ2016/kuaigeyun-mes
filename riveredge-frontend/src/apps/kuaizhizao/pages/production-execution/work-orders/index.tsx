@@ -274,6 +274,12 @@ const LazyWorkOrderPeerGroupCreateDetail = lazy(
 )
 import { EMPTY_PEER_GROUP_ITEM } from './components/WorkOrderPeerGroupCreateDetail'
 import { buildOperationsForCreatePayload } from './workOrderCreateOperations'
+import {
+  parseWorkOrderOperationsFromRouteSequence,
+  workOrderOperationRowFromProductProcessLine,
+  workOrderOperationRowFromOperationMaster,
+  type WorkOrderOpListContext,
+} from './workOrderOperationFromSources'
 const LazyWorkOrderReadinessModal = lazy(() =>
   import('./components/WorkOrderReadinessPopover').then((m) => ({ default: m.WorkOrderReadinessModal })),
 )
@@ -1992,6 +1998,11 @@ const WorkOrdersPage: React.FC = () => {
   const [workCenterList, setWorkCenterList] = useState<any[]>([])
   const [personnelOptions, setPersonnelOptions] = useState<any[]>([])
   const [resourceOptions, setResourceOptions] = useState<any[]>([])
+  const resolveWorkOrderOpListContext = useCallback((): WorkOrderOpListContext => ({
+    workshops: workshopList,
+    equipments: equipmentList,
+    personnelOptions,
+  }), [workshopList, equipmentList, personnelOptions])
   // 选中的工序列表（用于创建工单时）
   const [selectedOperations, setSelectedOperations] = useState<any[]>([])
   const [createProcessRouteId, setCreateProcessRouteId] = useState<number | undefined>()
@@ -2033,6 +2044,7 @@ const WorkOrdersPage: React.FC = () => {
       })
 
       const ppAllowJump = Boolean(pp.allowOperationJump)
+      const listCtx = resolveWorkOrderOpListContext()
       const mapLinesToOperations = () =>
         (pp.lines ?? [])
           .map((ln, index) => {
@@ -2040,35 +2052,14 @@ const WorkOrdersPage: React.FC = () => {
               operationList.find((o: any) => o.id === ln.operationId) ??
               operationList.find((o: any) => (o.uuid ?? '') === ln.operationUuid)
             if (!op) return null
-            const operatorIds = Array.isArray(ln.operatorIds)
-              ? ln.operatorIds.map((id: unknown) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0)
-              : []
-            const teamIds = Array.isArray(ln.teamIds)
-              ? ln.teamIds.map((id: unknown) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0)
-              : []
-            const equipmentIds = Array.isArray(ln.equipmentIds)
-              ? ln.equipmentIds.map((id: unknown) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0)
-              : []
-            const workshopIds = Array.isArray(ln.workshopIds)
-              ? ln.workshopIds.map((id: unknown) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0)
-              : []
-            const isNode = Boolean(ln.isNodeOperation)
-            return {
-              operation_id: op.id,
-              operation_code: ln.code ?? op.code,
-              operation_name: ln.name ?? op.name,
+            const row = workOrderOperationRowFromProductProcessLine(ln, op, {
               sequence: index + 1,
-              is_node_operation: isNode,
-              allow_jump: ppAllowJump && !isNode,
-              reporting_type:
-                ln.reportingType ?? op.reportingType ?? (op as any).reporting_type ?? 'quantity',
-              over_report_mode: ln.overReportMode ?? 'none',
-              over_report_value: ln.overReportValue ?? 0,
-              assigned_worker_ids: operatorIds,
-              assigned_worker_id: operatorIds[0],
-              assigned_team_id: teamIds[0],
-              assigned_equipment_id: equipmentIds[0],
-              workshop_id: workshopIds[0],
+              allowJump: ppAllowJump,
+              listContext: listCtx,
+            })
+            return {
+              ...row,
+              allow_jump: ppAllowJump && !Boolean(row.is_node_operation),
             }
           })
           .filter(Boolean)
@@ -2092,7 +2083,7 @@ const WorkOrdersPage: React.FC = () => {
       formRef.current?.setFieldsValue({ process_route_id: undefined, operations: undefined })
       setSelectedOperations([])
     }
-  }, [operationList, messageApi])
+  }, [operationList, messageApi, resolveWorkOrderOpListContext])
 
   const availableCreateOperations = useMemo(() => {
     const existingIds = new Set(
@@ -2119,16 +2110,12 @@ const WorkOrdersPage: React.FC = () => {
         (op: any) =>
           !selectedOperations.some((exist: any) => Number(exist?.operation_id) === Number(op?.id)),
       )
-      .map((op: any, index: number) => ({
-        operation_id: op.id,
-        operation_code: op.code,
-        operation_name: op.name,
-        sequence: selectedOperations.length + index + 1,
-        is_node_operation: false,
-        reporting_type: op.reportingType ?? (op as any).reporting_type ?? 'quantity',
-        over_report_mode: 'none',
-        over_report_value: 0,
-      }))
+      .map((op: any, index: number) =>
+        workOrderOperationRowFromOperationMaster(op, {
+          sequence: selectedOperations.length + index + 1,
+          listContext: resolveWorkOrderOpListContext(),
+        }),
+      )
 
     if (!appendRows.length) {
       messageApi.warning('所选工序已在清单中')
@@ -2148,6 +2135,7 @@ const WorkOrdersPage: React.FC = () => {
     messageApi,
     operationList,
     selectedOperations,
+    resolveWorkOrderOpListContext,
   ])
   // 只显示自制件
   const [onlyShowMake, setOnlyShowMake] = useState(true)
@@ -2857,99 +2845,17 @@ const WorkOrdersPage: React.FC = () => {
     }).filter(Boolean);
   }, [selectedRowKeys, actionRef.current]);
 
-  /** 解析工艺路线的 operation_sequence，兼容多种格式（与工艺路线编辑页保存格式对接） */
-  const parseOperationSequence = (
-    seq: any,
-    opList: any[]
-  ): {
-    operation_id: number
-    operation_code: string
-    operation_name: string
-    sequence: number
-    is_node_operation: boolean
-    reporting_type: string
-    over_report_mode: string
-    over_report_value: number
-  }[] => {
-    if (!seq || opList.length === 0) return []
-    let items: any[] = []
-    if (Array.isArray(seq)) {
-      items = seq
-    } else if (typeof seq === 'object') {
-      if (Array.isArray(seq.operations)) {
-        items = seq.operations
-      } else if (Array.isArray(seq.sequence)) {
-        items = seq.sequence.map((uuid: string, i: number) => ({ uuid, _idx: i }))
-      } else if (seq.operation_ids || seq.operationIds) {
-        const ids = seq.operation_ids ?? seq.operationIds ?? []
-        items = ids.map((id: number, i: number) => ({
-          operation_id: id,
-          operationId: id,
-          sequence: i + 1,
-        }))
-      } else {
-        const vals = Object.values(seq).filter(
-          (v: any) => v && (typeof v === 'object' || typeof v === 'string')
-        )
-        const arr = vals.find((v: any) => Array.isArray(v)) as any[] | undefined
-        items = arr ?? vals
-      }
-    }
-    const result: {
-      operation_id: number
-      operation_code: string
-      operation_name: string
-      sequence: number
-      is_node_operation: boolean
-      reporting_type: string
-      over_report_mode: string
-      over_report_value: number
-    }[] = []
-    items.forEach((item: any, index: number) => {
-      let op: any = null
-      if (item?.operation_id != null || item?.operationId != null) {
-        const id = item.operation_id ?? item.operationId
-        op = opList.find((o: any) => o.id === id)
-      } else if (typeof item === 'string' || item?.uuid) {
-        const uuid = typeof item === 'string' ? item : item.uuid
-        op = opList.find((o: any) => (o.uuid ?? '') === uuid)
-      } else if (item?.code || item?.name) {
-        op = opList.find(
-          (o: any) => o.uuid === item.uuid || (o.code === item.code && o.name === item.name)
-        )
-      }
-      if (op) {
-        const isNode = item.isNodeOperation ?? item.is_node_operation ?? false
-        const reportingType =
-          item.reportingType ??
-          item.reporting_type ??
-          op.reportingType ??
-          (op as any).reporting_type ??
-          'quantity'
-        const orm =
-          item.overReportMode ??
-          item.over_report_mode ??
-          (op as any).overReportMode ??
-          (op as any).over_report_mode ??
-          'none'
-        const orv = Number(
-          item.overReportValue ?? item.over_report_value ?? (op as any).overReportValue ?? (op as any).over_report_value ?? 0
-        ) || 0
-        result.push({
-          operation_id: op.id,
-          operation_code: op.code ?? op.mainCode ?? '',
-          operation_name: op.name ?? '',
-          sequence: item.sequence ?? item._idx ?? index + 1,
-          is_node_operation: Boolean(isNode),
-          reporting_type: reportingType === 'status' ? 'status' : 'quantity',
-          over_report_mode: String(orm || 'none'),
-          over_report_value: orv,
-        })
-      }
-    })
-    result.sort((a, b) => a.sequence - b.sequence)
-    return result.map((r, i) => ({ ...r, sequence: i + 1 }))
-  }
+  /** 解析工艺路线工序序列：工时/工价/资源与产品工艺路线编辑同源 */
+  const parseOperationSequence = useCallback(
+    (seq: any, opList: any[]) =>
+      parseWorkOrderOperationsFromRouteSequence(
+        seq,
+        opList,
+        false,
+        resolveWorkOrderOpListContext(),
+      ),
+    [resolveWorkOrderOpListContext],
+  )
 
 
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
