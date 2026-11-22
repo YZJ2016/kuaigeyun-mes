@@ -3032,11 +3032,11 @@ riveredge-frontend/src/components/layout-templates/DetailDrawerTemplate.tsx	747f
 riveredge-frontend/src/components/layout-templates/DocumentFormPageHeaderActions.tsx	dd85896790036614dca9585816a365a4bc76ada0	deferred	tracked审计：上游有本地缺，待摘取
 riveredge-frontend/src/components/layout-templates/DocumentFormPageLayout.tsx	1ddc246b6b001f101711be9ccc68e7ea4d77b2ef	superset	tracked审计：本地为上游超集/等价
 riveredge-frontend/src/components/layout-templates/FormModalTemplate.tsx	eff4e96249e887afc8876578304bb95e5dd1923a	superset	tracked审计：本地为上游超集/等价
-riveredge-frontend/src/components/layout-templates/MultiTabListPageTemplate.tsx	0ebc6bbc2d6f0d00f90f7f1893cae4a58a14cf09	deferred	待决：MultiTab 右固定列横向滚动契约。若摘，落本地 src/global.less，保留 antd6 size=medium；不跟 styles/global.less，不摘海尔 spin 样式
-riveredge-frontend/src/components/layout-templates/constants.ts	3e3ffc4b9cba07831e731721c91931b11e9c034a	deferred	待决：MultiTab 右固定列横向滚动契约。若摘，落本地 src/global.less，保留 antd6 size=medium；不跟 styles/global.less，不摘海尔 spin 样式
+riveredge-frontend/src/components/layout-templates/MultiTabListPageTemplate.tsx	0ebc6bbc2d6f0d00f90f7f1893cae4a58a14cf09	applied	用户决定摘取横向滚动契约：notifyResizeBus/tab-host/min-width:0。样式写入 src/global.less，不 import 组件 less，不建 styles/global.less，保留 antd6 size=medium，不摘海尔 spin
+riveredge-frontend/src/components/layout-templates/constants.ts	3e3ffc4b9cba07831e731721c91931b11e9c034a	applied	用户决定摘取横向滚动契约：notifyResizeBus/tab-host/min-width:0。样式写入 src/global.less，不 import 组件 less，不建 styles/global.less，保留 antd6 size=medium，不摘海尔 spin
 riveredge-frontend/src/components/layout-templates/detailDrawerDescriptionItems.tsx	327d5d3b1628bdc2d103a35508394c8b5152f072	applied	tracked审计：与上游tip逐字节一致
-riveredge-frontend/src/components/layout-templates/multiTabListPageTemplate.classes.ts	caba3e743b6d0a4533bfa22b1a05339482045939	deferred	待决：MultiTab 右固定列横向滚动契约。若摘，落本地 src/global.less，保留 antd6 size=medium；不跟 styles/global.less，不摘海尔 spin 样式
-riveredge-frontend/src/components/layout-templates/multiTabListPageTemplate.less	9db07ae06514b0cfeb3c107518ca88bd87038852	deferred	待决：MultiTab 右固定列横向滚动契约。若摘，落本地 src/global.less，保留 antd6 size=medium；不跟 styles/global.less，不摘海尔 spin 样式
+riveredge-frontend/src/components/layout-templates/multiTabListPageTemplate.classes.ts	caba3e743b6d0a4533bfa22b1a05339482045939	applied	用户决定摘取横向滚动契约：notifyResizeBus/tab-host/min-width:0。样式写入 src/global.less，不 import 组件 less，不建 styles/global.less，保留 antd6 size=medium，不摘海尔 spin
+riveredge-frontend/src/components/layout-templates/multiTabListPageTemplate.less	9db07ae06514b0cfeb3c107518ca88bd87038852	applied	用户决定摘取横向滚动契约：notifyResizeBus/tab-host/min-width:0。样式写入 src/global.less，不 import 组件 less，不建 styles/global.less，保留 antd6 size=medium，不摘海尔 spin
 riveredge-frontend/src/components/layout-templates/warehouse-detail-table-styles.ts	4d11d532afc54d3691c7509bd0eba8b7d1b29f21	applied	tracked审计：与上游tip逐字节一致
 riveredge-frontend/src/components/linked-document-detail/drawers/QuotationLinkedDetailDrawer.tsx	347bb8755cacde444e7667d0e21d8ee403df317e	superset	本地私有实现/分叉超集（预审A包复核）
 riveredge-frontend/src/components/linked-document-detail/drawers/ReceiptNoticeLinkedDetailDrawer.tsx	8f898563d24a25bfbc33469d71d4fbb58736ccaa	applied	tracked审计：与上游tip逐字节一致
@@ -3203,7 +3203,7 @@ riveredge-frontend/src/hooks/useMaterialQuickCreateAllowed.ts	922fdad15fdd4163e6
 riveredge-frontend/src/hooks/useNumericPrecision.ts	a2271e31c72a490606877ec40e6efc7d374946ec	superset	仅路径引用/注释/spoke-wheel改名或非zh-CN locale(i18n-zh-cn-only)：本地不取上游docs路径与改名
 riveredge-frontend/src/hooks/useRealtimeInbox.ts	abf3f8ab09ecb8301caec712e630f4bf4dcdb3d5	deferred	tracked审计：上游有本地缺，待摘取
 riveredge-frontend/src/hooks/useRegisterAiContext.ts	75742be764948a1fcc8e0d5e6c11bd901256e0c6	superset	本地等价实现：模块/路径/语义已在本地落定（kuaiplm本地app承接engineering_change_audit与plm深链、kuaireport真源、kuaiai路径、类型守卫/a11y/antd6 medium/泛型/uni-report特性/上游bug式差异）
-riveredge-frontend/src/hooks/useResizeBus.ts	236ba7b896e4dc16fa7997b9f063db098bcd567e	deferred	待决：MultiTab 右固定列横向滚动契约。若摘，落本地 src/global.less，保留 antd6 size=medium；不跟 styles/global.less，不摘海尔 spin 样式
+riveredge-frontend/src/hooks/useResizeBus.ts	236ba7b896e4dc16fa7997b9f063db098bcd567e	applied	用户决定摘取横向滚动契约：notifyResizeBus/tab-host/min-width:0。样式写入 src/global.less，不 import 组件 less，不建 styles/global.less，保留 antd6 size=medium，不摘海尔 spin
 riveredge-frontend/src/hooks/useSiteSettingQuery.ts	f66ed81dcd3649c9a93fada9187e68947463d902	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/hooks/useToolbarSyncPushFlags.ts	2a364d05ed9bfa3e2284b596bd0f3a89441fef94	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/hooks/useUnifiedMenuData.ts	1c33152a1c4a1c1dc8906e986b33e7b61551d060	applied	微差异桶：上游真修复摘取（ImportError优雅跳过可选包ORM/自定义字段排序tiebreak/PRO应用徽标根路径识别/colProps布局/showAdvancedSearch/loading上移/未用import清理/antd6 locale简化/helpHint缺键/File类型/documentReplacementRegistry换glob+占位组件/PRO升级提示License激活按钮(antd6适配medium)）
@@ -3345,7 +3345,7 @@ riveredge-frontend/src/services/userMessage.ts	5ade0da8906fa8cade0950f6ac513a88e
 riveredge-frontend/src/stores/configStore.ts	0c8c321a9fbbb00343a204920ad9965413dd5480	superset	仅路径引用/注释/spoke-wheel改名或非zh-CN locale(i18n-zh-cn-only)：本地不取上游docs路径与改名
 riveredge-frontend/src/stores/userPreferenceStore.ts	2edfe40f4c707e59678c65fbcffb338f1e38ed6f	applied	13be286f11续:前端+财务适配+迁移
 riveredge-frontend/src/styles/first-paint.css	495b926e77af3535586f0615863fd21bf58db993	superset	上游前端目录迁移/壳层重构不取：本地保留src/app.tsx、src/queryClient.ts、src/configs/、src/core/constants/、根级less/css/initSpinIndicator路径；menu-entry-shell与config/queryClient等新路径文件不引入
-riveredge-frontend/src/styles/global.less	91169bf6f1d587cc78a70fda05bfeac80d050e4c	deferred	待决：MultiTab 右固定列横向滚动契约。若摘，落本地 src/global.less，保留 antd6 size=medium；不跟 styles/global.less，不摘海尔 spin 样式
+riveredge-frontend/src/styles/global.less	91169bf6f1d587cc78a70fda05bfeac80d050e4c	applied	用户决定摘取横向滚动契约：notifyResizeBus/tab-host/min-width:0。样式写入 src/global.less，不 import 组件 less，不建 styles/global.less，保留 antd6 size=medium，不摘海尔 spin
 riveredge-frontend/src/styles/login-shell.css	f2707205929c8e6790f98f256e16fe6b6956641e	superset	上游前端目录迁移/壳层重构不取：本地保留src/app.tsx、src/queryClient.ts、src/configs/、src/core/constants/、根级less/css/initSpinIndicator路径；menu-entry-shell与config/queryClient等新路径文件不引入
 riveredge-frontend/src/styles/uni-toolbar-chrome.less	1051bdaa06f035b8e15415cf06c425a49a554578	superset	tracked审计：本地为上游超集/等价
 riveredge-frontend/src/theme/hmi/antd-theme.ts	ac1b67204c4f036fd1c6864b8d062c93038e329a	superset	本地等价实现：模块/路径/语义已在本地落定（kuaiplm本地app承接engineering_change_audit与plm深链、kuaireport真源、kuaiai路径、类型守卫/a11y/antd6 medium/泛型/uni-report特性/上游bug式差异）

@@ -357,14 +357,21 @@
   flex: 1 0 auto;
 }
 
+/* MultiTab 横向滚动契约：UniTable 滚动口承担 scroll.x；祖先 min-width:0，pane 不裁切右固定操作列。 */
 .multi-tab-list-page-container {
   min-height: 0;
+  min-width: 0;
+}
+
+.multi-tab-list-page-template {
+  min-width: 0;
 }
 
 .multi-tab-list-page-card.ant-card {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
 
   /* Card 默认 head 底边 1px + Tabs nav::before 1px；flex 后 marginBottom:-1 叠线失效，
      与 ink-bar(2px) 错位形成割裂。只保留 Tabs 自带分割线。 */
@@ -377,12 +384,13 @@
   > .ant-card-body {
     flex: 1 1 auto;
     min-height: 0;
+    min-width: 0;
     overflow: hidden;
   }
 
   > .ant-card-body.multi-tab-list-page-card-body {
-    overflow-x: hidden;
     overflow-y: auto;
+    overflow-x: hidden;
   }
 
   > .ant-card-body:has(.multi-tab-list-page-tab-pane) {
@@ -392,10 +400,29 @@
 }
 
 .multi-tab-list-page-tab-pane {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.multi-tab-list-page-tab-host {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+
+  > .uni-table-container {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+  }
 }
 
 /* 特殊布局 Modal 排除限高（如 MobileDevicePreview、工位机 kiosk 等） */

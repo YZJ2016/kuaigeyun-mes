@@ -8,14 +8,25 @@
  * Date: 2026-02-02
  */
 
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useLayoutEffect } from 'react';
 import { Card } from 'antd';
 import ListPageTemplate, { StatCard } from './ListPageTemplate';
 import { MULTI_TAB_PAGE_CONTAINER } from './constants';
 import { useMultiTabPageContainerHeight } from './useMultiTabPageContainerHeight';
+import { notifyResizeBus } from '../../hooks/useResizeBus';
+import {
+  MULTI_TAB_LIST_PAGE_CARD_BODY_CLASS,
+  MULTI_TAB_LIST_PAGE_CARD_CLASS,
+  MULTI_TAB_LIST_PAGE_CONTAINER_CLASS,
+  MULTI_TAB_LIST_PAGE_ROOT_CLASS,
+  MULTI_TAB_LIST_PAGE_TAB_HOST_CLASS,
+  MULTI_TAB_LIST_PAGE_TAB_PANE_CLASS,
+} from './multiTabListPageTemplate.classes';
 
-const MULTI_TAB_PAGE_ROOT_CLASS = 'multi-tab-list-page-template';
-const MULTI_TAB_PAGE_CONTAINER_CLASS = 'multi-tab-list-page-container';
+export {
+  MULTI_TAB_LIST_PAGE_ROOT_CLASS,
+  MULTI_TAB_LIST_PAGE_CONTAINER_CLASS,
+} from './multiTabListPageTemplate.classes';
 
 export interface TabItem {
     /** 标签唯一标识 */
@@ -54,6 +65,10 @@ export interface MultiTabListPageTemplateProps {
     prioritizeMainContentPaint?: boolean;
 }
 
+function MultiTabListPageTabHost({ children }: { children: ReactNode }) {
+    return <div className={MULTI_TAB_LIST_PAGE_TAB_HOST_CLASS}>{children}</div>;
+}
+
 /**
  * 多标签页列表页面布局模板
  */
@@ -74,12 +89,21 @@ export const MultiTabListPageTemplate: React.FC<MultiTabListPageTemplateProps> =
     const currentTab = tabs.find(tab => tab.key === activeTabKey);
 
     const tabPanePadding = typeof padding === 'number' ? { padding } : { padding };
+
+    /**
+     * preserveMounted 时非当前 Tab 为 display:none，UniTable 滚动口 clientWidth=0；
+     * 切换后须触发全局 resize 总线，使操作列 scroll.x 与右固定重新预算。
+     */
+    useLayoutEffect(() => {
+        notifyResizeBus();
+    }, [activeTabKey]);
+
     const bodyInner = preserveMounted ? (
         <>
             {tabs.map((tab) => (
                 <div
                     key={tab.key}
-                    className="multi-tab-list-page-tab-pane"
+                    className={MULTI_TAB_LIST_PAGE_TAB_PANE_CLASS}
                     style={{
                         display: tab.key === activeTabKey ? 'flex' : 'none',
                         flexDirection: 'column',
@@ -89,18 +113,18 @@ export const MultiTabListPageTemplate: React.FC<MultiTabListPageTemplateProps> =
                         ...tabPanePadding,
                     }}
                 >
-                    {tab.children}
+                    <MultiTabListPageTabHost>{tab.children}</MultiTabListPageTabHost>
                 </div>
             ))}
         </>
     ) : (
-        currentTab?.children
+        <MultiTabListPageTabHost>{currentTab?.children}</MultiTabListPageTabHost>
     );
 
     return (
         <div
             ref={containerRef}
-            className={[MULTI_TAB_PAGE_CONTAINER_CLASS, className].filter(Boolean).join(' ')}
+            className={[MULTI_TAB_LIST_PAGE_CONTAINER_CLASS, className].filter(Boolean).join(' ')}
             style={{
                 height: containerHeight,
                 minHeight: MULTI_TAB_PAGE_CONTAINER.MIN_HEIGHT_PX,
@@ -109,7 +133,7 @@ export const MultiTabListPageTemplate: React.FC<MultiTabListPageTemplateProps> =
         >
             <ListPageTemplate
                 statCards={statCards}
-                className={MULTI_TAB_PAGE_ROOT_CLASS}
+                className={MULTI_TAB_LIST_PAGE_ROOT_CLASS}
                 style={{ height: '100%', ...style }}
                 prioritizeMainContentPaint={prioritizeMainContentPaint}
                 fillMain
@@ -117,14 +141,14 @@ export const MultiTabListPageTemplate: React.FC<MultiTabListPageTemplateProps> =
             >
                 {header ? <div style={{ marginBottom: 16, flexShrink: 0 }}>{header}</div> : null}
                 <Card
-                    className="multi-tab-list-page-card"
-                    style={{ flex: 1, minHeight: 0 }}
+                    className={MULTI_TAB_LIST_PAGE_CARD_CLASS}
+                    style={{ flex: 1, minHeight: 0, minWidth: 0 }}
                     tabList={tabs.map(tab => ({ key: tab.key, tab: tab.label }))}
                     activeTabKey={activeTabKey}
                     onTabChange={onTabChange}
                     tabBarExtraContent={tabBarExtraContent}
                     tabProps={{ size: 'medium' }}
-                    classNames={{ body: 'scrollbar-like-modal multi-tab-list-page-card-body' }}
+                    classNames={{ body: `scrollbar-like-modal ${MULTI_TAB_LIST_PAGE_CARD_BODY_CLASS}` }}
                     styles={{ body: preserveMounted ? { padding: 0 } : { padding } }}
                 >
                     {bodyInner}

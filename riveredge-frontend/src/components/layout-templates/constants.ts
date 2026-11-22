@@ -413,7 +413,10 @@ export const LIST_PAGE_TABLE_SCROLL = {
   DEFAULT_FALLBACK_OFFSET_PX: 449,
 } as const;
 
-/** MultiTabListPageTemplate 视口高度容器：与业务配置页同一套计算方式 */
+/**
+ * MultiTabListPageTemplate 视口高度容器：与业务配置页同一套计算方式。
+ * 嵌套 UniTable 的横向滚动与右固定操作列契约见 `src/global.less` 的 `.multi-tab-list-page-*`。
+ */
 export const MULTI_TAB_PAGE_CONTAINER = {
   MIN_HEIGHT_PX: 400,
   /** 视口回退计算时容器底与视口底留白（主路径优先用父级 clientHeight，避免与 UniTabs 限高重复扣减导致外层滚动） */

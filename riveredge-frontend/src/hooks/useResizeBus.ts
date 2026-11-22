@@ -41,6 +41,11 @@ function maybeDetach(): void {
   }
 }
 
+/** MultiTab 切换等场景下主动触发与 window resize 相同的布局重算（UniTable 列宽预算等）。 */
+export function notifyResizeBus(): void {
+  onWindowResize();
+}
+
 /** 供组件订阅；返回 unsubscribe */
 export function subscribeResizeBus(listener: ResizeListener): () => void {
   listeners.add(listener);
