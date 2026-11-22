@@ -67,6 +67,22 @@ class HolidayResponse(HolidayBase):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True, by_alias=True)
 
 
+class BatchDeleteHolidaysRequest(BaseModel):
+    """批量删除假期"""
+
+    uuids: List[str] = Field(..., min_length=1, max_length=500, description="假期 UUID 列表")
+
+
+class BatchDeleteHolidaysResult(BaseModel):
+    """批量删除假期结果"""
+
+    deleted_count: int = Field(..., description="成功删除数量", alias="deletedCount")
+    failed_count: int = Field(0, description="失败数量", alias="failedCount")
+    failed_items: List[dict] = Field(default_factory=list, description="失败明细", alias="failedItems")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class HolidayCnImportRequest(BaseModel):
     """中国法定节假日 + 周休导入请求"""
 
@@ -78,7 +94,7 @@ class HolidayCnImportRequest(BaseModel):
     )
     rest_weekdays: Optional[List[int]] = Field(
         None,
-        description="休息星期（Python weekday：周一=0 … 周日=6）；custom 必填",
+        description="休息星期（Python weekday：周一=0 … 周日=6）；custom 可空表示不生成周休",
         alias="restWeekdays",
     )
 

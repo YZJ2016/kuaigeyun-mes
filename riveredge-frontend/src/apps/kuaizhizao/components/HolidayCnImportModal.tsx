@@ -73,10 +73,6 @@ export const HolidayCnImportModal: React.FC<HolidayCnImportModalProps> = ({
       messageApi.warning(t('app.kuaizhizao.performance.holidays.importCn.messages.yearRequired'));
       return;
     }
-    if (restMode === 'custom' && restWeekdays.length === 0) {
-      messageApi.warning(t('app.kuaizhizao.performance.holidays.importCn.messages.weekdaysRequired'));
-      return;
-    }
     setSubmitting(true);
     try {
       const result = await holidayApi.importCn({
@@ -134,7 +130,10 @@ export const HolidayCnImportModal: React.FC<HolidayCnImportModalProps> = ({
             onChange={(v) => handleRestModeChange(v as HolidayCnRestMode)}
           />
         </Form.Item>
-        <Form.Item label={t('app.kuaizhizao.performance.holidays.importCn.restWeekdays')} required>
+        <Form.Item
+          label={t('app.kuaizhizao.performance.holidays.importCn.restWeekdays')}
+          required={restMode !== 'custom'}
+        >
           <Checkbox.Group
             value={restWeekdays}
             options={weekdayOptions}
@@ -145,7 +144,11 @@ export const HolidayCnImportModal: React.FC<HolidayCnImportModalProps> = ({
             <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
               {t('app.kuaizhizao.performance.holidays.importCn.presetHint')}
             </Typography.Text>
-          ) : null}
+          ) : (
+            <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+              {t('app.kuaizhizao.performance.holidays.importCn.customWeekdayHint')}
+            </Typography.Text>
+          )}
         </Form.Item>
         <Space orientation="vertical" size={0}>
           <Typography.Text type="secondary">

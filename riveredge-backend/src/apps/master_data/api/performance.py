@@ -18,6 +18,7 @@ from apps.master_data.services.performance_service import PerformanceService
 from apps.master_data.schemas.performance_schemas import (
     HolidayCreate, HolidayUpdate, HolidayResponse,
     HolidayCnImportRequest, HolidayCnImportResult,
+    BatchDeleteHolidaysRequest, BatchDeleteHolidaysResult,
     SkillCreate, SkillUpdate, SkillResponse
 )
 from apps.master_data.services.employee_performance_service import (
@@ -219,6 +220,20 @@ async def update_holiday(
         return await PerformanceService.update_holiday(tenant_id, holiday_uuid, data, operator=current_user)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/holidays/batch-delete", response_model=BatchDeleteHolidaysResult, summary="Batch delete holidays")
+async def batch_delete_holidays(
+    request: BatchDeleteHolidaysRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """批量删除假期（软删除，单请求）。"""
+    try:
+        result = await PerformanceService.batch_delete_holidays(tenant_id, request.uuids)
+        return BatchDeleteHolidaysResult.model_validate(result)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

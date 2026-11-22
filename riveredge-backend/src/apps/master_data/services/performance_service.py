@@ -79,10 +79,8 @@ class PerformanceService:
             return list(_REST_MODE_PRESETS[mode])
         if mode != "custom":
             raise ValidationError("休息制度仅支持 double / single / custom")
-        if not rest_weekdays:
-            raise ValidationError("自定义休息制度须指定 rest_weekdays")
         cleaned: List[int] = []
-        for d in rest_weekdays:
+        for d in rest_weekdays or []:
             try:
                 wi = int(d)
             except (TypeError, ValueError) as exc:
@@ -91,8 +89,6 @@ class PerformanceService:
                 raise ValidationError("rest_weekdays 须为 0–6（周一=0 … 周日=6）")
             if wi not in cleaned:
                 cleaned.append(wi)
-        if not cleaned:
-            raise ValidationError("自定义休息制度至少选择一个休息日")
         return cleaned
 
     @staticmethod
@@ -401,6 +397,38 @@ class PerformanceService:
         from tortoise import timezone
         holiday.deleted_at = timezone.now()
         await holiday.save()
+
+    @staticmethod
+    async def batch_delete_holidays(tenant_id: int, holiday_uuids: List[str]) -> Dict[str, Any]:
+        """批量软删除假期（单次查询 + bulk_update）。"""
+        from tortoise import timezone
+
+        unique_uuids = list(dict.fromkeys((u or "").strip() for u in holiday_uuids if (u or "").strip()))
+        if not unique_uuids:
+            raise ValidationError("请选择要删除的假期")
+
+        now = timezone.now()
+        rows = await Holiday.filter(
+            tenant_id=tenant_id,
+            uuid__in=unique_uuids,
+            deleted_at__isnull=True,
+        ).all()
+        found_uuids = {row.uuid for row in rows}
+        for row in rows:
+            row.deleted_at = now
+        if rows:
+            await Holiday.bulk_update(rows, fields=["deleted_at", "updated_at"])
+
+        failed_items = [
+            {"uuid": u, "reason": "假期不存在"}
+            for u in unique_uuids
+            if u not in found_uuids
+        ]
+        return {
+            "deleted_count": len(rows),
+            "failed_count": len(failed_items),
+            "failed_items": failed_items,
+        }
     
     # ==================== 技能相关方法 ====================
     

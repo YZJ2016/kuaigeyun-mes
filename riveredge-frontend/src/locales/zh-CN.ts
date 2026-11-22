@@ -14755,6 +14755,8 @@ export default {
   'app.kuaizhizao.performance.holidays.importCn.restMode.custom': '自定义',
   'app.kuaizhizao.performance.holidays.importCn.restWeekdays': '一周休息日',
   'app.kuaizhizao.performance.holidays.importCn.presetHint': '双休默认周六日、单休默认周日；选择自定义后可勾选星期。',
+  'app.kuaizhizao.performance.holidays.importCn.customWeekdayHint':
+    '自定义下可不勾选任何星期，表示不生成周休、仅导入法定节假日。',
   'app.kuaizhizao.performance.holidays.importCn.weekday.0': '周一',
   'app.kuaizhizao.performance.holidays.importCn.weekday.1': '周二',
   'app.kuaizhizao.performance.holidays.importCn.weekday.2': '周三',

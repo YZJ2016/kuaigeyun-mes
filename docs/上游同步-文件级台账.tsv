@@ -1404,7 +1404,7 @@ riveredge-backend/src/apps/master_data/api/drawing_loans.py	582a7c34d95b9fc50dd2
 riveredge-backend/src/apps/master_data/api/management.py	1cfe2c4f47d3c8a8d17109e26a578ab4467b37cd	applied	tracked审计：与上游tip逐字节一致
 riveredge-backend/src/apps/master_data/api/material.py	1afde47eec24337d643cc96ed056c1ae804fca50	applied	R2簇4 master-data:适配本地(禁kuaiconnect薄代理/inbound_sync_gate)
 riveredge-backend/src/apps/master_data/api/partner_price_book.py	8d47321d6d86b850f6235d79e18d679d63216ddc	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
-riveredge-backend/src/apps/master_data/api/performance.py	8bb47b83c3eed61f8719373cb85f2a5a75836ad8	deferred	待决：假期批量删除与自定义周休允许零星期（现有导入弹窗行为会变）；不带海尔权限码旁路
+riveredge-backend/src/apps/master_data/api/performance.py	8bb47b83c3eed61f8719373cb85f2a5a75836ad8	applied	用户决定摘取：假期批量删除与自定义周休允许零星期；不带海尔权限码旁路；与上游 tip 逐字节一致
 riveredge-backend/src/apps/master_data/api/process.py	7b9f1184236b8b3d33f8fd6cabea6b0be43fe6c3	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/apps/master_data/api/router.py	470bac8b547409c55db858622e61ec12d01c4e28	superset	tracked审计：本地为上游超集/等价
 riveredge-backend/src/apps/master_data/api/supply_chain.py	853f6973fc20277d5ef0dde7d5c9fc6bdccf2427	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
@@ -1434,7 +1434,7 @@ riveredge-backend/src/apps/master_data/schemas/master_data_sync.py	f8d44f93b55ec
 riveredge-backend/src/apps/master_data/schemas/material_product_process_schemas.py	437f0aa722cc35529ffe1bb8ae714a8929630b01	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/apps/master_data/schemas/material_schemas.py	c06d1a805b6442a2f23cd992f6ea165086ff9cdd	superset	R2:本地已含适配内容/本地实现超前
 riveredge-backend/src/apps/master_data/schemas/partner_price_book_schemas.py	a7a3a212677ffc71724d1c3213a7cc7a675cc7b0	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
-riveredge-backend/src/apps/master_data/schemas/performance_schemas.py	215c701bccfd7d4358a00a2e222cdd1b331a8bc6	deferred	待决：假期批量删除与自定义周休允许零星期（现有导入弹窗行为会变）；不带海尔权限码旁路
+riveredge-backend/src/apps/master_data/schemas/performance_schemas.py	215c701bccfd7d4358a00a2e222cdd1b331a8bc6	applied	用户决定摘取：假期批量删除与自定义周休允许零星期；不带海尔权限码旁路；与上游 tip 逐字节一致
 riveredge-backend/src/apps/master_data/schemas/process_schemas.py	d1ea77cc604670c2b700ff30df1c242deb61e4da	applied	积压保存真bug：仅工艺路线Update接收snake/camel字段并校验超报模式/负值/百分比，existing test扩5例；不替换整文件/扩工艺业务
 riveredge-backend/src/apps/master_data/schemas/supply_chain_schemas.py	6ea2a20c8ae26e135e01401a4360eb7e0113b43b	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/apps/master_data/schemas/warehouse_schemas.py	8c3118d5a14076e8f8ab5a899e7b0bdffcc911e1	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
@@ -1471,7 +1471,7 @@ riveredge-backend/src/apps/master_data/services/partner_material_price_resolver.
 riveredge-backend/src/apps/master_data/services/partner_price_book_service.py	fd8d15eb4f45110e355de5ae5b6b4d443dda46f0	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/apps/master_data/services/partner_price_resolution_config.py	941421d5b2d408c5116a38b219625299a58b11f5	applied	tracked审计：与上游tip逐字节一致
 riveredge-backend/src/apps/master_data/services/partner_price_tier_utils.py	fbfe49709eedc3b7db40e8976eaa40ca82a7e1dd	applied	tracked审计：与上游tip逐字节一致
-riveredge-backend/src/apps/master_data/services/performance_service.py	64f53681ad96363c6cc8d9f2dce87f0648fb2678	deferred	待决：假期批量删除与自定义周休允许零星期（现有导入弹窗行为会变）；不带海尔权限码旁路
+riveredge-backend/src/apps/master_data/services/performance_service.py	64f53681ad96363c6cc8d9f2dce87f0648fb2678	applied	用户决定摘取：假期批量删除与自定义周休允许零星期；不带海尔权限码旁路；与上游 tip 逐字节一致
 riveredge-backend/src/apps/master_data/services/process_route_change_service.py	28702c9cec926e1b6d2955b82cece17c745c47fa	superset	本地等价实现：模块/路径/语义已在本地落定（kuaiplm本地app承接engineering_change_audit与plm深链、kuaireport真源、kuaiai路径、类型守卫/a11y/antd6 medium/泛型/uni-report特性/上游bug式差异）
 riveredge-backend/src/apps/master_data/services/process_service.py	953e36f6dd57ec69db98ae32d326b55f8af669c4	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/apps/master_data/services/reset_data_service.py	ec59127719c6c8a00abdc5b8fad0820faa809346	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
@@ -2221,7 +2221,7 @@ riveredge-frontend/src/apps/kuaizhizao/components/GanttSchedulingChart/stationRe
 riveredge-frontend/src/apps/kuaizhizao/components/GanttSchedulingChart/types.ts	0fb6648315885b0fcf707ec563a15765b65ad0ac	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
 riveredge-frontend/src/apps/kuaizhizao/components/GanttSchedulingChart/utils.ts	6dab9620932f432d49946847d93a7270a22e1f50	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
 riveredge-frontend/src/apps/kuaizhizao/components/GanttSchedulingChart/workOrderOperationLinks.ts	f6ff1781cbbf7bbb3f90a9c4c06309bbd4a4f1c3	superset	本地私有实现/分叉超集（预审A包复核）
-riveredge-frontend/src/apps/kuaizhizao/components/HolidayCnImportModal.tsx	3e7b5c7f6119789b3bf2fe6556494b8e0fa9fb51	deferred	待决：假期批量删除与自定义周休允许零星期（现有导入弹窗行为会变）；不带海尔权限码旁路
+riveredge-frontend/src/apps/kuaizhizao/components/HolidayCnImportModal.tsx	3e7b5c7f6119789b3bf2fe6556494b8e0fa9fb51	applied	用户决定摘取：假期批量删除与自定义周休允许零星期；不带海尔权限码旁路；与上游 tip 逐字节一致
 riveredge-frontend/src/apps/kuaizhizao/components/InspectionPlanFormModal.tsx	80bbd98f7e1d8507d1e00084035483a869d67ceb	applied	tracked审计：与上游tip逐字节一致
 riveredge-frontend/src/apps/kuaizhizao/components/InspectionPlanStepEditor.tsx	96b3ffa1be5e02aeb8db8e514d0c148d12d6f456	superset	tracked审计：本地为上游超集/等价
 riveredge-frontend/src/apps/kuaizhizao/components/InspectionSamplingSpecFields.tsx	ea5926d5c9fae7123868d3027758a18f4a6b76f3	applied	tracked审计：与上游tip逐字节一致
@@ -3225,7 +3225,7 @@ riveredge-frontend/src/locales/lo-LA.ts	95fd99291da08ca44a5fec39aa1a2ba36c366b7c
 riveredge-frontend/src/locales/vi-VN.login.ts	7f8e16b5abb0a679f9ecbf0443862b87d0a03791	superset	本地品牌/引用展示隐式鉴权语义：本地保留星技谷品牌与host_resource隐式鉴权（上游已改RiverEdge品牌+read|display严权模型），契约语义不同不取
 riveredge-frontend/src/locales/vi-VN.ts	97820a0546c20f2a15381ec9f045d5598eb0759a	superset	仅路径引用/注释/spoke-wheel改名或非zh-CN locale(i18n-zh-cn-only)：本地不取上游docs路径与改名
 riveredge-frontend/src/locales/zh-CN.login.ts	db74e76107d87f6bd9f68953bc8a91f8f93d3479	superset	tracked审计：本地为上游超集/等价
-riveredge-frontend/src/locales/zh-CN.ts	e9d7e96922583937aed06ac65faf20be3f147f09	applied	本轮海尔物联文案整段不摘（客户名、应用源码不在仓）；common 四键无本地调用方不单摘；文件维持既有本地定制
+riveredge-frontend/src/locales/zh-CN.ts	e9d7e96922583937aed06ac65faf20be3f147f09	applied	海尔物联文案整段不摘；已摘 customWeekdayHint（假期自定义周休可空）。common 四键无本地调用方不单摘
 riveredge-frontend/src/locales/zh-Hant.login.ts	e39ef176e510d9e92a7f0547a82a5a9da055cf57	superset	本地品牌/引用展示隐式鉴权语义：本地保留星技谷品牌与host_resource隐式鉴权（上游已改RiverEdge品牌+read|display严权模型），契约语义不同不取
 riveredge-frontend/src/locales/zh-Hant.ts	991e66ad16c6441e9a56c20b01dae279a1e9c624	superset	仅路径引用/注释/spoke-wheel改名或非zh-CN locale(i18n-zh-cn-only)：本地不取上游docs路径与改名
 riveredge-frontend/src/login.html	0b9d33e156e06f1a58731d453049b99b3ea81d27	superset	仅路径引用/注释/spoke-wheel改名或非zh-CN locale(i18n-zh-cn-only)：本地不取上游docs路径与改名
