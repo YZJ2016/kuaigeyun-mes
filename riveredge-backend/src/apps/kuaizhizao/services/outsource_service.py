@@ -356,6 +356,17 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
             policy_cache=policy_cache,
             inspections_by_op=inspections_by_op,
         )
+        from apps.kuaizhizao.services.operation_jump_rules import work_order_allows_operation_jump
+        from apps.kuaizhizao.services.work_order_service import WorkOrderService
+
+        # 与厂内报工相同：首道或允许跳转的工序，在制上限加上补领抬高。
+        # 前序节点尚无合格产出时 incoming 为 0，不能靠补领绕过节点。
+        if incoming > 0 and (
+            op_index == 0 or work_order_allows_operation_jump(work_order)
+        ):
+            incoming = incoming + await WorkOrderService.resolve_material_incoming_picking_extra_units(
+                tenant_id, int(work_order.id), plan_qty
+            )
 
         master_id = int(work_order_operation.operation_id) if work_order_operation.operation_id else 0
         mode = "none"
@@ -1388,6 +1399,11 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
         ).first()
         if not work_order or not op:
             raise NotFoundError("委外单关联的工单或工序不存在")
+        from apps.kuaizhizao.services.operation_jump_rules import (
+            assert_previous_nodes_have_qualified_output,
+        )
+
+        await assert_previous_nodes_have_qualified_output(tenant_id, work_order, op)
         breakdown = await self._compute_outsourceable_breakdown(
             tenant_id,
             work_order,

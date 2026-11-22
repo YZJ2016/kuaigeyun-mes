@@ -57,6 +57,104 @@ _PURCHASE_INVOICE_REL_TYPES = frozenset({"purchase_invoice", "PurchaseInvoice", 
 _PURCHASE_RETURN_REL_TYPES = frozenset({"purchase_return", "采购退货"})
 
 
+def purchase_return_amount_from_receipt_line(
+    receipt: Any,
+    receipt_line: Any,
+    poi_by_id: Dict[int, Any],
+    return_qty: Any,
+    *,
+    tax_inclusive: bool = True,
+) -> Decimal:
+    """退货金额按关联入库行价税合计（或未税）按数量分摊。"""
+    from apps.kuaicaiwu.services.purchase_settlement import (
+        compute_purchase_receipt_line_settlement_amounts,
+    )
+
+    excl, _tax, gross = compute_purchase_receipt_line_settlement_amounts(
+        receipt, receipt_line, poi_by_id
+    )
+    basis = gross if tax_inclusive else excl
+    receipt_qty = Decimal(str(getattr(receipt_line, "receipt_quantity", 0) or 0))
+    qty = Decimal(str(return_qty or 0))
+    if receipt_qty > 0 and qty < receipt_qty:
+        return quantize_money(basis * qty / receipt_qty)
+    return quantize_money(basis)
+
+
+async def _resolve_purchase_return_amount(
+    tenant_id: int,
+    ret: Any,
+    *,
+    tax_inclusive: bool = True,
+) -> Decimal:
+    """采购退货正数金额：有入库行用价税合计分摊，否则用退货单合计。"""
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+    items = await PurchaseReturnItem.filter(
+        tenant_id=tenant_id,
+        return_id=int(ret.id),
+    ).all()
+    if not items:
+        return quantize_money(getattr(ret, "total_amount", 0) or 0)
+
+    receipt_item_ids = [
+        int(it.purchase_receipt_item_id)
+        for it in items
+        if getattr(it, "purchase_receipt_item_id", None)
+    ]
+    ri_by_id: Dict[int, Any] = {}
+    receipt_by_id: Dict[int, Any] = {}
+    poi_by_id: Dict[int, Any] = {}
+    if receipt_item_ids:
+        ri_rows = await PurchaseReceiptItem.filter(
+            tenant_id=tenant_id, id__in=receipt_item_ids
+        ).all()
+        ri_by_id = {int(r.id): r for r in ri_rows}
+        receipt_ids = [
+            int(r.receipt_id) for r in ri_rows if getattr(r, "receipt_id", None)
+        ]
+        if receipt_ids:
+            receipts = await PurchaseReceipt.filter(
+                tenant_id=tenant_id, id__in=receipt_ids
+            ).all()
+            receipt_by_id = {int(r.id): r for r in receipts}
+        poi_ids = [
+            int(r.purchase_order_item_id)
+            for r in ri_rows
+            if getattr(r, "purchase_order_item_id", None)
+        ]
+        if poi_ids:
+            pois = await PurchaseOrderItem.filter(
+                tenant_id=tenant_id, id__in=poi_ids
+            ).all()
+            poi_by_id = {int(p.id): p for p in pois}
+
+    total = Decimal("0")
+    used_link = False
+    for it in items:
+        ri_id = getattr(it, "purchase_receipt_item_id", None)
+        ri = ri_by_id.get(int(ri_id)) if ri_id else None
+        receipt = (
+            receipt_by_id.get(int(ri.receipt_id))
+            if ri is not None and getattr(ri, "receipt_id", None)
+            else None
+        )
+        if ri is not None and receipt is not None:
+            total += purchase_return_amount_from_receipt_line(
+                receipt,
+                ri,
+                poi_by_id,
+                getattr(it, "return_quantity", 0),
+                tax_inclusive=tax_inclusive,
+            )
+            used_link = True
+        else:
+            total += quantize_money(getattr(it, "total_amount", 0) or 0)
+    if not used_link and total <= 0:
+        return quantize_money(getattr(ret, "total_amount", 0) or 0)
+    return quantize_money(total)
+
+
 def _add_positive_ids(target: Set[int], *raw_ids: Any) -> None:
     for raw in raw_ids:
         if raw is None:
@@ -443,7 +541,7 @@ class ReturnOpenBalanceOffsetService:
         if existing:
             return quantize_money(sum((quantize_money(r.amount) for r in existing), Decimal("0")))
 
-        return_amount = quantize_money(ret.total_amount)
+        return_amount = await _resolve_purchase_return_amount(tenant_id, ret)
         if return_amount <= 0:
             return Decimal("0.00")
 

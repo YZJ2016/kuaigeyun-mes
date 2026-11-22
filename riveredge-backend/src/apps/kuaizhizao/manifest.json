@@ -4176,6 +4176,15 @@
       "config_section": "procurement_order"
     },
     {
+      "node_key": "receipt_notice",
+      "entity_type": "receipt_notice",
+      "resource": "kuaizhizao:receipt-notice",
+      "name": "收货通知审核",
+      "template": "simple",
+      "config_category": "procurement",
+      "config_section": "procurement_order"
+    },
+    {
       "node_key": "reporting_record",
       "entity_type": "reporting_record",
       "resource": "kuaizhizao:reporting-record",

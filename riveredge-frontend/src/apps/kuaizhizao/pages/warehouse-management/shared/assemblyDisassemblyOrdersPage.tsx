@@ -1250,7 +1250,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
               <Button size="small" onClick={() => openItemModal(currentOrder)}>
                 {t('app.kuaizhizao.warehouseCommon.addItem')}
               </Button>
-              <Button size="small" type="primary" onClick={() => confirmExecuteOrder(currentOrder)}>
+              <Button size="small" type="primary" onClick={() => executeconfirmExecuteOrder(currentOrder)}>
                 {config.executeActionLabel}
               </Button>
             </Space>

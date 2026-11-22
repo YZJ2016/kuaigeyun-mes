@@ -718,9 +718,9 @@ class SalesInvoiceLineResponse(BaseSchema):
     unit: Optional[str] = None
     quantity: Optional[Decimal] = None
     unit_price: Optional[Decimal] = None
-    amount: Decimal
+    amount: Optional[Decimal] = None
     tax_rate: Decimal
-    tax_amount: Decimal
+    tax_amount: Optional[Decimal] = None
 
 
 class SalesInvoiceVoidRequest(BaseSchema):
@@ -737,6 +737,10 @@ class SalesInvoiceRedLetterRequest(BaseSchema):
 
 class SalesInvoiceResponse(SalesInvoiceBase):
     """销售发票响应schema"""
+    invoice_amount: Optional[Decimal] = None
+    tax_amount: Optional[Decimal] = None
+    total_amount: Optional[Decimal] = None
+    customer_name: Optional[str] = Field(None, max_length=200, description="客户名称")
     id: int
     tenant_id: int
     invoice_code: str
@@ -904,6 +908,9 @@ class PartnerStatementCreate(BaseSchema):
     ledger_posting_mode: Optional[str] = Field(
         "immediate", description="立账方式 immediate 或 by_invoice（按对账单立账客商）"
     )
+    amount_basis: Optional[str] = Field(
+        "tax_inclusive", description="对账金额口径 tax_inclusive 或 tax_exclusive"
+    )
 
 
 class PartnerStatementMarkSentRequest(BaseSchema):
@@ -929,6 +936,11 @@ class PartnerStatementResponse(BaseSchema):
     credit_total: Decimal
     closing_balance: Decimal
     status: str
+    review_status: str = "草稿"
+    reviewer_id: Optional[int] = None
+    reviewer_name: Optional[str] = None
+    review_time: Optional[datetime] = None
+    review_remarks: Optional[str] = None
     company_name: Optional[str] = None
     transaction_details: Optional[dict] = None
     confirmed_at: Optional[datetime] = None

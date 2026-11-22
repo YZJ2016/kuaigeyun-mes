@@ -28,13 +28,15 @@ def test_apply_cosmic_since_merges_existing_filter():
     assert "status EQ 'C'" in body["data"]["filter"]
 
 
-def test_apply_cosmic_since_does_not_pollute_empty_batch_data():
+def test_apply_cosmic_since_empty_batch_data_uses_top_level_filter():
+    """空 data 不往 data 塞字段；顶层 filter 驱动源端增量，避免全量翻页。"""
     since = datetime(2026, 10, 1, 8, 0, 0)
     body = apply_cosmic_since_filter(
         {"data": {}, "pageNo": 1, "pageSize": 100},
         since,
     )
     assert body["data"] == {}
+    assert "modifytime GE '" in str(body.get("filter") or "")
 
 
 def test_apply_cosmic_since_writes_start_modifytime_when_start_fields_exist():
@@ -60,14 +62,14 @@ def test_apply_cosmic_since_to_params_sys_query():
     assert "modifytime GE '" in params["filter"]
 
 
-def test_apply_cosmic_since_to_params_skips_basedata_batch():
+def test_apply_cosmic_since_to_params_basedata_batch():
     since = datetime(2026, 10, 1, 8, 0, 0)
     params = apply_cosmic_since_to_params(
-        {},
+        {"select": "number,name"},
         since,
         path="kapi/v2/basedata/bd_material/batchQuery",
     )
-    assert "filter" not in params
+    assert "modifytime GE '" in params["filter"]
 
 
 def test_with_cosmic_page():
@@ -108,5 +110,32 @@ def test_cosmic_paged_response_is_last_page():
     assert cosmic_paged_response_is_last_page(
         {"data": {"rows": []}},
         chunk_len=0,
+        page_size=500,
+    )
+    # 网关把请求 pageSize=500 裁成 100 且 lastPage=false：不得当末页
+    assert not cosmic_paged_response_is_last_page(
+        {
+            "data": {
+                "rows": [{}] * 100,
+                "pageNo": 1,
+                "pageSize": 100,
+                "lastPage": False,
+                "totalCount": 2464,
+            }
+        },
+        chunk_len=100,
+        page_size=500,
+    )
+    assert cosmic_paged_response_is_last_page(
+        {
+            "data": {
+                "rows": [{}] * 64,
+                "pageNo": 25,
+                "pageSize": 100,
+                "lastPage": True,
+                "totalCount": 2464,
+            }
+        },
+        chunk_len=64,
         page_size=500,
     )

@@ -53,6 +53,12 @@ import {
 } from '@ant-design/icons';
 
 import { getApprovalStatus, type ApprovalStatusResponse } from '../../services/approvalInstance';
+import { getEditableFields, type EditableFieldOption } from '../../services/approvalProcess';
+import {
+  AuditInlineEditableFields,
+  buildAuditDocumentUpdates,
+  resolveEditableFieldKeys,
+} from './auditInlineEditableFields';
 import { DOCUMENT_STATUS_SEMANTIC_COLOR } from '../../constants/documentStatusColors';
 import { MarkerTag, StatusTag } from '../../constants/statusBadges';
 import { resolveAuditFlowExecutePermission } from '../../utils/auditFlowViewerGate';
@@ -122,6 +128,9 @@ interface UniAuditModalProps {
 
   entityId?: number;
 
+  /** 审核 node_key；同 entity 多业务类型时用于草稿预览定位流程 */
+  auditNodeKey?: string;
+
   canExecute?: boolean;
 
   hubActions?: UniAuditHubAction[];
@@ -185,6 +194,9 @@ const NODE_STATUS_LABEL: Record<string, { color: string; text: string }> = {
 
   waiting: { color: DOCUMENT_STATUS_SEMANTIC_COLOR.muted, text: '待到达' },
 
+  /** 条件未走分支：从未进入，区别于空审批人「已跳过」、尚未轮到「待到达」 */
+  not_triggered: { color: DOCUMENT_STATUS_SEMANTIC_COLOR.muted, text: '未触发' },
+
   skipped: { color: DOCUMENT_STATUS_SEMANTIC_COLOR.pending, text: '已跳过' },
 
 };
@@ -213,6 +225,11 @@ function resolveNodeExecutionCardStyle(
       return {
         border: `1px solid ${token.colorWarningBorder}`,
         background: token.colorWarningBg,
+      };
+    case 'not_triggered':
+      return {
+        border: `1px solid ${token.colorBorderSecondary}`,
+        background: token.colorFillAlter,
       };
     case 'waiting':
     default:
@@ -430,20 +447,6 @@ function AuditHubDetailPanel({
 
 
   return (
-    <>
-      <style>{`
-        .uni-audit-hub-panel,
-        .uni-audit-hub-scroll {
-          scrollbar-width: none;
-          -ms-overflow-style: none;
-        }
-        .uni-audit-hub-panel::-webkit-scrollbar,
-        .uni-audit-hub-scroll::-webkit-scrollbar {
-          width: 0;
-          height: 0;
-          display: none;
-        }
-      `}</style>
     <Row
       className="uni-audit-hub-panel"
       gutter={16}
@@ -784,8 +787,6 @@ function AuditHubDetailPanel({
       </Col>
 
     </Row>
-    </>
-
   );
 
 }
@@ -811,6 +812,8 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
   entityType,
 
   entityId,
+
+  auditNodeKey,
 
   canExecute = true,
 
@@ -848,6 +851,8 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
   const [rejectConfirmOpen, setRejectConfirmOpen] = useState(false);
   /** antd Modal 默认 zoom 动画期间父级有 transform；结束后再挂流程预览 */
   const [flowCanvasReady, setFlowCanvasReady] = useState(false);
+  const [editableCatalog, setEditableCatalog] = useState<EditableFieldOption[]>([]);
+  const [auditFieldValues, setAuditFieldValues] = useState<Record<string, unknown>>({});
 
   useEffect(() => {
     if (!open) setFlowCanvasReady(false);
@@ -866,10 +871,16 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
     const hasMyPendingTask =
       viewerActions?.has_my_pending_task ?? flowStatus?.has_my_pending_task ?? false;
 
-    // live 未返回前：审核/驳回不可点，避免列表态 canExecute 或空 viewer_actions 误放行导致第一次点击空跑
+    // live 未返回前：审核/驳回不可点；撤回提交亦不可点（避免列表态 withdraw 在概况返回前误点）
     if (flowLoading) {
       items = items.map((item) => {
-        if (item.action !== 'approve' && item.action !== 'reject') {
+        if (
+          item.action !== 'approve'
+          && item.action !== 'reject'
+          && item.action !== 'withdraw'
+          && item.action !== 'revoke'
+          && item.action !== 'recall_own'
+        ) {
           return item;
         }
         return {
@@ -881,18 +892,40 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
       return { effectiveHubActions: items, flowAssigneeBlockHint: assigneeBlockHint };
     }
 
-    // 流程实例已结束：禁止再展示审核/驳回
+    // 流程实例已结束：禁止审核/驳回/撤回提交；终审可反审时补「撤销审核」(revoke)
+    // 禁止早退时原样保留列表态 withdraw——会把「撤回提交」误留给终审人点出「没有可撤回的审批流程」
     if (flowStatus?.has_instance && flowStatus.status !== 'pending') {
-      items = items.map((item) => {
-        if (item.action !== 'approve' && item.action !== 'reject') {
-          return item;
+      const moduleRbacEnded =
+        rbacAllowedProp
+        ?? items.find((item) => item.action === 'approve' || item.action === 'reject' || item.action === 'revoke')
+          ?.rbacAllowed
+        ?? adminOpen;
+      items = items.filter(
+        (item) =>
+          item.action !== 'approve'
+          && item.action !== 'reject'
+          && item.action !== 'withdraw'
+          && item.action !== 'recall_own',
+      );
+      if (flowStatus.viewer_can_revoke) {
+        if (!items.some((item) => item.action === 'revoke')) {
+          items.push({
+            action: 'revoke',
+            title: t('components.uniAudit.revokeAction'),
+            canExecute: true,
+            rbacAllowed: Boolean(moduleRbacEnded),
+            danger: true,
+          });
+        } else {
+          items = items.map((item) =>
+            item.action === 'revoke'
+              ? { ...item, canExecute: true, rbacAllowed: Boolean(moduleRbacEnded) }
+              : item,
+          );
         }
-        return {
-          ...item,
-          canExecute: false,
-          disabledReason: t('components.uniAudit.noPermission'),
-        };
-      });
+      } else {
+        items = items.filter((item) => item.action !== 'revoke');
+      }
       return { effectiveHubActions: items, flowAssigneeBlockHint: assigneeBlockHint };
     }
 
@@ -1011,31 +1044,23 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
           return item;
         });
       }
-      items = items.map((item) => {
-        if (item.action === 'withdraw' && flowStatus?.viewer_can_withdraw_submit === false) {
-          return {
-            ...item,
-            canExecute: false,
-            disabledReason: t('components.uniAudit.noPermission'),
-          };
-        }
-        if (item.action === 'recall_own' && !flowStatus?.viewer_can_recall_own) {
-          return {
-            ...item,
-            canExecute: false,
-            disabledReason: t('components.uniAudit.noPermission'),
-          };
-        }
-        return item;
-      });
+      // 撤回提交 ≠ 撤销审核：仅发起人且 live 放行时保留；否则从页脚移除，禁止置灰后仍可点
+      if (!flowStatus.viewer_can_withdraw_submit) {
+        items = items.filter((item) => item.action !== 'withdraw');
+      } else if (!isSubmitter && !adminOpen) {
+        items = items.filter((item) => item.action !== 'withdraw');
+      }
+      if (!flowStatus.viewer_can_recall_own) {
+        items = items.filter((item) => item.action !== 'recall_own');
+      }
       // 转交/加签/委托须本人持有当前待办；禁止管理员旁路伪装成待办人
       if (hasMyPendingTask && caps.allow_transfer) {
         items.push({ action: 'transfer', title: t('components.uniAudit.transfer'), canExecute: true });
       }
-      if (hasMyPendingTask && caps.allow_add_sign) {
+      if ((hasMyPendingTask || adminOpen) && caps.allow_add_sign) {
         items.push({ action: 'add_sign', title: t('components.uniAudit.addSign'), canExecute: true });
       }
-      if (hasMyPendingTask) {
+      if (hasMyPendingTask || adminOpen) {
         items.push({ action: 'delegate', title: t('components.uniAudit.delegate'), canExecute: true });
       }
       if (isSubmitter) {
@@ -1047,6 +1072,16 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
           title: t('components.uniAudit.recallOwnAction'),
           canExecute: true,
           rbacAllowed: Boolean(moduleRbac),
+        });
+      }
+      // 待审实例一般不反审整单；若 live 已放行 revoke（边界态）亦补按钮，文案与撤回提交区分
+      if (flowStatus.viewer_can_revoke && !items.some((item) => item.action === 'revoke')) {
+        items.push({
+          action: 'revoke',
+          title: t('components.uniAudit.revokeAction'),
+          canExecute: true,
+          rbacAllowed: Boolean(moduleRbac),
+          danger: true,
         });
       }
     }
@@ -1081,7 +1116,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
     setFlowLoading(true);
     setFlowLoadError(null);
 
-    getApprovalStatus(entityType, entityId)
+    getApprovalStatus(entityType, entityId, { nodeKey: auditNodeKey })
 
       .then((res) => {
 
@@ -1114,7 +1149,40 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
     };
 
-  }, [open, entityType, entityId, t]);
+  }, [open, entityType, entityId, auditNodeKey, t]);
+
+  useEffect(() => {
+    if (!open || !entityType || !flowStatus?.can_edit_during_approval) {
+      setEditableCatalog([]);
+      setAuditFieldValues({});
+      return;
+    }
+    let cancelled = false;
+    getEditableFields(entityType)
+      .then((res) => {
+        if (cancelled) return;
+        const catalog = res.fields || [];
+        setEditableCatalog(catalog);
+        const keys = resolveEditableFieldKeys(flowStatus.editable_fields, catalog);
+        const next: Record<string, unknown> = {};
+        keys.forEach((k) => {
+          const meta = catalog.find((c) => c.field === k);
+          if (meta?.type === 'boolean') {
+            next[k] = false;
+          }
+        });
+        setAuditFieldValues(next);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setEditableCatalog([]);
+          setAuditFieldValues({});
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, entityType, flowStatus?.can_edit_during_approval, flowStatus?.editable_fields]);
 
   const nodeDecision = flowStatus?.current_node_decision;
 
@@ -1153,12 +1221,21 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
   });
 
   const buildApprovePayload = (): Record<string, unknown> | undefined => {
-    if (!nodeDecision?.field || branchDecision === null) return undefined;
-    return {
-      instance_data_patch: {
+    const patch: Record<string, unknown> = {};
+    if (nodeDecision?.field && branchDecision !== null) {
+      patch.instance_data_patch = {
         [nodeDecision.field]: branchDecision,
-      },
-    };
+      };
+    }
+    const docUpdates = buildAuditDocumentUpdates(
+      editableCatalog,
+      flowStatus?.editable_fields,
+      auditFieldValues,
+    );
+    if (docUpdates) {
+      patch.document_updates = docUpdates;
+    }
+    return Object.keys(patch).length ? patch : undefined;
   };
 
   const openRejectConfirm = () => {
@@ -1182,7 +1259,12 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
     try {
 
-      const payload = action === 'reject' ? buildRejectPayload() : undefined;
+      const payload =
+        action === 'reject'
+          ? buildRejectPayload()
+          : action === 'approve'
+            ? buildApprovePayload()
+            : undefined;
       await onConfirm(reason.trim() || undefined, payload);
 
     } finally {
@@ -1204,7 +1286,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
         setBranchDecision(null);
         setFlowLoading(true);
         try {
-          const res = await getApprovalStatus(entityType, entityId);
+          const res = await getApprovalStatus(entityType, entityId, { nodeKey: auditNodeKey });
           setFlowStatus(res);
         } catch {
           setFlowStatus(null);
@@ -1256,7 +1338,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
         setBranchDecision(null);
         setFlowLoading(true);
         try {
-          const res = await getApprovalStatus(entityType, entityId);
+          const res = await getApprovalStatus(entityType, entityId, { nodeKey: auditNodeKey });
           setFlowStatus(res);
         } catch {
           setFlowStatus(null);
@@ -1377,13 +1459,20 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
         </div>
 
         <div
+          className="uni-audit-hub-actions"
           style={{
-            flex: '0 0 auto',
+            // 可填字段/分支决策变高时允许收缩并滚动，避免底栏被定高 body 裁死
+            flex: '0 1 auto',
+            minHeight: 0,
+            maxHeight: 'min(420px, 52%)',
+            overflowY: 'auto',
+            overflowX: 'hidden',
             marginTop: 12,
             paddingTop: 12,
             paddingBottom: 16,
             borderTop: '1px solid rgba(0, 0, 0, 0.06)',
             background: '#fff',
+            WebkitOverflowScrolling: 'touch',
           }}
         >
 
@@ -1403,6 +1492,15 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
           ) : null}
 
+          {flowStatus?.can_edit_during_approval && hasVisibleApprove ? (
+            <AuditInlineEditableFields
+              catalog={editableCatalog}
+              editableFields={flowStatus.editable_fields}
+              values={auditFieldValues}
+              onChange={setAuditFieldValues}
+            />
+          ) : null}
+
           {nodeDecision && hasVisibleApprove ? (
             <div
               style={{
@@ -1417,7 +1515,9 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
                 {nodeDecision.label}
               </Text>
               <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
-                {t('components.uniAudit.branchDecisionHint')}
+                {typeof nodeDecision.defaultValue === 'number'
+                  ? t('components.uniAudit.branchDecisionDefaultHint')
+                  : t('components.uniAudit.branchDecisionHint')}
               </Text>
               <Radio.Group
                 value={branchDecision === null ? undefined : branchDecision}
@@ -1427,14 +1527,21 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
                 {(nodeDecision.branches?.length
                   ? nodeDecision.branches
                   : [
-                      { index: 0, label: nodeDecision.trueBranchLabel || t('common.yes') },
-                      { index: 1, label: nodeDecision.falseBranchLabel || t('common.no') },
+                      { index: 0, label: nodeDecision.trueBranchLabel || t('common.yes'), targetLabel: '' },
+                      { index: 1, label: nodeDecision.falseBranchLabel || t('common.no'), targetLabel: '' },
                     ]
-                ).map((b) => (
+                ).map((b) => {
+                  const target = (b.targetLabel || '').trim();
+                  const shown =
+                    target && !b.label.includes(target) ? `${b.label} → ${target}` : b.label;
+                  return (
                   <Radio.Button key={b.index} value={b.index}>
-                    {b.label}
+                    {b.isDefault
+                      ? `${shown}（${t('pages.approval.branchDefaultMark')}）`
+                      : shown}
                   </Radio.Button>
-                ))}
+                  );
+                })}
               </Radio.Group>
             </div>
           ) : null}
@@ -1476,15 +1583,13 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
                   }
 
                   icon={
-
                     item.action === 'approve' ? <CheckCircleOutlined />
-
                       : item.action === 'reject' ? <CloseCircleOutlined />
-
-                        : item.action === 'withdraw' ? <RollbackOutlined />
-
+                        : item.action === 'withdraw'
+                          || item.action === 'revoke'
+                          || item.action === 'recall_own'
+                          ? <RollbackOutlined />
                           : <AuditOutlined />
-
                   }
 
                   onClick={() => handleHubAction(item)}
@@ -1531,7 +1636,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
             try {
               await onAction(action, cmt, payload);
               if (entityType && entityId) {
-                const res = await getApprovalStatus(entityType, entityId);
+                const res = await getApprovalStatus(entityType, entityId, { nodeKey: auditNodeKey });
                 setFlowStatus(res);
               }
             } finally {
@@ -1658,6 +1763,15 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
           <Typography.Text type="warning">{t('components.uniAudit.noPermission')}</Typography.Text>
 
         )}
+
+        {canExecute && action === 'approve' && flowStatus?.can_edit_during_approval ? (
+          <AuditInlineEditableFields
+            catalog={editableCatalog}
+            editableFields={flowStatus.editable_fields}
+            values={auditFieldValues}
+            onChange={setAuditFieldValues}
+          />
+        ) : null}
 
         {canExecute && action === 'reject' && (
           <>

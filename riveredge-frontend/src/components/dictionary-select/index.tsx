@@ -113,7 +113,7 @@ export interface DictionarySelectProps {
   /** 是否不包裹 ProForm.Item */
   noStyle?: boolean;
   /** 组件尺寸 */
-  size?: 'large' | 'middle' | 'small';
+  size?: 'large' | 'medium' | 'small';
   /** 自定义样式 */
   style?: React.CSSProperties;
   /** 自定义类名 */

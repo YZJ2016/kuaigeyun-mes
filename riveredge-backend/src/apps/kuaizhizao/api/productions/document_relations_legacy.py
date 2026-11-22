@@ -64,7 +64,8 @@ async def print_document(
         document_id=document_id,
         template_code=template_code,
         template_uuid=template_uuid,
-        output_format=output_format
+        output_format=output_format,
+        viewer_user_id=int(current_user.id),
     )
     if response_format == "html":
         return HTMLResponse(content=result.get("content", ""), status_code=200)

@@ -527,6 +527,17 @@ class PurchaseReceiptLineFinanceOccupancyService(AppBaseService):
             deleted_at__isnull=True,
         ).update(deleted_at=now)
 
+    async def soft_delete_by_receipt(self, tenant_id: int, receipt_id: int) -> None:
+        """撤回采购入库时清掉该入库单全部行占用，避免再次确认报可分摊金额不足。"""
+        from core.utils.timezone_utils import resolve_business_datetime
+
+        now = resolve_business_datetime()
+        await PurchaseReceiptLineFinanceOccupancy.filter(
+            tenant_id=tenant_id,
+            purchase_receipt_id=int(receipt_id),
+            deleted_at__isnull=True,
+        ).update(deleted_at=now)
+
     async def sums_by_receipt_item_ids(
         self,
         tenant_id: int,

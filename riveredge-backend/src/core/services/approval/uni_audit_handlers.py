@@ -181,6 +181,34 @@ async def _dispatch_shipment_notice(
     _unsupported("shipment_notice", action)
 
 
+async def _dispatch_receipt_notice(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.receipt_notice_service import ReceiptNoticeService
+
+    svc = ReceiptNoticeService()
+    if action == "submit":
+        return await svc.commit_receipt_notice(tenant_id, entity_id, user_id)
+    if action == "submit_review":
+        return await svc.submit_receipt_notice_for_review(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_receipt_notice(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.reject_receipt_notice(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await svc.withdraw_receipt_notice_submit(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_receipt_notice_approval(tenant_id, entity_id, user_id)
+    _unsupported("receipt_notice", action)
+
+
 async def _dispatch_sales_delivery(
     action: str,
     *,
@@ -599,7 +627,7 @@ async def _dispatch_reporting_record(
     if action == "submit":
         return await svc.submit_reporting_record(tenant_id, entity_id, user_id)
     if action == "withdraw":
-        _unsupported("reporting_record", action)
+        return await svc.withdraw_reporting_submit(tenant_id, entity_id, user_id)
     _unsupported("reporting_record", action)
 
 
@@ -1048,7 +1076,9 @@ async def _dispatch_rework_order(
         return await svc.approve_rework_order(tenant_id, entity_id, user_id)
     if action == "reject":
         return await svc.reject_rework_order(tenant_id, entity_id, user_id)
-    if action in ("withdraw", "revoke"):
+    if action == "withdraw":
+        return await svc.withdraw_rework_submit(tenant_id, entity_id, user_id)
+    if action == "revoke":
         _unsupported("rework_order", action)
     _unsupported("rework_order", action)
 
@@ -1446,6 +1476,36 @@ async def _dispatch_fund_transfer(
     _unsupported("fund_transfer", action)
 
 
+async def _dispatch_partner_statement(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.common.app_orm import require_finance_orm
+    from apps.kuaicaiwu.services.partner_statement_service import PartnerStatementService
+
+    require_finance_orm()
+    svc = PartnerStatementService()
+    if action == "submit":
+        return await svc.commit_statement(tenant_id, entity_id, user_id)
+    if action == "submit_review":
+        return await svc.submit_statement_for_review(tenant_id, entity_id, user_id)
+    if action == "withdraw":
+        return await svc.withdraw_statement(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_statement(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.approve_statement(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "revoke":
+        return await svc.revoke_statement(tenant_id, entity_id, user_id)
+    _unsupported("partner_statement", action)
+
+
 async def _dispatch_freight_bill(
     action: str,
     *,
@@ -1664,6 +1724,7 @@ HANDLERS: Dict[str, DispatchFn] = {
     "sales_contract": _dispatch_sales_contract,
     "quotation": _dispatch_quotation,
     "shipment_notice": _dispatch_shipment_notice,
+    "receipt_notice": _dispatch_receipt_notice,
     "sales_delivery": _dispatch_sales_delivery,
     "production_picking": _dispatch_production_picking,
     "work_order": _dispatch_work_order,
@@ -1710,6 +1771,7 @@ HANDLERS: Dict[str, DispatchFn] = {
     "other_income": _dispatch_other_income,
     "other_expense": _dispatch_other_expense,
     "fund_transfer": _dispatch_fund_transfer,
+    "partner_statement": _dispatch_partner_statement,
     "kuaioa_form_request": _dispatch_kuaioa_form_request,
     "kuaioa_asset_purchase": _dispatch_kuaioa_asset_purchase,
     "kuaioa_leave": _dispatch_kuaioa_leave,

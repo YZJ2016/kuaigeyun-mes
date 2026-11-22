@@ -14,6 +14,8 @@ interface UniTableColumnLayout {
   uniTableFillerColumn?: boolean;
   uniTableProgressColumn?: boolean;
   uniTableDetailProgressColumn?: boolean;
+  /** UniTable 操作列槽位契约（directMax / minPrimaryVisible 等） */
+  uniActionRenderOptions?: unknown;
   resizable?: boolean;
   defaultShow?: boolean;
 }

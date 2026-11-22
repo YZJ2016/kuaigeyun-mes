@@ -89,7 +89,7 @@ const SortableListItem: React.FC<SortableListItemProps> = ({ id, children }) => 
 type SimpleListProps<T> = {
   dataSource: T[];
   renderItem: (item: T, index: number) => ReactNode;
-  size?: 'small' | 'middle' | 'large';
+  size?: 'small' | 'medium' | 'large';
 };
 
 type SimpleListItemProps = {

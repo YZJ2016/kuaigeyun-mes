@@ -33,7 +33,8 @@ def test_base_amount_uses_prepayment_when_set():
     assert prepayment_application_base_amount(order) == Decimal("3000")
 
 
-def test_base_amount_upgrades_prepay_when_equals_excl_header():
+def test_base_amount_keeps_prepay_when_equals_excl_header():
+    """预付额等于未税合计且小于价税合计时，可请款基数仍是预付额。"""
     order = SimpleNamespace(
         prepayment_amount=Decimal("176.99"),
         total_amount=Decimal("176.99"),
@@ -41,7 +42,7 @@ def test_base_amount_upgrades_prepay_when_equals_excl_header():
         net_amount=Decimal("0"),
         tax_rate=Decimal("0.13"),
     )
-    assert prepayment_application_base_amount(order) == Decimal("200.00")
+    assert prepayment_application_base_amount(order) == Decimal("176.99")
 
 
 def test_remaining_subtracts_reserved_from_gross_when_no_prepay():

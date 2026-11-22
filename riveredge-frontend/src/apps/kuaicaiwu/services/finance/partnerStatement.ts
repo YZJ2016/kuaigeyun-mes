@@ -21,7 +21,15 @@ export interface PartnerStatementLine {
   parent_doc_code?: string;
   inbound_detail_doc_type?: string;
   inbound_detail_doc_id?: number;
+  /** 采购入库已保存未税合计；其它单据无拆分时为空 */
+  amount_excluding_tax?: number | null;
+  /** 采购入库已保存税额 */
+  tax_amount?: number | null;
+  /** 采购入库已保存价税合计 */
+  amount_including_tax?: number | null;
 }
+
+export type PartnerStatementAmountBasis = 'tax_inclusive' | 'tax_exclusive';
 
 export interface PartnerStatementSummary {
   opening_balance: number;
@@ -66,13 +74,18 @@ export interface PartnerStatement {
   credit_total: number;
   closing_balance: number;
   status: string;
-  ledger_posting_mode?: 'immediate' | 'by_invoice' | string;
+  review_status?: string;
+  reviewer_id?: number | null;
+  reviewer_name?: string | null;
+  review_time?: string | null;
+  review_remarks?: string | null;
   company_name?: string;
   transaction_details?: {
     summary?: PartnerStatementSummary;
     lines?: PartnerStatementLine[];
     balance_label?: string;
     partner_snapshot?: Record<string, unknown>;
+    amount_basis?: PartnerStatementAmountBasis;
   };
   confirmed_at?: string;
   sent_at?: string;
@@ -91,7 +104,7 @@ export interface PartnerStatement {
     entity_type?: string;
   };
   ledger_posted_at?: string | null;
-  ledger_posting_mode?: string | null;
+  ledger_posting_mode?: 'immediate' | 'by_invoice' | string | null;
   /** 详情 GET 组装：客商是否按月结对账单立账 */
   partner_uses_statement_ledger?: boolean | null;
 }
@@ -108,6 +121,7 @@ export interface PartnerStatementLineAmountInput {
 }
 
 export interface PartnerStatementListParams {
+  skip?: number;
   limit?: number;
   partner_type?: string;
   partner_id?: number;
@@ -132,6 +146,7 @@ export const partnerStatementService = {
     partner_type: string;
     start_date: string;
     end_date: string;
+    amount_basis?: PartnerStatementAmountBasis;
   }) =>
     apiRequest<PartnerStatementPreview>(`${API}/preview`, { method: 'GET', params }),
 
@@ -144,6 +159,8 @@ export const partnerStatementService = {
     notes?: string;
     attachments?: Array<{ uid?: string; name?: string; status?: string; url?: string }>;
     line_amounts?: PartnerStatementLineAmountInput[];
+    ledger_posting_mode?: 'immediate' | 'by_invoice';
+    amount_basis?: PartnerStatementAmountBasis;
   }) => apiRequest<PartnerStatement>(API, { method: 'POST', data }),
 
   list: (params?: PartnerStatementListParams) =>
@@ -173,6 +190,34 @@ export const partnerStatementService = {
     }),
 
   confirm: (id: number) => apiRequest<PartnerStatement>(`${API}/${id}/confirm`, { method: 'POST' }),
+
+  commitStatement: (id: number) =>
+    apiRequest<PartnerStatement>(`/core/uni-audit/partner_statement/${id}/submit`, {
+      method: 'POST',
+    }),
+
+  submitStatementForReview: (id: number) =>
+    apiRequest<PartnerStatement>(`/core/uni-audit/partner_statement/${id}/submit_review`, {
+      method: 'POST',
+    }),
+
+  withdrawStatement: (id: number) =>
+    apiRequest<PartnerStatement>(`/core/uni-audit/partner_statement/${id}/withdraw`, {
+      method: 'POST',
+    }),
+
+  approveStatement: (id: number) =>
+    apiRequest<PartnerStatement>(`/core/uni-audit/partner_statement/${id}/approve`, {
+      method: 'POST',
+    }),
+
+  revokeStatement: (id: number) =>
+    apiRequest<PartnerStatement>(`/core/uni-audit/partner_statement/${id}/revoke`, {
+      method: 'POST',
+    }),
+
+  postLedger: (id: number) =>
+    apiRequest<PartnerStatement>(`${API}/${id}/post-ledger`, { method: 'POST' }),
 
   markSent: (id: number, data: { channel: string; notes?: string }) =>
     apiRequest<PartnerStatement>(`${API}/${id}/mark-sent`, { method: 'POST', data }),

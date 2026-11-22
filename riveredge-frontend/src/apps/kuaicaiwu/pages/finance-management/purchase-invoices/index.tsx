@@ -1421,8 +1421,8 @@ const PurchaseInvoiceList: React.FC = () => {
     if (!pullPreviewData || !pullPreviewKind) return undefined;
     const maxPush = resolvePullPreviewInvoiceCap(pullPreviewData);
     const taxRate = 13;
-    // 由可开票含税上限反算不含税，避免默认值正算再超 0.01
-    const defaultExcl = maxPush > 0 ? invoiceExclFromIncl(maxPush, taxRate) : undefined;
+    // 默认取含税可开票上限，避免默认值正算再超 0.01
+    const defaultIncl = maxPush > 0 ? maxPush : undefined;
     const sourceLabel =
       pullPreviewKind === 'purchase_order'
         ? pullFromPurchaseOrderAction.sourceLabel

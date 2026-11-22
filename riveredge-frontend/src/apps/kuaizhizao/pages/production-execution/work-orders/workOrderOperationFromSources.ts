@@ -297,6 +297,10 @@ export function parseWorkOrderOperationsFromRouteSequence(
       listContext,
       lineUsesApiSeconds: false,
     })
-    return { ...row, allow_jump: allowJump } as WorkOrderOperationFormRow & { allow_jump?: boolean }
+    const isNode = Boolean(row.is_node_operation)
+    return {
+      ...row,
+      allow_jump: allowJump && !isNode,
+    } as WorkOrderOperationFormRow & { allow_jump?: boolean }
   })
 }

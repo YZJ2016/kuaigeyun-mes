@@ -30,7 +30,7 @@ type MenuIconPickerProps = {
   searchPlaceholder?: string;
   clearText?: string;
   emptyText?: string;
-  size?: 'small' | 'middle' | 'large';
+  size?: 'small' | 'medium' | 'large';
   style?: React.CSSProperties;
 };
 

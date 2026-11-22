@@ -47,6 +47,7 @@ class PurchaseOrderMilestoneResponse(PurchaseOrderMilestoneCreate):
     tenant_id: int
     purchase_order_id: int
     status: str
+    planned_amount: Optional[Decimal] = None
     payable_id: Optional[int] = None
     payable_code: Optional[str] = None
     created_at: datetime
@@ -230,6 +231,12 @@ class PurchaseOrderUpdate(PurchaseOrderBase):
 
 class PurchaseOrderResponse(PurchaseOrderBase):
     """采购订单响应Schema"""
+    # 金额隐藏策略返回空值；创建/更新 schema 仍要求原文。
+    supplier_name: Optional[str] = Field(None, max_length=200, description="供应商名称")
+    total_amount: Optional[Decimal] = Field(None, description="订单总金额")
+    tax_amount: Optional[Decimal] = Field(None, description="税额")
+    net_amount: Optional[Decimal] = Field(None, description="净金额")
+    total_fee_amount: Optional[Decimal] = Field(None, description="总费用金额")
     id: int = Field(..., description="订单ID")
     tenant_id: int = Field(..., description="租户ID")
     reviewer_id: Optional[int] = Field(None, description="审核人ID")
@@ -308,11 +315,11 @@ class PurchaseOrderItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
         description="录入单价（表单展示口径，含税时保存用户输入；详情只读直接展示）",
     )
     total_price: Decimal = Field(..., ge=0, description="总价")
-    tax_rate: Decimal = Field(
-        default=Decimal(0),
+    tax_rate: Optional[Decimal] = Field(
+        default=None,
         ge=0,
         le=100,
-        description="税率（%，行级；与销售订单行一致）",
+        description="税率（%，行级）。未传为 None，落库时用订单头税率；显式 0 保持 0",
     )
     price_settlement_status: Optional[str] = Field(None, max_length=20, description="定价状态")
     provisional_unit_price: Optional[Decimal] = Field(None, ge=0, description="暂估参考单价")
@@ -354,12 +361,14 @@ class PurchaseOrderItemResponse(PurchaseOrderItemBase):
     """采购订单明细响应Schema"""
     # 读侧允许 0：历史/变更残留行不得拖垮列表；写侧 Create/Update 仍用 gt=0
     ordered_quantity: Decimal = Field(..., ge=0, description="采购数量")
+    unit_price: Optional[Decimal] = Field(None, description="单价")
+    total_price: Optional[Decimal] = Field(None, description="总价")
     id: int = Field(..., description="明细ID")
     order_id: int = Field(..., description="订单ID")
     price_settled_at: Optional[datetime] = Field(None, description="定价时间")
     price_settled_by: Optional[int] = Field(None, description="定价人ID")
-    # V2 落地成本增强
-    landing_cost: Decimal = Field(default=Decimal(0), description="落地成本")
+    # V2 落地成本增强；金额隐藏时为空
+    landing_cost: Optional[Decimal] = Field(None, description="落地成本")
     additional_fees_details: Optional[List[dict]] = Field(None, description="费用明细")
 
 

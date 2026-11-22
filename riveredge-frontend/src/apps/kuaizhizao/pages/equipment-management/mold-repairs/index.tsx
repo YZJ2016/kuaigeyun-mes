@@ -70,7 +70,7 @@ interface MoldRepair {
   status?: string;
   remark?: string;
   updated_at?: string;
-  lines?: RepairLine[];
+  lines?: MaintenanceLineView[];
 }
 
 

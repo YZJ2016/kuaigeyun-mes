@@ -60,6 +60,25 @@ test('loading feedback suppresses short requests and cleans timers on restart an
   props.active=false;update(false);assert.equal(page.run('slow.value'),false);
   props.active=true;update(true);assert.equal(timers.size,2);unmount();assert.equal(timers.size,0);
 });
+test('sales confirm is withheld until review passes when audit is on',async()=>{
+  const posts=[];
+  const page=script('features/warehouse/board.uvue',{kind:'sales-deliveries'},{
+    apiPost:async(url)=>{posts.push(url);},
+    fieldText:(row,key)=>row?.[key]==null?'':String(row[key]),
+    fieldBool:(row,key,fallback)=>row?.[key]==null?fallback:!!row[key],
+    asJsonObject:value=>value,unwrap:value=>value,
+    readDetail:()=>({warehouseIdText:'',warehouseName:'',personIdText:'',personName:'',lines:[]}),
+    errorText:e=>e.message,
+  });
+  page.run("selectedId.value=1;salesAuditEnabled.value=true;salesReviewStatus.value='草稿'");
+  assert.equal(page.run('salesBlockedHint.value'),'尚未审核通过，不能确认出库');
+  await page.run('submitMain()');
+  assert.equal(posts.length,0);
+  page.run("salesAuditEnabled.value=false;salesReviewStatus.value='草稿'");
+  assert.equal(page.run('salesBlockedHint.value'),'');
+  page.run("salesAuditEnabled.value=true;salesReviewStatus.value='已通过';salesConfirmKnown.value=true;salesConfirmAllowed.value=false");
+  assert.equal(page.run('salesBlockedHint.value'),'当前单据不能确认出库');
+});
 test('warehouse pagination remains locked while refreshing or submitting',()=>{
   const page=script('features/warehouse/board.uvue',{kind:'inventory-query'});
   page.run('loading.value=true;loadMore()');assert.equal(page.run('page.value'),1);assert.equal(page.run('skip.value'),0);

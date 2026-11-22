@@ -25,6 +25,51 @@ def _normalize_app(app: Optional[str]) -> Optional[str]:
     return text or None
 
 
+def _business_type_from_loaded_doc(doc: Any) -> str:
+    if doc is None:
+        return ""
+    if isinstance(doc, dict):
+        return str(doc.get("business_type") or "").strip()
+    return str(getattr(doc, "business_type", None) or "").strip()
+
+
+async def resolve_audit_entry_for_entity(
+    tenant_id: int,
+    entity_type: str,
+    entity_id: int | None = None,
+    *,
+    business_type: str | None = None,
+) -> Optional[AuditEntry]:
+    """按实体解析 manifest.audit 登记；entity_type 含 business_type 分岔时须读活单或显式传入。"""
+    et = str(entity_type or "").strip()
+    if not et:
+        return None
+
+    bt = str(business_type or "").strip()
+    if bt:
+        hit = entry_by_entity_type_and_business(et, bt)
+        if hit:
+            return hit
+
+    hit = entry_by_entity_type(et)
+    if hit:
+        return hit
+
+    if entity_id is None:
+        return None
+
+    from core.services.approval.approval_document_view import DOCUMENT_LOADERS
+
+    loader = DOCUMENT_LOADERS.get(et)
+    if loader is None:
+        return None
+    doc = await loader(tenant_id, int(entity_id))
+    doc_bt = _business_type_from_loaded_doc(doc)
+    if not doc_bt:
+        return None
+    return entry_by_entity_type_and_business(et, doc_bt)
+
+
 def resolve_audit_entry_for_instance_data(
     data: dict[str, Any] | None,
     *,

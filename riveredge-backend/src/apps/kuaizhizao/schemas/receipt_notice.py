@@ -66,6 +66,7 @@ class ReceiptNoticeResponse(ReceiptNoticeBase):
     """收货通知单响应schema"""
     id: int = Field(..., description="通知单ID")
     tenant_id: int = Field(..., description="租户ID")
+    review_status: Optional[str] = Field("草稿", description="审核状态")
     notified_at: Optional[datetime] = Field(None, description="通知仓库时间")
     purchase_receipt_id: Optional[int] = Field(None, description="采购入库单ID")
     purchase_receipt_code: Optional[str] = Field(None, max_length=50, description="采购入库单编码")

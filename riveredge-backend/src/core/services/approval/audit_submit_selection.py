@@ -101,6 +101,16 @@ def parse_submit_branch_selection(
     return out
 
 
+def parse_hierarchy_department_uuid(payload: Optional[Dict[str, Any]]) -> Optional[str]:
+    if not payload:
+        return None
+    raw = payload.get("hierarchy_department_uuid")
+    if raw is None or raw == "":
+        return None
+    text = str(raw).strip()
+    return text or None
+
+
 def merge_branch_selection_into_instance_data(
     data: Dict[str, Any],
     branch_by_condition_node: Dict[str, int],

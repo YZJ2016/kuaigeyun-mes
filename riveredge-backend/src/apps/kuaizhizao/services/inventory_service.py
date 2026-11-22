@@ -64,6 +64,57 @@ def resolve_managed_decrease_batch_no(
         return "DEFAULT"
     return None
 
+
+def split_manual_aux_deduct_share(
+    total_quantity: Decimal,
+    aux_quantity_delta: Optional[Decimal],
+    deduct_quantity: Decimal,
+    remaining_aux: Optional[Decimal],
+    *,
+    finishes_quantity: bool,
+) -> tuple[Optional[Decimal], Optional[Decimal]]:
+    """按已扣主数量比例分摊手录辅数量；最后一笔吃掉余数。"""
+    if aux_quantity_delta is None or remaining_aux is None:
+        return None, remaining_aux
+    from apps.kuaizhizao.utils.inventory_posting_utils import (
+        split_base_deduct_for_inventory_deduct,
+    )
+
+    deduct_q = Decimal(str(deduct_quantity or 0))
+    if deduct_q <= 0:
+        return Decimal("0"), remaining_aux
+    if finishes_quantity:
+        share = remaining_aux
+    else:
+        share = split_base_deduct_for_inventory_deduct(
+            Decimal(str(total_quantity or 0)),
+            Decimal(str(aux_quantity_delta)),
+            deduct_q,
+        )
+        if share > remaining_aux:
+            share = remaining_aux
+    next_remaining = remaining_aux - share
+    if next_remaining < 0:
+        next_remaining = Decimal("0")
+    return share, next_remaining
+
+
+def stamp_negative_batch_manual_aux(stub, material, aux_quantity_delta: Optional[Decimal]) -> None:
+    """负库存新建批次：手录辅数量写入本次增量，禁止校正把负数钳成 0。"""
+    InventoryService._sync_batch_ledger_quantities(stub, material)
+    if aux_quantity_delta is None or material is None:
+        return
+    from apps.kuaizhizao.utils.ledger_dual_quantity_utils import (
+        material_ledger_uses_manual_aux_quantity,
+    )
+
+    if not material_ledger_uses_manual_aux_quantity(material):
+        return
+    delta = Decimal(str(aux_quantity_delta))
+    if delta == 0:
+        return
+    stub.aux_quantity = -delta
+
 # 再确认放行映射（spec 141 review）：撤回曾冲减数量但未回冲序列号台账的存量单据，
 # 再确认入库时序列号仍停在 in_stock → 凭同单已存在的撤回流水放行，对齐台账。
 # 键 = 正向入库 source_type；值 = 对应撤回流水的 source_type。
@@ -132,6 +183,302 @@ class InventoryService:
         if str(getattr(item, "location_code", None) or "").strip():
             return True
         return getattr(item, "location_id", None) is not None
+
+    @staticmethod
+    def _movement_location_kwargs(
+        batch: Any = None,
+        *,
+        location_code: Optional[str] = None,
+        location_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """把本次余额行的库位写入流水。
+
+        空串是未分库位键。批次 location_code 为 NULL 时流水也记 NULL，不收成空串。
+        这种已记录的 NULL 键用 location_id=0 标出，与「库位字段本身为空」的历史流水区分。
+        """
+        if batch is not None:
+            location_code = getattr(batch, "location_code", None)
+            location_id = getattr(batch, "location_id", None)
+            if location_code is None:
+                payload: Dict[str, Any] = {"location_code": None, "location_id": 0}
+                if location_id is not None:
+                    try:
+                        payload["location_id"] = int(location_id)
+                    except (TypeError, ValueError):
+                        payload["location_id"] = 0
+                return payload
+        payload = {"location_code": None if location_code is None else str(location_code)[:50]}
+        if location_code is None and batch is None:
+            payload["location_code"] = ""
+        if location_id is not None:
+            try:
+                payload["location_id"] = int(location_id)
+            except (TypeError, ValueError):
+                pass
+        return payload
+
+    @staticmethod
+    def _idempotency_key_matches_line(stored: Optional[str], line_key: str) -> bool:
+        key = str(stored or "")
+        prefix = str(line_key or "")
+        if not prefix or not key.startswith(prefix):
+            return False
+        if len(key) == len(prefix):
+            return True
+        return key[len(prefix)] in "@#"
+
+    @staticmethod
+    def _movement_posting_scope(stored: Optional[str], line_key: str) -> str:
+        rest = str(stored or "")[len(line_key):]
+        if rest.startswith("@"):
+            return rest[1:].split("#", 1)[0]
+        return ""
+
+    @staticmethod
+    def _withdraw_location_idempotency_key(
+        base_key: str,
+        location_code: str,
+        batch_no: Optional[str] = None,
+    ) -> str:
+        from urllib.parse import quote
+
+        token = quote(str(location_code or ""), safe="")
+        suffix = f"#loc={token}"
+        if batch_no is not None:
+            suffix += "#bn=" + quote(str(batch_no), safe="")
+        if len(base_key) + len(suffix) > 200:
+            raw = f"{location_code}\0{'' if batch_no is None else batch_no}"
+            suffix = "#loc=" + hashlib.sha256(raw.encode()).hexdigest()[:16]
+        return f"{base_key}{suffix}"
+
+    @staticmethod
+    def _posted_restore_batch_no(row: Any) -> str:
+        """确认流水上的批号。空值保持空串，不收成 DEFAULT。"""
+        raw = getattr(row, "batch_no", None)
+        if raw is None:
+            return ""
+        return str(raw).strip()
+
+    @staticmethod
+    def _group_posted_restore_rows(rows: list) -> Dict[tuple, Dict[str, Any]]:
+        grouped: Dict[tuple, Dict[str, Any]] = {}
+        for row in rows:
+            code = getattr(row, "location_code", None)
+            batch_no = InventoryService._posted_restore_batch_no(row)
+            key = (code, batch_no)
+            bucket = grouped.setdefault(
+                key,
+                {"qty": Decimal("0"), "base": Decimal("0"), "location_id": None, "batch_no": batch_no},
+            )
+            piece = abs(Decimal(str(row.quantity or 0)))
+            base_raw = getattr(row, "base_quantity", None)
+            base_piece = abs(Decimal(str(base_raw if base_raw is not None else row.quantity or 0)))
+            bucket["qty"] += piece
+            bucket["base"] += base_piece
+            loc_id = getattr(row, "location_id", None)
+            if bucket["location_id"] is None and loc_id not in (None, 0):
+                bucket["location_id"] = int(loc_id)
+        return grouped
+
+    @staticmethod
+    async def _null_location_restore_kind(
+        *,
+        tenant_id: int,
+        material_id: int,
+        warehouse_id: Optional[int],
+        batch_no: str,
+    ) -> str:
+        """NULL 库位键能加回原行时返回 line_side 或 batch，否则是未记录库位。"""
+        from apps.master_data.models.material_batch import MaterialBatch
+        from apps.master_data.models.warehouse import Warehouse
+
+        wh = None
+        if warehouse_id:
+            wh = await Warehouse.get_or_none(
+                id=warehouse_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+        bn = str(batch_no or "").strip()
+        if wh and wh.warehouse_type == "line_side":
+            from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
+
+            query = LineSideInventory.filter(
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                material_id=material_id,
+                deleted_at__isnull=True,
+            )
+            if bn:
+                query = query.filter(batch_no=bn)
+            else:
+                query = query.filter(Q(batch_no__isnull=True) | Q(batch_no=""))
+            if await query.first():
+                return "line_side"
+            return "unrecorded"
+
+        query = MaterialBatch.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            deleted_at__isnull=True,
+            location_code__isnull=True,
+        )
+        wh_id = InventoryService._normalize_main_warehouse_id(warehouse_id)
+        if wh_id > 0:
+            query = query.filter(Q(warehouse_id=wh_id) | Q(warehouse_id=0))
+        else:
+            query = query.filter(warehouse_id=0)
+        if bn and bn != "DEFAULT":
+            query = query.filter(batch_no=bn)
+        else:
+            query = query.filter(Q(batch_no="") | Q(batch_no="DEFAULT") | Q(batch_no__isnull=True))
+        if await query.first():
+            return "batch"
+        return "unrecorded"
+
+    @staticmethod
+    async def restore_unscoped_outbound_by_posted_locations(
+        *,
+        tenant_id: int,
+        material_id: int,
+        quantity: Decimal,
+        confirm_source_type: str,
+        line_idempotency_key: str,
+        withdraw_idempotency_key: str,
+        base_quantity: Optional[Decimal] = None,
+        aux_quantity_delta: Optional[Decimal] = None,
+        serial_nos: Optional[list] = None,
+        **increase_kwargs: Any,
+    ) -> None:
+        """行上无库位时，按本次确认出库流水的库位把数量加回。没有可用流水则失败。"""
+        del base_quantity
+        rows = await MaterialStockMovement.filter(
+            tenant_id=tenant_id,
+            source_doc_type=confirm_source_type,
+            source_doc_id=increase_kwargs.get("source_doc_id"),
+            idempotency_key__startswith=line_idempotency_key,
+        ).all()
+        matched = [
+            row
+            for row in rows
+            if InventoryService._idempotency_key_matches_line(
+                getattr(row, "idempotency_key", None),
+                line_idempotency_key,
+            )
+        ]
+        if not matched:
+            raise BusinessLogicError("确认出库没有库存流水，无法按原库位撤回")
+        latest_id = max(int(getattr(row, "id", 0) or 0) for row in matched)
+        latest_scope = InventoryService._movement_posting_scope(
+            next(
+                getattr(row, "idempotency_key", None)
+                for row in matched
+                if int(getattr(row, "id", 0) or 0) == latest_id
+            ),
+            line_idempotency_key,
+        )
+        deductions = []
+        for row in matched:
+            if InventoryService._movement_posting_scope(
+                getattr(row, "idempotency_key", None),
+                line_idempotency_key,
+            ) != latest_scope:
+                continue
+            qty = Decimal(str(getattr(row, "quantity", 0) or 0))
+            if qty >= 0:
+                continue
+            deductions.append(row)
+        if not deductions:
+            raise BusinessLogicError("确认出库没有库存流水，无法按原库位撤回")
+
+        located_rows = []
+        null_location_rows = []
+        for row in deductions:
+            if getattr(row, "location_code", None) is not None:
+                located_rows.append(row)
+                continue
+            # location_id=0 是本次从 NULL 库位批次写下的键；其它空值仍是未记录库位
+            if getattr(row, "location_id", None) == 0:
+                null_location_rows.append(row)
+                continue
+            raise BusinessLogicError("确认出库流水未记录库位，无法按原库位撤回")
+
+        grouped = InventoryService._group_posted_restore_rows(located_rows)
+        null_grouped = InventoryService._group_posted_restore_rows(null_location_rows)
+        for bucket in null_grouped.values():
+            kind = await InventoryService._null_location_restore_kind(
+                tenant_id=tenant_id,
+                material_id=material_id,
+                warehouse_id=increase_kwargs.get("warehouse_id"),
+                batch_no=bucket["batch_no"],
+            )
+            if kind == "unrecorded":
+                raise BusinessLogicError("确认出库流水未记录库位，无法按原库位撤回")
+            bucket["kind"] = kind
+
+        posted_qty = sum(
+            (bucket["qty"] for bucket in list(grouped.values()) + list(null_grouped.values())),
+            Decimal("0"),
+        )
+        need = Decimal(str(quantity or 0))
+        qty_scale = Decimal("0.0001")
+        if posted_qty.quantize(qty_scale) != need.quantize(qty_scale):
+            raise BusinessLogicError(
+                f"确认出库流水数量 {posted_qty} 与明细 {need} 不一致，无法按原库位撤回"
+            )
+
+        increase_kwargs.pop("location_code", None)
+        increase_kwargs.pop("location_id", None)
+        increase_kwargs.pop("batch_no", None)
+        increase_kwargs.pop("idempotency_key", None)
+        increase_kwargs.pop("quantity", None)
+        increase_kwargs.pop("base_quantity", None)
+        increase_kwargs.pop("aux_quantity_delta", None)
+        increase_kwargs.pop("serial_nos", None)
+
+        aux_total = (
+            Decimal(str(aux_quantity_delta)) if aux_quantity_delta is not None else None
+        )
+        aux_left = aux_total
+        ordered = sorted(grouped.items(), key=lambda pair: (str(pair[0][0]), pair[0][1]))
+        null_ordered = sorted(null_grouped.items(), key=lambda pair: pair[0][1])
+        steps = [("located", key, bucket) for key, bucket in ordered]
+        steps.extend(("null", key, bucket) for key, bucket in null_ordered)
+        for idx, (kind_step, key, bucket) in enumerate(steps):
+            call = dict(increase_kwargs)
+            posted_batch = bucket["batch_no"]
+            call.update(
+                tenant_id=tenant_id,
+                material_id=material_id,
+                quantity=bucket["qty"],
+                base_quantity=bucket["base"],
+                batch_no=posted_batch,
+                exact_batch_no=True,
+                idempotency_key=InventoryService._withdraw_location_idempotency_key(
+                    withdraw_idempotency_key,
+                    "" if kind_step == "null" else str(key[0] or ""),
+                    posted_batch,
+                ),
+            )
+            if kind_step == "null":
+                if bucket.get("kind") == "batch":
+                    call["match_null_location"] = True
+            else:
+                call["location_code"] = str(key[0] or "")
+                if bucket["location_id"] is not None:
+                    call["location_id"] = bucket["location_id"]
+            if aux_total is not None:
+                if idx == len(steps) - 1:
+                    aux_share = aux_left
+                else:
+                    aux_share = (aux_total * bucket["qty"] / posted_qty).quantize(
+                        Decimal("0.0001")
+                    )
+                    aux_left -= aux_share
+                call["aux_quantity_delta"] = aux_share
+            if idx == 0 and serial_nos:
+                call["serial_nos"] = serial_nos
+            await InventoryService.increase_stock(**call)
 
 
     @staticmethod
@@ -323,6 +670,8 @@ class InventoryService:
         operator_name: Optional[str] = None,
         remark: Optional[str] = None,
         idempotency_key: Optional[str] = None,
+        location_id: Optional[int] = None,
+        location_code: Optional[str] = None,
     ) -> None:
         """追加库存流水；写入失败必须回滚余额，由事务入口统一处理幂等。"""
         from infra.exceptions.exceptions import ValidationError
@@ -407,6 +756,8 @@ class InventoryService:
             operator_name=operator_name,
             remark=remark,
             idempotency_key=idempotency_key,
+            location_id=int(location_id) if location_id is not None else None,
+            location_code=None if location_code is None else str(location_code)[:50],
             created_by=operator_id,
             created_by_name=operator_name,
         )
@@ -477,6 +828,43 @@ class InventoryService:
             query = query.select_for_update()
         return await query.first()
 
+    @staticmethod
+    def _scoped_location_filter(location_code: Optional[str]):
+        code = str(location_code or "").strip()
+        if code:
+            return Q(location_code=code)
+        return Q(location_code="") | Q(location_code__isnull=True)
+
+    @staticmethod
+    async def _lock_location_key_tail(
+        *,
+        tenant_id: int,
+        material_id: int,
+        warehouse_id: int,
+        location_code: str,
+        ownership_type: Optional[str],
+        customer_id: Optional[int],
+        quality_status: str,
+    ):
+        """本库位键的最后一行（含数量为 0 / 已出库）。不跨到其它库位。"""
+        from apps.master_data.models.material_batch import MaterialBatch
+
+        own = InventoryService._ownership_filter(ownership_type, customer_id)
+        return await (
+            MaterialBatch.filter(
+                tenant_id=tenant_id,
+                material_id=material_id,
+                deleted_at__isnull=True,
+                quality_status=quality_status,
+                **own,
+            )
+            .filter(InventoryService._main_warehouse_balance_q(warehouse_id))
+            .filter(InventoryService._scoped_location_filter(location_code))
+            .order_by("-id")
+            .select_for_update()
+            .first()
+        )
+
     async def _list_in_stock_material_batches(
         tenant_id: int,
         material_id: int,
@@ -512,9 +900,9 @@ class InventoryService:
         )
         if require_positive_qty:
             filters["quantity__gt"] = 0
-        if location_scoped:
-            filters["location_code"] = str(location_code or "").strip()
         query = MaterialBatch.filter(**filters).filter(q)
+        if location_scoped:
+            query = query.filter(InventoryService._scoped_location_filter(location_code))
         if warehouse_id is not None:
             wh_id = InventoryService._normalize_main_warehouse_id(warehouse_id)
             if include_unassigned and wh_id > 0:
@@ -597,6 +985,52 @@ class InventoryService:
                 batch.expiry_date = resolved
 
     @staticmethod
+    async def _lock_material_batch_for_increase(
+        *,
+        tenant_id: int,
+        material_id: int,
+        batch_no: str,
+        warehouse_id: int,
+        location_code: str,
+        quality_status: str,
+        own: Dict[str, Any],
+        match_null_location: bool,
+    ):
+        """锁定要加回的批次行。NULL 库位只匹配 NULL，找不到时不新建空串行。"""
+        from apps.master_data.models.material_batch import MaterialBatch
+
+        base = dict(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            warehouse_id=warehouse_id,
+            quality_status=quality_status,
+            **own,
+        )
+        if batch_no == "":
+            batch_q = Q(batch_no="") | Q(batch_no="DEFAULT") | Q(batch_no__isnull=True)
+        else:
+            batch_q = Q(batch_no=batch_no)
+
+        async def _first(location_q):
+            return await (
+                MaterialBatch.filter(**base)
+                .filter(batch_q)
+                .filter(location_q)
+                .select_for_update()
+                .first()
+            )
+
+        if match_null_location:
+            return await _first(Q(location_code__isnull=True))
+        code = str(location_code or "")
+        if code:
+            return await _first(Q(location_code=code))
+        found = await _first(Q(location_code=""))
+        if found:
+            return found
+        return await _first(Q(location_code__isnull=True))
+
+    @staticmethod
     async def _material_batch_increase_or_restore(
         tenant_id: int,
         material_id: int,
@@ -617,6 +1051,8 @@ class InventoryService:
         location_code: Optional[str] = None,
         quality_status: str = QUALIFIED,
         aux_quantity_delta: Optional[Decimal] = None,
+        exact_batch_no: bool = False,
+        match_null_location: bool = False,
     ) -> None:
         """
         主仓批次数量增加（按 warehouse_id 拆分）。包含软删行：若唯一键已存在但 deleted_at 有值，
@@ -631,7 +1067,10 @@ class InventoryService:
         from apps.master_data.models.material import Material
         from apps.master_data.services.material_batch_service import MaterialBatchService
 
-        bn = InventoryService._normalize_batch_no_for_ledger(batch_no)
+        if exact_batch_no:
+            bn = str(batch_no or "").strip()
+        else:
+            bn = InventoryService._normalize_batch_no_for_ledger(batch_no)
         own = InventoryService._ownership_filter(ownership_type, customer_id)
         wh_id = InventoryService._normalize_main_warehouse_id(warehouse_id)
         wh_name = (str(warehouse_name or "").strip() or None)
@@ -644,26 +1083,28 @@ class InventoryService:
                 tenant_id=tenant_id, id=material_id, deleted_at__isnull=True
             )
 
-        batch = await MaterialBatch.filter(
+        batch = await InventoryService._lock_material_batch_for_increase(
             tenant_id=tenant_id,
             material_id=material_id,
             batch_no=bn,
             warehouse_id=wh_id,
             location_code=loc_code,
             quality_status=quality_status,
-            **own,
-        ).select_for_update().first()
+            own=own,
+            match_null_location=match_null_location,
+        )
         # 历史未归属行（warehouse_id=0）：首次带仓入库时认领，避免同批双行
         if not batch and wh_id > 0:
-            batch = await MaterialBatch.filter(
+            batch = await InventoryService._lock_material_batch_for_increase(
                 tenant_id=tenant_id,
                 material_id=material_id,
                 batch_no=bn,
                 warehouse_id=0,
                 location_code=loc_code,
                 quality_status=quality_status,
-                **own,
-            ).select_for_update().first()
+                own=own,
+                match_null_location=match_null_location,
+            )
             if batch:
                 batch.warehouse_id = wh_id
                 batch.warehouse_name = wh_name
@@ -692,6 +1133,8 @@ class InventoryService:
             InventoryService._sync_batch_ledger_quantities(batch, material)
             await batch.save()
             return
+        if match_null_location:
+            raise BusinessLogicError("确认出库流水未记录库位，无法按原库位撤回")
         create_production_date = ledger_production_date
         explicit_create_expiry = MaterialBatchService.coerce_optional_date(ledger_expiry_date)
         if explicit_create_expiry is None and material is not None and bn:
@@ -966,6 +1409,8 @@ class InventoryService:
         location_code: Optional[str] = None,
         quality_status: str = QUALIFIED,
         aux_quantity_delta: Optional[Decimal] = None,
+        exact_batch_no: bool = False,
+        match_null_location: bool = False,
     ) -> bool:
         """
         增加库存（不开启独立事务）。
@@ -1023,7 +1468,8 @@ class InventoryService:
                     use_line_side = True
 
             if (
-                material
+                not exact_batch_no
+                and material
                 and getattr(material, "batch_managed", False)
                 and not (batch_no and str(batch_no).strip())
             ):
@@ -1078,7 +1524,10 @@ class InventoryService:
                     main_wh_id if main_wh_id > 0 else None
                 )
                 logger.info(f"Adding stock for material_id={material_id}, batch_no={batch_no}, qty={quantity}")
-                bn_norm = InventoryService._normalize_batch_no_for_ledger(batch_no or "DEFAULT")
+                if exact_batch_no:
+                    bn_norm = str(batch_no or "").strip()
+                else:
+                    bn_norm = InventoryService._normalize_batch_no_for_ledger(batch_no or "DEFAULT")
                 existing_batch = await InventoryService._find_in_stock_material_batch(
                     tenant_id=tenant_id,
                     material_id=material_id,
@@ -1096,7 +1545,7 @@ class InventoryService:
                 await InventoryService._material_batch_increase_or_restore(
                     tenant_id=tenant_id,
                     material_id=material_id,
-                    batch_no=batch_no or "DEFAULT",
+                    batch_no=bn_norm if exact_batch_no else (batch_no or "DEFAULT"),
                     quantity=quantity,
                     base_quantity=base_qty_post,
                     ownership_type=ownership_type,
@@ -1113,6 +1562,8 @@ class InventoryService:
                     location_code=location_code,
                     quality_status=quality_status,
                     aux_quantity_delta=aux_quantity_delta,
+                    exact_batch_no=exact_batch_no,
+                    match_null_location=match_null_location,
                 )
                 qty_after = qty_before + quantity
                 base_qty_after = base_qty_before + base_qty_post
@@ -1404,6 +1855,8 @@ class InventoryService:
         location_code: Optional[str] = None,
         quality_status: str = QUALIFIED,
         aux_quantity_delta: Optional[Decimal] = None,
+        exact_batch_no: bool = False,
+        match_null_location: bool = False,
     ) -> bool:
         """
         增加库存（独立事务包装）。
@@ -1458,6 +1911,8 @@ class InventoryService:
             location_code=location_code,
             quality_status=quality_status,
             aux_quantity_delta=aux_quantity_delta,
+            exact_batch_no=exact_batch_no,
+            match_null_location=match_null_location,
         )
 
     @staticmethod
@@ -1758,7 +2213,7 @@ class InventoryService:
                         neg_stub.quantity = next_qty
                         neg_stub.base_quantity = -base_qty_post
                         neg_stub.aux_quantity = Decimal(0)
-                        InventoryService._sync_batch_ledger_quantities(neg_stub, material)
+                        stamp_negative_batch_manual_aux(neg_stub, material, aux_quantity_delta)
                         create_kw: Dict[str, Any] = dict(
                             tenant_id=tenant_id,
                             material_id=material_id,
@@ -1802,6 +2257,10 @@ class InventoryService:
                             operator_name=operator_name,
                             remark=remark,
                             idempotency_key=idempotency_key,
+                            **InventoryService._movement_location_kwargs(
+                                location_code=scoped_location_code if location_scoped else "",
+                                location_id=loc_kwargs.get("location_id") if location_scoped else None,
+                            ),
                         )
                     elif have_same_batch < quantity and not allow_negative:
                         raise BusinessLogicError(
@@ -1863,6 +2322,11 @@ class InventoryService:
 
                         remaining = quantity
                         remaining_base = base_qty_post
+                        remaining_aux = (
+                            Decimal(str(aux_quantity_delta))
+                            if aux_quantity_delta is not None
+                            else None
+                        )
                         part_idx = 0
                         for idx, batch in enumerate(matched):
                             if remaining <= 0:
@@ -1897,13 +2361,19 @@ class InventoryService:
                                 )
                             batch.quantity = next_qty
                             batch.base_quantity = next_base_qty
+                            finishes_qty = remaining - deduct <= 0
+                            aux_share, remaining_aux = split_manual_aux_deduct_share(
+                                quantity,
+                                aux_quantity_delta,
+                                deduct,
+                                remaining_aux,
+                                finishes_quantity=finishes_qty,
+                            )
                             InventoryService._apply_material_batch_aux_deduct(
                                 batch,
                                 material,
                                 deduct_base,
-                                aux_quantity_delta=(
-                                    aux_quantity_delta if part_idx == 0 else None
-                                ),
+                                aux_quantity_delta=aux_share,
                             )
                             InventoryService._sync_material_batch_status_after_qty_change(batch)
                             await batch.save()
@@ -1935,6 +2405,7 @@ class InventoryService:
                                 operator_name=operator_name,
                                 remark=remark,
                                 idempotency_key=key,
+                                **InventoryService._movement_location_kwargs(batch),
                             )
                             remaining -= deduct
                             remaining_base -= deduct_base
@@ -1956,14 +2427,15 @@ class InventoryService:
                         **own,
                         **stock_qs_filter,
                     )
-                    if location_scoped:
-                        cross_loc_filters["location_code"] = scoped_location_code
-                    batches = (
-                        await MaterialBatch.filter(**cross_loc_filters)
+                    batch_query = (
+                        MaterialBatch.filter(**cross_loc_filters)
                         .filter(InventoryService._main_warehouse_balance_q(main_wh_id))
-                        .select_for_update()
-                        .all()
                     )
+                    if location_scoped:
+                        batch_query = batch_query.filter(
+                            InventoryService._scoped_location_filter(scoped_location_code)
+                        )
+                    batches = await batch_query.select_for_update().all()
                     if lifo_enabled and not enforce_fifo:
                         batches = sorted(
                             batches,
@@ -1982,6 +2454,11 @@ class InventoryService:
                         )
                     remaining = quantity
                     remaining_base = base_qty_post
+                    remaining_aux = (
+                        Decimal(str(aux_quantity_delta))
+                        if aux_quantity_delta is not None
+                        else None
+                    )
                     from apps.kuaizhizao.utils.inventory_posting_utils import (
                         split_base_deduct_for_inventory_deduct,
                     )
@@ -2013,8 +2490,19 @@ class InventoryService:
                             )
                             b.quantity = qty_before - deduct
                             b.base_quantity = base_qty_before - deduct_base
+                            finishes_qty = remaining - deduct <= 0
+                            aux_share, remaining_aux = split_manual_aux_deduct_share(
+                                quantity,
+                                aux_quantity_delta,
+                                deduct,
+                                remaining_aux,
+                                finishes_quantity=finishes_qty,
+                            )
                             InventoryService._apply_material_batch_aux_deduct(
-                                b, material, deduct_base
+                                b,
+                                material,
+                                deduct_base,
+                                aux_quantity_delta=aux_share,
                             )
                             InventoryService._sync_material_batch_status_after_qty_change(b)
                             await b.save()
@@ -2048,6 +2536,7 @@ class InventoryService:
                                 operator_name=operator_name,
                                 remark=remark,
                                 idempotency_key=key,
+                                **InventoryService._movement_location_kwargs(b),
                             )
                             remaining -= deduct
                             remaining_base -= deduct_base
@@ -2059,7 +2548,17 @@ class InventoryService:
                                 + (f"（{available_hint}）" if available_hint != "无" else "")
                             )
                         tail = batches[-1] if batches else None
-                        if not tail:
+                        if not tail and location_scoped:
+                            tail = await InventoryService._lock_location_key_tail(
+                                tenant_id=tenant_id,
+                                material_id=material_id,
+                                warehouse_id=main_wh_id,
+                                location_code=scoped_location_code,
+                                ownership_type=own["ownership_type"],
+                                customer_id=own["customer_id"],
+                                quality_status=stock_quality_status,
+                            )
+                        elif not tail:
                             tail = await InventoryService._find_in_stock_material_batch(
                                 tenant_id=tenant_id,
                                 material_id=material_id,
@@ -2084,8 +2583,13 @@ class InventoryService:
                             tail.quantity = qty_before - remaining
                             tail.base_quantity = base_qty_before - remaining_base
                             InventoryService._apply_material_batch_aux_deduct(
-                                tail, material, remaining_base
+                                tail,
+                                material,
+                                remaining_base,
+                                aux_quantity_delta=remaining_aux,
                             )
+                            if remaining_aux is not None:
+                                remaining_aux = Decimal("0")
                             InventoryService._sync_material_batch_status_after_qty_change(tail)
                             await tail.save()
                             tail_bn = InventoryService._normalize_batch_no_for_ledger(
@@ -2120,6 +2624,7 @@ class InventoryService:
                                     if idempotency_key
                                     else None
                                 ),
+                                **InventoryService._movement_location_kwargs(tail),
                             )
                         else:
                             qty_before = Decimal(0)
@@ -2128,7 +2633,7 @@ class InventoryService:
                             neg_stub.quantity = next_qty
                             neg_stub.base_quantity = -remaining_base
                             neg_stub.aux_quantity = Decimal(0)
-                            InventoryService._sync_batch_ledger_quantities(neg_stub, material)
+                            stamp_negative_batch_manual_aux(neg_stub, material, remaining_aux)
                             await MaterialBatch.create(
                                 tenant_id=tenant_id,
                                 material_id=material_id,
@@ -2142,6 +2647,12 @@ class InventoryService:
                                 customer_id=own["customer_id"],
                                 warehouse_id=main_wh_id,
                                 warehouse_name=wh_name,
+                                location_code=scoped_location_code if location_scoped else "",
+                                **(
+                                    {"location_id": loc_kwargs["location_id"]}
+                                    if location_scoped and loc_kwargs.get("location_id") is not None
+                                    else {}
+                                ),
                             )
                             await InventoryService._record_stock_movement(
                                 tenant_id=tenant_id,
@@ -2171,6 +2682,10 @@ class InventoryService:
                                     f"{idempotency_key}#neg{part_idx}"
                                     if idempotency_key
                                     else None
+                                ),
+                                **InventoryService._movement_location_kwargs(
+                                    location_code=scoped_location_code if location_scoped else "",
+                                    location_id=loc_kwargs.get("location_id") if location_scoped else None,
                                 ),
                             )
                 logger.info(
@@ -2216,7 +2731,7 @@ class InventoryService:
                     qty_before = Decimal(0)
                     next_qty = -quantity
                     next_base_qty = -base_qty_post
-                    await LineSideInventory.create(
+                    created_line = await LineSideInventory.create(
                         tenant_id=tenant_id,
                         warehouse_id=warehouse_id,
                         warehouse_name=wh_name,
@@ -2242,6 +2757,7 @@ class InventoryService:
                         tenant_id=tenant_id,
                         material_id=material_id,
                         quantity=-quantity,
+                        **InventoryService._movement_location_kwargs(created_line),
                         qty_before=qty_before,
                         qty_after=next_qty,
                         base_quantity=-base_qty_post,
@@ -2289,6 +2805,7 @@ class InventoryService:
                         tenant_id=tenant_id,
                         material_id=material_id,
                         quantity=-quantity,
+                        **InventoryService._movement_location_kwargs(inv),
                         qty_before=qty_before,
                         qty_after=next_qty,
                         base_quantity=-base_qty_post,

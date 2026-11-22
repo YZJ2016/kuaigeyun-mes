@@ -144,6 +144,88 @@ async def test_decrease_stock_skips_assert_when_allow_negative():
 
 
 @pytest.mark.asyncio
+async def test_negative_batch_writes_aux_quantity_delta():
+    wh = MagicMock()
+    wh.warehouse_type = "normal"
+
+    with patch(
+        "apps.kuaizhizao.services.inventory_service.InventoryService._get_allow_negative_inventory",
+        new=AsyncMock(return_value=True),
+    ), patch(
+        "apps.master_data.models.warehouse.Warehouse.get_or_none",
+        new=AsyncMock(return_value=wh),
+    ), patch(
+        "apps.kuaizhizao.utils.inventory_helper.assert_outbound_warehouse_stock_available",
+        new=AsyncMock(),
+    ), patch(
+        "apps.kuaizhizao.services.inventory_service.InventoryService._get_warehouse_management_flags",
+        new=AsyncMock(return_value=(False, False)),
+    ), patch(
+        "apps.kuaizhizao.services.inventory_service.BusinessConfigService"
+    ) as cfg_cls, patch(
+        "apps.master_data.models.material.Material.get_or_none",
+        new=AsyncMock(return_value=MagicMock(batch_managed=False, name="M", code="M1")),
+    ), patch(
+        "apps.master_data.models.material_batch.MaterialBatch.filter"
+    ) as batch_filter, patch(
+        "apps.kuaizhizao.services.inventory_service.InventoryService._record_stock_movement",
+        new=AsyncMock(),
+    ), patch(
+        "apps.kuaizhizao.services.inventory_service.InventoryService._mark_serials_out_stock",
+        new=AsyncMock(),
+    ), patch(
+        "apps.kuaizhizao.services.work_order_readiness_service.notify_inventory_changed",
+        return_value=None,
+    ), patch(
+        "apps.kuaizhizao.utils.stock_posting.reuse_or_begin_transaction",
+        _noop_tx,
+    ), patch(
+        "apps.kuaizhizao.models.material_stock_movement.MaterialStockMovement.filter",
+        MagicMock(return_value=_dedup_miss_queryset()),
+    ), patch(
+        "apps.kuaizhizao.utils.ledger_dual_quantity_utils.material_ledger_uses_manual_aux_quantity",
+        return_value=True,
+    ):
+        cfg_cls.return_value.get_business_config = AsyncMock(
+            return_value={"parameters": {"warehouse": {"lifo": False, "fifo_mode": "batch_id"}}}
+        )
+        empty_qs = MagicMock()
+        empty_qs.filter.return_value = empty_qs
+        empty_qs.select_for_update.return_value = empty_qs
+        empty_qs.all = AsyncMock(return_value=[])
+        batch_filter.return_value = empty_qs
+
+        create_mock = AsyncMock()
+        with patch(
+            "apps.master_data.models.material_batch.MaterialBatch.create",
+            create_mock,
+        ), patch(
+            "apps.kuaizhizao.services.inventory_service.InventoryService._find_in_stock_material_batch",
+            new=AsyncMock(return_value=None),
+        ), patch(
+            "apps.kuaizhizao.services.inventory_service.InventoryService._resolve_warehouse_name",
+            new=AsyncMock(return_value="主仓"),
+        ):
+            await InventoryService._decrease_stock_no_atomic(
+                tenant_id=1,
+                material_id=10,
+                quantity=Decimal("5"),
+                aux_quantity_delta=Decimal("3"),
+                warehouse_id=2,
+                movement_type="sales_delivery",
+                source_type="sales_delivery",
+                source_doc_id=1,
+                operator_id=1,
+                operator_name="tester",
+                idempotency_key="test:negative-outbound:aux",
+            )
+
+    create_kwargs = create_mock.await_args.kwargs
+    assert create_kwargs["quantity"] == Decimal("-5")
+    assert create_kwargs["aux_quantity"] == Decimal("-3")
+
+
+@pytest.mark.asyncio
 async def test_decrease_stock_blocks_when_allow_negative_disabled():
     wh = MagicMock()
     wh.warehouse_type = "normal"

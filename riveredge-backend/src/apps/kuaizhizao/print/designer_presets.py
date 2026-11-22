@@ -257,10 +257,55 @@ class DocumentLayout:
     show_totals: bool = False
     notes_key: str | None = "notes"
     extra_fields: list[tuple[str, str]] = field(default_factory=list)
+    table_section_title: str = "明细"
+    secondary_table_title: str | None = None
+    secondary_table_collection: str | None = None
+    secondary_table_columns: list[dict[str, Any]] = field(default_factory=list)
 
 
-def _col(*pairs: tuple[str, str]) -> list[dict[str, str]]:
-    return [{"key": k, "label": label} for label, k in pairs]
+# 打印明细列小数位：单价类 4 位，总价/税额/金额类 2 位（与模板 number(precision) 一致）
+_PRINT_PRICE_COLUMN_KEYS = frozenset(
+    {
+        "unit_price",
+        "tax_inclusive_unit_price",
+        "suggested_unit_price",
+        "before_unit_price",
+        "after_unit_price",
+    }
+)
+_PRINT_AMOUNT_COLUMN_KEYS = frozenset(
+    {
+        "total_amount",
+        "tax_inclusive_amount",
+        "tax_amount",
+        "amount",
+        "before_amount",
+        "after_amount",
+        "delta_amount",
+        "before_total_amount",
+        "after_total_amount",
+        "total_request_amount",
+        "remaining_amount",
+        "paid_amount",
+    }
+)
+
+
+def annotate_print_numeric_column(col: dict[str, Any]) -> dict[str, Any]:
+    """为明细列补 type=number 与 precision（单价 4 / 金额税额 2）。"""
+    key = str(col.get("key") or "").strip()
+    out = dict(col)
+    if key in _PRINT_PRICE_COLUMN_KEYS:
+        out["type"] = "number"
+        out["precision"] = 4
+    elif key in _PRINT_AMOUNT_COLUMN_KEYS:
+        out["type"] = "number"
+        out["precision"] = 2
+    return out
+
+
+def _col(*pairs: tuple[str, str]) -> list[dict[str, Any]]:
+    return [annotate_print_numeric_column({"key": k, "label": label}) for label, k in pairs]
 
 
 # 明细列与前端 printTemplateSchemas.ARRAY_TABLE_TEMPLATES 对齐
@@ -427,6 +472,32 @@ _TABLE_COLUMNS: dict[str, list[dict[str, str]]] = {
         ("规格", "material_spec"),
         ("单位", "material_unit"),
         ("预测数量", "forecast_quantity"),
+    ),
+    "other_expense": _col(
+        ("行号", "line_no"),
+        ("费用类别", "category_name"),
+        ("摘要", "description"),
+        ("金额", "amount"),
+        ("领款人", "payee_name"),
+    ),
+    "payment_application": _col(
+        ("行号", "line_no"),
+        ("来源类型", "source_type"),
+        ("来源单号", "source_code"),
+        ("应付单号", "payable_code"),
+        ("申请金额", "request_amount"),
+        ("备注", "notes"),
+    ),
+    "payment_application_po_lines": _col(
+        ("采购订单号", "purchase_order_code"),
+        ("物料编号", "material_code"),
+        ("物料名称", "material_name"),
+        ("规格", "material_spec"),
+        ("单位", "unit"),
+        ("数量", "quantity"),
+        ("单价", "unit_price"),
+        ("金额", "total_price"),
+        ("备注", "notes"),
     ),
 }
 
@@ -677,6 +748,95 @@ DOCUMENT_LAYOUTS: dict[str, DocumentLayout] = {
         ],
         sign_labels=("编制人", "审核人"),
     ),
+    "payment_application": DocumentLayout(
+        "payment_application",
+        "付款申请",
+        [
+            ("供应商", "supplier_name"),
+            ("申请人", "applicant_name"),
+            ("申请部门", "department_name"),
+            ("申请日期", "application_date"),
+            ("期望付款日", "expected_payment_date"),
+            ("申请金额", "total_request_amount"),
+            ("待付金额", "remaining_amount"),
+            ("已付金额", "paid_amount"),
+            ("状态", "status"),
+            ("付款方式", "payment_method"),
+            ("发票情况", "invoice_status"),
+            ("付款条件", "payment_terms"),
+            ("收款户名", "supplier_account_name"),
+            ("开户行", "supplier_bank_name"),
+            ("收款账号", "supplier_bank_account"),
+            ("付款事由", "payment_reason"),
+        ],
+        table_section_title="申请明细",
+        sign_labels=("申请人", "审核人", "付款人"),
+        notes_key="notes",
+        secondary_table_title="采购订单明细",
+        secondary_table_collection="purchase_order_items",
+        secondary_table_columns=_TABLE_COLUMNS["payment_application_po_lines"],
+    ),
+    "other_expense": DocumentLayout(
+        "other_expense",
+        "其他费用支出",
+        [
+            ("单号", "code"),
+            ("业务日期", "business_date"),
+            ("往来单位", "counterparty_name"),
+            ("收款户名", "counterparty_account_name"),
+            ("开户行", "counterparty_bank_name"),
+            ("收款账号", "counterparty_bank_account"),
+            ("往来类型", "counterparty_kind"),
+            ("部门", "department_name"),
+            ("收付方式", "payment_method"),
+            ("金额", "total_amount"),
+            ("状态", "status"),
+        ],
+        sign_labels=("制单人", "审核人", "出纳"),
+        show_totals=True,
+        notes_key="notes",
+    ),
+    "outsource_order": DocumentLayout(
+        "outsource_order",
+        "工序委外单",
+        [
+            ("工单编号", "work_order_code"),
+            ("工序编号", "operation_code"),
+            ("工序名称", "operation_name"),
+            ("供应商", "supplier_name"),
+            ("委外数量", "outsource_quantity"),
+            ("已收货数量", "received_quantity"),
+            ("单价", "unit_price"),
+            ("金额", "total_amount"),
+            ("计划开始", "planned_start_date"),
+            ("计划结束", "planned_end_date"),
+            ("状态", "status"),
+        ],
+        table_collection="",
+        sign_labels=("制单人", "审核人", "供应商确认"),
+        notes_key="remarks",
+    ),
+    "outsource_work_order": DocumentLayout(
+        "outsource_work_order",
+        "工单委外单",
+        [
+            ("名称", "name"),
+            ("产品编号", "product_code"),
+            ("产品名称", "product_name"),
+            ("计划数量", "quantity"),
+            ("供应商", "supplier_name"),
+            ("委外工序", "outsource_operation"),
+            ("单价", "unit_price"),
+            ("金额", "total_amount"),
+            ("优先级", "priority"),
+            ("计划开始", "planned_start_date"),
+            ("计划结束", "planned_end_date"),
+            ("状态", "status"),
+        ],
+        table_collection="",
+        sign_labels=("制单人", "审核人", "供应商确认"),
+        notes_key="remarks",
+    ),
 }
 
 
@@ -784,7 +944,11 @@ def build_sales_contract_general_schema() -> dict[str, Any]:
 
 
 def build_designer_schema(layout: DocumentLayout) -> dict[str, Any]:
-    columns = layout.table_columns or _TABLE_COLUMNS.get(layout.document_type, [])
+    columns = (
+        []
+        if layout.document_type == "payment_application"
+        else layout.table_columns or _TABLE_COLUMNS.get(layout.document_type, [])
+    )
     qrcode_key = (
         qrcode_field_for_document_type(layout.document_type)
         if layout.document_type in MOBILE_INTERACTIVE_DOCUMENT_TYPES
@@ -798,11 +962,49 @@ def build_designer_schema(layout: DocumentLayout) -> dict[str, Any]:
     for label, key in layout.extra_fields:
         blocks.extend([_section_title(label), _field(key, label, show_label=False)])
     if columns:
-        blocks.extend([_section_title("明细"), _detail_table(layout.table_collection, columns)])
-    if layout.show_totals:
+        blocks.extend(
+            [
+                _section_title(layout.table_section_title),
+                _detail_table(layout.table_collection, columns),
+            ]
+        )
+    if layout.document_type == "payment_application":
         blocks.append(
             _text(
-                "总数量：{{ total_quantity | number }}    总金额：{{ total_amount | money }}",
+                "合计申请金额：{{ total_request_amount | money }}",
+                style={"textAlign": "right", "fontSize": "11px", "fontWeight": "600"},
+            )
+        )
+    if (
+        layout.document_type != "payment_application"
+        and layout.secondary_table_collection
+        and layout.secondary_table_columns
+    ):
+        blocks.extend(
+            [
+                _section_title(layout.secondary_table_title or "明细"),
+                _detail_table(
+                    layout.secondary_table_collection,
+                    layout.secondary_table_columns,
+                ),
+            ]
+        )
+    if layout.show_totals:
+        if layout.document_type == "purchase_order":
+            totals_text = (
+                "总数量：{{ total_quantity | number }}    "
+                "含税金额：{{ tax_inclusive_amount | money }}"
+            )
+        elif layout.document_type == "other_expense":
+            totals_text = "合计金额：{{ total_amount | money }}"
+        else:
+            totals_text = (
+                "总数量：{{ total_quantity | number }}    "
+                "总金额：{{ total_amount | money }}"
+            )
+        blocks.append(
+            _text(
+                totals_text,
                 style={"textAlign": "right", "fontSize": "11px", "fontWeight": "600"},
             )
         )

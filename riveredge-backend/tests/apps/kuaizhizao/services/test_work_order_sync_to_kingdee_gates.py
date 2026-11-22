@@ -106,16 +106,22 @@ async def test_scheduler_run_work_order_bidirectional_does_not_auto_push():
     pull_result = WorkOrderSyncFromSourceOut(created=0, updated=1, skipped=0, failed=0)
     service = WorkOrderSyncService()
 
+    async def _run_without_log(**kwargs):
+        return await kwargs["run"]()
+
     with patch(
-        "core.services.data.external_sync_scheduler.WorkOrderSyncBinding.filter",
+        "apps.kuaiconnect.services.inbound_sync.external_sync_scheduler.WorkOrderSyncBinding.filter",
     ) as binding_filter, patch(
-        "core.services.data.external_sync_scheduler._due",
+        "apps.kuaiconnect.services.inbound_sync.external_sync_scheduler._due",
         return_value=True,
     ), patch(
-        "core.services.data.external_sync_scheduler._resolve_actor",
+        "apps.kuaiconnect.services.inbound_sync.external_sync_scheduler._resolve_actor",
         new=AsyncMock(return_value=actor),
     ), patch(
-        "core.services.data.external_sync_scheduler.WorkOrderSyncService",
+        "apps.kuaiconnect.services.inbound_sync.external_sync_scheduler._scheduled_inbound_sync_with_run_log",
+        new=_run_without_log,
+    ), patch(
+        "apps.kuaiconnect.services.inbound_sync.external_sync_scheduler.WorkOrderSyncService",
         return_value=service,
     ), patch.object(
         service,

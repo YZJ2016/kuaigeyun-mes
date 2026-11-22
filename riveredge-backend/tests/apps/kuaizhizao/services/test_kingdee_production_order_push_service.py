@@ -49,7 +49,7 @@ def test_build_kingdee_production_order_model_defaults():
     )
 
     assert model["FDate"] == "2026-09-15"
-    assert model["FBillNo"] == "WO-20260915-001"
+    assert model["FBillNo"] == "100-WO-20260915-001"
     assert model["FBillType"]["FNUMBER"] == PRD_MO_DEFAULT_BILL_TYPE
     assert model["FPrdOrgId"]["FNumber"] == "100"
     assert model["FOwnerTypeId"] == "BD_OwnerOrg"

@@ -223,7 +223,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         from apps.kuaicaiwu.services.finance_tax import quantize_money
         from apps.kuaicaiwu.services.purchase_settlement import (
             coerce_purchase_order_display_unit_price,
-            normalize_po_tax_rate_to_percent,
+            resolve_purchase_line_tax_rate_percent,
         )
         from apps.kuaizhizao.utils.document_line_amounts import calc_document_line_amounts
 
@@ -231,9 +231,10 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             return quantize_money(item_data.total_price)
 
         price_type = str(order_price_type or "tax_exclusive")
-        line_tax_pct = normalize_po_tax_rate_to_percent(getattr(item_data, "tax_rate", None))
-        if line_tax_pct <= 0:
-            line_tax_pct = normalize_po_tax_rate_to_percent(header_tax_rate)
+        line_tax_pct = resolve_purchase_line_tax_rate_percent(
+            line_tax_rate=getattr(item_data, "tax_rate", None),
+            header_tax_rate=header_tax_rate,
+        )
 
         display = coerce_purchase_order_display_unit_price(
             getattr(item_data, "display_unit_price", None),
@@ -437,7 +438,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             )
             from apps.kuaicaiwu.services.purchase_settlement import (
                 coerce_purchase_order_display_unit_price,
-                normalize_po_tax_rate_to_percent,
+                resolve_purchase_line_tax_rate_percent,
             )
 
             line_excl_and_tax: list[tuple] = []
@@ -469,11 +470,10 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                         amount_decimal_places=amount_decimal_places,
                     )
                 outstanding_quantity = ordered_qty
-                line_tax_pct = normalize_po_tax_rate_to_percent(
-                    getattr(item_data, "tax_rate", None)
+                line_tax_pct = resolve_purchase_line_tax_rate_percent(
+                    line_tax_rate=getattr(item_data, "tax_rate", None),
+                    header_tax_rate=order_data.tax_rate,
                 )
-                if line_tax_pct <= 0:
-                    line_tax_pct = normalize_po_tax_rate_to_percent(order_data.tax_rate)
 
                 item_dict = item_data.model_dump()
                 item_dict["ordered_quantity"] = ordered_qty
@@ -1118,7 +1118,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             tenant_id, orders, result, has_items_by_id=has_items_by_id
         )
 
-        from apps.common.optional_pro import finance_orm_ready
+        from apps.common.app_orm import finance_orm_ready
 
         settlement_map: Dict[int, Optional[str]] = {}
         if finance_orm_ready() and orders:
@@ -1613,7 +1613,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 )
                 from apps.kuaicaiwu.services.purchase_settlement import (
                     coerce_purchase_order_display_unit_price,
-                    normalize_po_tax_rate_to_percent,
+                    resolve_purchase_line_tax_rate_percent,
                 )
 
                 line_excl_and_tax: list[tuple] = []
@@ -1656,11 +1656,10 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                             amount_decimal_places=amount_decimal_places,
                         )
                     outstanding_quantity = ordered_qty
-                    line_tax_pct = normalize_po_tax_rate_to_percent(
-                        getattr(item_data, "tax_rate", None)
+                    line_tax_pct = resolve_purchase_line_tax_rate_percent(
+                        line_tax_rate=getattr(item_data, "tax_rate", None),
+                        header_tax_rate=header_tax_fallback,
                     )
-                    if line_tax_pct <= 0:
-                        line_tax_pct = normalize_po_tax_rate_to_percent(header_tax_fallback)
 
                     item_dict = item_data.model_dump()
                     item_dict["ordered_quantity"] = ordered_qty

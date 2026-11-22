@@ -2,9 +2,12 @@
 
 from tortoise import fields
 from core.models.base import BaseModel
+from apps.kuaizhizao.models.mixins.document_line_dual_quantity import (
+    DocumentLineDualQuantityMixin,
+)
 
 
-class SemiFinishedGoodsReceiptItem(BaseModel):
+class SemiFinishedGoodsReceiptItem(DocumentLineDualQuantityMixin, BaseModel):
     """半成品入库单明细"""
 
     tenant_id = fields.IntField(description="租户ID")

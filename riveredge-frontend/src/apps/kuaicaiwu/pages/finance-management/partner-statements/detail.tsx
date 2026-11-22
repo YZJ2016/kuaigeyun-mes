@@ -67,6 +67,32 @@ import { PartnerStatementSettingsBar } from './PartnerStatementSettingsBar';
 
 const PS = 'app.kuaicaiwu.partnerStatement';
 const PARTNER_STATEMENT_RESOURCE = 'kuaicaiwu:partner-statement';
+const PARTNER_STATEMENT_ENTITY = 'partner_statement';
+
+function linePushAmount(ln: PartnerStatementLine): number {
+  return Number(ln.statement_amount ?? ln.doc_amount ?? 0);
+}
+
+function collectPayableStatementLines(lines: PartnerStatementLine[]): PartnerStatementLine[] {
+  return lines.filter((ln) => {
+    if (String(ln.doc_type || '').trim() !== '应付单') return false;
+    if (ln.doc_id == null) return false;
+    if (Number(ln.tree_level ?? 0) > 0) return false;
+    return linePushAmount(ln) > 0;
+  });
+}
+
+function statementInvoiceEmptyMessageKey(
+  partnerType: string,
+  ledgerPostingMode?: string | null,
+): string {
+  if (partnerType === 'Supplier') {
+    return ledgerPostingMode === 'by_invoice'
+      ? `${PS}.detail.pushSelectPurchaseReceipt`
+      : `${PS}.detail.pushSelectPayable`;
+  }
+  return `${PS}.detail.pushSelectReceivable`;
+}
 
 const money = (v: number | string | undefined) =>
   formatCurrencyAmount(v ?? 0);
@@ -210,6 +236,9 @@ const PartnerStatementDetailPage: React.FC = () => {
     };
   }, [clearLineDetailCache, hydrateWorkingLinesFromStatement, id, message, t]);
 
+  const reviewEditable =
+    !data?.review_status ||
+    ['草稿', 'draft', '驳回', '已驳回', 'rejected'].includes(String(data.review_status).trim());
   const linesEditable =
     !!data &&
     (data.status === 'Draft' ||
@@ -586,7 +615,7 @@ const PartnerStatementDetailPage: React.FC = () => {
         approvedStatuses={['已审核']}
         rejectedStatuses={['已驳回', '驳回']}
         theme="default"
-        size="middle"
+        size="medium"
         beforeAction={async (action) => {
           if (
             (action === 'submit' || action === 'submit_review') &&

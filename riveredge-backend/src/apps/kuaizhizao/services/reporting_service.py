@@ -321,7 +321,8 @@ async def _compute_operation_reportable_remaining(
         adjacent_prev_transfer=adjacent_prev,
         ordered_operations=ops,
     )
-    if op_index == 0 or work_order_allows_operation_jump(work_order):
+    # 首道或允许跳转：补领抬高在制。前序节点尚无合格产出时 incoming 为 0，不再抬高。
+    if incoming > 0 and (op_index == 0 or work_order_allows_operation_jump(work_order)):
         incoming = incoming + await WorkOrderService.resolve_material_incoming_picking_extra_units(
             tenant_id, int(work_order.id), plan_qty
         )
@@ -667,6 +668,17 @@ def _attach_inbound_notices(
     if notices:
         response.post_action_notices = notices
     return response
+
+
+def promote_released_work_order_when_reporting_approved(work_order: WorkOrder, *, approved: bool) -> None:
+    """未审核通过的报工不能单独把工单从 released 改成 in_progress。审核通过后再进入执行中。"""
+    if not approved:
+        return
+    if str(getattr(work_order, "status", "") or "") != "released":
+        return
+    work_order.status = "in_progress"
+    if not getattr(work_order, "actual_start_date", None):
+        work_order.actual_start_date = resolve_business_datetime()
 
 
 class ReportingService(AppBaseService[ReportingRecord]):
@@ -1739,7 +1751,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             # 根据报工类型验证数据（核心功能，新增）
             reporting_type = work_order_operation.reporting_type or "quantity"
 
-            # 跳转门禁：唯一认工单头 allow_operation_jump
+            # 跳转门禁：工单头 allow_operation_jump；允许跳转时前序节点仍不可跳过
             from apps.kuaizhizao.services.operation_jump_rules import (
                 validate_reporting_respects_jump_gates,
             )
@@ -1993,10 +2005,12 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             await work_order_operation.save()
 
-            # 更新工单状态为进行中（如果是从released变为in_progress）
-            if work_order.status == 'released':
-                work_order.status = 'in_progress'
-                work_order.actual_start_date = work_order.actual_start_date or resolve_business_datetime()
+            # 待审核报工可累计工序数量，但不能单独把工单从 released 改成执行中。
+            # 免审自动通过的创建 status 已是 approved，仍进入执行中。
+            promote_released_work_order_when_reporting_approved(
+                work_order,
+                approved=reporting_record.status == "approved",
+            )
             
             # 检查工单是否完成（以最后一道工序完成为依据；方案质检须检验放行后工序才 completed）
             all_operations = await WorkOrderOperation.filter(
@@ -2334,7 +2348,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
         from apps.kuaizhizao.models.process_inspection import ProcessInspection
         from apps.kuaizhizao.services.over_report_rules import (
             max_completed_quantity_for_plan,
-            tuple_from_model,
+            resolve_effective_over_report_async,
         )
         from apps.kuaizhizao.services.operation_transfer_service import (
             build_operation_policy_cache,
@@ -2409,12 +2423,17 @@ class ReportingService(AppBaseService[ReportingRecord]):
             deleted_at__isnull=True,
         ).all()
         inspections_by_wo_op: Dict[tuple[int, int], List[Any]] = defaultdict(list)
+        # 工单下全部工序的检验单。在制要看前序节点放行，不能只带当前工序。
+        inspections_by_wo: Dict[int, Dict[int, List[Any]]] = defaultdict(dict)
         for insp in inspections:
             mid = getattr(insp, "operation_id", None)
             wid = getattr(insp, "work_order_id", None)
             if mid is None or wid is None:
                 continue
-            inspections_by_wo_op[(int(wid), int(mid))].append(insp)
+            wo_key = int(wid)
+            op_key = int(mid)
+            inspections_by_wo_op[(wo_key, op_key)].append(insp)
+            inspections_by_wo[wo_key][op_key] = inspections_by_wo_op[(wo_key, op_key)]
 
         from apps.kuaizhizao.models.scrap_record import ScrapRecord
 
@@ -2496,15 +2515,17 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     adjacent_prev_transfer=prev_transfer,
                     ordered_operations=wo_ops,
                     policy_cache=policy_cache,
-                    inspections_by_op={master_id: op_inspections} if master_id else None,
+                    inspections_by_op=inspections_by_wo.get(wo_id, {}),
                 )
-                if op_index == 0 or wo_jump:
+                # 与提交报工相同：首道或允许跳转才叠补领；节点未产出时 incoming 已是 0
+                if incoming > 0 and (op_index == 0 or wo_jump):
                     incoming = incoming + picking_extra
                 material_remaining = incoming - material_consumed
                 if material_remaining < 0:
                     material_remaining = Decimal("0")
 
-                om, ov = tuple_from_model(op)
+                # 行 none 是继承：回落工单头，再回落工序档案。不能把继承行硬算成计划数。
+                om, ov = await resolve_effective_over_report_async(tenant_id, wo, op)
                 rule_cap = max_completed_quantity_for_plan(plan_qty, om, ov)
                 plan_remaining = max(Decimal("0"), rule_cap - completed)
                 # 报工上限：计划+超报累计完成上限；前序转入不足时本次可报更小（允许跳转时不卡紧邻上道）。
@@ -2713,12 +2734,18 @@ class ReportingService(AppBaseService[ReportingRecord]):
         inbound_by_rid = await self.batch_reporting_have_approved_inbound_downstream(
             tenant_id, record_ids
         )
-        enriched = enrich_reporting_record_list_capabilities(
-            records,
-            rows,
-            has_posted_sales_outbound_by_wo_id=outbound_by_wo,
-            has_approved_inbound_by_record_id=inbound_by_rid,
+        from apps.kuaizhizao.services.document_action_policy.print_unaudited_gate import (
+            push_allow_print_unaudited,
         )
+
+        allow_print = await BusinessConfigService().get_allow_print_unaudited(tenant_id)
+        with push_allow_print_unaudited(allow_print):
+            enriched = enrich_reporting_record_list_capabilities(
+                records,
+                rows,
+                has_posted_sales_outbound_by_wo_id=outbound_by_wo,
+                has_approved_inbound_by_record_id=inbound_by_rid,
+            )
         return {
             "data": [r.model_dump() for r in enriched],
             "total": total,
@@ -3159,8 +3186,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
         record_id: int,
         operator_id: int,
     ) -> ReportingRecordResponse:
-        """撤销提交（SUBMITTED→草稿）或撤回审核（待审核→SUBMITTED）。"""
-        from apps.kuaizhizao.constants import DocumentStatus, is_submitted_status
+        """撤回提交。已提交回到草稿审核态；待审撤回后 status 与 review_status 都回到 draft。"""
+        from apps.kuaizhizao.constants import is_submitted_status
 
         record = await ReportingRecord.get_or_none(id=record_id, tenant_id=tenant_id)
         if not record:
@@ -3182,7 +3209,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
         )
         if not cancelled:
             raise BusinessLogicError("撤回失败：无法取消审批流程，请重试")
-        record.review_status = DocumentStatus.SUBMITTED
+        record.status = "draft"
+        record.review_status = "draft"
         record.rejection_reason = None
         await record.save()
         return ReportingRecordResponse.model_validate(record)
@@ -3686,6 +3714,18 @@ class ReportingService(AppBaseService[ReportingRecord]):
             )
             if not work_order:
                 return
+
+            if str(work_order.status or "") == "released":
+                has_approved = await ReportingRecord.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order_id,
+                    status="approved",
+                    deleted_at__isnull=True,
+                ).exists()
+                promote_released_work_order_when_reporting_approved(
+                    work_order,
+                    approved=has_approved,
+                )
 
             await self._sync_work_order_header_quantities_from_last_operation(tenant_id, work_order)
 

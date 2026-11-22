@@ -84,6 +84,32 @@ class PermissionPolicyService:
         "untaxed_amount": "amount_without_tax",
         "totalamount": "total_amount",
         "total_amount": "total_amount",
+        "invoiceamount": "amount",
+        "invoice_amount": "amount",
+        "totalprice": "total_amount",
+        "total_price": "total_amount",
+        "netamount": "amount",
+        "net_amount": "amount",
+        "totalfeeamount": "total_amount",
+        "total_fee_amount": "total_amount",
+        "prepaymentamount": "total_amount",
+        "prepayment_amount": "total_amount",
+        "prepaymentunsettledbalance": "total_amount",
+        "prepayment_unsettled_balance": "total_amount",
+        "estimatedpayableafterprepayment": "total_amount",
+        "estimated_payable_after_prepayment": "total_amount",
+        "plannedamount": "amount",
+        "planned_amount": "amount",
+        "landingcost": "amount",
+        "landing_cost": "amount",
+        "annualtotalamount": "total_amount",
+        "annual_total_amount": "total_amount",
+        "annualtotal": "total_amount",
+        "annual_total": "total_amount",
+        "displayunitprice": "unit_price",
+        "display_unit_price": "unit_price",
+        "provisionalunitprice": "unit_price",
+        "provisional_unit_price": "unit_price",
         "taxamount": "tax_amount",
         "tax_amount": "tax_amount",
         "unitprice": "unit_price",
@@ -92,6 +118,9 @@ class PermissionPolicyService:
         "customer_name": "customer_name",
         "clientname": "customer_name",
         "client_name": "customer_name",
+        # 销售订单打印抬头空时回填客户主数据名称，与客户名称同一掩码
+        "invoicetitle": "customer_name",
+        "invoice_title": "customer_name",
         "suppliername": "supplier_name",
         "supplier_name": "supplier_name",
         "defaultsupplierid": "default_supplier_id",
@@ -1159,6 +1188,52 @@ class PermissionPolicyService:
         return nested
 
     @classmethod
+    def _mask_level_for_key(
+        cls,
+        key: object,
+        effective: dict[str, str],
+        alias_map: dict[str, str],
+    ) -> str | None:
+        canonical = cls._canonicalize_field_name_with_aliases(str(key), alias_map)
+        level = effective.get(canonical)
+        if not level or level == FieldMaskLevel.FULL:
+            return None
+        return level
+
+    @classmethod
+    def _apply_masks_to_mapping(
+        cls,
+        payload: dict[str, Any],
+        effective: dict[str, str],
+        alias_map: dict[str, str],
+    ) -> dict[str, Any]:
+        """顶层与嵌套行（dict / list[dict]）按同一字段策略脱敏。"""
+        out = dict(payload)
+        for key, value in payload.items():
+            if isinstance(value, dict):
+                out[key] = cls._apply_masks_to_mapping(value, effective, alias_map)
+                continue
+            if isinstance(value, list):
+                level = cls._mask_level_for_key(key, effective, alias_map)
+                masked_items: list[Any] = []
+                for item in value:
+                    if isinstance(item, dict):
+                        masked_items.append(
+                            cls._apply_masks_to_mapping(item, effective, alias_map)
+                        )
+                    elif level:
+                        masked_items.append(cls._apply_single_mask(item, level))
+                    else:
+                        masked_items.append(item)
+                out[key] = masked_items
+                continue
+            level = cls._mask_level_for_key(key, effective, alias_map)
+            if not level:
+                continue
+            out[key] = cls._apply_single_mask(value, level)
+        return out
+
+    @classmethod
     async def apply_field_masks_to_dict(
         cls,
         tenant_id: int,
@@ -1175,14 +1250,7 @@ class PermissionPolicyService:
         if not effective:
             return payload
         alias_map = await cls._load_tenant_field_alias_map(tenant_id=tenant_id)
-        out = dict(payload)
-        for k, v in payload.items():
-            canonical = cls._canonicalize_field_name_with_aliases(k, alias_map)
-            level = effective.get(canonical)
-            if not level:
-                continue
-            out[k] = cls._apply_single_mask(v, level)
-        return out
+        return cls._apply_masks_to_mapping(payload, effective, alias_map)
 
     @classmethod
     async def apply_field_masks_to_list(
@@ -1194,6 +1262,7 @@ class PermissionPolicyService:
     ) -> list[dict[str, Any]]:
         """
         批量字段脱敏：一次加载用户有效策略与字段别名，避免列表逐行触发重复查询。
+        每一行及其嵌套明细使用同一策略。
         """
         if not payloads:
             return payloads
@@ -1206,17 +1275,10 @@ class PermissionPolicyService:
         if not effective:
             return payloads
         alias_map = await cls._load_tenant_field_alias_map(tenant_id=tenant_id)
-        out_list: list[dict[str, Any]] = []
-        for payload in payloads:
-            out = dict(payload)
-            for k, v in payload.items():
-                canonical = cls._canonicalize_field_name_with_aliases(k, alias_map)
-                level = effective.get(canonical)
-                if not level:
-                    continue
-                out[k] = cls._apply_single_mask(v, level)
-            out_list.append(out)
-        return out_list
+        return [
+            cls._apply_masks_to_mapping(payload, effective, alias_map)
+            for payload in payloads
+        ]
 
     @classmethod
     async def apply_material_field_masks_to_dict(

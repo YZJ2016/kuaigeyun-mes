@@ -62,7 +62,10 @@ import {
 import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select';
 import {
   DocumentLineDualQuantityFormCell, DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
-import { coerceDocumentLineQuantity } from '../../../../../utils/materialDualQuantity';
+import {
+  coerceDocumentLineQuantity,
+  pickDocumentLineDualQuantityFields,
+} from '../../../../../utils/materialDualQuantity';
 import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import {

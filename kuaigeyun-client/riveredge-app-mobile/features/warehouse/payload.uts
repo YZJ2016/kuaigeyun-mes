@@ -69,6 +69,21 @@ function lineBody(line: LineForm, withReceipt: boolean): UTSJSONObject | null {
 	if (serials.length > 0) {
 		item.set('serial_numbers', serials)
 	}
+	const auxText = line.auxQuantityText.trim()
+	if (auxText.length > 0) {
+		const aux = parseFloat(auxText)
+		if (!isNaN(aux) && aux >= 0) {
+			item.set('aux_quantity', aux)
+		}
+	}
+	setText(item, 'aux_unit', line.auxUnit)
+	const rateText = line.unitConversionText.trim()
+	if (rateText.length > 0) {
+		const rate = parseFloat(rateText)
+		if (!isNaN(rate) && rate > 0) {
+			item.set('unit_conversion_rate', rate)
+		}
+	}
 	if (withReceipt) {
 		const text = line.receiptQuantityText.trim()
 		if (text.length > 0) {

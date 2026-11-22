@@ -53,8 +53,15 @@ _REVIEW_REJECTED = {"rejected", "已驳回", "审核驳回", "驳回"}
 _REVIEW_PENDING = {"待审核", "pending_review", "pending_approval", "已提交", "pending"}
 _REVIEW_DRAFT = {"草稿", "draft", ""}
 
-# 提交后仍保持主状态为草稿、仅 review_status 进入待审的单据（如采购询价、生产工单、报价单已提交）
-_DRAFT_REVIEW_PENDING_ENTITY_TYPES = frozenset({"purchase_inquiry", "work_order", "quotation"})
+# 提交后仍保持主状态为草稿、仅 review_status 进入待审的单据
+# （采购询价、生产工单、报价单、报工、返工）
+_DRAFT_REVIEW_PENDING_ENTITY_TYPES = frozenset({
+    "purchase_inquiry",
+    "work_order",
+    "quotation",
+    "reporting_record",
+    "rework_order",
+})
 # 上述单据「已提交待审」的 review 取值（不含建单默认 PENDING，避免草稿同时露出提交+审核）
 _DRAFT_ENTITY_SUBMITTED_REVIEW = frozenset({
     "pending_review",
@@ -230,7 +237,7 @@ def derive_audit_phase(
         raw_review = str(review_status or "").strip()
         if r in _REVIEW_APPROVED:
             phase = "approved"
-        elif entity_type in ("purchase_inquiry", "work_order", "quotation") and raw_review == "SUBMITTED":
+        elif entity_type in _DRAFT_REVIEW_PENDING_ENTITY_TYPES and raw_review == "SUBMITTED":
             phase = "submitted"
         elif (
             entity_type in _DRAFT_REVIEW_PENDING_ENTITY_TYPES

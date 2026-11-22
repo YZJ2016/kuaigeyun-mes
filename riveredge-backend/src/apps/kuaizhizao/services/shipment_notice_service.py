@@ -33,9 +33,13 @@ from apps.kuaizhizao.schemas.shipment_notice import (
     ShipmentNoticeItemResponse,
 )
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
+from apps.kuaizhizao.services.document_action_policy.print_unaudited_gate import (
+    push_allow_print_unaudited,
+)
 from apps.kuaizhizao.services.document_action_policy.shipment_notice import (
     assert_shipment_notice_capability,
     derive_shipment_notice_capabilities,
+    shipment_notice_review_approved,
 )
 from apps.kuaizhizao.services.document_action_policy.enricher import (
     enrich_shipment_notice_capabilities_on_response,
@@ -121,6 +125,50 @@ def _coerce_str_id_map(raw: Optional[Dict[Any, Any]]) -> Dict[int, str]:
         if item_id > 0 and text:
             out[item_id] = text
     return out
+
+
+def _is_whole_warehouse_placeholder(location: Any) -> bool:
+    """系统占位「整仓」：名称是整仓，且未挂库区（直挂本仓）。"""
+    from apps.master_data.services.warehouse_service import WHOLE_WAREHOUSE_LOCATION_NAME
+
+    name = str(getattr(location, "name", None) or "").strip()
+    return (
+        name == WHOLE_WAREHOUSE_LOCATION_NAME
+        and getattr(location, "storage_area_id", None) is None
+    )
+
+
+async def _warehouse_has_real_storage_location(tenant_id: int, warehouse_id: int) -> bool:
+    """未传库位时，仓库是否已有真实货位。仅「整仓」占位不算，需再查本仓其他库位。"""
+    from apps.master_data.models.warehouse import StorageLocation
+    from apps.master_data.services.warehouse_service import WarehouseService
+
+    found_id, _found_code = await WarehouseService.find_first_storage_location_for_warehouse(
+        tenant_id, warehouse_id
+    )
+    if found_id is None:
+        return False
+    found = await StorageLocation.get_or_none(
+        tenant_id=tenant_id,
+        id=int(found_id),
+        deleted_at__isnull=True,
+    )
+    if found is None:
+        return False
+    if not _is_whole_warehouse_placeholder(found):
+        return True
+    rows = await StorageLocation.filter(
+        tenant_id=tenant_id,
+        warehouse_id=int(warehouse_id),
+        deleted_at__isnull=True,
+        is_active=True,
+    )
+    for loc in rows:
+        if int(getattr(loc, "id", 0) or 0) == int(found_id):
+            continue
+        if not _is_whole_warehouse_placeholder(loc):
+            return True
+    return False
 
 
 class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
@@ -230,13 +278,15 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
     ) -> ShipmentNoticeResponse | ShipmentNoticeWithItemsResponse:
         item_count = await ShipmentNoticeItem.filter(tenant_id=tenant_id, notice_id=notice.id).count()
         delivery_withdrawable = await self._notice_delivery_withdrawable(tenant_id, notice)
-        enriched = enrich_shipment_notice_capabilities_on_response(
-            notice,
-            response,
-            has_items=item_count > 0,
-            has_warehouse=getattr(notice, "warehouse_id", None) is not None,
-            delivery_withdrawable=delivery_withdrawable,
-        )
+        allow_print = await self.business_config_service.get_allow_print_unaudited(tenant_id)
+        with push_allow_print_unaudited(allow_print):
+            enriched = enrich_shipment_notice_capabilities_on_response(
+                notice,
+                response,
+                has_items=item_count > 0,
+                has_warehouse=getattr(notice, "warehouse_id", None) is not None,
+                delivery_withdrawable=delivery_withdrawable,
+            )
         from core.services.approval.audit_record_enricher import enrich_record
 
         return await enrich_record(tenant_id, "shipment_notice", enriched)
@@ -564,6 +614,10 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             )
             if audit_required:
                 dump["status"] = "待审核"
+                dump["review_status"] = "待审核"
+            else:
+                dump["status"] = "待发货"
+                dump["review_status"] = "已通过"
 
             user_info = await self.get_user_info(created_by)
             notice = await ShipmentNotice.create(
@@ -789,12 +843,15 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             if include_items:
                 resp.items = items_by_notice.get(int(r.id), [])
             list_responses.append(resp)
-        enriched = await enrich_items(tenant_id, "shipment_notice", enrich_shipment_notice_list_capabilities(
-            notice_list,
-            list_responses,
-            has_items_by_id=has_items_by_id,
-            delivery_withdrawable_by_id=withdrawable_by_id,
-        ))
+        allow_print = await self.business_config_service.get_allow_print_unaudited(tenant_id)
+        with push_allow_print_unaudited(allow_print):
+            capped = enrich_shipment_notice_list_capabilities(
+                notice_list,
+                list_responses,
+                has_items_by_id=has_items_by_id,
+                delivery_withdrawable_by_id=withdrawable_by_id,
+            )
+        enriched = await enrich_items(tenant_id, "shipment_notice", capped)
         return {
             "data": [item.model_dump() for item in enriched],
             "total": total,
@@ -847,23 +904,31 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         )
         if not notice:
             raise NotFoundError(f"发货通知单不存在: {notice_id}")
+        review = str(notice.review_status or "").strip()
         status = str(notice.status or "").strip()
+        user_name = (await self.get_user_info(submitted_by))["name"]
+        if review == "待审核":
+            return await self.get_shipment_notice_by_id(tenant_id, notice_id)
         if status == "待审核":
+            await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
+                review_status="待审核",
+                updated_by=submitted_by,
+                updated_by_name=user_name,
+            )
             return await self.get_shipment_notice_by_id(tenant_id, notice_id)
 
         audit_required = await self.business_config_service.check_audit_required(
             tenant_id, "shipment_notice"
         )
+        assert_shipment_notice_capability(notice, "submit")
         if not audit_required:
             await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
                 status="待发货",
+                review_status="已通过",
                 updated_by=submitted_by,
-                updated_by_name=(await self.get_user_info(submitted_by))["name"],
+                updated_by_name=user_name,
             )
             return await self.get_shipment_notice_by_id(tenant_id, notice_id)
-
-        if status not in ("待发货",):
-            raise BusinessLogicError(f"当前状态不可提交审核: {status or '-'}")
 
         from core.services.approval.approval_instance_service import ApprovalInstanceService
 
@@ -883,8 +948,9 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             )
         await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
             status="待审核",
+            review_status="待审核",
             updated_by=submitted_by,
-            updated_by_name=(await self.get_user_info(submitted_by))["name"],
+            updated_by_name=user_name,
         )
         from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
 
@@ -903,9 +969,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         )
         if not notice:
             raise NotFoundError(f"发货通知单不存在: {notice_id}")
-        status = str(notice.status or "").strip()
-        if status != "待审核":
-            raise BusinessLogicError(f"只能审核待审核状态的发货通知单，当前: {status or '-'}")
+        assert_shipment_notice_capability(notice, "approve")
         audit_required = await self.business_config_service.check_audit_required(
             tenant_id, "shipment_notice"
         )
@@ -927,6 +991,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             )
         await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
             status="待发货",
+            review_status="已通过",
             updated_by=approver_id,
             updated_by_name=(await self.get_user_info(approver_id))["name"],
         )
@@ -945,9 +1010,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         )
         if not notice:
             raise NotFoundError(f"发货通知单不存在: {notice_id}")
-        status = str(notice.status or "").strip()
-        if status != "待审核":
-            raise BusinessLogicError(f"只能驳回待审核状态的发货通知单，当前: {status or '-'}")
+        assert_shipment_notice_capability(notice, "reject")
         audit_required = await self.business_config_service.check_audit_required(
             tenant_id, "shipment_notice"
         )
@@ -968,7 +1031,8 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
                 verb="驳回",
             )
         await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
-            status="已驳回",
+            status="草稿",
+            review_status="已驳回",
             updated_by=approver_id,
             updated_by_name=(await self.get_user_info(approver_id))["name"],
         )
@@ -985,9 +1049,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         )
         if not notice:
             raise NotFoundError(f"发货通知单不存在: {notice_id}")
-        status = str(notice.status or "").strip()
-        if status != "待审核":
-            raise BusinessLogicError(f"只能撤回待审核状态的发货通知单，当前: {status or '-'}")
+        assert_shipment_notice_capability(notice, "withdraw_submit")
         from core.services.approval.approval_instance_service import ApprovalInstanceService
 
         await ApprovalInstanceService.cancel_approval(
@@ -997,7 +1059,8 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             operator_id=operator_id,
         )
         await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
-            status="待发货",
+            status="草稿",
+            review_status="草稿",
             updated_by=operator_id,
             updated_by_name=(await self.get_user_info(operator_id))["name"],
         )
@@ -1019,18 +1082,23 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         )
         if not notice:
             raise NotFoundError(f"发货通知单不存在: {notice_id}")
-        status = str(notice.status or "").strip()
-        if status != "待发货":
-            raise BusinessLogicError(f"当前状态不可撤销审核: {status or '-'}")
+        assert_shipment_notice_capability(notice, "revoke_approval")
         audit_required = await self.business_config_service.check_audit_required(
             tenant_id, "shipment_notice"
         )
-        _ = resolve_revoke_to_draft_landing_phase(manual_audit_enabled=audit_required)
 
-        async def _do_revoke() -> ShipmentNoticeResponse:
-            # 发货通知可编辑态为「待发货」，须再次提交才进入待审核
+        async def _do_revoke(*, reopened: bool = False) -> ShipmentNoticeResponse:
+            landing = resolve_revoke_to_draft_landing_phase(
+                manual_audit_enabled=audit_required,
+                flow_reopened=reopened,
+            )
+            if landing == "pending":
+                next_status, next_review = "待审核", "待审核"
+            else:
+                next_status, next_review = "草稿", "草稿"
             await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
-                status="待发货",
+                status=next_status,
+                review_status=next_review,
                 updated_by=operator_id,
                 updated_by_name=(await self.get_user_info(operator_id))["name"],
             )
@@ -1054,6 +1122,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
     ) -> tuple[ShipmentNotice, List[ShipmentNoticeItem], Dict[int, tuple[Optional[int], Optional[str]]]]:
         """将通知请求中的行仓/库位落到通知明细，并解析出库库位（无库位仓 ensure 整仓）。
 
+        未传库位时，仅真实货位要求调用方指定；只有系统占位「整仓」则交给原库位解析复用。
         返回：(刷新后的通知头, 明细列表, {item_id: (location_id, location_code)})。
         """
         from apps.kuaizhizao.services.warehouse_service import _resolve_line_location_pair
@@ -1129,11 +1198,19 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
                 item.warehouse_id = wh_id
                 item.warehouse_name = wh_name
 
+            requested_loc_id = line_loc.get(item_id)
+            requested_loc_code = line_loc_codes.get(item_id)
+            has_requested_location = (
+                requested_loc_id is not None and int(requested_loc_id) > 0
+            ) or bool(str(requested_loc_code or "").strip())
+            if not has_requested_location:
+                if await _warehouse_has_real_storage_location(tenant_id, wh_id):
+                    raise ValidationError(f"物料 {label} 的出库仓库已有库位，请指定库位")
             loc_id, loc_code = await _resolve_line_location_pair(
                 tenant_id,
                 warehouse_id=wh_id,
-                location_id=line_loc.get(item_id),
-                location_code=line_loc_codes.get(item_id),
+                location_id=requested_loc_id,
+                location_code=requested_loc_code,
                 material_label=str(label),
                 direction_label="出库",
             )
@@ -1395,19 +1472,18 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
         notice = await ShipmentNotice.get_or_none(tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True)
         if not notice:
             raise NotFoundError(f"发货通知单不存在: {notice_id}")
-        from apps.kuaizhizao.services.document_action_policy.shipment_notice import _review_approved
-
-        if not _review_approved(notice.review_status):
+        if not shipment_notice_review_approved(notice.review_status):
             audit_required = await self.business_config_service.check_audit_required(
                 tenant_id, "shipment_notice"
             )
-            if not audit_required:
-                await self.submit_shipment_notice(tenant_id, notice_id, notified_by)
-                notice = await ShipmentNotice.get_or_none(
-                    tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
-                )
-                if not notice:
-                    raise NotFoundError(f"发货通知单不存在: {notice_id}")
+            if audit_required:
+                assert_shipment_notice_capability(notice, "notify")
+            await self.submit_shipment_notice(tenant_id, notice_id, notified_by)
+            notice = await ShipmentNotice.get_or_none(
+                tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
+            )
+            if not notice:
+                raise NotFoundError(f"发货通知单不存在: {notice_id}")
         item_count = await ShipmentNoticeItem.filter(tenant_id=tenant_id, notice_id=notice_id).count()
         assert_shipment_notice_capability(
             notice,

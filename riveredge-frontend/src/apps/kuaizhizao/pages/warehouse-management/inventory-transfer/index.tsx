@@ -30,6 +30,7 @@ import {
   type OutboundBatchAllocation,
 } from '../outbound/outboundBatchAllocation';
 import { useNumericPrecisionPlaces, buildNumericInputNumberProps, buildNumericFormRules } from '../../../../../hooks/useNumericPrecision';
+import { pickDocumentLineDualQuantityFields } from '../../../../../utils/materialDualQuantity';
 import { useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';

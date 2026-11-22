@@ -6,10 +6,12 @@
 默认写入快照前的读取优先级：
   工单表单显式值 > 物料产品工艺 > 物料分组产品工艺 > 工艺路线
 
-运行时（开工 / 报工 / 在制转入）只认工单快照，不认工序行 ``allow_jump`` /
-``is_node_operation``（行上可镜像头字段，仅展示/兼容，不作关闸）。
+运行时（开工 / 报工 / 委外下达 / 在制转入）认工单头 ``allow_operation_jump``。
+工序行 ``allow_jump`` 只是展示镜像，不是第二套真源。节点是否可跳认行上
+``is_node_operation``。
 
-- ``allow_operation_jump=True``：允许跳过前序，不强制前序合格转入
+- ``allow_operation_jump=True``：非节点工序可跳过；前序节点工序仍不可跳过
+  （尚无合格产出时，后续不能开工、不能报工、不能下达委外）
 - ``allow_operation_jump=False``：按序，紧邻前序须有可转下道合格数量
 """
 
@@ -77,12 +79,14 @@ def find_nearest_jump_gate(
     """
     关闸前序。
 
-    允许跳转时无关闸；不允许时关闸为紧邻前序。
-    ``predecessors`` 上的行 ``allow_jump`` 不再参与判定。
+    允许跳转时关闸为最近的前序节点工序（无节点则可跳）；不允许时为紧邻前序。
+    行上 ``allow_jump`` 不参与判定。
     """
+    alive = [op for op in predecessors if getattr(op, "deleted_at", None) is None]
     if allow_operation_jump:
-        return None
-    return find_adjacent_predecessor(predecessors)
+        nodes = [op for op in alive if bool(getattr(op, "is_node_operation", False))]
+        return nodes[-1] if nodes else None
+    return alive[-1] if alive else None
 
 
 async def list_predecessors(
@@ -138,6 +142,104 @@ async def resolve_jump_gate_predecessor(
     return find_adjacent_predecessor(preds)
 
 
+def _previous_operations(
+    current: WorkOrderOperation,
+    predecessors: Sequence[Any],
+) -> List[Any]:
+    current_seq = int(getattr(current, "sequence", None) or 0)
+    alive = []
+    for op in predecessors:
+        if getattr(op, "deleted_at", None) is not None:
+            continue
+        if int(getattr(op, "sequence", None) or 0) >= current_seq:
+            continue
+        alive.append(op)
+    return alive
+
+
+async def previous_node_operations(
+    tenant_id: int,
+    work_order_id: int,
+    work_order_operation: WorkOrderOperation,
+    *,
+    ordered_operations: Optional[Sequence[WorkOrderOperation]] = None,
+) -> List[Any]:
+    """当前工序之前的节点工序（按 sequence 升序）。"""
+    current_seq = int(getattr(work_order_operation, "sequence", None) or 0)
+    if ordered_operations is not None:
+        preds = _previous_operations(work_order_operation, ordered_operations)
+    else:
+        preds = await list_predecessors(tenant_id, work_order_id, current_seq)
+    return [op for op in preds if bool(getattr(op, "is_node_operation", False))]
+
+
+async def first_blocking_previous_node(
+    tenant_id: int,
+    work_order: Any,
+    work_order_operation: WorkOrderOperation,
+    *,
+    ordered_operations: Optional[Sequence[WorkOrderOperation]] = None,
+    policy_cache: Optional[Dict[int, Any]] = None,
+    inspections_by_op: Optional[Dict[int, List[Any]]] = None,
+) -> Optional[Any]:
+    """
+    允许跳转时，返回第一个尚无合格产出的前序节点工序。
+
+    不允许跳转时返回 None（紧邻前序由按序关闸负责）。行上 allow_jump 不参与。
+    """
+    if not work_order_allows_operation_jump(work_order):
+        return None
+    work_order_id = int(
+        getattr(work_order_operation, "work_order_id", None) or getattr(work_order, "id") or 0
+    )
+    nodes = await previous_node_operations(
+        tenant_id,
+        work_order_id,
+        work_order_operation,
+        ordered_operations=ordered_operations,
+    )
+    for node in nodes:
+        transferred = await qualified_transfer_quantity_async(
+            tenant_id,
+            work_order_id,
+            node,
+            policy_cache=policy_cache,
+            inspections_by_op=inspections_by_op,
+        )
+        if transferred <= 0:
+            return node
+    return None
+
+
+def previous_node_blocked_message(node: Any) -> str:
+    name = getattr(node, "operation_name", None) or "节点工序"
+    return (
+        f"允许跳转时前序节点仍不可跳过：前序节点工序「{name}」尚无合格产出"
+    )
+
+
+async def assert_previous_nodes_have_qualified_output(
+    tenant_id: int,
+    work_order: Any,
+    work_order_operation: WorkOrderOperation,
+    *,
+    ordered_operations: Optional[Sequence[WorkOrderOperation]] = None,
+    policy_cache: Optional[Dict[int, Any]] = None,
+    inspections_by_op: Optional[Dict[int, List[Any]]] = None,
+) -> None:
+    """开工 / 报工 / 委外下达：允许跳转时前序节点仍不可跳过。"""
+    blocked = await first_blocking_previous_node(
+        tenant_id,
+        work_order,
+        work_order_operation,
+        ordered_operations=ordered_operations,
+        policy_cache=policy_cache,
+        inspections_by_op=inspections_by_op,
+    )
+    if blocked is not None:
+        raise BusinessLogicError(previous_node_blocked_message(blocked))
+
+
 async def resolve_material_incoming_qty(
     tenant_id: int,
     work_order: Any,
@@ -153,12 +255,23 @@ async def resolve_material_incoming_qty(
     本道可用的在制转入上限。
 
     - 工单允许跳转：按工单计划数（超报不占在制，须补领抬高）；
+      前序节点尚无合格产出时为 0，后续不能开工/报工/下达委外。
     - 不允许跳转：取紧邻前序合格转出（无前序则同计划数）。
     """
     plan = plan_qty if plan_qty > 0 else Decimal("0")
     from apps.kuaizhizao.services.over_report_rules import first_operation_material_incoming
 
     if work_order_allows_operation_jump(work_order):
+        blocked = await first_blocking_previous_node(
+            tenant_id,
+            work_order,
+            work_order_operation,
+            ordered_operations=ordered_operations,
+            policy_cache=policy_cache,
+            inspections_by_op=inspections_by_op,
+        )
+        if blocked is not None:
+            return Decimal("0")
         return first_operation_material_incoming(plan, work_order_operation, work_order)
 
     work_order_id = int(getattr(work_order_operation, "work_order_id", None) or getattr(work_order, "id") or 0)
@@ -203,11 +316,18 @@ async def validate_start_respects_jump_gates(
     work_order: Optional[Any] = None,
     ordered_operations: Optional[Sequence[WorkOrderOperation]] = None,
 ) -> None:
+    wo = await _load_work_order(tenant_id, work_order_id, work_order)
+    await assert_previous_nodes_have_qualified_output(
+        tenant_id,
+        wo,
+        work_order_operation,
+        ordered_operations=ordered_operations,
+    )
     gate = await resolve_jump_gate_predecessor(
         tenant_id,
         work_order_id,
         work_order_operation,
-        work_order=work_order,
+        work_order=wo,
         ordered_operations=ordered_operations,
     )
     if gate is None:
@@ -248,14 +368,21 @@ async def validate_reporting_respects_jump_gates(
 ) -> None:
     """
     报工：
-    - 工单允许跳转：不卡前序转入；
+    - 工单允许跳转：非节点可跳；前序节点尚无合格产出时不可报。有合格产出后不按节点数量封顶。
     - 不允许：数量累计不可超过紧邻前序合格产出；状态报完成时前序须 completed。
     """
+    wo = await _load_work_order(tenant_id, work_order_id, work_order)
+    await assert_previous_nodes_have_qualified_output(
+        tenant_id,
+        wo,
+        work_order_operation,
+        ordered_operations=ordered_operations,
+    )
     gate = await resolve_jump_gate_predecessor(
         tenant_id,
         work_order_id,
         work_order_operation,
-        work_order=work_order,
+        work_order=wo,
         ordered_operations=ordered_operations,
     )
     if gate is None:

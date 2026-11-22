@@ -25,6 +25,7 @@
 			<action-button label="返回列表" tone="secondary" @press="closeDetail" />
 			<text class="title">{{ detailTitle }}</text>
 			<text v-if="detailStatus.length > 0" :class="statusClass(detailStatus)">{{ detailStatus }}</text>
+			<text v-if="salesBlockedHint.length > 0" class="hint">{{ salesBlockedHint }}</text>
 			<text class="hint">{{ stepLabel }}</text>
 
 			<view v-if="wizardStep == 1 && showHeader">
@@ -111,7 +112,7 @@
 					<text v-if="showReceipt && line.receiptQuantityText.length > 0" class="meta">实收 {{ line.receiptQuantityText }}</text>
 				</view>
 				<action-button label="返回修改" tone="secondary" v-if="showHeader" @press="goStep(2)" />
-				<action-button :label="actionLabel" tone="primary" :busy="busy" :disabled="loading" @press="askSubmit" />
+				<action-button v-if="salesBlockedHint.length == 0" :label="actionLabel" tone="primary" :busy="busy" :disabled="loading" @press="askSubmit" />
 			</view>
 		</view>
 	</scroll-view>
@@ -128,8 +129,8 @@
 	import { alertHandlePath, apiGet, apiPost, confirmPath, detailPath, listPath, listQuery, sendPath, stockExecutePath, transferExecutePath } from './http.uts'
 	import { DocCard, LineForm } from './models.uts'
 	import { buildAlertBody, buildInboundBody, buildOutboundBody, buildSalesBody, buildStockBody, serialList } from './payload.uts'
-	import { errorText } from '../../shared/api/fields.uts'
-	import { readCards, readDetail, readTotal } from './read.uts'
+	import { asJsonObject, errorText, fieldBool, fieldText } from '../../shared/api/fields.uts'
+	import { readCards, readDetail, readTotal, unwrap } from './read.uts'
 	import EmptyState from '../../shared/ui/empty-state.uvue'
 
 	defineOptions({
@@ -169,6 +170,10 @@
 	const selectedId = ref(0)
 	const detailTitle = ref('')
 	const detailStatus = ref('')
+	const salesReviewStatus = ref('')
+	const salesAuditEnabled = ref(false)
+	const salesConfirmAllowed = ref(true)
+	const salesConfirmKnown = ref(false)
 	const warehouseIdText = ref('')
 	const warehouseName = ref('')
 	const personIdText = ref('')
@@ -264,6 +269,72 @@
 		const value = mode.value
 		return value == 'inbound' || value == 'picking' || value == 'deliver' || value == 'sales' || value == 'send' || value == 'execute' || value == 'alert'
 	})
+
+	function salesReviewApproved(value : string) : boolean {
+		const raw = value.trim()
+		const lower = raw.toLowerCase()
+		return raw == '已通过' || raw == '审核通过' || raw == '通过' || raw == '已审核' || lower == 'approved'
+	}
+
+	const salesBlockedHint = computed((): string => {
+		if (currentKind() != 'sales-deliveries') {
+			return ''
+		}
+		if (salesAuditEnabled.value && !salesReviewApproved(salesReviewStatus.value)) {
+			return '尚未审核通过，不能确认出库'
+		}
+		if (salesConfirmKnown.value && !salesConfirmAllowed.value) {
+			return '当前单据不能确认出库'
+		}
+		return ''
+	})
+
+	function resetSalesGate() : void {
+		salesReviewStatus.value = ''
+		salesAuditEnabled.value = false
+		salesConfirmAllowed.value = true
+		salesConfirmKnown.value = false
+	}
+
+	function childObject(row : any | null, key : string) : any | null {
+		if (row == null) {
+			return null
+		}
+		if (row instanceof UTSJSONObject) {
+			const json = (row as UTSJSONObject).getJSON(key)
+			if (json != null) {
+				return json
+			}
+		}
+		const record = row as UTSJSONObject
+		const value = record[key]
+		if (value != null && typeof value == 'object') {
+			return value
+		}
+		return null
+	}
+
+	function readSalesGate(raw : any | null) : void {
+		resetSalesGate()
+		if (currentKind() != 'sales-deliveries') {
+			return
+		}
+		const obj = asJsonObject(unwrap(raw))
+		if (obj == null) {
+			return
+		}
+		salesReviewStatus.value = fieldText(obj, 'review_status')
+		const audit = childObject(obj, 'audit')
+		if (audit != null) {
+			salesAuditEnabled.value = fieldBool(audit, 'enabled', false)
+		}
+		const caps = childObject(obj, 'capabilities')
+		const confirm = caps == null ? null : childObject(caps, 'confirm')
+		if (confirm != null) {
+			salesConfirmKnown.value = true
+			salesConfirmAllowed.value = fieldBool(confirm, 'allowed', false)
+		}
+	}
 
 	const personLabel = computed((): string => {
 		if (mode.value == 'picking') return '领料人'
@@ -410,6 +481,7 @@
 		lines.value = []
 		hint.value = ''
 		wizardStep.value = 1
+		resetSalesGate()
 		clearLocate()
 	}
 
@@ -463,11 +535,13 @@
 		const detailId = selectedId.value
 		loading.value = true
 		hint.value = ''
+		resetSalesGate()
 		try {
 			const raw = await apiGet(detailPath(currentKind(), detailId), null)
 			if (ticket != mine) {
 				return
 			}
+			readSalesGate(raw)
 			const form = readDetail(currentKind(), raw)
 			warehouseIdText.value = form.warehouseIdText
 			warehouseName.value = form.warehouseName
@@ -624,6 +698,10 @@
 		const kind = currentKind()
 		const value = mode.value
 		hint.value = ''
+		if (value == 'sales' && salesBlockedHint.value.length > 0) {
+			hint.value = salesBlockedHint.value
+			return
+		}
 		if (value == 'send') {
 			await postEmpty(sendPath(selectedId.value))
 			return

@@ -62,6 +62,11 @@ class User(BaseModel):
     last_login = fields.DatetimeField(null=True, description="最后登录时间（可选）")
     password_changed_at = fields.DatetimeField(null=True, description="登录密码最近修改时间")
     must_change_password = fields.BooleanField(default=False, description="下次登录须修改密码")
+    # 多账户同实体：登录选组织弹窗 / 顶栏「默认」真源；同实体至多一行 True（服务层保证）
+    is_login_default = fields.BooleanField(
+        default=False,
+        description="是否为该登录实体的默认进入组织",
+    )
     
     # 扩展字段（账户管理模块）
     phone = fields.CharField(max_length=20, null=True, description="手机号（可选）")

@@ -131,8 +131,28 @@ from core.services.approval.audit_flow_viewer_gate import (
 T = TypeVar("T")
 
 
+def _response_exposes_review_status(response: Any) -> bool:
+    """响应带 review_status 才套打印门禁，避免没这个字段的单据被误判成未审核。"""
+    if isinstance(response, dict):
+        return "review_status" in response
+    return hasattr(response, "review_status")
+
+
 def _attach_capabilities_to_response(response: T, caps: Any) -> T:
     """写入 capabilities，并按 capabilities 裁剪 audit.allowed_actions。"""
+    from apps.kuaizhizao.services.document_action_policy.print_unaudited_gate import (
+        apply_print_unaudited_gate_to_capabilities,
+        resolve_allow_print_unaudited_for_attach,
+    )
+
+    if _response_exposes_review_status(response):
+        caps = apply_print_unaudited_gate_to_capabilities(
+            caps,
+            response,
+            allow_print_unaudited=resolve_allow_print_unaudited_for_attach(
+                response, explicit=None
+            ),
+        )
     audit = getattr(response, "audit", None)
     if audit is None and isinstance(response, dict):
         audit = response.get("audit")

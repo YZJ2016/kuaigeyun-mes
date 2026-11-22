@@ -10,5 +10,5 @@ def test_quantize_business_quantity_respects_places():
 
 
 def test_quantize_business_quantity_clamps_places():
-    assert quantize_business_quantity("1.23456", 99) == Decimal("1.2346")
+    assert quantize_business_quantity("1.23456", 99) == Decimal("1.234560")
     assert quantize_business_quantity("1.23456", -1) == Decimal("1")

@@ -59,6 +59,29 @@ router = APIRouter(
 
 purchase_order_sync_service = PurchaseOrderSyncService()
 
+_PURCHASE_ORDER_FIELD_RESOURCE = "kuaizhizao:purchase-order"
+
+
+async def mask_purchase_order_read_payload(tenant_id: int, user_id: int, payload: Any) -> Any:
+    """采购订单读出口：金额 / 客商名按现有字段策略脱敏，含嵌套行与汇总。"""
+    from core.services.authorization.permission_policy_service import PermissionPolicyService
+
+    if isinstance(payload, list):
+        return await PermissionPolicyService.apply_field_masks_to_list(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            resource=_PURCHASE_ORDER_FIELD_RESOURCE,
+            payloads=payload,
+        )
+    if isinstance(payload, dict):
+        return await PermissionPolicyService.apply_field_masks_to_dict(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            resource=_PURCHASE_ORDER_FIELD_RESOURCE,
+            payload=payload,
+        )
+    return payload
+
 
 @router.get(
     "/purchase-orders/sync-binding",
@@ -240,11 +263,20 @@ async def list_purchase_orders(
         pending_my_review=pending_my_review,
     )
 
-    return await PurchaseService().list_purchase_orders(tenant_id, params, current_user=current_user)
+    result = await PurchaseService().list_purchase_orders(
+        tenant_id, params, current_user=current_user
+    )
+    rows = result.get("data") if isinstance(result, dict) else None
+    if isinstance(rows, list):
+        result["data"] = await mask_purchase_order_read_payload(
+            tenant_id, int(current_user.id), rows
+        )
+    return result
 
 
 @router.get("/purchase-orders/statistics", summary="Purchase Orders statistics (KPI cards)")
 async def get_purchase_order_statistics(
+    current_user: CurrentUser = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> Dict[str, Any]:
     from apps.kuaizhizao.models.purchase_order import PurchaseOrder
@@ -389,20 +421,24 @@ async def get_purchase_order_statistics(
         annual_total_amount = 0; monthly_arrival_rate = 0; supplier_on_time_rate = 0
         trend_annual = [0] * 7
 
-    return {
-        "active_count": active_count,
-        "pending_review_count": pending_review_count,
-        "in_progress_count": in_progress_count,
-        "overdue_count": overdue_count,
-        "total_amount": round(annual_total_amount, 2),
-        "annual_total_amount": round(annual_total_amount, 2),
-        "monthly_arrival_rate": monthly_arrival_rate,
-        "supplier_on_time_rate": supplier_on_time_rate,
-        "trends": {
-            "arrival_rate": [monthly_arrival_rate] * 7,
-            "annual_total": trend_annual,
+    return await mask_purchase_order_read_payload(
+        tenant_id,
+        int(current_user.id),
+        {
+            "active_count": active_count,
+            "pending_review_count": pending_review_count,
+            "in_progress_count": in_progress_count,
+            "overdue_count": overdue_count,
+            "total_amount": round(annual_total_amount, 2),
+            "annual_total_amount": round(annual_total_amount, 2),
+            "monthly_arrival_rate": monthly_arrival_rate,
+            "supplier_on_time_rate": supplier_on_time_rate,
+            "trends": {
+                "arrival_rate": [monthly_arrival_rate] * 7,
+                "annual_total": trend_annual,
+            },
         },
-    }
+    )
 
 
 
@@ -712,6 +748,7 @@ async def pull_purchase_order_from_inquiry(
 @router.get("/purchase-orders/{order_id}", response_model=PurchaseOrderResponse, summary="Get purchase order")
 async def get_purchase_order(
     order_id: int = Path(..., description="采购订单ID"),
+    current_user: CurrentUser = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
     """
@@ -719,7 +756,11 @@ async def get_purchase_order(
 
     - **order_id**: 采购订单ID
     """
-    return await PurchaseService().get_purchase_order_by_id(tenant_id, order_id)
+    order = await PurchaseService().get_purchase_order_by_id(tenant_id, order_id)
+    masked = await mask_purchase_order_read_payload(
+        tenant_id, int(current_user.id), order.model_dump()
+    )
+    return PurchaseOrderResponse.model_validate(masked)
 
 
 @router.get("/purchase-orders/{order_id}/demand-source-chain", summary="Purchase order demand source chain")
@@ -1274,6 +1315,7 @@ async def print_purchase_order(
             template_code=template_code,
             template_uuid=template_uuid,
             output_format=output_format,
+            viewer_user_id=int(current_user.id),
         )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

@@ -28,6 +28,12 @@ class MaterialStockMovement(BaseModel):
     material_code = fields.CharField(max_length=50, null=True, description="物料编码")
     material_name = fields.CharField(max_length=200, null=True, description="物料名称（过账时落库）")
     batch_no = fields.CharField(max_length=100, null=True, description="批号")
+    location_id = fields.IntField(null=True, description="发生余额变动的库位ID")
+    location_code = fields.CharField(
+        max_length=50,
+        null=True,
+        description="发生余额变动的库位编码（空串=未分库位键；空值=历史流水未记录库位）",
+    )
 
     # staging_to_line | production_issue | production_return | backflush_consume |
     # semi_fg_receipt | fg_receipt | scrap | transfer | outsource_issue |

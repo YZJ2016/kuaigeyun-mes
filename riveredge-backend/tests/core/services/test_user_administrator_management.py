@@ -193,7 +193,7 @@ async def test_audit_actor_resolves_platform_administrator(monkeypatch):
     def _fake_filter(**kwargs):
         q = MagicMock()
         q.first = AsyncMock(
-            return_value=platform_admin if kwargs.get("tenant_id__isnull") else None
+            return_value=platform_admin if kwargs.get("is_infra_admin") else None
         )
         return q
 
@@ -209,6 +209,13 @@ async def test_audit_actor_rejects_plain_null_tenant_user(monkeypatch):
 
     monkeypatch.setattr(
         model_audit.User,
+        "filter",
+        lambda **_kwargs: MagicMock(first=AsyncMock(return_value=None)),
+    )
+    from infra.models.infra_superadmin import InfraSuperAdmin
+
+    monkeypatch.setattr(
+        InfraSuperAdmin,
         "filter",
         lambda **_kwargs: MagicMock(first=AsyncMock(return_value=None)),
     )

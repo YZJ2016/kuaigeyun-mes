@@ -304,7 +304,7 @@ class ProductionReturnListResponse(ProductionReturnResponse):
 
 # === 生产退料单明细 ===
 
-class ProductionReturnItemBase(BaseSchema):
+class ProductionReturnItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     """生产退料单明细基础schema"""
     picking_item_id: Optional[int] = Field(None, description="领料单明细ID")
     material_id: int = Field(..., description="物料ID")
@@ -652,7 +652,7 @@ class SemiFinishedGoodsReceiptWithItemsResponse(SemiFinishedGoodsReceiptResponse
     items: List["SemiFinishedGoodsReceiptItemResponse"] = Field(default_factory=list, description="入库明细列表")
 
 
-class SemiFinishedGoodsReceiptItemBase(BaseSchema):
+class SemiFinishedGoodsReceiptItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     """半成品入库单明细基础 schema"""
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")

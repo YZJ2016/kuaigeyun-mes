@@ -52,7 +52,7 @@ test('approval locks confirmation and request, cancellation makes no request', a
     uni: { showModal: options => modals.push(options) },
     request: options => { requests.push(options); return Promise.resolve([]); },
   });
-  run('rows.value = [{id: 7, work_order_code: "WO7", operation_name: "装配", qualified_quantity: 9, unqualified_quantity: 1, work_hours: 2}]');
+  run('rows.value = [{id: 7, status: "draft", review_status: "待审核", work_order_code: "WO7", operation_name: "装配", qualified_quantity: 9, unqualified_quantity: 1, work_hours: 2}]');
   run('approve(0); approve(0)');
   assert.equal(modals.length, 1);
   assert.equal(requests.length, 0);
@@ -71,7 +71,7 @@ test('failed approval unlocks and preserves record for a deliberate retry', asyn
     uni: { showModal: options => { modal = options; } },
     request: () => Promise.reject(new Error('提交失败')),
   });
-  run('rows.value = [{id: 7}]; approve(0)');
+  run('rows.value = [{id: 7, status: "draft", review_status: "待审核"}]; approve(0)');
   await modal.success({ confirm: true });
   assert.equal(run('approving.value'), false);
   assert.equal(run('rows.value.length'), 1);
@@ -83,7 +83,7 @@ test('request in flight prevents another modal or POST and removes only approved
     uni: { showModal: options => modals.push(options) },
     request: options => { requests.push(options); return new Promise(resolve => { finish = resolve; }); },
   });
-  run('rows.value = [{id: 7}, {id: 8}]; approve(0)');
+  run('rows.value = [{id: 7, status: "draft", review_status: "待审核"}, {id: 8, status: "draft", review_status: "待审核"}]; approve(0)');
   const submitted = modals[0].success({ confirm: true });
   run('approve(0); approve(1)');
   assert.equal(modals.length, 1);
@@ -96,13 +96,23 @@ test('request in flight prevents another modal or POST and removes only approved
   run('approve(0)');
   assert.equal(modals.length, 2);
 });
+test('draft without pending review does not call approve', () => {
+  const run = page('features/workshop/reporting-approve/index.uvue', {
+    uni: { showModal: () => { assert.fail('must not open'); } },
+    request: () => { assert.fail('must not submit'); },
+  });
+  run('rows.value = [{id: 7, status: "pending", review_status: "待审核"}]; approve(0)');
+  assert.equal(run('approving.value'), false);
+  run('rows.value = [{id: 8, status: "draft", review_status: "草稿"}]; approve(0)');
+  assert.equal(run('approving.value'), false);
+});
 test('modal failure unlocks without submitting', () => {
   let modal;
   const run = page('features/workshop/reporting-approve/index.uvue', {
     uni: { showModal: options => { modal = options; } },
     request: () => { assert.fail('must not submit'); },
   });
-  run('rows.value = [{id: 7}]; approve(0)');
+  run('rows.value = [{id: 7, status: "draft", review_status: "待审核"}]; approve(0)');
   modal.fail();
   assert.equal(run('approving.value'), false);
   assert.equal(run('rows.value.length'), 1);

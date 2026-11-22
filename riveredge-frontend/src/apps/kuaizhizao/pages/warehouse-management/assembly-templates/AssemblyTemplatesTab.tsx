@@ -718,7 +718,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
                   type="primary"
                   onClick={() => {
                     setBomPreviewVisible(false);
-                    confirmImportFromBom(currentTemplate);
+                    executeconfirmImportFromBom(currentTemplate);
                   }}
                 >
                   {t('app.kuaizhizao.assemblyTemplate.confirmImport')}

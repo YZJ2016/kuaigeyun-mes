@@ -52,7 +52,7 @@ def test_build_kingdee_sales_order_model():
         cfg={"org_number": "100", "api_unit_code_map": {"个": "006"}},
         customer_number="CUST01",
     )
-    assert model["FBillNo"] == "SO-001"
+    assert model["FBillNo"] == "100-SO-001"
     assert model["FCustId"]["FNumber"] == "CUST01"
     assert model["FSaleOrderEntry"][0]["FMaterialId"]["FNumber"] == "MAT-1"
     assert model["FSaleOrderEntry"][0]["FQty"] == 2.0
@@ -95,7 +95,7 @@ def test_build_kingdee_purchase_order_model():
         cfg={"org_number": "100", "api_unit_code_map": {"kg": "004"}},
         supplier_number="VEN01",
     )
-    assert model["FBillNo"] == "PO-001"
+    assert model["FBillNo"] == "100-PO-001"
     assert model["FSupplierId"]["FNumber"] == "VEN01"
     assert model["FPOOrderEntry"][0]["FQty"] == 5.0
     assert model["FPOOrderEntry"][0]["FUnitId"]["FNumber"] == "004"
@@ -152,6 +152,7 @@ def test_build_kingdee_other_outbound_model_pick_header():
             material_code="MAT-1",
             material_name="滑块",
             material_unit="件",
+            id=1,
             outbound_quantity=Decimal("5"),
             unit_price=Decimal("0"),
             location_code=None,

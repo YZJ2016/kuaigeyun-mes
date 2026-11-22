@@ -29,7 +29,7 @@ export interface CustomFieldJsonModeSegmentedProps {
   mode: CustomFieldJsonEditorMode;
   onChange: (mode: CustomFieldJsonEditorMode) => void;
   disabled?: boolean;
-  size?: 'small' | 'middle' | 'large';
+  size?: 'small' | 'medium' | 'large';
 }
 
 export const CustomFieldJsonModeSegmented: React.FC<CustomFieldJsonModeSegmentedProps> = ({

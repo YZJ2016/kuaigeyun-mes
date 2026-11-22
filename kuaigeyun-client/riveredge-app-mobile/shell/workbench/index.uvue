@@ -93,6 +93,7 @@
 	import ActionButton from '../../shared/ui/action-button.uvue'
 	import StatusBadge from '../../shared/ui/status-badge.uvue'
 	import { request } from '../../shared/api/index.uts'
+	import { fieldText, readRows } from '../../shared/api/fields.uts'
 	import { getTenantName, getToken, readSessionName, takePendingEntry } from '../../shared/api/session.uts'
 	import { openRegisteredRoute } from '../registry/index.uts'
 	import { iconAsset, iconMark, markClass, scopeTitle, tileClass } from './icons.uts'
@@ -268,10 +269,45 @@
 		} as HomeTodo)
 	}
 
+	function objectField(row : any | null, key : string) : any | null {
+		if (row == null) {
+			return null
+		}
+		if (row instanceof UTSJSONObject) {
+			const json = (row as UTSJSONObject).getJSON(key)
+			if (json != null) {
+				return json
+			}
+		}
+		const record = row as UTSJSONObject
+		const value = record[key]
+		if (value != null && typeof value == 'object') {
+			return value
+		}
+		return null
+	}
+
+	function reviewPending(value : string) : boolean {
+		const raw = value.trim()
+		const lower = raw.toLowerCase()
+		return raw == '待审核' || lower == 'pending' || lower == 'pending_review' || lower == 'pending_approval'
+	}
+
+	function reportingApproveAllowed(row : any) : boolean {
+		const caps = objectField(row, 'capabilities')
+		const approve = caps == null ? null : objectField(caps, 'approve')
+		if (approve != null) {
+			return fieldText(approve, 'allowed') == 'true'
+		}
+		const status = fieldText(row, 'status')
+		const draft = status == 'draft' || status == '草稿' || status.toLowerCase() == 'draft'
+		return draft && reviewPending(fieldText(row, 'review_status'))
+	}
+
 	async function measureReporting() : Promise<MeasuredTodo> {
 		const query = new UTSJSONObject()
-		query.set('status', 'pending')
-		query.set('limit', '1')
+		query.set('status', 'draft')
+		query.set('limit', '100')
 		try {
 			const payload = await request({
 				method: 'GET',
@@ -283,7 +319,14 @@
 			if (total == null) {
 				return { key: 'reporting-approve', count: 0, failed: true } as MeasuredTodo
 			}
-			return { key: 'reporting-approve', count: total, failed: false } as MeasuredTodo
+			const incoming = readRows(payload)
+			let count = 0
+			for (let i = 0; i < incoming.length; i++) {
+				if (reportingApproveAllowed(incoming[i])) {
+					count = count + 1
+				}
+			}
+			return { key: 'reporting-approve', count: count, failed: false } as MeasuredTodo
 		} catch (_err) {
 			return { key: 'reporting-approve', count: 0, failed: true } as MeasuredTodo
 		}

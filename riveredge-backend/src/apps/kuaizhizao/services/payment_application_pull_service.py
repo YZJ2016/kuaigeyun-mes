@@ -107,9 +107,7 @@ def prepayment_application_base_amount(order: Any) -> Decimal:
     prepay_q = quantize_money(prepay)
     if gross > 0 and prepay_q > gross:
         return gross
-    excl = quantize_money(Decimal(str(getattr(order, "total_amount", 0) or 0)))
-    if excl > 0 and prepay_q == excl and gross > prepay_q:
-        return gross
+    # 预付额等于未税合计且小于价税合计时，可请款仍是预付计划写入的基数
     return prepay_q
 
 

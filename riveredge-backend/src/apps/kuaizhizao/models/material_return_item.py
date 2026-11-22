@@ -9,9 +9,12 @@ Date: 2026-02-19
 
 from tortoise import fields
 from core.models.base import BaseModel
+from apps.kuaizhizao.models.mixins.document_line_dual_quantity import (
+    DocumentLineDualQuantityMixin,
+)
 
 
-class MaterialReturnItem(BaseModel):
+class MaterialReturnItem(DocumentLineDualQuantityMixin, BaseModel):
     """
     还料单明细
 

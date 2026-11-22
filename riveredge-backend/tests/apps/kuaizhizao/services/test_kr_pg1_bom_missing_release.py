@@ -53,6 +53,9 @@ async def test_check_material_shortage_marks_missing_bom_without_shortage():
     service = WorkOrderService()
     service.get_by_id = AsyncMock(return_value=wo)
     with patch(
+        "apps.kuaizhizao.services.work_order_bom_line_service.WorkOrderBomLineService.build_requirements_from_saved_lines",
+        new=AsyncMock(return_value=None),
+    ), patch(
         "apps.kuaizhizao.services.work_order_service.calculate_material_requirements_from_bom",
         new=AsyncMock(side_effect=NotFoundError("产品没有BOM")),
     ):
@@ -77,6 +80,9 @@ async def test_check_material_shortage_with_bom_keeps_shortage_shape():
         _requirement(),
     ]
     with patch(
+        "apps.kuaizhizao.services.work_order_bom_line_service.WorkOrderBomLineService.build_requirements_from_saved_lines",
+        new=AsyncMock(return_value=None),
+    ), patch(
         "apps.kuaizhizao.services.work_order_service.calculate_material_requirements_from_bom",
         new=AsyncMock(return_value=requirements),
     ), patch(

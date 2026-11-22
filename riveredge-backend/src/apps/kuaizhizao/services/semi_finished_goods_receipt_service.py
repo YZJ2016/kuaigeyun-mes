@@ -26,7 +26,6 @@ from apps.kuaizhizao.constants.work_order_inbound_status import (
     WORK_ORDER_INBOUND_ALLOWED_STATUSES,
 )
 from apps.kuaizhizao.models.work_order import WorkOrder
-from apps.kuaizhizao.utils.material_unit_utils import convert_to_base_quantity
 from apps.kuaizhizao.schemas.warehouse import (
     SemiFinishedGoodsReceiptCreate,
     SemiFinishedGoodsReceiptItemCreate,
@@ -36,7 +35,10 @@ from apps.kuaizhizao.schemas.warehouse import (
     InboundConfirmationRequest,
 )
 from apps.kuaizhizao.services.warehouse_service import (
+    _convert_line_to_posting_quantities,
+    _document_line_dual_quantity_write_kwargs,
     _get_warehouse_policy_flags,
+    _inventory_posting_call_kwargs,
     _resolve_warehouse_name_by_id,
     _validate_location_if_required,
 )
@@ -167,6 +169,7 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                         status=getattr(item_data, "status", "待入库"),
                         receipt_time=getattr(item_data, "receipt_time", None),
                         notes=getattr(item_data, "notes", None),
+                        **_document_line_dual_quantity_write_kwargs(item_data),
                     )
 
         work_order_id = getattr(receipt, "work_order_id", None) or getattr(
@@ -457,10 +460,11 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                     qty = item.receipt_quantity or item.qualified_quantity or Decimal(0)
                     if qty <= 0:
                         continue
-                    base_qty = convert_to_base_quantity(
-                        material_by_id.get(item.material_id),
-                        qty,
-                        from_unit=getattr(item, "material_unit", None),
+                    posting = _convert_line_to_posting_quantities(
+                        quantity=qty,
+                        material_unit=getattr(item, "material_unit", None),
+                        material=material_by_id.get(item.material_id),
+                        item=item,
                     )
                     wh_id = item.warehouse_id if getattr(item, "warehouse_id", None) else receipt.warehouse_id
                     item_serials = getattr(item, "serial_numbers", None)
@@ -473,7 +477,7 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                     await InventoryService._increase_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
-                        quantity=base_qty,
+                        **_inventory_posting_call_kwargs(posting),
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
                         serial_nos=serial_nos or None,
@@ -548,7 +552,7 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                 items = await SemiFinishedGoodsReceiptItem.filter(
                     tenant_id=tenant_id, receipt_id=receipt_id
                 ).all()
-                wh_id = receipt.warehouse_id if receipt.warehouse_id else None
+                header_wh_id = receipt.warehouse_id if receipt.warehouse_id else None
                 from apps.master_data.models.material import Material
 
                 material_ids = list({int(it.material_id) for it in items if getattr(it, "material_id", None)})
@@ -562,11 +566,13 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                     qty = item.receipt_quantity or item.qualified_quantity or Decimal(0)
                     if qty <= 0:
                         continue
-                    base_qty = convert_to_base_quantity(
-                        material_by_id.get(item.material_id),
-                        qty,
-                        from_unit=getattr(item, "material_unit", None),
+                    posting = _convert_line_to_posting_quantities(
+                        quantity=qty,
+                        material_unit=getattr(item, "material_unit", None),
+                        material=material_by_id.get(item.material_id),
+                        item=item,
                     )
+                    line_wh = getattr(item, "warehouse_id", None) or header_wh_id
                     item_serials = getattr(item, "serial_numbers", None)
                     serial_nos = None
                     if item_serials:
@@ -577,15 +583,17 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                     await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
-                        quantity=base_qty,
-                        warehouse_id=wh_id,
+                        **_inventory_posting_call_kwargs(posting),
+                        warehouse_id=line_wh,
                         batch_no=item.batch_number or None,
                         serial_nos=serial_nos or None,
+                        **InventoryService.location_kwargs_from_line_item(item),
+                        location_scoped=True,
                         source_type="semi_finished_goods_receipt_revoke",
                         source_doc_id=receipt_id,
                         source_doc_code=receipt.receipt_code,
                         movement_type="semi_fg_receipt_withdraw",
-                        from_warehouse_id=wh_id,
+                        from_warehouse_id=line_wh,
                         idempotency_key=f"semi_finished_goods_receipt:{receipt_id}:revoke:{item.id}",
                         operator_id=updated_by,
                     )

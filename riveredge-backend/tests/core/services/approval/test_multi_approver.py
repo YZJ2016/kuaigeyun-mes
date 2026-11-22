@@ -283,7 +283,7 @@ class TestResolveNodeApproversFailClosed:
 
     @pytest.mark.asyncio
     async def test_multi_level_manager_missing_level_returns_empty(self):
-        """组织树不足 N 级时返回空列表，由创建任务侧跳过，不阻断提交。"""
+        """组织树不足 N 级时解析结果为空列表；阻断与否由创建任务侧按 emptyApproverPolicy 决定。"""
         instance = MagicMock()
         instance.tenant_id = 1
         instance.submitter_id = 10

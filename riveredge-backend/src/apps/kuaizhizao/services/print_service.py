@@ -726,6 +726,25 @@ def _format_sales_contract_terms_for_print(contract_terms: Any) -> str:
     return "\n\n".join(chunks).strip()
 
 
+async def _mask_print_payload_for_viewer(
+    tenant_id: int,
+    viewer_user_id: Optional[int],
+    resource: str,
+    payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    """打印变量按现有字段策略脱敏。无查看人时保持原文（内部装配）。"""
+    if not viewer_user_id:
+        return payload
+    from core.services.authorization.permission_policy_service import PermissionPolicyService
+
+    return await PermissionPolicyService.apply_field_masks_to_dict(
+        tenant_id=tenant_id,
+        user_id=int(viewer_user_id),
+        resource=resource,
+        payload=payload,
+    )
+
+
 class DocumentPrintService:
     """单据打印服务"""
 
@@ -972,7 +991,9 @@ class DocumentPrintService:
         document_id: int,
         template_code: Optional[str] = None,
         template_uuid: Optional[str] = None,
-        output_format: str = "html"
+        output_format: str = "html",
+        *,
+        viewer_user_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         打印单据
@@ -989,7 +1010,13 @@ class DocumentPrintService:
             Dict: 打印结果
         """
         i18n = await PrintLocalization.for_tenant(tenant_id)
-        document_data = await self._get_document_data(tenant_id, document_type, document_id, i18n=i18n)
+        document_data = await self._get_document_data(
+            tenant_id,
+            document_type,
+            document_id,
+            i18n=i18n,
+            viewer_user_id=viewer_user_id,
+        )
         from apps.kuaizhizao.services.document_action_policy.print_unaudited_gate import (
             assert_allow_print_unaudited_or_raise,
         )
@@ -1273,9 +1300,16 @@ class DocumentPrintService:
         tenant_id: int,
         document_type: str,
         document_id: int,
+        *,
+        viewer_user_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """与 `print_document` / HTML 模板渲染共用 `_get_document_data`，供 print-variables API 调试预览。"""
-        document_data = await self._get_document_data(tenant_id, document_type, document_id)
+        document_data = await self._get_document_data(
+            tenant_id,
+            document_type,
+            document_id,
+            viewer_user_id=viewer_user_id,
+        )
         enrich_print_amount_uppercase_fields(document_data)
         return document_data
 
@@ -1298,6 +1332,7 @@ class DocumentPrintService:
         document_id: int,
         *,
         i18n: PrintLocalization | None = None,
+        viewer_user_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """获取单据数据"""
         loc = i18n or await PrintLocalization.for_tenant(tenant_id)
@@ -1375,7 +1410,12 @@ class DocumentPrintService:
             document = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=document_id)
             if not document:
                 raise NotFoundError(f"采购单不存在: {document_id}")
-            return await self._format_purchase_order_data(document, loc)
+            return await _mask_print_payload_for_viewer(
+                tenant_id,
+                viewer_user_id,
+                "kuaizhizao:purchase-order",
+                await self._format_purchase_order_data(document, loc),
+            )
 
         elif document_type == "purchase_requisition":
             document = await PurchaseRequisition.get_or_none(
@@ -1451,7 +1491,12 @@ class DocumentPrintService:
                         "已开启「打印须审核」，未审核通过的销售订单不可打印",
                     )
                 )
-            return await self._format_sales_order_data(document, loc)
+            return await _mask_print_payload_for_viewer(
+                tenant_id,
+                viewer_user_id,
+                "kuaizhizao:sales-order",
+                await self._format_sales_order_data(document, loc),
+            )
 
         elif document_type == "sales_order_change":
             document = await SalesOrderChangeOrder.get_or_none(
@@ -2582,6 +2627,7 @@ class DocumentPrintService:
             "planned_ship_date": to_api_isoformat(notice.planned_ship_date) if notice.planned_ship_date else None,
             "shipping_address": notice.shipping_address,
             "status": notice.status,
+            "review_status": notice.review_status,
             "notified_at": to_api_isoformat(notice.notified_at) if notice.notified_at else None,
             "sales_delivery_code": notice.sales_delivery_code,
             "total_quantity": str(notice.total_quantity or 0),

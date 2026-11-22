@@ -1,7 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Form, Modal, Select } from 'antd';
 import { useTranslation } from 'react-i18next';
-import type { SubmitInitiatorBranchHint, SubmitInitiatorNodeHint } from '../../services/uniAudit';
+import type {
+  HierarchyDepartmentOption,
+  SubmitInitiatorBranchHint,
+  SubmitInitiatorNodeHint,
+} from '../../services/uniAudit';
 import { searchUserDisplay } from '../../services/user';
 import { formatUserDisplayLabel } from '../../utils/userDisplay';
 
@@ -11,11 +15,15 @@ export interface UniAuditInitiatorSubmitModalProps {
   submitTitle: string;
   nodes: SubmitInitiatorNodeHint[];
   branchConditions?: SubmitInitiatorBranchHint[];
+  hierarchyDepartmentRequired?: boolean;
+  hierarchyDepartmentOptions?: HierarchyDepartmentOption[];
+  defaultHierarchyDepartmentUuid?: string | null;
   loading?: boolean;
   onCancel: () => void;
   onConfirm: (
     selectedByNode: Record<string, number[]>,
     branchByCondition: Record<string, number>,
+    hierarchyDepartmentUuid?: string,
   ) => Promise<void>;
 }
 
@@ -25,12 +33,15 @@ const UniAuditInitiatorSubmitModal: React.FC<UniAuditInitiatorSubmitModalProps> 
   submitTitle,
   nodes,
   branchConditions = [],
+  hierarchyDepartmentRequired = false,
+  hierarchyDepartmentOptions = [],
+  defaultHierarchyDepartmentUuid = null,
   loading,
   onCancel,
   onConfirm,
 }) => {
   const { t } = useTranslation();
-  const [form] = Form.useForm<Record<string, number[]>>();
+  const [form] = Form.useForm<Record<string, number | number[]>>();
   const [userOptions, setUserOptions] = useState<{ label: string; value: number }[]>([]);
   const [fetchingUsers, setFetchingUsers] = useState(false);
 
@@ -41,7 +52,20 @@ const UniAuditInitiatorSubmitModal: React.FC<UniAuditInitiatorSubmitModalProps> 
 
   useEffect(() => {
     if (!open) return;
+    const branchInitial: Record<string, number> = {};
+    for (const cond of branchConditions) {
+      if (typeof cond.default_index === 'number') {
+        branchInitial[branchField(cond.condition_node_id)] = cond.default_index;
+      }
+    }
     form.resetFields();
+    const initial: Record<string, number | number[] | string> = { ...branchInitial };
+    if (defaultHierarchyDepartmentUuid) {
+      initial.hierarchy_department_uuid = defaultHierarchyDepartmentUuid;
+    }
+    if (Object.keys(initial).length) {
+      form.setFieldsValue(initial);
+    }
     let cancelled = false;
     setFetchingUsers(true);
     searchUserDisplay({ page: 1, page_size: 200, is_active: true })
@@ -62,7 +86,7 @@ const UniAuditInitiatorSubmitModal: React.FC<UniAuditInitiatorSubmitModalProps> 
     return () => {
       cancelled = true;
     };
-  }, [open, form]);
+  }, [open, form, branchConditions, defaultHierarchyDepartmentUuid]);
 
   const branchField = (id: string) => `branch_${id}`;
 
@@ -87,8 +111,14 @@ const UniAuditInitiatorSubmitModal: React.FC<UniAuditInitiatorSubmitModalProps> 
       }
       branchByCondition[cond.condition_node_id] = Number(raw);
     }
-    await onConfirm(selectedByNode, branchByCondition);
+    const hierarchyUuid = values.hierarchy_department_uuid
+      ? String(values.hierarchy_department_uuid)
+      : undefined;
+    await onConfirm(selectedByNode, branchByCondition, hierarchyUuid);
   };
+
+  const showHierarchyPicker =
+    hierarchyDepartmentRequired && hierarchyDepartmentOptions.length >= 2;
 
   return (
     <Modal
@@ -110,6 +140,26 @@ const UniAuditInitiatorSubmitModal: React.FC<UniAuditInitiatorSubmitModalProps> 
         />
       ) : null}
       <Form form={form} layout="vertical">
+        {showHierarchyPicker ? (
+          <Form.Item
+            name="hierarchy_department_uuid"
+            label={t('pages.approval.hierarchyDepartment')}
+            rules={[
+              {
+                required: true,
+                message: t('pages.approval.hierarchyDepartmentRequired'),
+              },
+            ]}
+          >
+            <Select
+              placeholder={t('pages.approval.hierarchyDepartmentPlaceholder')}
+              options={hierarchyDepartmentOptions.map((opt) => ({
+                value: opt.uuid,
+                label: opt.is_primary ? `${opt.name}（${t('field.user.primaryDepartment')}）` : opt.name,
+              }))}
+            />
+          </Form.Item>
+        ) : null}
         {branchConditions.map((cond) => (
           <Form.Item
             key={cond.condition_node_id}
@@ -131,10 +181,17 @@ const UniAuditInitiatorSubmitModal: React.FC<UniAuditInitiatorSubmitModalProps> 
             <Select
               allowClear={!cond.required}
               placeholder={t('pages.approval.submitInitiatorBranchPlaceholder')}
-              options={(cond.branches || []).map((b) => ({
-                label: b.label,
-                value: b.index,
-              }))}
+              options={(cond.branches || []).map((b) => {
+                const target = (b.target_label || '').trim();
+                const shown =
+                  target && !b.label.includes(target) ? `${b.label} → ${target}` : b.label;
+                return {
+                  label: b.is_default
+                    ? `${shown}（${t('pages.approval.branchDefaultMark')}）`
+                    : shown,
+                  value: b.index,
+                };
+              })}
             />
           </Form.Item>
         ))}

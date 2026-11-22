@@ -252,13 +252,19 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
     ) -> ReceiptNoticeResponse | ReceiptNoticeWithItemsResponse:
         item_count = await ReceiptNoticeItem.filter(tenant_id=tenant_id, notice_id=notice.id).count()
         receipt_withdrawable = await self._notice_receipt_withdrawable(tenant_id, notice)
-        return enrich_receipt_notice_capabilities_on_response(
-            notice,
-            response,
-            has_items=item_count > 0,
-            has_warehouse=getattr(notice, "warehouse_id", None) is not None,
-            receipt_withdrawable=receipt_withdrawable,
+        from apps.kuaizhizao.services.document_action_policy.print_unaudited_gate import (
+            push_allow_print_unaudited,
         )
+
+        allow_print = await self.business_config_service.get_allow_print_unaudited(tenant_id)
+        with push_allow_print_unaudited(allow_print):
+            return enrich_receipt_notice_capabilities_on_response(
+                notice,
+                response,
+                has_items=item_count > 0,
+                has_warehouse=getattr(notice, "warehouse_id", None) is not None,
+                receipt_withdrawable=receipt_withdrawable,
+            )
 
     async def create_receipt_notice(
         self,
@@ -460,12 +466,18 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             if include_items:
                 resp.items = items_by_notice.get(int(r.id), [])
             list_responses.append(resp)
-        enriched = enrich_receipt_notice_list_capabilities(
-            notice_list,
-            list_responses,
-            has_items_by_id=items_map,
-            receipt_withdrawable_by_id=withdraw_map,
+        from apps.kuaizhizao.services.document_action_policy.print_unaudited_gate import (
+            push_allow_print_unaudited,
         )
+
+        allow_print = await self.business_config_service.get_allow_print_unaudited(tenant_id)
+        with push_allow_print_unaudited(allow_print):
+            enriched = enrich_receipt_notice_list_capabilities(
+                notice_list,
+                list_responses,
+                has_items_by_id=items_map,
+                receipt_withdrawable_by_id=withdraw_map,
+            )
         return {
             "data": [item.model_dump() for item in enriched],
             "total": total,
@@ -502,9 +514,12 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
         updated_by: int
     ) -> ReceiptNoticeResponse:
         """更新收货通知单"""
-        notice = await self.get_receipt_notice_by_id(tenant_id, notice_id)
-        if notice.status != "待收货":
-            raise BusinessLogicError("只能更新待收货状态的收货通知单")
+        notice = await ReceiptNotice.get_or_none(
+            tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
+        )
+        if not notice:
+            raise NotFoundError(f"收货通知单不存在: {notice_id}")
+        assert_receipt_notice_capability(notice, "update")
 
         async with in_transaction():
             dump = notice_data.model_dump(exclude_unset=True, exclude={"notice_code"})
@@ -521,11 +536,236 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
         notice = await ReceiptNotice.get_or_none(tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True)
         if not notice:
             raise NotFoundError(f"收货通知单不存在: {notice_id}")
-        if notice.status != "待收货":
-            raise BusinessLogicError("只能删除待收货状态的收货通知单")
+        assert_receipt_notice_capability(notice, "delete")
 
         await ReceiptNotice.filter(tenant_id=tenant_id, id=notice_id).update(deleted_at=resolve_business_datetime())
         return True
+
+    async def _get_notice_or_raise(self, tenant_id: int, notice_id: int) -> ReceiptNotice:
+        notice = await ReceiptNotice.get_or_none(
+            tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
+        )
+        if not notice:
+            raise NotFoundError(f"收货通知单不存在: {notice_id}")
+        return notice
+
+    async def submit_receipt_notice(
+        self,
+        tenant_id: int,
+        notice_id: int,
+        submitted_by: int,
+    ) -> ReceiptNoticeResponse:
+        """内部一键：草稿直接进入待审核或免审通过。页面提交走 commit。"""
+        notice = await self._get_notice_or_raise(tenant_id, notice_id)
+        item_count = await ReceiptNoticeItem.filter(tenant_id=tenant_id, notice_id=notice_id).count()
+        assert_receipt_notice_capability(notice, "submit", has_items=item_count > 0)
+        return await self._enter_receipt_notice_review(tenant_id, notice_id, submitted_by, notice)
+
+    async def commit_receipt_notice(
+        self,
+        tenant_id: int,
+        notice_id: int,
+        submitted_by: int,
+    ) -> ReceiptNoticeResponse:
+        from apps.kuaizhizao.constants import DocumentStatus, is_submitted_status
+
+        notice = await self._get_notice_or_raise(tenant_id, notice_id)
+        if is_submitted_status(notice.review_status):
+            return await self.get_receipt_notice_by_id(tenant_id, notice_id)
+        item_count = await ReceiptNoticeItem.filter(tenant_id=tenant_id, notice_id=notice_id).count()
+        assert_receipt_notice_capability(notice, "submit", has_items=item_count > 0)
+        await ReceiptNotice.filter(tenant_id=tenant_id, id=notice_id).update(
+            review_status=DocumentStatus.SUBMITTED,
+            updated_by=submitted_by,
+        )
+        return await self.get_receipt_notice_by_id(tenant_id, notice_id)
+
+    async def submit_receipt_notice_for_review(
+        self,
+        tenant_id: int,
+        notice_id: int,
+        submitted_by: int,
+    ) -> ReceiptNoticeResponse:
+        from apps.kuaizhizao.constants import is_submitted_status
+
+        notice = await self._get_notice_or_raise(tenant_id, notice_id)
+        if not is_submitted_status(notice.review_status):
+            raise BusinessLogicError("请先提交收货通知单，再提交审核")
+        return await self._enter_receipt_notice_review(tenant_id, notice_id, submitted_by, notice)
+
+    async def _enter_receipt_notice_review(
+        self,
+        tenant_id: int,
+        notice_id: int,
+        submitted_by: int,
+        notice: ReceiptNotice,
+    ) -> ReceiptNoticeResponse:
+        audit_required = await BusinessConfigService().check_audit_required(tenant_id, "receipt_notice")
+        review = str(notice.review_status or "").strip()
+        if review == "待审核":
+            from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+            status = await ApprovalInstanceService.get_approval_status(
+                tenant_id=tenant_id,
+                entity_type="receipt_notice",
+                entity_id=notice_id,
+            )
+            if status.get("has_flow"):
+                return await self.get_receipt_notice_by_id(tenant_id, notice_id)
+
+        if not audit_required:
+            await ReceiptNotice.filter(tenant_id=tenant_id, id=notice_id).update(
+                review_status="审核通过",
+                updated_by=submitted_by,
+            )
+            return await self.get_receipt_notice_by_id(tenant_id, notice_id)
+
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        instance = await ApprovalInstanceService.start_approval_for_node(
+            tenant_id=tenant_id,
+            user_id=submitted_by,
+            node_key="receipt_notice",
+            entity_type="receipt_notice",
+            entity_id=notice.id,
+            entity_uuid=str(notice.uuid),
+            title=f"收货通知审批: {notice.notice_code}",
+            content=f"供应商: {notice.supplier_name}, 采购订单: {notice.purchase_order_code}",
+        )
+        if not instance:
+            raise BusinessLogicError(
+                "收货通知审核已开启但未找到可用的审批流程，请在配置中心检查 receipt_notice 审批流程是否已激活"
+            )
+        await ReceiptNotice.filter(tenant_id=tenant_id, id=notice_id).update(
+            review_status="待审核",
+            updated_by=submitted_by,
+        )
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        if approval_instance_finished_on_submit(instance):
+            return await self.approve_receipt_notice(tenant_id, notice_id, submitted_by)
+        return await self.get_receipt_notice_by_id(tenant_id, notice_id)
+
+    async def approve_receipt_notice(
+        self,
+        tenant_id: int,
+        notice_id: int,
+        approver_id: int,
+    ) -> ReceiptNoticeResponse:
+        notice = await self._get_notice_or_raise(tenant_id, notice_id)
+        assert_receipt_notice_capability(notice, "approve")
+        audit_required = await BusinessConfigService().check_audit_required(tenant_id, "receipt_notice")
+        if audit_required:
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+            )
+
+            gate = await get_approval_gate_status(
+                tenant_id=tenant_id,
+                entity_type="receipt_notice",
+                entity_id=notice_id,
+            )
+            assert_manual_approval_action_allowed(gate, doc_label="收货通知单", verb="审核")
+        await ReceiptNotice.filter(tenant_id=tenant_id, id=notice_id).update(
+            review_status="审核通过",
+            updated_by=approver_id,
+        )
+        return await self.get_receipt_notice_by_id(tenant_id, notice_id)
+
+    async def reject_receipt_notice(
+        self,
+        tenant_id: int,
+        notice_id: int,
+        approver_id: int,
+        *,
+        rejection_reason: Optional[str] = None,
+    ) -> ReceiptNoticeResponse:
+        notice = await self._get_notice_or_raise(tenant_id, notice_id)
+        assert_receipt_notice_capability(notice, "reject")
+        audit_required = await BusinessConfigService().check_audit_required(tenant_id, "receipt_notice")
+        if audit_required:
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+            )
+
+            gate = await get_approval_gate_status(
+                tenant_id=tenant_id,
+                entity_type="receipt_notice",
+                entity_id=notice_id,
+            )
+            assert_manual_approval_action_allowed(gate, doc_label="收货通知单", verb="驳回")
+        await ReceiptNotice.filter(tenant_id=tenant_id, id=notice_id).update(
+            review_status="审核驳回",
+            updated_by=approver_id,
+        )
+        return await self.get_receipt_notice_by_id(tenant_id, notice_id)
+
+    async def withdraw_receipt_notice_submit(
+        self,
+        tenant_id: int,
+        notice_id: int,
+        operator_id: int,
+    ) -> ReceiptNoticeResponse:
+        from apps.kuaizhizao.constants import DocumentStatus, is_submitted_status
+
+        notice = await self._get_notice_or_raise(tenant_id, notice_id)
+        assert_receipt_notice_capability(notice, "withdraw_submit")
+        if is_submitted_status(notice.review_status):
+            await ReceiptNotice.filter(tenant_id=tenant_id, id=notice_id).update(
+                review_status="草稿",
+                updated_by=operator_id,
+            )
+            return await self.get_receipt_notice_by_id(tenant_id, notice_id)
+
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        cancelled = await ApprovalInstanceService.cancel_approval(
+            tenant_id=tenant_id,
+            entity_type="receipt_notice",
+            entity_id=notice_id,
+            operator_id=operator_id,
+        )
+        if not cancelled:
+            raise BusinessLogicError("撤回失败：无法取消审批流程，请重试")
+        await ReceiptNotice.filter(tenant_id=tenant_id, id=notice_id).update(
+            review_status=DocumentStatus.SUBMITTED,
+            updated_by=operator_id,
+        )
+        return await self.get_receipt_notice_by_id(tenant_id, notice_id)
+
+    async def revoke_receipt_notice_approval(
+        self,
+        tenant_id: int,
+        notice_id: int,
+        operator_id: int,
+    ) -> ReceiptNoticeResponse:
+        from core.services.approval.audit_transition import resolve_revoke_to_draft_landing_phase
+        from core.services.approval.uni_audit_service import UniAuditService
+
+        notice = await self._get_notice_or_raise(tenant_id, notice_id)
+        assert_receipt_notice_capability(notice, "revoke_approval")
+        audit_required = await BusinessConfigService().check_audit_required(tenant_id, "receipt_notice")
+
+        async def _do_revoke(*, reopened: bool = False) -> ReceiptNoticeResponse:
+            landing = resolve_revoke_to_draft_landing_phase(
+                manual_audit_enabled=audit_required,
+                flow_reopened=reopened,
+            )
+            await ReceiptNotice.filter(tenant_id=tenant_id, id=notice_id).update(
+                review_status="待审核" if landing == "pending" else "草稿",
+                updated_by=operator_id,
+            )
+            return await self.get_receipt_notice_by_id(tenant_id, notice_id)
+
+        return await UniAuditService.revoke_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="receipt_notice",
+            entity_id=notice_id,
+            operator_id=operator_id,
+            flow_revoke=_do_revoke,
+        )
 
     async def preview_notify_warehouse(
         self,

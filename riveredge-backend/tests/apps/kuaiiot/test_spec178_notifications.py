@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 import pytest
 from core.services.business import business_notification_service as service
+from core.services.business import notification_document_url as document_url
 from core.models.message_log import MessageLog
 
 
@@ -27,6 +28,7 @@ async def test_partial_retry_skips_only_successful_recipient_and_same_rule(monke
         saved.append((request.recipient, SimpleNamespace(variables=request.variables)))
         return SimpleNamespace(success=True)
     monkeypatch.setattr(service.MessageService, 'send_message', send)
+    monkeypatch.setattr(document_url, 'ensure_notification_document_url', AsyncMock())
     args = dict(trigger_document='kuaiiot_alert', trigger_action='raised', context={'entity_id': 1, 'reliable_delivery': True})
     with pytest.raises(RuntimeError):
         await service.BusinessNotificationService.dispatch(1, **args)

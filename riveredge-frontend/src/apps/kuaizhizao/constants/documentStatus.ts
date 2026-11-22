@@ -12,6 +12,7 @@ import { RE_STATUS_BADGE_DRAFT } from '../../../constants/statusBadges';
 /** 单据主状态枚举（fallback，与后端 constants.py 对齐） */
 export const DocumentStatus = {
   DRAFT: 'DRAFT',
+  SUBMITTED: 'SUBMITTED',
   PENDING_REVIEW: 'PENDING_REVIEW',
   AUDITED: 'AUDITED',
   REJECTED: 'REJECTED',
@@ -25,8 +26,9 @@ export const DocumentStatus = {
   FULL_CONVERTED: 'FULL_CONVERTED',
 } as const;
 
-/** 审核状态枚举（fallback） */
+/** 审核状态枚举（fallback；与后端 ReviewStatus 对齐，含未提交草稿） */
 export const ReviewStatusEnum = {
+  DRAFT: 'DRAFT',
   PENDING: 'PENDING',
   APPROVED: 'APPROVED',
   REJECTED: 'REJECTED',
@@ -36,7 +38,7 @@ const ENGLISH_STATUS_ALIASES: Record<string, string> = {
   draft: DocumentStatus.DRAFT,
   pending_review: DocumentStatus.PENDING_REVIEW,
   pending: DocumentStatus.PENDING_REVIEW,
-  submitted: DocumentStatus.PENDING_REVIEW,
+  submitted: DocumentStatus.SUBMITTED,
   audited: DocumentStatus.AUDITED,
   approved: DocumentStatus.AUDITED,
   rejected: DocumentStatus.REJECTED,
@@ -53,6 +55,7 @@ const ENGLISH_STATUS_ALIASES: Record<string, string> = {
 
 const FALLBACK_STATUS_ALIASES: Record<string, string> = {
   草稿: DocumentStatus.DRAFT,
+  已提交: DocumentStatus.SUBMITTED,
   待审核: DocumentStatus.PENDING_REVIEW,
   已审核: DocumentStatus.AUDITED,
   已驳回: DocumentStatus.REJECTED,
@@ -69,6 +72,8 @@ const FALLBACK_STATUS_ALIASES: Record<string, string> = {
 };
 
 const FALLBACK_REVIEW_ALIASES: Record<string, string> = {
+  草稿: ReviewStatusEnum.DRAFT,
+  draft: ReviewStatusEnum.DRAFT,
   待审核: ReviewStatusEnum.PENDING,
   审核通过: ReviewStatusEnum.APPROVED,
   审核驳回: ReviewStatusEnum.REJECTED,
@@ -79,6 +84,7 @@ const FALLBACK_REVIEW_ALIASES: Record<string, string> = {
 
 const FALLBACK_STATUS_DISPLAY: Record<string, { text: string; color: string }> = {
   [DocumentStatus.DRAFT]: { text: '草稿', color: RE_STATUS_BADGE_DRAFT },
+  [DocumentStatus.SUBMITTED]: { text: '已提交', color: 'processing' },
   [DocumentStatus.PENDING_REVIEW]: { text: '待审核', color: 'warning' },
   [DocumentStatus.AUDITED]: { text: '已审核', color: 'success' },
   [DocumentStatus.REJECTED]: { text: '已驳回', color: 'error' },
@@ -93,6 +99,7 @@ const FALLBACK_STATUS_DISPLAY: Record<string, { text: string; color: string }> =
 };
 
 const FALLBACK_REVIEW_DISPLAY: Record<string, { text: string; color: string }> = {
+  [ReviewStatusEnum.DRAFT]: { text: '草稿', color: RE_STATUS_BADGE_DRAFT },
   [ReviewStatusEnum.PENDING]: { text: '待审核', color: 'warning' },
   [ReviewStatusEnum.APPROVED]: { text: '审核通过', color: 'success' },
   [ReviewStatusEnum.REJECTED]: { text: '审核驳回', color: 'error' },

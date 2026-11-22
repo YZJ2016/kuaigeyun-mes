@@ -807,6 +807,7 @@ async def print_sales_order(
             template_code=template_code,
             template_uuid=template_uuid,
             output_format=output_format,
+            viewer_user_id=int(current_user.id),
         )
     except NotFoundError as e:
         raise _http_exception_with_trace(
@@ -832,7 +833,10 @@ async def get_sales_order_print_variables(
 
     try:
         variables = await DocumentPrintService().get_document_variables_for_print(
-            tenant_id, "sales_order", sales_order_id
+            tenant_id,
+            "sales_order",
+            sales_order_id,
+            viewer_user_id=int(current_user.id),
         )
         return {"success": True, "variables": variables}
     except NotFoundError as e:

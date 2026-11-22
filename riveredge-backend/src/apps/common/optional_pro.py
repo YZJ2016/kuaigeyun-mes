@@ -47,9 +47,12 @@ def host_finance_orm_ready() -> bool:
     """快制造宿主财务管理 ORM 已就绪：FINANCE_MANAGEMENT 清单内每个模块均已注册并绑定连接。"""
     from tortoise import Tortoise
 
-    from apps.kuaizhizao.finance.orm_models_finance_management import (
-        FINANCE_MANAGEMENT_ORM_MODEL_MODULES,
-    )
+    try:
+        from apps.kuaizhizao.finance.orm_models_finance_management import (
+            FINANCE_MANAGEMENT_ORM_MODEL_MODULES,
+        )
+    except ImportError:
+        return False
 
     if not getattr(Tortoise, "_inited", False):
         return False

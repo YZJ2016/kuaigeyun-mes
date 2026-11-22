@@ -119,6 +119,7 @@ import {
 import dayjs from 'dayjs';
 import { formatDateTime, formatQuantity, formatCurrencyAmount, formatCurrencyPrice, todaySiteDateString } from '../../../../../utils/format';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
+import { pickDocumentLineDualQuantityFields } from '../../../../../utils/materialDualQuantity';
 
 import {
 
@@ -1083,6 +1084,7 @@ const SalesContractsPage: React.FC = () => {
           partner_material_code: it.partner_material_code ?? '',
           partner_material_name: it.partner_material_name ?? '',
           material_unit: resolved.material_unit,
+          ...pickDocumentLineDualQuantityFields(it as Record<string, unknown>),
           contract_quantity: Number(it.contract_quantity),
           unit_price: Number(it.unit_price),
           tax_rate: Number(it.tax_rate ?? 0),

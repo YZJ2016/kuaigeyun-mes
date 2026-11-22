@@ -1131,7 +1131,7 @@ export const GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK = {
   option: 94,
 } satisfies FieldRankMap
 
-export function alignProColumns<T extends Record<string, unknown>>(
+export function alignProColumns<T extends object>(
   columns: ProColumns<T>[],
   rankMap: FieldRankMap = GLOBAL_DOC_LIST_FIELD_RANK,
 ): ProColumns<T>[] {

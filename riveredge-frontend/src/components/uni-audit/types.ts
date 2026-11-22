@@ -1,5 +1,6 @@
 export type UniAuditAction =
   | 'submit'
+  | 'submit_review'
   | 'withdraw'
   | 'approve'
   | 'reject'
@@ -13,6 +14,7 @@ export type UniAuditAction =
 
 export type UniAuditActionsMap = {
   submit?: (id: number) => Promise<any>;
+  submit_review?: (id: number) => Promise<any>;
   withdraw?: (id: number) => Promise<any>;
   approve?: (id: number) => Promise<any>;
   reject?: (id: number, reason?: string) => Promise<any>;

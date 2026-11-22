@@ -33,6 +33,7 @@ import { reportDocumentStatusText } from '../../../utils/reportPresentation';
 import { loadConfirmPreviewMaterialMeta, type ConfirmPreviewMaterialMeta } from './inboundItemTracking';
 import {
   filterWarehouseTrackingColumns,
+  isMaterialBatchEntryEnabled,
   isMaterialSerialEntryEnabled,
   useWarehouseTrackingFlags,
 } from '../shared/warehouseTrackingFlags';
@@ -66,6 +67,7 @@ import {
 } from './inboundPaths';
 import type { PurchaseReceiptPoComposePayload } from './inboundPullEntryTypes';
 import {
+  draftDayjs,
   draftOptionalNumber,
   mergeRecordMaps,
   usePullEntryFormDraft,

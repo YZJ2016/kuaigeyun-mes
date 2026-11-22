@@ -77,6 +77,26 @@ const RESOURCE = 'kuaiplm:material-review';
 const STATUS_KEYS: MaterialReviewStatus[] = ['draft', 'pending', 'approved', 'rejected'];
 const USAGE_KEYS: MaterialUsageStatus[] = ['preferred', 'limited', 'forbidden'];
 
+const USAGE_STATUS_ALIASES: Record<string, MaterialUsageStatus> = {
+  preferred: 'preferred',
+  优先使用: 'preferred',
+  limited: 'limited',
+  限用: 'limited',
+  forbidden: 'forbidden',
+  禁止使用: 'forbidden',
+};
+
+function normalizeUsageStatus(raw: string): MaterialUsageStatus | '' {
+  return USAGE_STATUS_ALIASES[raw.trim()] ?? '';
+}
+
+function usageMarkerColor(status: string): 'success' | 'warning' | 'error' | 'default' {
+  if (status === 'preferred') return 'success';
+  if (status === 'limited') return 'warning';
+  if (status === 'forbidden') return 'error';
+  return 'default';
+}
+
 const LINE_TEMPLATE_COLUMNS: ExportXlsxColumn[] = [
   { key: 'material_code', title: '物料编码' },
   { key: 'material_name', title: '物料名称' },

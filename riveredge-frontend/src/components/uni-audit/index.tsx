@@ -18,6 +18,7 @@ import UniAuditInitiatorSubmitModal from './UniAuditInitiatorSubmitModal';
 import { resolveRecordDocumentCode } from './resolveRecordDocumentCode';
 import {
   fetchSubmitInitiatorRequirements,
+  type HierarchyDepartmentOption,
   type SubmitInitiatorBranchHint,
   type SubmitInitiatorNodeHint,
 } from '../../services/uniAudit';
@@ -27,6 +28,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 const DEFAULT_ENDPOINTS: Partial<Record<UniAuditAction, string>> = {
   submit: 'submit',
+  submit_review: 'submit_review',
   withdraw: 'withdraw',
   approve: 'approve',
   reject: 'reject',
@@ -60,6 +62,11 @@ export interface UniAuditActionsProps {
   confirmMessages?: Partial<Record<UniAuditAction, string>>;
   resourcePrefix?: string;
   unifiedAudit?: boolean;
+  /** 返回错误文案则中断；用于业务单据提交前同口径预检 */
+  beforeAction?: (
+    action: UniAuditAction,
+    record: any,
+  ) => string | null | undefined | Promise<string | null | undefined>;
 }
 
 function inferAuditNodeKey(apiPrefix?: string): string {
@@ -77,7 +84,9 @@ function inferAuditNodeKey(apiPrefix?: string): string {
   if (prefix.includes('/quality/process-inspection')) return 'process_inspection';
   if (prefix.includes('/quality/finished-goods-inspection')) return 'finished_goods_inspection';
   if (prefix.includes('/productions/reporting') || prefix.includes('/reporting')) return 'reporting_record';
+  if (prefix.includes('/rework-orders') || prefix.includes('/rework')) return 'rework_order';
   if (prefix.includes('/demands')) return 'demand';
+
   if (prefix.includes('/quotation')) return 'quotation';
   if (prefix.includes('/shipment-notices')) return 'shipment_notice';
   if (prefix.includes('/payment-applications')) return 'payment_application';
@@ -130,8 +139,10 @@ function inferResourceByNodeKey(nodeKey?: string): string {
     purchase_inquiry: 'kuaizhizao:purchase-inquiry',
     purchase_order_change: 'kuaizhizao:purchase-order-change',
     demand: 'kuaizhizao:demand',
-    reporting_record: 'kuaizhizao:reporting-record',
+    reporting_record: 'kuaizhizao:production-execution-reporting',
+    rework_order: 'kuaizhizao:rework-order',
     quotation: 'kuaizhizao:quotation',
+
     incoming_inspection: 'kuaizhizao:incoming-inspection',
     process_inspection: 'kuaizhizao:process-inspection',
     finished_goods_inspection: 'kuaizhizao:finished-goods-inspection',
@@ -204,16 +215,23 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
   confirmMessages = {},
   resourcePrefix,
   unifiedAudit = false,
+  beforeAction,
 }) => {
   const { message } = App.useApp();
   const [loadingAction, setLoadingAction] = useState<UniAuditAction | null>(null);
   const [activeAction, setActiveAction] = useState<UniAuditAction | null>(null);
   const [auditHubOpen, setAuditHubOpen] = useState(false);
   const [initiatorSubmitOpen, setInitiatorSubmitOpen] = useState(false);
+  const [initiatorAction, setInitiatorAction] = useState<UniAuditAction>('submit');
   const [initiatorNodes, setInitiatorNodes] = useState<SubmitInitiatorNodeHint[]>([]);
   const [initiatorBranchConditions, setInitiatorBranchConditions] = useState<SubmitInitiatorBranchHint[]>(
     [],
   );
+  const [hierarchyDepartmentRequired, setHierarchyDepartmentRequired] = useState(false);
+  const [hierarchyDepartmentOptions, setHierarchyDepartmentOptions] = useState<HierarchyDepartmentOption[]>(
+    [],
+  );
+  const [defaultHierarchyDepartmentUuid, setDefaultHierarchyDepartmentUuid] = useState<string | null>(null);
   const [initiatorLoading, setInitiatorLoading] = useState(false);
   const rawCurrentUser = useCurrentUser();
   const currentUser = useMemo(() => resolveUserForMenuPermission(rawCurrentUser), [rawCurrentUser]);
@@ -224,7 +242,15 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
 
   const auditState =
     record?.audit && typeof record.audit === 'object' && typeof record.audit.phase === 'string'
-      ? (record.audit as { phase: string; enabled?: boolean; allowed_actions?: string[]; entity_type?: string })
+      ? (record.audit as {
+          phase: string;
+          enabled?: boolean;
+          allowed_actions?: string[];
+          entity_type?: string;
+          viewer_can_revoke?: boolean;
+          viewer_can_withdraw_submit?: boolean;
+          viewer_can_recall_own?: boolean;
+        })
       : null;
   const auditEntityType = (auditState?.entity_type || '').trim();
   const resolvedEntityType = (entityType || inferredNodeKey || auditEntityType || '').trim();
@@ -271,6 +297,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     allowedActions,
     manualAuditEnabled: auditFeatureEnabled,
     showSubmit,
+    showSubmitReview,
     showWithdraw,
     showApprove,
     showReject,
@@ -294,6 +321,9 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
       || (auditAuthoritative && Boolean(resolvedEntityType))
       || Boolean(actions.submit)
       || Boolean(apiPrefix),
+    submit_review:
+      routeViaUnified('submit_review')
+      || (auditAuthoritative && Boolean(resolvedEntityType)),
     withdraw:
       routeViaUnified('withdraw')
       || (auditAuthoritative && Boolean(resolvedEntityType))
@@ -342,11 +372,20 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
 
   const canExecuteByAction: Record<UniAuditAction, boolean> = {
     submit: canSubmit,
-    withdraw: canSubmit && viewerCanWithdraw !== false,
+    submit_review: canSubmit,
+    withdraw:
+      canSubmit
+      && (typeof viewerCanWithdraw === 'boolean' ? viewerCanWithdraw : true),
     approve: flowApprove.canExecute,
     reject: flowReject.canExecute,
-    revoke: canRevoke && viewerCanRevoke !== false,
-    recall_own: canReview,
+    revoke:
+      canRevoke
+      && (typeof viewerCanRevoke === 'boolean' ? viewerCanRevoke : true),
+    recall_own:
+      canReview
+      && (typeof auditState?.viewer_can_recall_own === 'boolean'
+        ? Boolean(auditState.viewer_can_recall_own)
+        : true),
     transfer: canReview,
     add_sign: canReview,
     delegate: canReview,
@@ -356,8 +395,49 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
 
   const enabledForLabels = auditFeatureEnabled;
   const approveLabel = enabledForLabels ? '审核' : '确认';
+  const migratedSaveSubmitCopy =
+    resolvedEntityType === 'purchase_order'
+    || resolvedEntityType === 'sales_contract'
+    || resolvedEntityType === 'quotation'
+    || resolvedEntityType === 'sales_forecast'
+    || resolvedEntityType === 'sales_order'
+    || resolvedEntityType === 'sales_order_change'
+    || resolvedEntityType === 'purchase_request'
+    || resolvedEntityType === 'purchase_inquiry'
+    || resolvedEntityType === 'payment_application'
+    || resolvedEntityType === 'purchase_order_change'
+    || resolvedEntityType === 'purchase_return'
+    || resolvedEntityType === 'sales_return'
+    || resolvedEntityType === 'demand'
+    || resolvedEntityType === 'purchase_receipt'
+    || resolvedEntityType === 'receipt_notice'
+    || resolvedEntityType === 'shipment_notice'
+    || resolvedEntityType === 'sales_delivery'
+    || resolvedEntityType === 'purchase_arrival_delay'
+    || resolvedEntityType === 'work_order'
+    || resolvedEntityType === 'reporting_record'
+    || resolvedEntityType === 'rework_order'
+    || resolvedEntityType === 'receivable'
+    || resolvedEntityType === 'payable'
+    || resolvedEntityType === 'receipt'
+    || resolvedEntityType === 'receipt_refund'
+    || resolvedEntityType === 'payment'
+    || resolvedEntityType === 'payment_refund'
+    || resolvedEntityType === 'sales_invoice'
+    || resolvedEntityType === 'other_income'
+    || resolvedEntityType === 'other_expense'
+    || resolvedEntityType === 'notes_receivable'
+    || resolvedEntityType === 'notes_payable'
+    || resolvedEntityType === 'purchase_invoice'
+    || resolvedEntityType === 'other_expense_application'
+    || resolvedEntityType === 'partner_statement'
+    || resolvedEntityType === 'fund_transfer';
   const effectiveSubmitLabel = (() => {
-    if (isRejected && (!submitActionLabel || submitActionLabel === '提交')) {
+    if (
+      isRejected &&
+      !migratedSaveSubmitCopy &&
+      (!submitActionLabel || submitActionLabel === '提交')
+    ) {
       return '重新提交';
     }
     if (!enabledForLabels && submitActionLabel.includes('审核')) {
@@ -388,15 +468,26 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
 
   const hubActions = useMemo((): UniAuditHubAction[] => {
     const items: UniAuditHubAction[] = [];
+    // 撤回提交（发起人）与撤销审核（recall_own / revoke）分轨，禁止混用文案或互相顶替
     if (showWithdraw && channelByAction.withdraw) {
-      items.push({ action: 'withdraw', title: '撤回提交', canExecute: canExecuteByAction.withdraw });
+      items.push({ action: 'withdraw', title: withdrawActionTitle, canExecute: canExecuteByAction.withdraw });
     }
     if (showRecallOwn && channelByAction.recall_own) {
       items.push({
         action: 'recall_own',
-        title: '撤销审核',
+        title: recallActionTitle,
         canExecute: canExecuteByAction.recall_own,
         rbacAllowed: canReview,
+      });
+    }
+    // revoke 以行内按钮为主；hub 仍带上以便弹窗 live 在实例已通过时能立刻展示「撤销审核」
+    if (showRevoke && channelByAction.revoke) {
+      items.push({
+        action: 'revoke',
+        title: revokeActionTitle,
+        canExecute: canExecuteByAction.revoke,
+        rbacAllowed: canRevoke,
+        danger: true,
       });
     }
     if (showApprove && channelByAction.approve) {
@@ -424,19 +515,27 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
   }, [
     showWithdraw,
     showRecallOwn,
+    showRevoke,
     showApprove,
     showReject,
     channelByAction.withdraw,
     channelByAction.recall_own,
+    channelByAction.revoke,
     channelByAction.approve,
     channelByAction.reject,
     canExecuteByAction.withdraw,
+    canExecuteByAction.recall_own,
+    canExecuteByAction.revoke,
     canExecuteByAction.approve,
     canExecuteByAction.reject,
     canReview,
+    canRevoke,
     flowApprove.blockReason,
     flowReject.blockReason,
     approveLabel,
+    withdrawActionTitle,
+    recallActionTitle,
+    revokeActionTitle,
   ]);
 
   const doApiCall = async (
@@ -476,22 +575,55 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
 
   const openActionModal = (action: UniAuditAction) => setActiveAction(action);
 
-  const beginSubmit = useCallback(async () => {
+  const beginInitiatorSubmit = useCallback(async (action: 'submit' | 'submit_review') => {
+    setInitiatorAction(action);
     if (!auditFeatureEnabled || !resolvedEntityType) {
-      openActionModal('submit');
+      openActionModal(action);
       return;
     }
     setInitiatorLoading(true);
     try {
-      const { nodes, branch_conditions: branchConditions } = await fetchSubmitInitiatorRequirements(
-        resolvedEntityType,
-      );
-      if (nodes.length > 0 || branchConditions.length > 0) {
+      const requirements = await fetchSubmitInitiatorRequirements(resolvedEntityType, recordId);
+      const { nodes, branch_conditions: branchConditions } = requirements;
+      const hierarchyRequired = Boolean(requirements.hierarchy_department_required);
+      const hierarchyOptions = requirements.hierarchy_department_options ?? [];
+      const needsHierarchyPicker = hierarchyRequired && hierarchyOptions.length >= 2;
+      if (nodes.length > 0 || branchConditions.length > 0 || needsHierarchyPicker) {
         setInitiatorNodes(nodes);
         setInitiatorBranchConditions(branchConditions);
+        setHierarchyDepartmentRequired(hierarchyRequired);
+        setHierarchyDepartmentOptions(hierarchyOptions);
+        setDefaultHierarchyDepartmentUuid(requirements.default_hierarchy_department_uuid ?? null);
         setInitiatorSubmitOpen(true);
+      } else if (action === 'submit_review') {
+        setLoadingAction('submit_review');
+        try {
+          if (!adminOpen && !canSubmit) {
+            message.warning('您没有该操作权限，仅可查看审核流程');
+            return;
+          }
+          if (beforeAction) {
+            const blocked = await beforeAction(action, record);
+            if (blocked) {
+              message.error(blocked);
+              return;
+            }
+          }
+          const res = await doApiCall('submit_review', undefined, {});
+          if (res?.demand_synced) {
+            message.success('提交审核成功，已同步关联需求。');
+          } else {
+            message.success('提交审核成功');
+          }
+          onSuccess?.();
+        } catch (error: unknown) {
+          const errMsg = error instanceof Error ? error.message : String(error);
+          message.error(`提交审核失败: ${errMsg || '未知错误'}`);
+        } finally {
+          setLoadingAction(null);
+        }
       } else {
-        openActionModal('submit');
+        openActionModal(action);
       }
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : String(error);
@@ -499,19 +631,80 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     } finally {
       setInitiatorLoading(false);
     }
-  }, [auditFeatureEnabled, resolvedEntityType, message]);
+  }, [
+    adminOpen,
+    auditFeatureEnabled,
+    resolvedEntityType,
+    message,
+    recordId,
+    canSubmit,
+    beforeAction,
+    record,
+    doApiCall,
+    onSuccess,
+  ]);
+
+  const beginSubmit = useCallback(async () => {
+    if (
+      resolvedEntityType === 'purchase_order'
+      || resolvedEntityType === 'sales_contract'
+      || resolvedEntityType === 'quotation'
+      || resolvedEntityType === 'sales_forecast'
+      || resolvedEntityType === 'sales_order'
+      || resolvedEntityType === 'sales_order_change'
+      || resolvedEntityType === 'purchase_request'
+      || resolvedEntityType === 'purchase_inquiry'
+      || resolvedEntityType === 'payment_application'
+      || resolvedEntityType === 'purchase_order_change'
+      || resolvedEntityType === 'purchase_return'
+      || resolvedEntityType === 'sales_return'
+      || resolvedEntityType === 'demand'
+      || resolvedEntityType === 'purchase_receipt'
+      || resolvedEntityType === 'receipt_notice'
+      || resolvedEntityType === 'shipment_notice'
+      || resolvedEntityType === 'sales_delivery'
+      || resolvedEntityType === 'purchase_arrival_delay'
+      || resolvedEntityType === 'work_order'
+      || resolvedEntityType === 'reporting_record'
+      || resolvedEntityType === 'rework_order'
+      || resolvedEntityType === 'receivable'
+      || resolvedEntityType === 'payable'
+      || resolvedEntityType === 'receipt'
+      || resolvedEntityType === 'receipt_refund'
+      || resolvedEntityType === 'payment'
+      || resolvedEntityType === 'payment_refund'
+      || resolvedEntityType === 'sales_invoice'
+      || resolvedEntityType === 'other_income'
+      || resolvedEntityType === 'other_expense'
+      || resolvedEntityType === 'notes_receivable'
+      || resolvedEntityType === 'notes_payable'
+      || resolvedEntityType === 'purchase_invoice'
+      || resolvedEntityType === 'other_expense_application'
+      || resolvedEntityType === 'partner_statement'
+      || resolvedEntityType === 'fund_transfer'
+    ) {
+      openActionModal('submit');
+      return;
+    }
+    await beginInitiatorSubmit('submit');
+  }, [beginInitiatorSubmit, resolvedEntityType]);
+
+  const beginSubmitReview = useCallback(async () => {
+    await beginInitiatorSubmit('submit_review');
+  }, [beginInitiatorSubmit]);
 
   const getActionTitle = (action: UniAuditAction): string => {
     if (action === 'submit') return effectiveSubmitLabel;
+    if (action === 'submit_review') return '提交审核';
     if (action === 'approve') return approveLabel;
     if (action === 'reject') return '驳回';
-    if (action === 'revoke') return rowActionLabel('revoke');
+    if (action === 'revoke') return revokeActionTitle;
     if (action === 'transfer') return '转交';
     if (action === 'add_sign') return '加签';
     if (action === 'delegate') return '委托';
     if (action === 'urge') return '催办';
-    if (action === 'withdraw') return '撤回提交';
-    if (action === 'recall_own') return '撤销审核';
+    if (action === 'withdraw') return withdrawActionTitle;
+    if (action === 'recall_own') return recallActionTitle;
     return '操作';
   };
 
@@ -519,9 +712,11 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     if (adminOpen) return true;
     if (action === 'urge') return canSubmit;
     if (action === 'transfer' || action === 'add_sign' || action === 'delegate') return canReview;
-    // approve/reject：此处只验 RBAC。列表态 viewer_actions 可能尚未补齐待办（batch 只读），
-    // 弹窗 getApprovalStatus 会同步任务后再用 live 门控按钮；后端 execute_approval 仍校验待办人。
-    if (action === 'approve' || action === 'reject') return canReview;
+    // approve/reject/recall_own/revoke：此处只验 RBAC。列表态 viewer_can_* 可能滞后于弹窗 live；
+    // 按钮可见性由 UniAuditModal live 裁剪，后端 assert_* / recall_own / revoke 仍做身份门禁。
+    if (action === 'approve' || action === 'reject' || action === 'recall_own') return canReview;
+    if (action === 'revoke') return canRevoke;
+    if (action === 'submit_review' || action === 'withdraw') return canSubmit;
     return Boolean(canExecuteByAction[action as keyof typeof canExecuteByAction]);
   };
 
@@ -537,6 +732,18 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
           : '您没有该操作权限，仅可查看审核流程',
       );
       return false;
+    }
+    if (beforeAction) {
+      try {
+        const blocked = await beforeAction(action, record);
+        if (blocked) {
+          message.error(blocked);
+          return false;
+        }
+      } catch (error: any) {
+        message.error(error?.message || '提交前校验失败');
+        return false;
+      }
     }
     setLoadingAction(action);
     try {
@@ -555,7 +762,9 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
         && resolvedEntityType
       ) {
         try {
-          const status = await getApprovalStatus(resolvedEntityType, recordId);
+          const status = await getApprovalStatus(resolvedEntityType, recordId, {
+            nodeKey: inferredNodeKey,
+          });
           const stillPending = status?.has_instance && status.status === 'pending';
           if (action === 'recall_own' && stillPending) {
             return true;
@@ -729,6 +938,8 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     inlineButtons.push(
       renderActionButton('revoke', {
         key: 'audit-revoke',
+        label: migratedSaveSubmitCopy ? revokeActionTitle : undefined,
+        labelKeep: migratedSaveSubmitCopy,
         loading: loadingAction === 'revoke',
         disabled: isBusy && loadingAction !== 'revoke',
         onClick: () => openActionModal('revoke'),
@@ -768,6 +979,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
           documentCode={documentCode}
           entityType={resolvedEntityType || undefined}
           entityId={recordId}
+          auditNodeKey={inferredNodeKey || undefined}
           hubActions={hubActions}
           rbacAllowed={canReview}
           onCancel={() => setAuditHubOpen(false)}
@@ -788,6 +1000,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
           }
           entityType={resolvedEntityType || undefined}
           entityId={recordId}
+          auditNodeKey={inferredNodeKey || undefined}
           canExecute={canExecuteByAction[activeAction]}
           onCancel={() => setActiveAction(null)}
           onConfirm={handleConfirm}
@@ -798,16 +1011,23 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
         <UniAuditInitiatorSubmitModal
           open
           entityName={entityName}
-          submitTitle={effectiveSubmitLabel}
+          submitTitle={initiatorAction === 'submit_review' ? '提交审核' : effectiveSubmitLabel}
           nodes={initiatorNodes}
           branchConditions={initiatorBranchConditions}
-          loading={loadingAction === 'submit'}
+          hierarchyDepartmentRequired={hierarchyDepartmentRequired}
+          hierarchyDepartmentOptions={hierarchyDepartmentOptions}
+          defaultHierarchyDepartmentUuid={defaultHierarchyDepartmentUuid}
+          loading={loadingAction === initiatorAction}
           onCancel={() => setInitiatorSubmitOpen(false)}
-          onConfirm={async (selectedByNode, branchByCondition) => {
-            await runAction('submit', undefined, {
+          onConfirm={async (selectedByNode, branchByCondition, hierarchyDepartmentUuid) => {
+            const extra: Record<string, unknown> = {
               selected_approver_by_node: selectedByNode,
               initiator_branch_by_node: branchByCondition,
-            });
+            };
+            if (hierarchyDepartmentUuid) {
+              extra.hierarchy_department_uuid = hierarchyDepartmentUuid;
+            }
+            await runAction(initiatorAction, undefined, extra);
             setInitiatorSubmitOpen(false);
           }}
         />

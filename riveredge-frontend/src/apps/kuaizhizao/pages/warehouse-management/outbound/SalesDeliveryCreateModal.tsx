@@ -426,6 +426,7 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
   onClose,
   onSuccess,
   editingId = null,
+  initialDraft = null,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -1493,6 +1494,7 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
           : !!(material as Material | null)?.batchManaged;
       const materialId = Number(it.material_id) || 0;
       const batchLine = salesDeliveryCreateBatchLineEnabled(trackingFlags, batchManaged);
+      const batchStrict = isMaterialBatchEntryEnabled(trackingFlags, batchManaged);
       const batchKey =
         materialId > 0 && lineWhId > 0 ? batchOptionsCacheKey(materialId, lineWhId) : '';
       const batchOpts = batchKey ? batchOptionsByKey[batchKey] ?? [] : [];

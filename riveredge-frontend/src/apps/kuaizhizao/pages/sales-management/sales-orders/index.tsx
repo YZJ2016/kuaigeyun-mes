@@ -33,7 +33,7 @@ const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
 );
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
-import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
+import { DocumentLineUnitSelect, DocumentLineDualQuantityFormCell } from '../../../../../components/quantity-with-unit';
 import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { MaterialUnitLabel } from '../../../../../components/material-unit-label';
@@ -258,6 +258,7 @@ import {
   getSalesOrderStatistics,
   listSalesOrderSalesmen,
   getSalesOrderSyncBinding,
+  withdrawSalesOrder,
   SalesOrder,
   SalesOrderItem,
   SalesOrderStatus,

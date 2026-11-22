@@ -9,6 +9,7 @@ import {
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { App, Button, Col, Descriptions, Form, Input, InputNumber, Row, Select, Space, Table, theme, type TableColumnsType } from 'antd';
+import { PrinterOutlined } from '@ant-design/icons';
 import { useLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 import type { FormListFieldData } from 'antd/es/form/FormList';
 import dayjs from 'dayjs';
@@ -61,6 +62,7 @@ import {
   renderDocumentLineMaterialsPreview,
 } from '../../../../../components/document-line-materials-preview';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
+import { useKuaizhizaoPrintModal } from '../../../../kuaizhizao/hooks/useKuaizhizaoPrintModal';
 import {
   mapAttachmentsToUploadList,
   normalizeDocumentAttachments,
@@ -306,8 +308,10 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
   const pendingFormValuesRef = useRef<Record<string, unknown> | null>(null);
   const pullReceiptSupplierIdRef = useRef<number>(0);
   const purchaseReceiptLinkCloseRef = useRef<(() => void) | null>(null);
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
 
   const catKind: MiscCategoryKind = kind;
+  const isOtherExpenseDoc = kind === 'expense';
   const codeField = kind === 'income' ? 'income_code' : 'expense_code';
   const attachmentCategory =
     kind === 'income' ? 'other_income_attachments' : 'other_expense_attachments';
@@ -334,187 +338,8 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
     actionRef.current?.reload();
   }, []);
 
-  const miscAuditEntityName = t(menuTitleKey);
-  const {
-    runAction: runMiscAuditBatch,
-    auditModal: miscIncomeAuditModal,
-  } = useAuditBatchRunner<VoucherRow>({
-    permGates: perms,
-    handlers: {
-      approve: (id: number) => service.approve(id),
-      revoke: (id: number) =>
-        service.revoke ? service.revoke(id) : Promise.reject(new Error('revoke unavailable')),
-      withdraw: (id: number) =>
-        service.withdraw ? service.withdraw(id) : Promise.reject(new Error('withdraw unavailable')),
-    },
-    onBatchComplete: handleAuditBatchSuccess,
-    auditEntity: {
-      entityType: auditEntityType,
-      entityName: miscAuditEntityName,
-    },
-  });
-
-  const incomeSaveSubmitSplit = kind === 'income' || kind === 'expense' || isExpenseApplication;
-
-  const incomeToolbarAuditMenus = useMemo(() => {
-    if (!incomeSaveSubmitSplit) {
-      return { submitItems: [] as UniBatchMenuItem[], auditItems: [] as UniBatchMenuItem[] };
-    }
-    const selected = tableRowsRef.current.filter((row) => selectedRowKeys.includes(row.id));
-    const reviewOf = (row: VoucherRow) => incomeReviewRaw(row);
-    const allowed = (row: VoucherRow, key: string) => pickCapability(row, key)?.allowed === true;
-    const run = (
-      records: VoucherRow[],
-      capabilityKey: string,
-      permAllowed: boolean,
-      onRun: (id: number) => Promise<unknown>,
-      notAllowedMessage?: string,
-    ) =>
-      runCapabilityBatchLoop({
-        keys: records.map((row) => Number(row.id)),
-        records,
-        capabilityKey,
-        permAllowed,
-        notAllowedMessage,
-        onRun,
-        onSuccess: () => {
-          setSelectedRowKeys([]);
-          actionRef.current?.reload();
-        },
-        message: messageApi,
-        t,
-      });
-    const submitRows = selected.filter((row) => allowed(row, 'submit'));
-    const canSubmit = Boolean(perms.canAction?.('submit'));
-    const submitDisabled = !selected.some((row) => allowed(row, 'submit'));
-    const onBatchSuccess = () => {
-      setSelectedRowKeys([]);
-      actionRef.current?.reload();
-    };
-    const commitFn = (id: number) => (service.commit ? service.commit(id) : service.submit(id));
-    const submitReviewFn = (id: number) =>
-      service.submitForReview
-        ? service.submitForReview(id)
-        : Promise.reject(new Error('submitForReview unavailable'));
-    const submitItems: UniBatchMenuItem[] = withDocumentSubmitCombinedItem(
-      [
-        {
-          key: 'submit',
-          label: t('common.submit'),
-          disabled: submitDisabled,
-          onClick: () => run(submitRows, 'submit', canSubmit, commitFn),
-        },
-        {
-          key: 'withdraw-submit',
-          label: t(`${i18nPrefix}.toolbar.withdrawSubmit`),
-          disabled: !selected.some((row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'withdraw_submit')),
-          onClick: () =>
-            run(
-              selected.filter((row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'withdraw_submit')),
-              'withdraw_submit',
-              canSubmit,
-              (id) => (service.withdraw ? service.withdraw(id) : Promise.reject(new Error('withdraw unavailable'))),
-            ),
-        },
-        {
-          key: 'submit-review',
-          label: t(`${i18nPrefix}.toolbar.submitReview`),
-          disabled: !selected.some((row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'submit_review')),
-          onClick: () =>
-            run(
-              selected.filter((row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'submit_review')),
-              'submit_review',
-              canSubmit,
-              submitReviewFn,
-              t(`${i18nPrefix}.toolbar.submitReviewNotAllowed`),
-            ),
-        },
-      ],
-      {
-        t,
-        message: messageApi,
-        disabled: submitDisabled,
-        commitRecords: submitRows,
-        permAllowed: canSubmit,
-        commit: commitFn,
-        submitReview: submitReviewFn,
-        onSuccess: onBatchSuccess,
-      },
-    );
-    const approveRows = selected.filter(
-      (row) => reviewOf(row) !== 'SUBMITTED' && isPendingReviewStatus(reviewOf(row)) && allowed(row, 'approve'),
-    );
-    const auditItems: UniBatchMenuItem[] = [
-      {
-        key: 'approve',
-        label: t('components.uniAction.audit'),
-        disabled: !selected.some(
-          (row) => reviewOf(row) !== 'SUBMITTED' && isPendingReviewStatus(reviewOf(row)) && allowed(row, 'approve'),
-        ),
-        onClick: () =>
-          void runMiscAuditBatch(
-            'approve',
-            approveRows.map((row) => Number(row.id)),
-            approveRows,
-            auditEnabled,
-          ),
-      },
-      {
-        key: 'withdraw-review',
-        label: t(`${i18nPrefix}.toolbar.withdrawReview`),
-        disabled: !selected.some(
-          (row) =>
-            reviewOf(row) !== 'SUBMITTED' && isPendingReviewStatus(reviewOf(row)) && allowed(row, 'withdraw_submit'),
-        ),
-        onClick: () =>
-          run(
-            selected.filter(
-              (row) =>
-                reviewOf(row) !== 'SUBMITTED'
-                && isPendingReviewStatus(reviewOf(row))
-                && allowed(row, 'withdraw_submit'),
-            ),
-            'withdraw_submit',
-            Boolean(perms.canAction?.('submit')),
-            (id) => (service.withdraw ? service.withdraw(id) : Promise.reject(new Error('withdraw unavailable'))),
-          ),
-      },
-      {
-        key: 'revoke',
-        label: t(`${i18nPrefix}.toolbar.revoke`),
-        disabled: !selected.some((row) => allowed(row, 'revoke_approval')),
-        onClick: () =>
-          run(
-            selected.filter((row) => allowed(row, 'revoke_approval')),
-            'revoke_approval',
-            Boolean(perms.canAction?.('revoke')),
-            (id) => (service.revoke ? service.revoke(id) : Promise.reject(new Error('revoke unavailable'))),
-          ),
-      },
-    ];
-    return { submitItems, auditItems };
-  }, [
-    incomeSaveSubmitSplit,
-    selectedRowKeys,
-    perms,
-    service,
-    messageApi,
-    t,
-    i18nPrefix,
-    runMiscAuditBatch,
-    auditEnabled,
-  ]);
-
-  const incomeReviewStatusEnum = useMemo(
-    () => ({
-      草稿: { text: t('app.kuaicaiwu.financeLifecycle.voucherDraft') },
-      SUBMITTED: { text: t('common.submitted') },
-      待审核: { text: t('app.kuaicaiwu.financeStatus.review.pending') },
-      已审核: { text: t('app.kuaicaiwu.financeStatus.review.approved') },
-      已驳回: { text: t('app.kuaicaiwu.financeStatus.review.rejected') },
-    }),
-    [t],
-  );
+  // 其他收支为单段审核（后端无 review_status 两段式），保持非拆分分支
+  const incomeSaveSubmitSplit = false;
 
   const miscWorkflowStatuses = useMemo(() => {
     // 收支拆开审核后：业务 status 仍是 Draft/Confirmed；审核态在 review_status。
@@ -1161,7 +986,6 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
       perms,
       reloadAfterWorkflow,
       renderMiscStatusTag,
-      renderMiscDocumentStatus,
       resource,
       runAction,
       service,
@@ -1544,7 +1368,7 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
                 statusField={miscWorkflowStatusField}
                 {...miscWorkflowStatuses}
                 theme="default"
-                size="middle"
+                size="medium"
                 onSuccess={() => reloadAfterWorkflow(detailRow.id)}
               />
               {isOtherExpenseDoc &&
@@ -1557,13 +1381,6 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
                   }
                 >
                   {t('components.uniAction.print')}
-                </Button>
-              ) : null}
-              {isExpenseApplication &&
-              detailRow.capabilities?.push_other_expense?.allowed &&
-              perms.canAction?.('push') ? (
-                <Button type="primary" onClick={() => void handlePushOtherExpense(detailRow)}>
-                  {t('app.kuaicaiwu.otherExpenseApplication.pushOtherExpense')}
                 </Button>
               ) : null}
             </Space>
@@ -1742,6 +1559,7 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
           okText={t('common.confirm')}
         />
       ) : null}
+      {PrintModal}
     </>
   );
 };

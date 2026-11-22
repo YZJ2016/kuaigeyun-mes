@@ -21,6 +21,9 @@ export class LineForm {
 	bookQuantityText: string = ''
 	actualQuantityText: string = ''
 	remarks: string = ''
+	auxQuantityText: string = ''
+	auxUnit: string = ''
+	unitConversionText: string = ''
 }
 
 export class DetailForm {

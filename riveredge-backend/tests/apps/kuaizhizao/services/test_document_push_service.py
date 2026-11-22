@@ -137,13 +137,13 @@ async def test_formal_push_fails_when_push_ready_false():
     handler = AsyncMock(return_value={"success": True})
     with (
         patch(
-            "apps.kuaizhizao.services.document_push_service.assert_document_push_ready",
+            "apps.kuaiconnect.services.document_push.document_push_service.assert_document_push_ready",
             new=AsyncMock(
                 side_effect=ValidationError("外推未就绪（push_ready=false）")
             ),
         ),
         patch.dict(
-            "apps.kuaizhizao.services.document_push_service._PUSH_HANDLERS",
+            "apps.kuaiconnect.services.document_push.document_push_service._PUSH_HANDLERS",
             {("work_order", WO_PROFILE): handler},
             clear=False,
         ),
@@ -176,11 +176,11 @@ async def test_dry_run_skips_ready_gate_and_invokes_handler():
     ready_assert = AsyncMock()  # dry_run 路径内 assert 应被调用且内部直接 return
     with (
         patch(
-            "apps.kuaizhizao.services.document_push_service.assert_document_push_ready",
+            "apps.kuaiconnect.services.document_push.document_push_service.assert_document_push_ready",
             new=ready_assert,
         ),
         patch.dict(
-            "apps.kuaizhizao.services.document_push_service._PUSH_HANDLERS",
+            "apps.kuaiconnect.services.document_push.document_push_service._PUSH_HANDLERS",
             {("work_order", WO_PROFILE): handler},
             clear=False,
         ),
@@ -240,14 +240,14 @@ async def test_fanout_isolates_failures():
     bad = AsyncMock(side_effect=RuntimeError("boom"))
     with (
         patch(
-            "apps.kuaizhizao.services.document_push_service.assert_document_push_ready",
+            "apps.kuaiconnect.services.document_push.document_push_service.assert_document_push_ready",
             new=AsyncMock(),
         ),
         patch(
             "core.services.integration.document_push_guard.document_push_guard.assert_allowed",
         ),
         patch.dict(
-            "apps.kuaizhizao.services.document_push_service._PUSH_HANDLERS",
+            "apps.kuaiconnect.services.document_push.document_push_service._PUSH_HANDLERS",
             {("work_order", WO_PROFILE): bad, ("work_order", OA_PROFILE): ok},
             clear=False,
         ),
@@ -357,14 +357,14 @@ async def test_fanout_isolates_failures_and_dry_run_has_no_bill():
     bad = AsyncMock(side_effect=RuntimeError("boom"))
     with (
         patch(
-            "apps.kuaizhizao.services.document_push_service.assert_document_push_ready",
+            "apps.kuaiconnect.services.document_push.document_push_service.assert_document_push_ready",
             new=AsyncMock(),
         ),
         patch(
             "core.services.integration.document_push_guard.document_push_guard.assert_allowed",
         ),
         patch.dict(
-            "apps.kuaizhizao.services.document_push_service._PUSH_HANDLERS",
+            "apps.kuaiconnect.services.document_push.document_push_service._PUSH_HANDLERS",
             {
                 ("work_order", WO_PROFILE): bad,
                 ("work_order", OA_PROFILE): ok,

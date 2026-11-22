@@ -766,6 +766,15 @@
       "template": "simple",
       "config_category": "finance",
       "config_section": "finance_ar_ap"
+    },
+    {
+      "node_key": "partner_statement",
+      "entity_type": "partner_statement",
+      "resource": "kuaicaiwu:partner-statement",
+      "name": "往来对账单审核",
+      "template": "simple",
+      "config_category": "finance",
+      "config_section": "finance_ar_ap"
     }
   ],
   "dependencies": {

@@ -132,7 +132,12 @@ test('home today todos use the reporting list total and inspection summary',asyn
     loadWorkbench:async()=>blocks,
     request:options=>{
       calls.push(options);
-      if(String(options.path).includes('/reporting')) return Promise.resolve({success:true,data:[{id:1}],total:4});
+      if(String(options.path).includes('/reporting')) return Promise.resolve({success:true,data:[
+        {id:1,status:'draft',review_status:'待审核'},
+        {id:2,status:'draft',review_status:'pending'},
+        {id:3,status:'draft',review_status:'草稿'},
+        {id:4,status:'pending',review_status:'待审核'},
+      ],total:4});
       return Promise.resolve({pending_incoming:1,pending_process:2,pending_finished:0,pending_oqc:3});
     },
   });
@@ -141,11 +146,11 @@ test('home today todos use the reporting list total and inspection summary',asyn
     '/api/v1/apps/kuaizhizao/reporting',
     '/api/v1/apps/kuaizhizao/quality/inspection-center-summary',
   ]);
-  assert.equal(calls[0].query.status,'pending');
-  assert.equal(calls[0].query.limit,'1');
+  assert.equal(calls[0].query.status,'draft');
+  assert.equal(calls[0].query.limit,'100');
   assert.equal(run('todos.value.map(todo => todo.title).join(",")'),'待审报工,待检验,待处理故障,逾期保养');
   assert.equal(run('todos.value[0].subtitle'),'报工审核');
-  assert.equal(run('todos.value[0].countText'),'4');
+  assert.equal(run('todos.value[0].countText'),'2');
   assert.equal(run('todos.value[0].route'),'/mes/reporting-approve');
   assert.equal(run('todos.value[1].subtitle'),'待检验');
   assert.equal(run('todos.value[1].countText'),'6');

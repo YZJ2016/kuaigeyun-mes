@@ -140,7 +140,7 @@ interface UniMaterialSelectProps {
   /** Form.List 的 name（当在 Form.List 内时，用于 fillMapping 的 setFieldValue 完整路径） */
   listFieldName?: string;
   /** 尺寸 */
-  size?: 'large' | 'middle' | 'small';
+  size?: 'large' | 'medium' | 'small';
   /** 是否显示快速新建入口（未传 quickCreate 时默认跳转物料管理） */
   showQuickCreate?: boolean;
   /** 自定义快速新建（如打开新建物料 Modal）；传入时优先于 showQuickCreate 的默认跳转 */

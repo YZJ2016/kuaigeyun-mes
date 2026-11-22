@@ -2208,6 +2208,24 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             )
         except Exception as rel_e:
             logger.warning(f"建立来料检验->采购入库单关联失败: {rel_e}")
+            try:
+                await PurchaseReceiptService().delete_purchase_receipt(
+                    tenant_id=tenant_id,
+                    receipt_id=int(created.id),
+                    acting_user_id=created_by,
+                )
+            except Exception as del_e:
+                logger.exception(
+                    "来料检验下推关联失败后撤销入库单失败 receipt_id=%s: %s",
+                    getattr(created, "id", None),
+                    del_e,
+                )
+                raise BusinessLogicError(
+                    "来料检验下推采购入库失败：单据关联未建立，且撤销入库单失败"
+                ) from rel_e
+            raise BusinessLogicError(
+                "来料检验下推采购入库失败：单据关联未建立，已撤销刚生成的入库单"
+            ) from rel_e
 
         if not inspection.purchase_receipt_id:
             await IncomingInspection.filter(tenant_id=tenant_id, id=inspection_id).update(

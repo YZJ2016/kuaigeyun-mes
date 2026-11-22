@@ -255,7 +255,7 @@ const ReworkSignoffWorkbenchPage: React.FC = () => {
 
   return (
     <ListPageTemplate>
-      <Space orientation="vertical" size="middle" className="project-workbench-shell" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="medium" className="project-workbench-shell" style={{ width: '100%' }}>
       <ProjectWorkbenchToolbar
         backLabel="返回列表"
         onBack={() => navigate('/apps/kuaizhizao/production-execution/rework-orders')}

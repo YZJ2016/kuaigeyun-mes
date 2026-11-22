@@ -2873,20 +2873,11 @@ class ApprovalInstanceService:
             )
 
         node_data = node.get("data") if isinstance(node.get("data"), dict) else {}
-        approver_type = str(
-            (node_data or {}).get("approverType")
-            or (node_data or {}).get("approver_type")
-            or "user"
-        ).strip().lower()
         empty_policy = str(
             (node_data or {}).get("emptyApproverPolicy")
             or (node_data or {}).get("empty_approver_policy")
             or "block"
         ).strip().lower()
-        # 多级上级：组织树不足 N 级时默认跳过（有第 N 级则正常审批）；
-        # 仍尊重显式「升级管理员 / 兜底审批人」。
-        if approver_type == "multi_level_manager" and empty_policy == "block":
-            empty_policy = "auto_pass"
 
         try:
             approvers = await ApprovalInstanceService._resolve_node_approvers(node, instance)
@@ -2975,48 +2966,21 @@ class ApprovalInstanceService:
                 )
 
         owner_id = await ApprovalInstanceService._document_creator_for_self_skip(instance)
-        if owner_id is not None and owner_id in approvers:
-            approvers = [uid for uid in approvers if int(uid) != owner_id]
-            if not approvers:
-                return await ApprovalInstanceService._auto_pass_empty_approval_node(
-                    tenant_id,
-                    instance,
-                    node,
-                    on_missing_branch=on_missing_branch,
-                    notify_pending_approvers=notify_pending_approvers,
-                    comment="审批人为单据制单人，自动跳过本人审批",
+        if owner_id is not None and int(owner_id) in {int(uid) for uid in approvers}:
+            others = [uid for uid in approvers if int(uid) != int(owner_id)]
+            if others:
+                approvers = others
+                await ApprovalInstanceService._create_approval_history(
+                    tenant_id=tenant_id,
+                    approval_instance_id=instance.id,
+                    action="approve",
                     action_by=owner_id,
+                    from_node=str(node_id),
+                    to_node=None,
+                    comment="制单人免本人审批，等待其他审批人",
                 )
-            await ApprovalInstanceService._create_approval_history(
-                tenant_id=tenant_id,
-                approval_instance_id=instance.id,
-                action="approve",
-                action_by=owner_id,
-                from_node=str(node_id),
-                to_node=None,
-                comment="制单人免本人审批，等待其他审批人",
-            )
-
-        # 本节点解析出的审批人若均已在前序审批节点通过，自动跳过（避免同人连审两级）
-        if await ApprovalInstanceService._node_would_auto_pass_same_prior_approver(
-            tenant_id,
-            node,
-            instance,
-            known_approvers=approvers,
-        ):
-            logger.info(
-                "审批节点 {} 审批人与前序已通过人相同，自动跳过: {}",
-                node_id,
-                approvers,
-            )
-            return await ApprovalInstanceService._auto_pass_empty_approval_node(
-                tenant_id,
-                instance,
-                node,
-                on_missing_branch=on_missing_branch,
-                notify_pending_approvers=notify_pending_approvers,
-                comment="与前序节点审批人相同，自动跳过",
-            )
+            # 解析结果只有制单人时留在本节点审批。
+            # 不得因剔除后名单为空走空审批人自动通过，把整单审过。
 
         tasks = await ApprovalInstanceService._sync_node_approver_tasks(
             tenant_id, instance, node, approvers
@@ -3147,7 +3111,10 @@ class ApprovalInstanceService:
         if expected is None:
             expected = await ApprovalInstanceService._resolve_node_approvers(node, instance)
         owner_id = await ApprovalInstanceService._document_creator_for_self_skip(instance)
-        expected = [uid for uid in (expected or []) if int(uid) != owner_id]
+        if owner_id is not None:
+            others = [uid for uid in (expected or []) if int(uid) != int(owner_id)]
+            if others:
+                expected = others
         if not expected:
             return []
 
@@ -3284,7 +3251,7 @@ class ApprovalInstanceService:
 
     @staticmethod
     async def _document_creator_for_self_skip(instance: ApprovalInstance) -> Optional[int]:
-        """仅凭单据制单人免本人审批，不把代提交人当成制单人。"""
+        """单据制单人。节点上还有其他人时免本人；仅剩制单人时不跳过。不把代提交人当成制单人。"""
         data = getattr(instance, "data", None)
         data = data if isinstance(data, dict) else {}
         for key in ("document_owner_id", "created_by"):
@@ -3300,35 +3267,6 @@ class ApprovalInstanceService:
         return None
 
     @staticmethod
-    async def _prior_approved_approver_ids(
-        tenant_id: int,
-        instance: ApprovalInstance,
-        *,
-        exclude_node_id: Optional[str] = None,
-        extra_user_ids: Optional[List[int]] = None,
-    ) -> set[int]:
-        """本实例中已在审批节点通过的审批人（可排除当前节点，可并入即将通过的人）。"""
-        rows = await ApprovalTask.filter(
-            tenant_id=tenant_id,
-            approval_instance_id=int(instance.id),
-            status="approved",
-        )
-        out: set[int] = set()
-        for row in rows:
-            if exclude_node_id and str(row.node_id or "") == str(exclude_node_id):
-                continue
-            try:
-                out.add(int(row.approver_id))
-            except (TypeError, ValueError):
-                continue
-        for uid in extra_user_ids or []:
-            try:
-                out.add(int(uid))
-            except (TypeError, ValueError):
-                continue
-        return out
-
-    @staticmethod
     async def _node_would_auto_pass_same_prior_approver(
         tenant_id: int,
         node: dict,
@@ -3337,37 +3275,9 @@ class ApprovalInstanceService:
         known_approvers: Optional[List[int]] = None,
         treating_as_approved: Optional[int] = None,
     ) -> bool:
-        """
-        本节点解析审批人若均已在前序节点通过（或将视为刚通过），则应自动跳过。
-        用于：创建任务时跳过同人连审；前一节点通过时提前要求选后续分支。
-        """
-        node_type = node.get("type") or (node.get("data") or {}).get("type")
-        if str(node_type or "") != "approval":
-            return False
-        node_id = str(node.get("id") or "")
-        approvers = known_approvers
-        if approvers is None:
-            try:
-                approvers = await ApprovalInstanceService._resolve_node_approvers(
-                    node, instance
-                )
-            except ValidationError:
-                return False
-        if not approvers:
-            return False
-        owner_id = await ApprovalInstanceService._document_creator_for_self_skip(instance)
-        approvers = [uid for uid in approvers if int(uid) != owner_id]
-        if not approvers:
-            return True
-        prior = await ApprovalInstanceService._prior_approved_approver_ids(
-            tenant_id,
-            instance,
-            exclude_node_id=node_id or None,
-            extra_user_ids=[treating_as_approved] if treating_as_approved else None,
-        )
-        if not prior:
-            return False
-        return all(int(uid) in prior for uid in approvers)
+        """同一人已在前序节点通过时，不再自动通过本节点。保留签名供调用方兼容。"""
+        del tenant_id, node, instance, known_approvers, treating_as_approved
+        return False
 
     @staticmethod
     async def _resolve_managers_for_department_uuids(
@@ -3854,18 +3764,11 @@ class ApprovalInstanceService:
         instance: ApprovalInstance,
     ) -> bool:
         node_data = node.get("data") if isinstance(node.get("data"), dict) else {}
-        approver_type = str(
-            (node_data or {}).get("approverType")
-            or (node_data or {}).get("approver_type")
-            or "user"
-        ).strip().lower()
         empty_policy = str(
             (node_data or {}).get("emptyApproverPolicy")
             or (node_data or {}).get("empty_approver_policy")
             or "block"
         ).strip().lower()
-        if approver_type == "multi_level_manager" and empty_policy == "block":
-            empty_policy = "auto_pass"
         try:
             approvers = await ApprovalInstanceService._resolve_node_approvers(node, instance)
         except ValidationError as resolve_err:
@@ -4055,9 +3958,11 @@ class ApprovalInstanceService:
         """
         解析节点审批人。兼容前端 camelCase（approverType, approverIds）与后端 snake_case。
         支持：user（指定用户）、role（角色）、department（部门负责人）、manager（直属上级）、
-        multi_level_manager（沿部门树第 N 级负责人；不足 N 级返回空列表由创建任务侧跳过）、
+        multi_level_manager（沿部门树第 N 级负责人；不足 N 级返回空列表）、
         initiator_select / form / form_select / selected（发起时勾选快照）。
-        找不到有效审批人时抛 ValidationError（multi_level_manager 不足级数除外），禁止回落到提交人。
+        找不到有效审批人时抛 ValidationError，禁止回落到提交人。
+        multi_level_manager 名单为空时不在这里抛错，由创建任务侧按 emptyApproverPolicy 处理：
+        block 阻断，auto_pass 才自动通过。
         """
         node_data = node.get("data", {})
         node_id = str(node.get("id") or "")
@@ -4220,7 +4125,8 @@ class ApprovalInstanceService:
                 managers = await ApprovalInstanceService._resolve_submitter_department_manager_at_level(
                     tenant_id, submitter_id, level
                 )
-                # 有第 N 级负责人则返回；不足 N 级返回空，由创建任务侧按 auto_pass 跳过
+                # 有第 N 级负责人则返回；不足 N 级返回空。
+                # block 由创建任务侧抛 ValidationError，只有策略本身是 auto_pass 才跳过。
                 return managers
             except ValidationError:
                 raise
@@ -4577,16 +4483,24 @@ class ApprovalInstanceService:
             )
 
         if str(variables.get("message_category") or "") == "approval":
-            from core.services.messaging.approval_wecom_push_service import schedule_approval_wecom_push
+            from core.services.messaging.approval_wecom_push_service import send_approval_wecom_push
 
-            schedule_approval_wecom_push(
-                tenant_id=tenant_id,
-                user_id=user_id,
-                subject=subject,
-                content=content,
-                variables=variables,
-                trigger_action=trigger_action,
-            )
+            try:
+                await send_approval_wecom_push(
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                    subject=subject,
+                    content=content,
+                    variables=variables,
+                    trigger_action=trigger_action,
+                )
+            except Exception as wecom_exc:
+                logger.warning(
+                    "审批企微推送异常 tenant={} user={}: {}",
+                    tenant_id,
+                    user_id,
+                    wecom_exc,
+                )
 
     @staticmethod
     async def _send_cc_notification(

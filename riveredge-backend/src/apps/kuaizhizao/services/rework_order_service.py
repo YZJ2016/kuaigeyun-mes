@@ -633,6 +633,18 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             rework_order,
             **capability_kwargs_from_context(ctx),
         )
+        from apps.kuaizhizao.services.document_action_policy.print_unaudited_gate import (
+            apply_print_unaudited_gate_to_capabilities,
+            resolve_allow_print_unaudited_for_attach,
+        )
+
+        caps = apply_print_unaudited_gate_to_capabilities(
+            caps,
+            rework_order,
+            allow_print_unaudited=resolve_allow_print_unaudited_for_attach(
+                rework_order, explicit=None
+            ),
+        )
         resp.capabilities = caps
         payload = getattr(rework_order, "extension_payload", None) or {}
         if not isinstance(payload, dict):
@@ -1555,19 +1567,25 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                 deleted_at__isnull=True,
             ).all()
             start_op_map = {int(op.id): op for op in start_ops if op.id is not None}
+        from apps.kuaizhizao.services.document_action_policy.print_unaudited_gate import (
+            push_allow_print_unaudited,
+        )
+
+        allow_print = await self.business_config_service.get_allow_print_unaudited(tenant_id)
         result = []
-        for ro in rework_orders:
-            resp = ReworkOrderListResponse.model_validate(ro)
-            resp.lifecycle = get_rework_order_lifecycle(ro)
-            await self._enrich_rework_order_response(tenant_id, resp, ro)
-            self._attach_original_work_order_code(resp, code_map, ro.original_work_order_id)
-            start_id = ro.start_work_order_operation_id
-            if start_id:
-                start_op = start_op_map.get(int(start_id))
-                if start_op:
-                    resp.start_operation_code = start_op.operation_code
-                    resp.start_operation_name = start_op.operation_name
-            result.append(resp)
+        with push_allow_print_unaudited(allow_print):
+            for ro in rework_orders:
+                resp = ReworkOrderListResponse.model_validate(ro)
+                resp.lifecycle = get_rework_order_lifecycle(ro)
+                await self._enrich_rework_order_response(tenant_id, resp, ro)
+                self._attach_original_work_order_code(resp, code_map, ro.original_work_order_id)
+                start_id = ro.start_work_order_operation_id
+                if start_id:
+                    start_op = start_op_map.get(int(start_id))
+                    if start_op:
+                        resp.start_operation_code = start_op.operation_code
+                        resp.start_operation_name = start_op.operation_name
+                result.append(resp)
         return {
             "data": [r.model_dump() for r in result],
             "total": total,
@@ -2472,7 +2490,7 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
     async def withdraw_rework_submit(
         self, tenant_id: int, rework_order_id: int, operator_id: int
     ) -> ReworkOrderResponse:
-        from apps.kuaizhizao.constants import DocumentStatus, is_submitted_status
+        from apps.kuaizhizao.constants import is_submitted_status
         from apps.kuaizhizao.services.document_action_policy.rework_order import (
             assert_rework_order_capability,
         )
@@ -2504,7 +2522,8 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             flow.pop("approval_submit_notes", None)
             payload[SIGNOFF_FLOW_KEY] = flow
             rework_order.extension_payload = payload
-        rework_order.review_status = DocumentStatus.SUBMITTED
+        rework_order.status = "draft"
+        rework_order.review_status = "draft"
         rework_order.updated_by = operator_id
         rework_order.updated_by_name = user_info["name"]
         await rework_order.save()

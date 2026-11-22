@@ -63,7 +63,7 @@ export const PartnerStatementPeriodQuickSelect: React.FC<PartnerStatementPeriodQ
         style={{ minWidth: 260 }}
       />
       <Select<PartnerStatementPeriodPreset | 'custom'>
-        size="middle"
+        size="medium"
         value={preset}
         options={presetOptions}
         popupMatchSelectWidth={false}

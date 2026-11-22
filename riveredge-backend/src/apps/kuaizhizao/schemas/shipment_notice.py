@@ -113,6 +113,7 @@ class ShipmentNoticeResponse(ShipmentNoticeBase):
     """发货通知单响应schema"""
     id: int = Field(..., description="通知单ID")
     tenant_id: int = Field(..., description="租户ID")
+    review_status: Optional[str] = Field("草稿", description="审核状态")
     notified_at: Optional[datetime] = Field(None, description="通知仓库时间")
     sales_delivery_id: Optional[int] = Field(None, description="销售出库单ID")
     sales_delivery_code: Optional[str] = Field(None, max_length=50, description="销售出库单编码")

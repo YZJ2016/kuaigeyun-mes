@@ -44,10 +44,9 @@ def resolve_purchase_line_tax_rate_percent(
     line_tax_rate: Any = None,
     header_tax_rate: Any = None,
 ) -> Decimal:
-    """行税率优先（百分比或小数均可）；否则头税率。"""
-    line_raw = Decimal(str(line_tax_rate or 0)) if line_tax_rate is not None else Decimal("0")
-    if line_raw > 0:
-        return normalize_po_tax_rate_to_percent(line_raw)
+    """行税率优先（百分比或小数均可）。显式 0 保持 0；仅缺失/None 用头税率。"""
+    if line_tax_rate is not None:
+        return normalize_po_tax_rate_to_percent(line_tax_rate)
     return normalize_po_tax_rate_to_percent(header_tax_rate)
 
 
@@ -347,11 +346,9 @@ def resolve_receipt_line_tax_rate_percent(
     poi_by_id: Mapping[int, Any],
     receipt_line: Any = None,
 ) -> Decimal:
-    """入库行税率：本行 → 关联采购订单行 → 入库单头。"""
-    if receipt_line is not None:
-        own_pct = normalize_po_tax_rate_to_percent(getattr(receipt_line, "tax_rate", None))
-        if own_pct > 0:
-            return own_pct
+    """入库行税率：本行 → 关联采购订单行 → 入库单头。显式 0 不回落。"""
+    if receipt_line is not None and getattr(receipt_line, "tax_rate", None) is not None:
+        return normalize_po_tax_rate_to_percent(getattr(receipt_line, "tax_rate", None))
     header_pct = normalize_po_tax_rate_to_percent(getattr(receipt, "tax_rate", None))
     poi_id = int(purchase_order_item_id or 0)
     if poi_id > 0 and poi_id in poi_by_id:

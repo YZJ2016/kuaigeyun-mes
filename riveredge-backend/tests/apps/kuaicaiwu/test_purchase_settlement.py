@@ -13,12 +13,54 @@ from apps.kuaicaiwu.services.purchase_settlement import (
     purchase_order_settlement_gross,
     purchase_receipt_header_out_of_sync,
     purchase_receipt_settlement_gross,
+    resolve_purchase_line_tax_rate_percent,
+    resolve_receipt_line_tax_rate_percent,
 )
 from apps.kuaizhizao.services.document_recognition import (
     describe_purchase_receipt_payable_auto_skip,
     should_auto_payable_on_purchase_invoice,
     should_auto_payable_on_purchase_receipt,
 )
+
+
+def test_explicit_zero_line_tax_does_not_fall_back_to_header():
+    assert resolve_purchase_line_tax_rate_percent(
+        line_tax_rate=0,
+        header_tax_rate=Decimal("0.13"),
+    ) == Decimal("0")
+    assert resolve_purchase_line_tax_rate_percent(
+        line_tax_rate=None,
+        header_tax_rate=Decimal("0.13"),
+    ) == Decimal("13.00")
+    receipt = SimpleNamespace(tax_rate=Decimal("0.13"))
+    line = SimpleNamespace(
+        receipt_quantity=Decimal("1"),
+        unit_price=Decimal("100"),
+        tax_rate=Decimal("0"),
+        display_unit_price=None,
+        purchase_order_item_id=None,
+    )
+    assert resolve_receipt_line_tax_rate_percent(
+        receipt=receipt,
+        purchase_order_item_id=None,
+        poi_by_id={},
+        receipt_line=line,
+    ) == Decimal("0")
+    excl, tax, gross = compute_purchase_receipt_line_settlement_amounts(receipt, line, {})
+    assert excl == Decimal("100.00")
+    assert tax == Decimal("0.00")
+    assert gross == Decimal("100.00")
+    missing = SimpleNamespace(
+        receipt_quantity=Decimal("1"),
+        unit_price=Decimal("100"),
+        tax_rate=None,
+        display_unit_price=None,
+        purchase_order_item_id=None,
+    )
+    _excl, tax_fb, _gross = compute_purchase_receipt_line_settlement_amounts(
+        receipt, missing, {}
+    )
+    assert tax_fb == Decimal("13.00")
 
 
 def test_normalize_po_tax_rate_decimal_to_percent():

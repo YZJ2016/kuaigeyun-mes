@@ -1,14 +1,10 @@
 {
   "antd": "^6.4.4",
   "scanned_files": 2899,
-  "pattern_types": 2,
-  "total_hits": 8,
+  "pattern_types": 1,
+  "total_hits": 4,
   "by_severity": {
     "med": {
-      "hits": 4,
-      "patterns": 1
-    },
-    "high": {
       "hits": 4,
       "patterns": 1
     }
@@ -42,61 +38,16 @@
           "snippet": "addonAfter=\"%\""
         }
       ]
-    },
-    {
-      "api": "size=\"middle\" → \"medium\"",
-      "component": "size enum",
-      "severity": "high",
-      "hits": 4,
-      "files": 4,
-      "samples": [
-        {
-          "file": "src/apps/kuaicaiwu/pages/finance-management/shared/MiscVoucherListPage.tsx",
-          "line": 1547,
-          "snippet": "size=\"middle\""
-        },
-        {
-          "file": "src/apps/kuaicaiwu/pages/finance-management/partner-statements/PartnerStatementPeriodQuickSelect.tsx",
-          "line": 66,
-          "snippet": "size=\"middle\""
-        },
-        {
-          "file": "src/apps/kuaicaiwu/pages/finance-management/partner-statements/detail.tsx",
-          "line": 589,
-          "snippet": "size=\"middle\""
-        },
-        {
-          "file": "src/apps/kuaizhizao/pages/production-execution/rework-orders/workbench/ReworkSignoffWorkbenchPage.tsx",
-          "line": 258,
-          "snippet": "<Space orientation=\"vertical\" size=\"middle\" className=\"project-workbench-shell\" style={{ width: '100%' }}>"
-        }
-      ]
     }
   ],
   "top_files": [
-    {
-      "file": "src/apps/kuaizhizao/components/InspectionSamplingSpecFields.tsx",
-      "approx_hits": 2
-    },
     {
       "file": "src/components/quantity-with-unit/DocumentLineDualQuantity.tsx",
       "approx_hits": 2
     },
     {
-      "file": "src/apps/kuaizhizao/pages/production-execution/rework-orders/workbench/ReworkSignoffWorkbenchPage.tsx",
-      "approx_hits": 1
-    },
-    {
-      "file": "src/apps/kuaicaiwu/pages/finance-management/partner-statements/PartnerStatementPeriodQuickSelect.tsx",
-      "approx_hits": 1
-    },
-    {
-      "file": "src/apps/kuaicaiwu/pages/finance-management/shared/MiscVoucherListPage.tsx",
-      "approx_hits": 1
-    },
-    {
-      "file": "src/apps/kuaicaiwu/pages/finance-management/partner-statements/detail.tsx",
-      "approx_hits": 1
+      "file": "src/apps/kuaizhizao/components/InspectionSamplingSpecFields.tsx",
+      "approx_hits": 2
     }
   ],
   "migration_ref": "https://ant.design/docs/react/migration-v6"

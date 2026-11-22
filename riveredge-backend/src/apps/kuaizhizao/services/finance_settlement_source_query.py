@@ -39,6 +39,8 @@ _MONEY = Decimal("0.01")
 # 与仓储确认态对齐：禁止只认「已入库/已出库」漏掉「已完成」等同义状态
 _PURCHASE_RECEIPT_POSTED_STATUSES = ("已入库", "已完成", "completed", "COMPLETED", "processed", "POSTED")
 _SALES_DELIVERY_POSTED_STATUSES = ("已出库", "已完成", "completed", "COMPLETED", "processed", "POSTED", "done", "DONE")
+_SALES_RETURN_POSTED_STATUSES = ("已退货", "completed", "已完成", "RETURNED")
+_PURCHASE_RETURN_POSTED_STATUSES = ("已退货", "completed", "已完成", "RETURNED")
 
 
 def _q_money(value: Decimal | float | int | str) -> Decimal:
@@ -267,6 +269,7 @@ class FinanceSettlementSourceQuery:
         returns = await SalesReturn.filter(
             tenant_id=tenant_id,
             customer_id=customer_id,
+            status__in=list(_SALES_RETURN_POSTED_STATUSES),
             deleted_at__isnull=True,
         ).exclude(review_status__in=_EXCLUDED_REVIEW).order_by("return_time", "id").all()
 
@@ -379,6 +382,7 @@ class FinanceSettlementSourceQuery:
         returns = await PurchaseReturn.filter(
             tenant_id=tenant_id,
             supplier_id=supplier_id,
+            status__in=list(_PURCHASE_RETURN_POSTED_STATUSES),
             deleted_at__isnull=True,
         ).exclude(review_status__in=_EXCLUDED_REVIEW).order_by("return_time", "id").all()
 
@@ -396,7 +400,13 @@ class FinanceSettlementSourceQuery:
                 continue
             if int(r.id) in posted_ret:
                 continue
-            amt = _q_money(r.total_amount)
+            from apps.kuaicaiwu.services.return_open_balance_offset_service import (
+                _resolve_purchase_return_amount,
+            )
+
+            amt = await _resolve_purchase_return_amount(
+                tenant_id, r, tax_inclusive=tax_inclusive
+            )
             if amt <= 0:
                 continue
             extra: Dict[str, Any] = {}

@@ -33,6 +33,10 @@ class OtherOutboundItem(DocumentLineDualQuantityMixin, BaseModel):
     unit_price = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="单价")
     total_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="金额")
 
+    # 行级仓库（可与表头不同）
+    warehouse_id = fields.IntField(null=True, description="行出库仓库ID（可与表头不同）")
+    warehouse_name = fields.CharField(max_length=100, null=True, description="行出库仓库名称")
+
     # 库位信息
     location_id = fields.IntField(null=True, description="库位ID")
     location_code = fields.CharField(max_length=50, null=True, description="库位编码")
@@ -54,5 +58,6 @@ class OtherOutboundItem(DocumentLineDualQuantityMixin, BaseModel):
         indexes = [
             ("tenant_id", "outbound_id"),
             ("material_id",),
+            ("warehouse_id",),
             ("location_id",),
         ]

@@ -7,6 +7,8 @@ import { rowActionLabelKeep } from './actionCatalog'
 type PrepareRowActionButtonProps = Omit<ButtonProps, 'type' | 'size' | 'danger' | 'icon' | 'className'> & {
   /** 保留自定义文案（须与 manifest 默认不同） */
   labelKeep?: boolean
+  /** 禁用时仍露出操作（配合 Tooltip 说明原因），契约见 uni-action/overflow */
+  'data-row-action-visible-when-disabled'?: boolean
 }
 
 /**

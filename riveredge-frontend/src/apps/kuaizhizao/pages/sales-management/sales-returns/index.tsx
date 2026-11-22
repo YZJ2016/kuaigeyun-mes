@@ -253,7 +253,7 @@ const SalesReturnOutboundBatchSelect: React.FC<{
   value?: string;
   onChange?: (value: string | undefined) => void;
   onPick?: (option: CustomerOutboundBatchOption | null) => void;
-  size?: 'small' | 'middle' | 'large';
+  size?: 'small' | 'medium' | 'large';
 }> = ({ customerId, materialId, deliveryItemId, value, onChange, onPick, size }) => {
   const { t } = useTranslation();
   const [options, setOptions] = useState<CustomerOutboundBatchOption[]>([]);

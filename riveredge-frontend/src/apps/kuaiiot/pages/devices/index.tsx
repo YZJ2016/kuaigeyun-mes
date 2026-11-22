@@ -20,6 +20,13 @@ import { UniTable } from '../../../../components/uni-table';
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 import { API_BASE_URL } from '../../../../services/api';
 import { formatDateTimeBySiteSetting } from '../../../../utils/format';
+import {
+  translateDispatchChannel,
+  translateCommandStatus,
+  translateMessageDirection,
+  translateMessageType,
+  translateMessageResult,
+} from '../../constants/formOptions';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { buildDetailDrawerEditExtra } from '../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
 import { IOT_LIST_COL, renderIotOnlineMarker } from '../../utils/iotListPresentation';

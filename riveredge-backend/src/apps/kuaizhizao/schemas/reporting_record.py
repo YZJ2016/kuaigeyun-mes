@@ -224,6 +224,7 @@ class ReportingRecordListResponse(BaseSchema):
     work_start_time: Optional[datetime] = Field(None, description="工序开始时间")
     work_end_time: Optional[datetime] = Field(None, description="工序完成时间")
     status: str = Field(..., description="审核状态")
+    review_status: Optional[str] = Field(None, description="审核状态")
     reported_at: datetime = Field(..., description="报工时间")
     created_at: datetime = Field(..., description="创建时间")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算）")

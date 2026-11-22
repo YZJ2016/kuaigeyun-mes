@@ -43,6 +43,36 @@ DEPRECATED_PARAMETER_KEYS: Dict[str, frozenset] = {
 }
 
 
+_TENANT_ALLOW_PRINT_UNAUDITED: Dict[int, bool] = {}
+
+
+def peek_allow_print_unaudited(tenant_id: int) -> bool:
+    """同步读取当前进程内已加载的租户「未审核可打印」配置，缺省为 True。"""
+    cached = _TENANT_ALLOW_PRINT_UNAUDITED.get(int(tenant_id))
+    if cached is None:
+        return True
+    return bool(cached)
+
+
+def migrate_allow_print_unaudited_parameters(parameters: Dict[str, Any]) -> None:
+    """旧 sales.require_audit_before_print → common.allow_print_unaudited（就地）。"""
+    if not isinstance(parameters, dict):
+        return
+    sales = parameters.get("sales")
+    old_val: bool | None = None
+    if isinstance(sales, dict) and "require_audit_before_print" in sales:
+        old_val = bool(sales.get("require_audit_before_print"))
+    common = parameters.get("common")
+    if not isinstance(common, dict):
+        common = {}
+        parameters["common"] = common
+    if "allow_print_unaudited" not in common:
+        if old_val is not None:
+            common["allow_print_unaudited"] = not old_val
+        else:
+            common["allow_print_unaudited"] = True
+
+
 def strip_deprecated_parameters(parameters: Dict[str, Any]) -> Dict[str, Any]:
     """就地剥离已废弃参数键，返回同一 dict。"""
     if not isinstance(parameters, dict):
@@ -289,6 +319,23 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
     "parameters.common.quantity_decimal_places": {"type": "number", "min": 0, "max": 6},
     "parameters.common.price_decimal_places": {"type": "number", "min": 0, "max": 6},
     "parameters.common.amount_decimal_places": {"type": "number", "min": 0, "max": 6},
+    "parameters.common.allow_print_unaudited": {"type": "boolean"},
+    "parameters.planning.auto_push_work_order_on_computation_complete": {"type": "boolean"},
+    "parameters.procurement.auto_notify_warehouse_on_receipt_notice": {"type": "boolean"},
+    "parameters.procurement.auto_confirm_purchase_receipt": {"type": "boolean"},
+    "parameters.warehouse.finished_goods_inbound_limit_mode": {
+        "type": "select",
+        "options": [
+            {
+                "value": "work_order_quantity",
+                "labelKey": "pages.system.configCenter.param.warehouse_finished_goods_inbound_limit_mode_opt_work_order_quantity",
+            },
+            {
+                "value": "picking_kit_sets",
+                "labelKey": "pages.system.configCenter.param.warehouse_finished_goods_inbound_limit_mode_opt_picking_kit_sets",
+            },
+        ],
+    },
     "parameters.purchase.tolerance_percentage": {"type": "number", "min": 0, "max": 100},
     "parameters.purchase.price_fluctuation_limit_percent": {"type": "number", "min": 0, "max": 100},
     "parameters.work_order.material_shortage_block_level": {"type": "number", "min": 0, "max": 3},
@@ -546,6 +593,7 @@ PROCESS_KEYS = {
     "parameters.work_order.picking_confirm_allowed_functional_domains",
     "parameters.work_order.require_confirmed_picking_before_operation_start",
     "parameters.work_order.require_confirmed_picking_before_reporting",
+    "parameters.work_order.require_operation_dispatch",
 }
 
 # 参数设置：具体业务值（数值、阈值、功能开关）
@@ -638,6 +686,12 @@ PARAMETER_KEYS = {
     "parameters.supply_chain.partner_price_resolution_order",
     "parameters.sales.partner_price_source",
     "parameters.purchase.partner_price_source",
+    "parameters.common.allow_print_unaudited",
+    "parameters.warehouse.finished_goods_inbound_limit_mode",
+    "parameters.quality.auto_push_purchase_receipt_after_iqc_pass",
+    "parameters.planning.auto_push_work_order_on_computation_complete",
+    "parameters.procurement.auto_notify_warehouse_on_receipt_notice",
+    "parameters.procurement.auto_confirm_purchase_receipt",
 }
 
 # 已实装并在后端有明确生效点的配置项（用于前端禁用"假开关"）
@@ -649,6 +703,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.common.quantity_decimal_places",
     "parameters.common.price_decimal_places",
     "parameters.common.amount_decimal_places",
+    "parameters.common.allow_print_unaudited",
     "parameters.procurement.require_purchase_requisition",
     "parameters.procurement.require_supplier_qualification",
     "parameters.procurement.require_purchase_order_change_confirm",
@@ -659,6 +714,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.work_order.picking_confirm_allowed_functional_domains",
     "parameters.work_order.require_confirmed_picking_before_operation_start",
     "parameters.work_order.require_confirmed_picking_before_reporting",
+    "parameters.work_order.require_operation_dispatch",
     "parameters.work_order.allow_production_without_material",
     "parameters.work_order.allow_work_order_without_bom",
     "parameters.work_order.auto_generate",
@@ -686,6 +742,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.warehouse.allow_negative_inventory",
     "parameters.warehouse.over_issue_allowance_ratio",
     "parameters.warehouse.allow_non_bom_production_issue",
+    "parameters.warehouse.finished_goods_inbound_limit_mode",
     "parameters.purchase.tolerance_percentage",
     "parameters.purchase.price_fluctuation_limit_percent",
     "parameters.purchase.partner_price_source",
@@ -698,6 +755,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.quality.finished_inspection",
     "parameters.quality.defect_handling",
     "parameters.quality.auto_create_iqc_on_purchase_receipt",
+    "parameters.quality.auto_push_purchase_receipt_after_iqc_pass",
     "parameters.quality.auto_create_ipqc_on_reporting",
     "parameters.quality.auto_create_fqc_on_last_reporting",
     "parameters.quality.auto_create_oqc_on_shipment_notice_notify",
@@ -727,8 +785,11 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.planning.auto_push_sales_to_computation_on_approve",
     "parameters.planning.auto_execute_computation_on_create",
     "parameters.planning.auto_push_purchase_on_computation_complete",
+    "parameters.planning.auto_push_work_order_on_computation_complete",
     "parameters.procurement.auto_approve_purchase_order_on_create",
     "parameters.procurement.auto_push_receipt_notice_on_approve",
+    "parameters.procurement.auto_notify_warehouse_on_receipt_notice",
+    "parameters.procurement.auto_confirm_purchase_receipt",
     "parameters.automation.push_default_mode",
     "parameters.automation.manual_create_auto_submit",
     "parameters.master_data.drawing_max_upload_size_mb",
@@ -928,6 +989,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "quantity_decimal_places": 2,
         "price_decimal_places": 2,
         "amount_decimal_places": 2,
+        "allow_print_unaudited": True,
     },
     "work_order": {
         "auto_generate": True,
@@ -943,6 +1005,8 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "picking_confirm_allowed_functional_domains": [],
         "require_confirmed_picking_before_operation_start": False,
         "require_confirmed_picking_before_reporting": False,
+        # 默认开：与历史硬门禁一致（未派工不可报工）；关闭后允许未派工报工
+        "require_operation_dispatch": True,
         "last_operation_auto_inbound_mode": "none",
         "show_customer_name": False,
         "score_enabled": True,
@@ -1012,6 +1076,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "allow_negative_inventory": False,
         "over_issue_allowance_ratio": 0,
         "allow_non_bom_production_issue": False,
+        "finished_goods_inbound_limit_mode": "work_order_quantity",
         "kingdee_inventory_push": {
             "enabled": False,
             "form_id": "STK_Miscellaneous",
@@ -1267,6 +1332,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "auto_create_fqc_on_last_reporting": False,
         "auto_create_oqc_on_shipment_notice_notify": False,
         "auto_create_oqc_on_sales_delivery": False,
+        "auto_push_purchase_receipt_after_iqc_pass": False,
     },
     "sales": {
         "partner_price_source": "recent",
@@ -1316,11 +1382,14 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "arrival_imminent_days": 3,
         "auto_approve_purchase_order_on_create": False,
         "auto_push_receipt_notice_on_approve": False,
+        "auto_notify_warehouse_on_receipt_notice": False,
+        "auto_confirm_purchase_receipt": False,
     },
     "planning": {
         "auto_push_sales_to_computation_on_approve": False,
         "auto_execute_computation_on_create": False,
         "auto_push_purchase_on_computation_complete": False,
+        "auto_push_work_order_on_computation_complete": False,
     },
     "automation": {
         # 与其它业务自动化布尔开关一致：默认保守（草稿），避免下推即提交/待审
@@ -1623,7 +1692,10 @@ class BusinessConfigService:
         if "kuaiplm" in merged:
             merged["kuaiplm"] = coerce_kuaiplm_parameters(dict(merged["kuaiplm"] or {}))
 
+        migrate_allow_print_unaudited_parameters(merged)
         strip_deprecated_parameters(merged)
+        allow_val = bool((merged.get("common") or {}).get("allow_print_unaudited", True))
+        _TENANT_ALLOW_PRINT_UNAUDITED[int(tenant_id)] = allow_val
         return {"parameters": merged}
 
     async def get_bom_multi_version_allowed(self, tenant_id: int) -> bool:
@@ -1768,6 +1840,57 @@ class BusinessConfigService:
         """报价单/销售订单：开启后须审核通过才可打印（默认关闭）。"""
         config = await self.get_business_config(tenant_id)
         return bool(config["parameters"].get("sales", {}).get("require_audit_before_print", False))
+
+    async def get_allow_print_unaudited(self, tenant_id: int) -> bool:
+        """未审核单据是否允许打印（默认 True）。"""
+        config = await self.get_business_config(tenant_id)
+        allow = bool(config["parameters"].get("common", {}).get("allow_print_unaudited", True))
+        _TENANT_ALLOW_PRINT_UNAUDITED[int(tenant_id)] = allow
+        return allow
+
+    async def require_operation_dispatch(self, tenant_id: int) -> bool:
+        """是否每道工序必须派工（人员或班组）后才允许报工。默认 True。"""
+        config = await self.get_business_config(tenant_id)
+        return bool(
+            config.get("parameters", {})
+            .get("work_order", {})
+            .get("require_operation_dispatch", True)
+        )
+
+    async def get_finished_goods_inbound_limit_mode(self, tenant_id: int) -> str:
+        config = await self.get_business_config(tenant_id)
+        raw = config["parameters"].get("warehouse", {}).get(
+            "finished_goods_inbound_limit_mode", "work_order_quantity"
+        )
+        v = str(raw or "work_order_quantity").strip()
+        return v if v in ("work_order_quantity", "picking_kit_sets") else "work_order_quantity"
+
+    async def auto_push_work_order_on_computation_complete(self, tenant_id: int) -> bool:
+        """需求计算完成后是否自动下推工单（组织级开关，默认关闭）。"""
+        config = await self.get_business_config(tenant_id)
+        return bool(
+            config["parameters"]
+            .get("planning", {})
+            .get("auto_push_work_order_on_computation_complete", False)
+        )
+
+    async def auto_notify_warehouse_on_receipt_notice(self, tenant_id: int) -> bool:
+        """收货通知创建后是否自动通知仓库生成采购入库草稿（组织级开关，默认关闭）。"""
+        config = await self.get_business_config(tenant_id)
+        return bool(
+            config["parameters"]
+            .get("procurement", {})
+            .get("auto_notify_warehouse_on_receipt_notice", False)
+        )
+
+    async def auto_confirm_purchase_receipt(self, tenant_id: int) -> bool:
+        """采购入库单创建后是否自动确认入库过账（组织级开关，默认关闭）。"""
+        config = await self.get_business_config(tenant_id)
+        return bool(
+            config["parameters"]
+            .get("procurement", {})
+            .get("auto_confirm_purchase_receipt", False)
+        )
 
     async def require_shipment_notice_before_delivery(self, tenant_id: int) -> bool:
         """销售出库须先发货通知：开启后禁止销售订单直连出库（默认关闭）。"""

@@ -17,7 +17,7 @@ export type DocumentLineDualQuantityFormColumnOptions = {
   quantityDecimals?: number;
   unitWidth?: number;
   quantityWidth?: number;
-  controlSize?: 'small' | 'middle' | 'large';
+  controlSize?: 'small' | 'medium' | 'large';
   alignQuantity?: 'left' | 'right' | 'center';
   unitColumnSpread?: Record<string, unknown>;
   quantityColumnSpread?: Record<string, unknown>;

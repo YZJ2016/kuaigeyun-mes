@@ -296,9 +296,20 @@ async def reconcile_document_push(
 @router.post("", summary="Push document to external system")
 async def push_document_external(
     body: DocumentPushBody,
+    request: Request,
+    auth: AuthContext = Depends(get_auth_context),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> Dict[str, Any]:
+    push_code = resolve_external_push_permission(body.source_type)
+    await ensure_permission_codes(
+        auth,
+        tenant_id,
+        request,
+        [push_code],
+        require_all=True,
+        check_abac=False,
+    )
     try:
         targets_payload = None
         if body.targets:

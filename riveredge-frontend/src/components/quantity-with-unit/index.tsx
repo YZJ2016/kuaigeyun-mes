@@ -29,7 +29,7 @@ export interface QuantityWithUnitProps {
   value?: QuantityWithUnitValue;
   onChange?: (next: QuantityWithUnitValue) => void;
   disabled?: boolean;
-  size?: 'large' | 'middle' | 'small';
+  size?: 'large' | 'medium' | 'small';
   quantityMin?: number;
   quantityPrecision?: number;
   quantityPlaceholder?: string;

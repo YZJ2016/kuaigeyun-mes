@@ -21,7 +21,7 @@ export interface MaterialUnitQuickSelectProps {
   placeholder?: string;
   disabled?: boolean;
   allowClear?: boolean;
-  size?: 'large' | 'middle' | 'small';
+  size?: 'large' | 'medium' | 'small';
   style?: React.CSSProperties;
 }
 

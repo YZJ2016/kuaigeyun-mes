@@ -199,6 +199,7 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaizhizao.models.tool",
     "apps.kuaizhizao.models.tool_ops",
     "apps.kuaizhizao.models.work_order",
+    "apps.kuaizhizao.models.work_order_bom_line",
     "apps.kuaizhizao.models.work_order_group",
     "apps.kuaizhizao.models.work_order_operation",
     "apps.kuaizhizao.models.work_order_score",

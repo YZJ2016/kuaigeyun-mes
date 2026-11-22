@@ -49,7 +49,48 @@
 	}
 
 	function lineSub(row : any) : string {
-		return fieldText(row, 'worker_name') + '  数量 ' + fieldText(row, 'reported_quantity') + '  ' + fieldText(row, 'status')
+		const review = fieldText(row, 'review_status')
+		const status = fieldText(row, 'status')
+		let text = fieldText(row, 'worker_name') + '  数量 ' + fieldText(row, 'reported_quantity') + '  ' + status
+		if (review.length > 0) {
+			text = text + '  ' + review
+		}
+		return text
+	}
+
+	function objectField(row : any | null, key : string) : any | null {
+		if (row == null) {
+			return null
+		}
+		if (row instanceof UTSJSONObject) {
+			const json = (row as UTSJSONObject).getJSON(key)
+			if (json != null) {
+				return json
+			}
+		}
+		const record = row as UTSJSONObject
+		const value = record[key]
+		if (value != null && typeof value == 'object') {
+			return value
+		}
+		return null
+	}
+
+	function reviewPending(value : string) : boolean {
+		const raw = value.trim()
+		const lower = raw.toLowerCase()
+		return raw == '待审核' || lower == 'pending' || lower == 'pending_review' || lower == 'pending_approval'
+	}
+
+	function reportingApproveAllowed(row : any) : boolean {
+		const caps = objectField(row, 'capabilities')
+		const approve = caps == null ? null : objectField(caps, 'approve')
+		if (approve != null) {
+			return fieldText(approve, 'allowed') == 'true'
+		}
+		const status = fieldText(row, 'status')
+		const draft = status == 'draft' || status == '草稿' || status.toLowerCase() == 'draft'
+		return draft && reviewPending(fieldText(row, 'review_status'))
 	}
 
 	async function load() {
@@ -58,7 +99,8 @@
 		loading.value = true
 		errorTextValue.value = ''
 		const query = new UTSJSONObject()
-		query.set('status', 'pending')
+		query.set('status', 'draft')
+		query.set('limit', '100')
 		try {
 			const payload = await request({
 				method: 'GET',
@@ -69,7 +111,14 @@
 			if (ticket != mine) {
 				return
 			}
-			rows.value = readRows(payload)
+			const incoming = readRows(payload)
+			const pending : any[] = []
+			for (let i = 0; i < incoming.length; i++) {
+				if (reportingApproveAllowed(incoming[i])) {
+					pending.push(incoming[i])
+				}
+			}
+			rows.value = pending
 		} catch (err) {
 			if (ticket != mine) {
 				return
@@ -91,6 +140,10 @@
 		const recordId = fieldNumber(row, 'id')
 		if (recordId <= 0) {
 			toast('报工记录无效')
+			return
+		}
+		if (!reportingApproveAllowed(row)) {
+			toast('这张报工还不能审核')
 			return
 		}
 		approvingIndex.value = index

@@ -91,6 +91,7 @@ class SendMessageRequest(BaseModel):
     entity_type: Optional[str] = Field(None, max_length=100, description="业务实体类型")
     entity_id: Optional[int] = Field(None, description="业务实体ID")
     entity_uuid: Optional[str] = Field(None, max_length=36, description="业务实体UUID")
+    attachment: Optional[MessageAttachment] = Field(None, description="可选附件；不传则与原来一样")
 
 
 class SendMessageResponse(BaseModel):

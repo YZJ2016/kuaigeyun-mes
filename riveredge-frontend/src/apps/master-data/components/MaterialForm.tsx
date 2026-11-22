@@ -18,6 +18,7 @@ import { useNavigate } from 'react-router-dom';
 import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert, Tag, Space, Switch, Card, theme, Upload, Typography, Tooltip } from 'antd';
 import { UniTableStackedPrimaryCell } from '../../../components/uni-table/stackedPrimaryColumn';
 import { useCustomFields } from '../../../hooks/useCustomFields';
+import type { CustomField } from '../../../services/customField';
 import { CustomFieldsFormSection } from '../../../components/custom-fields';
 import { MaterialDedupCreateGuard } from './MaterialDedupAssistant';
 import { FormModalTemplate, DocumentFormPageLayout, DocumentFormPageHeaderActions, DetailDrawerSection, useStackedOverlayZIndex } from '../../../components/layout-templates';

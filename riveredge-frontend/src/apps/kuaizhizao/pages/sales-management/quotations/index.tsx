@@ -141,7 +141,8 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../s
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import dayjs from 'dayjs';
 import { formatDateTime, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
-import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
+import { QuantityWithUnitDisplay, DocumentLineDualQuantityFormCell } from '../../../../../components/quantity-with-unit';
+import { pickDocumentLineDualQuantityFields } from '../../../../../utils/materialDualQuantity';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
@@ -705,6 +706,7 @@ function mapQuotationSubmitItem(
     partner_material_code: (it as { partner_material_code?: string }).partner_material_code,
     partner_material_name: (it as { partner_material_name?: string }).partner_material_name,
     material_unit: it.material_unit,
+    ...pickDocumentLineDualQuantityFields(it as Record<string, unknown>),
     quote_quantity: it.quote_quantity,
     unit_price: giftFields.unit_price,
     tax_rate: it.tax_rate ?? 0,

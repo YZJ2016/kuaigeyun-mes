@@ -42,6 +42,12 @@ class PartnerStatement(BaseModel):
 
     status = fields.CharField(max_length=20, default="Draft", description="状态 (Draft/Confirmed/Sent/Disputed)")
 
+    review_status = fields.CharField(max_length=20, default="草稿", description="审核状态 (草稿/待审核/已审核/驳回)")
+    reviewer_id = fields.IntField(null=True, description="审核人ID")
+    reviewer_name = fields.CharField(max_length=100, null=True, description="审核人姓名")
+    review_time = fields.DatetimeField(null=True, description="审核时间")
+    review_remarks = fields.TextField(null=True, description="审核备注/驳回原因")
+
     transaction_details = fields.JSONField(null=True, description="往来明细快照")
     company_name = fields.CharField(max_length=200, null=True, description="我司名称快照")
 

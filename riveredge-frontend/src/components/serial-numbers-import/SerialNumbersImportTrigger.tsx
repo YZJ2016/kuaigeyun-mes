@@ -8,7 +8,7 @@ export interface SerialNumbersImportTriggerProps {
   serials?: string[];
   expectedCount?: number;
   materialLabel?: string;
-  size?: 'small' | 'middle';
+  size?: 'small' | 'medium';
   generateLoading?: boolean;
   onSerialsChange: (serials: string[]) => void;
   onGenerate?: () => Promise<string[] | void>;

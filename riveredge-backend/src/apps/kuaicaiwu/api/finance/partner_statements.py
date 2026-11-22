@@ -131,6 +131,7 @@ async def create_partner_statement(
             end_date=data.end_date,
             line_amounts=[item.model_dump() for item in data.line_amounts] if data.line_amounts else None,
             ledger_posting_mode=str(data.ledger_posting_mode or "immediate"),
+            amount_basis=str(data.amount_basis or "tax_inclusive"),
         )
         return await _to_response(obj)
     except (ValidationError, NotFoundError, BusinessLogicError) as e:

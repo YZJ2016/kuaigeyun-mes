@@ -63,6 +63,7 @@ import DocumentAttachmentsField from '../../../../kuaizhizao/components/Document
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { formatDateTime, formatCurrencyAmount } from '../../../../../utils/format';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import {
   FINANCE_DOC_PINNED_STATUS_FIELD,
   financeDocCreatedUpdatedColumns,
@@ -73,6 +74,7 @@ import type { PartnerStatementListParams } from '../../../services/finance/partn
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { buildReportHelpViewConfig } from '../../../../../components/page-help-wiki';
+import { isPendingReviewStatus } from '../../../../kuaizhizao/constants/documentStatus';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   createListAuditPhaseColumn,
@@ -86,6 +88,7 @@ const money = (v: number | string | undefined) =>
 
 const PS = 'app.kuaicaiwu.partnerStatement';
 const PARTNER_STATEMENT_RESOURCE = 'kuaicaiwu:partner-statement';
+const PARTNER_STATEMENT_ENTITY = 'partner_statement';
 
 const PartnerStatementsPage: React.FC = () => {
   const customerActionRef = useRef<ActionType>();
@@ -95,6 +98,8 @@ const PartnerStatementsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'Customer' | 'Supplier' | 'Outsource'>('Customer');
   const [customerSelectedRowKeys, setCustomerSelectedRowKeys] = useState<React.Key[]>([]);
   const [supplierSelectedRowKeys, setSupplierSelectedRowKeys] = useState<React.Key[]>([]);
+  const [customerTableRows, setCustomerTableRows] = useState<PartnerStatement[]>([]);
+  const [supplierTableRows, setSupplierTableRows] = useState<PartnerStatement[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -734,6 +739,7 @@ const PartnerStatementsPage: React.FC = () => {
         />,
       ]}
       request={tableRequest('Customer')}
+      onTableDataChange={setCustomerTableRows}
       columns={alignProColumns(buildColumns('Customer'), SALES_DOC_LIST_FIELD_RANK)}
       skipFuzzyPinyinClientFilter
       pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}
@@ -781,6 +787,7 @@ const PartnerStatementsPage: React.FC = () => {
         />,
       ]}
       request={tableRequest('Supplier')}
+      onTableDataChange={setSupplierTableRows}
       columns={alignProColumns(buildColumns('Supplier'), SALES_DOC_LIST_FIELD_RANK)}
       skipFuzzyPinyinClientFilter
       pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}

@@ -902,24 +902,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
         plan_qty = Decimal(str(work_order.quantity or 0))
         try:
-            variant_attrs = getattr(work_order, "variant_attributes", None)
-            cfg_selections = getattr(work_order, "configurable_selections", None)
-            if cfg_selections and isinstance(cfg_selections, dict):
-                try:
-                    cfg_selections = {
-                        str(k): int(v) for k, v in cfg_selections.items() if v is not None
-                    }
-                except (TypeError, ValueError):
-                    cfg_selections = None
-            requirements = await calculate_material_requirements_from_bom(
-                tenant_id=tenant_id,
-                material_id=work_order.product_id,
-                required_quantity=float(plan_qty),
-                only_approved=True,
-                variant_attributes=variant_attrs,
-                configurable_selections=cfg_selections,
-                for_kitting_analysis=True,
-                **bom_expand_kwargs_from_work_order(work_order),
+            requirements = await WorkOrderService.component_requirements_saved_or_bom(
+                tenant_id, work_order
             )
         except Exception as exc:
             logger.warning(
@@ -4528,6 +4512,36 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     restore_status_hint=work_order.status,
                 )
 
+    @staticmethod
+    async def component_requirements_saved_or_bom(tenant_id: int, work_order: Any) -> List[Any]:
+        """缺料、齐套、报工可支撑量：已保存子件行优先，否则展开 BOM 模板。"""
+        from apps.kuaizhizao.services.work_order_bom_line_service import WorkOrderBomLineService
+
+        saved = await WorkOrderBomLineService().build_requirements_from_saved_lines(
+            tenant_id, work_order
+        )
+        if saved is not None:
+            return saved
+        variant_attrs = getattr(work_order, "variant_attributes", None)
+        cfg_selections = getattr(work_order, "configurable_selections", None)
+        if cfg_selections and isinstance(cfg_selections, dict):
+            try:
+                cfg_selections = {
+                    str(k): int(v) for k, v in cfg_selections.items() if v is not None
+                }
+            except (TypeError, ValueError):
+                cfg_selections = None
+        return await calculate_material_requirements_from_bom(
+            tenant_id=tenant_id,
+            material_id=work_order.product_id,
+            required_quantity=float(work_order.quantity),
+            only_approved=True,
+            variant_attributes=variant_attrs,
+            configurable_selections=cfg_selections,
+            for_kitting_analysis=True,
+            **bom_expand_kwargs_from_work_order(work_order),
+        )
+
     async def check_material_shortage(
         self,
         tenant_id: int,
@@ -4551,26 +4565,11 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         """
         work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
 
-        # 获取BOM物料需求（配置件时传入 variant_attributes，配置位时传入 configurable_selections）
+        # 已保存子件行优先（与领料确认防超发同一口径）；没有才读 BOM 模板。
+        # 模板展开仍只取一阶物料，避免半成品及其原材料双重计入。
         try:
-            variant_attrs = getattr(work_order, "variant_attributes", None)
-            cfg_selections = getattr(work_order, "configurable_selections", None)
-            if cfg_selections and isinstance(cfg_selections, dict):
-                try:
-                    cfg_selections = {str(k): int(v) for k, v in cfg_selections.items() if v is not None}
-                except (TypeError, ValueError):
-                    cfg_selections = None
-            # 与领料同口径：只校验一阶物料（自制/委外子件走各自工单，不拆子 BOM），
-            # 否则半成品及其原材料被双重计入需求，出现虚假缺料
-            material_requirements = await calculate_material_requirements_from_bom(
-                tenant_id=tenant_id,
-                material_id=work_order.product_id,
-                required_quantity=float(work_order.quantity),
-                only_approved=True,
-                variant_attributes=variant_attrs,
-                configurable_selections=cfg_selections,
-                for_kitting_analysis=True,
-                **bom_expand_kwargs_from_work_order(work_order),
+            material_requirements = await self.component_requirements_saved_or_bom(
+                tenant_id, work_order
             )
         except NotFoundError:
             logger.warning(f"工单 {work_order.code} 的产品 {work_order.product_id} 没有BOM，跳过缺料检测")
@@ -6281,7 +6280,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 policy_cache=policy_cache,
                 inspections_by_op=inspections_by_op,
             )
-            if idx == 0 or wo_allows_jump:
+            # 与提交报工、拉源、委外相同：前序节点尚无合格产出时 incoming 为 0，不再加补领。
+            if incoming > 0 and (idx == 0 or wo_allows_jump):
                 incoming = incoming + picking_extra_units
             material_remaining = incoming - material_consumed
             if material_remaining < 0:
@@ -7022,7 +7022,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 label = op_status_labels.get(status, status)
                 raise BusinessLogicError(f'只能开工「待开工」状态的工序，当前为「{label}」')
 
-            # 跳转门禁：唯一认工单头 allow_operation_jump
+            # 跳转门禁：工单头 allow_operation_jump；允许跳转时前序节点仍不可跳过
             from apps.kuaizhizao.services.operation_jump_rules import (
                 validate_start_respects_jump_gates,
             )
@@ -8135,18 +8135,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         if not wo:
             raise NotFoundError(f"工单不存在: {work_order_id}")
 
-        # 2. 从 BOM 计算物料需求
+        # 2. 物料需求：已保存子件行优先，没有才展开 BOM 模板
         try:
-            requirements = await calculate_material_requirements_from_bom(
-                tenant_id=tenant_id,
-                material_id=wo.product_id,
-                required_quantity=float(wo.quantity),
-                only_approved=True,
-                variant_attributes=wo.variant_attributes,
-                configurable_selections=wo.configurable_selections,
-                for_kitting_analysis=True,
-                **bom_expand_kwargs_from_work_order(wo),
-            )
+            requirements = await self.component_requirements_saved_or_bom(tenant_id, wo)
         except Exception as e:
             logger.warning(f"BOM 展开失败: {e}")
             requirements = []

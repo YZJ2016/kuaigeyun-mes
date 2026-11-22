@@ -98,6 +98,13 @@ function lineFrom(kind: string, item: UTSJSONObject, headerWh: string, headerWhN
 		line.batchNumber = fieldText(item, 'batch_no')
 	}
 	line.serialText = joinSerials(item)
+	if (item.get('aux_quantity') != null) {
+		line.auxQuantityText = fieldNumber(item, 'aux_quantity').toString()
+	}
+	line.auxUnit = fieldText(item, 'aux_unit')
+	if (item.get('unit_conversion_rate') != null) {
+		line.unitConversionText = fieldNumber(item, 'unit_conversion_rate').toString()
+	}
 	line.deliveryQuantity = fieldNumber(item, 'delivery_quantity')
 	line.displayQty = ''
 	if (kind == 'pickings') {

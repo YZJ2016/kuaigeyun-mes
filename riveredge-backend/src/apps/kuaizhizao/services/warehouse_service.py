@@ -239,6 +239,27 @@ def _document_line_dual_quantity_update_fields(line: Any) -> Dict[str, Any]:
     return out
 
 
+_SALES_DELIVERY_REVIEW_APPROVED = frozenset({
+    "已通过",
+    "审核通过",
+    "approved",
+    "APPROVED",
+    "通过",
+    "已审核",
+})
+
+
+def sales_delivery_confirm_blocked_by_review(
+    *,
+    audit_required: bool,
+    review_status: Any,
+) -> bool:
+    """组织开启销售出库审核时，未通过不能确认。免审不拦。"""
+    if not audit_required:
+        return False
+    return str(review_status or "").strip() not in _SALES_DELIVERY_REVIEW_APPROVED
+
+
 def _build_purchase_receipt_item_response(
     item: Any,
     *,
@@ -3902,6 +3923,8 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
                         serial_nos=item_serial_nos or None,
+                        **InventoryService.location_kwargs_from_line_item(item),
+                        location_scoped=InventoryService.line_item_location_scoped(item),
                         source_type="production_picking",
                         source_doc_id=picking_id,
                         source_doc_code=picking.picking_code,
@@ -4026,26 +4049,57 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                             quantity=qty,
                             scene="生产领料撤回",
                         )
-                    await InventoryService.increase_stock(
-                        tenant_id=tenant_id,
-                        material_id=item.material_id,
+                    posting = _convert_line_to_posting_quantities(
                         quantity=qty,
-                        warehouse_id=wh_id,
-                        batch_no=item.batch_number or None,
-                        serial_nos=serial_nos or None,
-                        source_type="production_picking_withdraw",
-                        source_doc_id=picking_id,
-                        source_doc_code=picking_obj.picking_code,
-                        work_order_id=_item_source_work_order_id(item, picking_obj) or None,
-                        work_order_code=_item_source_work_order_code(item, picking_obj),
-                        movement_type="production_issue",
-                        to_warehouse_id=wh_id,
-                        ledger_production_date=ledger_production_date,
-                        remark="撤回生产领料",
-                        idempotency_key=f"production_picking:{picking_id}:withdraw:{item.id}",
-                    operator_id=updated_by,
-                    operator_name=None,
-                )
+                        material_unit=getattr(item, "material_unit", None),
+                        material=mat,
+                        item=item,
+                    )
+                    if InventoryService.line_item_location_scoped(item):
+                        await InventoryService.increase_stock(
+                            tenant_id=tenant_id,
+                            material_id=item.material_id,
+                            **_inventory_posting_call_kwargs(posting),
+                            warehouse_id=wh_id,
+                            batch_no=item.batch_number or None,
+                            serial_nos=serial_nos or None,
+                            **InventoryService.location_kwargs_from_line_item(item),
+                            source_type="production_picking_withdraw",
+                            source_doc_id=picking_id,
+                            source_doc_code=picking_obj.picking_code,
+                            work_order_id=_item_source_work_order_id(item, picking_obj) or None,
+                            work_order_code=_item_source_work_order_code(item, picking_obj),
+                            movement_type="production_issue",
+                            to_warehouse_id=wh_id,
+                            ledger_production_date=ledger_production_date,
+                            remark="撤回生产领料",
+                            idempotency_key=f"production_picking:{picking_id}:withdraw:{item.id}",
+                            operator_id=updated_by,
+                            operator_name=None,
+                        )
+                    else:
+                        await InventoryService.restore_unscoped_outbound_by_posted_locations(
+                            tenant_id=tenant_id,
+                            material_id=item.material_id,
+                            **_inventory_posting_call_kwargs(posting),
+                            warehouse_id=wh_id,
+                            batch_no=item.batch_number or None,
+                            serial_nos=serial_nos or None,
+                            source_type="production_picking_withdraw",
+                            source_doc_id=picking_id,
+                            source_doc_code=picking_obj.picking_code,
+                            work_order_id=_item_source_work_order_id(item, picking_obj) or None,
+                            work_order_code=_item_source_work_order_code(item, picking_obj),
+                            movement_type="production_issue",
+                            to_warehouse_id=wh_id,
+                            ledger_production_date=ledger_production_date,
+                            remark="撤回生产领料",
+                            confirm_source_type="production_picking",
+                            line_idempotency_key=f"production_picking:{picking_id}:dec:{item.id}",
+                            withdraw_idempotency_key=f"production_picking:{picking_id}:withdraw:{item.id}",
+                            operator_id=updated_by,
+                            operator_name=None,
+                        )
                     required = item.required_quantity or Decimal(0)
                     await ProductionPickingItem.filter(
                         tenant_id=tenant_id, id=item.id, picking_id=picking_id
@@ -5890,7 +5944,7 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                         material=material_by_id.get(item.material_id),
                         item=item,
                     )
-                    wh_id = item.warehouse_id if item.warehouse_id else None
+                    wh_id = item.warehouse_id if item.warehouse_id else ret_obj.warehouse_id
                     await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
@@ -5898,6 +5952,8 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                         warehouse_id=wh_id,
                         batch_no=getattr(item, "batch_number", None) or None,
                         serial_nos=_parse_serial_numbers(getattr(item, "serial_numbers", None)) or None,
+                        **InventoryService.location_kwargs_from_line_item(item),
+                        location_scoped=InventoryService.line_item_location_scoped(item),
                         source_type="production_return_revoke",
                         source_doc_id=return_id,
                         source_doc_code=ret_obj.return_code,
@@ -6624,7 +6680,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                 items = await FinishedGoodsReceiptItem.filter(
                     tenant_id=tenant_id, receipt_id=receipt_id
                 ).all()
-                wh_id = receipt.warehouse_id if receipt.warehouse_id else None
+                header_wh_id = receipt.warehouse_id if receipt.warehouse_id else None
                 material_ids = list({int(it.material_id) for it in items if getattr(it, "material_id", None)})
                 material_by_id = await _load_materials_by_ids(tenant_id, material_ids)
                 for item in items:
@@ -6637,6 +6693,8 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                         material=material_by_id.get(item.material_id),
                         item=item,
                     )
+                    line_wh = getattr(item, "warehouse_id", None)
+                    wh_id = line_wh if line_wh else header_wh_id
                     serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
                     await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
@@ -6645,6 +6703,8 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
                         serial_nos=serial_nos or None,
+                        **InventoryService.location_kwargs_from_line_item(item),
+                        location_scoped=True,
                         source_type="finished_goods_receipt_revoke",
                         source_doc_id=receipt_id,
                         source_doc_code=receipt.receipt_code,
@@ -7854,12 +7914,25 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                         delivery_id=created_delivery_id,
                         confirmed_by=created_by,
                     )
-                except Exception:
-                    await self._discard_sales_delivery_after_failed_auto_confirm(
-                        tenant_id=tenant_id,
-                        delivery_id=created_delivery_id,
-                    )
-                    raise
+                except Exception as confirm_exc:
+                    try:
+                        await self._discard_sales_delivery_after_failed_auto_confirm(
+                            tenant_id=tenant_id,
+                            delivery_id=created_delivery_id,
+                            operator_id=created_by,
+                        )
+                    except Exception as rev_e:
+                        logger.exception(
+                            "销售出库自动确认失败且冲回失败 delivery_id=%s: %s",
+                            created_delivery_id,
+                            rev_e,
+                        )
+                        raise BusinessLogicError(
+                            f"销售出库自动确认失败，且冲回库存失败: {confirm_exc}"
+                        ) from rev_e
+                    raise BusinessLogicError(
+                        f"销售出库自动确认失败，已冲回库存: {confirm_exc}"
+                    ) from confirm_exc
 
         if not skip_manual_create_auto_submit:
             from apps.kuaizhizao.services.manual_create_auto_lifecycle import (
@@ -7875,12 +7948,45 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         delivery_obj = await SalesDelivery.get(tenant_id=tenant_id, id=created_delivery_id)
         return SalesDeliveryResponse.model_validate(delivery_obj)
 
-    async def _discard_sales_delivery_after_failed_auto_confirm(
+    async def _delete_sales_delivery_auto_receivables(
         self,
         tenant_id: int,
         delivery_id: int,
     ) -> None:
-        """自动出库确认失败后清理刚创建的待出库单（及明细、关联 OQC），避免残留幽灵单据。"""
+        """冲回已确认出库时删掉本次自动应收，避免重试再挂一笔。"""
+        from apps.kuaicaiwu.constants.finance_source_types import RECEIVABLE_SOURCE_SALES_DELIVERY
+        from apps.kuaicaiwu.models.receivable import Receivable
+        from apps.kuaicaiwu.services.finance_service import ReceivableService
+
+        rows = await Receivable.filter(
+            tenant_id=tenant_id,
+            source_type=RECEIVABLE_SOURCE_SALES_DELIVERY,
+            source_id=int(delivery_id),
+        ).all()
+        svc = ReceivableService()
+        for row in rows:
+            await svc.delete_receivable(tenant_id, int(row.id))
+
+    async def _discard_sales_delivery_after_failed_auto_confirm(
+        self,
+        tenant_id: int,
+        delivery_id: int,
+        *,
+        operator_id: Optional[int] = None,
+    ) -> None:
+        """自动出库确认失败后冲回已过账库存，再清理刚创建的待出库单。"""
+        posted = await SalesDelivery.get_or_none(
+            tenant_id=tenant_id,
+            id=delivery_id,
+            deleted_at__isnull=True,
+        )
+        if posted and (posted.status or "").strip() == "已出库":
+            await self.withdraw_delivery_confirmation(
+                tenant_id,
+                delivery_id,
+                operator_id or 0,
+            )
+            await self._delete_sales_delivery_auto_receivables(tenant_id, delivery_id)
         now = resolve_business_datetime()
         try:
             async with reuse_or_begin_transaction():
@@ -7891,7 +7997,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 )
                 if not delivery:
                     return
-                # 仅清理仍为待出库的建单失败产物；已部分过账则不擅自删除
+                # 仅清理仍为待出库的建单失败产物；冲回失败留下的已出库单不擅自删除
                 if (delivery.status or "").strip() != "待出库":
                     logger.warning(
                         "自动出库失败后跳过清理销售出库 %s：当前状态=%s",
@@ -8805,23 +8911,48 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                         quantity=posting.base_quantity,
                         scene="销售出库撤回",
                     )
-                await InventoryService.increase_stock(
-                    tenant_id=tenant_id,
-                    material_id=item.material_id,
-                    **_inventory_posting_call_kwargs(posting),
-                    warehouse_id=delivery.warehouse_id,
-                    batch_no=item.batch_number or None,
-                    serial_nos=serial_nos or None,
-                    source_type="sales_delivery_withdraw",
-                    source_doc_id=delivery_id,
-                    source_doc_code=delivery.delivery_code,
-                    ledger_production_date=ledger_production_date,
-                    movement_type="sales_delivery_withdraw",
-                    remark="撤回销售出库",
-                    idempotency_key=f"sales_delivery:{delivery_id}:withdraw:{item.id}",
-                    operator_id=updated_by,
-                    operator_name=None,
-                )
+                line_wh = getattr(item, "warehouse_id", None)
+                header_wh_id = delivery.warehouse_id if delivery.warehouse_id else None
+                wh_id = int(line_wh) if line_wh and int(line_wh) > 0 else header_wh_id
+                if InventoryService.line_item_location_scoped(item):
+                    await InventoryService.increase_stock(
+                        tenant_id=tenant_id,
+                        material_id=item.material_id,
+                        **_inventory_posting_call_kwargs(posting),
+                        warehouse_id=wh_id,
+                        batch_no=item.batch_number or None,
+                        serial_nos=serial_nos or None,
+                        **InventoryService.location_kwargs_from_line_item(item),
+                        source_type="sales_delivery_withdraw",
+                        source_doc_id=delivery_id,
+                        source_doc_code=delivery.delivery_code,
+                        ledger_production_date=ledger_production_date,
+                        movement_type="sales_delivery_withdraw",
+                        remark="撤回销售出库",
+                        idempotency_key=f"sales_delivery:{delivery_id}:withdraw:{item.id}",
+                        operator_id=updated_by,
+                        operator_name=None,
+                    )
+                else:
+                    await InventoryService.restore_unscoped_outbound_by_posted_locations(
+                        tenant_id=tenant_id,
+                        material_id=item.material_id,
+                        **_inventory_posting_call_kwargs(posting),
+                        warehouse_id=wh_id,
+                        batch_no=item.batch_number or None,
+                        serial_nos=serial_nos or None,
+                        source_type="sales_delivery_withdraw",
+                        source_doc_id=delivery_id,
+                        source_doc_code=delivery.delivery_code,
+                        ledger_production_date=ledger_production_date,
+                        movement_type="sales_delivery_withdraw",
+                        remark="撤回销售出库",
+                        confirm_source_type="sales_delivery",
+                        line_idempotency_key=f"sales_delivery:{delivery_id}:dec:{item.id}",
+                        withdraw_idempotency_key=f"sales_delivery:{delivery_id}:withdraw:{item.id}",
+                        operator_id=updated_by,
+                        operator_name=None,
+                    )
                 item.status = "待出库"
                 item.delivery_time = None
                 await item.save()
@@ -9113,6 +9244,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             tenant_id=tenant_id, sales_order_id__in=list(order_by_id.keys())
         ).all()
         pushable = await batch_pushable_qty_by_order_item(tenant_id, items)
+        pushable_aux = await batch_pushable_aux_qty_by_order_item(tenant_id, items)
         sales_order_service = SalesOrderService()
         kw = (keyword or "").strip().lower()
         lines: List[Dict[str, Any]] = []
@@ -9137,6 +9269,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     continue
             order_date = getattr(order, "order_date", None)
             document_date = str(order_date)[:10] if order_date else None
+            line_notes = str(getattr(item, "notes", None) or "").strip()
             aux_rem = pushable_aux.get(int(order.id), {}).get(int(item.id))
             row: Dict[str, Any] = {
                 "id": int(item.id),
@@ -10319,6 +10452,15 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         if delivery.status != "待出库":
             raise BusinessLogicError("只有待出库状态的销售出库单才能确认出库")
 
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "sales_delivery"
+        )
+        if sales_delivery_confirm_blocked_by_review(
+            audit_required=audit_required,
+            review_status=getattr(delivery, "review_status", None),
+        ):
+            raise BusinessLogicError("销售出库单尚未审核通过，不能确认出库")
+
         await assert_oqc_before_sales_delivery_confirm(
             tenant_id,
             sales_order_id=delivery.sales_order_id,
@@ -10395,6 +10537,15 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
 
             if delivery.status != "待出库":
                 raise BusinessLogicError("只有待出库状态的销售出库单才能确认出库")
+
+            audit_required = await self.business_config_service.check_audit_required(
+                tenant_id, "sales_delivery"
+            )
+            if sales_delivery_confirm_blocked_by_review(
+                audit_required=audit_required,
+                review_status=getattr(delivery, "review_status", None),
+            ):
+                raise BusinessLogicError("销售出库单尚未审核通过，不能确认出库")
 
             resolved_item_batches = item_batches
             if confirm_request and confirm_request.item_batches is not None:
@@ -11345,7 +11496,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     'receipt_quantity': receipt_quantity,
                     'unit_price': unit_price,
                     'total_amount': line_excl,
-                    'tax_rate': line_tax_pct if line_tax_pct > 0 else None,
+                    'tax_rate': line_tax_pct,
                 })
                 if display_unit is not None:
                     item_dict["display_unit_price"] = display_unit
@@ -11701,11 +11852,10 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     header_wh_id = line_wh_id
                     header_wh_name = line_wh_name
                 snapshot = await purchase_service._resolve_po_item_receipt_snapshot(tenant_id, item)
-                line_tax_pct = float(
-                    normalize_po_tax_rate_to_percent(
-                        getattr(item, "tax_rate", None) or getattr(primary, "tax_rate", None)
-                    )
-                )
+                line_tax_raw = getattr(item, "tax_rate", None)
+                if line_tax_raw is None:
+                    line_tax_raw = getattr(primary, "tax_rate", None)
+                line_tax_pct = float(normalize_po_tax_rate_to_percent(line_tax_raw))
                 dual_for_push = document_line_dual_quantity_for_push(
                     item,
                     source_primary_qty=getattr(item, "ordered_quantity", None),
@@ -11721,7 +11871,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         receipt_quantity=qty,
                         unit_price=unit_price,
                         total_amount=line_total_qty_unit_price(qty, unit_price),
-                        tax_rate=line_tax_pct if line_tax_pct > 0 else None,
+                        tax_rate=line_tax_pct,
                         qualified_quantity=qty,
                         unqualified_quantity=0,
                         warehouse_id=line_wh_id,
@@ -12450,7 +12600,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         "receipt_quantity": qty,
                         "unit_price": unit_price,
                         "total_amount": line_amount,
-                        "tax_rate": line_tax_pct if line_tax_pct > 0 else None,
+                        "tax_rate": line_tax_pct,
                     })
                     if display_unit is not None:
                         item_dict["display_unit_price"] = display_unit
@@ -12795,6 +12945,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                                 int(payable.id),
                                 total_amount,
                                 created_by=confirmed_by,
+                                settlement_gross=True,
                             )
                             await record_finance_accounting_event(
                                 tenant_id=tenant_id,
@@ -12839,14 +12990,27 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                                     prep_e,
                                 )
             except Exception as e:
-                # spec 142：过账已提交，应付生成失败为可见失败（入库已确认、账未记）
                 logger.exception(
                     "自动生成应付单失败 receipt_code=%s",
                     receipt_for_payable.receipt_code,
                 )
+                try:
+                    await self.withdraw_receipt_confirmation(
+                        tenant_id, receipt_id, confirmed_by
+                    )
+                except Exception as rev_e:
+                    logger.exception(
+                        "采购入库应付失败后冲回库存失败 receipt_id=%s: %s",
+                        receipt_id,
+                        rev_e,
+                    )
+                    raise BusinessLogicError(
+                        f"采购入库单 {receipt_for_payable.receipt_code} "
+                        f"自动生成应付失败，且冲回库存失败: {e}"
+                    ) from rev_e
                 raise BusinessLogicError(
                     f"采购入库单 {receipt_for_payable.receipt_code} "
-                    f"已入库，但自动生成应付单失败: {e}"
+                    f"自动生成应付失败，已冲回入库: {e}"
                 ) from e
         # #region agent log
         _agent_debug_ndjson(
@@ -13264,6 +13428,15 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             if receipt.status not in ("已入库", "已完成", "completed"):
                 raise BusinessLogicError("只有已入库状态的采购入库单才能撤回入库")
 
+            # 先清行占用，再走原撤回（删应付、冲库存）。会计事件失败后的补偿也走这里。
+            from apps.kuaicaiwu.services.purchase_receipt_line_finance_occupancy_service import (
+                PurchaseReceiptLineFinanceOccupancyService,
+            )
+
+            await PurchaseReceiptLineFinanceOccupancyService().soft_delete_by_receipt(
+                tenant_id, receipt_id
+            )
+
             # 先清理自动生成的应付：有付款/发票则拒绝撤回，避免库存已冲而应付悬空
             from apps.kuaicaiwu.services.finance_integration_hooks import (
                 cleanup_payables_for_purchase_receipt,
@@ -13314,6 +13487,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                             warehouse_id=line_wh,
                             batch_no=item.batch_number or None,
                             serial_nos=serial_nos or None,
+                            **InventoryService.location_kwargs_from_line_item(item),
+                            location_scoped=InventoryService.line_item_location_scoped(item),
                             source_type="purchase_receipt_revoke",
                             source_doc_id=receipt_id,
                             source_doc_code=receipt_obj.receipt_code,
@@ -16784,11 +16959,38 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             tenant_id=tenant_id,
             purchase_receipt_id=purchase_receipt_id,
         )
+        from apps.kuaicaiwu.services.return_open_balance_offset_service import (
+            purchase_return_amount_from_receipt_line,
+        )
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+        from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+
         returnable_by_item_id = {
             int(line.purchase_receipt_item_id): Decimal(str(line.source_pending_quantity or 0))
             for line in preview.lines
             if line.purchase_receipt_item_id is not None
         }
+        receipt_row = await PurchaseReceipt.get_or_none(
+            tenant_id=tenant_id, id=purchase_receipt_id, deleted_at__isnull=True
+        )
+        ri_rows = (
+            await PurchaseReceiptItem.filter(
+                tenant_id=tenant_id, id__in=list(returnable_by_item_id.keys())
+            ).all()
+            if returnable_by_item_id
+            else []
+        )
+        ri_by_id = {int(r.id): r for r in ri_rows}
+        poi_ids = [
+            int(r.purchase_order_item_id)
+            for r in ri_rows
+            if getattr(r, "purchase_order_item_id", None)
+        ]
+        poi_by_id = {}
+        if poi_ids:
+            pois = await PurchaseOrderItem.filter(tenant_id=tenant_id, id__in=poi_ids).all()
+            poi_by_id = {int(p.id): p for p in pois}
         line_by_item_id = {
             int(line.purchase_receipt_item_id): line
             for line in preview.lines
@@ -16817,8 +17019,15 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                 )
             line = line_by_item_id[item_id]
             batch_number = str(line.batch_number or "").strip() or None
-            unit_price = Decimal(str(line.unit_price or 0))
-            total_amount = resolve_simple_line_total(selected_qty, unit_price)
+            ri = ri_by_id.get(item_id)
+            if ri is not None and receipt_row is not None:
+                total_amount = purchase_return_amount_from_receipt_line(
+                    receipt_row, ri, poi_by_id, selected_qty
+                )
+                unit_price = (total_amount / selected_qty) if selected_qty else Decimal("0")
+            else:
+                unit_price = Decimal(str(line.unit_price or 0))
+                total_amount = resolve_simple_line_total(selected_qty, unit_price)
             return_items.append(
                 PurchaseReturnItemCreate(
                     purchase_receipt_item_id=item_id,
@@ -18229,7 +18438,11 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
         updated_return = await self.get_purchase_return_by_id(tenant_id, return_id)
         red_payable_id: Optional[int] = None
         ret_obj = await PurchaseReturn.get(tenant_id=tenant_id, id=return_id)
-        total_amount = float(ret_obj.total_amount or 0)
+        from apps.kuaicaiwu.services.return_open_balance_offset_service import (
+            _resolve_purchase_return_amount,
+        )
+
+        gross_amount = await _resolve_purchase_return_amount(tenant_id, ret_obj)
         supplier_id = int(ret_obj.supplier_id) if ret_obj.supplier_id else None
         try:
             from apps.kuaicaiwu.services.finance_service import PayableService
@@ -18242,7 +18455,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
 
             return_strategy = payable_recognition_from_doc(ret_obj)
             if (
-                total_amount > 0
+                gross_amount > 0
                 and supplier_id
                 and should_auto_payable_on_purchase_return(return_strategy)
             ):
@@ -18259,7 +18472,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                     source_code=ret_obj.return_code,
                     supplier_id=ret_obj.supplier_id,
                     supplier_name=ret_obj.supplier_name,
-                    total_amount=total_amount,
+                    total_amount=-gross_amount,
                     paid_amount=0.0,
                     # 冲减台账：不进入待付款；对账贷方取 total_amount 绝对值
                     remaining_amount=0.0,
@@ -18301,7 +18514,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                         target_doc_type="Payable",
                         target_doc_id=payable.id,
                         target_doc_code=payable.payable_code,
-                        amount=Decimal(str(total_amount)),
+                        amount=-gross_amount,
                         operator_id=confirmed_by,
                         notes=f"采购退货单 {ret_obj.return_code} 自动生成红字应付单",
                     )
@@ -18311,14 +18524,21 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                     raise
                 red_payable_id = int(payable.id)
         except Exception as fin_e:
-            # spec 142：过账已提交，红字应付生成失败为可见失败（退货已确认、账未记）
             logger.exception("采购退货确认-创建红字应付单失败: %s", fin_e)
+            try:
+                await self.withdraw_confirmation(tenant_id, return_id, confirmed_by)
+            except Exception as rev_e:
+                logger.exception("采购退货红字应付失败后冲回库存失败: %s", rev_e)
+                raise BusinessLogicError(
+                    f"采购退货单 {getattr(ret_obj, 'return_code', return_id)} "
+                    f"自动生成红字应付失败，且冲回库存失败: {fin_e}"
+                ) from rev_e
             raise BusinessLogicError(
                 f"采购退货单 {getattr(ret_obj, 'return_code', return_id)} "
-                f"已退货，但自动生成红字应付单失败: {fin_e}"
+                f"自动生成红字应付失败，已冲回库存: {fin_e}"
             ) from fin_e
 
-        if total_amount > 0:
+        if gross_amount > 0:
             try:
                 from apps.kuaicaiwu.services.return_open_balance_offset_service import (
                     ReturnOpenBalanceOffsetService,
@@ -18331,11 +18551,18 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                     red_payable_id=red_payable_id,
                 )
             except Exception as offset_e:
-                # spec 142：冲减失败不得假装成功，抛出为可见失败（退货已确认、冲减未记）
                 logger.error("采购退货确认-冲减蓝字应付未结余额失败: %s", offset_e)
+                try:
+                    await self.withdraw_confirmation(tenant_id, return_id, confirmed_by)
+                except Exception as rev_e:
+                    logger.exception("采购退货冲减失败后冲回库存失败: %s", rev_e)
+                    raise BusinessLogicError(
+                        f"采购退货单 {getattr(ret_obj, 'return_code', return_id)} "
+                        f"冲减蓝字应付失败，且冲回库存失败: {offset_e}"
+                    ) from rev_e
                 raise BusinessLogicError(
                     f"采购退货单 {getattr(ret_obj, 'return_code', return_id)} "
-                    f"已退货，但冲减蓝字应付未结余额失败: {offset_e}"
+                    f"冲减蓝字应付失败，已冲回库存: {offset_e}"
                 ) from offset_e
 
         return updated_return
@@ -19237,7 +19464,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                 
                 # 手动获取明细（模型定义中没有外键关系，只能用 filter）
                 inbound_obj = await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
-                wh_id = inbound_obj.warehouse_id if inbound_obj.warehouse_id else None
+                header_wh_id = inbound_obj.warehouse_id if inbound_obj.warehouse_id else None
                 items = await OtherInboundItem.filter(tenant_id=tenant_id, inbound_id=inbound_id)
                 material_ids = list({int(it.material_id) for it in items if getattr(it, "material_id", None)})
                 material_by_id = await _load_materials_by_ids(tenant_id, material_ids)
@@ -19255,18 +19482,21 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                     
                     # 反向扣减库存（decrease_stock 内部会校验余量，如果已被领用，这里会报错拦截）
                     serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
+                    line_wh = getattr(item, "warehouse_id", None) or header_wh_id
                     await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         **_inventory_posting_call_kwargs(posting),
-                        warehouse_id=wh_id,
+                        warehouse_id=line_wh,
                         batch_no=item.batch_number or None,
                         serial_nos=serial_nos or None,
+                        **InventoryService.location_kwargs_from_line_item(item),
+                        location_scoped=InventoryService.line_item_location_scoped(item),
                         source_type="other_inbound_revoke",
                         source_doc_id=inbound_id,
                         source_doc_code=inbound_obj.inbound_code,
                         movement_type="other_inbound_withdraw",
-                        from_warehouse_id=wh_id,
+                        from_warehouse_id=line_wh,
                         idempotency_key=f"other_inbound:{inbound_id}:revoke:{item.id}",
                         operator_id=updated_by,
                         operator_name=None,
@@ -20066,23 +20296,46 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                         item=item,
                     )
                     serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
-                    await InventoryService.increase_stock(
-                        tenant_id=tenant_id,
-                        material_id=item.material_id,
-                        **_inventory_posting_call_kwargs(posting),
-                        warehouse_id=wh_id,
-                        batch_no=item.batch_number or None,
-                        serial_nos=serial_nos or None,
-                        ledger_production_date=to_site_date(
-                            getattr(outbound_obj, "delivery_time", None) or tz_now()
-                        ),
-                        source_type="other_outbound_revoke",
-                        source_doc_id=outbound_id,
-                        source_doc_code=outbound_obj.outbound_code,
-                    movement_type="other_outbound",
-                    operator_id=updated_by,
-                    operator_name=None,
-                )
+                    if InventoryService.line_item_location_scoped(item):
+                        await InventoryService.increase_stock(
+                            tenant_id=tenant_id,
+                            material_id=item.material_id,
+                            **_inventory_posting_call_kwargs(posting),
+                            warehouse_id=wh_id,
+                            batch_no=item.batch_number or None,
+                            serial_nos=serial_nos or None,
+                            **InventoryService.location_kwargs_from_line_item(item),
+                            ledger_production_date=to_site_date(
+                                getattr(outbound_obj, "delivery_time", None) or tz_now()
+                            ),
+                            source_type="other_outbound_revoke",
+                            source_doc_id=outbound_id,
+                            source_doc_code=outbound_obj.outbound_code,
+                            movement_type="other_outbound",
+                            operator_id=updated_by,
+                            operator_name=None,
+                        )
+                    else:
+                        await InventoryService.restore_unscoped_outbound_by_posted_locations(
+                            tenant_id=tenant_id,
+                            material_id=item.material_id,
+                            **_inventory_posting_call_kwargs(posting),
+                            warehouse_id=wh_id,
+                            batch_no=item.batch_number or None,
+                            serial_nos=serial_nos or None,
+                            ledger_production_date=to_site_date(
+                                getattr(outbound_obj, "delivery_time", None) or tz_now()
+                            ),
+                            source_type="other_outbound_revoke",
+                            source_doc_id=outbound_id,
+                            source_doc_code=outbound_obj.outbound_code,
+                            movement_type="other_outbound",
+                            confirm_source_type="other_outbound",
+                            line_idempotency_key=f"other_outbound:{outbound_id}:dec:{item.id}",
+                            withdraw_idempotency_key=f"other_outbound:{outbound_id}:withdraw:{item.id}",
+                            operator_id=updated_by,
+                            operator_name=None,
+                        )
 
                 await OtherOutbound.filter(tenant_id=tenant_id, id=outbound_id).update(
                     status="待出库",
@@ -20635,23 +20888,46 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
                     )
                     wh_id = item.warehouse_id if item.warehouse_id else None
                     serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
-                    await InventoryService.increase_stock(
-                        tenant_id=tenant_id,
-                        material_id=item.material_id,
-                        **_inventory_posting_call_kwargs(posting),
-                        warehouse_id=wh_id,
-                        batch_no=item.batch_number or None,
-                        serial_nos=serial_nos or None,
-                        ledger_production_date=to_site_date(
-                            getattr(borrow_obj, "borrow_time", None) or tz_now()
-                        ),
-                        source_type="material_borrow_withdraw",
-                        source_doc_id=borrow_id,
-                        source_doc_code=borrow_obj.borrow_code,
-                    movement_type="other_outbound",
-                    operator_id=updated_by,
-                    operator_name=None,
-                )
+                    if InventoryService.line_item_location_scoped(item):
+                        await InventoryService.increase_stock(
+                            tenant_id=tenant_id,
+                            material_id=item.material_id,
+                            **_inventory_posting_call_kwargs(posting),
+                            warehouse_id=wh_id,
+                            batch_no=item.batch_number or None,
+                            serial_nos=serial_nos or None,
+                            **InventoryService.location_kwargs_from_line_item(item),
+                            ledger_production_date=to_site_date(
+                                getattr(borrow_obj, "borrow_time", None) or tz_now()
+                            ),
+                            source_type="material_borrow_withdraw",
+                            source_doc_id=borrow_id,
+                            source_doc_code=borrow_obj.borrow_code,
+                            movement_type="other_outbound",
+                            operator_id=updated_by,
+                            operator_name=None,
+                        )
+                    else:
+                        await InventoryService.restore_unscoped_outbound_by_posted_locations(
+                            tenant_id=tenant_id,
+                            material_id=item.material_id,
+                            **_inventory_posting_call_kwargs(posting),
+                            warehouse_id=wh_id,
+                            batch_no=item.batch_number or None,
+                            serial_nos=serial_nos or None,
+                            ledger_production_date=to_site_date(
+                                getattr(borrow_obj, "borrow_time", None) or tz_now()
+                            ),
+                            source_type="material_borrow_withdraw",
+                            source_doc_id=borrow_id,
+                            source_doc_code=borrow_obj.borrow_code,
+                            movement_type="other_outbound",
+                            confirm_source_type="material_borrow",
+                            line_idempotency_key=f"material_borrow:{borrow_id}:dec:{item.id}",
+                            withdraw_idempotency_key=f"material_borrow:{borrow_id}:withdraw:{item.id}",
+                            operator_id=updated_by,
+                            operator_name=None,
+                        )
 
                 await MaterialBorrow.filter(tenant_id=tenant_id, id=borrow_id).update(
                     status="待借出",

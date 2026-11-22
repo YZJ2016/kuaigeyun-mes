@@ -21,7 +21,7 @@ import {
 import { completeDeliveryNodeDocumentLinkIfPending } from '../../delivery-project/shared/deliveryNodeDocumentLink';
 import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormSelect, ProFormDigit } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Row, Col, Table, Empty, Form as AntForm, Input, InputNumber, List, Typography, theme, Spin, Select, Switch, Alert, Radio } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
@@ -164,7 +164,11 @@ import { UniMaterialSelect } from '../../../../../components/uni-material-select
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
-import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
+import {
+  DocumentLineDualQuantityFormCell,
+  DocumentLineUnitSelect,
+} from '../../../../../components/quantity-with-unit';
+import { pickDocumentLineDualQuantityFields } from '../../../../../utils/materialDualQuantity';
 import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import type { Material } from '../../../../master-data/types/material';
 import FeeDetailsTable from '../../../../../components/FeeDetailsTable';
@@ -192,7 +196,9 @@ import {
   PurchaseOrder,
   PurchaseOrderItem,
   listPurchaseOrderSalesOrderPullOrders,
+  listPurchaseOrderSalesOrderPullLines,
   type PurchaseOrderSalesOrderPullCandidate,
+  type PurchaseOrderSalesOrderPullLine,
 } from '../../../services/purchase';
 import {
   listPurchaseRequisitionPurchaseOrderPullLines,
@@ -494,6 +500,15 @@ const PurchaseOrdersPage: React.FC = () => {
   });
   const requirePurchaseRequisition = Boolean(
     businessConfig?.parameters?.procurement?.require_purchase_requisition,
+  );
+  const payableLedgerRecognitionOptions = useMemo(
+    () => buildPayableLedgerRecognitionOptions(t),
+    [t],
+  );
+  const purchaseOrderPaymentMethodOptions = useMemo(() => partnerPaymentMethodSelectOptions(t), [t]);
+  const purchaseOrderSettlementTermsOptions = useMemo(
+    () => partnerSettlementTermsSelectOptions(t),
+    [t],
   );
   const orgPayableRecognitionDefault = useMemo(
     () => resolveOrgPayableDefaultFromBusinessConfig(businessConfig),
@@ -3681,24 +3696,32 @@ const PurchaseOrdersPage: React.FC = () => {
 
       const itemsPayload = validItems.map((it: any) => {
         const qty = quantizeNumericByPlaces(Number(it.ordered_quantity) || 0, quantityDecimals);
-        let price = Number(it.unit_price) || 0;
+        const formUnitPrice = Number(it.unit_price) || 0;
         const taxRate = Number(it.tax_rate) || 0;
-        if (priceType === 'tax_inclusive' && price > 0 && taxRate >= 0) {
-          price = price / (1 + taxRate / 100);
-        }
+        const storedLine = purchaseOrderFormLineToStored(
+          formUnitPrice,
+          qty,
+          taxRate,
+          priceType,
+          priceDecimals,
+        );
+        const price = storedLine.unit_price;
         const dateStr = resolveLineDateStr(it.required_date) ?? headerDeliveryStr;
         if (!dateStr) {
           messageApi.error(t('app.kuaizhizao.purchaseOrder.lineRequiredDateMissing', { row: validItems.indexOf(it) + 1 }));
           throw new Error(t('app.kuaizhizao.purchaseOrder.form.requiredDateRequired'));
         }
-        const totalPrice = qty * price;
+        const totalPrice = storedLine.total_price;
+        const receivedQty = Number(it.received_quantity) || 0;
         return {
+          ...(it.id != null && Number(it.id) > 0 ? { id: Number(it.id) } : {}),
           material_id: Number(it.material_id),
           material_code: it.material_code || '',
           material_name: it.material_name || '',
           material_spec: it.material_spec || null,
           ordered_quantity: qty,
           unit: it.unit || '件',
+          ...pickDocumentLineDualQuantityFields(it as Record<string, unknown>),
           unit_price: price,
           display_unit_price: storedLine.display_unit_price,
           total_price: totalPrice,
@@ -3707,6 +3730,17 @@ const PurchaseOrdersPage: React.FC = () => {
           outstanding_quantity: Math.max(0, qty - receivedQty),
           required_date: dateStr,
           inspection_required: true,
+          source_type: it.source_type || null,
+          source_id: it.source_id != null && Number(it.source_id) > 0 ? Number(it.source_id) : null,
+          demand_computation_item_id:
+            it.demand_computation_item_id != null && Number(it.demand_computation_item_id) > 0
+              ? Number(it.demand_computation_item_id)
+              : null,
+          work_order_id:
+            it.work_order_id != null && Number(it.work_order_id) > 0
+              ? Number(it.work_order_id)
+              : null,
+          work_order_code: it.work_order_code || null,
           notes: it.notes || null,
           attachments: normalizeDocumentAttachments(it.attachments),
         };
@@ -3770,7 +3804,56 @@ const PurchaseOrdersPage: React.FC = () => {
           messageApi.success(t('app.kuaizhizao.purchaseOrder.updateSuccess'));
         }
       } else {
-        const created = await createPurchaseOrder({ ...data, items: itemsPayload });
+        const flowExtrasRaw = documentFlowSubmitExtrasRef.current;
+        const hadFlowHandoff = Boolean(flowExtrasRaw);
+        // handoff 回写以本单实际明细为准：按 source_id 重建申请行 id / 数量，避免表单删行改量后误占未转出的申请行
+        let flowExtras = flowExtrasRaw;
+        if (
+          flowExtrasRaw &&
+          String(flowExtrasRaw.documentFlowSourceType || '') === 'purchase_requisition_items'
+        ) {
+          const rawIds = (
+            Array.isArray(flowExtrasRaw.documentFlowRequisitionItemIds)
+              ? flowExtrasRaw.documentFlowRequisitionItemIds
+              : []
+          )
+            .map((v: unknown) => Number(v))
+            .filter((n: number) => Number.isFinite(n) && n > 0);
+          let unusedRaw = [...rawIds];
+          const qtyMap: Record<number, number> = {};
+          const sourceIds: number[] = [];
+          for (const it of itemsPayload) {
+            let sid = Number(it.source_id);
+            if (!(sid > 0) && unusedRaw.length > 0) {
+              sid = unusedRaw.shift() as number;
+              it.source_id = sid;
+              it.source_type = it.source_type || 'purchase_requisition';
+            } else if (sid > 0) {
+              unusedRaw = unusedRaw.filter((id) => id !== sid);
+            }
+            const qty = Number(it.ordered_quantity) || 0;
+            if (!(sid > 0) || qty <= 0) continue;
+            sourceIds.push(sid);
+            qtyMap[sid] = qty;
+          }
+          flowExtras = {
+            ...flowExtrasRaw,
+            // 明细丢 source 时不得清空 handoff 的申请行 id，否则 finalize 直接跳过
+            documentFlowRequisitionItemIds: sourceIds.length > 0 ? sourceIds : rawIds,
+            documentFlowItemQuantities:
+              Object.keys(qtyMap).length > 0
+                ? qtyMap
+                : flowExtrasRaw.documentFlowItemQuantities,
+          };
+        }
+        const createPayload =
+          flowExtras ?
+            {
+              ...data,
+              ...flowExtras,
+            }
+          : data;
+        const created = await createPurchaseOrder({ ...createPayload, items: itemsPayload });
         orderId = (created as any)?.id;
         if (orderId != null) {
           // 对齐工单：create 成功即钉住编辑身份，后续失败/选人也不再二次 create
@@ -3800,6 +3883,11 @@ const PurchaseOrdersPage: React.FC = () => {
             t,
           });
           if (linked) {
+            submitAfterSaveRef.current = false;
+            createdOrderIdRef.current = null;
+            return;
+          }
+          if (hadFlowHandoff && continuePoHandoffQueueIfAny(navigate)) {
             submitAfterSaveRef.current = false;
             createdOrderIdRef.current = null;
             return;
