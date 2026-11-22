@@ -307,7 +307,7 @@ fast-deploy/tools/workspace/compose.py	d02372bb48b7646f46d9ca6c055877aaab3b37f4	
 fast-deploy/tools/workspace/generate_workspace.py	f0d6c2d8d51a33629fdda82e468415940615b67e	domain-out	本地无对应物/本地架构不同：扫描脚本口径冲突、kuaiconnect应用不存在、工序编辑表组件本地以DndList/DetailOperations实现、fast-deploy本地工具链分叉
 fast-deploy/tools/workspace/workspace.example.yaml	8f5561da9999e219187695ef7a0e65a71c221e05	domain-out	本地无对应物/本地架构不同：扫描脚本口径冲突、kuaiconnect应用不存在、工序编辑表组件本地以DndList/DetailOperations实现、fast-deploy本地工具链分叉
 fast-deploy/windows/install-component.ps1	03fcb8f4c095fb6f52de544029a43ae6e2b54220	applied	本轮明确部署快修部分适配：低配启动等待360，compose清理后校验并fail closed，Windows Node/uv/Caddy检测及ZIP/可执行校验和curl参数遮蔽；保留本地蓝绿/worker/下载版本/镜像/命名策略；bash及compose回归通过，未做Windows实机或真实部署
-riveredge-backend/.env.example	8cc220de122b19cf008142e015f5becf457bda94	applied	图纸200MB簇：MAX_FILE_SIZE默认100→200MB（图纸上限钳制真源）；其余差异为星技谷品牌/邮箱/5173端口本地分叉保留
+riveredge-backend/.env.example	17bba9764c1d5dff8b23b4905ebe584b4888eb19	applied	本轮海尔 OAuth 占位不摘；本地星技谷品牌/APP_NAME 分叉保留
 riveredge-backend/docs/api-write-protection-ops.md	DELETED	superset	fe29bc0082上游删除一次性脚本/.cache/i18n产物/文档;本地保留(本地工具与文档治理需要)
 riveredge-backend/docs/config-center-ops.md	DELETED	superset	fe29bc0082上游删除一次性脚本/.cache/i18n产物/文档;本地保留(本地工具与文档治理需要)
 riveredge-backend/docs/core/ledger-dual-unit-contract.md	DELETED	superset	fe29bc0082上游删除一次性脚本/.cache/i18n产物/文档;本地保留(本地工具与文档治理需要)
@@ -372,6 +372,22 @@ riveredge-backend/migrations/models/1050_20261118170000_field_permission_two_kin
 riveredge-backend/migrations/models/1051_20261119110000_material_code_alias_partner_partial_unique.py	c9abf2212e67c77258378f9f02e01169b7ee4ebf	applied	同内容迁移已在本地按重编号落地(980/981)
 riveredge-backend/migrations/models/1052_20261119160000_purchase_invoice_discount_amount.py	2a788b4eaede12ad0b7258d9439899c6d846af76	applied	财务A/B适配至kuaicaiwu；保留本地创建自动送审/已审核口径；忠实保留源应付已审核或待审时早退导致优惠调整不生成；迁移20261122000001尚未执行；财务pytest191通过+聚焦9通过，时区0。前端tsc2743存量诊断，浏览器未验。
 riveredge-backend/migrations/models/1053_20261121100000_rename_spoke_wheel_to_ind_spoke_wheel.py	36170f7de38b5f4fffbd97a6888178aec10c55b9	domain-out	用户决策：本地保持spoke-wheel免费行业应用口径，不取上游ind-spoke-wheel改名（涉manifest/包名/权限码/前端路由/license语义与迁移1053，永久分叉）
+riveredge-backend/migrations/models/1054_20261121100000_haoligo_haier_iot.py	534afeaf8131b3d9025f0513d50c93a520d3d5bb	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/migrations/models/1055_20261121120000_haoligo_haier_iot_upload_attempts.py	c9af71c6e516f657de4a0ae881f4968c918462b1	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/migrations/models/1056_20261121160000_haoligo_haier_iot_audit_fields.py	0099b4129fe048ac5ca8b1b96ca9310ff4b1f3f9	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/migrations/models/1057_20261121180000_haoligo_haier_iot_calendar_break.py	e38ea88ef5c3918ea2501ced22c35c2d096ac041	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/migrations/models/1058_20261121193000_haoligo_haier_iot_interval_default_5.py	45612e8a86eb3d83e0b5967ee1f111e856ad9500	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/migrations/models/1059_20261121200000_haoligo_haier_iot_batch_schedule.py	63898b81682d95bd5894e239e237ffbb814b1c7f	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/migrations/models/1060_20261121210000_haoligo_haier_iot_batch_shift_ids.py	0208d5f0f93d795fc39e64f334526b7c737f40f7	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/migrations/models/1061_20261121220000_haoligo_haier_iot_test_item_template.py	189ea0dea3e69d824e3f5a3f8d51ea754c7c574f	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/migrations/models/1062_20261121230000_haoligo_haier_iot_optimal_value.py	086c61a72434fae248c8cbca47cf19edf0aa9962	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/migrations/models/1063_20261121233000_haoligo_haier_iot_upload_material_name.py	f120784deb77d0c59a1e583340cd1245db6b98c5	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/migrations/models/1064_20261121234000_haoligo_haier_iot_oid_query_url.py	f58565728c6e31205bdf1f6c4255c4f7db649473	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/migrations/models/1065_20261122120000_haoligo_haier_iot_test_item_template_audit.py	ef170a032ee53bc1e03ca389f4f658e7b53ab149	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/migrations/models/1066_20261122143000_haoligo_haier_iot_batch_series_snapshot.py	c7e939eb4b652c7b8847df7e2f9986f51ead59db	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/migrations/models/1067_20261122160000_haoligo_haier_prod_no_prefix.py	ef6c48cd8320d9a4438f387d76094495d9f44662	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/migrations/models/1068_20261122180000_haoligo_haier_oid_file_fingerprint.py	27b7ee3453382b0c6ee5be3b0b528c32342297f8	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/migrations/models/1069_20261122193000_haoligo_haier_iot_upload_log_summary.py	f575f0518b601191f867b500d2895134797d22ee	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
 riveredge-backend/migrations/models/20261123000035_sync_binding_schedule_window.py	6fe2f04c01867b0eab5c067566bcb8d9c684df23	applied	R2簇5迁移:调度窗列 22+绑定表 IF NOT EXISTS守卫;20261123命名落位(不执行)
 riveredge-backend/migrations/models/874_20261013170000_maintenance_scheme_params.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
 riveredge-backend/migrations/models/875_20261013180000_spot_check_plan_tasks.py	DELETED	superset	R2:本地独有资产(文档/AOCI/cursor记忆),上游无对应文件
@@ -1380,6 +1396,7 @@ riveredge-backend/src/apps/kuaizhizao/utils/work_order_group_bom_tree.py	772444d
 riveredge-backend/src/apps/kuaizhizao/utils/working_time.py	34b631e7fc9eb8434117161153c6b8fc74183952	superset	本地私有实现/分叉超集（预审A包复核）
 riveredge-backend/src/apps/kuaizhizao/workflows/functions/__init__.py	e9c1902661513ab4f5f08bf074f22a1bf48cd000	applied	R2：与上游tip blob一致，本地已同步
 riveredge-backend/src/apps/kuaizhizao/workflows/functions/demand_computation_automation_workflow.py	c10106fe52596b0c0501d1aea66f6cc8c05d6d3b	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
+riveredge-backend/src/apps/master_data/api/_performance_route_access.py	4edfcdcf22a6ef68025a1988a6fa7feb839bdcdb	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
 riveredge-backend/src/apps/master_data/api/_sync_from_source_run_log.py	135fb775585595e45762a5ec7f21fac12a04a736	deferred	tracked审计：上游有本地缺，待摘取
 riveredge-backend/src/apps/master_data/api/drawing_distributions.py	93d717bb3fb15b88e3ede25b7fe477818914ae6d	applied	tracked审计摘取：上游整取(drawing_uuid过滤链)
 riveredge-backend/src/apps/master_data/api/drawing_folders.py	85432ea0147605b80f845a5e5e34543a29de09a1	applied	宽区间补登：上游tip已落地（同文/等价映射/预审A包复核）
@@ -1387,6 +1404,7 @@ riveredge-backend/src/apps/master_data/api/drawing_loans.py	582a7c34d95b9fc50dd2
 riveredge-backend/src/apps/master_data/api/management.py	1cfe2c4f47d3c8a8d17109e26a578ab4467b37cd	applied	tracked审计：与上游tip逐字节一致
 riveredge-backend/src/apps/master_data/api/material.py	1afde47eec24337d643cc96ed056c1ae804fca50	applied	R2簇4 master-data:适配本地(禁kuaiconnect薄代理/inbound_sync_gate)
 riveredge-backend/src/apps/master_data/api/partner_price_book.py	8d47321d6d86b850f6235d79e18d679d63216ddc	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
+riveredge-backend/src/apps/master_data/api/performance.py	8bb47b83c3eed61f8719373cb85f2a5a75836ad8	deferred	待决：假期批量删除与自定义周休允许零星期（现有导入弹窗行为会变）；不带海尔权限码旁路
 riveredge-backend/src/apps/master_data/api/process.py	7b9f1184236b8b3d33f8fd6cabea6b0be43fe6c3	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/apps/master_data/api/router.py	470bac8b547409c55db858622e61ec12d01c4e28	superset	tracked审计：本地为上游超集/等价
 riveredge-backend/src/apps/master_data/api/supply_chain.py	853f6973fc20277d5ef0dde7d5c9fc6bdccf2427	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
@@ -1416,6 +1434,7 @@ riveredge-backend/src/apps/master_data/schemas/master_data_sync.py	f8d44f93b55ec
 riveredge-backend/src/apps/master_data/schemas/material_product_process_schemas.py	437f0aa722cc35529ffe1bb8ae714a8929630b01	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/apps/master_data/schemas/material_schemas.py	c06d1a805b6442a2f23cd992f6ea165086ff9cdd	superset	R2:本地已含适配内容/本地实现超前
 riveredge-backend/src/apps/master_data/schemas/partner_price_book_schemas.py	a7a3a212677ffc71724d1c3213a7cc7a675cc7b0	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
+riveredge-backend/src/apps/master_data/schemas/performance_schemas.py	215c701bccfd7d4358a00a2e222cdd1b331a8bc6	deferred	待决：假期批量删除与自定义周休允许零星期（现有导入弹窗行为会变）；不带海尔权限码旁路
 riveredge-backend/src/apps/master_data/schemas/process_schemas.py	d1ea77cc604670c2b700ff30df1c242deb61e4da	applied	积压保存真bug：仅工艺路线Update接收snake/camel字段并校验超报模式/负值/百分比，existing test扩5例；不替换整文件/扩工艺业务
 riveredge-backend/src/apps/master_data/schemas/supply_chain_schemas.py	6ea2a20c8ae26e135e01401a4360eb7e0113b43b	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/apps/master_data/schemas/warehouse_schemas.py	8c3118d5a14076e8f8ab5a899e7b0bdffcc911e1	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
@@ -1452,7 +1471,7 @@ riveredge-backend/src/apps/master_data/services/partner_material_price_resolver.
 riveredge-backend/src/apps/master_data/services/partner_price_book_service.py	fd8d15eb4f45110e355de5ae5b6b4d443dda46f0	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/apps/master_data/services/partner_price_resolution_config.py	941421d5b2d408c5116a38b219625299a58b11f5	applied	tracked审计：与上游tip逐字节一致
 riveredge-backend/src/apps/master_data/services/partner_price_tier_utils.py	fbfe49709eedc3b7db40e8976eaa40ca82a7e1dd	applied	tracked审计：与上游tip逐字节一致
-riveredge-backend/src/apps/master_data/services/performance_service.py	e3781ff232fb198e4b50c3f5c383676dd95b606d	applied	R2簇4 master-data:摘取上游tip实现
+riveredge-backend/src/apps/master_data/services/performance_service.py	64f53681ad96363c6cc8d9f2dce87f0648fb2678	deferred	待决：假期批量删除与自定义周休允许零星期（现有导入弹窗行为会变）；不带海尔权限码旁路
 riveredge-backend/src/apps/master_data/services/process_route_change_service.py	28702c9cec926e1b6d2955b82cece17c745c47fa	superset	本地等价实现：模块/路径/语义已在本地落定（kuaiplm本地app承接engineering_change_audit与plm深链、kuaireport真源、kuaiai路径、类型守卫/a11y/antd6 medium/泛型/uni-report特性/上游bug式差异）
 riveredge-backend/src/apps/master_data/services/process_service.py	953e36f6dd57ec69db98ae32d326b55f8af669c4	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/apps/master_data/services/reset_data_service.py	ec59127719c6c8a00abdc5b8fad0820faa809346	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
@@ -1492,6 +1511,7 @@ riveredge-backend/src/core/api/custom_fields/custom_fields.py	b5cd57eac1ce74c19d
 riveredge-backend/src/core/api/data_backups/data_backups.py	20d2bd4f80f4bc3d49bd25fff5862681e99be8fd	superset	spec-143 tenant_context 显式 scope（unscoped/with_tenant+审计）/trusted-proxy 加固/model_role连接架构/SQL租户注入白名单/附件下载/品牌名等本地硬化，上游为旧版
 riveredge-backend/src/core/api/data_dictionaries/data_dictionaries.py	0d351224dc5866656aaa44397a2aa6458cfb6914	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-backend/src/core/api/departments/departments.py	54b8d00320e1bbf9f8fc482d91a4e3e17333b630	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
+riveredge-backend/src/core/api/deps/custom_field_access.py	e38eb8531c98df631a1c1961471d6596902f81d4	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
 riveredge-backend/src/core/api/deps/deps.py	a718e40fe58e11ac2fd0d49321a9d56261a37796	deferred	tracked审计：上游有本地缺，待摘取
 riveredge-backend/src/core/api/deps/reference_display_access.py	b609fbe212bc5f2f44a2c0f3e86d08ab37f76d50	superset	本地品牌/引用展示隐式鉴权语义：本地保留星技谷品牌与host_resource隐式鉴权（上游已改RiverEdge品牌+read|display严权模型），契约语义不同不取
 riveredge-backend/src/core/api/enums/enums.py	cd5cb0091bbebce3a38c1203159bb4a75ed80170	deferred	tracked审计：上游有本地缺，待摘取
@@ -1533,13 +1553,13 @@ riveredge-backend/src/core/config/menu_takeover.py	a4fc7ce8a2f1faea7f3123bb4e934
 riveredge-backend/src/core/config/permission_action_spec.py	f0975c431321b21dbfc182f4865f4d44536d1aa2	superset	本地超集：spec143/184硬化或本地功能字段（tenant隔离/attachment/serial_numbers/urgency/mqtt/OEE富schema/严格版本/序列号台账/脉冲计数Optional/关键写路径/unscoped清理/public_error脱敏/kuaicaiwu路径/STATION_TERMINAL/design动作/宽度64)
 riveredge-backend/src/core/config/pro_app_catalog.py	b9556135fc166edd923d868cc18e044af301d773	superset	本地License决策：维持4个PRO应用(kuaiai/kuaireport/kuaiiot/kuaivision)+行业包免费，不采上游9PRO/行业包全PRO（产品决策2026-11-21）
 riveredge-backend/src/core/config/rework_order_funide_profile.py	3dcb60c3052a1be56d76c4cc6b2faaac645330cf	domain-out	客户品牌行业种子(funide)，通用产品规则不入产品源码；form_profile 回退段已剔除，通用行业配置经 IndustryExtensionRuntimeService 解析
-riveredge-backend/src/core/config/scheduled_job_registry.py	88b3a043103895f63cd07926168dae0f9060dd3f	deferred	tracked审计：上游有本地缺，待摘取
+riveredge-backend/src/core/config/scheduled_job_registry.py	51fc30d34f0caaaf47f8bf0796089c1e243c8973	deferred	本地已去掉 warehouse_kingdee_alignment preset，保持；本轮海尔检测数据上传 preset 不摘
 riveredge-backend/src/core/config/system_dictionaries.py	7a73228cc264a160196d1666cb3262b769788848	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/core/domain/security/password_policy.py	6c68f57e1f798245db572f21963157dcb62678d2	applied	C密码策略/默认与临时重置整簇；应用扫描按目录项容忍OSError但整目录不可枚举上抛；63聚焦测试包含用户与菜单同步；生成口令不写日志
 riveredge-backend/src/core/middleware/docs_auth_middleware.py	fe0ad5ee118bf72f8b06bb566c7f33dbed25f2f3	superset	本地品牌/引用展示隐式鉴权语义：本地保留星技谷品牌与host_resource隐式鉴权（上游已改RiverEdge品牌+read|display严权模型），契约语义不同不取
 riveredge-backend/src/core/middleware/exception_handler_middleware.py	a3e163ff55e63a55e64e0d62870730dbb446d873	superset	本地品牌/引用展示隐式鉴权语义：本地保留星技谷品牌与host_resource隐式鉴权（上游已改RiverEdge品牌+read|display严权模型），契约语义不同不取
 riveredge-backend/src/core/middleware/operation_log_middleware.py	eba310c6b35703d8ea2fdd759da759b64a0415a8	superset	tracked审计：本地为上游超集/等价
-riveredge-backend/src/core/middleware/request_timeout_middleware.py	661f7e46af78221f27f64374478026f1c4f88a7b	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
+riveredge-backend/src/core/middleware/request_timeout_middleware.py	b6e154bd41608111661e84b2a36791fa0c8ca5cf	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
 riveredge-backend/src/core/models/api.py	de8451cbe1d34ea504932b5d4d55ed43c5ddee28	applied	摘取：出站字段映射全链落地——model列+迁移988→20261123000039+编辑器/映射工具/表单接线；本地schema/服务/目录此前已在
 riveredge-backend/src/core/models/approval_process.py	6259f4adf6e3c59ae07f8a0542013a4b5869e629	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/core/models/approval_wecom_card.py	f61f0402040271932bacf4c20c2e41e23c3e90ef	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
@@ -1587,7 +1607,7 @@ riveredge-backend/src/core/services/application/api_service.py	d9a7516bf271bc687
 riveredge-backend/src/core/services/application/api_sync_binding_refs.py	7e37f2cbec72865dfbc3413b9d7168cc3afe8da5	applied	tracked审计摘取：上游整取(库位/仓位/多单位/批号管理4个同步绑定登记)
 riveredge-backend/src/core/services/application/api_test_request_merge.py	badda1f96617e6efd699d749b0aee9e5e17a005c	applied	4ba2d15ae8契约簇;force_rewrite/expand未接调用点随调度窗簇
 riveredge-backend/src/core/services/application/application_dedicated_binding_service.py	548e97527533c20da8ef947360ebc54ad3552e39	superset	spec-143 tenant_context 显式 scope（unscoped/with_tenant+审计）/trusted-proxy 加固/model_role连接架构/SQL租户注入白名单/附件下载/品牌名等本地硬化，上游为旧版
-riveredge-backend/src/core/services/application/application_registry_service.py	e40947b787e2d00571539ee1cf106a74993f0791	applied	R2簇5 core/sync:摘取上游tip实现
+riveredge-backend/src/core/services/application/application_registry_service.py	82a02afb38b59e891097dd814a14ae69432a3838	applied	绿区：重载应用路由时按 apps.{code}.api 整包失效缓存，避免只删 api.router 前缀而沿用旧子路由；kuaicaiwu 桥接保留
 riveredge-backend/src/core/services/application/application_service.py	fdbe7a7c699dcf0669f99ad209da87b05882909d	applied	适配落地：超报/在制口径簇、领料material_model、本地_load_materials_by_ids适配、应用停用按route path收口菜单、split子行capabilities、销售变更单取单链、报工面板、价格本税率、DetailDrawer/uni-pull/global.less/zh-CN/updateLog
 riveredge-backend/src/core/services/application/enabled_apps.py	72d8708bc5bad87d094da0b77124d8280b044283	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/core/services/approval/approval_audit_scope.py	cdd56eef29715e1835624c22f7933c6927d06f5c	deferred	tracked审计：上游有本地缺，待摘取
@@ -1715,7 +1735,7 @@ riveredge-backend/src/core/services/reference/tenant_model_display_provider.py	1
 riveredge-backend/src/core/services/resource/collab_function_category_service.py	ba1f13ef162235229d948e350c92772cbfc32057	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/core/services/resource/resource_category_refs.py	f5a014e3d1f8e075eff1dfa6790376601882f889	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/core/services/resource/resource_category_service.py	f5e6d5cc9547dbba0d8ab4106fafd0f537fdda48	applied	R2簇5 core/sync:摘取上游tip实现
-riveredge-backend/src/core/services/scheduling/scheduled_job_handlers.py	8a34f9c834a1fd840cc353a542148aff72860814	superset	superset:上游区间零增量；本地kuaicaiwu版保持
+riveredge-backend/src/core/services/scheduling/scheduled_job_handlers.py	ce0bee4cfa7eae95c38e076de8adac48e9947153	superset	本地 kuaicaiwu 任务集保持；本轮 haoligo.haier_supplier_check_upload 不摘（import gitignore 的 apps.haoligo）
 riveredge-backend/src/core/services/scheduling/scheduled_task_service.py	bf9457e23fac1bd5c8ca45366ad9b03893bdb356	superset	spec-143 tenant_context 显式 scope（unscoped/with_tenant+审计）/trusted-proxy 加固/model_role连接架构/SQL租户注入白名单/附件下载/品牌名等本地硬化，上游为旧版
 riveredge-backend/src/core/services/system/data_backup_jobs.py	d4e51390cb20dce46bc8df9a0e15ef51f1730a6e	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/core/services/system/data_backup_policy.py	0229e2e40d43606ad652223204cbd8701dd786a1	superset	spec-143 tenant_context 显式 scope（unscoped/with_tenant+审计）/trusted-proxy 加固/model_role连接架构/SQL租户注入白名单/附件下载/品牌名等本地硬化，上游为旧版
@@ -1812,6 +1832,32 @@ riveredge-backend/tests/apps/haoligo/test_finance_invoice_detail_report.py	6e983
 riveredge-backend/tests/apps/haoligo/test_finance_monthly_payment_settlement_totals.py	6b287b3715bf10265f3e6edf0070321452edc5af	domain-out	fast-deploy部署资产与客户定制app(haoligo/funide-oa)测试：本地fast-deploy独立维护+客户域不回流产品代码
 riveredge-backend/tests/apps/haoligo/test_finance_quantity_literal.py	5f708bc5c84ada8c733440a74e3dd720950afe5c	domain-out	fast-deploy部署资产与客户定制app(haoligo/funide-oa)测试：本地fast-deploy独立维护+客户域不回流产品代码
 riveredge-backend/tests/apps/haoligo/test_finance_spec_key.py	157a2baef408ea2681286f48ef1af0d9298e519f	domain-out	fast-deploy部署资产与客户定制app(haoligo/funide-oa)测试：本地fast-deploy独立维护+客户域不回流产品代码
+riveredge-backend/tests/apps/haoligo/test_haier_factory_calendar_performance_access.py	30b58f529a9e2bbcaeedc9ed108208da41849295	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_iot_batch_upload_state.py	7724ce5dd17afa0f6aeb97045f2005ac40267a3a	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_iot_csv_import.py	e6a2fd96f3b73942f02c6c1fc8c5a321b510f3ff	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_iot_factory_calendar_master_shift.py	ac5f411415332b942b61e3d49aeb211c56f5c493	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_iot_long_statement_timeout_ms.py	5a960ee89637a2bd73f68eed62dabc8af924ed99	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_iot_master_shifts_list.py	12c08c5c69617c262806f55687628f7a164c696e	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_iot_oid_compose.py	816d184cb1a60ad3dddbe27cd806e8058c2e6d76	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_iot_oid_import.py	08ef9915e0e2ef0122994acc9c8564f9aec55d91	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_iot_oid_query_url.py	4c989652cde081c9b0db163b2851d4a8f3a0e1ee	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_iot_payload_chunk.py	87bec7843ce0e3c7b397892b543fafd67d0fdf50	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_iot_series_resolve.py	a09acea6d4df2d520f94347ff26e4ef0501b4e9d	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_iot_shift_windows.py	5feef985316dea2a42e8f6c36a557d6c87529b63	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_iot_test_data_generator.py	ef708ec31cefe674463056604f7b06657aa2a979	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_iot_test_item_template.py	55e6a0cb1c2d5ea94d88cb15723891dc1c1e1cb4	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_iot_time_schedule.py	d16bff1aa6d125264f2773dba896e7b1ecb9e058	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_iot_upload_queue_slot.py	d05fd616807a42c3373fd387c7e85544de7ce1b0	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_iot_upload_window.py	fe5f62390af785ee5f5c4ad218148d210ab0c93e	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_line_test_coverage.py	f950c120911a9794c3d7de6c089cd27384c7a230	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_manual_upload_guard.py	2a21f314a4e96ae62ef005cf79f3904a50b0a6d9	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_oid_file_fingerprint.py	614f4b53c6e0d16f4f23fdc5bf4cc50b4110ac7b	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_scheduled_upload_line_window.py	cfa018e621e0dadc174e1345583cee9d53ccb173	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_upload_batch_detection_window.py	c96524726c46b4ca123b33f25270ece0f33cfb43	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_upload_batch_no_service.py	378cc125efaa332eedbc50462f62572a2605ece4	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_upload_batch_status.py	5a0cd01b319371c8cf5bc7e902a76500778012a3	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_upload_log_summary.py	10d40842259062eb5dfb35bfb38903df9a2816c8	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
+riveredge-backend/tests/apps/haoligo/test_haier_upload_test_time_submit_guard.py	d44d9639d62c4d010e1f5c00da8ecd6ff778617a	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
 riveredge-backend/tests/apps/haoligo/test_haoligo_models_registry.py	240274b24508ef0e1719d7019dd4ad6fbc1fd516	domain-out	fast-deploy部署资产与客户定制app(haoligo/funide-oa)测试：本地fast-deploy独立维护+客户域不回流产品代码
 riveredge-backend/tests/apps/haoligo/test_mold_borrow_return_pairing.py	84f6b8d7a1e5d976ba2d31a2fad033da5c64077f	domain-out	fast-deploy部署资产与客户定制app(haoligo/funide-oa)测试：本地fast-deploy独立维护+客户域不回流产品代码
 riveredge-backend/tests/apps/haoligo/test_outsource_complete_print.py	3620f316a1d994bf752b92fbb9f28f0b683ea6de	domain-out	fast-deploy部署资产与客户定制app(haoligo/funide-oa)测试：本地fast-deploy独立维护+客户域不回流产品代码
@@ -2003,6 +2049,7 @@ riveredge-backend/tests/core/services/test_menu_hierarchy_manifest_contract.py	d
 riveredge-backend/tests/core/services/test_permission_policy_field_masks.py	f652240149e2e632bcac7c1a1905e5ffea319505	applied	R3 NEW: 字段掩码display-only排除与kind展开测试;19 passed
 riveredge-backend/tests/core/services/test_tenant_restore_primary_key_conflicts.py	d8aff40e5a34c89e590efc2eb56b522e06440c28	deferred	tracked审计：上游有本地缺，待摘取
 riveredge-backend/tests/core/services/test_user_administrator_management.py	1ecaad806e58f567cf153fd6ce3ef7cd48b70443	superset	tracked审计：本地为上游超集/等价
+riveredge-backend/tests/core/test_request_timeout_middleware_paths.py	61c8c8627267f9f2453ea582d61ea96782bd516a	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
 riveredge-backend/tests/core/utils/test_content_disposition.py	e9f0b01bfcc363422b9f9b1469a87438d620d5c5	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/tests/core/utils/test_nested_transaction_reentry.py	b95f54abe0a575e50c6d58644d4c27bfef6d9d1b	deferred	tracked审计：上游有本地缺，待摘取
 riveredge-backend/tests/infra/infrastructure/http/test_non_persistent_cookies.py	08db1beb7717259987ee08a023f7a27f84cd4df9	applied	3 hunk落地：/notify→submit、_SALES_ORDER_REFERENCE_GET_RE拉单GET权限下放work-order、/unapply→execute；上游删除station-terminal函数段未取(本地仍活跃使用)
@@ -2174,6 +2221,7 @@ riveredge-frontend/src/apps/kuaizhizao/components/GanttSchedulingChart/stationRe
 riveredge-frontend/src/apps/kuaizhizao/components/GanttSchedulingChart/types.ts	0fb6648315885b0fcf707ec563a15765b65ad0ac	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
 riveredge-frontend/src/apps/kuaizhizao/components/GanttSchedulingChart/utils.ts	6dab9620932f432d49946847d93a7270a22e1f50	applied	排产策略/产线APS簇整落：策略向导+告警视图+交期预估抽屉+产线泳道；superset误判修正（实为旧快照）
 riveredge-frontend/src/apps/kuaizhizao/components/GanttSchedulingChart/workOrderOperationLinks.ts	f6ff1781cbbf7bbb3f90a9c4c06309bbd4a4f1c3	superset	本地私有实现/分叉超集（预审A包复核）
+riveredge-frontend/src/apps/kuaizhizao/components/HolidayCnImportModal.tsx	3e7b5c7f6119789b3bf2fe6556494b8e0fa9fb51	deferred	待决：假期批量删除与自定义周休允许零星期（现有导入弹窗行为会变）；不带海尔权限码旁路
 riveredge-frontend/src/apps/kuaizhizao/components/InspectionPlanFormModal.tsx	80bbd98f7e1d8507d1e00084035483a869d67ceb	applied	tracked审计：与上游tip逐字节一致
 riveredge-frontend/src/apps/kuaizhizao/components/InspectionPlanStepEditor.tsx	96b3ffa1be5e02aeb8db8e514d0c148d12d6f456	superset	tracked审计：本地为上游超集/等价
 riveredge-frontend/src/apps/kuaizhizao/components/InspectionSamplingSpecFields.tsx	ea5926d5c9fae7123868d3027758a18f4a6b76f3	applied	tracked审计：与上游tip逐字节一致
@@ -2569,7 +2617,7 @@ riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/sales-reviews/inde
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/shared/ProductScopeColumnTitle.tsx	f8891b3a36f1b0351bd38aebdf1440c472f2f6a1	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/shared/SalesCustomerContactAddressFormFields.tsx	db89805016b7136405f7fdc1c912802c0a8a74a5	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/shared/applyCustomerFormFields.ts	4bd0649769ee5c28c5f3c16c9b6ee61fd4dc33a4	applied	R2簇3 依赖件:salesOrderSyncFields别名/applySupplier defaultCurrency/syncSourceUtils/types(随tip再评)
-riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment.ts	3f7e23743dc19177d58d2c7a733fa99b9065f04c	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
+riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment.ts	9a317d0beaf9306c5c298b263434a06fbe8be892	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/shared/documentLineMaterialsPreview.tsx	a4b58f052f994d590be381eb646ffedb35c66e5e	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/shared/listAuditPhaseColumn.tsx	0ae49f19d731d7df33069e70db9dbb499cf7a507	applied	tracked审计：与上游tip逐字节一致
 riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/shared/materialLineColumns.tsx	8993fc26eb998406f0eb064fd21a87423036d52d	applied	R2：与上游tip blob一致，本地已同步
@@ -2984,9 +3032,11 @@ riveredge-frontend/src/components/layout-templates/DetailDrawerTemplate.tsx	747f
 riveredge-frontend/src/components/layout-templates/DocumentFormPageHeaderActions.tsx	dd85896790036614dca9585816a365a4bc76ada0	deferred	tracked审计：上游有本地缺，待摘取
 riveredge-frontend/src/components/layout-templates/DocumentFormPageLayout.tsx	1ddc246b6b001f101711be9ccc68e7ea4d77b2ef	superset	tracked审计：本地为上游超集/等价
 riveredge-frontend/src/components/layout-templates/FormModalTemplate.tsx	eff4e96249e887afc8876578304bb95e5dd1923a	superset	tracked审计：本地为上游超集/等价
-riveredge-frontend/src/components/layout-templates/MultiTabListPageTemplate.tsx	7767efc119674d0479d182bd77632ba18bf6c298	superset	本地antd6已超前(size=medium/Alert title),上游tip反旧
-riveredge-frontend/src/components/layout-templates/constants.ts	e9119451df04df1f2b4b12fdb786e010ecc60131	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
+riveredge-frontend/src/components/layout-templates/MultiTabListPageTemplate.tsx	0ebc6bbc2d6f0d00f90f7f1893cae4a58a14cf09	deferred	待决：MultiTab 右固定列横向滚动契约。若摘，落本地 src/global.less，保留 antd6 size=medium；不跟 styles/global.less，不摘海尔 spin 样式
+riveredge-frontend/src/components/layout-templates/constants.ts	3e3ffc4b9cba07831e731721c91931b11e9c034a	deferred	待决：MultiTab 右固定列横向滚动契约。若摘，落本地 src/global.less，保留 antd6 size=medium；不跟 styles/global.less，不摘海尔 spin 样式
 riveredge-frontend/src/components/layout-templates/detailDrawerDescriptionItems.tsx	327d5d3b1628bdc2d103a35508394c8b5152f072	applied	tracked审计：与上游tip逐字节一致
+riveredge-frontend/src/components/layout-templates/multiTabListPageTemplate.classes.ts	caba3e743b6d0a4533bfa22b1a05339482045939	deferred	待决：MultiTab 右固定列横向滚动契约。若摘，落本地 src/global.less，保留 antd6 size=medium；不跟 styles/global.less，不摘海尔 spin 样式
+riveredge-frontend/src/components/layout-templates/multiTabListPageTemplate.less	9db07ae06514b0cfeb3c107518ca88bd87038852	deferred	待决：MultiTab 右固定列横向滚动契约。若摘，落本地 src/global.less，保留 antd6 size=medium；不跟 styles/global.less，不摘海尔 spin 样式
 riveredge-frontend/src/components/layout-templates/warehouse-detail-table-styles.ts	4d11d532afc54d3691c7509bd0eba8b7d1b29f21	applied	tracked审计：与上游tip逐字节一致
 riveredge-frontend/src/components/linked-document-detail/drawers/QuotationLinkedDetailDrawer.tsx	347bb8755cacde444e7667d0e21d8ee403df317e	superset	本地私有实现/分叉超集（预审A包复核）
 riveredge-frontend/src/components/linked-document-detail/drawers/ReceiptNoticeLinkedDetailDrawer.tsx	8f898563d24a25bfbc33469d71d4fbb58736ccaa	applied	tracked审计：与上游tip逐字节一致
@@ -3107,7 +3157,7 @@ riveredge-frontend/src/components/uni-report/index.ts	39c47a740e584414cec54362f7
 riveredge-frontend/src/components/uni-report/types.ts	7b2529e99177c6a80f5201f688a24aab12b2195e	superset	本地等价实现：模块/路径/语义已在本地落定（kuaiplm本地app承接engineering_change_audit与plm深链、kuaireport真源、kuaiai路径、类型守卫/a11y/antd6 medium/泛型/uni-report特性/上游bug式差异）
 riveredge-frontend/src/components/uni-report/useUniReportExport.ts	9d68c2b2e6cdf2f41bcd87677518130363e1ed21	deferred	tracked审计：上游有本地缺，待摘取
 riveredge-frontend/src/components/uni-sync/index.tsx	bc66b1a6c181da3aafe02219214419f55d1f4401	deferred	tracked审计：上游有本地缺，待摘取
-riveredge-frontend/src/components/uni-table-detail/UniTableDetail.tsx	fda341b51bb03e8868ae36eb7289d5d7723c5836	applied	tracked审计：与上游tip逐字节一致
+riveredge-frontend/src/components/uni-table-detail/UniTableDetail.tsx	bcf1443cde47a53dfaae75ce2a8461e5d5335950	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
 riveredge-frontend/src/components/uni-table-detail/index.less	9bc5ddad139a6f80f27004628ef77ca23ab638a6	applied	tracked审计：与上游tip逐字节一致
 riveredge-frontend/src/components/uni-table-detail/sortableFormListTable.tsx	a05617ecc91650c3c2b33168e3ef5f01d8d465c0	applied	tracked审计：与上游tip逐字节一致
 riveredge-frontend/src/components/uni-table/UniTableToolbarSwitch.tsx	9537e7810f65d3c191594219a3fffee313c5f9d7	applied	tracked审计：与上游tip逐字节一致
@@ -3153,11 +3203,12 @@ riveredge-frontend/src/hooks/useMaterialQuickCreateAllowed.ts	922fdad15fdd4163e6
 riveredge-frontend/src/hooks/useNumericPrecision.ts	a2271e31c72a490606877ec40e6efc7d374946ec	superset	仅路径引用/注释/spoke-wheel改名或非zh-CN locale(i18n-zh-cn-only)：本地不取上游docs路径与改名
 riveredge-frontend/src/hooks/useRealtimeInbox.ts	abf3f8ab09ecb8301caec712e630f4bf4dcdb3d5	deferred	tracked审计：上游有本地缺，待摘取
 riveredge-frontend/src/hooks/useRegisterAiContext.ts	75742be764948a1fcc8e0d5e6c11bd901256e0c6	superset	本地等价实现：模块/路径/语义已在本地落定（kuaiplm本地app承接engineering_change_audit与plm深链、kuaireport真源、kuaiai路径、类型守卫/a11y/antd6 medium/泛型/uni-report特性/上游bug式差异）
+riveredge-frontend/src/hooks/useResizeBus.ts	236ba7b896e4dc16fa7997b9f063db098bcd567e	deferred	待决：MultiTab 右固定列横向滚动契约。若摘，落本地 src/global.less，保留 antd6 size=medium；不跟 styles/global.less，不摘海尔 spin 样式
 riveredge-frontend/src/hooks/useSiteSettingQuery.ts	f66ed81dcd3649c9a93fada9187e68947463d902	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/hooks/useToolbarSyncPushFlags.ts	2a364d05ed9bfa3e2284b596bd0f3a89441fef94	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/hooks/useUnifiedMenuData.ts	1c33152a1c4a1c1dc8906e986b33e7b61551d060	applied	微差异桶：上游真修复摘取（ImportError优雅跳过可选包ORM/自定义字段排序tiebreak/PRO应用徽标根路径识别/colProps布局/showAdvancedSearch/loading上移/未用import清理/antd6 locale简化/helpHint缺键/File类型/documentReplacementRegistry换glob+占位组件/PRO升级提示License激活按钮(antd6适配medium)）
 riveredge-frontend/src/index.html	8cf059062c8b45453f9c779f146a931ca018bef3	superset	仅路径引用/注释/spoke-wheel改名或非zh-CN locale(i18n-zh-cn-only)：本地不取上游docs路径与改名
-riveredge-frontend/src/layouts/BasicLayout.tsx	6ada74cfa26be420c8b3830b05ff66d77707f6ca	deferred	tracked审计：上游有本地缺，待摘取
+riveredge-frontend/src/layouts/BasicLayout.tsx	b962efee8ee25d6e6dff1a15200a86ea78662c22	deferred	本轮 menu_permission_any_of 仅服务海尔菜单，不摘；文件历史分叉仍待摘
 riveredge-frontend/src/layouts/basicLayout/buildInlineLayoutStyles.ts	9ecb6df8df9fd83e597ddec4fb09febbff4aeb88	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/locales/antd/lo_LA.ts	b6a0872d28c175d806b0d0ba2a4e54fc8c073c45	applied	微差异桶：上游真修复摘取（ImportError优雅跳过可选包ORM/自定义字段排序tiebreak/PRO应用徽标根路径识别/colProps布局/showAdvancedSearch/loading上移/未用import清理/antd6 locale简化/helpHint缺键/File类型/documentReplacementRegistry换glob+占位组件/PRO升级提示License激活按钮(antd6适配medium)）
 riveredge-frontend/src/locales/en-US.login.ts	1eb17b799be489e7abb46b6c0592c9cafae9d6d2	superset	本地品牌/引用展示隐式鉴权语义：本地保留星技谷品牌与host_resource隐式鉴权（上游已改RiverEdge品牌+read|display严权模型），契约语义不同不取
@@ -3174,7 +3225,7 @@ riveredge-frontend/src/locales/lo-LA.ts	95fd99291da08ca44a5fec39aa1a2ba36c366b7c
 riveredge-frontend/src/locales/vi-VN.login.ts	7f8e16b5abb0a679f9ecbf0443862b87d0a03791	superset	本地品牌/引用展示隐式鉴权语义：本地保留星技谷品牌与host_resource隐式鉴权（上游已改RiverEdge品牌+read|display严权模型），契约语义不同不取
 riveredge-frontend/src/locales/vi-VN.ts	97820a0546c20f2a15381ec9f045d5598eb0759a	superset	仅路径引用/注释/spoke-wheel改名或非zh-CN locale(i18n-zh-cn-only)：本地不取上游docs路径与改名
 riveredge-frontend/src/locales/zh-CN.login.ts	db74e76107d87f6bd9f68953bc8a91f8f93d3479	superset	tracked审计：本地为上游超集/等价
-riveredge-frontend/src/locales/zh-CN.ts	142077e9ddc06a7b5919bb9dc32dd3e9cd6e94d7	applied	物料同步税率文案：zh-CN摘defaultTaxRate等业务键+material-sync-default-tax-rate-r01日志键（跳过haoligo/haierIot块）；platformUpdateLog仅追加本批1条，文件整体本地定制保留
+riveredge-frontend/src/locales/zh-CN.ts	e9d7e96922583937aed06ac65faf20be3f147f09	applied	本轮海尔物联文案整段不摘（客户名、应用源码不在仓）；common 四键无本地调用方不单摘；文件维持既有本地定制
 riveredge-frontend/src/locales/zh-Hant.login.ts	e39ef176e510d9e92a7f0547a82a5a9da055cf57	superset	本地品牌/引用展示隐式鉴权语义：本地保留星技谷品牌与host_resource隐式鉴权（上游已改RiverEdge品牌+read|display严权模型），契约语义不同不取
 riveredge-frontend/src/locales/zh-Hant.ts	991e66ad16c6441e9a56c20b01dae279a1e9c624	superset	仅路径引用/注释/spoke-wheel改名或非zh-CN locale(i18n-zh-cn-only)：本地不取上游docs路径与改名
 riveredge-frontend/src/login.html	0b9d33e156e06f1a58731d453049b99b3ea81d27	superset	仅路径引用/注释/spoke-wheel改名或非zh-CN locale(i18n-zh-cn-only)：本地不取上游docs路径与改名
@@ -3294,7 +3345,7 @@ riveredge-frontend/src/services/userMessage.ts	5ade0da8906fa8cade0950f6ac513a88e
 riveredge-frontend/src/stores/configStore.ts	0c8c321a9fbbb00343a204920ad9965413dd5480	superset	仅路径引用/注释/spoke-wheel改名或非zh-CN locale(i18n-zh-cn-only)：本地不取上游docs路径与改名
 riveredge-frontend/src/stores/userPreferenceStore.ts	2edfe40f4c707e59678c65fbcffb338f1e38ed6f	applied	13be286f11续:前端+财务适配+迁移
 riveredge-frontend/src/styles/first-paint.css	495b926e77af3535586f0615863fd21bf58db993	superset	上游前端目录迁移/壳层重构不取：本地保留src/app.tsx、src/queryClient.ts、src/configs/、src/core/constants/、根级less/css/initSpinIndicator路径；menu-entry-shell与config/queryClient等新路径文件不引入
-riveredge-frontend/src/styles/global.less	474d7617b8fd9e6fb91aa83d2ad18242da8b427a	applied	适配落地：超报/在制口径簇、领料material_model、本地_load_materials_by_ids适配、应用停用按route path收口菜单、split子行capabilities、销售变更单取单链、报工面板、价格本税率、DetailDrawer/uni-pull/global.less/zh-CN/updateLog
+riveredge-frontend/src/styles/global.less	91169bf6f1d587cc78a70fda05bfeac80d050e4c	deferred	待决：MultiTab 右固定列横向滚动契约。若摘，落本地 src/global.less，保留 antd6 size=medium；不跟 styles/global.less，不摘海尔 spin 样式
 riveredge-frontend/src/styles/login-shell.css	f2707205929c8e6790f98f256e16fe6b6956641e	superset	上游前端目录迁移/壳层重构不取：本地保留src/app.tsx、src/queryClient.ts、src/configs/、src/core/constants/、根级less/css/initSpinIndicator路径；menu-entry-shell与config/queryClient等新路径文件不引入
 riveredge-frontend/src/styles/uni-toolbar-chrome.less	1051bdaa06f035b8e15415cf06c425a49a554578	superset	tracked审计：本地为上游超集/等价
 riveredge-frontend/src/theme/hmi/antd-theme.ts	ac1b67204c4f036fd1c6864b8d062c93038e329a	superset	本地等价实现：模块/路径/语义已在本地落定（kuaiplm本地app承接engineering_change_audit与plm深链、kuaireport真源、kuaiai路径、类型守卫/a11y/antd6 medium/泛型/uni-report特性/上游bug式差异）
@@ -3320,7 +3371,7 @@ riveredge-frontend/src/utils/fieldMaskPermission.ts	286ddcead2a6da93c49f2a561e63
 riveredge-frontend/src/utils/fieldPermissionI18n.ts	3e261cc74c8cd0103922e14c7a9e943c460ff941	applied	R3支撑依赖(范围外文件):FIELD_PERMISSION_KIND_OPTIONS两策略类选项
 riveredge-frontend/src/utils/fileDownload.ts	0faab853bc22b3d508b6978ec6acb70db100e059	applied	R2:与上游tip一致
 riveredge-frontend/src/utils/formListItems.ts	95a60bc0476846a4dcec74dad3b30b06a04d9920	applied	tracked审计：与上游tip逐字节一致
-riveredge-frontend/src/utils/format.ts	c7d956481114b0bededec37ad3323688d8b805e4	deferred	tracked审计：上游有本地缺，待摘取
+riveredge-frontend/src/utils/format.ts	3c227dc0c2dbc0d7027214bdff745e109466d722	deferred	本轮仅 export parseBySiteTimezone 供海尔页，不摘；文件历史分叉仍待摘
 riveredge-frontend/src/utils/futureDatePickerShortcuts.tsx	6bdaf681ebdda20c1314f04a3b2b9c14e0af13d5	superset	本地私有实现/分叉超集（预审A包复核）
 riveredge-frontend/src/utils/globalLifecycleI18n.ts	e51612a012fe120d3713595d25f9ede9747bd3e3	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 riveredge-frontend/src/utils/initSpinIndicator.tsx	60f37490ada5c68c747e9afdcfbe570dae768f35	superset	上游前端目录迁移/壳层重构不取：本地保留src/app.tsx、src/queryClient.ts、src/configs/、src/core/constants/、根级less/css/initSpinIndicator路径；menu-entry-shell与config/queryClient等新路径文件不引入
@@ -3350,7 +3401,7 @@ riveredge-frontend/src/utils/spreadsheetPreserveText.test.ts	c3f3c8e2c24c238e34e
 riveredge-frontend/src/utils/spreadsheetPreserveText.ts	0ff5f3233be4aa862af738c847e43baa71858f58	applied	tracked审计：与上游tip逐字节一致
 riveredge-frontend/src/utils/systemUniTableListFilters.ts	37c2169cb6eb0fdf701f399581bd8fc861e0feb2	superset	superset:上游区间零增量；本地站点墙钟语义版优先(上游UTC语义不采纳)
 riveredge-frontend/src/utils/tenantHomePath.ts	61c26e034fff27761b3de5daa6d00e9f08529ef1	superset	仅路径引用/注释/spoke-wheel改名或非zh-CN locale(i18n-zh-cn-only)：本地不取上游docs路径与改名
-riveredge-frontend/src/utils/uniTableLayoutColumns.ts	3745fc5b258f4027c08bebd3a3980f70f442dfc6	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
+riveredge-frontend/src/utils/uniTableLayoutColumns.ts	bc8c6d35300852db5d4a417a20713f661794180a	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
 riveredge-frontend/src/utils/userDisplay.ts	c1d47fe81a50b56e83935c93affbc07c45aa2cc9	superset	R2预审：本地已有等价/更深实现，不摘
 riveredge-frontend/src/vite-env.d.ts	6232bdf5f89c14048bf36fd63651a1b16c4bcb76	applied	tracked审计：与上游tip逐字节一致
 riveredge-frontend/vite.config.ts	c24e43bf04ac91b9caddd6ad2c23ad1e1d93e94c	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip

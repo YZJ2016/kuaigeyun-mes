@@ -218,10 +218,18 @@ class ApplicationRegistryService:
                             sys.path.insert(0, str(src_path))
                         
                         # 如果模块已经导入过，先移除它以便重新导入（修复语法错误后需要重新导入）
-                        # 需要移除所有相关的子模块，否则可能仍然使用缓存的错误版本
-                        modules_to_remove = [m for m in sys.modules.keys() if m.startswith(route_module_path)]
+                        # 须移除 apps.{code}.api 下全部子模块（如 routes_haier_iot），
+                        # 不能只删 api.router，否则会沿用旧的子路由模块导致 404。
+                        api_pkg_prefix = f"apps.{module_code}.api"
+                        modules_to_remove = [
+                            m
+                            for m in sys.modules.keys()
+                            if m == route_module_path or m.startswith(f"{api_pkg_prefix}.")
+                        ]
                         if modules_to_remove:
-                            logger.debug(f"🔄 移除 {len(modules_to_remove)} 个已缓存的模块以便重新导入: {route_module_path}")
+                            logger.debug(
+                                f"🔄 移除 {len(modules_to_remove)} 个已缓存的 API 模块以便重新导入: {api_pkg_prefix}"
+                            )
                             for m in modules_to_remove:
                                 del sys.modules[m]
                         
