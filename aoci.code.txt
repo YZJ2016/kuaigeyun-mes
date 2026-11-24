@@ -44,6 +44,7 @@ permission-responsibility.md[SS4M]: F:permission duty split | R:- | A:manifest�
 realtime-im.md[SM3T]: F:realtime IM transport | R:- | A:3 backends | S:socketio default; centrifugo separate; 56L
 aoci-cursor-setup.md[SU3T]: F:说明Cursor三仓AOCI接入、选仓与本机检查流程 | R:- | A:- | S:单个MCP进程只能绑定一个仓库；文中进度和路径须现场核对
 金蝶强一致实施-SOP.md[SW4T]: F:单租户金蝶强一致实施SOP:审计清红灯→基础资料→库存→金额→复核执行序 | R:code:riveredge-backend/scripts/tenant_kingdee_strong_consistency.py | A:一致口径五条,执行顺序,连枝横专项治理 | S:基础资料禁手工改编码不同步;撤回须金蝶成功再本地;空仓位归无货架再全量入站
+服务采购做单说明.md[SW4S]: F:服务采购全链做单说明:服务物料→申请→订单→入库→应付/发票→完成 | R:- | A:服务采购类型,取单衔接,存货类别约束 | S:存货类别勿填实物类;不入库不写库存不外推金蝶
 
 ===D:/kuaigeyun-pro/kuaigeyun/docs/===
 功能清单.md[SG3S]: F:星技谷制造全功能地图：主数据到AI十一模块组加多端与分期实施建议 | R:code:riveredge-backend/src/apps | A:主数据,星制造核心MES,星研发PLM,轻财务,行业扩展,平台与系统能力 | S:渐进上线按插件装配;行业包按需选装勿首期摊大
@@ -54,19 +55,22 @@ aoci-cursor-setup.md[SU3T]: F:说明Cursor三仓AOCI接入、选仓与本机检�
 报工思路.md[DU3T]: F:Implements 报工思路.md | R:- | A:- | S:59L
 报工新思路.md[DU3S]: F:Implements 报工新思路.md | R:- | A:- | S:143L
 文件路径.md[DU3T]: F:Implements 文件路径.md | R:- | A:- | S:33L
-上游同步台账.md[SW3L]: F:私有fork上游同步台账:gitee水位、批A-G摘取映射、跳过清单与逐批复核手法 | R:code:AGENTS.md | A:远端与水位,已同步映射,批C价税采购段,批C3财务适配段,基线清理记录 | S:勿用upstream;fetch半克隆;新批次置顶;财务=kuaicaiwu权威
+上游同步台账.md[SW3L]: F:私有fork上游同步台账:gitee水位、逐批复核手法、决策点与deferred清单 | R:code:AGENTS.md | A:远端与水位,已同步映射,R3收口记录,基线清理 | S:勿用upstream;fetch半克隆;新批次置顶;财务=kuaicaiwu权威
 成熟度与技术再评估.md[SG4M]: F:MES/MOM全领域成熟度再评估,含领域评分,链路核查与Q01-Q20问题清单 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/posting_service.py | A:总评,各领域成熟度盘点,业务主链路评估,技术评估,Q01-Q20具体问题,优先补齐方向 | S:评分非上线验收;spec标记≠运行证据;历史测试不作本轮验证
+上游同步-文件级台账.tsv[SD4L]: F:上游同步文件级裁决台账:path/sha/verdict/note机读列,勿手改列结构 | R:code:scripts/sync_upstream_audit.py | A:tracked|applied|superset|deferred|domain-out | S:DELETED行为上游删除固有口径;勿加未决?行
+上游同步-续作手册.md[SW4T]: F:上游同步跨会话交接手册:水位/边界/下一步顺序/台账指针 | R:code:docs/上游同步-文件级台账.tsv,code:docs/上游同步台账.md | A:新会话入口,既定边界,deferred顺序 | S:kuaicaiwu财务唯一权威;勿引kuaizhizao.finance平行体系
+上游同步-评估覆盖.md[SW4L]: F:上游同步逐轮评估覆盖清单:R2积压清零/宽区间补登/各批摘取落点 | R:code:docs/上游同步-文件级台账.tsv | A:R2清零轮,宽区间补登,尾批收口 | S:/tmp预审明细为会话产物,接续看TSV+台账
 
 ===D:/kuaigeyun-pro/kuaigeyun/fast-deploy/===
-README.md[SV3T]: F:fast-deploy脚本导览,统一入口,默认端口,蓝绿与H5发行要点 | R:code:fast-deploy/deploy.sh | A:推荐入口,脚本对照,环境要求,默认端口,蓝绿部署,Windows要点 | S:H5不npm构建须HBuilderX发行;install-h5缺省不阻断主仓
+README.md[SV3S]: F:fast-deploy脚本导览,统一入口,默认端口,蓝绿与H5发行要点 | R:code:fast-deploy/deploy.sh | A:推荐入口,脚本对照,环境要求,默认端口,蓝绿部署,Windows要点 | S:H5不npm构建须HBuilderX发行;install-h5缺省不阻断主仓
 build.mobile.web.sh[OV3T]: F:复制本机HBuilderX已发行H5产物到/mobile部署目录,缺失则写占位页 | R:code:fast-deploy/lib/common.sh | A:copy_mobile_h5_publish_to_web_dir,write_mobile_web_dist_placeholder,MOBILE_H5_PUBLISH_DIR | S:uni-app x无npm构建;缺产物仍exit0仅留占位页
-build.web.sh[OV2S]: F:frontend build+git push | R:- | A:dist-only commit | S:filter-repo strip; force-with-lease; 117L
+build.web.sh[OV2S]: F:旧式dist发布:build+dist提交+剥离历史+force-with-lease推送,默认停用 | R:code:fast-deploy/lib/build_web_git.sh | A:BUILD_WEB_PUBLISH=1,BUILD_WEB_SKIP_* | S:未开开关直接exit0;dist已不入库;重写历史须工作区干净
 deploy.sh[OV6S]: F:统一部署入口:dev/prod前缀+白名单分发到common.sh子命令 | R:code:fast-deploy/lib/common.sh | A:wizard,install,configure,update,pro-apps,install-h5 | S:未知命令即退出;USE_MIRROR默认1;Win install先试PS再回退bash
 launch.dev.sh[OV6L]: F:一键启停API/Taskiq/Vite开发栈,H5由HBuilderX发行不起Expo | R:code:riveredge-backend/scripts/run_dev_server.py | A:start_backend,start_worker,start_frontend,stop_all,kill_port,status | S:Taskiq默认1worker防占PG;Win按树清理;with-h5不启动Expo
 
 ===D:/kuaigeyun-pro/kuaigeyun/fast-deploy/config/===
 caddy-extra-proxies.list.example[CC1T]: F:Caddy extra proxy list | R:- | A:site→upstream lines | S:http=no TLS; https=auto; 11L
-deploy.env.example[CC4S]: F:deploy.env全量配置模板,端口,蓝绿,域名HTTPS,扩展仓与OPT选装 | R:code:fast-deploy/deploy.sh | A:BACKEND_PORT,BLUE_GREEN_DEPLOY,CADDY_DOMAIN,TASKIQ_WORKERS,OPT_选装项,UV_INDEX_URL | S:各仓分支一律develop禁main;OPT默认0不装;dist不含.gz/.br
+deploy.env.example[CC4S]: F:deploy.env全量配置模板,端口,蓝绿,域名HTTPS,扩展仓与OPT选装 | R:code:fast-deploy/deploy.sh | A:BACKEND_PORT,BLUE_GREEN_DEPLOY,CADDY_DOMAIN,NODE_BUILD_MEM,OPT_选装项 | S:各仓分支一律develop禁main;OPT默认0不装;dist不含.gz/.br
 install-scripts.json[CC1S]: F:OS install commands | R:- | A:6 tools × 5 OS | S:winget/apt/dnf per OS; 76L
 workbuddy-mcp.env.example[CC3T]: F:WorkBuddy MCP Sidecar密钥env模板，复制为workbuddy-mcp.env使用 | R:code:docs/apps/kuaiai/EXTERNAL-AGENT-WORKBUDDY.md | A:RIVEREDGE_BASE_URL,OPEN_API_ACCT_ID,OPEN_API_APP_ID,OPEN_API_APP_SECRET,OPEN_API_TENANT_ID,MCP_PORT | S:秘钥勿提交Git;与mcp.json无关;MCP_HOST等由systemd注入
 
@@ -75,8 +79,8 @@ blue_green.ps1[OV4M]: F:PS blue-green deploy | R:- | A:BG state+swap | S:low-spe
 blue_green.sh[OV5L]: F:蓝绿双槽位后端与前端dist-live切换,update尽量不停机可回滚 | R:code:fast-deploy/lib/common.sh | A:bg_enabled,bg_run_update_prod,bg_run_update_dev,bg_start_backend_slot,bg_flip_frontend_to_slot,bg_rollback_update | S:低配强制单槽清state;非交互默认传统;槽位8201/8202;worker先drain;uvicorn workers可配对齐DB/请求超时
 build_web_git.sh[OV5M]: F:build.web.sh专用:剥离Git历史dist提交仅tip保留 | R:code:fast-deploy/build.web.sh | A:assert_source_tree_committed,drop_pure_dist_commits,strip_dist_from_history,restore_remotes,push_with_lease | S:未commit拒跑;遇merge转filter-repo;重写后恢复remote
 common.ps1[OV9L]: F:Windows 侧部署共享库：依赖检测安装、env 读写、Caddy 生成、服务启停、迁移与开机任务 | R:code:fast-deploy/lib/common.sh | A:Load-DeployEnv,Get-EnhancedPath,Invoke-Configure,Invoke-Migrate,New-Caddyfile,Install-RiverEdgeBootTask | S:PS 侧不复制 H5 产物；须 PYTHONUTF8=1 防 GBK 读 pyproject 失败
-common.sh[OV9L]: F:全平台部署共享库:依赖检测安装、deploy.env管理、Caddy/systemd、迁移、选装依赖、私仓组装与后端workers/超时env | R:code:fast-deploy/deploy.sh | A:load_deploy_env,sync_git_from_origin,cmd_migrate,gen_caddyfile,cmd_install_service,sync_sibling_git_repo | S:systemd包装脚本缺+x/CRLF即203/EXEC;deploy.env须归服务用户;UVICORN_WORKERS/超时env透传后端exec
-low_spec_mode.sh[OV4M]: F:低配模式内存调优与快照恢复 | R:code:fast-deploy/lib/common.sh | A:low_spec_apply_profile,low_spec_apply_normal_profile | S:开启低配写PLAYWRIGHT_POSTINSTALL_ENABLE=1不关闭Chromium补装; 恢复一般模式不改该开关; 缩池关蓝绿
+common.sh[OV9L]: F:全平台部署共享库:依赖检测安装、deploy.env管理、Caddy/systemd、迁移、选装依赖、私仓组装与后端workers/超时env | R:code:fast-deploy/deploy.sh | A:load_deploy_env,sync_git_from_origin,cmd_migrate,gen_caddyfile,cmd_install_service,sync_sibling_git_repo | S:systemd包装脚本缺+x/CRLF即203/EXEC;deploy.env须归服务用户
+low_spec_mode.sh[OV4L]: F:低配模式内存调优与快照恢复 | R:code:fast-deploy/lib/common.sh | A:low_spec_apply_profile,low_spec_apply_normal_profile | S:开启低配写PLAYWRIGHT_POSTINSTALL_ENABLE=1不关闭Chromium补装; 恢复一般模式不改该开关; 缩池关蓝绿
 wizard.sh[OV8L]: F:对话式部署向导：面板 UI、意图分发、依赖安装计划、扩展/选装菜单与 8 阶段安装流程 | R:code:fast-deploy/lib/common.sh | A:cmd_wizard,wizard_show_home_panel,cmd_wizard_fresh,wizard_install_deps,wizard_ask_optional_deps_choice,wizard_update_app | S:面板宽取 /dev/tty 防 tee 误判；git reset 后须重 source common.sh
 
 ===D:/kuaigeyun-pro/kuaigeyun/fast-deploy/linux/===
@@ -1169,6 +1173,96 @@ config-center-ops.md[SO2T]: F:config center ops | R:- | A:3 control points | S:c
 20261118109200_other_expense_payee_related_receipts.py[MV3T]: F:other_expense_linesにpayee_id/payee_name,other_expensesにrelated_purchase_receipts(JSONB)追加 | R:- | A:upgrade,downgrade,RUN_IN_TRANSACTION | S:従業員立替行領収人必須はサービス層;関連入庫はsupplier往来のみ;33L
 20261118110000_fund_transfer_review_status.py[MV1T]: F:apps_kuaicaiwu_fund_transfersにreview_status列追加(草稿初期) | R:code:riveredge-backend/src/apps/kuaicaiwu/models/fund_transfer.py | A:upgrade,downgrade,RUN_IN_TRANSACTION | S:審核状態列;IF NOT EXISTS冪等;19L
 20261118111000_payment_offset_prepayment_lines.py[MV6T]: F:迁移:建payment_offset_prepayment_lines预付抵扣明细表 | R:- | A:(tenant,payment)/(tenant,prepayment_payment)索引,amount4位小数,deleted_at软删 | S:38L;预付抵扣付款的扣减侧明细
+1010_20261107233000_shipment_notice_review_status.py[PD4T]: F:发货通知加review_status列并回填审核态,待审核/已驳回迁出业务status | R:- | A:apps_kuaizhizao_shipment_notices | S:已通知/已出库记审核通过;downgrade回写status
+1022_20261110180000_production_picking_item_warehouse_nullable.py[PD4T]: F:生产领料明细出库仓库改可空,批量下推先生成单据后按行补仓 | R:- | A:apps_kuaizhizao_production_picking_items | S:-
+1030_20261115110000_other_inbound_item_line_warehouse.py[PD4T]: F:其他入库明细加行级仓库列,既有行从表头回填,对齐其他出库 | R:- | A:apps_kuaizhizao_other_inbound_items | S:-
+1037_20261115180000_work_order_form_bom_op_lines.py[PD4T]: F:工单加仓库/生产部门/客户订单号/需求日列+bom_lines建表+工序工价与作业要求 | R:- | A:apps_kuaizhizao_work_orders,work_order_operations,work_order_bom_lines | S:-
+20261118112000_receipt_pull_lines.py[PD4T]: F:收款单加载明细表apps_kuaicaiwu_receipt_pull_lines建表+双索引 | R:- | A:apps_kuaicaiwu_receipt_pull_lines | S:-
+20261118113000_receipt_counterparty_payer.py[PD4T]: F:收款单加对方付款户名/开户行/账号三列,客户资料带入 | R:- | A:apps_kuaicaiwu_receipts | S:-
+20261118114000_statement_ledger_recognition_columns.py[PD4T]: F:单据立账策略列+对账单立账方式+工序委外收货批次表(上游917/916/1038子集合并) | R:- | A:partner_statements,outsource_orders,outsource_material_receipts | S:-
+20261119000000_core_apis_pk_uuid_unique.py[PD4S]: F:core_apis消重撞号清软删幽灵补PK/UNIQUE(uuid,tenant+code)校准序列 | R:- | A:core_apis | S:缺PK致同id多行ORM抛MultipleObjects;软删仅占号产品已硬删
+20261119010000_master_partners_pk_and_seq.py[PD4T]: F:客商suppliers/customers补主键并对齐id序列 | R:- | A:apps_master_data_suppliers,apps_master_data_customers | S:序列落后max(id)致撞号MultipleObjects
+20261119020000_payment_application_department.py[PD4T]: F:付款申请加department_id/department_name列 | R:- | A:apps_kuaizhizao_payment_applications | S:-
+20261119030000_partner_addresses_json.py[PD4S]: F:客商加addresses JSONB明细列并从既有地址字段回填 | R:- | A:apps_master_data_customers,apps_master_data_suppliers | S:-
+20261120090000_core_apis_seq_and_orphan_bindings.py[PD4S]: F:校准core_apis序列+清空指向已删接口的同步绑定api_uuid | R:- | A:core_apis | S:失效uuid一律置空由用户重选,禁读侧猜绑
+20261121000000_purchase_receipt_sync_binding.py[PD4T]: F:采购入库出站绑定表purchase_receipt_sync_binding建表(上游935+936合并) | R:- | A:apps_kuaizhizao_purchase_receipt_sync_binding | S:-
+20261122000001_purchase_invoice_discount_amount.py[PD4T]: F:采购发票加discount_amount列默认0 | R:- | A:apps_kuaicaiwu_purchase_invoices | S:-
+20261122000002_user_employee_number.py[PD4T]: F:core_users加employee_number工号列(单据下推服务已消费) | R:- | A:core_users | S:-
+20261123000001_user_is_login_default.py[PD4T]: F:core_users加is_login_default多账户登录默认组织列 | R:- | A:core_users | S:-
+20261123000002_purchase_docs_department.py[PD4T]: F:采购管理单据表头加部门id+名称快照,供下推带入 | R:- | A:apps_kuaizhizao_purchase_orders等采购单据 | S:-
+20261123000003_partner_statement_review_fields.py[PD4T]: F:往来对账单接入审核:review_status+审核人/时间/备注字段 | R:- | A:apps_kuaicaiwu_partner_statements | S:-
+20261123000004_payment_application_line_material_snapshot.py[PD4T]: F:付款申请明细加来源物料快照:品名/规格/单位/数量/source_line_id | R:- | A:apps_kuaizhizao_payment_application_items | S:-
+20261123000005_partner_default_currency.py[PD4T]: F:客商加默认币种与汇率,单据表头带出 | R:- | A:apps_master_data_customers,apps_master_data_suppliers | S:-
+20261123000006_warehouse_location_ref_sync_binding.py[PD4T]: F:仓库库位关系入站同步绑定表(苍穹bd_warelocareference→库位warehouse_id) | R:- | A:apps_master_data_warehouse_location_ref_sync_binding | S:-
+20261123000007_material_multi_unit_sync_binding.py[PD4T]: F:物料辅单位多计量入站同步绑定表 | R:- | A:apps_master_data_material_multi_unit_sync_binding | S:-
+20261123000008_numeric_14_6_to_20_6.py[PD4T]: F:补迁移888遗留:NUMERIC(14,6)升平台标准DECIMAL(20,6)防整数位溢出 | R:- | A:多表numeric列 | S:(14,6)整数位约8,写可用库存等大数overflow
+20261123000009_rework_order_operation_assign.py[PD4T]: F:返工工序行加指派人员/班组字段,对齐工单工序派工 | R:- | A:apps_kuaizhizao_rework_order_operations | S:-
+20261123000010_equipment_repair_participants.py[PD4T]: F:设备维修加started_at与参与人(协作/转派)台账 | R:- | A:apps_kuaizhizao_equipment_repairs,repair_participants | S:-
+20261123000011_equipment_repair_participant_uuid_varchar.py[PD4T]: F:维修参与人uuid列PG UUID改VARCHAR(36)对齐BaseModel CharField | R:- | A:apps_kuaizhizao_equipment_repair_participants | S:-
+20261123000012_resource_categories_approval_message_print.py[PD4T]: F:审批流程/消息模板/打印模板加category_id分类外键 | R:- | A:core_approval_processes,core_message_templates,core_print_templates | S:-
+20261123000013_api_related_document_and_type.py[PD4T]: F:core_apis加关联单据码与接口类型(标准/自定义)列 | R:- | A:core_apis | S:-
+20261123000014_finished_goods_receipt_blank_work_order.py[PD4T]: F:成品/半成品入库空白建单时工单可空,对齐采购入库 | R:- | A:apps_kuaizhizao_finished_goods_receipts,semi_finished_goods_receipts | S:-
+20261123000015_production_picking_blank_work_order.py[PD4T]: F:生产领料空白建单时表头工单可空,对齐销售出库 | R:- | A:apps_kuaizhizao_production_pickings | S:-
+20261123000016_purchase_order_type_receipt.py[PD4T]: F:采购入库加order_type;采购订单框架协议回填为标准采购 | R:- | A:apps_kuaizhizao_purchase_receipts | S:-
+20261123000017_sync_run_log_trigger_kind.py[PD4T]: F:core_sync_run_logs加trigger_kind触发方式(manual/trigger/scheduled) | R:- | A:core_sync_run_logs | S:-
+20261123000018_production_picking_pick_department.py[PD4T]: F:生产领料加领用部门三列,对齐其他出库pick_department | R:- | A:apps_kuaizhizao_production_pickings | S:-
+20261123000019_other_outbound_item_line_warehouse.py[PD4T]: F:其他出库明细加行级仓库,既有行从表头回填,对齐销售出库/生产领料 | R:- | A:apps_kuaizhizao_other_outbound_items | S:-
+20261123000020_dual_inventory_unit_ledger.py[PD4T]: F:金蝶式双计量:物料加inventory_unit+批次/线边/流水base_quantity回填=quantity | R:- | A:apps_master_data_materials,material_batches | S:-
+20261123000021_seed_equipment_inspection_scheme_code_rule.py[PD4T]: F:补建点检方案编码规则EQUIPMENT_INSPECTION_SCHEME_CODE(DJFA+4位流水) | R:- | A:core_code_rules | S:缺规则时编码页与新建弹窗无法加载
+20261123000022_ledger_aux_quantity.py[PD4T]: F:台账加aux_quantity辅助数量列,与基本量并列,secondary_quantity真源 | R:- | A:apps_kuaizhizao_material_batches等台账表 | S:-
+20261123000023_rebackfill_material_base_unit_to_name.py[PD4T]: F:再次将物料base_unit从单位编码回填为名称(876后同步resolve曾误写code) | R:- | A:apps_master_data_materials | S:写路径已改回名称,本迁移补存量
+20261123000024_material_batch_manage_sync_binding.py[PD4T]: F:物料批号管理(enablelot)入站同步绑定表 | R:- | A:apps_master_data_material_batch_manage_sync_binding | S:-
+20261123000025_backfill_quality_inbound_material_unit_names.py[PD4T]: F:质检/入库等单据material_unit编码回填为单位目录名称 | R:- | A:质检与入出库单据表 | S:展示层禁止code→name映射,须真源回填名称
+20261123000026_backfill_picking_requisition_unit_names.py[PD4T]: F:生产领料/采购申请等unit编码回填为目录名称(991未覆盖的领料/请购明细) | R:- | A:领料/请购明细表 | S:-
+20261123000027_reporting_record_review_status.py[PD4T]: F:报工记录加review_status,历史pending/rejected迁出业务status,已通过记审核通过 | R:- | A:apps_kuaizhizao_reporting_records | S:-
+20261123000028_rework_order_review_status.py[PD4T]: F:返工单加review_status,审计态迁入,业务status保持草稿至下达 | R:- | A:apps_kuaizhizao_rework_orders | S:-
+20261123000029_purchase_receipt_display_unit_price.py[PD4T]: F:采购入库明细固化表单录入单价,详情只读展示禁反算含税价 | R:- | A:apps_kuaizhizao_purchase_receipt_items | S:-
+20261123000030_purchase_receipt_item_line_tax_net.py[PD4T]: F:采购入库明细行税额/价税合计服务端rollup写回,详情禁前端反算 | R:- | A:apps_kuaizhizao_purchase_receipt_items | S:-
+20261123000031_other_outbound_pick_date.py[PD4T]: F:其他出库单加领用日期列 | R:- | A:apps_kuaizhizao_other_outbounds | S:-
+20261123000032_sales_delivery_customer_contact.py[PD4T]: F:销售出库表头加客户联系人/电话,对齐销售订单/发货通知 | R:- | A:apps_kuaizhizao_sales_deliveries | S:-
+20261123000033_seed_missing_code_rules_batch.py[PD4T]: F:补种缺失编码规则:资金调拨/样机制作书/点检项/保养方案/巡检路线/模具保养维修 | R:- | A:core_code_rules | S:缺规则时编码页与新建弹窗无法加载
+20261123000034_misc_voucher_counterparty_payee.py[PD4T]: F:其他费用支出加对方收款户名/开户行/账号 | R:- | A:apps_kuaicaiwu_misc_expense_vouchers | S:-
+20261123000035_sync_binding_schedule_window.py[PD4T]: F:入站/单据同步绑定加定时允许时段(HH:mm) | R:- | A:同步绑定表 | S:-
+20261123000036_field_permission_two_kinds.py[PD4T]: F:字段权限细字段收敛为amount/party_name两大类;先软删同键多余行取最严再改名 | R:- | A:core_field_permissions | S:unique(tenant,role,resource,field_name)冲突须先软删
+20261123000037_clear_deleted_user_department_links.py[PD4T]: F:清除已删除用户残留部门任职与负责人引用 | R:- | A:部门任职/负责人关联表 | S:不清则空部门仍显示人数且无法删除
+20261123000038_menu_tenant_disabled_meta.py[PD4T]: F:回填菜单管理手工停用标记meta.tenant_disabled(上游1049) | R:- | A:菜单行meta | S:应用启用与接管恢复跳过带此标记菜单
+20261123000039_api_outbound_field_mappings.py[PD4T]: F:接口表加出站字段映射(本地字段→对方字段)(上游988) | R:- | A:core_apis | S:-
+20261123000040_finished_goods_receipt_blank_work_order.py[PD4T]: F:成品/半成品入库单工单字段可空(空白建单)(上游981) | R:- | A:apps_kuaizhizao_finished_goods_receipts,semi_finished_goods_receipts | S:-
+20261123000041_production_picking_blank_work_order.py[PD4T]: F:生产领料单工单字段可空(空白建单)(上游982) | R:- | A:apps_kuaizhizao_production_pickings | S:-
+20261123000042_production_picking_pick_department.py[PD4T]: F:生产领料加领用部门字段(上游985) | R:- | A:apps_kuaizhizao_production_pickings | S:-
+20261123000043_wo_op_assigned_production_line.py[PD4T]: F:工单工序加产线指派字段,自动化产线APS排程真源(上游1044) | R:- | A:apps_kuaizhizao_work_order_operations | S:-
+20261123000044_ind_relay_line_products.py[PD4T]: F:继电器行业包产线可生产自制件绑定表(上游1048) | R:- | A:ind_relay_line_products | S:-
+20261123000045_drawing_upload_size_default_200mb.py[PD4T]: F:图纸上传上限旧默认100MB回填为200MB | R:- | A:配置项 | S:-
+20261123000046_require_document_tax_rates.py[PD4T]: F:单据税率字段统一非空,0表示零税率 | R:- | A:各单据tax_rate列 | S:-
+20261123000047_link_purchase_receipt_inbound_permissions.py[PD4T]: F:采购入库单与入库管理共用同一组功能权限。 历史租户的采购管理入口可能仍绑定旧资源权限，导致角色矩阵中“采购入库单” 与“入库管理”的勾选状态彼此独立。迁移现有角色授权后，将两个菜单入口统一 绑定到 kuaizhizao：inbound：read。 | R:- | A:core_role_permissions,core_menus | S:-
+20261123000048_purchase_invoice_issued_status.py[PD4T]: F:采购发票审核通过后的业务状态为已开票。 | R:- | A:apps_kuaicaiwu_purchase_invoices | S:-
+20261123000049_outsource_order_receipt_audit_cols.py[PD4T]: F:工序委外收货批次表补齐 BaseModel 审计列。 1038 建表时未含 updated_by / updated_by_name；下达后详情查询 SELECT 会失败。 | R:- | A:apps_kuaizhizao_outsource_order_receipts | S:-
+20261123000050_customer_return_visit_status.py[PD4T]: F:客户回访增加状态字段：待登记 / 已完成。 下推生成的回访多为待登记；完成回访后写入已完成。 已有数据按是否已评满意度回填。 | R:- | A:apps_kuaizhizao_customer_return_visits | S:-
+20261123000051_purchase_receipt_push_code_fields.py[PD4T]: F:采购入库单增加苍穹推送编码字段：组织、单据类型、业务类型、库存事务。 单据可改；空时回落接口管理默认值。 | R:- | A:apps_kuaizhizao_purchase_receipts | S:-
+20261123000052_qms_system_document_circulation.py[PD4T]: F:体系文件发放、回收、宣贯记录。 | R:- | A:apps_kuaizhizao_qms_system_document_circulations | S:-
+20261123000053_qms_audit_checklist_nc.py[PD4S]: F:内审年度计划、检查表行、不符合报告；内审挂年度计划。 | R:- | A:core_code_rules,apps_kuaizhizao_qms_internal_audit_annual_plans,apps_kuaizhizao_qms_internal_audit_checklist_items,apps_kuaizhizao_qms_nonconformity_reports,apps_kuaizhizao_qms_internal_audits | S:-
+20261123000054_qms_corrective_action.py[PD4S]: F:纠正预防台账；管理评审决议行（供纠正预防挂接）。 | R:- | A:core_code_rules,apps_kuaizhizao_qms_corrective_actions,apps_kuaizhizao_qms_management_review_resolutions | S:-
+20261123000055_qms_objectives_legal_external.py[PD4S]: F:质量目标、法律法规、外审、证书。 | R:- | A:core_code_rules,apps_kuaizhizao_qms_quality_objectives,apps_kuaizhizao_qms_quality_objective_lines,apps_kuaizhizao_qms_legal_regulations,apps_kuaizhizao_qms_external_audits,apps_kuaizhizao_qms_certificates | S:-
+20261123000056_customer_partner_type_biz_function.py[PD4T]: F:客户 partner_type/biz_function 列（上游 947 迁移的时间戳 remap 落位）。 | R:- | A:apps_master_data_customers | S:-
+20261123000057_storage_location_sync_binding.py[PD4T]: F:库位入站同步绑定表 + external_sync_at（上游 948 迁移的时间戳 remap 落位）。 含 schedule_window_start/end 列：20261123000035 对存量表做条件 ALTER， 本表在其后创建，需在建表语句中直接带上。 | R:- | A:apps_master_data_storage_location_sync_binding,apps_master_data_storage_locations | S:-
+20261123000058_core_approval_wecom_cards.py[PD4T]: F:审批企微可更新卡片追踪表 core_approval_wecom_cards（上游 992 迁移的时间戳 remap 落位）。 | R:- | A:core_approval_wecom_cards | S:-
+20261123000059_stock_movement_location.py[PD4T]: F:库存流水记录实际扣减/增加的库位，供无库位出库撤回按原库位加回。 | R:- | A:apps_kuaizhizao_material_stock_movements | S:-
+20261123000061_sales_customer_order_no.py[PD4T]: F:销售订单/销售出库：客户订单号（表头+明细快照）。 | R:- | A:apps_kuaizhizao_sales_orders,apps_kuaizhizao_sales_order_items,apps_kuaizhizao_sales_deliveries,apps_kuaizhizao_sales_delivery_items | S:-
+20261123000062_work_order_sales_order_item_id.py[PD4T]: F:工单增加 sales_order_item_id，销售订单同料多行按行统计已转工单。 | R:- | A:apps_kuaizhizao_work_orders | S:-
+20261123000063_purchase_order_change_aux_quantity.py[PD4T]: F:采购变更明细增加变更前/后副数量。 | R:- | A:apps_kuaizhizao_purchase_order_change_items | S:-
+20261123000064_other_outbound_outbound_type.py[PD4T]: F:其他出库单增加出库类型（物料出库/资产出库）。 | R:- | A:apps_kuaizhizao_other_outbounds | S:-
+940_20261027100000_other_outbound_sync_binding.py[PD4T]: F:其他出库单出站绑定表 apps_kuaizhizao_other_outbound_sync_binding。 | R:- | A:apps_kuaizhizao_other_outbound_sync_binding | S:-
+941_20261027102000_other_outbound_kingdee_header_fields.py[PD4T]: F:其他出库单金蝶外推表头字段（领用部门、领用人、客户）。 | R:- | A:apps_kuaizhizao_other_outbounds | S:-
+942_20261027103000_other_inbound_sync_binding.py[PD4T]: F:其他入库单出站绑定表 apps_kuaizhizao_other_inbound_sync_binding。 | R:- | A:apps_kuaizhizao_other_inbound_sync_binding | S:-
+950_20261027180000_sales_delivery_item_line_warehouse.py[PD4T]: F:销售出库明细增加行级出库仓库（对齐金蝶 im_saloutbill 分录）； 既有行从单据表头回填，库位仍用 location_id/location_code。 | R:- | A:apps_kuaizhizao_sales_delivery_items | S:-
+977_20261110080000_sync_binding_schedule_window.py[PD4T]: F:入站/单据同步绑定：定时允许时段（HH：mm）。 | R:- | A:- | S:-
+978_20261121120000_warehouse_push_sync_bindings_trigger_kind.py[PD4S]: F:成品入库/生产领料/销售出库出站绑表（上游 961+979 合并）+ core_sync_run_logs.trigger_kind（上游 984）。 977 已按 to_regclass 守卫尝试补 schedule_window_*（当时表未建未生效），此处建表即带上。 | R:- | A:apps_kuaizhizao_finished_goods_receipt_sync_binding,apps_kuaizhizao_production_picking_sync_binding,apps_kuaizhizao_sales_delivery_sync_binding,core_sync_run_logs | S:-
+979_20261122000000_inspection_sampling_transfer_states.py[PD4T]: F:国标抽检严格度转移状态表 | R:- | A:apps_kuaizhizao_inspection_sampling_transfer_states | S:-
+980_20261119100000_supplier_eval_template_reminder_lead.py[PD4T]: F:评价模板：到期预警提前天数（R-03）。 | R:- | A:apps_kuaizhizao_supplier_eval_templates | S:-
+981_20261119110000_material_code_alias_partner_partial_unique.py[PD4T]: F:物料编号别名唯一：客商类型纳入 external_entity_id，并改为软删 partial unique。 | R:- | A:apps_master_data_material_code_aliases | S:-
+990_20261104070000_user_kingdee_org_fields.py[PD4T]: F:账户组织字段：工号、直接上级、人员类型/使用状态；兼职部门关联表。 | R:- | A:core_users,core_user_department_assignments | S:-
+997_20261107170000_receipt_notice_review_status.py[PD4T]: F:收货通知单增加审核状态。未通知的历史单记草稿。已通知或已入库记审核通过。 | R:- | A:apps_kuaizhizao_receipt_notices | S:-
+20261123000060_payment_method_mix_percents.py[PD4T]: F:收付方式比例链:客户/供应商加默认wire/acceptance比例,销售订单/采购订单/销售出库/应收/应付加payment_method_code与两比例列 | R:- | A:apps_master_data_customers,apps_master_data_suppliers,apps_kuaicaiwu_receivables等 | S:-
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/scripts/===
 pack_sensitive_words.py[XC3T]: F:敏感词打包脚本 | R:code:riveredge-backend/pyproject.toml | A:lexicon pack | S:gh mirror fallback; 90L
@@ -1181,6 +1275,7 @@ scan_host_finance_path_leaks.py[XQ4T]: F:上游同步回归扫描:禁apps.kuaizh
 tenant_kingdee_strong_consistency.py[XB4M]: F:租户级金蝶强一致审计:仓储红灯/仓库重名分叉/空仓位批次;--apply修空仓位落账 | R:code:docs/core/金蝶强一致实施-SOP.md | A:audit_warehouse_blockers,audit_duplicate_warehouse_names,audit_empty_location_batches,repair_empty_location_batches | S:TENANT_ID+PYTHONPATH=src直跑;默认dry-run;按SOP先审计后修复
 backfill_inclusive_tax_misentry.py[OR4L]: F:历史含税误存修正:PO/入库行错账指纹匹配→重算录入价+settlement/头表rollup | R:code:riveredge-backend/src/apps/kuaicaiwu/services/purchase_settlement.py, code:riveredge-backend/src/apps/kuaizhizao/utils/document_line_amounts.py | A:run | S:默认仅空PO行;frozen跳过;--dry-run先快照
 scan_route_manifest_alignment.py[XQ5M]: F:契约扫描:路由require_permission_codes↔manifest/基线/display声明对齐 | R:- | A:run_scan,filter_findings | S:未声明码恒403;--fail-on high
+sync_upstream_audit.py[XQ4M]: F:上游同步文件级台账审计工具:audit/seed/record子命令,只评估sha变化文件,输出NEW/REEVAL/DELETED/SKIP三分类 | R:code:docs/上游同步-文件级台账.tsv | A:cmd_audit,cmd_seed,cmd_record | S:verdict集tracked/applied/superset/deferred/domain-out
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/common/===
 __init__.py[CC2T]: F:公共模块导出 | R:code:riveredge-backend/scripts/scan_timezone_contract.py | A:AppBaseService | S:5L; init export
@@ -1188,6 +1283,9 @@ audit_actor.py[CC3T]: F:审计操作人统一写入 | R:code:riveredge-backend/s
 base_service.py[CB4M]: F:应用级服务基类AppBaseService[T]：统一编码生成、用户信息获取与租户隔离CRUD（含软删除） | R:code:riveredge-backend/src/apps/common/audit_actor.py | A:AppBaseService,generate_code,generate_code_batch,get_user_info,create_with_user,update_with_user | S:create同步写updated_*与audit_actor一致;软删除用resolve_business_datetime
 bulk_import.py[CC2T]: F:批量导入公共Schema | R:code:riveredge-backend/src/apps/common/base_service.py | A:BulkCreateResponse | S:per-item fail collect; 64L
 app_orm.py[CG5T]: F:应用/财务ORM就绪判定:未绑default_connection时读路径跳过写路径报错 | R:code:riveredge-backend/src/apps/kuaizhizao/services, code:riveredge-backend/src/core/services | A:app_orm_ready,require_app_orm,finance_orm_ready,require_finance_orm | S:对应上游optional_pro就绪分支;判Tortoise._meta.default_connection;无模型服务型应用已init即就绪;财务markers七核心模型
+optional_pro.py[CG5M]: F:可选专业包导入门禁:开源主仓无compose时禁宿主顶层硬import pro应用;kuaicaiwu/kuaiplm/kuaioa/kuaipd/kuaiai/kuaiiot/kuaireport/kuaiconnect+ind_/spoke_前缀识别 | R:code:riveredge-backend/src/apps/common/app_orm.py | A:import_pro_attr,require_pro_orm,_PRO_APPS,_PRO_APP_PREFIXES | S:require_pro_orm未就绪抛BusinessLogicError
+document_push_gate.py[CG5T]: F:宿主外推DocumentPush薄代理:仅kuaiconnect ORM就绪时懒加载document_push服务 | R:code:riveredge-backend/src/apps/common/optional_pro.py | A:load_document_push_attr,document_push_service | S:require_pro_orm未就绪即拒绝
+inbound_sync_gate.py[CG5T]: F:宿主入站同步薄代理:仅kuaiconnect ORM就绪时懒加载inbound_sync服务 | R:code:riveredge-backend/src/apps/common/optional_pro.py | A:load_inbound_sync_attr,inbound_sync_service | S:require_pro_orm未就绪即拒绝
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/ind_electronics/===
 extension_hooks.py[DE3T]: F:行业包扩展钩子 | R:code:riveredge-backend/src/apps/ind_electronics/api/router.py | A:esd apply/revert | S:deepcopy seed; 34L
@@ -1253,6 +1351,7 @@ __init__.py[AA2T]: F:继电器models包 | R:code:riveredge-backend/src/apps/ind_
 changeover_matrix.py[PC2T]: F:换型矩阵ORM | R:code:riveredge-backend/src/apps/ind_relay/models/__init__.py | A:RelayChangeoverMatrix | S:from/to family; 27L
 line_capacity.py[PC2T]: F:产线产能ORM | R:code:riveredge-backend/src/apps/ind_relay/models/changeover_matrix.py | A:RelayLineCapacity | S:takt/qty/cap; 34L
 auto_report.py[PB5S]: F:Implements auto_report.py | R:- | A:- | S:110L
+line_product.py[PC2T]: F:产线可生产自制件绑定表(继电器行业包) | R:- | A:RelayLineProduct | S:软依赖未装ind_relay时查找返回空
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/ind_relay/services/===
 __init__.py[AA2T]: F:继电器services包 | R:code:riveredge-backend/src/apps/ind_relay/orm_models.py | A:services pkg | S:1L; docstring
@@ -1318,10 +1417,10 @@ fund_transfers.py[FU1M]: F:资金调拨API:CRUD+confirm/unconfirm/cancel+uni-aud
 __init__.py[AA2T]: F:財務定數包 | R:code:riveredge-backend/src/apps/kuaicaiwu/bootstrap.py | A:re-export | S:payment_method集約;23L
 finance_source_types.py[AC2T]: F:往来源类型常量 | R:code:riveredge-backend/src/apps/kuaicaiwu/constants/__init__.py | A:13 source types | S:4 offset helpers;EARLY常量+诊断key
 price_settlement.py[AC1T]: F:月结定价常量 | R:code:riveredge-backend/src/apps/kuaicaiwu/constants/finance_source_types.py | A:4 enums | S:30L; status/side
-payment_method.py[AC5T]: F:付款方式常量与判定:银行转账/现金/员工垫付/预付抵扣 | R:- | A:is_prepayment_offset_payment_method,assert_prepayment_offset_payment_contract | S:员工垫付须领款人;预付抵扣须应付pull_lines+抵扣行,禁PO直拉
+payment_method.py[AC5S]: F:付款方式常量与判定:银行转账/现金/员工垫付/预付抵扣 | R:- | A:is_prepayment_offset_payment_method,assert_prepayment_offset_payment_contract | S:员工垫付须领款人;预付抵扣须应付pull_lines+抵扣行,禁PO直拉
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaicaiwu/models/===
-__init__.py[AA3T]: F:快财务模型包 | R:code:riveredge-backend/src/apps/kuaicaiwu/manifest.json | A:38 model classes | S:re-export;payment_offset_prepayment_line登记
+__init__.py[AA3S]: F:快财务模型包 | R:code:riveredge-backend/src/apps/kuaicaiwu/manifest.json | A:38 model classes | S:re-export;payment_offset_prepayment_line登记
 account_balance.py[PC2T]: F:科目余额ORM | R:code:riveredge-backend/src/apps/kuaicaiwu/models/__init__.py | A:AccountBalance | S:period+aux combo; 53L
 accounting_event.py[PL2T]: F:会计事件链路ORM | R:code:riveredge-backend/src/apps/kuaicaiwu/models/account_balance.py | A:AccountingEvent | S:51L; trace
 accounting_period.py[PC1T]: F:会计期间ORM | R:code:riveredge-backend/src/apps/kuaicaiwu/models/accounting_event.py | A:AccountingPeriod | S:28L; open/close
@@ -1363,6 +1462,7 @@ payment_advance_record.py[PM5T]: F:従業員立替台帳ORM:立替人/金額/参
 payment_pull_line.py[PM6T]: F:付款単取単明細ORM:source_type/source_id/金額/快照 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/payment.py | A:PaymentPullLine | S:多源(payable等)取単;persist/validate済;deleted_at軟削除
 purchase_receipt_line_finance_occupancy.py[PM5T]: F:採購入庫行財務占用ORM:行別占用単據/金額/状態 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/purchase_receipt_finance_pull_lines.py | A:PurchaseReceiptLineFinanceOccupancy | S:行占用防重複立賬;backfill済;軟削除
 payment_offset_prepayment_line.py[PM6T]: F:预付抵扣预付款明细ORM:预付款单/抵扣金额/行号/单号快照 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/payment.py | A:PaymentOffsetPrepaymentLine | S:一付款多行;deleted_at软删;双索引
+receipt_pull_line.py[PB4T]: F:收款单加载明细ORM:按来源单据记录本次收款分配金额 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/receipt.py | A:ReceiptPullLine | S:source_type限receivable|sales_order
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaicaiwu/reference_display/===
 __init__.py[AC2T]: F:快财务引用展示Provider包 | R:- | A:- | S:单行docstring; provider实现在setup.py
@@ -1447,6 +1547,13 @@ payment_advance_service.py[AD4S]: F:付款单员工垫付台账 | R:code:rivered
 payment_list_enrichment.py[AD4S]: F:付款单列表读侧富化 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/payable.py | A:enrich_payment_list_linked_payable_totals | S:按pull关系汇总关联应付/预付抵扣总额;纯读不改单据
 purchase_order_finance_lifecycle.py[AD7L]: F:采购订单账款发票生命周期快照(开票/付款进度+追溯关联) | R:code:riveredge-backend/src/apps/kuaicaiwu/services/purchase_settlement.py, code:riveredge-backend/src/apps/kuaizhizao/models/document_relation.py | A:compute_purchase_order_finance_lifecycle,purchase_order_has_linked_purchase_receipt,link_purchase_invoice_to_order_receipt_payables,backfill_purchase_invoice_payable_links_for_order | S:真源=发票+应付+DocumentRelation; 排除已作废/已红冲; finance_orm_ready门禁; 进度按价税合计比
 purchase_receipt_finance_occupancy_backfill.py[AD7L]: F:历史入库行财务占用补写(应付/进项,仅补缺) | R:code:riveredge-backend/src/apps/kuaicaiwu/services/purchase_receipt_line_finance_occupancy_service.py, code:riveredge-backend/src/apps/kuaicaiwu/services/purchase_receipt_finance_pull_lines.py | A:backfill_payables_from_receipt,backfill_invoices_from_relations,backfill_tenant | S:只补缺不覆盖已有占用; 按剩余容量截断; apply=False干跑; 来源类型含采购入库/purchase_receipt
+partner_statement_invoice_pull.py[AD4L]: F:对账单→购销发票加载源:按ledger_posting_mode过滤对账明细行 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/partner_statement_service.py | A:parse_partner_statement_id_csv | S:已审核口径frozenset含已审核/approved/APPROVED
+purchase_invoice_amounts.py[AD4T]: F:采购发票票面金额vs源单占用金额(含税)量化:face_total/discount | R:code:riveredge-backend/src/apps/kuaicaiwu/services/purchase_invoice_payable_auto.py | A:purchase_invoice_face_total,purchase_invoice_discount | S:Decimal0.01 HALF_UP量化
+purchase_invoice_payable_auto.py[AD5M]: F:采购发票审核通过后按立账策略自动生成应付(对齐销项发票→应收) | R:code:riveredge-backend/src/apps/kuaicaiwu/services/purchase_invoice_amounts.py | A:resolve_payable_recognition_for_purchase_invoice,should_auto_payable_on_purchase_invoice | S:-
+purchase_receipt_finance_pull_lines.py[AD5L]: F:采购入库加载应付/收票:行级可推余量与显式行选择校验 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/purchase_receipt_line_finance_occupancy_service.py | A:行级可推余量,显式行选择校验 | S:源类型集含purchase_receipt/采购入库/PurchaseReceipt
+purchase_receipt_line_finance_occupancy_service.py[AD6L]: F:采购入库行财务占用:写入时FIFO分摊(按明细id升序),报表只读汇总 | R:- | A:PurchaseReceiptLineFinanceOccupancyService | S:占用kind=payable/invoice/paid;money0.01 qty0.0001量化
+purchase_settlement.py[AD7L]: F:采购价税汇总:订单/入库明细→头未税/税额/价税(财务结算唯一真源) | R:code:riveredge-backend/src/apps/kuaicaiwu/services/finance_service.py | A:quantize_receipt_quantity,PURCHASE_RECEIPT_COMPUTED_HEADER_FIELDS | S:头表金额只能明细rollup写入,禁前端/外推payload
+sales_invoice_receivable_auto.py[AD5T]: F:销售发票审核通过后按立账策略自动生成应收(对齐采购发票→应付) | R:code:riveredge-backend/src/apps/kuaicaiwu/services/purchase_invoice_payable_auto.py | A:auto生成应收入口 | S:-
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaicaiwu/services/gl/===
 __init__.py[AC2S]: F:总账服务包 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/gl/coa_service.py | A:GlSettingsService,CoaService,GlPeriodService,BalanceService | S:重导出8个GL服务
@@ -1749,6 +1856,9 @@ router.py[EC8M]: F:快格轻制造主路由 | R:- | A:router | S:聚合全部子
 routes_config.py[EC2T]: F:配置辅助路由 | R:code:riveredge-backend/src/apps/kuaizhizao/services/kuaizhizao_notification_rule_presets.py | A:load_kuaizhizao_notification_rule_presets | S:消息提醒规则预设加载; 39行
 routes_mobile.py[EC4S]: F:移动端H5聚合API | R:code:riveredge-backend/src/apps/kuaizhizao/services/mobile_home_service.py | A:fetch_mobile_home_bootstrap | S:企微工作台; 首页bootstrap/待审批; 127行
 routes_print.py[EC2T]: F:打印模板预设路由 | R:code:riveredge-backend/src/apps/kuaizhizao/services/print_template_presets.py | A:load_kuaizhizao_print_template_presets | S:打印模板预设加载; 30行
+_inbound_sync_run_log.py[AC4T]: F:快制造入站sync-from-source统一写core_sync_run_logs | R:code:riveredge-backend/src/apps/master_data/services/master_data_sync_common.py | A:kuaizhizao_sync_from_source_with_run_log | S:stream模式走sync_progress_stream ndjson
+_kuaizhizao_document_gate.py[AC4M]: F:系统内下推/外推API权限码映射唯一真源(source_type→:push等) | R:code:riveredge-backend/src/apps/kuaizhizao/api/_kuaizhizao_route_access.py | A:_EXTERNAL_PUSH_BY_SOURCE | S:禁止路由内散落alias
+pull_query_params.py[AC3T]: F:取单列表API公共查询参数(来源单据日期起止等Annotated别名) | R:- | A:PullQueryDateFrom,PullQueryDateTo | S:站点日历YYYY-MM-DD
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/api/after_sales/===
 __init__.py[AC1T]: F:售后服务API包 | R:code:riveredge-backend/src/apps/kuaizhizao/api/router.py | A:- | S:文档字符串壳; 子模块由router.py显式导入挂载
@@ -1810,7 +1920,7 @@ demands.py[EB8L]: F:统一需求API | R:code:riveredge-backend/src/apps/kuaizhiz
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/api/document_push/===
 __init__.py[AC1T]: F:外推API包 | R:code:riveredge-backend/src/apps/kuaizhizao/api/router.py | A:- | S:文档字符串壳; 子模块由router.py显式导入挂载
-document_push.py[EB3S]: F:通用外推API:source+target_profile扇出到多连接器(非系统内下推) | R:code:riveredge-backend/src/apps/kuaizhizao/services/document_push_service.py | A:push_document_external,get_document_push_status,list_document_push_profiles | S:多目标fan-out;profile=*读配置;dry_run不落库;150行
+document_push.py[EB3M]: F:通用外推API:source+target_profile扇出到多连接器(非系统内下推) | R:code:riveredge-backend/src/apps/kuaizhizao/services/document_push_service.py | A:push_document_external,get_document_push_status,list_document_push_profiles | S:多目标fan-out;profile=*读配置;dry_run不落库;150行
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/api/document_push_pull/===
 document_push_pull.py[EB5S]: F:下推拉取API | R:code:riveredge-backend/src/apps/kuaizhizao/services/document_push_pull_service.py | A:DocumentPushPullService | S:下推/拉取/撤回三端点; 系统内单据; 非外推
@@ -1906,10 +2016,10 @@ drawing_balloon_sheets.py[EB5M]: F:图纸气泡标注API | R:- | A:DrawingBalloo
 purchase_arrival.py[EA4S]: F:采购到货API | R:code:riveredge-backend/src/apps/kuaizhizao/services/purchase_arrival_warning_service.py | A:PurchaseArrivalWarningService | S:到货预警列表+延期填报/审批; 117行
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/api/purchase_inquiries/===
-purchase_inquiries.py[EB7M]: F:采购询价单API | R:code:riveredge-backend/src/apps/kuaizhizao/services/purchase_inquiry_service.py | A:PurchaseInquiryService | S:询价CRUD+审批/授标/比价/转采购; 385行
+purchase_inquiries.py[EB7L]: F:采购询价单API | R:code:riveredge-backend/src/apps/kuaizhizao/services/purchase_inquiry_service.py | A:PurchaseInquiryService | S:询价CRUD+审批/授标/比价/转采购; 385行
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/api/purchase_order_changes/===
-purchase_order_changes.py[EA5M]: F:采购变更单API | R:code:riveredge-backend/src/apps/kuaizhizao/services/purchase_order_change_service.py | A:PurchaseOrderChangeService | S:变更CRUD+影响预览; 模块purchase-order-change; 189行
+purchase_order_changes.py[EA5S]: F:采购变更单API | R:code:riveredge-backend/src/apps/kuaizhizao/services/purchase_order_change_service.py | A:PurchaseOrderChangeService | S:变更CRUD+影响预览; 模块purchase-order-change; 189行
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/api/purchase_requisitions/===
 purchase_requisitions.py[EB8L]: F:采购申请API | R:code:riveredge-backend/src/apps/kuaizhizao/services/purchase_requisition_service.py | A:PurchaseRequisitionService | S:申请CRUD+审批/转采购转询价/拉取计算+打印; 507行
@@ -1944,13 +2054,13 @@ sales_orders.py[EB9L]: F:销售订单API | R:code:riveredge-backend/src/apps/kua
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/api/sales_reviews/===
 __init__.py[AC1T]: F:订单评审API包 | R:code:riveredge-backend/src/apps/kuaizhizao/api/router.py | A:- | S:文档字符串壳; 子模块由router.py显式导入挂载
-sales_reviews.py[EB7L]: F:订单评审API | R:code:riveredge-backend/src/apps/kuaizhizao/services/sales_review_service.py | A:SalesReviewService | S:评审CRUD+部门意见/驳回/推送; 模块sales-review; 346行
+sales_reviews.py[EB7M]: F:订单评审API | R:code:riveredge-backend/src/apps/kuaizhizao/services/sales_review_service.py | A:SalesReviewService | S:评审CRUD+部门意见/驳回/推送; 模块sales-review; 346行
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/api/scheduling_configs/===
 scheduling_configs.py[EA4S]: F:排程配置API | R:code:riveredge-backend/src/apps/kuaizhizao/services/scheduling_config_service.py | A:SchedulingConfigService | S:排程配置CRUD+约束; trace_id日志; 199行
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/api/shipment_notices/===
-shipment_notices.py[EB7L]: F:发货通知单API | R:code:riveredge-backend/src/apps/kuaizhizao/services/shipment_notice_service.py | A:ShipmentNoticeService | S:发货通知CRUD; 销售通知仓库不直接动库存; 339行
+shipment_notices.py[EB7M]: F:发货通知单API | R:code:riveredge-backend/src/apps/kuaizhizao/services/shipment_notice_service.py | A:ShipmentNoticeService | S:发货通知CRUD; 销售通知仓库不直接动库存; 339行
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/api/state_transitions/===
 state_transitions.py[EA3S]: F:状态流转API | R:code:riveredge-backend/src/apps/kuaizhizao/services/state_transition_service.py | A:StateTransitionService | S:实体状态流转+日志; 禁止路由层直写filter.update; 160行
@@ -1975,10 +2085,10 @@ traceability.py[EB7L]: F:溯源API | R:code:riveredge-backend/src/apps/kuaizhiza
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/api/visual_scheduling/===
 scheduling_ai.py[EA5M]: F:视觉排程AI API | R:code:riveredge-backend/src/apps/kuaizhizao/services/scheduling_ai_service.py | A:SchedulingAiService | S:AI排程建议; 模块kuaizhizao:visual-scheduling; 246行
-visual_scheduling.py[EB7L]: F:视觉排程API | R:code:riveredge-backend/src/apps/kuaizhizao/services/visual_scheduling_service.py | A:VisualSchedulingService | S:甘特图/工位负载; 模块kuaizhizao:visual-scheduling; 392行
+visual_scheduling.py[EB7M]: F:视觉排程API | R:code:riveredge-backend/src/apps/kuaizhizao/services/visual_scheduling_service.py | A:VisualSchedulingService | S:甘特图/工位负载; 模块kuaizhizao:visual-scheduling; 392行
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/api/wave_pickings/===
-wave_pickings.py[EB5M]: F:波次拣货API | R:code:riveredge-backend/src/apps/kuaizhizao/services/wave_picking_service.py | A:WavePickingService | S:波次生成/释放/拣货; 模块kuaizhizao:wave-picking; 244行
+wave_pickings.py[EB5T]: F:波次拣货API | R:code:riveredge-backend/src/apps/kuaizhizao/services/wave_picking_service.py | A:WavePickingService | S:波次生成/释放/拣货; 模块kuaizhizao:wave-picking; 244行
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/authorization/===
 data_scope_setup.py[DB7S]: F:快制造数据范围资源画像注册 | R:code:riveredge-backend/src/core/services/authorization/data_scope_resource_registry.py | A:register_kuaizhizao_data_scope_profiles | S:启动注册一次;跟进用followable解析器;含spec181行级资源键
@@ -1986,7 +2096,7 @@ data_scope_setup.py[DB7S]: F:快制造数据范围资源画像注册 | R:code:ri
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/===
 bootstrap.py[AC2T]: F:快制造启动注册 | R:code:riveredge-backend/src/apps/kuaizhizao/authorization/data_scope_setup.py | A:register | S:注册数据范围+引用展示provider; 11行
 manifest.json[FC8L]: F:快制造应用清单 | R:- | A:manifest | S:7菜单组+2000权限码+移动工作台6区;6379行
-orm_models.py[PC4S]: F:ORM模块注册 | R:code:riveredge-backend/src/apps/kuaizhizao/models/work_order.py | A:ORM_MODEL_MODULES | S:运行时按应用中心启用状态加载; 187行
+orm_models.py[PC4M]: F:ORM模块注册 | R:code:riveredge-backend/src/apps/kuaizhizao/models/work_order.py | A:ORM_MODEL_MODULES | S:运行时按应用中心启用状态加载; 187行
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/constants/===
 __init__.py[CB7S]: F:业务状态枚举与别名 | R:- | A:DocumentStatus | S:归一化中文/旧值;DOCUMENT_ENTITY_TYPES;128行
@@ -2001,11 +2111,16 @@ price_type.py[CB2T]: F:销售价类常量 | R:- | A:- | S:默认含税; 归一�
 purchase_inquiry.py[CB5S]: F:采购询价单状态 | R:- | A:PurchaseInquiryStatus | S:询价/供应商/报价三枚举+进行中frozenset; 52行
 quality_complaint_code_rules.py[CB4S]: F:质量投诉编码规则 | R:code:riveredge-backend/src/apps/kuaizhizao/constants/quality_complaint_types.py | A:- | S:禁止硬编码客户专名前缀; 客诉双时效默认; 48行
 quality_complaint_types.py[CB4S]: F:质量投诉业务类型 | R:- | A:- | S:R-11五类型+缺陷分类; 禁止客户专名; 默认SLA5工作日; 59行
-rework_business_types.py[CB4S]: F:返工业务类型 | R:- | A:- | S:R-11三类型+会签部门默认序; 禁止客户专名; 45行
+rework_business_types.py[CB4T]: F:返工业务类型 | R:- | A:- | S:R-11三类型+会签部门默认序; 禁止客户专名; 45行
 supplier_eval.py[CB5S]: F:供应商评价常量 | R:- | A:- | S:R-03; 与主数据运营评级分离; 周期/审核/整改/计划状态; 60行
 tool_status.py[CB5S]: F:工装台账状态 | R:- | A:- | S:8态+归一化/校验; 手动锁报废停用; 55行
 price_settlement.py[CB4T]: F:月结定价常量 | R:code:riveredge-backend/src/apps/kuaicaiwu/constants/price_settlement.py | A:PriceSettlementStatus,PriceSettlementSide,PriceSettlementBatchStatus,PriceSettlementPriceSource,MONTHLY_SETTLEMENT_METHOD_CODES | S:开源真源;kuaicaiwu同名镜像;4枚举+月结码集;30行
 work_order_inbound_status.py[CB3T]: F:工单一键入库状态白名单 | R:code:riveredge-backend/src/apps/kuaizhizao/models/work_order.py | A:WORK_ORDER_INBOUND_ALLOWED_STATUSES | S:入库允许态唯一真源spec140/KR-CL1;中英兼容;16行
+other_outbound_type.py[CB4T]: F:其他出库单出库类型(与采购入库order_type对称,外推金蝶variant):物料出库/资产出库 | R:code:riveredge-backend/src/apps/kuaizhizao/constants/purchase_order_type.py | A:OTHER_OUTBOUND_TYPE_MATERIAL,OTHER_OUTBOUND_TYPE_ASSET | S:类型行物料校验复用采购断言
+purchase_order_type.py[CB4M]: F:采购订单/入库单业务类型:标准/资产/服务采购,含行物料校验断言 | R:code:riveredge-backend/src/apps/kuaizhizao/constants/__init__.py | A:PURCHASE_ORDER_TYPE_*,assert_purchase_order_type_matches_material_rows | S:-
+rework_signoff_audit.py[CB4T]: F:会签返工各节点审批node_key(配置中心审核绑定) | R:code:riveredge-backend/src/apps/kuaizhizao/constants/__init__.py | A:会签node_key集 | S:-
+rework_signoff_chain.py[CB4T]: F:会签返工节点链(客户原文唯一顺序) | R:code:riveredge-backend/src/apps/kuaizhizao/constants/__init__.py | A:会签节点链 | S:禁止用form_sections冒充流转
+rework_signoff_sections.py[CB3T]: F:会签返工多分区节点子区key(无其它依赖,避免chain模块半加载) | R:code:riveredge-backend/src/apps/kuaizhizao/constants/__init__.py | A:子区key | S:-
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/migrations/===
 migrate_computation_data.py[OC7M]: F:MRP/LRP数据迁移 | R:code:riveredge-backend/src/apps/kuaizhizao/models/demand_computation.py | A:ComputationDataMigration | S:旧运算结果迁到统一需求计算结果表; 544行
@@ -2036,7 +2151,7 @@ delivery_project.py[PC9M]: F:交付项目模型 | R:code:riveredge-backend/src/a
 demand.py[PC5M]: F:统一需求模型 | R:code:riveredge-backend/src/apps/kuaizhizao/constants/__init__.py | A:Demand | S:销售预测MTS+销售订单MTO统一; 流程源头; 118行
 demand_change_event.py[PC3T]: F:需求变更事件 | R:- | A:DemandChangeEvent | S:订单/BOM/工艺变更统一输入; 39行
 demand_computation.py[PC4S]: F:需求计算模型 | R:code:riveredge-backend/src/apps/kuaizhizao/constants/demand_computation_status.py | A:DemandComputation | S:MRP/LRP统一; 合并运算结果; 80行
-demand_computation_item.py[PC3S]: F:需求计算明细 | R:code:riveredge-backend/src/apps/kuaizhizao/models/demand_computation.py | A:DemandComputationItem | S:每物料计算结果; MRP/LRP; 82行
+demand_computation_item.py[PC3T]: F:需求计算明细 | R:code:riveredge-backend/src/apps/kuaizhizao/models/demand_computation.py | A:DemandComputationItem | S:每物料计算结果; MRP/LRP; 82行
 demand_computation_recalc_history.py[PC2T]: F:需求计算重算历史 | R:code:riveredge-backend/src/apps/kuaizhizao/models/demand_computation_snapshot.py | A:DemandComputationRecalcHistory | S:recompute审计; 关联快照; 34行
 demand_computation_snapshot.py[PC2T]: F:需求计算快照 | R:code:riveredge-backend/src/apps/kuaizhizao/models/demand_computation.py | A:DemandComputationSnapshot | S:重算前JSON汇总+明细快照; 32行
 demand_impact_record.py[PC2T]: F:需求影响记录 | R:code:riveredge-backend/src/apps/kuaizhizao/models/demand_change_event.py | A:DemandImpactRecord | S:事件→对象可追溯; 风险/冻结期/审批; 34行
@@ -2046,7 +2161,7 @@ demand_replan_task.py[PC3T]: F:需求重算任务 | R:code:riveredge-backend/src
 demand_snapshot.py[PC2T]: F:需求快照 | R:code:riveredge-backend/src/apps/kuaizhizao/models/demand.py | A:DemandSnapshot | S:重算前主表+明细JSON; 追溯对比; 33行
 disassembly_order.py[PC5S]: F:拆卸单模型 | R:code:riveredge-backend/src/apps/kuaizhizao/models/assembly_order.py | A:DisassemblyOrder | S:成品按BOM拆为组件; 消耗成品增组件; 129行
 document_node_timing.py[PC3S]: F:单据节点耗时 | R:code:riveredge-backend/src/apps/kuaizhizao/models/document_relation.py | A:DocumentNodeTiming | S:各节点起止时间; 耗时统计; 86行
-document_relation.py[PC4S]: F:单据关联模型 | R:- | A:DocumentRelation | S:上下游追溯; push/pull/manual; 70行
+document_relation.py[PC4T]: F:单据关联模型 | R:- | A:DocumentRelation | S:上下游追溯; push/pull/manual; 70行
 equipment.py[PC7M]: F:设备模型 | R:- | A:Equipment | S:编码/名称/类型/技术参数/供应商; 多组织; 212行
 equipment_acceptance.py[PC3T]: F:设备工装验收 | R:code:riveredge-backend/src/apps/kuaizhizao/models/equipment.py | A:EquipmentAcceptance | S:R-10; 验收目录与履历; 时限/延期; 49行
 equipment_board_visit.py[PC2T]: F:设备看板参观覆盖 | R:code:riveredge-backend/src/apps/kuaizhizao/models/equipment.py | A:EquipmentBoardVisitOverride | S:仅展示层不改业务真源; 指标覆盖; 51行
@@ -2072,7 +2187,7 @@ inventory_sync_binding.py[PC2T]: F:即时库存同步绑定 | R:- | A:InventoryS
 inventory_transfer.py[PC6M]: F:库存调拨单模型 | R:- | A:InventoryTransfer | S:跨仓库调拨; 四态+明细; 195行
 label_station.py[PC5M]: F:标签工位引擎 | R:- | A:LabelModelConfig | S:R-16; 型号策略参数+校验钩子; 禁止客户名常量; 171行
 launch_countdown.py[PC3S]: F:上线倒计时 | R:- | A:LaunchCountdown | S:上线日期+快照+导入进度JSON; 73行
-line_side_inventory.py[PC4S]: F:线边仓库存 | R:code:riveredge-backend/src/apps/kuaizhizao/models/work_order.py | A:LineSideInventory | S:批次+工单预留; 预留数量字段; 90行
+line_side_inventory.py[PC4T]: F:线边仓库存 | R:code:riveredge-backend/src/apps/kuaizhizao/models/work_order.py | A:LineSideInventory | S:批次+工单预留; 预留数量字段; 90行
 logistics.py[PC6M]: F:物流管理模型 | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_delivery.py | A:LogisticsCarrier | S:承运商/车辆/司机/货运/轨迹/运费七实体; 180行
 lrp_result.py[PC3T]: F:LRP运算结果(废弃) | R:code:riveredge-backend/src/apps/kuaizhizao/models/demand_computation.py | A:LRPResult | S:已废弃; MRP/LRP已合并统一; 仅向后兼容; 74行
 maintenance_plan.py[PC7M]: F:维护保养计划 | R:code:riveredge-backend/src/apps/kuaizhizao/models/equipment.py | A:MaintenancePlan,MaintenanceExecution | S:计划绑保养方案快照;含执行记录;故障可转保养;214行
@@ -2095,9 +2210,9 @@ other_inbound.py[PC2T]: F:其他入库单 | R:- | A:OtherInbound | S:盘盈/调�
 other_inbound_item.py[PC2T]: F:其他入库明细 | R:code:riveredge-backend/src/apps/kuaizhizao/models/other_inbound.py | A:OtherInboundItem | S:入库行物料; 数量+单价+金额; 库位/批次; 56行
 other_outbound.py[PC2T]: F:其他出库单 | R:- | A:OtherOutbound | S:盘亏/样品/报废等杂项出库; 64行
 other_outbound_item.py[PC2T]: F:其他出库明细 | R:code:riveredge-backend/src/apps/kuaizhizao/models/other_outbound.py | A:OtherOutboundItem | S:出库行物料; 数量+单价+金额; 库位/批次; 55行
-outsource_order.py[PC5M]: F:工序委外单 | R:code:riveredge-backend/src/apps/kuaizhizao/models/work_order.py | A:OutsourceOrder | S:关联工单+工序; 委外入库; 130行
+outsource_order.py[PC5S]: F:工序委外单 | R:code:riveredge-backend/src/apps/kuaizhizao/models/work_order.py | A:OutsourceOrder | S:关联工单+工序; 委外入库; 130行
 outsource_settlement.py[PC3S]: F:委外结算单 | R:code:riveredge-backend/src/apps/kuaizhizao/models/outsource_order.py | A:OutsourceSettlement | S:加工费结算; 审核生成差额应付; 82行
-outsource_work_order.py[PC9M]: F:工单委外模型 | R:code:riveredge-backend/src/apps/kuaizhizao/models/work_order.py | A:OutsourceWorkOrder | S:委外发料/收货/费用; 委外件物料; 474行
+outsource_work_order.py[PC9L]: F:工单委外模型 | R:code:riveredge-backend/src/apps/kuaizhizao/models/work_order.py | A:OutsourceWorkOrder | S:委外发料/收货/费用; 委外件物料; 474行
 packing_binding.py[PC3S]: F:装箱打包绑定 | R:code:riveredge-backend/src/apps/kuaizhizao/models/finished_goods_receipt.py | A:PackingBinding | S:序列号+箱托层级+封箱; 入库/出库来源行; 83行
 process_inspection.py[PC4S]: F:过程检验单 | R:code:riveredge-backend/src/apps/kuaizhizao/models/work_order_operation.py | A:ProcessInspection | S:工序质检; 报工触发幂等; 方案步骤+不合格处置; 109行
 production_daily.py[PC3T]: F:生产日报模板 | R:- | A:ProductionDailyTemplate | S:R-13; schema驱动字段; 系统预置/租户扩展; 62行
@@ -2108,15 +2223,15 @@ production_plan_item.py[PC2T]: F:生产计划明细 | R:code:riveredge-backend/s
 production_return.py[PC2T]: F:生产退料单 | R:code:riveredge-backend/src/apps/kuaizhizao/models/production_picking.py | A:ProductionReturn | S:领料后退回仓库; 关联领料单; 59行
 production_return_item.py[PC2T]: F:生产退料单明细 | R:code:riveredge-backend/src/apps/kuaizhizao/models/production_return.py | A:ProductionReturnItem | S:退料行物料; 关联领料明细picking_item_id; 59行
 purchase_arrival_delay_report.py[PC3S]: F:采购到货延期填报单 | R:code:riveredge-backend/src/apps/kuaizhizao/models/purchase_order.py | A:PurchaseArrivalDelayReport | S:延期填报+审核; 审核通过生成采购变更单; 55行
-purchase_inquiry.py[PC6S]: F:采购询价单模型 | R:code:riveredge-backend/src/apps/kuaizhizao/constants/purchase_inquiry.py | A:PurchaseInquiry | S:询价/供应商/报价三实体; PR直转PO门禁; 188行
+purchase_inquiry.py[PC6M]: F:采购询价单模型 | R:code:riveredge-backend/src/apps/kuaizhizao/constants/purchase_inquiry.py | A:PurchaseInquiry | S:询价/供应商/报价三实体; PR直转PO门禁; 188行
 purchase_order.py[PC7M]: F:采购订单模型 | R:code:riveredge-backend/src/apps/kuaizhizao/constants/__init__.py | A:PurchaseOrder | S:头+行; 到货/未到货计算真源; 209行
 purchase_order_change_order.py[PC4T]: F:采购变更单 | R:code:riveredge-backend/src/apps/kuaizhizao/models/purchase_order.py | A:PurchaseOrderChangeOrder | S:同单N次变更; 变更前后金额差额; 89行
 purchase_order_milestone.py[PC3T]: F:采购付款里程碑 | R:code:riveredge-backend/src/apps/kuaizhizao/models/purchase_order.py | A:PurchaseOrderMilestone | S:分期计划; 预付/到货触发; 自动生成应付; 45行
 purchase_order_sync_binding.py[PC2T]: F:采购订单同步绑定 | R:- | A:PurchaseOrderSyncBinding | S:租户一条; 接口/数据集映射+无感外推; 43行
 purchase_receipt.py[PC3S]: F:采购入库单 | R:code:riveredge-backend/src/apps/kuaizhizao/models/purchase_order.py | A:PurchaseReceipt | S:采购物料入库; 关联订单+供应商; 63行
-purchase_receipt_item.py[PC3T]: F:采购入库单明细 | R:code:riveredge-backend/src/apps/kuaizhizao/models/purchase_receipt.py | A:PurchaseReceiptItem | S:关联订单行+通知行; 行级仓库/批次/质量数量; 77行
-purchase_requisition.py[PC4T]: F:采购申请 | R:code:riveredge-backend/src/apps/kuaizhizao/models/purchase_order.py | A:PurchaseRequisition,PurchaseRequisitionItem | S:头+行; 需求与订单可选中间层; 98行
-purchase_return.py[PC3S]: F:采购退货单 | R:code:riveredge-backend/src/apps/kuaizhizao/models/purchase_receipt.py | A:PurchaseReturn | S:关联原入库单+订单追溯; 83行
+purchase_receipt_item.py[PC3S]: F:采购入库单明细 | R:code:riveredge-backend/src/apps/kuaizhizao/models/purchase_receipt.py | A:PurchaseReceiptItem | S:关联订单行+通知行; 行级仓库/批次/质量数量; 77行
+purchase_requisition.py[PC4S]: F:采购申请 | R:code:riveredge-backend/src/apps/kuaizhizao/models/purchase_order.py | A:PurchaseRequisition,PurchaseRequisitionItem | S:头+行; 需求与订单可选中间层; 98行
+purchase_return.py[PC3T]: F:采购退货单 | R:code:riveredge-backend/src/apps/kuaizhizao/models/purchase_receipt.py | A:PurchaseReturn | S:关联原入库单+订单追溯; 83行
 purchase_return_item.py[PC2T]: F:采购退货单明细 | R:code:riveredge-backend/src/apps/kuaizhizao/models/purchase_return.py | A:PurchaseReturnItem | S:跨单取单按行占用; 批次/序列号; 68行
 qms_audit_clause.py[PC1T]: F:内审条款关联 | R:code:riveredge-backend/src/apps/kuaizhizao/models/qms_internal_audit.py | A:QmsAuditClause | S:内审-条款多对多; 软删除; 23行
 qms_document_clause.py[PC1T]: F:体系文件条款关联 | R:code:riveredge-backend/src/apps/kuaizhizao/models/qms_system_document.py | A:QmsDocumentClause | S:文件-条款多对多; 软删除; 23行
@@ -2137,10 +2252,10 @@ quality_exception.py[PC4S]: F:质量异常记录 | R:code:riveredge-backend/src/
 quality_standard.py[PC3T]: F:质检标准 | R:code:riveredge-backend/src/apps/kuaizhizao/models/inspection_plan.py | A:QualityStandard | S:三类型; 创建检验单自动引用; 93行
 quotation.py[PC4S]: F:报价单 | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_order.py | A:Quotation | S:销售前报价; 系列多版本链; 可转销售订单; 102行
 quotation_item.py[PC2T]: F:报价单明细 | R:code:riveredge-backend/src/apps/kuaizhizao/models/quotation.py | A:QuotationItem | S:报价行物料; 税率/赠品; 取价快照; 57行
-receipt_notice.py[PC3S]: F:收货通知单 | R:code:riveredge-backend/src/apps/kuaizhizao/models/purchase_order.py | A:ReceiptNotice | S:采购通知仓库收货; 不直接动库存; 66行
+receipt_notice.py[PC3T]: F:收货通知单 | R:code:riveredge-backend/src/apps/kuaizhizao/models/purchase_order.py | A:ReceiptNotice | S:采购通知仓库收货; 不直接动库存; 66行
 receipt_notice_item.py[PC2T]: F:收货通知单明细 | R:code:riveredge-backend/src/apps/kuaizhizao/models/receipt_notice.py | A:ReceiptNoticeItem | S:通知行物料; 关联订单行; 行级仓库; 51行
 replenishment_suggestion.py[PC4S]: F:补货建议 | R:code:riveredge-backend/src/apps/kuaizhizao/models/inventory_alert.py | A:ReplenishmentSuggestion | S:库存预警生成; 建议数量/时间; 120行
-reporting_record.py[PC8M]: F:报工记录 | R:code:riveredge-backend/src/apps/kuaizhizao/models/work_order_operation.py | A:ReportingRecord | S:工序级报工; 合格/不合格数量; 144行
+reporting_record.py[PC8S]: F:报工记录 | R:code:riveredge-backend/src/apps/kuaizhizao/models/work_order_operation.py | A:ReportingRecord | S:工序级报工; 合格/不合格数量; 144行
 reporting_sync_binding.py[PC2T]: F:报工同步绑定 | R:code:riveredge-backend/src/apps/kuaizhizao/models/reporting_record.py | A:ReportingSyncBinding | S:租户一条; 接口/数据集映射+无感外推; 39行
 rework_order.py[PC7M]: F:返工单 | R:code:riveredge-backend/src/apps/kuaizhizao/models/work_order.py | A:ReworkOrder | S:原工单返工; 多组织; 216行
 rework_order_operation.py[PC2T]: F:返工单关联工序 | R:code:riveredge-backend/src/apps/kuaizhizao/models/rework_order.py | A:ReworkOrderOperation | S:返工涉及原工单工序; 顺序排序; 69行
@@ -2159,12 +2274,12 @@ sales_delivery_item.py[PC3T]: F:销售出库明细 | R:code:riveredge-backend/sr
 sales_forecast.py[PC3S]: F:销售预测 | R:- | A:SalesForecast | S:MTS模式需求计划; 周期+时间范围; 67行
 sales_forecast_item.py[PC2T]: F:销售预测明细 | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_forecast.py | A:SalesForecastItem | S:每物料预测; 订单冲销量; 置信度/方法; 60行
 sales_opportunity.py[PC3T]: F:销售商机 | R:code:riveredge-backend/src/apps/kuaizhizao/models/quotation.py | A:SalesOpportunity | S:商机漏斗; 三态; 可推进阶段; 53行
-sales_order.py[PC9L]: F:销售订单模型 | R:code:riveredge-backend/src/apps/kuaizhizao/models/quotation.py | A:SalesOrder | S:MTO核心单据; 租户编码唯一; 审核/需求状态; 107行
+sales_order.py[PC9S]: F:销售订单模型 | R:code:riveredge-backend/src/apps/kuaizhizao/models/quotation.py | A:SalesOrder | S:MTO核心单据; 租户编码唯一; 审核/需求状态; 107行
 sales_order_change_order.py[PC4T]: F:销售变更单 | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_order.py | A:SalesOrderChangeOrder,SalesOrderChangeItem | S:同单N次变更; 头+行前后量价差额; 89行
 sales_order_item.py[PC3T]: F:销售订单明细 | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_order.py | A:SalesOrderItem | S:订单行产品; 暂估定价/赠品; 预测冲销绑定; 78行
 sales_order_milestone.py[PC2T]: F:销售订单收款里程碑 | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_order.py | A:SalesOrderMilestone | S:分期计划; 预付/自动生成应收; 47行
 sales_order_sync_binding.py[PC2T]: F:销售订单同步绑定 | R:- | A:SalesOrderSyncBinding | S:租户一条; 接口/数据集映射+无感外推; 匹配键默认order_code; 43行
-sales_return.py[PC3S]: F:销售退货单 | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_delivery.py | A:SalesReturn | S:关联原出库单+订单追溯; 89行
+sales_return.py[PC3T]: F:销售退货单 | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_delivery.py | A:SalesReturn | S:关联原出库单+订单追溯; 89行
 sales_return_item.py[PC2T]: F:销售退货明细 | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_return.py | A:SalesReturnItem | S:跨单取单按行占用; 批次序列号; 68行
 sales_review.py[PC3S]: F:订单评审单 | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_order.py | A:SalesReview | S:接单前五部门评审; 通过可下推订单; 75行
 sales_review_dept_opinion.py[PC2T]: F:订单评审部门意见 | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_review.py | A:SalesReviewDeptOpinion | S:五部门槽位; 三态结果; 30行
@@ -2173,7 +2288,7 @@ scheduling_config.py[PC2T]: F:排程配置 | R:- | A:SchedulingConfig | S:多套
 scrap_record.py[PC4S]: F:报废记录 | R:code:riveredge-backend/src/apps/kuaizhizao/models/reporting_record.py | A:ScrapRecord | S:关联报工; 原因+成本计算; 116行
 semi_finished_goods_receipt.py[PC2T]: F:半成品入库单 | R:code:riveredge-backend/src/apps/kuaizhizao/models/finished_goods_receipt.py | A:SemiFinishedGoodsReceipt | S:与成品入库同构; 单据类型独立; 45行
 semi_finished_goods_receipt_item.py[PC2T]: F:半成品入库明细 | R:code:riveredge-backend/src/apps/kuaizhizao/models/semi_finished_goods_receipt.py | A:SemiFinishedGoodsReceiptItem | S:合格/不合格数量; 库位批次; 关联检验单; 47行
-shipment_notice.py[PC3S]: F:发货通知单 | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_order.py | A:ShipmentNotice | S:销售通知仓库发货; 不直接动库存; 80行
+shipment_notice.py[PC3T]: F:发货通知单 | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_order.py | A:ShipmentNotice | S:销售通知仓库发货; 不直接动库存; 80行
 shipment_notice_item.py[PC2T]: F:发货通知单明细 | R:code:riveredge-backend/src/apps/kuaizhizao/models/shipment_notice.py | A:ShipmentNoticeItem | S:通知行物料; 关联订单行; 行出库仓库; 55行
 spare_part.py[PC5S]: F:备品备件 | R:code:riveredge-backend/src/apps/kuaizhizao/models/equipment.py | A:SparePart | S:设备维修备件; 库存管理; 141行
 spc_sample.py[PC1T]: F:SPC采样数据 | R:code:riveredge-backend/src/apps/kuaizhizao/models/spc_chart.py | A:SPCSample | S:控制图采样点; 多来源; 33行
@@ -2198,6 +2313,26 @@ outsource_inspection.py[PC4T]: F:委外检验单OSQC | R:code:riveredge-backend/
 payment_application.py[PC4S]: F:付款申请单 | R:code:riveredge-backend/src/apps/kuaizhizao/constants/__init__.py | A:PaymentApplication,PaymentApplicationLine | S:采购请款→财务付款; 头+行挂应付; 101行
 quality_patrol.py[PC4T]: F:质量巡检单 | R:- | A:QualityPatrol | S:无强制来源抽检; 车间/工序/工单上下文; 86行
 station_operator_session.py[PC3T]: F:工位操作员会话 | R:code:riveredge-backend/src/apps/kuaizhizao/api/deps/__init__.py | A:StationOperatorSession | S:刷脸/员工码确认会话; 仅存SHA-256哈希; 44行
+finished_goods_receipt_sync_binding.py[PC4T]: F:成品入库单与数据接口出站绑定ORM(租户一条) | R:code:riveredge-backend/src/apps/kuaizhizao/constants/__init__.py | A:FinishedGoodsReceiptSyncBinding | S:-
+inspection_sampling_transfer.py[PC2T]: F:GB/T2828.1抽检严格度转移状态ORM(租户+物料+方案+步骤) | R:code:riveredge-backend/src/apps/kuaizhizao/models/orm_models.py | A:InspectionSamplingTransfer | S:-
+other_inbound_sync_binding.py[PC2T]: F:其他入库单与数据接口出站绑定ORM(租户一条) | R:code:riveredge-backend/src/apps/kuaizhizao/models/reporting_sync_binding.py | A:OtherInboundSyncBinding | S:接口/数据集映射+无感外推
+other_outbound_sync_binding.py[PC2T]: F:其他出库单与数据接口出站绑定ORM(租户一条) | R:code:riveredge-backend/src/apps/kuaizhizao/models/other_inbound_sync_binding.py | A:OtherOutboundSyncBinding | S:接口/数据集映射+无感外推
+outsource_order_receipt.py[PC3T]: F:委外订单到货/收货ORM | R:code:riveredge-backend/src/apps/kuaizhizao/models/orm_models.py | A:OutsourceOrderReceipt | S:-
+production_picking_sync_binding.py[PC2T]: F:生产领料单与数据接口出站绑定ORM(租户一条) | R:code:riveredge-backend/src/apps/kuaizhizao/models/reporting_sync_binding.py | A:ProductionPickingSyncBinding | S:接口/数据集映射+无感外推
+purchase_demand_party.py[PC3T]: F:采购询价需方ORM | R:code:riveredge-backend/src/apps/kuaizhizao/models/orm_models.py | A:PurchaseDemandParty | S:-
+purchase_receipt_sync_binding.py[PC2T]: F:采购入库单与数据接口出站绑定ORM(租户一条) | R:code:riveredge-backend/src/apps/kuaizhizao/models/reporting_sync_binding.py | A:PurchaseReceiptSyncBinding | S:接口/数据集映射+无感外推
+qms_certificate.py[PC3T]: F:质量体系-证书.状态由到期日计算禁止手改矛盾状态 | R:code:riveredge-backend/src/apps/kuaizhizao/models/qms_internal_audit.py | A:QmsCertificate | S:-
+qms_corrective_action.py[PC3T]: F:质量体系-纠正预防(菜单名不用CAPA) | R:code:riveredge-backend/src/apps/kuaizhizao/models/qms_internal_audit.py | A:QmsCorrectiveAction | S:-
+qms_external_audit.py[PC3T]: F:质量体系-外审.不符合走同一不符合报告,来源external_audit | R:code:riveredge-backend/src/apps/kuaizhizao/models/qms_internal_audit.py | A:QmsExternalAudit | S:-
+qms_internal_audit_annual_plan.py[PC3T]: F:质量体系-内审年度计划.单次内审必须挂年度计划下 | R:code:riveredge-backend/src/apps/kuaizhizao/models/qms_internal_audit.py | A:QmsInternalAuditAnnualPlan | S:-
+qms_internal_audit_checklist_item.py[PC3T]: F:质量体系-内审检查表行.结论不符合时生成不符合报告 | R:code:riveredge-backend/src/apps/kuaizhizao/models/qms_internal_audit.py | A:QmsInternalAuditChecklistItem | S:-
+qms_legal_regulation.py[PC3T]: F:质量体系-法律法规.禁止环境因素/排放/危险源字段 | R:code:riveredge-backend/src/apps/kuaizhizao/models/qms_internal_audit.py | A:QmsLegalRegulation | S:-
+qms_management_review_resolution.py[PC3T]: F:质量体系-管理评审决议行(第3期供纠正预防挂接) | R:code:riveredge-backend/src/apps/kuaizhizao/models/qms_internal_audit.py | A:QmsManagementReviewResolution | S:-
+qms_nonconformity_report.py[PC3T]: F:质量体系-不符合报告.第3期起严重/一般须关联并关闭纠正预防才能关闭 | R:code:riveredge-backend/src/apps/kuaizhizao/models/qms_internal_audit.py | A:QmsNonconformityReport | S:-
+qms_quality_objective.py[PC3T]: F:质量体系-质量目标(头表+行表) | R:code:riveredge-backend/src/apps/kuaizhizao/models/qms_internal_audit.py | A:QmsQualityObjective | S:-
+qms_system_document_circulation.py[PC3T]: F:质量体系-体系文件发放/回收/宣贯记录,挂已生效文件非文件状态,作废后记录仍保留 | R:code:riveredge-backend/src/apps/kuaizhizao/models/qms_internal_audit.py | A:QmsSystemDocumentCirculation | S:-
+sales_delivery_sync_binding.py[PC2T]: F:销售出库单与数据接口出站绑定ORM(租户一条) | R:code:riveredge-backend/src/apps/kuaizhizao/models/other_outbound_sync_binding.py | A:SalesDeliverySyncBinding | S:接口/数据集映射+无感外推
+work_order_bom_line.py[PC3T]: F:工单BOM子件明细行ORM(开单保存后可改;领料/齐套以已保存行为准) | R:code:riveredge-backend/src/apps/kuaizhizao/models/work_order.py | A:WorkOrderBomLine | S:-
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/print/===
 __init__.py[PC1T]: F:打印预置包 | R:- | A:- | S:空包标记; 1行
@@ -2207,9 +2342,13 @@ equipment_card.py[PC7M]: F:设备卡预设 | R:code:riveredge-backend/src/apps/k
 mold_card.py[PC7M]: F:模具卡预设 | R:code:riveredge-backend/src/apps/kuaizhizao/print/equipment_card.py | A:build_mold_card_preset | S:60x50mm标签; 复用资产卡布局; 225行
 preset_templates.py[PC4M]: F:打印预设模板 | R:code:riveredge-backend/src/apps/kuaizhizao/print/designer_presets.py | A:KUAIZHIZAO_PRESET_PRINT_TEMPLATES | S:业务单据预设注册; 交付/8D/付款stub; 282行
 styles.py[PC4M]: F:打印共享样式 | R:- | A:build_a4_document,make_preset,build_certificate_document | S:A4/A5样式+Jinja2骨架; 通用编译; 294行
+grid_outsource_order_print.py[PC4S]: F:工序委外单格线表打印(与默认可视化模板并列可选) | R:code:riveredge-backend/src/apps/kuaizhizao/print/preset_templates.py | A:格线表构建 | S:-
+machining_work_order_print.py[PC4S]: F:工单机加工版打印(格线表样,与默认可视化模板并列可选) | R:code:riveredge-backend/src/apps/kuaizhizao/print/preset_templates.py | A:格线表构建 | S:-
+purchase_receipt_red_voucher_template.py[PC4M]: F:采购入库红框凭证HTML真源(对齐纸质外购入库单样例) | R:code:riveredge-backend/src/apps/kuaizhizao/print/preset_templates.py | A:红框凭证模板 | S:-
+red_voucher_presets.py[PC4M]: F:红框凭证类打印模板schema修补与版本标记 | R:code:riveredge-backend/src/apps/kuaizhizao/print/purchase_receipt_red_voucher_template.py | A:schema修补,版本标记 | S:-
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/reference_display/===
-setup.py[PC4S]: F:引用展示注册 | R:code:riveredge-backend/src/core/services/reference/reference_display_provider_registry.py | A:register_reference_display_provider | S:单据引用Provider注册; 多模型; 206行
+setup.py[PC4M]: F:引用展示注册 | R:code:riveredge-backend/src/core/services/reference/reference_display_provider_registry.py | A:register_reference_display_provider | S:单据引用Provider注册; 多模型; 206行
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/schemas/===
 __init__.py[PC6M]: F:Schema包 | R:code:riveredge-backend/src/apps/kuaizhizao/schemas/work_order.py | A:__all__ | S:聚合各模块Schema; BOM已移至master_data; 294行
@@ -2266,7 +2405,7 @@ material_shortage_exception.py[CB4S]: F:缺料异常记录Schema | R:code:rivere
 material_stock_movement.py[CB2T]: F:生产物料库存移动流水Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/material_stock_movement.py | A:WorkOrderMaterialMovementItem | S:双来源; 前后量快照; 55行
 mold.py[CB7M]: F:模具Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/mold.py | A:MoldBase | S:状态校验; 待激活态; 287行
 mold_ops.py[CB9L]: F:模具运营扩展Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/mold_ops.py | A:MoldMaintenanceItemBase,MoldRepairSchemeBase,MoldSchemeBindingBase,MoldTrialCreate,MoldBorrowCreate,MoldMaintenanceResponse | S:保养/维修项+方案; 试模/领用/归还/报废; 762行
-order_change.py[CB6M]: F:订单变更单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_order_change_order.py | A:OrderChangeItemBase | S:销售/采购对称; 前后量价快照; 179行
+order_change.py[CB6S]: F:订单变更单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_order_change_order.py | A:OrderChangeItemBase | S:销售/采购对称; 前后量价快照; 179行
 outsource_order.py[CB5M]: F:委外单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/outsource_order.py | A:OutsourceOrderBase | S:工单关联; 171行
 outsource_settlement.py[CB6M]: F:委外结算Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/outsource_settlement.py | A:OutsourceSettlementItemCreate | S:双行类型; 超耗扣款快照; 204行
 outsource_work_order.py[CB9L]: F:委外工单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/outsource_work_order.py | A:OutsourceWorkOrderBase | S:功能点2.1.10核心; 入库Hub能力; 605行
@@ -2274,7 +2413,7 @@ packing_binding.py[CB7M]: F:装箱打包绑定Schema | R:code:riveredge-backend/
 partner_material_price_trend.py[CB1T]: F:客商物料价格趋势Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/partner_material_price_trend.py | A:PartnerMaterialPriceTrendItem | S:历史成交价明细; 45行
 production_control.py[CB4S]: F:生产计划管控塔Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/production_control.py | A:MaterialReadinessItem | S:齐套率0-100; 备料等级带; 136行
 production_daily.py[CB3S]: F:生产日报Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/production_daily.py | A:ProductionDailyTemplateCreate | S:字段定义JSON; 四类字段; 107行
-purchase.py[CB8M]: F:采购订单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/purchase_order.py | A:PurchaseOrderMilestoneCreate,PurchaseOrderBase,PurchaseOrderItemBase | S:付款里程碑+比价/落地成本分摊+入库拉单; 369行
+purchase.py[CB8L]: F:采购订单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/purchase_order.py | A:PurchaseOrderMilestoneCreate,PurchaseOrderBase,PurchaseOrderItemBase | S:付款里程碑+比价/落地成本分摊+入库拉单; 369行
 purchase_arrival.py[CB3S]: F:采购到货延期填报Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/purchase_arrival_delay_report.py | A:PurchaseArrivalDelayReportCreate | S:六类延期原因; 91行
 purchase_inquiry.py[CB7M]: F:采购询价单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/purchase_inquiry.py | A:PurchaseInquiryItemBase | S:数量>0; 询价能力; 254行
 purchase_order_ocr.py[CB1T]: F:采购订单OCR录单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/services/purchase_order_ocr_service.py | A:PurchaseOrderOcrItem | S:驼峰alias; 41行
@@ -2286,22 +2425,22 @@ quality_complaint_batch_month.py[CB1T]: F:投诉批次月录入Schema | R:code:r
 quality_exception.py[CB4S]: F:质量异常Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/quality_exception.py | A:QualityExceptionBase | S:三类异常+追溯; 115行
 quality_fai.py[CB4S]: F:FAI检验Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/quality_fai.py | A:FaiCharacteristicBase | S:气泡号+判定默认pending; 量具关联; 148行
 quality_improvement.py[CB8M]: F:质量改进Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/quality_8d_report.py | A:Quality8DBase,OQCInspectionBase,SPCSampleBase,Quality8DActionItemBase | S:8D阶段/行动项+不合格处置+OQC放行+SPC; 393行
-quality_qms.py[CB8M]: F:质量体系Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/quality_qms.py | A:QmsEvidenceLink | S:体系文件/内审/管理评审; 证据+条款链接; 383行
+quality_qms.py[CB8L]: F:质量体系Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/quality_qms.py | A:QmsEvidenceLink | S:体系文件/内审/管理评审; 证据+条款链接; 383行
 quotation.py[CB7M]: F:报价单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/quotation.py | A:QuotationItemBase,QuotationBase,QuotationRevisionBody | S:默认售价类型;系列多版本+修订;报价能力; 251行
 quote.py[CB1T]: F:快速核价结果Schema | R:code:riveredge-backend/src/apps/kuaizhizao/services/quote_service.py | A:QuoteBreakdownResponse | S:三类成本明细; 33行
-receipt_notice.py[CB5M]: F:收货通知单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/receipt_notice.py | A:ReceiptNoticeBase | S:采购通知仓库收货; 不动库存; 150行
+receipt_notice.py[CB5S]: F:收货通知单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/receipt_notice.py | A:ReceiptNoticeBase | S:采购通知仓库收货; 不动库存; 150行
 replenishment_suggestion.py[CB3S]: F:补货建议Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/replenishment_suggestion.py | A:ReplenishmentSuggestionBase | S:补货建议能力; 101行
 reporting_record.py[CB9M]: F:报工记录Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/reporting_record.py | A:ReportingRecordBase,ReportingRecordCreate,ReportingPullCandidateItem | S:报工+不良品同事务;人员/小组校验+统计; 353行
-reporting_sync.py[CB3S]: F:报工同步绑定Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/reporting_sync_binding.py | A:ReportingSyncBindingOut | S:默认15分钟; 匹配键id; 91行
+reporting_sync.py[CB3T]: F:报工同步绑定Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/reporting_sync_binding.py | A:ReportingSyncBindingOut | S:默认15分钟; 匹配键id; 91行
 rework_order.py[CB8L]: F:返工单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/rework_order.py | A:ReworkOrderBase | S:原工单关联; 操作能力; 454行
 rework_position_plan_template.py[CB3S]: F:返工排位策划模板Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/rework_position_plan_template.py | A:ReworkPositionPlanTemplateItemBase | S:工位+计划人数+标准分钟; 86行
 rolling_schedule.py[CB3S]: F:滚动计划Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/rolling_schedule_plan.py | A:RollingScheduleGenerateRequest | S:关账+生成请求; 齐套阈值默认80; 110行
 sales.py[CB6M]: F:销售管理Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_forecast.py | A:SalesForecastBase,SalesOrderBase,SalesForecastItemBase | S:预测默认MTS;订单默认MTO;销售能力; 239行
 sales_contract.py[CB7M]: F:销售合同Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_contract.py | A:SalesContractItemCreate,SalesContractCreate,SalesContractResponse,SalesContractConvertToOrderRequest,SalesContractPushToWorkOrderRequest | S:条款快照;按行释放转单/下推工单;变更;287行
 sales_contract_term.py[CB3S]: F:销售合同条款Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_contract_term_item.py | A:SalesContractTermItemCreate | S:条款排序+启用; 103行
-sales_forecast.py[CB6M]: F:销售预测Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_forecast.py | A:SalesForecastBase | S:双预测类型; 192行
+sales_forecast.py[CB6S]: F:销售预测Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_forecast.py | A:SalesForecastBase | S:双预测类型; 192行
 sales_opportunity.py[CB3S]: F:销售商机Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_opportunity.py | A:SalesOpportunityBase | S:终端阶段WON/LOST; 89行
-sales_order.py[CB8M]: F:销售订单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_order.py | A:SalesOrderMilestoneCreate,SalesOrderItemBase,SalesOrderCreate,SalesOrderResponse,SalesOrderTrackingResponse | S:里程碑预付+自动应收;条款快照;追踪360;355行
+sales_order.py[CB8L]: F:销售订单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_order.py | A:SalesOrderMilestoneCreate,SalesOrderItemBase,SalesOrderCreate,SalesOrderResponse,SalesOrderTrackingResponse | S:里程碑预付+自动应收;条款快照;追踪360;355行
 sales_order_ocr.py[CB1T]: F:销售订单OCR录单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/services/sales_order_ocr_service.py | A:SalesOrderOcrItem | S:驼峰alias; 46行
 sales_order_sync.py[CB2T]: F:销售订单同步绑定Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_order_sync_binding.py | A:SalesOrderSyncBindingOut | S:默认15分钟; 匹配键order_code; 59行
 sales_review.py[CB7M]: F:订单评审Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_review.py | A:SalesReviewDeptPlanItem | S:五部门槽位; 指定评审人; 245行
@@ -2309,25 +2448,36 @@ scheduling_ai.py[CB6M]: F:可视排产AI助手Schema | R:code:riveredge-backend/
 scheduling_config.py[CB2T]: F:排程配置Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/scheduling_config.py | A:SchedulingConfigBase | S:排产规则子表; 默认配置标志; 57行
 scheduling_constraints.py[CB2T]: F:可视排产规则DTO | R:code:riveredge-backend/src/apps/kuaizhizao/schemas/scheduling_config.py | A:SchedulingConstraints | S:四4M开关; 冻结窗口2天; 滚动窗口14天; 83行
 scrap_record.py[CB4S]: F:报废记录Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/scrap_record.py | A:ScrapRecordBase | S:报工记录可选关联; 130行
-shipment_notice.py[CB5S]: F:发货通知单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/shipment_notice.py | A:ShipmentNoticeBase,ShipmentNoticeNotify,ShipmentNoticeResponse,ShipmentNoticeItemBase | S:销售通知仓库不动库存;行级多仓发货;166行
+shipment_notice.py[CB5M]: F:发货通知单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/shipment_notice.py | A:ShipmentNoticeBase,ShipmentNoticeNotify,ShipmentNoticeResponse,ShipmentNoticeItemBase | S:销售通知仓库不动库存;行级多仓发货;166行
 spare_part_requisition.py[CB3S]: F:备件领用单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/spare_part_requisition.py | A:SparePartRequisitionLineInput | S:数量>=1; 默认库位; 82行
 station.py[CB8M]: F:工位终端Schema | R:code:riveredge-backend/src/apps/kuaizhizao/api/station/station.py | A:StationAndonCreate,StationSopDocument,StationOperationDocumentsResponse,StationOperatorSessionConfirmRequest,ShiftHandoverCreate | S:安灯四呼叫+联动;ESOP别名;人脸/技能/会话;380行
-stocktaking.py[CB6M]: F:库存盘点单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/stocktaking.py | A:StocktakingBase | S:盘点单+行物料预览; 197行
-supplier_evaluation.py[CB8M]: F:供应商评价Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/supplier_evaluation.py | A:SupplierEvalTemplateClauseInput | S:R-03; 权重默认1/满分100; 413行
+stocktaking.py[CB6S]: F:库存盘点单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/stocktaking.py | A:StocktakingBase | S:盘点单+行物料预览; 197行
+supplier_evaluation.py[CB8L]: F:供应商评价Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/supplier_evaluation.py | A:SupplierEvalTemplateClauseInput | S:R-03; 权重默认1/满分100; 413行
 tool.py[CB7M]: F:工装Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/tool.py | A:ToolBase | S:状态校验; 273行
 tool_ops.py[CB9L]: F:工装运营扩展Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/tool_ops.py | A:ToolMaintenanceItemBase | S:保养/维修主数据+单据; 审计人; 751行
 traceability_schemas.py[CB4S]: F:追溯管理Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/traceability_schemas.py | A:TraceIdentifierType | S:EPCIS语义+GBT报告; 双枚举; 117行
-visual_scheduling.py[CB8M]: F:可视排产API Schema | R:code:riveredge-backend/src/apps/kuaizhizao/api/visual_scheduling.py | A:VisualSchedulingScanRequest | S:负荷窗口默认14天上限90; 432行
+visual_scheduling.py[CB8L]: F:可视排产API Schema | R:code:riveredge-backend/src/apps/kuaizhizao/api/visual_scheduling.py | A:VisualSchedulingScanRequest | S:负荷窗口默认14天上限90; 432行
 warehouse.py[CB9L]: F:仓储管理Schema | R:code:riveredge-backend/src/apps/kuaizhizao/services/warehouse_service.py | A:DocumentLineMaterialPreview,ProductionPickingBase,SalesDeliveryBase,SalesReturnBase,InboundConfirmationRequest,OutboundConfirmationRequest | S:领退料/入出库/借还料/双退货;Hub能力;1868行
 wave_picking.py[CB1T]: F:波次拣货Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/wave_picking.py | A:WavePickingGenerateRequest | S:多领料单合并; 22行
 work_order.py[CB9L]: F:工单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/work_order.py | A:WorkOrderBase,WorkOrderCreate,WorkOrderOperationBase,WorkOrderKittingAnalysisResponse,WorkOrderCreatePeerGroupRequest | S:超报/冻结/批序/齐套;拆分合并+平级编组;1087行
 work_order_group.py[CB2T]: F:工单组Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/work_order_group.py | A:WorkOrderGroupMemberResponse | S:双类型成员; 51行
 work_order_score.py[CB2T]: F:工单综合打分Schema | R:code:riveredge-backend/src/apps/kuaizhizao/services/work_order_score_service.py | A:WorkOrderScoreBreakdownItem | S:归一化0-100; 加权; 71行
-work_order_sync.py[CB3S]: F:生产工单同步绑定Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/work_order_sync_binding.py | A:WorkOrderSyncBindingOut | S:匹配键code; 默认15分钟; 94行
+work_order_sync.py[CB3T]: F:生产工单同步绑定Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/work_order_sync_binding.py | A:WorkOrderSyncBindingOut | S:匹配键code; 默认15分钟; 94行
 drawing_balloon_sheet.py[CB4S]: F:图纸气泡标注Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/drawing_balloon_sheet.py | A:DrawingBalloonSheetBase,DrawingBalloonSheetLineBase,DrawingBalloonConfirmLinesRequest,FaiImportFromBalloonSheetRequest | S:头+行双族; OCR候选确认; 可导入FAI; 104行
 outsource_inspection.py[CB5S]: F:委外检验单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/outsource_inspection.py | A:OutsourceInspectionBase,OutsourceInspectionConduct,OutsourceInspectionResponse,OutsourceReceiptPullCandidate | S:检验执行+审核; 收货拉取候选; 116行
-payment_application.py[CB6S]: F:付款申请单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/payment_application.py | A:PaymentApplicationCreate,PaymentApplicationResponse,PaymentApplicationLineBase,PullPaymentApplicationFromPurchaseOrderRequest | S:请款头行+审批;订单/入库/对账拉取; 179行
+payment_application.py[CB6M]: F:付款申请单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/payment_application.py | A:PaymentApplicationCreate,PaymentApplicationResponse,PaymentApplicationLineBase,PullPaymentApplicationFromPurchaseOrderRequest | S:请款头行+审批;订单/入库/对账拉取; 179行
 quality_patrol.py[CB4S]: F:质量巡检单Schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/quality_patrol.py | A:QualityPatrolBase,QualityPatrolCreate,QualityPatrolConduct,QualityPatrolResponse | S:无强制来源巡检;方案步骤判定;质检能力; 113行
+document_line_dual_quantity.py[DB4T]: F:单据行主/副数量schema字段 | R:- | A:行dual数量字段 | S:-
+document_line_material_attachments.py[DB4T]: F:单据行物料附件汇总schema(Material.images+工程图纸) | R:- | A:行附件汇总 | S:-
+finished_goods_receipt_sync.py[DB4T]: F:成品入库单出站绑定schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/finished_goods_receipt_sync_binding.py | A:绑定schema | S:-
+kingdee_consistency.py[DB5T]: F:金蝶强一致审计与编排schema(走系统sync-from-source/外推,禁止旁路写批次) | R:- | A:审计/编排schema | S:-
+ledger_dual_quantity.py[DB4T]: F:台账双计量API字段(主/副单位与主/副数量) | R:- | A:dual计量字段 | S:-
+other_inbound_sync.py[DB4T]: F:其他入库单出站绑定schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/other_inbound_sync_binding.py | A:绑定schema | S:-
+other_outbound_sync.py[DB4T]: F:其他出库单出站绑定schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/other_outbound_sync_binding.py | A:绑定schema | S:-
+production_picking_sync.py[DB4T]: F:生产领料单出站绑定schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/production_picking_sync_binding.py | A:绑定schema | S:-
+purchase_demand_party.py[DB4T]: F:采购询价需方schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/purchase_demand_party.py | A:PurchaseDemandPartyCreate/Update/Response | S:-
+purchase_receipt_sync.py[DB4T]: F:采购入库单出站绑定schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/purchase_receipt_sync_binding.py | A:绑定schema | S:-
+sales_delivery_sync.py[DB4T]: F:销售出库单出站绑定schema | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_delivery_sync_binding.py | A:绑定schema | S:-
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/scripts/===
 sync_equipment_card_print_template.py[OV2T]: F:设备卡打印模板同步脚本 | R:code:riveredge-backend/src/apps/kuaizhizao/print/equipment_card.py | A:sync,main | S:100×70mm单卡;unscoped跨组织;61行
@@ -2345,7 +2495,7 @@ batch_serial_helper.py[DB3T]: F:批号序列号生成辅助 | R:code:riveredge-b
 batch_service.py[DB8M]: F:批量操作服务 | R:code:riveredge-backend/src/apps/kuaizhizao/services/batch_service.py | A:BatchOperationService | S:通用三批操作; 字段探测; 344行
 batching_center_service.py[DB9L]: F:配料中心任务队列服务 | R:code:riveredge-backend/src/apps/kuaizhizao/models/batching_order.py | A:BatchingCenterService | S:四源聚合; 备料建议+叫料+草稿+倒冲失败; 859行
 batching_order_service.py[DB9L]: F:配料单服务 | R:code:riveredge-backend/src/apps/kuaizhizao/models/batching_order.py | A:BatchingOrderService | S:工单生成配料单; 主仓/线边仓双拣选; BOM配比; 771行
-contract_milestone_billing_service.py[DB8M]: F:合同里程碑收款服务 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/finance_service.py | A:ContractMilestoneBillingService | S:四源类型; 应收/应付生成; 跨kuaicaiwu; 398行
+contract_milestone_billing_service.py[DB8L]: F:合同里程碑收款服务 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/finance_service.py | A:ContractMilestoneBillingService | S:四源类型; 应收/应付生成; 跨kuaicaiwu; 398行
 coordination_board_service.py[DA9L]: F:生产协调看板服务 | R:code:riveredge-backend/src/apps/kuaizhizao/services/demand_computation_service.py | A:CoordinationBoardService | S:MRP为枢纽; 聚合采购/委外/齐套/排程/下达/进度; 六源类型; 1845行
 cost_comparison_service.py[DA8L]: F:成本对比服务 | R:code:riveredge-backend/src/apps/kuaizhizao/services/production_cost_service.py | A:CostComparisonService | S:标准vs实际成本; 基于物料来源类型; 484行
 cost_optimization_service.py[DA8L]: F:成本优化建议服务 | R:code:riveredge-backend/src/apps/kuaizhizao/services/cost_comparison_service.py | A:CostOptimizationService | S:基于物料来源类型优化建议; 456行
@@ -2357,7 +2507,7 @@ customer_pool_list_core.py[DA6M]: F:客户池列表核心 | R:code:riveredge-bac
 customer_pool_service.py[DA9L]: F:客户池服务 | R:code:riveredge-backend/src/apps/kuaizhizao/services/customer_pool_list_core.py | A:CustomerPoolService | S:公海/私有池; 分配/回收; 1039行
 customer_return_visit_service.py[DA6M]: F:客户回访服务 | R:code:riveredge-backend/src/apps/kuaizhizao/models/after_sales_service.py | A:CustomerReturnVisitService | S:双枚举: 方式+来源; 220行
 dashboard_todo_link.py[DA5S]: F:工作台待办深链 | R:code:riveredge-backend/src/apps/kuaizhizao/services/dashboard_service.py | A:TODO_HANDLE_MESSAGES | S:todo_id前缀→处理提示; 唯一真源; 203行
-data_compensation_service.py[DA8M]: F:动态数据补偿服务 | R:code:riveredge-backend/src/apps/kuaizhizao/services/initial_data_service.py | A:DataCompensationService | S:快照时间点→上线日期数据变化; 410行
+data_compensation_service.py[DA8L]: F:动态数据补偿服务 | R:code:riveredge-backend/src/apps/kuaizhizao/services/initial_data_service.py | A:DataCompensationService | S:快照时间点→上线日期数据变化; 410行
 defect_record_service.py[DA9L]: F:不良品记录服务 | R:code:riveredge-backend/src/apps/kuaizhizao/models/defect_record.py | A:DefectRecordService | S:让步审批+统计;退回/隔离/返工/报废/降级;三类检验批量建; 2644行
 delivery_delay_notification_service.py[DA8M]: F:交期延误通知服务 | R:code:riveredge-backend/src/apps/kuaizhizao/services/kuaizhizao_business_notification.py | A:dispatch_kuaizhizao_notification | S:同日去重; 配置中心消息规则; 327行
 delivery_issue_service.py[DA4S]: F:交付项目问题服务 | R:code:riveredge-backend/src/apps/kuaizhizao/services/delivery_project_service.py | A:DeliveryIssueService | S:项目节点关联; 169行
@@ -2376,7 +2526,7 @@ disassembly_order_service.py[DB8L]: F:拆卸单服务 | R:code:riveredge-backend
 document_attachment_center_service.py[SB5S]: F:单据附件中心：聚合本单 + 全链路关联单据 attachments JSON。 | R:code:riveredge-backend/src/apps/kuaizhizao/services/document_relation_new_service.py | A:DocumentAttachmentCenterService,_flatten_trace_nodes,_dedupe_chain_documents | S:190行;trace上下游扁平化去重;按类型并发查attachments
 document_lifecycle_service.py[SB5L]: F:单据生命周期服务：由后端控制各单据类型的生命周期节点，前端仅展示。 | R:code:riveredge-backend/src/apps/kuaizhizao/services/document_relation_new_service.py | A:LIFECYCLE_AUDIT_MODE,_lifecycle_contract_wrapper,get_sales_order_lifecycle,get_document_milestones | S:3161行;40+单据阶段配置;A/B/N审核可视化;统一status_class契约
 document_push_pull_service.py[SB5L]: F:单据下推和加载服务模块  提供单据下推和加载功能，支持从上游单据生成下游单据，或从下游单据关联上游单据。  Author: Luigi Lu Date: ... | R:- | A:DocumentPushPullService | S:727L
-document_push_service.py[SB5L]: F:通用外推门面：按 source_type + target_profile 分发到业务适配。  与「系统内下推」document_push_pull 无关... | R:- | A:_disabled_result,register_push_handler,list_registered_push_handlers,_handle_... | S:913L
+document_push_service.py[SB5T]: F:通用外推门面：按 source_type + target_profile 分发到业务适配。  与「系统内下推」document_push_pull 无关... | R:- | A:_disabled_result,register_push_handler,list_registered_push_handlers,_handle_... | S:913L
 document_relation_new_service.py[SB5L]: F:单据关联服务（新实现）：表驱动优先、旧服务推导补充并去重；提供创建/快照维护、全链路追溯与变更影响分析 | R:code:riveredge-backend/src/apps/kuaizhizao/models/document_relation.py | A:_relation_key,_derived_to_response,DocumentRelationNewService | S:1343行
 document_relation_service.py[SB5L]: F:业务推导式单据关联服务：DOCUMENT_TYPES+策略表解析多单据上下游，支持完整追溯与变更影响分析（旧实现） | R:code:riveredge-backend/src/apps/kuaizhizao/models/document_relation.py | A:_order_display_name,_rel_doc,_dedupe_relation_documents,DocumentRelationService,DOCUMENT_RELATION_STRATEGIES | S:4225行
 document_salesmen.py[SB5T]: F:销售单据列表：从当前可见单据中汇总销售人员选项。 | R:- | A:collect_document_salesmen | S:32L; 销售单据列表：从当前可见单据中汇总销售人员选项。
@@ -2402,7 +2552,7 @@ equipment_supervision_service.py[SB5M]: F:快制造设备 — 点检/保养督�
 exception_process_service.py[SB5L]: F:异常处理流程服务模块  提供异常处理流程相关的业务逻辑，包括异常处理流程启动、步骤流转、历史记录等。  Author: Luigi Lu Date: 20... | R:- | A:_load_work_order_ref_map,ExceptionProcessService | S:735L
 exception_service.py[SB5L]: F:生产异常处理服务：缺料/交付延期/质量三类异常上报、自动检测、列表处理与统计；检验结果联动生成或关闭质量异常并派发通知 | R:code:riveredge-backend/src/apps/kuaizhizao/models/material_shortage_exception.py | A:ExceptionService,report_material_shortage,detect_material_shortage,create_from_inspection | S:1455行
 fai_balloon_ocr_service.py[SB5M]: F:FAI图纸气泡OCR（自研）：OCR视觉端点抽尺寸文字→对话模型结构化→正则补全合并；DeepSeek-OCR走纯文本prompt | R:code:riveredge-backend/src/core/ai/structured_draft.py, code:riveredge-backend/src/core/utils/deepseek_vision_client.py | A:FaiBalloonOcrService,_normalize_candidate,_merge_candidates | S:395行
-feishu_work_order_push_service.py[SB5S]: F:业务适配：生产工单 → 飞书 IM 通知（P3 私有协议样板）。  profile: feishu_im_notify 连接器：feishu（app_id... | R:- | A:FeishuWorkOrderPushService | S:151L
+feishu_work_order_push_service.py[SB5T]: F:业务适配：生产工单 → 飞书 IM 通知（P3 私有协议样板）。  profile: feishu_im_notify 连接器：feishu（app_id... | R:- | A:FeishuWorkOrderPushService | S:151L
 fifo_policy.py[SB5T]: F:仓储先进先出（FIFO/FEFO）判定策略。 | R:- | A:normalize_fifo_mode,resolve_fifo_settings,batch_fifo_sort_key,is_batch_before... | S:82L; 仓储先进先出（FIFO/FEFO）判定策略。
 first_pass_yield_service.py[SB5L]: F:工序直通率（First Pass Yield）计算服务。  口径：首次报工（rework_order_id 为空）的合格数量 / 首次报工数量； 返工报工... | R:- | A:_to_float,compute_first_pass_yield_rate,_empty_qty_bucket,_add_record_quantit... | S:430L
 flow_data_generate_service.py[SB5L]: F:按销售订单/预测生成制造全流程演示数据（运维造数）：运算下推→采购→IQC→委外→领料→报工→检验→出入库11步；含时间轴改写、断点续跑与失败回滚 | R:code:riveredge-backend/src/core/services/document_time_rewrite_service.py | A:FlowDataGenerateService,FlowGenerateJobService,TimelinePlanner,FlowGenerateRequest | S:5748行
@@ -2419,18 +2569,18 @@ install_execution_service.py[SB5L]: F:安装执行单服务 | R:- | A:InstallExe
 inventory_alert_service.py[SB5L]: F:库存预警业务服务模块  提供库存预警规则和预警记录相关的业务逻辑处理，包括预警规则配置、预警触发、预警处理等。  Author: Luigi Lu Dat... | R:- | A:_normalize_rule_threshold_fields,_resolve_rule_material_scope,InventoryAlertR... | S:1072L
 inventory_analysis_service.py[SB5M]: F:库存分析业务服务模块  提供库存周转率、ABC 分析、呆滞料分析等（基于 MaterialBatch 与出入库单据）。 | R:- | A:InventoryAnalysisService | S:362L
 inventory_service.py[SB5L]: F:统一库存服务：领退料/入出库/盘点/调拨/组装/拆解统一增减接口；主仓MaterialBatch按仓拆余额、线边仓LineSideInventory；atomic/idempotent过账包装 | R:- | A:InventoryService | S:2023行
-inventory_sync_service.py[SB5L]: F:即时库存从数据接口/数据集同步服务：绑定CRUD+字段映射拉取+MaterialBatch批量UPSERT；金蝶avbqty/lotnum空映射回退 | R:- | A:InventorySyncService,normalize_inventory_sync_batch_no | S:574行
+inventory_sync_service.py[SB5T]: F:即时库存从数据接口/数据集同步服务：绑定CRUD+字段映射拉取+MaterialBatch批量UPSERT；金蝶avbqty/lotnum空映射回退 | R:- | A:InventorySyncService,normalize_inventory_sync_batch_no | S:574行
 inventory_threshold_resolver.py[SB5M]: F:库存阈值唯一解析：预警规则（作用域覆盖）→ 物料 defaults → 无阈值。  供即时库存角标与预警引擎共用，禁止平行维护两套绝对数量真源。 | R:- | A:EffectiveThreshold,_to_decimal,material_stock_thresholds,_normalize_rule_mate... | S:297L
 inventory_transfer_service.py[SB5L]: F:库存调拨业务服务：调拨单/明细CRUD、执行（逐行调出扣减+调入增加，行级幂等键）、库内移位bin_relocation校验 | R:- | A:InventoryTransferService | S:901行
 inventory_verify_reminder_service.py[SB5M]: F:库存验证开单/月末完成提醒（INF-03 / R-07）。 | R:- | A:_month_entity_id,_parse_verify_month,_site_wall_clock_utc,InventoryVerifyRemi... | S:285L; 库存验证开单/月末完成提醒（INF-03 / R-07）。
-kingdee_engineering_bom_push_service.py[SB5M]: F:业务适配：工程 BOM → 金蝶工程 BOM（ENG_BOM）。  source_id = 版本组内最小 BOM 行 id（与 list_bom_grou... | R:- | A:_to_float,engineering_bom_push_skip_reason,build_kingdee_eng_bom_model,Kingde... | S:286L
-kingdee_inventory_push_service.py[SB5M]: F:业务适配：物料批次库存→金蝶其他入库单（STK_MISCELLANEOUS）；STK_Inventory查询态不可Save，以MaterialBatch.id为source_id走DocumentPushPipeline | R:code:riveredge-backend/src/core/services/integration/document_push_pipeline.py | A:material_batch_push_skip_reason,build_kingdee_inventory_misc_in_model,KingdeeInventoryPushService | S:367行
-kingdee_material_push_service.py[SB5M]: F:业务适配：物料主数据 → 金蝶物料（BD_MATERIAL）。 | R:- | A:material_push_skip_reason,build_kingdee_bd_material_model,KingdeeMaterialPush... | S:255L; 业务适配：物料主数据 → 金蝶物料（BD_MATERIAL）。
-kingdee_process_operation_push_service.py[SB5M]: F:业务适配：工序 → 金蝶工序/工艺基础资料（可配置 FormId，默认 ENG_Process）。 | R:- | A:operation_push_skip_reason,build_kingdee_eng_process_model,KingdeeProcessOper... | S:213L
-kingdee_production_order_push_service.py[SB5M]: F:业务适配：生产工单 → 金蝶生产订单（PRD_MO）；编排走DocumentPushPipeline，本模块只管字段映射与门禁；FTreeEntity 单位强制覆盖必填 | R:code:riveredge-backend/src/core/services/integration/document_push_pipeline.py | A:work_order_push_skip_reason,build_kingdee_production_order_model,KingdeeProductionOrderPushService | S:364行
-kingdee_production_report_push_service.py[SB5L]: F:业务适配：已审核报工 → 金蝶生产汇报单（PRD_MORPT）；薄壳转DocumentPushService含写门；失败退避重试上限5次超限置dead+站内告警 | R:code:riveredge-backend/src/apps/kuaizhizao/services/document_push_service.py | A:build_kingdee_production_report_model,KingdeeProductionReportPushService,PUSH_MAX_ATTEMPTS,PUSH_RETRY_BACKOFF_MINUTES | S:545行
-kingdee_purchase_order_push_service.py[SB5M]: F:业务适配：采购订单 → 金蝶采购订单（PUR_PurchaseOrder）；编排走DocumentPushPipeline；门禁：外部导入不可回推/已推送/须有明细 | R:code:riveredge-backend/src/core/services/integration/document_push_pipeline.py | A:purchase_order_push_skip_reason,build_kingdee_purchase_order_model,KingdeePurchaseOrderPushService | S:347行
-kingdee_sales_order_push_service.py[SB5L]: F:业务适配：销售订单 → 金蝶销售订单（SAL_SaleOrder）；编排走DocumentPushPipeline；占位关联防并发重推（PUSHING_TARGET_ID=-1/600s过期/同事务锁） | R:code:riveredge-backend/src/core/services/integration/document_push_pipeline.py | A:sales_order_push_skip_reason,_claim_sales_order_push_slot,build_kingdee_sales_order_model,KingdeeSalesOrderPushService | S:501行
+kingdee_engineering_bom_push_service.py[SB5T]: F:业务适配：工程 BOM → 金蝶工程 BOM（ENG_BOM）。  source_id = 版本组内最小 BOM 行 id（与 list_bom_grou... | R:- | A:_to_float,engineering_bom_push_skip_reason,build_kingdee_eng_bom_model,Kingde... | S:286L
+kingdee_inventory_push_service.py[SB5T]: F:业务适配：物料批次库存→金蝶其他入库单（STK_MISCELLANEOUS）；STK_Inventory查询态不可Save，以MaterialBatch.id为source_id走DocumentPushPipeline | R:code:riveredge-backend/src/core/services/integration/document_push_pipeline.py | A:material_batch_push_skip_reason,build_kingdee_inventory_misc_in_model,KingdeeInventoryPushService | S:367行
+kingdee_material_push_service.py[SB5T]: F:业务适配：物料主数据 → 金蝶物料（BD_MATERIAL）。 | R:- | A:material_push_skip_reason,build_kingdee_bd_material_model,KingdeeMaterialPush... | S:255L; 业务适配：物料主数据 → 金蝶物料（BD_MATERIAL）。
+kingdee_process_operation_push_service.py[SB5T]: F:业务适配：工序 → 金蝶工序/工艺基础资料（可配置 FormId，默认 ENG_Process）。 | R:- | A:operation_push_skip_reason,build_kingdee_eng_process_model,KingdeeProcessOper... | S:213L
+kingdee_production_order_push_service.py[SB5T]: F:业务适配：生产工单 → 金蝶生产订单（PRD_MO）；编排走DocumentPushPipeline，本模块只管字段映射与门禁；FTreeEntity 单位强制覆盖必填 | R:code:riveredge-backend/src/core/services/integration/document_push_pipeline.py | A:work_order_push_skip_reason,build_kingdee_production_order_model,KingdeeProductionOrderPushService | S:364行
+kingdee_production_report_push_service.py[SB5T]: F:业务适配：已审核报工 → 金蝶生产汇报单（PRD_MORPT）；薄壳转DocumentPushService含写门；失败退避重试上限5次超限置dead+站内告警 | R:code:riveredge-backend/src/apps/kuaizhizao/services/document_push_service.py | A:build_kingdee_production_report_model,KingdeeProductionReportPushService,PUSH_MAX_ATTEMPTS,PUSH_RETRY_BACKOFF_MINUTES | S:545行
+kingdee_purchase_order_push_service.py[SB5T]: F:业务适配：采购订单 → 金蝶采购订单（PUR_PurchaseOrder）；编排走DocumentPushPipeline；门禁：外部导入不可回推/已推送/须有明细 | R:code:riveredge-backend/src/core/services/integration/document_push_pipeline.py | A:purchase_order_push_skip_reason,build_kingdee_purchase_order_model,KingdeePurchaseOrderPushService | S:347行
+kingdee_sales_order_push_service.py[SB5T]: F:业务适配：销售订单 → 金蝶销售订单（SAL_SaleOrder）；编排走DocumentPushPipeline；占位关联防并发重推（PUSHING_TARGET_ID=-1/600s过期/同事务锁） | R:code:riveredge-backend/src/core/services/integration/document_push_pipeline.py | A:sales_order_push_skip_reason,_claim_sales_order_push_slot,build_kingdee_sales_order_model,KingdeeSalesOrderPushService | S:501行
 kuaizhizao_approval_scope.py[SB5T]: F:快制造移动审批判定（委托 core.approval_audit_scope + audit 注册表）。 | R:- | A:is_kuaizhizao_approval_instance,is_kuaizhizao_approval_pending_task | S:26L
 kuaizhizao_business_notification.py[SB5L]: F:快制造业务消息提醒派发（仅站内信）：dispatch → BusinessNotificationService 规则匹配；含交付项目预警与成品检验按权限码定向通知 | R:code:riveredge-backend/src/core/services/business/business_notification_service.py | A:dispatch_kuaizhizao_notification,notify_sales_order_approved,notify_delivery_node_due_soon,ensure_kuaizhizao_notification_scope_resolvers | S:689行
 kuaizhizao_data_scope.py[SB5L]: F:快制造列表数据权限（唯一路径：DataScopeService + manifest data_scope_key）。 | R:- | A:apply_kuaizhizao_list_scope,assert_kuaizhizao_row_visible,apply_sales_order_c... | S:405L
@@ -2454,8 +2604,8 @@ mold_ops_service.py[SB5L]: F:模具运营服务聚合：保养/维修项与方�
 mold_service.py[SB5L]: F:模具管理服务模块  提供模具 CRUD 与校验/保养提醒等操作；领用/归还见 mold_ops_service。  Author: Luigi Lu Da... | R:- | A:MoldService,MoldSignbackService,MoldCalibrationService,MoldMaintenanceReminde... | S:603L
 mold_signback_reminder_service.py[SB5S]: F:模具供应商半年回签到期提醒（INF-03 / R-10）。  - 到期前 14 天：due_soon - 过期后 1 天：due_overdue（未执行预警） | R:- | A:_site_day_at_hour_utc,MoldSignbackReminderService,dispatch_mold_signback_remi... | S:189L
 mold_status_service.py[SB5T]: F:模具状态解析服务：根据在途业务单据计算模具应处状态。  Author: RiverEdge Date: 2026-06-29 | R:- | A:MoldStatusService | S:94L
-oa_document_push_service.py[SB5M]: F:业务适配：生产工单 → OA/CRM HTTP Webhook（profile oa_http_webhook，P2 首个非金蝶样板）；内置 DEFAULT_FIELD_MAP 组装 model，走 DocumentPushPipeline | R:code:riveredge-backend/src/core/services/integration/document_push_pipeline.py | A:_resolve_local_value,build_oa_document_model,OaDocumentPushService | S:225行
-operation_jump_rules.py[SB5S]: F:工单工序跳转与节点工序校验（允许跳转时节点仍不可跳过） | R:- | A:effective_allow_jump,qualified_transfer_quantity,qualified_transfer_quantity_... | S:161L; 工单工序跳转与节点工序校验（允许跳转时节点仍不可跳过）
+oa_document_push_service.py[SB5T]: F:业务适配：生产工单 → OA/CRM HTTP Webhook（profile oa_http_webhook，P2 首个非金蝶样板）；内置 DEFAULT_FIELD_MAP 组装 model，走 DocumentPushPipeline | R:code:riveredge-backend/src/core/services/integration/document_push_pipeline.py | A:_resolve_local_value,build_oa_document_model,OaDocumentPushService | S:225行
+operation_jump_rules.py[SB5L]: F:工单工序跳转与节点工序校验（允许跳转时节点仍不可跳过） | R:- | A:effective_allow_jump,qualified_transfer_quantity,qualified_transfer_quantity_... | S:161L; 工单工序跳转与节点工序校验（允许跳转时节点仍不可跳过）
 operation_transfer_service.py[SB5L]: F:工单工序转下道数量口径：none=报工累计合格数；simple=已通过过程检验单合格数；plan=有序方案放行合格数；另含在制占用、让步产出、检验卡片徽章 | R:code:riveredge-backend/src/apps/kuaizhizao/services/inspection_policy_service.py | A:material_consumed_against_incoming,resolve_operation_transfer_qualified,resolve_operation_ipqc_mode,resolve_key_operation_output_quantity,resolve_operation_display_unqualified,resolve_process_inspection_card_status | S:450行
 output_basis_service.py[SB5M]: F:实现产能（产量）口径：统一看板/报工统计/行业达成看板的合格分子。  - all_operations: 全部工序已审核报工合格（历史默认） - last... | R:- | A:OutputBasisService | S:235L
 outsource_collaboration_service.py[SB5M]: F:委外协同服务模块  提供委外协同功能，包括委外订单下发、委外进度跟踪、委外协同消息等。  Author: Auto (AI Assistant) Date... | R:- | A:OutsourceCollaborationService | S:280L
@@ -2464,15 +2614,15 @@ outsource_material_deduction_service.py[SB5S]: F:委外材料超耗扣款预览�
 outsource_material_issue_service.py[SB5L]: F:委外发料业务服务模块  提供委外发料相关的业务逻辑处理。  根据功能点2.1.10：委外工单管理（核心功能，新增）  Author: Auto (AI A... | R:- | A:OutsourceMaterialIssueService | S:526L
 outsource_material_receipt_service.py[SB5L]: F:委外收货业务服务：收货单CRUD与确认（合格数量优先计金额、联动委外工单执行状态）、供应商信息富化、收货金额真源 | R:- | A:resolve_outsource_material_receipt_amount,enrich_outsource_docs_with_supplier,OutsourceMaterialReceiptService | S:984行
 outsource_material_return_service.py[SB5M]: F:委外退料业务服务模块  供应商退回未使用的委外发料原料，增加库存。 | R:- | A:OutsourceMaterialReturnService | S:323L; 委外退料业务服务模块  供应商退回未使用的委外发料原料，增加库存。
-outsource_product_return_service.py[SB5M]: F:委外退货业务服务模块  委外成品不合格退回供应商，扣减库存。 | R:- | A:OutsourceProductReturnService | S:351L; 委外退货业务服务模块  委外成品不合格退回供应商，扣减库存。
+outsource_product_return_service.py[SB5L]: F:委外退货业务服务模块  委外成品不合格退回供应商，扣减库存。 | R:- | A:OutsourceProductReturnService | S:351L; 委外退货业务服务模块  委外成品不合格退回供应商，扣减库存。
 outsource_service.py[SB5L]: F:委外单业务服务模块  提供委外单相关的业务逻辑处理，包括CRUD操作、状态流转、委外入库关联等。  Author: Luigi Lu Date: 2025... | R:- | A:OutsourceService | S:792L
 outsource_settlement_credit_service.py[SB5S]: F:委外退货触发的红字结算单。 | R:- | A:OutsourceSettlementCreditService | S:198L; 委外退货触发的红字结算单。
 outsource_settlement_finance_bridge.py[SB5S]: F:委外结算与应付衔接（含红字差额）。 | R:- | A:OutsourceSettlementFinanceBridge | S:162L; 委外结算与应付衔接（含红字差额）。
 outsource_settlement_service.py[SB5L]: F:委外结算服务：按委外收货行结算加工费，支持扣款、红字、应付与成本调差。 | R:- | A:OutsourceSettlementService | S:1094L; 委外结算服务：按委外收货行结算加工费，支持扣款、红字、应付与成本调差。
 outsource_work_order_service.py[SB5L]: F:委外工单业务服务模块  提供委外工单相关的业务逻辑处理，包括CRUD操作、状态流转等。  根据功能点2.1.10：委外工单管理（核心功能，新增）  Aut... | R:- | A:OutsourceWorkOrderService | S:673L
-over_report_rules.py[SB5S]: F:超报规则：多层级合并后得到允许的最大累计完成数量（相对工单计划数量）。  合并顺序（后者在非 none 时覆盖前者；工艺路线序列项、工单工序行若显式传键则... | R:- | A:normalize_over_report_mode,to_decimal,tuple_from_model,extra_has_over_report_... | S:158L
+over_report_rules.py[SB5M]: F:超报规则：多层级合并后得到允许的最大累计完成数量（相对工单计划数量）。  合并顺序（后者在非 none 时覆盖前者；工艺路线序列项、工单工序行若显式传键则... | R:- | A:normalize_over_report_mode,to_decimal,tuple_from_model,extra_has_over_report_... | S:158L
 packing_binding_service.py[SB5L]: F:装箱打包绑定业务服务  分箱剩余量门禁、来源行关联、包装物料真源、封箱状态、箱托层级字段与 ASN 汇总。 | R:- | A:_dec,_normalize_serial_list,PackingBindingService | S:1062L
-partner_material_price_trend_service.py[SB5L]: F:客商物料价格趋势查询服务。 | R:- | A:_clamp_limit,_aggregate_prices,_build_trend_points,PartnerMaterialPriceTrendS... | S:555L; 客商物料价格趋势查询服务。
+partner_material_price_trend_service.py[SB5M]: F:客商物料价格趋势查询服务。 | R:- | A:_clamp_limit,_aggregate_prices,_build_trend_points,PartnerMaterialPriceTrendS... | S:555L; 客商物料价格趋势查询服务。
 print_service.py[SB5L]: F:单据打印服务：30余类业务单据按打印模板渲染；HTML子进程转PDF、本地图片base64内嵌、单据二维码、字典标签与多语状态、金额大写 | R:code:riveredge-backend/src/core/services/print/print_template_service.py, code:riveredge-backend/src/apps/kuaizhizao/print/document_qrcode.py | A:DocumentPrintService,_html_to_pdf_bytes,_inline_local_file_images_in_html,_resolve_print_dictionary_label | S:3032行
 print_template_presets.py[SB5T]: F:加载快制造打印模板预设到租户。  约定：库内 PrintTemplate.content 为版式唯一真源。 预设在「租户尚无该 code」时创建。  升级... | R:- | A:_upgrade_non_visual_builtin_preset,load_kuaizhizao_print_template_presets | S:73L
 production_control_service.py[SB5L]: F:生产计划管控塔核心服务：进行中工单齐套性概览(采样+并发)、工作中心负荷分析、交期风险(延期+MTO连带)、齐套批量下达、插单影响模拟、人机效同屏 | R:code:riveredge-backend/src/apps/kuaizhizao/services/work_order_service.py | A:ProductionControlService,get_global_material_readiness,get_delivery_risk_orders,release_kitted_work_orders,simulate_urgent_order_impact,get_human_machine_efficiency | S:648行
@@ -2484,7 +2634,7 @@ purchase_cost_service.py[SB5L]: F:采购成本核算服务模块  提供基于�
 purchase_inquiry_service.py[SB5L]: F:采购询价单服务  Author: RiverEdge Team Date: 2026-05-28 | R:- | A:PurchaseInquiryService | S:1900L
 purchase_order_change_service.py[SB5L]: F:采购变更单服务 | R:- | A:PurchaseOrderChangeService | S:1303L; 采购变更单服务
 purchase_order_ocr_service.py[SB5T]: F:采购订单 OCR 智能录单（KU-Draft） | R:- | A:PurchaseOrderOcrService | S:57L; 采购订单 OCR 智能录单（KU-Draft）
-purchase_order_sync_service.py[SB5L]: F:采购订单从数据接口/数据集同步服务。 | R:- | A:PurchaseOrderSyncService | S:523L; 采购订单从数据接口/数据集同步服务。
+purchase_order_sync_service.py[SB5T]: F:采购订单从数据接口/数据集同步服务。 | R:- | A:PurchaseOrderSyncService | S:523L; 采购订单从数据接口/数据集同步服务。
 purchase_order_terms_service.py[SB5S]: F:采购订单付款里程碑（参照销售订单收款计划）。 | R:- | A:PurchaseOrderTermsService | S:124L; 采购订单付款里程碑（参照销售订单收款计划）。
 purchase_po_line_impact_service.py[SB5M]: F:采购订单行影响总成解析（MRP/PR 溯源 + 工单组 + 销售需求明细）。 | R:- | A:_norm_source_key,PurchasePoLineImpactService | S:284L; 采购订单行影响总成解析（MRP/PR 溯源 + 工单组 + 销售需求明细）。
 purchase_requisition_service.py[SB5L]: F:采购申请服务：CRUD+提交/审批/撤回/撤审(UniAudit)；按行下推采购订单(可跨申请按供应商合并)、转询价预览、订单与询价拉取行、行合并拆分与状态修复 | R:code:riveredge-backend/src/apps/kuaizhizao/models/purchase_requisition.py, code:riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/purchase_requisition.py | A:PurchaseRequisitionService,create_requisition,approve_requisition,convert_to_purchase_order,convert_selected_items_to_purchase_orders,merge_split_requisition_items | S:1953行
@@ -2584,6 +2734,46 @@ payment_application_service.py[SB5L]: F:付款申请单服务：请款头/行CRU
 purchase_requisition_stock_service.py[SB5T]: F:采购申请选料分仓在库结存：委托ReportService即时库存口径，仅统计自购在库(company_owned、非客供行)，按物料→仓库名聚合数量降序 | R:code:riveredge-backend/src/apps/kuaizhizao/services/report_service.py | A:PurchaseRequisitionStockService,material_on_hand_by_warehouse,_is_countable_row | S:75行
 quality_patrol_service.py[SB5L]: F:质量巡检服务：无强制来源建单；车间/产线/工位/工序/工单可选上下文；plan_type=patrol方案快照；CRUD+检验执行+审核/撤销审核+撤回检验 | R:code:riveredge-backend/src/apps/kuaizhizao/models/quality_patrol.py | A:QualityPatrolService,_load_patrol_template,conduct,approve,revoke_approval,revoke_conduct | S:491行
 station_operator_session_service.py[SB5M]: F:工位操作员会话生命周期服务：刷脸/员工码确认签发会话；凭据仅落SHA-256、compare_digest恒定比较；确认同事务关闭同终端遗留active会话；状态查询刷新last_seen_at；幂等关闭 | R:code:riveredge-backend/src/apps/kuaizhizao/models/station_operator_session.py, code:riveredge-backend/src/infra/services/face_template_service.py | A:generate_credential,hash_credential,StationOperatorSessionService | S:270行
+document_header_amount_contract.py[DB5T]: F:单据头表金额/数量:明细派生字段契约,禁止API客户端直写 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/purchase_settlement.py | A:COMPUTED_HEADER_FIELDS契约 | S:-
+document_line_material_attachment_source_service.py[DB4S]: F:按物料ID汇总images+已发布工程图纸,供单据行物料附件快捷弹窗 | R:code:riveredge-backend/src/apps/kuaizhizao/schemas/document_line_material_attachments.py | A:附件汇总服务 | S:-
+document_push_reconcile_service.py[DB3T]: F:兼容再导出:真源kuaiconnect.services.document_push.document_push_reconcile_service | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_reconcile_service.py | A:re-export | S:-
+document_recognition.py[DB5M]: F:业务单据头立账策略默认解析与门控(单据字段为真源) | R:code:riveredge-backend/src/apps/kuaicaiwu/services/purchase_invoice_payable_auto.py | A:立账策略解析/门控 | S:-
+finance_settlement_source_query.py[DB5L]: F:只读:按对账单立账策略下尚未生成应收/应付的业务源单查询,供kuaicaiwu往来对账单预览与期初调节 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/partner_statement_service.py | A:源单查询 | S:禁止此模块写kuaizhizao表;头revenue/payable_recognition==on_partner_statement纳入
+finished_goods_receipt_sync_service.py[DB3T]: F:兼容再导出:真源kuaiconnect.services.inbound_sync.finished_goods_receipt_sync_service | R:code:riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/finished_goods_receipt_sync_service.py | A:re-export | S:2L
+gb2828_sampling.py[DB5M]: F:GB/T2828.1-2012一次正常/加严/放宽抽样(字码表+Ac/Re)仅服务端查表 | R:code:riveredge-backend/src/apps/kuaizhizao/models/inspection_sampling_transfer.py | A:抽样字码表,Ac/Re | S:前端只存level/aql/strictness/transfer_enabled
+inspection_sampling_transfer_service.py[DB5M]: F:GB/T2828.1跨批严格度转移+检验模板resolved_sampling | R:code:riveredge-backend/src/apps/kuaizhizao/services/gb2828_sampling.py | A:严格度转移服务 | S:-
+kingdee_consistency_orchestrator.py[DB6L]: F:租户金蝶强一致编排:审计只读;修复走主数据/即时库存sync-from-source与外推API | R:code:riveredge-backend/src/apps/kuaizhizao/schemas/kingdee_consistency.py | A:KingdeeConsistencyOrchestrator | S:禁止旁路写批次
+kingdee_finished_goods_receipt_push_service.py[DB3T]: F:兼容再导出:真源kuaiconnect kingdee_finished_goods_receipt_push_service | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_finished_goods_receipt_push_service.py | A:re-export | S:-
+kingdee_im_batch_update_service.py[DB3T]: F:兼容再导出:真源kuaiconnect kingdee_im_batch_update_service | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_im_batch_update_service.py | A:re-export | S:-
+kingdee_im_batch_update_sync.py[DB3T]: F:兼容再导出:真源kuaiconnect kingdee_im_batch_update_sync | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_im_batch_update_sync.py | A:re-export | S:-
+kingdee_im_warehouse_revoke_service.py[DB3T]: F:兼容再导出:真源kuaiconnect kingdee_im_warehouse_revoke_service | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_im_warehouse_revoke_service.py | A:re-export | S:-
+kingdee_other_inbound_push_service.py[DB3T]: F:兼容再导出:真源kuaiconnect kingdee_other_inbound_push_service | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_other_inbound_push_service.py | A:re-export | S:-
+kingdee_other_outbound_push_service.py[DB3T]: F:兼容再导出:真源kuaiconnect kingdee_other_outbound_push_service | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_other_outbound_push_service.py | A:re-export | S:-
+kingdee_outbound_avb_precheck_service.py[DB3T]: F:兼容再导出:真源kuaiconnect kingdee_outbound_avb_precheck_service | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_outbound_avb_precheck_service.py | A:re-export | S:-
+kingdee_outbound_invtype_resolve.py[DB3T]: F:兼容再导出:真源kuaiconnect kingdee_outbound_invtype_resolve | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_outbound_invtype_resolve.py | A:re-export | S:-
+kingdee_production_picking_push_service.py[DB3T]: F:兼容再导出:真源kuaiconnect kingdee_production_picking_push_service | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_production_picking_push_service.py | A:re-export | S:-
+kingdee_purchase_receipt_push_service.py[DB3T]: F:兼容再导出:真源kuaiconnect kingdee_purchase_receipt_push_service | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_purchase_receipt_push_service.py | A:re-export | S:-
+kingdee_purchase_receipt_revoke_service.py[DB3T]: F:兼容再导出:真源kuaiconnect kingdee_purchase_receipt_revoke_service | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_purchase_receipt_revoke_service.py | A:re-export | S:-
+kingdee_push_location.py[DB3T]: F:兼容再导出:真源kuaiconnect kingdee_push_location | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_push_location.py | A:re-export | S:-
+kingdee_sales_delivery_push_service.py[DB3T]: F:兼容再导出:真源kuaiconnect kingdee_sales_delivery_push_service | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_sales_delivery_push_service.py | A:re-export | S:-
+kingdee_stocktaking_deficit_push_service.py[DB3T]: F:兼容再导出:真源kuaiconnect kingdee_stocktaking_deficit_push_service | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_stocktaking_deficit_push_service.py | A:re-export | S:-
+kingdee_stocktaking_surplus_push_service.py[DB3T]: F:兼容再导出:真源kuaiconnect kingdee_stocktaking_surplus_push_service | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_stocktaking_surplus_push_service.py | A:re-export | S:-
+kingdee_warehouse_billentry_dual_qty.py[DB3T]: F:兼容再导出:真源kuaiconnect kingdee_warehouse_billentry_dual_qty | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_warehouse_billentry_dual_qty.py | A:re-export | S:-
+kingdee_push_bill_detail.py[DB4T]: F:详情响应挂载金蝶外推单号(读DocumentRelation) | R:code:riveredge-backend/src/apps/kuaizhizao/services/kingdee_push_bill_resolver.py | A:detail挂载外推单号 | S:-
+kingdee_push_bill_resolver.py[DB4T]: F:外推金蝶单据号解析(读DocumentRelation真源,禁止头表冗余字段) | R:code:riveredge-backend/src/apps/kuaizhizao/models/document_relation.py | A:金蝶单号解析 | S:-
+line_capacity_lookup.py[DB3T]: F:产线节拍/日产能查找(软依赖ind_relay未装包返回空) | R:code:riveredge-backend/src/apps/ind_relay/models/line_capacity.py | A:产线产能查找 | S:-
+line_product_lookup.py[DB3T]: F:产线可生产自制件查找(软依赖ind_relay未装包返回空;含硬门禁约定) | R:code:riveredge-backend/src/apps/ind_relay/models/line_product.py | A:产线自制件查找 | S:-
+maintenance_workflow_complete.py[DB4T]: F:维保/保养单据完修时写明细执行结果(工装模具共用) | R:code:riveredge-backend/src/apps/kuaizhizao/services/maintenance_plan_service.py | A:完修写结果 | S:-
+manual_create_auto_lifecycle.py[DB5M]: F:手动建单自动提交生命周期(业务自动化,全局automation.manual_create_auto_submit或单证开关生效) | R:code:riveredge-backend/src/apps/kuaizhizao/services/document_lifecycle_service.py | A:自动提交生命周期 | S:-
+menu_badge_counts_cache.py[DB4T]: F:菜单徽章分区进程内缓存(L1)+singleflight,避免每次命中读PG cache桶 | R:code:riveredge-backend/src/apps/kuaizhizao/services/menu_badge_counts_service.py | A:徽章L1缓存,singleflight | S:远程库RTT高时防重复查
+other_inbound_sync_service.py[DB3T]: F:兼容再导出:真源kuaiconnect inbound_sync.other_inbound_sync_service | R:code:riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/other_inbound_sync_service.py | A:re-export | S:-
+other_outbound_sync_service.py[DB3T]: F:兼容再导出:真源kuaiconnect inbound_sync.other_outbound_sync_service | R:code:riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/other_outbound_sync_service.py | A:re-export | S:-
+outsource_order_batch_quantity.py[DB5M]: F:工序委外:默认套数基数/已发料套数与建议发料/收货数量 | R:code:riveredge-backend/src/apps/kuaizhizao/services/outsource_service.py | A:套数基数与建议量 | S:-
+outsource_order_issue_bridge.py[DB5M]: F:工序委外:发料预览与确认后开工 | R:code:riveredge-backend/src/apps/kuaizhizao/services/outsource_service.py | A:发料预览,确认开工 | S:-
+outsource_order_receipt_finance.py[DB5T]: F:工序委外分批收货立应付 | R:code:riveredge-backend/src/apps/kuaizhizao/services/outsource_service.py | A:分批收货立应付 | S:-
+payment_application_line_materials.py[DB4M]: F:付款申请行从来源单据明细带出品名/规格/数量快照 | R:code:riveredge-backend/src/apps/kuaizhizao/services/payment_application_service.py | A:行物料快照 | S:-
+payment_application_purchase_order_sources.py[DB4S]: F:付款申请详情按申请行聚合来源采购订单(只读快照,不写申请行表) | R:code:riveredge-backend/src/apps/kuaizhizao/services/payment_application_service.py | A:来源订单聚合 | S:-
+production_picking_sync_service.py[DB3T]: F:兼容再导出:真源kuaiconnect inbound_sync.production_picking_sync_service | R:code:riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/production_picking_sync_service.py | A:re-export | S:-
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/===
 __init__.py[CB2S]: F:单据行为策略包 | R:code:riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/enricher.py | A:- | S:双源导入: 单据业务态能力派生+列表/响应enrich; 195行
@@ -2603,29 +2793,32 @@ oqc_inspection.py[SB5S]: F:OQC 出货检验业务态 capabilities（与 quality_
 outsource_work_order.py[SB5S]: F:委外工单业务态 capabilities（出库发料 + 入库收货/退料/退货加载门禁）。 | R:- | A:_cap,_norm,_push_cap,derive_outsource_work_order_capabilities,assert_outsourc... | S:133L
 packing_binding.py[SB5T]: F:装箱绑定业务态 capabilities（唯一真源，与 packing_binding_service 门禁一致）。 | R:- | A:_cap,derive_packing_binding_capabilities,assert_packing_binding_capability | S:64L
 purchase_inquiry.py[SB5S]: F:采购询价单业务态 capabilities（唯一真源，与 service 门禁一致）。 | R:code:riveredge-backend/src/apps/kuaizhizao/services/purchase_inquiry_service.py | A:_cap,_norm,_normalize_review_status,_is_review_awaiting_decision,derive_purchase_inquiry_capabilities,assert_purchase_inquiry_capability | S:仅草稿可删;授标才推采购订单;撤审看review待决;118行
-purchase_order.py[SB5M]: F:采购订单业务态 capabilities（唯一真源，与 service 门禁一致）。 | R:code:riveredge-backend/src/apps/kuaizhizao/services/purchase_service.py | A:_is_audited_status,_is_order_pushable_status,_require_supplier_for_push,derive_purchase_order_capabilities,assert_purchase_order_capability | S:下推均须供应商;删/撤审卡下游单据;变更走create_change_order;397行
+purchase_order.py[SB5L]: F:采购订单业务态 capabilities（唯一真源，与 service 门禁一致）。 | R:code:riveredge-backend/src/apps/kuaizhizao/services/purchase_service.py | A:_is_audited_status,_is_order_pushable_status,_require_supplier_for_push,derive_purchase_order_capabilities,assert_purchase_order_capability | S:下推均须供应商;删/撤审卡下游单据;变更走create_change_order;397行
 purchase_order_change.py[SB5S]: F:采购变更单业务态 capabilities（与 sales_order_change 对称）。 | R:- | A:_cap,_norm_status,_is_pending_review,_is_applied,derive_purchase_order_change... | S:126L
-purchase_requisition.py[SB5S]: F:采购申请业务态 capabilities（唯一真源，与 service 门禁一致）。 | R:code:riveredge-backend/src/apps/kuaizhizao/services/purchase_requisition_service.py | A:_cap,_norm,_is_revoke_approval_allowed,_status_implies_linked_purchase_order,derive_purchase_requisition_capabilities,assert_purchase_requisition_capability | S:已转采购禁删禁撤审;部分/全部转单即算关联;169行
+purchase_requisition.py[SB5M]: F:采购申请业务态 capabilities（唯一真源，与 service 门禁一致）。 | R:code:riveredge-backend/src/apps/kuaizhizao/services/purchase_requisition_service.py | A:_cap,_norm,_is_revoke_approval_allowed,_status_implies_linked_purchase_order,derive_purchase_requisition_capabilities,assert_purchase_requisition_capability | S:已转采购禁删禁撤审;部分/全部转单即算关联;169行
 purchase_return.py[SB5M]: F:采购退货单业务态 capabilities（与 sales_return 对称，含审核动作）。 | R:- | A:_cap,_norm_status,_norm_review,_is_pending,_is_draft,_is_returned | S:212L
 quality_inspection_record.py[SB5M]: F:检验单业务态 capabilities（来料/过程/成品，与 quality_service 门禁一致）。 | R:- | A:_as_dec,_cap,_norm,_is_pending_review,_is_approved_review,can_apply_quality_i... | S:327L
 quotation.py[SB5M]: F:报价单业务态 capabilities（唯一真源，与 service 门禁一致）。 | R:code:riveredge-backend/src/apps/kuaizhizao/services/quotation_service.py | A:_is_superseded,_has_live_sales_order_link,_sent_allows_business_action,derive_quotation_capabilities,assert_quotation_capability,quotation_capabilities_to_suggestions | S:转合同已废;转单/评审卡关联与版本latest;打印可配先审;367行
 receipt_notice.py[SB5S]: F:收货通知单业务态 capabilities（与 shipment_notice 对称）。 | R:- | A:_cap,_norm,_is_pending,_is_notified,derive_receipt_notice_capabilities,assert... | S:115L
 repair_order.py[SB5S]: F:维修单业务态 capabilities（下推派工/结算/回访）。 | R:- | A:_cap,derive_repair_order_capabilities,assert_repair_order_capability | S:104L; 维修单业务态 capabilities（下推派工/结算/回访）。
 replenishment_suggestion.py[SB5T]: F:补货建议业务态 capabilities（与 replenishment_suggestion_service 门禁一致）。 | R:- | A:_cap,_norm,_qty_positive,derive_replenishment_suggestion_capabilities,assert_... | S:84L
-reporting_record.py[SB7T]: F:报工业务态capabilities真源：反审与删除门禁 | R:code:riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/types.py | A:derive_reporting_record_capabilities,assert_reporting_record_capability | S:has_posted_sales_outbound或has_approved_inbound_downstream为真则禁revoke/delete；出库reason优先于入库
+reporting_record.py[SB7S]: F:报工业务态capabilities真源：反审与删除门禁 | R:code:riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/types.py | A:derive_reporting_record_capabilities,assert_reporting_record_capability | S:has_posted_sales_outbound或has_approved_inbound_downstream为真则禁revoke/delete；出库reason优先于入库
 rework_order.py[SB5M]: F:返工单业务态 capabilities（唯一真源）。 | R:- | A:capability_kwargs_from_context,_cap,_norm,_dec,derive_rework_order_capabiliti... | S:251L; 返工单业务态 capabilities（唯一真源）。
 sales_contract.py[SB5M]: F:销售合同业务态 capabilities（唯一真源，与 service 门禁一致）。 | R:code:riveredge-backend/src/apps/kuaizhizao/services/sales_contract_service.py | A:_cap,_norm_status,_is_effective,derive_sales_contract_capabilities,assert_sales_contract_capability | S:推订单须生效+已审+行可释放;已释放禁撤审;226行
 sales_delivery.py[SB5T]: F:销售出库单 — 送货单加载 capabilities（唯一真源）。 | R:- | A:_cap,derive_sales_delivery_pull_capabilities,assert_sales_delivery_pull_capab... | S:70L; 销售出库单 — 送货单加载 capabilities（唯一真源）。
-sales_forecast.py[SB5S]: F:销售预测业务态 capabilities（唯一真源，与 service 门禁一致）。 | R:code:riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/types.py, code:riveredge-backend/src/apps/kuaizhizao/services/sales_service.py | A:derive_sales_forecast_capabilities,assert_sales_forecast_capability | S:199行;撤审卡下游与已下推;推计算须已审且有明细
+sales_forecast.py[SB5M]: F:销售预测业务态 capabilities（唯一真源，与 service 门禁一致）。 | R:code:riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/types.py, code:riveredge-backend/src/apps/kuaizhizao/services/sales_service.py | A:derive_sales_forecast_capabilities,assert_sales_forecast_capability | S:199行;撤审卡下游与已下推;推计算须已审且有明细
 sales_order.py[SB5L]: F:销售订单业务态 capabilities（唯一真源，与 service 门禁一致）。 | R:code:riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/types.py, code:riveredge-backend/src/apps/kuaizhizao/services/sales_order_service.py | A:derive_sales_order_capabilities,assert_sales_order_capability | S:541行;11种下推须已审核;锁单禁直改走变更单
 sales_order_change.py[SB5S]: F:销售变更单业务态 capabilities（唯一真源，与 service 门禁一致）。 | R:code:riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/types.py, code:riveredge-backend/src/apps/kuaizhizao/services/sales_order_change_service.py | A:derive_sales_order_change_capabilities,assert_sales_order_change_capability | S:170行;apply须已审核未生效;已生效禁撤审
 sales_return.py[SB5M]: F:销售退货单业务态 capabilities（唯一真源，与 service 门禁一致）。 | R:- | A:_cap,_norm_status,_norm_review,_is_pending,_is_draft,_is_returned | S:213L
 shipment_notice.py[SB5S]: F:发货通知单业务态 capabilities（唯一真源，与 service 门禁一致）。 | R:- | A:_cap,_norm_status,_is_pending,_is_notified,derive_shipment_notice_capabilitie... | S:114L
 types.py[SB6L]: F:单据capabilities类型与CAPABILITY_REASON_MESSAGES | R:- | A:CAPABILITY_REASON_MESSAGES,ActionCapability,SalesOrderCapabilities,InboundHubCapabilities | S:944行;caps类型全集+reason文案表;下游拦截统一先反审删下游
 warehouse_inbound_hub.py[SB5S]: F:入库 Hub 聚合行业务态 capabilities（与 inboundHubTypes / inboundBatchConfirm 门禁一致）。 | R:code:riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/types.py, code:riveredge-backend/src/apps/kuaizhizao/services/warehouse_service.py | A:derive_inbound_hub_capabilities,assert_inbound_hub_capability | S:156行;委外退料退货仅单行预览;采购入库可推付款申请
-warehouse_outbound_hub.py[SB5S]: F:出库 Hub 聚合行业务态 capabilities（与 outboundHubTypes / outboundBatchConfirm 门禁一致）。 | R:- | A:_cap,_norm,_is_review_approved,_derive_delete_capability,derive_outbound_hub_... | S:188L
-work_order.py[SB5M]: F:工单业务态 capabilities（唯一真源，与 work_order_service 门禁一致）。 | R:- | A:_cap,_norm,_has_work,_is_list_work_order_row,_revoke_status_allowed,_is_manua... | S:296L
+warehouse_outbound_hub.py[SB5M]: F:出库 Hub 聚合行业务态 capabilities（与 outboundHubTypes / outboundBatchConfirm 门禁一致）。 | R:- | A:_cap,_norm,_is_review_approved,_derive_delete_capability,derive_outbound_hub_... | S:188L
+work_order.py[SB5L]: F:工单业务态 capabilities（唯一真源，与 work_order_service 门禁一致）。 | R:- | A:_cap,_norm,_has_work,_is_list_work_order_row,_revoke_status_allowed,_is_manua... | S:296L
 payment_application.py[SB5T]: F:付款申请单业务态 capabilities（唯一真源，与 service 门禁一致）。 | R:code:riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/types.py | A:_cap,_norm,_is_approved,derive_payment_application_capabilities,assert_payment_application_capability | S:reject/withdraw与approve同门禁;推付款需已批+余额;67行
+outsource_order.py[CB4T]: F:工序委外业务态capabilities(工序发料门禁) | R:code:riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/outsource_work_order.py | A:derive_outsource_order_push_issue_cap | S:-
+print_unaudited_gate.py[CB5S]: F:未审核单据打印门禁(系统参数parameters.common.allow_print_unaudited) | R:code:riveredge-backend/src/apps/kuaizhizao/services/document_lifecycle_service.py | A:PRINT_UNAUDITED_DENIED_REASON,_allow_print_unaudited_stack | S:ContextVar栈式放行
+review_submission_gate.py[CB5T]: F:未提交审核与capabilities/删除门禁(与review_submission_state/审批实例同源) | R:code:riveredge-backend/src/core/services/approval/review_submission_state.py | A:is_effective_review_draft,is_effective_review_pending | S:draft/pending/rejected三态判定
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/ind_relay/workflows/===
 __init__.py[XC1T]: F:Implements __init__.py | R:- | A:- | S:1L
@@ -8438,7 +8631,7 @@ wechat.svg[DU5T]: F:<?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-
 
 ===D:/kuaigeyun-pro/kuaigeyun/.cursor/rules/===
 aoci-git-commit.mdc[XV5T]: F:约定提交须含正式AOCI且改托管对象先maintain | R:code:.cursor/rules/build-push-aoci.mdc | A:- | S:勿gitignore整夹.aoci/;memory进git但scope exclude勿为笔记写Entry;推送≠build.web
-build-push-aoci.mdc[XV6S]: F:按改动类型分流推送并仅产物相关变更才构建 | R:code:.cursor/rules/aoci-git-commit.mdc | A:- | S:仅backend/fast-deploy/memory则push不跑build.web;改托管对象序=maintain→commit→再构建;用户说构建推送先看diff分流
+build-push-aoci.mdc[XV6T]: F:按改动类型分流推送,dist不入库不构建,改托管对象先AOCI再commit | R:code:.cursor/rules/aoci-git-commit.mdc | A:- | S:dist已gitignore勿提交;擅跑build.web.sh(BUILD_WEB_PUBLISH=1)重写历史+force-push须用户明确要求;memory/rules可按表跳maintain
 ai-memory.mdc[XC5S]: F:约定Agent开任务先读Vault与本仓memory路由 | R:code:.cursor/rules/dev-memory-library.mdc | A:- | S:MES必读architecture-map+ai-change-protocol;禁扫全Vault;秘密不入库
 api-write-protection.mdc[XS6S]: F:固化/api写防护渠道限流幂等与开放账套约定 | R:code:riveredge-backend/docs/api-write-protection-ops.md | A:- | S:新公开写接口须进interactive_client_guard豁免;关键路径须匹配_CRITICAL_PATH_RE;integration写须open Token
 dev-memory-library.mdc[XC5S]: F:约定.cursor/memory开发前检索与交付后写笔记 | R:code:.cursor/rules/ai-memory.mdc | A:- | S:先读README关键词路由再开1-3篇;交付须features笔记并更新README索引;与rules行为分工不重复
@@ -8448,7 +8641,7 @@ antd6-api.mdc[XG6T]: F:前端只写antd v6 API并固化v5→v6禁用替换对照
 detail-drawer-contract.mdc[XU6T]: F:业务单据详情抽屉唯一路径，统一DetailDrawerTemplate壳、插槽、关联打开、宽度与字段序 | R:code:.cursor/skills/detail-drawer/SKILL.md,code:.cursor/skills/master-data-detail-drawer/SKILL.md | A:DetailDrawerTemplate,openLinkedDocumentDetail,traceDocument,DRAWER_CONFIG.HALF_WIDTH,DetailDrawerSection | S:禁止loading与有数据各return一棵Template致双树滑入;取数失败须Result+重试留在壳内不得onClose;基础资料勿套HALF_WIDTH与全链路
 form-modal-detail-table-contract.mdc[XU6T]: F:FormModal栅格与明细表竖序契约：表头业务字段→明细→备注通栏→启用 | R:code:.cursor/skills/form-modal/SKILL.md | A:FormModalTemplate,FormModalGridBlock,UniTableDetail | S:有明细必须grid={false}且明细放表头Row之外;裸Alert/说明/Divider须包FormModalGridBlock;备注倒数第二启用最后且明细算整单字段;禁用列宽margin或overflow:visible掩盖出格裁切
 generic-product-no-customer-brand.mdc[XB6T]: F:交付一律按通用产品实现客户公司名禁进产品真源无法通用走行业插件 | R:- | A:industry_plugin_*,INDUSTRY_*,CODE_RULE_PAGES | S:代码注释manifest编码规则探针与更新日志禁出现客户中文名及拼音商标;禁为单一客户复制审批/消息/文件/打印/权限引擎;.custom/<客户>/商务文档可保留但禁回流riveredge-*产品代码
-git-push-sop.mdc[XV6T]: F:develop推送SOP先核历史条数异常须cherry-pick整理前端改动必走build.web.sh构建后推送 | R:code:fast-deploy/build.web.sh | A:develop,./fast-deploy/build.web.sh,BUILD_WEB_SKIP_HISTORY_REWRITE=1 | S:禁推main/master与手写--force;分叉须备份后cherry-pick自己提交;除dist外须全commit;dist缺index.html/login.html禁推
+git-push-sop.mdc[XV6T]: F:Gitee/develop推送SOP:核分支+fetch+提交条数,分叉先备份再cherry-pick整理 | R:code:fast-deploy/build.web.sh | A:develop,origin/develop..HEAD,cherry-pick --skip | S:禁推main/master与手写--force;dist不入库推送不再需build.web.sh;语言包冲突禁整文件AcceptTheirs;凭据kuaigeyun+私人令牌勿入仓
 i18n-zh-cn-only.mdc[XL5T]: F:i18n默认只改zh-CN.ts禁同次顺带同步其余五语除非用户明确要求 | R:code:riveredge-frontend/src/locales/zh-CN.ts,code:.cursor/rules/no-middle-dot-separator.mdc | A:zh-CN,t() | S:用户未点名补齐六语时不展开en-US/zh-Hant/ja-JP/vi-VN/lo-LA;组件禁硬编码面向用户中文须走t()+zh-CN;新key命名沿用app.*/pages.*前缀;禁仅为i18n对称改后端detail/message多语言
 kuaizhizao-report-contract.mdc[XU6T]: F:快制造报表统一走KuaizhizaoReport与UniReport契约筛选进功能区禁彩标复制图标与头表冒充明细 | R:code:.cursor/skills/kuaizhizao-report/SKILL.md | A:KuaizhizaoReport,UniReport,uniReportScrollPolicy,stripReportCopyable,columnPersistenceId | S:搜索须toolbarLeft禁另占行与headerTitle;状态用汉字或valueEnum.text禁Tag/StatusTag;复制须stripReportCopyable;限高用uniReportScrollPolicy禁像素常数;改列须bump columnPersistenceId
 master-data-detail-drawer-contract.mdc[XU6T]: F:基础资料详情抽屉契约：STANDARD_WIDTH+双列+主数据rank+MarkerTag，勿套业务单据壳 | R:code:.cursor/rules/detail-drawer-contract.mdc,code:riveredge-frontend/src/components/layout-templates/DetailDrawerTemplate.tsx | A:DetailDrawerTemplate,DRAWER_CONFIG.STANDARD_WIDTH,MASTER_DATA_DETAIL_BASIC_FIELD_RANK,MarkerTag,renderMasterActiveTag,detailDrawerDescriptionItems | S:勿套HALF_WIDTH与业务rank；rank须显式传；禁用traceDocument/流程StatusTag；编辑extra只走FormModal
@@ -8840,7 +9033,7 @@ index.uts[LD3T]: F:仓储特性包清单,注册12个entry的key/route/page_path 
 models.uts[DD3T]: F:仓储单据卡片与行/明细表单数据类定义 | R:code:kuaigeyun-client/riveredge-app-mobile/features/warehouse/board.uvue | A:DocCard,LineForm,DetailForm | S:数量与ID多为字符串Text字段;DetailForm.lines为LineForm数组
 pages.entries.json[FC3T]: F:仓储12个移动端页面的路由与导航标题清单 | R:code:kuaigeyun-client/riveredge-app-mobile/features/warehouse/index.uts | A:pickings,returns,fg-receipts,purchase-receipts,sales-deliveries,stocktaking | S:path须为features/warehouse/*/index；新增页须登记否则无入口
 payload.uts[LD4M]: F:构建仓储出入库/销售/盘点/预警请求体并校验过滤无效行 | R:code:kuaigeyun-client/riveredge-app-mobile/features/warehouse/http.uts | A:buildInboundBody,buildOutboundBody,buildSalesBody,buildStockBody,buildAlertBody,serialList | S:itemId≤0行被丢弃；items空返null；id类字段仅收正整数
-read.uts[LD3S]: F:仓储单据响应解析器，unwrap取data并按kind生成卡片与明细行 | R:code:kuaigeyun-client/riveredge-app-mobile/features/warehouse/board.uvue | A:unwrap,readTotal,readCards,readDetail,lineFrom,fillPerson | S:仅itemId>0行入明细；kind分派数量与人员字段；success真才取data
+read.uts[LD3M]: F:仓储单据响应解析器，unwrap取data并按kind生成卡片与明细行 | R:code:kuaigeyun-client/riveredge-app-mobile/features/warehouse/board.uvue | A:unwrap,readTotal,readCards,readDetail,lineFrom,fillPerson | S:仅itemId>0行入明细；kind分派数量与人员字段；success真才取data
 
 ===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/warehouse/delivery-notices/===
 index.uvue[EW3T]: F:发货通知页壳,挂board并转发返回守卫与重显刷新 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:onGuardState,onBackPress,onShow | S:guarded时递增backRequest拦截返回;首次onShow不触发showRequest
@@ -9586,6 +9779,7 @@ payment_applications.py[EB7M]: F:付款申请单API | R:- | A:PaymentApplication
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/models/mixins/===
 document_line_partner_material.py[PC3T]: F:单据行伙伴物料快照Mixin | R:- | A:DocumentLinePartnerMaterialSnapshotMixin | S:伙伴料号/品名+型号快照; 18行表共用; 20行
+document_line_dual_quantity.py[PC2T]: F:单据行主/副数量与行换算率字段mixin | R:- | A:行dual数量字段 | S:-
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/services/flow_sim/===
 __init__.py[SB3T]: F:流程造数仿真包门面：导出单一时钟/场景目录/模式归一化/Kit预检。 | R:code:riveredge-backend/src/apps/kuaizhizao/services/flow_data_generate_service.py | A:BusinessClock,KitPrecheckResult,SimMode,ScenarioId,normalize_sim_mode,precheck_simulation_kit | S:27行
@@ -9955,3 +10149,91 @@ scheduling_board.py[SB4M]: F:场景只读Tool:query_scheduling_board排产看板
 shift_brief.py[SB4M]: F:场景只读Tool:query_production_daily/query_pulse_signals日报与异常信号 | R:code:riveredge-backend/src/apps/kuaiai/services/scene_tools.py | A:query_production_daily,query_pulse_signals | S:errors/complete透传;不调list_templates
 stocktaking.py[SB4L]: F:场景只读Tool:query_stocktakings/analyze_stocktaking_variance盘点差异解读 | R:code:riveredge-backend/src/apps/kuaiai/services/scene_tools.py | A:query_stocktakings,analyze_stocktaking_variance | S:双视图按读权限分判;过采样后收敛
 traceability.py[SB4M]: F:场景只读Tool:trace_lineage批号/序列号/工单正反追溯BFS分层 | R:code:riveredge-backend/src/apps/kuaiai/services/scene_tools.py | A:trace_lineage | S:与路由同口径无行级;不落通讯信息
+
+===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/docs/core/===
+ledger-dual-unit-contract.md[SD4T]: F:台账双计量契约:主/基本/辅助三层单位语义与金蝶字段对照 | R:code:riveredge-backend/src/apps/kuaizhizao/utils/inventory_posting_utils.py | A:primary_*/secondary_*,avbqty2nd候选键,qtyunit2nd | S:禁把baseqty当辅助量;双单位判定看固定辅助单位非库存≠基本
+
+===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaiconnect/===
+__init__.py[SB1T]: F:快连接应用包标记 | R:- | A:- | S:1L
+manifest.json[FG5T]: F:快连接pro应用清单:应用连接器/接口/数据源/数据集管理 | R:code:riveredge-backend/src/apps/kuaiconnect/api/apis/apis.py | A:code,name,market_category=pro,sort_order=330 | S:is_pro=true;icon=database
+
+===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaiconnect/services/===
+__init__.py[SB1T]: F:快连接服务包标记 | R:- | A:- | S:1L
+
+===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaiconnect/services/document_push/===
+__init__.py[SB1T]: F:快连接外推DocumentPush包标记(金蝶/OA/飞书等) | R:- | A:- | S:1L
+document_push_reconcile_service.py[IB5L]: F:SyncPushHub组件级同步对账:本地单据vs金蝶苍穹IM单(按DocumentRelation.billno查询) | R:code:riveredge-backend/src/core/services/integration/document_push_pipeline.py | A:DocumentPushReconcileService | S:BIZ_IM其他入/其他出/采购入/销售出四单型
+document_push_service.py[IB7L]: F:通用外推门面:按source_type+target_profile注册表分发到业务适配,支持多目标fan-out | R:code:riveredge-backend/src/core/services/integration/document_push_pipeline.py | A:DocumentPushService,SUPPORTED_PROFILES | S:与系统内下推document_push_pull无关,只推外部;禁再扩品牌if/elif;正式写回须push_ready
+feishu_work_order_push_service.py[IB4S]: F:业务适配:生产工单→飞书IM通知(P3私有协议样板,profile=feishu_im_notify) | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:飞书连接器app_id/app_secret/receive_id | S:receive_id可在连接器或本配置
+kingdee_engineering_bom_push_service.py[IB5M]: F:业务适配:工程BOM→金蝶工程BOM(ENG_BOM) | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:ENG_BOM适配 | S:source_id=版本组内最小BOM行id,与list_bom_groups对齐
+kingdee_finished_goods_receipt_push_service.py[IB5L]: F:业务适配:成品入库单→金蝶苍穹其他入库单(im_otherinbill/batchAdd,单据类型=生产完工入库) | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:成品入库→im_otherinbill | S:-
+kingdee_im_batch_update_service.py[IB5M]: F:金蝶im_*仓储单batchUpdate:编辑保存与外推复用 | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:batchUpdate | S:须出站绑定update接口
+kingdee_im_batch_update_sync.py[IB5M]: F:各仓储单据编辑保存后batchUpdate金蝶(替代sync_*_kingdee_after_delete) | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_im_batch_update_service.py | A:batchUpdate同步 | S:-
+kingdee_im_warehouse_revoke_service.py[IB5L]: F:仓储im_*外推单撤回/删除:苍穹batchUnaudit/batchUnsubmit/batchDelete(与采购入库同套) | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:撤回/删除三步 | S:-
+kingdee_inventory_push_service.py[IB5M]: F:业务适配:物料批次库存→金蝶其他入库单(STK_MISCELLANEOUS);STK_Inventory为查询态不可Save | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:库存回写走单据 | S:即时库存balance id为聚合伪id,以MaterialBatch.id为source_id
+kingdee_material_push_service.py[IB5M]: F:业务适配:物料主数据→金蝶物料(BD_MATERIAL) | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:BD_MATERIAL适配 | S:-
+kingdee_other_inbound_push_service.py[IB6L]: F:业务适配:其他入库单→金蝶苍穹其他入库单批量新增(im_otherinbill/batchAdd) | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:其他入库→im_otherinbill | S:-
+kingdee_other_outbound_push_service.py[IB6L]: F:业务适配:其他出库单→金蝶苍穹标准其他出库(batchAdd或自定义add3) | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:其他出库→im_otheroutbill | S:-
+kingdee_outbound_avb_precheck_service.py[IB5M]: F:出库确认前金蝶可用量预检(仅无感外推租户执行) | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:可用量预检 | S:-
+kingdee_outbound_invtype_resolve.py[IB5M]: F:出库推送金蝶按仓位可用量选择库存类型(普通110/赠品111);本地台账不拆金蝶库存类型 | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:invtype/outinvtype改写 | S:普通不足赠品足够时须改写否则金蝶报可用短缺
+kingdee_process_operation_push_service.py[IB4M]: F:业务适配:工序→金蝶工序/工艺基础资料(FormId可配,默认ENG_Process) | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:ENG_Process适配 | S:-
+kingdee_production_order_push_service.py[IB5M]: F:业务适配:生产工单→金蝶生产订单(PRD_MO),只负责字段映射与门禁 | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:PRD_MO适配 | S:通用编排在core document_push_pipeline,他页按同方式接入Pipeline
+kingdee_production_picking_push_service.py[IB5L]: F:业务适配:生产领料单→金蝶苍穹其他出库单(im_otheroutbill/batchAdd,单据类型=生产领料) | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:生产领料→im_otheroutbill | S:-
+kingdee_production_report_push_service.py[IB5L]: F:已审核报工记录推送金蝶星空生产汇报单 | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:报工→生产汇报单适配 | S:-
+kingdee_purchase_order_push_service.py[IB5M]: F:业务适配:采购订单→金蝶采购订单(PUR_PurchaseOrder) | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:PUR_PurchaseOrder适配 | S:-
+kingdee_purchase_receipt_push_service.py[IB6L]: F:业务适配:采购入库单→金蝶苍穹采购入库单新增(默认标品add,自定义add2含验收人) | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:采购入库→苍穹收料/入库 | S:-
+kingdee_purchase_receipt_revoke_service.py[IB5L]: F:采购入库撤回/删除时同步苍穹反审核/撤销提交/删除 | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/kingdee_im_warehouse_revoke_service.py | A:撤回三步 | S:-
+kingdee_push_bill_resolver.py[IB3T]: F:兼容re-export:真源在apps.kuaizhizao.services.kingdee_push_bill_resolver | R:code:riveredge-backend/src/apps/kuaizhizao/services/kingdee_push_bill_resolver.py | A:re-export | S:8L
+kingdee_push_location.py[IB4S]: F:金蝶推送分录location_number解析(优先苍穹source_location_code) | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:location解析 | S:-
+kingdee_sales_delivery_push_service.py[IB6L]: F:业务适配:销售出库单→金蝶苍穹销售出库单批量新增(im_saloutbill/batchAdd) | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:销售出库→im_saloutbill | S:-
+kingdee_sales_order_push_service.py[IB5L]: F:业务适配:销售订单→金蝶销售订单(SAL_SaleOrder) | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:SAL_SaleOrder适配 | S:-
+kingdee_stocktaking_deficit_push_service.py[IB5L]: F:业务适配:盘点单盘亏行→金蝶苍穹盘亏单批量新增(im_deficitbill/batchAdd) | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:盘亏→im_deficitbill | S:-
+kingdee_stocktaking_surplus_push_service.py[IB5L]: F:业务适配:盘点单盘盈行→金蝶苍穹盘盈单批量新增(im_surplusbill/batchAdd) | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:盘盈→im_surplusbill | S:-
+kingdee_warehouse_billentry_dual_qty.py[IB5M]: F:仓储单据推送苍穹库存单位+辅助单位数量(billentry真源);辅助量开放字段qtyunit2nd | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:qtyunit2nd | S:禁写即时库存qty2nd字段,会被忽略默认同库存数量
+oa_document_push_service.py[IB5M]: F:业务适配:生产工单→OA/CRM HTTP Webhook(P2首个非金蝶样板,profile=oa_http_webhook) | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:DEFAULT_FIELD_MAP | S:映射不从业务配置读fi
+warehouse_kingdee_alignment.py[IB5S]: F:仓储单据与金蝶关联本地红灯:本地已过账金蝶未审/本地撤回金蝶仍审时禁入站覆盖批次 | R:code:riveredge-backend/src/apps/kuaiconnect/services/document_push/document_push_service.py | A:本地红灯判定 | S:只看本地状态+金蝶关联+最近外推日志,拉库存不再打金蝶
+
+===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaiconnect/api/apis/===
+apis.py[EB6L]: F:接口管理API:接口CRUD+test/probe测试+金蝶ExecuteBillQuery目录+接口库pack加载 | R:code:riveredge-backend/src/core/services/integration/api_service.py | A:APICreate,APIUpdate,APITestRequest,InstallApiLibraryPackRequest | S:-
+
+===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaiconnect/api/application_connections/===
+application_connections.py[EB5M]: F:应用连接管理API:仅处理type为预置连接器类型的IntegrationConfig记录 | R:code:riveredge-backend/src/core/services/integration/integration_config_service.py | A:TestConfigRequest,SyncContactsResponse,LoadConnectorApiPresetsResponse | S:-
+__init__.py[AA2T]: F:应用连接API包标记 | R:- | A:- | S:1L
+
+===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaiconnect/api/data_sources/===
+data_sources.py[EB4M]: F:数据源管理API兼容层:委托IntegrationConfig,仅处理postgresql/mysql/mongodb/api类型 | R:code:riveredge-backend/src/core/services/integration/integration_config_service.py | A:DataSourceCreate,TestConnectionResponse | S:-
+
+===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaiconnect/api/datasets/===
+datasets.py[EB6L]: F:数据集管理API:CRUD+execute_query查询执行+页面指标StatCard配置 | R:code:riveredge-backend/src/core/services/integration/dataset_service.py | A:ExecuteQueryRequest,PageMetricConfigCreate | S:-
+
+===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaiconnect/services/inbound_sync/===
+__init__.py[SB1T]: F:快连接入站同步包标记(sync-binding/sync-from-source) | R:- | A:- | S:1L
+customer_sync_service.py[IB5L]: F:客户从数据接口/数据集同步 | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:CustomerSyncService | S:-
+engineering_bom_sync_service.py[IB5M]: F:工程BOM从数据接口/数据集同步 | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:EngineeringBomSyncService | S:-
+external_sync_scheduler.py[IB6L]: F:外部主数据/单据定时同步调度 | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:ExternalSyncScheduler | S:-
+finished_goods_receipt_sync_service.py[IB4T]: F:成品入库单出站绑定服务(本阶段仅push-binding无入站同步) | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:绑定服务 | S:-
+inventory_sync_service.py[IB6L]: F:即时库存从数据接口/数据集同步 | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:InventorySyncService | S:-
+master_data_sync_common.py[IB7L]: F:主数据同步绑定解析与行映射:入站写库统一契约所有sync_service必须遵守 | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:collect_mapped_scalar_proposed,sync_record_needs_update | S:只收录映射行中出现可写字段(+always如name)
+material_batch_manage_sync_service.py[IB5M]: F:物料批号管理同步:金蝶bd_materialinventoryinfo.enablelot→Material.batch_managed | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:MaterialBatchManageSyncService | S:-
+material_group_sync_service.py[IB5M]: F:物料分组从数据接口/数据集独立同步 | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:MaterialGroupSyncService | S:-
+material_multi_unit_sync_service.py[IB5M]: F:物料辅单位同步:苍穹bd_multimeasureunit→Material.units.units(保留scenarios) | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:MaterialMultiUnitSyncService | S:-
+material_sync_service.py[IB6L]: F:物料从数据接口/数据集同步 | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:MaterialSyncService | S:-
+operation_sync_service.py[IB4M]: F:工序从数据接口/数据集同步 | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:OperationSyncService | S:-
+other_inbound_sync_service.py[IB4T]: F:其他入库单出站绑定服务(本阶段仅push-binding无入站同步) | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:绑定服务 | S:-
+other_outbound_sync_service.py[IB4T]: F:其他出库单出站绑定服务(本阶段仅push-binding无入站同步) | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:绑定服务 | S:-
+production_picking_sync_service.py[IB4T]: F:生产领料单出站绑定服务(本阶段仅push-binding无入站同步) | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:绑定服务 | S:-
+purchase_order_sync_service.py[IB6L]: F:采购订单从数据接口/数据集同步:预加载供应商/物料/已有订单→内存组payload→轻量create/update+bulk_create明细 | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:PurchaseOrderSyncService | S:写路径对齐销售订单同步避免逐行N+1超时
+purchase_receipt_sync_service.py[IB4T]: F:采购入库单出站绑定服务(本阶段仅push-binding无入站同步) | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:绑定服务 | S:-
+reporting_sync_service.py[IB5M]: F:报工同步服务 | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:ReportingSyncService | S:-
+sales_delivery_sync_service.py[IB4T]: F:销售出库单出站绑定服务(本阶段仅push-binding无入站同步) | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:绑定服务 | S:-
+sales_order_sync_service.py[IB6L]: F:销售订单从数据接口/数据集同步 | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:SalesOrderSyncService | S:-
+storage_location_sync_service.py[IB4M]: F:库位从数据接口/数据集同步(对齐苍穹bd_location,可不挂库区) | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:StorageLocationSyncService | S:-
+supplier_sync_service.py[IB5L]: F:供应商从数据接口/数据集同步 | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:SupplierSyncService | S:-
+sync_binding_sources.py[IB5M]: F:同步sources解析与外推targets读写(运行时只读JSON真源) | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:绑定sources/targets读写 | S:-
+unit_sync_service.py[IB4M]: F:物料单位从数据接口/数据集独立同步 | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:UnitSyncService | S:-
+warehouse_location_ref_sync_service.py[IB5L]: F:仓库库位关系同步:苍穹bd_warelocareference→本地库位warehouse_id | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:WarehouseLocationRefSyncService | S:-
+warehouse_sync_service.py[IB5L]: F:仓库从数据接口/数据集同步 | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:WarehouseSyncService | S:-
+work_order_sync_service.py[IB5L]: F:生产工单从数据接口/数据集同步(表头行,无明细分组) | R:code:riveredge-backend/src/apps/common/inbound_sync_gate.py | A:WorkOrderSyncService | S:-
+
+===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/api/purchase_demand_parties/===
+purchase_demand_parties.py[EB4S]: F:采购询价需方API(/purchase-demand-parties CRUD) | R:code:riveredge-backend/src/apps/kuaizhizao/services/purchase_demand_party_service.py | A:PurchaseDemandPartyService | S:-
