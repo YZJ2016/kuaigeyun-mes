@@ -88,6 +88,10 @@ async def test_withdraw_receipt_passes_serial_nos_to_decrease():
             AsyncMock(return_value=None),
         ),
         patch(
+            "apps.kuaicaiwu.services.purchase_receipt_line_finance_occupancy_service.PurchaseReceiptLineFinanceOccupancyService.soft_delete_by_receipt",
+            AsyncMock(return_value=None),
+        ),
+        patch(
             "apps.kuaizhizao.services.receipt_notice_service.sync_receipt_notice_status_from_purchase_receipt",
             AsyncMock(return_value=None),
         ),

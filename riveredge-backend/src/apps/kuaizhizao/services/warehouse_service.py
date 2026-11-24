@@ -13,7 +13,7 @@ from apps.kuaizhizao.utils.stock_posting import (
     serialize_stock_create,
     stock_document_guard,
 )
-from typing import List, Optional, Dict, Any, Tuple, Iterable
+from typing import List, Optional, Dict, Any, Tuple, Iterable, Sequence
 from datetime import datetime, date, timedelta
 from decimal import Decimal, InvalidOperation
 import json
@@ -20420,7 +20420,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
             inbound_id,
             acting_user_id=updated_by,
         )
-        async with in_transaction():
+        async with in_transaction(), stock_document_guard("other_inbound", tenant_id, inbound_id):
             inbound_obj = await OtherInbound.get_or_none(tenant_id=tenant_id, id=inbound_id)
             if not inbound_obj or inbound_obj.status != "已入库":
                 raise BusinessLogicError("只有已入库状态的其他入库单才能撤回确认")
@@ -20448,7 +20448,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                     
                     # 反向扣减库存（decrease_stock 内部会校验余量，如果已被领用，这里会报错拦截）
                     serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
-                    line_wh = getattr(item, "warehouse_id", None) or header_wh_id
+                    line_wh = getattr(item, "warehouse_id", None) or wh_id
                     await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,

@@ -44,6 +44,13 @@ async def test_monthly_customer_includes_completed_delivery_with_old_header_stra
         "filter",
         lambda **_kwargs: _QueryRows([]),
     )
+    from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
+
+    monkeypatch.setattr(
+        SalesDeliveryItem,
+        "filter",
+        lambda **_kwargs: _QueryRows([]),
+    )
 
     async def _none_posted(*_args, **_kwargs):
         return set()

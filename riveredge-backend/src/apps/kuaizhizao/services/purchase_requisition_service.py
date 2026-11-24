@@ -2380,13 +2380,14 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 for i in group_items
                 if i.id is not None
             }
-            group_suggested = sum(Decimal(str(i.quantity or 0)) for i in group_items)
-            group_occupied = sum(
-                (occupied_map.get(int(i.id), Decimal("0")) for i in group_items if i.id is not None),
-                Decimal("0"),
+            group_suggested = float(
+                sum(Decimal(str(i.quantity or 0)) for i in group_items)
             )
-            suggested, pushed, remaining = build_partial_push_qty_triplet(
-                group_suggested, group_occupied,
+            group_occupied = float(
+                sum(Decimal(str(v or 0)) for v in group_occ_by_item.values())
+            )
+            qty_s, pushed, remaining = build_partial_push_qty_triplet(
+                group_suggested, group_occupied, line_fully_pushed=line_fully
             )
             (
                 group_aux_sug,
@@ -2396,11 +2397,15 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             ) = resolve_requisition_material_aux_triplet(
                 group_items=group_items,
                 occupied_aux_by_item_id=group_occ_aux_by_item,
+                line_fully_pushed=line_fully,
             )
             group_occ_aux_sum = float(
                 sum(Decimal(str(v or 0)) for v in group_occ_aux_by_item.values())
             )
-            is_open_carrier = qty > float(occupied_map.get(item_id, Decimal("0")))
+
+            line_occ = float(occupied_primary_map.get(item_id, Decimal("0")))
+            line_remaining = max(0.0, qty - line_occ)
+            is_open_carrier = line_remaining > 0
             group_ids = [int(i.id) for i in group_items if i.id is not None]
             is_closed_group_rep = (
                 not is_open_carrier and remaining <= 0
@@ -2478,7 +2483,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             enrich_pull_line_from_source_item(
                 row,
                 item,
-                suggested_primary=suggested,
+                suggested_primary=qty_s,
                 pushed_primary=pushed,
                 remaining_primary=remaining,
                 occupied_aux_pushed=group_occ_aux_sum,

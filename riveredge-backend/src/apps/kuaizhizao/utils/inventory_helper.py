@@ -115,24 +115,83 @@ def _material_batch_on_hand_base_q(*, today: date) -> Q:
     )
 
 
-async def aggregate_on_hand_qty_by_material(tenant_id: int) -> Dict[int, Decimal]:
+async def enrich_pull_lines_with_current_stock(
+    tenant_id: int,
+    lines: List[Dict[str, Any]],
+    *,
+    material_id_key: str = "material_id",
+) -> List[Dict[str, Any]]:
+    """开口行取单：按本页物料补全租户全仓总库存（与 aggregate_on_hand_qty_by_material 同口径）。"""
+    if not lines:
+        return lines
+    material_ids = sorted(
+        {
+            int(row.get(material_id_key) or 0)
+            for row in lines
+            if int(row.get(material_id_key) or 0) > 0
+        }
+    )
+    stock_by_material = await aggregate_on_hand_qty_by_material(
+        tenant_id, material_ids=material_ids
+    )
+    for row in lines:
+        mid = int(row.get(material_id_key) or 0)
+        if mid > 0:
+            row["current_stock"] = float(stock_by_material.get(mid, Decimal("0")))
+        elif "current_stock" not in row:
+            row["current_stock"] = 0.0
+    return lines
+
+
+async def paginate_pull_lines_with_stock(
+    tenant_id: int,
+    lines: List[Dict[str, Any]],
+    skip: int,
+    limit: int,
+    *,
+    material_id_key: str = "material_id",
+) -> Dict[str, Any]:
+    """先分页再补库存，禁止对全量开口行扫租户库存。"""
+    total = len(lines)
+    page = lines[skip : skip + limit]
+    page = await enrich_pull_lines_with_current_stock(
+        tenant_id, page, material_id_key=material_id_key
+    )
+    return {"data": page, "total": total}
+
+
+async def aggregate_on_hand_qty_by_material(
+    tenant_id: int,
+    material_ids: Optional[Iterable[int]] = None,
+) -> Dict[int, Decimal]:
     """
     租户全仓可用库存按物料汇总（运营看板「总库存」、仓储看板 total_quantity / 金额共用）。
 
     口径与 get_material_inventory_info（不限仓）的 available_quantity 一致：
     - 主仓：合格、未删除、quantity>0、未过期，排除 out_stock/scrapped/expired
     - 线边：status=available 的 (quantity - reserved_quantity)，下限 0
+
+    material_ids 非空时仅汇总这些物料（取单分页补库存专用）；None 表示全租户。
     """
     from apps.master_data.models.material_batch import MaterialBatch
     from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
 
+    scoped_ids: Optional[List[int]] = None
+    if material_ids is not None:
+        scoped_ids = sorted({int(mid) for mid in material_ids if int(mid or 0) > 0})
+        if not scoped_ids:
+            return {}
+
     out: Dict[int, Decimal] = {}
     today = _site_today()
 
+    batch_q = MaterialBatch.filter(tenant_id=tenant_id).filter(
+        _material_batch_on_hand_base_q(today=today)
+    )
+    if scoped_ids is not None:
+        batch_q = batch_q.filter(material_id__in=scoped_ids)
     batch_rows = (
-        await MaterialBatch.filter(tenant_id=tenant_id)
-        .filter(_material_batch_on_hand_base_q(today=today))
-        .group_by("material_id")
+        await batch_q.group_by("material_id")
         .annotate(qty=Sum("quantity"))
         .values("material_id", "qty")
     )
@@ -140,13 +199,15 @@ async def aggregate_on_hand_qty_by_material(tenant_id: int) -> Dict[int, Decimal
         mid = int(row["material_id"])
         out[mid] = _decimal_or_zero(row.get("qty"))
 
+    line_q = LineSideInventory.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+        status="available",
+    )
+    if scoped_ids is not None:
+        line_q = line_q.filter(material_id__in=scoped_ids)
     line_rows = (
-        await LineSideInventory.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            status="available",
-        )
-        .group_by("material_id")
+        await line_q.group_by("material_id")
         .annotate(qty=Sum("quantity"), reserved_qty=Sum("reserved_quantity"))
         .values("material_id", "qty", "reserved_qty")
     )

@@ -21,6 +21,7 @@ def _req():
         department_id=1,
         department_name="采购部",
         order_type="标准采购",
+        attachments=None,
     )
 
 
@@ -39,6 +40,9 @@ def _item(*, item_id: int, qty: str, required: date, supplier_id: int | None = N
         supplier_id=supplier_id,
         aux_quantity=None,
         aux_unit=None,
+        material_model=None,
+        partner_material_code=None,
+        partner_material_name=None,
     )
 
 
@@ -98,6 +102,9 @@ async def test_list_purchase_order_pull_lines_same_material_two_independent_rows
         patch(
             "apps.kuaizhizao.services.purchase_requisition_service.PurchaseRequisitionItem"
         ) as ItemModel,
+        patch(
+            "apps.kuaizhizao.services.purchase_requisition_service.Material"
+        ) as MaterialModel,
         patch.object(
             service,
             "_occupied_purchase_order_qty_by_requisition_item_ids",
@@ -115,6 +122,7 @@ async def test_list_purchase_order_pull_lines_same_material_two_independent_rows
     ):
         ReqModel.filter.return_value = _ReqQuery()
         ItemModel.filter.return_value = _ItemQuery([item_a, item_b])
+        MaterialModel.filter.return_value = _ItemQuery([])
 
         result = await service.list_purchase_order_pull_lines(1, skip=0, limit=50)
 

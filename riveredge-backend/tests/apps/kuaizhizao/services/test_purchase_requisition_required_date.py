@@ -61,6 +61,7 @@ async def test_open_lines_use_actual_occupancy_and_group_split_rows(
     req = SimpleNamespace(
         id=11, requisition_code="PR-11", status="已通过",
         review_status="已通过", requisition_date=date(2026, 11, 19), applicant_name="Operator",
+        order_type=None, attachments=None, department_id=None, department_name=None,
     )
     rows = [
         SimpleNamespace(
@@ -68,6 +69,8 @@ async def test_open_lines_use_actual_occupancy_and_group_split_rows(
             quantity=Decimal(qty), purchase_order_id=100 if index in occupied else None,
             material_code="M-5", material_name="Material", material_spec=None,
             unit="件", required_date=None, supplier_id=7, notes=None,
+            aux_quantity=None, aux_unit=None, material_model=None,
+            partner_material_code=None, partner_material_name=None,
         )
         for index, qty in enumerate(quantities, 1)
     ]
@@ -78,9 +81,15 @@ async def test_open_lines_use_actual_occupancy_and_group_split_rows(
     item_query.all = AsyncMock(return_value=rows)
     monkeypatch.setattr(requisition_module.PurchaseRequisition, "filter", MagicMock(return_value=req_query))
     monkeypatch.setattr(requisition_module.PurchaseRequisitionItem, "filter", MagicMock(return_value=item_query))
+    material_query = MagicMock()
+    material_query.all = AsyncMock(return_value=[])
+    monkeypatch.setattr(requisition_module.Material, "filter", MagicMock(return_value=material_query))
     monkeypatch.setattr(requisition_module, "requisition_open_line_can_push", lambda *args, **kwargs: True)
     monkeypatch.setattr(requisition_module, "aggregate_on_hand_qty_by_material", AsyncMock(return_value={}))
     service = PurchaseRequisitionService()
+    monkeypatch.setattr(
+        service, "_batch_supplier_names", AsyncMock(return_value={7: "供应商7"})
+    )
     monkeypatch.setattr(
         service, "_occupied_purchase_order_qty_by_requisition_item_ids",
         AsyncMock(return_value=(

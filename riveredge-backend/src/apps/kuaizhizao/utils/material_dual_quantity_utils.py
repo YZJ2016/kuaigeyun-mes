@@ -98,6 +98,15 @@ def convert_document_line_quantity_to_base(
     return qty * factor
 
 
+def document_line_dual_quantity_write_kwargs(item_data: Any) -> dict[str, Any]:
+    """创建/重建明细时写入副数量三字段（显式 kwargs 路径，非整包 model_dump）。"""
+    return {
+        "aux_quantity": getattr(item_data, "aux_quantity", None),
+        "aux_unit": getattr(item_data, "aux_unit", None),
+        "unit_conversion_rate": getattr(item_data, "unit_conversion_rate", None),
+    }
+
+
 def document_line_dual_quantity_for_push(
     source: Any,
     *,

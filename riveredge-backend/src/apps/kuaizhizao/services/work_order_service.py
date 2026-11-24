@@ -2411,6 +2411,32 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         allocated = sum(Decimal(str(row.quantity)) for row in child_rows)
         return max(Decimal("0"), parent.quantity - allocated)
 
+    async def _work_order_operation_has_reporting_qty(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        op: WorkOrderOperation,
+    ) -> bool:
+        """工序是否已有报工数量（完成量或已审核报工），有则不允许头超报覆盖行快照。"""
+        from apps.kuaizhizao.models.reporting_record import ReportingRecord
+        from tortoise.expressions import Q
+
+        completed_qty = Decimal(str(getattr(op, "completed_quantity", None) or 0))
+        if completed_qty > 0:
+            return True
+        master_id = getattr(op, "operation_id", None)
+        q = ReportingRecord.filter(
+            tenant_id=tenant_id,
+            work_order_id=int(work_order_id),
+            status="approved",
+            deleted_at__isnull=True,
+        )
+        if master_id is not None:
+            q = q.filter(Q(operation_id=int(master_id)) | Q(operation_id=int(op.id)))
+        else:
+            q = q.filter(operation_id=int(op.id))
+        return await q.exists()
+
     # 拆分子工单编码：{父单号}-{三位序号}，与 split_work_order / 序列号自动拆分写入一致
     _SPLIT_CODE_SUFFIX = re.compile(r"^(.+)-(\d{3})$")
 

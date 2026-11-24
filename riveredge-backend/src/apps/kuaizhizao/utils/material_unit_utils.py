@@ -9,6 +9,8 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any, Dict, Optional
 
+from apps.master_data.constants.material_conversion_type import is_floating_aux_unit_row
+
 MaterialScenario = str  # purchase | sale | production | inventory
 
 

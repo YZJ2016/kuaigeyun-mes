@@ -20,7 +20,7 @@ async def test_wo_qty_fifo_across_same_material_lines():
     items_by_order = {order_id: [line_b, line_a]}
 
     async def fake_values_list(*args, **kwargs):
-        return [(order_id, 100, Decimal("6"))]
+        return [(order_id, None, 100, Decimal("6"))]
 
     chain = SimpleNamespace(values_list=AsyncMock(side_effect=fake_values_list))
     with patch(

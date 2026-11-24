@@ -93,9 +93,44 @@ export function usePartnerStatementInboundDetailColumns(
     inboundDocType === 'outsource_material_receipt' ||
     inboundDocType === '委外收货' ||
     inboundDocType === 'outsource_receipt';
+  const isSalesDelivery =
+    inboundDocType === 'sales_delivery' || inboundDocType === '销售出库';
 
-  return useMemo(
-    () => [
+  return useMemo(() => {
+    if (isSalesDelivery) {
+      return [
+        { title: t(`${PS}.lineDetail.materialCode`), dataIndex: 'material_code', width: 120 },
+        { title: t(`${PS}.lineDetail.materialName`), dataIndex: 'material_name', ellipsis: true },
+        {
+          title: t(`${PS}.lineDetail.materialSpec`),
+          dataIndex: 'material_spec',
+          width: 120,
+          ellipsis: true,
+          render: (v: string | null | undefined) => (v && String(v).trim() ? v : '—'),
+        },
+        {
+          title: t(`${PS}.lineDetail.salesDeliveryQuantity`),
+          dataIndex: 'quantity',
+          width: 100,
+          align: 'right' as const,
+        },
+        {
+          title: t(`${PS}.lineDetail.salesDeliveryUnitPrice`),
+          dataIndex: 'unit_price',
+          width: 100,
+          align: 'right' as const,
+          render: (v: number) => money(v),
+        },
+        {
+          title: t(`${PS}.lineDetail.salesDeliveryAmount`),
+          dataIndex: 'amount',
+          width: 110,
+          align: 'right' as const,
+          render: (v: number) => money(v),
+        },
+      ];
+    }
+    return [
       { title: t(`${PS}.lineDetail.materialCode`), dataIndex: 'material_code', width: 120 },
       { title: t(`${PS}.lineDetail.materialName`), dataIndex: 'material_name', ellipsis: true },
       {
@@ -158,9 +193,8 @@ export function usePartnerStatementInboundDetailColumns(
         align: 'right',
         render: (v: unknown) => (v == null || v === '' ? '—' : v),
       },
-    ],
-    [isOutsource, t],
-  );
+    ];
+  }, [isOutsource, isSalesDelivery, t]);
 }
 
 type ExpandedProps = {

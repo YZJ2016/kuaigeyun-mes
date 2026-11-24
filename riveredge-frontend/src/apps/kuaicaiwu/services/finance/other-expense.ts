@@ -49,6 +49,8 @@ export type OtherExpenseVoucher = {
   bank_account_id?: number;
   status: string;
   notes?: string;
+  department_id?: number | null;
+  department_name?: string | null;
   attachments?: unknown[];
   related_purchase_receipts?: RelatedPurchaseReceiptRef[] | null;
   lines: OtherVoucherLine[];

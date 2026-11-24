@@ -33,6 +33,11 @@ async def test_item_update_resolves_price_type_and_persists(monkeypatch, submitt
 
     query.order_by = MagicMock(side_effect=lambda *a, **kw: _AwaitableList())
     monkeypatch.setattr(module.SalesOrder, "filter", lambda **kw: query)
+    monkeypatch.setattr(
+        module.SalesOrder,
+        "get",
+        AsyncMock(return_value=SimpleNamespace(customer_order_no=None)),
+    )
     monkeypatch.setattr(module.SalesOrderItem, "filter", lambda **kw: query)
     create = AsyncMock()
     monkeypatch.setattr(module.SalesOrderItem, "create", create)

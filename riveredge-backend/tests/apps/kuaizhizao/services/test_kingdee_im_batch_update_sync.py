@@ -57,6 +57,7 @@ def test_warehouse_updates_call_sync_after_save():
         (PurchaseReceiptService.update_purchase_receipt, sync_purchase_receipt_kingdee_after_update),
         (OtherInboundService.update_other_inbound, sync_other_inbound_kingdee_after_update),
         (OtherOutboundService.update_other_outbound, sync_other_outbound_kingdee_after_update),
+        (FinishedGoodsReceiptService.update_finished_goods_receipt, sync_finished_goods_receipt_kingdee_after_update),
     )
     for method, sync_fn in pairs:
         source = inspect.getsource(method)
@@ -69,6 +70,6 @@ def test_warehouse_updates_call_sync_after_save():
         assert await_lines[0].startswith("        await ")
 
 
-def test_finished_goods_sync_helper_exists_without_local_update_method():
+def test_finished_goods_sync_helper_exists_with_update_method():
     assert callable(sync_finished_goods_receipt_kingdee_after_update)
-    assert not hasattr(FinishedGoodsReceiptService, "update_finished_goods_receipt")
+    assert hasattr(FinishedGoodsReceiptService, "update_finished_goods_receipt")

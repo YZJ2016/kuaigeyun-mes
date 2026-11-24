@@ -9,6 +9,7 @@ PARTNER_PAYMENT_METHOD_CODES = frozenset(
         "cash",
         "bank_transfer",
         "bank_acceptance",
+        "bank_transfer_and_acceptance",
         "commercial_acceptance",
         "other",
     }

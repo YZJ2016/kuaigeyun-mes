@@ -1979,6 +1979,46 @@ const PurchaseRequisitionsPage: React.FC = () => {
     return tableRowsRef.current.find((row) => row.id === id) ?? null;
   }, [selectedRowKeys]);
 
+  async function handleCopySelectedPurchaseRequisition() {
+    const record = selectedRequisitionForToolbar;
+    if (!record?.id) {
+      messageApi.warning(t('app.kuaizhizao.purchaseRequisition.selectToCopy'));
+      return;
+    }
+    try {
+      const data = await getPurchaseRequisition(record.id);
+      const items = (data.items ?? []).map((it) => {
+        const {
+          id: _id,
+          purchase_order_id: _purchaseOrderId,
+          purchase_order_item_id: _purchaseOrderItemId,
+          converted_quantity_draft: _draftQty,
+          converted_quantity_confirmed: _confirmedQty,
+          demand_computation_item_id: _demandItemId,
+          ...rest
+        } = it;
+        return rest;
+      });
+      navigate(PURCHASE_REQUISITION_CREATE_PATH, {
+        state: {
+          purchaseRequisitionCopy: {
+            requisition_name: data.requisition_name,
+            applicant_id: data.applicant_id,
+            applicant_name: data.applicant_name,
+            department_id: data.department_id,
+            department_name: data.department_name,
+            required_date: data.required_date,
+            notes: data.notes,
+            attachments: data.attachments,
+            items,
+          },
+        },
+      });
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseRequisition.loadFailed')));
+    }
+  }
+
   const canPushPurchaseOrder = !!selectedRequisitionForToolbar?.capabilities?.push_purchase_order?.allowed;
   const canPushInquiry = !!selectedRequisitionForToolbar?.capabilities?.push_inquiry?.allowed;
   const toolbarPushDisabledReason = useMemo(() => {
@@ -3575,13 +3615,12 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 ]),
                 { type: 'divider', key: 'copy-selected-divider' },
                 {
-                  key: 'pull-from-demand-computation',
-                  actionKey: 'purchase_requisition.pull_from_demand_computation',
-                  onClick: () => {
-                    pullFromComputationQuery.openModal();
-                  },
+                  key: 'copy-selected',
+                  label: t('app.kuaizhizao.purchaseRequisition.copySelectedCreate'),
+                  disabled: !selectedRequisitionForToolbar,
+                  onClick: () => void handleCopySelectedPurchaseRequisition(),
                 },
-              ])}
+              ]}
             />,
             <UniPushToolbarButton
               key={`purchase-requisition-push-${selectedRequisitionForToolbar?.id ?? 'none'}`}

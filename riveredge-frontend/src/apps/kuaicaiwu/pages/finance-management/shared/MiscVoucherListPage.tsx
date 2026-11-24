@@ -8,7 +8,7 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Col, Descriptions, Form, Input, InputNumber, Row, Select, Space, Table, theme, type TableColumnsType } from 'antd';
+import { App, Button, Col, Form, Input, InputNumber, Row, Select, Space, theme, type TableColumnsType } from 'antd';
 import { PrinterOutlined } from '@ant-design/icons';
 import { useLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 import type { FormListFieldData } from 'antd/es/form/FormList';
@@ -16,12 +16,14 @@ import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import {
-  DetailDrawerTemplate,
-  DRAWER_CONFIG,
   FormModalTemplate,
   ListPageTemplate,
   MODAL_CONFIG,
 } from '../../../../../components/layout-templates';
+import {
+  MiscVoucherDetailDrawer,
+  type MiscVoucherDetailRecord,
+} from './MiscVoucherDetailDrawer';
 import { MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../../components/layout-templates/constants';
 import { UniDropdown, QuickCreateModal } from '../../../../../components/uni-dropdown';
 import { UniTable } from '../../../../../components/uni-table';
@@ -66,7 +68,6 @@ import { useKuaizhizaoPrintModal } from '../../../../kuaizhizao/hooks/useKuaizhi
 import {
   mapAttachmentsToUploadList,
   normalizeDocumentAttachments,
-  openDocumentAttachment,
 } from '../../../../kuaizhizao/utils/documentAttachments';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
@@ -109,6 +110,8 @@ type VoucherRow = {
   counterparty_name?: string;
   payment_method?: string;
   notes?: string;
+  review_status?: string;
+  audit?: unknown;
   capabilities?: Record<string, { allowed: boolean }>;
   receivable_id?: number | null;
   receivable_code?: string | null;
@@ -297,6 +300,7 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
   const [editing, setEditing] = useState<VoucherRow | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [detailRow, setDetailRow] = useState<(VoucherRow & { lines?: LineFormRow[]; notes?: string }) | null>(null);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [categories, setCategories] = useState<MiscCategory[]>([]);
@@ -359,7 +363,7 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
       rejectedStatuses: ['Rejected', '已驳回'],
     };
   }, [incomeSaveSubmitSplit]);
-  const miscWorkflowStatusField = incomeSaveSubmitSplit ? 'review_status' : 'status';
+
 
   const reloadAfterWorkflow = useCallback(
     (rowId?: number) => {
@@ -612,18 +616,33 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
     async (row: VoucherRow) => {
       setDetailOpen(true);
       setDetailLoading(true);
+      setDetailError(null);
       try {
         const full = await service.get(row.id);
-        setDetailRow(full);
+        setDetailRow({
+          ...full,
+          review_status: full.review_status ?? row.review_status,
+          audit: full.audit ?? row.audit,
+          capabilities: { ...(row.capabilities ?? {}), ...(full.capabilities ?? {}) },
+        });
       } catch (e) {
         setDetailRow(null);
-        messageApi.error(getApiErrorMessage(e, t(`${i18nPrefix}.loadFailed`)));
+        const msg = getApiErrorMessage(e, t(`${i18nPrefix}.loadFailed`));
+        setDetailError(msg);
+        messageApi.error(msg);
       } finally {
         setDetailLoading(false);
       }
     },
     [i18nPrefix, messageApi, service, t],
   );
+
+  const detailBankAccountLabel = useMemo(() => {
+    const bankId = (detailRow as { bank_account_id?: number } | null)?.bank_account_id;
+    if (!bankId) return '';
+    const acc = bankAccounts.find((a) => a.id === bankId);
+    return acc ? formatBankAccountOptionLabel(acc) : '';
+  }, [bankAccounts, detailRow]);
 
   const handleSave = async (values: Record<string, unknown>) => {
     assertBankAccountForPaymentMethod(
@@ -921,7 +940,8 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
                       resourcePrefix={resource}
                       workflowAuditEnabled={auditEnabled}
                       entityName={t(menuTitleKey)}
-                      statusField={miscWorkflowStatusField}
+                      statusField="status"
+                      reviewStatusField="review_status"
                       {...miscWorkflowStatuses}
                       onSuccess={() => reloadAfterWorkflow(row.id)}
                     />
@@ -979,7 +999,6 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
       kind,
       menuTitleKey,
       miscStatusEnum,
-      miscWorkflowStatusField,
       miscWorkflowStatuses,
       openDetail,
       openEdit,
@@ -1349,12 +1368,41 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
         </Row>
       </FormModalTemplate>
 
-      <DetailDrawerTemplate
+      <MiscVoucherDetailDrawer
         open={detailOpen}
-        onClose={() => setDetailOpen(false)}
-        size={DRAWER_CONFIG.STANDARD_WIDTH}
-        title={detailRow ? resolveDocCode(detailRow, codeField) : ''}
+        onClose={() => {
+          setDetailOpen(false);
+          setDetailError(null);
+        }}
         loading={detailLoading}
+        error={detailError}
+        onRetry={
+          detailRow?.id
+            ? () => {
+                const id = detailRow.id;
+                setDetailLoading(true);
+                setDetailError(null);
+                void service
+                  .get(id)
+                  .then((full) => setDetailRow(full))
+                  .catch((e) => {
+                    const msg = getApiErrorMessage(e, t(`${i18nPrefix}.loadFailed`));
+                    setDetailError(msg);
+                  })
+                  .finally(() => setDetailLoading(false));
+              }
+            : undefined
+        }
+        record={detailRow as MiscVoucherDetailRecord | null}
+        codeField={codeField}
+        i18nPrefix={i18nPrefix}
+        kind={kind}
+        isExpenseApplication={false}
+        isOtherExpenseDoc={isOtherExpenseDoc}
+        bankAccountLabel={detailBankAccountLabel}
+        documentType={auditEntityType}
+        renderDocumentStatus={(row) => renderMiscStatusTag(row.status)}
+        onOpenLinkedDocument={(type, id) => linkedDetail?.openLinkedDocumentDetail(type, id)}
         extra={
           detailRow ? (
             <Space>
@@ -1365,7 +1413,8 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
                 resourcePrefix={resource}
                 workflowAuditEnabled={auditEnabled}
                 entityName={t(menuTitleKey)}
-                statusField={miscWorkflowStatusField}
+                statusField="status"
+                reviewStatusField="review_status"
                 {...miscWorkflowStatuses}
                 theme="default"
                 size="medium"
@@ -1386,148 +1435,7 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
             </Space>
           ) : null
         }
-      >
-        {detailRow && (
-          <>
-            <Descriptions column={2} size="small">
-              <Descriptions.Item label={t(`${i18nPrefix}.col.businessDate`)}>{detailRow.business_date}</Descriptions.Item>
-              <Descriptions.Item label={t('common.status')}>
-                {renderMiscStatusTag(detailRow.status)}
-              </Descriptions.Item>
-              <Descriptions.Item label={t(`${i18nPrefix}.col.amount`)}>
-                {formatCurrencyAmount(detailRow.total_amount)}
-              </Descriptions.Item>
-              <Descriptions.Item label={t(`${i18nPrefix}.col.counterparty`)}>
-                {detailRow.counterparty_name || '—'}
-              </Descriptions.Item>
-              <Descriptions.Item label={t(`${i18nPrefix}.field.department`)}>
-                {detailRow.department_name || '—'}
-              </Descriptions.Item>
-              {kind === 'expense' ? (
-                <Descriptions.Item label={t('app.kuaicaiwu.payment.advancePayee')}>
-                  {(detailRow.lines ?? []).find((l) => l.payee_name)?.payee_name || '—'}
-                </Descriptions.Item>
-              ) : null}
-              <Descriptions.Item label={t(`${i18nPrefix}.field.notes`)} span={2}>
-                {detailRow.notes || '—'}
-              </Descriptions.Item>
-              {kind === 'income' && detailRow.receivable_id ? (
-                <Descriptions.Item label={t('app.kuaicaiwu.otherIncome.finance.receivable')}>
-                  <Button
-                    type="link"
-                    size="small"
-                    style={{ padding: 0, height: 'auto' }}
-                    onClick={() => linkedDetail?.openLinkedDocumentDetail('receivable', Number(detailRow.receivable_id))}
-                  >
-                    {detailRow.receivable_code || detailRow.receivable_id}
-                  </Button>
-                </Descriptions.Item>
-              ) : null}
-              {kind === 'income' && detailRow.receipt_id ? (
-                <Descriptions.Item label={t('app.kuaicaiwu.otherIncome.finance.receipt')}>
-                  <Button
-                    type="link"
-                    size="small"
-                    style={{ padding: 0, height: 'auto' }}
-                    onClick={() => linkedDetail?.openLinkedDocumentDetail('receipt', Number(detailRow.receipt_id))}
-                  >
-                    {detailRow.receipt_code || detailRow.receipt_id}
-                  </Button>
-                </Descriptions.Item>
-              ) : null}
-              {kind === 'expense' && detailRow.payable_id ? (
-                <Descriptions.Item label={t('app.kuaicaiwu.otherExpense.finance.payable')}>
-                  <Button
-                    type="link"
-                    size="small"
-                    style={{ padding: 0, height: 'auto' }}
-                    onClick={() => linkedDetail?.openLinkedDocumentDetail('payable', Number(detailRow.payable_id))}
-                  >
-                    {detailRow.payable_code || detailRow.payable_id}
-                  </Button>
-                </Descriptions.Item>
-              ) : null}
-              {kind === 'expense' && detailRow.payment_id ? (
-                <Descriptions.Item label={t('app.kuaicaiwu.otherExpense.finance.payment')}>
-                  <Button
-                    type="link"
-                    size="small"
-                    style={{ padding: 0, height: 'auto' }}
-                    onClick={() => linkedDetail?.openLinkedDocumentDetail('payment', Number(detailRow.payment_id))}
-                  >
-                    {detailRow.payment_code || detailRow.payment_id}
-                  </Button>
-                </Descriptions.Item>
-              ) : null}
-              {kind === 'expense' ? (
-                <Descriptions.Item label={t(`${i18nPrefix}.relatedPurchaseReceipts`)} span={2}>
-                  {Array.isArray(detailRow.related_purchase_receipts) &&
-                  detailRow.related_purchase_receipts.length > 0 ? (
-                    <Space wrap size={[8, 4]}>
-                      {detailRow.related_purchase_receipts.map((item) => (
-                        <Button
-                          key={item.id}
-                          type="link"
-                          size="small"
-                          style={{ padding: 0, height: 'auto' }}
-                          onClick={() =>
-                            linkedDetail?.openLinkedDocumentDetail('purchase_receipt', Number(item.id))
-                          }
-                        >
-                          {item.code || item.id}
-                        </Button>
-                      ))}
-                    </Space>
-                  ) : (
-                    '—'
-                  )}
-                </Descriptions.Item>
-              ) : null}
-              <Descriptions.Item label={t(`${i18nPrefix}.field.attachments`)} span={2}>
-                {Array.isArray(detailRow.attachments) && detailRow.attachments.length > 0 ? (
-                  <Space wrap size={[8, 4]}>
-                    {(detailRow.attachments as Array<Record<string, unknown>>).map((file, idx) => {
-                      const name = String(file.name || file.original_name || file.uid || idx + 1);
-                      return (
-                        <Button
-                          key={String(file.uid || idx)}
-                          type="link"
-                          size="small"
-                          style={{ padding: 0, height: 'auto' }}
-                          onClick={() =>
-                            void openDocumentAttachment(
-                              file as Parameters<typeof openDocumentAttachment>[0],
-                            )
-                          }
-                        >
-                          {name}
-                        </Button>
-                      );
-                    })}
-                  </Space>
-                ) : (
-                  '—'
-                )}
-              </Descriptions.Item>
-            </Descriptions>
-            <Table
-              size="small"
-              style={{ marginTop: 16 }}
-              pagination={false}
-              rowKey={(_, i) => String(i)}
-              dataSource={detailRow.lines ?? []}
-              columns={[
-                { title: t(`${i18nPrefix}.line.category`), dataIndex: 'category_name' },
-                { title: t(`${i18nPrefix}.line.amount`), dataIndex: 'amount', render: (v) => formatCurrencyAmount(v) },
-                { title: t(`${i18nPrefix}.line.description`), dataIndex: 'description' },
-                ...(kind === 'expense'
-                  ? [{ title: t('app.kuaicaiwu.payment.advancePayee'), dataIndex: 'payee_name' }]
-                  : []),
-              ]}
-            />
-          </>
-        )}
-      </DetailDrawerTemplate>
+      />
       {kind === 'expense' ? (
         <UniPullQueryModal<OtherExpensePurchaseReceiptLinkCandidate>
           open={purchaseReceiptLinkQuery.open}

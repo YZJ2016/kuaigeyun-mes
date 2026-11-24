@@ -12,6 +12,9 @@ export interface Receivable {
     remaining_amount: number;
     due_date: string;
     payment_terms?: string;
+    payment_method_code?: string;
+    payment_wire_percent?: number | string;
+    payment_acceptance_percent?: number | string;
     status: '未收款' | '部分收款' | '已结清';
     refunded_amount?: number;
     refund_execution_status?: string;
