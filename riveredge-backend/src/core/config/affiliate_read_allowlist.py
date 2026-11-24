@@ -175,6 +175,54 @@ AFFILIATE_READ_ENTRIES: tuple[AffiliateReadEntry, ...] = (
         reason="工单从销售订单取开口行：工单新建/查看或销售订单读/展示",
     ),
     AffiliateReadEntry(
+        id="kuaizhizao_sales_orders_purchase_requisition_pull",
+        app_code="kuaizhizao",
+        method="GET",
+        path_pattern=re.compile(
+            r"/sales-orders/purchase-requisition-pull-(?:lines|orders)(?:/|$)",
+            re.IGNORECASE,
+        ),
+        permission_codes=(
+            build_permission_code("kuaizhizao", "sales-order", "read"),
+            build_permission_code("kuaizhizao", "sales-order", "display"),
+            build_permission_code("kuaizhizao", "purchase-requisition", "create"),
+            build_permission_code("kuaizhizao", "purchase-requisition", "read"),
+        ),
+        reason="采购申请从销售订单取单：申请新建/查看或销售订单读/展示",
+    ),
+    AffiliateReadEntry(
+        id="kuaizhizao_purchase_requisitions_sales_order_pull_lines",
+        app_code="kuaizhizao",
+        method="GET",
+        path_pattern=re.compile(
+            r"/purchase-requisitions/(?:pull/)?sales-order-pull-lines(?:/|$)",
+            re.IGNORECASE,
+        ),
+        permission_codes=(
+            build_permission_code("kuaizhizao", "sales-order", "read"),
+            build_permission_code("kuaizhizao", "sales-order", "display"),
+            build_permission_code("kuaizhizao", "purchase-requisition", "create"),
+            build_permission_code("kuaizhizao", "purchase-requisition", "read"),
+        ),
+        reason="采购申请从销售订单取开口行：申请新建/查看或销售订单读/展示",
+    ),
+    AffiliateReadEntry(
+        id="kuaizhizao_purchase_requisitions_sales_order_pull_orders",
+        app_code="kuaizhizao",
+        method="GET",
+        path_pattern=re.compile(
+            r"/purchase-requisitions/(?:pull/)?sales-order-pull-orders(?:/|$)",
+            re.IGNORECASE,
+        ),
+        permission_codes=(
+            build_permission_code("kuaizhizao", "sales-order", "read"),
+            build_permission_code("kuaizhizao", "sales-order", "display"),
+            build_permission_code("kuaizhizao", "purchase-requisition", "create"),
+            build_permission_code("kuaizhizao", "purchase-requisition", "read"),
+        ),
+        reason="采购申请从销售订单取单来源筛选：申请新建/查看或销售订单读/展示",
+    ),
+    AffiliateReadEntry(
         id="kuaizhizao_document_line_material_attachment_sources",
         app_code="kuaizhizao",
         method="GET",

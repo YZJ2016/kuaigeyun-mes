@@ -47,6 +47,7 @@ interface BatchInventoryItem {
   ledger_has_auxiliary_unit?: boolean;
   secondary_quantity?: number | null;
   batch_no: string;
+  serial_no?: string | null;
   production_date: string | null;
   shelf_life_days?: number | null;
   expiry_date: string | null;
@@ -681,34 +682,41 @@ const BatchInventoryQuery: React.FC = () => {
         t('app.kuaizhizao.warehouseInventory.colTexture'),
         t('app.kuaizhizao.warehouseInventory.colPrimaryUnit'),
         t('app.kuaizhizao.batchInventoryQuery.colBatchNo'),
+        t('app.kuaizhizao.warehouseCommon.colSerialNo'),
         t('app.kuaizhizao.batchInventoryQuery.colProductionDate'),
         t('app.kuaizhizao.batchInventoryQuery.colShelfLifeDays'),
         t('app.kuaizhizao.batchInventoryQuery.colExpiryDate'),
         t('app.kuaizhizao.warehouseInventory.colPrimaryQuantity'),
         t('app.kuaizhizao.warehouseInventory.colSecondaryUnit'),
         t('app.kuaizhizao.warehouseInventory.colSecondaryQuantity'),
-        t('app.kuaizhizao.warehouseInventory.colLocation'),
         t('app.kuaizhizao.warehouseInventory.colInTransit'),
+        t('app.kuaizhizao.warehouseInventory.inTransitPurchase'),
+        t('app.kuaizhizao.warehouseInventory.inTransitWorkOrder'),
+        t('app.kuaizhizao.warehouseInventory.inTransitOutsource'),
+        t('app.kuaizhizao.warehouseInventory.colLocation'),
         t('app.kuaizhizao.warehouseInventory.colAlert'),
+        t('app.kuaizhizao.inventoryAlert.colAlertMessage'),
         t('app.kuaizhizao.batchInventoryQuery.colSupplierBatchNo'),
         t('common.status'),
         t('app.kuaizhizao.warehouseReports.colWarehouse'),
       ];
-      const lines = items.map((r) =>
-        [
+      const lines = items.map((r) => {
+        const breakdown = r.in_transit_breakdown;
+        return [
           r.material_code,
           r.material_name,
-          r.material_spec,
-          r.model,
-          r.brand,
-          r.texture,
+          renderCell(r.material_spec),
+          renderCell(r.model),
+          renderCell(r.brand),
+          renderCell(r.texture),
           r.primary_unit ?? r.material_unit,
           formatBatchNoForDisplay(r.batch_no) || '—',
-          r.production_date,
+          renderCell(r.serial_no),
+          r.production_date || '—',
           r.shelf_life_days != null && r.shelf_life_days >= 1
             ? `${r.shelf_life_days}${t('app.master-data.materialForm.shelfLifeDayUnit')}`
             : '—',
-          r.expiry_date,
+          r.expiry_date || '—',
           r.primary_quantity,
           inventoryRowShowsLedgerSecondary(r) ? r.secondary_unit ?? '' : '—',
           inventoryRowShowsLedgerSecondary(r) &&
@@ -716,16 +724,23 @@ const BatchInventoryQuery: React.FC = () => {
           r.secondary_quantity !== undefined
             ? r.secondary_quantity
             : '—',
-          formatInventoryLocationDisplay(r) || '-',
           r.in_transit_quantity ?? 0,
           r.alert_label,
           r.supplier_batch_no,
+          breakdown?.purchase_quantity ?? 0,
+          breakdown?.work_order_quantity ?? 0,
+          breakdown?.outsource_work_order_quantity ?? 0,
+          formatInventoryLocationDisplay(r) || '—',
+          renderCell(r.alert_label ?? t('app.kuaizhizao.warehouseInventory.alertNormal')),
+          renderCell(r.alert_message),
+          renderCell(r.supplier_batch_no),
+          r.warehouse_name || '—',
           r.status,
           r.warehouse_name || '-',
         ]
           .map(escapeCsv)
-          .join(',')
-      );
+          .join(',');
+      });
       const csv = [headers.join(','), ...lines].join('\n');
       const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);

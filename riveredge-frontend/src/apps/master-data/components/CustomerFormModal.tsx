@@ -6,7 +6,7 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ProFormInstance } from '@ant-design/pro-components';
+import { ProFormDependency, ProFormInstance } from '@ant-design/pro-components';
 import { App, Input, Tabs, Row, Col } from 'antd';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import {
@@ -50,6 +50,8 @@ import { PartnerAddressesFormTable } from './PartnerAddressesFormTable';
 import { PartnerSettlementAccountsFormTable } from './PartnerSettlementAccountsFormTable';
 import { useCustomFields } from '../../../hooks/useCustomFields';
 import { CustomFieldsFormSection } from '../../../components/custom-fields';
+import { MixedPaymentMethodRatioFields } from './MixedPaymentMethodRatioFields';
+import { validatePaymentMethodMix } from '../utils/paymentMethodMix';
 
 const PAGE_CODE = 'master-data-supply-chain-customer';
 const CUSTOM_FIELD_TABLE = 'master_data_customers';
@@ -379,6 +381,15 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
         messageApi.error(t('app.kuaizhizao.customerPool.phoneOrEmailRequired'));
         throw new Error('phone or email required');
       }
+      const mixErr = validatePaymentMethodMix(
+        standardValues.defaultPaymentMethodCode,
+        standardValues.defaultPaymentWirePercent,
+        standardValues.defaultPaymentAcceptancePercent,
+      );
+      if (mixErr) {
+        messageApi.error(mixErr);
+        throw new Error(mixErr);
+      }
       if (standardValues.isPublic === true) {
         // 显式传 null，后端才能识别为“清空归属业务员”
         payload.salesmanId = null;
@@ -657,6 +668,11 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                         },
                       }}
                     />
+                    <ProFormDependency name={['defaultPaymentMethodCode']}>
+                      {({ defaultPaymentMethodCode }) => (
+                        <MixedPaymentMethodRatioFields paymentMethodCode={defaultPaymentMethodCode} />
+                      )}
+                    </ProFormDependency>
                   </Row>
                 ),
               },

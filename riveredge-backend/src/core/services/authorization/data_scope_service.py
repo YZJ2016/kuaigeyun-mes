@@ -483,9 +483,7 @@ class DataScopeService:
                     )
                     if part is not None:
                         q_parts.append(part)
-                else:
-                    any_unrestricted = True
-                    break
+                # 厂内角色未落库数据策略：不参与放宽（禁止冲掉其它角色的本部门/本人）
                 continue
 
             if any((p.scope_type or "").strip().lower() == DataScopeType.ALL for p in role_policies):

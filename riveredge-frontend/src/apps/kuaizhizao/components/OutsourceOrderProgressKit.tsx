@@ -1,5 +1,5 @@
 /**
- * 工序委外后续操作：下达 / 开始执行 / 委外入库 / 登记收货 / 完成 / 结算
+ * 工序委外后续操作：下达 / 工序发料 / 登记收货 / 完成 / 结算
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -12,7 +12,7 @@ import {
 } from '../utils/outsourceOrderRegisterReceiptQuantities';
 import type { NavigateFunction } from 'react-router-dom';
 import type { TFunction } from 'i18next';
-import { SendOutlined, PlayCircleOutlined, InboxOutlined, CheckOutlined, RollbackOutlined } from '@ant-design/icons';
+import { SendOutlined, ExportOutlined, ImportOutlined, CheckOutlined, RollbackOutlined } from '@ant-design/icons';
 import { outsourceOrderApi } from '../services/production';
 import { getApiErrorMessage } from '../../../utils/errorHandler';
 import { getOutsourceOrderProgressFlags } from '../utils/outsourceOrderLifecycle';
@@ -43,6 +43,8 @@ export type OutsourceOrderProgressRecord = {
   unqualified_quantity?: number;
   purchase_receipt_id?: number;
   receipt_batches?: OutsourceOrderReceiptBatch[];
+  issued_batch_quantity?: number;
+  suggested_receipt_quantity?: number;
   capabilities?: {
     push_outsource_issue?: { allowed?: boolean; reason?: string };
   };
@@ -126,6 +128,16 @@ export function useOutsourceOrderProgressHandlers(
   return { release, revokeRelease, start, complete };
 }
 
+/** lifecycle=下达/撤回/完成；execution=发料/入库/登记等；all=抽屉内全量 */
+export type OutsourceOrderProgressActionScope = 'lifecycle' | 'execution' | 'all';
+
+function progressActionInScope(
+  kind: 'lifecycle' | 'execution',
+  scope: OutsourceOrderProgressActionScope,
+): boolean {
+  return scope === 'all' || scope === kind;
+}
+
 type BuildProgressActionsArgs = {
   record: OutsourceOrderProgressRecord;
   t: TFunction;
@@ -134,23 +146,46 @@ type BuildProgressActionsArgs = {
   handlers: OutsourceOrderProgressHandlers;
   onOpenRegisterReceipt: (record: OutsourceOrderProgressRecord) => void;
   onOpenProcessIssue: (record: OutsourceOrderProgressRecord) => void;
-  layout: 'drawer' | 'row';
+  layout: 'drawer' | 'row' | 'toolbar';
+  scope?: OutsourceOrderProgressActionScope;
+  /** 列表功能区：未单选或选中无效时整组置灰，按钮仍占位展示 */
+  toolbarSelectionActive?: boolean;
   closeDrawer?: () => void;
 };
 
+function buildOutsourceToolbarIdleButtons(t: TFunction): React.ReactNode[] {
+  return [
+    <Button key="oo-toolbar-issue-idle" type="primary" disabled icon={<ExportOutlined />}>
+      {t('app.kuaizhizao.outsourceOrder.actionProcessIssue')}
+    </Button>,
+    <Button key="oo-toolbar-register-idle" type="primary" disabled icon={<ImportOutlined />}>
+      {t('app.kuaizhizao.outsourceOrder.actionRegisterReceipt')}
+    </Button>,
+  ];
+}
+
 /** 每个后续动作单独一个节点，供操作列直出（禁止包在单组件 Fragment 里）。 */
 export function buildOutsourceOrderProgressActionNodes(args: BuildProgressActionsArgs): React.ReactNode[] {
-  const { record, t, navigate, linkedDetail, handlers, onOpenRegisterReceipt, onOpenProcessIssue, layout, closeDrawer } =
-    args;
+  const {
+    record,
+    t,
+    navigate,
+    linkedDetail,
+    handlers,
+    onOpenRegisterReceipt,
+    onOpenProcessIssue,
+    layout,
+    scope = 'all',
+    closeDrawer,
+    toolbarSelectionActive = true,
+  } = args;
+  if (layout === 'toolbar' && !toolbarSelectionActive) {
+    return buildOutsourceToolbarIdleButtons(t);
+  }
   const flags = getOutsourceOrderProgressFlags(record as Record<string, unknown>);
   const isRow = layout === 'row';
   const primaryBtn = isRow ? { type: 'link' as const, size: 'small' as const } : { type: 'primary' as const };
   const defaultBtn = isRow ? { type: 'link' as const, size: 'small' as const } : {};
-
-  const goInbound = () => {
-    closeDrawer?.();
-    navigate(`${ROUTES.WM_INBOUND}?receipt_type=purchase`);
-  };
 
   const openInboundDoc = () => {
     if (record.purchase_receipt_id == null || !linkedDetail || !canOpenLinkedDocumentDetail('purchase_receipt')) {
@@ -161,7 +196,7 @@ export function buildOutsourceOrderProgressActionNodes(args: BuildProgressAction
 
   const nodes: React.ReactNode[] = [];
 
-  if (flags.canRevokeRelease) {
+  if (flags.canRevokeRelease && progressActionInScope('lifecycle', scope)) {
     nodes.push(
       <ActionConfirmPopconfirm
         key="oo-progress-revoke-pop"
@@ -180,7 +215,7 @@ export function buildOutsourceOrderProgressActionNodes(args: BuildProgressAction
       </ActionConfirmPopconfirm>,
     );
   }
-  if (flags.canRelease) {
+  if (flags.canRelease && progressActionInScope('lifecycle', scope)) {
     nodes.push(
       <Button
         key="oo-progress-release"
@@ -196,13 +231,13 @@ export function buildOutsourceOrderProgressActionNodes(args: BuildProgressAction
       </Button>,
     );
   }
-  if (flags.canStart) {
+  if (flags.canStart && progressActionInScope('execution', scope)) {
     nodes.push(
       <Button
         key="oo-progress-start"
-        {...(isRow ? rowActionKind('submit') : {})}
+        {...(isRow ? rowActionKind('export') : {})}
         {...primaryBtn}
-        icon={isRow ? undefined : <PlayCircleOutlined />}
+        icon={isRow ? undefined : <ExportOutlined />}
         onClick={(e) => {
           e.stopPropagation();
           onOpenProcessIssue(record);
@@ -217,23 +252,7 @@ export function buildOutsourceOrderProgressActionNodes(args: BuildProgressAction
       </Button>,
     );
   }
-  if (flags.canGoInbound) {
-    nodes.push(
-      <Button
-        key="oo-progress-inbound"
-        {...(isRow ? rowActionKind('submit') : {})}
-        {...primaryBtn}
-        icon={isRow ? undefined : <InboxOutlined />}
-        onClick={(e) => {
-          e.stopPropagation();
-          goInbound();
-        }}
-      >
-        {t('app.kuaizhizao.outsourceOrder.actionInbound')}
-      </Button>,
-    );
-  }
-  if (flags.canOpenInboundDoc) {
+  if (flags.canOpenInboundDoc && progressActionInScope('execution', scope)) {
     nodes.push(
       <Button
         key="oo-progress-open-inbound"
@@ -248,12 +267,13 @@ export function buildOutsourceOrderProgressActionNodes(args: BuildProgressAction
       </Button>,
     );
   }
-  if (flags.canRegisterReceipt) {
+  if (flags.canRegisterReceipt && progressActionInScope('execution', scope)) {
     nodes.push(
       <Button
         key="oo-progress-register"
-        {...(isRow ? rowActionKind('submit') : {})}
+        {...(isRow ? rowActionKind('import') : {})}
         {...primaryBtn}
+        icon={isRow ? undefined : <ImportOutlined />}
         onClick={(e) => {
           e.stopPropagation();
           onOpenRegisterReceipt(record);
@@ -263,7 +283,7 @@ export function buildOutsourceOrderProgressActionNodes(args: BuildProgressAction
       </Button>,
     );
   }
-  if (flags.canComplete) {
+  if (flags.canComplete && progressActionInScope('lifecycle', scope)) {
     nodes.push(
       <ActionConfirmPopconfirm
         key="oo-progress-complete-pop"
@@ -282,7 +302,7 @@ export function buildOutsourceOrderProgressActionNodes(args: BuildProgressAction
       </ActionConfirmPopconfirm>,
     );
   }
-  if (flags.canSettlement) {
+  if (flags.canSettlement && progressActionInScope('execution', scope)) {
     nodes.push(
       <Button
         key="oo-progress-settlement"
@@ -304,9 +324,17 @@ export function buildOutsourceOrderProgressActionNodes(args: BuildProgressAction
 
 export function appendOutsourceOrderProgressRowActions(
   target: React.ReactNode[],
-  args: Omit<BuildProgressActionsArgs, 'layout'>,
+  args: Omit<BuildProgressActionsArgs, 'layout'> & { scope?: OutsourceOrderProgressActionScope },
 ): void {
-  target.push(...buildOutsourceOrderProgressActionNodes({ ...args, layout: 'row' }));
+  const { scope = 'all', ...rest } = args;
+  target.push(...buildOutsourceOrderProgressActionNodes({ ...rest, layout: 'row', scope }));
+}
+
+/** 列表功能区：未单选时占位置灰；单选后按单据状态启用对应项。 */
+export function buildOutsourceOrderProgressToolbarActions(
+  args: Omit<BuildProgressActionsArgs, 'layout'>,
+): React.ReactNode[] {
+  return buildOutsourceOrderProgressActionNodes({ ...args, layout: 'toolbar', scope: 'execution' });
 }
 
 export function OutsourceOrderRegisterReceiptModal(props: {
@@ -346,7 +374,12 @@ export function OutsourceOrderRegisterReceiptModal(props: {
 
   useEffect(() => {
     if (!open || !record) return;
-    const defaultRecv = remainingQty > 0 ? remainingQty : undefined;
+    const suggested = Number(record.suggested_receipt_quantity ?? 0);
+    const basisDefault =
+      Number.isFinite(suggested) && suggested > 0
+        ? Math.min(remainingQty, suggested)
+        : remainingQty;
+    const defaultRecv = basisDefault > 0 ? basisDefault : undefined;
     form.setFieldsValue({
       received_quantity: defaultRecv,
       qualified_quantity: defaultRecv,

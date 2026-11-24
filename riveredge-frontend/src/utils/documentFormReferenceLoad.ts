@@ -252,6 +252,18 @@ export function referenceDisplayItemsToMaterials(items: ReferenceDisplayItem[]):
         source_type: extra.source_type as string | undefined,
         group_id: extra.group_id as number | undefined,
         images: extra.images,
+        variantManaged: !!(extra.variant_managed ?? extra.variantManaged),
+        variant_managed: extra.variant_managed as boolean | undefined,
+        variantAttributes: (extra.variant_attributes ?? extra.variantAttributes) as
+          | Material['variantAttributes']
+          | undefined,
+        variant_attributes: extra.variant_attributes as Material['variantAttributes'] | undefined,
+        isGiftable: !!(extra.is_giftable ?? extra.isGiftable),
+        is_giftable: !!(extra.is_giftable ?? extra.isGiftable),
+        batchManaged: !!(extra.batch_managed ?? extra.batchManaged),
+        batch_managed: extra.batch_managed as boolean | undefined,
+        serialManaged: !!(extra.serial_managed ?? extra.serialManaged),
+        serial_managed: extra.serial_managed as boolean | undefined,
       } as Material;
     });
 }

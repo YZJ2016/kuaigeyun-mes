@@ -2149,113 +2149,120 @@ const SalesReturnsPage: React.FC = () => {
 
   const renderSalesReturnFormFields = () => (
     <>
-        <Row gutter={16}>
-          <Col span={8}>
-            <ProForm.Item
-              name="customer_id"
-              label={t('app.kuaizhizao.salesReturn.customer')}
-              rules={[{ required: true, message: t('app.kuaizhizao.salesReturn.selectCustomer') }]}
-            >
-              <CustomerSelectDropdown
-                hostResource={SALES_RETURN_RESOURCE}
-                placeholder={t('app.kuaizhizao.salesReturn.selectCustomer')}
-                style={{ width: '100%' }}
-                onCustomerPick={(customer) => {
-                  const name = customer
-                    ? resolveSalesReturnSnapshotName(
-                        (customer as { name?: unknown; customer_name?: unknown }).name ??
-                          (customer as { customer_name?: unknown }).customer_name,
-                      )
-                    : '';
-                  formRef.current?.setFieldsValue({ customer_name: name });
-                  const items = normalizeFormListItems<Record<string, unknown>>(
-                    formRef.current?.getFieldValue('items'),
-                  );
-                  items.forEach((_, idx) => {
-                    void repriceUnlockedSalesDocumentLineIfNeeded(formRef.current, idx, {
-                      asOfField: 'return_time',
-                    });
-                  });
-                }}
-              />
-            </ProForm.Item>
-            <ProFormText name="customer_name" hidden />
-          </Col>
-          <Col span={8}>
-            <UniWarehouseSelect
-              name="warehouse_id"
-              label={t('app.kuaizhizao.salesReturn.returnWarehouse')}
-              placeholder={t('app.kuaizhizao.salesReturn.selectWarehouse')}
-              required
-              onChange={(value, wh) => {
-                formRef.current?.setFieldsValue({ warehouse_name: (wh as any)?.name ?? '' });
-                updateSelectedWarehouseId(value);
-              }}
-              rules={[{ required: true, message: t('app.kuaizhizao.salesReturn.selectWarehouse') }]}
-            />
-            <ProFormText name="warehouse_name" hidden />
-          </Col>
-          <Col span={8}>
-            <ProFormDatePicker
-              name="return_time"
-              label={t('app.kuaizhizao.salesReturn.returnDate')}
-              required
-              fieldProps={{
-                style: { width: '100%' },
-                onChange: () => {
-                  const items = normalizeFormListItems<Record<string, unknown>>(
-                    formRef.current?.getFieldValue('items'),
-                  );
-                  items.forEach((_, idx) => {
-                    void repriceUnlockedSalesDocumentLineIfNeeded(formRef.current, idx, {
-                      asOfField: 'return_time',
-                    });
-                  });
-                },
-              }}
-              initialValue={dayjs()}
-            />
-          </Col>
-        </Row>
+        <div className="document-form-untitled-groups">
+          <div className="document-form-untitled-group">
+            <Row gutter={16} wrap={false}>
+              <Col flex="1 1 0" style={{ minWidth: 0 }}>
+                <ProForm.Item
+                  name="customer_id"
+                  label={t('app.kuaizhizao.salesReturn.customer')}
+                  rules={[{ required: true, message: t('app.kuaizhizao.salesReturn.selectCustomer') }]}
+                >
+                  <CustomerSelectDropdown
+                    hostResource={SALES_RETURN_RESOURCE}
+                    placeholder={t('app.kuaizhizao.salesReturn.selectCustomer')}
+                    style={{ width: '100%' }}
+                    onCustomerPick={(customer) => {
+                      const name = customer
+                        ? resolveSalesReturnSnapshotName(
+                            (customer as { name?: unknown; customer_name?: unknown }).name ??
+                              (customer as { customer_name?: unknown }).customer_name,
+                          )
+                        : '';
+                      formRef.current?.setFieldsValue({ customer_name: name });
+                      const items = normalizeFormListItems<Record<string, unknown>>(
+                        formRef.current?.getFieldValue('items'),
+                      );
+                      items.forEach((_, idx) => {
+                        void repriceUnlockedSalesDocumentLineIfNeeded(formRef.current, idx, {
+                          asOfField: 'return_time',
+                        });
+                      });
+                    }}
+                  />
+                </ProForm.Item>
+                <ProFormText name="customer_name" hidden />
+              </Col>
+              <Col flex="1 1 0" style={{ minWidth: 0 }}>
+                <UniWarehouseSelect
+                  name="warehouse_id"
+                  label={t('app.kuaizhizao.salesReturn.returnWarehouse')}
+                  placeholder={t('app.kuaizhizao.salesReturn.selectWarehouse')}
+                  required
+                  onChange={(value, wh) => {
+                    formRef.current?.setFieldsValue({ warehouse_name: (wh as any)?.name ?? '' });
+                    updateSelectedWarehouseId(value);
+                  }}
+                  rules={[{ required: true, message: t('app.kuaizhizao.salesReturn.selectWarehouse') }]}
+                />
+                <ProFormText name="warehouse_name" hidden />
+              </Col>
+              <Col flex="1 1 0" style={{ minWidth: 0 }}>
+                <ProFormDatePicker
+                  name="return_time"
+                  label={t('app.kuaizhizao.salesReturn.returnDate')}
+                  required
+                  fieldProps={{
+                    style: { width: '100%' },
+                    onChange: () => {
+                      const items = normalizeFormListItems<Record<string, unknown>>(
+                        formRef.current?.getFieldValue('items'),
+                      );
+                      items.forEach((_, idx) => {
+                        void repriceUnlockedSalesDocumentLineIfNeeded(formRef.current, idx, {
+                          asOfField: 'return_time',
+                        });
+                      });
+                    },
+                  }}
+                  initialValue={dayjs()}
+                />
+              </Col>
+              <Col flex="1 1 0" style={{ minWidth: 0 }}>
+                <ProFormSelect
+                  name="return_reason"
+                  label={t('app.kuaizhizao.salesReturn.returnReason')}
+                  placeholder={t('app.kuaizhizao.salesReturn.selectReturnReason')}
+                  options={returnReasonOptions}
+                  fieldProps={{ showSearch: true, allowClear: true, loading: dictOptionsLoading }}
+                />
+              </Col>
+              <Col flex="1 1 0" style={{ minWidth: 0 }}>
+                <ProFormSelect
+                  name="return_type"
+                  label={t('app.kuaizhizao.salesReturn.returnType')}
+                  placeholder={t('app.kuaizhizao.salesReturn.selectReturnType')}
+                  options={returnTypeOptions}
+                  fieldProps={{ showSearch: true, allowClear: true, loading: dictOptionsLoading }}
+                />
+              </Col>
+            </Row>
+            <Row gutter={16} wrap={false}>
+              <Col flex="1 1 0" style={{ minWidth: 0 }}>
+                <ProFormSelect
+                  name="shipping_method"
+                  label={t('app.kuaizhizao.salesOrder.shippingMethod')}
+                  placeholder={t('app.kuaizhizao.salesReturn.selectShippingMethod')}
+                  options={shippingMethodOptions}
+                  fieldProps={{ showSearch: true, allowClear: true, loading: dictOptionsLoading }}
+                />
+              </Col>
+              <Col flex="1 1 0" style={{ minWidth: 0 }} aria-hidden />
+              <Col flex="1 1 0" style={{ minWidth: 0 }} aria-hidden />
+              <Col flex="1 1 0" style={{ minWidth: 0 }} aria-hidden />
+              <Col flex="1 1 0" style={{ minWidth: 0 }} aria-hidden />
+            </Row>
+          </div>
+        </div>
         <ProFormText name="currency_code" hidden initialValue="CNY" />
         <ProForm.Item name="exchange_rate" hidden initialValue={1}>
           <InputNumber />
         </ProForm.Item>
-        <Row gutter={16}>
-          <Col span={8}>
-            <ProFormSelect
-              name="return_reason"
-              label={t('app.kuaizhizao.salesReturn.returnReason')}
-              placeholder={t('app.kuaizhizao.salesReturn.selectReturnReason')}
-              options={returnReasonOptions}
-              fieldProps={{ showSearch: true, allowClear: true, loading: dictOptionsLoading }}
-            />
-          </Col>
-          <Col span={8}>
-            <ProFormSelect
-              name="return_type"
-              label={t('app.kuaizhizao.salesReturn.returnType')}
-              placeholder={t('app.kuaizhizao.salesReturn.selectReturnType')}
-              options={returnTypeOptions}
-              fieldProps={{ showSearch: true, allowClear: true, loading: dictOptionsLoading }}
-            />
-          </Col>
-          <Col span={8}>
-            <ProFormSelect
-              name="shipping_method"
-              label={t('app.kuaizhizao.salesOrder.shippingMethod')}
-              placeholder={t('app.kuaizhizao.salesReturn.selectShippingMethod')}
-              options={shippingMethodOptions}
-              fieldProps={{ showSearch: true, allowClear: true, loading: dictOptionsLoading }}
-            />
-          </Col>
-          <CustomFieldsFormSection
-            customFields={salesReturnFormCustomFields}
-            customFieldValues={salesReturnFormCustomFieldValues}
-            gridColumns={3}
-            embedInParentRow
-          />
-        </Row>
+        <CustomFieldsFormSection
+          customFields={salesReturnFormCustomFields}
+          customFieldValues={salesReturnFormCustomFieldValues}
+          gridColumns={4}
+        />
 
         <DocumentDetailTableStyles />
         <UniTableDetail

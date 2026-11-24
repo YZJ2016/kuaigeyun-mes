@@ -16,6 +16,8 @@ import {
   Table,
   Typography,
 } from 'antd';
+import { UniTableDetailHeader } from '../../../components/uni-table-detail/UniTableDetail';
+import { WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../components/layout-templates';
 import { PurchaseInboundLineLocationCell } from '../pages/warehouse-management/inbound/PurchaseInboundLineWhCells';
 import {
   filterWarehouseTrackingColumns,
@@ -79,7 +81,7 @@ export type OutsourceIssueWorkOrderBrief = {
   plannedEndDate?: string | null;
 };
 
-function formatSupplierBrief(workOrder: OutsourceIssueWorkOrderBrief): string {
+export function formatOutsourceIssueSupplierBrief(workOrder: OutsourceIssueWorkOrderBrief): string {
   const code = (workOrder.supplier_code ?? workOrder.supplierCode ?? '').trim();
   const name = (workOrder.supplier_name ?? workOrder.supplierName ?? '').trim();
   if (code && name) return `${code} - ${name}`;
@@ -151,7 +153,7 @@ export function OutsourceIssueWorkOrderInfoPanel({
           {
             key: 'supplier',
             label: t('app.kuaizhizao.outsourceOrder.fieldSupplier'),
-            value: formatSupplierBrief(workOrder),
+            value: formatOutsourceIssueSupplierBrief(workOrder),
           } as OutsourceIssueInfoCell,
         ]
       : []),
@@ -661,85 +663,109 @@ const OutsourceIssueFormContent: React.FC<OutsourceIssueFormContentProps> = ({
 
   const alertType = allowManualLines && previewMessage ? 'info' : 'warning';
 
+  const manualAddAction =
+    allowManualLines && !pickerOpen
+      ? [
+          {
+            key: 'add-manual',
+            label: t('app.kuaizhizao.outsourceWorkOrder.issueAddManualLine'),
+            icon: <PlusOutlined />,
+            color: 'primary' as const,
+            onClick: () => setPickerOpen(true),
+          },
+        ]
+      : undefined;
+
+  const headerExtra = (
+    <Space wrap size={8} align="center">
+      {pickerOpen ? (
+        <>
+          <Form form={pickerForm} style={{ minWidth: 280, marginBottom: 0 }}>
+            <UniMaterialSelect
+              name="manual_material_id"
+              label=""
+              placeholder={t('app.kuaizhizao.outsourceWorkOrder.issuePickMaterial')}
+              onChange={addManualMaterial}
+              showQuickCreate
+              showAdvancedSearch
+            />
+          </Form>
+          <Button onClick={() => setPickerOpen(false)}>{t('common.cancel')}</Button>
+        </>
+      ) : null}
+      {lineWarehouseEnabled && onBatchSetWarehouse ? (
+        <Space.Compact>
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder={t('app.kuaizhizao.warehouseOutbound.entry.batchSetLineWarehouse')}
+            style={{ width: 220 }}
+            options={warehouseOptions}
+            value={batchWhId}
+            onChange={(v) => setBatchWhId(v == null ? undefined : Number(v))}
+          />
+          <Button
+            disabled={!(batchWhId != null && batchWhId > 0) || !lines.length}
+            onClick={() => {
+              if (batchWhId != null && batchWhId > 0) onBatchSetWarehouse(batchWhId);
+            }}
+          >
+            {t('app.kuaizhizao.warehouseOutbound.entry.batchSetLineWarehouse')}
+          </Button>
+        </Space.Compact>
+      ) : null}
+    </Space>
+  );
+
   return (
     <>
       {hideWorkOrderInfo ? null : <OutsourceIssueWorkOrderInfoPanel workOrder={workOrder} />}
 
-      <Divider style={{ margin: `${PAGE_SPACING.BLOCK_GAP}px 0` }}>
-        {t('app.kuaizhizao.outsourceWorkOrder.issueLineSection')}
-      </Divider>
-      {previewMessage ? (
-        <Alert type={alertType} showIcon title={previewMessage} style={{ marginBottom: 12 }} />
-      ) : null}
-      <Space style={{ marginBottom: 12 }} wrap>
-        {allowManualLines ? (
-          pickerOpen ? (
-            <>
-              <Form form={pickerForm} style={{ minWidth: 320, flex: 1 }}>
-                <UniMaterialSelect
-                  name="manual_material_id"
-                  label=""
-                  placeholder={t('app.kuaizhizao.outsourceWorkOrder.issuePickMaterial')}
-                  onChange={addManualMaterial}
-                  showQuickCreate
-                  showAdvancedSearch
-                />
-              </Form>
-              <Button onClick={() => setPickerOpen(false)}>{t('common.cancel')}</Button>
-            </>
-          ) : (
-            <Button icon={<PlusOutlined />} onClick={() => setPickerOpen(true)}>
-              {t('app.kuaizhizao.outsourceWorkOrder.issueAddManualLine')}
-            </Button>
-          )
+      <div
+        className="uni-table-detail"
+        style={{ marginTop: hideWorkOrderInfo ? 0 : PAGE_SPACING.BLOCK_GAP }}
+      >
+        {previewMessage ? (
+          <Alert type={alertType} showIcon title={previewMessage} style={{ marginBottom: 12 }} />
         ) : null}
-        {lineWarehouseEnabled && onBatchSetWarehouse ? (
-          <Space.Compact>
-            <Select
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              placeholder={t('app.kuaizhizao.warehouseOutbound.entry.batchSetLineWarehouse')}
-              style={{ width: 220 }}
-              options={warehouseOptions}
-              value={batchWhId}
-              onChange={(v) => setBatchWhId(v == null ? undefined : Number(v))}
-            />
-            <Button
-              disabled={!(batchWhId != null && batchWhId > 0) || !lines.length}
-              onClick={() => {
-                if (batchWhId != null && batchWhId > 0) onBatchSetWarehouse(batchWhId);
-              }}
-            >
-              {t('app.kuaizhizao.warehouseOutbound.entry.batchSetLineWarehouse')}
-            </Button>
-          </Space.Compact>
-        ) : null}
-      </Space>
-      <Spin spinning={!!loading}>
-        <Table<OutsourceIssueLine>
-          size="small"
-          rowKey="materialId"
-          columns={columns}
-          dataSource={lines}
-          pagination={false}
-          scroll={{
-            x: quantityOnlyLines
-              ? lineTrackingEnabled
-                ? 980
-                : 760
-              : lineWarehouseEnabled
-                ? 1180
-                : 980,
-            y: 280,
-          }}
-          locale={{
-            emptyText: loading
-              ? t('common.loading')
-              : t('app.kuaizhizao.outsourceWorkOrder.issueLineEmpty'),
-          }}
+        <UniTableDetailHeader
+          title={t('app.kuaizhizao.warehouseOutbound.entry.issueDetails')}
+          required={false}
+          actions={manualAddAction}
+          headerExtra={headerExtra}
         />
-      </Spin>
+        <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+        <div className="uni-table-detail-body">
+          <div className="uni-table-detail-scroll">
+            <Spin spinning={!!loading}>
+              <Table<OutsourceIssueLine>
+                className="uni-detail-table warehouse-detail-table"
+                size="small"
+                rowKey="materialId"
+                columns={columns}
+                dataSource={lines}
+                pagination={false}
+                scroll={{
+                  x: quantityOnlyLines
+                    ? lineTrackingEnabled
+                      ? 980
+                      : 760
+                    : lineWarehouseEnabled
+                      ? 1180
+                      : 980,
+                  y: 280,
+                }}
+                locale={{
+                  emptyText: loading
+                    ? t('common.loading')
+                    : t('app.kuaizhizao.outsourceWorkOrder.issueLineEmpty'),
+                }}
+              />
+            </Spin>
+          </div>
+        </div>
+      </div>
     </>
   );
 };

@@ -14,6 +14,7 @@ class OrderChangeCategory(str, Enum):
 
 class OrderChangeLineType(str, Enum):
     QUANTITY = "QUANTITY"
+    AUX_QUANTITY = "AUX_QUANTITY"
     DELIVERY_DATE = "DELIVERY_DATE"
     UNIT_PRICE = "UNIT_PRICE"
     LINE_CANCEL = "LINE_CANCEL"

@@ -136,7 +136,12 @@ async def sync_other_outbound_kingdee_after_update(
 
     async def _cfg(tid: int, wh: Dict[str, Any], doc: OtherOutbound, items: List[Any]) -> Dict[str, Any]:
         mids = [int(it.material_id) for it in items if getattr(it, "material_id", None)]
-        return await resolve_other_outbound_push_config(tid, wh, material_ids=mids)
+        return await resolve_other_outbound_push_config(
+            tid,
+            wh,
+            material_ids=mids,
+            outbound_type=getattr(doc, "outbound_type", None),
+        )
 
     await _run_im_batch_update_sync(
         tenant_id=tenant_id,

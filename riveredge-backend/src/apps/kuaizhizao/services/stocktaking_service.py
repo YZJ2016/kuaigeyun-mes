@@ -193,8 +193,11 @@ class StocktakingService(AppBaseService[Stocktaking]):
         response = StocktakingWithItemsResponse.model_validate(stocktaking)
         response.items = [StocktakingItemResponse.model_validate(item) for item in items]
         response.lifecycle = get_stocktaking_lifecycle(stocktaking, milestones=milestones)
+        from apps.kuaizhizao.services.kingdee_push_bill_detail import attach_stocktaking_kingdee_bills_detail
 
-        return response
+        return await attach_stocktaking_kingdee_bills_detail(
+            response, tenant_id=tenant_id, stocktaking_id=stocktaking_id
+        )
 
     async def delete_stocktaking(self, tenant_id: int, stocktaking_id: int) -> bool:
         """删除盘点单（软删除，仅草稿可删）"""

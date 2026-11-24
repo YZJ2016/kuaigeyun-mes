@@ -6,7 +6,7 @@
 
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, validator, ConfigDict
+from pydantic import BaseModel, Field, model_validator, validator, ConfigDict
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 
@@ -44,6 +44,20 @@ class PartnerInvoiceAndExtendedMixin(BaseModel):
         max_length=50,
         description="默认付款方式编码",
         alias="defaultPaymentMethodCode",
+    )
+    default_payment_wire_percent: Optional[Decimal] = Field(
+        None,
+        ge=0,
+        le=100,
+        description="默认电汇比例（%）",
+        alias="defaultPaymentWirePercent",
+    )
+    default_payment_acceptance_percent: Optional[Decimal] = Field(
+        None,
+        ge=0,
+        le=100,
+        description="默认承兑比例（%）",
+        alias="defaultPaymentAcceptancePercent",
     )
     settlement_terms_code: Optional[str] = Field(
         None,
@@ -92,6 +106,27 @@ class PartnerInvoiceAndExtendedMixin(BaseModel):
         if coerced is None:
             raise ValueError("无效的默认付款方式")
         return coerced
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_default_payment_method_mix(cls, data):
+        from apps.master_data.config.payment_method_mix import apply_payment_method_mix_to_mapping
+
+        if not isinstance(data, dict):
+            return data
+        mapped = apply_payment_method_mix_to_mapping(
+            {
+                "payment_method_code": data.get("default_payment_method_code"),
+                "payment_wire_percent": data.get("default_payment_wire_percent"),
+                "payment_acceptance_percent": data.get("default_payment_acceptance_percent"),
+            },
+            skip_when_all_missing=True,
+        )
+        patched = dict(data)
+        patched["default_payment_method_code"] = mapped.get("payment_method_code")
+        patched["default_payment_wire_percent"] = mapped.get("payment_wire_percent")
+        patched["default_payment_acceptance_percent"] = mapped.get("payment_acceptance_percent")
+        return patched
 
     @validator("settlement_terms_code", pre=True)
     def validate_settlement_terms_code(cls, v):

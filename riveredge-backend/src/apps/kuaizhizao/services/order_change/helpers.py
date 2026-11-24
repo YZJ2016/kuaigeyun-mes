@@ -36,7 +36,7 @@ def infer_change_category(line_types: List[str]) -> str:
         return OrderChangeCategory.OTHER.value
     if len(types) == 1:
         t = next(iter(types))
-        if t == OrderChangeLineType.QUANTITY.value:
+        if t in (OrderChangeLineType.QUANTITY.value, OrderChangeLineType.AUX_QUANTITY.value):
             return OrderChangeCategory.QUANTITY.value
         if t == OrderChangeLineType.DELIVERY_DATE.value:
             return OrderChangeCategory.DELIVERY.value
@@ -164,15 +164,40 @@ def read_purchase_line_entered_unit_price(source_item: Any, price_type: str) -> 
     return Decimal(str(getattr(source_item, "unit_price", 0) or 0))
 
 
+def read_source_aux_quantity(source_item: Any) -> Optional[Decimal]:
+    raw = getattr(source_item, "aux_quantity", None)
+    if raw is None or raw == "":
+        return None
+    return Decimal(str(raw))
+
+
+def optional_decimals_differ(a: Any, b: Any) -> bool:
+    def norm(value: Any) -> Optional[Decimal]:
+        if value is None or value == "":
+            return None
+        return Decimal(str(value))
+
+    na = norm(a)
+    nb = norm(b)
+    if na is None and nb is None:
+        return False
+    if na is None or nb is None:
+        return True
+    return na != nb
+
+
 def snapshot_purchase_item(
     source_item: Any, *, price_type: str = "tax_exclusive"
 ) -> Tuple[str, Dict[str, Any]]:
     before_qty = Decimal(str(getattr(source_item, "ordered_quantity", 0) or 0))
     before_price = read_purchase_line_entered_unit_price(source_item, price_type)
     before_date = getattr(source_item, "required_date", None)
+    before_aux = read_source_aux_quantity(source_item)
     return OrderChangeLineType.QUANTITY.value, {
         "before_quantity": before_qty,
         "after_quantity": before_qty,
+        "before_aux_quantity": before_aux,
+        "after_aux_quantity": before_aux,
         "before_unit_price": before_price,
         "after_unit_price": before_price,
         "before_delivery_date": before_date,
@@ -245,6 +270,7 @@ def resolve_purchase_line_change(
             payload.after_quantity,
             payload.after_unit_price,
             payload.after_delivery_date,
+            after_aux_quantity=getattr(payload, "after_aux_quantity", None),
             line_cancel=cancel,
             price_type=price_type,
         )
@@ -259,6 +285,7 @@ def diff_purchase_item(
     after_quantity: Optional[Decimal],
     after_unit_price: Optional[Decimal],
     after_delivery_date: Optional[Any],
+    after_aux_quantity: Optional[Decimal] = None,
     line_cancel: bool = False,
     *,
     price_type: str = "tax_exclusive",
@@ -266,6 +293,7 @@ def diff_purchase_item(
     before_qty = Decimal(str(getattr(source_item, "ordered_quantity", 0) or 0))
     before_price = read_purchase_line_entered_unit_price(source_item, price_type)
     before_date = getattr(source_item, "required_date", None)
+    before_aux = read_source_aux_quantity(source_item)
     received = Decimal(str(getattr(source_item, "received_quantity", 0) or 0))
 
     if line_cancel:
@@ -274,6 +302,8 @@ def diff_purchase_item(
         return OrderChangeLineType.LINE_CANCEL.value, {
             "before_quantity": before_qty,
             "after_quantity": Decimal("0"),
+            "before_aux_quantity": before_aux,
+            "after_aux_quantity": before_aux,
             "before_unit_price": before_price,
             "after_unit_price": before_price,
             "before_delivery_date": before_date,
@@ -283,6 +313,9 @@ def diff_purchase_item(
     new_qty = before_qty if after_quantity is None else Decimal(str(after_quantity))
     new_price = before_price if after_unit_price is None else Decimal(str(after_unit_price))
     new_date = before_date if after_delivery_date is None else after_delivery_date
+    new_aux = before_aux if after_aux_quantity is None else (
+        None if after_aux_quantity == "" else Decimal(str(after_aux_quantity))
+    )
 
     if new_qty < received:
         raise BusinessLogicError(
@@ -292,6 +325,8 @@ def diff_purchase_item(
     changes: List[str] = []
     if new_qty != before_qty:
         changes.append(OrderChangeLineType.QUANTITY.value)
+    if optional_decimals_differ(new_aux, before_aux):
+        changes.append(OrderChangeLineType.AUX_QUANTITY.value)
     if new_price != before_price:
         changes.append(OrderChangeLineType.UNIT_PRICE.value)
     if str(new_date) != str(before_date):
@@ -304,6 +339,8 @@ def diff_purchase_item(
     return change_type, {
         "before_quantity": before_qty,
         "after_quantity": new_qty,
+        "before_aux_quantity": before_aux,
+        "after_aux_quantity": new_aux,
         "before_unit_price": before_price,
         "after_unit_price": new_price,
         "before_delivery_date": before_date,

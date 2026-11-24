@@ -56,6 +56,10 @@ import {
   renderDocumentLineMaterialsPreview,
 } from '../../sales-management/shared/documentLineMaterialsPreview';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import {
+  KUAIZHIZAO_CUSTOMER_MATERIAL_REGISTRATION_FIELD_RESOURCE,
+  renderWarehousePartyNameDisplay,
+} from '../shared/warehouseAmountDisplay';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
@@ -764,7 +768,11 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       sorter: true,
       hideInSearch: true,
       render: (_, r) =>
-        r.customer_name != null && r.customer_name !== '' ? String(r.customer_name) : '-',
+        renderWarehousePartyNameDisplay(
+          r.customer_name,
+          KUAIZHIZAO_CUSTOMER_MATERIAL_REGISTRATION_FIELD_RESOURCE,
+          'customer_name',
+        ),
     },
     {
       title: t('app.kuaizhizao.warehouseCommon.colWorkOrder'),
@@ -877,7 +885,16 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
 
   const detailBasicColumns = useMemo(() => alignDescriptionColumns([
     { title: t('app.kuaizhizao.warehouseCommon.colCode'), dataIndex: 'registration_code' },
-    { title: t('app.kuaizhizao.warehouseCommon.colCustomer'), dataIndex: 'customer_name' },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colCustomer'),
+      dataIndex: 'customer_name',
+      render: (_: unknown, record: CustomerMaterialRegistration) =>
+        renderWarehousePartyNameDisplay(
+          record.customer_name,
+          KUAIZHIZAO_CUSTOMER_MATERIAL_REGISTRATION_FIELD_RESOURCE,
+          'customer_name',
+        ),
+    },
     { title: t('app.kuaizhizao.warehouseCommon.colWorkOrder'), dataIndex: 'work_order_code', key: 'linked_work_order_code' },
     { title: t('app.kuaizhizao.warehouseCommon.colSalesOrder'), dataIndex: 'sales_order_code' },
     { title: t('app.kuaizhizao.warehouseCommon.colWarehouse'), dataIndex: 'warehouse_name' },

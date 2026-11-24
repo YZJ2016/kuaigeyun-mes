@@ -37,6 +37,13 @@ class Payable(BaseModel):
     # 账期信息
     due_date = fields.DateField(description="到期日期")
     payment_terms = fields.CharField(max_length=100, null=True, description="付款条件")
+    payment_method_code = fields.CharField(max_length=50, null=True, description="结算方式编码")
+    payment_wire_percent = fields.DecimalField(
+        max_digits=5, decimal_places=2, null=True, description="电汇占比%"
+    )
+    payment_acceptance_percent = fields.DecimalField(
+        max_digits=5, decimal_places=2, null=True, description="承兑占比%"
+    )
 
     # 状态
     status = fields.CharField(max_length=20, default="未付款", description="付款状态")

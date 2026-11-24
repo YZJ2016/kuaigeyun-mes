@@ -3187,8 +3187,10 @@ const PurchaseReturnsPage: React.FC = () => {
 
   const renderPurchaseReturnFormFields = () => (
     <>
-        <Row gutter={16}>
-          <Col span={8}>
+        <div className="document-form-untitled-groups">
+          <div className="document-form-untitled-group">
+        <Row gutter={16} wrap={false}>
+          <Col flex="1 1 0" style={{ minWidth: 0 }}>
             <ProFormSelect
               name="supplier_id"
               label={t('app.kuaizhizao.purchaseReturn.supplier')}
@@ -3223,7 +3225,7 @@ const PurchaseReturnsPage: React.FC = () => {
             />
             <ProFormText name="supplier_name" hidden />
           </Col>
-          <Col span={8}>
+          <Col flex="1 1 0" style={{ minWidth: 0 }}>
             <UniWarehouseSelect
               name="warehouse_id"
               label={t('app.kuaizhizao.purchaseReturn.returnWarehouse')}
@@ -3237,7 +3239,7 @@ const PurchaseReturnsPage: React.FC = () => {
             />
             <ProFormText name="warehouse_name" hidden />
           </Col>
-          <Col span={8}>
+          <Col flex="1 1 0" style={{ minWidth: 0 }}>
             <ProFormDatePicker
               name="return_time"
               label={t('app.kuaizhizao.purchaseReturn.returnDate')}
@@ -3261,15 +3263,7 @@ const PurchaseReturnsPage: React.FC = () => {
               initialValue={dayjs()}
             />
           </Col>
-        </Row>
-        <Row gutter={16}>
-          <Col span={8}>
-            <PurchaseDepartmentFormField
-              options={departmentOptions}
-              loading={departmentOptionsLoading}
-            />
-          </Col>
-          <Col span={8}>
+          <Col flex="1 1 0" style={{ minWidth: 0 }}>
             <ProFormSelect
               name="return_reason"
               label={t('app.kuaizhizao.purchaseReturn.returnReason')}
@@ -3278,7 +3272,7 @@ const PurchaseReturnsPage: React.FC = () => {
               fieldProps={{ showSearch: true, allowClear: true, loading: dictOptionsLoading }}
             />
           </Col>
-          <Col span={8}>
+          <Col flex="1 1 0" style={{ minWidth: 0 }}>
             <ProFormSelect
               name="return_type"
               label={t('app.kuaizhizao.purchaseReturn.returnType')}
@@ -3288,8 +3282,14 @@ const PurchaseReturnsPage: React.FC = () => {
             />
           </Col>
         </Row>
-        <Row gutter={16}>
-          <Col span={8}>
+        <Row gutter={16} wrap={false}>
+          <Col flex="1 1 0" style={{ minWidth: 0 }}>
+            <PurchaseDepartmentFormField
+              options={departmentOptions}
+              loading={departmentOptionsLoading}
+            />
+          </Col>
+          <Col flex="1 1 0" style={{ minWidth: 0 }}>
             <ProFormSelect
               name="shipping_method"
               label={t('app.kuaizhizao.purchaseReturn.shippingMethod')}
@@ -3298,16 +3298,7 @@ const PurchaseReturnsPage: React.FC = () => {
               fieldProps={{ showSearch: true, allowClear: true, loading: dictOptionsLoading }}
             />
           </Col>
-          <CustomFieldsFormSection
-            customFields={purchaseReturnFormCustomFields}
-            customFieldValues={purchaseReturnFormCustomFieldValues}
-            gridColumns={3}
-            embedInParentRow
-          />
-        </Row>
-
-        <Row gutter={16}>
-          <Col span={8}>
+          <Col flex="1 1 0" style={{ minWidth: 0 }}>
             <ProFormSelect
               name="replenish"
               label={t('app.kuaizhizao.purchaseReturn.replenish')}
@@ -3320,7 +3311,16 @@ const PurchaseReturnsPage: React.FC = () => {
               rules={[{ required: true, message: t('app.kuaizhizao.purchaseReturn.replenishRequired') }]}
             />
           </Col>
+          <Col flex="1 1 0" style={{ minWidth: 0 }} aria-hidden />
+          <Col flex="1 1 0" style={{ minWidth: 0 }} aria-hidden />
         </Row>
+          </div>
+        <CustomFieldsFormSection
+          customFields={purchaseReturnFormCustomFields}
+          customFieldValues={purchaseReturnFormCustomFieldValues}
+          gridColumns={4}
+        />
+        </div>
 
         <DocumentDetailTableStyles />
         <UniTableDetail

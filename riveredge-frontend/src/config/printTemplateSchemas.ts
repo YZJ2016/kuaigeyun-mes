@@ -48,6 +48,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     name: '工单',
     fields: [
       { key: 'code', label: '工单编号', type: 'string' },
+      { key: 'kingdee_bill_no', label: '金蝶单号', type: 'string' },
       { key: 'work_order_qrcode', label: '工单二维码', type: 'string' },
       { key: 'signature', label: '签名', type: 'string' },
       { key: 'name', label: '工单名称', type: 'string' },
@@ -142,6 +143,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     fields: [
       { key: 'code', label: '领料单号', type: 'string' },
       DOCUMENT_QRCODE_FIELD,
+      { key: 'kingdee_bill_no', label: '金蝶单号', type: 'string' },
       { key: 'work_order_code', label: '工单编号', type: 'string' },
       { key: 'workshop_name', label: '车间名称', type: 'string' },
       { key: 'status', label: '状态', type: 'string' },
@@ -208,6 +210,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     fields: [
       { key: 'code', label: '入库单号', type: 'string' },
       DOCUMENT_QRCODE_FIELD,
+      { key: 'kingdee_bill_no', label: '金蝶单号', type: 'string' },
       { key: 'reason_type', label: '原因类型', type: 'string' },
       { key: 'reason_desc', label: '原因说明', type: 'string' },
       { key: 'warehouse_name', label: '仓库名称', type: 'string' },
@@ -353,6 +356,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     fields: [
       { key: 'code', label: '出库单号', type: 'string' },
       DOCUMENT_QRCODE_FIELD,
+      { key: 'kingdee_bill_no', label: '金蝶单号', type: 'string' },
       { key: 'reason_type', label: '原因类型', type: 'string' },
       { key: 'reason_desc', label: '原因说明', type: 'string' },
       { key: 'warehouse_name', label: '仓库名称', type: 'string' },
@@ -386,6 +390,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     fields: [
       { key: 'code', label: '入库单号', type: 'string' },
       DOCUMENT_QRCODE_FIELD,
+      { key: 'kingdee_bill_no', label: '金蝶单号', type: 'string' },
       { key: 'work_order_code', label: '工单编号', type: 'string' },
       { key: 'warehouse_name', label: '仓库名称', type: 'string' },
       { key: 'total_quantity', label: '总数量', type: 'number' },
@@ -456,6 +461,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     fields: [
       { key: 'code', label: '出库单号', type: 'string' },
       DOCUMENT_QRCODE_FIELD,
+      { key: 'kingdee_bill_no', label: '金蝶单号', type: 'string' },
       { key: 'sales_order_code', label: '销售订单号', type: 'string' },
       { key: 'customer_name', label: '客户名称', type: 'string' },
       { key: 'warehouse_name', label: '仓库名称', type: 'string' },
@@ -492,6 +498,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     name: '采购订单',
     fields: [
       { key: 'code', label: '订单号', type: 'string' },
+      { key: 'kingdee_bill_no', label: '金蝶单号', type: 'string' },
       { key: 'order_name', label: '订单名称', type: 'string' },
       { key: 'supplier_name', label: '供应商名称', type: 'string' },
       { key: 'department_name', label: '申请部门', type: 'string' },
@@ -668,6 +675,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     fields: [
       { key: 'code', label: '入库单号', type: 'string' },
       DOCUMENT_QRCODE_FIELD,
+      { key: 'kingdee_bill_no', label: '金蝶单号', type: 'string' },
       { key: 'purchase_order_code', label: '采购订单号', type: 'string' },
       { key: 'supplier_name', label: '供应商名称', type: 'string' },
       { key: 'warehouse_name', label: '仓库名称', type: 'string' },
@@ -788,6 +796,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     name: '销售订单',
     fields: [
       { key: 'code', label: '订单号', type: 'string' },
+      { key: 'kingdee_bill_no', label: '金蝶单号', type: 'string' },
       { key: 'order_name', label: '订单名称', type: 'string' },
       { key: 'customer_name', label: '客户名称', type: 'string' },
       { key: 'customer_contact', label: '客户联系人', type: 'string' },

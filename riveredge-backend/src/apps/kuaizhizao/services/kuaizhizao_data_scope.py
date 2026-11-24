@@ -11,6 +11,7 @@ from core.services.authorization.data_scope_service import DataScopeService
 if TYPE_CHECKING:
     from infra.models.user import User
 
+INBOUND_SCOPE_RESOURCE = "kuaizhizao:inbound"
 SALES_ORDER_SCOPE_RESOURCE = "kuaizhizao:sales-order"
 SALES_REVIEW_SCOPE_RESOURCE = "kuaizhizao:sales-review"
 SALES_OUTBOUND_SCOPE_RESOURCE = "kuaizhizao:outbound"

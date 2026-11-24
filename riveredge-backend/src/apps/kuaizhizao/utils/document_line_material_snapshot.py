@@ -144,6 +144,71 @@ async def enrich_line_dicts_with_partner_snapshots(
     return enriched
 
 
+async def overwrite_line_spec_model_from_material(
+    tenant_id: int,
+    lines: Sequence[Mapping[str, Any]],
+    *,
+    material_id_key: str = "material_id",
+) -> List[Dict[str, Any]]:
+    """仅覆盖规格/型号（不改伙伴料号），供无伙伴快照的单据写路径。"""
+    material_ids = [
+        int(line.get(material_id_key) or 0)
+        for line in lines
+        if int(line.get(material_id_key) or 0) > 0
+    ]
+    if not material_ids:
+        return [dict(line) for line in lines]
+    materials = await Material.filter(
+        tenant_id=tenant_id, id__in=sorted(set(material_ids)), deleted_at__isnull=True
+    ).all()
+    by_id = {m.id: m for m in materials}
+    out: List[Dict[str, Any]] = []
+    for raw in lines:
+        row = dict(raw)
+        mid = int(row.get(material_id_key) or 0)
+        mat = by_id.get(mid) if mid > 0 else None
+        if mat:
+            snap = snapshot_from_material(mat)
+            row["material_spec"] = snap.material_spec
+            row["material_model"] = snap.material_model
+        out.append(row)
+    return out
+
+
+def resolved_line_material_spec(
+    source: Any,
+    material: Optional[Material] = None,
+) -> Optional[str]:
+    """行规格快照：优先源行，其次物料主数据 specification（下推/取单与详情对齐）。"""
+    line = _strip_or_none(getattr(source, "material_spec", None), 200)
+    if line:
+        return line
+    if isinstance(source, Mapping):
+        line = _strip_or_none(source.get("material_spec"), 200)
+        if line:
+            return line
+    if material:
+        return _strip_or_none(getattr(material, "specification", None), 200)
+    return None
+
+
+def resolved_line_material_model(
+    source: Any,
+    material: Optional[Material] = None,
+) -> Optional[str]:
+    """行型号快照：优先源行，其次物料主数据 model。"""
+    line = _strip_or_none(getattr(source, "material_model", None), 200)
+    if line:
+        return line
+    if isinstance(source, Mapping):
+        line = _strip_or_none(source.get("material_model"), 200)
+        if line:
+            return line
+    if material:
+        return _strip_or_none(getattr(material, "model", None), 200)
+    return None
+
+
 def snapshot_kwargs_for_orm(row: Mapping[str, Any]) -> Dict[str, Optional[str]]:
     return {
         "partner_material_code": _strip_or_none(row.get("partner_material_code"), 100),

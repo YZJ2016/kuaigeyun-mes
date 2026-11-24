@@ -605,9 +605,14 @@ class IntegrationConfigService:
                 "weaver", "seeyon", "landray", "cloudhub", "tongda_oa",
                 "rootcloud", "casicloud", "alicloud_iot", "huaweicloud_iot", "thingsboard", "jetlinks",
                 "flux_wms", "kejian_wms", "digiwin_wms", "openwms",
-                "nas_webdav", "nas_smb",
+                "nas_smb",
             ):
                 result = await IntegrationConfigService._test_rest_api_connection(integration)
+            elif integration.type == "nas_webdav":
+                from core.services.file.storage.nas_webdav_storage import probe_nas_webdav_storage
+
+                config = integration.get_config() if hasattr(integration, "get_config") else (integration.config or {})
+                result = await probe_nas_webdav_storage(config, write_probe=True)
             elif integration.type in OBJECT_STORAGE_TYPES:
                 result = await IntegrationConfigService._test_object_storage_connection(integration)
             elif integration.type in (
@@ -872,9 +877,14 @@ class IntegrationConfigService:
                 "weaver", "seeyon", "landray", "cloudhub", "tongda_oa",
                 "rootcloud", "casicloud", "alicloud_iot", "huaweicloud_iot", "thingsboard", "jetlinks",
                 "flux_wms", "kejian_wms", "digiwin_wms", "openwms",
-                "nas_webdav", "nas_smb",
+                "nas_smb",
             ):
                 result = await IntegrationConfigService._test_rest_api_connection(temp)
+            elif temp.type == "nas_webdav":
+                from core.services.file.storage.nas_webdav_storage import probe_nas_webdav_storage
+
+                config = temp.get_config() if hasattr(temp, "get_config") else (temp.config or {})
+                result = await probe_nas_webdav_storage(config, write_probe=True)
             elif temp.type in OBJECT_STORAGE_TYPES:
                 result = await IntegrationConfigService._test_object_storage_connection(temp)
             elif temp.type in (

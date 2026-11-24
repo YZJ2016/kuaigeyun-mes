@@ -1938,78 +1938,95 @@ const ShipmentNoticesPage: React.FC = () => {
 
   const renderCreateForm = () => (
     <>
-      <Row gutter={16}>
-        <Col span={8}>
-          <ProFormText
-            name="notice_code"
-            label={t('app.kuaizhizao.shipmentNotice.noticeCode')}
-            placeholder={isAutoGenerateEnabled('kuaizhizao-shipment-notice') ? t('app.kuaizhizao.quotation.form.codeAutoGenerate') : t('app.kuaizhizao.shipmentNotice.codeRequired')}
-            rules={[{ required: true, message: t('app.kuaizhizao.shipmentNotice.codeRequired') }]}
-          />
-        </Col>
-        <Col span={8}>
-          <ProForm.Item name="sales_order_id" label={t('app.kuaizhizao.salesOrderChange.salesOrderLabel')} rules={[{ required: true, message: t('app.kuaizhizao.salesOrderChange.selectSalesOrder') }]}>
-            <Select
-              placeholder={t('app.kuaizhizao.salesOrderChange.selectSalesOrder')}
-              showSearch
-              optionFilterProp="label"
-              options={salesOrderList.map((o: any) => ({
-                value: o.id ?? o.sales_order_id,
-                label: `${o.order_code || o.sales_order_code || o.code || ''} - ${o.customer_name || o.customerName || ''}`.trim(),
-              }))}
-              onChange={onSalesOrderSelect}
-            />
-          </ProForm.Item>
-        </Col>
-        <Col span={8}>
-          <ProForm.Item name="customer_id" label={t('app.kuaizhizao.quotation.form.customer')} rules={[{ required: true, message: t('app.kuaizhizao.quotation.form.selectCustomer') }]}>
-            <Select
-              placeholder={t('app.kuaizhizao.quotation.form.selectCustomer')}
-              showSearch
-              optionFilterProp="label"
-              options={customerList.map((c: any) => ({ value: c.id ?? c.customer_id, label: c.name || c.customer_name || c.code }))}
-              onChange={(v) => {
-                const cust = customerList.find((x: any) => (x.id ?? x.customer_id) === v);
-                if (cust) createFormRef.current?.setFieldsValue({
-                  customer_name: cust.name || cust.customer_name,
-                  customer_contact: cust.contactPerson ?? (cust as any)?.contact,
-                  customer_phone: cust.phone,
-                  shipping_address: cust.address,
-                });
-              }}
-            />
-          </ProForm.Item>
-        </Col>
-      </Row>
+      <div className="document-form-untitled-groups">
+        <div className="document-form-untitled-group">
+          <Row gutter={16} wrap={false}>
+            <Col flex="1 1 0" style={{ minWidth: 0 }}>
+              <ProFormText
+                name="notice_code"
+                label={t('app.kuaizhizao.shipmentNotice.noticeCode')}
+                placeholder={isAutoGenerateEnabled('kuaizhizao-shipment-notice') ? t('app.kuaizhizao.quotation.form.codeAutoGenerate') : t('app.kuaizhizao.shipmentNotice.codeRequired')}
+                rules={[{ required: true, message: t('app.kuaizhizao.shipmentNotice.codeRequired') }]}
+              />
+            </Col>
+            <Col flex="1 1 0" style={{ minWidth: 0 }}>
+              <ProForm.Item name="sales_order_id" label={t('app.kuaizhizao.salesOrderChange.salesOrderLabel')} rules={[{ required: true, message: t('app.kuaizhizao.salesOrderChange.selectSalesOrder') }]}>
+                <Select
+                  placeholder={t('app.kuaizhizao.salesOrderChange.selectSalesOrder')}
+                  showSearch
+                  optionFilterProp="label"
+                  options={salesOrderList.map((o: any) => ({
+                    value: o.id ?? o.sales_order_id,
+                    label: `${o.order_code || o.sales_order_code || o.code || ''} - ${o.customer_name || o.customerName || ''}`.trim(),
+                  }))}
+                  onChange={onSalesOrderSelect}
+                />
+              </ProForm.Item>
+            </Col>
+            <Col flex="1 1 0" style={{ minWidth: 0 }}>
+              <ProForm.Item name="customer_id" label={t('app.kuaizhizao.quotation.form.customer')} rules={[{ required: true, message: t('app.kuaizhizao.quotation.form.selectCustomer') }]}>
+                <Select
+                  placeholder={t('app.kuaizhizao.quotation.form.selectCustomer')}
+                  showSearch
+                  optionFilterProp="label"
+                  options={customerList.map((c: any) => ({ value: c.id ?? c.customer_id, label: c.name || c.customer_name || c.code }))}
+                  onChange={(v) => {
+                    const cust = customerList.find((x: any) => (x.id ?? x.customer_id) === v);
+                    if (cust) createFormRef.current?.setFieldsValue({
+                      customer_name: cust.name || cust.customer_name,
+                      customer_contact: cust.contactPerson ?? (cust as any)?.contact,
+                      customer_phone: cust.phone,
+                      shipping_address: cust.address,
+                    });
+                  }}
+                />
+              </ProForm.Item>
+            </Col>
+            <Col flex="1 1 0" style={{ minWidth: 0 }}>
+              <ProFormText name="customer_contact" label={t('field.customer.contactPerson')} placeholder={t('field.customer.contactPersonPlaceholder')} />
+            </Col>
+            <Col flex="1 1 0" style={{ minWidth: 0 }}>
+              <ProFormText name="customer_phone" label={t('field.customer.phone')} placeholder={t('field.customer.phonePlaceholder')} />
+            </Col>
+          </Row>
+          <Row gutter={16} wrap={false}>
+            <Col flex="1 1 0" style={{ minWidth: 0 }}>
+              <UniWarehouseSelect
+                name="warehouse_id"
+                label={t('app.kuaizhizao.shipmentNotice.outboundWarehouse')}
+                placeholder={t('app.kuaizhizao.shipmentNotice.selectOutboundWarehouse')}
+                onChange={(_, wh) => createFormRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+              />
+            </Col>
+            <Col flex="1 1 0" style={{ minWidth: 0 }}>
+              <ProFormDatePicker
+                name="planned_ship_date"
+                label={t('app.kuaizhizao.shipmentNotice.plannedShipDate')}
+                fieldProps={buildFutureDateShortcutFieldProps({
+                  getForm: () => createFormRef.current,
+                  fieldName: 'planned_ship_date',
+                  t,
+                })}
+              />
+            </Col>
+            <Col flex="3 1 0" style={{ minWidth: 0 }}>
+              <ProFormTextArea
+                name="shipping_address"
+                label={t('app.kuaizhizao.salesOrder.shippingAddress')}
+                placeholder={t('app.kuaizhizao.quotation.form.shippingAddressPlaceholder')}
+                fieldProps={{ rows: 2 }}
+              />
+            </Col>
+          </Row>
+        </div>
+      </div>
       <ProFormText name="sales_order_code" hidden />
       <ProFormText name="customer_name" hidden />
-      <Row gutter={16}>
-        <Col span={8}>
-          <ProFormText name="customer_contact" label={t('field.customer.contactPerson')} placeholder={t('field.customer.contactPersonPlaceholder')} />
-        </Col>
-        <Col span={8}>
-          <ProFormText name="customer_phone" label={t('field.customer.phone')} placeholder={t('field.customer.phonePlaceholder')} />
-        </Col>
-        <Col span={8}>
-          <UniWarehouseSelect
-            name="warehouse_id"
-            label={t('app.kuaizhizao.shipmentNotice.outboundWarehouse')}
-            placeholder={t('app.kuaizhizao.shipmentNotice.selectOutboundWarehouse')}
-            onChange={(_, wh) => createFormRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
-          />
-        </Col>
-      </Row>
       <ProFormText name="warehouse_name" hidden />
       <ProFormText name="currency_code" hidden initialValue="CNY" />
       <ProForm.Item name="exchange_rate" hidden initialValue={1}>
         <InputNumber />
       </ProForm.Item>
-      <Row gutter={16}>
-        <Col span={8}>
-          <ProFormDatePicker name="planned_ship_date" label={t('app.kuaizhizao.shipmentNotice.plannedShipDate')} fieldProps={buildFutureDateShortcutFieldProps({ getForm: () => createFormRef.current, fieldName: 'planned_ship_date', t })} />
-        </Col>
-      </Row>
-      <ProFormTextArea name="shipping_address" label={t('app.kuaizhizao.salesOrder.shippingAddress')} placeholder={t('app.kuaizhizao.quotation.form.shippingAddressPlaceholder')} fieldProps={{ rows: 2 }} />
       <UniTableDetail
         name="items"
         title={t('app.kuaizhizao.shipmentNotice.noticeItems')}
@@ -2171,55 +2188,74 @@ const ShipmentNoticesPage: React.FC = () => {
 
   const renderEditForm = () => (
     <>
-      <Row gutter={16}>
-        <Col span={8}>
-          <ProFormText name="sales_order_code" label={t('app.kuaizhizao.shipmentNotice.salesOrderCode')} disabled />
-        </Col>
-        <Col span={8}>
-          <ProForm.Item name="customer_id" label={t('app.kuaizhizao.quotation.form.customer')} rules={[{ required: true, message: t('app.kuaizhizao.quotation.form.selectCustomer') }]}>
-            <Select
-              placeholder={t('app.kuaizhizao.quotation.form.selectCustomer')}
-              showSearch
-              optionFilterProp="label"
-              options={customerList.map((c: any) => ({ value: c.id ?? c.customer_id, label: c.name || c.customer_name || c.code }))}
-              onChange={(v) => {
-                const cust = customerList.find((x: any) => (x.id ?? x.customer_id) === v);
-                if (cust) editFormRef.current?.setFieldsValue({
-                  customer_name: cust.name || cust.customer_name,
-                  customer_contact: cust.contactPerson ?? (cust as any)?.contact,
-                  customer_phone: cust.phone,
-                });
-              }}
-            />
-          </ProForm.Item>
-        </Col>
-        <Col span={8}>
-          <ProFormText name="customer_contact" label={t('field.customer.contactPerson')} placeholder={t('field.customer.contactPersonPlaceholder')} />
-        </Col>
-      </Row>
-      <Row gutter={16}>
-        <Col span={8}>
-          <ProFormText name="customer_phone" label={t('field.customer.phone')} placeholder={t('field.customer.phonePlaceholder')} />
-        </Col>
-        <Col span={8}>
-          <UniWarehouseSelect
-            name="warehouse_id"
-            label={t('app.kuaizhizao.shipmentNotice.outboundWarehouse')}
-            placeholder={t('app.kuaizhizao.shipmentNotice.selectOutboundWarehouse')}
-            onChange={(_, wh) => editFormRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
-          />
-        </Col>
-        <Col span={8}>
-          <ProFormDatePicker name="planned_ship_date" label={t('app.kuaizhizao.shipmentNotice.plannedShipDate')} fieldProps={buildFutureDateShortcutFieldProps({ getForm: () => editFormRef.current, fieldName: 'planned_ship_date', t })} />
-        </Col>
-      </Row>
+      <div className="document-form-untitled-groups">
+        <div className="document-form-untitled-group">
+          <Row gutter={16} wrap={false}>
+            <Col flex="1 1 0" style={{ minWidth: 0 }}>
+              <ProFormText name="sales_order_code" label={t('app.kuaizhizao.shipmentNotice.salesOrderCode')} disabled />
+            </Col>
+            <Col flex="1 1 0" style={{ minWidth: 0 }}>
+              <ProForm.Item name="customer_id" label={t('app.kuaizhizao.quotation.form.customer')} rules={[{ required: true, message: t('app.kuaizhizao.quotation.form.selectCustomer') }]}>
+                <Select
+                  placeholder={t('app.kuaizhizao.quotation.form.selectCustomer')}
+                  showSearch
+                  optionFilterProp="label"
+                  options={customerList.map((c: any) => ({ value: c.id ?? c.customer_id, label: c.name || c.customer_name || c.code }))}
+                  onChange={(v) => {
+                    const cust = customerList.find((x: any) => (x.id ?? x.customer_id) === v);
+                    if (cust) editFormRef.current?.setFieldsValue({
+                      customer_name: cust.name || cust.customer_name,
+                      customer_contact: cust.contactPerson ?? (cust as any)?.contact,
+                      customer_phone: cust.phone,
+                    });
+                  }}
+                />
+              </ProForm.Item>
+            </Col>
+            <Col flex="1 1 0" style={{ minWidth: 0 }}>
+              <ProFormText name="customer_contact" label={t('field.customer.contactPerson')} placeholder={t('field.customer.contactPersonPlaceholder')} />
+            </Col>
+            <Col flex="1 1 0" style={{ minWidth: 0 }}>
+              <ProFormText name="customer_phone" label={t('field.customer.phone')} placeholder={t('field.customer.phonePlaceholder')} />
+            </Col>
+            <Col flex="1 1 0" style={{ minWidth: 0 }}>
+              <UniWarehouseSelect
+                name="warehouse_id"
+                label={t('app.kuaizhizao.shipmentNotice.outboundWarehouse')}
+                placeholder={t('app.kuaizhizao.shipmentNotice.selectOutboundWarehouse')}
+                onChange={(_, wh) => editFormRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+              />
+            </Col>
+          </Row>
+          <Row gutter={16} wrap={false}>
+            <Col flex="1 1 0" style={{ minWidth: 0 }}>
+              <ProFormDatePicker
+                name="planned_ship_date"
+                label={t('app.kuaizhizao.shipmentNotice.plannedShipDate')}
+                fieldProps={buildFutureDateShortcutFieldProps({
+                  getForm: () => editFormRef.current,
+                  fieldName: 'planned_ship_date',
+                  t,
+                })}
+              />
+            </Col>
+            <Col flex="4 1 0" style={{ minWidth: 0 }}>
+              <ProFormTextArea
+                name="shipping_address"
+                label={t('app.kuaizhizao.salesOrder.shippingAddress')}
+                placeholder={t('app.kuaizhizao.quotation.form.shippingAddressPlaceholder')}
+                fieldProps={{ rows: 2 }}
+              />
+            </Col>
+          </Row>
+        </div>
+      </div>
       <ProFormText name="warehouse_name" hidden />
       <ProFormText name="customer_name" hidden />
       <ProFormText name="currency_code" hidden />
       <ProForm.Item name="exchange_rate" hidden>
         <InputNumber />
       </ProForm.Item>
-      <ProFormTextArea name="shipping_address" label={t('app.kuaizhizao.salesOrder.shippingAddress')} placeholder={t('app.kuaizhizao.quotation.form.shippingAddressPlaceholder')} fieldProps={{ rows: 2 }} />
       <ProFormItem label={t('app.kuaizhizao.shipmentNotice.noticeItems')}>
         <AntForm.Item
           noStyle

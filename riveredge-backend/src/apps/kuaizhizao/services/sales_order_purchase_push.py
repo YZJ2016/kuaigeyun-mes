@@ -317,7 +317,7 @@ async def batch_pushed_work_order_qty_by_sales_order_item(
     """
     sales_order_item.id → 已下推工单主数量（排除已取消工单）。
 
-    工单表仅存 sales_order_id + product_id，多行同料合并工单时按行 id 顺序 FIFO 分摊占用。
+    优先认工单 ``sales_order_item_id``；历史工单无行指针时按物料池 FIFO 分摊（行 id 升序）。
     """
     if not items_by_order:
         return {}
@@ -325,40 +325,48 @@ async def batch_pushed_work_order_qty_by_sales_order_item(
     from apps.kuaizhizao.models.work_order import WorkOrder
 
     order_ids = [int(oid) for oid in items_by_order.keys() if oid]
-    wo_by_order_material: Dict[int, Dict[int, Decimal]] = {oid: {} for oid in order_ids}
+    occupied: Dict[int, Decimal] = {}
+    legacy_wo_by_order_material: Dict[int, Dict[int, Decimal]] = {oid: {} for oid in order_ids}
     if order_ids:
         rows = await WorkOrder.filter(
             tenant_id=tenant_id,
             sales_order_id__in=order_ids,
             deleted_at__isnull=True,
         ).exclude(status__in=["cancelled", "CANCELLED", "已取消"]).values_list(
-            "sales_order_id", "product_id", "quantity"
+            "sales_order_id", "sales_order_item_id", "product_id", "quantity"
         )
-        for so_id, product_id, qty in rows:
+        for so_id, so_item_id, product_id, qty in rows:
             oid = int(so_id or 0)
+            lid = int(so_item_id or 0)
             mid = int(product_id or 0)
-            if oid not in wo_by_order_material or mid <= 0:
+            q = Decimal(str(qty or 0))
+            if q <= 0 or oid not in legacy_wo_by_order_material:
                 continue
-            bucket = wo_by_order_material.setdefault(oid, {})
-            bucket[mid] = bucket.get(mid, Decimal("0")) + Decimal(str(qty or 0))
+            if lid > 0:
+                occupied[lid] = occupied.get(lid, Decimal("0")) + q
+            elif mid > 0:
+                bucket = legacy_wo_by_order_material.setdefault(oid, {})
+                bucket[mid] = bucket.get(mid, Decimal("0")) + q
 
-    occupied: Dict[int, Decimal] = {}
     for oid, order_items in items_by_order.items():
         order_id = int(oid)
-        wo_pool = dict(wo_by_order_material.get(order_id) or {})
+        wo_pool = dict(legacy_wo_by_order_material.get(order_id) or {})
         for it in sorted(order_items, key=lambda row: int(getattr(row, "id", 0) or 0)):
             lid = int(getattr(it, "id", 0) or 0)
+            if lid <= 0:
+                continue
+            if lid in occupied:
+                continue
             mid = int(getattr(it, "material_id", 0) or 0)
             line_qty = Decimal(str(getattr(it, "order_quantity", 0) or 0))
-            if lid <= 0 or line_qty <= 0:
+            if line_qty <= 0:
+                occupied[lid] = Decimal("0")
                 continue
             pool = wo_pool.get(mid, Decimal("0"))
             take = min(line_qty, pool) if pool > 0 else Decimal("0")
-            if take > 0:
-                occupied[lid] = take
+            occupied[lid] = take
+            if mid > 0 and take > 0:
                 wo_pool[mid] = pool - take
-            else:
-                occupied[lid] = Decimal("0")
     return occupied
 
 
@@ -1129,7 +1137,7 @@ def _purchase_pull_audited_status_values() -> Tuple[str, ...]:
     )
 
 
-async def list_purchase_order_sales_order_pull_lines(
+async def _list_sales_order_buy_pull_lines(
     tenant_id: int,
     *,
     skip: int = 0,
@@ -1137,12 +1145,13 @@ async def list_purchase_order_sales_order_pull_lines(
     keyword: Optional[str] = None,
     sales_order_id: Optional[int] = None,
     pullable_only: bool = True,
+    block_when_require_pr: bool,
 ) -> Dict[str, Any]:
-    """开口销售订单外购行，供采购订单跨单取单。
+    """开口销售订单外购行（采购订单/采购申请取单共用）。
 
-    批量算共享余量与默认供应商；禁止对每张 SO 调 collect（含价目 N+1）。
+    block_when_require_pr=True 时组织强制先请购则返回空（采购订单直连取单）。
     """
-    if await require_purchase_requisition_for_tenant(tenant_id):
+    if block_when_require_pr and await require_purchase_requisition_for_tenant(tenant_id):
         return {"data": [], "total": 0}
 
     from apps.kuaizhizao.models.sales_order import SalesOrder
@@ -1284,19 +1293,60 @@ async def list_purchase_order_sales_order_pull_lines(
     return await paginate_pull_lines_with_stock(tenant_id, lines, skip, limit)
 
 
-async def list_sales_orders_for_purchase_order_pull(
+async def list_purchase_order_sales_order_pull_lines(
+    tenant_id: int,
+    *,
+    skip: int = 0,
+    limit: int = 20,
+    keyword: Optional[str] = None,
+    sales_order_id: Optional[int] = None,
+    pullable_only: bool = True,
+) -> Dict[str, Any]:
+    return await _list_sales_order_buy_pull_lines(
+        tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+        sales_order_id=sales_order_id,
+        pullable_only=pullable_only,
+        block_when_require_pr=True,
+    )
+
+
+async def list_purchase_requisition_sales_order_pull_lines(
+    tenant_id: int,
+    *,
+    skip: int = 0,
+    limit: int = 20,
+    keyword: Optional[str] = None,
+    sales_order_id: Optional[int] = None,
+    pullable_only: bool = True,
+) -> Dict[str, Any]:
+    return await _list_sales_order_buy_pull_lines(
+        tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+        sales_order_id=sales_order_id,
+        pullable_only=pullable_only,
+        block_when_require_pr=False,
+    )
+
+
+async def _list_sales_orders_for_buy_pull(
     tenant_id: int,
     *,
     skip: int = 0,
     limit: int = 20,
     keyword: Optional[str] = None,
     pullable_only: bool = True,
+    block_when_require_pr: bool,
 ) -> Dict[str, Any]:
-    """供采购订单「从销售订单创建」取单：已审核且仍有外购共享余量的销售订单头。"""
-    from apps.kuaizhizao.constants import LEGACY_AUDITED_VALUES, DemandStatus, normalize_status
-    from apps.kuaizhizao.models.sales_order import SalesOrder, SalesOrderItem
+    from apps.kuaizhizao.models.sales_order import SalesOrder
+    from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+    from tortoise.expressions import Q
 
-    if await require_purchase_requisition_for_tenant(tenant_id):
+    if block_when_require_pr and await require_purchase_requisition_for_tenant(tenant_id):
         return {"data": [], "total": 0, "success": True}
 
     from tortoise.expressions import Q
@@ -1349,3 +1399,41 @@ async def list_sales_orders_for_purchase_order_pull(
     total = len(rows)
     page_rows = rows[skip : skip + limit] if skip < len(rows) else []
     return {"data": page_rows, "total": total, "success": True}
+
+
+async def list_sales_orders_for_purchase_order_pull(
+    tenant_id: int,
+    *,
+    skip: int = 0,
+    limit: int = 20,
+    keyword: Optional[str] = None,
+    pullable_only: bool = True,
+) -> Dict[str, Any]:
+    """供采购订单「从销售订单创建」取单：已审核且仍有外购共享余量的销售订单头。"""
+    return await _list_sales_orders_for_buy_pull(
+        tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+        pullable_only=pullable_only,
+        block_when_require_pr=True,
+    )
+
+
+async def list_sales_orders_for_purchase_requisition_pull(
+    tenant_id: int,
+    *,
+    skip: int = 0,
+    limit: int = 20,
+    keyword: Optional[str] = None,
+    pullable_only: bool = True,
+) -> Dict[str, Any]:
+    """供采购申请「从销售订单创建」取单：已审核且仍有外购共享余量的销售订单头。"""
+    return await _list_sales_orders_for_buy_pull(
+        tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+        pullable_only=pullable_only,
+        block_when_require_pr=False,
+    )

@@ -1395,8 +1395,8 @@ const SalesContractsPage: React.FC = () => {
       <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionBasic')}>
         <div className="document-form-untitled-groups">
           <div className="document-form-untitled-group">
-            <Row gutter={16}>
-              <Col span={8}>
+            <Row gutter={16} wrap={false}>
+              <Col flex="1 1 0" style={{ minWidth: 0 }}>
                 <ProFormText
                   name="contract_code"
                   label={t('app.kuaizhizao.salesContract.contractCode')}
@@ -1409,7 +1409,7 @@ const SalesContractsPage: React.FC = () => {
                   fieldProps={{ disabled: isEditPage }}
                 />
               </Col>
-              <Col span={8}>
+              <Col flex="1 1 0" style={{ minWidth: 0 }}>
                 <ProForm.Item
                   name="customer_id"
                   label={t('app.kuaizhizao.salesContract.customer')}
@@ -1437,18 +1437,14 @@ const SalesContractsPage: React.FC = () => {
                   />
                 </ProForm.Item>
               </Col>
-              <Col span={8}>
+              <Col flex="1 1 0" style={{ minWidth: 0 }}>
                 <SalesDocumentSalesmanField
                   userList={users}
                   loading={usersLoading}
                   label={salesCommonLabels.salesman}
                 />
               </Col>
-            </Row>
-          </div>
-          <div className="document-form-untitled-group">
-            <Row gutter={16}>
-              <Col span={8}>
+              <Col flex="1 1 0" style={{ minWidth: 0 }}>
                 <ProFormDatePicker
                   name="contract_date"
                   label={t('app.kuaizhizao.salesContract.contractDate')}
@@ -1468,7 +1464,7 @@ const SalesContractsPage: React.FC = () => {
                   }}
                 />
               </Col>
-              <Col span={8}>
+              <Col flex="1 1 0" style={{ minWidth: 0 }}>
                 <ProFormDatePicker
                   name="valid_from"
                   label={t('app.kuaizhizao.salesContract.validFrom')}
@@ -1485,7 +1481,9 @@ const SalesContractsPage: React.FC = () => {
                   ]}
                 />
               </Col>
-              <Col span={8}>
+            </Row>
+            <Row gutter={16} wrap={false}>
+              <Col flex="1 1 0" style={{ minWidth: 0 }}>
                 <ProFormDatePicker
                   name="valid_to"
                   label={t('app.kuaizhizao.salesContract.validTo')}
@@ -1507,11 +1505,7 @@ const SalesContractsPage: React.FC = () => {
                   ]}
                 />
               </Col>
-            </Row>
-          </div>
-          <div className="document-form-untitled-group">
-            <Row gutter={16}>
-              <Col span={8}>
+              <Col flex="1 1 0" style={{ minWidth: 0 }}>
                 <DictionarySelect
                   dictionaryCode="CURRENCY"
                   name="currency_code"
@@ -1522,7 +1516,7 @@ const SalesContractsPage: React.FC = () => {
                   valueEqualsLabel={false}
                 />
               </Col>
-              <Col span={8}>
+              <Col flex="1 1 0" style={{ minWidth: 0 }}>
                 <ProFormSwitch
                   name="enter_line_items"
                   label={
@@ -1561,6 +1555,8 @@ const SalesContractsPage: React.FC = () => {
                   }}
                 />
               </Col>
+              <Col flex="1 1 0" style={{ minWidth: 0 }} aria-hidden />
+              <Col flex="1 1 0" style={{ minWidth: 0 }} aria-hidden />
             </Row>
           </div>
         </div>

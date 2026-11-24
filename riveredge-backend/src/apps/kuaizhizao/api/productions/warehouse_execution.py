@@ -1141,6 +1141,7 @@ async def list_production_returns(
         created_end_date=created_end_date,
         updated_start_date=updated_start_date,
         updated_end_date=updated_end_date,
+        current_user=current_user,
     )
     return {"items": items, "total": total, "skip": skip, "limit": limit}
 
@@ -1324,6 +1325,7 @@ async def list_other_inbounds(
         created_end_date=created_end_date,
         updated_start_date=updated_start_date,
         updated_end_date=updated_end_date,
+        current_user=current_user,
     )
     logger.info(f"FINAL-DEBUG: 模块 {__file__} 返回了 {len(items)} 条数据")
     return {"items": items, "total": total, "skip": skip, "limit": limit}
@@ -1616,6 +1618,7 @@ async def list_other_outbounds(
         created_end_date=created_end_date,
         updated_start_date=updated_start_date,
         updated_end_date=updated_end_date,
+        current_user=current_user,
     )
     return {"items": items, "total": total, "skip": skip, "limit": limit}
 
@@ -1806,6 +1809,7 @@ async def list_material_borrows(
         created_end_date=created_end_date,
         updated_start_date=updated_start_date,
         updated_end_date=updated_end_date,
+        current_user=current_user,
     )
     return {"items": items, "total": total, "skip": skip, "limit": limit}
 
@@ -2000,6 +2004,7 @@ async def list_material_returns(
         created_end_date=created_end_date,
         updated_start_date=updated_start_date,
         updated_end_date=updated_end_date,
+        current_user=current_user,
     )
     return {"items": items, "total": total, "skip": skip, "limit": limit}
 
@@ -2313,6 +2318,7 @@ async def list_finished_goods_receipts(
         created_end_date=created_end_date,
         updated_start_date=updated_start_date,
         updated_end_date=updated_end_date,
+        current_user=current_user,
     )
     return {"items": items, "total": total, "skip": skip, "limit": limit}
 
@@ -2483,6 +2489,7 @@ async def list_semi_finished_goods_receipts(
         created_end_date=created_end_date,
         updated_start_date=updated_start_date,
         updated_end_date=updated_end_date,
+        current_user=current_user,
     )
     return {"items": items, "total": total, "skip": skip, "limit": limit}
 
@@ -3026,6 +3033,7 @@ async def list_inventory_alert_rules(
         created_end_date=created_end_date,
         updated_start_date=updated_start_date,
         updated_end_date=updated_end_date,
+        current_user=current_user,
     )
     return {"items": items, "total": total}
 
@@ -3534,6 +3542,7 @@ async def list_barcode_mapping_rules(
         created_end_date=created_end_date,
         updated_start_date=updated_start_date,
         updated_end_date=updated_end_date,
+        current_user=current_user,
     )
     return {"items": items, "total": total}
 
@@ -5115,6 +5124,10 @@ async def list_purchase_receipts(
     created_end_date: Optional[str] = Query(None, description="创建日期止"),
     updated_start_date: Optional[str] = Query(None, description="更新日期起"),
     updated_end_date: Optional[str] = Query(None, description="更新日期止"),
+    receipt_start_date: Optional[str] = Query(None, description="入库日期起"),
+    receipt_end_date: Optional[str] = Query(None, description="入库日期止"),
+    material_id: Optional[int] = Query(None, description="明细物料ID"),
+    material_keyword: Optional[str] = Query(None, description="明细物料编码/名称/规格"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -5138,6 +5151,11 @@ async def list_purchase_receipts(
         created_end_date=created_end_date,
         updated_start_date=updated_start_date,
         updated_end_date=updated_end_date,
+        receipt_start_date=receipt_start_date,
+        receipt_end_date=receipt_end_date,
+        material_id=material_id,
+        material_keyword=material_keyword,
+        current_user=current_user,
     )
     return {"items": items, "total": total, "skip": skip, "limit": limit}
 
@@ -6354,6 +6372,7 @@ async def list_replenishment_suggestions(
         created_end_date=created_end_date,
         updated_start_date=updated_start_date,
         updated_end_date=updated_end_date,
+        current_user=current_user,
     )
     return {"items": items, "total": total}
 

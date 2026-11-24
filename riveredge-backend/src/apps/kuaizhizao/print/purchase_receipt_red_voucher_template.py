@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-PURCHASE_RECEIPT_RED_VOUCHER_LAYOUT_VERSION = "purchase_receipt_red_voucher_v8"
+PURCHASE_RECEIPT_RED_VOUCHER_LAYOUT_VERSION = "purchase_receipt_red_voucher_v9"
 
 PURCHASE_RECEIPT_RED_VOUCHER_HTML = """\
 <style>
@@ -77,6 +77,7 @@ PURCHASE_RECEIPT_RED_VOUCHER_HTML = """\
     <div><span class="label">编号：</span><span class="value">{{ code or "—" }}</span></div>
     <div><span class="label">供应商：</span><span class="value">{{ supplier_name or "—" }}</span></div>
     <div><span class="label">日期：</span><span class="value">{{ ((receipt_time or created_at) or "")[:10] or "—" }}</span></div>
+    <div><span class="label">金蝶单号：</span><span class="value">{{ kingdee_bill_no or "—" }}</span></div>
   </div>
   <table class="grid">
     <colgroup>

@@ -124,6 +124,19 @@ export const OutboundDetailDrawer: React.FC<OutboundDetailDrawerProps> = ({
           },
         },
         {
+          title: t('app.kuaizhizao.warehouse.field.kingdeeBillNo'),
+          key: 'kingdee_bill_no',
+          dataIndex: 'kingdee_bill_no',
+          render: (_, record) => {
+            const display = String(record.kingdee_bill_no || '').trim();
+            return display ? (
+              <Typography.Text copyable={{ text: display }}>{display}</Typography.Text>
+            ) : (
+              '—'
+            );
+          },
+        },
+        {
           title: t('app.kuaizhizao.warehouseOutbound.field.outboundType'),
           dataIndex: 'outbound_type',
           render: (_, record) => renderOutboundIssueTypeMarkerTag(t, record.outbound_type),
@@ -139,6 +152,15 @@ export const OutboundDetailDrawer: React.FC<OutboundDetailDrawerProps> = ({
                     KUAIZHIZAO_OUTBOUND_FIELD_RESOURCE,
                     'customer_name',
                   ),
+              },
+            ]
+          : []),
+        ...(effective.outbound_type === 'sales_delivery' &&
+        String((effective as { customer_order_no?: string }).customer_order_no ?? '').trim()
+          ? [
+              {
+                title: t('app.kuaizhizao.salesOrder.customerOrderNo'),
+                dataIndex: 'customer_order_no' as const,
               },
             ]
           : []),

@@ -87,7 +87,11 @@ import OutboundHubEditModal from './OutboundHubEditModal';
 import { runOutboundHubConfirmFromRecord, formatOutboundConfirmError } from './outboundHubRunConfirm';
 import { buildOutboundHubDetailLineColumns } from '../shared/warehouseLineDetailColumns';
 import { useWarehouseTrackingFlags } from '../shared/warehouseTrackingFlags';
-import SalesDeliveryCreateModal from './SalesDeliveryCreateModal';
+import {
+  resolveOutboundListPath,
+  salesDeliveryCreatePath,
+  salesDeliveryEditPath,
+} from './outboundPaths';
 import ProductionPickingCreateModal from './ProductionPickingCreateModal';
 import { formatBusinessDateOnly, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
 import {
@@ -318,6 +322,21 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
   const [outboundTrackingRefreshKey, setOutboundTrackingRefreshKey] = useState(0);
   const detailRetryRecordRef = useRef<OutboundOrder | null>(null);
   const [editModalRecord, setEditModalRecord] = useState<OutboundOrder | null>(null);
+  const [productionPickingEditId, setProductionPickingEditId] = useState<number | null>(null);
+  const outboundFormListPath = useMemo(
+    () => resolveOutboundListPath(location.pathname),
+    [location.pathname],
+  );
+  const [oqcReviewOpen, setOqcReviewOpen] = useState(false);
+  const [oqcReviewLoading, setOqcReviewLoading] = useState(false);
+  const [oqcReviewEnsure, setOqcReviewEnsure] = useState<EnsureOqcForSalesDeliveryResult | null>(null);
+  const [oqcReviewSalesDeliveryId, setOqcReviewSalesDeliveryId] = useState<number | string | undefined>();
+  const oqcPendingRef = useRef<{
+    record: OutboundOrder;
+    silentSuccess?: boolean;
+    resolve: () => void;
+    reject: (error: unknown) => void;
+  } | null>(null);
 
   const [executionConfig, setExecutionConfig] = useState<any>(null);
   const outboundPerms = useResourcePermissions(permissionResource);
@@ -375,8 +394,20 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
   );
 
   const handleEdit = useCallback((record: OutboundOrder) => {
+    if (record.outbound_type === 'sales_delivery' && record.id != null && Number(record.id) > 0) {
+      navigate(salesDeliveryEditPath(Number(record.id), outboundFormListPath));
+      return;
+    }
+    if (
+      record.outbound_type === 'production_picking' &&
+      record.id != null &&
+      Number(record.id) > 0
+    ) {
+      setProductionPickingEditId(Number(record.id));
+      return;
+    }
     setEditModalRecord(record);
-  }, []);
+  }, [navigate, outboundFormListPath]);
 
   const handleOutboundEdit = useCallback(
     (record: OutboundOrder) => {
@@ -487,13 +518,26 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
 
   const handleQuickPullSuccess = useCallback(
     (detail?: OutboundQuickPullSuccessDetail) => {
+      if (detail?.pullKey === 'sales_order' && detail.salesDeliveryDraft) {
+        navigate(salesDeliveryCreatePath(outboundFormListPath), {
+          state: { salesDeliveryCreateDraft: detail.salesDeliveryDraft },
+        });
+        return;
+      }
       invalidateMenuBadgeCounts();
       if (detail?.pullKey === 'work_order') {
         handleOutboundTypeFilterChange('production_picking');
       }
       actionRef.current?.reload();
     },
-    [handleOutboundTypeFilterChange, invalidateMenuBadgeCounts],
+    [
+      handleOutboundTypeFilterChange,
+      invalidateMenuBadgeCounts,
+      location.pathname,
+      location.search,
+      navigate,
+      outboundFormListPath,
+    ],
   );
 
   const defaultOutboundQuickPullKey = useMemo(
@@ -537,16 +581,27 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
       ),
     [hubScopedOutboundTypes, requireShipmentNoticeBeforeDelivery, t],
   );
-  const [salesDeliveryCreateOpen, setSalesDeliveryCreateOpen] = useState(false);
+  const [productionPickingCreateOpen, setProductionPickingCreateOpen] = useState(false);
   const enableSalesDeliveryBlankCreate =
     fixedOutboundType === 'sales_delivery' && outboundPerms.canCreate;
   const handleCreate = useCallback(() => {
     if (enableSalesDeliveryBlankCreate) {
-      setSalesDeliveryCreateOpen(true);
+      navigate(salesDeliveryCreatePath(outboundFormListPath));
       return;
     }
     quickPullRef.current?.open(defaultOutboundQuickPullKey);
-  }, [enableSalesDeliveryBlankCreate, defaultOutboundQuickPullKey]);
+  }, [
+    defaultOutboundQuickPullKey,
+    enableProductionPickingBlankCreate,
+    enablePurchaseReturnCreate,
+    enableSalesDeliveryBlankCreate,
+    navigate,
+    outboundFormListPath,
+    purchaseReturnsListPath,
+  ]);
+
+  useNewShortcut(handleCreate);
+
   const salesDeliveryCreateButtonLabel = useMemo(
     () => withSingleNewShortcutHint(t('app.kuaizhizao.warehouseOutbound.createSalesDelivery')),
     [t],
@@ -1808,7 +1863,7 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.salesDelivery)}
         columnPersistenceId={
-          columnPersistenceId ?? 'apps.kuaizhizao.pages.warehouse-management.outbound-width-v9'
+          columnPersistenceId ?? 'apps.kuaizhizao.pages.warehouse-management.outbound-width-v13'
         }
         actionRef={actionRef}
         formRef={searchFormRef}
@@ -2258,12 +2313,35 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
         onClose={handleEditModalClose}
         onSuccess={handleEditModalSuccess}
       />
-      <SalesDeliveryCreateModal
-        open={salesDeliveryCreateOpen}
-        onClose={() => setSalesDeliveryCreateOpen(false)}
+      <ProductionPickingCreateModal
+        open={productionPickingCreateOpen || productionPickingEditId != null}
+        editingId={productionPickingEditId}
+        onClose={() => {
+          setProductionPickingCreateOpen(false);
+          setProductionPickingEditId(null);
+        }}
         onSuccess={() => {
           invalidateMenuBadgeCounts();
           actionRef.current?.reload();
+          if (
+            productionPickingEditId != null &&
+            currentOrder?.id === productionPickingEditId &&
+            currentOrder.outbound_type === 'production_picking'
+          ) {
+            void handleDetail(currentOrder);
+          }
+        }}
+      />
+      <SalesDeliveryOqcReviewModal
+        open={oqcReviewOpen}
+        loading={oqcReviewLoading}
+        salesDeliveryId={oqcReviewSalesDeliveryId}
+        ensure={oqcReviewEnsure}
+        t={t}
+        navigate={navigate}
+        onCancel={handleOqcReviewCancel}
+        onContinue={() => {
+          void handleOqcReviewContinue();
         }}
       />
       {PrintModal}

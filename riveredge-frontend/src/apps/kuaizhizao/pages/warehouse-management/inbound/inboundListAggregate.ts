@@ -141,6 +141,10 @@ export async function fetchInboundHubList(
     created_end_date: params.created_end_date,
     updated_start_date: params.updated_start_date,
     updated_end_date: params.updated_end_date,
+    receipt_start_date: params.receipt_start_date,
+    receipt_end_date: params.receipt_end_date,
+    material_id: params.material_id,
+    material_keyword: params.material_keyword,
   };
 
   const sourceStatus = (

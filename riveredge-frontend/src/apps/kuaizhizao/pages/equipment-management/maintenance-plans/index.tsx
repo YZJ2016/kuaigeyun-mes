@@ -43,7 +43,7 @@ import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { useEquipmentDetailDrawer } from '../shared/equipmentMasterDataDetail';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { getMaintenancePlanLifecycle } from '../../../utils/equipmentLifecycle';
-import { maintenancePlanApi, sparePartApi } from '../../../services/equipment';
+import { maintenancePlanApi, sparePartApi, equipmentApi } from '../../../services/equipment';
 import { maintenanceSchemesApi } from '../../../services/equipmentOps';
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -216,6 +216,25 @@ const MaintenancePlansPage: React.FC = () => {
   const [selectedEquipmentUuids, setSelectedEquipmentUuids] = useState<string[]>([]);
   const [schemeEquipmentLoading, setSchemeEquipmentLoading] = useState(false);
   const [activeSchemeId, setActiveSchemeId] = useState<number | undefined>();
+  const equipmentCatalogRef = useRef<SchemeEquipmentOption[]>([]);
+
+  const ensureEquipmentCatalog = useCallback(async (): Promise<SchemeEquipmentOption[]> => {
+    if (equipmentCatalogRef.current.length > 0) {
+      return equipmentCatalogRef.current;
+    }
+    const res = await equipmentApi.list({ limit: 2000, is_active: true });
+    const { data } = normalizeEquipmentListResponse(res);
+    const items = (data as Array<Record<string, unknown>>)
+      .map((row) => ({
+        id: typeof row.id === 'number' ? row.id : Number(row.id),
+        uuid: row.uuid != null ? String(row.uuid) : undefined,
+        code: row.code != null ? String(row.code) : undefined,
+        name: row.name != null ? String(row.name) : undefined,
+      }))
+      .filter((item) => Boolean(item.uuid));
+    equipmentCatalogRef.current = items;
+    return items;
+  }, []);
 
   const loadSchemeEquipment = useCallback(
     async (
@@ -229,16 +248,20 @@ const MaintenancePlansPage: React.FC = () => {
       }
       setSchemeEquipmentLoading(true);
       try {
-        const res = await maintenancePlanApi.listSchemeBoundEquipment(schemeId);
-        const items = (Array.isArray(res) ? res : []) as SchemeEquipmentOption[];
-        setSchemeEquipmentPool(items);
-        const poolUuids = items.map((i) => i.uuid).filter(Boolean) as string[];
+        const [catalog, boundRes] = await Promise.all([
+          ensureEquipmentCatalog(),
+          maintenancePlanApi.listSchemeBoundEquipment(schemeId),
+        ]);
+        const bound = (Array.isArray(boundRes) ? boundRes : []) as SchemeEquipmentOption[];
+        setSchemeEquipmentPool(catalog);
+        const catalogUuids = catalog.map((i) => i.uuid).filter(Boolean) as string[];
+        const boundUuids = bound.map((i) => i.uuid).filter(Boolean) as string[];
         if (selection === 'all') {
-          setSelectedEquipmentUuids(poolUuids);
+          setSelectedEquipmentUuids(boundUuids);
         } else if (selection === 'keep') {
-          setSelectedEquipmentUuids((prev) => prev.filter((u) => poolUuids.includes(u)));
+          setSelectedEquipmentUuids((prev) => prev.filter((u) => catalogUuids.includes(u)));
         } else {
-          setSelectedEquipmentUuids(selection.filter((u) => poolUuids.includes(u)));
+          setSelectedEquipmentUuids(selection.filter((u) => catalogUuids.includes(u)));
         }
       } catch (error: unknown) {
         const err = error as { message?: string };
@@ -249,7 +272,7 @@ const MaintenancePlansPage: React.FC = () => {
         setSchemeEquipmentLoading(false);
       }
     },
-    [messageApi, t],
+    [ensureEquipmentCatalog, messageApi, t],
   );
 
   const boundLabel = useCallback(
@@ -269,6 +292,7 @@ const MaintenancePlansPage: React.FC = () => {
       status: '草稿',
     });
     setModalVisible(true);
+    void ensureEquipmentCatalog();
   };
   useNewShortcut(handleCreate);
   const createButtonLabel = useMemo(
@@ -1068,11 +1092,14 @@ const MaintenancePlansPage: React.FC = () => {
             <Typography.Paragraph type="secondary" style={{ marginBottom: 8, marginTop: 4 }}>
               {t(`${P}.form.planEquipmentScopeHint`)}
             </Typography.Paragraph>
-            {schemeEquipmentLoading ? <Spin /> : null}
-            {!schemeEquipmentLoading && schemeEquipmentPool.length === 0 ? (
+            {!activeSchemeId ? (
+              <Typography.Text type="secondary">{t(`${P}.form.selectSchemeForEquipment`)}</Typography.Text>
+            ) : null}
+            {activeSchemeId && schemeEquipmentLoading ? <Spin /> : null}
+            {activeSchemeId && !schemeEquipmentLoading && schemeEquipmentPool.length === 0 ? (
               <Typography.Text type="secondary">{t(`${P}.form.planEquipmentEmpty`)}</Typography.Text>
             ) : null}
-            {!schemeEquipmentLoading && schemeEquipmentPool.length > 0 ? (
+            {activeSchemeId && !schemeEquipmentLoading && schemeEquipmentPool.length > 0 ? (
               <Checkbox.Group
                 style={{ width: '100%' }}
                 value={selectedEquipmentUuids}

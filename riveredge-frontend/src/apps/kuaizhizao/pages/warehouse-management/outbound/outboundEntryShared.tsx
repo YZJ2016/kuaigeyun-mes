@@ -17,6 +17,7 @@ import {
   useInboundReceiverSelect,
 } from '../inbound/inboundEntryShared';
 import { useTranslation } from 'react-i18next';
+import type { Material } from '../../../../master-data/types/material';
 
 type OutboundEntryOperatorFieldProps = {
   label?: string;
@@ -50,4 +51,15 @@ export function OutboundEntryRemarksSection({
       placeholder={placeholder ?? t('app.kuaizhizao.warehouseOutbound.field.remarksPlaceholder')}
     />
   );
+}
+
+/** 物料主数据默认出库仓（领料/出库取单共用） */
+export function resolvePrimaryDefaultWarehouse(
+  material: Material,
+): { id: number; name: string } | null {
+  const wh = material.defaultWarehouse ?? material.default_warehouse;
+  if (wh && typeof wh === 'object' && 'id' in wh && wh.id) {
+    return { id: Number(wh.id), name: String((wh as { name?: string }).name ?? '') };
+  }
+  return null;
 }

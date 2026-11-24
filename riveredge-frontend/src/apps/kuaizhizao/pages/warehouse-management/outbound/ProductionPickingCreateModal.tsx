@@ -41,7 +41,11 @@ import {
 } from '../../sales-management/shared/materialLineFormDetail';
 import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import { buildDocumentLineDualQuantityPairColumns } from '../../../../../components/quantity-with-unit';
-import { validateDualQuantityBeforeSave } from '../../../../../utils/materialDualQuantity';
+import {
+  resolveAuxUnitForScenario,
+  syncDualQuantitiesFixed,
+  validateDualQuantityBeforeSave,
+} from '../../../../../utils/materialDualQuantity';
 import {
   fetchMaterialForUnitSelectCache,
   prefetchMaterialsForUnitSelect,
@@ -103,6 +107,7 @@ import {
 } from './outboundBatchAllocation';
 import { isOutboundEditable, outboundDocumentCode } from './outboundHubTypes';
 import type { OutboundHubOrder } from './outboundHubTypes';
+import { resolvePrimaryDefaultWarehouse } from './outboundEntryShared';
 
 const OUTBOUND_HOST_RESOURCE = 'kuaizhizao:outbound';
 
@@ -404,14 +409,6 @@ function ProductionPickingCreateLocationCell({
       )}
     </>
   );
-}
-
-function resolvePrimaryDefaultWarehouse(material: Material): { id: number; name: string } | null {
-  const wh = material.defaultWarehouse ?? material.default_warehouse;
-  if (wh && typeof wh === 'object' && 'id' in wh && wh.id) {
-    return { id: Number(wh.id), name: String((wh as { name?: string }).name ?? '') };
-  }
-  return null;
 }
 
 export const ProductionPickingCreateModal: React.FC<ProductionPickingCreateModalProps> = ({
@@ -734,6 +731,7 @@ export const ProductionPickingCreateModal: React.FC<ProductionPickingCreateModal
             material_code: String(line.material_code ?? ''),
             material_name: String(line.material_name ?? ''),
             material_spec: line.material_spec != null ? String(line.material_spec) : undefined,
+            material_model: line.material_model != null ? String(line.material_model) : undefined,
             material_unit: String(line.material_unit ?? ''),
             required_quantity: Number(line.required_quantity) || 1,
             warehouse_id: Number(line.warehouse_id) > 0 ? Number(line.warehouse_id) : undefined,
@@ -1302,6 +1300,7 @@ export const ProductionPickingCreateModal: React.FC<ProductionPickingCreateModal
               material_code: String(it.material_code ?? ''),
               material_name: String(it.material_name ?? ''),
               material_spec: it.material_spec != null ? String(it.material_spec) : undefined,
+              material_model: it.material_model != null ? String(it.material_model) : undefined,
               material_unit: String(it.material_unit ?? ''),
               aux_quantity: it.aux_quantity != null ? Number(it.aux_quantity) : undefined,
               aux_unit: it.aux_unit != null ? String(it.aux_unit) : undefined,
@@ -1344,6 +1343,230 @@ export const ProductionPickingCreateModal: React.FC<ProductionPickingCreateModal
       throw error;
     }
   };
+
+  const pullDocumentScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
+  const pullOpenQtyTripleColumns = useMemo(
+    () =>
+      buildDefaultPullOpenLineQtyColumns(t, {
+        includeRemaining: true,
+        widths: { suggested: 100, pushed: 100, remaining: 100 },
+      }),
+    [t],
+  );
+
+  const workOrderPullColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.col.workOrderCode'),
+        dataIndex: 'work_order_code',
+        width: 168,
+        ellipsis: true,
+      },
+      buildPullQueryMaterialIdentityColumn<PullWorkOrderCandidate>(t),
+      ...pullOpenQtyTripleColumns,
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.pull.convertStatus'),
+        key: 'convert_status',
+        width: 100,
+        align: 'center' as const,
+        render: (_: unknown, record: PullWorkOrderCandidate) =>
+          renderPullCapabilityTag(
+            Number(record.remaining_quantity ?? 0) > 0,
+            t('app.kuaizhizao.warehouseOutbound.pull.canCreate'),
+            t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate'),
+          ),
+      },
+    ],
+    [pullOpenQtyTripleColumns, t],
+  );
+
+  const applyWorkOrderPullLinesToForm = useCallback(
+    async (rows: PullWorkOrderCandidate[]) => {
+      const selectable = rows.filter((row) => isPullOpenLineSelectable(row));
+      if (!selectable.length) {
+        messageApi.warning(t('app.kuaizhizao.warehouseOutbound.pull.wo.selectLinesFirst'));
+        return;
+      }
+      const newLines = await Promise.all(
+        selectable.map(async (row) => {
+          const materialId = Number(row.material_id);
+          const qty = Number(row.remaining_quantity ?? 0);
+          const material = materialId > 0 ? await fetchMaterialForUnitSelectCache(materialId) : null;
+          const unit =
+            String(row.unit ?? '').trim() ||
+            (material ? resolveMaterialScenarioUnit(material, 'production') : '个');
+          const woId = Number(row.work_order_id);
+          const woCode = String(row.work_order_code ?? '').trim();
+          const specFromRow =
+            row.material_spec != null ? String(row.material_spec).trim() : '';
+          const modelFromRow =
+            row.material_model != null ? String(row.material_model).trim() : '';
+          const specFromMat =
+            material?.specification != null ? String(material.specification).trim() : '';
+          const modelFromMat = material?.model != null ? String(material.model).trim() : '';
+          let auxQuantity =
+            row.remaining_aux_quantity != null ? Number(row.remaining_aux_quantity) : undefined;
+          let auxUnit =
+            row.aux_unit != null && String(row.aux_unit).trim()
+              ? String(row.aux_unit).trim()
+              : undefined;
+          let unitConversionRate =
+            row.unit_conversion_rate != null ? Number(row.unit_conversion_rate) : undefined;
+          if ((auxQuantity == null || !(auxQuantity > 0)) && material && qty > 0) {
+            const dual = syncDualQuantitiesFixed({
+              material,
+              scenario: 'production',
+              changed: 'primary',
+              value: {
+                quantity: qty,
+                material_unit: unit,
+                aux_unit: auxUnit ?? resolveAuxUnitForScenario(material, 'production'),
+                unit_conversion_rate: unitConversionRate,
+              },
+            });
+            if (dual.aux_quantity != null && Number(dual.aux_quantity) > 0) {
+              auxQuantity = Number(dual.aux_quantity);
+            }
+            if (dual.aux_unit) auxUnit = dual.aux_unit;
+            if (dual.unit_conversion_rate != null) {
+              unitConversionRate = Number(dual.unit_conversion_rate);
+            }
+          }
+          const line: Record<string, unknown> = {
+            ...defaultLineItem,
+            material_id: materialId,
+            material_code: String(row.material_code ?? ''),
+            material_name: String(row.material_name ?? ''),
+            material_spec: specFromRow || specFromMat || undefined,
+            material_model: modelFromRow || modelFromMat || undefined,
+            material_unit: unit,
+            work_order_id: woId > 0 ? woId : undefined,
+            work_order_code: woCode || undefined,
+            wo_bom_required: Number(row.suggested_quantity ?? 0),
+            wo_bom_picked: Number(row.pushed_quantity ?? 0),
+            required_quantity: qty > 0 ? qty : 0,
+            aux_quantity: auxQuantity,
+            aux_unit: auxUnit,
+            unit_conversion_rate: unitConversionRate,
+            batch_managed: material
+              ? isMaterialBatchEntryEnabled(trackingFlags, material.batchManaged)
+              : false,
+            serial_managed: material
+              ? isMaterialSerialEntryEnabled(trackingFlags, material.serialManaged)
+              : false,
+          };
+          const primaryWh = material ? resolvePrimaryDefaultWarehouse(material) : null;
+          if (primaryWh) {
+            line.warehouse_id = primaryWh.id;
+            line.warehouse_name = primaryWh.name;
+          }
+          return line;
+        }),
+      );
+
+      const current = normalizeFormListItems<Record<string, unknown>>(
+        formRef.current?.getFieldValue('items'),
+      );
+      const merged = [
+        ...current.filter((it) => Number(it.material_id) > 0),
+        ...newLines.filter(
+          (nl) =>
+            !current.some(
+              (c) =>
+                Number(c.material_id) === Number(nl.material_id) &&
+                Number(c.work_order_id) === Number(nl.work_order_id),
+            ),
+        ),
+      ];
+
+      const woIds = [
+        ...new Set(
+          merged
+            .map((it) => Number(it.work_order_id))
+            .filter((id) => Number.isFinite(id) && id > 0),
+        ),
+      ];
+      const headerWo =
+        woIds.length === 1
+          ? {
+              work_order_id: woIds[0],
+              work_order_code: String(
+                merged.find((it) => Number(it.work_order_id) === woIds[0])?.work_order_code ?? '',
+              ).trim(),
+            }
+          : { work_order_id: undefined, work_order_code: undefined };
+
+      formRef.current?.setFieldsValue({
+        ...headerWo,
+        items: merged.length ? merged : newLines,
+      });
+      syncLineStockKeyFromForm();
+      await prefetchMaterialsForUnitSelect(
+        (merged.length ? merged : newLines).map((it) => Number(it.material_id)),
+      );
+      messageApi.success(t('app.kuaizhizao.warehouseOutbound.msg.workOrderLinesLoaded'));
+    },
+    [messageApi, syncLineStockKeyFromForm, t, trackingFlags],
+  );
+
+  const pullFromWorkOrderQuery = useUniPullQuery<PullWorkOrderCandidate>({
+    rowKey: 'id',
+    selectionType: 'checkbox',
+    scopeOptions: pullDocumentScopeOptions,
+    defaultScope: 'pullable',
+    onOpen: () => {
+      pullSourceWorkOrderIdRef.current = undefined;
+      setPullSourceWorkOrderId(undefined);
+      void loadPullSourceReferenceOptions({
+        resource: PULL_SOURCE_REFERENCE.workOrder,
+        hostResource: OUTBOUND_HOST_RESOURCE,
+      })
+        .then(setPullSourceWorkOrderOptions)
+        .catch((error: unknown) => {
+          messageApi.error(
+            getApiErrorMessage(error, t('app.kuaizhizao.warehouseOutbound.pull.wo.loadSourceFailed')),
+          );
+          setPullSourceWorkOrderOptions([]);
+        });
+    },
+    loadData: async (params) => {
+      const { scope } = params;
+      try {
+        const listRes = await warehouseApi.productionPicking.listWorkOrderPullLines({
+          ...toUniPullQueryHttpParams(params),
+          work_order_id: pullSourceWorkOrderIdRef.current,
+          pullable_only: isPullableScope(scope),
+        });
+        return { data: listRes?.data ?? [], total: listRes?.total ?? 0 };
+      } catch (error: unknown) {
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.warehouseOutbound.pull.loadWorkOrdersFailed')),
+        );
+        return { data: [], total: 0 };
+      }
+    },
+    isRowDisabled: (record) => !isPullOpenLineSelectable(record),
+    onConfirm: async (_keys, selectedRows) => {
+      try {
+        await applyWorkOrderPullLinesToForm(selectedRows);
+        pullFromWorkOrderQuery.closeModal();
+      } catch (error: unknown) {
+        messageApi.error(getApiErrorMessage(error, t('common.loadFailed')));
+      }
+    },
+  });
+
+  const handleOpenLoadWorkOrder = useCallback(() => {
+    if (isEdit) return;
+    pullFromWorkOrderQuery.openModal();
+  }, [isEdit, pullFromWorkOrderQuery]);
 
   const modalTitle = useMemo(() => {
     if (!isEdit) return t('app.kuaizhizao.warehouseOutbound.createProductionPickingModal');

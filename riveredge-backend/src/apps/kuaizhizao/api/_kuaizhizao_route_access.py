@@ -35,6 +35,13 @@ _SALES_ORDER_REFERENCE_GET_RE = re.compile(
     r")(?:/|$)",
     re.IGNORECASE,
 )
+_SALES_ORDER_PURCHASE_REQUISITION_PULL_GET_RE = re.compile(
+    r"/sales-orders/(?:"
+    r"purchase-requisition-pull-lines|"
+    r"purchase-requisition-pull-orders"
+    r")(?:/|$)",
+    re.IGNORECASE,
+)
 
 # 仅声明 :audit（无 :approve/:reject）的模块：/approve、/reject 均走 audit
 _AUDIT_ONLY_REVIEW_MODULES = frozenset({
@@ -364,6 +371,18 @@ def require_kuaizhizao_sales_order_access(
             and action == "create"
         ):
             required = list(collection_create_permissions)
+        elif (
+            action == "read"
+            and _SALES_ORDER_PURCHASE_REQUISITION_PULL_GET_RE.search(
+                request.url.path or ""
+            )
+        ):
+            required = [
+                build_permission_code("kuaizhizao", "sales-order", "read"),
+                build_permission_code("kuaizhizao", "sales-order", "display"),
+                build_permission_code("kuaizhizao", "purchase-requisition", "create"),
+                build_permission_code("kuaizhizao", "purchase-requisition", "read"),
+            ]
         elif (
             action == "read"
             and _SALES_ORDER_REFERENCE_GET_RE.search(request.url.path or "")

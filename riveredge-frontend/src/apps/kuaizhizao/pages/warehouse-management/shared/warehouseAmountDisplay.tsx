@@ -40,6 +40,37 @@ export function renderWarehousePartyNameDisplay(
   );
 }
 
+export type WarehousePartyNameRecord = {
+  customer_name?: string | null;
+  supplier_name?: string | null;
+};
+
+/** 仓储 hub 列表叠列主行：客户/供应商名称走字段权限（与出库管理一致） */
+export function resolveWarehouseHubStackedPartyPrimary(
+  fieldResource: string,
+  record: WarehousePartyNameRecord,
+): { primary: string; primaryContent: React.ReactNode } | null {
+  if (record.customer_name) {
+    const value = String(record.customer_name);
+    return {
+      primary: value,
+      primaryContent: renderWarehousePartyNameDisplay(value, fieldResource, 'customer_name'),
+    };
+  }
+  if (record.supplier_name) {
+    const value = String(record.supplier_name);
+    return {
+      primary: value,
+      primaryContent: renderWarehousePartyNameDisplay(value, fieldResource, 'supplier_name'),
+    };
+  }
+  return null;
+}
+
+export const KUAIZHIZAO_DELIVERY_NOTICE_FIELD_RESOURCE = 'kuaizhizao:delivery-notice';
+export const KUAIZHIZAO_CUSTOMER_MATERIAL_REGISTRATION_FIELD_RESOURCE =
+  'kuaizhizao:warehouse-management-customer-material-registration';
+
 export function renderWarehouseAmountDisplay(
   val: unknown,
   kind: 'price' | 'amount',

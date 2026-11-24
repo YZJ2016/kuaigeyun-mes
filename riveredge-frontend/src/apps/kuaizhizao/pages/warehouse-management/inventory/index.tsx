@@ -258,30 +258,48 @@ const InventoryPage: React.FC = () => {
       t('app.kuaizhizao.warehouseInventory.colPrimaryUnit'),
       t('app.kuaizhizao.warehouseInventory.colPrimaryQuantity'),
       t('app.kuaizhizao.warehouseInventory.colLocation'),
+      t('app.kuaizhizao.warehouseInventory.colSecondaryUnit'),
+      t('app.kuaizhizao.warehouseInventory.colSecondaryQuantity'),
       t('app.kuaizhizao.warehouseInventory.colInTransit'),
+      t('app.kuaizhizao.warehouseInventory.inTransitPurchase'),
+      t('app.kuaizhizao.warehouseInventory.inTransitWorkOrder'),
+      t('app.kuaizhizao.warehouseInventory.inTransitOutsource'),
+      t('app.kuaizhizao.warehouseInventory.colLocation'),
       t('app.kuaizhizao.warehouseInventory.colAlert'),
+      t('app.kuaizhizao.inventoryAlert.colAlertMessage'),
       t('common.status'),
       t('app.kuaizhizao.warehouseReports.colWarehouse'),
     ];
-    const lines = rows.map((r) =>
-      [
+    const lines = rows.map((r) => {
+      const breakdown = r.in_transit_breakdown;
+      return [
         r.material_code,
         r.material_name,
-        r.material_spec,
-        r.model,
-        r.brand,
-        r.texture,
+        renderCell(r.material_spec),
+        renderCell(r.model),
+        renderCell(r.brand),
+        renderCell(r.texture),
         r.primary_unit ?? r.material_unit,
         r.primary_quantity,
-        formatInventoryLocationDisplay(r) || '-',
+        inventoryRowShowsLedgerSecondary(r) ? r.secondary_unit ?? '' : '—',
+        inventoryRowShowsLedgerSecondary(r) &&
+        r.secondary_quantity !== null &&
+        r.secondary_quantity !== undefined
+          ? r.secondary_quantity
+          : '—',
         r.in_transit_quantity ?? 0,
-        r.alert_label,
+        breakdown?.purchase_quantity ?? 0,
+        breakdown?.work_order_quantity ?? 0,
+        breakdown?.outsource_work_order_quantity ?? 0,
+        formatInventoryLocationDisplay(r) || '—',
+        renderCell(r.alert_label ?? t('app.kuaizhizao.warehouseInventory.alertNormal')),
+        renderCell(r.alert_message),
         r.status,
-        r.warehouse_name || '-',
+        r.warehouse_name || '—',
       ]
         .map(escapeCsv)
-        .join(',')
-    );
+        .join(',');
+    });
     const csv = [headers.join(','), ...lines].join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);

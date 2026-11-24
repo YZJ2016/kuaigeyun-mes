@@ -548,6 +548,7 @@ async def compute_viewer_flow_withdraw_revoke(
     process_nodes: Any,
     history: Optional[List[ApprovalHistory]] = None,
     admin_bypass: bool = False,
+    admin_revoke_bypass: Optional[bool] = None,
     has_revoke_permission: bool = False,
 ) -> Dict[str, bool]:
     """计算 viewer_can_revoke / viewer_can_withdraw_submit / viewer_can_recall_own。"""
@@ -558,6 +559,10 @@ async def compute_viewer_flow_withdraw_revoke(
     }
     if viewer_id is None or not instance:
         return out
+
+    effective_admin_revoke = (
+        bool(admin_revoke_bypass) if admin_revoke_bypass is not None else bool(admin_bypass)
+    )
 
     graph = normalize_flow_graph(process_nodes or {})
     vid = int(viewer_id)
@@ -602,7 +607,7 @@ async def compute_viewer_flow_withdraw_revoke(
 
         if not revoke_policy["allowRevokeAfterApproved"]:
             out["viewer_can_revoke"] = False
-        elif admin_bypass:
+        elif effective_admin_revoke:
             out["viewer_can_revoke"] = True
         elif has_revoke_permission and (
             # auto_pass / 无人工终审人：有 revoke 码即可反审回草稿

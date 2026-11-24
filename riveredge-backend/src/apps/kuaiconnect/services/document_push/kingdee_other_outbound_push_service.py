@@ -206,6 +206,12 @@ async def enrich_pick_header_config(
         if not _config_text(out, "bizdept_number"):
             out["bizdept_number"] = pickdept
     picker = str(doc_picker_operator or "").strip()
+    if not picker and int(picker_user_id or 0) > 0:
+        from apps.kuaizhizao.utils.kingdee_warehouse_operator_utils import (
+            resolve_document_operator_number,
+        )
+
+        picker = await resolve_document_operator_number(tenant_id, int(picker_user_id)) or ""
     if picker:
         out["pickeroperator_operatornumber"] = picker
         out["pickeroperator_number"] = picker
@@ -620,6 +626,7 @@ class KingdeeOtherOutboundPushService:
             tenant_id,
             warehouse,
             material_ids=[int(it.material_id) for it in items if getattr(it, "material_id", None)],
+            outbound_type=getattr(outbound, "outbound_type", None),
         )
         code = str(connection_code or "").strip()
         api_uuid = str(save_api_uuid or "").strip()

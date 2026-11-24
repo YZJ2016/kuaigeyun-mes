@@ -490,24 +490,45 @@ async def _resolve_sales_order_snapshot_fields(
     sales_order_id: Optional[int],
     sales_order_code: Optional[str],
     sales_order_name: Optional[str],
-) -> tuple[Optional[str], Optional[str]]:
-    """仅有 sales_order_id 时从销售订单主表补全编号/名称，便于列表与详情展示。"""
+    *,
+    customer_id: Optional[int] = None,
+    customer_name: Optional[str] = None,
+    customer_order_no: Optional[str] = None,
+) -> tuple[Optional[str], Optional[str], Optional[int], Optional[str], Optional[str]]:
+    """关联销售订单时补全编号/名称/客户；客户订单号缺省用销售订单号。"""
     if not sales_order_id:
-        return sales_order_code, sales_order_name
-    if sales_order_code and sales_order_name:
-        return sales_order_code, sales_order_name
+        return sales_order_code, sales_order_name, customer_id, customer_name, customer_order_no
+
+    need_so = not (
+        sales_order_code
+        and sales_order_name
+        and customer_id
+        and (customer_name or "").strip()
+        and (customer_order_no or "").strip()
+    )
+    if not need_so:
+        return sales_order_code, sales_order_name, customer_id, customer_name, customer_order_no
+
     so = await SalesOrder.get_or_none(
         id=sales_order_id,
         tenant_id=tenant_id,
         deleted_at__isnull=True,
     )
     if not so:
-        return sales_order_code, sales_order_name
+        return sales_order_code, sales_order_name, customer_id, customer_name, customer_order_no
+
     code = sales_order_code or so.order_code
     name = sales_order_name or (
         f"{so.order_code} - {so.customer_name}" if so.customer_name else so.order_code
     )
-    return code, name
+    resolved_customer_id = customer_id or (int(so.customer_id) if so.customer_id else None)
+    resolved_customer_name = (customer_name or "").strip() or (so.customer_name or None)
+    resolved_customer_order_no = (
+        (customer_order_no or "").strip()
+        or (getattr(so, "customer_order_no", None) or "").strip()
+        or (so.order_code or None)
+    )
+    return code, name, resolved_customer_id, resolved_customer_name, resolved_customer_order_no
 
 
 def _max_reportable_quantity_for_op(work_order: WorkOrder, op: WorkOrderOperation) -> Decimal:
@@ -1843,11 +1864,20 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             if stored_pr_id is None and process_route_resolved and not has_manual_ops:
                 stored_pr_id = process_route_resolved.id
 
-            resolved_so_code, resolved_so_name = await _resolve_sales_order_snapshot_fields(
+            (
+                resolved_so_code,
+                resolved_so_name,
+                resolved_customer_id,
+                resolved_customer_name,
+                resolved_customer_order_no,
+            ) = await _resolve_sales_order_snapshot_fields(
                 tenant_id,
                 work_order_data.sales_order_id,
                 work_order_data.sales_order_code,
                 work_order_data.sales_order_name,
+                customer_id=getattr(work_order_data, "customer_id", None),
+                customer_name=getattr(work_order_data, "customer_name", None),
+                customer_order_no=getattr(work_order_data, "customer_order_no", None),
             )
 
             tracking_service = WorkOrderTrackingService()
@@ -1880,8 +1910,12 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 quantity=work_order_data.quantity,
                 production_mode=work_order_data.production_mode,
                 sales_order_id=work_order_data.sales_order_id,
+                sales_order_item_id=getattr(work_order_data, "sales_order_item_id", None),
                 sales_order_code=resolved_so_code,
                 sales_order_name=resolved_so_name,
+                customer_id=resolved_customer_id,
+                customer_name=resolved_customer_name,
+                customer_order_no=resolved_customer_order_no,
                 workshop_id=work_order_data.workshop_id,
                 workshop_name=work_order_data.workshop_name,
                 work_center_id=work_order_data.work_center_id,
@@ -2266,12 +2300,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         async def _load_sales_snapshot():
             if not (work_order.sales_order_id and not work_order.sales_order_code):
                 return None, None
-            return await _resolve_sales_order_snapshot_fields(
+            code, name, _cid, _cname, _cono = await _resolve_sales_order_snapshot_fields(
                 tenant_id,
                 work_order.sales_order_id,
                 work_order.sales_order_code,
                 work_order.sales_order_name,
             )
+            return code, name
 
         async def _load_split_meta():
             if (work_order.status or "") != "split" or work_order.parent_work_order_id is not None:

@@ -12,6 +12,11 @@ export const EMPTY_DEMAND_PUSH_PREVIEW_FILTERS: DemandPushPreviewFilters = {
   materialSpec: '',
 };
 
+/** Table 行身份（可重复 item_id 时仍唯一）；勾选状态真源仍是 item_id（下推 API 契约） */
+export function demandPushPreviewRowKey(row: ComputationPushPreviewItem): string {
+  return `${row.item_id}-${row.target_document ?? 'line'}-${row.push_line_index ?? 0}-${row.planned_receipt_date ?? ''}`;
+}
+
 export function filterDemandPushPreviewItems(
   items: ComputationPushPreviewItem[],
   filters: DemandPushPreviewFilters,

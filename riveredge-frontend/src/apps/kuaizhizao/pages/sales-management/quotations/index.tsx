@@ -3525,10 +3525,10 @@ const QuotationsPage: React.FC = () => {
     <>
       <DetailDrawerSection titleAccent title={t('app.kuaizhizao.quotation.form.section.basicInfo')}>
       <div className="document-form-untitled-groups">
-        {/* 单据与归属：编号 / 客户 / 业务员 */}
+        {/* 一行 5 格（与销售订单表头一致：Col flex=1） */}
         <div className="document-form-untitled-group">
-          <Row gutter={16}>
-            <Col span={8}>
+          <Row gutter={16} wrap={false}>
+            <Col flex="1 1 0" style={{ minWidth: 0 }}>
               <ProFormText
                 name="quotation_code"
                 label={t('app.kuaizhizao.quotation.import.code')}
@@ -3537,7 +3537,7 @@ const QuotationsPage: React.FC = () => {
                 rules={[{ required: true, whitespace: true, message: t('app.kuaizhizao.quotation.form.codeRequired') }]}
               />
             </Col>
-            <Col span={8}>
+            <Col flex="1 1 0" style={{ minWidth: 0 }}>
               <ProForm.Item name="customer_id" label={t('field.customer.name')} rules={[{ required: true, message: t('app.kuaizhizao.quotation.form.selectCustomer') }]}>
                 <CustomerSelectDropdown
                   hostResource={KUAIZHIZAO_DOC_HOST.quotation}
@@ -3551,15 +3551,10 @@ const QuotationsPage: React.FC = () => {
                 />
               </ProForm.Item>
             </Col>
-            <Col span={8}>
+            <Col flex="1 1 0" style={{ minWidth: 0 }}>
               <QuotationSalesmanField userList={userList} loading={usersLoading} />
             </Col>
-          </Row>
-        </div>
-        {/* 日期 */}
-        <div className="document-form-untitled-group">
-          <Row gutter={16}>
-            <Col span={8}>
+            <Col flex="1 1 0" style={{ minWidth: 0 }}>
               <ProFormDatePicker
                 name="quotation_date"
                 label={t('app.kuaizhizao.quotation.colQuotationDate')}
@@ -3580,7 +3575,7 @@ const QuotationsPage: React.FC = () => {
                 }}
               />
             </Col>
-            <Col span={8}>
+            <Col flex="1 1 0" style={{ minWidth: 0 }}>
               <ProFormDatePicker
                 name="valid_until"
                 label={t('app.kuaizhizao.quotation.form.validUntil')}
@@ -3593,83 +3588,92 @@ const QuotationsPage: React.FC = () => {
                 })}
               />
             </Col>
-            <Col span={8}>
-              <ProFormDatePicker
-                name="delivery_date"
-                label={t('app.kuaizhizao.quotation.form.expectedDeliveryDate')}
-                formItemProps={formDateFormItemProps}
-                fieldProps={buildFutureDateShortcutFieldProps({
-                  getForm: () => formRef.current,
-                  fieldName: 'delivery_date',
-                  baseFieldName: 'quotation_date',
-                  t,
-                  onApply: (date) => {
-                    formRef.current?.setFieldValue?.('delivery_date', date);
-                    applyHeaderDeliveryToItemLines(date);
-                  },
-                  fieldProps: {
-                    onChange: (value: unknown) => {
-                      applyHeaderDeliveryToItemLines(value);
+          </Row>
+        </div>
+        <SalesCustomerPartnerDetailBridge
+          customerList={customerList as unknown as Array<Record<string, unknown>>}
+          hostResource="kuaizhizao:quotation"
+        >
+          <div className="document-form-untitled-group">
+            <Row gutter={16} wrap={false}>
+              <Col flex="1 1 0" style={{ minWidth: 0 }}>
+                <ProFormDatePicker
+                  name="delivery_date"
+                  label={t('app.kuaizhizao.quotation.form.expectedDeliveryDate')}
+                  formItemProps={formDateFormItemProps}
+                  fieldProps={buildFutureDateShortcutFieldProps({
+                    getForm: () => formRef.current,
+                    fieldName: 'delivery_date',
+                    baseFieldName: 'quotation_date',
+                    t,
+                    onApply: (date) => {
+                      formRef.current?.setFieldValue?.('delivery_date', date);
+                      applyHeaderDeliveryToItemLines(date);
                     },
-                  },
-                })}
-              />
-            </Col>
-          </Row>
-        </div>
-        {/* 履约与商务：发货 / 联系 / 付款 / 币种 */}
-        <div className="document-form-untitled-group">
-          <Row gutter={16}>
-            <Col span={5}>
-              <DictionarySelect
-                dictionaryCode="SHIPPING_METHOD"
-                name="shipping_method"
-                label={t('app.kuaizhizao.salesOrder.shippingMethod')}
-                placeholder={t('app.kuaizhizao.quotation.form.selectShippingMethod')}
-                formRef={formRef}
-                simpleQuickCreate
-                quickCreatePopoverZIndex={quotationNestedElevatedPopupZIndex}
-              />
-            </Col>
-            <Col span={5}>
-              <ProFormText name="customer_contact" label={salesCommonFormLabels.contact} />
-            </Col>
-            <Col span={5}>
-              <ProFormText name="customer_phone" label={salesCommonFormLabels.phone} />
-            </Col>
-            <Col span={5}>
-              <DictionarySelect
-                dictionaryCode="PAYMENT_TERMS"
-                name="payment_terms"
-                label={t('app.kuaizhizao.salesOrder.paymentTerms')}
-                placeholder={t('app.kuaizhizao.quotation.form.selectPaymentTerms')}
-                formRef={formRef}
-                simpleQuickCreate
-                quickCreatePopoverZIndex={quotationNestedElevatedPopupZIndex}
-              />
-            </Col>
-            <Col span={4}>
-              <DictionarySelect
-                dictionaryCode="CURRENCY"
-                name="currency_code"
-                label={t('app.kuaizhizao.quotation.form.currency')}
-                placeholder={t('app.kuaizhizao.quotation.form.selectCurrency')}
-                formRef={formRef}
-                valueEqualsLabel={false}
-                quickCreatePopoverZIndex={quotationNestedElevatedPopupZIndex}
-              />
-            </Col>
-          </Row>
-          <Row gutter={16}>
-            <Col span={24}>
-              <ProFormText
-                name="shipping_address"
-                label={t('app.kuaizhizao.salesOrder.shippingAddress')}
-                placeholder={t('app.kuaizhizao.quotation.form.shippingAddressPlaceholder')}
-              />
-            </Col>
-          </Row>
-        </div>
+                    fieldProps: {
+                      onChange: (value: unknown) => {
+                        applyHeaderDeliveryToItemLines(value);
+                      },
+                    },
+                  })}
+                />
+              </Col>
+              <Col flex="1 1 0" style={{ minWidth: 0 }}>
+                <DictionarySelect
+                  dictionaryCode="SHIPPING_METHOD"
+                  name="shipping_method"
+                  label={t('app.kuaizhizao.salesOrder.shippingMethod')}
+                  placeholder={t('app.kuaizhizao.quotation.form.selectShippingMethod')}
+                  formRef={formRef}
+                  simpleQuickCreate
+                  quickCreatePopoverZIndex={quotationNestedElevatedPopupZIndex}
+                />
+              </Col>
+              <Col flex="1 1 0" style={{ minWidth: 0 }}>
+                <SalesCustomerContactFormField
+                  formRef={formRef}
+                  label={salesCommonFormLabels.contact}
+                />
+              </Col>
+              <Col flex="1 1 0" style={{ minWidth: 0 }}>
+                <SalesCustomerPhoneFormField label={salesCommonFormLabels.phone} />
+              </Col>
+              <Col flex="1 1 0" style={{ minWidth: 0 }}>
+                <DictionarySelect
+                  dictionaryCode="PAYMENT_TERMS"
+                  name="payment_terms"
+                  label={t('app.kuaizhizao.salesOrder.paymentTerms')}
+                  placeholder={t('app.kuaizhizao.quotation.form.selectPaymentTerms')}
+                  formRef={formRef}
+                  simpleQuickCreate
+                  quickCreatePopoverZIndex={quotationNestedElevatedPopupZIndex}
+                />
+              </Col>
+            </Row>
+            <Row gutter={16} wrap={false}>
+              <Col flex="1 1 0" style={{ minWidth: 0 }}>
+                <DictionarySelect
+                  dictionaryCode="CURRENCY"
+                  name="currency_code"
+                  label={t('app.kuaizhizao.quotation.form.currency')}
+                  placeholder={t('app.kuaizhizao.quotation.form.selectCurrency')}
+                  formRef={formRef}
+                  valueEqualsLabel={false}
+                  quickCreatePopoverZIndex={quotationNestedElevatedPopupZIndex}
+                />
+              </Col>
+              <Col flex="1 1 0" style={{ minWidth: 0 }}>
+                <SalesCustomerShippingAddressFormField
+                  label={t('app.kuaizhizao.salesOrder.shippingAddress')}
+                  placeholder={t('app.kuaizhizao.quotation.form.shippingAddressPlaceholder')}
+                />
+              </Col>
+              <Col flex="1 1 0" style={{ minWidth: 0 }} aria-hidden />
+              <Col flex="1 1 0" style={{ minWidth: 0 }} aria-hidden />
+              <Col flex="1 1 0" style={{ minWidth: 0 }} aria-hidden />
+            </Row>
+          </div>
+        </SalesCustomerPartnerDetailBridge>
         <CustomFieldsFormSection
           customFields={quotationFormCustomFields}
           customFieldValues={quotationFormCustomFieldValues}

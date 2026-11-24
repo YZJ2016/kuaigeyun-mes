@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from tortoise.transactions import in_transaction
 
@@ -19,6 +19,10 @@ from apps.kuaizhizao.schemas.outsource_work_order import (
 )
 from apps.kuaizhizao.services.document_action_policy.outsource_order import assert_outsource_order_push_issue
 from apps.kuaizhizao.services.outsource_material_issue_service import OutsourceMaterialIssueService
+from apps.kuaizhizao.services.outsource_order_batch_quantity import (
+    compute_issued_batch_quantity,
+    resolve_outsource_suggested_issue_batch_quantity,
+)
 from core.utils.timezone_utils import resolve_business_datetime
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 
@@ -50,9 +54,11 @@ class OutsourceOrderIssueBridge:
             raise BusinessLogicError("工单或产品不存在，无法生成发料预览")
 
         issue_svc = OutsourceMaterialIssueService()
-        scale_qty = float(oo.outsource_quantity or 0)
-        if scale_qty <= 0:
+        out_qty = Decimal(str(oo.outsource_quantity or 0))
+        if out_qty <= 0:
             raise ValidationError("委外数量无效")
+        scale_qty = float(out_qty)
+        issued_map = await self._net_issued_by_material(tenant_id, outsource_order_id)
 
         message: Optional[str] = None
         try:
@@ -74,7 +80,30 @@ class OutsourceOrderIssueBridge:
                 getattr(r, "component_type", None),
             )
         ]
-        issued_map = await self._net_issued_by_material(tenant_id, outsource_order_id)
+
+        bom_per_unit: List[Tuple[int, Decimal]] = []
+        if out_qty > 0:
+            for r in issue_reqs:
+                mid = int(r.component_id)
+                required = Decimal(str(r.net_requirement or r.gross_requirement or 0))
+                per_unit = required / out_qty
+                if per_unit > 0:
+                    bom_per_unit.append((mid, per_unit))
+
+        issued_batch = await compute_issued_batch_quantity(
+            tenant_id,
+            oo,
+            work_order=work_order,
+            issued_map=issued_map,
+            bom_per_unit=bom_per_unit,
+        )
+        pending_batch = max(Decimal("0"), out_qty - issued_batch)
+        suggested_batch = await resolve_outsource_suggested_issue_batch_quantity(
+            tenant_id,
+            oo,
+            work_order=work_order,
+            issued_batch=issued_batch,
+        )
         mat_ids = [int(r.component_id) for r in issue_reqs]
         inv_map = await batch_get_material_inventory(tenant_id, mat_ids)
 
@@ -111,7 +140,10 @@ class OutsourceOrderIssueBridge:
             supplier_name=str(oo.supplier_name or "") or None,
             planned_start_date=oo.planned_start_date,
             planned_end_date=oo.planned_end_date,
-            quantity=Decimal(str(scale_qty)),
+            quantity=out_qty,
+            issued_batch_quantity=issued_batch,
+            pending_batch_quantity=pending_batch,
+            suggested_batch_quantity=suggested_batch,
             lines=lines,
             message=message,
             allow_manual_lines=True,

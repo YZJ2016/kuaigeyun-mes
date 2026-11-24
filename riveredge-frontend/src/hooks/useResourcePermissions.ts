@@ -6,6 +6,7 @@ import { hasReviewPermission } from '../utils/permissionContract';
 import { isPlatformInfraPath } from '../utils/platformScope';
 import { canInitiateCompleteCreate } from '../utils/documentWorkflowPermission';
 import { useCurrentUser } from './useCurrentUser';
+import { useAdminRevokeAllDocuments } from './useAdminRevokeAllDocuments';
 
 export type ResourcePermissionGates = {
   /** 是否已解析到资源前缀并启用按钮级权限控制 */
@@ -63,10 +64,22 @@ export function useResourcePermissions(
   const location = useLocation();
   const currentUser = useCurrentUser();
   const completeSource = options?.completeCreateSourceResource?.trim() || '';
+  const adminRevokeAll = useAdminRevokeAllDocuments(false);
 
   return useMemo(() => {
     if (isAdminBypass(currentUser)) {
-      return ADMIN_BYPASS_OPEN;
+      const prefix = (resource || '').trim();
+      const check = (action: string) =>
+        hasPermission(currentUser, buildPermissionCode(prefix, action));
+      const canAction = (action: string) => {
+        const act = (action || '').trim().toLowerCase();
+        if (!act || act === 'skip') return true;
+        if (act === 'revoke') {
+          return adminRevokeAll || (prefix ? check('revoke') : false);
+        }
+        return true;
+      };
+      return { ...ADMIN_BYPASS_OPEN, canAction };
     }
 
     // /infra/* 无 manifest 资源码：仅平台管理员可展示操作按钮（后端 infra API 强校验）
@@ -107,5 +120,5 @@ export function useResourcePermissions(
       canPrint: check('print'),
       canAction,
     };
-  }, [currentUser, resource, completeSource, location.pathname]);
+  }, [adminRevokeAll, completeSource, currentUser, location.pathname, resource]);
 }

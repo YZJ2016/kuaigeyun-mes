@@ -42,6 +42,7 @@ from apps.kuaizhizao.services.order_change.helpers import (
     infer_change_category,
     is_source_order_locked_for_direct_edit,
     line_amount,
+    optional_decimals_differ,
     read_purchase_line_entered_unit_price,
     resolve_purchase_line_change,
 )
@@ -175,6 +176,8 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
             return True
         if cls._norm_change_date(item.after_delivery_date) != cls._norm_change_date(item.before_delivery_date):
             return True
+        if optional_decimals_differ(item.after_aux_quantity, item.before_aux_quantity):
+            return True
         return False
 
     async def _has_change_content(self, tenant_id: int, doc: PurchaseOrderChangeOrder) -> bool:
@@ -253,6 +256,8 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
             material_unit=item.material_unit,
             before_quantity=item.before_quantity,
             after_quantity=item.after_quantity,
+            before_aux_quantity=item.before_aux_quantity,
+            after_aux_quantity=item.after_aux_quantity,
             before_unit_price=item.before_unit_price,
             after_unit_price=item.after_unit_price,
             before_delivery_date=item.before_delivery_date,
@@ -422,6 +427,10 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
                     "material_unit": payload.material_unit,
                     "before_quantity": diff["before_quantity"],
                     "after_quantity": diff["after_quantity"],
+                    "before_aux_quantity": getattr(payload, "before_aux_quantity", None)
+                    or diff.get("before_aux_quantity"),
+                    "after_aux_quantity": getattr(payload, "after_aux_quantity", None)
+                    or diff.get("after_aux_quantity"),
                     "before_unit_price": diff["before_unit_price"],
                     "after_unit_price": diff["after_unit_price"],
                     "before_delivery_date": diff["before_delivery_date"],
@@ -458,6 +467,8 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
                 "material_unit": src.unit,
                 "before_quantity": diff["before_quantity"],
                 "after_quantity": diff["after_quantity"],
+                "before_aux_quantity": diff.get("before_aux_quantity"),
+                "after_aux_quantity": diff.get("after_aux_quantity"),
                 "before_unit_price": diff["before_unit_price"],
                 "after_unit_price": diff["after_unit_price"],
                 "before_delivery_date": diff["before_delivery_date"],
@@ -505,6 +516,8 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
                 "material_unit": src.unit,
                 "before_quantity": src.ordered_quantity,
                 "after_quantity": src.ordered_quantity,
+                "before_aux_quantity": getattr(src, "aux_quantity", None),
+                "after_aux_quantity": getattr(src, "aux_quantity", None),
                 "before_unit_price": entered,
                 "after_unit_price": entered,
                 "before_delivery_date": src.required_date,
@@ -587,6 +600,8 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
             "material_unit": src.unit,
             "before_quantity": src.ordered_quantity,
             "after_quantity": src.ordered_quantity,
+            "before_aux_quantity": getattr(src, "aux_quantity", None),
+            "after_aux_quantity": getattr(src, "aux_quantity", None),
             "before_unit_price": entered,
             "after_unit_price": entered,
             "before_delivery_date": src.required_date,
@@ -1347,6 +1362,19 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
                         operator_id=operator_id,
                         operator_name=operator_name,
                     )
+                if optional_decimals_differ(ch.after_aux_quantity, po_item.aux_quantity):
+                    await PurchaseOrderChange.create(
+                        tenant_id=tenant_id,
+                        order_id=order.id,
+                        change_type="Quantity",
+                        field_name=f"line_{po_item.id}_aux_quantity",
+                        old_value=str(ch.before_aux_quantity if ch.before_aux_quantity is not None else ""),
+                        new_value=str(ch.after_aux_quantity if ch.after_aux_quantity is not None else ""),
+                        reason=doc.change_reason,
+                        operator_id=operator_id,
+                        operator_name=operator_name,
+                    )
+                    po_item.aux_quantity = ch.after_aux_quantity
                 po_item.ordered_quantity = after_qty
                 entered_after = (
                     Decimal(str(ch.after_unit_price))
@@ -1550,6 +1578,7 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
                         material_spec=ch.material_spec,
                         unit=ch.material_unit or "",
                         ordered_quantity=before_qty,
+                        aux_quantity=ch.before_aux_quantity,
                         received_quantity=Decimal("0"),
                         outstanding_quantity=before_qty,
                         unit_price=Decimal("0"),
@@ -1646,6 +1675,23 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
                 )
                 if ch.before_delivery_date is not None:
                     po_item.required_date = ch.before_delivery_date
+                if optional_decimals_differ(po_item.aux_quantity, ch.before_aux_quantity):
+                    await PurchaseOrderChange.create(
+                        tenant_id=tenant_id,
+                        order_id=order.id,
+                        change_type="Quantity",
+                        field_name=f"line_{po_item.id}_aux_quantity",
+                        old_value=str(
+                            ch.after_aux_quantity if ch.after_aux_quantity is not None else ""
+                        ),
+                        new_value=str(
+                            ch.before_aux_quantity if ch.before_aux_quantity is not None else ""
+                        ),
+                        reason=f"撤销生效：{doc.change_code}",
+                        operator_id=operator_id,
+                        operator_name=operator_name,
+                    )
+                    po_item.aux_quantity = ch.before_aux_quantity
                 po_item.outstanding_quantity = max(Decimal("0"), before_qty - received)
                 await po_item.save()
 

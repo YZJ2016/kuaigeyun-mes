@@ -47,12 +47,15 @@ export interface OutboundHubOrder {
   work_order_code?: string;
   sales_order_id?: number;
   sales_order_code?: string;
+  customer_order_no?: string;
   sales_forecast_id?: number;
   sales_forecast_code?: string;
   outsource_work_order_id?: number;
   outsource_work_order_code?: string;
   warehouse_id?: number;
   warehouse_name?: string;
+  /** 外推金蝶单号（详情） */
+  kingdee_bill_no?: string | null;
   total_quantity?: number;
   quantity_unit?: string | null;
   total_amount?: number;
@@ -233,6 +236,7 @@ export function outboundSourceDocNo(record: OutboundHubOrder): string {
   const parts: string[] = [];
   pushUniqueRef(parts, record.purchase_order_code);
   pushUniqueRef(parts, record.sales_order_code);
+  pushUniqueRef(parts, record.customer_order_no);
   pushUniqueRef(parts, record.sales_forecast_code);
   pushUniqueRef(parts, record.work_order_code);
   pushUniqueRef(parts, record.outsource_work_order_code);
@@ -243,6 +247,7 @@ export function outboundSourceDocNo(record: OutboundHubOrder): string {
 export const OUTBOUND_SOURCE_DOC_CODE_FIELDS = [
   'purchase_order_code',
   'sales_order_code',
+  'customer_order_no',
   'sales_forecast_code',
   'work_order_code',
   'outsource_work_order_code',

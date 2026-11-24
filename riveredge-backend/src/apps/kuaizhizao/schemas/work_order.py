@@ -39,6 +39,9 @@ class WorkOrderBase(BaseSchema):
 
     # MTO模式可选字段
     sales_order_id: Optional[int] = Field(None, description="销售订单ID（MTO模式）")
+    sales_order_item_id: Optional[int] = Field(
+        None, description="来源销售订单明细ID（MTO直推按行占用）"
+    )
     sales_order_code: Optional[str] = Field(None, description="销售订单编码")
     sales_order_name: Optional[str] = Field(None, description="销售订单名称")
 
@@ -452,6 +455,7 @@ class WorkOrderListResponse(BaseSchema):
     sales_order_name: Optional[str] = Field(None, description="销售订单名称（冗余展示）")
     customer_id: Optional[int] = Field(None, description="客户ID（来自关联销售订单）")
     customer_name: Optional[str] = Field(None, description="客户名称（来自关联销售订单）")
+    customer_order_no: Optional[str] = Field(None, description="客户订单号（来自关联销售订单）")
     status: str = Field(..., description="工单状态")
     priority: Optional[str] = Field(None, description="优先级")
     planned_start_date: Optional[datetime] = Field(None, description="计划开始时间")

@@ -6,6 +6,7 @@ import {
   UniPullQueryModal,
   PULL_SOURCE_REFERENCE,
   isPullOpenLineSelectable,
+  isPullWorkOrderFgLineSelectable,
   isPullableScope,
   loadPullSourceReferenceOptions,
   readPullOpenLineHandoffAuxQty,
@@ -338,10 +339,10 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           return { data: [], total: 0 };
         }
       },
-      isRowDisabled: (record) => !isPullOpenLineSelectable(record),
+      isRowDisabled: (record) => !isPullWorkOrderFgLineSelectable(record),
       onConfirm: async (_keys, rows) => {
         const selectedIds = rows
-          .filter((row) => isPullOpenLineSelectable(row))
+          .filter((row) => isPullWorkOrderFgLineSelectable(row))
           .map((row) => Number(row.id))
           .filter((id) => id > 0);
         if (!selectedIds.length) {
@@ -968,7 +969,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           align: 'center' as const,
           render: (_: unknown, record: PullWorkOrderCandidate) =>
             renderPullCapabilityTag(
-              Number(record.remaining_quantity ?? 0) > 0,
+              isPullWorkOrderFgLineSelectable(record),
               t('app.kuaizhizao.warehouseInbound.pull.canCreate'),
               t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate'),
             ),

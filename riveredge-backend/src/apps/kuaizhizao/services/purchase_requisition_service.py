@@ -39,16 +39,28 @@ from apps.kuaizhizao.services.purchase_service import PurchaseService
 from apps.kuaizhizao.utils.document_source_types import is_purchase_requisition_source_type
 from apps.kuaizhizao.utils.pull_open_line_quantity import (
     build_partial_push_qty_triplet,
-    requisition_material_group_key,
+)
+from apps.kuaizhizao.utils.document_attachment_count import normalize_document_attachments_for_carry
+from apps.kuaizhizao.utils.inventory_helper import aggregate_on_hand_qty_by_material
+from apps.kuaizhizao.utils.material_dual_quantity_utils import (
+    document_line_dual_quantity_for_push,
+    document_line_dual_quantity_write_kwargs,
 )
 from apps.kuaizhizao.utils.document_line_material_snapshot import (
+    apply_snapshot_to_line_dict,
+    enrich_line_dicts_with_partner_snapshots,
+    overwrite_line_spec_model_from_material,
     partner_snapshot_fields_from_source_line,
+    resolve_line_material_snapshots,
+    resolved_line_material_model,
+    resolved_line_material_spec,
+    snapshot_kwargs_for_orm,
 )
 from apps.kuaizhizao.utils.material_source_helper import (
     SOURCE_TYPE_BUY,
+    resolve_default_supplier_id_from_material,
     resolve_material_purchase_line_unit_price,
 )
-from apps.kuaizhizao.utils.inventory_helper import aggregate_on_hand_qty_by_material
 from apps.kuaizhizao.services.document_action_policy.enricher import (
     enrich_purchase_requisition_detail_capabilities,
     enrich_purchase_requisition_list_capabilities,
@@ -64,6 +76,87 @@ from apps.kuaizhizao.services.document_action_policy.purchase_requisition import
 def _default_requisition_name(requisition_code: str) -> str:
     code = (requisition_code or "").strip()
     return f"采购申请-{code}" if code else "采购申请"
+
+
+def _resolve_requisition_line_supplier_id(
+    explicit_supplier_id: Optional[int],
+    material: Optional[Material],
+) -> Optional[int]:
+    if explicit_supplier_id is not None and int(explicit_supplier_id) > 0:
+        return int(explicit_supplier_id)
+    resolved = resolve_default_supplier_id_from_material(material)
+    return int(resolved) if resolved else None
+
+
+async def _enrich_requisition_item_row_snapshots(
+    tenant_id: int,
+    row: Dict[str, Any],
+    supplier_id: Optional[int],
+) -> Dict[str, Any]:
+    """写路径：按行建议供应商补型号与供应商品号/品名快照（与采购订单写路径一致）。"""
+    enriched = await enrich_line_dicts_with_partner_snapshots(
+        tenant_id,
+        partner_type="supplier",
+        partner_id=int(supplier_id or 0) or None,
+        lines=[dict(row)],
+    )
+    line = enriched[0]
+    out = snapshot_kwargs_for_orm(line)
+    spec = line.get("material_spec")
+    if spec is not None and str(spec).strip():
+        out["material_spec"] = str(spec).strip()[:200]
+    return out
+
+
+def _requisition_line_needs_partner_snapshot_heal(item: PurchaseRequisitionItem) -> bool:
+    return (
+        not str(getattr(item, "material_model", None) or "").strip()
+        or not str(getattr(item, "partner_material_code", None) or "").strip()
+        or not str(getattr(item, "partner_material_name", None) or "").strip()
+    )
+
+
+async def _heal_requisition_item_partner_snapshots(
+    tenant_id: int,
+    items: List[PurchaseRequisitionItem],
+) -> None:
+    """详情读路径：历史行缺快照时按物料+建议供应商回填并落库。"""
+    candidates = [i for i in items if _requisition_line_needs_partner_snapshot_heal(i)]
+    if not candidates:
+        return
+    by_supplier: Dict[Optional[int], List[PurchaseRequisitionItem]] = {}
+    for row in candidates:
+        sid = int(row.supplier_id or 0) or None
+        by_supplier.setdefault(sid, []).append(row)
+    for supplier_id, group in by_supplier.items():
+        material_ids = [int(i.material_id) for i in group if i.material_id]
+        snaps = await resolve_line_material_snapshots(
+            tenant_id,
+            partner_type="supplier",
+            partner_id=supplier_id,
+            material_ids=material_ids,
+        )
+        for item in group:
+            snap = snaps.get(int(item.material_id))
+            if not snap:
+                continue
+            merged = apply_snapshot_to_line_dict(
+                {
+                    "material_model": getattr(item, "material_model", None),
+                    "partner_material_code": getattr(item, "partner_material_code", None),
+                    "partner_material_name": getattr(item, "partner_material_name", None),
+                },
+                snap,
+            )
+            repaired: Dict[str, str] = {}
+            for key in ("material_model", "partner_material_code", "partner_material_name"):
+                if str(getattr(item, key, None) or "").strip():
+                    continue
+                val = merged.get(key)
+                if val is not None and str(val).strip():
+                    repaired[key] = str(val).strip()
+            if repaired:
+                await item.update_from_dict(repaired).save()
 
 
 def _supplier_header_contact_fields(sup: Optional[Supplier]) -> Dict[str, str]:
@@ -117,6 +210,44 @@ PURCHASE_REQUISITION_SORTABLE_FIELDS = frozenset({
 
 class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
     """采购申请服务"""
+
+    async def _batch_supplier_names(
+        self, tenant_id: int, supplier_ids: List[Optional[int]]
+    ) -> Dict[int, str]:
+        positive = sorted(
+            {int(sid) for sid in supplier_ids if sid is not None and int(sid) > 0}
+        )
+        if not positive:
+            return {}
+        rows = await Supplier.filter(
+            tenant_id=tenant_id, id__in=positive, deleted_at__isnull=True
+        ).only("id", "name")
+        out: Dict[int, str] = {}
+        for row in rows:
+            name = str(row.name or "").strip()
+            if name:
+                out[int(row.id)] = name
+        return out
+
+    def _attach_supplier_names_to_item_dicts(
+        self, item_dicts: List[Dict[str, Any]], name_by_id: Dict[int, str]
+    ) -> None:
+        for d in item_dicts:
+            sid = d.get("supplier_id")
+            if sid is None:
+                continue
+            sid_int = int(sid)
+            if sid_int in name_by_id:
+                d["supplier_name"] = name_by_id[sid_int]
+
+    async def _material_by_ids(
+        self, tenant_id: int, material_ids: List[int]
+    ) -> Dict[int, Material]:
+        ids = sorted({int(mid) for mid in material_ids if mid and int(mid) > 0})
+        if not ids:
+            return {}
+        rows = await Material.filter(tenant_id=tenant_id, id__in=ids).all()
+        return {int(m.id): m for m in rows}
 
     def __init__(self):
         super().__init__(PurchaseRequisition)
@@ -301,14 +432,31 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 updated_by_name=user_info["name"],
             )
 
-            for item_data in data.items:
+            item_rows = await overwrite_line_spec_model_from_material(
+                tenant_id,
+                [item.model_dump() if hasattr(item, "model_dump") else dict(item) for item in data.items],
+            )
+            material_by_id = await self._material_by_ids(
+                tenant_id, [int(it.material_id) for it in data.items]
+            )
+            for item_data, row in zip(data.items, item_rows):
+                line_supplier_id = _resolve_requisition_line_supplier_id(
+                    item_data.supplier_id,
+                    material_by_id.get(int(item_data.material_id)),
+                )
+                snap = await _enrich_requisition_item_row_snapshots(
+                    tenant_id, row, line_supplier_id
+                )
                 await PurchaseRequisitionItem.create(
                     tenant_id=tenant_id,
                     requisition_id=req.id,
                     material_id=item_data.material_id,
                     material_code=item_data.material_code,
                     material_name=item_data.material_name,
-                    material_spec=item_data.material_spec,
+                    material_spec=snap.get("material_spec") or row.get("material_spec"),
+                    material_model=snap.get("material_model"),
+                    partner_material_code=snap.get("partner_material_code"),
+                    partner_material_name=snap.get("partner_material_name"),
                     unit=item_data.unit or "件",
                     quantity=item_data.quantity,
                     suggested_unit_price=item_data.suggested_unit_price or Decimal(0),
@@ -316,7 +464,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                     demand_computation_item_id=item_data.demand_computation_item_id,
                     work_order_id=item_data.work_order_id,
                     work_order_code=item_data.work_order_code,
-                    supplier_id=item_data.supplier_id,
+                    supplier_id=line_supplier_id,
                     notes=item_data.notes,
                     attachments=item_data.attachments,
                 )
@@ -477,6 +625,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         requisition_id: int,
         *,
         viewer_id: Optional[int] = None,
+        current_user: Optional[Any] = None,
     ) -> PurchaseRequisitionResponse:
         """获取采购申请详情"""
         req = await PurchaseRequisition.get_or_none(
@@ -484,10 +633,20 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         )
         if not req:
             raise NotFoundError(f"采购申请不存在: {requisition_id}")
+        if current_user is not None:
+            from apps.kuaizhizao.services.kuaizhizao_data_scope import assert_kuaizhizao_row_visible
+
+            await assert_kuaizhizao_row_visible(
+                req,
+                tenant_id=tenant_id,
+                user=current_user,
+                resource="kuaizhizao:purchase-requisition",
+            )
 
         items = await PurchaseRequisitionItem.filter(
             tenant_id=tenant_id, requisition_id=requisition_id
         ).all()
+        await _heal_requisition_item_partner_snapshots(tenant_id, items)
 
         material_ids = sorted(
             {
@@ -507,6 +666,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
 
         async def _build_item_resps(items_list, clear_orphan: bool = False):
             resps = []
+            pending_dicts: List[Dict[str, Any]] = []
             cleared = False
             for i in items_list:
                 d = {k: getattr(i, k) for k in i._meta.fields_map if hasattr(i, k)}
@@ -557,6 +717,12 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                         d["purchase_order_item_id"] = None
                         d["supplier_id"] = None
                         cleared = True
+                pending_dicts.append(d)
+            name_by_id = await self._batch_supplier_names(
+                tenant_id, [pd.get("supplier_id") for pd in pending_dicts]
+            )
+            self._attach_supplier_names_to_item_dicts(pending_dicts, name_by_id)
+            for d in pending_dicts:
                 resps.append(PurchaseRequisitionItemResponse.model_validate(d))
             return resps, cleared
 
@@ -752,6 +918,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         order_by: Optional[str] = None,
         include_items: bool = False,
         viewer_id: Optional[int] = None,
+        current_user=None,
     ) -> Dict[str, Any]:
         """列表查询，返回 { data, total, success }"""
         from apps.kuaizhizao.utils.list_item_material_keyword import (
@@ -761,6 +928,15 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         query = PurchaseRequisition.filter(
             tenant_id=tenant_id, deleted_at__isnull=True
         )
+        if current_user is not None:
+            from apps.kuaizhizao.services.kuaizhizao_data_scope import apply_kuaizhizao_list_scope
+
+            query = await apply_kuaizhizao_list_scope(
+                query,
+                tenant_id=tenant_id,
+                current_user=current_user,
+                resource="kuaizhizao:purchase-requisition",
+            )
         lifecycle_filter = (lifecycle_stage or "").strip()
         if lifecycle_filter == "待我审核":
             from core.services.approval.pending_my_approval import (
@@ -856,10 +1032,18 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 .order_by("requisition_id", "id")
                 .all()
             )
-            for it in all_items:
+            item_dicts = [
+                {k: getattr(it, k) for k in it._meta.fields_map if hasattr(it, k)}
+                for it in all_items
+            ]
+            name_by_id = await self._batch_supplier_names(
+                tenant_id, [d.get("supplier_id") for d in item_dicts]
+            )
+            self._attach_supplier_names_to_item_dicts(item_dicts, name_by_id)
+            for it, d in zip(all_items, item_dicts):
                 rid = int(it.requisition_id)
                 items_by_req.setdefault(rid, []).append(
-                    PurchaseRequisitionItemResponse.model_validate(it)
+                    PurchaseRequisitionItemResponse.model_validate(d)
                 )
 
         items_count_map = await self._batch_requisition_items_count(tenant_id, req_ids)
@@ -869,10 +1053,15 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         )
 
         result = []
+        from apps.kuaizhizao.utils.document_attachment_count import count_document_attachments
+
         for req in reqs:
             req_dict = {k: getattr(req, k) for k in req._meta.fields_map if hasattr(req, k)}
             req_dict.pop("items", None)
             resp = PurchaseRequisitionListResponse.model_construct(**req_dict)
+            header_att_count = count_document_attachments(getattr(req, "attachments", None))
+            resp.header_attachments_count = header_att_count
+            resp.attachments_count = header_att_count
             resp.items_count = items_count_map.get(req.id, 0)
             totals = item_totals_map.get(req.id, None)
             if totals:
@@ -886,7 +1075,12 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 req, milestones=None, audit_required=audit_required
             )
             if include_items:
-                resp.items = items_by_req.get(int(req.id), [])
+                line_items = items_by_req.get(int(req.id), [])
+                resp.items = line_items
+                line_att_total = sum(
+                    count_document_attachments(getattr(it, "attachments", None)) for it in line_items
+                )
+                resp.attachments_count = header_att_count + line_att_total
             result.append(resp)
 
         enriched = await enrich_purchase_requisition_list_capabilities(tenant_id, reqs, result)
@@ -1175,14 +1369,31 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             await PurchaseRequisitionItem.filter(
                 tenant_id=tenant_id, requisition_id=requisition_id
             ).delete()
-            for item_data in data.items:
+            item_rows = await overwrite_line_spec_model_from_material(
+                tenant_id,
+                [item.model_dump() if hasattr(item, "model_dump") else dict(item) for item in data.items],
+            )
+            material_by_id = await self._material_by_ids(
+                tenant_id, [int(it.material_id) for it in data.items]
+            )
+            for item_data, row in zip(data.items, item_rows):
+                line_supplier_id = _resolve_requisition_line_supplier_id(
+                    item_data.supplier_id,
+                    material_by_id.get(int(item_data.material_id)),
+                )
+                snap = await _enrich_requisition_item_row_snapshots(
+                    tenant_id, row, line_supplier_id
+                )
                 await PurchaseRequisitionItem.create(
                     tenant_id=tenant_id,
                     requisition_id=requisition_id,
                     material_id=item_data.material_id,
                     material_code=item_data.material_code,
                     material_name=item_data.material_name,
-                    material_spec=item_data.material_spec,
+                    material_spec=snap.get("material_spec") or row.get("material_spec"),
+                    material_model=snap.get("material_model"),
+                    partner_material_code=snap.get("partner_material_code"),
+                    partner_material_name=snap.get("partner_material_name"),
                     unit=item_data.unit or "件",
                     quantity=item_data.quantity,
                     suggested_unit_price=item_data.suggested_unit_price or Decimal(0),
@@ -1190,7 +1401,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                     demand_computation_item_id=item_data.demand_computation_item_id,
                     work_order_id=item_data.work_order_id,
                     work_order_code=item_data.work_order_code,
-                    supplier_id=item_data.supplier_id,
+                    supplier_id=line_supplier_id,
                     notes=item_data.notes,
                     attachments=item_data.attachments,
                 )
@@ -1614,14 +1825,22 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             entered = item.suggested_unit_price
             price_type = DEFAULT_PURCHASE_PRICE_TYPE
         else:
-            entered = await self._resolve_purchase_order_unit_price_async(
+            exclusive = await self._resolve_purchase_order_unit_price_async(
                 tenant_id,
                 item,
                 material_by_id,
                 supplier_id,
                 price_override=None,
             )
-            price_type = "tax_exclusive"
+            price_type = DEFAULT_PURCHASE_PRICE_TYPE
+            if (
+                price_type == DEFAULT_PURCHASE_PRICE_TYPE
+                and exclusive > 0
+            ):
+                entered = exclusive * (Decimal("1") + tax_pct / Decimal("100"))
+            else:
+                entered = exclusive
+                price_type = "tax_exclusive"
 
         if qty <= 0 or Decimal(str(entered or 0)) <= 0:
             return _RequisitionPushLinePricing(
@@ -1983,7 +2202,9 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         limit: int = 20,
         keyword: Optional[str] = None,
         requisition_id: Optional[int] = None,
+        order_type: Optional[str] = None,
         pullable_only: bool = True,
+        current_user: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """开口申请行：可转采购订单的剩余明细。"""
         return await self._list_requisition_open_lines(
@@ -1992,8 +2213,10 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             limit=limit,
             keyword=keyword,
             requisition_id=requisition_id,
+            order_type=order_type,
             pullable_only=pullable_only,
             target="purchase_order",
+            current_user=current_user,
         )
 
     async def list_purchase_inquiry_pull_lines(
@@ -2005,6 +2228,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         keyword: Optional[str] = None,
         requisition_id: Optional[int] = None,
         pullable_only: bool = True,
+        current_user: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """开口申请行：可转询价的剩余明细。"""
         return await self._list_requisition_open_lines(
@@ -2013,8 +2237,10 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             limit=limit,
             keyword=keyword,
             requisition_id=requisition_id,
+            order_type=None,
             pullable_only=pullable_only,
             target="inquiry",
+            current_user=current_user,
         )
 
     async def _list_requisition_open_lines(
@@ -2025,14 +2251,31 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         limit: int,
         keyword: Optional[str],
         requisition_id: Optional[int],
+        order_type: Optional[str],
         pullable_only: bool,
         target: str,
+        current_user: Optional[Any] = None,
     ) -> Dict[str, Any]:
+        from apps.kuaizhizao.constants.purchase_order_type import normalize_purchase_order_type
+
         req_query = PurchaseRequisition.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if requisition_id is not None:
             req_query = req_query.filter(id=int(requisition_id))
+        if order_type is not None and str(order_type).strip():
+            req_query = req_query.filter(
+                order_type=normalize_purchase_order_type(order_type)
+            )
         if pullable_only:
             req_query = req_query.filter(status__in=REQUISITION_DOWNSTREAM_PUSH_STATUS_VALUES)
+        if current_user is not None:
+            from apps.kuaizhizao.services.kuaizhizao_data_scope import apply_kuaizhizao_list_scope
+
+            req_query = await apply_kuaizhizao_list_scope(
+                req_query,
+                tenant_id=tenant_id,
+                current_user=current_user,
+                resource="kuaizhizao:purchase-requisition",
+            )
         requisitions = await req_query.only(
             "id",
             "requisition_code",
@@ -2042,6 +2285,8 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             "applicant_name",
             "department_id",
             "department_name",
+            "order_type",
+            "attachments",
         )
         req_by_id = {int(r.id): r for r in requisitions}
         if not req_by_id:
@@ -2051,6 +2296,16 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             tenant_id=tenant_id,
             requisition_id__in=list(req_by_id.keys()),
         ).all()
+
+        material_ids = sorted(
+            {int(i.material_id) for i in items if i.material_id is not None}
+        )
+        material_by_id: Dict[int, Material] = {}
+        if material_ids:
+            material_rows = await Material.filter(
+                tenant_id=tenant_id, id__in=material_ids
+            ).all()
+            material_by_id = {int(m.id): m for m in material_rows}
 
         item_ids = [int(i.id) for i in items if i.id is not None]
         occupied_po: Dict[int, Decimal] = {}
@@ -2069,20 +2324,32 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
 
         from apps.kuaizhizao.utils.pull_open_line_quantity import (
             enrich_pull_line_from_source_item,
+            requisition_pull_display_group_key,
             resolve_requisition_material_aux_triplet,
         )
 
-        items_by_material_group: Dict[Tuple[int, int], List] = {}
-        for item in items:
-            key = requisition_material_group_key(
-                item.requisition_id, item.material_id, fallback_item_id=item.id,
+        # 分批转单会拆行：占用挂在已转行、剩余在新行。展示三元组按同申请展示组汇总。
+        items_by_display_group: Dict[Tuple[int, int, str, str], List] = {}
+        for it in items:
+            gkey = requisition_pull_display_group_key(
+                it.requisition_id,
+                it.material_id,
+                required_date=it.required_date,
+                notes=it.notes,
+                fallback_item_id=int(it.id or 0) or None,
             )
-            items_by_material_group.setdefault(key, []).append(item)
-        occupied_map = occupied_po if target == "purchase_order" else occupied_inquiry
+            items_by_display_group.setdefault(gkey, []).append(it)
+
+        occupied_primary_map = occupied_po if target == "purchase_order" else occupied_inquiry
         occupied_aux_map = (
             occupied_po_aux if target == "purchase_order" else occupied_inquiry_aux
         )
         kw = (keyword or "").strip().lower()
+        supplier_name_by_id = await self._batch_supplier_names(
+            tenant_id, [i.supplier_id for i in items]
+        )
+        from apps.kuaizhizao.utils.document_attachment_count import count_document_attachments
+
         lines: List[Dict[str, Any]] = []
         for item in items:
             req = req_by_id.get(int(item.requisition_id))
@@ -2093,10 +2360,21 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             if qty <= 0:
                 continue
             item_id = int(item.id) if item.id is not None else 0
-            key = requisition_material_group_key(
-                item.requisition_id, item.material_id, fallback_item_id=item_id or None,
+
+            line_fully = False
+            group_key = requisition_pull_display_group_key(
+                item.requisition_id,
+                item.material_id,
+                required_date=item.required_date,
+                notes=item.notes,
+                fallback_item_id=item_id or None,
             )
-            group_items = items_by_material_group[key]
+            group_items = items_by_display_group.get(group_key, [item])
+            group_occ_by_item = {
+                int(i.id): occupied_primary_map.get(int(i.id), Decimal("0"))
+                for i in group_items
+                if i.id is not None
+            }
             group_occ_aux_by_item = {
                 int(i.id): occupied_aux_map.get(int(i.id), Decimal("0"))
                 for i in group_items
@@ -2134,11 +2412,19 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 continue
             material_code = str(item.material_code or "").strip()
             material_name = str(item.material_name or "").strip()
-            material_spec = str(item.material_spec or "").strip()
+            mat = (
+                material_by_id.get(int(item.material_id))
+                if item.material_id is not None
+                else None
+            )
+            material_spec = str(resolved_line_material_spec(item, mat) or "").strip()
             requisition_code = str(req.requisition_code or "").strip()
             applicant_name = str(req.applicant_name or "").strip()
             department_name = str(getattr(req, "department_name", None) or "").strip()
             line_notes = str(item.notes or "").strip()
+            supplier_name = ""
+            if item.supplier_id:
+                supplier_name = supplier_name_by_id.get(int(item.supplier_id), "")
             if kw:
                 haystack = " ".join(
                     [
@@ -2149,6 +2435,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                         material_name,
                         material_spec,
                         line_notes,
+                        supplier_name,
                     ]
                 ).lower()
                 if kw not in haystack:
@@ -2160,10 +2447,13 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 if material_id > 0
                 else 0.0
             )
+            header_att_count = count_document_attachments(getattr(req, "attachments", None))
+            line_att_count = count_document_attachments(getattr(item, "attachments", None))
             row: Dict[str, Any] = {
                 "id": int(item.id),
                 "requisition_id": int(item.requisition_id),
                 "requisition_code": req.requisition_code,
+                "order_type": normalize_purchase_order_type(getattr(req, "order_type", None)),
                 "requisition_status": req.status,
                 "can_push": can_push,
                 "document_date": requisition_date,
@@ -2180,6 +2470,10 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 "required_date": str(item.required_date) if item.required_date else None,
                 "line_notes": line_notes or None,
                 "supplier_id": item.supplier_id,
+                "supplier_name": supplier_name or None,
+                "header_attachments_count": header_att_count,
+                "line_attachments_count": line_att_count,
+                "attachments_count": header_att_count + line_att_count,
             }
             enrich_pull_line_from_source_item(
                 row,
@@ -2191,6 +2485,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 suggested_aux_override=group_aux_sug,
                 aux_unit_override=group_aux_unit,
             )
+            row["can_push"] = can_push and is_open_carrier
             lines.append(row)
 
         # 单据日期倒序（最新在前），同日按申请/行 id 倒序
@@ -2259,13 +2554,16 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         ).all()
         from apps.kuaizhizao.utils.pull_open_line_quantity import (
             dual_quantity_for_open_requisition_push,
+            requisition_pull_display_group_key,
         )
 
-        items_by_group: Dict[Tuple[int, int], List[PurchaseRequisitionItem]] = {}
+        items_by_group: Dict[Tuple[int, int, str, str], List[PurchaseRequisitionItem]] = {}
         for it in all_req_items:
-            gkey = requisition_material_group_key(
+            gkey = requisition_pull_display_group_key(
                 it.requisition_id,
                 it.material_id,
+                required_date=it.required_date,
+                notes=it.notes,
                 fallback_item_id=int(it.id or 0) or None,
             )
             items_by_group.setdefault(gkey, []).append(it)
@@ -2361,18 +2659,23 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 if price_override is not None:
                     price_override = Decimal(str(price_override))
             line_supplier_id = self._resolve_line_supplier_id(item, data)
+            pricing_supplier_id = line_supplier_id
+            if not pricing_supplier_id and supplier_id > 0:
+                pricing_supplier_id = int(supplier_id)
             line_pricing = await self._build_requisition_push_line_pricing(
                 tenant_id,
                 item=item,
                 material_by_id=material_by_id,
-                supplier_id=line_supplier_id,
+                supplier_id=pricing_supplier_id,
                 quantity=qty,
                 price_override=price_override,
             )
             conversions.append((item, qty))
-            group_key = requisition_material_group_key(
+            group_key = requisition_pull_display_group_key(
                 item.requisition_id,
                 item.material_id,
+                required_date=item.required_date,
+                notes=item.notes,
                 fallback_item_id=item_id or None,
             )
             group_items = items_by_group.get(group_key, [item])
@@ -2388,12 +2691,28 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 push_primary_qty=qty,
                 line_remaining_primary=remaining,
             )
+            mat = (
+                material_by_id.get(int(item.material_id))
+                if item.material_id is not None
+                else None
+            )
+            line_spec = resolved_line_material_spec(item, mat)
+            line_model = resolved_line_material_model(item, mat)
+            partner_snap = partner_snapshot_fields_from_source_line(item)
+            partner_snap = {
+                **partner_snap,
+                "material_model": line_model or partner_snap.get("material_model"),
+            }
+            line_attachments = normalize_document_attachments_for_carry(
+                getattr(item, "attachments", None)
+            )
             po_items.append(
                 PurchaseOrderItemCreate(
                     material_id=item.material_id,
                     material_code=item.material_code,
                     material_name=item.material_name,
-                    material_spec=item.material_spec,
+                    material_spec=line_spec,
+                    attachments=line_attachments,
                     ordered_quantity=qty,
                     unit=item.unit or "件",
                     unit_price=line_pricing.stored_unit_price,
@@ -2410,12 +2729,25 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                     work_order_code=item.work_order_code,
                     notes=item.notes,
                     **dual_for_push,
-                    **partner_snapshot_fields_from_source_line(item),
+                    **partner_snap,
                 )
             )
 
         if not po_items:
             raise BusinessLogicError("所选明细的本次下推数量均为 0，无法生成采购订单")
+
+        if supplier_id > 0:
+            from apps.kuaizhizao.utils.document_line_material_snapshot import (
+                enrich_line_dicts_with_partner_snapshots,
+            )
+
+            enriched_rows = await enrich_line_dicts_with_partner_snapshots(
+                tenant_id,
+                partner_type="supplier",
+                partner_id=int(supplier_id),
+                lines=[row.model_dump() for row in po_items],
+            )
+            po_items = [PurchaseOrderItemCreate(**row) for row in enriched_rows]
 
         delivery_date = max(po_line_required_dates, default=today)
         po_create = PurchaseOrderCreate(

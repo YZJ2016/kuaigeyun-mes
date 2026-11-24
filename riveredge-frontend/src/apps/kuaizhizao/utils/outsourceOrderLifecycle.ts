@@ -54,7 +54,6 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
   const hasReceipt = Boolean(record?.purchase_receipt_id);
   const outQty = Number(record?.outsource_quantity ?? 0);
   const recvQty = Number(record?.received_quantity ?? 0);
-  const receiptOpen = !hasReceipt || (outQty > 0 && recvQty < outQty);
   let next_step_suggestions: string[] = [];
   if (stageName === '草稿') {
     next_step_suggestions = ['下达'];
@@ -63,11 +62,10 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
     if (!hasReceipt && recvQty <= 0 && !record?.actual_start_date) {
       next_step_suggestions.push('撤回下达');
     }
-    if (receiptOpen) next_step_suggestions.push('委外入库');
     next_step_suggestions.push('工序发料');
+    if (outQty > 0 && recvQty < outQty) next_step_suggestions.push('登记收货');
   } else if (stageName === '执行中') {
     next_step_suggestions = [];
-    if (receiptOpen) next_step_suggestions.push('委外入库');
     next_step_suggestions.push('工序发料');
     if (outQty > 0 && recvQty < outQty) next_step_suggestions.push('登记收货');
     next_step_suggestions.push('完成');
@@ -88,7 +86,6 @@ export type OutsourceOrderProgressFlags = {
   canRelease: boolean;
   canRevokeRelease: boolean;
   canStart: boolean;
-  canGoInbound: boolean;
   canOpenInboundDoc: boolean;
   canRegisterReceipt: boolean;
   canComplete: boolean;
@@ -138,7 +135,6 @@ export function getOutsourceOrderProgressFlags(
     canRelease: status === 'draft' || status === '草稿',
     canRevokeRelease,
     canStart: !terminal && resolveProcessIssueAllowed(base),
-    canGoInbound: !terminal && !hasReceipt && status !== 'draft' && status !== '草稿',
     canOpenInboundDoc: !terminal && hasReceipt,
     canRegisterReceipt:
       (status === 'released' || status === '已下达' || status === 'in_progress' || status === '执行中') &&
@@ -171,10 +167,10 @@ const OUTSOURCE_ORDER_LIFECYCLE_I18N: Record<string, string> = {
 
 export function buildOutsourceOrderLifecycleValueEnum(
   t: (key: string) => string,
-): Record<string, { text: string; status?: 'Default' | 'Processing' | 'Success' | 'Error' }> {
-  const statusByKey: Record<string, 'Default' | 'Processing' | 'Success' | 'Error'> = {
+): Record<string, { text: string; status?: 'Default' | 'Processing' | 'Success' | 'Error' | 'Warning' }> {
+  const statusByKey: Record<string, 'Default' | 'Processing' | 'Success' | 'Error' | 'Warning'> = {
     draft: 'Default',
-    released: 'Processing',
+    released: 'Warning',
     in_progress: 'Processing',
     completed: 'Success',
     cancelled: 'Error',

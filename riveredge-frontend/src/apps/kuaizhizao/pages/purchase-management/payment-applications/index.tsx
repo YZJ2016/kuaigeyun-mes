@@ -1548,8 +1548,10 @@ const PaymentApplicationsPage: React.FC = () => {
         <PaymentApplicationLineItemsHeaderSync
           syncHeaderFromLines={syncHeaderRequestAmountFromLineItems}
         />
-        <Row gutter={16}>
-          <Col span={8}>
+        <div className="document-form-untitled-groups">
+          <div className="document-form-untitled-group">
+        <Row gutter={16} wrap={false}>
+          <Col flex="1 1 0" style={{ minWidth: 0 }}>
             <ProFormSelect
               name="supplierId"
               label={t('app.kuaizhizao.paymentApplication.supplierName')}
@@ -1565,7 +1567,7 @@ const PaymentApplicationsPage: React.FC = () => {
               }}
             />
           </Col>
-          <Col span={8}>
+          <Col flex="1 1 0" style={{ minWidth: 0 }}>
             <ProFormDatePicker
               name="applicationDate"
               label={t('app.kuaizhizao.paymentApplication.applicationDate')}
@@ -1573,21 +1575,21 @@ const PaymentApplicationsPage: React.FC = () => {
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
-          <Col span={8}>
+          <Col flex="1 1 0" style={{ minWidth: 0 }}>
             <ProFormDatePicker
               name="expectedPaymentDate"
               label={t('app.kuaizhizao.paymentApplication.expectedPaymentDate')}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
-          <Col span={8}>
+          <Col flex="1 1 0" style={{ minWidth: 0 }}>
             <PurchaseDepartmentFormField
               required
               options={departmentOptions}
               loading={departmentOptionsLoading}
             />
           </Col>
-          <Col span={8}>
+          <Col flex="1 1 0" style={{ minWidth: 0 }}>
             <ProFormSelect
               name="paymentMethod"
               label={t('app.kuaizhizao.paymentApplication.paymentMethod')}
@@ -1595,7 +1597,9 @@ const PaymentApplicationsPage: React.FC = () => {
               options={paymentMethodOptions}
             />
           </Col>
-          <Col span={8}>
+        </Row>
+        <Row gutter={16} wrap={false}>
+          <Col flex="1 1 0" style={{ minWidth: 0 }}>
             <ProFormSelect
               name="invoiceStatus"
               label={t('app.kuaizhizao.paymentApplication.invoiceStatus')}
@@ -1603,7 +1607,7 @@ const PaymentApplicationsPage: React.FC = () => {
               options={invoiceStatusOptions}
             />
           </Col>
-          <Col span={8}>
+          <Col flex="1 1 0" style={{ minWidth: 0 }}>
             <ProFormDigit
               name="headerRequestAmount"
               label={t('app.kuaizhizao.paymentApplication.totalRequestAmount')}
@@ -1611,7 +1615,7 @@ const PaymentApplicationsPage: React.FC = () => {
               fieldProps={{ precision: 2, style: { width: '100%' }, readOnly: true }}
             />
           </Col>
-          <Col span={8}>
+          <Col flex="1 1 0" style={{ minWidth: 0 }}>
             <ProFormItem
               name="applicationKind"
               label={t('app.kuaizhizao.paymentApplication.applicationKind')}
@@ -1652,20 +1656,31 @@ const PaymentApplicationsPage: React.FC = () => {
               />
             </ProFormItem>
           </Col>
+          <Col flex="1 1 0" style={{ minWidth: 0 }}>
+            <ProFormSwitch
+              name="requirePaymentVoucher"
+              label={t('app.kuaizhizao.paymentApplication.requirePaymentVoucher')}
+              extra={t('app.kuaizhizao.paymentApplication.requirePaymentVoucherHint')}
+            />
+          </Col>
           <ProFormDependency name={['paymentMethod']}>
             {({ paymentMethod: method }) =>
               method === EMPLOYEE_ADVANCE_PAYMENT_METHOD ? (
-                <Col span={8}>
+                <Col flex="1 1 0" style={{ minWidth: 0 }}>
                   <PaymentAdvancePayeeField
                     methodField="paymentMethod"
                     payeeIdField="advancePayeeId"
                     colProps={false}
                   />
                 </Col>
-              ) : null
+              ) : (
+                <Col flex="1 1 0" style={{ minWidth: 0 }} aria-hidden />
+              )
             }
           </ProFormDependency>
         </Row>
+          </div>
+        </div>
         <Row gutter={16}>
           <Col span={24}>
             <ProFormTextArea

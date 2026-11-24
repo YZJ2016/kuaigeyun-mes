@@ -1912,7 +1912,8 @@
     "inbound": [
       "master-data:material",
       "master-data:warehouse:warehouse",
-      "purchase-order"
+      "purchase-order",
+      "receipt-notice"
     ],
     "outbound": [
       "master-data:material",

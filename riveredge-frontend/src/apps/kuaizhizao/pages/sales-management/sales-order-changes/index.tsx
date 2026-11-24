@@ -92,7 +92,7 @@ import {
   OrderChangeFormItemsTableScrollY,
   OrderChangeItemsTable,
   type OrderChangeItemsTablePricing,
-} from '../../../components/order-change/OrderChangeItemsTable';
+} from '../../../components/order-change';
 import { SalesOrderSourceOrderHeaderPanel } from '../../../components/order-change/SalesOrderSourceOrderHeaderPanel';
 import { OrderChangeImpactModal } from '../../../components/order-change/OrderChangeImpactModal';
 import { isSourceOrderEligibleForChange } from '../../../utils/orderChangeSourceOrder';

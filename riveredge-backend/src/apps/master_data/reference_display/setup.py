@@ -418,6 +418,8 @@ class _MaterialDisplayProvider:
                     "variant_managed": r.variant_managed,
                     "variant_attributes": r.variant_attributes,
                     "is_giftable": bool(getattr(r, "is_giftable", False)),
+                    "batch_managed": bool(getattr(r, "batch_managed", False)),
+                    "serial_managed": bool(getattr(r, "serial_managed", False)),
                 }
                 for r in rows
             ],
@@ -461,6 +463,8 @@ class _MaterialDisplayProvider:
                 "variant_managed": r.variant_managed,
                 "variant_attributes": r.variant_attributes,
                 "is_giftable": bool(getattr(r, "is_giftable", False)),
+                "batch_managed": bool(getattr(r, "batch_managed", False)),
+                "serial_managed": bool(getattr(r, "serial_managed", False)),
             }
             for r in rows
         ]

@@ -77,6 +77,8 @@ class PurchaseOrderChangeItem(DocumentLinePartnerMaterialSnapshotMixin, BaseMode
 
     before_quantity = fields.DecimalField(max_digits=14, decimal_places=4, null=True)
     after_quantity = fields.DecimalField(max_digits=14, decimal_places=4, null=True)
+    before_aux_quantity = fields.DecimalField(max_digits=18, decimal_places=4, null=True)
+    after_aux_quantity = fields.DecimalField(max_digits=18, decimal_places=4, null=True)
     before_unit_price = fields.DecimalField(max_digits=12, decimal_places=4, null=True)
     after_unit_price = fields.DecimalField(max_digits=12, decimal_places=4, null=True)
     before_delivery_date = fields.DateField(null=True)

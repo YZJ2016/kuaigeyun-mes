@@ -139,6 +139,7 @@ import { MrpParametersCustomerGuideTrigger } from './MrpParametersCustomerGuide'
 import { readinessFieldHelpI18nKey } from './readinessFieldHelp'
 import { buildDemandPushPreviewSummary } from './pushPreviewSummary'
 import { renderPushPreviewTargetBadge } from './pushPreviewTargetBadge'
+import { demandPushPreviewRowKey } from './demandPushPreviewFilter'
 import {
   EMPTY_DEMAND_PUSH_PREVIEW_FILTERS,
   filterDemandPushPreviewItems,
@@ -378,11 +379,6 @@ function isDemandPushPreviewLineSelectable(
     return true
   }
   return false
-}
-
-/** Table 行身份（可重复 item_id 时仍唯一）；勾选状态真源仍是 item_id（下推 API 契约） */
-function demandPushPreviewRowKey(row: ComputationPushPreviewItem): string {
-  return `${row.item_id}-${row.target_document ?? 'line'}-${row.push_line_index ?? 0}-${row.planned_receipt_date ?? ''}`
 }
 
 function demandPushPreviewNeedsLineSelection(pushConfig: {

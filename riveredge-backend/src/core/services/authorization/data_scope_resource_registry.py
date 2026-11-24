@@ -13,6 +13,8 @@ class DataScopeResourceProfile:
     applicant_user_id_field: str = "applicant_user_id"
     department_uuid_field: Optional[str] = "department_uuid"
     created_by_user_id_field: Optional[str] = None
+    """本部门策略：按任职部门成员池过滤时使用的用户 id 字段；空则与 applicant_user_id_field 相同。"""
+    department_user_id_field: Optional[str] = None
     partner_code_field: Optional[str] = None
     partner_dimension: Optional[str] = None
     """无数据策略配置时的默认解析器（scope_custom resolver 名）；禁止在业务 service 内手写行过滤。"""

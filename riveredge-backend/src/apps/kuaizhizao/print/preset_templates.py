@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from apps.kuaizhizao.print.equipment_card import build_equipment_card_preset
+from apps.kuaizhizao.print.grid_outsource_order_print import grid_outsource_order_print_preset
+from apps.kuaizhizao.print.machining_work_order_print import machining_work_order_print_preset
 from apps.kuaizhizao.print.mold_card import build_mold_card_preset
 from apps.kuaizhizao.print.styles import PRINT_STYLE_A4_PLAIN, build_a4_document, make_preset
 
@@ -275,6 +277,8 @@ KUAIZHIZAO_PRESET_PRINT_TEMPLATES = [
     ),
     build_equipment_card_preset(),
     build_mold_card_preset(),
+    grid_outsource_order_print_preset(),
+    machining_work_order_print_preset(),
     _DELIVERY_PROJECT_PRINT_STUB,
     _DELIVERY_NODE_REPORT_PRINT_STUB,
     _DELIVERY_ISSUE_PRINT_STUB,

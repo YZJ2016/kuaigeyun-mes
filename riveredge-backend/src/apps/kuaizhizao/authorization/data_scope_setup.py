@@ -25,6 +25,13 @@ _KUAIZHIZAO_PURCHASE_DOC_PROFILE = DataScopeResourceProfile(
     department_uuid_field=None,
 )
 
+_KUAIZHIZAO_PURCHASE_REQUISITION_PROFILE = DataScopeResourceProfile(
+    applicant_user_id_field="applicant_id",
+    created_by_user_id_field="created_by",
+    department_user_id_field="created_by",
+    department_uuid_field=None,
+)
+
 _KUAIZHIZAO_WORK_ORDER_PROFILE = DataScopeResourceProfile(
     applicant_user_id_field="created_by",
     created_by_user_id_field=None,
@@ -122,6 +129,7 @@ def register_kuaizhizao_data_scope_profiles() -> None:
     )
     register_resource_profile("kuaizhizao:sales-contract", _KUAIZHIZAO_SALES_DOC_PROFILE)
     register_resource_profile("kuaizhizao:purchase-order", _KUAIZHIZAO_PURCHASE_DOC_PROFILE)
+    register_resource_profile("kuaizhizao:purchase-requisition", _KUAIZHIZAO_PURCHASE_REQUISITION_PROFILE)
     register_resource_profile("kuaizhizao:work-order", _KUAIZHIZAO_WORK_ORDER_PROFILE)
     register_resource_profile("kuaizhizao:rework-order", _KUAIZHIZAO_WORK_ORDER_PROFILE)
     register_resource_profile("kuaizhizao:outsource-order", _KUAIZHIZAO_WORK_ORDER_PROFILE)

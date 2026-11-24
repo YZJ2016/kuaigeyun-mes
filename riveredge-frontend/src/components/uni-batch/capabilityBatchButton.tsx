@@ -9,6 +9,7 @@ import { batchSomeCapabilityAllowed } from '../../hooks/useDocumentCapabilities'
 import { pickCapability, defaultAuditBatchAllowed } from './auditBatchMenu';
 import { UniBatchButton, type UniBatchButtonProps } from './index';
 import { getApiErrorMessage } from '../../utils/errorHandler';
+import { isSubmitReviewUserCancelled } from '../../utils/submitReviewUserCancelled';
 import { useUniTableDataActionIconOnly } from '../uni-table/dataActionIconOnlyContext';
 
 export type BulkCapabilityResult = {
@@ -86,6 +87,7 @@ export async function runCapabilityBatchLoop(
 
   let success = 0;
   let failed = 0;
+  let cancelled = 0;
   let lastError: unknown = null;
   const pushWarnings: string[] = [];
   for (const id of eligibleIds) {
@@ -95,8 +97,12 @@ export async function runCapabilityBatchLoop(
       const pushMessage = readExternalPushMessage(result);
       if (pushMessage) pushWarnings.push(pushMessage);
     } catch (error) {
-      failed += 1;
-      lastError = error;
+      if (isSubmitReviewUserCancelled(error)) {
+        cancelled += 1;
+      } else {
+        failed += 1;
+        lastError = error;
+      }
     }
   }
 
@@ -113,8 +119,18 @@ export async function runCapabilityBatchLoop(
     } else {
       message.warning(t(`${i18nPrefix}.partial`, { success, failed }));
     }
+  } else if (cancelled > 0) {
+    if (success > 0) {
+      message.info(
+        t('components.uniBatch.submitReviewCancelledPartial', { success, cancelled }),
+      );
+    } else {
+      message.info(t('components.uniBatch.submitReviewCancelled'));
+    }
   }
-  onSuccess?.();
+  if (success > 0 || failed > 0) {
+    onSuccess?.();
+  }
 }
 
 export async function runCapabilityBatchBulk(

@@ -138,19 +138,26 @@ def _response_exposes_review_status(response: Any) -> bool:
     return hasattr(response, "review_status")
 
 
-def _attach_capabilities_to_response(response: T, caps: Any) -> T:
+def _attach_capabilities_to_response(
+    response: T,
+    caps: Any,
+    *,
+    print_gate_record: Any | None = None,
+    allow_print_unaudited: bool | None = None,
+) -> T:
     """写入 capabilities，并按 capabilities 裁剪 audit.allowed_actions。"""
     from apps.kuaizhizao.services.document_action_policy.print_unaudited_gate import (
         apply_print_unaudited_gate_to_capabilities,
         resolve_allow_print_unaudited_for_attach,
     )
 
-    if _response_exposes_review_status(response):
+    gate_record = print_gate_record if print_gate_record is not None else response
+    if _response_exposes_review_status(gate_record):
         caps = apply_print_unaudited_gate_to_capabilities(
             caps,
-            response,
+            gate_record,
             allow_print_unaudited=resolve_allow_print_unaudited_for_attach(
-                response, explicit=None
+                gate_record, explicit=allow_print_unaudited
             ),
         )
     audit = getattr(response, "audit", None)

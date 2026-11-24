@@ -19,6 +19,8 @@ class OrderChangeItemBase(BaseModel):
     material_unit: Optional[str] = None
     before_quantity: Optional[Decimal] = None
     after_quantity: Optional[Decimal] = None
+    before_aux_quantity: Optional[Decimal] = None
+    after_aux_quantity: Optional[Decimal] = None
     before_unit_price: Optional[Decimal] = None
     after_unit_price: Optional[Decimal] = None
     before_delivery_date: Optional[date] = None

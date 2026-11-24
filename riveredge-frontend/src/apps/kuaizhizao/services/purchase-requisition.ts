@@ -37,6 +37,9 @@ export interface PurchaseRequisitionItem {
   material_code?: string;
   material_name?: string;
   material_spec?: string;
+  material_model?: string;
+  partner_material_code?: string;
+  partner_material_name?: string;
   unit?: string;
   quantity?: number;
   aux_quantity?: number | null;
@@ -45,6 +48,7 @@ export interface PurchaseRequisitionItem {
   suggested_unit_price?: number;
   required_date?: string;
   supplier_id?: number;
+  supplier_name?: string;
   purchase_order_id?: number;
   purchase_order_item_id?: number;
   demand_computation_item_id?: number;
@@ -72,6 +76,8 @@ export interface PurchaseRequisition {
   review_status?: string;
   notes?: string;
   attachments?: unknown;
+  attachments_count?: number;
+  header_attachments_count?: number;
   items_count?: number;
   total_quantity?: number;
   total_amount?: number;
@@ -201,6 +207,12 @@ export type PurchaseRequisitionPullLine = {
   /** 申请行备注 */
   line_notes?: string | null;
   supplier_id?: number | null;
+  supplier_name?: string | null;
+  /** 表头采购类型 */
+  order_type?: string | null;
+  attachments_count?: number;
+  header_attachments_count?: number;
+  line_attachments_count?: number;
 };
 
 export async function listPurchaseRequisitionPurchaseOrderPullLines(params: {
@@ -208,6 +220,7 @@ export async function listPurchaseRequisitionPurchaseOrderPullLines(params: {
   limit?: number;
   keyword?: string;
   requisition_id?: number;
+  order_type?: string;
   pullable_only?: boolean;
 }): Promise<{ data: PurchaseRequisitionPullLine[]; total: number }> {
   return apiRequest('/apps/kuaizhizao/purchase-requisitions/purchase-order-pull-lines', {
@@ -302,9 +315,13 @@ export async function submitPurchaseRequisition(id: number): Promise<PurchaseReq
   return uniAuditPurchaseRequisition(id, 'submit') as Promise<PurchaseRequisition>;
 }
 
-export async function submitPurchaseRequisitionForReview(id: number): Promise<PurchaseRequisition> {
+export async function submitPurchaseRequisitionForReview(
+  id: number,
+  data: Record<string, unknown> = {},
+): Promise<PurchaseRequisition> {
   return apiRequest(`/core/uni-audit/${PURCHASE_REQUEST_AUDIT_ENTITY}/${id}/submit_review`, {
     method: 'POST',
+    data,
   });
 }
 

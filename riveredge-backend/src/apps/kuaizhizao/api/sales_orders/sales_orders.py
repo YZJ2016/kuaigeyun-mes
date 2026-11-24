@@ -329,6 +329,186 @@ SALES_ORDER_SORTABLE_FIELDS = frozenset({
 
 
 @router.get(
+    "/mrp-pull-lines",
+    summary="Open sales order lines for MRP pull",
+    dependencies=[
+        Depends(require_read_or_display("kuaizhizao:sales-order")),
+        Depends(require_permission_codes("kuaizhizao:plan-management-demand-computation:create")),
+    ],
+)
+async def list_sales_order_mrp_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="单号/客户/物料"),
+    sales_order_id: Optional[int] = Query(None, description="来源销售订单"),
+    pullable_only: bool = Query(True, description="仅剩余可分析量大于 0"),
+    date_from: Optional[date] = Query(None, description="单据日期起"),
+    date_to: Optional[date] = Query(None, description="单据日期止"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await sales_order_service.list_sales_order_mrp_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            sales_order_id=sales_order_id,
+            pullable_only=pullable_only,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/mrp-pull-lines", tenant_id
+        )
+    except Exception:
+        logger.exception("列出销售订单 MRP 开口行失败")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "列出销售订单 MRP 开口行失败",
+            "/sales-orders/mrp-pull-lines",
+            tenant_id,
+        )
+
+
+@router.get(
+    "/work-order-pull-lines",
+    summary="Open sales order lines for work order pull",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:sales-order:read",
+                "kuaizhizao:sales-order:display",
+                "kuaizhizao:work-order:create",
+                "kuaizhizao:work-order:read",
+                require_all=False,
+            )
+        ),
+    ],
+)
+async def list_sales_order_work_order_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="单号/客户/物料"),
+    sales_order_id: Optional[int] = Query(None, description="来源销售订单"),
+    pullable_only: bool = Query(True, description="仅剩余可下推量大于 0"),
+    date_from: Optional[date] = Query(None, description="单据日期起"),
+    date_to: Optional[date] = Query(None, description="单据日期止"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """开口销售订单行，供工单页从销售订单取明细。"""
+    try:
+        return await sales_order_service.list_sales_order_work_order_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            sales_order_id=sales_order_id,
+            pullable_only=pullable_only,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/work-order-pull-lines", tenant_id
+        )
+    except Exception as e:
+        logger.exception("列出工单开口销售行失败")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"列出工单开口销售行失败：{e}",
+            "/sales-orders/work-order-pull-lines",
+            tenant_id,
+        )
+
+
+@router.get(
+    "/purchase-requisition-pull-lines",
+    summary="Open sales order buy lines for purchase requisition pull",
+)
+async def list_sales_order_purchase_requisition_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    sales_order_id: Optional[int] = Query(None, description="来源销售订单"),
+    pullable_only: bool = Query(True, description="仅外购剩余量大于 0"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.services.sales_order_purchase_push import (
+        list_purchase_requisition_sales_order_pull_lines as list_lines,
+    )
+
+    try:
+        return await list_lines(
+            tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            sales_order_id=sales_order_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_400_BAD_REQUEST,
+            str(e),
+            "/sales-orders/purchase-requisition-pull-lines",
+            tenant_id,
+        )
+    except Exception as e:
+        logger.exception("列出采购申请取单销售开口行失败")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"列出采购申请取单销售开口行失败：{e}",
+            "/sales-orders/purchase-requisition-pull-lines",
+            tenant_id,
+        )
+
+
+@router.get(
+    "/purchase-requisition-pull-orders",
+    summary="Sales orders for purchase requisition pull",
+)
+async def list_sales_order_purchase_requisition_pull_orders(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="订单号/客户"),
+    pullable_only: bool = Query(True, description="仅仍有外购可下推余量的销售订单"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.services.sales_order_purchase_push import (
+        list_sales_orders_for_purchase_requisition_pull,
+    )
+
+    try:
+        return await list_sales_orders_for_purchase_requisition_pull(
+            tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_400_BAD_REQUEST,
+            str(e),
+            "/sales-orders/purchase-requisition-pull-orders",
+            tenant_id,
+        )
+    except Exception as e:
+        logger.exception("列出采购申请取单销售订单失败")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"列出采购申请取单销售订单失败：{e}",
+            "/sales-orders/purchase-requisition-pull-orders",
+            tenant_id,
+        )
+
+
+@router.get(
     "/shipment-notice-pull-lines",
     summary="Open sales order lines for shipment notice pull",
     dependencies=[Depends(require_read_or_display("kuaizhizao:sales-order"))],

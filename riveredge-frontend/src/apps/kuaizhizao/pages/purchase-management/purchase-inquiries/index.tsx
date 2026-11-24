@@ -135,6 +135,7 @@ import {
   type PurchaseInquiryVendor,
 } from '../../../services/purchase-inquiry';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { buildDocumentAttachmentsListColumn } from '../../../components/documentAttachmentsListColumn';
 import {
   appendDocumentAttachmentsToSupplementary,
   documentAttachmentsFromRecord,
@@ -2122,6 +2123,7 @@ const PurchaseInquiriesPage: React.FC = () => {
         width: 112,
         render: (v: string) => (v ? formatBusinessDateOnly(v) : '-'),
       },
+      buildDocumentAttachmentsListColumn<PullPurchaseRequisitionCandidate>(t),
       {
         title: t('app.kuaizhizao.purchaseRequisition.pull.convertStatus'),
         key: 'convert_status',
@@ -2167,18 +2169,20 @@ const PurchaseInquiriesPage: React.FC = () => {
 
   const renderPurchaseInquiryFormBody = () => (
     <>
-      <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
-        <Col span={8}>
+      <div className="document-form-untitled-groups">
+        <div className="document-form-untitled-group">
+      <Row gutter={FORM_LAYOUT.GRID_GUTTER} wrap={false}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
           <ProFormText name="inquiry_name" label={t('app.kuaizhizao.purchaseInquiry.inquiryName')} rules={[{ required: true }]} />
         </Col>
-        <Col span={8}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
           <ProFormDatePicker
             name="inquiry_date"
             label={t('app.kuaizhizao.purchaseInquiry.inquiryDate')}
             fieldProps={{ style: { width: '100%' } }}
           />
         </Col>
-        <Col span={8}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
           <ProFormSelect
             name="demand_party_id"
             label={t('app.kuaizhizao.purchaseInquiry.demandPartyName')}
@@ -2203,9 +2207,7 @@ const PurchaseInquiriesPage: React.FC = () => {
             <Input />
           </Form.Item>
         </Col>
-      </Row>
-      <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
-        <Col span={8}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
           <Form.Item name="buyer_id" label={t('app.kuaizhizao.purchaseInquiry.buyer')}>
             <UniDropdown
               showSearch
@@ -2232,10 +2234,7 @@ const PurchaseInquiriesPage: React.FC = () => {
             <Input />
           </Form.Item>
         </Col>
-        <Col span={8}>
-          <ProFormText name="buyer_phone" label={t('app.kuaizhizao.purchaseInquiry.buyerPhone')} />
-        </Col>
-        <Col span={8}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
           <ProFormDatePicker
             name="quote_deadline"
             label={t('app.kuaizhizao.purchaseInquiry.quoteDeadline')}
@@ -2248,14 +2247,22 @@ const PurchaseInquiriesPage: React.FC = () => {
           />
         </Col>
       </Row>
-      <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
-        <Col span={8}>
+      <Row gutter={FORM_LAYOUT.GRID_GUTTER} wrap={false}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
+          <ProFormText name="buyer_phone" label={t('app.kuaizhizao.purchaseInquiry.buyerPhone')} />
+        </Col>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
           <PurchaseDepartmentFormField
             options={departmentOptions}
             loading={departmentOptionsLoading}
           />
         </Col>
+        <Col flex="1 1 0" style={{ minWidth: 0 }} aria-hidden />
+        <Col flex="1 1 0" style={{ minWidth: 0 }} aria-hidden />
+        <Col flex="1 1 0" style={{ minWidth: 0 }} aria-hidden />
       </Row>
+        </div>
+      </div>
 
       <div className="uni-table-detail" style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -2297,8 +2304,9 @@ const PurchaseInquiriesPage: React.FC = () => {
         )}
       </div>
 
-      <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
-        <Col span={8}>
+      <div className="document-form-untitled-group">
+      <Row gutter={FORM_LAYOUT.GRID_GUTTER} wrap={false}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
           <ProFormSelect
             name="payment_method"
             label={t('app.kuaizhizao.purchaseInquiry.paymentMethod')}
@@ -2306,7 +2314,7 @@ const PurchaseInquiriesPage: React.FC = () => {
             fieldProps={{ allowClear: true }}
           />
         </Col>
-        <Col span={8}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
           <DictionarySelect
             dictionaryCode="PAYMENT_TERMS"
             name="payment_terms"
@@ -2315,7 +2323,7 @@ const PurchaseInquiriesPage: React.FC = () => {
             hostResource={PURCHASE_INQUIRY_RESOURCE}
           />
         </Col>
-        <Col span={8}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
           <DictionarySelect
             dictionaryCode="TRADE_MODE"
             name="trade_mode"
@@ -2324,9 +2332,7 @@ const PurchaseInquiriesPage: React.FC = () => {
             hostResource={PURCHASE_INQUIRY_RESOURCE}
           />
         </Col>
-      </Row>
-      <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
-        <Col span={6}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
           <DictionarySelect
             dictionaryCode="CURRENCY"
             name="currency"
@@ -2337,7 +2343,7 @@ const PurchaseInquiriesPage: React.FC = () => {
             rules={[{ required: true }]}
           />
         </Col>
-        <Col span={6}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
           <ProFormDigit
             name="exchange_rate"
             label={t('app.kuaizhizao.purchaseInquiry.exchangeRate')}
@@ -2345,7 +2351,9 @@ const PurchaseInquiriesPage: React.FC = () => {
             fieldProps={{ precision: 6, style: { width: '100%' } }}
           />
         </Col>
-        <Col span={6}>
+      </Row>
+      <Row gutter={FORM_LAYOUT.GRID_GUTTER} wrap={false}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
           <ProFormSelect
             name="invoice_type"
             label={t('app.kuaizhizao.purchaseInquiry.invoiceType')}
@@ -2353,14 +2361,18 @@ const PurchaseInquiriesPage: React.FC = () => {
             rules={[{ required: true }]}
           />
         </Col>
-        <Col span={6}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
           <ProFormSelect
             name="tax_rate_percent"
             label={t('app.kuaizhizao.purchaseInquiry.taxRate')}
             options={taxRatePercentOptions}
           />
         </Col>
+        <Col flex="1 1 0" style={{ minWidth: 0 }} aria-hidden />
+        <Col flex="1 1 0" style={{ minWidth: 0 }} aria-hidden />
+        <Col flex="1 1 0" style={{ minWidth: 0 }} aria-hidden />
       </Row>
+      </div>
 
       <div className="uni-table-detail" style={{ marginBottom: 24 }}>
         <Space style={{ marginBottom: 8 }}>

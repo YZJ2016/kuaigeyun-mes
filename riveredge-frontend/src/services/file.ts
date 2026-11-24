@@ -69,6 +69,9 @@ export interface FileStorageMigrateRequest {
   dry_run?: boolean;
   cursor?: number;
   limit?: number;
+  /** originals | leftover_tiers */
+  phase?: 'originals' | 'leftover_tiers' | string;
+  leftover_cursor?: number;
 }
 
 export interface FileStorageMigrateResult {
@@ -86,6 +89,9 @@ export interface FileStorageMigrateResult {
   /** 实际写入的桶名，用于与控制台核对 */
   target_bucket?: string | null;
   target_endpoint?: string | null;
+  storage_backend?: string | null;
+  phase?: 'originals' | 'leftover_tiers' | string;
+  next_leftover_cursor?: number;
 }
 
 export interface FileListParams {
@@ -650,10 +656,12 @@ export async function saveFileStorageSettings(
  */
 export async function migrateFileStorageToCos(
   data?: FileStorageMigrateRequest,
+  options?: { timeoutMs?: number },
 ): Promise<FileStorageMigrateResult> {
   return apiRequest<FileStorageMigrateResult>('/core/files/storage-migrate', {
     method: 'POST',
     data: data || {},
+    timeoutMs: options?.timeoutMs,
   });
 }
 

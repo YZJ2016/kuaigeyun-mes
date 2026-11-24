@@ -1,5 +1,5 @@
 /**
- * 文件存储位置设置：本地 / 对象存储连接（腾讯 COS、MinIO），以及本环境历史文件迁移。
+ * 文件存储位置设置：本地 / 远程连接（COS、MinIO、RustFS、NAS WebDAV），以及本环境历史文件迁移。
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -23,7 +23,7 @@ export interface FileStorageSettingsModalProps {
 }
 
 /** 本轮前端可选的对象存储连接类型（与后端 SUPPORTED_OBJECT_STORAGE_TYPES 对齐） */
-const SUPPORTED_STORAGE_CONNECTION_TYPES = ['tencent_cos', 'minio', 'rustfs'] as const;
+const SUPPORTED_STORAGE_CONNECTION_TYPES = ['tencent_cos', 'minio', 'rustfs', 'nas_webdav'] as const;
 
 const LOCAL_LOCATION_VALUE = '__local__';
 
@@ -71,6 +71,7 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({
       if (type === 'tencent_cos') return t('pages.system.files.storageTypeTencentCos');
       if (type === 'minio') return t('pages.system.files.storageTypeMinio');
       if (type === 'rustfs') return t('pages.system.files.storageTypeRustfs');
+      if (type === 'nas_webdav') return t('pages.system.files.storageTypeNasWebdav');
       return type;
     },
     [t],
@@ -79,13 +80,14 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [settings, cosList, minioList, rustfsList] = await Promise.all([
+      const [settings, cosList, minioList, rustfsList, nasWebdavList] = await Promise.all([
         getFileStorageSettings(),
         getApplicationConnectionListAll({ type: 'tencent_cos', is_active: true }),
         getApplicationConnectionListAll({ type: 'minio', is_active: true }),
         getApplicationConnectionListAll({ type: 'rustfs', is_active: true }),
+        getApplicationConnectionListAll({ type: 'nas_webdav', is_active: true }),
       ]);
-      const connections = [...cosList, ...minioList, ...rustfsList].filter((c) =>
+      const connections = [...cosList, ...minioList, ...rustfsList, ...nasWebdavList].filter((c) =>
         SUPPORTED_STORAGE_CONNECTION_TYPES.includes(
           c.type as (typeof SUPPORTED_STORAGE_CONNECTION_TYPES)[number],
         ),
@@ -168,7 +170,15 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({
       }
       await saveFileStorageSettings(payload);
 
+      const connType =
+        connectionOptions.find((c) => c.value === payload.connection_uuid)?.type || '';
+      const isNasWebdav = connType === 'nas_webdav';
+      const batchLimit = isNasWebdav ? 4 : 50;
+      const requestTimeoutMs = isNasWebdav ? 180_000 : 90_000;
+
       let cursor = 0;
+      let phase: 'originals' | 'leftover_tiers' = 'originals';
+      let leftoverCursor = 0;
       let done = false;
       let totalMigrated = 0;
       let totalFailed = 0;
@@ -177,12 +187,17 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({
       const allFailures: Array<{ uuid: string; reason: string }> = [];
 
       while (!done) {
-        const result = await migrateFileStorageToCos({
-          dry_run: dryRun,
-          cursor,
-          limit: 50,
-          connection_uuid: payload.connection_uuid || undefined,
-        });
+        const result = await migrateFileStorageToCos(
+          {
+            dry_run: dryRun,
+            cursor,
+            limit: batchLimit,
+            phase,
+            leftover_cursor: leftoverCursor,
+            connection_uuid: payload.connection_uuid || undefined,
+          },
+          { timeoutMs: requestTimeoutMs },
+        );
         if (initialTotal === 0) initialTotal = result.total;
         if (!targetBucket && result.target_bucket) {
           targetBucket = result.target_bucket;
@@ -203,6 +218,13 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({
           failureSamples: allFailures.slice(0, 8),
         });
         cursor = result.next_cursor;
+        const nextPhase = result.phase;
+        if (nextPhase === 'leftover_tiers' || nextPhase === 'originals') {
+          phase = nextPhase;
+        }
+        if (typeof result.next_leftover_cursor === 'number') {
+          leftoverCursor = result.next_leftover_cursor;
+        }
         done = result.done;
       }
 
@@ -346,6 +368,11 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({
           </Form.Item>
           <Typography.Text>{t('pages.system.files.storageDeleteLocalLabel')}</Typography.Text>
         </div>
+        {connectionOptions.find((c) => c.value === storageLocation)?.type === 'nas_webdav' ? (
+          <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+            {t('pages.system.files.storageMigrateNasHint')}
+          </Typography.Paragraph>
+        ) : null}
         <Space wrap style={{ marginBottom: migrateProgress ? 12 : 0 }}>
           <Button
             disabled={!isObjectStorage || migrating || imageTierBackfillLoading}

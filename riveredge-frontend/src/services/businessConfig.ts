@@ -84,6 +84,13 @@ export function isTrialRunModeEnabled(config: BusinessConfig | null | undefined)
   return Boolean(config?.parameters?.common?.trial_run_mode);
 }
 
+/** 系统管理员是否可反审全单据（parameters.common.admin_revoke_all_documents，默认 false） */
+export function isAdminRevokeAllDocumentsEnabled(
+  config: BusinessConfig | null | undefined,
+): boolean {
+  return Boolean(config?.parameters?.common?.admin_revoke_all_documents);
+}
+
 /**
  * 单据物料下拉是否允许「快速新增物料」。
  * 读取 parameters.master_data.allow_material_quick_create；缺省 true（保持历史行为）。

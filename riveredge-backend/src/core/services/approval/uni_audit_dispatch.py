@@ -548,8 +548,14 @@ async def execute_uni_audit(
 
         user = await User.get_or_none(id=user_id)
         admin_bypass = False
+        admin_revoke_bypass = False
         if user:
+            from core.services.approval.admin_revoke_policy import resolve_admin_revoke_bypass
+
             admin_bypass = await UserPermissionService.is_admin_bypass(user, tenant_id)
+            admin_revoke_bypass = await resolve_admin_revoke_bypass(
+                tenant_id=tenant_id, user=user
+            )
         if act == "withdraw":
             # 已提交尚未送审时无审批实例；撤销提交由各实体 handler 改回草稿。
             # 仅待审核（有 pending 实例）才校验发起人撤回门禁。
@@ -574,8 +580,8 @@ async def execute_uni_audit(
                 entity_type=entry.entity_type,
                 entity_id=entity_id,
                 operator_id=user_id,
-                admin_bypass=admin_bypass,
-                has_revoke_permission=has_revoke or admin_bypass,
+                admin_bypass=admin_revoke_bypass,
+                has_revoke_permission=has_revoke or admin_revoke_bypass,
             )
 
     if act in ("transfer", "add_sign", "delegate", "urge"):

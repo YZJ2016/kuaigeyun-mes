@@ -17,6 +17,7 @@ import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
 import {
   UniPullQueryModal,
   UNI_PULL_QUERY_MAX_FETCH_LIMIT,
+  isPullableScope,
   pagePullCandidates,
   renderPullQueryDocStatus,
   useUniPullQuery,
@@ -86,7 +87,7 @@ import {
 import {
   OrderChangeItemsTable,
   type OrderChangeItemsTablePricing,
-} from '../../../components/order-change/OrderChangeItemsTable';
+} from '../../../components/order-change';
 import { OrderChangeImpactModal } from '../../../components/order-change/OrderChangeImpactModal';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import {
@@ -116,6 +117,11 @@ function orderChangeItemHasContent(item: OrderChangeLineItem): boolean {
   const delta = Number(item.delta_amount ?? 0);
   if (Number.isFinite(delta) && delta !== 0) return true;
   if (Number(item.after_quantity ?? 0) !== Number(item.before_quantity ?? 0)) return true;
+  const normAux = (v: unknown) =>
+    v == null || v === '' || Number.isNaN(Number(v)) ? null : Number(v);
+  const beforeAux = normAux(item.before_aux_quantity);
+  const afterAux = normAux(item.after_aux_quantity);
+  if (beforeAux !== afterAux && !(beforeAux == null && afterAux == null)) return true;
   if (Number(item.after_unit_price ?? 0) !== Number(item.before_unit_price ?? 0)) return true;
   const beforeDate = item.before_delivery_date ? String(item.before_delivery_date).slice(0, 10) : '';
   const afterDate = item.after_delivery_date ? String(item.after_delivery_date).slice(0, 10) : '';
@@ -263,6 +269,8 @@ const PurchaseOrderChangesPage: React.FC = () => {
         material_unit: item.material_unit,
         before_quantity: item.before_quantity,
         after_quantity: item.after_quantity,
+        before_aux_quantity: item.before_aux_quantity,
+        after_aux_quantity: item.after_aux_quantity,
         before_unit_price: item.before_unit_price,
         after_unit_price: item.after_unit_price,
         before_delivery_date: item.before_delivery_date,
@@ -332,6 +340,10 @@ const PurchaseOrderChangesPage: React.FC = () => {
           skip: 0,
           limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
           keyword: keyword.trim() || undefined,
+          pullable_only: isPullableScope(scope),
+          pull_target: 'purchase_order_change',
+          include_items: false,
+          view: 'options',
         });
         const rows = (result.data || []).filter(
           (order): order is PullPurchaseOrderCandidate => order.id != null && !!order.order_code,
@@ -889,6 +901,57 @@ const PurchaseOrderChangesPage: React.FC = () => {
     setSelectedRowKeys([]);
     reloadTable();
   }, [message, t]);
+
+  const purchaseOrderChangeCanCommit = ['', 'DRAFT', '草稿', 'draft', 'REJECTED', '已驳回', 'rejected'].includes(
+    String(editingStatus || '').trim(),
+  );
+
+  async function handleCopySelectedPurchaseOrderChange() {
+    const row = selectedChangeForToolbar;
+    if (!row?.id) {
+      message.warning(t('app.kuaizhizao.purchaseOrderChange.selectToCopy'));
+      return;
+    }
+    try {
+      const full = await getPurchaseOrderChange(row.id);
+      if (!full.source_order_id) {
+        message.warning(t('app.kuaizhizao.purchaseOrderChange.selectToCopy'));
+        return;
+      }
+      const created = await createPurchaseOrderChangeFromOrder(
+        full.source_order_id,
+        full.change_reason || t('app.kuaizhizao.purchaseOrderChange.defaultReason'),
+      );
+      await updatePurchaseOrderChange(created.id!, {
+        change_reason: full.change_reason,
+        notes: full.notes,
+        attachments: full.attachments,
+        items: (full.items ?? []).map((item, idx) => ({
+          line_no: item.line_no ?? idx + 1,
+          source_item_id: item.source_item_id,
+          change_type: item.change_type ?? 'QUANTITY',
+          material_id: item.material_id,
+          material_code: item.material_code,
+          material_name: item.material_name,
+          material_spec: item.material_spec,
+          material_unit: item.material_unit,
+          before_quantity: item.before_quantity,
+          after_quantity: item.after_quantity,
+          before_aux_quantity: item.before_aux_quantity,
+          after_aux_quantity: item.after_aux_quantity,
+          before_unit_price: item.before_unit_price,
+          after_unit_price: item.after_unit_price,
+          before_delivery_date: item.before_delivery_date,
+          after_delivery_date: item.after_delivery_date,
+          notes: item.notes,
+        })),
+      });
+      await openEdit(created);
+      reloadTable();
+    } catch (error: unknown) {
+      message.error(getApiErrorMessage(error, t('common.loadFailed')));
+    }
+  }
 
   const timeconfigBasicItems = useDetailDrawerDescriptionItems(
     detailBasicColumns.filter((col) => {

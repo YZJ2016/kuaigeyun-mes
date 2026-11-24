@@ -34,9 +34,9 @@ import { WarehouseTraceBriefPrimaryActions } from '../../../warehouse-management
 import { getPurchaseOrderLifecycle } from '../../../../utils/purchaseOrderLifecycle';
 import { payableLedgerRecognitionLabel } from '../../../../../../utils/documentLedgerRecognition';
 import {
-  partnerDefaultPaymentMethodLabel,
   partnerSettlementTermsLabel,
 } from '../../../../../master-data/utils/partner-static-labels';
+import { renderDocumentPaymentMethodDisplay } from '../../../../components/PaymentMethodWithMixFormItems';
 import { formatOrderChangeStatusLabel } from '../../../../utils/orderChangeLifecycle';
 import { type PurchaseOrder, type PurchaseOrderItem } from '../../../../services/purchase';
 import { listPurchaseOrderChangesByOrder, type PurchaseOrderChange } from '../../../../services/purchase-order-change';
@@ -268,10 +268,7 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
             title: t('app.kuaizhizao.purchaseOrder.paymentMethod'),
             dataIndex: 'payment_method_code',
             render: (_, entity) =>
-              partnerDefaultPaymentMethodLabel(
-                t,
-                (entity as { payment_method_code?: string }).payment_method_code,
-              ),
+              renderDocumentPaymentMethodDisplay(t, entity as Parameters<typeof renderDocumentPaymentMethodDisplay>[1]),
           },
           {
             title: t('app.kuaizhizao.purchaseOrder.settlementTerms'),

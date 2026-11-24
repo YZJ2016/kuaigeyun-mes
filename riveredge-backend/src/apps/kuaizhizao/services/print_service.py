@@ -1044,6 +1044,14 @@ class DocumentPrintService:
             await upgrade_print_numeric_column_precision(tenant_id)
         except Exception as e:
             logger.warning("打印模板签核/数值小数位升级失败 tenant={}: {}", tenant_id, e)
+        try:
+            from apps.kuaizhizao.services.print_template_presets import (
+                upgrade_kingdee_bill_no_print_fields,
+            )
+
+            await upgrade_kingdee_bill_no_print_fields(tenant_id)
+        except Exception as e:
+            logger.warning("打印模板补金蝶单号失败 tenant={}: {}", tenant_id, e)
         if document_type == "purchase_requisition":
             try:
                 from apps.kuaizhizao.services.print_template_presets import (
@@ -1313,17 +1321,31 @@ class DocumentPrintService:
         enrich_print_amount_uppercase_fields(document_data)
         return document_data
 
-    @staticmethod
-    def _finalize_print_context(
+    async def _finalize_print_context(
+        self,
+        tenant_id: int,
         document_type: str,
+        document_id: int,
         document: Any,
         data: Dict[str, Any],
     ) -> Dict[str, Any]:
-        return attach_document_qrcode_fields(
+        out = attach_document_qrcode_fields(
             document_type=document_type,
             document=document,
             data=data,
         )
+        from apps.kuaizhizao.services.kingdee_push_bill_resolver import (
+            KINGDEE_PRINT_SOURCE_TYPES,
+            resolve_kingdee_push_bill_no,
+        )
+
+        if document_type in KINGDEE_PRINT_SOURCE_TYPES:
+
+            bill_no = await resolve_kingdee_push_bill_no(
+                tenant_id, document_type, int(document_id)
+            )
+            out = {**out, "kingdee_bill_no": bill_no or ""}
+        return out
 
     async def _get_document_data(
         self,
@@ -1340,8 +1362,11 @@ class DocumentPrintService:
             document = await WorkOrder.get_or_none(tenant_id=tenant_id, id=document_id)
             if not document:
                 raise NotFoundError(f"工单不存在: {document_id}")
-            return self._finalize_print_context(
-                document_type, document, await self._format_work_order_data(document, loc)
+            return await self._finalize_print_context(
+            tenant_id,
+            document_type,
+            document_id,
+                document, await self._format_work_order_data(document, loc)
             )
 
         elif document_type == "outsource_order":
@@ -1350,8 +1375,11 @@ class DocumentPrintService:
             )
             if not document:
                 raise NotFoundError(f"工序委外单不存在: {document_id}")
-            return self._finalize_print_context(
-                document_type, document, await self._format_outsource_order_data(document, loc)
+            return await self._finalize_print_context(
+            tenant_id,
+            document_type,
+            document_id,
+                document, await self._format_outsource_order_data(document, loc)
             )
 
         elif document_type == "outsource_work_order":
@@ -1360,8 +1388,10 @@ class DocumentPrintService:
             )
             if not document:
                 raise NotFoundError(f"工单委外单不存在: {document_id}")
-            return self._finalize_print_context(
-                document_type,
+            return await self._finalize_print_context(
+            tenant_id,
+            document_type,
+            document_id,
                 document,
                 await self._format_outsource_work_order_data(document, loc),
             )
@@ -1370,40 +1400,55 @@ class DocumentPrintService:
             document = await ProductionPicking.get_or_none(tenant_id=tenant_id, id=document_id)
             if not document:
                 raise NotFoundError(f"生产领料单不存在: {document_id}")
-            return self._finalize_print_context(
-                document_type, document, await self._format_production_picking_data(document)
+            return await self._finalize_print_context(
+            tenant_id,
+            document_type,
+            document_id,
+                document, await self._format_production_picking_data(document)
             )
         
         elif document_type == "production_return":
             document = await ProductionReturn.get_or_none(tenant_id=tenant_id, id=document_id)
             if not document:
                 raise NotFoundError(f"生产退料单不存在: {document_id}")
-            return self._finalize_print_context(
-                document_type, document, await self._format_production_return_data(document)
+            return await self._finalize_print_context(
+            tenant_id,
+            document_type,
+            document_id,
+                document, await self._format_production_return_data(document)
             )
         
         elif document_type == "finished_goods_receipt":
             document = await FinishedGoodsReceipt.get_or_none(tenant_id=tenant_id, id=document_id)
             if not document:
                 raise NotFoundError(f"成品入库单不存在: {document_id}")
-            return self._finalize_print_context(
-                document_type, document, await self._format_finished_goods_receipt_data(document)
+            return await self._finalize_print_context(
+            tenant_id,
+            document_type,
+            document_id,
+                document, await self._format_finished_goods_receipt_data(document)
             )
 
         elif document_type == "semi_finished_goods_receipt":
             document = await SemiFinishedGoodsReceipt.get_or_none(tenant_id=tenant_id, id=document_id)
             if not document:
                 raise NotFoundError(f"半成品入库单不存在: {document_id}")
-            return self._finalize_print_context(
-                document_type, document, await self._format_semi_finished_goods_receipt_data(document)
+            return await self._finalize_print_context(
+            tenant_id,
+            document_type,
+            document_id,
+                document, await self._format_semi_finished_goods_receipt_data(document)
             )
         
         elif document_type == "sales_delivery":
             document = await SalesDelivery.get_or_none(tenant_id=tenant_id, id=document_id)
             if not document:
                 raise NotFoundError(f"销售出库单不存在: {document_id}")
-            return self._finalize_print_context(
-                document_type, document, await self._format_sales_delivery_data(document)
+            return await self._finalize_print_context(
+            tenant_id,
+            document_type,
+            document_id,
+                document, await self._format_sales_delivery_data(document)
             )
         
         elif document_type == "purchase_order":
@@ -1436,8 +1481,10 @@ class DocumentPrintService:
             if not document:
                 raise NotFoundError(f"付款申请不存在: {document_id}")
             assert_payment_application_capability(document, "print")
-            return self._finalize_print_context(
-                document_type,
+            return await self._finalize_print_context(
+            tenant_id,
+            document_type,
+            document_id,
                 document,
                 await self._format_payment_application_data(document, loc),
             )
@@ -1450,18 +1497,23 @@ class DocumentPrintService:
             )
             if not document:
                 raise NotFoundError(f"付款单不存在: {document_id}")
-            return self._finalize_print_context(
-                document_type,
+            return await self._finalize_print_context(
+            tenant_id,
+            document_type,
+            document_id,
                 document,
                 await self._format_finance_payment_data(document, loc),
             )
-        
+
         elif document_type == "purchase_receipt":
             document = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=document_id)
             if not document:
                 raise NotFoundError(f"采购入库单不存在: {document_id}")
-            return self._finalize_print_context(
-                document_type, document, await self._format_purchase_receipt_data(document)
+            return await self._finalize_print_context(
+            tenant_id,
+            document_type,
+            document_id,
+                document, await self._format_purchase_receipt_data(document)
             )
         
         elif document_type == "sales_forecast":
@@ -1526,16 +1578,22 @@ class DocumentPrintService:
             document = await OtherInbound.get_or_none(tenant_id=tenant_id, id=document_id)
             if not document:
                 raise NotFoundError(f"其他入库单不存在: {document_id}")
-            return self._finalize_print_context(
-                document_type, document, await self._format_other_inbound_data(document)
+            return await self._finalize_print_context(
+            tenant_id,
+            document_type,
+            document_id,
+                document, await self._format_other_inbound_data(document)
             )
         
         elif document_type == "other_outbound":
             document = await OtherOutbound.get_or_none(tenant_id=tenant_id, id=document_id)
             if not document:
                 raise NotFoundError(f"其他出库单不存在: {document_id}")
-            return self._finalize_print_context(
-                document_type, document, await self._format_other_outbound_data(document)
+            return await self._finalize_print_context(
+            tenant_id,
+            document_type,
+            document_id,
+                document, await self._format_other_outbound_data(document)
             )
         
         elif document_type == "sales_review":
@@ -1590,16 +1648,22 @@ class DocumentPrintService:
             document = await MaterialBorrow.get_or_none(tenant_id=tenant_id, id=document_id, deleted_at__isnull=True)
             if not document:
                 raise NotFoundError(f"借料单不存在: {document_id}")
-            return self._finalize_print_context(
-                document_type, document, await self._format_material_borrow_data(document)
+            return await self._finalize_print_context(
+            tenant_id,
+            document_type,
+            document_id,
+                document, await self._format_material_borrow_data(document)
             )
         
         elif document_type == "material_return":
             document = await MaterialReturn.get_or_none(tenant_id=tenant_id, id=document_id, deleted_at__isnull=True)
             if not document:
                 raise NotFoundError(f"还料单不存在: {document_id}")
-            return self._finalize_print_context(
-                document_type, document, await self._format_material_return_data(document)
+            return await self._finalize_print_context(
+            tenant_id,
+            document_type,
+            document_id,
+                document, await self._format_material_return_data(document)
             )
         
         elif document_type == "delivery_notice":
@@ -1607,8 +1671,11 @@ class DocumentPrintService:
             document = await DeliveryNotice.get_or_none(tenant_id=tenant_id, id=document_id, deleted_at__isnull=True)
             if not document:
                 raise NotFoundError(f"送货单不存在: {document_id}")
-            return self._finalize_print_context(
-                document_type, document, await self._format_delivery_notice_data(document)
+            return await self._finalize_print_context(
+            tenant_id,
+            document_type,
+            document_id,
+                document, await self._format_delivery_notice_data(document)
             )
 
         elif document_type == "product_quality_certificate":
@@ -1660,8 +1727,10 @@ class DocumentPrintService:
             if not document:
                 raise NotFoundError(f"8D 报告不存在: {document_id}")
             assert_eight_d_report_capability(document, "print")
-            return self._finalize_print_context(
-                document_type,
+            return await self._finalize_print_context(
+            tenant_id,
+            document_type,
+            document_id,
                 document,
                 await self._format_eight_d_report_data_async(tenant_id, document, loc),
             )
@@ -1675,6 +1744,43 @@ class DocumentPrintService:
         """格式化工序委外单打印数据。"""
         fmt = await self._resolve_print_numeric_formatters(order.tenant_id)
         fmt_price, fmt_amount = fmt["fmt_price"], fmt["fmt_amount"]
+        fmt_qty = fmt["fmt_qty"]
+        product_name = ""
+        material_spec = ""
+        unit = "件"
+        from apps.kuaizhizao.models.work_order import WorkOrder
+
+        work_order = await WorkOrder.get_or_none(
+            tenant_id=order.tenant_id, id=int(order.work_order_id)
+        )
+        if work_order:
+            product_name = str(work_order.product_name or "").strip()
+            if work_order.product_id:
+                from apps.master_data.models.material import Material
+
+                material = await Material.get_or_none(
+                    tenant_id=order.tenant_id, id=int(work_order.product_id)
+                )
+                if material:
+                    material_spec = str(getattr(material, "specification", None) or "").strip()
+                    base_unit = str(getattr(material, "base_unit", None) or "").strip()
+                    if base_unit:
+                        unit = base_unit
+        qty_text = fmt_qty(order.outsource_quantity)
+        delivery_text = i18n.format_datetime(order.planned_end_date) if order.planned_end_date else ""
+        note_text = str(order.remarks or "").strip()
+        items = [
+            {
+                "line_no": 1,
+                "product_name": product_name,
+                "material_spec": material_spec,
+                "operation_name": order.operation_name,
+                "unit": unit,
+                "quantity": qty_text,
+                "delivery_date": delivery_text,
+                "notes": note_text,
+            }
+        ]
         return {
             "document_type": "outsource_order",
             "code": order.code,
@@ -1688,12 +1794,17 @@ class DocumentPrintService:
             "unit_price": fmt_price(order.unit_price),
             "total_amount": fmt_amount(order.total_amount),
             "planned_start_date": i18n.format_datetime(order.planned_start_date),
-            "planned_end_date": i18n.format_datetime(order.planned_end_date),
+            "planned_end_date": delivery_text,
             "status": i18n.document_status(order.status),
             "status_code": order.status,
             "remarks": order.remarks,
             "created_by_name": order.created_by_name,
             "created_at": i18n.format_datetime(order.created_at),
+            "product_name": product_name,
+            "material_spec": material_spec,
+            "unit": unit,
+            "total_quantity": qty_text,
+            "items": items,
         }
 
     async def _format_outsource_work_order_data(
@@ -1772,6 +1883,56 @@ class DocumentPrintService:
                 "remarks": op.remarks,
             })
         data["operations"] = ops_list
+
+        material_spec = ""
+        material_model = ""
+        product_id = getattr(work_order, "product_id", None)
+        if product_id:
+            from apps.master_data.models.material import Material
+
+            material = await Material.get_or_none(
+                tenant_id=work_order.tenant_id, id=int(product_id)
+            )
+            if material:
+                material_spec = str(getattr(material, "specification", None) or "").strip()
+                material_model = str(getattr(material, "model", None) or "").strip()
+        process_chunks: list[str] = []
+        for op in operations:
+            name = str(getattr(op, "operation_name", None) or "").strip()
+            if not name:
+                continue
+            remark = str(getattr(op, "remarks", None) or "").strip()
+            process_chunks.append(f"{name}{('：' + remark) if remark else ''}")
+        process_requirements = " / ".join(process_chunks)
+        delivery_dt = getattr(work_order, "required_date", None) or getattr(
+            work_order, "planned_end_date", None
+        )
+        delivery_text = (
+            i18n.format_datetime(delivery_dt)
+            if delivery_dt is not None
+            else ""
+        )
+        fmt = await self._resolve_print_numeric_formatters(work_order.tenant_id)
+        qty_text = fmt["fmt_qty"](work_order.quantity)
+        data["customer_name"] = str(getattr(work_order, "customer_name", None) or "").strip()
+        data["items"] = [
+            {
+                "line_no": 1,
+                "customer_name": data["customer_name"],
+                "drawing_name": work_order.product_name,
+                "product_name": work_order.product_name,
+                "product_code": work_order.product_code,
+                "material_grade": material_model,
+                "material_model": material_model,
+                "material_spec": material_spec,
+                "process_requirements": process_requirements,
+                "quantity": qty_text,
+                "required_date": delivery_text,
+                "delivery_date": delivery_text,
+                "notes": str(getattr(work_order, "remarks", None) or "").strip(),
+                "remarks": str(getattr(work_order, "remarks", None) or "").strip(),
+            }
+        ]
 
         return data
 

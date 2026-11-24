@@ -55,6 +55,7 @@ export {
   isPullOpenLineRowDisabled,
   isPullOpenLineSelectable,
   isPullRequisitionOpenLineSelectable,
+  isPullWorkOrderFgLineSelectable,
   readPullOpenLineAuxPushedQty,
   readPullOpenLineAuxRemainingQty,
   readPullOpenLineAuxSuggestedQty,
@@ -76,7 +77,11 @@ export {
   renderPullOpenLineDualQtyCell,
 } from './pullOpenLineQtyColumns';
 export type { BuildPullOpenLineQtyColumnOptions, PullOpenLineQtyPart } from './pullOpenLineQtyColumns';
-export type { PullOpenLineQtyRow, PullRequisitionOpenLineRow } from './pullOpenLine';
+export type {
+  PullOpenLineQtyRow,
+  PullRequisitionOpenLineRow,
+  PullWorkOrderFgInboundLineRow,
+} from './pullOpenLine';
 export {
   composePullRowDisabled,
   isPullRowBlockedByPartnerLock,

@@ -70,6 +70,7 @@ import type { UniAuditAction } from './types';
 import { documentCodeFromInstanceTitle } from './resolveRecordDocumentCode';
 import { getSessionCurrentUser } from '../../utils/sessionCurrentUser';
 import { isAdminBypass, resolveUserForMenuPermission } from '../../utils/permission';
+import { useAdminRevokeAllDocuments } from '../../hooks/useAdminRevokeAllDocuments';
 import { formatDateTimeBySiteSetting } from '../../utils/format';
 import { useTranslation } from 'react-i18next';
 import type { GlobalToken } from 'antd/es/theme/interface';
@@ -860,6 +861,8 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
   const sessionUser = resolveUserForMenuPermission(getSessionCurrentUser());
   const adminOpen = isAdminBypass(sessionUser);
+  const adminRevokeAll = useAdminRevokeAllDocuments(false);
+  const adminRevokeOpen = adminOpen && adminRevokeAll;
   const currentUserId = sessionUser?.id ?? null;
 
   const { effectiveHubActions, flowAssigneeBlockHint } = useMemo(() => {
@@ -899,7 +902,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
         rbacAllowedProp
         ?? items.find((item) => item.action === 'approve' || item.action === 'reject' || item.action === 'revoke')
           ?.rbacAllowed
-        ?? adminOpen;
+        ?? adminRevokeOpen;
       items = items.filter(
         (item) =>
           item.action !== 'approve'

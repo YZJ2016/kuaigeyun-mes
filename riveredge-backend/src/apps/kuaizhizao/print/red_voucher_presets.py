@@ -68,6 +68,55 @@ _HTML_TOTAL_QTY_2 = (
 )
 
 
+_RED_VOUCHER_KINGDEE_BILL_SNIPPET = (
+    '    <div><span class="label">金蝶单号：</span>'
+    '<span class="value">{{ kingdee_bill_no or "—" }}</span></div>\n'
+)
+
+
+_PRINT_KINGDEE_TABLE_MARKERS = (
+    '  </div>\n  <table class="grid">',
+    '  </div>\r\n  <table class="grid">',
+)
+
+
+def patch_print_kingdee_bill_no_html(html: str) -> tuple[str, bool]:
+    """整页 HTML 打印在明细表前补金蝶单号。已有则不动。"""
+    text = str(html or "")
+    if "kingdee_bill_no" in text or "金蝶单号" in text:
+        return text, False
+    if 'class="lab"' in text:
+        snippet = (
+            '    <div><span class="lab">金蝶单号：</span>'
+            '<span class="val">{{ kingdee_bill_no or "" }}</span></div>\n'
+        )
+    else:
+        snippet = (
+            '    <div><span class="label">金蝶单号：</span>'
+            '<span class="value">{{ kingdee_bill_no or "" }}</span></div>\n'
+        )
+    for marker in _PRINT_KINGDEE_TABLE_MARKERS:
+        if marker in text:
+            return text.replace(marker, snippet + marker, 1), True
+    return text, False
+
+
+def patch_kuaizhizao_red_voucher_kingdee_bill_no_html(html: str) -> tuple[str, bool]:
+    """红框凭证表头补金蝶单号（幂等）。"""
+    text = str(html or "")
+    if "金蝶单号" in text:
+        return text, False
+    if not any(title in text for title in KUAIZHIZAO_RED_VOUCHER_TITLE_BASES):
+        return text, False
+    for marker in (
+        '  </div>\n  <table class="grid">',
+        '  </div>\r\n  <table class="grid">',
+    ):
+        if marker in text:
+            return text.replace(marker, _RED_VOUCHER_KINGDEE_BILL_SNIPPET + marker, 1), True
+    return text, False
+
+
 def _apply_literal_replacements(text: str, pairs: list[tuple[str, str]]) -> tuple[str, bool]:
     out = text
     changed = False

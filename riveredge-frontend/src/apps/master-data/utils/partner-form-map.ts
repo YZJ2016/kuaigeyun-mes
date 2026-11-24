@@ -29,6 +29,12 @@ const partnerFormSlice = (d: Customer | Supplier) => ({
   enterpriseTypeCode: d.enterpriseTypeCode ?? undefined,
   paymentTermsDays: optNum(d.paymentTermsDays as number | string | undefined),
   defaultPaymentMethodCode: d.defaultPaymentMethodCode ?? undefined,
+  defaultPaymentWirePercent: optNum(
+    (d as { defaultPaymentWirePercent?: number | string }).defaultPaymentWirePercent,
+  ),
+  defaultPaymentAcceptancePercent: optNum(
+    (d as { defaultPaymentAcceptancePercent?: number | string }).defaultPaymentAcceptancePercent,
+  ),
   settlementTermsCode: d.settlementTermsCode ?? undefined,
   defaultCurrencyCode: d.defaultCurrencyCode ?? undefined,
   defaultExchangeRate: optNum(d.defaultExchangeRate as number | string | undefined),

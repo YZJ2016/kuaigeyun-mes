@@ -9,6 +9,7 @@ import {
 import { formatUserDisplayLabel, normalizeUserDisplayName } from '../../../../../utils/userDisplay';
 import {
   resolvePaymentMethodFromCustomer,
+  resolvePaymentMixPercentsFromCustomer,
   resolvePaymentTermsDaysFromCustomer,
   resolveSettlementTermsFromCustomer,
 } from '../../sales-management/shared/applyCustomerFormFields';
@@ -56,6 +57,7 @@ export function resolveSupplierFormFieldValues(
   );
   const paymentTermsDays = resolvePaymentTermsDaysFromCustomer(supplier);
   const paymentMethod = resolvePaymentMethodFromCustomer(supplier);
+  const paymentMix = resolvePaymentMixPercentsFromCustomer(supplier);
   const settlementTerms = resolveSettlementTermsFromCustomer(supplier);
   const currencyRaw =
     supplier.defaultCurrencyCode ??
@@ -75,8 +77,12 @@ export function resolveSupplierFormFieldValues(
     supplier_phone,
     ...(bId != null ? { buyer_id: bId, buyer_name: bName } : {}),
     ...(paymentMethod != null
-      ? { payment_method_code: paymentMethod }
-      : { payment_method_code: undefined }),
+      ? { payment_method_code: paymentMethod, ...paymentMix }
+      : {
+          payment_method_code: undefined,
+          payment_wire_percent: undefined,
+          payment_acceptance_percent: undefined,
+        }),
     ...(settlementTerms != null
       ? { settlement_terms_code: settlementTerms }
       : { settlement_terms_code: undefined }),
@@ -96,6 +102,8 @@ function buildClearSupplierFormFields(defaultCurrency = 'CNY'): Record<string, u
     supplier_contact: undefined,
     supplier_phone: undefined,
     payment_method_code: undefined,
+    payment_wire_percent: undefined,
+    payment_acceptance_percent: undefined,
     settlement_terms_code: undefined,
     payment_terms_days: undefined,
     currency,

@@ -18,6 +18,10 @@ import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../.
 import { alignDescriptionColumns } from '../../../sales-management/shared/documentFieldAlignment';
 import { formatQuantity } from '../../../../../../utils/format';
 import { getDeliveryNoticeLifecycle } from '../../../../utils/deliveryNoticeLifecycle';
+import {
+  KUAIZHIZAO_DELIVERY_NOTICE_FIELD_RESOURCE,
+  renderWarehousePartyNameDisplay,
+} from '../../shared/warehouseAmountDisplay';
 
 export type DeliveryNoticeDetailRecord = {
   id?: number;
@@ -104,7 +108,16 @@ export const DeliveryNoticeDetailDrawer: React.FC<DeliveryNoticeDetailDrawerProp
           title: t('app.kuaizhizao.deliveryNote.col.salesOrderCode'),
           dataIndex: 'sales_order_code',
         },
-        { title: t('app.kuaizhizao.deliveryNote.field.customer'), dataIndex: 'customer_name' },
+        {
+          title: t('app.kuaizhizao.deliveryNote.field.customer'),
+          dataIndex: 'customer_name',
+          render: (_: unknown, record: DeliveryNoticeDetailRecord) =>
+            renderWarehousePartyNameDisplay(
+              record.customer_name,
+              KUAIZHIZAO_DELIVERY_NOTICE_FIELD_RESOURCE,
+              'customer_name',
+            ),
+        },
         { title: t('app.kuaizhizao.deliveryNote.field.contact'), dataIndex: 'customer_contact' },
         { title: t('app.kuaizhizao.deliveryNote.field.phone'), dataIndex: 'customer_phone' },
         {

@@ -27,6 +27,7 @@ class SalesOrder(BaseModel):
     customer_name = fields.CharField(max_length=200, description="客户名称")
     customer_contact = fields.CharField(max_length=100, null=True, description="客户联系人")
     customer_phone = fields.CharField(max_length=20, null=True, description="客户电话")
+    customer_order_no = fields.CharField(max_length=100, null=True, description="客户订单号")
 
     # 订单基本信息
     order_date = fields.DateField(description="订单日期")
@@ -60,7 +61,22 @@ class SalesOrder(BaseModel):
     # 物流信息
     shipping_address = fields.TextField(null=True, description="收货地址")
     shipping_method = fields.CharField(max_length=50, null=True, description="发货方式")
-    payment_terms = fields.CharField(max_length=100, null=True, description="付款条件")
+    payment_method_code = fields.CharField(
+        max_length=50, null=True, description="付款方式（现金/转账/承兑等）"
+    )
+    payment_wire_percent = fields.DecimalField(
+        max_digits=5, decimal_places=2, null=True, description="电汇比例（%，组合付款）"
+    )
+    payment_acceptance_percent = fields.DecimalField(
+        max_digits=5, decimal_places=2, null=True, description="承兑比例（%，组合付款）"
+    )
+    settlement_terms_code = fields.CharField(
+        max_length=50, null=True, description="结算方式（预付/账期/货到付款等）"
+    )
+    payment_terms_days = fields.IntField(null=True, description="付款周期（天），对齐客商付款账期")
+    payment_terms = fields.CharField(
+        max_length=100, null=True, description="付款周期（历史字典码，新单以 payment_terms_days 为准）"
+    )
     currency_code = fields.CharField(max_length=20, null=True, default="CNY", description="币种（如 CNY 人民币）")
     exchange_rate = fields.DecimalField(max_digits=8, decimal_places=4, default=1, description="汇率（相对本位币）")
 

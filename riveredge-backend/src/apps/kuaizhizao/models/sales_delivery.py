@@ -35,7 +35,9 @@ class SalesDelivery(BaseModel):
     
     customer_id = fields.IntField(description="客户ID")
     customer_name = fields.CharField(max_length=200, description="客户名称")
-
+    customer_contact = fields.CharField(max_length=100, null=True, description="客户联系人")
+    customer_phone = fields.CharField(max_length=50, null=True, description="客户电话")
+    customer_order_no = fields.CharField(max_length=100, null=True, description="客户订单号（来源销售订单）")
     revenue_recognition = fields.CharField(
         max_length=32,
         default="on_shipment",
@@ -67,6 +69,15 @@ class SalesDelivery(BaseModel):
     currency_code = fields.CharField(max_length=20, null=True, default="CNY", description="币种代码")
     exchange_rate = fields.DecimalField(
         max_digits=8, decimal_places=4, default=1, description="汇率（相对本位币）"
+    )
+    payment_method_code = fields.CharField(
+        max_length=50, null=True, description="付款方式（现金/电汇/承兑等）"
+    )
+    payment_wire_percent = fields.DecimalField(
+        max_digits=5, decimal_places=2, null=True, description="电汇比例（%，组合付款）"
+    )
+    payment_acceptance_percent = fields.DecimalField(
+        max_digits=5, decimal_places=2, null=True, description="承兑比例（%，组合付款）"
     )
 
     # 物流信息

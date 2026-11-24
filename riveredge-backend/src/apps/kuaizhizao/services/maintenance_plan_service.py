@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime
 from decimal import Decimal
 from tortoise.exceptions import IntegrityError
+from tortoise.transactions import in_transaction
 
 from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan, MaintenanceExecution
 from apps.kuaizhizao.models.equipment import Equipment
@@ -39,7 +40,7 @@ class MaintenancePlanService:
 
     维护类型 / 周期真源：保养方案。
     本计划设备范围真源：MaintenancePlan.equipment_items（创建/编辑时勾选写入）。
-    方案绑定 EquipmentSchemeBinding 仅作表单预载池。
+    方案绑定 EquipmentSchemeBinding：表单预载 + 计划保存时补绑所选设备。
     """
 
     @staticmethod
@@ -103,6 +104,61 @@ class MaintenancePlanService:
         return items
 
     @staticmethod
+    async def _ensure_maintenance_scheme_bindings(
+        tenant_id: int,
+        scheme_id: int,
+        equipment_ids: List[int],
+        *,
+        created_by: Optional[int] = None,
+    ) -> None:
+        """计划所选设备若未绑方案，写入 EquipmentSchemeBinding（maintenance）。"""
+        ids = list(dict.fromkeys(int(i) for i in equipment_ids if int(i) > 0))
+        if not ids:
+            return
+        existing = await EquipmentSchemeBinding.filter(
+            tenant_id=tenant_id,
+            scheme_id=scheme_id,
+            scheme_type="maintenance",
+            equipment_id__in=ids,
+            deleted_at__isnull=True,
+        ).values_list("equipment_id", flat=True)
+        missing = [eid for eid in ids if eid not in set(existing)]
+        if not missing:
+            return
+        rows = await Equipment.filter(
+            tenant_id=tenant_id,
+            id__in=missing,
+            deleted_at__isnull=True,
+        ).all()
+        by_id = {row.id: row for row in rows}
+        if len(by_id) != len(missing):
+            raise ValidationError("所选设备不存在或已停用")
+        actor = None
+        if created_by is not None:
+            actor = await User.filter(id=created_by, tenant_id=tenant_id).first()
+        async with in_transaction():
+            for eid in missing:
+                equip = by_id[eid]
+                dup = await EquipmentSchemeBinding.filter(
+                    tenant_id=tenant_id,
+                    scheme_id=scheme_id,
+                    scheme_type="maintenance",
+                    equipment_id=equip.id,
+                    deleted_at__isnull=True,
+                ).exists()
+                if dup:
+                    continue
+                payload: dict[str, Any] = dict(
+                    tenant_id=tenant_id,
+                    equipment_id=equip.id,
+                    equipment_uuid=equip.uuid,
+                    scheme_id=scheme_id,
+                    scheme_type="maintenance",
+                )
+                apply_create_audit(payload, actor)
+                await EquipmentSchemeBinding.create(**payload)
+
+    @staticmethod
     def stored_plan_equipment_items(plan: MaintenancePlan) -> List[dict[str, Any]]:
         raw = plan.equipment_items
         if not isinstance(raw, list) or not raw:
@@ -153,13 +209,13 @@ class MaintenancePlanService:
         tenant_id: int,
         scheme_id: int,
         equipment_uuids: List[str],
+        *,
+        created_by: Optional[int] = None,
     ) -> List[dict[str, Any]]:
         uuids = list(dict.fromkeys(str(u).strip() for u in equipment_uuids if str(u).strip()))
         if not uuids:
             raise ValidationError("请至少选择一台设备")
 
-        pool = await MaintenancePlanService._list_bound_equipment(tenant_id, scheme_id)
-        pool_uuids = {str(item.get("uuid")) for item in pool if item.get("uuid")}
         rows = await Equipment.filter(
             tenant_id=tenant_id,
             uuid__in=uuids,
@@ -169,13 +225,19 @@ class MaintenancePlanService:
         if len(by_uuid) != len(uuids):
             raise ValidationError("所选设备不存在或已停用")
 
-        items: list[dict[str, Any]] = []
+        pool = await MaintenancePlanService._list_bound_equipment(tenant_id, scheme_id)
+        pool_uuids = {str(item.get("uuid")) for item in pool if item.get("uuid")}
+        unbound_ids: list[int] = []
         for eu in uuids:
             if eu not in pool_uuids:
-                equip = by_uuid[eu]
-                raise ValidationError(
-                    f"设备未绑定所选保养方案: {equip.code or equip.name or eu}"
-                )
+                unbound_ids.append(by_uuid[eu].id)
+        if unbound_ids:
+            await MaintenancePlanService._ensure_maintenance_scheme_bindings(
+                tenant_id, scheme_id, unbound_ids, created_by=created_by
+            )
+
+        items: list[dict[str, Any]] = []
+        for eu in uuids:
             equip = by_uuid[eu]
             items.append(
                 {
@@ -242,7 +304,10 @@ class MaintenancePlanService:
             if not equipment_uuids:
                 raise ValidationError("请至少选择一台设备")
             equipment_items = await MaintenancePlanService._resolve_equipment_scope(
-                tenant_id, int(scheme_id), list(equipment_uuids)
+                tenant_id,
+                int(scheme_id),
+                list(equipment_uuids or []),
+                created_by=created_by,
             )
 
             plan_no = str(payload.get("plan_no") or "").strip()
@@ -410,7 +475,9 @@ class MaintenancePlanService:
     async def update_maintenance_plan(
         tenant_id: int,
         uuid: str,
-        data: MaintenancePlanUpdate
+        data: MaintenancePlanUpdate,
+        *,
+        updated_by: Optional[int] = None,
     ) -> MaintenancePlan:
         """
         更新维护计划
@@ -450,7 +517,10 @@ class MaintenancePlanService:
             if not scheme_id:
                 raise ValidationError("请绑定保养方案")
             items = await MaintenancePlanService._resolve_equipment_scope(
-                tenant_id, int(scheme_id), list(equipment_uuids)
+                tenant_id,
+                int(scheme_id),
+                list(equipment_uuids),
+                created_by=updated_by,
             )
             MaintenancePlanService._apply_equipment_snapshots(plan, items)
         elif scheme_changed:

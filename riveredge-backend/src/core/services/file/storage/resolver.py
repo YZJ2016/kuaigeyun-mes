@@ -8,17 +8,19 @@ from core.models.integration_config import IntegrationConfig
 from core.services.file.storage.base import FileStorageBackend
 from core.services.file.storage.local import LocalFileStorage
 from core.services.file.storage.minio_storage import MinioStorage
+from core.services.file.storage.nas_webdav_storage import NasWebDavStorage
 from core.services.file.storage.rustfs_storage import RustFsStorage
 from core.services.file.storage.tencent_cos import TencentCosStorage
 from core.services.system.site_setting_service import SiteSettingService
 from infra.exceptions.exceptions import ValidationError
 
-SUPPORTED_OBJECT_STORAGE_TYPES = ("tencent_cos", "minio", "rustfs")
+SUPPORTED_OBJECT_STORAGE_TYPES = ("tencent_cos", "minio", "rustfs", "nas_webdav")
 
 OBJECT_STORAGE_TYPE_LABELS = {
     "tencent_cos": "腾讯云 COS",
     "minio": "MinIO",
     "rustfs": "RustFS",
+    "nas_webdav": "NAS WebDAV",
 }
 
 DEFAULT_FILE_STORAGE: Dict[str, Any] = {
@@ -100,11 +102,13 @@ def _build_storage_from_integration(ic: IntegrationConfig) -> FileStorageBackend
         return MinioStorage(cfg, connection_uuid=conn_uuid)
     if ic.type == "rustfs":
         return RustFsStorage(cfg, connection_uuid=conn_uuid)
+    if ic.type == "nas_webdav":
+        return NasWebDavStorage(cfg, connection_uuid=conn_uuid)
     raise ValidationError(f"暂不支持该存储类型：{ic.type}")
 
 
 async def load_object_storage(tenant_id: int, connection_uuid: str) -> FileStorageBackend:
-    """按应用连接 UUID 加载对象存储适配器（腾讯 COS / MinIO / RustFS）。"""
+    """按应用连接 UUID 加载远程存储适配器（COS / MinIO / RustFS / NAS WebDAV）。"""
     ic = await IntegrationConfig.filter(
         tenant_id=tenant_id,
         uuid=connection_uuid,

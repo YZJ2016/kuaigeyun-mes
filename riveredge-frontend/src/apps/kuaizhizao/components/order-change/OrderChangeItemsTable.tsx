@@ -51,6 +51,16 @@ function calcDelta(row: OrderChangeItem): number {
   );
 }
 
+function auxQuantityChanged(before?: number | null, after?: number | null): boolean {
+  const norm = (v: number | null | undefined) =>
+    v == null || Number.isNaN(Number(v)) ? null : Number(v);
+  const b = norm(before);
+  const a = norm(after);
+  if (b === a) return false;
+  if (b == null && a == null) return false;
+  return b !== a;
+}
+
 /** 与后端 diff_sales_item / diff_purchase_item 一致：按 before/after 推断变更维度 */
 function inferLineChangeTypes(row: OrderChangeItem): string[] {
   if (row.change_type === 'LINE_ADD') return ['LINE_ADD'];
@@ -59,6 +69,9 @@ function inferLineChangeTypes(row: OrderChangeItem): string[] {
   const changes: string[] = [];
   if (Number(row.after_quantity ?? 0) !== Number(row.before_quantity ?? 0)) {
     changes.push('QUANTITY');
+  }
+  if (auxQuantityChanged(row.before_aux_quantity, row.after_aux_quantity)) {
+    changes.push('AUX_QUANTITY');
   }
   if (Number(row.after_unit_price ?? 0) !== Number(row.before_unit_price ?? 0)) {
     changes.push('UNIT_PRICE');
@@ -78,8 +91,6 @@ function inferLineChangeTypeForSave(row: OrderChangeItem): string {
   if (types.length === 1) return types[0];
   return 'QUANTITY';
 }
-
-export const OrderChangeFormItemsTableScrollY = 320;
 
 export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({
   items,
@@ -128,6 +139,7 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({
     updateItem(index, {
       change_type: 'QUANTITY',
       after_quantity: row.before_quantity,
+      after_aux_quantity: row.before_aux_quantity,
       after_unit_price: row.before_unit_price,
       after_delivery_date: row.before_delivery_date,
     });
@@ -220,6 +232,16 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({
         },
       },
       {
+        title: t('app.kuaizhizao.orderChange.colMaterialSpec'),
+        dataIndex: 'material_spec',
+        width: 120,
+        ellipsis: true,
+        render: (v: string | null | undefined) => {
+          const text = String(v ?? '').trim();
+          return text ? text : '—';
+        },
+      },
+      {
         title: t('app.kuaizhizao.orderChange.colChangeType'),
         dataIndex: 'change_type',
         width: 96,
@@ -270,6 +292,38 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({
           );
         },
       },
+      ...(pricing?.side === 'purchase'
+        ? [
+            {
+              title: t('app.kuaizhizao.orderChange.colBeforeAuxQuantity'),
+              dataIndex: 'before_aux_quantity',
+              width: 108,
+              render: (v: number | null | undefined) => (v == null ? '-' : v),
+            },
+            {
+              title: t('app.kuaizhizao.orderChange.colAfterAuxQuantity'),
+              dataIndex: 'after_aux_quantity',
+              width: 120,
+              render: (v: number | null | undefined, row: OrderChangeItem, index: number) => {
+                if (!editable || row.change_type === 'LINE_CANCEL') {
+                  return v == null ? '-' : v;
+                }
+                return (
+                  <InputNumber
+                    min={0}
+                    value={v ?? undefined}
+                    style={{ width: '100%' }}
+                    onChange={(val) =>
+                      updateItem(index, {
+                        after_aux_quantity: val === null ? null : (val ?? undefined),
+                      })
+                    }
+                  />
+                );
+              },
+            },
+          ]
+        : []),
       {
         title: t('app.kuaizhizao.orderChange.colBeforeUnitPrice'),
         dataIndex: 'before_unit_price',
@@ -372,7 +426,7 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({
           size="small"
           pagination={false}
           scroll={{
-            x: 1200,
+            x: pricing?.side === 'purchase' ? 1460 : 1320,
             ...(bodyMaxHeight != null ? { y: bodyMaxHeight } : {}),
           }}
           dataSource={items}
@@ -386,3 +440,5 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({
     </div>
   );
 };
+
+export default OrderChangeItemsTable;

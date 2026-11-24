@@ -219,6 +219,10 @@ async def list_purchase_orders(
         None,
         description="加载目标：purchase_order_change；与 pullable_only 组合使用",
     ),
+    view: Optional[str] = Query(
+        None,
+        description="options 时仅返回选单所需轻量字段，跳过进度/账款/capabilities 重计算",
+    ),
     include_items: bool = Query(False, description="是否附带订单明细（明细表格视图）"),
     column_filters: Optional[str] = Query(None, description="列筛选 JSON（高级搜索）"),
     pending_my_review: Optional[bool] = Query(
@@ -258,6 +262,7 @@ async def list_purchase_orders(
         order_by=safe_order_by,
         pullable_only=pullable_only,
         pull_target=pull_target,
+        view=view,
         include_items=include_items,
         column_filters=column_filters,
         pending_my_review=pending_my_review,

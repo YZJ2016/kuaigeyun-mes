@@ -8,6 +8,7 @@ import { MarkerTag } from '../../../constants/statusBadges';
 
 export const ORDER_CHANGE_LINE_TYPE_CODES = [
   'QUANTITY',
+  'AUX_QUANTITY',
   'DELIVERY_DATE',
   'UNIT_PRICE',
   'LINE_CANCEL',
@@ -20,6 +21,7 @@ export type OrderChangeLineTypeCode = (typeof ORDER_CHANGE_LINE_TYPE_CODES)[numb
 export function getOrderChangeTypeMarkerColor(type: string | undefined | null): string {
   switch (String(type ?? '').toUpperCase()) {
     case 'QUANTITY':
+    case 'AUX_QUANTITY':
       return 'blue';
     case 'UNIT_PRICE':
       return 'gold';
@@ -38,6 +40,8 @@ export function translateOrderChangeLineType(t: TFunction, type: string | undefi
   switch (String(type ?? '').toUpperCase()) {
     case 'QUANTITY':
       return t('common.quantity');
+    case 'AUX_QUANTITY':
+      return t('app.kuaizhizao.orderChange.typeAuxQuantity');
     case 'DELIVERY_DATE':
       return t('app.kuaizhizao.orderChange.changeTypeDeliveryDate');
     case 'UNIT_PRICE':

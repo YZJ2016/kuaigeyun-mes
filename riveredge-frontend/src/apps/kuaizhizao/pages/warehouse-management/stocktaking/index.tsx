@@ -65,6 +65,8 @@ interface Stocktaking {
   id?: number;
   uuid?: string;
   code?: string;
+  kingdee_surplus_bill_no?: string | null;
+  kingdee_deficit_bill_no?: string | null;
   warehouse_id?: number;
   warehouse_name?: string;
   stocktaking_date?: string;
@@ -752,6 +754,18 @@ const StocktakingPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.warehouseReports.colStocktakingCode'),
       dataIndex: 'code',
+    },
+    {
+      title: t('app.kuaizhizao.warehouse.field.kingdeeSurplusBillNo'),
+      key: 'kingdee_surplus_bill_no',
+      dataIndex: 'kingdee_surplus_bill_no',
+      render: (_: unknown, entity: Stocktaking) => String(entity.kingdee_surplus_bill_no || '').trim() || '—',
+    },
+    {
+      title: t('app.kuaizhizao.warehouse.field.kingdeeDeficitBillNo'),
+      key: 'kingdee_deficit_bill_no',
+      dataIndex: 'kingdee_deficit_bill_no',
+      render: (_: unknown, entity: Stocktaking) => String(entity.kingdee_deficit_bill_no || '').trim() || '—',
     },
     {
       title: t('app.kuaizhizao.warehouseReports.colWarehouse'),

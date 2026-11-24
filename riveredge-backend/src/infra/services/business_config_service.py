@@ -336,6 +336,7 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
             },
         ],
     },
+    "parameters.common.admin_revoke_all_documents": {"type": "boolean"},
     "parameters.purchase.tolerance_percentage": {"type": "number", "min": 0, "max": 100},
     "parameters.purchase.price_fluctuation_limit_percent": {"type": "number", "min": 0, "max": 100},
     "parameters.work_order.material_shortage_block_level": {"type": "number", "min": 0, "max": 3},
@@ -605,6 +606,8 @@ PARAMETER_KEYS = {
     "parameters.common.quantity_decimal_places",
     "parameters.common.price_decimal_places",
     "parameters.common.amount_decimal_places",
+    "parameters.common.allow_print_unaudited",
+    "parameters.common.admin_revoke_all_documents",
     "parameters.work_order.allow_production_without_material",
     "parameters.work_order.allow_work_order_without_bom",
     "parameters.work_order.auto_generate",
@@ -704,6 +707,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.common.price_decimal_places",
     "parameters.common.amount_decimal_places",
     "parameters.common.allow_print_unaudited",
+    "parameters.common.admin_revoke_all_documents",
     "parameters.procurement.require_purchase_requisition",
     "parameters.procurement.require_supplier_qualification",
     "parameters.procurement.require_purchase_order_change_confirm",
@@ -990,6 +994,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "price_decimal_places": 2,
         "amount_decimal_places": 2,
         "allow_print_unaudited": True,
+        "admin_revoke_all_documents": False,
     },
     "work_order": {
         "auto_generate": True,
@@ -1890,6 +1895,13 @@ class BusinessConfigService:
             config["parameters"]
             .get("procurement", {})
             .get("auto_confirm_purchase_receipt", False)
+        )
+
+    async def get_admin_revoke_all_documents(self, tenant_id: int) -> bool:
+        """系统管理员是否可反审全单据（默认 False）。"""
+        config = await self.get_business_config(tenant_id)
+        return bool(
+            config["parameters"].get("common", {}).get("admin_revoke_all_documents", False)
         )
 
     async def require_shipment_notice_before_delivery(self, tenant_id: int) -> bool:

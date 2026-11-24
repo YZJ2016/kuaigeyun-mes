@@ -261,6 +261,84 @@ class TestResolveNodeApproversFailClosed:
             await ApprovalInstanceService._resolve_node_approvers(node, instance)
 
     @pytest.mark.asyncio
+    async def test_auto_pass_follows_configured_default_branch(self):
+        """上一审批人被跳过时，条件节点按已勾选的默认分支继续。"""
+        instance = MagicMock()
+        instance.id = 1
+        instance.submitter_id = 9
+        instance.data = {}
+        instance.save = AsyncMock()
+        condition = {
+            "id": "c1",
+            "type": "condition",
+            "data": {
+                "label": "是否选择总经理",
+                "routeMode": "previous_approver",
+                "conditions": [
+                    {"label": "特批是（需总经理特批）"},
+                    {"label": "分支 2", "isDefault": True},
+                ],
+            },
+        }
+        instance.process = MagicMock()
+        instance.process.nodes = {
+            "nodes": [
+                {"id": "a1", "type": "approval", "data": {"label": "审批节点"}},
+                condition,
+                {"id": "gm", "type": "approval", "data": {"label": "总经理"}},
+                {"id": "end", "type": "end", "data": {"label": "结束"}},
+            ],
+            "edges": [
+                {"source": "a1", "target": "c1"},
+                {"source": "c1", "target": "gm"},
+                {"source": "c1", "target": "end"},
+            ],
+        }
+        node = {"id": "a1", "type": "approval", "data": {"label": "审批节点"}}
+        with patch.object(
+            ApprovalInstanceService,
+            "_create_approval_history",
+            new_callable=AsyncMock,
+        ), patch.object(
+            ApprovalInstanceService,
+            "_create_node_tasks",
+            new_callable=AsyncMock,
+            return_value=[],
+        ):
+            await ApprovalInstanceService._auto_pass_empty_approval_node(1, instance, node)
+        assert instance.data["__branch_index_c1"] == 1
+
+    @pytest.mark.asyncio
+    async def test_manager_without_department_leader_skips_node(self):
+        """直属部门没有可用负责人时跳过本节点，不把待办回给提交人。"""
+        from infra.exceptions.exceptions import ValidationError
+
+        instance = MagicMock()
+        instance.id = 5
+        instance.tenant_id = 1
+        instance.submitter_id = 10
+        instance.data = {}
+        node = {
+            "id": "n1",
+            "type": "approval",
+            "data": {"approverType": "manager", "emptyApproverPolicy": "block"},
+        }
+
+        with patch.object(
+            ApprovalInstanceService,
+            "_resolve_node_approvers",
+            new_callable=AsyncMock,
+            side_effect=ValidationError("制单人直属部门未配置可用负责人，无法提交审核"),
+        ), patch.object(
+            ApprovalInstanceService,
+            "_auto_pass_empty_approval_node",
+            new_callable=AsyncMock,
+            return_value=[],
+        ) as skipped:
+            await ApprovalInstanceService._create_node_tasks(1, instance, node)
+        skipped.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_multi_level_manager_level_two(self):
         instance = MagicMock()
         instance.tenant_id = 1

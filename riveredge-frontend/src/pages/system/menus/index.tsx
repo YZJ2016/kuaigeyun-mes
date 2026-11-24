@@ -27,6 +27,7 @@ import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../utils/uniTableL
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
 import { SystemMasterDetailDrawer } from '../shared/systemMasterDetailDrawer';
 import { getApiErrorMessage } from '../../../utils/errorHandler';
+import { isVirtualMenuGroupHomePath } from '../../../utils/menuHomePathOptions';
 import { UniTable } from '../../../components/uni-table';
 import {
   pickListSearchKeywordOrFields,
@@ -927,8 +928,12 @@ const MenuListPage: React.FC = () => {
             const isAppMenu = !!record.application_uuid;
             const deleteCheck = checkCanDelete(record);
             const canDelete = !isAppMenu && deleteCheck.can;
+            const pathText = record.path ? String(record.path).trim() : '';
             const canSetHome =
-              record.is_active && !record.is_external && !!(record.path && String(record.path).trim());
+              record.is_active &&
+              !record.is_external &&
+              !!pathText &&
+              !isVirtualMenuGroupHomePath(pathText, record);
             const actions: React.ReactNode[] = [
               <Button {...rowActionKind('read')} key="detail" onClick={() => handleView(record)} />,
               <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)} />,

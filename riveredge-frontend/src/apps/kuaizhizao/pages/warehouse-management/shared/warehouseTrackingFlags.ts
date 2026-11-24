@@ -47,6 +47,34 @@ export function useWarehouseTrackingFlags(): WarehouseTrackingFlags {
   return useMemo(() => resolveWarehouseTrackingFlags(data), [data]);
 }
 
+/** 选料 / 引用展示行上的批号、序列号标记（兼容 camel / snake） */
+export function resolveMaterialTrackingFlags(
+  material: { batchManaged?: boolean | null; batch_managed?: boolean | null; serialManaged?: boolean | null; serial_managed?: boolean | null; uuid?: string | null } | null | undefined,
+): { batchManaged: boolean; serialManaged: boolean; uuid?: string } {
+  if (!material) {
+    return { batchManaged: false, serialManaged: false };
+  }
+  const uuid = String(material.uuid ?? '').trim() || undefined;
+  return {
+    batchManaged: !!(material.batchManaged ?? material.batch_managed),
+    serialManaged: !!(material.serialManaged ?? material.serial_managed),
+    uuid,
+  };
+}
+
+/** 引用展示未带批号标记时，按物料 id 补全档案 */
+export function materialTrackingFlagsNeedMaterialFetch(
+  material: { batchManaged?: boolean | null; batch_managed?: boolean | null; serialManaged?: boolean | null; serial_managed?: boolean | null } | null | undefined,
+): boolean {
+  if (!material) return false;
+  return (
+    material.batchManaged === undefined &&
+    material.batch_managed === undefined &&
+    material.serialManaged === undefined &&
+    material.serial_managed === undefined
+  );
+}
+
 /** 租户总闸 ∧ 物料标记：是否需要录入批号 */
 export function isMaterialBatchEntryEnabled(
   flags: WarehouseTrackingFlags,

@@ -261,6 +261,9 @@ const OtherOutboundPage = lazy(() => import('./pages/warehouse-management/other-
 const MaterialBorrowsPage = lazy(() => import('./pages/warehouse-management/material-borrows'));
 const MaterialReturnsPage = lazy(() => import('./pages/warehouse-management/material-returns'));
 const OutboundPage = lazy(() => import('./pages/warehouse-management/outbound'));
+const SalesDeliveryFormPage = lazy(
+  () => import('./pages/warehouse-management/outbound/SalesDeliveryCreateModal'),
+);
 const OutboundWorkOrderPullEntryPage = lazy(
   () => import('./pages/warehouse-management/outbound/OutboundWorkOrderPullEntryPage'),
 );
@@ -781,6 +784,22 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="warehouse-management/other-outbound" element={withPageSuspense(OtherOutboundPage)} />
       <Route path="warehouse-management/material-borrows" element={withPageSuspense(MaterialBorrowsPage)} />
       <Route path="warehouse-management/material-returns" element={withPageSuspense(MaterialReturnsPage)} />
+      <Route
+        path="sales-management/outbound/sales-delivery/new"
+        element={withPageSuspense(SalesDeliveryFormPage)}
+      />
+      <Route
+        path="sales-management/outbound/sales-delivery/:id/edit"
+        element={withPageSuspense(SalesDeliveryFormPage)}
+      />
+      <Route
+        path="warehouse-management/outbound/sales-delivery/new"
+        element={withPageSuspense(SalesDeliveryFormPage)}
+      />
+      <Route
+        path="warehouse-management/outbound/sales-delivery/:id/edit"
+        element={withPageSuspense(SalesDeliveryFormPage)}
+      />
       <Route
         path="warehouse-management/outbound/entry/work-order/:woId"
         element={withPageSuspense(OutboundWorkOrderPullEntryPage)}

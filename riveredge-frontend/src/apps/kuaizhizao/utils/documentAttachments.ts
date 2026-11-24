@@ -155,6 +155,27 @@ export function mergeMaterialSourcesIntoLineAttachments(
   return next;
 }
 
+/** 列表/取单：从 attachments JSON 统计有效附件条数 */
+export function countDocumentAttachments(value: unknown): number {
+  if (!value || !Array.isArray(value)) {
+    return 0;
+  }
+  let count = 0;
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const row = item as DocumentAttachmentFile;
+    if (
+      row.uid ||
+      row.uuid ||
+      (row.name && String(row.name).trim()) ||
+      (row.url && String(row.url).trim())
+    ) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
 export function normalizeDocumentAttachments(list?: DocumentAttachmentFile[] | null) {
   return (list ?? []).map((file) => {
     const meta: Pick<DocumentAttachmentFile, 'kind' | 'source' | 'supplier_id'> = {};

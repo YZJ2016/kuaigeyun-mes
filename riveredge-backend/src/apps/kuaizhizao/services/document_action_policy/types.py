@@ -835,6 +835,8 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "batching_order.pull_from_work_order.no_shortage_lines": "工单无待备料缺料行",
     "work_order.push_finished_goods_receipt.not_allowed": "当前状态不可下推成品入库",
     "work_order.push_finished_goods_receipt.frozen": "工单已冻结，不可下推成品入库",
+    "finished_goods_inbound.pull.pick_incomplete": "事前领料未发齐，不可从工单取单成品入库",
+    "finished_goods_inbound.pull.operation_not_reported": "存在尚未报工的工序，不可从工单取单成品入库",
     "work_order.push_production_return.not_allowed": "当前状态不可下推生产退料",
     "work_order.push_production_return.frozen": "工单已冻结，不可下推生产退料",
     "work_order.push_production_return.no_returnable_lines": "工单无可退料明细",

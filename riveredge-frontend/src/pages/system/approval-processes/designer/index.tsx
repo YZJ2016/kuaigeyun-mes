@@ -14,8 +14,13 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormText } from '@ant-design/pro-components';
 import { App, Button, Form, Space, theme, Typography } from 'antd';
-import { 
-  SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, ReloadOutlined,
+import {
+  SaveOutlined,
+  CloseOutlined,
+  PlusOutlined,
+  DeleteOutlined,
+  ReloadOutlined,
+  CloudUploadOutlined,
 } from '@ant-design/icons';
 import { useNodesState, useEdgesState } from '@ant-design/pro-flow';
 import type { Node, Edge } from '@ant-design/pro-flow';
@@ -295,7 +300,8 @@ const ApprovalProcessDesignerPage: React.FC = () => {
         setNodeDataMap(built.latestMap);
       }
       await updateApprovalProcess(processUuid, { ...processData, nodes: built.graph });
-      messageApi.success(t('common.saveSuccess'));
+      messageApi.success(t('pages.approval.designer.saveDraftSuccess'));
+      messageApi.warning(t('pages.approval.designer.saveDraftNotPublishedHint'), 8);
       await loadProcessData();
     } catch (error: any) {
       messageApi.error(error.message || t('common.saveFailed'));
@@ -452,11 +458,24 @@ const ApprovalProcessDesignerPage: React.FC = () => {
         )}
       </Space>
       <Space>
-        <Button loading={saving} onClick={() => void handlePublish()}>
+        <Button
+          icon={<SaveOutlined />}
+          loading={saving}
+          onClick={() => void handleSave()}
+        >
+          {t('pages.approval.designer.saveDraft')}
+        </Button>
+        <Button icon={<CloseOutlined />} onClick={() => navigate('/system/approval-processes')}>
+          {t('common.close')}
+        </Button>
+        <Button
+          type="primary"
+          icon={<CloudUploadOutlined />}
+          loading={saving}
+          onClick={() => void handlePublish()}
+        >
           {t('pages.approval.designer.publishDraft')}
         </Button>
-        <Button icon={<CloseOutlined />} onClick={() => navigate('/system/approval-processes')}>{t('common.close')}</Button>
-        <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={() => void handleSave()}>{t('common.save')}</Button>
       </Space>
     </div>
   );

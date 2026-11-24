@@ -96,7 +96,7 @@ def test_dual_quantity_for_open_requisition_push_matches_group_remaining_aux():
 
 
 def test_split_requisition_material_group_qty_after_partial_po():
-    """拆行后开口展示：主副三元组按同物料组汇总（申请量不变、已转累加）。"""
+    """拆行后转单下推：组级副三元组仍按同物料汇总（非取单列表展示口径）。"""
     pushed_row = SimpleNamespace(id=101, quantity=2, aux_quantity=5, aux_unit="箱")
     remainder_row = SimpleNamespace(id=102, quantity=2, aux_quantity=5, aux_unit="箱")
     group_suggested = float(pushed_row.quantity + remainder_row.quantity)
@@ -110,6 +110,45 @@ def test_split_requisition_material_group_qty_after_partial_po():
     )
     assert unit == "箱"
     assert (aux_sug, aux_pushed, aux_rem) == (10.0, 6.0, 4.0)
+
+
+def test_requisition_pull_line_qty_per_item_not_grouped():
+    """同物料多行：取单列表按各行 quantity/占用独立算三元组，禁止组内汇总到列表。"""
+    line_a = SimpleNamespace(id=1, quantity=10, aux_quantity=5, aux_unit="箱")
+    line_b = SimpleNamespace(id=2, quantity=6, aux_quantity=3, aux_unit="箱")
+    sug_a, pushed_a, rem_a = build_partial_push_qty_triplet(
+        float(line_a.quantity), 0.0
+    )
+    sug_b, pushed_b, rem_b = build_partial_push_qty_triplet(
+        float(line_b.quantity), 2.0
+    )
+    assert (sug_a, pushed_a, rem_a) == (10.0, 0.0, 10.0)
+    assert (sug_b, pushed_b, rem_b) == (6.0, 2.0, 4.0)
+
+    row_a: dict = {}
+    row_b: dict = {}
+    enrich_pull_line_from_source_item(
+        row_a,
+        line_a,
+        suggested_primary=sug_a,
+        pushed_primary=pushed_a,
+        remaining_primary=rem_a,
+        occupied_aux_pushed=0,
+    )
+    enrich_pull_line_from_source_item(
+        row_b,
+        line_b,
+        suggested_primary=sug_b,
+        pushed_primary=pushed_b,
+        remaining_primary=rem_b,
+        occupied_aux_pushed=1,
+    )
+    assert row_a["suggested_quantity"] == 10
+    assert row_b["suggested_quantity"] == 6
+    assert row_a["suggested_aux_quantity"] == 5
+    assert row_b["suggested_aux_quantity"] == 3
+    assert row_b["pushed_aux_quantity"] == 1
+    assert row_b["remaining_aux_quantity"] == 2
 
 
 def test_merge_without_aux_unit_omits_aux_fields():

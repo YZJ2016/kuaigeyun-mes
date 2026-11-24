@@ -70,6 +70,8 @@ export interface InboundHubOrder {
   outsource_work_order_code?: string;
   warehouse_id?: number;
   warehouse_name?: string;
+  /** 外推金蝶单号（详情） */
+  kingdee_bill_no?: string | null;
   total_quantity?: number;
   /** 明细单位一致时的单位；不一致为 null */
   quantity_unit?: string | null;

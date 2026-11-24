@@ -43,6 +43,28 @@ def remaining_qty(suggested: Any, pushed: Any) -> float:
     return max(0.0, _f(suggested) - _f(pushed))
 
 
+def requisition_pull_display_group_key(
+    requisition_id: Any,
+    material_id: Any,
+    *,
+    required_date: Any = None,
+    notes: Any = None,
+    fallback_item_id: Optional[int] = None,
+) -> Tuple[int, int, str, str]:
+    """开口行取单/详情展示组：同申请同物料且交期+行备注一致的拆分行视为一条逻辑申请行。"""
+    rid = int(requisition_id or 0)
+    mid = int(material_id or 0)
+    rd = ""
+    if required_date is not None:
+        rd = str(required_date).strip()
+    nt = str(notes or "").strip() if notes is not None else ""
+    if mid > 0:
+        return rid, mid, rd, nt
+    if fallback_item_id is not None and int(fallback_item_id) > 0:
+        return rid, -int(fallback_item_id), rd, nt
+    return rid, 0, rd, nt
+
+
 def requisition_material_group_key(
     requisition_id: Any,
     material_id: Any,
@@ -87,9 +109,10 @@ def resolve_requisition_material_aux_triplet(
     line_fully_pushed: bool = False,
 ) -> Tuple[Optional[float], Optional[float], Optional[float], Optional[str]]:
     """
-    拆行后开口取单展示：副建议量按同物料各行相加，已转副量按各行 source 占用相加。
-    与主数量同组汇总口径一致（申请量不因拆行变小）。
-    例：主2副10 拆为 5+5，PO 占副6 → 建议10 / 已转6 / 可取4。
+    同申请同物料拆分行组：副建议量相加、已转副量按各行 source 占用相加。
+
+    用于转单下推副量与同展示组分组合汇总（取单列表 suggested/pushed/remaining 按展示组汇总）。
+    例：主2副10 拆为 5+5，PO 占副6 → 组内副剩余 4，用于本次下推按比例分摊。
     """
     suggested, aux_unit = sum_suggested_aux_for_requisition_material_items(group_items)
     if aux_unit is None or suggested is None:

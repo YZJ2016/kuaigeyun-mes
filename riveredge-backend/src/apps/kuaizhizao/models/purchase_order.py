@@ -93,6 +93,12 @@ class PurchaseOrder(BaseModel):
     payment_method_code = fields.CharField(
         max_length=50, null=True, description="付款方式（现金/转账/承兑等）"
     )
+    payment_wire_percent = fields.DecimalField(
+        max_digits=5, decimal_places=2, null=True, description="电汇比例（%，组合付款）"
+    )
+    payment_acceptance_percent = fields.DecimalField(
+        max_digits=5, decimal_places=2, null=True, description="承兑比例（%，组合付款）"
+    )
     settlement_terms_code = fields.CharField(
         max_length=50, null=True, description="结算方式（预付/账期/货到付款等）"
     )

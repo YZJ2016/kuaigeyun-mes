@@ -99,6 +99,23 @@ import {
 } from '../../../components/direct-push-bom-version/loadDirectPushBomMaterials';
 import { applyCustomerFormFields } from '../shared/applyCustomerFormFields';
 import {
+  SalesCustomerContactFormField,
+  SalesCustomerPartnerDetailBridge,
+  SalesCustomerPhoneFormField,
+  SalesCustomerShippingAddressFormField,
+} from '../shared/SalesCustomerContactAddressFormFields';
+import { useHydrateCustomerOnCreatePrefill } from '../../../../../utils/partnerFormPrefillHydration';
+import {
+  partnerPaymentMethodSelectOptions,
+  partnerSettlementTermsSelectOptions,
+} from '../../../../master-data/utils/partner-static-labels';
+import { PaymentMethodWithMixFormItems } from '../../../components/PaymentMethodWithMixFormItems';
+import { getBusinessConfig } from '../../../../../services/businessConfig';
+import {
+  buildRevenueLedgerRecognitionOptions,
+  orgFinanceRevenueDefault,
+} from '../../../../../utils/documentLedgerRecognition';
+import {
   SalesOrderPaymentMilestonesFields,
   SalesOrderContractTermsFields,
 } from '../shared/salesOrderTermsMilestonesFields';
@@ -860,7 +877,7 @@ const SalesOrdersPage: React.FC = () => {
     invoice: true,
   };
   // 与 UniTable viewTypes 同步：table=订单维度；其余视图键（明细表格、帮助）走明细数据维度
-  const salesOrderListPersistenceId = 'apps.kuaizhizao.pages.sales-management.sales-orders-width-v2';
+  const salesOrderListPersistenceId = 'apps.kuaizhizao.pages.sales-management.sales-orders-width-v3';
   const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>(() =>
     readPersistedUniTableViewType(salesOrderListPersistenceId, 'table', [
       'table',
@@ -1734,6 +1751,8 @@ const SalesOrdersPage: React.FC = () => {
         const c = customers.find(x => x.id === values.customer_id);
         if (c) values.customer_name = c.name;
       }
+      const headerCustomerOrderNo = String(values.customer_order_no ?? '').trim();
+      values.customer_order_no = headerCustomerOrderNo || undefined;
 
       // 销售员：后端只需 salesman_id 和 salesman_name
       // salesman_id 已经在表单中了，salesman_name 也在表单中（隐藏域）
@@ -1832,6 +1851,7 @@ const SalesOrdersPage: React.FC = () => {
           gift_ref_unit_price: giftFields.gift_ref_unit_price,
           notes: (it as any).notes,
           attachments: normalizeDocumentAttachments((it as any).attachments),
+          customer_order_no: headerCustomerOrderNo || undefined,
         };
       });
 
@@ -4184,6 +4204,14 @@ const SalesOrdersPage: React.FC = () => {
       ),
     },
     {
+      title: t('app.kuaizhizao.salesOrder.customerOrderNo'),
+      dataIndex: 'customer_order_no',
+      key: 'customer_order_no',
+      width: 140,
+      uniTableKeepWidth: true,
+      ellipsis: true,
+    },
+    {
       title: t('app.kuaizhizao.salesOrder.customerName'),
       dataIndex: 'customer_id',
       hideInTable: true,
@@ -4473,6 +4501,14 @@ const SalesOrdersPage: React.FC = () => {
           secondary={String(record.order_code ?? '')}
         />
       ),
+    },
+    {
+      title: t('app.kuaizhizao.salesOrder.customerOrderNo'),
+      dataIndex: 'customer_order_no',
+      key: 'customer_order_no',
+      width: 140,
+      uniTableKeepWidth: true,
+      ellipsis: true,
     },
     {
       title: t('app.kuaizhizao.salesOrder.customerName'),
@@ -4918,9 +4954,12 @@ const SalesOrdersPage: React.FC = () => {
                 const items = normalizeFormListItems<Record<string, unknown>>(
                   formRef.current?.getFieldValue('items'),
                 );
+                const cid = Number((c as { id?: number })?.id);
                 items.forEach((_, idx) => {
                   void repriceUnlockedSalesDocumentLineIfNeeded(formRef.current, idx, {
                     asOfField: 'order_date',
+                    trigger: 'partner',
+                    customerId: Number.isFinite(cid) && cid > 0 ? cid : undefined,
                   });
                 });
               }}
@@ -4930,7 +4969,14 @@ const SalesOrdersPage: React.FC = () => {
         <Col span={6}>
           <SalesOrderSalesmanField userList={users} loading={usersLoading} />
         </Col>
-        <Col span={6}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
+          <ProFormText
+            name="customer_order_no"
+            label={t('app.kuaizhizao.salesOrder.customerOrderNo')}
+            fieldProps={{ maxLength: 100 }}
+          />
+        </Col>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
           <ProFormDatePicker
             name="order_date"
             label={t('app.kuaizhizao.salesOrder.orderDate')}
@@ -5032,29 +5078,13 @@ const SalesOrdersPage: React.FC = () => {
             }}
           />
         </Col>
-        <Col span={3}>
-          <ProFormDependency name={['currency_code']}>
-            {({ currency_code }) => {
-              const code = String(currency_code ?? salesOrderBaseCurrency).trim().toUpperCase();
-              const isBaseCurrency = code === salesOrderBaseCurrency.trim().toUpperCase();
-              return (
-                <ProFormDigit
-                  name="exchange_rate"
-                  label={t('app.kuaizhizao.salesOrder.exchangeRate')}
-                  tooltip={t('app.kuaizhizao.salesOrder.exchangeRateHint')}
-                  initialValue={1}
-                  min={0.0001}
-                  max={9999.9999}
-                  fieldProps={{ precision: 4, disabled: isBaseCurrency }}
-                  rules={
-                    isBaseCurrency
-                      ? []
-                      : [{ required: true, message: t('app.kuaizhizao.salesOrder.exchangeRateRequired') }]
-                  }
-                />
-              );
-            }}
-          </ProFormDependency>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
+          <PaymentMethodWithMixFormItems
+            formRef={formRef}
+            options={salesOrderPaymentMethodOptions}
+            methodLabel={t('app.kuaizhizao.salesOrder.paymentMethod')}
+            methodPlaceholder={t('app.kuaizhizao.salesOrder.selectPaymentMethod')}
+          />
         </Col>
       </Row>
           </div>
@@ -5120,6 +5150,20 @@ const SalesOrdersPage: React.FC = () => {
                 </Space>
               );
               const orderDetailColumns = [
+                    {
+                      title: t('app.kuaizhizao.salesOrder.customerOrderNo'),
+                      dataIndex: 'customer_order_no',
+                      width: 128,
+                      ...DOCUMENT_DETAIL_TEXT_COL,
+                      render: (_: unknown, __: unknown, _index: number) => (
+                        <AntForm.Item noStyle shouldUpdate>
+                          {({ getFieldValue }) => {
+                            const header = String(getFieldValue('customer_order_no') ?? '').trim();
+                            return header || '—';
+                          }}
+                        </AntForm.Item>
+                      ),
+                    },
                     {
                       title: productColumnTitle,
                       dataIndex: 'material_id',

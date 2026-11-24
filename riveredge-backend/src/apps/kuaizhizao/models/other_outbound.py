@@ -20,6 +20,13 @@ class OtherOutbound(BaseModel):
     tenant_id = fields.IntField(description="租户ID")
     outbound_code = fields.CharField(max_length=50, db_index=True, description="出库单编码")  # 租户内未删除唯一，见迁移 462
 
+    outbound_type = fields.CharField(
+        max_length=20,
+        null=True,
+        default="物料出库",
+        description="出库类型（物料出库/资产出库；空则外推按行类别推断）",
+    )
+
     # 出库原因
     reason_type = fields.CharField(max_length=20, description="原因类型：盘亏/样品/报废/其他")
     reason_desc = fields.TextField(null=True, description="原因说明")

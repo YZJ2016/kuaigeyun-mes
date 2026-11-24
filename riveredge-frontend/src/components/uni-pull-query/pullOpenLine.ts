@@ -28,6 +28,17 @@ export function isPullRequisitionOpenLineSelectable(row: PullRequisitionOpenLine
   return row.can_push === true && isPullOpenLineSelectable(row);
 }
 
+export type PullWorkOrderFgInboundLineRow = PullOpenLineQtyRow & {
+  can_push?: boolean | null;
+};
+
+/** 成品入库从工单取单：剩余量 + 领料/报工门禁 */
+export function isPullWorkOrderFgLineSelectable(row: PullWorkOrderFgInboundLineRow): boolean {
+  if (row.can_push === false) return false;
+  if (row.can_push === true) return isPullOpenLineSelectable(row);
+  return isPullOpenLineSelectable(row);
+}
+
 /** 与 isRowDisabled 对接：不可选时返回 true */
 export function isPullOpenLineRowDisabled(row: PullOpenLineQtyRow): boolean {
   return !isPullOpenLineSelectable(row);

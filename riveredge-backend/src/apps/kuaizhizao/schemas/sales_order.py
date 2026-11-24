@@ -10,7 +10,7 @@ Date: 2026-01-19
 from __future__ import annotations
 
 from datetime import datetime, date
-from typing import Optional, List
+from typing import Any, Optional, List
 from decimal import Decimal
 from pydantic import Field, field_validator, model_validator
 from core.schemas.base import BaseSchema
@@ -118,6 +118,7 @@ class SalesOrderItemResponse(SalesOrderItemBase):
     delivery_status: Optional[str] = Field(None, max_length=20, description="交货状态")
     work_order_id: Optional[int] = Field(None, description="工单ID")
     work_order_code: Optional[str] = Field(None, max_length=50, description="工单编码")
+    customer_order_no: Optional[str] = Field(None, max_length=100, description="客户订单号（表头同步，只读）")
     price_settled_at: Optional[datetime] = Field(None, description="定价时间")
     price_settled_by: Optional[int] = Field(None, description="定价人ID")
     created_at: datetime
@@ -141,6 +142,7 @@ class SalesOrderBase(BaseSchema):
     customer_name: str = Field(..., max_length=200, description="客户名称")
     customer_contact: Optional[str] = Field(None, max_length=100, description="客户联系人")
     customer_phone: Optional[str] = Field(None, max_length=20, description="客户电话")
+    customer_order_no: Optional[str] = Field(None, max_length=100, description="客户订单号")
     
     # 金额信息
     total_quantity: Decimal = Field(Decimal("0"), ge=0, description="总数量")
@@ -168,7 +170,20 @@ class SalesOrderBase(BaseSchema):
     # 物流信息
     shipping_address: Optional[str] = Field(None, description="收货地址")
     shipping_method: Optional[str] = Field(None, max_length=50, description="发货方式")
-    payment_terms: Optional[str] = Field(None, max_length=100, description="付款条件")
+    payment_method_code: Optional[str] = Field(
+        None, max_length=50, description="付款方式（现金/转账/承兑等）"
+    )
+    payment_wire_percent: Optional[Decimal] = Field(
+        None, ge=0, le=100, description="电汇比例（%）"
+    )
+    payment_acceptance_percent: Optional[Decimal] = Field(
+        None, ge=0, le=100, description="承兑比例（%）"
+    )
+    settlement_terms_code: Optional[str] = Field(
+        None, max_length=50, description="结算方式（预付/账期/货到付款等）"
+    )
+    payment_terms_days: Optional[int] = Field(None, ge=0, description="付款周期（天）")
+    payment_terms: Optional[str] = Field(None, max_length=100, description="付款周期（历史）")
     contract_id: Optional[int] = Field(None, description="关联销售合同ID")
     contract_code: Optional[str] = Field(None, max_length=50, description="关联销售合同编码")
     is_release_order: bool = Field(False, description="是否为框架合同释放单")
@@ -188,6 +203,37 @@ class SalesOrderBase(BaseSchema):
     # 费用信息
     fee_details: Optional[List[dict]] = Field(None, description="费用明细 (JSON)")
     total_fee_amount: Decimal = Field(Decimal("0"), ge=0, description="总费用金额")
+
+    @field_validator("payment_method_code", mode="before")
+    @classmethod
+    def validate_payment_method_code(cls, v):
+        from apps.master_data.config.partner_settlement_codes import coerce_partner_payment_method_code
+
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        coerced = coerce_partner_payment_method_code(v)
+        if coerced is None:
+            raise ValueError("无效的付款方式")
+        return coerced
+
+    @field_validator("settlement_terms_code", mode="before")
+    @classmethod
+    def validate_settlement_terms_code(cls, v):
+        from apps.master_data.config.partner_settlement_codes import coerce_partner_settlement_terms_code
+
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        coerced = coerce_partner_settlement_terms_code(v)
+        if coerced is None:
+            raise ValueError("无效的结算方式")
+        return coerced
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_payment_method_mix_fields(cls, data: Any) -> Any:
+        from apps.master_data.config.payment_method_mix import apply_payment_method_mix_to_mapping
+
+        return apply_payment_method_mix_to_mapping(data)
 
 
 class SalesOrderCreate(SalesOrderBase):
@@ -243,6 +289,7 @@ class SalesOrderUpdate(BaseSchema):
     customer_name: Optional[str] = Field(None, max_length=200)
     customer_contact: Optional[str] = Field(None, max_length=100)
     customer_phone: Optional[str] = Field(None, max_length=20)
+    customer_order_no: Optional[str] = Field(None, max_length=100, description="客户订单号")
     total_quantity: Optional[Decimal] = Field(None, ge=0)
     total_amount: Optional[Decimal] = Field(None, ge=0)
     price_type: Optional[str] = Field(None, max_length=20)
@@ -251,6 +298,11 @@ class SalesOrderUpdate(BaseSchema):
     salesman_name: Optional[str] = Field(None, max_length=100)
     shipping_address: Optional[str] = None
     shipping_method: Optional[str] = Field(None, max_length=50)
+    payment_method_code: Optional[str] = Field(None, max_length=50)
+    payment_wire_percent: Optional[Decimal] = Field(None, ge=0, le=100)
+    payment_acceptance_percent: Optional[Decimal] = Field(None, ge=0, le=100)
+    settlement_terms_code: Optional[str] = Field(None, max_length=50)
+    payment_terms_days: Optional[int] = Field(None, ge=0)
     payment_terms: Optional[str] = Field(None, max_length=100)
     currency_code: Optional[str] = Field(None, max_length=20)
     exchange_rate: Optional[Decimal] = Field(None, gt=0)
@@ -262,6 +314,37 @@ class SalesOrderUpdate(BaseSchema):
     contract_terms: Optional[List[SalesContractTermSnapshot]] = None
     items: Optional[List[SalesOrderItemCreate]] = None
     payment_milestones: Optional[List[SalesOrderMilestoneCreate]] = None
+
+    @field_validator("payment_method_code", mode="before")
+    @classmethod
+    def validate_payment_method_code(cls, v):
+        from apps.master_data.config.partner_settlement_codes import coerce_partner_payment_method_code
+
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        coerced = coerce_partner_payment_method_code(v)
+        if coerced is None:
+            raise ValueError("无效的付款方式")
+        return coerced
+
+    @field_validator("settlement_terms_code", mode="before")
+    @classmethod
+    def validate_settlement_terms_code(cls, v):
+        from apps.master_data.config.partner_settlement_codes import coerce_partner_settlement_terms_code
+
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        coerced = coerce_partner_settlement_terms_code(v)
+        if coerced is None:
+            raise ValueError("无效的结算方式")
+        return coerced
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_payment_method_mix_fields(cls, data: Any) -> Any:
+        from apps.master_data.config.payment_method_mix import apply_payment_method_mix_to_mapping
+
+        return apply_payment_method_mix_to_mapping(data, skip_when_all_missing=True)
 
 
 class SalesOrderResponse(SalesOrderBase):

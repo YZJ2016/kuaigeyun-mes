@@ -16,19 +16,34 @@ export function clearDocumentLineUnitPriceLock<T extends Record<string, unknown>
   return next;
 }
 
+function lineUnitPricePositive(line: Record<string, unknown>): boolean {
+  const up = Number(line.unit_price ?? line.unitPrice ?? line.suggested_unit_price ?? line.suggestedUnitPrice);
+  return Number.isFinite(up) && up > 0;
+}
+
 export function isDocumentLineUnitPriceLocked(line: Record<string, unknown> | null | undefined): boolean {
   if (!line || typeof line !== 'object') return false;
-  if (line.source_line_id != null && String(line.source_line_id).trim() !== '') return true;
-  if (line.sourceLineId != null && String(line.sourceLineId).trim() !== '') return true;
-  if (line.source_document_line_id != null && String(line.source_document_line_id).trim() !== '') return true;
-  if (line.sourceDocumentLineId != null && String(line.sourceDocumentLineId).trim() !== '') return true;
+  if (line.source_line_id != null && String(line.source_line_id).trim() !== '') {
+    return lineUnitPricePositive(line);
+  }
+  if (line.sourceLineId != null && String(line.sourceLineId).trim() !== '') {
+    return lineUnitPricePositive(line);
+  }
+  if (line.source_document_line_id != null && String(line.source_document_line_id).trim() !== '') {
+    return lineUnitPricePositive(line);
+  }
+  if (line.sourceDocumentLineId != null && String(line.sourceDocumentLineId).trim() !== '') {
+    return lineUnitPricePositive(line);
+  }
   const srcType = line.source_document_type ?? line.sourceDocumentType ?? line.source_type ?? line.sourceType;
   const srcId = line.source_document_id ?? line.sourceDocumentId ?? line.source_id ?? line.sourceId;
   if (srcType != null && String(srcType).trim() !== '' && srcId != null && String(srcId).trim() !== '') {
-    return true;
+    return lineUnitPricePositive(line);
   }
   const srcCode = line.source_document_code ?? line.sourceDocumentCode ?? line.source_order_code ?? line.sourceOrderCode;
-  if (srcCode != null && String(srcCode).trim() !== '') return true;
+  if (srcCode != null && String(srcCode).trim() !== '') {
+    return lineUnitPricePositive(line);
+  }
   if (line.pricing_locked === true || line[DOCUMENT_LINE_UNIT_PRICE_LOCKED_KEY] === true) return true;
   const salesDeliveryItemId = line.sales_delivery_item_id ?? line.salesDeliveryItemId;
   if (salesDeliveryItemId != null && String(salesDeliveryItemId).trim() !== '' && Number(salesDeliveryItemId) > 0) {

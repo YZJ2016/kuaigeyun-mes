@@ -36,6 +36,21 @@ def _parse_material_units_cfg(units_cfg: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _allowed_inventory_units(base_unit: str, units_cfg: Optional[Dict[str, Any]]) -> set[str]:
+    """与 validate_material_inventory_unit 一致：基础单位 + 固定换算副单位。"""
+    allowed = {base_unit} if base_unit else set()
+    if not units_cfg:
+        return allowed
+    for row in units_cfg.get("units") or []:
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("unit") or "").strip()
+        if not name or is_floating_aux_unit_row(row):
+            continue
+        allowed.add(name)
+    return allowed
+
+
 def resolve_material_inventory_unit(material: Any) -> str:
     """库存单位（金蝶 FStockUnit）；缺省等于基础单位。
 
@@ -45,22 +60,19 @@ def resolve_material_inventory_unit(material: Any) -> str:
     if material is None:
         return ""
     base_unit = str(getattr(material, "base_unit", None) or "").strip()
-    inv = str(getattr(material, "inventory_unit", None) or "").strip()
-    if inv:
-        return inv
     units_cfg = _parse_material_units_cfg(getattr(material, "units", None))
+    allowed = _allowed_inventory_units(base_unit, units_cfg)
+
+    inv = str(getattr(material, "inventory_unit", None) or "").strip()
+    if inv and (not base_unit or inv == base_unit or inv in allowed):
+        return inv
+
     if units_cfg:
         scenarios = units_cfg.get("scenarios") or {}
         if isinstance(scenarios, dict):
             mapped = scenarios.get("inventory")
             if mapped is not None and str(mapped).strip():
                 unit = str(mapped).strip()
-                allowed = {base_unit} if base_unit else set()
-                for row in units_cfg.get("units") or []:
-                    if isinstance(row, dict):
-                        name = str(row.get("unit") or "").strip()
-                        if name:
-                            allowed.add(name)
                 if unit in allowed:
                     return unit
     return base_unit

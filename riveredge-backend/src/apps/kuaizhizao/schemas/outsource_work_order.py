@@ -219,6 +219,18 @@ class OutsourceMaterialIssuePreviewResponse(BaseModel):
     planned_start_date: Optional[datetime] = Field(None, description="计划开始时间")
     planned_end_date: Optional[datetime] = Field(None, description="计划结束时间")
     quantity: Decimal = Field(..., description="委外数量")
+    issued_batch_quantity: Decimal = Field(
+        Decimal("0"),
+        description="已累计发料套数",
+    )
+    pending_batch_quantity: Decimal = Field(
+        Decimal("0"),
+        description="待发料套数",
+    )
+    suggested_batch_quantity: Decimal = Field(
+        Decimal("0"),
+        description="本次建议发料套数",
+    )
     lines: List[OutsourceMaterialIssuePreviewLine] = Field(default_factory=list)
     message: Optional[str] = Field(None, description="提示信息")
     allow_manual_lines: bool = Field(

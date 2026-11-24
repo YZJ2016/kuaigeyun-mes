@@ -1159,10 +1159,16 @@ class ApprovalInstanceService:
             from core.services.authorization.user_permission_service import UserPermissionService
 
             admin_bypass = False
+            admin_revoke_bypass = False
             has_revoke = False
             user = await User.get_or_none(id=int(viewer_id))
             if user:
+                from core.services.approval.admin_revoke_policy import resolve_admin_revoke_bypass
+
                 admin_bypass = await UserPermissionService.is_admin_bypass(user, tenant_id)
+                admin_revoke_bypass = await resolve_admin_revoke_bypass(
+                    tenant_id=tenant_id, user=user
+                )
             entry = entry_by_entity_type(entity_type)
             if entry and user:
                 revoke_code = f"{entry.resource}:revoke"
@@ -1181,7 +1187,8 @@ class ApprovalInstanceService:
                 process_nodes=process.nodes if process else {},
                 history=withdraw_history,
                 admin_bypass=admin_bypass,
-                has_revoke_permission=has_revoke or admin_bypass,
+                admin_revoke_bypass=admin_revoke_bypass,
+                has_revoke_permission=has_revoke or admin_revoke_bypass,
             )
             viewer_can_revoke = bool(flow_flags["viewer_can_revoke"])
             viewer_can_withdraw_submit = bool(flow_flags["viewer_can_withdraw_submit"])
@@ -1466,9 +1473,13 @@ class ApprovalInstanceService:
 
         user = await User.get_or_none(id=int(viewer_id))
         admin_bypass = False
+        admin_revoke_bypass = False
         has_revoke = False
         if user:
+            from core.services.approval.admin_revoke_policy import resolve_admin_revoke_bypass
+
             admin_bypass = await UserPermissionService.is_admin_bypass(user, tenant_id)
+            admin_revoke_bypass = await resolve_admin_revoke_bypass(tenant_id=tenant_id, user=user)
         entry = entry_by_entity_type(entity_type)
         if entry and user:
             has_revoke = await UserPermissionService.has_permission(
@@ -1487,7 +1498,8 @@ class ApprovalInstanceService:
                 process_nodes=process.nodes if process else {},
                 history=history_by_inst.get(int(instance.id), []),
                 admin_bypass=admin_bypass,
-                has_revoke_permission=has_revoke or admin_bypass,
+                admin_revoke_bypass=admin_revoke_bypass,
+                has_revoke_permission=has_revoke or admin_revoke_bypass,
             )
             out[eid] = flags
         return out
@@ -2650,6 +2662,9 @@ class ApprovalInstanceService:
         node_completed, instance_status = await ApprovalInstanceService._check_node_completion(
             instance
         )
+        # 节点完成后推进/驳回到上级时，_create_node_tasks(notify_pending_approvers=True)
+        # 已异步发过待办通知；勿再在操作通知里重复 _notify_pending_approvers。
+        skip_pending_approver_notify = False
         if node_completed:
             if (
                 action_data.action == "reject"
@@ -2663,6 +2678,7 @@ class ApprovalInstanceService:
                     comment=action_data.comment,
                     previous_node_id=str((reject_options or {}).get("previous_node_id") or ""),
                 )
+                skip_pending_approver_notify = True
             else:
                 await ApprovalInstanceService._advance_instance_after_node_completion(
                     tenant_id,
@@ -2670,7 +2686,23 @@ class ApprovalInstanceService:
                     instance_status,
                     route_action_by=user_id if action_data.action == "approve" else None,
                 )
+                skip_pending_approver_notify = True
 
+        from apps.kuaizhizao.services.menu_badge_counts_cache import (
+            touch_kuaizhizao_menu_badges_for_tenant,
+        )
+
+        touch_kuaizhizao_menu_badges_for_tenant(int(tenant_id))
+        await instance.refresh_from_db()
+        ApprovalInstanceService._schedule_approval_action_notifications(
+            tenant_id=tenant_id,
+            approval_instance_id=int(instance.id),
+            user_id=user_id,
+            action=action_data,
+            old_status=old_status,
+            old_current_approver_id=old_current_approver_id,
+            skip_pending_approver_notify=skip_pending_approver_notify,
+        )
         return instance
 
     @staticmethod
@@ -2878,6 +2910,10 @@ class ApprovalInstanceService:
             or (node_data or {}).get("empty_approver_policy")
             or "block"
         ).strip().lower()
+        # 直属上级没有负责人、多级上级层级不够：跳过本节点，流程继续。
+        # 节点上显式写了升级管理员或兜底审批人时仍走那一项。
+        if approver_type in ("manager", "multi_level_manager") and empty_policy == "block":
+            empty_policy = "auto_pass"
 
         try:
             approvers = await ApprovalInstanceService._resolve_node_approvers(node, instance)
@@ -2981,6 +3017,26 @@ class ApprovalInstanceService:
                 )
             # 解析结果只有制单人时留在本节点审批。
             # 不得因剔除后名单为空走空审批人自动通过，把整单审过。
+        # 本节点解析出的审批人若均已在前序审批节点通过，自动跳过（避免同人连审两级）
+        if await ApprovalInstanceService._node_would_auto_pass_same_prior_approver(
+            tenant_id,
+            node,
+            instance,
+            known_approvers=approvers,
+        ):
+            logger.info(
+                "审批节点 {} 审批人与前序已通过人相同，自动跳过: {}",
+                node_id,
+                approvers,
+            )
+            return await ApprovalInstanceService._auto_pass_empty_approval_node(
+                tenant_id,
+                instance,
+                node,
+                on_missing_branch=on_missing_branch,
+                notify_pending_approvers=notify_pending_approvers,
+                comment="与前序节点审批人相同，自动跳过",
+            )
 
         tasks = await ApprovalInstanceService._sync_node_approver_tasks(
             tenant_id, instance, node, approvers
@@ -3014,6 +3070,72 @@ class ApprovalInstanceService:
         return list(dict.fromkeys(int(uid) for uid in rows if uid is not None))
 
     @staticmethod
+    async def _prior_approved_approver_ids(
+        tenant_id: int,
+        instance: ApprovalInstance,
+        *,
+        exclude_node_id: Optional[str] = None,
+        extra_user_ids: Optional[List[int]] = None,
+    ) -> set[int]:
+        """本实例中已在审批节点通过的审批人（可排除当前节点，可并入即将通过的人）。"""
+        rows = await ApprovalTask.filter(
+            tenant_id=tenant_id,
+            approval_instance_id=int(instance.id),
+            status="approved",
+        )
+        out: set[int] = set()
+        for row in rows:
+            if exclude_node_id and str(row.node_id or "") == str(exclude_node_id):
+                continue
+            try:
+                out.add(int(row.approver_id))
+            except (TypeError, ValueError):
+                continue
+        for uid in extra_user_ids or []:
+            try:
+                out.add(int(uid))
+            except (TypeError, ValueError):
+                continue
+        return out
+
+    @staticmethod
+    async def _node_would_auto_pass_same_prior_approver(
+        tenant_id: int,
+        node: dict,
+        instance: ApprovalInstance,
+        *,
+        known_approvers: Optional[List[int]] = None,
+        treating_as_approved: Optional[int] = None,
+    ) -> bool:
+        """
+        本节点解析审批人若均已在前序节点通过（或将视为刚通过），则应自动跳过。
+        用于：创建任务时跳过同人连审；前一节点通过时提前要求选后续分支。
+        """
+        node_type = node.get("type") or (node.get("data") or {}).get("type")
+        if str(node_type or "") != "approval":
+            return False
+        node_id = str(node.get("id") or "")
+        approvers = known_approvers
+        if approvers is None:
+            try:
+                approvers = await ApprovalInstanceService._resolve_node_approvers(
+                    node, instance
+                )
+            except ValidationError:
+                return False
+        if not approvers:
+            return False
+        prior = await ApprovalInstanceService._prior_approved_approver_ids(
+            tenant_id,
+            instance,
+            exclude_node_id=node_id or None,
+            extra_user_ids=[treating_as_approved] if treating_as_approved else None,
+        )
+        if not prior:
+            return False
+        return all(int(uid) in prior for uid in approvers)
+
+    @staticmethod
     async def _auto_pass_empty_approval_node(
         tenant_id: int,
         instance: ApprovalInstance,
@@ -3041,17 +3163,31 @@ class ApprovalInstanceService:
             )
             if route_mode == "previous_approver":
                 inst_data = instance.data if isinstance(instance.data, dict) else {}
+                cond_id = str(next_structural.get("id") or "")
+                edge_count = len(edges) or 2
                 if ApprovalInstanceService._read_branch_edge_index(
                     inst_data,
-                    str(next_structural.get("id") or ""),
-                    len(edges) or 2,
+                    cond_id,
+                    edge_count,
                 ) is None:
-                    node_label = ApprovalInstanceService._node_display_label(node) or str(node_id)
-                    cond_label = ApprovalInstanceService._node_display_label(next_structural) or "后续分支"
-                    raise ValidationError(
-                        f"节点「{node_label}」无审批人，无法自动跳过："
-                        f"须由上一节点审批人在审核时选择「{cond_label}」，禁止默认跳转"
+                    spec = ApprovalInstanceService._infer_decision_spec_from_condition_node(
+                        nodes_config, next_structural
                     )
+                    default_index = spec.get("defaultValue") if isinstance(spec, dict) else None
+                    if default_index is None:
+                        node_label = ApprovalInstanceService._node_display_label(node) or str(node_id)
+                        cond_label = ApprovalInstanceService._node_display_label(next_structural) or "后续分支"
+                        raise ValidationError(
+                            f"节点「{node_label}」无法自动跳过："
+                            f"须由上一节点审批人在审核时选择「{cond_label}」，禁止默认跳转"
+                        )
+                    chosen = int(default_index)
+                    data = dict(inst_data)
+                    data[ApprovalInstanceService._condition_branch_index_key(cond_id)] = chosen
+                    if edge_count == 2:
+                        data[ApprovalInstanceService._condition_branch_route_key(cond_id)] = chosen == 0
+                    instance.data = data
+                    await instance.save(update_fields=["data", "updated_at"])
         await ApprovalInstanceService._create_approval_history(
             tenant_id=tenant_id,
             approval_instance_id=instance.id,
@@ -3278,6 +3414,48 @@ class ApprovalInstanceService:
         """同一人已在前序节点通过时，不再自动通过本节点。保留签名供调用方兼容。"""
         del tenant_id, node, instance, known_approvers, treating_as_approved
         return False
+    async def _ensure_document_owner_user_id(instance: ApprovalInstance) -> int:
+        """
+        组织审批锚点用户：优先 instance.data.document_owner_id / created_by，
+        再查单据制单人，最后才回落 instance.submitter_id（点击提交人）。
+        """
+        data = instance.data if isinstance(instance.data, dict) else {}
+        for key in ("document_owner_id", "created_by"):
+            raw = data.get(key)
+            try:
+                uid = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if uid > 0:
+                return uid
+
+        entity_type = str(data.get("entity_type") or "").strip()
+        entity_id_raw = data.get("entity_id")
+        try:
+            entity_id = int(entity_id_raw) if entity_id_raw is not None else 0
+        except (TypeError, ValueError):
+            entity_id = 0
+        if entity_type and entity_id > 0:
+            owner = await ApprovalInstanceService._lookup_document_created_by(
+                int(instance.tenant_id), entity_type, entity_id
+            )
+            if owner:
+                new_data = dict(data)
+                new_data["document_owner_id"] = int(owner)
+                if "created_by" not in new_data:
+                    new_data["created_by"] = int(owner)
+                instance.data = new_data
+                try:
+                    await instance.save(update_fields=["data", "updated_at"])
+                except Exception as exc:
+                    logger.warning(
+                        "回写 document_owner_id 失败 instance={}: {}",
+                        getattr(instance, "id", None),
+                        exc,
+                    )
+                return int(owner)
+
+        return int(instance.submitter_id)
 
     @staticmethod
     async def _resolve_managers_for_department_uuids(
@@ -3769,6 +3947,8 @@ class ApprovalInstanceService:
             or (node_data or {}).get("empty_approver_policy")
             or "block"
         ).strip().lower()
+        if approver_type in ("manager", "multi_level_manager") and empty_policy == "block":
+            empty_policy = "auto_pass"
         try:
             approvers = await ApprovalInstanceService._resolve_node_approvers(node, instance)
         except ValidationError as resolve_err:
@@ -3960,9 +4140,11 @@ class ApprovalInstanceService:
         支持：user（指定用户）、role（角色）、department（部门负责人）、manager（直属上级）、
         multi_level_manager（沿部门树第 N 级负责人；不足 N 级返回空列表）、
         initiator_select / form / form_select / selected（发起时勾选快照）。
-        找不到有效审批人时抛 ValidationError，禁止回落到提交人。
-        multi_level_manager 名单为空时不在这里抛错，由创建任务侧按 emptyApproverPolicy 处理：
-        block 阻断，auto_pass 才自动通过。
+        指定用户、角色、部门找不到人时抛 ValidationError，不回落提交人。
+        直属上级没有可用负责人时抛出无人可审，由创建任务侧按自动跳过继续流转。
+        multi_level_manager 不足级数返回空列表，由创建任务侧跳过。
+        manager / multi_level_manager / department(submitter 范围) 以制单人（document_owner）为组织锚点，
+        不以点击提交人 submitter_id 为准（代提/撤回重提场景）。
         """
         node_data = node.get("data", {})
         node_id = str(node.get("id") or "")
@@ -4436,6 +4618,87 @@ class ApprovalInstanceService:
         return f"/personal/tasks?highlight={instance.id}"
 
     @staticmethod
+    def _schedule_approval_action_notifications(
+        *,
+        tenant_id: int,
+        approval_instance_id: int,
+        user_id: int,
+        action: "ApprovalInstanceAction",
+        old_status: str,
+        old_current_approver_id: Optional[int],
+        skip_pending_approver_notify: bool = False,
+    ) -> None:
+        """任务式审批完成后：站内信副作用 + 企微可更新卡片同步（须脱离事务）。"""
+
+        async def _run() -> None:
+            instance = await ApprovalInstance.filter(
+                tenant_id=tenant_id,
+                id=approval_instance_id,
+                deleted_at__isnull=True,
+            ).first()
+            if not instance:
+                return
+            await ApprovalInstanceService._send_approval_action_notification(
+                tenant_id=tenant_id,
+                approval_instance=instance,
+                action=action,
+                user_id=user_id,
+                old_status=old_status,
+                old_current_approver_id=old_current_approver_id,
+                skip_pending_approver_notify=skip_pending_approver_notify,
+            )
+
+        ApprovalInstanceService._spawn_background(_run())
+
+    @staticmethod
+    async def _sync_approval_wecom_cards_after_action(
+        *,
+        tenant_id: int,
+        approval_instance: ApprovalInstance,
+    ) -> None:
+        """审批操作后更新企微待办卡为已通过/已驳回/已处理等状态。"""
+        from core.models.approval_wecom_card import ApprovalWecomCard
+        from core.services.messaging.approval_wecom_card_service import (
+            invalidate_approval_wecom_cards,
+            invalidate_approval_wecom_cards_for_users,
+        )
+
+        if approval_instance.status == "rejected":
+            await invalidate_approval_wecom_cards(
+                tenant_id=tenant_id,
+                approval_instance_id=int(approval_instance.id),
+                status_label="已驳回",
+            )
+        elif approval_instance.status == "approved":
+            await invalidate_approval_wecom_cards(
+                tenant_id=tenant_id,
+                approval_instance_id=int(approval_instance.id),
+                status_label="已通过",
+            )
+        elif approval_instance.status == "pending":
+            pending_ids = await ApprovalInstanceService._pending_approver_ids_for_instance(
+                tenant_id, approval_instance
+            )
+            active_rows = await ApprovalWecomCard.filter(
+                tenant_id=tenant_id,
+                approval_instance_id=approval_instance.id,
+                status="active",
+                deleted_at__isnull=True,
+            ).all()
+            stale_ids = [
+                int(r.recipient_user_id)
+                for r in active_rows
+                if int(r.recipient_user_id) not in set(pending_ids)
+            ]
+            if stale_ids:
+                await invalidate_approval_wecom_cards_for_users(
+                    tenant_id=tenant_id,
+                    approval_instance_id=int(approval_instance.id),
+                    recipient_user_ids=stale_ids,
+                    status_label="已处理",
+                )
+
+    @staticmethod
     async def _send_internal_to_user(
         *,
         tenant_id: int,
@@ -4734,7 +4997,9 @@ class ApprovalInstanceService:
         action: ApprovalInstanceAction,
         user_id: int,
         old_status: str,
-        old_current_approver_id: Optional[int]
+        old_current_approver_id: Optional[int],
+        *,
+        skip_pending_approver_notify: bool = False,
     ) -> None:
         """
         审批操作通知（站内信，少打扰）：
@@ -4784,8 +5049,21 @@ class ApprovalInstanceService:
                     },
                 )
 
-            if (
-                approval_instance.current_approver_id
+            try:
+                await ApprovalInstanceService._sync_approval_wecom_cards_after_action(
+                    tenant_id=tenant_id,
+                    approval_instance=approval_instance,
+                )
+            except Exception as wecom_card_exc:
+                logger.warning(
+                    "审批操作后失效企微卡失败 instance={}: {}",
+                    approval_instance.id,
+                    wecom_card_exc,
+                )
+
+            if not skip_pending_approver_notify and (
+                approval_instance.status == "pending"
+                and approval_instance.current_approver_id
                 and approval_instance.current_approver_id != old_current_approver_id
                 and approval_instance.status == "pending"
             ):
@@ -5390,6 +5668,122 @@ class ApprovalInstanceService:
                     )
                 logger.info(f"采购发票 {entity_id} 审批回调完成: {approval_instance.status}")
 
+            async def _handle_payment_application() -> None:
+                from apps.kuaizhizao.services.payment_application_service import (
+                    PaymentApplicationService,
+                )
+
+                if not entity_id:
+                    return
+                service = PaymentApplicationService()
+                if approval_instance.status == "approved":
+                    await service.approve_application(
+                        tenant_id,
+                        int(entity_id),
+                        approved=True,
+                        approved_by=int(approver_id),
+                        is_auto_approve=True,
+                    )
+                elif approval_instance.status == "rejected":
+                    await service.approve_application(
+                        tenant_id,
+                        int(entity_id),
+                        approved=False,
+                        approved_by=int(approver_id),
+                        review_remarks="审批驳回",
+                        is_auto_approve=True,
+                    )
+                logger.info(
+                    f"付款申请 {entity_id} 审批回调完成: {approval_instance.status}"
+                )
+
+            async def _handle_other_expense_application() -> None:
+                from apps.kuaizhizao.services.other_expense_application_service import (
+                    OtherExpenseApplicationService,
+                )
+
+                if not entity_id:
+                    return
+                service = OtherExpenseApplicationService()
+                if approval_instance.status == "approved":
+                    await service.approve_application(
+                        tenant_id,
+                        int(entity_id),
+                        approved=True,
+                        operator_id=int(approver_id),
+                        is_auto_approve=True,
+                    )
+                elif approval_instance.status == "rejected":
+                    await service.approve_application(
+                        tenant_id,
+                        int(entity_id),
+                        approved=False,
+                        operator_id=int(approver_id),
+                        review_remarks="审批驳回",
+                        is_auto_approve=True,
+                    )
+                logger.info(
+                    f"其他费用支出申请 {entity_id} 审批回调完成: {approval_instance.status}"
+                )
+
+            async def _handle_other_expense() -> None:
+                from apps.kuaizhizao.services.other_expense_audit_service import (
+                    OtherExpenseAuditService,
+                )
+
+                if not entity_id:
+                    return
+                service = OtherExpenseAuditService()
+                if approval_instance.status == "approved":
+                    await service.approve_expense(
+                        tenant_id,
+                        int(entity_id),
+                        approver_id,
+                        approved=True,
+                        is_auto_approve=True,
+                    )
+                elif approval_instance.status == "rejected":
+                    await service.approve_expense(
+                        tenant_id,
+                        int(entity_id),
+                        approver_id,
+                        approved=False,
+                        review_remarks="审批驳回",
+                        is_auto_approve=True,
+                    )
+                logger.info(
+                    f"其他费用支出 {entity_id} 审批回调完成: {approval_instance.status}"
+                )
+
+            async def _handle_other_income() -> None:
+                from apps.kuaizhizao.services.other_income_audit_service import (
+                    OtherIncomeAuditService,
+                )
+
+                if not entity_id:
+                    return
+                service = OtherIncomeAuditService()
+                if approval_instance.status == "approved":
+                    await service.approve_income(
+                        tenant_id,
+                        int(entity_id),
+                        approver_id,
+                        approved=True,
+                        is_auto_approve=True,
+                    )
+                elif approval_instance.status == "rejected":
+                    await service.approve_income(
+                        tenant_id,
+                        int(entity_id),
+                        approver_id,
+                        approved=False,
+                        review_remarks="审批驳回",
+                        is_auto_approve=True,
+                    )
+                logger.info(
+                    f"其他费用收入 {entity_id} 审批回调完成: {approval_instance.status}"
+                )
+
             async def _handle_product_firmware() -> None:
                 from apps.kuaiplm.services.product_firmware_service import ProductFirmwareService
                 from infra.models.user import User
@@ -5902,8 +6296,9 @@ class ApprovalInstanceService:
                 "receivable": _handle_receivable,
                 "purchase_invoice": _handle_purchase_invoice,
                 "payment_application": _handle_payment_application,
-                "other_income": _handle_other_income,
                 "other_expense": _handle_other_expense,
+                "other_income": _handle_other_income,
+                "other_expense_application": _handle_other_expense_application,
                 "product_firmware": _handle_product_firmware,
                 "lab_request": _handle_lab_request,
                 "production_file": _handle_production_file,

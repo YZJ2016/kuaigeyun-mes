@@ -101,6 +101,16 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { OutsourceOrderReceiptBatchesSection, type OutsourceOrderReceiptBatchRow } from '../../../components/OutsourceOrderReceiptBatchesSection';
 import { buildOutsourceCreateFormDefaults } from '../../../utils/outsourceCreateFormDefaults';
+import { useOptionalLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
+import {
+  OutsourceOrderProgressButtons,
+  OutsourceOrderRegisterReceiptModal,
+  appendOutsourceOrderProgressRowActions,
+  buildOutsourceOrderProgressToolbarActions,
+  useOutsourceOrderProgressHandlers,
+  type OutsourceOrderProgressRecord,
+} from '../../../components/OutsourceOrderProgressKit';
+import { OutsourceOrderProcessIssueModal } from '../../../components/OutsourceOrderProcessIssueModal';
 import { OutsourceOrderCreateFromSourceForm } from '../../../components/OutsourceOrderCreateFromSourceForm';
 const OUTSOURCE_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_outsource_orders';
 const OUTSOURCE_ORDER_HOST_RESOURCE = 'kuaizhizao:outsource-order';
@@ -120,6 +130,8 @@ interface OutsourceOrder {
   supplier_code?: string;
   supplier_name?: string;
   outsource_quantity?: number;
+  issued_batch_quantity?: number;
+  suggested_receipt_quantity?: number;
   received_quantity?: number;
   qualified_quantity?: number;
   unqualified_quantity?: number;
@@ -178,6 +190,7 @@ export const OutsourceOrdersTable: React.FC = () => {
   const { token } = AntdTheme.useToken();
   const outsourceOrderDetailDrawerZIndex = token.zIndexPopupBase;
   const actionRef = useRef<ActionType>(null);
+  const tableRowsRef = useRef<OutsourceOrder[]>([]);
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const outsourceOrderPerms = useResourcePermissions(OUTSOURCE_ORDER_HOST_RESOURCE);
 
@@ -252,6 +265,42 @@ export const OutsourceOrdersTable: React.FC = () => {
   );
 
   const outsourceProgressHandlers = useOutsourceOrderProgressHandlers(t, refreshAfterOutsourceProgress);
+
+  const selectedOoForToolbar = useMemo(() => {
+    if (selectedRowKeys.length !== 1) return null;
+    const id = Number(selectedRowKeys[0]);
+    if (!Number.isFinite(id) || id <= 0) return null;
+    return tableRowsRef.current.find((row) => row.id === id) ?? null;
+  }, [selectedRowKeys]);
+
+  const outsourceToolbarSelectionActive =
+    selectedRowKeys.length === 1 && selectedOoForToolbar != null;
+
+  const outsourceProgressToolbarActions = useMemo(() => {
+    return buildOutsourceOrderProgressToolbarActions({
+      record: selectedOoForToolbar ?? {},
+      toolbarSelectionActive: outsourceToolbarSelectionActive,
+      t,
+      navigate,
+      linkedDetail: linkedDetail ?? null,
+      handlers: outsourceProgressHandlers,
+      onOpenRegisterReceipt: (r) => setRegisterReceiptTarget(r),
+      onOpenProcessIssue: (r) => setProcessIssueTarget(r),
+    });
+  }, [
+    linkedDetail,
+    navigate,
+    outsourceProgressHandlers,
+    outsourceToolbarSelectionActive,
+    selectedOoForToolbar,
+    t,
+  ]);
+
+  const outsourceOrderTracking = useDocumentTracking(
+    detailDrawerVisible && outsourceOrderDetail?.id ? 'outsource_order' : undefined,
+    outsourceOrderDetail?.id,
+    ooTrackingRefreshKey,
+  );
 
   // 供应商列表
   const [supplierList, setSupplierList] = useState<Supplier[]>([]);
@@ -556,6 +605,7 @@ export const OutsourceOrdersTable: React.FC = () => {
       { title: t('app.kuaizhizao.outsourceOrder.colSupplierName'), dataIndex: 'supplier_name' },
       { title: t('app.kuaizhizao.outsourceOrder.colUnitPrice'), dataIndex: 'unit_price', valueType: 'money' },
       { title: t('app.kuaizhizao.outsourceOrder.colOutsourceQty'), dataIndex: 'outsource_quantity', valueType: 'digit' },
+      { title: t('app.kuaizhizao.outsourceOrder.colIssuedBatchQty'), dataIndex: 'issued_batch_quantity', valueType: 'digit' },
       { title: t('app.kuaizhizao.outsourceOrder.colTotalAmount'), dataIndex: 'total_amount', valueType: 'money' },
       { title: t('app.kuaizhizao.outsourceOrder.colReceivedQty'), dataIndex: 'received_quantity', valueType: 'digit' },
       { title: t('app.kuaizhizao.outsourceOrder.colQualifiedQty'), dataIndex: 'qualified_quantity', valueType: 'digit' },
@@ -758,81 +808,61 @@ export const OutsourceOrdersTable: React.FC = () => {
     }
   };
 
-  const renderOoRowActionNodes = (record: OutsourceOrder): React.ReactNode[] => {
-    const nodes: React.ReactNode[] = [];
-    appendOutsourceOrderProgressRowActions(nodes, {
-      record,
-      t,
-      navigate,
-      linkedDetail: linkedDetail ?? null,
-      handlers: outsourceProgressHandlers,
-      onOpenRegisterReceipt: (r) => setRegisterReceiptTarget(r),
-      onOpenProcessIssue: (r) => setProcessIssueTarget(r),
-    });
-    nodes.push(
-      <Button {...rowActionKind('read')}
-        key="detail"
-        type="link"
-        size="small"
-        icon={<EyeOutlined />}
-        onClick={(e) => {
-          e.stopPropagation();
-          void handleDetail(record);
-        }}
-      >
-        {t('common.detail')}
-      </Button>
-    );
-    nodes.push(
-      <Button {...rowActionKind('update')}
-        key="edit"
-        type="link"
-        size="small"
-        icon={<EditOutlined />}
-        disabled={!isOutsourceOrderDraftEditable(record.status)}
-        onClick={(e) => {
-          e.stopPropagation();
-          void handleEditFromRecord(record);
-        }}
-      >
-        {t('common.edit')}
-      </Button>
-    );
-    nodes.push(
-      <Button {...rowActionKind('delete')}
-        key="delete"
-        type="link"
-        size="small"
-        danger
-        icon={<DeleteOutlined />}
-        disabled={!isOutsourceOrderDraftEditable(record.status)}
-        onClick={(e) => {
-          e.stopPropagation();
-          handleDeleteFromRecord(record);
-        }}
-      >
-        {t('common.delete')}
-      </Button>
-    );
-    if (outsourceOrderPerms.canPrint && record.id != null) {
+  const renderOoRowActionNodes = useCallback(
+    (record: OutsourceOrder): React.ReactNode[] => {
+      const nodes: React.ReactNode[] = [];
       nodes.push(
         <Button
-          {...rowActionKind('print')}
-          key="print"
+          {...rowActionKind('read')}
+          key="detail"
           type="link"
           size="small"
-          icon={<PrinterOutlined />}
+          icon={<EyeOutlined />}
           onClick={(e) => {
             e.stopPropagation();
-            handlePrint(record);
+            void handleDetail(record);
           }}
         >
-          {t('components.uniAction.print')}
+          {t('common.detail')}
         </Button>,
       );
-    }
-    return nodes;
-  };
+      nodes.push(
+        <Button
+          {...rowActionKind('update')}
+          key="edit"
+          type="link"
+          size="small"
+          icon={<EditOutlined />}
+          disabled={!isOutsourceOrderDraftEditable(record.status)}
+          onClick={(e) => {
+            e.stopPropagation();
+            void handleEditFromRecord(record);
+          }}
+        >
+          {t('common.edit')}
+        </Button>,
+      );
+      appendOutsourceOrderProgressRowActions(nodes, {
+        record,
+        scope: 'lifecycle',
+        t,
+        navigate,
+        linkedDetail: linkedDetail ?? null,
+        handlers: outsourceProgressHandlers,
+        onOpenRegisterReceipt: (r) => setRegisterReceiptTarget(r),
+        onOpenProcessIssue: (r) => setProcessIssueTarget(r),
+      });
+      return nodes;
+    },
+    [
+      handleDetail,
+      handleEditFromRecord,
+      linkedDetail,
+      navigate,
+      outsourceProgressHandlers,
+      t,
+    ],
+  );
 
   const outsourceOrderLifecycleValueEnum = useMemo(() => buildOutsourceOrderLifecycleValueEnum(t), [t]);
   const supplierSearchValueEnum = useMemo(
@@ -995,6 +1025,17 @@ export const OutsourceOrdersTable: React.FC = () => {
         hideInSearch: true,
       },
       {
+        title: t('app.kuaizhizao.outsourceOrder.colIssuedBatchQty'),
+        dataIndex: 'issued_batch_quantity',
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        valueType: 'digit',
+        sorter: true,
+        hideInSearch: true,
+      },
+      {
         title: t('app.kuaizhizao.outsourceOrder.colTotalAmount'),
         dataIndex: 'total_amount',
         width: 120,
@@ -1082,11 +1123,11 @@ export const OutsourceOrdersTable: React.FC = () => {
         key: 'option',
         fixed: 'right',
         hideInSearch: true,
-        uniActionRenderOptions: { directMax: 6, minPrimaryVisible: 4 },
+        uniActionRenderOptions: { directMax: 3, minPrimaryVisible: 2 },
         render: (_, record) => renderOoRowActionNodes(record),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [outsourceCustomFieldColumns, outsourceOrderLifecycleValueEnum, outsourceProgressHandlers, supplierSearchValueEnum, linkedDetail, navigate, t],
+    [outsourceCustomFieldColumns, outsourceOrderLifecycleValueEnum, supplierSearchValueEnum, t],
   );
 
   /**
@@ -1165,7 +1206,7 @@ export const OutsourceOrdersTable: React.FC = () => {
         headerTitle={t('app.kuaizhizao.outsourceOrder.title')}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.outsourceOrder)}
-        columnPersistenceId="apps.kuaizhizao.pages.outsource-management.outsource-orders-width-v2"
+        columnPersistenceId="apps.kuaizhizao.pages.outsource-management.outsource-orders-width-v7"
         actionRef={actionRef}
         columns={columns}
         request={handleRequest}
@@ -1173,6 +1214,10 @@ export const OutsourceOrdersTable: React.FC = () => {
         enableRowSelection={true}
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
+        onTableDataChange={(rows) => {
+          tableRowsRef.current = rows;
+        }}
+        toolBarActionsAfterCreate={outsourceProgressToolbarActions}
         showCreateButton={true}
         createButtonText={createButtonLabel}
         onCreate={handleCreate}

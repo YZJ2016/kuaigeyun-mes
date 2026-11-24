@@ -1,11 +1,16 @@
 """销售订单直推采购占用统计辅助逻辑单测。"""
 
 from decimal import Decimal
+from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from apps.kuaizhizao.services.sales_order_purchase_push import (
     _add_po_item_qty,
     _is_purchase_order_doc_type,
     _is_sales_order_source,
+    list_purchase_order_sales_order_pull_lines,
+    list_purchase_requisition_sales_order_pull_lines,
 )
 from apps.kuaizhizao.utils.pull_open_line_quantity import build_partial_push_qty_triplet
 
@@ -36,3 +41,31 @@ def test_partial_push_line_triplet_keeps_second_pull_visible():
   assert sug == 6.0
   assert pushed == 3.0
   assert rem == 3.0
+
+
+@pytest.mark.asyncio
+async def test_po_pull_lines_empty_when_require_pr_gate():
+    with patch(
+        "apps.kuaizhizao.services.sales_order_purchase_push.require_purchase_requisition_for_tenant",
+        new_callable=AsyncMock,
+        return_value=True,
+    ):
+        res = await list_purchase_order_sales_order_pull_lines(1)
+    assert res == {"data": [], "total": 0}
+
+
+@pytest.mark.asyncio
+async def test_pr_pull_lines_skips_require_pr_gate():
+    with patch(
+        "apps.kuaizhizao.services.sales_order_purchase_push.require_purchase_requisition_for_tenant",
+        new_callable=AsyncMock,
+        return_value=True,
+    ):
+        with patch(
+            "apps.kuaizhizao.services.sales_order_purchase_push._list_sales_order_buy_pull_lines",
+            new_callable=AsyncMock,
+            return_value={"data": [{"id": 1}], "total": 1},
+        ) as inner:
+            res = await list_purchase_requisition_sales_order_pull_lines(1)
+            inner.assert_awaited_once()
+    assert res["total"] == 1

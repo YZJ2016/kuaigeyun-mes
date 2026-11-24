@@ -200,6 +200,7 @@ import {
   generateOrdersFromComputation,
   type PushPreview,
 } from '../../../services/demand-computation'
+import { demandPushPreviewRowKey } from '../../plan-management/demand-computation/demandPushPreviewFilter'
 import {
   DirectPushBomVersionFields,
   type DirectPushBomMaterialRow,
@@ -8751,6 +8752,131 @@ const WorkOrdersPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.reports.remainingQuantity'),
             dataIndex: 'remaining_push_quantity',
+            title: t('app.kuaizhizao.purchaseOrder.form.lineNotes'),
+            dataIndex: 'line_notes',
+            width: 160,
+            ellipsis: true,
+            render: (v: string | null | undefined) => (v && String(v).trim() ? String(v) : '-'),
+          },
+        ]}
+        dataSource={pullFromSalesOrderQuery.dataSource}
+        loading={pullFromSalesOrderQuery.loading}
+        confirmLoading={pullFromSalesOrderQuery.confirmLoading}
+        selectionType={pullFromSalesOrderQuery.selectionType}
+        selectedRowKeys={pullFromSalesOrderQuery.selectedRowKeys}
+        selectedRows={pullFromSalesOrderQuery.selectedRows}
+        onSelectedRowKeysChange={pullFromSalesOrderQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromSalesOrderQuery.isRowDisabled}
+        searchDraft={pullFromSalesOrderQuery.searchDraft}
+        onSearchDraftChange={pullFromSalesOrderQuery.setSearchDraft}
+        onSearchApply={pullFromSalesOrderQuery.handleSearchApply}
+        onSearchClear={pullFromSalesOrderQuery.handleSearchClear}
+        appliedKeyword={pullFromSalesOrderQuery.appliedKeyword}
+        searchPlaceholder={t('components.uniPullQuery.searchPlaceholder')}
+        page={pullFromSalesOrderQuery.page}
+        pageSize={pullFromSalesOrderQuery.pageSize}
+        total={pullFromSalesOrderQuery.total}
+        onPageChange={pullFromSalesOrderQuery.handlePageChange}
+        scopeOptions={pullFromSalesOrderQuery.scopeOptions}
+        scope={pullFromSalesOrderQuery.scope}
+        onScopeChange={pullFromSalesOrderQuery.handleScopeChange}
+        okText={t('app.kuaizhizao.workOrder.pull.okCreateWorkOrder')}
+      />
+
+      <UniPullQueryModal<PullDemandPlanWorkOrderLine>
+        open={pullFromDemandPlanQuery.open}
+        title={pullFromDemandPlanAction.label}
+        onCancel={pullFromDemandPlanQuery.closeModal}
+        onOk={pullFromDemandPlanQuery.handleConfirm}
+        rowKey="id"
+        width={MODAL_CONFIG.PULL_QUERY_WIDTH}
+        columns={[
+          {
+            title: t('app.kuaizhizao.demandComputation.pull.colPlanDate'),
+            dataIndex: 'plan_date',
+            width: 112,
+            render: (v) => (v ? formatBusinessDateOnly(String(v)) : '-'),
+          },
+          { title: t('app.kuaizhizao.demandComputation.colDemandCode'), dataIndex: 'demand_code', width: 148, ellipsis: true },
+          buildPullQueryMaterialIdentityColumn<PullDemandPlanWorkOrderLine>(t),
+          { title: t('app.kuaizhizao.demandComputation.pull.colBomVersion'), dataIndex: 'bom_version', width: 88, ellipsis: true },
+          {
+            title: t('app.kuaizhizao.warehouseOutbound.pull.colOrderQty'),
+            dataIndex: 'quantity',
+            width: 100,
+            align: 'right' as const,
+            render: formatQuantity,
+          },
+          {
+            title: t('app.kuaizhizao.demandComputation.pull.colTransferredQty'),
+            dataIndex: 'transferred_quantity',
+            width: 112,
+            align: 'right' as const,
+            render: formatQuantity,
+          },
+        ]}
+        dataSource={pullFromDemandPlanQuery.dataSource}
+        loading={pullFromDemandPlanQuery.loading}
+        confirmLoading={pullFromDemandPlanQuery.confirmLoading}
+        selectionType={pullFromDemandPlanQuery.selectionType}
+        selectedRowKeys={pullFromDemandPlanQuery.selectedRowKeys}
+        selectedRows={pullFromDemandPlanQuery.selectedRows}
+        onSelectedRowKeysChange={pullFromDemandPlanQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromDemandPlanQuery.isRowDisabled}
+        searchDraft={pullFromDemandPlanQuery.searchDraft}
+        onSearchDraftChange={pullFromDemandPlanQuery.setSearchDraft}
+        onSearchApply={pullFromDemandPlanQuery.handleSearchApply}
+        onSearchClear={pullFromDemandPlanQuery.handleSearchClear}
+        appliedKeyword={pullFromDemandPlanQuery.appliedKeyword}
+        searchPlaceholder={t('app.kuaizhizao.demandComputation.searchDemandPlaceholder')}
+        getRowLabel={(row) =>
+          [row.demand_code, row.material_code, row.material_name].filter(Boolean).join(' ')
+        }
+        page={pullFromDemandPlanQuery.page}
+        pageSize={pullFromDemandPlanQuery.pageSize}
+        total={pullFromDemandPlanQuery.total}
+        onPageChange={pullFromDemandPlanQuery.handlePageChange}
+        scopeOptions={pullFromDemandPlanQuery.scopeOptions}
+        scope={pullFromDemandPlanQuery.scope}
+        onScopeChange={pullFromDemandPlanQuery.handleScopeChange}
+        okText={t('app.kuaizhizao.workOrder.pull.okCreateWorkOrder')}
+      />
+
+      <UniPullQueryModal<PullSalesForecastWorkOrderLine>
+        open={pullFromSalesForecastQuery.open}
+        title={pullFromSalesForecastAction.label}
+        onCancel={pullFromSalesForecastQuery.closeModal}
+        onOk={pullFromSalesForecastQuery.handleConfirm}
+        rowKey="id"
+        width={MODAL_CONFIG.PULL_QUERY_WIDTH}
+        columns={[
+          {
+            title: t('app.kuaizhizao.workOrder.colForecastCode'),
+            dataIndex: 'forecast_code',
+            width: 160,
+            ellipsis: true,
+          },
+          {
+            title: t('app.kuaizhizao.workOrder.colForecastName'),
+            dataIndex: 'forecast_name',
+            width: 160,
+            ellipsis: true,
+          },
+          {
+            title: t('app.kuaizhizao.purchaseOrder.col.materialCode'),
+            dataIndex: 'material_code',
+            width: 128,
+            ellipsis: true,
+          },
+          {
+            title: t('app.kuaizhizao.purchaseOrder.col.materialName'),
+            dataIndex: 'material_name',
+            width: 160,
+            ellipsis: true,
+          },
+          {
+            title: t('app.kuaizhizao.purchaseOrder.col.spec'),
+            dataIndex: 'material_spec',
             width: 140,
             align: 'right',
             render: (v) => Number(v ?? 0),
@@ -8878,13 +9004,22 @@ const WorkOrdersPage: React.FC = () => {
                   <Table
                     size="small"
                     dataSource={computationPullPreviewData.items}
-                    rowKey={(row) => `${row.item_id}-${row.target_document ?? 'work_order'}`}
+                    rowKey={demandPushPreviewRowKey}
                     pagination={false}
                     scroll={{ x: 1000 }}
                     rowSelection={{
-                      selectedRowKeys: computationPullSelectedItemIds.map(String),
-                      onChange: (keys) =>
-                        setComputationPullSelectedItemIds(keys.map((k) => Number(k))),
+                      selectedRowKeys: (computationPullPreviewData.items || [])
+                        .filter((row) =>
+                          computationPullSelectedItemIds.includes(Number(row.item_id)),
+                        )
+                        .map(demandPushPreviewRowKey),
+                      onChange: (_keys, selectedRows) => {
+                        setComputationPullSelectedItemIds(
+                          Array.from(
+                            new Set(selectedRows.map((row) => Number(row.item_id))),
+                          ),
+                        )
+                      },
                       getCheckboxProps: (row) => ({
                         disabled:
                           Number(row.max_push_quantity ?? 0) <= 0 ||

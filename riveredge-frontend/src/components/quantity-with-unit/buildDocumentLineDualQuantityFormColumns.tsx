@@ -23,6 +23,8 @@ export type DocumentLineDualQuantityFormColumnOptions = {
   quantityColumnSpread?: Record<string, unknown>;
   /** 数量变更后（未锁定行阶梯重算等） */
   onAfterQuantityChange?: (rowIndex: number) => void;
+  /** 仓储领料/出库等：单位仅展示物料档案单位，不可改 */
+  unitReadOnly?: boolean;
 };
 
 const DUAL_QUANTITY_COL_WIDTH = 168;
@@ -185,6 +187,10 @@ export function buildDocumentLineDualQuantityFormColumns(
             const materialId = getFieldValue([listName, index, 'material_id']);
             const form = params.getForm();
             if (!form) return null;
+            if (params.unitReadOnly) {
+              const unit = String(getFieldValue([listName, index, params.unitField]) ?? '').trim();
+              return unit || EMPTY_VALUE_PLACEHOLDER;
+            }
             return (
               <AntForm.Item name={[index, params.unitField]} style={{ margin: 0 }}>
                 <DocumentLineUnitSelect

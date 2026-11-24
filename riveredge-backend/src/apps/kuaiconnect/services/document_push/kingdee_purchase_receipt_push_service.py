@@ -51,8 +51,12 @@ from core.services.integration.kingdee_warehouse_document_push_config import (
     merge_warehouse_kingdee_push_config,
 )
 from core.services.integration.kingdee_warehouse_push_routing import (
+    PURCHASE_RECEIPT_ASSET_KEY,
     PURCHASE_RECEIPT_BASE_KEY,
+    assert_purchase_receipt_asset_push_line_type_configured,
+    finalize_purchase_receipt_asset_push_config,
     resolve_purchase_receipt_push_config,
+    resolve_purchase_receipt_variant_key_from_order_type,
 )
 from apps.kuaiconnect.services.document_push.kingdee_im_batch_update_service import (
     kingdee_purchase_receipt_batch_update_linked_bill,
@@ -632,6 +636,21 @@ class KingdeePurchaseReceiptPushService:
         }
         config = await enrich_kingdee_warehouse_push_config(tenant_id, config)
         config = await self._apply_add2_acceptor_field(tenant_id, config)
+        variant_key = resolve_purchase_receipt_variant_key_from_order_type(
+            getattr(receipt, "order_type", None)
+        )
+        if variant_key == PURCHASE_RECEIPT_ASSET_KEY:
+            biz_config = await BusinessConfigService().get_business_config(tenant_id)
+            warehouse = (biz_config.get("parameters") or {}).get("warehouse") or {}
+            config = finalize_purchase_receipt_asset_push_config(
+                config,
+                warehouse,
+                variant_key=variant_key,
+            )
+        assert_purchase_receipt_asset_push_line_type_configured(
+            config,
+            order_type=getattr(receipt, "order_type", None),
+        )
         form_id = str(config.get("form_id") or DEFAULT_FORM_ID).strip() or DEFAULT_FORM_ID
         save_path = str(config.get("save_path") or DEFAULT_SAVE_PATH).strip() or DEFAULT_SAVE_PATH
 

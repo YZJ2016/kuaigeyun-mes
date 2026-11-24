@@ -513,10 +513,18 @@ async def _config_other_outbound(tenant_id: int, source_id: int) -> Dict[str, An
         resolve_other_outbound_push_config,
     )
 
+    from apps.kuaizhizao.models.other_outbound import OtherOutbound
+
     biz_config = await BusinessConfigService().get_business_config(tenant_id)
     warehouse = (biz_config.get("parameters", {}) or {}).get("warehouse", {}) or {}
     material_ids: List[int] = []
+    outbound_type: Optional[str] = None
     if source_id > 0:
+        outbound = await OtherOutbound.get_or_none(
+            tenant_id=tenant_id, id=source_id, deleted_at__isnull=True
+        )
+        if outbound is not None:
+            outbound_type = getattr(outbound, "outbound_type", None)
         items = await OtherOutboundItem.filter(
             tenant_id=tenant_id, outbound_id=source_id
         ).all()
@@ -524,7 +532,10 @@ async def _config_other_outbound(tenant_id: int, source_id: int) -> Dict[str, An
             int(it.material_id) for it in items if getattr(it, "material_id", None)
         ]
     return await resolve_other_outbound_push_config(
-        tenant_id, warehouse, material_ids=material_ids
+        tenant_id,
+        warehouse,
+        material_ids=material_ids,
+        outbound_type=outbound_type,
     )
 
 

@@ -104,6 +104,25 @@ export function resolvePaymentMethodFromCustomer(customer: CustomerLike): string
   return code || undefined;
 }
 
+export function resolvePaymentMixPercentsFromCustomer(customer: CustomerLike): {
+  payment_wire_percent?: number;
+  payment_acceptance_percent?: number;
+} {
+  const wireRaw =
+    customer.defaultPaymentWirePercent ??
+    customer.default_payment_wire_percent;
+  const accRaw =
+    customer.defaultPaymentAcceptancePercent ??
+    customer.default_payment_acceptance_percent;
+  const wire = wireRaw != null && wireRaw !== '' ? Number(wireRaw) : undefined;
+  const acceptance = accRaw != null && accRaw !== '' ? Number(accRaw) : undefined;
+  if (wire == null && acceptance == null) return {};
+  return {
+    ...(Number.isFinite(wire) ? { payment_wire_percent: wire } : {}),
+    ...(Number.isFinite(acceptance) ? { payment_acceptance_percent: acceptance } : {}),
+  };
+}
+
 export function resolveSettlementTermsFromCustomer(customer: CustomerLike): string | undefined {
   const raw = customer.settlementTermsCode ?? customer.settlement_terms_code;
   if (typeof raw !== 'string') return undefined;
@@ -131,6 +150,7 @@ export function resolveCustomerFormFieldValues(
   );
   const paymentTermsDays = resolvePaymentTermsDaysFromCustomer(customer);
   const paymentMethod = resolvePaymentMethodFromCustomer(customer);
+  const paymentMix = resolvePaymentMixPercentsFromCustomer(customer);
   const settlementTerms = resolveSettlementTermsFromCustomer(customer);
   const currencyRaw =
     customer.defaultCurrencyCode ??
@@ -165,8 +185,8 @@ export function resolveCustomerFormFieldValues(
     salesman_name: sName,
     shipping_address: resolvedShippingAddress ?? '',
     ...(paymentMethod != null
-      ? { payment_method_code: paymentMethod }
-      : { payment_method_code: undefined }),
+      ? { payment_method_code: paymentMethod, ...paymentMix }
+      : { payment_method_code: undefined, payment_wire_percent: undefined, payment_acceptance_percent: undefined }),
     ...(settlementTerms != null
       ? { settlement_terms_code: settlementTerms }
       : { settlement_terms_code: undefined }),

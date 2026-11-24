@@ -323,7 +323,8 @@ async def update_maintenance_plan(
         plan = await MaintenancePlanService.update_maintenance_plan(
             tenant_id=tenant_id,
             uuid=uuid,
-            data=data
+            data=data,
+            updated_by=current_user.id,
         )
         return await MaintenancePlanService.build_maintenance_plan_response(plan)
     except NotFoundError as e:

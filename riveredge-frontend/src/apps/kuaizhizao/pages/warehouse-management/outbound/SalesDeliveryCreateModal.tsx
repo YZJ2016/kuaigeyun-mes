@@ -1,5 +1,5 @@
 /**
- * 销售出库空白建单 / 编辑（与新建同一 FormModal，确认出库前可改）。
+ * 销售出库空白建单 / 编辑（UniTab DocumentFormPageLayout，确认出库前可改）。
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -12,17 +12,21 @@ import {
   InputNumber,
   Row,
   Space,
+  Spin,
   Tooltip,
+  Typography,
 } from 'antd';
 import {
+  ProForm,
   ProFormDatePicker,
   ProFormItem,
   ProFormText,
   ProFormTextArea,
   type ProFormInstance,
 } from '@ant-design/pro-components';
-import { PlusOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { useLocation, useParams } from 'react-router-dom';
 import dayjs from 'dayjs';
 import {
   normalizeDocumentFormPriceType,
@@ -34,7 +38,16 @@ import { DEFAULT_SALES_PRICE_TYPE, salesFormPriceType } from '../../sales-manage
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import { deferConvertLineItemsByPriceType } from '../../../../../utils/priceTypeSwitch';
 import { useQuery } from '@tanstack/react-query';
-import { FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import {
+  DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
+  DetailDrawerSection,
+  DocumentFormPageHeaderActions,
+  DocumentFormPageLayout,
+} from '../../../../../components/layout-templates';
+import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
+import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
+import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
+import { resolveOutboundListPath } from './outboundPaths';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import {
   mapAttachmentsToUploadList,
@@ -64,6 +77,9 @@ import {
   lineLocationSelectionRequired,
 } from '../../../../../components/uni-wh-dropdown';
 import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
+import { partnerPaymentMethodSelectOptions } from '../../../../master-data/utils/partner-static-labels';
+import { PaymentMethodWithMixFormItems } from '../../../components/PaymentMethodWithMixFormItems';
+import { validatePaymentMethodMix } from '../../../../master-data/utils/paymentMethodMix';
 import { warehouseApi } from '../../../services/production';
 import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { toApiBusinessDocumentDateTime } from '../../../../../utils/formDate';
@@ -84,6 +100,12 @@ import {
   applySalesDocumentLineMaterialPricing,
   repriceUnlockedSalesDocumentLineIfNeeded,
 } from '../../../../master-data/utils/resolve-partner-material-price';
+import { materialApi } from '../../../../master-data/services/material';
+import {
+  applyMaterialTrackingToFormRow,
+  readMaterialTrackingFromPicker,
+} from '../inbound/inboundItemTracking';
+import { applySalesDocumentLineMaterialPricing } from '../../../../master-data/utils/resolve-partner-material-price';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { getBusinessConfig } from '../../../../../services/businessConfig';
 import { applyCustomerFormFields } from '../../sales-management/shared/applyCustomerFormFields';
@@ -131,6 +153,7 @@ const defaultLineItem = {
   delivery_quantity: 1,
   unit_price: 0,
   tax_rate: 0,
+  material_model: undefined as string | undefined,
   partner_material_code: '',
   partner_material_name: '',
   warehouse_id: undefined as number | undefined,
@@ -195,18 +218,14 @@ function resolvePrimaryDefaultWarehouse(
   return { id, name: String(first?.warehouseName ?? '').trim() };
 }
 
-export type SalesDeliveryCreateModalProps = {
-  open: boolean;
-  onClose: () => void;
-  onSuccess?: () => void;
-  /** 有值则为编辑，表单布局与新建一致 */
-  editingId?: number | null;
-  initialDraft?: SalesDeliveryCreateDraft | null;
+export type SalesDeliveryFormLocationState = {
+  salesDeliveryCreateDraft?: SalesDeliveryCreateDraft | null;
 };
 
 export type SalesDeliveryCreateDraft = {
   salesOrderId?: number | null;
   salesOrderCode?: string;
+  customerOrderNo?: string;
   customerId?: number;
   customerName?: string;
   customerContact?: string;
@@ -216,6 +235,9 @@ export type SalesDeliveryCreateDraft = {
   exchangeRate?: number;
   shippingAddress?: string;
   shippingMethod?: string;
+  paymentMethodCode?: string;
+  paymentWirePercent?: number;
+  paymentAcceptancePercent?: number;
   priceType?: string;
   items: Array<Record<string, unknown>>;
 };
@@ -283,6 +305,65 @@ function SalesDeliveryCreateLocationCell({
   );
 }
 
+function SalesDeliveryItemsTableSection({
+  buildFormItemColumns,
+  defaultLineItem,
+  formRef,
+  handleSalesDeliveryPriceTypeChange,
+  isEdit,
+  needValidLineKey,
+  t,
+}: {
+  buildFormItemColumns: (showTaxColumns: boolean) => Parameters<typeof UniTableDetail>[0]['columns'];
+  defaultLineItem: typeof defaultLineItem;
+  formRef: React.MutableRefObject<ProFormInstance | undefined>;
+  handleSalesDeliveryPriceTypeChange: (checked: boolean) => void;
+  isEdit: boolean;
+  needValidLineKey: string;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+}) {
+  const priceType = salesFormPriceType(AntForm.useWatch('price_type'));
+  const showTaxColumns = priceType === 'tax_inclusive';
+  return (
+    <>
+      <DocumentDetailTableStyles />
+      <UniTableDetail
+        name="items"
+        title={t('app.kuaizhizao.warehouseOutbound.createLinesTitle')}
+        required
+        requiredMessage={t(needValidLineKey)}
+        leftExtra={(
+          <PriceTypeSwitch
+            checked={priceType === 'tax_inclusive'}
+            onChange={handleSalesDeliveryPriceTypeChange}
+          />
+        )}
+        headerExtra={
+          isEdit ? undefined : (
+            <Space size={8}>
+              <Button
+                type="default"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  const next = [...(formRef.current?.getFieldValue('items') ?? []), { ...defaultLineItem }];
+                  formRef.current?.setFieldsValue({ items: next });
+                }}
+              >
+                {t('common.addDetail')}
+              </Button>
+            </Space>
+          )
+        }
+        columns={buildFormItemColumns(showTaxColumns)}
+        disabledAdd
+        disabledRemove={isEdit}
+        initialValue={{ ...defaultLineItem }}
+        tableProps={DOCUMENT_DETAIL_TABLE_PROPS}
+      />
+    </>
+  );
+}
+
 /** 用 useWatch 订阅物料，确保选料后仓下拉能带 materialId 拉库存 */
 function SalesDeliveryCreateWarehouseCell({
   index,
@@ -303,9 +384,6 @@ function SalesDeliveryCreateWarehouseCell({
   return (
     <div>
       <AntForm.Item name={[index, 'warehouse_name']} hidden>
-        <Input />
-      </AntForm.Item>
-      <AntForm.Item name={[index, 'batch_managed']} hidden>
         <Input />
       </AntForm.Item>
       <AntForm.Item
@@ -332,14 +410,17 @@ function SalesDeliveryCreateWarehouseCell({
             formRef.current?.setFieldValue(['items', index, 'warehouse_name'], wh?.name ?? '');
             if (whId > 0) {
               const mid = Number(
-                formRef.current?.getFieldValue(['items', index, 'material_id']) ?? 0,
+                formRef.current?.getFieldValue(['items', index, 'material_id']) || 0,
               );
               const batchManaged = !!formRef.current?.getFieldValue([
                 'items',
                 index,
                 'batch_managed',
               ]);
-              if (mid > 0 && salesDeliveryCreateBatchLineEnabled(trackingFlags, batchManaged)) {
+              if (
+                mid > 0 &&
+                salesDeliveryCreateBatchLineEnabled(trackingFlags, batchManaged)
+              ) {
                 void ensureBatchOptions(mid, whId, index);
               }
             }
@@ -421,15 +502,30 @@ function UserPickField({
   );
 }
 
-export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> = ({
-  open,
-  onClose,
-  onSuccess,
-  editingId = null,
-  initialDraft = null,
-}) => {
+export const SalesDeliveryCreateModal: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const location = useLocation();
+  const params = useParams<{ id?: string }>();
+  const listPath = resolveOutboundListPath(location.pathname);
+  const leaveFormPage = useLeaveFormTab(listPath);
+  const leaveFormPageRef = useRef(leaveFormPage);
+  leaveFormPageRef.current = leaveFormPage;
+  const isCreatePage = /\/sales-delivery\/new$/.test(location.pathname);
+  const editRouteId = (() => {
+    const fromParams = Number(params.id);
+    if (Number.isFinite(fromParams) && fromParams > 0) return fromParams;
+    const m = location.pathname.match(/\/sales-delivery\/(\d+)\/edit$/);
+    return m ? Number(m[1]) : null;
+  })();
+  const editingId =
+    !isCreatePage && editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0
+      ? editRouteId
+      : null;
+  const initialDraft =
+    isCreatePage && location.state && typeof location.state === 'object'
+      ? ((location.state as SalesDeliveryFormLocationState).salesDeliveryCreateDraft ?? null)
+      : null;
   const formRef = useRef<ProFormInstance>();
   const currentUser = useCurrentUser();
   const quantityDecimals = useNumericPrecisionPlaces('quantity');
@@ -452,6 +548,16 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
   const [splitLineIndex, setSplitLineIndex] = useState<number | null>(null);
   /** 编辑灌数时的明细行 id（提交时若 Form 未带回则按行序回填） */
   const editLineIdsRef = useRef<number[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void resolveAllowNegativeInventory().then((v) => {
+      if (!cancelled) setAllowNegativeInventory(v);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const applySplitByWarehouse = useCallback(
     (lineIndex: number, allocations: SplitByWarehouseAllocation[]) => {
@@ -583,6 +689,92 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
     formRef.current?.setFieldValue(['items', index, 'serial_numbers'], undefined);
   }, []);
 
+  const syncLineMaterialTracking = useCallback(
+    async (index: number, material: Material | undefined) => {
+      if (!formRef.current) return;
+      if (!material) {
+        formRef.current.setFieldValue(['items', index, 'batch_managed'], false);
+        formRef.current.setFieldValue(['items', index, 'serial_managed'], false);
+        return;
+      }
+      let batchManaged = !!(
+        material.batchManaged ?? (material as { batch_managed?: boolean }).batch_managed
+      );
+      let serialManaged = !!(
+        material.serialManaged ?? (material as { serial_managed?: boolean }).serial_managed
+      );
+      let materialUuid = String(material.uuid ?? '').trim();
+      const fromPicker = readMaterialTrackingFromPicker(material as unknown as Record<string, unknown>);
+      if (fromPicker) {
+        applyMaterialTrackingToFormRow(
+          (name, value) => formRef.current!.setFieldValue(name, value),
+          'items',
+          index,
+          fromPicker,
+        );
+        batchManaged = fromPicker.batchManaged;
+        serialManaged = fromPicker.serialManaged;
+        materialUuid = fromPicker.uuid || materialUuid;
+      } else {
+        const id = Number(material.id);
+        if (id > 0) {
+          const resolved = await fetchMaterialForUnitSelectCache(id);
+          const meta = resolved
+            ? readMaterialTrackingFromPicker(resolved as unknown as Record<string, unknown>)
+            : null;
+          if (meta) {
+            applyMaterialTrackingToFormRow(
+              (name, value) => formRef.current!.setFieldValue(name, value),
+              'items',
+              index,
+              meta,
+            );
+            batchManaged = meta.batchManaged;
+            serialManaged = meta.serialManaged;
+            materialUuid = meta.uuid || materialUuid;
+          } else if (resolved) {
+            batchManaged = !!(
+              resolved.batchManaged ?? (resolved as { batch_managed?: boolean }).batch_managed
+            );
+            serialManaged = !!(
+              resolved.serialManaged ?? (resolved as { serial_managed?: boolean }).serial_managed
+            );
+            materialUuid = String(resolved.uuid ?? '').trim() || materialUuid;
+          }
+        }
+      }
+      if (materialUuid) {
+        try {
+          const full = await materialApi.get(materialUuid);
+          batchManaged = !!full.batchManaged;
+          serialManaged = !!full.serialManaged;
+          const meta = readMaterialTrackingFromPicker(full as unknown as Record<string, unknown>);
+          if (meta) {
+            applyMaterialTrackingToFormRow(
+              (name, value) => formRef.current!.setFieldValue(name, value),
+              'items',
+              index,
+              meta,
+            );
+            batchManaged = meta.batchManaged;
+            serialManaged = meta.serialManaged;
+          }
+        } catch {
+          /* use picker fields */
+        }
+      }
+      formRef.current.setFieldValue(
+        ['items', index, 'batch_managed'],
+        isMaterialBatchEntryEnabled(trackingFlags, batchManaged),
+      );
+      formRef.current.setFieldValue(
+        ['items', index, 'serial_managed'],
+        isMaterialSerialEntryEnabled(trackingFlags, serialManaged),
+      );
+    },
+    [trackingFlags],
+  );
+
   const ensureSerialOptions = useCallback(async (materialUuid: string, selected?: string[]) => {
     const uuid = String(materialUuid || '').trim();
     if (!uuid || serialOptionsLoadingRef.current[uuid]) return;
@@ -628,8 +820,16 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
   /** 取单草稿必须进 ProForm initialValues + remount key；禁止 open 后 setFieldsValue（formRef 未挂载会丢明细） */
   const createFormSeed = useMemo(() => {
     if (isEdit || !initialDraft) return blankCreateSeed;
+    const headerCustomerOrderNo = String(initialDraft.customerOrderNo ?? '').trim();
     const items: Array<Record<string, unknown>> = initialDraft.items.length
-      ? initialDraft.items.map((item) => ({ ...defaultLineItem, ...item }))
+      ? initialDraft.items.map((item) => {
+          const merged = { ...defaultLineItem, ...item };
+          const lineCo = String(merged.customer_order_no ?? '').trim();
+          if (!lineCo && headerCustomerOrderNo) {
+            merged.customer_order_no = headerCustomerOrderNo;
+          }
+          return merged;
+        })
       : [{ ...defaultLineItem }];
     return {
       ...blankCreateSeed,
@@ -651,6 +851,10 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
           : blankCreateSeed.exchange_rate,
       shipping_address: String(initialDraft.shippingAddress ?? '').trim() || undefined,
       shipping_method: String(initialDraft.shippingMethod ?? '').trim() || undefined,
+      customer_order_no: String(initialDraft.customerOrderNo ?? '').trim() || undefined,
+      payment_method_code: initialDraft.paymentMethodCode,
+      payment_wire_percent: initialDraft.paymentWirePercent,
+      payment_acceptance_percent: initialDraft.paymentAcceptancePercent,
       price_type: initialDraft.priceType ?? DEFAULT_SALES_PRICE_TYPE,
       items,
     };
@@ -679,7 +883,6 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
   }, [blankCreateSeed]);
 
   useEffect(() => {
-    if (!open) return;
     let cancelled = false;
     (async () => {
       setUsersLoading(true);
@@ -695,11 +898,11 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, []);
 
   // 新建：仅在出库人仍空时补登录人，避免 currentUser 抖动把已选人冲掉
   useEffect(() => {
-    if (!open || isEdit) return;
+    if (isEdit) return;
     const rid = formRef.current?.getFieldValue('deliverer_id');
     if (rid != null && rid !== '') return;
     if (defaultPerson.id == null && !defaultPerson.name) return;
@@ -707,10 +910,9 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
       deliverer_id: defaultPerson.id,
       deliverer_name: defaultPerson.name,
     });
-  }, [open, isEdit, defaultPerson]);
+  }, [isEdit, defaultPerson]);
 
   useEffect(() => {
-    if (!open) return;
     let cancelled = false;
 
     const hydrateEdit = async () => {
@@ -720,6 +922,24 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
         const items = initialDraft.items.map((item) => ({ ...defaultLineItem, ...item }));
         await prefetchMaterialsForUnitSelect(
           items.map((item) => Number(item.material_id) || 0),
+        );
+        await Promise.all(
+          items.map(async (row, index) => {
+            const materialId = Number(row.material_id);
+            const warehouseId = Number(row.warehouse_id);
+            if (!(materialId > 0)) return;
+            const material = await fetchMaterialForUnitSelectCache(materialId);
+            if (cancelled || !material) return;
+            await syncLineMaterialTracking(index, material);
+            const batchManaged = !!formRef.current?.getFieldValue([
+              'items',
+              index,
+              'batch_managed',
+            ]);
+            if (warehouseId > 0 && salesDeliveryCreateBatchLineEnabled(trackingFlags, batchManaged)) {
+              await ensureBatchOptions(materialId, warehouseId, index);
+            }
+          }),
         );
         return;
       }
@@ -733,7 +953,7 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
         const hubRow = { ...detail, outbound_type: 'sales_delivery' as const };
         if (!isOutboundEditable(hubRow as OutboundHubOrder)) {
           messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.pickingEditFailed'));
-          onClose();
+          leaveFormPageRef.current();
           return;
         }
         setEditDocumentCode(outboundDocumentCode(hubRow as OutboundHubOrder));
@@ -761,10 +981,14 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
             material_code: String(line.material_code ?? ''),
             material_name: String(line.material_name ?? ''),
             material_spec: line.material_spec != null ? String(line.material_spec) : undefined,
+            material_model:
+              line.material_model != null ? String(line.material_model).trim() || undefined : undefined,
             partner_material_code:
               line.partner_material_code != null ? String(line.partner_material_code) : '',
             partner_material_name:
               line.partner_material_name != null ? String(line.partner_material_name) : '',
+            customer_order_no:
+              line.customer_order_no != null ? String(line.customer_order_no) : undefined,
             material_unit: String(line.material_unit ?? ''),
             delivery_quantity: Number(line.delivery_quantity) || 1,
             unit_price: Number(line.unit_price) || 0,
@@ -798,6 +1022,8 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
         formRef.current?.setFieldsValue({
           customer_id: Number(detail.customer_id) > 0 ? Number(detail.customer_id) : undefined,
           customer_name: String(detail.customer_name ?? ''),
+          customer_order_no:
+            detail.customer_order_no != null ? String(detail.customer_order_no) : undefined,
           customer_contact: detail.customer_contact != null ? String(detail.customer_contact) : undefined,
           customer_phone: detail.customer_phone != null ? String(detail.customer_phone) : undefined,
           shipping_address:
@@ -823,35 +1049,28 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
             const material = await fetchMaterialForUnitSelectCache(mid);
             if (cancelled) return;
             if (material) {
-              formRef.current?.setFieldValue(
-                ['items', index, 'batch_managed'],
-                !!material.batchManaged,
-              );
-              formRef.current?.setFieldValue(
-                ['items', index, 'serial_managed'],
-                !!material.serialManaged,
-              );
-              const uuid = String(material.uuid ?? '').trim();
-              if (uuid) {
-                formRef.current?.setFieldValue(['items', index, 'material_uuid'], uuid);
-              }
-              if (
-                isMaterialSerialEntryEnabled(trackingFlags, !!material.serialManaged) &&
-                uuid
-              ) {
-                await ensureSerialOptions(
+              await syncLineMaterialTracking(index, material);
+              const serialManaged = !!formRef.current?.getFieldValue([
+                'items',
+                index,
+                'serial_managed',
+              ]);
+              const uuid = String(
+                formRef.current?.getFieldValue(['items', index, 'material_uuid']) ?? '',
+              ).trim();
+              if (serialManaged && uuid) {
+                const loaded = await ensureSerialOptions(
                   uuid,
                   Array.isArray(row.serial_numbers) ? row.serial_numbers : undefined,
                 );
               }
             }
-            if (
-              whId > 0 &&
-              salesDeliveryCreateBatchLineEnabled(
-                trackingFlags,
-                material?.batchManaged ?? row.batch_managed,
-              )
-            ) {
+            const batchManaged = !!formRef.current?.getFieldValue([
+              'items',
+              index,
+              'batch_managed',
+            ]);
+            if (whId > 0 && salesDeliveryCreateBatchLineEnabled(trackingFlags, batchManaged)) {
               await ensureBatchOptions(mid, whId, index);
             }
           }),
@@ -862,7 +1081,7 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
         messageApi.error(
           err?.message || t('app.kuaizhizao.warehouseOutbound.msg.loadDetailFailed'),
         );
-        onClose();
+        leaveFormPageRef.current();
       } finally {
         if (!cancelled) setFormLoading(false);
       }
@@ -874,7 +1093,7 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
     };
     // 仅开窗 / 切换编辑单时灌数；勿把 defaultPerson/resetForm 放进依赖，否则会冲掉已选出库人
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional open-bound hydrate
-  }, [open, isEdit, editingId]);
+  }, [isEdit, editingId, initialDraft]);
 
   const buildFormItemColumns = useCallback((showTaxColumns: boolean) => {
     const cols = [
@@ -906,6 +1125,9 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
             <AntForm.Item name={[index, 'material_uuid']} hidden>
               <Input />
             </AntForm.Item>
+            <AntForm.Item name={[index, 'batch_managed']} hidden>
+              <Input />
+            </AntForm.Item>
             <AntForm.Item name={[index, 'serial_managed']} hidden>
               <Input />
             </AntForm.Item>
@@ -925,12 +1147,11 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
               skipFuzzyPinyinClientFilter
               onChange={(_v, material) => {
                 clearLineWarehouseDependents(index);
+                formRef.current?.setFieldValue(['items', index, 'serial_numbers'], undefined);
                 if (!material) {
+                  void syncLineMaterialTracking(index, undefined);
                   formRef.current?.setFieldValue(['items', index, 'warehouse_id'], undefined);
                   formRef.current?.setFieldValue(['items', index, 'warehouse_name'], '');
-                  formRef.current?.setFieldValue(['items', index, 'batch_managed'], false);
-                  formRef.current?.setFieldValue(['items', index, 'serial_managed'], false);
-                  formRef.current?.setFieldValue(['items', index, 'material_uuid'], undefined);
                   return;
                 }
                 const mat = material as Material;
@@ -938,29 +1159,23 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
                   ['items', index, 'material_unit'],
                   resolveMaterialScenarioUnit(mat, 'sales'),
                 );
-                formRef.current?.setFieldValue(
-                  ['items', index, 'batch_managed'],
-                  !!mat.batchManaged,
-                );
-                formRef.current?.setFieldValue(
-                  ['items', index, 'serial_managed'],
-                  !!mat.serialManaged,
-                );
-                formRef.current?.setFieldValue(
-                  ['items', index, 'material_uuid'],
-                  String(mat.uuid ?? '').trim() || undefined,
-                );
-                formRef.current?.setFieldValue(['items', index, 'serial_numbers'], undefined);
+                void syncLineMaterialTracking(index, mat);
                 const primaryWh = resolvePrimaryDefaultWarehouse(mat);
                 if (primaryWh) {
                   formRef.current?.setFieldValue(['items', index, 'warehouse_id'], primaryWh.id);
                   formRef.current?.setFieldValue(['items', index, 'warehouse_name'], primaryWh.name);
-                  if (salesDeliveryCreateBatchLineEnabled(trackingFlags, !!mat.batchManaged)) {
+                  const batchManaged = !!(
+                    mat.batchManaged ?? (mat as { batch_managed?: boolean }).batch_managed
+                  );
+                  if (salesDeliveryCreateBatchLineEnabled(trackingFlags, batchManaged)) {
                     void ensureBatchOptions(Number(mat.id), primaryWh.id, index);
                   }
                 }
+                const serialManaged = !!(
+                  mat.serialManaged ?? (mat as { serial_managed?: boolean }).serial_managed
+                );
                 const uuid = String(mat.uuid ?? '').trim();
-                if (isMaterialSerialEntryEnabled(trackingFlags, !!mat.serialManaged) && uuid) {
+                if (isMaterialSerialEntryEnabled(trackingFlags, serialManaged) && uuid) {
                   void ensureSerialOptions(uuid);
                 }
                 void applySalesDocumentLineMaterialPricing(formRef.current, index, mat, {
@@ -973,6 +1188,17 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
       },
       ...buildDocumentDetailSpecModelFormColumns(t),
       ...buildDocumentDetailPartnerMaterialFormColumns(t, 'customer'),
+      {
+        title: t('app.kuaizhizao.salesOrder.customerOrderNo'),
+        dataIndex: 'customer_order_no',
+        width: 128,
+        ...DOCUMENT_DETAIL_TEXT_COL,
+        render: (_: unknown, __: unknown, index: number) => (
+          <AntForm.Item name={[index, 'customer_order_no']} style={{ margin: 0 }}>
+            <Input disabled maxLength={100} />
+          </AntForm.Item>
+        ),
+      },
       ...buildDocumentLineDualQuantityPairColumns({
         t,
         getForm: () => formRef.current,
@@ -1070,7 +1296,7 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
               const materialId = Number(getFieldValue(['items', index, 'material_id']) || 0);
               const whId = Number(getFieldValue(['items', index, 'warehouse_id']) || 0);
               const batchManaged = !!getFieldValue(['items', index, 'batch_managed']);
-              if (!salesDeliveryCreateBatchLineEnabled(trackingFlags, batchManaged)) {
+              if (!batchManaged) {
                 return <span>—</span>;
               }
               const key =
@@ -1144,7 +1370,7 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
           >
             {({ getFieldValue }) => {
               const row = getFieldValue('items')?.[index];
-              if (!isMaterialSerialEntryEnabled(trackingFlags, row?.serial_managed)) {
+              if (!row?.serial_managed) {
                 return <span>—</span>;
               }
               const qty = Number(row?.delivery_quantity ?? 0);
@@ -1404,6 +1630,7 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
     clearLineWarehouseDependents,
     ensureBatchOptions,
     ensureSerialOptions,
+    syncLineMaterialTracking,
     isEdit,
     quantityDecimals,
     serialOptionsByUuid,
@@ -1470,6 +1697,15 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
       const msg = t('app.kuaizhizao.warehouseOutbound.selectCustomerRequired');
       messageApi.error(msg);
       throw new Error(msg);
+    }
+    const mixErr = validatePaymentMethodMix(
+      values.payment_method_code as string,
+      values.payment_wire_percent as number,
+      values.payment_acceptance_percent as number,
+    );
+    if (mixErr) {
+      messageApi.error(mixErr);
+      throw new Error(mixErr);
     }
 
     await prefetchMaterialsForUnitSelect(
@@ -1580,6 +1816,14 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
           delivery_time: deliveryTime,
           deliverer_id: values.deliverer_id != null ? Number(values.deliverer_id) : undefined,
           deliverer_name: String(values.deliverer_name ?? '').trim() || undefined,
+          payment_method_code:
+            values.payment_method_code != null ? String(values.payment_method_code) : undefined,
+          payment_wire_percent:
+            values.payment_wire_percent != null ? Number(values.payment_wire_percent) : undefined,
+          payment_acceptance_percent:
+            values.payment_acceptance_percent != null
+              ? Number(values.payment_acceptance_percent)
+              : undefined,
           notes: String(values.notes ?? '').trim() || undefined,
           price_type: String(values.price_type ?? DEFAULT_SALES_PRICE_TYPE),
           items: validItems.map((it) => {
@@ -1628,6 +1872,9 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
           sales_order_code: '',
           customer_id: customerId,
           customer_name: String(values.customer_name ?? '').trim(),
+          customer_order_no: String(values.customer_order_no ?? '').trim() || undefined,
+          customer_contact: String(values.customer_contact ?? '').trim() || undefined,
+          customer_phone: String(values.customer_phone ?? '').trim() || undefined,
           shipping_address: String(values.shipping_address ?? '').trim() || undefined,
           revenue_recognition: values.revenue_recognition,
           // 表头仓仅列表汇总：取首行；真源在明细行
@@ -1638,6 +1885,14 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
           deliverer_name: String(values.deliverer_name ?? '').trim() || undefined,
           currency_code: String(values.currency_code ?? 'CNY').trim() || 'CNY',
           exchange_rate: values.exchange_rate != null ? Number(values.exchange_rate) : 1,
+          payment_method_code:
+            values.payment_method_code != null ? String(values.payment_method_code) : undefined,
+          payment_wire_percent:
+            values.payment_wire_percent != null ? Number(values.payment_wire_percent) : undefined,
+          payment_acceptance_percent:
+            values.payment_acceptance_percent != null
+              ? Number(values.payment_acceptance_percent)
+              : undefined,
           notes: String(values.notes ?? '').trim() || undefined,
           price_type: String(values.price_type ?? DEFAULT_SALES_PRICE_TYPE),
           items: validItems.flatMap((it) => {
@@ -1652,7 +1907,11 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
             const lineWhId = Number(it.warehouse_id) || 0;
             const allocs = lineBatchAllocations(it, qty);
             const base = {
-              sales_order_item_id: null as null,
+              sales_order_item_id: soItemId > 0 ? soItemId : null,
+              customer_order_no:
+                it.customer_order_no != null && String(it.customer_order_no).trim()
+                  ? String(it.customer_order_no).trim()
+                  : String(values.customer_order_no ?? '').trim() || undefined,
               material_id: Number(it.material_id),
               material_code: String(it.material_code ?? ''),
               material_name: String(it.material_name ?? ''),
@@ -1701,8 +1960,7 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
         });
         messageApi.success(t('common.createSuccess'));
       }
-      onClose();
-      onSuccess?.();
+      leaveFormPage();
     } catch (error: unknown) {
       const err = error as { message?: string };
       if (err?.message !== t(needValidLineKey)) {
@@ -1714,29 +1972,91 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
     }
   };
 
-  const modalTitle = useMemo(() => {
+  const pageTitle = useMemo(() => {
     if (!isEdit) return t('app.kuaizhizao.warehouseOutbound.createSalesDeliveryModal');
     const typeLabel = t('app.kuaizhizao.warehouseOutbound.entry.salesDelivery');
     return `${t('common.edit')} ${typeLabel}${editDocumentCode ? ` - ${editDocumentCode}` : ''}`;
   }, [editDocumentCode, isEdit, t]);
 
+  useEffect(() => {
+    const sp = new URLSearchParams(location.search || '');
+    sp.delete('_refresh');
+    const cleanSearch = sp.toString();
+    const tabKey = location.pathname + (cleanSearch ? `?${cleanSearch}` : '');
+    setCustomPageTitle(location.pathname, pageTitle);
+    setCustomPageTitle(tabKey, pageTitle);
+    window.dispatchEvent(
+      new CustomEvent('riveredge:update-tab-title', {
+        detail: { key: tabKey, path: location.pathname, title: pageTitle },
+      }),
+    );
+    return () => {
+      removeCustomPageTitle(location.pathname);
+      removeCustomPageTitle(tabKey);
+    };
+  }, [location.pathname, location.search, pageTitle]);
+
+  const triggerSave = useCallback(() => {
+    void formRef.current?.submit?.();
+  }, []);
+
+  useSubmitShortcut(triggerSave, true);
+
   return (
     <>
-    <FormModalTemplate
-      key={formMountKey}
-      title={modalTitle}
-      open={open}
-      onClose={onClose}
-      formRef={formRef}
-      onFinish={handleFinish}
-      isEdit={isEdit}
-      loading={formLoading}
-      width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
-      grid={false}
-      initialValues={isEdit ? undefined : createFormSeed}
+    <DocumentFormPageLayout
+      header={
+        <>
+          <Space align="center" size={8}>
+            <Button
+              type="text"
+              icon={<ArrowLeftOutlined />}
+              aria-label={t('common.back')}
+              onClick={() => leaveFormPage()}
+            />
+            <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
+              {pageTitle}
+            </Typography.Title>
+          </Space>
+          <DocumentFormPageHeaderActions
+            onCancel={() => leaveFormPage()}
+            onSaveDraft={triggerSave}
+            onPrimarySubmit={triggerSave}
+            isCreatePage={isCreatePage}
+            showSaveDraft={false}
+            primaryLoading={formLoading}
+          />
+        </>
+      }
     >
-      <Row gutter={16}>
-        <Col span={12}>
+      <Spin spinning={formLoading}>
+        <ProForm
+          key={formMountKey}
+          formRef={formRef}
+          layout="vertical"
+          submitter={false}
+          scrollToFirstError
+          onFinish={handleFinish}
+          onFinishFailed={({ errorFields }) => {
+            const first = errorFields?.[0];
+            const errText = first?.errors?.filter(Boolean)[0];
+            messageApi.error(errText || t('components.layoutTemplates.formModal.checkFormHint'));
+          }}
+          initialValues={isEdit ? undefined : createFormSeed}
+        >
+      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionBasic')}>
+        <div className="document-form-untitled-groups">
+          <div className="document-form-untitled-group">
+      <Row gutter={16} wrap={false}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
+          <ProFormText
+            name="customer_order_no"
+            label={t('app.kuaizhizao.salesOrder.customerOrderNo')}
+            disabled
+            fieldProps={{ maxLength: 100 }}
+          />
+        </Col>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
           <ProFormItem
             name="customer_id"
             label={t('app.kuaizhizao.warehouseOutbound.field.customer')}
@@ -1785,7 +2105,7 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
           </ProFormItem>
           <ProFormText name="customer_name" hidden />
         </Col>
-        <Col span={12}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
           <ProFormItem
             name="revenue_recognition"
             label={t('field.document.ledgerRecognition')}
@@ -1795,116 +2115,82 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
             <UniDropdown options={revenueLedgerRecognitionOptions} style={{ width: '100%' }} />
           </ProFormItem>
         </Col>
-        <Col span={8}>
-          <ProFormText
-            name="customer_contact"
-            label={t('app.kuaizhizao.salesOrder.customerContact')}
-            placeholder={t('field.customer.contactPersonPlaceholder')}
-          />
-        </Col>
-        <Col span={8}>
-          <ProFormText
-            name="customer_phone"
-            label={t('app.kuaizhizao.salesOrder.customerPhone')}
-            placeholder={t('field.customer.phonePlaceholder')}
-          />
-        </Col>
-        <Col span={8}>
-          <UserPickField
-            name="deliverer_id"
-            nameField="deliverer_name"
-            label={t('app.kuaizhizao.warehouseOutbound.field.operator')}
-            placeholder={t('app.kuaizhizao.warehouseOutbound.field.operator')}
-            userList={users}
-            loading={usersLoading}
-          />
-        </Col>
-        <Col span={24}>
-          <ProFormText
-            name="shipping_address"
-            label={t('app.kuaizhizao.salesOrder.shippingAddress')}
-            placeholder={t('app.kuaizhizao.quotation.form.shippingAddressPlaceholder')}
-          />
-        </Col>
-        <Col span={12}>
-          <ProFormDatePicker
-            name="delivery_time"
-            label={t('app.kuaizhizao.warehouseOutbound.field.documentDate')}
-            fieldProps={{
-              style: { width: '100%' },
-              onChange: () => {
-                const items = normalizeFormListItems<Record<string, unknown>>(
-                  formRef.current?.getFieldValue('items'),
-                );
-                items.forEach((_, idx) => {
-                  void repriceUnlockedSalesDocumentLineIfNeeded(formRef.current, idx, {
-                    asOfField: 'delivery_time',
-                  });
-                });
-              },
-            }}
-          />
-        </Col>
-        <Col span={12}>
-          <ProFormText
-            name="currency_code"
-            label={t('app.kuaizhizao.warehouseInbound.field.currency')}
-            initialValue="CNY"
-            rules={[
-              { required: true, message: t('app.kuaizhizao.warehouseInbound.field.currencyRequired') },
-            ]}
-          />
-        </Col>
+        <SalesCustomerPartnerDetailBridge customerList={[]} hostResource={OUTBOUND_HOST_RESOURCE}>
+          <Col flex="1 1 0" style={{ minWidth: 0 }}>
+            <SalesCustomerContactFormField
+              formRef={formRef}
+              label={t('app.kuaizhizao.salesOrder.customerContact')}
+              placeholder={t('field.customer.contactPersonPlaceholder')}
+            />
+          </Col>
+          <Col flex="1 1 0" style={{ minWidth: 0 }}>
+            <SalesCustomerPhoneFormField
+              label={t('app.kuaizhizao.salesOrder.customerPhone')}
+              placeholder={t('field.customer.phonePlaceholder')}
+            />
+          </Col>
+          <Col flex="1 1 0" style={{ minWidth: 0 }}>
+            <UserPickField
+              name="deliverer_id"
+              nameField="deliverer_name"
+              label={t('app.kuaizhizao.warehouseOutbound.field.operator')}
+              placeholder={t('app.kuaizhizao.warehouseOutbound.field.operator')}
+              userList={users}
+              loading={usersLoading}
+            />
+          </Col>
+        </SalesCustomerPartnerDetailBridge>
       </Row>
+      <SalesCustomerPartnerDetailBridge customerList={[]} hostResource={OUTBOUND_HOST_RESOURCE}>
+        <Row gutter={16} wrap={false}>
+          <Col flex="3 1 0" style={{ minWidth: 0 }}>
+            <SalesCustomerShippingAddressFormField
+              wide
+              label={t('app.kuaizhizao.salesOrder.shippingAddress')}
+              placeholder={t('app.kuaizhizao.quotation.form.shippingAddressPlaceholder')}
+            />
+          </Col>
+          <Col flex="1 1 0" style={{ minWidth: 0 }}>
+            <ProFormDatePicker
+              name="delivery_time"
+              label={t('app.kuaizhizao.warehouseOutbound.field.documentDate')}
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </Col>
+          <Col flex="1 1 0" style={{ minWidth: 0 }}>
+            <ProFormText
+              name="currency_code"
+              label={t('app.kuaizhizao.warehouseInbound.field.currency')}
+              initialValue="CNY"
+              rules={[
+                { required: true, message: t('app.kuaizhizao.warehouseInbound.field.currencyRequired') },
+              ]}
+            />
+          </Col>
+          <Col flex="1 1 0" style={{ minWidth: 0 }}>
+            <PaymentMethodWithMixFormItems
+              formRef={formRef}
+              options={partnerPaymentMethodSelectOptions(t)}
+              methodLabel={t('app.kuaizhizao.salesOrder.paymentMethod')}
+              methodPlaceholder={t('app.kuaizhizao.salesOrder.selectPaymentMethod')}
+            />
+          </Col>
+        </Row>
+      </SalesCustomerPartnerDetailBridge>
+          </div>
+        </div>
+      </DetailDrawerSection>
 
       <ProFormText name="price_type" hidden initialValue={DEFAULT_SALES_PRICE_TYPE} />
-      <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.price_type !== curr?.price_type}>
-        {({ getFieldValue }) => {
-          const priceType = salesFormPriceType(getFieldValue('price_type'));
-          const showTaxColumns = priceType === 'tax_inclusive';
-          return (
-            <>
-              <DocumentDetailTableStyles />
-              <UniTableDetail
-                name="items"
-                title={t('app.kuaizhizao.warehouseOutbound.createLinesTitle')}
-                required
-                requiredMessage={t(needValidLineKey)}
-                leftExtra={(
-                  <PriceTypeSwitch
-                    checked={priceType === 'tax_inclusive'}
-                    onChange={handleSalesDeliveryPriceTypeChange}
-                  />
-                )}
-                headerExtra={
-                  isEdit ? undefined : (
-                    <Space size={8}>
-                      <Button
-                        type="default"
-                        icon={<PlusOutlined />}
-                        onClick={() => {
-                          const next = [
-                            ...(formRef.current?.getFieldValue('items') ?? []),
-                            { ...defaultLineItem },
-                          ];
-                          formRef.current?.setFieldsValue({ items: next });
-                        }}
-                      >
-                        {t('common.addDetail')}
-                      </Button>
-                    </Space>
-                  )
-                }
-                columns={buildFormItemColumns(showTaxColumns)}
-                disabledAdd
-                disabledRemove={isEdit}
-                initialValue={{ ...defaultLineItem }}
-                tableProps={DOCUMENT_DETAIL_TABLE_PROPS}
-              />
-            </>
-          );
-        }}
-      </AntForm.Item>
+      <SalesDeliveryItemsTableSection
+        buildFormItemColumns={buildFormItemColumns}
+        defaultLineItem={defaultLineItem}
+        formRef={formRef}
+        handleSalesDeliveryPriceTypeChange={handleSalesDeliveryPriceTypeChange}
+        isEdit={isEdit}
+        needValidLineKey={needValidLineKey}
+        t={t}
+      />
       <Row gutter={16}>
         <Col span={24}>
           <ProFormTextArea
@@ -1915,7 +2201,9 @@ export const SalesDeliveryCreateModal: React.FC<SalesDeliveryCreateModalProps> =
           />
         </Col>
       </Row>
-    </FormModalTemplate>
+        </ProForm>
+      </Spin>
+    </DocumentFormPageLayout>
     {!isEdit && splitLineContext ? (
       <SplitByWarehouseModal
         open

@@ -443,6 +443,13 @@ export function buildOutboundHubDetailLineColumns(
           { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
           { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 150 },
           {
+            title: t('app.kuaizhizao.salesOrder.customerOrderNo'),
+            dataIndex: 'customer_order_no',
+            width: 120,
+            ellipsis: true,
+            render: (v: unknown) => dash(v),
+          },
+          {
             title: t('app.kuaizhizao.warehouseOutbound.col.deliveryQty'),
             dataIndex: 'delivery_quantity',
             width: 100,

@@ -136,27 +136,50 @@ class UniAuditService:
         entity_id: int,
         operator_id: int,
         flow_revoke: ActionCallback,
-        admin_bypass: bool = False,
-        has_revoke_permission: bool = True,
+        admin_bypass: bool | None = None,
+        has_revoke_permission: bool | None = None,
     ) -> Any:
         """反审核统一入口。
 
         回调若声明 ``reopened``：有已通过流程则重开终审节点，并把是否成功传给回调
         （采购申请/销售订单据此落 pending）。其余单据仍只取消 pending 后走原草稿落点。
         """
+        from core.config.audit_registry import entry_by_entity_type
+        from core.services.approval.admin_revoke_policy import resolve_admin_revoke_bypass
         from core.services.approval.approval_flow_policy import (
             assert_revoke_allowed_for_viewer,
             resolve_final_approval_context,
             should_reopen_on_revoke,
         )
+        from core.services.authorization.user_permission_service import UserPermissionService
+        from infra.models.user import User
+
+        resolved_admin_revoke = admin_bypass
+        resolved_has_revoke = has_revoke_permission
+        if resolved_admin_revoke is None or resolved_has_revoke is None:
+            user = await User.get_or_none(id=int(operator_id))
+            if resolved_admin_revoke is None:
+                resolved_admin_revoke = (
+                    await resolve_admin_revoke_bypass(tenant_id=tenant_id, user=user)
+                    if user
+                    else False
+                )
+            if resolved_has_revoke is None:
+                has_revoke = False
+                entry = entry_by_entity_type(entity_type)
+                if entry and user:
+                    has_revoke = await UserPermissionService.has_permission(
+                        int(operator_id), tenant_id, f"{entry.resource}:revoke"
+                    )
+                resolved_has_revoke = has_revoke or bool(resolved_admin_revoke)
 
         await assert_revoke_allowed_for_viewer(
             tenant_id=tenant_id,
             entity_type=entity_type,
             entity_id=entity_id,
             operator_id=operator_id,
-            admin_bypass=admin_bypass,
-            has_revoke_permission=has_revoke_permission,
+            admin_bypass=bool(resolved_admin_revoke),
+            has_revoke_permission=bool(resolved_has_revoke),
         )
 
         accepts_reopened = _callback_accepts_kwarg(flow_revoke, "reopened")

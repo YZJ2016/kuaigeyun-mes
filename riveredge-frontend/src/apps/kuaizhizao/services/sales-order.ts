@@ -47,6 +47,7 @@ export interface SalesOrder {
   customer_name?: string;
   customer_contact?: string;
   customer_phone?: string;
+  customer_order_no?: string;
   total_quantity?: number;
   total_amount?: number;
   /** 价格类型：含税(tax_inclusive)/不含税(tax_exclusive) */
@@ -66,6 +67,8 @@ export interface SalesOrder {
   shipping_method?: string;
   /** 付款方式：cash / bank_transfer / bank_acceptance / commercial_acceptance / other */
   payment_method_code?: string;
+  payment_wire_percent?: number | null;
+  payment_acceptance_percent?: number | null;
   /** 结算方式：prepaid / net_terms / cod 等（与客商同码表） */
   settlement_terms_code?: string;
   /** 付款周期（天），对齐客商付款账期 */
@@ -199,6 +202,7 @@ export interface SalesOrderItem {
   gift_ref_unit_price?: number;
   work_order_id?: number;
   work_order_code?: string;
+  customer_order_no?: string;
   /** 属性（配置件专用，如 {"color":"red","size":"M"}） */
   variant_attributes?: Record<string, unknown>;
   notes?: string;

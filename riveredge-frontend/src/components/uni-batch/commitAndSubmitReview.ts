@@ -9,6 +9,7 @@
 import type { TFunction } from 'i18next';
 import type React from 'react';
 import { getApiErrorMessage } from '../../utils/errorHandler';
+import { isSubmitReviewUserCancelled } from '../../utils/submitReviewUserCancelled';
 import type { UniBatchMenuItem } from './index';
 
 export type CommitAndSubmitReviewBatchOptions<T extends { id?: number }> = {
@@ -83,6 +84,7 @@ export async function runCommitThenSubmitReviewBatch<T extends { id?: number }>(
 
   let success = 0;
   let failed = 0;
+  let cancelled = 0;
   let lastError: unknown = null;
   for (const id of eligibleIds) {
     try {
@@ -90,8 +92,12 @@ export async function runCommitThenSubmitReviewBatch<T extends { id?: number }>(
       await submitReview(id);
       success += 1;
     } catch (error) {
-      failed += 1;
-      lastError = error;
+      if (isSubmitReviewUserCancelled(error)) {
+        cancelled += 1;
+      } else {
+        failed += 1;
+        lastError = error;
+      }
     }
   }
 
@@ -113,8 +119,18 @@ export async function runCommitThenSubmitReviewBatch<T extends { id?: number }>(
         t('common.submitDocumentAndSubmitReviewPartial', { success, failed }),
       );
     }
+  } else if (cancelled > 0) {
+    if (success > 0) {
+      message.info(
+        t('components.uniBatch.submitReviewCancelledPartial', { success, cancelled }),
+      );
+    } else {
+      message.info(t('components.uniBatch.submitReviewCancelled'));
+    }
   }
-  onSuccess?.();
+  if (success > 0 || failed > 0) {
+    onSuccess?.();
+  }
 }
 
 export function buildCommitAndSubmitReviewMenuItem(options: {
@@ -256,24 +272,39 @@ export function buildDocumentSubmitMenuItems<T extends { id?: number }>(
       }
       let success = 0;
       let failed = 0;
+      let cancelled = 0;
       for (const row of records) {
         const id = Number(row.id);
         if (!Number.isFinite(id) || id <= 0) continue;
         try {
           await onRun(id);
           success += 1;
-        } catch {
-          failed += 1;
+        } catch (error) {
+          if (isSubmitReviewUserCancelled(error)) {
+            cancelled += 1;
+          } else {
+            failed += 1;
+          }
         }
       }
-      if (success > 0 && failed === 0) {
+      if (success > 0 && failed === 0 && cancelled === 0) {
         message.success(t('common.operationSuccess'));
-      } else if (success > 0 || failed > 0) {
+      } else if (failed > 0) {
         message.warning(
           t('common.submitDocumentAndSubmitReviewPartial', { success, failed }),
         );
+      } else if (cancelled > 0) {
+        if (success > 0) {
+          message.info(
+            t('components.uniBatch.submitReviewCancelledPartial', { success, cancelled }),
+          );
+        } else {
+          message.info(t('components.uniBatch.submitReviewCancelled'));
+        }
       }
-      onSuccess?.();
+      if (success > 0 || failed > 0) {
+        onSuccess?.();
+      }
     })();
   };
   const run = runBatch ?? defaultRun;

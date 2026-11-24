@@ -29,6 +29,7 @@ const defaultPaymentMethodOptions: FieldConfig['options'] = [
   { labelKey: 'field.partner.settlementMethod.cash', value: 'cash' },
   { labelKey: 'field.partner.settlementMethod.bankTransfer', value: 'bank_transfer' },
   { labelKey: 'field.partner.settlementMethod.bankAcceptance', value: 'bank_acceptance' },
+  { labelKey: 'field.partner.settlementMethod.bankTransferAndAcceptance', value: 'bank_transfer_and_acceptance' },
   { labelKey: 'field.partner.settlementMethod.commercialAcceptance', value: 'commercial_acceptance' },
   { labelKey: 'field.partner.settlementMethod.other', value: 'other' },
 ];

@@ -13,6 +13,7 @@ import {
 import { useGlobalStore } from '../../stores';
 import { hasModulePermission, hasReviewPermission } from '../../utils/permissionContract';
 import { isAdminBypass, resolveUserForMenuPermission } from '../../utils/permission';
+import { useAdminRevokeAllDocuments } from '../../hooks/useAdminRevokeAllDocuments';
 import UniAuditModal, { type UniAuditHubAction } from './UniAuditModal';
 import UniAuditInitiatorSubmitModal from './UniAuditInitiatorSubmitModal';
 import { resolveRecordDocumentCode } from './resolveRecordDocumentCode';
@@ -236,6 +237,8 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
   const rawCurrentUser = useCurrentUser();
   const currentUser = useMemo(() => resolveUserForMenuPermission(rawCurrentUser), [rawCurrentUser]);
   const adminOpen = isAdminBypass(currentUser);
+  const adminRevokeAll = useAdminRevokeAllDocuments(false);
+  const adminRevokeOpen = adminOpen && adminRevokeAll;
   const documentCode = useMemo(() => resolveRecordDocumentCode(record), [record]);
 
   const inferredNodeKey = useMemo(() => auditNodeKey || inferAuditNodeKey(apiPrefix), [auditNodeKey, apiPrefix]);
@@ -270,7 +273,9 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
 
   const canSubmit = adminOpen || (hasActionResource && hasModulePermission(currentUser ?? undefined, resolvedResource, 'submit'));
   const canReview = adminOpen || (hasActionResource && hasReviewPermission(currentUser ?? undefined, resolvedResource));
-  const canRevoke = adminOpen || (hasActionResource && hasModulePermission(currentUser ?? undefined, resolvedResource, 'revoke'));
+  const canRevoke =
+    adminRevokeOpen
+    || (hasActionResource && hasModulePermission(currentUser ?? undefined, resolvedResource, 'revoke'));
 
   const status = (record?.[statusField] ?? undefined) as WorkflowStatus;
   const reviewStatus = (record?.[reviewStatusField] ?? undefined) as WorkflowStatus;

@@ -100,6 +100,12 @@ import { normalizeDocumentAttachments } from '../../../utils/documentAttachments
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { renderWarehouseReasonTypeMarkerTag } from '../shared/warehouseMarkerTags';
+import {
+  OTHER_OUTBOUND_TYPE_ASSET,
+  OTHER_OUTBOUND_TYPE_MATERIAL,
+  renderOtherOutboundTypeMarkerTag,
+  translateOtherOutboundTypeLabel,
+} from './otherOutboundTypeLabels';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
@@ -320,6 +326,7 @@ interface OtherOutbound {
   id?: number;
   tenant_id?: number;
   outbound_code?: string;
+  outbound_type?: string;
   reason_type?: string;
   reason_desc?: string;
   warehouse_id?: number;
@@ -902,6 +909,17 @@ const OtherOutboundPage: React.FC = () => {
         r.warehouse_name != null && r.warehouse_name !== '' ? String(r.warehouse_name) : '-',
     },
     {
+      title: t('app.kuaizhizao.otherOutbound.col.outboundType'),
+      dataIndex: 'outbound_type',
+      width: 108,
+      minWidth: 108,
+      uniTableKeepWidth: true,
+      resizable: false,
+      sorter: true,
+      hideInSearch: true,
+      render: (_, r) => renderOtherOutboundTypeMarkerTag(t, r.outbound_type),
+    },
+    {
       title: t('app.kuaizhizao.otherOutbound.col.reasonType'),
       dataIndex: 'reason_type',
       ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
@@ -1444,6 +1462,7 @@ const OtherOutboundPage: React.FC = () => {
         }));
         formRef.current?.setFieldsValue({
           outbound_code: detail.outbound_code,
+          outbound_type: detail.outbound_type ? detail.outbound_type : undefined,
           reason_type: detail.reason_type,
           pick_date: detail.pick_date ? dayjs(String(detail.pick_date)) : dayjs(todaySiteDateString()),
           picker_id: detail.picker_id,
@@ -1613,7 +1632,9 @@ const OtherOutboundPage: React.FC = () => {
           }
           return payload;
         });
+        const updateOutboundType = String(values.outbound_type ?? '').trim();
         await warehouseApi.otherOutbound.update(String(editingOutboundId), {
+          ...(updateOutboundType ? { outbound_type: updateOutboundType } : {}),
           reason_type: standardValues.reason_type,
           warehouse_id: headerWhId,
           warehouse_name: headerWhName,
@@ -1646,6 +1667,7 @@ const OtherOutboundPage: React.FC = () => {
 
       const created = await warehouseApi.otherOutbound.create({
         outbound_code: standardValues.outbound_code,
+        outbound_type: String(values.outbound_type ?? OTHER_OUTBOUND_TYPE_MATERIAL).trim(),
         reason_type: standardValues.reason_type,
         // 表头仓仅列表汇总：取首行；真源在明细行
         warehouse_id: headerWhId,
@@ -1719,6 +1741,20 @@ const OtherOutboundPage: React.FC = () => {
 
   const detailColumns = useMemo(() => alignDescriptionColumns([
     { title: t('app.kuaizhizao.otherOutbound.col.outboundCode'), dataIndex: 'outbound_code' },
+    {
+      title: t('app.kuaizhizao.warehouse.field.kingdeeBillNo'),
+      key: 'kingdee_bill_no',
+      dataIndex: 'kingdee_bill_no',
+      render: (_, record) => {
+        const display = String(record.kingdee_bill_no || '').trim();
+        return display || '—';
+      },
+    },
+    {
+      title: t('app.kuaizhizao.otherOutbound.col.outboundType'),
+      dataIndex: 'outbound_type',
+      render: (_, record) => translateOtherOutboundTypeLabel(t, record.outbound_type),
+    },
     {
       title: t('app.kuaizhizao.otherOutbound.col.reasonType'),
       dataIndex: 'reason_type',
@@ -1827,7 +1863,7 @@ const OtherOutboundPage: React.FC = () => {
           headerTitle={t('app.kuaizhizao.otherOutbound.title')}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.otherOutbound)}
-          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.other-outbound-width-v5"
+          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.other-outbound-width-v6"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -2093,6 +2129,7 @@ const OtherOutboundPage: React.FC = () => {
         onFinish={handleCreateSubmit}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         initialValues={{
+          outbound_type: OTHER_OUTBOUND_TYPE_MATERIAL,
           reason_type: '其他',
           pick_date: dayjs(todaySiteDateString()),
           items: [{ ...defaultOutboundItem }],
@@ -2116,6 +2153,44 @@ const OtherOutboundPage: React.FC = () => {
             />
           </Col>
           <Col span={12}>
+            <ProFormItem
+              name="outbound_type"
+              label={t('app.kuaizhizao.otherOutbound.field.outboundType')}
+              rules={
+                editingOutboundId == null
+                  ? [
+                      {
+                        required: true,
+                        message: t('app.kuaizhizao.otherOutbound.field.outboundTypeRequired'),
+                      },
+                    ]
+                  : []
+              }
+            >
+              <UniDropdown
+                style={{ width: '100%' }}
+                allowClear={editingOutboundId != null}
+                placeholder={
+                  editingOutboundId != null
+                    ? t('app.kuaizhizao.otherOutbound.field.outboundTypeLegacyHint')
+                    : undefined
+                }
+                options={[
+                  {
+                    value: OTHER_OUTBOUND_TYPE_MATERIAL,
+                    label: t('app.kuaizhizao.otherOutbound.outboundType.material'),
+                  },
+                  {
+                    value: OTHER_OUTBOUND_TYPE_ASSET,
+                    label: t('app.kuaizhizao.otherOutbound.outboundType.asset'),
+                  },
+                ]}
+              />
+            </ProFormItem>
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
             <ProFormItem name="reason_type" label={t('app.kuaizhizao.otherOutbound.field.reasonType')} rules={[{ required: true }]}>
               <UniDropdown
                 placeholder={t('app.kuaizhizao.otherOutbound.field.selectReasonType')}
@@ -2131,8 +2206,6 @@ const OtherOutboundPage: React.FC = () => {
               />
             </ProFormItem>
           </Col>
-        </Row>
-        <Row gutter={16}>
           <Col span={12}>
             <ProFormDatePicker
               name="pick_date"

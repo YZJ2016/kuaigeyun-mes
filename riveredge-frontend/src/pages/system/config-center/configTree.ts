@@ -178,6 +178,14 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = [
       type: 'boolean',
     },
     {
+      key: 'common.admin_revoke_all_documents',
+      nameKey: 'pages.system.configCenter.param.common_admin_revoke_all_documents',
+      descriptionKey: 'pages.system.configCenter.param.common_admin_revoke_all_documents_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.common.admin_revoke_all_documents',
+      type: 'boolean',
+    },
+    {
       key: 'common.quantity_decimal_places',
       nameKey: 'pages.system.configCenter.param.common_quantity_decimal_places',
       descriptionKey: 'pages.system.configCenter.param.common_quantity_decimal_places_desc',

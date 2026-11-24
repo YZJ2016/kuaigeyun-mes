@@ -59,6 +59,7 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   employee_code: 10,
   calculation_no: 10,
   order_code: 10,
+  customer_order_no: 10.6,
   quotation_code: 10,
   contract_code: 10,
   forecast_code: 10,
@@ -713,6 +714,7 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   shortage_quantity: 31.2,
   delay_days: 31,
   outsource_quantity: 31.1,
+  issued_batch_quantity: 31.15,
   packing_quantity: 31.05,
   received_quantity: 31.2,
   inspection_quantity: 31.3,
@@ -1064,6 +1066,7 @@ export const GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK = {
   // 单据标识
   quotation_code: 10,
   order_code: 10,
+  customer_order_no: 10.6,
   contract_code: 10,
   forecast_code: 10,
   inquiry_code: 10,
@@ -1078,6 +1081,7 @@ export const GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK = {
   materialCode: 20.1,
   material_spec: 20.72,
   material_model: 20.74,
+  supplier_name: 21.1,
   // 类型类
   forecast_period: 25,
   forecast_type: 25.2,
@@ -1297,6 +1301,7 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
 
   employee_name: 20,
   customer_name: 20,
+  customer_order_no: 20.6,
   supplier_name: 20,
   project_name: 20.05,
   urgency: 20.08,
@@ -1464,6 +1469,7 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   defect_quantity: 62.32,
   reported_quantity: 62.4,
   outsource_quantity: 62.5,
+  issued_batch_quantity: 62.55,
   packing_quantity: 62.6,
   inspection_quantity: 62.65,
   required_quantity: 62.7,

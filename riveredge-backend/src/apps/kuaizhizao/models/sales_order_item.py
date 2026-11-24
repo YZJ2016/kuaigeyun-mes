@@ -29,6 +29,7 @@ class SalesOrderItem(
     """
     tenant_id = fields.IntField(description="租户ID")
     sales_order_id = fields.IntField(description="销售订单ID")
+    customer_order_no = fields.CharField(max_length=100, null=True, description="客户订单号（表头同步快照）")
 
     # 产品信息
     material_id = fields.IntField(description="物料ID")

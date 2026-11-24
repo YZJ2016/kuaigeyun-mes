@@ -12,6 +12,8 @@ export interface OrderChangeItem {
   material_unit?: string;
   before_quantity?: number;
   after_quantity?: number;
+  before_aux_quantity?: number | null;
+  after_aux_quantity?: number | null;
   before_unit_price?: number;
   after_unit_price?: number;
   before_delivery_date?: string;

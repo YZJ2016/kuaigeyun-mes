@@ -40,12 +40,15 @@ async def resolve_scope_self(ctx: ScopeResolveContext) -> Q:
 
 async def resolve_scope_department(ctx: ScopeResolveContext) -> Q:
     dept_field = ctx.profile.department_uuid_field
-    applicant_field = ctx.profile.applicant_user_id_field
+    anchor_field = (
+        (getattr(ctx.profile, "department_user_id_field", None) or "").strip()
+        or ctx.profile.applicant_user_id_field
+    )
     clauses: list[Q] = []
     if dept_field and ctx.department_uuid:
         clauses.append(Q(**{dept_field: ctx.department_uuid}))
     if ctx.department_user_ids:
-        clauses.append(Q(**{f"{applicant_field}__in": ctx.department_user_ids}))
+        clauses.append(Q(**{f"{anchor_field}__in": ctx.department_user_ids}))
     if not clauses:
         return await resolve_scope_self(ctx)
     combined = clauses[0]

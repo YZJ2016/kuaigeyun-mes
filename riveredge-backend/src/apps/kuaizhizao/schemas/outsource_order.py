@@ -170,6 +170,8 @@ class OutsourceOrderResponse(OutsourceOrderBase):
     lifecycle: Optional[Dict[str, Any]] = Field(None, description="生命周期（后端计算）")
     capabilities: Optional[Dict[str, Any]] = Field(None, description="动作能力（后端计算）")
     receipt_batches: Optional[List[Dict[str, Any]]] = Field(None, description="收货批次")
+    issued_batch_quantity: Optional[Decimal] = Field(None, description="已累计发料套数")
+    suggested_receipt_quantity: Optional[Decimal] = Field(None, description="登记收货建议本批数量")
 
 
 class OutsourceOrderListResponse(BaseModel):
@@ -201,3 +203,5 @@ class OutsourceOrderListResponse(BaseModel):
     updated_by: Optional[int] = Field(None, description="更新人ID")
     updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     lifecycle: Optional[Dict[str, Any]] = Field(None, description="生命周期（后端计算）")
+    issued_batch_quantity: Decimal = Field(Decimal("0"), description="已累计发料套数")
+    suggested_receipt_quantity: Optional[Decimal] = Field(None, description="登记收货建议本批数量")

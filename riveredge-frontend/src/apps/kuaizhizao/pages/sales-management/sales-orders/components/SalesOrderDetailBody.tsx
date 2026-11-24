@@ -328,6 +328,7 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
         { title: t('app.kuaizhizao.salesOrder.orderDate'), dataIndex: 'order_date', valueType: 'date' },
         { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', valueType: 'date' },
         { title: t('app.kuaizhizao.salesOrder.customerName'), dataIndex: 'customer_name' },
+        { title: t('app.kuaizhizao.salesOrder.customerOrderNo'), dataIndex: 'customer_order_no' },
         { title: t('app.kuaizhizao.salesOrder.customerContact'), dataIndex: 'customer_contact' },
         { title: t('app.kuaizhizao.salesOrder.customerPhone'), dataIndex: 'customer_phone' },
         {

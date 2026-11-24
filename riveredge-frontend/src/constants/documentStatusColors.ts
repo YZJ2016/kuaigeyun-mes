@@ -9,8 +9,8 @@
  * | 语义 | Token | 含义 |
  * |------|-------|------|
  * | draft | RE_STATUS_BADGE_DRAFT | 草稿 / 计划中 / 初始 |
- * | pending | warning | 待审核 / 已提交 / 待决（等人） |
- * | active | processing | 进行中 / 执行中 / 评审中 / 已生效 / **转单结案**（与审核「已通过」区分） |
+ * | pending | warning | 待审核 / 已提交 / 待决 / **已下达**（尚未开工） |
+ * | active | processing | 进行中 / **执行中** / 评审中 / 已生效 / **转单结案**（与审核「已通过」区分） |
  * | success | success | 审核通过 / 已完成 / 业务终态结案（非转单语义） |
  * | danger | error | 驳回 / 取消 / 失败 / 不合格 |
  * | muted | default | 关闭 / 无 / 停用 |

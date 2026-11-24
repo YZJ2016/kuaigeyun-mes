@@ -143,6 +143,19 @@ export const InboundDetailDrawer: React.FC<InboundDetailDrawerProps> = ({
           },
         },
         {
+          title: t('app.kuaizhizao.warehouse.field.kingdeeBillNo'),
+          key: 'kingdee_bill_no',
+          dataIndex: 'kingdee_bill_no',
+          render: (_, record) => {
+            const display = String(record.kingdee_bill_no || '').trim();
+            return display ? (
+              <Typography.Text copyable={{ text: display }}>{display}</Typography.Text>
+            ) : (
+              '—'
+            );
+          },
+        },
+        {
           title: t('app.kuaizhizao.warehouseInbound.field.type'),
           dataIndex: 'receipt_type',
           render: (_, record) => renderInboundReceiptTypeMarkerTag(t, record.receipt_type),

@@ -8,10 +8,10 @@ Date: 2025-12-30
 """
 
 from datetime import date, datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 from apps.kuaizhizao.services.document_action_policy.types import PurchaseOrderCapabilities
 
 from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
@@ -89,6 +89,8 @@ class PurchaseOrderBase(BaseSchema):
     payment_method_code: Optional[str] = Field(
         None, max_length=50, description="付款方式（现金/转账/承兑等）"
     )
+    payment_wire_percent: Optional[Decimal] = Field(None, ge=0, le=100, description="电汇比例（%）")
+    payment_acceptance_percent: Optional[Decimal] = Field(None, ge=0, le=100, description="承兑比例（%）")
     settlement_terms_code: Optional[str] = Field(
         None, max_length=50, description="结算方式（预付/账期/货到付款等）"
     )
@@ -139,6 +141,13 @@ class PurchaseOrderBase(BaseSchema):
         if coerced is None:
             raise ValueError("无效的付款方式")
         return coerced
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_payment_method_mix_fields(cls, data: Any) -> Any:
+        from apps.master_data.config.payment_method_mix import apply_payment_method_mix_to_mapping
+
+        return apply_payment_method_mix_to_mapping(data)
 
     @field_validator("settlement_terms_code", mode="before")
     @classmethod
@@ -345,8 +354,7 @@ class PurchaseOrderItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
 
 
 class PurchaseOrderItemCreate(PurchaseOrderItemBase):
-    """采购订单明细创建Schema"""
-    pass
+    """采购订单明细创建Schema（单价允许 0，待定价/申请下推等场景）"""
 
 
 class PurchaseOrderItemUpdate(PurchaseOrderItemBase):
@@ -359,7 +367,7 @@ class PurchaseOrderItemUpdate(PurchaseOrderItemBase):
 
 class PurchaseOrderItemResponse(PurchaseOrderItemBase):
     """采购订单明细响应Schema"""
-    # 读侧允许 0：历史/变更残留行不得拖垮列表；写侧 Create/Update 仍用 gt=0
+    # 读侧允许 0：历史/变更残留行不得拖垮列表；写侧单价 ge=0 与 Create/Update 一致
     ordered_quantity: Decimal = Field(..., ge=0, description="采购数量")
     unit_price: Optional[Decimal] = Field(None, description="单价")
     total_price: Optional[Decimal] = Field(None, description="总价")
@@ -485,6 +493,7 @@ class PurchaseOrderListParams(BaseModel):
     order_by: Optional[str] = None
     pullable_only: Optional[bool] = None
     pull_target: Optional[str] = None
+    view: Optional[str] = None
     include_items: bool = False
     column_filters: Optional[str] = None
     pending_my_review: Optional[bool] = None

@@ -548,6 +548,7 @@ DOCUMENT_LAYOUTS: dict[str, DocumentLayout] = {
             ("订单日期", "order_date"),
             ("交货日期", "delivery_date"),
             ("状态", "status"),
+            ("金蝶单号", "kingdee_bill_no"),
         ],
         show_totals=True,
     ),
@@ -577,6 +578,7 @@ DOCUMENT_LAYOUTS: dict[str, DocumentLayout] = {
             ("出库日期", "delivery_date"),
             ("经办人", "deliverer_name"),
             ("状态", "status"),
+            ("金蝶单号", "kingdee_bill_no"),
         ],
         sign_labels=("制单", "仓管", "领货人"),
     ),
@@ -589,6 +591,7 @@ DOCUMENT_LAYOUTS: dict[str, DocumentLayout] = {
             ("订单日期", "order_date"),
             ("要求到货", "required_date"),
             ("状态", "status"),
+            ("金蝶单号", "kingdee_bill_no"),
         ],
         sign_labels=("采购员", "审核人", "供应商确认"),
         show_totals=True,
@@ -617,6 +620,7 @@ DOCUMENT_LAYOUTS: dict[str, DocumentLayout] = {
             ("入库日期", "receipt_date"),
             ("验收人", "receiver_name"),
             ("状态", "status"),
+            ("金蝶单号", "kingdee_bill_no"),
         ],
         sign_labels=("仓管", "质检", "采购确认"),
     ),
@@ -633,6 +637,7 @@ DOCUMENT_LAYOUTS: dict[str, DocumentLayout] = {
             ("计划开始", "planned_start_date"),
             ("计划结束", "planned_end_date"),
             ("状态", "status"),
+            ("金蝶单号", "kingdee_bill_no"),
         ],
         table_collection="operations",
         sign_labels=("计划员", "车间主任", "操作员"),
@@ -647,6 +652,7 @@ DOCUMENT_LAYOUTS: dict[str, DocumentLayout] = {
             ("领料人", "picker_name"),
             ("领料时间", "picking_time"),
             ("状态", "status"),
+            ("金蝶单号", "kingdee_bill_no"),
         ],
         sign_labels=("领料人", "仓管", "车间确认"),
     ),
@@ -672,6 +678,7 @@ DOCUMENT_LAYOUTS: dict[str, DocumentLayout] = {
             ("入库人", "receiver_name"),
             ("入库时间", "receipt_time"),
             ("状态", "status"),
+            ("金蝶单号", "kingdee_bill_no"),
         ],
         sign_labels=("仓管", "质检", "生产确认"),
     ),
@@ -721,6 +728,7 @@ DOCUMENT_LAYOUTS: dict[str, DocumentLayout] = {
             ("经办人", "operator_name"),
             ("入库时间", "inbound_time"),
             ("状态", "status"),
+            ("金蝶单号", "kingdee_bill_no"),
         ],
         sign_labels=("经办人", "仓管", "审批人"),
     ),
@@ -733,6 +741,7 @@ DOCUMENT_LAYOUTS: dict[str, DocumentLayout] = {
             ("经办人", "operator_name"),
             ("出库时间", "outbound_time"),
             ("状态", "status"),
+            ("金蝶单号", "kingdee_bill_no"),
         ],
         sign_labels=("经办人", "仓管", "审批人"),
     ),
@@ -975,11 +984,7 @@ def build_designer_schema(layout: DocumentLayout) -> dict[str, Any]:
                 style={"textAlign": "right", "fontSize": "11px", "fontWeight": "600"},
             )
         )
-    if (
-        layout.document_type != "payment_application"
-        and layout.secondary_table_collection
-        and layout.secondary_table_columns
-    ):
+    if layout.secondary_table_collection and layout.secondary_table_columns:
         blocks.extend(
             [
                 _section_title(layout.secondary_table_title or "明细"),

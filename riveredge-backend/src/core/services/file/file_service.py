@@ -33,6 +33,27 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.config.infra_config import infra_settings as settings
 from core.utils.timezone_utils import resolve_business_datetime
 
+# 迁移批次：NAS WebDAV 每请求往返慢，须小批避免网关 30s 超时
+MIGRATE_BATCH_LIMIT_BY_BACKEND: Dict[str, int] = {"nas_webdav": 4}
+MIGRATE_DEFAULT_BATCH_LIMIT = 50
+MIGRATE_MAX_BATCH_LIMIT = 100
+LEFTOVER_TIER_UUIDS_PER_BATCH_BY_BACKEND: Dict[str, int] = {"nas_webdav": 3}
+LEFTOVER_TIER_UUIDS_DEFAULT = 20
+
+
+def _resolve_migrate_batch_limit(storage_backend_name: str, requested: int) -> int:
+    req = max(1, min(int(requested or MIGRATE_DEFAULT_BATCH_LIMIT), MIGRATE_MAX_BATCH_LIMIT))
+    cap = MIGRATE_BATCH_LIMIT_BY_BACKEND.get(storage_backend_name)
+    if cap is not None:
+        return min(req, cap)
+    return req
+
+
+def _resolve_leftover_tier_batch(storage_backend_name: str) -> int:
+    return LEFTOVER_TIER_UUIDS_PER_BATCH_BY_BACKEND.get(
+        storage_backend_name, LEFTOVER_TIER_UUIDS_DEFAULT,
+    )
+
 
 class FileService:
     """
@@ -777,6 +798,16 @@ class FileService:
             return False
 
     @staticmethod
+    def _remote_storage_target_label(remote, target_bucket: Optional[str]) -> str:
+        backend = str(getattr(remote, "backend_name", None) or "").strip().lower()
+        if backend == "nas_webdav":
+            base = str(getattr(remote, "base_url", None) or "").strip()
+            root = str(getattr(remote, "root_path", None) or "").strip()
+            parts = [p for p in (base, root) if p]
+            return "WebDAV " + (" / ".join(parts) if parts else "未知地址")
+        return f"bucket={target_bucket or '未知'}"
+
+    @staticmethod
     async def _put_local_file_to_object_storage(
         remote,
         dest_key: str,
@@ -786,15 +817,16 @@ class FileService:
     ) -> int:
         """不分格式、不分大小：从磁盘上传到对象存储，HEAD 校验字节数后才视为成功。"""
         local_size = os.path.getsize(abs_path)
+        target_label = FileService._remote_storage_target_label(remote, target_bucket)
         await remote.put_file(dest_key, abs_path, content_type=content_type)
         remote_size = await remote.head_content_length(dest_key)
         if remote_size is None:
             raise ValidationError(
-                f"上传后对象不存在（bucket={target_bucket or '未知'} key={dest_key}）"
+                f"上传后对象不存在（{target_label} key={dest_key}）"
             )
         if remote_size != local_size:
             raise ValidationError(
-                f"上传后对象大小不一致（bucket={target_bucket or '未知'} key={dest_key} "
+                f"上传后对象大小不一致（{target_label} key={dest_key} "
                 f"本地={local_size} 远端={remote_size}），未删除本地文件"
             )
         return local_size
@@ -855,7 +887,25 @@ class FileService:
         return moved
 
     @staticmethod
-    async def _migrate_leftover_local_tiers(
+    def _collect_leftover_local_tier_file_uuids() -> List[str]:
+        thumb_dir = os.path.join(FileService.UPLOAD_DIR, "thumbnails")
+        if not os.path.isdir(thumb_dir):
+            return []
+        seen_uuids: set[str] = set()
+        ordered: List[str] = []
+        for name in sorted(os.listdir(thumb_dir)):
+            parsed = ImageTierService.parse_local_tier_filename(name)
+            if not parsed:
+                continue
+            file_uuid, _size = parsed
+            if file_uuid in seen_uuids:
+                continue
+            seen_uuids.add(file_uuid)
+            ordered.append(file_uuid)
+        return ordered
+
+    @staticmethod
+    async def _migrate_leftover_local_tiers_page(
         *,
         tenant_id: int,
         remote,
@@ -865,28 +915,24 @@ class FileService:
         dry_run: bool,
         target_bucket: Optional[str],
         failures: List[Dict[str, str]],
+        start_index: int,
+        max_uuids: int,
         cos=None,
-    ) -> Tuple[int, int]:
-        """已标记对象存储的文件若仍留着本机档位，一并上传后删除。"""
+    ) -> Tuple[int, int, int, bool]:
+        """已标记对象存储的文件若仍留着本机档位，分页上传后删除。返回 migrated, failed, next_index, done。"""
         from core.services.file.storage.resolver import SUPPORTED_OBJECT_STORAGE_TYPES
 
         storage = remote if remote is not None else cos
-        thumb_dir = os.path.join(FileService.UPLOAD_DIR, "thumbnails")
-        if not os.path.isdir(thumb_dir):
-            return 0, 0
+        uuids = FileService._collect_leftover_local_tier_file_uuids()
+        if not uuids or start_index >= len(uuids):
+            return 0, 0, start_index, True
 
+        safe_start = max(0, int(start_index))
+        safe_max = max(1, int(max_uuids))
+        batch = uuids[safe_start : safe_start + safe_max]
         migrated = 0
         failed = 0
-        seen_uuids: set[str] = set()
-        names = sorted(os.listdir(thumb_dir))
-        for name in names:
-            parsed = ImageTierService.parse_local_tier_filename(name)
-            if not parsed:
-                continue
-            file_uuid, _size = parsed
-            if file_uuid in seen_uuids:
-                continue
-            seen_uuids.add(file_uuid)
+        for file_uuid in batch:
             row = await File.filter(
                 tenant_id=tenant_id,
                 uuid=file_uuid,
@@ -913,7 +959,10 @@ class FileService:
             except Exception as e:
                 failed += 1
                 failures.append({"uuid": file_uuid, "reason": f"图片档位迁移失败: {str(e)[:180]}"})
-        return migrated, failed
+
+        next_index = safe_start + len(batch)
+        done = next_index >= len(uuids)
+        return migrated, failed, next_index, done
 
     @staticmethod
     async def migrate_local_files_to_object_storage(
@@ -923,6 +972,8 @@ class FileService:
         dry_run: bool = False,
         cursor: int = 0,
         limit: int = 50,
+        phase: str = "originals",
+        leftover_cursor: int = 0,
     ) -> Dict[str, Any]:
         """
         将本租户本地文件分页迁移到所选对象存储连接（腾讯 COS / MinIO）。
@@ -949,6 +1000,63 @@ class FileService:
         target_bucket = str((getattr(remote, "config", None) or {}).get("bucket") or "").strip() or None
         target_endpoint = getattr(remote, "base_url", None) or None
         storage_backend_name = str(getattr(remote, "backend_name", None) or "tencent_cos")
+        safe_limit = _resolve_migrate_batch_limit(storage_backend_name, limit)
+        leftover_batch = _resolve_leftover_tier_batch(storage_backend_name)
+        migrate_phase = str(phase or "originals").strip().lower()
+        if migrate_phase not in ("originals", "leftover_tiers"):
+            raise ValidationError("无效迁移阶段 phase")
+
+        def _migrate_response_base(**extra: Any) -> Dict[str, Any]:
+            payload: Dict[str, Any] = {
+                "cursor": max(0, int(cursor or 0)),
+                "next_cursor": max(0, int(cursor or 0)),
+                "limit": safe_limit,
+                "dry_run": dry_run,
+                "connection_uuid": target_uuid,
+                "target_bucket": target_bucket,
+                "target_endpoint": target_endpoint,
+                "storage_backend": storage_backend_name,
+                "phase": migrate_phase,
+                "next_leftover_cursor": 0,
+                "skipped": 0,
+                "migrated": 0,
+                "failed": 0,
+                "failures": [],
+            }
+            payload.update(extra)
+            return payload
+
+        if migrate_phase == "leftover_tiers":
+            failures: List[Dict[str, str]] = []
+            safe_leftover_cursor = max(0, int(leftover_cursor or 0))
+            leftover_migrated, leftover_failed, next_leftover, leftover_done = (
+                await FileService._migrate_leftover_local_tiers_page(
+                    tenant_id=tenant_id,
+                    remote=remote,
+                    local=local,
+                    key_prefix=key_prefix,
+                    delete_local=delete_local,
+                    dry_run=dry_run,
+                    target_bucket=target_bucket,
+                    failures=failures,
+                    start_index=safe_leftover_cursor,
+                    max_uuids=leftover_batch,
+                )
+            )
+            total_local = await File.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).filter(Q(storage_backend="local") | Q(storage_backend__isnull=True) | Q(storage_backend="")).count()
+            return _migrate_response_base(
+                total=total_local,
+                next_cursor=0,
+                done=leftover_done,
+                migrated=leftover_migrated,
+                failed=leftover_failed,
+                failures=failures,
+                phase="leftover_tiers" if not leftover_done else "originals",
+                next_leftover_cursor=next_leftover,
+            )
 
         # 首批真实迁移前做写探测，避免「连接测试通过但无写权限 / 桶不一致」仍批跑完
         safe_cursor = max(0, int(cursor or 0))
@@ -957,9 +1065,14 @@ class FileService:
             probe_body = b"riveredge-object-storage-migrate-probe"
             await remote.put(probe_key, probe_body, content_type="text/plain")
             if not await remote.exists(probe_key):
+                target_label = FileService._remote_storage_target_label(remote, target_bucket)
+                hint = (
+                    "请核对 WebDAV URL、Root Path 与账号写权限。"
+                    if storage_backend_name == "nas_webdav"
+                    else "请核对 Endpoint、Bucket、密钥与写权限。"
+                )
                 raise ValidationError(
-                    f"已写入对象存储但无法通过 HEAD 读回（桶={target_bucket or '未知'}）。"
-                    "请核对 Endpoint、Bucket、密钥与写权限。"
+                    f"已写入远程存储但无法通过 HEAD 读回（{target_label}）。{hint}"
                 )
             await remote.delete(probe_key)
 
@@ -969,7 +1082,6 @@ class FileService:
         ).filter(Q(storage_backend="local") | Q(storage_backend__isnull=True) | Q(storage_backend=""))
 
         total = await local_q.count()
-        safe_limit = max(1, min(int(limit or 50), 100))
         # id 游标：迁移成功后记录离开 local 集合，不可用 offset（会跳过剩余行）
         rows = await local_q.filter(id__gt=safe_cursor).order_by("id").limit(safe_limit).all()
 
@@ -1033,36 +1145,49 @@ class FileService:
 
         next_cursor = int(rows[-1].id) if rows else safe_cursor
         originals_exhausted = len(rows) == 0 or len(rows) < safe_limit
-        if originals_exhausted:
-            leftover_ok, leftover_fail = await FileService._migrate_leftover_local_tiers(
-                tenant_id=tenant_id,
-                remote=remote,
-                local=local,
-                key_prefix=key_prefix,
-                delete_local=delete_local,
-                dry_run=dry_run,
-                target_bucket=target_bucket,
+        if not originals_exhausted:
+            return _migrate_response_base(
+                total=total,
+                next_cursor=next_cursor,
+                done=False,
+                migrated=migrated,
+                failed=failed,
                 failures=failures,
+                phase="originals",
             )
-            migrated += leftover_ok
-            failed += leftover_fail
 
-        return {
-            "total": total,
-            "cursor": safe_cursor,
-            "next_cursor": next_cursor,
-            "limit": safe_limit,
-            "done": originals_exhausted,
-            "migrated": migrated,
-            "skipped": skipped,
-            "failed": failed,
-            "failures": failures,
-            "dry_run": dry_run,
-            "connection_uuid": target_uuid,
-            "target_bucket": target_bucket,
-            "target_endpoint": target_endpoint,
-            "storage_backend": storage_backend_name,
-        }
+        leftover_migrated = 0
+        leftover_failed = 0
+        next_leftover = 0
+        leftover_done = True
+        if originals_exhausted:
+            leftover_migrated, leftover_failed, next_leftover, leftover_done = (
+                await FileService._migrate_leftover_local_tiers_page(
+                    tenant_id=tenant_id,
+                    remote=remote,
+                    local=local,
+                    key_prefix=key_prefix,
+                    delete_local=delete_local,
+                    dry_run=dry_run,
+                    target_bucket=target_bucket,
+                    failures=failures,
+                    start_index=0,
+                    max_uuids=leftover_batch,
+                )
+            )
+            migrated += leftover_migrated
+            failed += leftover_failed
+
+        return _migrate_response_base(
+            total=total,
+            next_cursor=next_cursor,
+            done=leftover_done,
+            migrated=migrated,
+            failed=failed,
+            failures=failures,
+            phase="leftover_tiers" if not leftover_done else "originals",
+            next_leftover_cursor=next_leftover,
+        )
 
     @staticmethod
     async def migrate_local_files_to_cos(
@@ -1080,5 +1205,7 @@ class FileService:
             dry_run=dry_run,
             cursor=cursor,
             limit=limit,
+            phase="originals",
+            leftover_cursor=0,
         )
 

@@ -45,6 +45,10 @@ import { formatDateBySiteSetting, formatCurrencyPrice } from '../../../../../../
 import { useAuditRequired } from '../../../../../../hooks/useAuditRequired';
 import type { AuditPhaseRecord } from '../../../../../../components/uni-audit/AuditPhaseBadge';
 import type { CustomField } from '../../../../../../services/customField';
+import {
+  mergeRequisitionDetailDisplayItems,
+  renderMergedRequisitionConvertedTag,
+} from '../mergeRequisitionDetailDisplayItems';
 
 const PURCHASE_REQUISITION_RESOURCE = 'kuaizhizao:purchase-requisition';
 const PLACEHOLDER: PurchaseRequisition = { id: 0 };
@@ -136,6 +140,11 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
   );
   const nextSteps = lifecycle?.nextStepSuggestions;
   const showNextInTitle = Boolean(nextSteps?.length);
+
+  const detailDisplayItems = useMemo(
+    () => mergeRequisitionDetailDisplayItems(effective.items),
+    [effective.items],
+  );
 
   const handleCopy = useCallback(
     (text: string) => {
@@ -301,14 +310,14 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
       }
       lines={
         contentReady ? (
-          effective.items && effective.items.length > 0 ? (
+          detailDisplayItems.length > 0 ? (
             <Table
               size="small"
               rowKey="id"
               tableLayout="fixed"
               style={{ minWidth: DETAIL_ITEMS_MIN_WIDTH }}
               pagination={false}
-              dataSource={effective.items}
+              dataSource={detailDisplayItems}
               columns={[
                 {
                   title: t('app.kuaizhizao.purchaseRequisition.col.materialCode'),
@@ -330,6 +339,13 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
                     ellipsis: true,
                   }),
                 ),
+                {
+                  title: t('app.kuaizhizao.purchaseRequisition.form.suggestedSupplier'),
+                  dataIndex: 'supplier_name',
+                  width: 140,
+                  ellipsis: true,
+                  render: (v: string | undefined) => (v?.trim() ? v.trim() : '—'),
+                },
                 ...buildPartnerMaterialLineColumns(t, 'supplier', { readOnly: true, width: 110 }).map((col) => ({
                   title: col.title,
                   dataIndex: col.dataIndex as string,
@@ -354,13 +370,21 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
                 {
                   title: t('app.kuaizhizao.purchaseRequisition.col.converted'),
                   dataIndex: 'purchase_order_id',
-                  width: 80,
-                  render: (v: number | undefined) =>
-                    v ? (
-                      <Tag color="success">{t('common.yes')}</Tag>
-                    ) : (
-                      <Tag>{t('common.no')}</Tag>
-                    ),
+                  width: 88,
+                  render: (_: number | undefined, record: PurchaseRequisitionItem) => {
+                    const state = renderMergedRequisitionConvertedTag(record, t);
+                    if (state === 'yes') {
+                      return <Tag color="success">{t('common.yes')}</Tag>;
+                    }
+                    if (state === 'partial') {
+                      return (
+                        <Tag color="processing">
+                          {t('app.kuaizhizao.purchaseRequisition.col.partialConverted', '部分')}
+                        </Tag>
+                      );
+                    }
+                    return <Tag>{t('common.no')}</Tag>;
+                  },
                 },
                 {
                   title: t('app.kuaizhizao.purchaseRequisition.form.lineNotes'),

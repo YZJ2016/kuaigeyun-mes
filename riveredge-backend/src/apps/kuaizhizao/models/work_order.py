@@ -66,6 +66,7 @@ class WorkOrder(BaseModel):
             ("status",),
             ("production_mode",),
             ("sales_order_id",),
+            ("sales_order_item_id",),
             ("planned_start_date",),
             ("planned_end_date",),
             ("created_at",),
@@ -95,8 +96,21 @@ class WorkOrder(BaseModel):
 
     # 销售订单关联（MTO模式）
     sales_order_id = fields.IntField(null=True, description="销售订单ID（MTO模式时关联）")
+    sales_order_item_id = fields.IntField(
+        null=True,
+        description="来源销售订单明细ID（直推工单按行占用与取单展示）",
+    )
     sales_order_code = fields.CharField(max_length=50, null=True, description="销售订单编码")
     sales_order_name = fields.CharField(max_length=200, null=True, description="销售订单名称")
+
+    warehouse_id = fields.IntField(null=True, description="仓库ID")
+    warehouse_name = fields.CharField(max_length=200, null=True, description="仓库名称")
+    manufacturing_department_id = fields.IntField(null=True, description="生产部门ID")
+    manufacturing_department_name = fields.CharField(max_length=200, null=True, description="生产部门名称")
+    customer_id = fields.IntField(null=True, description="客户ID")
+    customer_name = fields.CharField(max_length=200, null=True, description="客户名称")
+    customer_order_no = fields.CharField(max_length=100, null=True, description="客户订单号")
+    required_date = fields.DatetimeField(null=True, description="需求日")
 
     # 车间工作中心信息
     workshop_id = fields.IntField(null=True, description="车间ID")

@@ -64,6 +64,47 @@ export function columnStateKeyIsCodeOwnedFixed(
   return false
 }
 
+function findUniTableColumnByStateKey(
+  columns: Record<string, unknown>[],
+  stateKey: string,
+): Record<string, unknown> | undefined {
+  for (let index = 0; index < columns.length; index++) {
+    const col = columns[index]
+    if (col.hideInTable) continue
+    if (getProColumnStateKey(col, index) === stateKey) return col
+  }
+  return undefined
+}
+
+/** 列设置在列展示面板中禁止取消勾选（仅操作列） */
+export function columnStateKeyIsColumnSettingLocked(
+  columns: Record<string, unknown>[],
+  stateKey: string,
+): boolean {
+  const col = findUniTableColumnByStateKey(columns, stateKey)
+  if (!col) return false
+  return isUniTableOperationColumn(col)
+}
+
+function columnSettingLocked(col: Record<string, unknown>): boolean {
+  return isUniTableOperationColumn(col)
+}
+
+function patchCodeOwnedFixedColumnState(
+  col: Record<string, unknown>,
+  prev: ColumnsState | undefined,
+  patch: Partial<ColumnsState>,
+): ColumnsState {
+  const locked = columnSettingLocked(col)
+  const show = locked ? true : prev?.show ?? (col.defaultShow === false ? false : true)
+  return {
+    ...prev,
+    ...patch,
+    show,
+    disable: locked,
+  }
+}
+
 function parseUniTableColumnWidthValue(width: unknown): number | undefined {
   if (typeof width === 'number' && Number.isFinite(width)) return width
   if (typeof width === 'string') {
@@ -494,25 +535,19 @@ export function buildDefaultColumnsStateMap(columns: Record<string, unknown>[]):
   columns.forEach((col, index) => {
     if (col.hideInTable || !isCodeOwnedFixed(col.fixed)) return
     const columnKey = getProColumnStateKey(col, index)
-    map[columnKey] = {
-      ...map[columnKey],
-      show: true,
+    map[columnKey] = patchCodeOwnedFixedColumnState(col, map[columnKey], {
       fixed: col.fixed,
-      disable: true,
-    }
+    })
   })
   // 左/右固定连续：columnsState.order 与 normalizeFixedColumnOrder 一致，避免 hasGapFixed
   let leftOrder = 0
   columns.forEach((col, index) => {
     if (col.hideInTable || col.fixed !== 'left') return
     const columnKey = getProColumnStateKey(col, index)
-    map[columnKey] = {
-      ...map[columnKey],
+    map[columnKey] = patchCodeOwnedFixedColumnState(col, map[columnKey], {
       order: leftOrder++,
       fixed: 'left',
-      show: true,
-      disable: true,
-    }
+    })
   })
   const rightFixedCols: { col: Record<string, unknown>; index: number }[] = []
   columns.forEach((col, index) => {
@@ -525,13 +560,10 @@ export function buildDefaultColumnsStateMap(columns: Record<string, unknown>[]):
   })
   rightFixedCols.forEach(({ col, index }, i) => {
     const columnKey = getProColumnStateKey(col, index)
-    map[columnKey] = {
-      ...map[columnKey],
+    map[columnKey] = patchCodeOwnedFixedColumnState(col, map[columnKey], {
       order: UNI_TABLE_CODE_OWNED_RIGHT_ORDER_BASE + i,
       fixed: 'right',
-      show: true,
-      disable: true,
-    }
+    })
   })
   return map
 }
@@ -548,7 +580,7 @@ export function stripColumnsStateForPersistence(
     const skipShow =
       columns != null &&
       columns.length > 0 &&
-      columnStateKeyIsCodeOwnedFixed(columns, k)
+      columnStateKeyIsColumnSettingLocked(columns, k)
     out[k] = {
       ...(v.show !== undefined && !skipShow ? { show: v.show } : {}),
       ...(v.order !== undefined && !isCodeOwnedOrder(v.order) ? { order: v.order } : {}),
@@ -570,7 +602,7 @@ export function mergeColumnsStateWithCodeContract(
       if (!v) continue
       const { fixed: _dropPersistedFixed, ...showOrder } = v
       const allowShow =
-        showOrder.show !== undefined && !columnStateKeyIsCodeOwnedFixed(columns, k)
+        showOrder.show !== undefined && !columnStateKeyIsColumnSettingLocked(columns, k)
       merged[k] = {
         ...merged[k],
         ...(allowShow ? { show: showOrder.show } : {}),
@@ -599,11 +631,13 @@ export function lockCodeOwnedFixedInColumnsState(
 
   for (const [k, v] of Object.entries(codeDefaults)) {
     if (isCodeOwnedFixed(v.fixed)) {
+      const col = findUniTableColumnByStateKey(columns, k)
+      const locked = col != null && columnSettingLocked(col)
       merged[k] = {
         ...merged[k],
-        show: true,
+        ...(locked ? { show: true } : {}),
         fixed: v.fixed,
-        disable: true,
+        disable: locked,
         ...(v.order !== undefined ? { order: v.order } : {}),
       }
     } else if (merged[k] && 'fixed' in merged[k] && !isCodeOwnedFixed(merged[k].fixed)) {
@@ -616,11 +650,12 @@ export function lockCodeOwnedFixedInColumnsState(
   columns.forEach((col, index) => {
     if (col.hideInTable || !isCodeOwnedFixed(col.fixed)) return
     const columnKey = getProColumnStateKey(col, index)
+    const locked = columnSettingLocked(col)
     merged[columnKey] = {
       ...merged[columnKey],
-      show: true,
+      ...(locked ? { show: true } : {}),
       fixed: col.fixed,
-      disable: true,
+      disable: locked,
       ...(codeDefaults[columnKey]?.order !== undefined
         ? { order: codeDefaults[columnKey].order }
         : {}),

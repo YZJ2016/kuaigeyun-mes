@@ -362,23 +362,146 @@ function startPoHandoffDraftQueue(
   );
 }
 
+function mergeSalesOrderPurchaseRequisitionDrafts(
+  drafts: Array<{
+    create_payload: Record<string, unknown>;
+    document_flow: Record<string, unknown>;
+    source_code?: string;
+    source_id?: number;
+  }>,
+): { create_payload: Record<string, unknown>; document_flow: Record<string, unknown> } | null {
+  if (!drafts.length) return null;
+  if (drafts.length === 1) {
+    return {
+      create_payload: drafts[0]!.create_payload,
+      document_flow: drafts[0]!.document_flow,
+    };
+  }
+
+  const items: Record<string, unknown>[] = [];
+  const salesOrderIds: number[] = [];
+  const orderCodes: string[] = [];
+  let requiredDate: string | undefined;
+  let requisitionDate: string | undefined;
+
+  for (const draft of drafts) {
+    const payload = draft.create_payload;
+    const rowItems = Array.isArray(payload.items)
+      ? (payload.items as Record<string, unknown>[])
+      : [];
+    items.push(...rowItems);
+
+    const soId = Number(
+      draft.document_flow.documentFlowSalesOrderId ?? draft.source_id ?? payload.source_id ?? 0,
+    );
+    if (Number.isFinite(soId) && soId > 0 && !salesOrderIds.includes(soId)) {
+      salesOrderIds.push(soId);
+    }
+
+    const code = String(draft.source_code ?? payload.source_code ?? '').trim();
+    if (code && !orderCodes.includes(code)) {
+      orderCodes.push(code);
+    }
+
+    const headReq = payload.required_date != null ? String(payload.required_date) : undefined;
+    if (headReq && (!requiredDate || headReq < requiredDate)) {
+      requiredDate = headReq;
+    }
+    for (const row of rowItems) {
+      const lineReq = row.required_date != null ? String(row.required_date) : undefined;
+      if (lineReq && (!requiredDate || lineReq < requiredDate)) {
+        requiredDate = lineReq;
+      }
+    }
+
+    const reqDate = payload.requisition_date != null ? String(payload.requisition_date) : undefined;
+    if (reqDate && (!requisitionDate || reqDate < requisitionDate)) {
+      requisitionDate = reqDate;
+    }
+  }
+
+  const first = drafts[0]!;
+  const codesLabel =
+    orderCodes.length > 0 ? orderCodes.join('、') : salesOrderIds.map(String).join('、');
+
+  return {
+    create_payload: {
+      ...first.create_payload,
+      requisition_name:
+        orderCodes.length === 1
+          ? first.create_payload.requisition_name
+          : `销售订单${codesLabel}请购`,
+      requisition_date: requisitionDate ?? first.create_payload.requisition_date,
+      required_date: requiredDate ?? first.create_payload.required_date,
+      source_type: 'sales_order',
+      source_id: salesOrderIds[0] ?? first.create_payload.source_id,
+      source_code: orderCodes[0] ?? first.create_payload.source_code,
+      notes: `由销售订单 ${codesLabel} 直推生成（按单外购，未做库存抵扣）`,
+      items,
+    },
+    document_flow: {
+      documentFlowSourceType: 'sales_order_buy_push',
+      documentFlowSalesOrderId: salesOrderIds[0],
+      documentFlowSalesOrderIds: salesOrderIds,
+    },
+  };
+}
+
+/** 多张销售订单取行：合并一张采购申请草稿再打开新建页。 */
+export async function handoffSalesOrdersToPurchaseRequisitionCreate(
+  navigate: NavigateFunction,
+  selections: Array<{ salesOrderId: number; payload: PushSalesOrderToPurchaseRequest }>,
+): Promise<void> {
+  const config = resolveDocumentFlowHandoff('purchase_requisition.pull_from_sales_order');
+  if (!config || !selections.length) return;
+
+  const draftPieces: Array<{
+    create_payload: Record<string, unknown>;
+    document_flow: Record<string, unknown>;
+    source_code?: string;
+    source_id?: number;
+  }> = [];
+  for (const sel of selections) {
+    const draftRes = await draftSalesOrderToPurchaseRequisition(sel.salesOrderId, sel.payload);
+    draftPieces.push({
+      create_payload: draftRes.create_payload,
+      document_flow: draftRes.document_flow,
+      source_code: draftRes.source_code,
+      source_id: draftRes.source_id,
+    });
+  }
+
+  const merged = mergeSalesOrderPurchaseRequisitionDrafts(draftPieces);
+  if (!merged) return;
+
+  const primaryId = selections[0]!.salesOrderId;
+  const search = `?flow=sales_order&sourceId=${primaryId}`;
+  writeDocumentFlowCreateDraft(config, config.createPath, search, {
+    createPayload: merged.create_payload,
+    documentFlow: merged.document_flow,
+    sourceType: 'sales_order',
+    sourceId: Number(merged.create_payload.source_id ?? primaryId),
+    sourceCode:
+      merged.create_payload.source_code != null
+        ? String(merged.create_payload.source_code)
+        : undefined,
+  });
+  openSinglePoHandoffDraft(
+    navigate,
+    config,
+    search,
+    merged.create_payload,
+    merged.document_flow,
+    'sales_order',
+  );
+}
+
 export async function handoffSalesOrderToPurchaseRequisitionCreate(
   navigate: NavigateFunction,
   salesOrderId: number,
   payload: PushSalesOrderToPurchaseRequest,
 ): Promise<void> {
-  const config = resolveDocumentFlowHandoff('purchase_requisition.pull_from_sales_order');
-  if (!config) return;
-  const draftRes = await draftSalesOrderToPurchaseRequisition(salesOrderId, payload);
-  const search = `?flow=sales_order&sourceId=${salesOrderId}`;
-  writeDocumentFlowCreateDraft(config, config.createPath, search, {
-    createPayload: draftRes.create_payload,
-    documentFlow: draftRes.document_flow,
-    sourceType: draftRes.source_type,
-    sourceId: draftRes.source_id,
-    sourceCode: draftRes.source_code,
-  });
-  navigate(`${config.createPath}${search}`);
+  await handoffSalesOrdersToPurchaseRequisitionCreate(navigate, [{ salesOrderId, payload }]);
 }
 
 export async function handoffSalesOrderToPurchaseOrderCreate(
@@ -407,7 +530,14 @@ export async function handoffReplenishmentToPurchaseRequisitionCreate(
     documentFlow: draftRes.document_flow,
     sourceType: draftRes.source_type,
   });
-  navigate(`${config.createPath}${search}`);
+  openSinglePoHandoffDraft(
+    navigate,
+    config,
+    search,
+    draftRes.create_payload,
+    draftRes.document_flow,
+    draftRes.source_type,
+  );
 }
 
 export async function handoffReplenishmentToPurchaseOrderCreate(
@@ -454,7 +584,14 @@ export async function handoffDemandComputationToPurchaseRequisitionCreate(
     documentFlow: draftRes.document_flow,
     sourceType: draftRes.source_type,
   });
-  navigate(`${config.createPath}${search}`);
+  openSinglePoHandoffDraft(
+    navigate,
+    config,
+    search,
+    draftRes.create_payload,
+    draftRes.document_flow,
+    draftRes.source_type,
+  );
 }
 
 export async function handoffRequisitionToPurchaseInquiryCreate(

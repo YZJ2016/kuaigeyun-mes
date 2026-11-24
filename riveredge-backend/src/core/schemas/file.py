@@ -153,6 +153,11 @@ class FileStorageMigrateRequest(BaseModel):
     dry_run: bool = Field(default=False, description="仅统计不写数据")
     cursor: int = Field(default=0, ge=0, description="上一批最大文件 id；首批传 0")
     limit: int = Field(default=50, ge=1, le=100, description="每批条数")
+    phase: str = Field(
+        default="originals",
+        description="originals：本地主文件；leftover_tiers：已上云但本机仍留图片档位",
+    )
+    leftover_cursor: int = Field(default=0, ge=0, description="leftover_tiers 阶段 uuid 列表下标")
 
 
 class FileStorageMigrateFailure(BaseModel):
@@ -176,4 +181,7 @@ class FileStorageMigrateResponse(BaseModel):
     connection_uuid: str = Field(..., description="实际使用的目标连接 UUID")
     target_bucket: Optional[str] = Field(None, description="目标桶名（便于核对控制台）")
     target_endpoint: Optional[str] = Field(None, description="目标桶访问域名")
+    storage_backend: Optional[str] = Field(None, description="目标存储后端类型")
+    phase: str = Field(default="originals", description="当前阶段 originals | leftover_tiers")
+    next_leftover_cursor: int = Field(default=0, description="leftover_tiers 下一批下标")
 

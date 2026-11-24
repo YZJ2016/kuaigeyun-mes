@@ -102,6 +102,12 @@ class Supplier(BaseModel):
     default_payment_method_code = fields.CharField(
         max_length=50, null=True, description="默认付款方式编码"
     )
+    default_payment_wire_percent = fields.DecimalField(
+        max_digits=5, decimal_places=2, null=True, description="默认电汇比例（%，组合付款方式）"
+    )
+    default_payment_acceptance_percent = fields.DecimalField(
+        max_digits=5, decimal_places=2, null=True, description="默认承兑比例（%，组合付款方式）"
+    )
     settlement_terms_code = fields.CharField(max_length=50, null=True, description="结算条款编码")
     default_currency_code = fields.CharField(
         max_length=10, null=True, description="默认币种（采购单据表头带出）"

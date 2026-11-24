@@ -148,6 +148,12 @@ export interface PurchaseOrder {
   net_amount?: number;
   currency?: string;
   exchange_rate?: number;
+  payment_method_code?: string | null;
+  payment_wire_percent?: number | null;
+  payment_acceptance_percent?: number | null;
+  settlement_terms_code?: string | null;
+  payment_terms_days?: number | null;
+  payable_recognition?: string | null;
   status?: string;
   source_type?: string;
   source_id?: number;
@@ -247,6 +253,8 @@ export interface PurchaseOrderListParams {
   pullable_only?: boolean;
   /** 加载目标：purchase_order_change */
   pull_target?: 'purchase_order_change';
+  /** 选单轻量列表，跳过进度/账款/全量 capabilities */
+  view?: 'options';
   /** 附带订单明细（明细表格视图） */
   include_items?: boolean;
   /** 高级搜索 / 列筛选 JSON */
@@ -666,6 +674,33 @@ export async function listPurchaseOrderSalesOrderPullLines(params: {
   pullable_only?: boolean;
 }): Promise<{ data: PurchaseOrderSalesOrderPullLine[]; total: number }> {
   return apiRequest('/apps/kuaizhizao/purchase-orders/sales-order-pull-lines', {
+    method: 'GET',
+    params,
+  });
+}
+
+export type PurchaseRequisitionSalesOrderPullLine = PurchaseOrderSalesOrderPullLine;
+
+export async function listPurchaseRequisitionSalesOrderPullOrders(params: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  pullable_only?: boolean;
+}): Promise<{ data: PurchaseOrderSalesOrderPullCandidate[]; total: number; success?: boolean }> {
+  return apiRequest('/apps/kuaizhizao/sales-orders/purchase-requisition-pull-orders', {
+    method: 'GET',
+    params,
+  });
+}
+
+export async function listPurchaseRequisitionSalesOrderPullLines(params: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  sales_order_id?: number;
+  pullable_only?: boolean;
+}): Promise<{ data: PurchaseRequisitionSalesOrderPullLine[]; total: number }> {
+  return apiRequest('/apps/kuaizhizao/sales-orders/purchase-requisition-pull-lines', {
     method: 'GET',
     params,
   });

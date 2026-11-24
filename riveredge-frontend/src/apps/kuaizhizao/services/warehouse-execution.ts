@@ -133,6 +133,7 @@ export type SalesDeliveryOrderPullLine = {
   id: number;
   sales_order_id: number;
   order_code?: string;
+  customer_order_no?: string | null;
   customer_id?: number;
   customer_name?: string;
   customer_contact?: string | null;
@@ -146,6 +147,9 @@ export type SalesDeliveryOrderPullLine = {
   material_code?: string;
   material_name?: string;
   material_spec?: string | null;
+  material_model?: string | null;
+  partner_material_code?: string | null;
+  partner_material_name?: string | null;
   unit?: string;
   warehouse_id?: number | null;
   warehouse_name?: string | null;
@@ -197,6 +201,8 @@ export type WorkOrderFinishedGoodsPullLine = {
   suggested_quantity?: number;
   pushed_quantity?: number;
   remaining_quantity?: number;
+  can_push?: boolean;
+  push_block_reason?: string;
 };
 
 export type ProductionReturnPullLine = {
@@ -223,10 +229,16 @@ export type WorkOrderPickingPullLine = {
   material_code?: string;
   material_name?: string;
   material_spec?: string | null;
+  material_model?: string | null;
   unit?: string;
   suggested_quantity?: number;
   pushed_quantity?: number;
   remaining_quantity?: number;
+  suggested_aux_quantity?: number | null;
+  pushed_aux_quantity?: number | null;
+  remaining_aux_quantity?: number | null;
+  aux_unit?: string | null;
+  unit_conversion_rate?: number | null;
 };
 
 export type OutsourceIssuePullLine = {
@@ -403,6 +415,8 @@ export const warehouseApi = {
         issue_quantity: number;
         warehouse_id?: number;
         warehouse_name?: string;
+        location_id?: number;
+        location_code?: string;
         batch_number?: string;
         serial_numbers?: string[];
       }>;
@@ -489,6 +503,8 @@ export const warehouseApi = {
           issue_quantity: number;
           warehouse_id?: number;
           warehouse_name?: string;
+          location_id?: number;
+          location_code?: string;
           batch_number?: string;
           serial_numbers?: string[];
         }>;

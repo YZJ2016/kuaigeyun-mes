@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from apps.kuaizhizao.services.document_lifecycle_service import get_outsource_order_lifecycle
 
 
-def test_outsource_order_released_suggests_inbound():
+def test_outsource_order_released_suggests_process_issue():
     row = SimpleNamespace(
         status="released",
         outsource_quantity=10,
@@ -14,7 +14,7 @@ def test_outsource_order_released_suggests_inbound():
     )
     lc = get_outsource_order_lifecycle(row)
     assert lc["current_stage_key"] == "released"
-    assert "委外入库" in lc["next_step_suggestions"]
+    assert "工序发料" in lc["next_step_suggestions"]
     assert lc.get("sub_stages") is None
 
 

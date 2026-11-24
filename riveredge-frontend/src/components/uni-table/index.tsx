@@ -3286,8 +3286,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   )
 
   const columnsForLayoutPlan = React.useMemo(() => {
-    // 与 ProTable 实际绘制同一套 show：右固定列在 columnsState 里被锁为显示，
-    // 宽度预算若仍读未锁定的 show:false，scroll.x 不含操作列，列会画在视口外。
+    // 与 ProTable 实际绘制同一套 show：操作列始终显示；其它固定列可隐藏。
+    // 宽度预算须与 lock 后 visibleState 一致，否则 scroll.x 不含操作列会画在视口外。
     const visibleState = lockCodeOwnedFixedInColumnsState(
       columnsStateValue,
       effectiveTableColumns,

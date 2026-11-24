@@ -172,15 +172,6 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 f"{Decimal(str(fluctuation_limit_percent)):.2f}%（基准价={benchmark_price}，当前={current_price}）"
             )
 
-    @staticmethod
-    def _assert_non_gift_purchase_unit_price(item_data: Any) -> None:
-        """非赠品明细采购单价须大于 0（与报价单口径一致；采购行暂无 is_gift 时一律按非赠品）。"""
-        if bool(getattr(item_data, "is_gift", False)):
-            return
-        price = Decimal(str(getattr(item_data, "unit_price", 0) or 0))
-        if price <= 0:
-            raise ValidationError("非赠品明细须填写大于0的采购单价")
-
     def _apply_purchase_item_price_settlement(
         self,
         item_dict: Dict[str, Any],
@@ -447,7 +438,6 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 material = await Material.get_or_none(tenant_id=tenant_id, id=item_data.material_id)
                 if not material:
                     raise NotFoundError(f"物料不存在: {item_data.material_id}")
-                self._assert_non_gift_purchase_unit_price(item_data)
                 self._validate_purchase_price_fluctuation_for_material(
                     material=material,
                     unit_price=item_data.unit_price,
@@ -821,6 +811,80 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 response.estimated_payable_after_prepayment = estimated_net
         return await enrich_record(tenant_id, "purchase_order", response)
 
+    async def _list_purchase_orders_options_view(
+        self,
+        tenant_id: int,
+        orders: List[PurchaseOrder],
+        *,
+        total: int,
+        params: PurchaseOrderListParams,
+    ) -> Dict[str, Any]:
+        """选单/关联轻量列表：跳过收货进度、账款、全量 capabilities 批量聚合。"""
+        if not orders:
+            return {"data": [], "total": total, "success": True}
+
+        order_ids = [int(o.id) for o in orders if o.id is not None]
+        items_count_by_id: Dict[int, int] = {oid: 0 for oid in order_ids}
+        if order_ids:
+            item_rows = await PurchaseOrderItem.filter(
+                tenant_id=tenant_id,
+                order_id__in=order_ids,
+                deleted_at__isnull=True,
+            ).values("order_id")
+            for row in item_rows:
+                oid = int(row["order_id"])
+                items_count_by_id[oid] = items_count_by_id.get(oid, 0) + 1
+
+        pull_target_norm = (params.pull_target or "").strip().lower()
+        pending_map: Dict[int, bool] = {}
+        if pull_target_norm == "purchase_order_change" and order_ids:
+            from apps.kuaizhizao.services.document_action_policy.enricher import (
+                _purchase_order_pending_change_by_ids,
+            )
+
+            pending_map = await _purchase_order_pending_change_by_ids(tenant_id, order_ids)
+
+        option_items_by_order: Dict[int, List[PurchaseOrderItem]] = {}
+        if params.include_items and order_ids:
+            all_items = await PurchaseOrderItem.filter(
+                tenant_id=tenant_id,
+                order_id__in=order_ids,
+                deleted_at__isnull=True,
+            ).order_by("order_id", "id").all()
+            for it in all_items:
+                option_items_by_order.setdefault(int(it.order_id), []).append(it)
+
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            _attach_capabilities_to_response,
+        )
+
+        result: List[PurchaseOrderListResponse] = []
+        for order in orders:
+            oid = int(order.id)
+            order_data = order.__dict__.copy()
+            order_data.pop("items", None)
+            resp = PurchaseOrderListResponse.model_construct(**order_data)
+            resp.items = []
+            if params.include_items:
+                resp.items = [
+                    PurchaseOrderItemResponse.model_validate(it)
+                    for it in option_items_by_order.get(oid, [])
+                ]
+            ic = items_count_by_id.get(oid, 0)
+            resp.items_count = ic
+            if pull_target_norm == "purchase_order_change":
+                caps = derive_purchase_order_capabilities(
+                    order,
+                    has_items=ic > 0,
+                    has_pending_change=pending_map.get(oid, False),
+                )
+                resp = _attach_capabilities_to_response(
+                    resp, caps, print_gate_record=order
+                )
+            result.append(resp)
+
+        return {"data": result, "total": total, "success": True}
+
     async def list_purchase_orders(
         self,
         tenant_id: int,
@@ -978,6 +1042,15 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         if field not in PURCHASE_ORDER_SORTABLE_FIELDS:
             order_clause = "-created_at"
         orders = await query.offset(skip).limit(limit).order_by(order_clause, "-id")
+
+        view_norm = (getattr(params, "view", None) or "").strip().lower()
+        if view_norm == "options":
+            return await self._list_purchase_orders_options_view(
+                tenant_id,
+                orders,
+                total=total,
+                params=params,
+            )
 
         # 不能直接 model_validate(order)：order.items 是 ReverseRelation，会导致 Pydantic 校验失败
         # 列表禁止读侧 sync 回写已到货数：确认入库/退货/撤回等写路径已 sync；读侧批量 update 易拖垮列表致网关 504
@@ -1631,7 +1704,6 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     material = await Material.get_or_none(tenant_id=tenant_id, id=item_data.material_id)
                     if not material:
                         raise NotFoundError(f"物料不存在: {item_data.material_id}")
-                    self._assert_non_gift_purchase_unit_price(item_data)
                     self._validate_purchase_price_fluctuation_for_material(
                         material=material,
                         unit_price=item_data.unit_price,

@@ -52,7 +52,8 @@ const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = {
   theme_color: '#1890ff',
 };
 
-export async function getPlatformSettingsPublic(): Promise<PlatformSettings> {
+/** 登录页拉取公开设置；失败或 HTTP 非 2xx 时返回 null（勿用默认开关冒充已开启）。 */
+export async function fetchPlatformSettingsPublic(): Promise<PlatformSettings | null> {
   try {
     const url = new URL('/api/v1/infra/platform-settings/public', window.location.origin);
     const tenantDomain = resolveTenantDomainFromUrl();
@@ -60,10 +61,30 @@ export async function getPlatformSettingsPublic(): Promise<PlatformSettings> {
       url.searchParams.set('tenant_domain', tenantDomain);
     }
     const response = await fetch(url.toString());
-    if (!response.ok) return DEFAULT_PLATFORM_SETTINGS;
-    return response.json();
+    if (!response.ok) return null;
+    return (await response.json()) as PlatformSettings;
   } catch {
-    return DEFAULT_PLATFORM_SETTINGS;
+    return null;
   }
+}
+
+export async function getPlatformSettingsPublic(): Promise<PlatformSettings> {
+  const data = await fetchPlatformSettingsPublic();
+  return data ?? DEFAULT_PLATFORM_SETTINGS;
+}
+
+/** 登录页底部能力：须 API 成功且字段显式为 true 才展示 */
+export function isLoginPageFeatureExplicitlyEnabled(
+  settings: PlatformSettings | null | undefined,
+  settingsLoadedFromApi: boolean,
+  field:
+    | 'login_guest_enabled'
+    | 'login_quick_enabled'
+    | 'login_client_win_enabled'
+    | 'login_client_android_enabled'
+    | 'enable_register',
+): boolean {
+  if (!settingsLoadedFromApi || !settings) return false;
+  return settings[field] === true;
 }
 

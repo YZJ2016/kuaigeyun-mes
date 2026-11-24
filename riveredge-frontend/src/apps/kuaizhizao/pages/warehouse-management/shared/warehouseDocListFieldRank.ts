@@ -34,6 +34,7 @@ export const WAREHOUSE_DOC_LIST_FIELD_RANK: Record<string, number> = {
   source_doc_no: 21,
   purchase_order_code: 21,
   sales_order_code: 21,
+  customer_order_no: 20.6,
   sales_delivery_code: 21,
   work_order_code: 21,
   reserved_work_order_code: 40,

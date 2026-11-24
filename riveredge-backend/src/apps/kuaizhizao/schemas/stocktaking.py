@@ -96,6 +96,8 @@ class StocktakingResponse(StocktakingBase):
     updated_by: Optional[int] = Field(None, description="更新人ID")
     updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycleStepper 展示）")
+    kingdee_surplus_bill_no: Optional[str] = Field(None, description="外推金蝶盘盈单号")
+    kingdee_deficit_bill_no: Optional[str] = Field(None, description="外推金蝶盘亏单号")
     items: Optional[List[DocumentLineMaterialPreview]] = Field(
         None, description="明细物料名预览（列表「明细」列）",
     )

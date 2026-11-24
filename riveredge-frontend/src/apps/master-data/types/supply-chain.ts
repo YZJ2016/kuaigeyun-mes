@@ -18,6 +18,8 @@ export interface PartnerInvoiceAndExtendedFields {
   enterpriseTypeCode?: string;
   paymentTermsDays?: number | string | null;
   defaultPaymentMethodCode?: string;
+  defaultPaymentWirePercent?: number | string | null;
+  defaultPaymentAcceptancePercent?: number | string | null;
   settlementTermsCode?: string;
   /** 默认币种，采购/销售单据表头带出 */
   defaultCurrencyCode?: string;

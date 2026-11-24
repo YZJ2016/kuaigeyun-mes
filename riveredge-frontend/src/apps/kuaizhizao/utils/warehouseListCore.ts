@@ -749,6 +749,10 @@ export function resolveInboundHubListParams(
 ): Record<string, string | number | readonly string[] | undefined> {
   const { created_start_date, created_end_date, updated_start_date, updated_end_date } =
     resolveCommonDateRanges(searchFormValues);
+  const { date_start: receipt_start_date, date_end: receipt_end_date } = parseSalesReportDateRange(
+    searchFormValues ?? {},
+    ['receipt_date_range', 'receiptDateRange'],
+  );
   const hubScopedReceiptTypesRaw = pickSearchRaw(searchFormValues, 'hub_scoped_receipt_types');
   const hubScopedReceiptTypes = Array.isArray(hubScopedReceiptTypesRaw)
     ? hubScopedReceiptTypesRaw.filter(
@@ -772,10 +776,15 @@ export function resolveInboundHubListParams(
       hubScopedReceiptTypes?.length ? hubScopedReceiptTypes : undefined,
     warehouse_id: pickFiniteNumber(searchFormValues, 'warehouse_id'),
     supplier_name: pickSearchString(searchFormValues, 'supplier_name'),
+    purchase_order_code: pickSearchString(searchFormValues, 'purchase_order_code'),
+    material_id: pickFiniteNumber(searchFormValues, 'material_id'),
+    material_keyword: pickSearchString(searchFormValues, 'material_keyword'),
     created_start_date,
     created_end_date,
     updated_start_date,
     updated_end_date,
+    receipt_start_date,
+    receipt_end_date,
   };
 }
 
@@ -902,12 +911,33 @@ export function filterInboundHubRows(
   const keyword = typeof params.keyword === 'string' ? params.keyword.trim().toLowerCase() : '';
   const supplierName =
     typeof params.supplier_name === 'string' ? params.supplier_name.trim().toLowerCase() : '';
+  const purchaseOrderCode =
+    typeof params.purchase_order_code === 'string'
+      ? params.purchase_order_code.trim().toLowerCase()
+      : '';
   const warehouseId =
     params.warehouse_id != null && params.warehouse_id !== ''
       ? Number(params.warehouse_id)
       : undefined;
+  const receiptStart =
+    typeof params.receipt_start_date === 'string' ? params.receipt_start_date.trim() : '';
+  const receiptEnd =
+    typeof params.receipt_end_date === 'string' ? params.receipt_end_date.trim() : '';
+  const materialKeyword =
+    typeof params.material_keyword === 'string' ? params.material_keyword.trim().toLowerCase() : '';
+  const materialId =
+    params.material_id != null && params.material_id !== '' ? Number(params.material_id) : undefined;
 
-  if (!keyword && !supplierName && !(warehouseId != null && Number.isFinite(warehouseId))) {
+  if (
+    !keyword &&
+    !supplierName &&
+    !purchaseOrderCode &&
+    !materialKeyword &&
+    !(materialId != null && Number.isFinite(materialId)) &&
+    !(warehouseId != null && Number.isFinite(warehouseId)) &&
+    !receiptStart &&
+    !receiptEnd
+  ) {
     return rows;
   }
 
@@ -942,8 +972,42 @@ export function filterInboundHubRows(
         return false;
       }
     }
+    if (purchaseOrderCode) {
+      const hay = [
+        row.purchase_order_code,
+        row.sales_order_code,
+        row.outsource_work_order_code,
+        row.work_order_code,
+        row.picking_code,
+        row.source_doc_no,
+      ]
+        .map((x) => String(x ?? '').toLowerCase())
+        .join(' ');
+      if (!hay.includes(purchaseOrderCode)) return false;
+    }
+    if (materialKeyword) {
+      const materialHay = documentLineMaterialKeywordHaystack(row);
+      if (!materialHay.includes(materialKeyword)) return false;
+    }
+    if (materialId != null && Number.isFinite(materialId)) {
+      const items = Array.isArray(row.items) ? row.items : [];
+      const lineMatch = items.some((it) => Number((it as { material_id?: number }).material_id) === materialId);
+      if (!lineMatch) return false;
+    }
     if (warehouseId != null && Number.isFinite(warehouseId)) {
       if (Number(row.warehouse_id) !== warehouseId) return false;
+    }
+    if (receiptStart || receiptEnd) {
+      const raw =
+        row.receipt_date ??
+        row.receipt_time ??
+        row.received_at ??
+        row.return_time ??
+        row.registration_date;
+      const text = String(raw ?? '').trim().slice(0, 10);
+      if (!text) return false;
+      if (receiptStart && text < receiptStart) return false;
+      if (receiptEnd && text > receiptEnd) return false;
     }
     return true;
   });

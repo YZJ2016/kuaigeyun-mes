@@ -392,6 +392,8 @@ async def migrate_storage_to_object_storage(
             dry_run=data.dry_run,
             cursor=data.cursor,
             limit=data.limit,
+            phase=data.phase,
+            leftover_cursor=data.leftover_cursor,
         )
         return FileStorageMigrateResponse(**result)
     except ValidationError as e:

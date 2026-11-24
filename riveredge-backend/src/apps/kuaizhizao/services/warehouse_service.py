@@ -676,6 +676,20 @@ async def _validate_batch_serial_policy(
             )
 
 
+def _normalize_customer_order_no_text(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _customer_order_no_from_so_item(so_item: Any, header_no: Optional[str]) -> Optional[str]:
+    line = _normalize_customer_order_no_text(getattr(so_item, "customer_order_no", None))
+    if line:
+        return line
+    return _normalize_customer_order_no_text(header_no)
+
+
 def _coerce_sales_delivery_item_serials(serial_numbers: Any) -> Any:
     """将明细表中的序列号字段解析为列表（供确认出库校验）。"""
     if serial_numbers is None:
@@ -702,6 +716,7 @@ def _build_sales_delivery_item_response(item: Any) -> SalesDeliveryItemResponse:
         "delivery_id": int(getattr(item, "delivery_id")),
         "sales_order_item_id": getattr(item, "sales_order_item_id", None),
         "shipment_notice_item_id": getattr(item, "shipment_notice_item_id", None),
+        "customer_order_no": getattr(item, "customer_order_no", None),
         "material_id": int(getattr(item, "material_id")),
         "material_code": str(getattr(item, "material_code", "") or ""),
         "material_name": str(getattr(item, "material_name", "") or ""),
@@ -2735,6 +2750,11 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             "production_picking",
             audit_required=audit_required,
         )
+        from apps.kuaizhizao.services.kingdee_push_bill_detail import attach_kingdee_bill_no_detail
+
+        resp = await attach_kingdee_bill_no_detail(
+            resp, tenant_id=tenant_id, source_type="production_picking", source_id=picking_id
+        )
         return await enrich_record(
             tenant_id, "production_picking", resp, audit_enabled=audit_required
         )
@@ -4381,16 +4401,25 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             if int(getattr(item, "material_id", 0) or 0) > 0
         ]
         unit_by_material: Dict[int, str] = {}
+        material_by_id: Dict[int, Material] = {}
         if material_ids:
             mats = await Material.filter(
                 tenant_id=tenant_id,
                 id__in=list(set(material_ids)),
                 deleted_at__isnull=True,
             ).all()
+            material_by_id = {int(m.id): m for m in mats}
             unit_by_material = {
                 int(m.id): str(getattr(m, "base_unit", "") or "个").strip() or "个"
                 for m in mats
             }
+        from apps.kuaizhizao.utils.document_line_material_snapshot import snapshot_from_material
+        from apps.kuaizhizao.utils.ledger_dual_quantity_utils import (
+            ledger_aux_quantity_from_base,
+            material_ledger_is_dual_unit,
+            resolve_material_display_auxiliary_unit,
+        )
+        from apps.kuaizhizao.utils.material_dual_quantity_utils import compute_line_unit_conversion_rate
 
         tolerance_resolver = OverQtyToleranceResolver(tenant_id)
         await tolerance_resolver.preload_materials(material_ids)
@@ -4419,17 +4448,40 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 material_unit = unit_by_material[material_id]
             if not material_unit:
                 material_unit = "个"
+            mat = material_by_id.get(material_id)
+            snap = snapshot_from_material(mat)
+            aux_unit: Optional[str] = None
+            aux_quantity: Optional[float] = None
+            unit_conversion_rate: Optional[float] = None
+            if mat is not None:
+                aux_unit_raw = resolve_material_display_auxiliary_unit(mat)
+                aux_unit = str(aux_unit_raw).strip() if aux_unit_raw else None
+                if aux_unit and material_ledger_is_dual_unit(mat):
+                    aux_dec = ledger_aux_quantity_from_base(mat, required_qty)
+                    if aux_dec > 0:
+                        aux_quantity = float(aux_dec)
+                        rate = compute_line_unit_conversion_rate(
+                            primary_quantity=required_qty,
+                            aux_quantity=aux_dec,
+                        )
+                        if rate is not None and rate > 0:
+                            unit_conversion_rate = float(rate)
             preview_items.append(
                 {
                     "item_id": material_id,
                     "material_code": str(getattr(item, "material_code", "") or ""),
                     "material_name": str(getattr(item, "material_name", "") or ""),
+                    "material_spec": snap.material_spec,
+                    "material_model": snap.material_model,
                     "material_unit": material_unit,
                     "quantity": float(required_qty),
                     "pushed_quantity": float(picked_qty),
                     "max_push_quantity": float(max_push_qty),
                     "base_quantity": float(required_qty),
                     "over_issue_tolerance_pct": float(issue_pct),
+                    "aux_unit": aux_unit,
+                    "aux_quantity": aux_quantity,
+                    "unit_conversion_rate": unit_conversion_rate,
                 }
             )
 
@@ -4679,23 +4731,59 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 serial_numbers_json = json.dumps(serial_numbers) if serial_numbers else None
 
                 meta = meta_by_material.get(material_id, {})
-                await ProductionPickingItem.create(
-                    tenant_id=tenant_id,
-                    picking_id=picking.id,
-                    work_order_id=work_order_id,
-                    work_order_code=work_order.code,
-                    material_id=material_id,
-                    material_code=str(getattr(line, "material_code", "") or line.get("material_code", "") or meta.get("material_code", "")),
-                    material_name=str(getattr(line, "material_name", "") or line.get("material_name", "") or meta.get("material_name", "")),
-                    material_unit=str(getattr(line, "material_unit", "") or line.get("material_unit", "") or meta.get("material_unit", "个")),
-                    required_quantity=issue_qty,
-                    picked_quantity=Decimal("0"),
-                    remaining_quantity=issue_qty,
+                line_unit = getattr(line, "material_unit", None)
+                if line_unit is None and isinstance(line, dict):
+                    line_unit = line.get("material_unit")
+                material_code = str(
+                    getattr(line, "material_code", "")
+                    or (line.get("material_code") if isinstance(line, dict) else "")
+                    or meta.get("material_code", "")
+                )
+                material_name = str(
+                    getattr(line, "material_name", "")
+                    or (line.get("material_name") if isinstance(line, dict) else "")
+                    or meta.get("material_name", "")
+                )
+                material_label = f"{material_code} {material_name}".strip() if material_name else material_code
+                line_loc_id = getattr(line, "location_id", None)
+                if line_loc_id is None and isinstance(line, dict):
+                    line_loc_id = line.get("location_id")
+                line_loc_code = getattr(line, "location_code", None)
+                if line_loc_code is None and isinstance(line, dict):
+                    line_loc_code = line.get("location_code")
+                loc_id, loc_code = await _resolve_line_location_pair(
+                    tenant_id,
                     warehouse_id=resolved_wh_id,
-                    warehouse_name=resolved_wh_name,
-                    batch_number=batch_number,
-                    serial_numbers=serial_numbers_json,
-                    status="待领料",
+                    location_id=line_loc_id,
+                    location_code=line_loc_code,
+                    material_label=material_label,
+                    direction_label="出库",
+                )
+                pick_line_rows.append(
+                    ProductionPickingItem(
+                        tenant_id=tenant_id,
+                        picking_id=picking.id,
+                        work_order_id=work_order_id,
+                        work_order_code=work_order.code,
+                        material_id=material_id,
+                        material_code=material_code,
+                        material_name=material_name,
+                        material_unit=await _canonical_material_unit(
+                            tenant_id,
+                            unit=line_unit or meta.get("material_unit"),
+                            unit_lookup=unit_lookup,
+                        ),
+                        required_quantity=issue_qty,
+                        picked_quantity=Decimal("0"),
+                        remaining_quantity=issue_qty,
+                        warehouse_id=resolved_wh_id,
+                        warehouse_name=resolved_wh_name,
+                        location_id=loc_id,
+                        location_code=loc_code,
+                        batch_number=batch_number,
+                        serial_numbers=serial_numbers_json,
+                        status="待领料",
+                    )
                 )
 
             try:
@@ -4996,35 +5084,56 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 serial_numbers_json = json.dumps(serial_numbers) if serial_numbers else None
 
                 meta = meta_by_material.get(material_id, {})
-                await ProductionPickingItem.create(
-                    tenant_id=tenant_id,
-                    picking_id=picking.id,
-                    work_order_id=work_order_id,
-                    work_order_code=work_order.code,
-                    material_id=material_id,
-                    material_code=str(
-                        getattr(line, "material_code", "")
-                        or line.get("material_code", "")
-                        or meta.get("material_code", "")
-                    ),
-                    material_name=str(
-                        getattr(line, "material_name", "")
-                        or line.get("material_name", "")
-                        or meta.get("material_name", "")
-                    ),
-                    material_unit=str(
-                        getattr(line, "material_unit", "")
-                        or line.get("material_unit", "")
-                        or meta.get("material_unit", "个")
-                    ),
-                    required_quantity=issue_qty,
-                    picked_quantity=Decimal("0"),
-                    remaining_quantity=issue_qty,
+                material_code = str(
+                    getattr(line, "material_code", "")
+                    or (line.get("material_code") if isinstance(line, dict) else "")
+                    or meta.get("material_code", "")
+                )
+                material_name = str(
+                    getattr(line, "material_name", "")
+                    or (line.get("material_name") if isinstance(line, dict) else "")
+                    or meta.get("material_name", "")
+                )
+                material_label = f"{material_code} {material_name}".strip() if material_name else material_code
+                line_loc_id = getattr(line, "location_id", None)
+                if line_loc_id is None and isinstance(line, dict):
+                    line_loc_id = line.get("location_id")
+                line_loc_code = getattr(line, "location_code", None)
+                if line_loc_code is None and isinstance(line, dict):
+                    line_loc_code = line.get("location_code")
+                loc_id, loc_code = await _resolve_line_location_pair(
+                    tenant_id,
                     warehouse_id=resolved_wh_id,
-                    warehouse_name=resolved_wh_name,
-                    batch_number=batch_number,
-                    serial_numbers=serial_numbers_json,
-                    status="待领料",
+                    location_id=line_loc_id,
+                    location_code=line_loc_code,
+                    material_label=material_label,
+                    direction_label="出库",
+                )
+                call_line_rows.append(
+                    ProductionPickingItem(
+                        tenant_id=tenant_id,
+                        picking_id=picking.id,
+                        work_order_id=work_order_id,
+                        work_order_code=work_order.code,
+                        material_id=material_id,
+                        material_code=material_code,
+                        material_name=material_name,
+                        material_unit=str(
+                            getattr(line, "material_unit", "")
+                            or (line.get("material_unit") if isinstance(line, dict) else "")
+                            or meta.get("material_unit", "个")
+                        ),
+                        required_quantity=issue_qty,
+                        picked_quantity=Decimal("0"),
+                        remaining_quantity=issue_qty,
+                        warehouse_id=resolved_wh_id,
+                        warehouse_name=resolved_wh_name,
+                        location_id=loc_id,
+                        location_code=loc_code,
+                        batch_number=batch_number,
+                        serial_numbers=serial_numbers_json,
+                        status="待领料",
+                    )
                 )
 
             call_row = await MaterialCallRequest.get(id=call.id, tenant_id=tenant_id)
@@ -5643,6 +5752,19 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
         )
 
         query = ProductionReturn.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        current_user = filters.get("current_user")
+        if current_user is not None:
+            from apps.kuaizhizao.services.kuaizhizao_data_scope import (
+                INBOUND_SCOPE_RESOURCE,
+                apply_kuaizhizao_list_scope,
+            )
+
+            query = await apply_kuaizhizao_list_scope(
+                query,
+                tenant_id=tenant_id,
+                current_user=current_user,
+                resource=INBOUND_SCOPE_RESOURCE,
+            )
         if filters.get("status"):
             query = query.filter(status=filters["status"])
         if filters.get("work_order_id"):
@@ -6291,6 +6413,186 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
 
         return FinishedGoodsReceiptResponse.model_validate(receipt)
 
+    async def update_finished_goods_receipt(
+        self,
+        tenant_id: int,
+        receipt_id: int,
+        receipt_data: FinishedGoodsReceiptUpdate,
+        updated_by: int,
+    ) -> FinishedGoodsReceiptResponse:
+        """更新成品入库单（待入库/草稿可改表头与明细）。"""
+        from apps.kuaizhizao.models.finished_goods_receipt_item import FinishedGoodsReceiptItem
+
+        async with in_transaction():
+            receipt = await FinishedGoodsReceipt.get_or_none(
+                tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+            )
+            if not receipt:
+                raise NotFoundError(f"成品入库单不存在: {receipt_id}")
+            if receipt.status not in ("待入库", "草稿", "draft", "DRAFT"):
+                raise BusinessLogicError("只有待入库状态的成品入库单可修改")
+
+            items = getattr(receipt_data, "items", None)
+            if items is not None and len(items) == 0:
+                raise ValidationError("入库明细不能为空")
+
+            total_quantity = (
+                sum(float(item.receipt_quantity or 0) for item in items)
+                if items is not None
+                else float(receipt.total_quantity or 0)
+            )
+            work_order_id = receipt.work_order_id
+            raw_wo = getattr(receipt_data, "work_order_id", None)
+            if "work_order_id" in receipt_data.model_fields_set:
+                work_order_id = int(raw_wo) if raw_wo not in (None, 0, "0") else None
+            if items is not None:
+                await self._assert_finished_goods_inbound_lines_by_work_order(
+                    tenant_id,
+                    items,
+                    exclude_finished_receipt_id=receipt_id,
+                    header_work_order_id=int(work_order_id) if work_order_id else None,
+                    header_total_qty=float(total_quantity or 0),
+                )
+
+            dump = receipt_data.model_dump(
+                exclude_unset=True,
+                exclude={"receipt_code", "items", "status", "total_quantity"},
+            )
+            if "work_order_id" in dump:
+                dump["work_order_id"] = work_order_id
+                dump["work_order_code"] = (
+                    str(getattr(receipt_data, "work_order_code", None) or "").strip()
+                    if work_order_id
+                    else ""
+                )
+            if dump.get("receipt_time") is not None:
+                dump["receipt_time"] = resolve_business_datetime(dump["receipt_time"])
+            user_info = await self.get_user_info(updated_by)
+            dump["updated_by"] = updated_by
+            dump["updated_by_name"] = user_info["name"]
+            if items is not None:
+                dump["total_quantity"] = total_quantity
+            if dump:
+                await FinishedGoodsReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(**dump)
+
+            if items is not None:
+                from apps.master_data.models.material import Material
+                from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item
+                from apps.kuaizhizao.utils.document_line_material_snapshot import (
+                    enrich_line_dicts_with_partner_snapshots,
+                    resolve_customer_id_for_finished_goods_receipt,
+                    snapshot_kwargs_for_orm,
+                )
+
+                await FinishedGoodsReceiptItem.filter(
+                    tenant_id=tenant_id, receipt_id=receipt_id
+                ).delete()
+                location_required, _ = await _get_warehouse_policy_flags(tenant_id)
+                header_wh_id = (
+                    dump.get("warehouse_id")
+                    if "warehouse_id" in dump
+                    else receipt.warehouse_id
+                )
+                sales_order_id = (
+                    dump.get("sales_order_id")
+                    if "sales_order_id" in dump
+                    else receipt.sales_order_id
+                )
+                customer_id = await resolve_customer_id_for_finished_goods_receipt(
+                    tenant_id,
+                    sales_order_id=sales_order_id,
+                )
+                for item_data in items:
+                    material = await Material.get_or_none(
+                        tenant_id=tenant_id,
+                        id=item_data.material_id,
+                        deleted_at__isnull=True,
+                    )
+                    batch_number = getattr(item_data, "batch_number", None)
+                    if material:
+                        batch_number = await ensure_batch_no_for_item(
+                            tenant_id=tenant_id,
+                            material=material,
+                            item_data=item_data,
+                            supplier_code=None,
+                        ) or batch_number
+                    material_label = (
+                        getattr(item_data, "material_name", None)
+                        or getattr(item_data, "material_code", "未知物料")
+                    )
+                    line_wh_id = getattr(item_data, "warehouse_id", None) or header_wh_id
+                    loc_id, loc_code = await _resolve_line_location_pair(
+                        tenant_id,
+                        warehouse_id=line_wh_id,
+                        location_id=getattr(item_data, "location_id", None),
+                        location_code=getattr(item_data, "location_code", None),
+                        material_label=material_label,
+                        direction_label="入库",
+                    )
+                    _validate_location_if_required(
+                        location_required=location_required,
+                        location_id=loc_id,
+                        location_code=loc_code,
+                        scene="成品入库",
+                        material_label=material_label,
+                    )
+                    line_payload = {
+                        "material_id": item_data.material_id,
+                        "material_spec": getattr(item_data, "material_spec", None),
+                    }
+                    enriched = await enrich_line_dicts_with_partner_snapshots(
+                        tenant_id,
+                        partner_type="customer" if customer_id else None,
+                        partner_id=customer_id,
+                        lines=[line_payload],
+                    )
+                    snap = snapshot_kwargs_for_orm(enriched[0])
+                    serials = getattr(item_data, "serial_numbers", None)
+                    line_wo_id = getattr(item_data, "work_order_id", None)
+                    line_wo_code = getattr(item_data, "work_order_code", None)
+                    await FinishedGoodsReceiptItem.create(
+                        tenant_id=tenant_id,
+                        receipt_id=receipt_id,
+                        work_order_id=int(line_wo_id) if line_wo_id not in (None, 0) else None,
+                        work_order_code=str(line_wo_code or "").strip() or None,
+                        material_id=item_data.material_id,
+                        material_code=item_data.material_code,
+                        material_name=item_data.material_name,
+                        material_spec=getattr(item_data, "material_spec", None)
+                        or enriched[0].get("material_spec"),
+                        material_unit=await _canonical_material_unit(
+                            tenant_id,
+                            unit=item_data.material_unit,
+                            material=material,
+                        ),
+                        **snap,
+                        receipt_quantity=item_data.receipt_quantity,
+                        qualified_quantity=item_data.qualified_quantity,
+                        unqualified_quantity=item_data.unqualified_quantity,
+                        location_id=loc_id,
+                        location_code=loc_code,
+                        batch_number=batch_number,
+                        serial_numbers=serials if serials else None,
+                        expiry_date=getattr(item_data, "expiry_date", None),
+                        quality_status=getattr(item_data, "quality_status", "合格"),
+                        quality_inspection_id=getattr(item_data, "quality_inspection_id", None),
+                        status=getattr(item_data, "status", "待入库"),
+                        receipt_time=getattr(item_data, "receipt_time", None),
+                        notes=getattr(item_data, "notes", None),
+                    )
+
+            updated = await FinishedGoodsReceipt.get(tenant_id=tenant_id, id=receipt_id)
+            result = FinishedGoodsReceiptResponse.model_validate(updated)
+
+        from apps.kuaiconnect.services.document_push.kingdee_im_batch_update_sync import (
+            sync_finished_goods_receipt_kingdee_after_update,
+        )
+
+        await sync_finished_goods_receipt_kingdee_after_update(
+            tenant_id, receipt_id, acting_user_id=updated_by
+        )
+        return result
+
     async def get_finished_goods_receipt_by_id(self, tenant_id: int, receipt_id: int) -> FinishedGoodsReceiptWithItemsResponse:
         """根据ID获取成品入库单（含明细）"""
         receipt = await FinishedGoodsReceipt.get_or_none(tenant_id=tenant_id, id=receipt_id)
@@ -6302,7 +6604,192 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
         from apps.kuaizhizao.services.document_lifecycle_service import get_other_inbound_lifecycle
 
         resp.lifecycle = get_other_inbound_lifecycle(receipt)
-        return resp
+        caps = derive_inbound_hub_capabilities(receipt, receipt_type="finished_goods")
+        resp = resp.model_copy(update={"capabilities": caps})
+        from apps.kuaizhizao.services.kingdee_push_bill_detail import attach_kingdee_bill_no_detail
+
+        return await attach_kingdee_bill_no_detail(
+            resp, tenant_id=tenant_id, source_type="finished_goods_receipt", source_id=receipt_id
+        )
+
+    async def update_finished_goods_receipt(
+        self,
+        tenant_id: int,
+        receipt_id: int,
+        receipt_data: FinishedGoodsReceiptUpdate,
+        updated_by: int,
+    ) -> FinishedGoodsReceiptWithItemsResponse:
+        """更新成品入库单（待入库可改表头与明细，含副数量）。"""
+        from apps.kuaizhizao.services.document_action_policy.warehouse_inbound_hub import (
+            assert_inbound_hub_capability,
+        )
+
+        async with in_transaction():
+            receipt = await FinishedGoodsReceipt.get_or_none(
+                tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+            )
+            if not receipt:
+                raise NotFoundError(f"成品入库单不存在: {receipt_id}")
+            assert_inbound_hub_capability(receipt, "update", receipt_type="finished_goods")
+
+            user_info = await self.get_user_info(updated_by)
+            dump = receipt_data.model_dump(
+                exclude_unset=True,
+                exclude={"receipt_code", "items", "status", "review_status"},
+            )
+            if dump.get("receipt_time") is not None:
+                dump["receipt_time"] = resolve_business_datetime(dump["receipt_time"])
+            dump["updated_by"] = updated_by
+            dump["updated_by_name"] = user_info.get("name", "")
+            if dump:
+                await FinishedGoodsReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(**dump)
+
+            if receipt_data.items is not None:
+                if not receipt_data.items:
+                    raise ValidationError("入库明细不能为空")
+                await FinishedGoodsReceiptItem.filter(
+                    tenant_id=tenant_id, receipt_id=receipt_id
+                ).delete()
+
+                from apps.master_data.models.material import Material
+                from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item
+                from apps.kuaizhizao.utils.document_line_material_snapshot import (
+                    enrich_line_dicts_with_partner_snapshots,
+                    resolve_customer_id_for_finished_goods_receipt,
+                    snapshot_kwargs_for_orm,
+                )
+
+                location_required, _ = await _get_warehouse_policy_flags(tenant_id)
+                refreshed = await FinishedGoodsReceipt.get(tenant_id=tenant_id, id=receipt_id)
+                header_wh_id = int(
+                    getattr(receipt_data, "warehouse_id", None)
+                    or getattr(refreshed, "warehouse_id", 0)
+                    or 0
+                )
+                customer_id = await resolve_customer_id_for_finished_goods_receipt(
+                    tenant_id,
+                    sales_order_id=getattr(refreshed, "sales_order_id", None),
+                )
+                material_by_id = await _load_document_line_materials(
+                    tenant_id,
+                    [int(getattr(it, "material_id", 0) or 0) for it in receipt_data.items],
+                    alive_only=True,
+                )
+                unit_lookup = await _load_unit_name_lookup(tenant_id)
+                enriched_lines = await enrich_line_dicts_with_partner_snapshots(
+                    tenant_id,
+                    partner_type="customer" if customer_id else None,
+                    partner_id=customer_id,
+                    lines=[
+                        {
+                            "material_id": item_data.material_id,
+                            "material_spec": getattr(item_data, "material_spec", None),
+                        }
+                        for item_data in receipt_data.items
+                    ],
+                )
+                total_quantity = Decimal(0)
+                fgr_line_rows: List[FinishedGoodsReceiptItem] = []
+                for item_data, enriched_line in zip(receipt_data.items, enriched_lines):
+                    qty = Decimal(str(item_data.receipt_quantity or 0))
+                    if qty <= 0:
+                        raise ValidationError(
+                            f"物料 {item_data.material_code or item_data.material_id} 的入库数量必须大于 0"
+                        )
+                    material = material_by_id.get(int(item_data.material_id))
+                    batch_number = getattr(item_data, "batch_number", None)
+                    if material:
+                        batch_number = await ensure_batch_no_for_item(
+                            tenant_id=tenant_id,
+                            material=material,
+                            item_data=item_data,
+                            supplier_code=None,
+                        )
+                    material_label = (
+                        getattr(item_data, "material_name", None)
+                        or getattr(item_data, "material_code", None)
+                        or str(item_data.material_id)
+                    )
+                    line_wh_id = int(
+                        getattr(item_data, "warehouse_id", None) or header_wh_id or 0
+                    ) or None
+                    loc_id, loc_code = await _resolve_line_location_pair(
+                        tenant_id,
+                        warehouse_id=line_wh_id,
+                        location_id=getattr(item_data, "location_id", None),
+                        location_code=getattr(item_data, "location_code", None),
+                        material_label=material_label,
+                        direction_label="入库",
+                    )
+                    _validate_location_if_required(
+                        location_required=location_required,
+                        location_id=loc_id,
+                        location_code=loc_code,
+                        scene="成品入库",
+                        material_label=material_label,
+                    )
+                    snap = snapshot_kwargs_for_orm(enriched_line)
+                    fgr_line_rows.append(
+                        FinishedGoodsReceiptItem(
+                            tenant_id=tenant_id,
+                            receipt_id=receipt_id,
+                            material_id=item_data.material_id,
+                            material_code=item_data.material_code,
+                            material_name=item_data.material_name,
+                            material_spec=getattr(item_data, "material_spec", None)
+                            or enriched_line.get("material_spec"),
+                            material_unit=await _canonical_material_unit(
+                                tenant_id,
+                                unit=item_data.material_unit,
+                                material=material,
+                                unit_lookup=unit_lookup,
+                            ),
+                            **snap,
+                            **_document_line_dual_quantity_write_kwargs(item_data),
+                            receipt_quantity=qty,
+                            qualified_quantity=Decimal(
+                                str(getattr(item_data, "qualified_quantity", None) or qty)
+                            ),
+                            unqualified_quantity=Decimal(
+                                str(getattr(item_data, "unqualified_quantity", None) or 0)
+                            ),
+                            location_id=loc_id,
+                            location_code=loc_code,
+                            batch_number=batch_number,
+                            expiry_date=getattr(item_data, "expiry_date", None),
+                            quality_status=getattr(item_data, "quality_status", "合格"),
+                            quality_inspection_id=getattr(
+                                item_data, "quality_inspection_id", None
+                            ),
+                            status=getattr(item_data, "status", "待入库") or "待入库",
+                            receipt_time=getattr(item_data, "receipt_time", None),
+                            notes=getattr(item_data, "notes", None),
+                            serial_numbers=(
+                                json.dumps(item_data.serial_numbers)
+                                if isinstance(getattr(item_data, "serial_numbers", None), list)
+                                and item_data.serial_numbers
+                                else getattr(item_data, "serial_numbers", None)
+                            ),
+                        )
+                    )
+                    total_quantity += qty
+                if fgr_line_rows:
+                    await FinishedGoodsReceiptItem.bulk_create(fgr_line_rows)
+
+                await FinishedGoodsReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
+                    total_quantity=total_quantity
+                )
+
+            result = await self.get_finished_goods_receipt_by_id(tenant_id, receipt_id)
+
+        from apps.kuaiconnect.services.document_push.kingdee_im_batch_update_sync import (
+            sync_finished_goods_receipt_kingdee_after_update,
+        )
+
+        await sync_finished_goods_receipt_kingdee_after_update(
+            tenant_id, receipt_id, acting_user_id=updated_by
+        )
+        return result
 
     async def list_finished_goods_receipts(
         self, tenant_id: int, skip: int = 0, limit: int = 20, **filters
@@ -6315,6 +6802,19 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
         )
 
         query = FinishedGoodsReceipt.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        current_user = filters.get("current_user")
+        if current_user is not None:
+            from apps.kuaizhizao.services.kuaizhizao_data_scope import (
+                INBOUND_SCOPE_RESOURCE,
+                apply_kuaizhizao_list_scope,
+            )
+
+            query = await apply_kuaizhizao_list_scope(
+                query,
+                tenant_id=tenant_id,
+                current_user=current_user,
+                resource=INBOUND_SCOPE_RESOURCE,
+            )
 
         # 应用过滤条件
         if filters.get('status'):
@@ -6912,21 +7412,190 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
     _WO_INBOUND_RECEIPT_COUNT_STATUSES = ("待入库", "草稿", "draft", "DRAFT", "已入库")
 
     async def _sum_work_order_inbound_quantity(self, tenant_id: int, work_order_id: int) -> float:
+        totals = await self.batch_sum_work_order_inbound_quantity(tenant_id, [work_order_id])
+        return float(totals.get(int(work_order_id), 0.0))
+
+    async def batch_sum_work_order_inbound_quantity(
+        self,
+        tenant_id: int,
+        work_order_ids: List[int],
+    ) -> Dict[int, float]:
+        """工单已占用入库数量（成品+半成品入库单），取单列表批量用。
+
+        含待入库/草稿（保存未确认入库即占用）；空白建单按行 work_order_id 汇总，头表工单按 total_quantity。
+        """
+        from collections import defaultdict
+
+        from apps.kuaizhizao.models.finished_goods_receipt_item import FinishedGoodsReceiptItem
         from apps.kuaizhizao.models.semi_finished_goods_receipt import SemiFinishedGoodsReceipt
 
         fg_rows = await FinishedGoodsReceipt.filter(
             tenant_id=tenant_id,
             work_order_id=work_order_id,
             deleted_at__isnull=True,
-            status__in=self._WO_INBOUND_RECEIPT_COUNT_STATUSES,
-        ).all()
+            status__in=statuses,
+        ).values("id", "work_order_id", "total_quantity")
         sf_rows = await SemiFinishedGoodsReceipt.filter(
             tenant_id=tenant_id,
             work_order_id=work_order_id,
             deleted_at__isnull=True,
-            status__in=self._WO_INBOUND_RECEIPT_COUNT_STATUSES,
-        ).all()
-        return sum(float(r.total_quantity or 0) for r in fg_rows + sf_rows)
+            status__in=statuses,
+        ).values("work_order_id", "total_quantity")
+        for row in fg_rows:
+            wid = int(row.get("work_order_id") or 0)
+            if wid <= 0:
+                continue
+            out[wid] += float(row.get("total_quantity") or 0)
+        for row in sf_rows:
+            wid = int(row.get("work_order_id") or 0)
+            if wid <= 0:
+                continue
+            out[wid] += float(row.get("total_quantity") or 0)
+
+        line_rows = await FinishedGoodsReceiptItem.filter(
+            tenant_id=tenant_id,
+            work_order_id__in=ids,
+            deleted_at__isnull=True,
+        ).values("work_order_id", "receipt_id", "receipt_quantity")
+        if line_rows:
+            receipt_ids = sorted(
+                {int(r["receipt_id"]) for r in line_rows if int(r.get("receipt_id") or 0) > 0}
+            )
+            if receipt_ids:
+                header_meta = await FinishedGoodsReceipt.filter(
+                    tenant_id=tenant_id,
+                    id__in=receipt_ids,
+                    deleted_at__isnull=True,
+                    status__in=statuses,
+                ).values("id", "work_order_id")
+                header_wo_by_receipt = {
+                    int(h["id"]): int(h.get("work_order_id") or 0) for h in header_meta
+                }
+                valid_receipt_ids = set(header_wo_by_receipt.keys())
+                for row in line_rows:
+                    rid = int(row.get("receipt_id") or 0)
+                    if rid not in valid_receipt_ids:
+                        continue
+                    if header_wo_by_receipt.get(rid, 0) > 0:
+                        continue
+                    wid = int(row.get("work_order_id") or 0)
+                    if wid <= 0:
+                        continue
+                    out[wid] += float(row.get("receipt_quantity") or 0)
+        return dict(out)
+
+    async def batch_inbound_pull_quotas_for_work_orders(
+        self,
+        tenant_id: int,
+        work_orders: Sequence[Any],
+    ) -> Dict[int, Dict[str, float]]:
+        """
+        成品入库取单列表专用额度快照：批量汇总已入库量，不算 FQC 余量（与建单 pending 口径一致）。
+        """
+        from decimal import Decimal
+
+        from apps.kuaizhizao.services.over_report_rules import (
+            max_completed_quantity_for_plan,
+            tuple_from_model,
+        )
+        from apps.kuaizhizao.utils.over_qty_tolerance import (
+            OverQtyToleranceResolver,
+            max_allowed,
+        )
+        from infra.services.business_config_service import BusinessConfigService
+
+        rows = [wo for wo in work_orders if getattr(wo, "id", None)]
+        if not rows:
+            return {}
+        ids = [int(wo.id) for wo in rows]
+        received_by_id = await self.batch_sum_work_order_inbound_quantity(tenant_id, ids)
+        limit_mode = await BusinessConfigService().get_finished_goods_inbound_limit_mode(
+            tenant_id
+        )
+        tolerance_resolver = OverQtyToleranceResolver(tenant_id)
+        picking_kit_cap_by_id: Dict[int, float] = {}
+        out: Dict[int, Dict[str, float]] = {}
+        for wo in rows:
+            wid = int(wo.id)
+            planned = float(wo.quantity or 0)
+            mode, value = tuple_from_model(wo)
+            max_qty = float(
+                max_completed_quantity_for_plan(wo.quantity, mode, value)
+            )
+            received = float(received_by_id.get(wid, 0.0))
+            receipt_pct = await tolerance_resolver.resolve_over_receipt_pct(
+                int(wo.product_id)
+            )
+            max_with_tolerance = float(
+                max_allowed(Decimal(str(max_qty)), receipt_pct)
+            )
+            if limit_mode == "picking_kit_sets":
+                if wid not in picking_kit_cap_by_id:
+                    picking_kit_cap_by_id[wid] = await self._compute_picking_kit_sets_cap(
+                        tenant_id, wo
+                    )
+                max_with_tolerance = min(
+                    max_with_tolerance, float(picking_kit_cap_by_id[wid])
+                )
+            pending = max(0.0, max_with_tolerance - received)
+            out[wid] = {
+                "planned": planned,
+                "received": received,
+                "pending": pending,
+                "max_quantity": max_with_tolerance,
+            }
+        return out
+
+    async def _compute_picking_kit_sets_cap(self, tenant_id: int, work_order: Any) -> float:
+        """按 BOM 齐套计入物料与已确认领料量折算的可装配套数上限（件）。"""
+        from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
+        from apps.kuaizhizao.utils.issue_method_resolver import is_kitting_rate_material
+        from apps.kuaizhizao.utils.mrp_bom_snapshot import bom_expand_kwargs_from_work_order
+        from apps.kuaizhizao.utils.picking_posting import sum_confirmed_picked_by_material
+        from math import floor
+
+        planned = float(work_order.quantity or 0)
+        if planned <= 0:
+            return 0.0
+
+        try:
+            requirements = await calculate_material_requirements_from_bom(
+                tenant_id=tenant_id,
+                material_id=int(work_order.product_id),
+                required_quantity=planned,
+                only_approved=True,
+                for_kitting_analysis=True,
+                **bom_expand_kwargs_from_work_order(work_order),
+            )
+        except Exception:
+            return 0.0
+
+        if not requirements:
+            return 0.0
+
+        picked_by_material = await sum_confirmed_picked_by_material(
+            tenant_id, int(work_order.id)
+        )
+        kit_set_caps: List[float] = []
+        for req in requirements:
+            if not is_kitting_rate_material(
+                getattr(req, "issue_method", None),
+                getattr(req, "component_type", None),
+            ):
+                continue
+            material_id = int(getattr(req, "component_id", 0) or 0)
+            if material_id <= 0:
+                continue
+            gross = float(getattr(req, "gross_requirement", 0) or 0)
+            per_unit = gross / planned if planned > 0 else 0.0
+            if per_unit <= 0:
+                continue
+            picked = float(picked_by_material.get(material_id, 0) or 0)
+            kit_set_caps.append(float(floor(picked / per_unit)))
+
+        if not kit_set_caps:
+            return 0.0
+        return float(min(kit_set_caps))
 
     async def _get_work_order_inbound_quota(
         self,
@@ -6959,14 +7628,26 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
         received = await self._sum_work_order_inbound_quantity(tenant_id, work_order_id)
 
         if exclude_finished_receipt_id:
+            from apps.kuaizhizao.models.finished_goods_receipt_item import FinishedGoodsReceiptItem
+
             excluded = await FinishedGoodsReceipt.get_or_none(
                 tenant_id=tenant_id,
                 id=exclude_finished_receipt_id,
-                work_order_id=work_order_id,
                 deleted_at__isnull=True,
             )
             if excluded and excluded.status in self._WO_INBOUND_RECEIPT_COUNT_STATUSES:
-                received -= float(excluded.total_quantity or 0)
+                ex_header_wo = int(excluded.work_order_id or 0)
+                if ex_header_wo == int(work_order_id):
+                    received -= float(excluded.total_quantity or 0)
+                elif ex_header_wo <= 0:
+                    line_rows = await FinishedGoodsReceiptItem.filter(
+                        tenant_id=tenant_id,
+                        receipt_id=int(excluded.id),
+                        work_order_id=int(work_order_id),
+                        deleted_at__isnull=True,
+                    ).all()
+                    for it in line_rows:
+                        received -= float(getattr(it, "receipt_quantity", 0) or 0)
 
         if exclude_semi_receipt_id:
             from apps.kuaizhizao.models.semi_finished_goods_receipt import SemiFinishedGoodsReceipt
@@ -7261,6 +7942,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             material_code=(getattr(material, "main_code", None) or getattr(material, "code", None) or work_order.product_code or ""),
             material_name=(getattr(material, "name", None) or work_order.product_name or ""),
             material_spec=getattr(material, "specification", None) or getattr(work_order, "product_spec", None),
+            material_model=getattr(material, "model", None),
             material_unit=material_unit,
             source_doc_quantity=reference_qty,
             source_received_quantity=received,
@@ -7273,6 +7955,69 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             inbound_doc_kind="finished_goods",
             lines=[line],
             message=hint,
+        )
+
+    async def preview_blank_finished_goods_from_work_orders(
+        self,
+        tenant_id: int,
+        work_order_ids: List[int],
+    ):
+        from apps.kuaizhizao.schemas.warehouse import (
+            FinishedGoodsBlankFromWorkOrdersLine,
+            FinishedGoodsBlankFromWorkOrdersResponse,
+        )
+
+        ordered: List[int] = []
+        seen: set[int] = set()
+        for raw in work_order_ids or []:
+            wid = int(raw or 0)
+            if wid <= 0 or wid in seen:
+                continue
+            seen.add(wid)
+            ordered.append(wid)
+        if not ordered:
+            raise ValidationError("请至少选择一个工单")
+
+        items: List[FinishedGoodsBlankFromWorkOrdersLine] = []
+        messages: List[str] = []
+        for wid in ordered:
+            try:
+                preview = await self.get_work_order_inbound_preview(tenant_id, wid)
+            except (BusinessLogicError, ValidationError, NotFoundError) as e:
+                messages.append(f"工单 {wid}：{e}")
+                continue
+            if str(getattr(preview, "inbound_doc_kind", "")) != "finished_goods":
+                messages.append(f"工单 {preview.work_order_code} 为半成品，已跳过")
+                continue
+            line = (preview.lines or [None])[0]
+            if not line:
+                messages.append(f"工单 {preview.work_order_code} 无产品明细")
+                continue
+            pending = float(line.source_pending_quantity or line.receipt_quantity or 0)
+            if pending <= 0:
+                messages.append(preview.message or f"工单 {preview.work_order_code} 无可缴库余量")
+                continue
+            quota = await self._get_work_order_inbound_quota(tenant_id, wid)
+            items.append(
+                FinishedGoodsBlankFromWorkOrdersLine(
+                    work_order_id=int(preview.work_order_id),
+                    work_order_code=str(preview.work_order_code),
+                    work_order_quantity=float(quota.get("planned") or line.source_doc_quantity or 0),
+                    received_quantity=float(quota.get("received") or line.source_received_quantity or 0),
+                    receipt_quantity=float(pending),
+                    material_id=int(line.material_id),
+                    material_code=str(line.material_code),
+                    material_name=str(line.material_name),
+                    material_spec=line.material_spec,
+                    material_model=line.material_model,
+                    material_unit=str(line.material_unit),
+                )
+            )
+        if not items and not messages:
+            raise BusinessLogicError("所选工单均无可加载的成品入库明细")
+        return FinishedGoodsBlankFromWorkOrdersResponse(
+            items=items,
+            message="；".join(messages) if messages else None,
         )
 
     async def quick_receipt_from_work_order(
@@ -7319,6 +8064,11 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
         if not work_order:
             raise NotFoundError(f"工单不存在: {work_order_id}")
         assert_work_order_capability(work_order, "push_finished_goods_receipt")
+        from apps.kuaizhizao.utils.finished_goods_inbound_pull_eligibility import (
+            assert_fg_inbound_pull_readiness,
+        )
+
+        await assert_fg_inbound_pull_readiness(tenant_id, work_order)
         if await is_semi_finished_product_by_bom_role(tenant_id, work_order.product_id):
             from apps.kuaizhizao.services.semi_finished_goods_receipt_service import (
                 SemiFinishedGoodsReceiptService,
@@ -7671,6 +8421,38 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 upstream=upstream_so,
                 provided=provided_rev,
             )
+            if "customer_order_no" in rev_fields_set:
+                header_customer_order_no = _normalize_customer_order_no_text(
+                    getattr(delivery_data, "customer_order_no", None)
+                )
+            else:
+                header_customer_order_no = _normalize_customer_order_no_text(
+                    getattr(upstream_so, "customer_order_no", None)
+                    if upstream_so is not None
+                    else None
+                )
+            from apps.kuaizhizao.constants.price_type import normalize_price_type
+            from apps.kuaizhizao.utils.sales_price_amount import stored_sales_line_amount
+
+            if "price_type" in rev_fields_set and getattr(delivery_data, "price_type", None):
+                delivery_price_type = normalize_price_type(delivery_data.price_type)
+            elif upstream_so is not None:
+                delivery_price_type = normalize_price_type(getattr(upstream_so, "price_type", None))
+            else:
+                delivery_price_type = normalize_price_type(None)
+            for item in items:
+                item.total_amount = float(
+                    stored_sales_line_amount(
+                        item.delivery_quantity,
+                        item.unit_price,
+                        getattr(item, "tax_rate", 0) or 0,
+                        delivery_price_type,
+                        is_gift=bool(getattr(item, "is_gift", False)),
+                    )
+                )
+            total_quantity = sum(item.delivery_quantity for item in items) if items else 0
+            total_amount = sum(item.total_amount for item in items) if items else 0
+            
             delivery = await SalesDelivery.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
@@ -7684,6 +8466,9 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 demand_type=demand_type,
                 customer_id=delivery_data.customer_id,
                 customer_name=delivery_data.customer_name,
+                customer_contact=getattr(delivery_data, "customer_contact", None),
+                customer_phone=getattr(delivery_data, "customer_phone", None),
+                customer_order_no=header_customer_order_no,
                 revenue_recognition=delivery_revenue_recognition,
                 warehouse_id=delivery_data.warehouse_id,
                 warehouse_name=delivery_data.warehouse_name,
@@ -7791,40 +8576,59 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                         or None
                     )
                     if line_wh_id and not line_wh_name:
-                        line_wh_name = await _resolve_warehouse_name_by_id(
-                            tenant_id, int(line_wh_id), None
+                        line_wh_name = wh_name_by_id.get(int(line_wh_id)) or ""
+                        if not line_wh_name:
+                            raise ValidationError(f"仓库不存在或未启用: {int(line_wh_id)}")
+                    item_fields_set = getattr(item_data, "model_fields_set", set()) or set()
+                    if "customer_order_no" in item_fields_set:
+                        line_customer_order_no = _normalize_customer_order_no_text(
+                            getattr(item_data, "customer_order_no", None)
                         )
-                    await SalesDeliveryItem.create(
-                        tenant_id=tenant_id,
-                        delivery_id=delivery.id,
-                        sales_order_item_id=int(so_line_id) if so_line_id else None,
-                        shipment_notice_item_id=int(sn_line_id) if sn_line_id else None,
-                        material_id=item_data.material_id,
-                        material_code=material_code,
-                        material_name=material_name,
-                        material_spec=material_spec
-                        if material_spec is not None
-                        else getattr(item_data, "material_spec", None),
-                        material_unit=material_unit,
-                        **line_snap,
-                        delivery_quantity=item_data.delivery_quantity,
-                        unit_price=item_data.unit_price,
-                        total_amount=item_data.total_amount,
-                        warehouse_id=int(line_wh_id) if line_wh_id else None,
-                        warehouse_name=line_wh_name,
-                        location_id=getattr(item_data, 'location_id', None),
-                        location_code=getattr(item_data, 'location_code', None),
-                        batch_number=getattr(item_data, 'batch_number', None),
-                        expiry_date=getattr(item_data, 'expiry_date', None),
-                        serial_numbers=serial_numbers_json,  # 批号和序列号选择功能增强
-                        demand_id=item_demand_id,  # 销售出库与需求关联功能增强
-                        demand_item_id=demand_item_id,  # 销售出库与需求关联功能增强
-                        status=getattr(item_data, 'status', '待出库'),
-                        delivery_time=getattr(item_data, 'delivery_time', None),
-                        notes=getattr(item_data, 'notes', None),
-                        is_gift=bool(getattr(item_data, "is_gift", False)),
-                        gift_ref_unit_price=getattr(item_data, "gift_ref_unit_price", None),
+                    else:
+                        line_customer_order_no = header_customer_order_no
+                        if so_line_id:
+                            so_it = so_by_id.get(int(so_line_id))
+                            if so_it is not None:
+                                line_customer_order_no = _customer_order_no_from_so_item(
+                                    so_it, header_customer_order_no
+                                )
+                    line_rows.append(
+                        SalesDeliveryItem(
+                            tenant_id=tenant_id,
+                            delivery_id=delivery.id,
+                            sales_order_item_id=int(so_line_id) if so_line_id else None,
+                            shipment_notice_item_id=int(sn_line_id) if sn_line_id else None,
+                            customer_order_no=line_customer_order_no,
+                            material_id=item_data.material_id,
+                            material_code=material_code,
+                            material_name=material_name,
+                            material_spec=material_spec
+                            if material_spec is not None
+                            else getattr(item_data, "material_spec", None),
+                            material_unit=material_unit,
+                            **line_snap,
+                            delivery_quantity=item_data.delivery_quantity,
+                            **_document_line_dual_quantity_write_kwargs(item_data),
+                            unit_price=item_data.unit_price,
+                            tax_rate=getattr(item_data, "tax_rate", 0) or 0,
+                            total_amount=item_data.total_amount,
+                            warehouse_id=int(line_wh_id) if line_wh_id else None,
+                            warehouse_name=line_wh_name,
+                            location_id=resolved_loc_id,
+                            location_code=resolved_loc_code,
+                            batch_number=getattr(item_data, "batch_number", None),
+                            expiry_date=getattr(item_data, "expiry_date", None),
+                            serial_numbers=serial_numbers_json,
+                            demand_id=item_demand_id,
+                            demand_item_id=demand_item_id,
+                            status=getattr(item_data, "status", "待出库"),
+                            delivery_time=getattr(item_data, "delivery_time", None),
+                            notes=getattr(item_data, "notes", None),
+                            is_gift=bool(getattr(item_data, "is_gift", False)),
+                            gift_ref_unit_price=getattr(item_data, "gift_ref_unit_price", None),
+                        )
                     )
+                await SalesDeliveryItem.bulk_create(line_rows)
 
             # 建立销售订单→销售出库 的 DocumentRelation
             if sales_order_id:
@@ -8068,6 +8872,11 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             resp,
             "sales_delivery",
             audit_required=audit_required,
+        )
+        from apps.kuaizhizao.services.kingdee_push_bill_detail import attach_kingdee_bill_no_detail
+
+        resp = await attach_kingdee_bill_no_detail(
+            resp, tenant_id=tenant_id, source_type="sales_delivery", source_id=delivery_id
         )
         return await enrich_record(
             tenant_id, "sales_delivery", resp, audit_enabled=audit_required
@@ -9133,6 +9942,12 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                         if getattr(item, "gift_ref_unit_price", None) is not None
                         else None
                     ),
+                    customer_order_no=_customer_order_no_from_so_item(
+                        item,
+                        getattr(sales_order, "customer_order_no", None),
+                    ),
+                    warehouse_id=int(warehouse_id) if warehouse_id else None,
+                    warehouse_name=warehouse_name,
                     demand_id=None,
                     demand_item_id=None,
                 )
@@ -9159,6 +9974,11 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             demand_type="sales_order",  # 销售出库与需求关联功能增强
             customer_id=sales_order.customer_id,
             customer_name=sales_order.customer_name,
+            customer_contact=getattr(sales_order, "customer_contact", None),
+            customer_phone=getattr(sales_order, "customer_phone", None),
+            customer_order_no=_normalize_customer_order_no_text(
+                getattr(sales_order, "customer_order_no", None)
+            ),
             revenue_recognition=getattr(sales_order, "revenue_recognition", None),
             warehouse_id=warehouse_id,
             warehouse_name=warehouse_name,
@@ -9167,6 +9987,9 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             total_amount=float(total_amount),
             shipping_address=sales_order.shipping_address,
             shipping_method=sales_order.shipping_method,
+            payment_method_code=getattr(sales_order, "payment_method_code", None),
+            payment_wire_percent=getattr(sales_order, "payment_wire_percent", None),
+            payment_acceptance_percent=getattr(sales_order, "payment_acceptance_percent", None),
             notes=delivery_notes,
             items=delivery_items
         )
@@ -9224,6 +10047,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         orders = await so_query.only(
             "id",
             "order_code",
+            "customer_order_no",
             "order_date",
             "status",
             "customer_id",
@@ -9236,6 +10060,9 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             "revenue_recognition",
             "shipping_address",
             "shipping_method",
+            "payment_method_code",
+            "payment_wire_percent",
+            "payment_acceptance_percent",
         )
         order_by_id = {int(o.id): o for o in orders}
         if not order_by_id:
@@ -9271,10 +10098,25 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             document_date = str(order_date)[:10] if order_date else None
             line_notes = str(getattr(item, "notes", None) or "").strip()
             aux_rem = pushable_aux.get(int(order.id), {}).get(int(item.id))
+            line_material_model = getattr(item, "material_model", None)
+            line_partner_code = getattr(item, "partner_material_code", None)
+            line_partner_name = getattr(item, "partner_material_name", None)
+            material_model = (
+                str(line_material_model).strip()[:200] if line_material_model is not None else None
+            ) or None
+            partner_material_code = (
+                str(line_partner_code).strip()[:100] if line_partner_code is not None else None
+            ) or None
+            partner_material_name = (
+                str(line_partner_name).strip()[:200] if line_partner_name is not None else None
+            ) or None
             row: Dict[str, Any] = {
                 "id": int(item.id),
                 "sales_order_id": int(item.sales_order_id),
                 "order_code": order.order_code,
+                "customer_order_no": _customer_order_no_from_so_item(
+                    item, getattr(order, "customer_order_no", None)
+                ),
                 "customer_id": order.customer_id,
                 "customer_name": order.customer_name,
                 "customer_contact": getattr(order, "customer_contact", None),
@@ -9284,10 +10126,16 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 "exchange_rate": float(getattr(order, "exchange_rate", None) or 1),
                 "shipping_address": getattr(order, "shipping_address", None),
                 "shipping_method": getattr(order, "shipping_method", None),
+                "payment_method_code": getattr(order, "payment_method_code", None),
+                "payment_wire_percent": getattr(order, "payment_wire_percent", None),
+                "payment_acceptance_percent": getattr(order, "payment_acceptance_percent", None),
                 "material_id": item.material_id,
                 "material_code": material_code,
                 "material_name": material_name,
                 "material_spec": material_spec or None,
+                "material_model": material_model,
+                "partner_material_code": partner_material_code,
+                "partner_material_name": partner_material_name,
                 "unit": item.material_unit or "件",
                 "unit_price": float(item.unit_price or 0),
                 "tax_rate": float(getattr(item, "tax_rate", 0) or 0),
@@ -9463,6 +10311,11 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                         ),
                         location_id=loc_id,
                         location_code=loc_code,
+                        customer_order_no=_customer_order_no_from_so_item(
+                            item,
+                            getattr(order_by_id[int(item.sales_order_id)], "customer_order_no", None),
+                        ),
+                        notes=(getattr(item, "notes", None) or None),
                     )
                 )
                 total_quantity += qty
@@ -9477,6 +10330,11 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     demand_type="sales_order",
                     customer_id=primary.customer_id,
                     customer_name=primary.customer_name,
+                    customer_contact=getattr(primary, "customer_contact", None),
+                    customer_phone=getattr(primary, "customer_phone", None),
+                    customer_order_no=_normalize_customer_order_no_text(
+                        getattr(primary, "customer_order_no", None)
+                    ),
                     revenue_recognition=getattr(primary, "revenue_recognition", None),
                     warehouse_id=header_wh_id,
                     warehouse_name=header_wh_name,
@@ -9781,6 +10639,13 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             source_codes = " ".join(notice_by_id[nid].notice_code for nid in source_notice_ids)
             header_wh_id = group_rows[0][2]
             header_wh_name = group_rows[0][3]
+            header_customer_order_no = None
+            if getattr(primary, "sales_order_id", None):
+                src_order_hdr = order_by_id.get(int(primary.sales_order_id))
+                if src_order_hdr is not None:
+                    header_customer_order_no = _normalize_customer_order_no_text(
+                        getattr(src_order_hdr, "customer_order_no", None)
+                    )
             delivery_items: List[SalesDeliveryItemCreate] = []
             total_quantity = Decimal("0")
             total_amount = Decimal("0")
@@ -9811,10 +10676,17 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     price_type,
                     is_gift=bool(getattr(item, "is_gift", False)),
                 )
+                line_notes = getattr(item, "notes", None) or (
+                    getattr(src_so_line, "notes", None) if src_so_line else None
+                )
+                line_customer_order_no = _customer_order_no_from_so_item(
+                    src_so_line, header_customer_order_no
+                )
                 delivery_items.append(
                     SalesDeliveryItemCreate(
                         sales_order_item_id=int(so_item_id) if so_item_id else None,
                         shipment_notice_item_id=int(item.id),
+                        customer_order_no=line_customer_order_no,
                         material_id=item.material_id,
                         material_code=item.material_code,
                         material_name=item.material_name,
@@ -9850,6 +10722,9 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     demand_type="sales_order",
                     customer_id=primary.customer_id,
                     customer_name=primary.customer_name,
+                    customer_contact=getattr(primary, "customer_contact", None),
+                    customer_phone=getattr(primary, "customer_phone", None),
+                    customer_order_no=header_customer_order_no,
                     revenue_recognition=revenue_recognition,
                     warehouse_id=header_wh_id,
                     warehouse_name=header_wh_name,
@@ -10830,6 +11705,19 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             due_date = await resolve_partner_due_date(
                 tenant_id, "customer", int(delivery_row.customer_id), biz_date
             )
+            from apps.kuaizhizao.finance.services.finance_payment_method import payment_method_fields_from_source
+
+            pm_code, pm_wire, pm_accept, pm_summary = payment_method_fields_from_source(delivery_row)
+            if not pm_code and pull_plan.get("sales_order_id"):
+                from apps.kuaizhizao.models.sales_order import SalesOrder
+
+                order = await SalesOrder.get_or_none(
+                    tenant_id=tenant_id,
+                    id=int(pull_plan["sales_order_id"]),
+                    deleted_at__isnull=True,
+                )
+                if order:
+                    pm_code, pm_wire, pm_accept, pm_summary = payment_method_fields_from_source(order)
             receivable_data = ReceivableCreate(
                 source_type="销售出库",
                 source_id=delivery_id,
@@ -10842,6 +11730,10 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 due_date=due_date,
                 business_date=biz_date,
                 status="未收款",
+                payment_method_code=pm_code,
+                payment_wire_percent=pm_wire,
+                payment_acceptance_percent=pm_accept,
+                payment_terms=pm_summary,
                 notes=f"由销售出库单 {delivery_row.delivery_code} 自动生成",
             )
             receivable = await receivable_service.create_receivable(
@@ -12373,7 +13265,32 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             run_id="post-fix",
         )
         # #endregion
-        return resp
+        from apps.kuaizhizao.services.document_action_policy.warehouse_inbound_hub import (
+            derive_inbound_hub_capabilities,
+        )
+        from core.services.approval.audit_record_enricher import audit_enabled_for, enrich_record
+
+        resp = resp.model_copy(
+            update={
+                "capabilities": derive_inbound_hub_capabilities(
+                    receipt,
+                    receipt_type="purchase",
+                    has_items=len(items) > 0,
+                )
+            }
+        )
+        audit_required = await audit_enabled_for(tenant_id, "purchase_receipt")
+        from apps.kuaizhizao.services.kingdee_push_bill_detail import attach_kingdee_bill_no_detail
+
+        resp = await attach_kingdee_bill_no_detail(
+            resp, tenant_id=tenant_id, source_type="purchase_receipt", source_id=receipt_id
+        )
+        return await enrich_record(
+            tenant_id,
+            "purchase_receipt",
+            resp,
+            audit_enabled=audit_required,
+        )
 
     async def update_purchase_receipt(
         self,
@@ -12684,6 +13601,19 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         )
 
         query = PurchaseReceipt.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        current_user = filters.get("current_user")
+        if current_user is not None:
+            from apps.kuaizhizao.services.kuaizhizao_data_scope import (
+                INBOUND_SCOPE_RESOURCE,
+                apply_kuaizhizao_list_scope,
+            )
+
+            query = await apply_kuaizhizao_list_scope(
+                query,
+                tenant_id=tenant_id,
+                current_user=current_user,
+                resource=INBOUND_SCOPE_RESOURCE,
+            )
 
         # 应用过滤条件
         if filters.get('status'):
@@ -12703,6 +13633,20 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             apply_query_header_or_line_material_keyword,
         )
         from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+
+        material_id = filters.get("material_id")
+        if material_id is not None and int(material_id) > 0:
+            receipt_ids = (
+                await PurchaseReceiptItem.filter(
+                    tenant_id=tenant_id,
+                    material_id=int(material_id),
+                    deleted_at__isnull=True,
+                )
+                .distinct()
+                .values_list("receipt_id", flat=True)
+            )
+            receipt_id_list = [int(x) for x in receipt_ids if x is not None]
+            query = query.filter(id__in=receipt_id_list if receipt_id_list else [-1])
 
         kw = pick_search_keyword(filters.get("keyword"), filters.get("search"))
         query, order_clause = apply_warehouse_doc_list_filters(
@@ -12727,6 +13671,16 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 tenant_id=tenant_id,
                 kw=kw,
                 keyword_fields=PURCHASE_RECEIPT_KEYWORD_FIELDS,
+                item_model=PurchaseReceiptItem,
+                item_header_fk_field="receipt_id",
+            )
+        material_kw = (filters.get("material_keyword") or "").strip()
+        if material_kw:
+            query = await apply_query_header_or_line_material_keyword(
+                query,
+                tenant_id=tenant_id,
+                kw=material_kw,
+                keyword_fields=[],
                 item_model=PurchaseReceiptItem,
                 item_header_fk_field="receipt_id",
             )
@@ -18932,7 +19886,11 @@ class OtherInboundService(AppBaseService[OtherInbound]):
         await _enrich_other_doc_item_responses_ledger(
             tenant_id, response.items, quantity_attr="inbound_quantity"
         )
-        return response
+        from apps.kuaizhizao.services.kingdee_push_bill_detail import attach_kingdee_bill_no_detail
+
+        return await attach_kingdee_bill_no_detail(
+            response, tenant_id=tenant_id, source_type="other_inbound", source_id=inbound_id
+        )
 
     async def list_other_inbounds(
         self,
@@ -19453,9 +20411,18 @@ class OtherInboundService(AppBaseService[OtherInbound]):
         updated_by: int
     ) -> OtherInboundResponse:
         """撤回确认入库"""
-        async with in_transaction(), stock_document_guard("other_inbound", tenant_id, inbound_id):
-            inbound = await self.get_other_inbound_by_id(tenant_id, inbound_id)
-            if inbound.status != "已入库":
+        from apps.kuaiconnect.services.document_push.kingdee_im_warehouse_revoke_service import (
+            sync_other_inbound_kingdee_after_withdraw,
+        )
+
+        kingdee_withdraw_warning = await sync_other_inbound_kingdee_after_withdraw(
+            tenant_id,
+            inbound_id,
+            acting_user_id=updated_by,
+        )
+        async with in_transaction():
+            inbound_obj = await OtherInbound.get_or_none(tenant_id=tenant_id, id=inbound_id)
+            if not inbound_obj or inbound_obj.status != "已入库":
                 raise BusinessLogicError("只有已入库状态的其他入库单才能撤回确认")
 
             # 校验并反转库存
@@ -19463,8 +20430,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                 from apps.kuaizhizao.services.inventory_service import InventoryService
                 
                 # 手动获取明细（模型定义中没有外键关系，只能用 filter）
-                inbound_obj = await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
-                header_wh_id = inbound_obj.warehouse_id if inbound_obj.warehouse_id else None
+                wh_id = inbound_obj.warehouse_id if inbound_obj.warehouse_id else None
                 items = await OtherInboundItem.filter(tenant_id=tenant_id, inbound_id=inbound_id)
                 material_ids = list({int(it.material_id) for it in items if getattr(it, "material_id", None)})
                 material_by_id = await _load_materials_by_ids(tenant_id, material_ids)
@@ -19554,6 +20520,22 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
             if outbound_data.outbound_code:
                 code = outbound_data.outbound_code
 
+            from apps.kuaizhizao.constants.other_outbound_type import (
+                load_and_assert_other_outbound_type_materials,
+                normalize_other_outbound_type,
+            )
+
+            dump["outbound_type"] = normalize_other_outbound_type(
+                dump.get("outbound_type")
+            )
+            items = getattr(outbound_data, "items", None) or []
+            if items:
+                await load_and_assert_other_outbound_type_materials(
+                    tenant_id,
+                    dump["outbound_type"],
+                    [int(getattr(it, "material_id", 0) or 0) for it in items],
+                )
+
             outbound = await OtherOutbound.create(
                 tenant_id=tenant_id,
                 outbound_code=code,
@@ -19638,7 +20620,11 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
             tenant_id, response.items, quantity_attr="outbound_quantity"
         )
         response.lifecycle = get_other_outbound_lifecycle(outbound)
-        return response
+        from apps.kuaizhizao.services.kingdee_push_bill_detail import attach_kingdee_bill_no_detail
+
+        return await attach_kingdee_bill_no_detail(
+            response, tenant_id=tenant_id, source_type="other_outbound", source_id=outbound_id
+        )
 
     async def list_other_outbounds(
         self,
@@ -19878,9 +20864,27 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                     updated_by_name=user_info["name"],
                 )
 
-            result = OtherOutboundResponse.model_validate(
-                await OtherOutbound.get(tenant_id=tenant_id, id=outbound_id)
-            )
+            outbound_row = await OtherOutbound.get(tenant_id=tenant_id, id=outbound_id)
+            eff_outbound_type = str(getattr(outbound_row, "outbound_type", None) or "").strip()
+            if eff_outbound_type:
+                from apps.kuaizhizao.constants.other_outbound_type import (
+                    load_and_assert_other_outbound_type_materials,
+                    normalize_other_outbound_type,
+                )
+
+                line_mids = [
+                    int(it.material_id)
+                    for it in await OtherOutboundItem.filter(
+                        tenant_id=tenant_id, outbound_id=outbound_id
+                    ).all()
+                ]
+                await load_and_assert_other_outbound_type_materials(
+                    tenant_id,
+                    normalize_other_outbound_type(eff_outbound_type),
+                    line_mids,
+                )
+
+            result = OtherOutboundResponse.model_validate(outbound_row)
 
         from apps.kuaizhizao.services.kingdee_im_batch_update_sync import (
             sync_other_outbound_kingdee_after_update,
@@ -20121,14 +21125,31 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                 if confirmation_data and confirmation_data.delivery_time
                 else getattr(outbound, "delivery_time", None)
             )
-            await OtherOutbound.filter(tenant_id=tenant_id, id=outbound_id).update(
-                status="已出库",
-                deliverer_id=confirmed_by,
-                deliverer_name=deliverer_name,
-                delivery_time=delivery_time,
-                updated_by=confirmed_by,
-                updated_by_name=deliverer_name,
+            from apps.kuaizhizao.utils.kingdee_warehouse_operator_utils import (
+                sync_other_outbound_picker_operator_fields,
             )
+
+            picker_operator_patch: Dict[str, Any] = {
+                "picker_id": int(outbound.picker_id or 0) or confirmed_by,
+                "deliverer_id": confirmed_by,
+            }
+            await sync_other_outbound_picker_operator_fields(tenant_id, picker_operator_patch)
+            header_update: Dict[str, Any] = {
+                "status": "已出库",
+                "deliverer_id": confirmed_by,
+                "deliverer_name": deliverer_name,
+                "delivery_time": delivery_time,
+                "updated_by": confirmed_by,
+                "updated_by_name": deliverer_name,
+            }
+            if picker_operator_patch.get("picker_operator_number"):
+                header_update["picker_operator_number"] = picker_operator_patch[
+                    "picker_operator_number"
+                ]
+            if int(outbound.picker_id or 0) <= 0:
+                header_update["picker_id"] = confirmed_by
+                header_update["picker_name"] = deliverer_name
+            await OtherOutbound.filter(tenant_id=tenant_id, id=outbound_id).update(**header_update)
             fresh_items_for_status = await OtherOutboundItem.filter(
                 tenant_id=tenant_id, outbound_id=outbound_id
             ).all()

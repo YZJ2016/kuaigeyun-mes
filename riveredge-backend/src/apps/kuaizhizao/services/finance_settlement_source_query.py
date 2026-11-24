@@ -47,6 +47,47 @@ def _q_money(value: Decimal | float | int | str) -> Decimal:
     return Decimal(str(value or 0)).quantize(_MONEY)
 
 
+async def _sales_delivery_amount_parts(
+    tenant_id: int,
+    delivery: SalesDelivery,
+) -> Dict[str, float]:
+    """按出库明细汇总未税、税额、价税合计（与价类一致）。"""
+    from apps.kuaizhizao.constants.price_type import normalize_price_type
+    from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
+    from apps.kuaizhizao.utils.sales_price_amount import calc_sales_line_amounts
+
+    items = await SalesDeliveryItem.filter(
+        tenant_id=tenant_id,
+        delivery_id=int(delivery.id),
+        deleted_at__isnull=True,
+    ).all()
+    price_type = normalize_price_type(getattr(delivery, "price_type", None))
+    excl = Decimal("0")
+    tax = Decimal("0")
+    incl = Decimal("0")
+    for it in items:
+        if bool(getattr(it, "is_gift", False)):
+            continue
+        line_excl, line_tax, line_incl = calc_sales_line_amounts(
+            Decimal(str(getattr(it, "delivery_quantity", 0) or 0)),
+            Decimal(str(getattr(it, "unit_price", 0) or 0)),
+            Decimal(str(getattr(it, "tax_rate", 0) or 0)),
+            price_type,
+        )
+        excl += line_excl
+        tax += line_tax
+        incl += line_incl
+    if incl <= 0:
+        incl = _q_money(getattr(delivery, "total_amount", 0) or 0)
+    if excl <= 0 and incl > 0 and tax <= 0:
+        excl = incl
+    return {
+        "amount_excluding_tax": float(_q_money(excl)),
+        "tax_amount": float(_q_money(tax)),
+        "amount_including_tax": float(_q_money(incl if incl > 0 else excl)),
+    }
+
+
 def _business_date_from_row(dt: Optional[datetime]) -> Optional[date]:
     if dt is None:
         return None
@@ -250,8 +291,13 @@ class FinanceSettlementSourceQuery:
                 continue
             if int(d.id) in posted_del:
                 continue
-            amt = _q_money(d.total_amount)
-            if amt <= 0:
+            parts = await _sales_delivery_amount_parts(tenant_id, d)
+            active = _q_money(
+                parts["amount_including_tax"]
+                if parts["amount_including_tax"] > 0
+                else d.total_amount
+            )
+            if active <= 0:
                 continue
             lines.append(
                 _settlement_line(
@@ -259,10 +305,15 @@ class FinanceSettlementSourceQuery:
                     doc_type="销售出库",
                     doc_code=d.delivery_code,
                     doc_id=int(d.id),
-                    amount=amt,
+                    amount=active,
                     finance_source_type=RECEIVABLE_SOURCE_SALES_DELIVERY,
                     is_credit=False,
                     summary=f"销售出库 {d.delivery_code}",
+                    extra={
+                        "inbound_detail_doc_type": "sales_delivery",
+                        "inbound_detail_doc_id": int(d.id),
+                        **parts,
+                    },
                 )
             )
 

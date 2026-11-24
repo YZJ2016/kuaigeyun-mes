@@ -2879,7 +2879,7 @@ OUTSOURCE_ORDER_MAIN_STAGES = [
 
 
 def _outsource_order_next_step_suggestions(record: Any, stage_key: str) -> List[str]:
-    """工序委外后续动作（与委外管理菜单、采购入库关联一致）。"""
+    """工序委外后续动作（与列表功能区一致：发料、登记收货、完成）。"""
     if stage_key == "cancelled":
         return []
     if stage_key == "draft":
@@ -2891,7 +2891,6 @@ def _outsource_order_next_step_suggestions(record: Any, stage_key: str) -> List[
     except Exception:
         out_qty = Decimal("0")
         recv_qty = Decimal("0")
-    receipt_open = not has_receipt or (out_qty > 0 and recv_qty < out_qty)
     if stage_key == "released":
         steps: List[str] = []
         can_revoke = (
@@ -2901,14 +2900,12 @@ def _outsource_order_next_step_suggestions(record: Any, stage_key: str) -> List[
         )
         if can_revoke:
             steps.append("撤回下达")
-        if receipt_open:
-            steps.append("委外入库")
-        steps.append("开始执行")
+        steps.append("工序发料")
+        if out_qty > 0 and recv_qty < out_qty:
+            steps.append("登记收货")
         return steps
     if stage_key == "in_progress":
         steps = []
-        if receipt_open:
-            steps.append("委外入库")
         steps.append("工序发料")
         if out_qty > 0 and recv_qty < out_qty:
             steps.append("登记收货")

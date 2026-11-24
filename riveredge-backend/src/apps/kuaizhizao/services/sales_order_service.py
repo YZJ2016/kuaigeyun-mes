@@ -79,6 +79,13 @@ from infra.services.business_config_service import BusinessConfigService
 
 
 # 写入 ORM 时排除：明细单独处理；order_name/audit/submit_time 为 schema/响应虚拟字段（SalesOrder 表无对应列）
+def _normalize_customer_order_no(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 _SALES_ORDER_PERSIST_EXCLUDE = frozenset({
     "items",
     "order_name",
@@ -985,6 +992,7 @@ class SalesOrderService:
                     else Decimal("0")
                 ),
                 "delivery_status": getattr(it, "delivery_status", None),
+                "customer_order_no": getattr(it, "customer_order_no", None),
                 "created_at": it.created_at,
                 "updated_at": it.updated_at,
             }
@@ -1015,6 +1023,9 @@ class SalesOrderService:
             "customer_name": order.customer_name,
             "customer_contact": getattr(order, "customer_contact", None),
             "customer_phone": getattr(order, "customer_phone", None),
+            "customer_order_no": _normalize_customer_order_no(
+                getattr(order, "customer_order_no", None)
+            ),
             "total_quantity": order.total_quantity if order.total_quantity is not None else Decimal("0"),
             "total_amount": order.total_amount if order.total_amount is not None else Decimal("0"),
             "status": order.status,
@@ -1089,6 +1100,9 @@ class SalesOrderService:
             "customer_name": order.customer_name,
             "customer_contact": order.customer_contact,
             "customer_phone": order.customer_phone,
+            "customer_order_no": _normalize_customer_order_no(
+                getattr(order, "customer_order_no", None)
+            ),
             "total_quantity": order.total_quantity if order.total_quantity is not None else Decimal("0"),
             "total_amount": order.total_amount if order.total_amount is not None else Decimal("0"),
             "price_type": getattr(order, "price_type", None) or DEFAULT_SALES_PRICE_TYPE,
@@ -1104,6 +1118,11 @@ class SalesOrderService:
             "salesman_name": getattr(order, "salesman_name", None),
             "shipping_address": order.shipping_address,
             "shipping_method": order.shipping_method,
+            "payment_method_code": getattr(order, "payment_method_code", None),
+            "payment_wire_percent": getattr(order, "payment_wire_percent", None),
+            "payment_acceptance_percent": getattr(order, "payment_acceptance_percent", None),
+            "settlement_terms_code": getattr(order, "settlement_terms_code", None),
+            "payment_terms_days": getattr(order, "payment_terms_days", None),
             "payment_terms": order.payment_terms,
             "contract_id": getattr(order, "contract_id", None),
             "contract_code": getattr(order, "contract_code", None),
@@ -1235,6 +1254,9 @@ class SalesOrderService:
                     delivery_status=it.delivery_status,
                     work_order_id=getattr(it, "work_order_id", None),
                     work_order_code=getattr(it, "work_order_code", None),
+                    customer_order_no=_normalize_customer_order_no(
+                        getattr(it, "customer_order_no", None)
+                    ),
                     created_at=it.created_at if getattr(it, "created_at", None) else resolve_business_datetime(),
                     updated_at=it.updated_at if getattr(it, "updated_at", None) else resolve_business_datetime(),
                 )
@@ -2071,6 +2093,9 @@ class SalesOrderService:
                 prepayment_amount=getattr(sales_order_data, "prepayment_amount", None),
             )
             order_dict = sales_order_data.model_dump(exclude=_SALES_ORDER_PERSIST_EXCLUDE)
+            order_dict["customer_order_no"] = _normalize_customer_order_no(
+                order_dict.get("customer_order_no")
+            )
             from apps.kuaizhizao.services.sales_order_terms_service import SalesOrderTermsService
 
             terms_svc = SalesOrderTermsService()
@@ -2131,6 +2156,7 @@ class SalesOrderService:
                 order_dict.get("revenue_recognition"),
             )
             order = await SalesOrder.create(tenant_id=tenant_id, **order_dict)
+            line_customer_order_no = getattr(order, "customer_order_no", None)
 
             total_qty = Decimal("0")
             subtotal = Decimal("0")
@@ -2215,6 +2241,7 @@ class SalesOrderService:
                         gift_ref_unit_price=row["gift_ref_unit_price"],
                         price_settlement_status=row["price_settlement_status"],
                         provisional_unit_price=row["provisional_unit_price"],
+                        customer_order_no=line_customer_order_no,
                     )
                     for idx, row in enumerate(item_rows)
                 ]
@@ -3300,6 +3327,7 @@ class SalesOrderService:
             "customer_name": order.customer_name,
             "customer_contact": order.customer_contact,
             "customer_phone": order.customer_phone,
+            "customer_order_no": getattr(order, "customer_order_no", None),
             "total_quantity": order.total_quantity,
             "total_amount": order.total_amount,
             "price_type": order.price_type,
@@ -3369,6 +3397,8 @@ class SalesOrderService:
             upd = sales_order_data.model_dump(
                 exclude_unset=True, exclude=_SALES_ORDER_PERSIST_EXCLUDE
             )
+            if "customer_order_no" in upd:
+                upd["customer_order_no"] = _normalize_customer_order_no(upd.get("customer_order_no"))
             effective_currency = (
                 upd["currency_code"]
                 if "currency_code" in upd
@@ -3464,6 +3494,10 @@ class SalesOrderService:
 
             if upd:
                 await SalesOrder.filter(id=sales_order_id).update(**upd)
+            if "customer_order_no" in upd and sales_order_data.items is None:
+                await SalesOrderItem.filter(
+                    tenant_id=tenant_id, sales_order_id=sales_order_id
+                ).update(customer_order_no=upd.get("customer_order_no"))
 
             if code_changed:
                 from apps.kuaizhizao.services.sales_order_code_sync import sync_sales_order_code_snapshots
@@ -3477,6 +3511,8 @@ class SalesOrderService:
                 order = await SalesOrder.get(tenant_id=tenant_id, id=sales_order_id)
 
             if sales_order_data.items is not None:
+                order_for_lines = await SalesOrder.get(tenant_id=tenant_id, id=sales_order_id)
+                line_customer_order_no = getattr(order_for_lines, "customer_order_no", None)
                 await SalesOrderItem.filter(
                     tenant_id=tenant_id, sales_order_id=sales_order_id
                 ).delete()
@@ -3563,6 +3599,7 @@ class SalesOrderService:
                             gift_ref_unit_price=row["gift_ref_unit_price"],
                             price_settlement_status=row.get("price_settlement_status"),
                             provisional_unit_price=row.get("provisional_unit_price"),
+                            customer_order_no=line_customer_order_no,
                         )
                         for idx, row in enumerate(item_rows)
                     ]
@@ -3594,6 +3631,7 @@ class SalesOrderService:
         field_labels = {
             "order_date": "订单日期", "delivery_date": "交货日期", "customer_name": "客户名称",
             "customer_contact": "客户联系人", "customer_phone": "客户电话",
+            "customer_order_no": "客户订单号",
             "total_quantity": "总数量", "total_amount": "总金额", "price_type": "价格类型",
             "discount_amount": "优惠金额", "salesman_name": "销售员", "shipping_address": "收货地址",
             "shipping_method": "发货方式", "payment_terms": "付款条件", "notes": "备注",
@@ -4897,8 +4935,8 @@ class SalesOrderService:
         )
         from apps.master_data.models.material import Material
 
-        # 汇总待生成工单的物料：material_id -> {qty, material_code, material_name, delivery_date}
-        wo_pool: Dict[tuple[int, Optional[int]], Dict[str, Any]] = {}
+        # 汇总待生成工单：按销售明细行分桶，避免同料多行合并后已转量错位
+        wo_pool: Dict[tuple[int, Optional[int], int], Dict[str, Any]] = {}
 
         def _add_to_pool(
             material_id: int,
@@ -4909,10 +4947,18 @@ class SalesOrderService:
             work_center_id: Optional[int] = None,
             work_center_name: Optional[str] = None,
             line_remarks: Optional[str] = None,
+            *,
+            sales_order_item_id: Optional[int] = None,
+            populate_bom_lines: bool = False,
         ):
             if qty <= 0:
                 return
-            key = (int(material_id), int(work_center_id) if work_center_id else None)
+            line_id = int(sales_order_item_id or 0)
+            key = (
+                int(material_id),
+                int(work_center_id) if work_center_id else None,
+                line_id,
+            )
             if key not in wo_pool:
                 wo_pool[key] = {
                     "material_id": material_id,
@@ -4922,6 +4968,7 @@ class SalesOrderService:
                     "earliest_delivery": delivery_date,
                     "work_center_id": int(work_center_id) if work_center_id else None,
                     "work_center_name": work_center_name or None,
+                    "sales_order_item_id": line_id if line_id > 0 else None,
                     "remarks": None,
                 }
             wo_pool[key]["quantity"] += Decimal(str(qty))
@@ -5050,6 +5097,8 @@ class SalesOrderService:
                                 delivery_date,
                                 selected_work_center_id,
                                 selected_work_center_name,
+                                sales_order_item_id=item_id,
+                                populate_bom_lines=True,
                             )
             else:
                 # 无BOM：仅成品工单
@@ -5063,6 +5112,8 @@ class SalesOrderService:
                         selected_work_center_id,
                         selected_work_center_name,
                         line_remarks=line_remarks,
+                        sales_order_item_id=item_id,
+                        populate_bom_lines=expand_from_bom and bool(bom and bom.bom_code),
                     )
 
         for mid, sel_qty in selected_by_material.items():
@@ -5103,8 +5154,12 @@ class SalesOrderService:
                 quantity=qty_dec,
                 production_mode="MTO",
                 sales_order_id=order.id,
+                sales_order_item_id=info.get("sales_order_item_id"),
                 sales_order_code=order.order_code,
                 sales_order_name=order.order_code,
+                customer_id=int(order.customer_id) if order.customer_id else None,
+                customer_name=(order.customer_name or None),
+                customer_order_no=getattr(order, "customer_order_no", None) or order.order_code,
                 work_center_id=info.get("work_center_id"),
                 work_center_name=info.get("work_center_name"),
                 planned_start_date=planned_start_date,

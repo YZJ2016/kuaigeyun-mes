@@ -107,6 +107,7 @@ import {
   appendWarehouseLineAmountColumns,
   buildWarehouseTotalAmountListColumn,
   KUAIZHIZAO_INBOUND_FIELD_RESOURCE,
+  resolveWarehouseHubStackedPartyPrimary,
   renderWarehouseAmountDisplay,
   useWarehouseShowAmount,
 } from '../shared/warehouseAmountDisplay';
@@ -173,7 +174,11 @@ import {
   isProductionInboundHubScope,
   resolveInboundDocumentPushMode,
 } from './inboundHubTypes';
-import { toApiBusinessDocumentDateTime } from '../../../../../utils/formDate';
+import { formDateRangeFormItemProps, toApiBusinessDocumentDateTime } from '../../../../../utils/formDate';
+import {
+  requestActiveSupplierNameSelectOptions,
+  requestActiveWarehouseSelectOptions,
+} from '../shared/warehouseDocHubSearchHelpers';
 import { inboundReceiptTypeMarkerValueEnum, renderInboundReceiptTypeMarkerTag } from '../shared/warehouseMarkerTags';
 import { buildPurchaseReceiptDetailFinanceColumns } from '../shared/warehouseLineDetailColumns';
 import {
@@ -2214,23 +2219,42 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
   /**
    * 表格列定义
    */
-  const getInboundStackedPrimary = (record: InboundOrder): string => {
-    // 主体优先业务对方：客户 / 供应商（采购、委外）；再回落源单号，最后才是仓库
-    if (record.customer_name) {
-      return String(record.customer_name);
-    }
-    if (record.supplier_name) {
-      return String(record.supplier_name);
-    }
-    if (record.outsource_work_order_code) return String(record.outsource_work_order_code);
-    if (record.work_order_code) return String(record.work_order_code);
-    if (record.picking_code) return String(record.picking_code);
-    if (record.warehouse_name) return String(record.warehouse_name);
-    return t('app.kuaizhizao.warehouseInbound.fallbackDoc');
+  const resolveInboundStackedPrimary = (
+    record: InboundOrder,
+  ): { primary: string; primaryContent?: React.ReactNode } => {
+    const party = resolveWarehouseHubStackedPartyPrimary(KUAIZHIZAO_INBOUND_FIELD_RESOURCE, record);
+    if (party) return party;
+    // 无客户/供应商时回落源单号或仓库（非 party_name 字段，不做脱敏）
+    if (record.outsource_work_order_code) return { primary: String(record.outsource_work_order_code) };
+    if (record.work_order_code) return { primary: String(record.work_order_code) };
+    if (record.picking_code) return { primary: String(record.picking_code) };
+    if (record.warehouse_name) return { primary: String(record.warehouse_name) };
+    return { primary: t('app.kuaizhizao.warehouseInbound.fallbackDoc') };
   };
 
   const columns: ProColumns<InboundOrder>[] = useMemo(
   () => alignProColumns<InboundOrder>([
+    {
+      title: t('common.updatedAt'),
+      dataIndex: 'updated_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+    },
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+    },
+    {
+      title: t('app.kuaizhizao.warehouseInbound.field.documentDate'),
+      dataIndex: 'receipt_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+    },
     {
       title: t('app.kuaizhizao.warehouseInbound.col.subjectDocNo'),
       key: 'receipt_code',
@@ -2241,12 +2265,17 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
       resizable: false,
       ellipsis: false,
       fixed: 'left',
-      render: (_, record) => (
-        <UniTableStackedPrimaryCell
-          primary={getInboundStackedPrimary(record)}
-          secondary={String(record.receipt_code || record.return_code || '')}
-        />
-      ),
+      hideInSearch: true,
+      render: (_, record) => {
+        const stacked = resolveInboundStackedPrimary(record);
+        return (
+          <UniTableStackedPrimaryCell
+            primary={stacked.primary}
+            primaryContent={stacked.primaryContent}
+            secondary={String(record.receipt_code || record.return_code || '')}
+          />
+        );
+      },
     },
     {
       title: t('app.kuaizhizao.warehouseInbound.col.docNo'),
@@ -2271,6 +2300,22 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
       initialValue: 'pending',
     },
     {
+      title: t('app.kuaizhizao.common.colLineMaterials'),
+      dataIndex: 'material_keyword',
+      hideInTable: true,
+      fieldProps: {
+        placeholder: t('app.kuaizhizao.warehouseInbound.search.lineMaterialKeywordPlaceholder'),
+      },
+    },
+    {
+      title: t('app.kuaizhizao.warehouseInbound.col.sourceDocNo'),
+      dataIndex: 'purchase_order_code',
+      hideInTable: true,
+      fieldProps: {
+        placeholder: t('app.kuaizhizao.warehouseInbound.col.sourceDocNo'),
+      },
+    },
+    {
       title: t('app.kuaizhizao.warehouseInbound.col.sourceDocNo'),
       key: 'sourceDocNo',
       dataIndex: 'source_doc_no',
@@ -2291,11 +2336,14 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
       title: t('app.kuaizhizao.warehouseInbound.col.supplier'),
       dataIndex: 'supplier_name',
       hideInTable: true,
-      ellipsis: true,
+      valueType: 'select',
+      request: requestActiveSupplierNameSelectOptions,
+      fieldProps: { showSearch: true, allowClear: true },
     },
     {
       title: t('app.kuaizhizao.common.colLineMaterials'),
       ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+      hideInSearch: true,
       render: (_, record) => renderDocumentLineMaterialsPreview(record.items, t),
     },
     {
@@ -2306,6 +2354,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
       uniTableKeepWidth: true,
       resizable: false,
       sorter: true,
+      hideInSearch: true,
       render: (_, record) => renderWarehouseHeaderQuantity(record, t),
     },
     ...buildWarehouseTotalAmountListColumn<InboundOrder>(
@@ -2318,6 +2367,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
       minWidth: 110,
       uniTableKeepWidth: true,
       resizable: false,
+      hideInSearch: true,
       render: (_dom: unknown, record: InboundOrder) =>
         renderWarehouseAmountDisplay(
           record.receipt_type === 'purchase'
@@ -2332,6 +2382,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
       title: t('app.kuaizhizao.warehouseInbound.col.receiptProgress'),
       dataIndex: 'receipt_progress',
       ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
+      hideInSearch: true,
       render: (_, record) => {
         let required = Number(record.total_quantity ?? 0);
         const posted = isInboundStockPosted(record);
@@ -2356,6 +2407,14 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
     },
     {
       title: t('app.kuaizhizao.warehouseInbound.col.warehouse'),
+      dataIndex: 'warehouse_id',
+      hideInTable: true,
+      valueType: 'select',
+      request: requestActiveWarehouseSelectOptions,
+      fieldProps: { showSearch: true, allowClear: true },
+    },
+    {
+      title: t('app.kuaizhizao.warehouseInbound.col.warehouse'),
       dataIndex: 'warehouse_name',
       width: 120,
       minWidth: 120,
@@ -2363,6 +2422,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
       resizable: false,
       ellipsis: true,
       sorter: true,
+      hideInSearch: true,
       render: (_, r) =>
         r.warehouse_name != null && r.warehouse_name !== '' ? String(r.warehouse_name) : '-',
     },
@@ -2397,7 +2457,11 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
       sorter: true,
       render: (_, record) => resolveInboundHubOperator(record) || '-',
     },
-    ...buildDocumentAuditColumns<Record<string, unknown>>(t),
+    ...buildDocumentAuditColumns<Record<string, unknown>>(t).map((col) => ({
+      ...col,
+      hideInSearch: true,
+    })),
+    inboundAuditColumn,
     {
       title: t('app.kuaizhizao.warehouseInbound.col.lifecycle'),
       dataIndex: 'lifecycle_stage',

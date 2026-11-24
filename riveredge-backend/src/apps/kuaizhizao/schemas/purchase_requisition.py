@@ -22,6 +22,9 @@ class PurchaseRequisitionItemBase(BaseModel):
     material_code: str = Field(..., max_length=50, description="物料编码")
     material_name: str = Field(..., max_length=200, description="物料名称")
     material_spec: Optional[str] = Field(None, max_length=200, description="物料规格")
+    material_model: Optional[str] = Field(None, max_length=200, description="物料型号")
+    partner_material_code: Optional[str] = Field(None, max_length=100, description="供应商料号")
+    partner_material_name: Optional[str] = Field(None, max_length=200, description="供应商品名")
     unit: str = Field("件", max_length=20, description="单位")
     quantity: Decimal = Field(..., gt=0, description="申请数量")
     suggested_unit_price: Decimal = Field(Decimal(0), ge=0, description="建议单价")
@@ -61,6 +64,7 @@ class PurchaseRequisitionItemResponse(PurchaseRequisitionItemBase):
     purchase_order_id: Optional[int] = None
     purchase_order_item_id: Optional[int] = None
     supplier_id: Optional[int] = None
+    supplier_name: Optional[str] = Field(None, description="建议供应商名称（展示）")
     converted_quantity_draft: Optional[Decimal] = Field(0, description="已下推数量（草稿）")
     converted_quantity_confirmed: Optional[Decimal] = Field(0, description="已下推数量（已确认）")
     created_at: datetime
@@ -197,6 +201,8 @@ class PurchaseRequisitionListResponse(PurchaseRequisitionResponse):
     items_count: Optional[int] = None
     total_quantity: Optional[Decimal] = None
     total_amount: Optional[Decimal] = None
+    attachments_count: Optional[int] = Field(None, description="附件数量（头表+明细行）")
+    header_attachments_count: Optional[int] = Field(None, description="头表附件数量（列表展示）")
 
 
 class ConvertToPurchaseOrderRequest(BaseModel):

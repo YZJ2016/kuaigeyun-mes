@@ -2099,6 +2099,12 @@ const RolesPermissionsPage: React.FC = () => {
                         '仅展示已在「功能权限」中勾选的业务资源。批量范围选「全部/本部门/自定义」后点保存，会对当前列表内资源生效（勾选时仅作用于已选）；也可勾选后点「应用到已选」预览再保存。',
                     })}
                   </div>
+                  <div style={{ color: token.colorTextSecondary, fontSize: 12 }}>
+                    {t('pages.system.roles.dataGrantDepartmentScopeNote', {
+                      defaultValue:
+                        '「本部门」按任职部门成员经办的单据过滤；配置后须保存；多角色合并已保存的数据策略，未配置策略的角色不会把范围放宽为全部。',
+                    })}
+                  </div>
                   <Flex gap={8} wrap="wrap" align="center">
                     <ThemedSegmented
                       surfaceBackground

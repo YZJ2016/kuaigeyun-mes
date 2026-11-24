@@ -1104,6 +1104,32 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
             }
             for b in batches
         ]
+        from apps.kuaizhizao.services.outsource_order_batch_quantity import (
+            compute_issued_batch_quantity,
+            resolve_outsource_suggested_receipt_quantity,
+        )
+
+        work_order = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            id=int(outsource_order.work_order_id),
+            deleted_at__isnull=True,
+        ).first()
+        work_order_operation = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            id=int(outsource_order.work_order_operation_id),
+            deleted_at__isnull=True,
+        ).first()
+        payload["issued_batch_quantity"] = await compute_issued_batch_quantity(
+            tenant_id,
+            outsource_order,
+            work_order=work_order,
+        )
+        payload["suggested_receipt_quantity"] = await resolve_outsource_suggested_receipt_quantity(
+            tenant_id,
+            outsource_order,
+            work_order=work_order,
+            work_order_operation=work_order_operation,
+        )
         return OutsourceOrderResponse.model_validate(payload)
 
     async def list_outsource_orders(
@@ -1200,6 +1226,31 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
             derive_outsource_order_push_issue_cap,
         )
 
+        wo_ids = list({int(r.work_order_id) for r in outsource_orders if r.work_order_id})
+        wo_rows = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            id__in=wo_ids,
+            deleted_at__isnull=True,
+        ).all() if wo_ids else []
+        work_orders_by_id = {int(w.id): w for w in wo_rows}
+
+        op_ids = list({int(r.work_order_operation_id) for r in outsource_orders if r.work_order_operation_id})
+        op_rows = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            id__in=op_ids,
+            deleted_at__isnull=True,
+        ).all() if op_ids else []
+        ops_by_id = {int(o.id): o for o in op_rows}
+
+        from apps.kuaizhizao.services.outsource_order_batch_quantity import (
+            batch_compute_issued_batch_quantities,
+            resolve_outsource_suggested_receipt_quantity,
+        )
+
+        issued_batch_by_order = await batch_compute_issued_batch_quantities(
+            tenant_id, outsource_orders, work_orders_by_id
+        )
+
         rows: list[dict] = []
         for row in outsource_orders:
             item = OutsourceOrderListResponse.model_validate(row).model_dump()
@@ -1207,6 +1258,17 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
             item["capabilities"] = {
                 "push_outsource_issue": derive_outsource_order_push_issue_cap(row).model_dump(),
             }
+            oid = int(row.id)
+            item["issued_batch_quantity"] = issued_batch_by_order.get(oid, Decimal("0"))
+            wo = work_orders_by_id.get(int(row.work_order_id))
+            op = ops_by_id.get(int(row.work_order_operation_id))
+            if wo and op:
+                item["suggested_receipt_quantity"] = await resolve_outsource_suggested_receipt_quantity(
+                    tenant_id,
+                    row,
+                    work_order=wo,
+                    work_order_operation=op,
+                )
             rows.append(item)
         return {
             "data": rows,

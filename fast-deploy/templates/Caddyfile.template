@@ -16,7 +16,8 @@
     @api_long_running path \
         /api/v1/apps/haoligo/finance/invoices/parse-pdf \
         /api/v1/apps/haoligo/finance/invoices/ai-review \
-        /api/v1/apps/kuaizhizao/sales-orders/ocr-extract
+        /api/v1/apps/kuaizhizao/sales-orders/ocr-extract \
+        /api/v1/core/files/storage-migrate
     handle @api_long_running {
         reverse_proxy {{BACKEND_ADDR}} {
             transport http {

@@ -235,6 +235,19 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
         )
 
         query = SemiFinishedGoodsReceipt.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        current_user = filters.get("current_user")
+        if current_user is not None:
+            from apps.kuaizhizao.services.kuaizhizao_data_scope import (
+                INBOUND_SCOPE_RESOURCE,
+                apply_kuaizhizao_list_scope,
+            )
+
+            query = await apply_kuaizhizao_list_scope(
+                query,
+                tenant_id=tenant_id,
+                current_user=current_user,
+                resource=INBOUND_SCOPE_RESOURCE,
+            )
         if filters.get("status"):
             query = query.filter(status=filters["status"])
         if filters.get("work_order_id"):
@@ -806,6 +819,7 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
             material_code=(getattr(material, "main_code", None) or getattr(material, "code", None) or work_order.product_code or ""),
             material_name=(getattr(material, "name", None) or work_order.product_name or ""),
             material_spec=getattr(material, "specification", None) or getattr(work_order, "product_spec", None),
+            material_model=getattr(material, "model", None),
             material_unit=material_unit,
             source_doc_quantity=reference_qty,
             source_received_quantity=received,
@@ -843,6 +857,11 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
             if not work_order:
                 raise NotFoundError(f"工单不存在: {work_order_id}")
             assert_work_order_capability(work_order, "push_finished_goods_receipt")
+            from apps.kuaizhizao.utils.finished_goods_inbound_pull_eligibility import (
+                assert_fg_inbound_pull_readiness,
+            )
+
+            await assert_fg_inbound_pull_readiness(tenant_id, work_order)
 
             if receipt_quantity is None:
                 qc_records = await FinishedGoodsInspection.filter(

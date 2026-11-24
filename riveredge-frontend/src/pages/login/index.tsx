@@ -69,7 +69,11 @@ import { Spin } from 'antd';
 
 const LazyRegisterDrawer = lazy(() => import('./RegisterDrawer'));
 import { theme } from 'antd';
-import { getPlatformSettingsPublic, type PlatformSettings } from '../../services/publicPlatformSettings';
+import {
+  fetchPlatformSettingsPublic,
+  isLoginPageFeatureExplicitlyEnabled,
+  type PlatformSettings,
+} from '../../services/publicPlatformSettings';
 import {
   isLoginQuickProviderEnabled,
   resolveLoginQuickProviders,
@@ -324,6 +328,7 @@ export default function LoginPage() {
   const [platformSettings, setPlatformSettings] = useState<PlatformSettings | null>(() =>
     readPlatformSettingsPublicCache(platformSettingsCacheKey),
   );
+  const [platformSettingsLoadedFromApi, setPlatformSettingsLoadedFromApi] = useState(false);
   const [isLoadingPlatformSettings, setIsLoadingPlatformSettings] = useState(
     () => readPlatformSettingsPublicCache(platformSettingsCacheKey) === null,
   );
@@ -336,16 +341,24 @@ export default function LoginPage() {
 
   useEffect(() => {
     let cancelled = false;
-    void getPlatformSettingsPublic()
+    void fetchPlatformSettingsPublic()
       .then((data) => {
         if (!cancelled) {
-          setPlatformSettings(data);
-          void applyFavicon(data?.favicon);
-          applySearchEngineIndexing(data?.search_engine_indexing_enabled);
+          if (data) {
+            setPlatformSettings(data);
+            setPlatformSettingsLoadedFromApi(true);
+            void applyFavicon(data.favicon);
+            applySearchEngineIndexing(data.search_engine_indexing_enabled);
+          } else {
+            setPlatformSettingsLoadedFromApi(false);
+            void applyFavicon(undefined);
+            applySearchEngineIndexing(true);
+          }
         }
       })
       .catch(() => {
         if (!cancelled) {
+          setPlatformSettingsLoadedFromApi(false);
           void applyFavicon(undefined);
           applySearchEngineIndexing(true);
         }
@@ -379,12 +392,32 @@ export default function LoginPage() {
     ? (platformSettings?.platform_name_en || platformSettings?.login_title_en || platformSettings?.platform_name || cachedPlatformName || 'StarTech')
     : (platformSettings?.platform_name || cachedPlatformName || '星技谷');
 
-  const loginGuestEnabled = platformSettings?.login_guest_enabled !== false;
-  const loginQuickEnabled = platformSettings?.login_quick_enabled !== false;
+  const loginGuestEnabled = isLoginPageFeatureExplicitlyEnabled(
+    platformSettings,
+    platformSettingsLoadedFromApi,
+    'login_guest_enabled',
+  );
+  const loginQuickEnabled = isLoginPageFeatureExplicitlyEnabled(
+    platformSettings,
+    platformSettingsLoadedFromApi,
+    'login_quick_enabled',
+  );
   const loginQuickProviders = resolveLoginQuickProviders(platformSettings?.login_quick_providers);
-  const loginClientWinEnabled = platformSettings?.login_client_win_enabled !== false;
-  const loginClientAndroidEnabled = platformSettings?.login_client_android_enabled !== false;
-  const registerEnabled = platformSettings?.enable_register !== false;
+  const loginClientWinEnabled = isLoginPageFeatureExplicitlyEnabled(
+    platformSettings,
+    platformSettingsLoadedFromApi,
+    'login_client_win_enabled',
+  );
+  const loginClientAndroidEnabled = isLoginPageFeatureExplicitlyEnabled(
+    platformSettings,
+    platformSettingsLoadedFromApi,
+    'login_client_android_enabled',
+  );
+  const registerEnabled = isLoginPageFeatureExplicitlyEnabled(
+    platformSettings,
+    platformSettingsLoadedFromApi,
+    'enable_register',
+  );
   const showClientDownloads = loginClientWinEnabled || loginClientAndroidEnabled;
 
   const { data: loginClientDownloads } = useQuery({

@@ -9,8 +9,8 @@ Date: 2025-12-30
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional, List, Literal
-from pydantic import Field, field_validator
+from typing import Any, Optional, List, Literal
+from pydantic import Field, field_validator, model_validator
 from core.schemas.base import BaseSchema
 
 from apps.kuaizhizao.services.document_action_policy.types import (
@@ -107,6 +107,10 @@ class ProductionPickingResponse(ProductionPickingBase):
     capabilities: Optional[OutboundHubCapabilities] = Field(
         None, description="业务态 capabilities（出库 Hub，document_action_policy）",
     )
+    external_withdraw_message: Optional[str] = Field(
+        None, description="撤回领料时苍穹同步失败原因（本地已撤回时仍可能返回）",
+    )
+    kingdee_bill_no: Optional[str] = Field(None, description="外推金蝶单号（DocumentRelation）")
 
     class Config:
         from_attributes = True
@@ -156,6 +160,8 @@ class ProductionPickingPullLineCreate(BaseSchema):
     issue_quantity: float = Field(..., gt=0, description="本次领料数量")
     warehouse_id: Optional[int] = Field(None, description="出库仓库ID（明细行）")
     warehouse_name: Optional[str] = Field(None, max_length=100, description="出库仓库名称（明细行）")
+    location_id: Optional[int] = Field(None, description="库位ID（明细行）")
+    location_code: Optional[str] = Field(None, max_length=50, description="库位编码（明细行）")
     batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
     serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
 
@@ -365,6 +371,7 @@ class InboundCreatePreviewLine(BaseSchema):
     material_code: str = Field(..., max_length=50, description="物料编码")
     material_name: str = Field(..., max_length=200, description="物料名称")
     material_spec: Optional[str] = Field(None, max_length=200, description="物料规格")
+    material_model: Optional[str] = Field(None, max_length=200, description="物料型号")
     material_unit: str = Field(default="个", max_length=20, description="物料单位")
     source_doc_quantity: Optional[float] = Field(None, description="源单数量")
     source_received_quantity: Optional[float] = Field(None, description="已处理数量")
@@ -519,6 +526,13 @@ class FinishedGoodsReceiptResponse(FinishedGoodsReceiptBase):
     items: Optional[List[DocumentLineMaterialPreview]] = Field(
         None, description="明细物料名预览（列表「明细」列）",
     )
+    external_push_message: Optional[str] = Field(
+        None, description="确认入库后外推失败原因（仅确认接口返回）",
+    )
+    external_withdraw_message: Optional[str] = Field(
+        None, description="撤回入库时苍穹同步失败原因（本地已撤回时仍可能返回）",
+    )
+    kingdee_bill_no: Optional[str] = Field(None, description="外推金蝶单号（DocumentRelation）")
 
     class Config:
         from_attributes = True
@@ -720,6 +734,9 @@ class SalesDeliveryBase(BaseSchema):
     
     customer_id: int = Field(..., description="客户ID")
     customer_name: str = Field(..., max_length=200, description="客户名称")
+    customer_contact: Optional[str] = Field(None, max_length=100, description="客户联系人")
+    customer_phone: Optional[str] = Field(None, max_length=50, description="客户电话")
+    customer_order_no: Optional[str] = Field(None, max_length=100, description="客户订单号（来源销售订单）")
     revenue_recognition: Optional[str] = Field(
         None,
         max_length=32,
@@ -740,11 +757,33 @@ class SalesDeliveryBase(BaseSchema):
     total_amount: float = Field(0, ge=0, description="总金额")
     currency_code: Optional[str] = Field("CNY", max_length=20, description="币种代码")
     exchange_rate: Decimal = Field(default=Decimal("1"), gt=0, description="汇率（相对本位币）")
+    payment_method_code: Optional[str] = Field(None, max_length=50, description="付款方式")
+    payment_wire_percent: Optional[Decimal] = Field(None, ge=0, le=100, description="电汇比例（%）")
+    payment_acceptance_percent: Optional[Decimal] = Field(None, ge=0, le=100, description="承兑比例（%）")
     shipping_method: Optional[str] = Field(None, max_length=50, description="发货方式")
     tracking_number: Optional[str] = Field(None, max_length=100, description="物流单号")
     shipping_address: Optional[str] = Field(None, description="收货地址")
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+
+    @field_validator("payment_method_code", mode="before")
+    @classmethod
+    def validate_payment_method_code(cls, v):
+        from apps.master_data.config.partner_settlement_codes import coerce_partner_payment_method_code
+
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        coerced = coerce_partner_payment_method_code(v)
+        if coerced is None:
+            raise ValueError("无效的付款方式")
+        return coerced
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_payment_method_mix_fields(cls, data: Any) -> Any:
+        from apps.master_data.config.payment_method_mix import apply_payment_method_mix_to_mapping
+
+        return apply_payment_method_mix_to_mapping(data)
 
 
 class SalesDeliveryCreate(SalesDeliveryBase):
@@ -782,9 +821,31 @@ class SalesDeliveryUpdate(BaseSchema):
     shipping_method: Optional[str] = Field(None, max_length=50, description="发货方式")
     tracking_number: Optional[str] = Field(None, max_length=100, description="物流单号")
     shipping_address: Optional[str] = Field(None, description="收货地址")
+    payment_method_code: Optional[str] = Field(None, max_length=50, description="付款方式")
+    payment_wire_percent: Optional[Decimal] = Field(None, ge=0, le=100, description="电汇比例（%）")
+    payment_acceptance_percent: Optional[Decimal] = Field(None, ge=0, le=100, description="承兑比例（%）")
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
     items: Optional[List[SalesDeliveryItemEditLine]] = Field(None, description="明细编辑行")
+
+    @field_validator("payment_method_code", mode="before")
+    @classmethod
+    def validate_payment_method_code(cls, v):
+        from apps.master_data.config.partner_settlement_codes import coerce_partner_payment_method_code
+
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        coerced = coerce_partner_payment_method_code(v)
+        if coerced is None:
+            raise ValueError("无效的付款方式")
+        return coerced
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_payment_method_mix_fields(cls, data: Any) -> Any:
+        from apps.master_data.config.payment_method_mix import apply_payment_method_mix_to_mapping
+
+        return apply_payment_method_mix_to_mapping(data, skip_when_all_missing=True)
 
 
 class SalesDeliveryResponse(SalesDeliveryBase):
@@ -809,6 +870,13 @@ class SalesDeliveryResponse(SalesDeliveryBase):
     items: Optional[List[DocumentLineMaterialPreview]] = Field(
         None, description="明细物料名预览（列表「明细」列）",
     )
+    external_push_message: Optional[str] = Field(
+        None, description="确认出库后外推失败原因（仅确认接口返回）",
+    )
+    external_withdraw_message: Optional[str] = Field(
+        None, description="撤回出库时苍穹同步失败原因（本地已撤回时仍可能返回）",
+    )
+    kingdee_bill_no: Optional[str] = Field(None, description="外推金蝶单号（DocumentRelation）")
 
     class Config:
         from_attributes = True
@@ -825,6 +893,7 @@ class SalesDeliveryItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     """销售出库单明细基础schema"""
     sales_order_item_id: Optional[int] = Field(None, description="销售订单明细ID")
     shipment_notice_item_id: Optional[int] = Field(None, description="发货通知明细ID")
+    customer_order_no: Optional[str] = Field(None, max_length=100, description="客户订单号（来源销售订单）")
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")
     material_name: str = Field(..., max_length=200, description="物料名称")
@@ -1092,6 +1161,13 @@ class PurchaseReceiptResponse(PurchaseReceiptBase):
     finance_outcome: Optional[PurchaseReceiptFinanceOutcome] = Field(
         None, description="确认入库时的应付立账结果（仅确认接口返回）",
     )
+    external_push_message: Optional[str] = Field(
+        None, description="确认入库后外推失败原因（仅确认接口返回）",
+    )
+    external_withdraw_message: Optional[str] = Field(
+        None, description="撤回入库时苍穹同步失败原因（本地已撤回时仍可能返回）",
+    )
+    kingdee_bill_no: Optional[str] = Field(None, description="外推金蝶单号（DocumentRelation）")
 
     class Config:
         from_attributes = True
@@ -1514,6 +1590,10 @@ class OtherInboundResponse(OtherInboundBase):
     items: Optional[List[DocumentLineMaterialPreview]] = Field(
         None, description="明细物料名预览（列表「明细」列）",
     )
+    external_withdraw_message: Optional[str] = Field(
+        None, description="撤回入库时苍穹同步失败原因（本地已撤回时仍可能返回）",
+    )
+    kingdee_bill_no: Optional[str] = Field(None, description="外推金蝶单号（DocumentRelation）")
 
     class Config:
         from_attributes = True
@@ -1585,6 +1665,11 @@ class OtherInboundWithItemsResponse(OtherInboundResponse):
 class OtherOutboundBase(BaseSchema):
     """其他出库单基础schema"""
     outbound_code: Optional[str] = Field(None, max_length=50, description="出库单编码（可选，不提供则自动生成）")
+    outbound_type: Optional[str] = Field(
+        "物料出库",
+        max_length=20,
+        description="出库类型（物料出库/资产出库）",
+    )
     reason_type: str = Field(
         ...,
         min_length=1,
@@ -1620,6 +1705,16 @@ class OtherOutboundBase(BaseSchema):
     total_amount: float = Field(0, ge=0, description="总金额")
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+
+    @field_validator("outbound_type", mode="before")
+    @classmethod
+    def _normalize_outbound_type_field(cls, value: object) -> object:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            text = value.strip()
+            return text or None
+        return value
 
     @field_validator("reason_type", mode="before")
     @classmethod
@@ -1680,6 +1775,10 @@ class OtherOutboundResponse(OtherOutboundBase):
     items: Optional[List[DocumentLineMaterialPreview]] = Field(
         None, description="明细物料名预览（列表「明细」列）",
     )
+    external_withdraw_message: Optional[str] = Field(
+        None, description="撤回出库时苍穹同步失败原因（本地已撤回时仍可能返回）",
+    )
+    kingdee_bill_no: Optional[str] = Field(None, description="外推金蝶单号（DocumentRelation）")
 
     class Config:
         from_attributes = True

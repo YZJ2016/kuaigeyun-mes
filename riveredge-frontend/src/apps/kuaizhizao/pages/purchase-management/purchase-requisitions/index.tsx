@@ -45,6 +45,8 @@ import {
   isPullableScope,
   renderPullCapabilityTag,
   useUniPullQuery,
+  buildPullQueryMaterialIdentityColumn,
+  isPullOpenLineSelectable,
 } from '../../../../../components/uni-pull-query';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { SourceDocumentCode } from '../../../../../components/linked-document-code/SourceDocumentCode';
@@ -80,6 +82,7 @@ import {
 } from '../shared/PurchaseDepartmentFormField';
 import type { User } from '../../../../../services/user';
 import type { Material } from '../../../../master-data/types/material';
+import { resolveDefaultSupplierIdFromMaterial } from '../../../../master-data/utils/materialDefaultSupplier';
 import {
   applyPurchaseDocumentLineMaterialPricing,
   repriceUnlockedPurchaseDocumentLineIfNeeded,
@@ -122,12 +125,7 @@ import {
   type DemandComputationPurchasePullLine,
 } from '../../../services/demand-computation';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
-import UniAuditInitiatorSubmitModal from '../../../../../components/uni-audit/UniAuditInitiatorSubmitModal';
-import {
-  fetchSubmitInitiatorRequirements,
-  type SubmitInitiatorBranchHint,
-  type SubmitInitiatorNodeHint,
-} from '../../../../../services/uniAudit';
+import { useListSubmitReviewWithInitiator } from '../../../../../hooks/useListSubmitReviewWithInitiator';
 import {
   buildPurchaseRequisitionLifecycleValueEnum,
   getPurchaseRequisitionLifecycle,
@@ -176,12 +174,26 @@ import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import {
+  handoffDemandComputationToPurchaseRequisitionCreate,
+  handoffRequisitionToPurchaseInquiryCreate,
+  handoffRequisitionToPurchaseOrderCreate,
+  handoffSalesOrdersToPurchaseRequisitionCreate,
+  hydrateDocumentFlowCreateFormValues,
+} from '../../../utils/documentFlowHandoff';
+import {
+  listPurchaseRequisitionSalesOrderPullLines,
+  listPurchaseRequisitionSalesOrderPullOrders,
+  type PurchaseRequisitionSalesOrderPullLine,
+} from '../../../services/purchase';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import {
   buildDocumentLineAttachmentsFormColumn,
   DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY,
 } from '../../../components/documentLineAttachmentsColumns';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { buildDocumentAttachmentsListColumn } from '../../../components/documentAttachmentsListColumn';
+import { countDocumentAttachments } from '../../../utils/documentAttachments';
 import { formatBusinessDateOnly, formatDateTime, formatNumber, formatQuantity, todaySiteDateString, formatCurrencyAmount, formatCurrencyPrice } from '../../../../../utils/format';
 import { computeSimpleDocumentLineTotal } from '../../../utils/documentLineAmounts';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
@@ -256,6 +268,62 @@ function healPurchaseRequisitionDraft(values: Record<string, unknown>): Record<s
   return next;
 }
 
+/** 下推/草稿灌入采购申请新建页。明细必须进 initialValues，禁止灌完再改掉 flow 查询。 */
+function buildPurchaseRequisitionHandoffFormValues(flowBody: Record<string, unknown>): {
+  formValues: Record<string, unknown>;
+  extras: Record<string, unknown> | null;
+} {
+  const {
+    _documentFlowMeta: _meta,
+    documentFlowSourceType,
+    documentFlowDemandComputationItemIds,
+    documentFlowDemandComputationIds,
+    documentFlowReplenishmentSuggestionIds,
+    documentFlowSalesOrderId,
+    ...formValues
+  } = flowBody;
+  const hydrated = hydrateDocumentFlowCreateFormValues(formValues);
+  const healed = healPurchaseRequisitionDraft(hydrated);
+  if (healed.requisition_date == null || healed.requisition_date === '') {
+    healed.requisition_date = dayjs();
+  }
+  const normalizedItems = normalizeFormListItems<Record<string, unknown>>(healed.items).map((item) => {
+    const midRaw = item.material_id ?? item.materialId;
+    const mid = midRaw != null ? Number(midRaw) : NaN;
+    const qtyRaw = item.quantity ?? item.ordered_quantity;
+    const qty = Number(qtyRaw);
+    return {
+      ...item,
+      material_id: Number.isFinite(mid) && mid > 0 ? mid : undefined,
+      material_code: item.material_code ?? item.materialCode ?? '',
+      material_name: item.material_name ?? item.materialName ?? '',
+      material_spec: item.material_spec ?? item.materialSpec ?? '',
+      material_model: item.material_model ?? item.materialModel ?? '',
+      unit: item.unit || '件',
+      quantity: Number.isFinite(qty) && qty > 0 ? qty : 1,
+      suggested_unit_price: Number(item.suggested_unit_price ?? item.suggestedUnitPrice ?? 0),
+      required_date: item.required_date != null ? coerceFormDate(item.required_date) : undefined,
+      demand_computation_item_id:
+        item.demand_computation_item_id ?? item.demandComputationItemId ?? undefined,
+    };
+  });
+  return {
+    formValues: {
+      ...healed,
+      items: normalizedItems.length > 0 ? normalizedItems : [{ ...INITIAL_PR_FORM_ITEM_ROW }],
+    },
+    extras: documentFlowSourceType
+      ? {
+          documentFlowSourceType,
+          documentFlowDemandComputationItemIds,
+          documentFlowDemandComputationIds,
+          documentFlowReplenishmentSuggestionIds,
+          documentFlowSalesOrderId,
+        }
+      : null,
+  };
+}
+
 const SuggestedPriceStoreRepair: React.FC<{
   form: {
     getFieldValue?: (name: any) => any;
@@ -302,7 +370,7 @@ type PurchaseRequisitionItemRow = PurchaseRequisitionItem & {
 };
 
 const PURCHASE_REQUISITION_LIST_PERSISTENCE_ID =
-  'apps.kuaizhizao.pages.purchase-management.purchase-requisitions-width-v2';
+  'apps.kuaizhizao.pages.purchase-management.purchase-requisitions-rank-v11';
 
 const PURCHASE_REQUISITION_ORDER_TYPE_FALLBACK: Pick<DictionaryItem, 'value' | 'label' | 'is_system_managed' | 'sort_order'>[] = [
   { value: '标准采购', label: '标准采购', is_system_managed: true, sort_order: 0 },
@@ -328,6 +396,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const pushToPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'purchase_order.pull_from_requisition');
   const pushToInquiryAction = resolveKuaizhizaoDocumentAction(t, 'purchase_inquiry.pull_from_requisition');
   const pullFromDemandComputationAction = resolveKuaizhizaoDocumentAction(t, 'purchase_requisition.pull_from_demand_computation');
+  const pullFromSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'purchase_requisition.pull_from_sales_order');
   const currentUser = useCurrentUser();
   const {
     options: departmentOptions,
@@ -363,6 +432,20 @@ const PurchaseRequisitionsPage: React.FC = () => {
     [isFormPage, location.pathname, location.search],
   );
   const formPageInitKeyRef = useRef<string | null>(null);
+  const purchaseRequisitionCreateSeed = useMemo(() => {
+    if (!isCreatePage) return null;
+    const flowBodyFromState =
+      location.state &&
+      typeof location.state === 'object' &&
+      (location.state as { documentFlowCreate?: unknown }).documentFlowCreate &&
+      typeof (location.state as { documentFlowCreate?: unknown }).documentFlowCreate === 'object'
+        ? (location.state as { documentFlowCreate: Record<string, unknown> }).documentFlowCreate
+        : null;
+    const draft = prFormDraftKey ? getDocumentFormDraft<Record<string, unknown>>(prFormDraftKey) : null;
+    const flowBody = flowBodyFromState ?? draft;
+    if (!flowBody || Object.keys(flowBody).length === 0) return null;
+    return buildPurchaseRequisitionHandoffFormValues(flowBody).formValues;
+  }, [isCreatePage, location.state, prFormDraftKey]);
   const { token } = theme.useToken();
   const prqDetailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi, modal: modalApi } = App.useApp();
@@ -431,6 +514,134 @@ const PurchaseRequisitionsPage: React.FC = () => {
     actionRef.current?.reload();
   }, [invalidateMenuBadgeCounts]);
   const leavePurchaseRequisitionFormPage = useLeaveFormTab(PURCHASE_REQUISITION_LIST_PATH);
+
+  const {
+    runAction: runPurchaseRequisitionAuditBatch,
+    auditModal: purchaseRequisitionAuditModal,
+  } = useAuditBatchRunner<PurchaseRequisition>({
+    permGates: purchaseRequisitionPerms,
+    handlers: purchaseRequisitionAuditBatchHandlers,
+    onBatchComplete: handlePurchaseRequisitionAuditBatchSuccess,
+    resolveIdFromKey: resolveRequisitionIdFromSelectionKey,
+    auditEntity: {
+      entityType: 'purchase_request',
+      entityName: t('app.kuaizhizao.purchaseRequisition.entityName'),
+    },
+  });
+
+  const {
+    runSubmitReviewWithInitiator: runPurchaseRequisitionSubmitReviewWithInitiator,
+    listInitiatorModal: purchaseRequisitionListInitiatorModal,
+  } = useListSubmitReviewWithInitiator({
+    entityType: 'purchase_request',
+    entityLabel: t('app.kuaizhizao.purchaseRequisition.entityName'),
+    submitTitle: t('app.kuaizhizao.purchaseRequisition.toolbar.submitReview'),
+    submitReview: (id, payload) => submitPurchaseRequisitionForReview(id, payload ?? {}),
+  });
+
+  const purchaseRequisitionToolbarAuditMenus = useMemo(() => {
+    const canPerm = (action: AuditBatchAction) => {
+      const perm = action === 'approve' ? 'audit' : action === 'submit' ? 'submit' : 'revoke';
+      return purchaseRequisitionPerms.canAction?.(perm) ?? false;
+    };
+    const item = (
+      key: string,
+      action: AuditBatchAction,
+      label: string,
+      capKey: string,
+      rows: PurchaseRequisition[],
+    ): UniBatchMenuItem => ({
+      key,
+      label,
+      disabled:
+        selectedRequisitionsForBatch.length > 0
+        && !defaultAuditBatchAllowed(rows, canPerm(action), capKey, (row) => row),
+      onClick: () =>
+        runPurchaseRequisitionAuditBatch(
+          action,
+          rows.map((row) => row.id!).filter((id): id is number => id != null && Number(id) > 0),
+          rows,
+          purchaseRequestAuditEnabled,
+        ),
+    });
+    const capOn = (row: PurchaseRequisition, capKey: string) => pickCapability(row, capKey)?.allowed === true;
+    const submittedRows = selectedRequisitionsForBatch.filter(
+      (row) => String(row.status || '').trim() === 'SUBMITTED' && capOn(row, 'withdraw_submit'),
+    );
+    const pendingRows = selectedRequisitionsForBatch.filter(
+      (row) => isPendingReviewStatus(row.status) && capOn(row, 'withdraw_submit'),
+    );
+    const submitReviewRows = selectedRequisitionsForBatch.filter((row) =>
+      (row.audit?.allowed_actions ?? []).includes('submit_review'),
+    );
+    const canSubmitReview = purchaseRequisitionPerms.canAction?.('submit') ?? false;
+    const submitRows = selectedRequisitionsForBatch.filter((row) => capOn(row, 'submit'));
+    const submitMenuItem = item('submit', 'submit', t('common.submit'), 'submit', submitRows);
+    const submitDisabled = Boolean(submitMenuItem.disabled);
+    return {
+      submit: withDocumentSubmitCombinedItem(
+        [
+          submitMenuItem,
+          item('withdraw-submit', 'withdraw', t('app.kuaizhizao.purchaseRequisition.toolbar.withdrawSubmit'), 'withdraw_submit', submittedRows),
+          {
+            key: 'submit-review',
+            label: t('app.kuaizhizao.purchaseRequisition.toolbar.submitReview'),
+            disabled: selectedRequisitionsForBatch.length > 0 && !(canSubmitReview && submitReviewRows.length > 0),
+            onClick: () => runCapabilityBatchLoop({
+              keys: submitReviewRows
+                .map((row) => row.id)
+                .filter((id): id is number => id != null && Number(id) > 0),
+              records: submitReviewRows,
+              capabilityKey: 'submit_review',
+              permAllowed: canSubmitReview,
+              notAllowedMessage: t('app.kuaizhizao.purchaseRequisition.toolbar.submitReviewNotAllowed'),
+              onRun: (id) => runPurchaseRequisitionSubmitReviewWithInitiator(id),
+              message: messageApi,
+              t,
+              onSuccess: handlePurchaseRequisitionAuditBatchSuccess,
+            }),
+          },
+        ],
+        {
+          t,
+          message: messageApi,
+          disabled: submitDisabled,
+          commitRecords: submitRows,
+          permAllowed: canSubmitReview,
+          resolveId: (key) => resolveRequisitionIdFromSelectionKey(key),
+          commit: (id) => submitPurchaseRequisition(id),
+          submitReview: (id) => runPurchaseRequisitionSubmitReviewWithInitiator(id),
+          onSuccess: handlePurchaseRequisitionAuditBatchSuccess,
+        },
+      ),
+      audit: [
+        item('approve', 'approve', t('components.uniAction.audit'), 'approve', selectedRequisitionsForBatch.filter((row) => capOn(row, 'approve'))),
+        item('withdraw-review', 'withdraw', t('app.kuaizhizao.purchaseRequisition.toolbar.withdrawReview'), 'withdraw_submit', pendingRows),
+        item('revoke', 'revoke', t('app.kuaizhizao.purchaseRequisition.toolbar.revoke'), 'revoke_approval', selectedRequisitionsForBatch.filter((row) => capOn(row, 'revoke_approval'))),
+      ] satisfies UniBatchMenuItem[],
+    };
+  }, [
+    handlePurchaseRequisitionAuditBatchSuccess,
+    messageApi,
+    purchaseRequestAuditEnabled,
+    purchaseRequisitionPerms,
+    resolveRequisitionIdFromSelectionKey,
+    runPurchaseRequisitionAuditBatch,
+    runPurchaseRequisitionSubmitReviewWithInitiator,
+    selectedRequisitionsForBatch,
+    t,
+  ]);
+  const leavePurchaseRequisitionFormPage = useLeaveFormTab(PURCHASE_REQUISITION_LIST_PATH);
+
+  const {
+    runAfterPersist: runPurchaseRequisitionSaveAndAudit,
+    initiatorModal: purchaseRequisitionInitiatorModal,
+  } = useDocumentFormCommitAndSubmitReview({
+    entityType: 'purchase_request',
+    entityLabel: t('app.kuaizhizao.purchaseRequisition.entityName'),
+    commit: submitPurchaseRequisition,
+    submitReview: (id, payload) => submitPurchaseRequisitionForReview(id, payload ?? {}),
+  });
   const [detailVisible, setDetailVisible] = useState(false);
   const [currentReq, setCurrentReq] = useState<PurchaseRequisition | null>(null);
   const [supplierList, setSupplierList] = useState<Array<{ id: number; code?: string; name: string }>>([]);
@@ -444,6 +655,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
     [],
   );
   const postSaveSubmitContextRef = useRef<{ requisitionId: number; wasEdit: boolean } | null>(null);
+  const [editingStatus, setEditingStatus] = useState<string | null>(null);
   /** 上一次表头要求到货日，用于改表头时同步曾跟随表头的明细行（对齐采购订单/销售订单） */
   const lastHeaderDeliveryRef = useRef<ReturnType<typeof dayjs> | null>(null);
   /** 程序化回填（服务端/草稿）期间禁止 onValuesChange 写草稿，避免空价覆盖手填 */
@@ -522,6 +734,11 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const [pullSourceComputationId, setPullSourceComputationId] = useState<number | undefined>();
   const pullSourceComputationIdRef = useRef<number | undefined>(undefined);
   const [pullSourceOptions, setPullSourceOptions] = useState<Array<{ value: number; label: string }>>([]);
+  const [pullSourceSalesOrderId, setPullSourceSalesOrderId] = useState<number | undefined>();
+  const pullSourceSalesOrderIdRef = useRef<number | undefined>(undefined);
+  const [pullSourceSalesOrderOptions, setPullSourceSalesOrderOptions] = useState<
+    Array<{ value: number; label: string }>
+  >([]);
   const [pullDateConfirmOpen, setPullDateConfirmOpen] = useState(false);
   const [pullDateConfirming, setPullDateConfirming] = useState(false);
   const [pullDateConfirmRows, setPullDateConfirmRows] = useState<
@@ -557,19 +774,24 @@ const PurchaseRequisitionsPage: React.FC = () => {
           : dayjs();
       const priced = await resolvePurchaseDocumentMaterialLinesPricing(selected, { asOf });
       const defaultDate = resolveHeaderRequiredDateDefault();
-      const queue = priced.map(({ material: m, unitPrice }) => ({
+      const queue = priced.map(
+        ({ material: m, unitPrice, material_spec, material_model, partner_material_code, partner_material_name }) => ({
         material_id: (m as Material).id,
         material_code: (m as Material).mainCode ?? (m as Material).code ?? '',
         material_name: (m as Material).name ?? '',
-        material_spec: (m as Material).specification ?? '',
+        material_spec: material_spec ?? (m as Material).specification ?? '',
+        material_model: material_model ?? '',
+        partner_material_code: partner_material_code ?? '',
+        partner_material_name: partner_material_name ?? '',
         unit: resolveMaterialScenarioUnit(m as Material, 'purchase'),
         quantity: 1,
         suggested_unit_price: unitPrice,
         required_date: defaultDate,
         demand_computation_item_id: undefined,
-        supplier_id: undefined,
+        supplier_id: resolveDefaultSupplierIdFromMaterial(m as Material),
         notes: undefined,
-      }));
+      }),
+      );
       const items = [...normalizeFormListItems<any>(createFormRef.current?.getFieldValue('items'))].map(
         (row: any) => ({ ...row }),
       );
@@ -621,6 +843,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
             suggested_unit_price: suggestedPrice,
             required_date:
               requiredDate && dayjs(requiredDate).isValid() ? dayjs(requiredDate) : defaultDate,
+            supplier_id: mat ? resolveDefaultSupplierIdFromMaterial(mat as Material) : undefined,
             notes: notes || undefined,
           };
         })
@@ -682,6 +905,9 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   material_code: it.material_code ?? '',
                   material_name: it.material_name ?? '',
                   material_spec: it.material_spec ?? '',
+                  material_model: it.material_model ?? '',
+                  partner_material_code: it.partner_material_code ?? '',
+                  partner_material_name: it.partner_material_name ?? '',
                   unit: it.unit ?? '件',
                   quantity: Number(it.quantity ?? 1),
                   suggested_unit_price: Number(it.suggested_unit_price ?? 0),
@@ -889,12 +1115,21 @@ const PurchaseRequisitionsPage: React.FC = () => {
       applyCreateFormDefaults(copiedValues);
       return;
     }
+    const flowBodyFromState =
+      location.state &&
+      typeof location.state === 'object' &&
+      (location.state as { documentFlowCreate?: unknown }).documentFlowCreate &&
+      typeof (location.state as { documentFlowCreate?: unknown }).documentFlowCreate === 'object'
+        ? (location.state as { documentFlowCreate: Record<string, unknown> }).documentFlowCreate
+        : null;
     const draft = prFormDraftKey ? getDocumentFormDraft<Record<string, unknown>>(prFormDraftKey) : null;
-    if (draft && Object.keys(draft).length > 0) {
-      const healed = healPurchaseRequisitionDraft(draft as Record<string, unknown>);
-      if (healed.requisition_date == null || healed.requisition_date === '') {
-        healed.requisition_date = dayjs();
+    const flowBody = flowBodyFromState ?? draft;
+    if (flowBody && Object.keys(flowBody).length > 0) {
+      const handoff = buildPurchaseRequisitionHandoffFormValues(flowBody);
+      if (handoff.extras) {
+        documentFlowSubmitExtrasRef.current = handoff.extras;
       }
+      const healed = handoff.formValues;
       applyCreateFormDefaults(healed);
       lastHeaderDeliveryRef.current = null;
       applyHeaderDeliveryToItemLines(healed.required_date);
@@ -981,7 +1216,15 @@ const PurchaseRequisitionsPage: React.FC = () => {
         });
       }
     }
-  }, [ensureSupplierList, prFormDraftKey, applyCreateFormDefaults, initialCreateItems, applyHeaderDeliveryToItemLines, fillBlankPurchaseRequisitionCode]);
+  }, [
+    applyCreateFormDefaults,
+    applyHeaderDeliveryToItemLines,
+    ensureSupplierList,
+    fillBlankPurchaseRequisitionCode,
+    initialCreateItems,
+    location,
+    prFormDraftKey,
+  ]);
 
   const handleCreate = () => {
     navigate(PURCHASE_REQUISITION_CREATE_PATH);
@@ -1064,7 +1307,10 @@ const PurchaseRequisitionsPage: React.FC = () => {
     return () => {
       const values = createFormRef.current?.getFieldsValue?.(true);
       if (values && Object.keys(values).length > 0) {
-        setDocumentFormDraft(prFormDraftKey, values);
+        setDocumentFormDraft(prFormDraftKey, {
+          ...values,
+          ...(documentFlowSubmitExtrasRef.current ?? {}),
+        });
       }
     };
   }, [isFormPage, prFormDraftKey]);
@@ -1222,6 +1468,154 @@ const PurchaseRequisitionsPage: React.FC = () => {
     },
   });
 
+  const pullFromSalesOrderColumns: ProColumns<PurchaseRequisitionSalesOrderPullLine>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.salesOrder.orderCode'),
+        dataIndex: 'order_code',
+        width: 168,
+        ellipsis: true,
+      },
+      buildPullQueryMaterialIdentityColumn<PurchaseRequisitionSalesOrderPullLine>(t),
+      {
+        title: t('components.uniPullQuery.documentDateColumn'),
+        dataIndex: 'document_date',
+        width: 112,
+        render: (_: unknown, record) => {
+          const raw = record.document_date || record.order_date;
+          return raw ? formatBusinessDateOnly(String(raw)) : '-';
+        },
+      },
+      {
+        title: t('common.quantity'),
+        dataIndex: 'suggested_quantity',
+        width: 100,
+        align: 'right' as const,
+        render: (v: number) => formatQuantity(v),
+      },
+      {
+        title: t('app.kuaizhizao.workOrder.pull.colPushedWorkOrderQty'),
+        dataIndex: 'pushed_work_order_quantity',
+        width: 100,
+        align: 'right' as const,
+        render: (v: number | undefined) => formatQuantity(Number(v ?? 0)),
+      },
+      {
+        title: t('app.kuaizhizao.workOrder.pull.colPushedPurchaseQty'),
+        dataIndex: 'pushed_purchase_quantity',
+        width: 100,
+        align: 'right' as const,
+        render: (v: number | undefined, record) =>
+          formatQuantity(Number(v ?? record.pushed_quantity ?? 0)),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.colShippableQty'),
+        dataIndex: 'remaining_quantity',
+        width: 100,
+        align: 'right' as const,
+        render: (v: number) => formatQuantity(v),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseRequisition.pull.convertStatus'),
+        key: 'convert_status',
+        width: 100,
+        align: 'center' as const,
+        render: (_: unknown, record) =>
+          renderPullCapabilityTag(
+            isPullOpenLineSelectable(record),
+            t('app.kuaizhizao.purchaseRequisition.pull.canCreate'),
+            t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate'),
+          ),
+      },
+    ],
+    [t],
+  );
+
+  const pullFromSalesOrderQuery = useUniPullQuery<PurchaseRequisitionSalesOrderPullLine>({
+    rowKey: 'id',
+    selectionType: 'checkbox',
+    scopeOptions: pullDocumentScopeOptions,
+    defaultScope: 'pullable',
+    onOpen: () => {
+      pullSourceSalesOrderIdRef.current = undefined;
+      setPullSourceSalesOrderId(undefined);
+      void listPurchaseRequisitionSalesOrderPullOrders({ skip: 0, limit: 100, pullable_only: true })
+        .then((res) => {
+          setPullSourceSalesOrderOptions(
+            (res?.data ?? [])
+              .filter((row) => row.id != null && row.order_code)
+              .map((row) => ({ value: row.id, label: String(row.order_code) })),
+          );
+        })
+        .catch((error: unknown) => {
+          messageApi.error(
+            getApiErrorMessage(error, t('app.kuaizhizao.purchaseOrder.pull.loadSourceFailed')),
+          );
+          setPullSourceSalesOrderOptions([]);
+        });
+    },
+    loadData: async ({ keyword, page, pageSize, scope }) => {
+      try {
+        const listRes = await listPurchaseRequisitionSalesOrderPullLines({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          keyword: keyword.trim() || undefined,
+          sales_order_id: pullSourceSalesOrderIdRef.current,
+          pullable_only: isPullableScope(scope),
+        });
+        return { data: listRes?.data ?? [], total: listRes?.total ?? 0 };
+      } catch (error: unknown) {
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.purchaseRequisition.pull.salesOrderLinesFailed')),
+        );
+        return { data: [], total: 0 };
+      }
+    },
+    isRowDisabled: (record) => !isPullOpenLineSelectable(record),
+    onConfirm: async (_keys, rows) => {
+      const selectable = rows.filter((row) => isPullOpenLineSelectable(row));
+      const byOrder = new Map<number, number[]>();
+      for (const row of selectable) {
+        const oid = Number(row.sales_order_id);
+        const itemId = Number(row.id);
+        if (oid > 0 && itemId > 0) {
+          const bucket = byOrder.get(oid) ?? [];
+          bucket.push(itemId);
+          byOrder.set(oid, bucket);
+        }
+      }
+      if (!byOrder.size) {
+        messageApi.warning(t('app.kuaizhizao.purchaseRequisition.pull.selectLinesFirst'));
+        return;
+      }
+      try {
+        await handoffSalesOrdersToPurchaseRequisitionCreate(
+          navigate,
+          [...byOrder.entries()].map(([orderId, itemIds]) => ({
+            salesOrderId: orderId,
+            payload: { selected_item_ids: itemIds },
+          })),
+        );
+        messageApi.success(
+          t('app.kuaizhizao.documentFlow.openedDownstreamCreate', {
+            target: pullFromSalesOrderAction.targetLabel,
+          }),
+        );
+        pullFromSalesOrderQuery.closeModal();
+      } catch (error: unknown) {
+        messageApi.error(
+          getApiErrorMessage(
+            error,
+            t('app.kuaizhizao.purchaseRequisition.pull.salesOrderCreateFailed', {
+              source: pullFromSalesOrderAction.sourceLabel,
+              target: pullFromSalesOrderAction.targetLabel,
+            }),
+          ),
+        );
+      }
+    },
+  });
+
   const resetPullDateConfirmModal = useCallback(() => {
     setPullDateConfirmOpen(false);
     setPullDateConfirming(false);
@@ -1280,6 +1674,9 @@ const PurchaseRequisitionsPage: React.FC = () => {
       material_code?: string;
       material_name?: string;
       material_spec?: string;
+      material_model?: string;
+      partner_material_code?: string;
+      partner_material_name?: string;
       unit?: string;
       quantity?: number;
       suggested_unit_price?: number;
@@ -1314,6 +1711,18 @@ const PurchaseRequisitionsPage: React.FC = () => {
         material_code: i.material_code || '',
         material_name: i.material_name || '',
         material_spec: i.material_spec,
+        material_model:
+          typeof i.material_model === 'string' && i.material_model.trim()
+            ? i.material_model.trim()
+            : undefined,
+        partner_material_code:
+          typeof i.partner_material_code === 'string' && i.partner_material_code.trim()
+            ? i.partner_material_code.trim()
+            : undefined,
+        partner_material_name:
+          typeof i.partner_material_name === 'string' && i.partner_material_name.trim()
+            ? i.partner_material_name.trim()
+            : undefined,
         unit: i.unit || '件',
         ...dualQty,
         quantity: Number(i.quantity) || 0,
@@ -1343,48 +1752,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
     isFormPage,
     leavePurchaseRequisitionFormPage,
   ]);
-
-  const showPurchaseRequisitionSaveSubmitSuccess = useCallback(
-    (afterSubmit: PurchaseRequisition, wasEdit: boolean) => {
-      const st = afterSubmit.status;
-      if (isAuditedStatus(st)) {
-        messageApi.success(
-          wasEdit
-            ? t('app.kuaizhizao.purchaseRequisition.saveSubmitAutoApproved')
-            : t('app.kuaizhizao.purchaseRequisition.createSubmitAutoApproved'),
-        );
-      } else {
-        messageApi.success(
-          wasEdit
-            ? t('app.kuaizhizao.purchaseRequisition.saveSubmitPending')
-            : t('app.kuaizhizao.purchaseRequisition.createSubmitPending'),
-        );
-      }
-    },
-    [messageApi, t],
-  );
-
-  const runPurchaseRequisitionSubmitAfterSave = useCallback(
-    async (requisitionId: number, wasEdit: boolean) => {
-      const { nodes, branch_conditions: branchConditions } = await fetchSubmitInitiatorRequirements(
-        'purchase_request',
-      );
-      if (nodes.length > 0 || branchConditions.length > 0) {
-        postSaveSubmitContextRef.current = { requisitionId, wasEdit };
-        setPostSaveInitiatorNodes(nodes);
-        setPostSaveInitiatorBranches(branchConditions);
-        setPostSaveInitiatorOpen(true);
-        if (!wasEdit) {
-          navigate(purchaseRequisitionEditPath(requisitionId), { replace: true });
-        }
-        return;
-      }
-      const afterSubmit = (await uniAuditPurchaseRequisition(requisitionId, 'submit')) as PurchaseRequisition;
-      showPurchaseRequisitionSaveSubmitSuccess(afterSubmit, wasEdit);
-      finalizePurchaseRequisitionForm();
-    },
-    [finalizePurchaseRequisitionForm, navigate, showPurchaseRequisitionSaveSubmitSuccess],
-  );
 
   const handleModalSubmit = async (values: {
     requisition_code?: string;
@@ -1744,7 +2111,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
     if (
       selectedIds.some((id) => {
         const price = itemUnitPrices[id];
-        return price == null || !Number.isFinite(price) || price < 0;
+        return price == null || !Number.isFinite(price) || !(Number(price) > 0);
       })
     ) {
       messageApi.error(t('app.kuaizhizao.purchaseRequisition.convert.invalidUnitPrice'));
@@ -2156,6 +2523,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
       formItemProps: formDateRangeFormItemProps,
     },
     ...(purchaseRequisitionAuditColumn ? [purchaseRequisitionAuditColumn] : []),
+    buildDocumentAttachmentsListColumn<PurchaseRequisition>(t, { allowPreview: true }),
     {
       title: t('app.kuaizhizao.purchaseRequisition.col.lifecycle'),
       key: 'lifecycle',
@@ -2318,6 +2686,20 @@ const PurchaseRequisitionsPage: React.FC = () => {
             ),
           },
           {
+            title: t('app.kuaizhizao.purchaseRequisition.form.suggestedSupplier'),
+            dataIndex: 'supplier_name',
+            key: 'supplier_name',
+            width: 132,
+            minWidth: 132,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            render: (_: unknown, row) => {
+              const name = String(row.supplier_name ?? '').trim();
+              return name || '—';
+            },
+          },
+          {
             title: t('app.kuaizhizao.purchaseRequisition.col.suggestedPrice'),
             dataIndex: 'suggested_unit_price',
             width: 100,
@@ -2391,6 +2773,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
           ...(purchaseRequisitionAuditColumn
             ? [purchaseRequisitionAuditColumn as ProColumns<PurchaseRequisitionItemRow>]
             : []),
+          buildDocumentAttachmentsListColumn<PurchaseRequisitionItemRow>(t),
           {
             title: t('app.kuaizhizao.purchaseRequisition.col.lifecycle'),
             key: 'lifecycle',
@@ -2557,29 +2940,40 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   }}
                 />
               </Col>
-              {!showRequisitionNameField ? (
-                <Col span={12}>
-                  <ProFormDatePicker
-                    name="required_date"
-                    label={t('app.kuaizhizao.purchaseRequisition.form.requiredDate')}
-                    fieldProps={buildFutureDateShortcutFieldProps({
-                      getForm: () => createFormRef.current,
-                      fieldName: 'required_date',
-                      baseFieldName: 'requisition_date',
-                      t,
-                      onApply: (date) => {
-                        createFormRef.current?.setFieldValue?.('required_date', date);
-                        applyHeaderDeliveryToItemLines(date);
+            </Row>
+            <Row gutter={16} wrap={false}>
+              <Col flex="1 1 0" style={{ minWidth: 0 }}>
+                <ProFormDatePicker
+                  name="required_date"
+                  label={t('app.kuaizhizao.purchaseRequisition.form.requiredDate')}
+                  rules={[
+                    {
+                      required: true,
+                      message: t('app.kuaizhizao.purchaseRequisition.form.requiredDateRequired'),
+                    },
+                  ]}
+                  fieldProps={buildFutureDateShortcutFieldProps({
+                    getForm: () => createFormRef.current,
+                    fieldName: 'required_date',
+                    baseFieldName: 'requisition_date',
+                    allowPastDates: true,
+                    t,
+                    onApply: (date) => {
+                      createFormRef.current?.setFieldValue?.('required_date', date);
+                      applyHeaderDeliveryToItemLines(date);
+                    },
+                    fieldProps: {
+                      onChange: (value: unknown) => {
+                        applyHeaderDeliveryToItemLines(value);
                       },
-                      fieldProps: {
-                        onChange: (value: unknown) => {
-                          applyHeaderDeliveryToItemLines(value);
-                        },
-                      },
-                    })}
-                  />
-                </Col>
-              ) : null}
+                    },
+                  })}
+                />
+              </Col>
+              <Col flex="1 1 0" style={{ minWidth: 0 }} aria-hidden />
+              <Col flex="1 1 0" style={{ minWidth: 0 }} aria-hidden />
+              <Col flex="1 1 0" style={{ minWidth: 0 }} aria-hidden />
+              <Col flex="1 1 0" style={{ minWidth: 0 }} aria-hidden />
             </Row>
           </div>
           <div className="document-form-untitled-group">
@@ -2717,6 +3111,14 @@ const PurchaseRequisitionsPage: React.FC = () => {
                                         ['items', index, 'unit'],
                                         resolveMaterialScenarioUnit(material, 'purchase'),
                                       );
+                                      const defaultSupplierId =
+                                        resolveDefaultSupplierIdFromMaterial(material as Material);
+                                      if (defaultSupplierId) {
+                                        createFormRef.current?.setFieldValue(
+                                          ['items', index, 'supplier_id'],
+                                          defaultSupplierId,
+                                        );
+                                      }
                                       void applyPurchaseDocumentLineMaterialPricing(
                                         createFormRef.current,
                                         index,
@@ -2725,6 +3127,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                                           asOfField: 'requisition_date',
                                           unitPriceField: 'suggested_unit_price',
                                           includeTaxRate: false,
+                                          supplierId: defaultSupplierId,
                                         },
                                       );
                                     }}
@@ -2737,7 +3140,13 @@ const PurchaseRequisitionsPage: React.FC = () => {
                                   />
                                 </div>
                               </div>
-                              <AntForm.Item name={[index, 'demand_computation_item_id']} hidden>
+                              <AntForm.Item name={[index, 'demand_computation_item_id']} hidden preserve>
+                                <Input type="hidden" />
+                              </AntForm.Item>
+                              <AntForm.Item name={[index, 'material_code']} hidden preserve>
+                                <Input type="hidden" />
+                              </AntForm.Item>
+                              <AntForm.Item name={[index, 'material_name']} hidden preserve>
                                 <Input type="hidden" />
                               </AntForm.Item>
                             </>
@@ -2971,6 +3380,11 @@ const PurchaseRequisitionsPage: React.FC = () => {
         >
           <div className="form-modal-content-inner">
               <ProForm
+                key={
+                  isCreatePage
+                    ? `purchase-requisition-create:${location.search}`
+                    : `purchase-requisition-edit:${editRouteId ?? ''}`
+                }
                 formRef={createFormRef}
                 layout="vertical"
                 submitter={false}
@@ -2980,7 +3394,10 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   if (prFormHydratingRef.current || !prFormDraftKey) return;
                   const values = createFormRef.current?.getFieldsValue?.(true);
                   if (values && Object.keys(values).length > 0) {
-                    setDocumentFormDraft(prFormDraftKey, values);
+                    setDocumentFormDraft(prFormDraftKey, {
+                      ...values,
+                      ...(documentFlowSubmitExtrasRef.current ?? {}),
+                    });
                   }
                 }}
                 onFinishFailed={({ errorFields }) => {
@@ -2988,7 +3405,15 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   const errText = first?.errors?.filter(Boolean)[0];
                   messageApi.error(errText || t('components.layoutTemplates.formModal.checkFormHint'));
                 }}
-                initialValues={{ items: initialCreateItems }}
+                initialValues={
+                  isCreatePage
+                    ? {
+                        order_type: '标准采购',
+                        requisition_date: dayjs(),
+                        ...(purchaseRequisitionCreateSeed ?? { items: initialCreateItems }),
+                      }
+                    : undefined
+                }
               >
                 {renderPurchaseRequisitionForm()}
               </ProForm>
@@ -3011,52 +3436,14 @@ const PurchaseRequisitionsPage: React.FC = () => {
             columnOptions={requisitionLineImportColumnOptions}
           />
         </Suspense>
-        {postSaveInitiatorOpen && (
-          <UniAuditInitiatorSubmitModal
-            open
-            entityName={t('app.kuaizhizao.purchaseRequisition.entityName')}
-            submitTitle={t('app.kuaizhizao.purchaseRequisition.submitTitle')}
-            nodes={postSaveInitiatorNodes}
-            branchConditions={postSaveInitiatorBranches}
-            loading={postSaveInitiatorLoading}
-            onCancel={() => {
-              setPostSaveInitiatorOpen(false);
-              postSaveSubmitContextRef.current = null;
-              messageApi.info(t('app.kuaizhizao.purchaseRequisition.savedDraftSubmitLater'));
-              invalidateMenuBadgeCounts();
-              actionRef.current?.reload();
-            }}
-            onConfirm={async (selectedByNode, branchByCondition) => {
-              const ctx = postSaveSubmitContextRef.current;
-              if (!ctx) return;
-              setPostSaveInitiatorLoading(true);
-              try {
-                const afterSubmit = (await uniAuditPurchaseRequisition(ctx.requisitionId, 'submit', {
-                  selected_approver_by_node: selectedByNode,
-                  initiator_branch_by_node: branchByCondition,
-                })) as PurchaseRequisition;
-                setPostSaveInitiatorOpen(false);
-                postSaveSubmitContextRef.current = null;
-                showPurchaseRequisitionSaveSubmitSuccess(afterSubmit, ctx.wasEdit);
-                finalizePurchaseRequisitionForm();
-              } catch (submitErr: unknown) {
-                const submitMessage =
-                  submitErr instanceof Error ? submitErr.message : t('common.operationFailed');
-                messageApi.error(
-                  t('app.kuaizhizao.purchaseRequisition.submitFailedWithReason', { message: submitMessage }),
-                );
-              } finally {
-                setPostSaveInitiatorLoading(false);
-              }
-            }}
-          />
-        )}
       </>
     );
   }
 
   return (
     <>
+      {purchaseRequisitionAuditModal}
+      {purchaseRequisitionListInitiatorModal}
       <ListPageTemplate>
         <UniTable
           headerTitle={t('app.kuaizhizao.menu.purchase-management.purchase-requisitions')}
@@ -3095,6 +3482,12 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   : `req-${h.id}-idx-${index}`,
               mapItemRow: (h, item) => ({
                 ...item,
+                header_attachments_count:
+                  h.header_attachments_count ?? countDocumentAttachments(h.attachments),
+                line_attachments_count: countDocumentAttachments(item.attachments),
+                attachments_count:
+                  (h.header_attachments_count ?? countDocumentAttachments(h.attachments)) +
+                  countDocumentAttachments(item.attachments),
                 requisition_id: h.id ?? 0,
                 requisition_code: h.requisition_code,
                 requisition_name: h.requisition_name,
@@ -3159,7 +3552,28 @@ const PurchaseRequisitionsPage: React.FC = () => {
               createIcon={<PlusOutlined />}
               createLabel={t('app.kuaizhizao.menu.purchase-management.purchase-requisitions.new')}
               onCreate={handleCreate}
-              menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
+              menuItems={[
+                ...buildKuaizhizaoPullCreateMenuItems(t, [
+                  {
+                    key: 'pull-from-demand-computation',
+                    actionKey: 'purchase_requisition.pull_from_demand_computation',
+                    onClick: () => {
+                      pullFromComputationQuery.openModal();
+                    },
+                  },
+                  {
+                    key: 'pull-from-sales-order',
+                    actionKey: 'purchase_requisition.pull_from_sales_order',
+                    onClick: () => {
+                      if (!purchaseRequisitionPerms.canCreate) {
+                        messageApi.warning(t('common.permissionDenied'));
+                        return;
+                      }
+                      pullFromSalesOrderQuery.openModal();
+                    },
+                  },
+                ]),
+                { type: 'divider', key: 'copy-selected-divider' },
                 {
                   key: 'pull-from-demand-computation',
                   actionKey: 'purchase_requisition.pull_from_demand_computation',
@@ -3298,6 +3712,56 @@ const PurchaseRequisitionsPage: React.FC = () => {
         scope={pullFromComputationQuery.scope}
         onScopeChange={pullFromComputationQuery.handleScopeChange}
         okText={t('common.next')}
+      />
+
+      <UniPullQueryModal<PurchaseRequisitionSalesOrderPullLine>
+        open={pullFromSalesOrderQuery.open}
+        title={pullFromSalesOrderAction.label}
+        onCancel={pullFromSalesOrderQuery.closeModal}
+        onOk={pullFromSalesOrderQuery.handleConfirm}
+        rowKey="id"
+        columns={pullFromSalesOrderColumns}
+        dataSource={pullFromSalesOrderQuery.dataSource}
+        loading={pullFromSalesOrderQuery.loading}
+        confirmLoading={pullFromSalesOrderQuery.confirmLoading}
+        selectionType={pullFromSalesOrderQuery.selectionType}
+        selectedRowKeys={pullFromSalesOrderQuery.selectedRowKeys}
+        selectedRows={pullFromSalesOrderQuery.selectedRows}
+        onSelectedRowKeysChange={pullFromSalesOrderQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromSalesOrderQuery.isRowDisabled}
+        searchDraft={pullFromSalesOrderQuery.searchDraft}
+        onSearchDraftChange={pullFromSalesOrderQuery.setSearchDraft}
+        onSearchApply={pullFromSalesOrderQuery.handleSearchApply}
+        onSearchClear={pullFromSalesOrderQuery.handleSearchClear}
+        appliedKeyword={pullFromSalesOrderQuery.appliedKeyword}
+        searchPlaceholder={t('app.kuaizhizao.purchaseOrder.pull.searchPlaceholder')}
+        filterExtra={(
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder={t('app.kuaizhizao.purchaseRequisition.pull.salesOrderSourcePlaceholder')}
+            style={{ width: 220, flexShrink: 0 }}
+            value={pullSourceSalesOrderId}
+            options={pullSourceSalesOrderOptions}
+            onChange={(value) => {
+              const nextId = Number(value);
+              const next = Number.isFinite(nextId) && nextId > 0 ? nextId : undefined;
+              pullSourceSalesOrderIdRef.current = next;
+              setPullSourceSalesOrderId(next);
+              pullFromSalesOrderQuery.handleSearchApply(pullFromSalesOrderQuery.appliedKeyword);
+            }}
+          />
+        )}
+        getRowLabel={(row) => [row.order_code, row.material_code].filter(Boolean).join(' ')}
+        page={pullFromSalesOrderQuery.page}
+        pageSize={pullFromSalesOrderQuery.pageSize}
+        total={pullFromSalesOrderQuery.total}
+        onPageChange={pullFromSalesOrderQuery.handlePageChange}
+        scopeOptions={pullFromSalesOrderQuery.scopeOptions}
+        scope={pullFromSalesOrderQuery.scope}
+        onScopeChange={pullFromSalesOrderQuery.handleScopeChange}
+        okText={t('app.kuaizhizao.purchaseOrder.pull.ok')}
       />
 
       <Modal
