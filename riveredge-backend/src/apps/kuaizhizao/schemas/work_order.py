@@ -85,6 +85,7 @@ class WorkOrderBase(BaseSchema):
     # 时间信息
     planned_start_date: Optional[datetime] = Field(None, description="计划开始时间")
     planned_end_date: Optional[datetime] = Field(None, description="计划结束时间")
+    required_date: Optional[datetime] = Field(None, description="需求日")
     actual_start_date: Optional[datetime] = Field(None, description="实际开始时间")
     actual_end_date: Optional[datetime] = Field(None, description="实际结束时间")
 

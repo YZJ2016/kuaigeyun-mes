@@ -1003,6 +1003,8 @@ class PurchaseReceiptBase(BaseSchema):
         max_length=32,
         description="付款方式（客商码 cash/bank_transfer/…；外推映射金蝶 CREDIT/CASH）",
     )
+    advance_payee_id: Optional[int] = Field(None, description="员工垫付领款人ID")
+    advance_payee_name: Optional[str] = Field(None, max_length=100, description="员工垫付领款人姓名")
     org_number: Optional[str] = Field(None, max_length=64, description="库存组织编码")
     bizorg_number: Optional[str] = Field(None, max_length=64, description="采购组织编码")
     billtype_number: Optional[str] = Field(None, max_length=64, description="单据类型编码")
@@ -1031,6 +1033,27 @@ class PurchaseReceiptBase(BaseSchema):
     invoice_number: Optional[str] = Field(None, max_length=100, description="发票号")
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+
+    @field_validator("pay_mode", mode="before")
+    @classmethod
+    def validate_pay_mode(cls, v):
+        from apps.master_data.config.partner_settlement_codes import normalize_purchase_receipt_pay_mode
+
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        normalized = normalize_purchase_receipt_pay_mode(v)
+        if normalized is None:
+            raise ValueError("无效的付款方式")
+        return normalized
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_pay_mode_advance_payee(cls, data: Any) -> Any:
+        from apps.master_data.config.partner_payment_advance import (
+            apply_partner_payment_advance_payee_to_mapping,
+        )
+
+        return apply_partner_payment_advance_payee_to_mapping(data, method_key="pay_mode")
 
 
 # === 采购入库单明细 ===

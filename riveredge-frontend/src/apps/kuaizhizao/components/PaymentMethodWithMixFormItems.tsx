@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState, type CSSProperties } from 'react';
 import { App, Col, InputNumber, Modal, Row } from 'antd';
 import { ProFormDependency, ProFormDigit, ProFormItem, type ProFormInstance } from '@ant-design/pro-components';
 import { theme } from 'antd';
@@ -7,9 +7,18 @@ import { UniDropdown } from '../../../components/uni-dropdown';
 import {
   formatPaymentMethodMixLabel,
   isMixedPaymentMethodCode,
+  isPartnerEmployeeAdvancePaymentMethod,
   validatePaymentMethodMix,
 } from '../../master-data/utils/paymentMethodMix';
+import {
+  PartnerPaymentAdvancePayeeField,
+  type PartnerPaymentAdvancePayeeFieldHandle,
+} from './PartnerPaymentAdvancePayeeField';
 import { partnerDefaultPaymentMethodLabel } from '../../master-data/utils/partner-static-labels';
+import {
+  PartnerPaymentMethodFieldLabel,
+  PartnerPaymentMethodLabelAddons,
+} from './PartnerPaymentMethodLabelAddons';
 
 type Props = {
   formRef: React.MutableRefObject<ProFormInstance | undefined>;
@@ -19,6 +28,10 @@ type Props = {
   wireField?: string;
   acceptanceField?: string;
   methodField?: string;
+  advancePayeeIdField?: string;
+  advancePayeeNameField?: string;
+  /** 单据支持员工垫付+领款人时开启；主数据/销售侧仅组合比例 */
+  enableEmployeeAdvance?: boolean;
 };
 
 export const PaymentMethodWithMixFormItems: React.FC<Props> = ({
@@ -29,6 +42,9 @@ export const PaymentMethodWithMixFormItems: React.FC<Props> = ({
   wireField = 'payment_wire_percent',
   acceptanceField = 'payment_acceptance_percent',
   methodField = 'payment_method_code',
+  advancePayeeIdField = 'advance_payee_id',
+  advancePayeeNameField = 'advance_payee_name',
+  enableEmployeeAdvance = true,
 }) => {
   const { t } = useTranslation();
   const { message } = App.useApp();
@@ -36,6 +52,7 @@ export const PaymentMethodWithMixFormItems: React.FC<Props> = ({
   const [mixOpen, setMixOpen] = useState(false);
   const [draftWire, setDraftWire] = useState<number | null>(null);
   const [draftAcceptance, setDraftAcceptance] = useState<number | null>(null);
+  const advancePayeeRef = useRef<PartnerPaymentAdvancePayeeFieldHandle>(null);
 
   const openMixModal = useCallback(() => {
     const form = formRef.current;
@@ -59,6 +76,75 @@ export const PaymentMethodWithMixFormItems: React.FC<Props> = ({
     setMixOpen(false);
   }, [acceptanceField, draftAcceptance, draftWire, formRef, message, wireField]);
 
+  const buildMethodFieldExtra = useCallback(
+    (dep: Record<string, unknown> | undefined) => {
+      const code = dep?.[methodField] as string | undefined;
+      const hintStyle: CSSProperties = {
+        fontSize: 12,
+        lineHeight: '20px',
+        cursor: 'pointer',
+      };
+
+      if (isMixedPaymentMethodCode(code)) {
+        const mixLabel = formatPaymentMethodMixLabel(
+          dep?.[wireField] as number | string | null | undefined,
+          dep?.[acceptanceField] as number | string | null | undefined,
+        );
+        if (mixLabel) return undefined;
+        return (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={openMixModal}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') openMixModal();
+            }}
+            style={{
+              ...hintStyle,
+              color: token.colorTextSecondary,
+            }}
+          >
+            {t('field.partner.paymentMix.configureHint')}
+          </span>
+        );
+      }
+
+      if (enableEmployeeAdvance && isPartnerEmployeeAdvancePaymentMethod(code)) {
+        const storedName = String(dep?.[advancePayeeNameField] ?? '').trim();
+        const payeeId = dep?.[advancePayeeIdField];
+        if (storedName || (payeeId != null && payeeId !== '')) {
+          return undefined;
+        }
+        return (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={() => advancePayeeRef.current?.open()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') advancePayeeRef.current?.open();
+            }}
+            style={{ ...hintStyle, color: token.colorTextSecondary }}
+          >
+            {t('field.partner.paymentAdvance.configureHint')}
+          </span>
+        );
+      }
+
+      return undefined;
+    },
+    [
+      acceptanceField,
+      advancePayeeIdField,
+      advancePayeeNameField,
+      enableEmployeeAdvance,
+      methodField,
+      openMixModal,
+      t,
+      token.colorTextSecondary,
+      wireField,
+    ],
+  );
+
   const onMethodChange = useCallback(
     (next: string | undefined) => {
       const form = formRef.current;
@@ -68,6 +154,18 @@ export const PaymentMethodWithMixFormItems: React.FC<Props> = ({
           [wireField]: undefined,
           [acceptanceField]: undefined,
         });
+      }
+      if (enableEmployeeAdvance) {
+        if (!isPartnerEmployeeAdvancePaymentMethod(next)) {
+          form.setFieldsValue({
+            [advancePayeeIdField]: undefined,
+            [advancePayeeNameField]: undefined,
+          });
+        } else {
+          advancePayeeRef.current?.openIfNeeded();
+        }
+      }
+      if (!isMixedPaymentMethodCode(next)) {
         return;
       }
       const wire = form.getFieldValue(wireField);
@@ -77,54 +175,66 @@ export const PaymentMethodWithMixFormItems: React.FC<Props> = ({
         openMixModal();
       }
     },
-    [acceptanceField, formRef, openMixModal, wireField],
+    [acceptanceField, advancePayeeIdField, advancePayeeNameField, enableEmployeeAdvance, formRef, openMixModal, wireField],
   );
 
   return (
     <>
-      <ProFormItem name={methodField} label={methodLabel}>
-        <UniDropdown
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          options={options}
-          placeholder={methodPlaceholder}
-          style={{ width: '100%' }}
-          onChange={(v) => onMethodChange(v as string | undefined)}
-        />
-      </ProFormItem>
       <ProFormDigit name={wireField} hidden />
       <ProFormDigit name={acceptanceField} hidden />
-      <ProFormDependency name={[methodField, wireField, acceptanceField]}>
-        {(dep) => {
-          const code = dep?.[methodField] as string | undefined;
-          if (!isMixedPaymentMethodCode(code)) return null;
-          const mixLabel = formatPaymentMethodMixLabel(
-            dep?.[wireField] as number | string | null | undefined,
-            dep?.[acceptanceField] as number | string | null | undefined,
-          );
-          return (
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={openMixModal}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') openMixModal();
-              }}
-              style={{
-                marginTop: -12,
-                marginBottom: 4,
-                fontSize: 12,
-                lineHeight: '20px',
-                color: mixLabel ? token.colorText : token.colorTextSecondary,
-                cursor: 'pointer',
-              }}
-            >
-              {mixLabel ?? t('field.partner.paymentMix.configureHint')}
-            </div>
-          );
-        }}
+      <ProFormDependency
+        name={[
+          methodField,
+          wireField,
+          acceptanceField,
+          ...(enableEmployeeAdvance ? [advancePayeeIdField, advancePayeeNameField] : []),
+        ]}
+      >
+        {(dep) => (
+          <ProFormItem
+            name={methodField}
+            label={
+              <PartnerPaymentMethodFieldLabel title={methodLabel}>
+                <PartnerPaymentMethodLabelAddons
+                  t={t}
+                  methodCode={dep?.[methodField] as string | undefined}
+                  mixWire={dep?.[wireField] as number | string | null | undefined}
+                  mixAcceptance={dep?.[acceptanceField] as number | string | null | undefined}
+                  advancePayeeName={
+                    enableEmployeeAdvance
+                      ? (dep?.[advancePayeeNameField] as string | undefined)
+                      : undefined
+                  }
+                  onAdvancePayeeClick={
+                    enableEmployeeAdvance ? () => advancePayeeRef.current?.open() : undefined
+                  }
+                  onMixClick={openMixModal}
+                />
+              </PartnerPaymentMethodFieldLabel>
+            }
+            extra={buildMethodFieldExtra(dep)}
+          >
+            <UniDropdown
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              options={options}
+              placeholder={methodPlaceholder}
+              style={{ width: '100%' }}
+              onChange={(v) => onMethodChange(v as string | undefined)}
+            />
+          </ProFormItem>
+        )}
       </ProFormDependency>
+      {enableEmployeeAdvance ? (
+        <PartnerPaymentAdvancePayeeField
+          ref={advancePayeeRef}
+          formRef={formRef}
+          methodField={methodField}
+          payeeIdField={advancePayeeIdField}
+          payeeNameField={advancePayeeNameField}
+        />
+      ) : null}
       <Modal
         title={t('field.partner.paymentMix.modalTitle')}
         open={mixOpen}

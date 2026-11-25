@@ -843,6 +843,8 @@ export const PURCHASE_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> =
   'purchase_order.push_prepayment.require_application': '组织已启用预付款须走付款申请',
   'purchase_order.push_payment_application.not_audited': '只有已审核或已确认的采购单才能下推付款申请',
   'purchase_order.push_payment_application.no_amount': '采购单未填写预付款金额或预付请款额度已用尽',
+  'purchase_order.push_payment_application.no_department':
+    '采购订单未填写申请部门，无法下推付款申请',
   'purchase_receipt.push_payment_application.not_posted': '仅已过账的采购入库可下推付款申请',
   'purchase_receipt.push_payment_application.no_open_amount': '该入库应付无可请款余额',
   'payment_application.pull_from_purchase_order.no_amount': '该采购订单预付请款额度已用尽',

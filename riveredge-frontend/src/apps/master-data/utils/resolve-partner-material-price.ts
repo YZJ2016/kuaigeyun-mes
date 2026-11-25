@@ -587,7 +587,12 @@ export async function resolveSalesDocumentMaterialLinesPricing(
       if (resolved?.found) {
         const src = pickSourceTaxRate(pickResolvedTaxRate(resolved), materialTax);
         taxRate = src.taxRate;
-        inflateTaxRate = src.inflateTaxRate;
+        inflateTaxRate = resolveInflateTaxRateForExclusiveBookPrice(
+          pt,
+          src.inflateTaxRate,
+          src.taxRate,
+          true,
+        );
       } else if (getMaterialSalePriceMethod(full) === 'market') {
         const market = await resolveMaterialMarketSalePrice(full, asOf);
         unitPrice = market.unitPrice;
@@ -629,6 +634,8 @@ export async function resolveOrderLineSalePrice(
   taxRate: number;
   /** 取价源税率；仅 >0 时可用其将未税价乘回含税表单价 */
   inflateTaxRate: number | null;
+  /** 单价来自客户价本剥离后的未税价 */
+  fromPartnerPriceBook: boolean;
   resolved?: PartnerPriceResolveResult;
   snapshot?: Record<string, unknown> | null;
 }> {
@@ -642,6 +649,7 @@ export async function resolveOrderLineSalePrice(
         unitPrice: market.unitPrice,
         taxRate: src.taxRate,
         inflateTaxRate: src.inflateTaxRate,
+        fromPartnerPriceBook: false,
         snapshot: market.snapshot ?? null,
       };
     }
@@ -651,6 +659,7 @@ export async function resolveOrderLineSalePrice(
       unitPrice: material ? getMaterialDefaultSalePrice(material) : 0,
       taxRate: src.taxRate,
       inflateTaxRate: src.inflateTaxRate,
+      fromPartnerPriceBook: false,
       snapshot: null,
     };
   };
@@ -691,6 +700,7 @@ export async function resolveOrderLineSalePrice(
         unitPrice: Number(unitPriceRaw),
         taxRate: src.taxRate,
         inflateTaxRate: src.inflateTaxRate,
+        fromPartnerPriceBook: true,
         resolved: resolvedFromUnified,
         snapshot: null,
       };
@@ -790,6 +800,38 @@ export function toFormUnitPriceFromExclusive(
   return convertUnitPriceByPriceType(unitPrice, inflateTaxRate, 'tax_exclusive', 'tax_inclusive');
 }
 
+/**
+ * 价本/API 出口为未税单价；表单为含税时乘回。
+ * 行税率回落只用于已确认来自价本（已剥离）；物料默认价禁止用回落税率再乘。
+ */
+export function resolveInflateTaxRateForExclusiveBookPrice(
+  formPriceType: string,
+  inflateTaxRate: number | null | undefined,
+  lineTaxRate: number,
+  fromPartnerPriceBook: boolean,
+): number | null {
+  if (formPriceType !== 'tax_inclusive') return null;
+  if (inflateTaxRate != null && Number(inflateTaxRate) > 0) return Number(inflateTaxRate);
+  if (fromPartnerPriceBook && Number(lineTaxRate) > 0) return Number(lineTaxRate);
+  return null;
+}
+
+export function formUnitPriceFromExclusiveBook(
+  exclusiveUnitPrice: unknown,
+  formPriceType: string,
+  inflateTaxRate: number | null | undefined,
+  lineTaxRate: number,
+  fromPartnerPriceBook: boolean,
+): number {
+  const inflate = resolveInflateTaxRateForExclusiveBookPrice(
+    formPriceType,
+    inflateTaxRate,
+    lineTaxRate,
+    fromPartnerPriceBook,
+  );
+  return toFormUnitPriceFromExclusive(exclusiveUnitPrice, formPriceType, inflate);
+}
+
 function pickSourceTaxRate(raw: unknown, fallback: number): {
   taxRate: number;
   inflateTaxRate: number | null;
@@ -838,6 +880,7 @@ export async function applySalesDocumentLineMaterialPricing(
   let unitPrice = 0;
   let taxRate = getMaterialDefaultTaxRate(full);
   let inflateTaxRate: number | null = null;
+  let fromPartnerPriceBook = false;
   let snapshot: Record<string, unknown> | null = null;
   let partnerSnapshot = { partner_material_code: '', partner_material_name: '' };
   try {
@@ -863,12 +906,13 @@ export async function applySalesDocumentLineMaterialPricing(
     unitPrice = resolved.unitPrice;
     taxRate = resolved.taxRate;
     inflateTaxRate = resolved.inflateTaxRate;
+    fromPartnerPriceBook = resolved.fromPartnerPriceBook;
     snapshot = resolved.snapshot ?? null;
     partnerSnapshot = pickPartnerMaterialSnapshotFields(resolved.resolved);
   } catch (e: unknown) {
     message.error(getApiErrorMessage(e, '未维护该日原料行情，请到原料行情录入'));
   }
-  let up = toFormUnitPriceFromExclusive(unitPrice, pt, inflateTaxRate);
+  let up = formUnitPriceFromExclusiveBook(unitPrice, pt, inflateTaxRate, taxRate, fromPartnerPriceBook);
   const priceOnly = options?.priceOnly === true;
   const items = [...normalizeFormListItems<Record<string, unknown>>(form.getFieldValue('items'))];
   if (!items[index]) return;
@@ -883,6 +927,25 @@ export async function applySalesDocumentLineMaterialPricing(
         taxRate = existingTax;
       }
     }
+  }
+  const correctedInclusiveUp = formUnitPriceFromExclusiveBook(
+    unitPrice,
+    pt,
+    inflateTaxRate,
+    taxRate,
+    fromPartnerPriceBook,
+  );
+  if (
+    pt === 'tax_inclusive' &&
+    fromPartnerPriceBook &&
+    unitPrice > 0 &&
+    correctedInclusiveUp > 0 &&
+    !unitPricesDisplayEqual(correctedInclusiveUp, unitPrice) &&
+    Number.isFinite(existingPrice) &&
+    existingPrice > 0 &&
+    unitPricesDisplayEqual(existingPrice, unitPrice)
+  ) {
+    up = correctedInclusiveUp;
   }
   // 取价结果与行上单价在展示精度下相同则保留原值，禁止剥税乘回改写末位（800→799.99 / 799.999998）
   // 选料与改数量共用：价本含税标准价剥未税再乘回不得改写已录入/已回填的干净单价
@@ -1095,13 +1158,11 @@ export async function resolvePurchaseDocumentMaterialLinesPricing(
     );
     const taxRate = src.taxRate;
     let unitPrice = pickPurchaseUnitPrice(full, resolved);
-    // 未命中价本时 pickPurchaseUnitPrice 已剥未税，inflate 跟物料税率
-    const inflateTaxRate =
-      resolved?.found
-        ? src.inflateTaxRate
-        : fromMaterial > 0
-          ? fromMaterial
-          : null;
+    const inflateTaxRate = resolved?.found
+      ? resolveInflateTaxRateForExclusiveBookPrice(pt, src.inflateTaxRate, taxRate, true)
+      : fromMaterial > 0 && pt === 'tax_inclusive'
+        ? fromMaterial
+        : src.inflateTaxRate;
     unitPrice = toFormUnitPriceFromExclusive(unitPrice, pt, inflateTaxRate);
     const partner = pickPartnerMaterialSnapshotFields(resolved);
     return {

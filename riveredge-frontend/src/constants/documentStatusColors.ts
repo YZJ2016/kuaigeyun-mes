@@ -56,7 +56,7 @@ const STATUS_SEMANTIC_ALIASES: Record<string, DocumentStatusSemantic> = {
   已提交: 'pending',
   PENDING_REVIEW: 'pending',
   PENDING: 'pending',
-  SUBMITTED: 'pending',
+  SUBMITTED: 'active',
   pending: 'pending',
   pending_review: 'pending',
   submitted: 'pending',
@@ -79,6 +79,7 @@ const STATUS_SEMANTIC_ALIASES: Record<string, DocumentStatusSemantic> = {
   registered: 'pending',
   assigned: 'pending',
   待核对: 'pending',
+  待确认: 'pending',
   部分转单: 'pending',
   PARTIAL_CONVERTED: 'pending',
   partial_converted: 'pending',
@@ -112,6 +113,7 @@ const STATUS_SEMANTIC_ALIASES: Record<string, DocumentStatusSemantic> = {
   upkeep: 'active',
   commissioning: 'active',
   trial_recording: 'active',
+  待下达: 'pending',
   已下达: 'pending',
   RELEASED: 'pending',
   released: 'pending',
@@ -240,6 +242,7 @@ const STATUS_SEMANTIC_ALIASES: Record<string, DocumentStatusSemantic> = {
 /** 审核相位 → 语义（与待审核 / 已通过 / 已驳回同色） */
 const AUDIT_PHASE_SEMANTIC: Record<string, DocumentStatusSemantic> = {
   draft: 'draft',
+  submitted: 'active',
   pending: 'pending',
   approved: 'success',
   rejected: 'danger',

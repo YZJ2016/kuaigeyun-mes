@@ -100,7 +100,7 @@ export const supplierFormSchemaBasic: FieldConfig[] = [
 
 export const supplierFormSchemaInvoice: FieldConfig[] = partnerInvoiceFormFields;
 
-const supplierBusinessFields: FieldConfig[] = [
+export const supplierFormSchemaExtendedBusiness: FieldConfig[] = [
   {
     name: 'payableRecognitionOverride',
     type: 'select',
@@ -162,6 +162,6 @@ const supplierBusinessFields: FieldConfig[] = [
 
 /** TAB：业务与扩展（供应商业务指标 + 商事/结算/收货联系人） */
 export const supplierFormSchemaExtended: FieldConfig[] = [
-  ...supplierBusinessFields,
+  ...supplierFormSchemaExtendedBusiness,
   ...partnerExtendedFormFieldsWithoutFinance,
 ];

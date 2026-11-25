@@ -111,7 +111,7 @@ export const customerFormSchemaBasic: FieldConfig[] = [
 /** TAB：开票资料（与客户/供应商共用字段） */
 export const customerFormSchemaInvoice: FieldConfig[] = partnerInvoiceFormFields;
 
-const customerBusinessFields: FieldConfig[] = [
+export const customerFormSchemaExtendedBusiness: FieldConfig[] = [
   {
     name: 'revenueRecognitionOverride',
     type: 'select',
@@ -228,6 +228,6 @@ const customerBusinessFields: FieldConfig[] = [
 
 /** TAB：业务与扩展（客户业务指标 + 商事/结算/收货联系人） */
 export const customerFormSchemaExtended: FieldConfig[] = [
-  ...customerBusinessFields,
+  ...customerFormSchemaExtendedBusiness,
   ...partnerExtendedFormFieldsWithoutFinance,
 ];

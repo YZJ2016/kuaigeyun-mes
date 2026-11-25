@@ -167,6 +167,7 @@ import {
   resolveMaterialForPricing,
   resolveOrderLineSalePrice,
   resolveSalesDocumentMaterialLinesPricing,
+  formUnitPriceFromExclusiveBook,
 } from '../../../../master-data/utils/resolve-partner-material-price';
 
 import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
@@ -674,7 +675,7 @@ const SalesContractsPage: React.FC = () => {
         ? await resolveMaterialForPricing(material, materialList)
         : undefined;
 
-      const { unitPrice, taxRate } = await resolveOrderLineSalePrice(
+      const { unitPrice, taxRate, inflateTaxRate, fromPartnerPriceBook } = await resolveOrderLineSalePrice(
 
         customerId ? Number(customerId) : undefined,
 
@@ -688,13 +689,19 @@ const SalesContractsPage: React.FC = () => {
 
       );
 
-      let up = unitPrice;
+      const up = formUnitPriceFromExclusiveBook(
 
-      if (pt === 'tax_inclusive' && up > 0) {
+        unitPrice,
 
-        up = convertUnitPriceByPriceType(up, taxRate, 'tax_exclusive', 'tax_inclusive');
+        pt,
 
-      }
+        inflateTaxRate,
+
+        taxRate,
+
+        fromPartnerPriceBook,
+
+      );
 
       const items = [...normalizeFormListItems<any>(formRef.current?.getFieldValue('items'))];
 

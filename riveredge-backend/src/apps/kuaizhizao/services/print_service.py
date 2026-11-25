@@ -2091,6 +2091,9 @@ class DocumentPrintService:
                 "total_amount": str(i.total_amount),
                 "location_code": i.location_code,
                 "batch_number": i.batch_number,
+                "customer_order_no": getattr(i, "customer_order_no", None) or "",
+                "pricing_method": i.material_unit or "",
+                "weight": "",
                 "status": i.status,
                 "notes": i.notes,
             }
@@ -2342,6 +2345,7 @@ class DocumentPrintService:
                 "line_kind": self._resolve_payment_application_kind_label(line.line_kind),
                 "request_amount": _amount(line.request_amount),
                 "paid_amount": _amount(line.paid_amount),
+                "tax_rate": str(getattr(line, "tax_rate", None) or ""),
                 "notes": line.notes or "",
             }
             for line in lines
@@ -2369,6 +2373,7 @@ class DocumentPrintService:
             "status_code": application.status,
             "payment_method": application.payment_method or "",
             "invoice_status": application.invoice_status or "",
+            "tax_rate": str(getattr(application, "tax_rate", None) or ""),
             "payment_terms": application.payment_terms or "",
             "supplier_account_name": application.supplier_account_name or "",
             "supplier_bank_name": application.supplier_bank_name or "",
@@ -3192,22 +3197,54 @@ class DocumentPrintService:
     async def _format_delivery_notice_data(self, notice) -> Dict[str, Any]:
         """格式化送货单数据"""
         from apps.kuaizhizao.models.delivery_notice_item import DeliveryNoticeItem
+        from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
+
         items = await DeliveryNoticeItem.filter(tenant_id=notice.tenant_id, notice_id=notice.id).all()
-        items_data = [
-            {
-                "material_code": i.material_code,
-                "material_name": i.material_name,
-                "material_spec": i.material_spec,
-                "material_unit": i.material_unit,
-                "notice_quantity": str(i.notice_quantity),
-                "unit_price": str(i.unit_price),
-                "total_amount": str(i.total_amount),
-                "notes": i.notes,
-            }
-            for i in items
+        delivery_item_ids = [
+            int(i.delivery_item_id) for i in items if int(i.delivery_item_id or 0) > 0
         ]
+        delivery_by_id: Dict[int, SalesDeliveryItem] = {}
+        if delivery_item_ids:
+            delivery_rows = await SalesDeliveryItem.filter(
+                tenant_id=notice.tenant_id,
+                id__in=delivery_item_ids,
+            ).all()
+            delivery_by_id = {int(row.id): row for row in delivery_rows}
+        items_data = []
+        for i in items:
+            linked = delivery_by_id.get(int(i.delivery_item_id or 0))
+            items_data.append(
+                {
+                    "material_code": i.material_code,
+                    "material_name": i.material_name,
+                    "material_spec": i.material_spec,
+                    "material_unit": i.material_unit,
+                    "notice_quantity": str(i.notice_quantity),
+                    "unit_price": str(i.unit_price),
+                    "total_amount": str(i.total_amount),
+                    "customer_order_no": getattr(linked, "customer_order_no", None) or "",
+                    "batch_number": getattr(linked, "batch_number", None) or "",
+                    "pricing_method": i.material_unit or "",
+                    "weight": "",
+                    "notes": i.notes,
+                }
+            )
+        reviewer_name = ""
+        if int(getattr(notice, "sales_delivery_id", 0) or 0) > 0:
+            reviewer_name = await self._resolve_print_reviewer_name(
+                tenant_id=notice.tenant_id,
+                entity_type="sales_delivery",
+                entity_id=int(notice.sales_delivery_id),
+                fallback="",
+            )
         return {
             "document_type": "delivery_notice",
+            "document_id": notice.id,
+            "customer_id": notice.customer_id,
+            "sales_order_id": notice.sales_order_id,
+            "sales_delivery_id": notice.sales_delivery_id,
+            "created_by_name": getattr(notice, "created_by_name", None) or "",
+            "reviewer_name": reviewer_name,
             "code": notice.notice_code,
             "sales_delivery_code": notice.sales_delivery_code,
             "sales_order_code": notice.sales_order_code,

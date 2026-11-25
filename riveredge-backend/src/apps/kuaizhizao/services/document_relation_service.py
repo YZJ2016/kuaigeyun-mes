@@ -30,6 +30,7 @@ from apps.kuaizhizao.models.sales_return import SalesReturn
 from apps.kuaizhizao.models.delivery_notice import DeliveryNotice
 from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+from apps.kuaizhizao.models.purchase_order_change_order import PurchaseOrderChangeOrder
 from apps.kuaizhizao.models.purchase_inquiry import PurchaseInquiry
 from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
@@ -3600,14 +3601,29 @@ class DocumentRelationService:
         tenant_id: int,
         order_id: int
     ) -> List[Dict[str, Any]]:
-        """获取采购单的下游单据（采购入库单）"""
+        """获取采购单的下游单据（与反审核门禁 purchase_order_has_downstream 口径对齐）。"""
         downstream = []
 
-        # 采购入库单
+        notices = await ReceiptNotice.filter(
+            tenant_id=tenant_id,
+            purchase_order_id=order_id,
+            deleted_at__isnull=True,
+        ).order_by("-id").limit(20)
+        for notice in notices:
+            downstream.append({
+                "document_type": "receipt_notice",
+                "document_id": notice.id,
+                "document_code": notice.notice_code,
+                "document_name": None,
+                "status": notice.status,
+                "created_at": to_api_isoformat(notice.created_at) if notice.created_at else None,
+            })
+
         receipts = await PurchaseReceipt.filter(
             tenant_id=tenant_id,
-            purchase_order_id=order_id
-        ).limit(10)
+            purchase_order_id=order_id,
+            deleted_at__isnull=True,
+        ).order_by("-id").limit(20)
         for receipt in receipts:
             downstream.append({
                 "document_type": "purchase_receipt",
@@ -3616,6 +3632,36 @@ class DocumentRelationService:
                 "document_name": None,
                 "status": receipt.status if hasattr(receipt, 'status') else None,
                 "created_at": to_api_isoformat(receipt.created_at) if receipt.created_at else None
+            })
+
+        returns = await PurchaseReturn.filter(
+            tenant_id=tenant_id,
+            purchase_order_id=order_id,
+            deleted_at__isnull=True,
+        ).order_by("-id").limit(20)
+        for ret in returns:
+            downstream.append({
+                "document_type": "purchase_return",
+                "document_id": ret.id,
+                "document_code": ret.return_code,
+                "document_name": None,
+                "status": ret.status,
+                "created_at": to_api_isoformat(ret.created_at) if ret.created_at else None,
+            })
+
+        changes = await PurchaseOrderChangeOrder.filter(
+            tenant_id=tenant_id,
+            source_order_id=order_id,
+            deleted_at__isnull=True,
+        ).order_by("-id").limit(20)
+        for change in changes:
+            downstream.append({
+                "document_type": "purchase_order_change",
+                "document_id": change.id,
+                "document_code": change.change_code,
+                "document_name": None,
+                "status": change.status,
+                "created_at": to_api_isoformat(change.created_at) if change.created_at else None,
             })
 
         if _finance_orm_ok():

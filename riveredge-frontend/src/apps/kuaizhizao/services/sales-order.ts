@@ -122,6 +122,11 @@ export interface SalesOrder {
   remaining_push_quantity?: number;
   /** 工单下推占比 0-100（列表接口返回） */
   work_order_push_progress?: number;
+  purchase_push_progress?: number;
+  fulfillment_push_progress?: number;
+  procurement_fulfillment_mode?: string;
+  pushed_purchase_quantity?: number;
+  pushed_purchase_codes?: string[];
   /** 是否存在可发货产品（库存满足且仍有欠交） */
   has_shippable_products?: boolean;
   /** 当前可发货数量合计 */

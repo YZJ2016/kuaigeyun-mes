@@ -6730,6 +6730,98 @@ export default {
     '其他费用支出详情展示申请部门与附件',
   'pages.dashboard.updateLog.entries.other-expense-detail-dept-attachments-r01.description':
     '详情基本信息展示申请部门；头表未写入时从来源支出申请继承。附件区支持在线预览，无附件时明确占位。',
+  'pages.dashboard.updateLog.entries.nas-webdav-upload-error-surface-r01.title':
+    '修复上传到 NAS 失败时无明确原因',
+  'pages.dashboard.updateLog.entries.nas-webdav-upload-error-surface-r01.description':
+    'NAS WebDAV 上传与建目录失败改为可读提示；默认不校验证书以适配铁威马自签 HTTPS；文件上传接口纳入长请求超时，避免慢速 NAS 被 25 秒掐断。',
+  'pages.dashboard.updateLog.entries.nas-storage-migrate-api-long-timeout-r01.title':
+    '修复迁移到 NAS 仍被 25 秒掐断',
+  'pages.dashboard.updateLog.entries.nas-storage-migrate-api-long-timeout-r01.description':
+    '文件迁移接口纳入 API 长请求超时，与网关和前端放宽一致，避免 NAS WebDAV 单批上传在约 25 秒被后端中断。',
+  'pages.dashboard.updateLog.entries.kingdee-sales-delivery-push-unit-price-r02.title':
+    '销售出库外推价税与本地行单价一致',
+  'pages.dashboard.updateLog.entries.kingdee-sales-delivery-push-unit-price-r02.description':
+    '外推金蝶前不再把含税单价先四舍五入到两位再算价税合计，避免与过账行金额出现 0.几元差额；价税合计仍按金额两位落苍穹。已审单需反审后 batchUpdate 修正。',
+  'pages.dashboard.updateLog.entries.partner-price-book-partner-select-r01.title':
+    '客户/供应商价格本可选全量伙伴',
+  'pages.dashboard.updateLog.entries.partner-price-book-partner-select-r01.description':
+    '新建与批量登记改用远端搜索选客户/供应商，并分页拉全启用伙伴供多选；避免单次 limit 1000 与仅首屏选项导致部分伙伴选不到。',
+  'pages.dashboard.updateLog.entries.material-unit-conversion-decimal-r01.title':
+    '物料多单位换算支持小数',
+  'pages.dashboard.updateLog.entries.material-unit-conversion-decimal-r01.description':
+    '新建/编辑物料多单位固定换算的分子、分母可输入小数（如 1/9.5）；界面与保存后的回显保留用户录入值，后台仍存约分后的整数比用于换算。需更新 Web 端。',
+  'pages.dashboard.updateLog.entries.payment-application-line-tax-rate-r01.title':
+    '付款申请税率改到明细行',
+  'pages.dashboard.updateLog.entries.payment-application-line-tax-rate-r01.description':
+    '税率改为申请明细列展示与保存；从采购订单/入库/应付展开时按来源行带入百分比，头表仅在税率一致时自动汇总供打印。需执行数据库迁移并更新 Web 端。',
+  'pages.dashboard.updateLog.entries.payment-application-po-pull-performance-r01.title':
+    '付款申请从采购订单取单加载加速',
+  'pages.dashboard.updateLog.entries.payment-application-po-pull-performance-r01.description':
+    '取单列表改走轻量采购订单选单视图，仅计算可下推付款申请的额度与可选状态；表单多选确认时并行请求预览，减少串行等待。需重启后端并更新 Web 端。',
+  'pages.dashboard.updateLog.entries.payment-application-po-header-invoice-tax-r01.title':
+    '采购订单下推付款申请带入发票与税率',
+  'pages.dashboard.updateLog.entries.payment-application-po-header-invoice-tax-r01.description':
+    '从采购订单下推或取单生成付款申请时，自动带入订单价类对应的「发票情况」、行税率（百分比）及付款方式；申请表头新增税率字段便于核对。需执行数据库迁移并重启后端与更新 Web 端。',
+  'pages.dashboard.updateLog.entries.purchase-inbound-export-search-params-r01.title':
+    '采购入库单导出与列表搜索条件对齐',
+  'pages.dashboard.updateLog.entries.purchase-inbound-export-search-params-r01.description':
+    '入库 Hub 列表「导出全部」改为与当前列表相同的已提交搜索条件（高级搜索、模糊词、钉住状态等），避免仅读表单导致导出结果与列表不一致。需更新 Web 端。',
+  'pages.dashboard.updateLog.entries.other-expense-payment-application-list-search-r01.title':
+    '其他费用支出与付款申请列表可搜明细',
+  'pages.dashboard.updateLog.entries.other-expense-payment-application-list-search-r01.description':
+    '列表展示明细或付款事行列，工具栏模糊搜索与高级搜索会匹配明细摘要、物料品名、来源单号及付款事由等字段。',
+  'pages.dashboard.updateLog.entries.po-payment-application-department-r01.title':
+    '采购订单缺部门时禁止下推付款申请',
+  'pages.dashboard.updateLog.entries.po-payment-application-department-r01.description':
+    '从采购订单创建付款申请时，取单列表与能力门禁同步校验申请部门；采购订单提交前须填写申请部门，避免审核后才发现无法请款。',
+  'pages.dashboard.updateLog.entries.purchase-order-trace-downstream-r01.title':
+    '采购订单全链路补全下游节点',
+  'pages.dashboard.updateLog.entries.purchase-order-trace-downstream-r01.description':
+    '全链路跟踪会展示收货通知、采购退货与采购变更等阻断反审核的下游单据，与后台门禁一致，便于先删下游再反审采购订单。',
+  'pages.dashboard.updateLog.entries.sales-order-detail-tax-price-amount-r01.title':
+    '销售订单详情展示含税与未税单价金额',
+  'pages.dashboard.updateLog.entries.sales-order-detail-tax-price-amount-r01.description':
+    '销售订单详情明细同时显示含税单价、未税单价、含税金额、未税金额。含税录单时未税单价由含税单价按行税率换算，未税录单时反向换算。',
+  'pages.dashboard.updateLog.entries.sales-book-inclusive-unit-price-r01.title':
+    '销售含税录单客户价本未乘回税率',
+  'pages.dashboard.updateLog.entries.sales-book-inclusive-unit-price-r01.description':
+    '表头为含税价时，从客户价本取到的未税单价会按行税率乘回含税单价，避免个别行仍显示价本未税价。',
+  'pages.dashboard.updateLog.entries.pr-pull-from-so-ok-text-r01.title':
+    '从销售订单创建采购申请确认按钮文案',
+  'pages.dashboard.updateLog.entries.pr-pull-from-so-ok-text-r01.description':
+    '取单窗口底部确认按钮由误用的创建采购订单改为创建采购申请，与弹窗标题一致。',
+  'pages.dashboard.updateLog.entries.sales-order-fulfillment-push-r01.title':
+    '销售订单采产下推进度与采购路径二选一',
+  'pages.dashboard.updateLog.entries.sales-order-fulfillment-push-r01.description':
+    '销售订单列表下推进度合并外购轨与工单轨并展示采购单号；外购首次下推后锁定采购申请或采购订单路径；采购取单列区分可转单与已转申请/订单数量。',
+  'pages.dashboard.updateLog.entries.partner-payment-method-form-unify-r01.title':
+    '客商与单据付款方式表单样式统一',
+  'pages.dashboard.updateLog.entries.partner-payment-method-form-unify-r01.description':
+    '采购入库、销售订单出库、客户与供应商默认付款方式均与采购订单一致，标签行展示比例或领款人、下方配置提示与弹窗录入；主数据与销售侧不含员工垫付领款人。',
+  'pages.dashboard.updateLog.entries.purchase-advance-payee-modal-ui-r01.title':
+    '员工垫付领款人弹窗选择',
+  'pages.dashboard.updateLog.entries.purchase-advance-payee-modal-ui-r01.description':
+    '采购订单与采购入库选员工垫付后，领款人改为付款方式下方可点文案并弹窗选择，与电汇加承兑组合付款交互一致。',
+  'pages.dashboard.updateLog.entries.purchase-employee-advance-payee-r01.title':
+    '采购订单与入库支持员工垫付',
+  'pages.dashboard.updateLog.entries.purchase-employee-advance-payee-r01.description':
+    '采购订单与采购入库付款方式新增员工垫付；选择后须指定领款人，保存至单据并在详情展示。从订单下推入库时自动带入。',
+  'pages.dashboard.updateLog.entries.maintenance-plan-equipment-catalog-limit-r01.title':
+    '维护计划设备列表加载修复',
+  'pages.dashboard.updateLog.entries.maintenance-plan-equipment-catalog-limit-r01.description':
+    '新建或编辑维护计划时加载设备台账改为分页取数，避免超出接口 limit 上限导致保存失败或设备范围为空。',
+  'pages.dashboard.updateLog.entries.purchase-order-change-aux-quantity-lock-r01.title':
+    '采购变更副数量与原单一致',
+  'pages.dashboard.updateLog.entries.purchase-order-change-aux-quantity-lock-r01.description':
+    '采购变更单明细中，原采购订单行未启用副数量时，变更后副数量不可录入；保存时后端拒绝擅自填写副数量。',
+  'pages.dashboard.updateLog.entries.purchase-order-change-source-order-header-r01.title':
+    '采购变更编辑页展示原订单信息',
+  'pages.dashboard.updateLog.entries.purchase-order-change-source-order-header-r01.description':
+    '编辑采购变更单时在明细表上方展示原采购订单编号、日期、供应商、金额与执行状态等基本信息，与销售变更单对齐，便于对照改单行。',
+  'pages.dashboard.updateLog.entries.purchase-order-change-impact-preview-empty-r01.title':
+    '采购变更影响预览空窗修复',
+  'pages.dashboard.updateLog.entries.purchase-order-change-impact-preview-empty-r01.description':
+    '保存并审核时，原采购订单无下游收货通知或入库单也会提示「未检测到受影响下游」；加载中显示转圈，保存失败不再误开空弹窗。',
   'pages.dashboard.updateLog.entries.warehouse-outbound-picking-unit-readonly-r01.title':
     '领料与出库明细单位只读',
   'pages.dashboard.updateLog.entries.warehouse-outbound-picking-unit-readonly-r01.description':
@@ -8220,6 +8312,12 @@ export default {
   'app.kuaicaiwu.otherExpense.editTitle': '编辑其他费用支出',
   'app.kuaicaiwu.otherExpense.col.code': '单号',
   'app.kuaicaiwu.otherExpense.col.businessDate': '业务日期',
+  'app.kuaicaiwu.otherExpense.col.lineKeyword': '明细摘要',
+  'app.kuaicaiwu.otherExpense.copySelectedCreate': '复制选中单据新建',
+  'app.kuaicaiwu.otherExpense.selectToCopy': '请选中一张其他费用支出单',
+  'app.kuaicaiwu.otherExpense.payableRecognitionOpt.onReceipt': '立即产生应付账款',
+  'app.kuaicaiwu.otherExpense.payableRecognitionOpt.onPurchaseInvoice': '以发票为准',
+  'app.kuaicaiwu.otherExpense.counterpartyOtherLedgerRecognition': '不自动生成应付账款',
   'app.kuaicaiwu.otherExpense.col.amount': '金额',
   'app.kuaicaiwu.otherExpense.col.remainingAmount': '剩余金额',
   'app.kuaicaiwu.otherExpense.col.counterparty': '往来对象',
@@ -13366,6 +13464,8 @@ export default {
     '只有已审核或已确认的采购单才能下推付款申请',
   'app.kuaizhizao.purchaseOrder.capability.purchase_order.push_payment_application.no_amount':
     '采购单无可请款额度或额度已用尽',
+  'app.kuaizhizao.purchaseOrder.capability.purchase_order.push_payment_application.no_department':
+    '采购订单未填写申请部门，无法下推付款申请',
   'app.kuaicaiwu.documentReconciliation.createPaymentApplication': '生成付款申请',
   'app.kuaicaiwu.documentReconciliation.paymentApplicationSupplierOnly': '请在对账条件中选择供应商后再生成付款申请',
   'app.kuaicaiwu.documentReconciliation.paymentApplicationSelectPayable': '请勾选可付的应付缺口行',
@@ -13604,6 +13704,8 @@ export default {
   'app.kuaizhizao.purchaseOrderChange.selectPurchaseOrder': '请选择采购订单',
   'app.kuaizhizao.purchaseOrderChange.purchaseOrderLabel': '采购订单',
   'app.kuaizhizao.purchaseOrderChange.selectPurchaseOrderPlaceholder': '请点击右侧选择采购订单',
+  'app.kuaizhizao.purchaseOrderChange.sourceOrderHeaderTitle': '原采购订单',
+  'app.kuaizhizao.purchaseOrderChange.sourceOrderMissing': '未加载到原采购订单',
   'app.kuaizhizao.purchaseOrderChange.editTitle': '编辑采购变更单',
   'app.kuaizhizao.purchaseOrderChange.detailTitle': '采购变更单 - {{code}}',
   'app.kuaizhizao.purchaseOrderChange.entityName': '采购变更单',
@@ -13882,6 +13984,8 @@ export default {
   'app.kuaizhizao.orderChange.affectedReceiptNotices': '受影响收货通知',
   'app.kuaizhizao.orderChange.affectedInbounds': '受影响入库单',
   'app.kuaizhizao.orderChange.noImpactData': '暂无影响数据',
+  'app.kuaizhizao.orderChange.noDownstreamImpact':
+    '未检测到受影响的下游单据（如收货通知、采购入库等），可确认后继续提交变更单。',
   'app.kuaizhizao.orderChange.confirmSubmit': '确认提交',
   'app.kuaizhizao.orderChange.purchaseOrderLabel': '采购订单',
   'app.kuaizhizao.orderChange.loadSalesOrdersFailed': '加载销售订单失败',
@@ -16127,6 +16231,10 @@ export default {
   'app.kuaizhizao.salesOrder.orderItems': '订单明细',
   'app.kuaizhizao.salesOrder.importItems': '导入明细',
   'app.kuaizhizao.salesOrder.unitPrice': '单价({{currency}})',
+  'app.kuaizhizao.salesOrder.detailInclUnitPrice': '含税单价({{currency}})',
+  'app.kuaizhizao.salesOrder.detailExclUnitPrice': '未税单价({{currency}})',
+  'app.kuaizhizao.salesOrder.detailInclAmount': '含税金额({{currency}})',
+  'app.kuaizhizao.salesOrder.detailExclAmount': '未税金额({{currency}})',
   'app.kuaizhizao.salesOrder.priceProvisional': '待月结定价',
   'app.kuaizhizao.sales.isGift': '赠品',
   'app.kuaizhizao.sales.giftRefUnitPrice': '参考单价',
@@ -18028,6 +18136,9 @@ export default {
   'app.kuaizhizao.workOrder.pull.computationListLoadFailed': '加载需求计算取单列表失败',
   'app.kuaizhizao.workOrder.pull.colPushedWorkOrderQty': '已转工单',
   'app.kuaizhizao.workOrder.pull.colPushedPurchaseQty': '已转采购',
+  'app.kuaizhizao.pullOpenLine.colTransferableQty': '可转单',
+  'app.kuaizhizao.pullOpenLine.colPushedPurchaseRequisitionQty': '已转采购申请',
+  'app.kuaizhizao.pullOpenLine.colPushedPurchaseOrderQty': '已转采购订单',
   'app.kuaizhizao.workOrder.push.selectSplitChild': '已拆分主工单不可下推，请勾选拆分子工单',
   'app.kuaizhizao.workOrder.push.outboundStatusBlocked': '仅「已下达 / 执行中」工单可下推领料出库',
   'app.kuaizhizao.workOrder.push.inboundStatusBlocked': '仅「执行中 / 已完成」工单可下推成品入库',
@@ -31151,6 +31262,10 @@ export default {
   'app.kuaicaiwu.payable.col.paymentMethod': '付款方式',
   'field.partner.settlementMethod.bankAcceptance': '银行承兑',
   'field.partner.settlementMethod.commercialAcceptance': '商业承兑',
+  'field.partner.settlementMethod.employeeAdvance': '员工垫付',
+  'field.partner.paymentAdvance.configureHint': '员工垫付：点击此处选择领款人',
+  'field.partner.paymentAdvance.payeeConfigured': '领款人：{{name}}',
+  'field.partner.paymentAdvance.payeeModalTitle': '选择领款人',
   'field.partner.settlementMethod.prepaid': '预付款',
   'field.partner.settlementMethod.payBeforeShip': '款到发货',
   'field.partner.settlementMethod.spot': '现款现货',
@@ -35516,6 +35631,7 @@ export default {
   'pages.system.applicationConnections.dingtalkClientSecretTooltip': '原 AppSecret / SuiteSecret；快捷登录必填',
   'pages.system.applicationConnections.formUsernameLabel': '用户名',
   'pages.system.applicationConnections.formPasswordLabel': '密码',
+  'pages.system.applicationConnections.nasVerifySsl': '校验证书（自签证书请关闭）',
   'pages.system.applicationConnections.formInstanceIdLabel': '实例 ID / APP ID',
   'pages.system.applicationConnections.exportFileName': '应用连接器-{{date}}.xlsx',
   'pages.system.applicationConnections.importHeaderType': '类型',
@@ -51850,6 +51966,8 @@ export default {
   'app.kuaizhizao.salesOrder.pushRequiresApproved': '仅已审核/已确认且未关闭的销售订单可下推',
   'app.kuaizhizao.salesOrder.pushRatio': '工单下推进度',
   'app.kuaizhizao.salesOrder.pushRatioTooltip': '{{percent}}%（已下推工单 {{pushed}} / 总量 {{total}}，剩余 {{remaining}}）',
+  'app.kuaizhizao.salesOrder.fulfillmentPushRatioTooltip':
+    '{{percent}}%（外购 {{purchasePercent}}% + 工单 {{workOrderPercent}}%；已转外购 {{pushedPurchase}}、工单 {{pushedWorkOrder}}）',
   'app.kuaizhizao.salesManagement.pushProgress.title': '下推进度',
   'app.kuaizhizao.salesManagement.pushProgress.percentOnly': '{{percent}}%',
   'app.kuaizhizao.salesManagement.pushProgress.orderRelease': '下推订单进度',

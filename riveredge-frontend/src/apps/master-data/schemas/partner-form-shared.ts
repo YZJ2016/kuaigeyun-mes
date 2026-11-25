@@ -25,15 +25,6 @@ const enterpriseTypeOptions: FieldConfig['options'] = [
   { labelKey: 'field.partner.enterpriseType.other', value: 'other' },
 ];
 
-const defaultPaymentMethodOptions: FieldConfig['options'] = [
-  { labelKey: 'field.partner.settlementMethod.cash', value: 'cash' },
-  { labelKey: 'field.partner.settlementMethod.bankTransfer', value: 'bank_transfer' },
-  { labelKey: 'field.partner.settlementMethod.bankAcceptance', value: 'bank_acceptance' },
-  { labelKey: 'field.partner.settlementMethod.bankTransferAndAcceptance', value: 'bank_transfer_and_acceptance' },
-  { labelKey: 'field.partner.settlementMethod.commercialAcceptance', value: 'commercial_acceptance' },
-  { labelKey: 'field.partner.settlementMethod.other', value: 'other' },
-];
-
 const settlementTermsOptions: FieldConfig['options'] = [
   { labelKey: 'field.partner.settlementMethod.prepaid', value: 'prepaid' },
   { labelKey: 'field.partner.settlementMethod.payBeforeShip', value: 'pay_before_ship' },
@@ -122,7 +113,8 @@ export const partnerInvoiceFormFields: FieldConfig[] = [
   },
 ];
 
-const partnerExtendedSettlementFormFields: FieldConfig[] = [
+/** 默认付款方式由 PartnerDefaultPaymentMethodFormField 插入，不占 schema select */
+export const partnerExtendedSettlementFormFieldsBeforeDefaultPayment: FieldConfig[] = [
   {
     name: 'legalRepresentative',
     type: 'text',
@@ -149,15 +141,9 @@ const partnerExtendedSettlementFormFields: FieldConfig[] = [
     colSpan: 12,
     fieldProps: { min: 0, precision: 0, style: { width: '100%' } },
   },
-  {
-    name: 'defaultPaymentMethodCode',
-    type: 'select',
-    labelKey: 'field.partner.defaultPaymentMethod',
-    placeholderKey: 'field.partner.defaultPaymentMethodPlaceholder',
-    options: defaultPaymentMethodOptions,
-    allowClear: true,
-    colSpan: 12,
-  },
+];
+
+export const partnerExtendedSettlementFormFieldsAfterDefaultPayment: FieldConfig[] = [
   {
     name: 'settlementTermsCode',
     type: 'select',
@@ -230,7 +216,7 @@ export const partnerFinanceContactFormFields: FieldConfig[] = [
   },
 ];
 
-const partnerDeliveryContactFormFields: FieldConfig[] = [
+export const partnerDeliveryContactFormFields: FieldConfig[] = [
   {
     name: 'deliveryContactName',
     type: 'text',
@@ -257,6 +243,11 @@ const partnerDeliveryContactFormFields: FieldConfig[] = [
     colSpan: 24,
     fieldProps: { rows: 2, maxLength: 500 },
   },
+];
+
+const partnerExtendedSettlementFormFields: FieldConfig[] = [
+  ...partnerExtendedSettlementFormFieldsBeforeDefaultPayment,
+  ...partnerExtendedSettlementFormFieldsAfterDefaultPayment,
 ];
 
 /** 扩展 TAB：商事主体、结算、财务/收货联系人（业务指标在各自主 schema 中前置） */

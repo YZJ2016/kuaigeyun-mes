@@ -93,6 +93,7 @@ import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { renderWarehouseLineQuantity, renderWarehouseHeaderQuantity } from '../shared/warehouseListQuantity';
 import { formatApiErrorDetail } from '../../../../../services/api';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { pickAppliedListSearchFormValues } from '../../../../../utils/listLifecycleStage';
 
 const INBOUND_HOST_RESOURCE = 'kuaizhizao:inbound';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
@@ -586,6 +587,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
   const inboundDetailDrawerZIndex = token.zIndexPopupBase;
   const actionRef = useRef<ActionType>(null);
   const searchFormRef = useRef<ProFormInstance>();
+  const tableSearchParamsRef = useRef<Record<string, unknown> | undefined>(undefined);
   const quickPullRef = useRef<InboundQuickPullModalsRef>(null);
   const receiptTypeFilterRef = useRef<string>(initialReceiptTypeFilter);
   const [receiptTypeFilter, setReceiptTypeFilter] = useState<string>(initialReceiptTypeFilter);
@@ -2982,6 +2984,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
         }
         actionRef={actionRef}
         formRef={searchFormRef}
+        searchParamsRef={tableSearchParamsRef}
         rowKey={inboundRowKey}
         columns={columns}
         showAdvancedSearch={true}
@@ -3065,7 +3068,10 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
           try {
             const loadAll = async () => {
               const typeFilter = receiptTypeFilterRef.current;
-              const searchFormValues = searchFormRef.current?.getFieldsValue?.() ?? {};
+              const searchFormValues = pickAppliedListSearchFormValues(
+                tableSearchParamsRef,
+                () => searchFormRef.current?.getFieldsValue?.() ?? {},
+              );
               const listParams = resolveInboundHubListParams(
                 {
                   ...(searchFormValues as Record<string, unknown>),

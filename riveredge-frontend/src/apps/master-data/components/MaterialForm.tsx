@@ -15,7 +15,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert, Tag, Space, Switch, Card, theme, Upload, Typography, Tooltip } from 'antd';
+import { Modal, Tabs, App, Table, Button, Form, Input, InputNumber, Select, Collapse, Row, Col, Alert, Tag, Space, Switch, Card, theme, Upload, Typography, Tooltip } from 'antd';
 import { UniTableStackedPrimaryCell } from '../../../components/uni-table/stackedPrimaryColumn';
 import { useCustomFields } from '../../../hooks/useCustomFields';
 import type { CustomField } from '../../../services/customField';
@@ -101,6 +101,11 @@ import {
   CONVERSION_TYPE_FLOATING,
   normalizeMaterialConversionType,
 } from '../utils/materialConversionType';
+import {
+  normalizeMaterialUnitsForSubmit,
+  resolveMaterialConversionDisplayPair,
+  syncMaterialUnitConversionFromDisplay,
+} from '../utils/materialConversionRatio';
 import { MaterialGroupFormModal } from './MaterialGroupFormModal';
 import { RouteFormModal } from './RouteFormModal';
 import { SupplierFormModal } from './SupplierFormModal';
@@ -1364,7 +1369,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         units: (() => {
           const raw = restValues.units as MaterialUnits | undefined;
           if (!raw) return raw;
-          const aux = raw.units ?? [];
+          const aux = normalizeMaterialUnitsForSubmit(raw.units ?? []);
           const scenarios = pruneMaterialScenarioUnits(String(restValues.baseUnit ?? ''), raw);
           if (!aux.length || !Object.keys(scenarios).length) {
             return { units: aux };
@@ -2312,12 +2317,29 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
       if (conv === CONVERSION_TYPE_FLOATING) {
         delete row.numerator;
         delete row.denominator;
+        delete row.numeratorInput;
+        delete row.denominatorInput;
       } else {
         row.numerator = row.numerator ?? 1;
         row.denominator = row.denominator ?? 1;
       }
     }
     nextUnits[index] = row;
+    commitUnits(nextUnits);
+  };
+
+  const handleConversionInputChange = (
+    index: number,
+    part: 'numerator' | 'denominator',
+    value: number | null,
+  ) => {
+    const row = units[index];
+    const display = resolveMaterialConversionDisplayPair(row);
+    const nextNum = part === 'numerator' ? (typeof value === 'number' && value > 0 ? value : 1) : display.numerator;
+    const nextDen =
+      part === 'denominator' ? (typeof value === 'number' && value > 0 ? value : 1) : display.denominator;
+    const nextUnits = [...units];
+    nextUnits[index] = syncMaterialUnitConversionFromDisplay(row, nextNum, nextDen);
     commitUnits(nextUnits);
   };
 
@@ -2384,11 +2406,10 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
             </Typography.Text>
           );
         }
-        const numerator = record.numerator || 1;
-        const denominator = record.denominator || 1;
+        const display = resolveMaterialConversionDisplayPair(record);
+        const { numerator, denominator } = display;
         const conversionRate = numerator / denominator;
         const isInteger = Number.isInteger(conversionRate);
-        // 预览：1 主单位 = (分子/分母) 副单位，例如 12/1 → 1箱 = 12瓶
         const auxLabel = String(record.unit ?? '').trim() || t('app.master-data.materialForm.auxUnitShort');
         const rateText = isInteger ? String(conversionRate) : `${numerator}/${denominator}`;
         const previewText = baseUnit
@@ -2401,17 +2422,14 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
 
         return (
           <Space.Compact block className="material-units-conversion-row">
-            <Input
+            <InputNumber
               style={{ width: '22%' }}
-              type="number"
               value={numerator}
               placeholder={t('app.master-data.materialForm.numerator')}
-              onChange={(e) => {
-                const num = parseInt(e.target.value, 10) || 1;
-                handleUnitChange(index, 'numerator', num);
-              }}
-              min={1}
-              step={1}
+              min={0.000001}
+              precision={6}
+              controls={false}
+              onChange={(v) => handleConversionInputChange(index, 'numerator', v)}
             />
             <Input
               className="material-units-conversion-sep"
@@ -2420,17 +2438,14 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
               readOnly
               tabIndex={-1}
             />
-            <Input
+            <InputNumber
               style={{ width: '22%' }}
-              type="number"
               value={denominator}
               placeholder={t('app.master-data.materialForm.denominator')}
-              onChange={(e) => {
-                const den = parseInt(e.target.value, 10) || 1;
-                handleUnitChange(index, 'denominator', den);
-              }}
-              min={1}
-              step={1}
+              min={0.000001}
+              precision={6}
+              controls={false}
+              onChange={(v) => handleConversionInputChange(index, 'denominator', v)}
             />
             <Input
               className="material-units-conversion-preview"

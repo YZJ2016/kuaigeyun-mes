@@ -55,6 +55,10 @@ class PurchaseReceipt(BaseModel):
         default=None,
         description="付款方式（客商码；历史可含 CREDIT/CASH）",
     )
+    advance_payee_id = fields.IntField(null=True, description="员工垫付领款人ID")
+    advance_payee_name = fields.CharField(
+        max_length=100, null=True, description="员工垫付领款人姓名"
+    )
     # 苍穹出站常用编码：单据可改；空则回落接口管理默认值 / 业务配置
     org_number = fields.CharField(max_length=64, null=True, description="库存组织编码（推送 org_number）")
     bizorg_number = fields.CharField(max_length=64, null=True, description="采购组织编码（推送 bizorg_number）")

@@ -22,6 +22,9 @@ from apps.kuaizhizao.services.document_action_policy.enricher import (
     _order_prepayment_linked_by_ids,
 )
 from apps.kuaizhizao.services.payable_open_amount_service import PayableOpenAmountService
+from apps.kuaizhizao.services.payment_application_po_header import (
+    payment_application_header_from_purchase_order,
+)
 from apps.kuaizhizao.services.payment_application_service import PaymentApplicationService
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 
@@ -79,6 +82,15 @@ def _payment_reason_for_purchase_orders(order_codes: Sequence[str]) -> str:
     if len(codes) > 5:
         return f"采购订单 {head} 等{len(codes)}单预付请款"
     return f"采购订单 {head} 预付请款"
+
+
+def _preview_po_header_aliases(header: Dict[str, Any]) -> Dict[str, Any]:
+    out = dict(header)
+    if "invoice_status" in header:
+        out["invoiceStatus"] = header["invoice_status"]
+    if "payment_method" in header:
+        out["paymentMethod"] = header["payment_method"]
+    return out
 
 
 def _payment_reason_for_purchase_receipts(receipt_codes: Sequence[str]) -> str:
@@ -415,6 +427,11 @@ class PaymentApplicationPullService:
             ),
             "supplier_id": order.supplier_id,
             "supplier_name": order.supplier_name,
+            **_preview_po_header_aliases(
+                await payment_application_header_from_purchase_order(
+                    tenant_id, order, application_kind="prepayment"
+                )
+            ),
         }
 
     async def create_from_purchase_order(
@@ -443,6 +460,9 @@ class PaymentApplicationPullService:
             request_amount=amount,
             line_kind="prepayment",
         )
+        po_header = await payment_application_header_from_purchase_order(
+            tenant_id, order, application_kind="prepayment"
+        )
         create = PaymentApplicationCreate(
             supplier_id=int(order.supplier_id),
             supplier_name=str(order.supplier_name or ""),
@@ -450,6 +470,7 @@ class PaymentApplicationPullService:
             items=items,
             payment_reason=_payment_reason_for_purchase_orders([str(order.order_code or "")]),
             **_department_payload_from_model(order, label="采购订单"),
+            **po_header,
         )
         return await self._apps.create_application(
             tenant_id, create, created_by, skip_manual_create_auto_submit=True
@@ -517,6 +538,9 @@ class PaymentApplicationPullService:
             raise BusinessLogicError("所选采购订单无可合并的请款明细")
 
         first_order = await PurchaseOrder.get(id=ids[0])
+        po_header = await payment_application_header_from_purchase_order(
+            tenant_id, first_order, application_kind="prepayment"
+        )
         create = PaymentApplicationCreate(
             supplier_id=int(supplier_id),
             supplier_name=str(supplier_name or ""),
@@ -524,6 +548,7 @@ class PaymentApplicationPullService:
             items=merged_items,
             payment_reason=_payment_reason_for_purchase_orders(order_codes),
             **_department_payload_from_model(first_order, label="采购订单"),
+            **po_header,
         )
         return await self._apps.create_application(
             tenant_id, create, created_by, skip_manual_create_auto_submit=True

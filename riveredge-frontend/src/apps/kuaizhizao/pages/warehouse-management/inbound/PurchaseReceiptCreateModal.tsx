@@ -83,6 +83,9 @@ import {
   repriceUnlockedPurchaseDocumentLineIfNeeded,
 } from '../../../../master-data/utils/resolve-partner-material-price';
 import { partnerPaymentMethodSelectOptions } from '../../../../master-data/utils/partner-static-labels';
+import { isPartnerEmployeeAdvancePaymentMethod } from '../../../../master-data/utils/paymentMethodMix';
+import { resolvePartnerAdvancePayeeName } from '../../../components/PartnerPaymentAdvancePayeeField';
+import { PaymentMethodWithMixFormItems } from '../../../components/PaymentMethodWithMixFormItems';
 import {
   normalizeFormListItems,
   resolveFormListFieldForSubmit,
@@ -818,6 +821,8 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
             receipt_time: poCompose.receiptTimeIso ? dayjs(poCompose.receiptTimeIso) : dayjs(),
             delivery_note: poCompose.deliveryNote ?? '',
             pay_mode: poPayMode,
+            advance_payee_id: (orderWithMaterials as { advance_payee_id?: number }).advance_payee_id ?? undefined,
+            advance_payee_name: (orderWithMaterials as { advance_payee_name?: string }).advance_payee_name ?? undefined,
             price_type: poPriceType,
             tax_rate: taxPct,
             currency: String(orderWithMaterials.currency ?? 'CNY').trim() || 'CNY',
@@ -927,6 +932,8 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
           receipt_time: receiptTimeRaw ? dayjs(String(receiptTimeRaw)) : dayjs(),
           delivery_note: String(detail.delivery_note ?? ''),
           pay_mode: formPayMode,
+          advance_payee_id: (detail as { advance_payee_id?: number }).advance_payee_id ?? undefined,
+          advance_payee_name: (detail as { advance_payee_name?: string }).advance_payee_name ?? undefined,
           price_type: purchaseReceiptFormPriceType(
             purchaseOrderTaxRateToPercent(detail.tax_rate ?? 13),
           ),
@@ -1408,6 +1415,36 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
           values.department_name,
         ),
         pay_mode: String(values.pay_mode ?? '').trim() || undefined,
+        advance_payee_id: (() => {
+          const mode = String(values.pay_mode ?? '').trim();
+          if (!isPartnerEmployeeAdvancePaymentMethod(mode)) return undefined;
+          const id = Number(values.advance_payee_id);
+          if (!Number.isFinite(id) || id <= 0) {
+            const msg = t('app.kuaicaiwu.payment.advancePayeeRequired');
+            messageApi.error(msg);
+            throw new Error(msg);
+          }
+          return id;
+        })(),
+        advance_payee_name: (() => {
+          const mode = String(values.pay_mode ?? '').trim();
+          if (!isPartnerEmployeeAdvancePaymentMethod(mode)) return undefined;
+          const id = Number(values.advance_payee_id);
+          const name =
+            resolvePartnerAdvancePayeeName(
+              id,
+              users.map((u) => ({
+                label: String(u.full_name || u.username || '').trim(),
+                value: u.id,
+              })),
+            ) || String(values.advance_payee_name ?? '').trim();
+          if (!name) {
+            const msg = t('app.kuaicaiwu.payment.advancePayeeRequired');
+            messageApi.error(msg);
+            throw new Error(msg);
+          }
+          return name;
+        })(),
         tax_rate: values.tax_rate != null ? Number(values.tax_rate) : 13,
         currency: String(values.currency ?? 'CNY').trim() || 'CNY',
         receiver_id: values.receiver_id != null ? Number(values.receiver_id) : undefined,
@@ -1670,12 +1707,13 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
           />
         </Col>
         <Col span={6}>
-          <ProFormItem
-            name="pay_mode"
-            label={t('app.kuaizhizao.warehouseInbound.field.payMode')}
-          >
-            <UniDropdown options={payModeOptions} style={{ width: '100%' }} />
-          </ProFormItem>
+          <PaymentMethodWithMixFormItems
+            formRef={formRef}
+            options={payModeOptions}
+            methodLabel={t('app.kuaizhizao.warehouseInbound.field.payMode')}
+            methodPlaceholder={t('app.kuaizhizao.purchaseOrder.selectPaymentMethod')}
+            methodField="pay_mode"
+          />
         </Col>
         <Col span={6}>
           <ProFormItem

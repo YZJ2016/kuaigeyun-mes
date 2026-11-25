@@ -313,9 +313,16 @@ def diff_purchase_item(
     new_qty = before_qty if after_quantity is None else Decimal(str(after_quantity))
     new_price = before_price if after_unit_price is None else Decimal(str(after_unit_price))
     new_date = before_date if after_delivery_date is None else after_delivery_date
-    new_aux = before_aux if after_aux_quantity is None else (
-        None if after_aux_quantity == "" else Decimal(str(after_aux_quantity))
-    )
+    if before_aux is None:
+        if after_aux_quantity is not None and after_aux_quantity != "":
+            raise BusinessLogicError(
+                f"物料 {getattr(source_item, 'material_code', '')} 原单未启用副数量，不能变更副数量"
+            )
+        new_aux = None
+    else:
+        new_aux = before_aux if after_aux_quantity is None else (
+            None if after_aux_quantity == "" else Decimal(str(after_aux_quantity))
+        )
 
     if new_qty < received:
         raise BusinessLogicError(

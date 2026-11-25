@@ -28,6 +28,9 @@ MOBILE_INTERACTIVE_DOCUMENT_TYPES: frozenset[str] = frozenset(
     }
 )
 
+# 可视化/ HTML 打印页眉二维码尺寸（与 designer_presets._qrcode_block 一致）
+DOCUMENT_PRINT_QRCODE_SIZE = 72
+
 # 模板变量 key（work_order 沿用既有字段名）
 DOCUMENT_QRCODE_FIELD: dict[str, str] = {
     "work_order": "work_order_qrcode",

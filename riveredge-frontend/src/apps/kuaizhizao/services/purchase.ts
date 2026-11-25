@@ -252,7 +252,7 @@ export interface PurchaseOrderListParams {
   /** 仅可加载建单；需配合 pull_target */
   pullable_only?: boolean;
   /** 加载目标：purchase_order_change */
-  pull_target?: 'purchase_order_change';
+  pull_target?: 'purchase_order_change' | 'payment_application';
   /** 选单轻量列表，跳过进度/账款/全量 capabilities */
   view?: 'options';
   /** 附带订单明细（明细表格视图） */

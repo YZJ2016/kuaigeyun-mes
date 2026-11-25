@@ -1228,6 +1228,12 @@ const ApplicationConnectionsListPage: React.FC = () => {
             <ProFormText name="username" label={t('pages.system.applicationConnections.formUsernameLabel')} rules={[{ required: true }]} colProps={{ span: 12 }} />
             <ProFormText.Password name="password" label={t('pages.system.applicationConnections.formPasswordLabel')} rules={[{ required: true }]} colProps={{ span: 12 }} />
             <ProFormText name="root_path" label="Root Path" initialValue="/" colProps={{ span: 12 }} />
+            <ProFormSwitch
+              name="verify_ssl"
+              label={t('pages.system.applicationConnections.nasVerifySsl')}
+              initialValue={false}
+              colProps={{ span: 12 }}
+            />
           </>
         );
       case 'nas_smb':

@@ -465,6 +465,7 @@ def enrich_sales_order_capabilities_on_response(
     require_shipment_notice_before_delivery: bool = False,
     require_audit_before_print: bool = False,
     has_prepayment_receipt: bool = False,
+    procurement_fulfillment_mode: Optional[str] = None,
 ) -> T:
     caps = derive_sales_order_capabilities(
         order_model,
@@ -484,6 +485,7 @@ def enrich_sales_order_capabilities_on_response(
         require_shipment_notice_before_delivery=require_shipment_notice_before_delivery,
         require_audit_before_print=require_audit_before_print,
         has_prepayment_receipt=has_prepayment_receipt,
+        procurement_fulfillment_mode=procurement_fulfillment_mode,
     )
     if hasattr(response, "model_copy"):
         return _attach_capabilities_to_response(response, caps)
@@ -1317,7 +1319,12 @@ async def _purchase_order_pending_change_by_ids(tenant_id: int, order_ids: List[
     return result
 
 
-async def _purchase_order_downstream_by_ids(tenant_id: int, order_ids: List[int]) -> dict[int, bool]:
+async def _purchase_order_downstream_by_ids(
+    tenant_id: int,
+    order_ids: List[int],
+    *,
+    for_revoke: bool = False,
+) -> dict[int, bool]:
     from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
     from apps.kuaizhizao.models.purchase_order_change_order import PurchaseOrderChangeOrder
     from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
@@ -1360,11 +1367,18 @@ async def _purchase_order_downstream_by_ids(tenant_id: int, order_ids: List[int]
     for oid in return_ids:
         _mark(int(oid))
 
-    change_ids = await PurchaseOrderChangeOrder.filter(
+    change_q = PurchaseOrderChangeOrder.filter(
         tenant_id=tenant_id,
         source_order_id__in=order_ids,
         deleted_at__isnull=True,
-    ).values_list("source_order_id", flat=True)
+    )
+    if for_revoke:
+        from apps.kuaizhizao.constants import DocumentStatus
+
+        change_q = change_q.exclude(
+            status__in=[DocumentStatus.DRAFT.value, DocumentStatus.REJECTED.value]
+        )
+    change_ids = await change_q.values_list("source_order_id", flat=True)
     for oid in change_ids:
         _mark(int(oid))
 
@@ -1373,6 +1387,13 @@ async def _purchase_order_downstream_by_ids(tenant_id: int, order_ids: List[int]
 
 async def purchase_order_has_downstream(tenant_id: int, order_id: int) -> bool:
     downstream_map = await _purchase_order_downstream_by_ids(tenant_id, [order_id])
+    return downstream_map.get(order_id, False)
+
+
+async def purchase_order_has_revoke_blocking_downstream(tenant_id: int, order_id: int) -> bool:
+    downstream_map = await _purchase_order_downstream_by_ids(
+        tenant_id, [order_id], for_revoke=True
+    )
     return downstream_map.get(order_id, False)
 
 
@@ -1389,6 +1410,7 @@ def enrich_purchase_order_capabilities_on_response(
     has_invoice: bool = False,
     has_receipt_notice: bool = False,
     has_downstream: bool = False,
+    has_revoke_blocking_downstream: Optional[bool] = None,
     has_pending_change: bool = False,
     has_returnable: bool = False,
     has_prepayment_payment: bool = False,
@@ -1407,6 +1429,7 @@ def enrich_purchase_order_capabilities_on_response(
         has_invoice=has_invoice,
         has_receipt_notice=has_receipt_notice,
         has_downstream=has_downstream,
+        has_revoke_blocking_downstream=has_revoke_blocking_downstream,
         has_pending_change=has_pending_change,
         has_returnable=has_returnable,
         has_prepayment_payment=has_prepayment_payment,
@@ -1440,6 +1463,7 @@ async def enrich_purchase_order_detail_capabilities(
         has_received_map,
         has_invoice_map,
         has_downstream,
+        revoke_block_downstream,
         pending_change_map,
         returnable_map,
         prepay_map,
@@ -1455,6 +1479,7 @@ async def enrich_purchase_order_detail_capabilities(
         _purchase_order_received_by_ids(tenant_id, [order_id]),
         _purchase_order_invoice_by_ids(tenant_id, [order_id]),
         purchase_order_has_downstream(tenant_id, order_id),
+        purchase_order_has_revoke_blocking_downstream(tenant_id, order_id),
         _purchase_order_pending_change_by_ids(tenant_id, [order_id]),
         _purchase_order_returnable_by_ids(tenant_id, [order_id]),
         _order_prepayment_linked_by_ids(
@@ -1481,6 +1506,7 @@ async def enrich_purchase_order_detail_capabilities(
         has_received=has_received_map.get(order_id, False),
         has_invoice=has_invoice_map.get(order_id, False),
         has_downstream=has_downstream,
+        has_revoke_blocking_downstream=revoke_block_downstream,
         has_pending_change=pending_change_map.get(order_id, False),
         has_returnable=returnable_map.get(order_id, False),
         has_prepayment_payment=prepay_map.get(order_id, False),
@@ -1488,6 +1514,60 @@ async def enrich_purchase_order_detail_capabilities(
         require_payment_application=require_app,
         prepayment_application_remaining=prepay_remaining,
     )
+
+
+async def enrich_purchase_order_options_payment_application(
+    tenant_id: int,
+    orders: List[Any],
+    responses: List[T],
+    *,
+    items_count_by_id: dict[int, int],
+) -> List[T]:
+    """选单轻量列表：仅批量聚合付款申请下推所需额度与 capabilities，禁止全量列表 enrich。"""
+    if not orders:
+        return responses
+    from apps.kuaizhizao.services.payment_application_pull_service import (
+        PaymentApplicationPullService,
+        compute_prepayment_application_remaining,
+    )
+    from infra.services.business_config_service import BusinessConfigService
+
+    order_ids = [int(getattr(o, "id", 0) or 0) for o in orders]
+    pull_svc = PaymentApplicationPullService()
+    prepay_map, reserved_map, payment_occ_map, require_app = await asyncio.gather(
+        _order_prepayment_linked_by_ids(
+            tenant_id, order_ids, source_type="purchase_order", target_type="payment"
+        ),
+        pull_svc.prepayment_reserved_by_order_ids(tenant_id, order_ids),
+        pull_svc.prepayment_payment_occupied_by_order_ids(tenant_id, order_ids),
+        BusinessConfigService().get_finance_require_payment_application(tenant_id),
+    )
+    out: List[T] = []
+    for order_model, resp in zip(orders, responses):
+        oid = int(getattr(order_model, "id", 0) or 0)
+        ic = int(items_count_by_id.get(oid, 0) or 0)
+        reserved_total = reserved_map.get(oid, Decimal("0")) + payment_occ_map.get(
+            oid, Decimal("0")
+        )
+        prepay_remaining = compute_prepayment_application_remaining(
+            order_model, reserved_total
+        )
+        caps = derive_purchase_order_capabilities(
+            order_model,
+            has_items=ic > 0,
+            has_prepayment_payment=prepay_map.get(oid, False),
+            require_payment_application=require_app,
+            prepayment_application_remaining=prepay_remaining,
+        )
+        if hasattr(resp, "model_copy"):
+            out.append(
+                _attach_capabilities_to_response(
+                    resp, caps, print_gate_record=order_model
+                )
+            )
+        else:
+            out.append(resp)
+    return out
 
 
 async def enrich_purchase_order_list_capabilities(
@@ -1511,6 +1591,7 @@ async def enrich_purchase_order_list_capabilities(
         received_map,
         invoice_map,
         downstream_map,
+        revoke_block_map,
         pending_change_map,
         returnable_map,
         prepay_map,
@@ -1525,6 +1606,7 @@ async def enrich_purchase_order_list_capabilities(
         _purchase_order_received_by_ids(tenant_id, order_ids),
         _purchase_order_invoice_by_ids(tenant_id, order_ids),
         _purchase_order_downstream_by_ids(tenant_id, order_ids),
+        _purchase_order_downstream_by_ids(tenant_id, order_ids, for_revoke=True),
         _purchase_order_pending_change_by_ids(tenant_id, order_ids),
         _purchase_order_returnable_by_ids(tenant_id, order_ids),
         _order_prepayment_linked_by_ids(
@@ -1554,6 +1636,7 @@ async def enrich_purchase_order_list_capabilities(
             has_received=received_map.get(oid, False),
             has_invoice=invoice_map.get(oid, False),
             has_downstream=downstream_map.get(oid, False),
+            has_revoke_blocking_downstream=revoke_block_map.get(oid, False),
             has_pending_change=pending_change_map.get(oid, False),
             has_returnable=returnable_map.get(oid, False),
             has_prepayment_payment=prepay_map.get(oid, False),

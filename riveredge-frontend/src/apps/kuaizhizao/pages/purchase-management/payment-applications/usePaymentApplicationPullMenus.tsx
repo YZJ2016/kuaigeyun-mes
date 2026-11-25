@@ -283,6 +283,9 @@ export function usePaymentApplicationPullMenus({ onCreated }: Props) {
           skip: 0,
           limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
           keyword: keyword.trim() || undefined,
+          view: 'options',
+          pull_target: 'payment_application',
+          ...(scope === 'pullable' ? { pullable_only: true } : {}),
         });
         const items = res.data ?? [];
         const rows = items.map((o) => mapPurchaseOrderToPaymentApplicationPullRow(o, t));

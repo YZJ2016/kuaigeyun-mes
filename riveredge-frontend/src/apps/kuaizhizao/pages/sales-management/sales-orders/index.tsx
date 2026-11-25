@@ -427,6 +427,11 @@ type SalesOrderItemRow = SalesOrderItem & {
   pushed_work_order_quantity?: number;
   remaining_push_quantity?: number;
   work_order_push_progress?: number;
+  purchase_push_progress?: number;
+  fulfillment_push_progress?: number;
+  procurement_fulfillment_mode?: string;
+  pushed_purchase_quantity?: number;
+  pushed_purchase_codes?: string[];
   status?: string;
   review_status?: string;
   pushed_to_computation?: boolean;
@@ -4380,20 +4385,29 @@ const SalesOrdersPage: React.FC = () => {
       render: (_: unknown, record: SalesOrder) => {
         const totalQty = Number(record.total_quantity ?? 0);
         const pushedQty = Number(record.pushed_work_order_quantity ?? 0);
-        const remainingQty = Number(record.remaining_push_quantity ?? Math.max(totalQty - pushedQty, 0));
-        const ratio = Number(record.work_order_push_progress ?? (totalQty > 0 ? (pushedQty / totalQty) * 100 : 0));
+        const pushedPurchase = Number(record.pushed_purchase_quantity ?? 0);
+        const purchasePercent = Number(record.purchase_push_progress ?? 0);
+        const workOrderPercent = Number(record.work_order_push_progress ?? 0);
+        const ratio = Number(
+          record.fulfillment_push_progress ??
+            record.work_order_push_progress ??
+            (totalQty > 0 ? (pushedQty / totalQty) * 100 : 0),
+        );
         return (
           <DocumentPushProgressBar
             percent={ratio}
-            tooltip={t('app.kuaizhizao.salesOrder.pushRatioTooltip', {
+            tooltip={t('app.kuaizhizao.salesOrder.fulfillmentPushRatioTooltip', {
               percent: Math.round(ratio),
-              pushed: pushedQty,
-              total: totalQty,
-              remaining: remainingQty,
+              purchasePercent: Math.round(purchasePercent),
+              workOrderPercent: Math.round(workOrderPercent),
+              pushedPurchase,
+              pushedWorkOrder: pushedQty,
             })}
             documents={collectSalesOrderPushDocuments(record, {
               workOrder: t('components.documentTrackingPanel.docType.work_order'),
               demandComputation: t('components.documentTrackingPanel.docType.demand_computation'),
+              purchaseRequisition: t('components.documentTrackingPanel.docType.purchase_requisition'),
+              purchaseOrder: t('components.documentTrackingPanel.docType.purchase_order'),
             })}
             formatMoreDocs={(count) =>
               t('app.kuaizhizao.salesManagement.pushProgress.moreDocs', { count })
@@ -5084,6 +5098,7 @@ const SalesOrdersPage: React.FC = () => {
             options={salesOrderPaymentMethodOptions}
             methodLabel={t('app.kuaizhizao.salesOrder.paymentMethod')}
             methodPlaceholder={t('app.kuaizhizao.salesOrder.selectPaymentMethod')}
+            enableEmployeeAdvance={false}
           />
         </Col>
       </Row>

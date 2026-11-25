@@ -1,7 +1,8 @@
 import React from 'react';
-import { Alert, Descriptions, List, Modal, Tag } from 'antd';
+import { Alert, Descriptions, List, Modal, Spin, Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { ChangeImpactPreview } from '../../services/sales-order-change';
+import { changeImpactHasVisibleContent } from './changeImpactPreview';
 
 interface OrderChangeImpactModalProps {
   open: boolean;
@@ -24,6 +25,7 @@ export const OrderChangeImpactModal: React.FC<OrderChangeImpactModalProps> = ({
   const blocking = impact?.blocking_errors ?? [];
   const canProceed = blocking.length === 0;
   const okText = confirmText ?? t('app.kuaizhizao.orderChange.confirmSubmit');
+  const hasVisibleContent = changeImpactHasVisibleContent(impact);
 
   const renderList = (title: string, items?: Array<Record<string, unknown>>) => {
     if (!items?.length) return null;
@@ -54,6 +56,7 @@ export const OrderChangeImpactModal: React.FC<OrderChangeImpactModalProps> = ({
       width={720}
       destroyOnHidden
     >
+      {loading ? <Spin style={{ display: 'block', margin: '24px auto' }} /> : null}
       {blocking.length > 0 && (
         <Alert
           type="error"
@@ -76,6 +79,9 @@ export const OrderChangeImpactModal: React.FC<OrderChangeImpactModalProps> = ({
       {renderList(t('app.kuaizhizao.orderChange.affectedWorkOrders'), impact?.affected_work_orders)}
       {renderList(t('app.kuaizhizao.orderChange.affectedReceiptNotices'), impact?.affected_receipt_notices)}
       {renderList(t('app.kuaizhizao.orderChange.affectedInbounds'), impact?.affected_inbounds)}
+      {!loading && impact && !hasVisibleContent && (
+        <Alert type="info" title={t('app.kuaizhizao.orderChange.noDownstreamImpact')} />
+      )}
       {!impact && !loading && <Alert type="info" title={t('app.kuaizhizao.orderChange.noImpactData')} />}
     </Modal>
   );

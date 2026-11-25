@@ -270,6 +270,15 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
             render: (_, entity) =>
               renderDocumentPaymentMethodDisplay(t, entity as Parameters<typeof renderDocumentPaymentMethodDisplay>[1]),
           },
+          ...(String(effective.payment_method_code ?? '') === 'employee_advance'
+          && String(effective.advance_payee_name ?? '').trim()
+            ? [
+                {
+                  title: t('app.kuaicaiwu.payment.advancePayee'),
+                  dataIndex: 'advance_payee_name',
+                },
+              ]
+            : []),
           {
             title: t('app.kuaizhizao.purchaseOrder.settlementTerms'),
             dataIndex: 'settlement_terms_code',
@@ -345,7 +354,7 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
         ] as ProDescriptionsItemProps<PurchaseOrder>[],
         GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK,
       ),
-    [t],
+    [effective, t],
   );
 
   const notesColumn = useMemo(

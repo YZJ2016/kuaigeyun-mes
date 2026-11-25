@@ -267,6 +267,20 @@ export function mergeListPageSearchParamsPreservingToolbar(
   return { ...toolbar, ...incoming };
 }
 
+/**
+ * 与 UniTable request 一致：优先读已提交的 searchParamsRef（高级搜索、模糊词、钉住 Tab），
+ * 否则回退 ProForm（首屏 initialValue）。
+ */
+export function pickAppliedListSearchFormValues(
+  searchParamsRef?: MutableRefObject<Record<string, unknown> | undefined>,
+  getFormValues?: () => Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (searchParamsRef?.current !== undefined) {
+    return { ...(searchParamsRef.current as Record<string, unknown>) };
+  }
+  return getFormValues?.() ?? {};
+}
+
 /** 唯一入口：更新 searchParamsRef 并通知 UI 刷新钉住高亮 */
 export function commitListPageSearchParams(
   searchParamsRef: MutableRefObject<Record<string, unknown> | undefined> | undefined,

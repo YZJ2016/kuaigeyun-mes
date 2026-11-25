@@ -89,6 +89,8 @@ class PurchaseOrderBase(BaseSchema):
     payment_method_code: Optional[str] = Field(
         None, max_length=50, description="付款方式（现金/转账/承兑等）"
     )
+    advance_payee_id: Optional[int] = Field(None, description="员工垫付领款人ID")
+    advance_payee_name: Optional[str] = Field(None, max_length=100, description="员工垫付领款人姓名")
     payment_wire_percent: Optional[Decimal] = Field(None, ge=0, le=100, description="电汇比例（%）")
     payment_acceptance_percent: Optional[Decimal] = Field(None, ge=0, le=100, description="承兑比例（%）")
     settlement_terms_code: Optional[str] = Field(
@@ -146,8 +148,12 @@ class PurchaseOrderBase(BaseSchema):
     @classmethod
     def validate_payment_method_mix_fields(cls, data: Any) -> Any:
         from apps.master_data.config.payment_method_mix import apply_payment_method_mix_to_mapping
+        from apps.master_data.config.partner_payment_advance import (
+            apply_partner_payment_advance_payee_to_mapping,
+        )
 
-        return apply_payment_method_mix_to_mapping(data)
+        data = apply_payment_method_mix_to_mapping(data)
+        return apply_partner_payment_advance_payee_to_mapping(data)
 
     @field_validator("settlement_terms_code", mode="before")
     @classmethod

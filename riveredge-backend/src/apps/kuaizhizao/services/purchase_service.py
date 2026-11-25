@@ -883,6 +883,18 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 )
             result.append(resp)
 
+        if pull_target_norm == "payment_application":
+            from apps.kuaizhizao.services.document_action_policy.enricher import (
+                enrich_purchase_order_options_payment_application,
+            )
+
+            result = await enrich_purchase_order_options_payment_application(
+                tenant_id,
+                orders,
+                result,
+                items_count_by_id=items_count_by_id,
+            )
+
         return {"data": result, "total": total, "success": True}
 
     async def list_purchase_orders(
@@ -997,8 +1009,10 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 },
             )
 
+        pull_target_norm = (params.pull_target or "").strip().lower()
+
         # 加载建采购变更：与 is_source_order_locked_for_direct_edit / create_change_order 粗过滤对齐
-        if params.pullable_only and (params.pull_target or "").strip().lower() == "purchase_order_change":
+        if params.pullable_only and pull_target_norm == "purchase_order_change":
             change_eligible_statuses = (
                 "AUDITED",
                 "CONFIRMED",
@@ -1030,6 +1044,34 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     Q(review_status__in=approved_review)
                     & ~Q(status__in=excluded_for_review_gate)
                 )
+            )
+
+        if params.pullable_only and pull_target_norm == "payment_application":
+            from apps.kuaizhizao.constants import DocumentStatus, LEGACY_AUDITED_VALUES
+
+            audited_statuses = (
+                DocumentStatus.AUDITED.value,
+                DocumentStatus.CONFIRMED.value,
+                *tuple(LEGACY_AUDITED_VALUES),
+            )
+            approved_review = ("APPROVED", "已通过", "审核通过", "通过", "已审核")
+            excluded_for_review_gate = (
+                "DRAFT",
+                "PENDING_REVIEW",
+                "REJECTED",
+                "草稿",
+                "待审核",
+                "已驳回",
+            )
+            query = query.filter(
+                Q(status__in=audited_statuses)
+                | (
+                    Q(review_status__in=approved_review)
+                    & ~Q(status__in=excluded_for_review_gate)
+                )
+            )
+            query = query.filter(department_id__gt=0, supplier_id__gt=0).exclude(
+                Q(department_name="") | Q(department_name__isnull=True)
             )
 
         # 分页
@@ -1893,6 +1935,11 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
         await assert_supplier_purchasable_for_tenant(tenant_id, supplier)
 
+        did = int(getattr(order, "department_id", None) or 0)
+        dname = str(getattr(order, "department_name", None) or "").strip()
+        if did <= 0 or not dname:
+            raise ValidationError("提交前须填写申请部门")
+
         # 检查业务配置：若无需审核，则提交后直接设为已审核（考虑中小企业实情）
         from infra.services.business_config_service import BusinessConfigService
         config_service = BusinessConfigService()
@@ -2398,7 +2445,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         operator_id: int,
     ) -> PurchaseOrderResponse:
         """撤销审核：一律回到草稿，须重新提交再审。"""
-        from apps.kuaizhizao.services.document_action_policy.enricher import purchase_order_has_downstream
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            purchase_order_has_revoke_blocking_downstream,
+        )
         from core.services.approval.audit_transition import (
             resolve_revoke_to_draft_landing_phase,
         )
@@ -2411,11 +2460,14 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         if not order:
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
-        has_downstream = await purchase_order_has_downstream(tenant_id, order_id)
+        revoke_block_downstream = await purchase_order_has_revoke_blocking_downstream(
+            tenant_id, order_id
+        )
         assert_purchase_order_capability(
             order,
             "revoke_approval",
-            has_downstream=has_downstream,
+            has_downstream=revoke_block_downstream,
+            has_revoke_blocking_downstream=revoke_block_downstream,
         )
 
         audit_required = await BusinessConfigService().check_audit_required(

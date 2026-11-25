@@ -4048,9 +4048,10 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     deleted_at__isnull=True,
                 ).all() if material_ids else []
                 material_by_id = {m.id: m for m in materials}
-                ledger_production_date = (
-                    to_site_date(picking_obj.picking_time) if picking_obj.picking_time else None
+                from apps.kuaizhizao.utils.inbound_confirm_helper import (
+                    resolve_stock_restore_ledger_production_date,
                 )
+
                 for item in items:
                     qty = item.picked_quantity if item.picked_quantity and item.picked_quantity > 0 else (
                         item.required_quantity or Decimal(0)
@@ -4069,6 +4070,11 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                             quantity=qty,
                             scene="生产领料撤回",
                         )
+                    ledger_production_date = resolve_stock_restore_ledger_production_date(
+                        line_time=getattr(item, "picking_time", None),
+                        header_time=picking_obj.picking_time,
+                        header_updated_at=getattr(picking_obj, "updated_at", None),
+                    )
                     posting = _convert_line_to_posting_quantities(
                         quantity=qty,
                         material_unit=getattr(item, "material_unit", None),
@@ -9695,14 +9701,19 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 deleted_at__isnull=True,
             ).all() if material_ids else []
             material_by_id = {m.id: m for m in materials}
-            ledger_production_date = (
-                to_site_date(delivery.delivery_time) if delivery.delivery_time else None
+            from apps.kuaizhizao.utils.inbound_confirm_helper import (
+                resolve_stock_restore_ledger_production_date,
             )
 
             for item in items:
                 qty = item.delivery_quantity or Decimal(0)
                 if qty <= 0:
                     continue
+                ledger_production_date = resolve_stock_restore_ledger_production_date(
+                    line_time=getattr(item, "delivery_time", None),
+                    header_time=delivery.delivery_time,
+                    header_updated_at=getattr(delivery, "updated_at", None),
+                )
                 posting = _convert_line_to_posting_quantities(
                     quantity=Decimal(str(qty)),
                     material_unit=getattr(item, "material_unit", None),
@@ -11496,7 +11507,12 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 if confirm_request and confirm_request.delivery_time
                 else getattr(sd_row, "delivery_time", None)
             )
-            confirm_time = coerce_business_datetime_to_utc(time_source)
+            if time_source is None:
+                from core.utils.timezone_utils import resolve_business_datetime
+
+                confirm_time = coerce_business_datetime_to_utc(resolve_business_datetime())
+            else:
+                confirm_time = coerce_business_datetime_to_utc(time_source)
 
             sd_row.status = "已出库"
             sd_row.deliverer_id = deliverer_id
@@ -12231,6 +12247,13 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     getattr(po_upstream, "payment_method_code", None)
                 )
             receipt_dict["pay_mode"] = normalized_pay
+            advance_fields_set = getattr(receipt_data, "model_fields_set", set()) or set()
+            if "advance_payee_id" not in advance_fields_set and po_upstream is not None:
+                receipt_dict["advance_payee_id"] = getattr(po_upstream, "advance_payee_id", None)
+                receipt_dict["advance_payee_name"] = getattr(po_upstream, "advance_payee_name", None)
+            elif "advance_payee_id" not in advance_fields_set:
+                receipt_dict["advance_payee_id"] = None
+                receipt_dict["advance_payee_name"] = None
             if receipt_dict.get("receipt_time") is not None:
                 receipt_dict["receipt_time"] = resolve_business_datetime(
                     receipt_dict["receipt_time"]
@@ -12791,6 +12814,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     tax_rate=po_tax_pct if po_tax_pct > 0 else None,
                     currency=str(getattr(primary, "currency", None) or "CNY").strip() or "CNY",
                     pay_mode=getattr(primary, "payment_method_code", None),
+                    advance_payee_id=getattr(primary, "advance_payee_id", None),
+                    advance_payee_name=getattr(primary, "advance_payee_name", None),
                     payable_recognition=getattr(primary, "payable_recognition", None),
                     warehouse_id=header_wh_id,
                     warehouse_name=header_wh_name or await _resolve_warehouse_name_by_id(

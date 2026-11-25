@@ -3087,7 +3087,9 @@ const WorkOrdersPage: React.FC = () => {
         setSoPullSelectedItemIds(ids)
         setSoPullQuantities(qtyMap)
         if (res.push_mode_default === 'confirm') setSoPullMode('confirm')
-        if (res.bom_multi_version_allowed) {
+        const shouldLoadBomVersions =
+          (res.items || []).some((row: any) => row?.has_bom) || res.bom_multi_version_allowed
+        if (shouldLoadBomVersions) {
           setSoPullBomMaterialsLoading(true)
           void loadDirectPushBomMaterials(res.items || [])
             .then((loaded) => {
@@ -9150,7 +9152,10 @@ const WorkOrdersPage: React.FC = () => {
                 />
               </Space>
             </div>
-            {soPullPreviewData.bom_multi_version_allowed ? (
+            {(soPullPreviewData.items || []).some((row: { has_bom?: boolean }) => row?.has_bom) ||
+            soPullPreviewData.bom_multi_version_allowed ||
+            soPullBomMaterials.length > 0 ||
+            soPullBomMaterialsLoading ? (
               soPullBomMaterialsLoading ? (
                 <div style={{ marginBottom: 12 }}>
                   <Spin size="small" /> {t('app.kuaizhizao.salesOrder.directPushBomLoading')}

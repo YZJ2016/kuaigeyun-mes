@@ -31,8 +31,13 @@ import {
   customerFormSchemaBasicTail,
   customerFormSchemaBasicTailEdit,
   customerFormSchemaInvoice,
-  customerFormSchemaExtended,
+  customerFormSchemaExtendedBusiness,
 } from '../schemas/customer';
+import {
+  partnerExtendedSettlementFormFieldsAfterDefaultPayment,
+  partnerExtendedSettlementFormFieldsBeforeDefaultPayment,
+} from '../schemas/partner-form-shared';
+import { PartnerDefaultPaymentMethodFormField } from './PartnerDefaultPaymentMethodFormField';
 import {
   dedupeDictionaryOptionsByValue,
   dictionaryQuickCreateValueFromLabel,
@@ -50,7 +55,6 @@ import { PartnerAddressesFormTable } from './PartnerAddressesFormTable';
 import { PartnerSettlementAccountsFormTable } from './PartnerSettlementAccountsFormTable';
 import { useCustomFields } from '../../../hooks/useCustomFields';
 import { CustomFieldsFormSection } from '../../../components/custom-fields';
-import { MixedPaymentMethodRatioFields } from './MixedPaymentMethodRatioFields';
 import { validatePaymentMethodMix } from '../utils/paymentMethodMix';
 
 const PAGE_CODE = 'master-data-supply-chain-customer';
@@ -626,7 +630,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                 children: (
                   <Row gutter={FORM_LAYOUT.GRID_GUTTER} wrap>
                     <SchemaFormRenderer
-                      schema={customerFormSchemaExtended}
+                      schema={customerFormSchemaExtendedBusiness}
                       optionsMap={optionsMap}
                       isEdit={isEdit}
                       dropdownEnhanceMap={{
@@ -668,11 +672,17 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                         },
                       }}
                     />
-                    <ProFormDependency name={['defaultPaymentMethodCode']}>
-                      {({ defaultPaymentMethodCode }) => (
-                        <MixedPaymentMethodRatioFields paymentMethodCode={defaultPaymentMethodCode} />
-                      )}
-                    </ProFormDependency>
+                    <SchemaFormRenderer
+                      schema={partnerExtendedSettlementFormFieldsBeforeDefaultPayment}
+                      optionsMap={optionsMap}
+                      isEdit={isEdit}
+                    />
+                    <PartnerDefaultPaymentMethodFormField formRef={formRef} />
+                    <SchemaFormRenderer
+                      schema={partnerExtendedSettlementFormFieldsAfterDefaultPayment}
+                      optionsMap={optionsMap}
+                      isEdit={isEdit}
+                    />
                   </Row>
                 ),
               },

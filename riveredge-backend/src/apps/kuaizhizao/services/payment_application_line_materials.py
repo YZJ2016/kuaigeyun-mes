@@ -6,8 +6,16 @@ from decimal import Decimal
 from typing import List, Optional
 
 from apps.kuaicaiwu.models.payable import Payable
+from apps.kuaicaiwu.services.purchase_settlement import (
+    normalize_po_tax_rate_to_percent,
+    resolve_purchase_line_tax_rate_percent,
+    resolve_receipt_line_tax_rate_percent,
+)
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder
 from apps.kuaizhizao.models.sales_order import SalesOrder
+from apps.kuaizhizao.services.payment_application_po_header import (
+    resolve_tax_rate_percent_from_purchase_order,
+)
 from apps.kuaizhizao.schemas.payment_application import PaymentApplicationLineCreate
 from apps.kuaizhizao.utils.document_amount_write import allocate_amount_by_weights
 
@@ -27,8 +35,12 @@ async def lines_from_purchase_receipt_items(
     line_kind: str = "goods",
     source_type: str = "purchase_receipt",
 ) -> List[PaymentApplicationLineCreate]:
+    from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
     from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
 
+    receipt = await PurchaseReceipt.get_or_none(
+        tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+    )
     items = (
         await PurchaseReceiptItem.filter(
             tenant_id=tenant_id,
@@ -38,6 +50,20 @@ async def lines_from_purchase_receipt_items(
         .order_by("id")
         .all()
     )
+    poi_by_id: dict[int, object] = {}
+    if items and receipt:
+        poi_ids = {
+            int(getattr(it, "purchase_order_item_id", 0) or 0)
+            for it in items
+            if int(getattr(it, "purchase_order_item_id", 0) or 0) > 0
+        }
+        if poi_ids:
+            from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+            po_items = await PurchaseOrderItem.filter(
+                tenant_id=tenant_id, id__in=list(poi_ids)
+            ).all()
+            poi_by_id = {int(p.id): p for p in po_items}
     if not items:
         return [
             PaymentApplicationLineCreate(
@@ -58,6 +84,16 @@ async def lines_from_purchase_receipt_items(
     for it, amt in zip(items, amounts):
         if amt <= 0:
             continue
+        tax_pct = (
+            resolve_receipt_line_tax_rate_percent(
+                receipt=receipt,
+                purchase_order_item_id=int(getattr(it, "purchase_order_item_id", 0) or 0),
+                poi_by_id=poi_by_id,
+                receipt_line=it,
+            )
+            if receipt
+            else normalize_po_tax_rate_to_percent(getattr(it, "tax_rate", None))
+        )
         lines.append(
             PaymentApplicationLineCreate(
                 source_type=source_type,
@@ -72,6 +108,7 @@ async def lines_from_purchase_receipt_items(
                 quantity=it.receipt_quantity,
                 material_unit=it.material_unit,
                 source_line_id=int(it.id),
+                tax_rate=tax_pct,
             )
         )
     if not lines:
@@ -96,18 +133,9 @@ async def lines_from_purchase_order_items(
     request_amount: Decimal,
     line_kind: str = "prepayment",
 ) -> List[PaymentApplicationLineCreate]:
-    if line_kind == "prepayment":
-        return [
-            PaymentApplicationLineCreate(
-                source_type="purchase_order",
-                source_id=int(order.id),
-                source_code=order.order_code,
-                line_kind=line_kind,
-                request_amount=request_amount,
-            )
-        ]
-
     from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+    order_tax = await resolve_tax_rate_percent_from_purchase_order(tenant_id, order)
 
     items = (
         await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=int(order.id))
@@ -122,6 +150,7 @@ async def lines_from_purchase_order_items(
                 source_code=order.order_code,
                 line_kind=line_kind,
                 request_amount=request_amount,
+                tax_rate=order_tax,
             )
         ]
     amount_weights = [Decimal(str(it.total_price or 0)) for it in items]
@@ -132,6 +161,10 @@ async def lines_from_purchase_order_items(
     for it, amt in zip(items, amounts):
         if amt <= 0:
             continue
+        tax_pct = resolve_purchase_line_tax_rate_percent(
+            line_tax_rate=getattr(it, "tax_rate", None),
+            header_tax_rate=getattr(order, "tax_rate", None),
+        )
         lines.append(
             PaymentApplicationLineCreate(
                 source_type="purchase_order",
@@ -144,6 +177,7 @@ async def lines_from_purchase_order_items(
                 quantity=it.ordered_quantity,
                 material_unit=it.unit,
                 source_line_id=int(it.id),
+                tax_rate=tax_pct,
             )
         )
     if not lines:
@@ -154,6 +188,7 @@ async def lines_from_purchase_order_items(
                 source_code=order.order_code,
                 line_kind=line_kind,
                 request_amount=request_amount,
+                tax_rate=order_tax,
             )
         ]
     return lines
@@ -193,6 +228,7 @@ async def lines_from_sales_order_items(
         for it, amt in zip(items, amounts):
             if amt <= 0:
                 continue
+            tax_pct = normalize_po_tax_rate_to_percent(getattr(it, "tax_rate", None))
             lines.append(
                 PaymentApplicationLineCreate(
                     source_type="sales_order",
@@ -205,6 +241,7 @@ async def lines_from_sales_order_items(
                     quantity=it.order_quantity,
                     material_unit=it.material_unit,
                     source_line_id=int(it.id),
+                    tax_rate=tax_pct,
                 )
             )
         if not lines:

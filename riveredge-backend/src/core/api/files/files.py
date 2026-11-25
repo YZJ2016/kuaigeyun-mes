@@ -158,12 +158,14 @@ async def upload_file(
     except ValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
+            detail=str(e) or "文件校验失败",
         )
     except Exception as e:
+        err_text = str(e).strip() or e.__class__.__name__
+        logger.exception("文件上传失败: {}", err_text)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"文件上传失败: {str(e)}"
+            detail=f"文件上传失败: {err_text}",
         )
 
 

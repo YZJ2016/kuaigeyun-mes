@@ -2,6 +2,13 @@
 
 export const PARTNER_MIXED_PAYMENT_METHOD = 'bank_transfer_and_acceptance';
 
+/** 与后端 partner_settlement_codes.PARTNER_EMPLOYEE_ADVANCE_PAYMENT_METHOD 一致 */
+export const PARTNER_EMPLOYEE_ADVANCE_PAYMENT_METHOD = 'employee_advance';
+
+export function isPartnerEmployeeAdvancePaymentMethod(code?: string | null): boolean {
+  return String(code ?? '').trim() === PARTNER_EMPLOYEE_ADVANCE_PAYMENT_METHOD;
+}
+
 export function isMixedPaymentMethodCode(code?: string | null): boolean {
   return String(code ?? '').trim() === PARTNER_MIXED_PAYMENT_METHOD;
 }

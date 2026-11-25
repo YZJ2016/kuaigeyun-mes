@@ -52,6 +52,63 @@ def build_header_keyword_or_clause(keyword_fields: Sequence[str], kw: str) -> Q:
     return header_cond
 
 
+async def header_ids_matching_line_icontains(
+    tenant_id: int,
+    item_model: Type[Model],
+    header_fk_field: str,
+    keyword: str,
+    line_fields: Sequence[str],
+) -> List[int]:
+    """按明细行文本字段 icontains 反查表头 ID。"""
+    kw = (keyword or "").strip()
+    if not kw or not line_fields:
+        return []
+    line_cond = Q()
+    for field in line_fields:
+        line_cond |= Q(**{f"{field}__icontains": kw})
+    filter_kwargs: dict[str, Any] = {"tenant_id": tenant_id}
+    if hasattr(item_model, "deleted_at"):
+        filter_kwargs["deleted_at__isnull"] = True
+    ids = (
+        await item_model.filter(**filter_kwargs)
+        .filter(line_cond)
+        .distinct()
+        .values_list(header_fk_field, flat=True)
+    )
+    return [int(x) for x in ids if x is not None]
+
+
+async def apply_query_header_or_line_icontains_keyword(
+    query,
+    *,
+    tenant_id: int,
+    kw: str,
+    keyword_fields: Sequence[str],
+    item_model: Type[Model] | None = None,
+    item_header_fk_field: str | None = None,
+    line_fields: Sequence[str] | None = None,
+    header_pk_field: str = "id",
+):
+    """表头 keyword_fields 与明细行文本字段 keyword 合并为 OR 过滤。"""
+    keyword = (kw or "").strip()
+    if not keyword:
+        return query
+    header_cond = build_header_keyword_or_clause(keyword_fields, keyword)
+    if item_model and item_header_fk_field and line_fields:
+        line_header_ids = await header_ids_matching_line_icontains(
+            tenant_id,
+            item_model,
+            item_header_fk_field,
+            keyword,
+            line_fields,
+        )
+        if line_header_ids:
+            return query.filter(
+                header_cond | Q(**{f"{header_pk_field}__in": line_header_ids})
+            )
+    return query.filter(header_cond)
+
+
 async def apply_query_header_or_line_material_keyword(
     query,
     *,

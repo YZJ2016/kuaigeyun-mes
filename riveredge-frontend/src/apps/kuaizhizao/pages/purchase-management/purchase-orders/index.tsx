@@ -162,7 +162,8 @@ import { SimpleSparkline } from '../../../../../components';
 import CodeField from '../../../../../components/code-field';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { PaymentMethodWithMixFormItems } from '../../../components/PaymentMethodWithMixFormItems';
-import { validatePaymentMethodMix } from '../../../../master-data/utils/paymentMethodMix';
+import { validatePaymentMethodMix, isPartnerEmployeeAdvancePaymentMethod } from '../../../../master-data/utils/paymentMethodMix';
+import { resolvePartnerAdvancePayeeName } from '../../../components/PartnerPaymentAdvancePayeeField';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
@@ -2750,6 +2751,10 @@ const PurchaseOrdersPage: React.FC = () => {
           payment_acceptance_percent:
             (detail as { payment_acceptance_percent?: number | null }).payment_acceptance_percent ??
             undefined,
+          advance_payee_id:
+            (detail as { advance_payee_id?: number | null }).advance_payee_id ?? undefined,
+          advance_payee_name:
+            (detail as { advance_payee_name?: string | null }).advance_payee_name ?? undefined,
           settlement_terms_code:
             (detail as { settlement_terms_code?: string | null }).settlement_terms_code ?? undefined,
           payment_terms_days:
@@ -3287,7 +3292,7 @@ const PurchaseOrdersPage: React.FC = () => {
         render: (v: number | undefined) => formatQuantity(Number(v ?? 0)),
       },
       {
-        title: t('app.kuaizhizao.workOrder.pull.colPushedPurchaseQty'),
+        title: t('app.kuaizhizao.pullOpenLine.colPushedPurchaseOrderQty'),
         dataIndex: 'pushed_purchase_quantity',
         width: 100,
         align: 'right' as const,
@@ -3295,7 +3300,7 @@ const PurchaseOrdersPage: React.FC = () => {
           formatQuantity(Number(v ?? record.pushed_quantity ?? 0)),
       },
       {
-        title: t('app.kuaizhizao.salesOrder.colShippableQty'),
+        title: t('app.kuaizhizao.pullOpenLine.colTransferableQty'),
         dataIndex: 'remaining_quantity',
         width: 100,
         align: 'right' as const,
@@ -3772,6 +3777,34 @@ const PurchaseOrdersPage: React.FC = () => {
       if (paymentMixErr) {
         messageApi.error(paymentMixErr);
         throw new Error(paymentMixErr);
+      }
+
+      const employeeAdvance = isPartnerEmployeeAdvancePaymentMethod(
+        values.payment_method_code as string | undefined,
+      );
+      if (employeeAdvance) {
+        const payeeId = Number(values.advance_payee_id);
+        if (!Number.isFinite(payeeId) || payeeId <= 0) {
+          messageApi.error(t('app.kuaicaiwu.payment.advancePayeeRequired'));
+          throw new Error(t('app.kuaicaiwu.payment.advancePayeeRequired'));
+        }
+        const payeeName =
+          resolvePartnerAdvancePayeeName(
+            payeeId,
+            users.map((u) => ({
+              label: normalizeUserDisplayName(u.full_name || u.username),
+              value: u.id,
+            })),
+          ) || normalizeUserDisplayName(values.advance_payee_name);
+        if (!payeeName) {
+          messageApi.error(t('app.kuaicaiwu.payment.advancePayeeRequired'));
+          throw new Error(t('app.kuaicaiwu.payment.advancePayeeRequired'));
+        }
+        values.advance_payee_id = payeeId;
+        values.advance_payee_name = payeeName;
+      } else {
+        values.advance_payee_id = undefined;
+        values.advance_payee_name = undefined;
       }
 
       const data = { ...values };

@@ -66,6 +66,7 @@ import { ActionConfirmPopconfirm } from '../../../../../components/action-confir
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 const P = 'app.kuaizhizao.maintenancePlan';
 
 function toApiDateTimeString(value: unknown): string | undefined {
@@ -222,9 +223,10 @@ const MaintenancePlansPage: React.FC = () => {
     if (equipmentCatalogRef.current.length > 0) {
       return equipmentCatalogRef.current;
     }
-    const res = await equipmentApi.list({ limit: 2000, is_active: true });
-    const { data } = normalizeEquipmentListResponse(res);
-    const items = (data as Array<Record<string, unknown>>)
+    const rows = await fetchAllListItems((p) =>
+      equipmentApi.list({ ...p, is_active: true }),
+    );
+    const items = (rows as Array<Record<string, unknown>>)
       .map((row) => ({
         id: typeof row.id === 'number' ? row.id : Number(row.id),
         uuid: row.uuid != null ? String(row.uuid) : undefined,

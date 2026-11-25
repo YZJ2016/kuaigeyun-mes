@@ -11,9 +11,16 @@ PARTNER_PAYMENT_METHOD_CODES = frozenset(
         "bank_acceptance",
         "bank_transfer_and_acceptance",
         "commercial_acceptance",
+        "employee_advance",
         "other",
     }
 )
+
+PARTNER_EMPLOYEE_ADVANCE_PAYMENT_METHOD = "employee_advance"
+
+
+def is_partner_employee_advance_payment_method(value: Optional[str]) -> bool:
+    return str(value or "").strip() == PARTNER_EMPLOYEE_ADVANCE_PAYMENT_METHOD
 
 # 结算方式（付款节点；周期类账期用 net_terms + payment_terms_days）
 PARTNER_SETTLEMENT_TERMS_CODES = frozenset(

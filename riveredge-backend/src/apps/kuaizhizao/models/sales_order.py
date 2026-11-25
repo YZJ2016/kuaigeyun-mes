@@ -111,6 +111,12 @@ class SalesOrder(BaseModel):
     planning_computation_code = fields.CharField(max_length=50, null=True, description="关联需求计算编码")
     planning_computation_pushed_at = fields.DatetimeField(null=True, description="下推需求计算时间")
 
+    procurement_fulfillment_mode = fields.CharField(
+        max_length=32,
+        null=True,
+        description="外购履单路径 purchase_requisition|purchase_order，首张采购下游落库后锁定",
+    )
+
     is_active = fields.BooleanField(default=True, description="是否有效")
     external_sync_at = fields.DatetimeField(null=True, description="最近从外部接口/数据集同步时间")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")

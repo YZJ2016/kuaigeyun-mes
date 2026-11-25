@@ -43,6 +43,168 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  * titleKey / descriptionKey 对应 pages.dashboard.updateLog.entries.{id}.*
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
+{
+    id: 'nas-webdav-upload-error-surface-r01',
+    date: '2026-11-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.nas-webdav-upload-error-surface-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.nas-webdav-upload-error-surface-r01.description',
+  },  {
+    id: 'nas-storage-migrate-api-long-timeout-r01',
+    date: '2026-11-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.nas-storage-migrate-api-long-timeout-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.nas-storage-migrate-api-long-timeout-r01.description',
+  },  {
+    id: 'sales-order-detail-tax-price-amount-r01',
+    date: '2026-11-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-detail-tax-price-amount-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-detail-tax-price-amount-r01.description',
+  },  {
+    id: 'sales-book-inclusive-unit-price-r01',
+    date: '2026-11-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-book-inclusive-unit-price-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-book-inclusive-unit-price-r01.description',
+  },  {
+    id: 'pr-pull-from-so-ok-text-r01',
+    date: '2026-11-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.pr-pull-from-so-ok-text-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.pr-pull-from-so-ok-text-r01.description',
+  },  {
+    id: 'sales-order-fulfillment-push-r01',
+    date: '2026-11-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-fulfillment-push-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-fulfillment-push-r01.description',
+  },  {
+    id: 'partner-payment-method-form-unify-r01',
+    date: '2026-11-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.partner-payment-method-form-unify-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.partner-payment-method-form-unify-r01.description',
+  },  {
+    id: 'purchase-advance-payee-modal-ui-r01',
+    date: '2026-11-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-advance-payee-modal-ui-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-advance-payee-modal-ui-r01.description',
+  },  {
+    id: 'purchase-employee-advance-payee-r01',
+    date: '2026-11-25',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-employee-advance-payee-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-employee-advance-payee-r01.description',
+  },  {
+    id: 'maintenance-plan-equipment-catalog-limit-r01',
+    date: '2026-11-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.maintenance-plan-equipment-catalog-limit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.maintenance-plan-equipment-catalog-limit-r01.description',
+  },  {
+    id: 'purchase-order-change-aux-quantity-lock-r01',
+    date: '2026-11-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-change-aux-quantity-lock-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-change-aux-quantity-lock-r01.description',
+  },  {
+    id: 'payment-application-line-tax-rate-r01',
+    date: '2026-11-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-line-tax-rate-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-line-tax-rate-r01.description',
+  },  {
+    id: 'payment-application-po-pull-performance-r01',
+    date: '2026-11-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-po-pull-performance-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-po-pull-performance-r01.description',
+  },  {
+    id: 'payment-application-po-header-invoice-tax-r01',
+    date: '2026-11-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-po-header-invoice-tax-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-po-header-invoice-tax-r01.description',
+  },  {
+    id: 'material-unit-conversion-decimal-r01',
+    date: '2026-11-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-unit-conversion-decimal-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-unit-conversion-decimal-r01.description',
+  },  {
+    id: 'purchase-inbound-export-search-params-r01',
+    date: '2026-11-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-inbound-export-search-params-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-inbound-export-search-params-r01.description',
+  },  {
+    id: 'other-expense-payment-application-list-search-r01',
+    date: '2026-11-25',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.other-expense-payment-application-list-search-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.other-expense-payment-application-list-search-r01.description',
+  },  {
+    id: 'po-payment-application-department-r01',
+    date: '2026-11-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.po-payment-application-department-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.po-payment-application-department-r01.description',
+  },  {
+    id: 'kingdee-sales-delivery-push-unit-price-r02',
+    date: '2026-11-24',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-sales-delivery-push-unit-price-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-sales-delivery-push-unit-price-r02.description',
+  },  {
+    id: 'partner-price-book-partner-select-r01',
+    date: '2026-11-24',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.partner-price-book-partner-select-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.partner-price-book-partner-select-r01.description',
+  },  {
+    id: 'purchase-order-trace-downstream-r01',
+    date: '2026-11-24',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-trace-downstream-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-trace-downstream-r01.description',
+  },  {
+    id: 'purchase-order-change-source-order-header-r01',
+    date: '2026-11-24',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-change-source-order-header-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-change-source-order-header-r01.description',
+  },  {
+    id: 'purchase-order-change-impact-preview-empty-r01',
+    date: '2026-11-24',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-change-impact-preview-empty-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-change-impact-preview-empty-r01.description',
+  },
   {
     id: 'warehouse-outbound-picking-unit-readonly-r01',
     date: '2026-11-23',

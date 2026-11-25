@@ -6826,6 +6826,7 @@ class DemandComputationService(AppBaseService):
                 sales_order_name=sales_order_name,
                 planned_start_date=planned_start_date,
                 planned_end_date=planned_end_date,
+                required_date=planned_end_date,
                 remarks=remarks,
                 bom_id=bom_snap.get("bom_id"),
                 bom_version=bom_snap.get("bom_version"),

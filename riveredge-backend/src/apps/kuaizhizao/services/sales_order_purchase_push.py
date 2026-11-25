@@ -57,16 +57,15 @@ async def require_purchase_requisition_for_tenant(tenant_id: int) -> bool:
     )
 
 
-async def batch_pushed_purchase_qty_by_material(
+async def batch_pushed_purchase_requisition_qty_by_material(
     tenant_id: int,
     sales_order_ids: List[int],
 ) -> Dict[int, Dict[int, Decimal]]:
-    """order_id → material_id → 已占用数量（SO→PR + SO→PO）。"""
+    """order_id → material_id → 已占用（仅 SO→采购申请）。"""
     result: Dict[int, Dict[int, Decimal]] = {int(oid): {} for oid in sales_order_ids}
     if not sales_order_ids:
         return result
 
-    from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
     from apps.kuaizhizao.models.purchase_requisition import (
         PurchaseRequisition,
         PurchaseRequisitionItem,
@@ -87,21 +86,34 @@ async def batch_pushed_purchase_qty_by_material(
         pr_ids_by_order.setdefault(oid, []).append(int(pr.id))
 
     all_pr_ids = [pid for ids in pr_ids_by_order.values() for pid in ids]
-    if all_pr_ids:
-        pr_items = await PurchaseRequisitionItem.filter(
-            tenant_id=tenant_id,
-            requisition_id__in=all_pr_ids,
-        ).all()
-        pr_order_by_id = {
-            pid: oid for oid, ids in pr_ids_by_order.items() for pid in ids
-        }
-        for item in pr_items:
-            oid = pr_order_by_id.get(int(item.requisition_id))
-            mid = int(item.material_id or 0)
-            if not oid or mid <= 0:
-                continue
-            bucket = result.setdefault(oid, {})
-            bucket[mid] = bucket.get(mid, Decimal("0")) + Decimal(str(item.quantity or 0))
+    if not all_pr_ids:
+        return result
+    pr_items = await PurchaseRequisitionItem.filter(
+        tenant_id=tenant_id,
+        requisition_id__in=all_pr_ids,
+    ).all()
+    pr_order_by_id = {pid: oid for oid, ids in pr_ids_by_order.items() for pid in ids}
+    for item in pr_items:
+        oid = pr_order_by_id.get(int(item.requisition_id))
+        mid = int(item.material_id or 0)
+        if not oid or mid <= 0:
+            continue
+        bucket = result.setdefault(oid, {})
+        bucket[mid] = bucket.get(mid, Decimal("0")) + Decimal(str(item.quantity or 0))
+    return result
+
+
+async def batch_pushed_purchase_order_qty_by_material(
+    tenant_id: int,
+    sales_order_ids: List[int],
+) -> Dict[int, Dict[int, Decimal]]:
+    """order_id → material_id → 已占用（仅 SO→采购订单）。"""
+    result: Dict[int, Dict[int, Decimal]] = {int(oid): {} for oid in sales_order_ids}
+    if not sales_order_ids:
+        return result
+
+    from apps.kuaizhizao.models.document_relation import DocumentRelation
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
 
     pos = await PurchaseOrder.filter(
         tenant_id=tenant_id,
@@ -120,10 +132,6 @@ async def batch_pushed_purchase_qty_by_material(
         po_ids_by_order.setdefault(oid, []).append(pid)
         counted_po_ids.add(pid)
 
-    from apps.kuaizhizao.models.document_relation import DocumentRelation
-
-    all_po_ids = [pid for ids in po_ids_by_order.values() for pid in ids]
-
     def _ingest_po_items(po_items: List[Any], order_by_po: Dict[int, int]) -> None:
         for item in po_items:
             oid = order_by_po.get(int(item.order_id or 0))
@@ -131,19 +139,16 @@ async def batch_pushed_purchase_qty_by_material(
                 continue
             _add_po_item_qty(result, oid, int(item.material_id or 0), item.ordered_quantity)
 
+    all_po_ids = [pid for ids in po_ids_by_order.values() for pid in ids]
     if all_po_ids:
         po_items = await PurchaseOrderItem.filter(
             tenant_id=tenant_id,
             order_id__in=all_po_ids,
             deleted_at__isnull=True,
         ).all()
-        po_order_by_id = {
-            pid: oid for oid, ids in po_ids_by_order.items() for pid in ids
-        }
+        po_order_by_id = {pid: oid for oid, ids in po_ids_by_order.items() for pid in ids}
         _ingest_po_items(po_items, po_order_by_id)
 
-    # 头 source 缺失时：单据关联 + 行 source 仍应计入已转采购
-    # DocumentRelation 无 soft-delete 字段，禁止 deleted_at__isnull
     extra_po_by_order: Dict[int, List[int]] = {}
     rels = await DocumentRelation.filter(
         tenant_id=tenant_id,
@@ -168,9 +173,7 @@ async def batch_pushed_purchase_qty_by_material(
             order_id__in=extra_po_ids,
             deleted_at__isnull=True,
         ).all()
-        extra_order_by_po = {
-            pid: oid for oid, ids in extra_po_by_order.items() for pid in ids
-        }
+        extra_order_by_po = {pid: oid for oid, ids in extra_po_by_order.items() for pid in ids}
         _ingest_po_items(extra_items, extra_order_by_po)
 
     line_items = await PurchaseOrderItem.filter(
@@ -188,7 +191,27 @@ async def batch_pushed_purchase_qty_by_material(
         if oid not in result:
             continue
         _add_po_item_qty(result, oid, int(item.material_id or 0), item.ordered_quantity)
+    return result
 
+
+async def batch_pushed_purchase_qty_by_material(
+    tenant_id: int,
+    sales_order_ids: List[int],
+) -> Dict[int, Dict[int, Decimal]]:
+    """order_id → material_id → 已占用数量（SO→PR + SO→PO）。"""
+    if not sales_order_ids:
+        return {}
+    pr_map, po_map = await asyncio.gather(
+        batch_pushed_purchase_requisition_qty_by_material(tenant_id, sales_order_ids),
+        batch_pushed_purchase_order_qty_by_material(tenant_id, sales_order_ids),
+    )
+    result: Dict[int, Dict[int, Decimal]] = {int(oid): {} for oid in sales_order_ids}
+    for oid in sales_order_ids:
+        merged: Dict[int, Decimal] = {}
+        for src in (pr_map.get(int(oid)) or {}, po_map.get(int(oid)) or {}):
+            for mid, qty in src.items():
+                merged[mid] = merged.get(mid, Decimal("0")) + qty
+        result[int(oid)] = merged
     return result
 
 
@@ -230,15 +253,26 @@ def merge_exact_and_material_purchase_occupancy(
     return occupied
 
 
-async def batch_pushed_purchase_qty_by_sales_order_item(
+async def batch_pushed_purchase_requisition_qty_by_sales_order_item(
     tenant_id: int,
     items_by_order: Dict[int, List[Any]],
 ) -> Dict[int, Decimal]:
-    """sales_order_item.id → 已下推采购占用（主数量，含草稿；删除的采购订单不计）。
+    """销售明细 → 已下推采购申请占用（物料池 FIFO）。"""
+    if not items_by_order:
+        return {}
+    material_by_order = await batch_pushed_purchase_requisition_qty_by_material(
+        tenant_id, list(items_by_order.keys())
+    )
+    return merge_exact_and_material_purchase_occupancy(
+        items_by_order, {}, material_by_order
+    )
 
-    优先认采购订单行 ``source_id=销售明细 id``；其余按物料池（PR+PO 头/关联/行）
-    与工单相同的行序 FIFO 摊到明细，避免只挂钩单头的采购漏计到行。
-    """
+
+async def batch_pushed_purchase_order_qty_by_sales_order_item(
+    tenant_id: int,
+    items_by_order: Dict[int, List[Any]],
+) -> Dict[int, Decimal]:
+    """销售明细 → 已下推采购订单占用（行 source_id 优先 + 物料池 FIFO）。"""
     if not items_by_order:
         return {}
 
@@ -281,12 +315,52 @@ async def batch_pushed_purchase_qty_by_sales_order_item(
                 continue
             exact_occupied[sid] = exact_occupied.get(sid, Decimal("0")) + qty
 
-    material_by_order = await batch_pushed_purchase_qty_by_material(
+    material_by_order = await batch_pushed_purchase_order_qty_by_material(
         tenant_id, list(items_by_order.keys())
     )
     return merge_exact_and_material_purchase_occupancy(
         items_by_order, exact_occupied, material_by_order
     )
+
+
+async def batch_pushed_purchase_qty_by_sales_order_item(
+    tenant_id: int,
+    items_by_order: Dict[int, List[Any]],
+    *,
+    purchase_track: Optional[str] = None,
+) -> Dict[int, Decimal]:
+    """sales_order_item.id → 已下推采购占用（主数量，含草稿；删除的采购订单不计）。
+
+    purchase_track：``purchase_requisition`` / ``purchase_order`` 时仅计对应轨；缺省为两轨合计。
+    """
+    if not items_by_order:
+        return {}
+
+    from apps.kuaizhizao.services.sales_order_procurement_mode import (
+        PROCUREMENT_MODE_ORDER,
+        PROCUREMENT_MODE_REQUISITION,
+        normalize_procurement_fulfillment_mode,
+    )
+
+    track = normalize_procurement_fulfillment_mode(purchase_track)
+    if track == PROCUREMENT_MODE_REQUISITION:
+        return await batch_pushed_purchase_requisition_qty_by_sales_order_item(
+            tenant_id, items_by_order
+        )
+    if track == PROCUREMENT_MODE_ORDER:
+        return await batch_pushed_purchase_order_qty_by_sales_order_item(
+            tenant_id, items_by_order
+        )
+
+    pr_map, po_map = await asyncio.gather(
+        batch_pushed_purchase_requisition_qty_by_sales_order_item(tenant_id, items_by_order),
+        batch_pushed_purchase_order_qty_by_sales_order_item(tenant_id, items_by_order),
+    )
+    merged: Dict[int, Decimal] = {}
+    keys = set(pr_map.keys()) | set(po_map.keys())
+    for lid in keys:
+        merged[lid] = pr_map.get(lid, Decimal("0")) + po_map.get(lid, Decimal("0"))
+    return merged
 
 
 def material_is_buy_eligible(material: Any) -> bool:
@@ -423,6 +497,175 @@ async def batch_remaining_fulfillable_qty_by_material(
             if remaining > 0:
                 bucket[mid] = remaining
         out[order_id] = bucket
+    return out
+
+
+async def batch_remaining_fulfillable_qty_by_material_for_track(
+    tenant_id: int,
+    items_by_order: Dict[int, List[Any]],
+    *,
+    purchase_track: str,
+) -> Dict[int, Dict[int, Decimal]]:
+    """取单余量：工单占用 + 指定采购轨占用。"""
+    from apps.kuaizhizao.services.sales_order_procurement_mode import (
+        PROCUREMENT_MODE_ORDER,
+        PROCUREMENT_MODE_REQUISITION,
+        normalize_procurement_fulfillment_mode,
+    )
+
+    track = normalize_procurement_fulfillment_mode(purchase_track)
+    if track not in (PROCUREMENT_MODE_REQUISITION, PROCUREMENT_MODE_ORDER):
+        return await batch_remaining_fulfillable_qty_by_material(tenant_id, items_by_order)
+
+    purchase_fn = (
+        batch_pushed_purchase_requisition_qty_by_material
+        if track == PROCUREMENT_MODE_REQUISITION
+        else batch_pushed_purchase_order_qty_by_material
+    )
+    pushed_purchase, pushed_wo = await asyncio.gather(
+        purchase_fn(tenant_id, list(items_by_order.keys())),
+        batch_pushed_work_order_qty_by_material(tenant_id, items_by_order),
+    )
+    out: Dict[int, Dict[int, Decimal]] = {}
+    for oid, items in items_by_order.items():
+        order_id = int(oid)
+        totals = _order_qty_by_material(items)
+        wo_for = pushed_wo.get(order_id) or {}
+        pr_for = pushed_purchase.get(order_id) or {}
+        bucket: Dict[int, Decimal] = {}
+        for mid, total_qty in totals.items():
+            remaining = total_qty - wo_for.get(mid, Decimal("0")) - pr_for.get(mid, Decimal("0"))
+            if remaining > 0:
+                bucket[mid] = remaining
+        out[order_id] = bucket
+    return out
+
+
+async def batch_sales_order_fulfillment_push_summary(
+    tenant_id: int,
+    orders: List[Any],
+    items_by_order: Dict[int, List[Any]],
+) -> Dict[int, Dict[str, Any]]:
+    """列表采产下推进度：按锁定采购轨 + 工单轨合计。"""
+    from apps.kuaizhizao.services.sales_order_procurement_mode import (
+        PROCUREMENT_MODE_ORDER,
+        PROCUREMENT_MODE_REQUISITION,
+        batch_resolve_procurement_fulfillment_mode,
+        list_sales_order_purchase_downstream_codes,
+    )
+
+    if not orders:
+        return {}
+    order_ids = [int(getattr(o, "id", 0) or 0) for o in orders]
+    mode_map = await batch_resolve_procurement_fulfillment_mode(tenant_id, orders)
+    material_by_id = await _load_materials_for_items(tenant_id, items_by_order)
+    codes_pr, codes_po = await asyncio.gather(
+        list_sales_order_purchase_downstream_codes(
+            tenant_id, order_ids, PROCUREMENT_MODE_REQUISITION
+        ),
+        list_sales_order_purchase_downstream_codes(
+            tenant_id, order_ids, PROCUREMENT_MODE_ORDER
+        ),
+    )
+    items_subset_pr: Dict[int, List[Any]] = {}
+    items_subset_po: Dict[int, List[Any]] = {}
+    buy_eligible_qty: Dict[int, Decimal] = {oid: Decimal("0") for oid in order_ids}
+    make_eligible_qty: Dict[int, Decimal] = {oid: Decimal("0") for oid in order_ids}
+    for oid, items in items_by_order.items():
+        order_id = int(oid)
+        pr_list: List[Any] = []
+        po_list: List[Any] = []
+        mode = mode_map.get(order_id)
+        for it in items or []:
+            mid = int(getattr(it, "material_id", 0) or 0)
+            m = material_by_id.get(mid)
+            if not m:
+                continue
+            qty = Decimal(str(getattr(it, "order_quantity", 0) or 0))
+            if qty <= 0:
+                continue
+            if material_is_buy_eligible(m):
+                buy_eligible_qty[order_id] = buy_eligible_qty.get(order_id, Decimal("0")) + qty
+                if mode == PROCUREMENT_MODE_ORDER:
+                    po_list.append(it)
+                else:
+                    pr_list.append(it)
+            if material_is_production_eligible(m):
+                make_eligible_qty[order_id] = make_eligible_qty.get(order_id, Decimal("0")) + qty
+        if pr_list:
+            items_subset_pr[order_id] = pr_list
+        if po_list:
+            items_subset_po[order_id] = po_list
+
+    pushed_wo = await batch_pushed_work_order_qty_by_sales_order_item(
+        tenant_id, items_by_order
+    )
+    pushed_pr = (
+        await batch_pushed_purchase_requisition_qty_by_sales_order_item(
+            tenant_id, items_subset_pr
+        )
+        if items_subset_pr
+        else {}
+    )
+    pushed_po = (
+        await batch_pushed_purchase_order_qty_by_sales_order_item(
+            tenant_id, items_subset_po
+        )
+        if items_subset_po
+        else {}
+    )
+
+    out: Dict[int, Dict[str, Any]] = {}
+    for order in orders:
+        oid = int(order.id)
+        mode = mode_map.get(oid)
+        purchase_pushed = Decimal("0")
+        if mode == PROCUREMENT_MODE_ORDER:
+            for it in items_subset_po.get(oid) or []:
+                lid = int(getattr(it, "id", 0) or 0)
+                purchase_pushed += pushed_po.get(lid, Decimal("0"))
+            purchase_codes = list(codes_po.get(oid) or [])
+        else:
+            for it in items_subset_pr.get(oid) or []:
+                lid = int(getattr(it, "id", 0) or 0)
+                purchase_pushed += pushed_pr.get(lid, Decimal("0"))
+            purchase_codes = list(codes_pr.get(oid) or [])
+        wo_pushed = Decimal("0")
+        for it in items_by_order.get(oid) or []:
+            lid = int(getattr(it, "id", 0) or 0)
+            m = material_by_id.get(int(getattr(it, "material_id", 0) or 0))
+            if m and material_is_production_eligible(m):
+                wo_pushed += pushed_wo.get(lid, Decimal("0"))
+
+        buy_total = buy_eligible_qty.get(oid, Decimal("0"))
+        make_total = make_eligible_qty.get(oid, Decimal("0"))
+        eligible = buy_total + make_total
+        pushed_total = purchase_pushed + wo_pushed
+        if buy_total > 0:
+            purchase_ratio = float(
+                min(Decimal("100"), (purchase_pushed / buy_total) * Decimal("100"))
+            )
+        else:
+            purchase_ratio = 0.0
+        if make_total > 0:
+            wo_ratio = float(min(Decimal("100"), (wo_pushed / make_total) * Decimal("100")))
+        else:
+            wo_ratio = 0.0
+        if eligible > 0:
+            fulfillment_ratio = float(
+                min(Decimal("100"), (pushed_total / eligible) * Decimal("100"))
+            )
+        else:
+            fulfillment_ratio = 0.0
+
+        out[oid] = {
+            "procurement_fulfillment_mode": mode,
+            "purchase_push_progress": round(purchase_ratio, 1),
+            "pushed_purchase_quantity": purchase_pushed,
+            "pushed_purchase_codes": purchase_codes,
+            "fulfillment_push_progress": round(fulfillment_ratio, 1),
+            "work_order_push_progress_refined": round(wo_ratio, 1),
+        }
     return out
 
 
@@ -780,6 +1023,11 @@ async def finalize_sales_order_after_requisition_created(
     )
     if not order:
         return
+    from apps.kuaizhizao.services.sales_order_procurement_mode import (
+        PROCUREMENT_MODE_REQUISITION,
+        lock_procurement_fulfillment_mode,
+    )
+
     try:
         await DocumentRelationNewService().create_relation(
             tenant_id=tenant_id,
@@ -800,6 +1048,9 @@ async def finalize_sales_order_after_requisition_created(
         )
     except Exception as exc:
         logger.warning("建立销售订单→采购申请关联失败: %s", exc)
+    await lock_procurement_fulfillment_mode(
+        tenant_id, int(order.id), PROCUREMENT_MODE_REQUISITION
+    )
 
 
 async def push_to_purchase_requisition(
@@ -812,6 +1063,14 @@ async def push_to_purchase_requisition(
     selected_quantities: Optional[Dict[int, Decimal]] = None,
 ) -> Dict[str, Any]:
     from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
+    from apps.kuaizhizao.services.sales_order_procurement_mode import (
+        PROCUREMENT_MODE_REQUISITION,
+        assert_procurement_mode_allows_push,
+    )
+
+    await assert_procurement_mode_allows_push(
+        tenant_id, order, PROCUREMENT_MODE_REQUISITION
+    )
 
     req_data = await build_purchase_requisition_create_from_sales_order(
         tenant_id=tenant_id,
@@ -1055,6 +1314,11 @@ async def finalize_sales_order_after_purchase_order_created(
     )
     if not order:
         return
+    from apps.kuaizhizao.services.sales_order_procurement_mode import (
+        PROCUREMENT_MODE_ORDER,
+        lock_procurement_fulfillment_mode,
+    )
+
     try:
         await DocumentRelationNewService().create_relation(
             tenant_id=tenant_id,
@@ -1075,6 +1339,9 @@ async def finalize_sales_order_after_purchase_order_created(
         )
     except Exception as exc:
         logger.warning("建立销售订单→采购订单关联失败: %s", exc)
+    await lock_procurement_fulfillment_mode(
+        tenant_id, int(order.id), PROCUREMENT_MODE_ORDER
+    )
 
 
 async def push_to_purchase_order(
@@ -1087,6 +1354,12 @@ async def push_to_purchase_order(
     selected_quantities: Optional[Dict[int, Decimal]] = None,
 ) -> Dict[str, Any]:
     from apps.kuaizhizao.services.purchase_service import PurchaseService
+    from apps.kuaizhizao.services.sales_order_procurement_mode import (
+        PROCUREMENT_MODE_ORDER,
+        assert_procurement_mode_allows_push,
+    )
+
+    await assert_procurement_mode_allows_push(tenant_id, order, PROCUREMENT_MODE_ORDER)
 
     plans = await plan_purchase_orders_from_sales_order(
         tenant_id=tenant_id,
@@ -1146,6 +1419,7 @@ async def _list_sales_order_buy_pull_lines(
     sales_order_id: Optional[int] = None,
     pullable_only: bool = True,
     block_when_require_pr: bool,
+    purchase_pull_track: Optional[str] = None,
 ) -> Dict[str, Any]:
     """开口销售订单外购行（采购订单/采购申请取单共用）。
 
@@ -1175,7 +1449,33 @@ async def _list_sales_order_buy_pull_lines(
     if not orders:
         return {"data": [], "total": 0}
 
-    order_by_id = {int(o.id): o for o in orders}
+    from apps.kuaizhizao.services.sales_order_procurement_mode import (
+        PROCUREMENT_MODE_ORDER,
+        PROCUREMENT_MODE_REQUISITION,
+        batch_resolve_procurement_fulfillment_mode,
+        normalize_procurement_fulfillment_mode,
+    )
+
+    mode_by_order = await batch_resolve_procurement_fulfillment_mode(tenant_id, orders)
+    track = normalize_procurement_fulfillment_mode(purchase_pull_track)
+    if track == PROCUREMENT_MODE_ORDER:
+        filtered_orders = {
+            oid: o
+            for oid, o in {int(o.id): o for o in orders}.items()
+            if mode_by_order.get(oid) != PROCUREMENT_MODE_REQUISITION
+        }
+    elif track == PROCUREMENT_MODE_REQUISITION:
+        filtered_orders = {
+            oid: o
+            for oid, o in {int(o.id): o for o in orders}.items()
+            if mode_by_order.get(oid) != PROCUREMENT_MODE_ORDER
+        }
+    else:
+        filtered_orders = {int(o.id): o for o in orders}
+    if not filtered_orders:
+        return {"data": [], "total": 0}
+
+    order_by_id = filtered_orders
     items = await SalesOrderItem.filter(
         tenant_id=tenant_id, sales_order_id__in=list(order_by_id.keys())
     ).all()
@@ -1183,11 +1483,20 @@ async def _list_sales_order_buy_pull_lines(
     for it in items:
         items_by_order.setdefault(int(it.sales_order_id), []).append(it)
 
+    fulfill_coro = (
+        batch_remaining_fulfillable_qty_by_material_for_track(
+            tenant_id, items_by_order, purchase_track=track
+        )
+        if track
+        else batch_remaining_fulfillable_qty_by_material(tenant_id, items_by_order)
+    )
     material_by_id, fulfill_by_order, pushed_purchase_by_item, pushed_wo_by_item = (
         await asyncio.gather(
             _load_materials_for_items(tenant_id, items_by_order),
-            batch_remaining_fulfillable_qty_by_material(tenant_id, items_by_order),
-            batch_pushed_purchase_qty_by_sales_order_item(tenant_id, items_by_order),
+            fulfill_coro,
+            batch_pushed_purchase_qty_by_sales_order_item(
+                tenant_id, items_by_order, purchase_track=track
+            ),
             batch_pushed_work_order_qty_by_sales_order_item(tenant_id, items_by_order),
         )
     )
@@ -1310,6 +1619,7 @@ async def list_purchase_order_sales_order_pull_lines(
         sales_order_id=sales_order_id,
         pullable_only=pullable_only,
         block_when_require_pr=True,
+        purchase_pull_track="purchase_order",
     )
 
 
@@ -1330,6 +1640,7 @@ async def list_purchase_requisition_sales_order_pull_lines(
         sales_order_id=sales_order_id,
         pullable_only=pullable_only,
         block_when_require_pr=False,
+        purchase_pull_track="purchase_requisition",
     )
 
 

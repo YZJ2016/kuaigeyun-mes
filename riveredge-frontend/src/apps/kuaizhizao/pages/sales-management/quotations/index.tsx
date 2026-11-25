@@ -90,6 +90,7 @@ import {
   resolveMaterialForPricing,
   resolveOrderLineSalePrice,
   resolveSalesDocumentMaterialLinesPricing,
+  formUnitPriceFromExclusiveBook,
 } from '../../../../master-data/utils/resolve-partner-material-price';
 import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import { OrderLineVariantAttributesCell } from '../../../../master-data/components/OrderLineVariantAttributesCell';
@@ -3308,17 +3309,20 @@ const QuotationsPage: React.FC = () => {
       const asOf =
         quotationDate != null ? (dayjs.isDayjs(quotationDate) ? quotationDate : dayjs(quotationDate)) : dayjs();
       const pt = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
-      const { unitPrice, taxRate } = await resolveOrderLineSalePrice(
+      const { unitPrice, taxRate, inflateTaxRate, fromPartnerPriceBook } = await resolveOrderLineSalePrice(
         customerId ? Number(customerId) : undefined,
         materialId ? Number(materialId) : undefined,
         attrs,
         full,
         asOf,
       );
-      let up = unitPrice;
-      if (pt === 'tax_inclusive' && up > 0) {
-        up = convertUnitPriceByPriceType(up, taxRate, 'tax_exclusive', 'tax_inclusive');
-      }
+      const up = formUnitPriceFromExclusiveBook(
+        unitPrice,
+        pt,
+        inflateTaxRate,
+        taxRate,
+        fromPartnerPriceBook,
+      );
       const items = [...normalizeFormListItems<any>(formRef.current?.getFieldValue('items'))];
       if (items[index]) {
         const nextRow = {

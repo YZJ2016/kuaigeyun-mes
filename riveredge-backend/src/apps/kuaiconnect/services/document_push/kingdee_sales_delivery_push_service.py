@@ -364,7 +364,6 @@ def build_kingdee_sales_delivery_model(
             price = _to_float(config.get("default_price"))
         if price <= 0 and not bool(getattr(item, "is_gift", False)):
             price = 1.0
-        price = round(price, 2)
         price_type = normalize_price_type(getattr(delivery, "price_type", None))
         excl_amt, _, incl_amt = calc_sales_line_amounts(
             Decimal(str(qty)),

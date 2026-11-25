@@ -19,6 +19,13 @@ class PaymentApplicationLineBase(BaseModel):
     payable_code: Optional[str] = Field(None, max_length=50, alias="payableCode", description="应付编码")
     line_kind: str = Field("goods", max_length=20, alias="lineKind", description="prepayment/goods/invoice")
     request_amount: Decimal = Field(..., gt=0, alias="requestAmount", description="申请金额")
+    tax_rate: Optional[Decimal] = Field(
+        None,
+        ge=0,
+        le=100,
+        alias="taxRate",
+        description="税率百分比",
+    )
     notes: Optional[str] = None
 
     model_config = ConfigDict(populate_by_name=True)
@@ -82,6 +89,13 @@ class PaymentApplicationCreate(BaseModel):
     advance_payee_id: Optional[int] = Field(None, alias="advancePayeeId")
     advance_payee_name: Optional[str] = Field(None, alias="advancePayeeName")
     invoice_status: Optional[str] = Field(None, alias="invoiceStatus")
+    tax_rate: Optional[Decimal] = Field(
+        None,
+        ge=0,
+        le=100,
+        alias="taxRate",
+        description="税率百分比（与采购订单行一致）",
+    )
     payment_terms: Optional[str] = Field(None, alias="paymentTerms")
     notes: Optional[str] = None
     require_payment_voucher: bool = Field(
@@ -111,6 +125,7 @@ class PaymentApplicationUpdate(BaseModel):
     advance_payee_id: Optional[int] = Field(None, alias="advancePayeeId")
     advance_payee_name: Optional[str] = Field(None, alias="advancePayeeName")
     invoice_status: Optional[str] = Field(None, alias="invoiceStatus")
+    tax_rate: Optional[Decimal] = Field(None, ge=0, le=100, alias="taxRate")
     payment_terms: Optional[str] = Field(None, alias="paymentTerms")
     notes: Optional[str] = None
     require_payment_voucher: Optional[bool] = Field(
@@ -155,6 +170,7 @@ class PaymentApplicationResponse(UuidStrCoerceMixin, BaseSchema):
     advance_payee_id: Optional[int] = Field(None, alias="advancePayeeId")
     advance_payee_name: Optional[str] = Field(None, alias="advancePayeeName")
     invoice_status: Optional[str] = Field(None, alias="invoiceStatus")
+    tax_rate: Optional[Decimal] = Field(None, alias="taxRate")
     payment_terms: Optional[str] = Field(None, alias="paymentTerms")
     notes: Optional[str] = None
     require_payment_voucher: bool = Field(

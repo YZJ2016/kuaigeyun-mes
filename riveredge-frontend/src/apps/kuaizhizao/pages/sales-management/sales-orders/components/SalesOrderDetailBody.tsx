@@ -11,7 +11,9 @@ import { CopyOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { NavigateFunction } from 'react-router-dom';
-import { resolveSalesOrderDisplayTotalAmount } from '../../../../utils/documentLineAmounts';
+import { calcDocumentLineAmounts, resolveSalesOrderDisplayTotalAmount } from '../../../../utils/documentLineAmounts';
+import { convertUnitPriceByPriceType } from '../../../../../master-data/utils/resolve-partner-material-price';
+import { normalizeSalesPriceType } from '../../shared/salesPriceType';
 import {
   documentCurrencyTitleVars,
   resolveDocumentCurrencyInputPrefix,
@@ -587,6 +589,28 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
   const { t } = useTranslation();
   const { order, feeTypeOptions } = useSalesOrderDetailContext();
   const orderMoneyPrefix = resolveDocumentCurrencyInputPrefix(order.currency_code);
+  const pt = normalizeSalesPriceType(order.price_type);
+  const currencyVars = documentCurrencyTitleVars(order.currency_code, t);
+  const lineAmounts = (it: SalesOrderItem) =>
+    calcDocumentLineAmounts(it.required_quantity, it.unit_price, it.tax_rate, pt);
+  const lineUnitPrices = (it: SalesOrderItem) => {
+    const stored = it.unit_price;
+    if (pt === 'tax_inclusive') {
+      return {
+        incl: stored,
+        excl: convertUnitPriceByPriceType(stored, it.tax_rate, 'tax_inclusive', 'tax_exclusive'),
+      };
+    }
+    return {
+      excl: stored,
+      incl: convertUnitPriceByPriceType(stored, it.tax_rate, 'tax_exclusive', 'tax_inclusive'),
+    };
+  };
+  const provisionalTag = (record: SalesOrderItem) =>
+    (record as SalesOrderItem & { price_settlement_status?: string }).price_settlement_status ===
+    'PROVISIONAL' ? (
+      <MarkerTag color="warning">{t('app.kuaizhizao.salesOrder.priceProvisional')}</MarkerTag>
+    ) : null;
 
   return (
     <>
@@ -635,7 +659,7 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
           <Table<SalesOrderItem>
             size="small"
             tableLayout="fixed"
-            style={{ minWidth: 1280 }}
+            style={{ minWidth: 1680 }}
             columns={[
               { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
               { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 200,
@@ -681,17 +705,36 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
                 ),
               },
               {
-                title: t('app.kuaizhizao.salesOrder.unitPrice', documentCurrencyTitleVars(order.currency_code, t)),
-                dataIndex: 'unit_price',
-                width: 100,
+                title: t('app.kuaizhizao.salesOrder.detailInclUnitPrice', currencyVars),
+                key: 'incl_unit_price',
+                width: 110,
                 align: 'right' as const,
-                render: (val: number, record: SalesOrderItem) => (
+                render: (_: unknown, record: SalesOrderItem) => (
                   <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-                    <AmountDisplay resource={SO} fieldName="unit_price" value={val} prefix={orderMoneyPrefix} />
-                    {(record as SalesOrderItem & { price_settlement_status?: string }).price_settlement_status ===
-                    'PROVISIONAL' ? (
-                      <MarkerTag color="warning">{t('app.kuaizhizao.salesOrder.priceProvisional')}</MarkerTag>
-                    ) : null}
+                    <AmountDisplay
+                      resource={SO}
+                      fieldName="unit_price"
+                      value={lineUnitPrices(record).incl}
+                      prefix={orderMoneyPrefix}
+                    />
+                    {pt === 'tax_inclusive' ? provisionalTag(record) : null}
+                  </span>
+                ),
+              },
+              {
+                title: t('app.kuaizhizao.salesOrder.detailExclUnitPrice', currencyVars),
+                key: 'excl_unit_price',
+                width: 110,
+                align: 'right' as const,
+                render: (_: unknown, record: SalesOrderItem) => (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                    <AmountDisplay
+                      resource={SO}
+                      fieldName="unit_price"
+                      value={lineUnitPrices(record).excl}
+                      prefix={orderMoneyPrefix}
+                    />
+                    {pt === 'tax_exclusive' ? provisionalTag(record) : null}
                   </span>
                 ),
               },
@@ -703,12 +746,45 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
                 render: (val: number) => val ?? 0,
               },
               {
-                title: t('app.kuaizhizao.salesOrder.inclAmount', documentCurrencyTitleVars(order.currency_code, t)),
-                dataIndex: 'item_amount',
+                title: t('app.kuaizhizao.salesOrder.detailExclAmount', currencyVars),
+                key: 'line_excl',
                 width: 120,
                 align: 'right' as const,
-                render: (val: number) => (
-                  <AmountDisplay resource={SO} fieldName="amount_with_tax" value={val} prefix={orderMoneyPrefix} />
+                render: (_: unknown, it: SalesOrderItem) => (
+                  <AmountDisplay
+                    resource={SO}
+                    fieldName="amount_without_tax"
+                    value={lineAmounts(it).excl}
+                    prefix={orderMoneyPrefix}
+                  />
+                ),
+              },
+              {
+                title: t('app.kuaizhizao.salesOrder.taxAmount', currencyVars),
+                key: 'line_tax',
+                width: 100,
+                align: 'right' as const,
+                render: (_: unknown, it: SalesOrderItem) => (
+                  <AmountDisplay
+                    resource={SO}
+                    fieldName="tax_amount"
+                    value={lineAmounts(it).tax}
+                    prefix={orderMoneyPrefix}
+                  />
+                ),
+              },
+              {
+                title: t('app.kuaizhizao.salesOrder.detailInclAmount', currencyVars),
+                key: 'line_incl',
+                width: 120,
+                align: 'right' as const,
+                render: (_: unknown, it: SalesOrderItem) => (
+                  <AmountDisplay
+                    resource={SO}
+                    fieldName="amount_with_tax"
+                    value={lineAmounts(it).incl}
+                    prefix={orderMoneyPrefix}
+                  />
                 ),
               },
               { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', width: 120 },

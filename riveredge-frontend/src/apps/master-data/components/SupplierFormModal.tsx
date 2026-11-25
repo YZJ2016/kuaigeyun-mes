@@ -22,8 +22,16 @@ import {
   supplierFormSchemaBasicHead,
   supplierFormSchemaBasicTail,
   supplierFormSchemaInvoice,
-  supplierFormSchemaExtended,
+  supplierFormSchemaExtendedBusiness,
 } from '../schemas/supplier';
+import {
+  partnerDeliveryContactFormFields,
+  partnerExtendedSettlementFormFieldsAfterDefaultPayment,
+  partnerExtendedSettlementFormFieldsBeforeDefaultPayment,
+  partnerFinanceContactFormFields,
+} from '../schemas/partner-form-shared';
+import { PartnerDefaultPaymentMethodFormField } from './PartnerDefaultPaymentMethodFormField';
+import { validatePaymentMethodMix } from '../utils/paymentMethodMix';
 import { getDataDictionaryByCode, createDictionaryItem } from '../../../services/dataDictionary';
 import {
   dedupeDictionaryOptionsByValue,
@@ -190,6 +198,15 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
     try {
       setFormLoading(true);
       const { customData, standardValues } = extractFormValues(values);
+      const mixErr = validatePaymentMethodMix(
+        standardValues.defaultPaymentMethodCode,
+        standardValues.defaultPaymentWirePercent,
+        standardValues.defaultPaymentAcceptancePercent,
+      );
+      if (mixErr) {
+        messageApi.error(mixErr);
+        throw new Error(mixErr);
+      }
       const payload: Record<string, unknown> & { contacts: PartnerContact[]; code?: string; isActive?: boolean } = {
         ...standardValues,
         contacts: normalizePartnerContactsForSubmit(standardValues.contacts ?? values.contacts),
@@ -396,7 +413,7 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
                 children: (
                   <Row gutter={FORM_LAYOUT.GRID_GUTTER} wrap>
                     <SchemaFormRenderer
-                      schema={supplierFormSchemaExtended}
+                      schema={supplierFormSchemaExtendedBusiness}
                       optionsMap={optionsMap}
                       isEdit={isEdit}
                       dropdownEnhanceMap={{
@@ -425,6 +442,22 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
                           },
                         },
                       }}
+                    />
+                    <SchemaFormRenderer
+                      schema={partnerExtendedSettlementFormFieldsBeforeDefaultPayment}
+                      optionsMap={optionsMap}
+                      isEdit={isEdit}
+                    />
+                    <PartnerDefaultPaymentMethodFormField formRef={formRef} />
+                    <SchemaFormRenderer
+                      schema={partnerExtendedSettlementFormFieldsAfterDefaultPayment}
+                      optionsMap={optionsMap}
+                      isEdit={isEdit}
+                    />
+                    <SchemaFormRenderer
+                      schema={[...partnerFinanceContactFormFields, ...partnerDeliveryContactFormFields]}
+                      optionsMap={optionsMap}
+                      isEdit={isEdit}
                     />
                   </Row>
                 ),

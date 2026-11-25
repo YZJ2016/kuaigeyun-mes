@@ -60,6 +60,9 @@ class PaymentApplication(BaseModel):
     payment_reason = fields.TextField(null=True, description="付款事由")
     payment_method = fields.CharField(max_length=50, null=True, description="付款方式")
     invoice_status = fields.CharField(max_length=50, null=True, description="发票情况")
+    tax_rate = fields.DecimalField(
+        max_digits=6, decimal_places=2, default=0, description="税率百分比（如13表示13%）"
+    )
     payment_terms = fields.CharField(max_length=200, null=True, description="付款条件")
 
     notes = fields.TextField(null=True, description="备注")
@@ -96,6 +99,12 @@ class PaymentApplicationLine(BaseModel):
     paid_amount = fields.DecimalField(max_digits=16, decimal_places=4, default=0, description="已付金额")
     max_request_amount = fields.DecimalField(
         max_digits=16, decimal_places=4, default=0, description="最大可申请"
+    )
+    tax_rate = fields.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=0,
+        description="税率百分比（如13表示13%）",
     )
     notes = fields.TextField(null=True, description="备注")
 

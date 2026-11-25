@@ -381,6 +381,20 @@ class SalesOrderResponse(SalesOrderBase):
     pushed_work_order_quantity: Decimal = Field(Decimal("0"), description="已下推工单数量")
     remaining_push_quantity: Decimal = Field(Decimal("0"), description="剩余可下推数量")
     work_order_push_progress: float = Field(0.0, description="工单下推占比 0-100")
+    purchase_push_progress: float = Field(0.0, description="外购下推占比 0-100（按锁定采购轨）")
+    fulfillment_push_progress: float = Field(
+        0.0, description="采产下推综合占比 0-100（外购轨+工单轨）"
+    )
+    procurement_fulfillment_mode: Optional[str] = Field(
+        None, description="外购履单路径 purchase_requisition|purchase_order"
+    )
+    pushed_purchase_quantity: Decimal = Field(
+        Decimal("0"), description="已下推外购主数量（当前采购轨）"
+    )
+    pushed_purchase_codes: List[str] = Field(
+        default_factory=list,
+        description="已下推采购申请/采购订单单号（按履单路径）",
+    )
     pushed_work_order_codes: List[str] = Field(
         default_factory=list,
         description="已下推工单编码（列表 hover 用，排除已取消）",

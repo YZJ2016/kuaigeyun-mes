@@ -7,6 +7,7 @@ from typing import Any, Optional, Sequence
 from infra.exceptions.exceptions import ValidationError
 
 BANK_TRANSFER_PAYMENT_METHOD = "银行转账"
+BANK_ACCEPTANCE_PAYMENT_METHOD = "银行承兑"
 CASH_PAYMENT_METHOD = "现金"
 NOTE_PAYMENT_METHOD = "票据"
 PREPAYMENT_OFFSET_PAYMENT_METHOD = "预付抵扣"

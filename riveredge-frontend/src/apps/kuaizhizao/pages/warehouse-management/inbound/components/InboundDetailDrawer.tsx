@@ -328,6 +328,16 @@ export const InboundDetailDrawer: React.FC<InboundDetailDrawerProps> = ({
               },
             ]
           : []),
+        ...(effective.receipt_type === 'purchase' &&
+        String(effective.pay_mode ?? '') === 'employee_advance' &&
+        String((effective as { advance_payee_name?: string }).advance_payee_name ?? '').trim()
+          ? [
+              {
+                title: t('app.kuaicaiwu.payment.advancePayee'),
+                dataIndex: 'advance_payee_name' as const,
+              },
+            ]
+          : []),
         ...(effective.receipt_type === 'purchase' && effective.tax_rate != null
           ? [
               {

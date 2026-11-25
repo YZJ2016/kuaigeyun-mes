@@ -89,6 +89,8 @@ import {
   type OrderChangeItemsTablePricing,
 } from '../../../components/order-change';
 import { OrderChangeImpactModal } from '../../../components/order-change/OrderChangeImpactModal';
+import { PurchaseOrderSourceOrderHeaderPanel } from '../../../components/order-change/PurchaseOrderSourceOrderHeaderPanel';
+import { isDraftStatus, isRejectedStatus } from '../../../constants/documentStatus';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import {
   DocumentAttachmentsReadonly,
@@ -111,6 +113,14 @@ type PullPurchaseOrderCandidate = PurchaseOrder & {
 
 type OrderChangeLineItem = NonNullable<PurchaseOrderChange['items']>[number];
 
+function normalizePurchaseOrderChangeLineAux<T extends OrderChangeLineItem>(item: T): T {
+  const beforeAux = item.before_aux_quantity;
+  if (beforeAux == null || beforeAux === '' || Number.isNaN(Number(beforeAux))) {
+    return { ...item, after_aux_quantity: null };
+  }
+  return item;
+}
+
 function orderChangeItemHasContent(item: OrderChangeLineItem): boolean {
   const changeType = String(item.change_type ?? '').toUpperCase();
   if (changeType === 'LINE_ADD' || changeType === 'LINE_CANCEL') return true;
@@ -121,7 +131,7 @@ function orderChangeItemHasContent(item: OrderChangeLineItem): boolean {
     v == null || v === '' || Number.isNaN(Number(v)) ? null : Number(v);
   const beforeAux = normAux(item.before_aux_quantity);
   const afterAux = normAux(item.after_aux_quantity);
-  if (beforeAux !== afterAux && !(beforeAux == null && afterAux == null)) return true;
+  if (beforeAux != null && beforeAux !== afterAux) return true;
   if (Number(item.after_unit_price ?? 0) !== Number(item.before_unit_price ?? 0)) return true;
   const beforeDate = item.before_delivery_date ? String(item.before_delivery_date).slice(0, 10) : '';
   const afterDate = item.after_delivery_date ? String(item.after_delivery_date).slice(0, 10) : '';
@@ -171,6 +181,8 @@ const PurchaseOrderChangesPage: React.FC = () => {
   const [editItems, setEditItems] = useState<PurchaseOrderChange['items']>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingStatus, setEditingStatus] = useState<string | null>(null);
+  const [sourcePurchaseOrder, setSourcePurchaseOrder] = useState<PurchaseOrder | null>(null);
+  const [sourcePurchaseOrderLoading, setSourcePurchaseOrderLoading] = useState(false);
   const [changePricing, setChangePricing] = useState<OrderChangeItemsTablePricing | undefined>();
   const [impactOpen, setImpactOpen] = useState(false);
   const [impactLoading, setImpactLoading] = useState(false);
@@ -213,16 +225,25 @@ const PurchaseOrderChangesPage: React.FC = () => {
 
   const hydratePurchaseOrderChangeEditForm = useCallback(async (full: PurchaseOrderChange) => {
     setEditingId(full.id!);
+    setSourcePurchaseOrder(null);
+    setSourcePurchaseOrderLoading(
+      full.source_order_id != null && Number(full.source_order_id) > 0,
+    );
     let pricingAsOf = full.created_at ? dayjs(full.created_at) : dayjs();
     if (full.source_order_id != null && Number(full.source_order_id) > 0) {
       try {
         const sourceOrder = await getPurchaseOrder(full.source_order_id);
+        setSourcePurchaseOrder(sourceOrder);
         if (sourceOrder.order_date) {
           pricingAsOf = dayjs(sourceOrder.order_date);
         }
       } catch {
-        /* 保留变更单创建时间 */
+        setSourcePurchaseOrder(null);
+      } finally {
+        setSourcePurchaseOrderLoading(false);
       }
+    } else {
+      setSourcePurchaseOrderLoading(false);
     }
     setChangePricing({
       side: 'purchase',
@@ -232,7 +253,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
           : undefined,
       asOf: pricingAsOf,
     });
-    setEditItems(full.items ?? []);
+    setEditItems((full.items ?? []).map((row) => normalizePurchaseOrderChangeLineAux(row)));
     editForm.setFieldsValue({
       change_reason: full.change_reason,
       notes: full.notes,
@@ -257,7 +278,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
       change_reason: values.change_reason,
       notes: values.notes,
       attachments: normalizeDocumentAttachments(values.attachments),
-      items: (editItems ?? []).map((item, idx) => ({
+      items: (editItems ?? []).map((item, idx) => normalizePurchaseOrderChangeLineAux({
         id: item.id,
         line_no: item.line_no ?? idx + 1,
         source_item_id: item.source_item_id,
@@ -462,9 +483,12 @@ const PurchaseOrderChangesPage: React.FC = () => {
     setImpactOpen(true);
     try {
       setImpactData(await previewPurchaseOrderChangeImpact(id));
-    } catch (e: any) {
-      message.error(e?.message ?? t('app.kuaizhizao.purchaseOrderChange.impactPreviewFailed'));
+    } catch (e: unknown) {
+      message.error(
+        getApiErrorMessage(e, t('app.kuaizhizao.purchaseOrderChange.impactPreviewFailed')),
+      );
       setImpactOpen(false);
+      setPendingSubmitId(null);
     } finally {
       setImpactLoading(false);
     }
@@ -902,10 +926,6 @@ const PurchaseOrderChangesPage: React.FC = () => {
     reloadTable();
   }, [message, t]);
 
-  const purchaseOrderChangeCanCommit = ['', 'DRAFT', '草稿', 'draft', 'REJECTED', '已驳回', 'rejected'].includes(
-    String(editingStatus || '').trim(),
-  );
-
   async function handleCopySelectedPurchaseOrderChange() {
     const row = selectedChangeForToolbar;
     if (!row?.id) {
@@ -926,7 +946,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
         change_reason: full.change_reason,
         notes: full.notes,
         attachments: full.attachments,
-        items: (full.items ?? []).map((item, idx) => ({
+        items: (full.items ?? []).map((item, idx) => normalizePurchaseOrderChangeLineAux({
           line_no: item.line_no ?? idx + 1,
           source_item_id: item.source_item_id,
           change_type: item.change_type ?? 'QUANTITY',
@@ -966,9 +986,8 @@ const PurchaseOrderChangesPage: React.FC = () => {
   const showPurchaseOrderChangeAttachments =
     Boolean(detail) && hasDocumentAttachments(purchaseOrderChangeAttachments);
 
-  const purchaseOrderChangeCanCommit = ['', 'DRAFT', '草稿', 'draft', 'REJECTED', '已驳回', 'rejected'].includes(
-    String(editingStatus || '').trim(),
-  );
+  const purchaseOrderChangeCanCommit =
+    isDraftStatus(editingStatus ?? undefined) || isRejectedStatus(editingStatus ?? undefined);
 
   const triggerCommitAfterSave = useCallback(() => {
     commitAfterSaveRef.current = true;
@@ -1017,8 +1036,12 @@ const PurchaseOrderChangesPage: React.FC = () => {
         >
           <Spin spinning={formPageLoading}>
             <ProForm form={editForm} layout="vertical" submitter={false} onFinish={() => void handleSaveEdit()}>
+              <PurchaseOrderSourceOrderHeaderPanel
+                order={sourcePurchaseOrder}
+                loading={sourcePurchaseOrderLoading || formPageLoading}
+              />
               {!editItemsHaveChangeContent ? (
-                <FormModalGridBlock>
+                <FormModalGridBlock style={{ marginBottom: 20 }}>
                   <Alert type="info" title={t('app.kuaizhizao.purchaseOrderChange.submitNoChangesHint')} />
                 </FormModalGridBlock>
               ) : null}

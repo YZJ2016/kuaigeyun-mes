@@ -1,6 +1,6 @@
 """入库/出库确认：解析业务操作人（支持确认时二次选择）。"""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Awaitable, Callable, Optional, Protocol, Tuple, Union
 
 from core.utils.timezone_utils import coerce_business_datetime_to_utc
@@ -176,3 +176,30 @@ def resolve_inbound_posting_business_time(
     from core.utils.timezone_utils import resolve_business_datetime
 
     return coerce_business_datetime_to_utc(resolve_business_datetime())
+
+
+def resolve_stock_restore_ledger_production_date(
+    *,
+    line_time: Optional[Union[datetime, str]] = None,
+    header_time: Optional[Union[datetime, str]] = None,
+    header_updated_at: Optional[Union[datetime, str]] = None,
+) -> date:
+    """
+    出库/领料撤回回冲库存：批号台账须写入入库日期。
+
+    优先行级业务时刻 → 单据头业务时刻 → 单据更新时间 → 当前业务时刻。
+    """
+    from core.utils.timezone_utils import resolve_business_datetime, to_site_date
+
+    def _as_dt(raw: Optional[Union[datetime, str]]) -> Optional[datetime]:
+        if raw is None or (isinstance(raw, str) and not str(raw).strip()):
+            return None
+        if isinstance(raw, str):
+            return resolve_inbound_confirm_business_time(None, existing_time=raw)
+        return coerce_business_datetime_to_utc(raw)
+
+    for raw in (line_time, header_time, header_updated_at):
+        dt = _as_dt(raw)
+        if dt is not None:
+            return to_site_date(dt)
+    return to_site_date(resolve_business_datetime())

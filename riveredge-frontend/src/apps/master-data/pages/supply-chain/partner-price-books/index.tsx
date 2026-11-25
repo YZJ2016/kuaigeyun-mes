@@ -38,6 +38,9 @@ import { buildDetailDrawerEditExtra } from '../../../../kuaizhizao/pages/equipme
 import { MasterDataDetailDrawer } from '../../shared/masterDataDetailDrawer';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { CustomerSelectDropdown } from '../../../components/CustomerSelectDropdown';
+import { SupplierSelectDropdown } from '../../../components/SupplierSelectDropdown';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { PartnerPriceVariantPricesEditor } from '../../../components/PartnerPriceVariantPricesEditor';
 import { PartnerPriceVariantPricesTable } from '../../../components/PartnerPriceVariantPricesTable';
 import {
@@ -78,7 +81,6 @@ import {
   resolvePartnerPriceBookListParams,
 } from '../../../utils/supplyChainListCore';
 import { PartnerPriceBookBatchRegisterModal } from './PartnerPriceBookBatchRegisterModal';
-import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import {
   buildPartnerPriceBookImportTemplate,
   commitPartnerPriceBookImport,
@@ -217,12 +219,14 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
     let cancelled = false;
     (async () => {
       try {
-        const res = isCustomer
-          ? await customerApi.list({ limit: 1000, isActive: true })
-          : await supplierApi.list({ limit: 1000, isActive: true });
+        const partners = await fetchAllListItems((p) =>
+          isCustomer
+            ? customerApi.list({ ...p, isActive: true })
+            : supplierApi.list({ ...p, isActive: true }),
+        );
         if (cancelled) return;
         setPartnerOptions(
-          unwrapSupplyPagedList(res).map((p: any) => ({
+          partners.map((p) => ({
             label: `${p.code} - ${p.name}`,
             value: p.id,
           })),
@@ -990,16 +994,27 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
             label={isCustomer ? t('app.master-data.codeMapping.customerLabel', '客户') : t('app.master-data.codeMapping.supplierLabel', '供应商')}
             rules={[{ required: true, message: t('common.required') }]}
           >
-            <UniDropdown
-              placeholder={isCustomer ? t('app.master-data.codeMapping.selectCustomer') : t('app.master-data.codeMapping.selectSupplier')}
-              showSearch
-              optionFilterProp="label"
-              options={partnerOptions}
-              onChange={(v) => {
-                const materialId = form.getFieldValue('materialId');
-                refreshAliasPreview(v as number, materialId);
-              }}
-            />
+            {isCustomer ? (
+              <CustomerSelectDropdown
+                hostResource={pagePermissionResource}
+                snapshotNameField={false}
+                placeholder={t('app.master-data.codeMapping.selectCustomer')}
+                onChange={(v) => {
+                  const materialId = form.getFieldValue('materialId');
+                  refreshAliasPreview(v as number | undefined, materialId);
+                }}
+              />
+            ) : (
+              <SupplierSelectDropdown
+                hostResource={pagePermissionResource}
+                snapshotNameField={false}
+                placeholder={t('app.master-data.codeMapping.selectSupplier')}
+                onChange={(v) => {
+                  const materialId = form.getFieldValue('materialId');
+                  refreshAliasPreview(v as number | undefined, materialId);
+                }}
+              />
+            )}
           </Form.Item>
           <Row gutter={16}>
             <Col xs={24} sm={aliasLocked ? 24 : 8}>

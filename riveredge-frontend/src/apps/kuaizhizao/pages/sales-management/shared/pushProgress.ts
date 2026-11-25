@@ -115,12 +115,27 @@ export function collectComputationPushDocuments(
 export function collectSalesOrderPushDocuments(
   row: {
     pushed_work_order_codes?: Array<string | null | undefined> | null;
+    pushed_purchase_codes?: Array<string | null | undefined> | null;
+    procurement_fulfillment_mode?: string | null;
     computation_code?: string | null;
     pushed_to_computation?: boolean | null;
   },
-  labels: { workOrder: string; demandComputation: string },
+  labels: {
+    workOrder: string;
+    demandComputation: string;
+    purchaseRequisition: string;
+    purchaseOrder: string;
+  },
 ): PushProgressDocument[] {
   const docs: PushProgressDocument[] = [];
+  const mode = String(row.procurement_fulfillment_mode ?? '').trim();
+  if (mode === 'purchase_order') {
+    appendPushDocs(docs, labels.purchaseOrder, row.pushed_purchase_codes);
+  } else if (mode === 'purchase_requisition') {
+    appendPushDocs(docs, labels.purchaseRequisition, row.pushed_purchase_codes);
+  } else if (Array.isArray(row.pushed_purchase_codes) && row.pushed_purchase_codes.length > 0) {
+    appendPushDocs(docs, labels.purchaseRequisition, row.pushed_purchase_codes);
+  }
   appendPushDocs(docs, labels.workOrder, row.pushed_work_order_codes);
   if (row.pushed_to_computation) {
     appendPushDoc(docs, labels.demandComputation, row.computation_code);

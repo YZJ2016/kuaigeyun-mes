@@ -39,6 +39,8 @@ import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { useLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  DOCUMENT_LINE_MATERIALS_KEY,
   type DocumentLineMaterialPreviewItem,
   renderDocumentLineMaterialsPreview,
 } from '../../../../../components/document-line-materials-preview';
@@ -193,6 +195,7 @@ const PAYMENT_APPLICATION_DETAIL_LINE_WIDTH = {
   sourceCode: 200,
   lineMaterials: 280,
   quantity: 120,
+  taxRate: 72,
   payableCode: 188,
   requestAmount: 128,
   paidAmount: 128,
@@ -302,6 +305,7 @@ async function buildPaymentApplicationEditFormItems(
     quantity: line.quantity,
     materialUnit: line.materialUnit,
     sourceLineId: line.sourceLineId,
+    taxRate: line.taxRate != null && Number(line.taxRate) >= 0 ? Number(line.taxRate) : undefined,
   }));
   if (kind !== 'prepayment') {
     return baseRows;
@@ -1121,6 +1125,46 @@ const PaymentApplicationsPage: React.FC = () => {
             render: (_, r) => (r.applicationDate ? formatDateBySiteSetting(r.applicationDate) : '—'),
           },
           {
+            title: t('app.kuaizhizao.paymentApplication.paymentReason'),
+            key: 'payment_reason',
+            dataIndex: 'paymentReason',
+            width: 200,
+            minWidth: 160,
+            uniTableKeepWidth: true,
+            ellipsis: true,
+            hideInSearch: true,
+            render: (_, r) => r.paymentReason?.trim() || '—',
+          },
+          {
+            title: t('app.kuaizhizao.paymentApplication.paymentReason'),
+            dataIndex: 'paymentReason',
+            hideInTable: true,
+            order: 13,
+            fieldProps: { allowClear: true },
+          },
+          {
+            title: t('app.kuaizhizao.common.colLineMaterials'),
+            key: DOCUMENT_LINE_MATERIALS_KEY,
+            dataIndex: 'items',
+            ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+            hideInSearch: true,
+            render: (_, r) =>
+              renderDocumentLineMaterialsPreview(
+                (r.items ?? []).map((line) => {
+                  const materialName =
+                    String(line.materialName ?? '').trim()
+                    || String(line.sourceCode ?? '').trim()
+                    || String(line.payableCode ?? '').trim();
+                  if (!materialName) return null;
+                  return {
+                    material_name: materialName,
+                    material_spec: line.materialSpec?.trim() || undefined,
+                  };
+                }).filter((row): row is DocumentLineMaterialPreviewItem => row != null),
+                t,
+              ),
+          },
+          {
             title: t('app.kuaizhizao.paymentApplication.notes'),
             dataIndex: 'notes',
             minWidth: 160,
@@ -1252,6 +1296,10 @@ const PaymentApplicationsPage: React.FC = () => {
         quantity: row.quantity != null && row.quantity !== '' ? Number(row.quantity) : undefined,
         materialUnit: (row.materialUnit as string | undefined) || undefined,
         sourceLineId: row.sourceLineId != null ? Number(row.sourceLineId) : undefined,
+        taxRate:
+          row.taxRate != null && row.taxRate !== '' && Number.isFinite(Number(row.taxRate))
+            ? Number(row.taxRate)
+            : undefined,
         lineNo: index + 1,
       };
     });
@@ -1393,6 +1441,8 @@ const PaymentApplicationsPage: React.FC = () => {
         materialSpec: line.materialSpec,
         quantity: line.quantity,
         materialUnit: line.materialUnit,
+        taxRate:
+          line.taxRate != null && Number(line.taxRate) >= 0 ? Number(line.taxRate) : undefined,
       }));
       pendingEditValuesRef.current = {
         supplierId: full.supplierId,
@@ -1660,7 +1710,7 @@ const PaymentApplicationsPage: React.FC = () => {
             <ProFormSwitch
               name="requirePaymentVoucher"
               label={t('app.kuaizhizao.paymentApplication.requirePaymentVoucher')}
-              extra={t('app.kuaizhizao.paymentApplication.requirePaymentVoucherHint')}
+              tooltip={t('app.kuaizhizao.paymentApplication.requirePaymentVoucherHint')}
             />
           </Col>
           <ProFormDependency name={['paymentMethod']}>
@@ -1680,17 +1730,19 @@ const PaymentApplicationsPage: React.FC = () => {
           </ProFormDependency>
         </Row>
           </div>
-        </div>
-        <Row gutter={16}>
-          <Col span={24}>
-            <ProFormTextArea
-              name="paymentReason"
-              label={t('app.kuaizhizao.paymentApplication.paymentReason')}
-              rules={[{ required: true, whitespace: true, message: t('common.required') }]}
-              fieldProps={{ rows: 2 }}
-            />
-          </Col>
-        </Row>
+          <div className="document-form-untitled-group">
+            <Row gutter={16}>
+              <Col span={24}>
+                <ProFormTextArea
+                  name="paymentReason"
+                  label={t('app.kuaizhizao.paymentApplication.paymentReason')}
+                  rules={[{ required: true, whitespace: true, message: t('common.required') }]}
+                  fieldProps={{ rows: 2 }}
+                />
+              </Col>
+            </Row>
+          </div>
+          <div className="document-form-untitled-group">
         <PaymentApplicationFormPayableMaterialPreviewsProvider>
         <UniTableDetail
           name="items"
@@ -1776,6 +1828,26 @@ const PaymentApplicationsPage: React.FC = () => {
                     return `${qty}${unitText}`;
                   }}
                 </Form.Item>
+              ),
+            },
+            {
+              title: t('app.kuaizhizao.purchaseOrder.col.taxRate'),
+              dataIndex: 'taxRate',
+              width: 72,
+              align: 'right' as const,
+              render: (_: unknown, field: FormListFieldData) => (
+                <>
+                  <Form.Item name={[field.name, 'taxRate']} hidden>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item shouldUpdate style={{ margin: 0 }}>
+                    {() => {
+                      const raw = formRef.current?.getFieldValue(['items', field.name, 'taxRate']);
+                      const num = Number(raw);
+                      return Number.isFinite(num) && num >= 0 ? `${num}%` : '—';
+                    }}
+                  </Form.Item>
+                </>
               ),
             },
             {
@@ -1868,6 +1940,8 @@ const PaymentApplicationsPage: React.FC = () => {
           ]}
         />
         </PaymentApplicationFormPayableMaterialPreviewsProvider>
+          </div>
+        </div>
         <PaymentApplicationSupplierPayeeSection />
         <Row gutter={16}>
           <Col span={24}>
@@ -1908,10 +1982,11 @@ const PaymentApplicationsPage: React.FC = () => {
           actionRef={actionRef}
           permissionResource={RESOURCE}
           pinnedTabsField={[...PAYMENT_APPLICATION_PINNED_TABS_FIELDS]}
-          columnPersistenceId="apps.kuaizhizao.pages.purchase-management.payment-applications-width-v9"
+          columnPersistenceId="apps.kuaizhizao.pages.purchase-management.payment-applications-width-v10"
           headerTitle={t('app.kuaizhizao.menu.purchase-management.payment-applications')}
           rowKey="id"
           columns={columns}
+          showAdvancedSearch
           showCreateButton={false}
           toolBarRender={() => [
             ...(perms.canCreate ? [
@@ -2375,6 +2450,14 @@ const PaymentApplicationsPage: React.FC = () => {
                       const unit = row.materialUnit ? ` ${row.materialUnit}` : '';
                       return `${row.quantity}${unit}`;
                     },
+                  },
+                  {
+                    title: t('app.kuaizhizao.purchaseOrder.col.taxRate'),
+                    key: 'taxRate',
+                    width: PAYMENT_APPLICATION_DETAIL_LINE_WIDTH.taxRate,
+                    align: 'right' as const,
+                    render: (_, row) =>
+                      row.taxRate != null && Number(row.taxRate) > 0 ? `${Number(row.taxRate)}%` : '—',
                   },
                   {
                     title: t('app.kuaizhizao.paymentApplication.payableCode'),

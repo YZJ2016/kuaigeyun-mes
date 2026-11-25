@@ -81,6 +81,7 @@ import { buildDocumentAuditColumns } from '../../../../kuaizhizao/pages/shared/d
 import {
   FINANCE_DOC_PINNED_STATUS_FIELD,
   financeDocCodePartnerSearchColumns,
+  resolveMiscVoucherListKeywordParams,
 } from '../../../utils/financeListCore';
 import {
   loadCustomerFormReferenceList,
@@ -804,6 +805,17 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
             partnerIdField: 'counterparty_id',
             partnerNameField: 'counterparty_name',
           }),
+          ...(isOtherExpenseDoc
+            ? [
+                {
+                  title: t(`${i18nPrefix}.col.lineKeyword`),
+                  dataIndex: 'lineKeyword',
+                  hideInTable: true,
+                  order: 13,
+                  fieldProps: { allowClear: true },
+                },
+              ]
+            : []),
           {
             title: t(`${i18nPrefix}.col.code`),
             key: 'finance_doc_partner_stacked',
@@ -1032,6 +1044,7 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
           columns={columns}
           pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}
           showAdvancedSearch
+          skipFuzzyPinyinClientFilter={isOtherExpenseDoc}
           showCreateButton={Boolean(perms.canCreate)}
           createButtonText={createButtonText}
           onCreate={openCreate}
@@ -1058,10 +1071,15 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
             tableRowsRef.current = rows;
           }}
           request={async (params, _sort, _filter, searchFormValues) => {
+            const keywordParams = resolveMiscVoucherListKeywordParams(searchFormValues, {
+              codeField,
+              partnerNameField: 'counterparty_name',
+              lineSearchField: 'lineKeyword',
+            });
             const res = await service.list({
               skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
               limit: params.pageSize ?? 20,
-              keyword: pickSearchString(searchFormValues, codeField) ?? params.keyword,
+              ...keywordParams,
               status: pickSearchString(searchFormValues, 'status') ?? params.status,
             });
             return { data: res.items, success: true, total: res.total };

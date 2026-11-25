@@ -2173,6 +2173,7 @@ export const SalesDeliveryCreateModal: React.FC = () => {
               options={partnerPaymentMethodSelectOptions(t)}
               methodLabel={t('app.kuaizhizao.salesOrder.paymentMethod')}
               methodPlaceholder={t('app.kuaizhizao.salesOrder.selectPaymentMethod')}
+              enableEmployeeAdvance={false}
             />
           </Col>
         </Row>

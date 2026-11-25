@@ -638,14 +638,16 @@ const SalesOrderChangesPage: React.FC = () => {
 
   const runSubmitWithPreview = async (id: number) => {
     setPendingSubmitId(id);
+    setImpactData(null);
     setImpactLoading(true);
     setImpactOpen(true);
     try {
       const impact = await previewSalesOrderChangeImpact(id);
       setImpactData(impact);
-    } catch (e: any) {
-      message.error(e?.message ?? t('app.kuaizhizao.salesOrderChange.impactPreviewFailed'));
+    } catch (e: unknown) {
+      message.error(getApiErrorMessage(e, t('app.kuaizhizao.salesOrderChange.impactPreviewFailed')));
       setImpactOpen(false);
+      setPendingSubmitId(null);
     } finally {
       setImpactLoading(false);
     }

@@ -243,8 +243,15 @@ def _normalize_material_units_json(units: Any) -> Any:
         )
         cleaned["conversionType"] = conv
         if conv == CONVERSION_TYPE_FLOATING:
-            cleaned.pop("numerator", None)
-            cleaned.pop("denominator", None)
+            for key in (
+                "numerator",
+                "denominator",
+                "numeratorInput",
+                "denominatorInput",
+                "numerator_input",
+                "denominator_input",
+            ):
+                cleaned.pop(key, None)
         else:
             try:
                 num = int(cleaned.get("numerator", 1) or 1)

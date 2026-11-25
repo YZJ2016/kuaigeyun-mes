@@ -100,10 +100,14 @@ export interface MaterialUnit {
   unit: string;
   /** 换算类型；缺省 fixed */
   conversionType?: MaterialUnitConversionType;
-  /** 固定换算：分子（1 副单位 = numerator/denominator 主单位） */
+  /** 固定换算：分子（1 副单位 = numerator/denominator 主单位），存库为约分后的正整数 */
   numerator?: number;
-  /** 固定换算：分母 */
+  /** 固定换算：分母（存库为约分后的正整数） */
   denominator?: number;
+  /** 界面回显：用户录入的分子（可与 numerator 不同，如 1 对应 2/19） */
+  numeratorInput?: number;
+  /** 界面回显：用户录入的分母（如 9.5） */
+  denominatorInput?: number;
   /** 使用场景（purchase/sale/production/inventory） */
   scenarios?: string[];
 }

@@ -1059,6 +1059,11 @@ class SalesOrderService:
         pushed_work_order_quantity: Optional[Decimal] = None,
         remaining_push_quantity: Optional[Decimal] = None,
         work_order_push_progress: Optional[float] = None,
+        purchase_push_progress: Optional[float] = None,
+        fulfillment_push_progress: Optional[float] = None,
+        procurement_fulfillment_mode: Optional[str] = None,
+        pushed_purchase_quantity: Optional[Decimal] = None,
+        pushed_purchase_codes: Optional[List[str]] = None,
         pushed_work_order_codes: Optional[List[str]] = None,
         audit_enabled: bool = False,
         lifecycle_items: Optional[List[Any]] = None,
@@ -1165,6 +1170,15 @@ class SalesOrderService:
             base["remaining_push_quantity"] = remaining_push_quantity
         if work_order_push_progress is not None:
             base["work_order_push_progress"] = round(float(work_order_push_progress), 1)
+        if purchase_push_progress is not None:
+            base["purchase_push_progress"] = round(float(purchase_push_progress), 1)
+        if fulfillment_push_progress is not None:
+            base["fulfillment_push_progress"] = round(float(fulfillment_push_progress), 1)
+        if procurement_fulfillment_mode is not None:
+            base["procurement_fulfillment_mode"] = procurement_fulfillment_mode
+        if pushed_purchase_quantity is not None:
+            base["pushed_purchase_quantity"] = pushed_purchase_quantity
+        base["pushed_purchase_codes"] = list(pushed_purchase_codes or [])
         base["pushed_work_order_codes"] = list(pushed_work_order_codes or [])
         hint = shippable_hint or {}
         base["has_shippable_products"] = bool(hint.get("has_shippable_products"))
@@ -1318,6 +1332,7 @@ class SalesOrderService:
         require_purchase_requisition: bool = False,
         require_shipment_notice_before_delivery: bool = False,
         has_prepayment_receipt: bool = False,
+        procurement_fulfillment_mode: Optional[str] = None,
     ) -> dict[str, bool]:
         item_list = items or []
         has_items = len(item_list) > 0
@@ -1355,6 +1370,7 @@ class SalesOrderService:
             "require_purchase_requisition": require_purchase_requisition,
             "require_shipment_notice_before_delivery": require_shipment_notice_before_delivery,
             "has_prepayment_receipt": has_prepayment_receipt,
+            "procurement_fulfillment_mode": procurement_fulfillment_mode,
         }
 
     async def _assert_sales_order_capability_for_order(
@@ -1417,6 +1433,11 @@ class SalesOrderService:
             source_type="sales_order",
             target_type="receipt",
         )
+        from apps.kuaizhizao.services.sales_order_procurement_mode import (
+            resolve_procurement_fulfillment_mode,
+        )
+
+        procurement_mode = await resolve_procurement_fulfillment_mode(tenant_id, order)
         ctx = self._sales_order_capability_context(
             order, items, demand, pushable_by_item=pushable_by_item,
             has_existing_delivery_project=has_existing_delivery_project,
@@ -1432,6 +1453,7 @@ class SalesOrderService:
                 tenant_id
             ),
             has_prepayment_receipt=prepay_map.get(int(order.id), False),
+            procurement_fulfillment_mode=procurement_mode,
         )
         require_audit_before_print = (
             await self.business_config_service.get_sales_require_audit_before_print(tenant_id)
@@ -3181,11 +3203,22 @@ class SalesOrderService:
                 eligible_ship_check_ids.append(order.id)
 
         all_list_items = [it for items in items_by_order.values() for it in items]
-        shippable_map, pushable_by_order, purchasable_by_order, production_fulfillable_by_order = await asyncio.gather(
+        from apps.kuaizhizao.services.sales_order_purchase_push import (
+            batch_sales_order_fulfillment_push_summary,
+        )
+
+        (
+            shippable_map,
+            pushable_by_order,
+            purchasable_by_order,
+            production_fulfillable_by_order,
+            fulfillment_push_by_order,
+        ) = await asyncio.gather(
             self._batch_shippable_by_order(tenant_id, eligible_ship_check_ids),
             batch_pushable_qty_by_order_item(tenant_id, all_list_items),
             batch_has_purchasable_remaining(tenant_id, items_by_order),
             batch_has_production_fulfillable_remaining(tenant_id, items_by_order),
+            batch_sales_order_fulfillment_push_summary(tenant_id, orders, items_by_order),
         )
 
         # 6. 组装响应
@@ -3215,13 +3248,16 @@ class SalesOrderService:
             remaining_qty = total_qty - pushed_qty
             if remaining_qty < 0:
                 remaining_qty = Decimal("0")
+            oid = int(order.id)
             if total_qty > 0:
                 push_ratio = float((pushed_qty / total_qty) * Decimal("100"))
                 push_ratio = max(0.0, min(100.0, push_ratio))
             else:
                 push_ratio = 0.0
-
-            oid = int(order.id)
+            fulfillment = fulfillment_push_by_order.get(oid) or {}
+            wo_progress = float(
+                fulfillment.get("work_order_push_progress_refined") or push_ratio
+            )
             row_review_submitted = review_submitted_by_id.get(oid)
             sales_orders.append(
                 enrich_sales_order_capabilities_on_response(
@@ -3236,7 +3272,14 @@ class SalesOrderService:
                         collection_progress=collection_progress_val,
                         pushed_work_order_quantity=pushed_qty,
                         remaining_push_quantity=remaining_qty,
-                        work_order_push_progress=push_ratio,
+                        work_order_push_progress=wo_progress,
+                        purchase_push_progress=float(fulfillment.get("purchase_push_progress") or 0),
+                        fulfillment_push_progress=float(
+                            fulfillment.get("fulfillment_push_progress") or wo_progress
+                        ),
+                        procurement_fulfillment_mode=fulfillment.get("procurement_fulfillment_mode"),
+                        pushed_purchase_quantity=fulfillment.get("pushed_purchase_quantity"),
+                        pushed_purchase_codes=fulfillment.get("pushed_purchase_codes"),
                         pushed_work_order_codes=pushed_codes,
                         material_code_fallback=material_code_fallback_all.get(order.id) if include_items else None,
                         material_fallback=material_fallback_all.get(order.id) if include_items else None,
@@ -3265,6 +3308,9 @@ class SalesOrderService:
                         > Decimal("0"),
                         has_purchasable_remaining=purchasable_by_order.get(
                             int(order.id), False
+                        ),
+                        procurement_fulfillment_mode=fulfillment.get(
+                            "procurement_fulfillment_mode"
                         ),
                         require_purchase_requisition=require_pr,
                         require_shipment_notice_before_delivery=require_sn_before_sd,
@@ -5164,6 +5210,7 @@ class SalesOrderService:
                 work_center_name=info.get("work_center_name"),
                 planned_start_date=planned_start_date,
                 planned_end_date=planned_end_date,
+                required_date=planned_end_date,
                 remarks=custom_remarks or default_remarks,
                 bom_id=bom_snap.get("bom_id"),
                 bom_version=bom_snap.get("bom_version"),

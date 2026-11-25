@@ -47,6 +47,12 @@ def _is_audited_status(status: Any) -> bool:
     return normalized in (DocumentStatus.AUDITED.value, DocumentStatus.CONFIRMED.value) or raw in LEGACY_AUDITED_VALUES
 
 
+def _purchase_order_has_department(order: Any) -> bool:
+    did = int(getattr(order, "department_id", None) or 0)
+    dname = str(getattr(order, "department_name", None) or "").strip()
+    return did > 0 and bool(dname)
+
+
 def _is_order_pushable_status(status: Any) -> bool:
     """与 ORDER_PUSHABLE_STATUSES 一致：已审核/已确认/执行中均可继续下推收货。"""
     raw = _norm(status)
@@ -152,6 +158,7 @@ def derive_purchase_order_capabilities(
     has_invoice: bool = False,
     has_receipt_notice: bool = False,
     has_downstream: bool = False,
+    has_revoke_blocking_downstream: Optional[bool] = None,
     has_pending_change: bool = False,
     has_returnable: bool = False,
     has_prepayment_payment: bool = False,
@@ -281,6 +288,8 @@ def derive_purchase_order_capabilities(
     if _is_audited_status(status):
         if prepay_app_remaining <= 0:
             push_app_reason = "purchase_order.push_payment_application.no_amount"
+        elif not _purchase_order_has_department(order):
+            push_app_reason = "purchase_order.push_payment_application.no_department"
         else:
             push_app_allowed = True
             push_app_reason = None
@@ -327,10 +336,15 @@ def derive_purchase_order_capabilities(
         create_change_reason = None
     create_change_cap = _cap(create_change_allowed, create_change_reason)
 
+    revoke_block_downstream = (
+        has_revoke_blocking_downstream
+        if has_revoke_blocking_downstream is not None
+        else has_downstream
+    )
     revoke_allowed = False
     revoke_reason = "purchase_order.revoke_approval.not_allowed"
     if _is_audited_status(status) or _is_rejected_status(status):
-        if has_downstream:
+        if revoke_block_downstream:
             revoke_reason = "purchase_order.revoke_approval.has_downstream"
         else:
             revoke_allowed = True
@@ -370,6 +384,7 @@ def assert_purchase_order_capability(
     has_invoice: bool = False,
     has_receipt_notice: bool = False,
     has_downstream: bool = False,
+    has_revoke_blocking_downstream: Optional[bool] = None,
     has_pending_change: bool = False,
     has_returnable: bool = False,
     has_prepayment_payment: bool = False,
@@ -389,6 +404,7 @@ def assert_purchase_order_capability(
         has_invoice=has_invoice,
         has_receipt_notice=has_receipt_notice,
         has_downstream=has_downstream,
+        has_revoke_blocking_downstream=has_revoke_blocking_downstream,
         has_pending_change=has_pending_change,
         has_returnable=has_returnable,
         has_prepayment_payment=has_prepayment_payment,

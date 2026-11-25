@@ -46,8 +46,8 @@ export function buildSupplierContactPickOptions(supplier: SupplierLike): Supplie
     if (seen.has(key)) return;
     seen.add(key);
     const phoneText = phone?.trim();
-    const label = phoneText ? `${contact} ${phoneText}` : contact;
-    out.push({ value: contact, label, phone: phoneText });
+    /** 下拉与选中态仅展示姓名；电话由独立的「联系电话」字段展示 */
+    out.push({ value: contact, label: contact, phone: phoneText });
   };
 
   for (const row of normalizeContactRows(supplier)) {

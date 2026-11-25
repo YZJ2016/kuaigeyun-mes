@@ -631,7 +631,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
     selectedRequisitionsForBatch,
     t,
   ]);
-  const leavePurchaseRequisitionFormPage = useLeaveFormTab(PURCHASE_REQUISITION_LIST_PATH);
 
   const {
     runAfterPersist: runPurchaseRequisitionSaveAndAudit,
@@ -1501,7 +1500,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         render: (v: number | undefined) => formatQuantity(Number(v ?? 0)),
       },
       {
-        title: t('app.kuaizhizao.workOrder.pull.colPushedPurchaseQty'),
+        title: t('app.kuaizhizao.pullOpenLine.colPushedPurchaseRequisitionQty'),
         dataIndex: 'pushed_purchase_quantity',
         width: 100,
         align: 'right' as const,
@@ -1509,7 +1508,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
           formatQuantity(Number(v ?? record.pushed_quantity ?? 0)),
       },
       {
-        title: t('app.kuaizhizao.salesOrder.colShippableQty'),
+        title: t('app.kuaizhizao.pullOpenLine.colTransferableQty'),
         dataIndex: 'remaining_quantity',
         width: 100,
         align: 'right' as const,
@@ -3800,7 +3799,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         scopeOptions={pullFromSalesOrderQuery.scopeOptions}
         scope={pullFromSalesOrderQuery.scope}
         onScopeChange={pullFromSalesOrderQuery.handleScopeChange}
-        okText={t('app.kuaizhizao.purchaseOrder.pull.ok')}
+        okText={t('app.kuaizhizao.purchaseRequisition.pull.ok')}
       />
 
       <Modal

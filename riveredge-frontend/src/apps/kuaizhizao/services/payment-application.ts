@@ -39,6 +39,7 @@ export interface PaymentApplicationLine {
   quantity?: number;
   materialUnit?: string;
   sourceLineId?: number;
+  taxRate?: number;
   notes?: string;
 }
 
@@ -71,6 +72,7 @@ export interface PaymentApplication {
   advancePayeeId?: number;
   advancePayeeName?: string;
   invoiceStatus?: string;
+  taxRate?: number;
   paymentTerms?: string;
   notes?: string;
   /** 勾选后，由该申请下推/取单生成的付款单必须上传付款凭证 */

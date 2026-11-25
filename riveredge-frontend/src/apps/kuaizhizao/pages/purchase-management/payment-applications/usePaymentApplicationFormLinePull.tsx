@@ -180,6 +180,9 @@ export function usePaymentApplicationFormLinePull({ formRef, getApplicationKind 
           limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
           keyword: keyword.trim() || undefined,
           supplier_id: supplierId,
+          view: 'options',
+          pull_target: 'payment_application',
+          ...(scope === 'pullable' ? { pullable_only: true } : {}),
         });
         const items = res.data ?? [];
         const rows = items
@@ -201,10 +204,8 @@ export function usePaymentApplicationFormLinePull({ formRef, getApplicationKind 
           .map((r) => Number(r.sourceId))
           .filter((id) => id > 0),
       );
-      const { newLines, skipped } = await collectPaymentApplicationItemsFromPurchaseOrderRows(
-        rows,
-        usedPoIds,
-      );
+      const { newLines, skipped, headerFromPo } =
+        await collectPaymentApplicationItemsFromPurchaseOrderRows(rows, usedPoIds);
       if (!newLines.length) {
         messageApi.warning(
           skipped > 0
@@ -214,6 +215,25 @@ export function usePaymentApplicationFormLinePull({ formRef, getApplicationKind 
         return;
       }
       mergeItems(newLines);
+      if (headerFromPo) {
+        const patch: Record<string, unknown> = {};
+        const form = formRef.current;
+        if (
+          headerFromPo.invoiceStatus &&
+          !String(form?.getFieldValue('invoiceStatus') ?? '').trim()
+        ) {
+          patch.invoiceStatus = headerFromPo.invoiceStatus;
+        }
+        if (
+          headerFromPo.paymentMethod &&
+          !String(form?.getFieldValue('paymentMethod') ?? '').trim()
+        ) {
+          patch.paymentMethod = headerFromPo.paymentMethod;
+        }
+        if (Object.keys(patch).length > 0) {
+          form?.setFieldsValue(patch);
+        }
+      }
       closePoRef.current?.();
       if (skipped > 0) {
         messageApi.warning(t('app.kuaizhizao.paymentApplication.formPullPoPartialSkip', { count: skipped }));

@@ -41,6 +41,7 @@ const PAYMENT_METHOD_KEYS: Record<string, string> = {
   bank_acceptance: 'field.partner.settlementMethod.bankAcceptance',
   bank_transfer_and_acceptance: 'field.partner.settlementMethod.bankTransferAndAcceptance',
   commercial_acceptance: 'field.partner.settlementMethod.commercialAcceptance',
+  employee_advance: 'field.partner.settlementMethod.employeeAdvance',
   other: 'field.partner.settlementMethod.other',
 };
 

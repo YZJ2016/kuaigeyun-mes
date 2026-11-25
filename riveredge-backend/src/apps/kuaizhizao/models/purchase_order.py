@@ -93,6 +93,10 @@ class PurchaseOrder(BaseModel):
     payment_method_code = fields.CharField(
         max_length=50, null=True, description="付款方式（现金/转账/承兑等）"
     )
+    advance_payee_id = fields.IntField(null=True, description="员工垫付领款人ID")
+    advance_payee_name = fields.CharField(
+        max_length=100, null=True, description="员工垫付领款人姓名"
+    )
     payment_wire_percent = fields.DecimalField(
         max_digits=5, decimal_places=2, null=True, description="电汇比例（%，组合付款）"
     )

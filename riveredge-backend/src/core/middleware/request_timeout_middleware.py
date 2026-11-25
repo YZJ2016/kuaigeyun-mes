@@ -45,8 +45,13 @@ _EXCLUDED_PREFIXES: tuple[str, ...] = (
 
 # 主数据 / 业务「从源同步」整批拉取，前端客户端超时约 600s；进程内须放宽，
 # 否则计量单位等前置同步常在默认 25s 被掐成 504（物料同步弹「处理超过时限」）。
+# storage-migrate：NAS WebDAV 单批上传+探针慢，网关/前端已放宽到约 180–300s，
+# 若不进长请求仍会被本中间件默认 25s 掐断。
 _LONG_REQUEST_PATH_SUFFIXES: tuple[str, ...] = (
     "/sync-from-source",
+    "/storage-migrate",
+    "/files/upload",
+    "/files/upload/multiple",
 )
 
 

@@ -419,13 +419,47 @@ export function resolvePaymentApplicationListParams(
 
   const docCode = pickSearchString(searchFormValues, 'applicationCode');
   const supplierName = pickSearchString(searchFormValues, 'supplierName');
+  const paymentReason =
+    pickSearchString(searchFormValues, 'paymentReason')
+    ?? pickSearchString(searchFormValues, 'payment_reason');
   if (docCode) {
     params.keyword = docCode;
   } else if (supplierName) {
     params.keyword = supplierName;
+  } else if (paymentReason) {
+    params.keyword = paymentReason;
   }
 
   return params;
+}
+
+/** 其他费用支出/申请：模糊词与高级搜索单号、往来、明细摘要合并为 keyword */
+export function resolveMiscVoucherListKeywordParams(
+  searchFormValues: Record<string, unknown> | null | undefined,
+  options: {
+    codeField: string;
+    partnerNameField: string;
+    lineSearchField?: string;
+  },
+): { keyword?: string } {
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
+  if (fuzzyKeyword) {
+    return { keyword: fuzzyKeyword };
+  }
+  const docCode = pickSearchString(searchFormValues, options.codeField);
+  const partnerName = pickSearchString(searchFormValues, options.partnerNameField);
+  const lineField = options.lineSearchField ?? 'lineKeyword';
+  const lineHint = pickSearchString(searchFormValues, lineField);
+  if (docCode) {
+    return { keyword: docCode };
+  }
+  if (partnerName) {
+    return { keyword: partnerName };
+  }
+  if (lineHint) {
+    return { keyword: lineHint };
+  }
+  return {};
 }
 
 export const FINANCE_INVOICE_PINNED_REVIEW_FIELD = 'review_status';

@@ -148,6 +148,7 @@ def derive_sales_order_capabilities(
     require_shipment_notice_before_delivery: bool = False,
     require_audit_before_print: bool = False,
     has_prepayment_receipt: bool = False,
+    procurement_fulfillment_mode: Optional[str] = None,
 ) -> SalesOrderCapabilities:
     status = getattr(order, "status", None)
     review_status = getattr(order, "review_status", None)
@@ -408,10 +409,24 @@ def derive_sales_order_capabilities(
     )
 
     # push_purchase_requisition / push_purchase_order — 明细含剩余可采购件（Buy）
+    from apps.kuaizhizao.services.sales_order_procurement_mode import (
+        PROCUREMENT_MODE_ORDER,
+        PROCUREMENT_MODE_REQUISITION,
+        normalize_procurement_fulfillment_mode,
+    )
+
+    resolved_mode = normalize_procurement_fulfillment_mode(procurement_fulfillment_mode)
+    if not resolved_mode:
+        resolved_mode = normalize_procurement_fulfillment_mode(
+            getattr(order, "procurement_fulfillment_mode", None)
+        )
+
     push_pr_allowed = False
     push_pr_reason = push_reason or "sales_order.push_purchase_requisition.not_allowed"
     if push_ok:
-        if not has_items:
+        if resolved_mode == PROCUREMENT_MODE_ORDER:
+            push_pr_reason = "sales_order.push_purchase_requisition.mode_locked_order"
+        elif not has_items:
             push_pr_reason = "sales_order.push.no_items"
         elif not has_purchasable_remaining:
             push_pr_reason = "sales_order.push_purchase_requisition.no_buy_items"
@@ -425,6 +440,8 @@ def derive_sales_order_capabilities(
     if push_ok:
         if require_purchase_requisition:
             push_po_reason = "sales_order.push_purchase_order.require_requisition"
+        elif resolved_mode == PROCUREMENT_MODE_REQUISITION:
+            push_po_reason = "sales_order.push_purchase_order.mode_locked_requisition"
         elif not has_items:
             push_po_reason = "sales_order.push.no_items"
         elif not has_purchasable_remaining:
@@ -509,6 +526,7 @@ def assert_sales_order_capability(
     require_audit_before_print: bool = False,
     has_prepayment_receipt: bool = False,
     review_submitted: Optional[bool] = None,
+    procurement_fulfillment_mode: Optional[str] = None,
 ) -> None:
     caps = derive_sales_order_capabilities(
         order,
@@ -528,6 +546,7 @@ def assert_sales_order_capability(
         require_shipment_notice_before_delivery=require_shipment_notice_before_delivery,
         require_audit_before_print=require_audit_before_print,
         has_prepayment_receipt=has_prepayment_receipt,
+        procurement_fulfillment_mode=procurement_fulfillment_mode,
     )
     cap_map = {
         "update": caps.update,

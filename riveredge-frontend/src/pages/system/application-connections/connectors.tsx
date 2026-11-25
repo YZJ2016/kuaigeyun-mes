@@ -1063,7 +1063,7 @@ export const APP_CONNECTOR_DEFINITIONS: AppConnectorDefinition[] = [
     category: 'storage',
     description: '群晖 / 威联通等 NAS WebDAV 协议',
     icon: <HddOutlined />,
-    defaultConfig: { base_url: '', username: '', password: '', root_path: '/' },
+    defaultConfig: { base_url: '', username: '', password: '', root_path: '/', verify_ssl: false },
   },
   {
     id: 'nas_smb',

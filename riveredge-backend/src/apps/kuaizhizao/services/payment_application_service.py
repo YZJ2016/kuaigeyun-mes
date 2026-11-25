@@ -26,6 +26,10 @@ from apps.kuaizhizao.services.document_action_policy.payment_application import 
     derive_payment_application_capabilities,
 )
 from apps.kuaizhizao.services.payable_open_amount_service import PayableOpenAmountService
+from apps.kuaizhizao.services.payment_application_tax import (
+    payment_application_line_tax_percent,
+    sync_header_tax_rate_from_lines,
+)
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
@@ -285,6 +289,7 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
                 invoice_status=self._coerce_invoice_status(
                     data.invoice_status, allow_default=True
                 ),
+                tax_rate=sync_header_tax_rate_from_lines(data.items),
                 payment_terms=data.payment_terms,
                 notes=data.notes,
                 require_payment_voucher=bool(data.require_payment_voucher),
@@ -314,6 +319,7 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
                     request_amount=item.request_amount,
                     paid_amount=Decimal("0"),
                     max_request_amount=max_amt,
+                    tax_rate=payment_application_line_tax_percent(item.tax_rate),
                     notes=item.notes,
                 )
             app_id = app.id
@@ -388,8 +394,32 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
             query = query.filter(remaining_amount__gt=0)
         kw = str(keyword or "").strip()
         if kw:
-            query = query.filter(
-                Q(application_code__icontains=kw) | Q(supplier_name__icontains=kw)
+            from apps.kuaizhizao.models.payment_application import PaymentApplicationLine
+            from apps.kuaizhizao.utils.list_item_material_keyword import (
+                apply_query_header_or_line_icontains_keyword,
+            )
+
+            query = await apply_query_header_or_line_icontains_keyword(
+                query,
+                tenant_id=tenant_id,
+                kw=kw,
+                keyword_fields=(
+                    "application_code",
+                    "supplier_name",
+                    "payment_reason",
+                    "notes",
+                    "applicant_name",
+                    "department_name",
+                ),
+                item_model=PaymentApplicationLine,
+                item_header_fk_field="application_id",
+                line_fields=(
+                    "material_name",
+                    "material_spec",
+                    "source_code",
+                    "payable_code",
+                    "notes",
+                ),
             )
         sf = sort_field if sort_field in PAYMENT_APPLICATION_SORTABLE else "created_at"
         order = sf if (sort_order or "desc").lower() == "asc" else f"-{sf}"
@@ -470,10 +500,12 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
                         request_amount=item["request_amount"],
                         paid_amount=Decimal("0"),
                         max_request_amount=max_amt,
+                        tax_rate=payment_application_line_tax_percent(item.get("tax_rate")),
                         notes=item.get("notes"),
                     )
                 dump["total_request_amount"] = total
                 dump["remaining_amount"] = total - Decimal(str(app.paid_amount or 0))
+                dump["tax_rate"] = sync_header_tax_rate_from_lines(items)
         if "invoice_status" in dump:
             dump["invoice_status"] = self._coerce_invoice_status(
                 dump["invoice_status"], allow_default=False
