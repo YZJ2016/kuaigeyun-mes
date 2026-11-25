@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from decimal import Decimal
+from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
@@ -36,6 +37,27 @@ def decode_header_material_id(line_id: int) -> Tuple[int, int]:
     return hid, mid
 
 
+def _attach_pull_open_qty(
+    line: Dict[str, Any],
+    source: Any,
+    *,
+    suggested_primary: float,
+    pushed_primary: float,
+    remaining_primary: float,
+    occupied_aux_pushed: Any = 0,
+) -> Dict[str, Any]:
+    from apps.kuaizhizao.utils.pull_open_line_quantity import enrich_pull_line_from_source_item
+
+    return enrich_pull_line_from_source_item(
+        line,
+        source,
+        suggested_primary=suggested_primary,
+        pushed_primary=pushed_primary,
+        remaining_primary=remaining_primary,
+        occupied_aux_pushed=occupied_aux_pushed,
+    )
+
+
 def _match_material_keyword(keyword: Optional[str], *parts: Any) -> bool:
     kw = (keyword or "").strip().lower()
     if not kw:
@@ -44,8 +66,27 @@ def _match_material_keyword(keyword: Optional[str], *parts: Any) -> bool:
     return kw in haystack
 
 
-def _page(lines: List[Dict[str, Any]], skip: int, limit: int) -> Dict[str, Any]:
-    return {"data": lines[skip : skip + limit], "total": len(lines)}
+_FG_PULL_WO_STATUSES = frozenset(
+    {
+        "released",
+        "in_progress",
+        "completed",
+        "已下达",
+        "执行中",
+        "已完成",
+    }
+)
+
+
+async def _page(
+    tenant_id: int,
+    lines: List[Dict[str, Any]],
+    skip: int,
+    limit: int,
+) -> Dict[str, Any]:
+    from apps.kuaizhizao.utils.inventory_helper import paginate_pull_lines_with_stock
+
+    return await paginate_pull_lines_with_stock(tenant_id, lines, skip, limit)
 
 
 async def _resolve_material_warehouse(tenant_id: int, material_id: int, label: str) -> Tuple[int, str]:
@@ -74,23 +115,54 @@ class WarehouseWoOutsourcePullService:
         keyword: Optional[str] = None,
         work_order_id: Optional[int] = None,
         pullable_only: bool = True,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
     ) -> Dict[str, Any]:
         from apps.kuaizhizao.services.document_action_policy.work_order import (
             derive_work_order_capabilities,
         )
         from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
+        from apps.kuaizhizao.utils.pull_query_date_filter import apply_pull_query_document_date_filter
         from apps.master_data.models.material import Material
 
         query = WorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if work_order_id is not None:
             query = query.filter(id=int(work_order_id))
+        elif pullable_only:
+            query = query.filter(status__in=list(_FG_PULL_WO_STATUSES), is_frozen=False)
+        query = apply_pull_query_document_date_filter(
+            query,
+            field="planned_start_date",
+            kind="datetime",
+            date_from=date_from,
+            date_to=date_to,
+        )
         orders = await query.only(
-            "id", "code", "status", "is_frozen", "product_id", "product_code",
-            "product_name", "quantity",
+            "id",
+            "code",
+            "status",
+            "is_frozen",
+            "product_id",
+            "product_code",
+            "product_name",
+            "quantity",
+            "over_report_mode",
+            "over_report_value",
         )
         if not orders:
             return {"data": [], "total": 0}
         fg_svc = FinishedGoodsReceiptService()
+        quota_by_id = await fg_svc.batch_inbound_pull_quotas_for_work_orders(tenant_id, orders)
+        from apps.kuaizhizao.utils.finished_goods_inbound_pull_eligibility import (
+            batch_evaluate_fg_pull_readiness,
+        )
+        from infra.services.business_config_service import BusinessConfigService
+
+        readiness_by_id = await batch_evaluate_fg_pull_readiness(tenant_id, orders)
+
+        audit_required = await BusinessConfigService().check_audit_required(
+            tenant_id, "work_order"
+        )
         material_ids = [int(o.product_id) for o in orders if o.product_id]
         mats = await Material.filter(
             tenant_id=tenant_id, id__in=list(set(material_ids)), deleted_at__isnull=True
@@ -98,13 +170,15 @@ class WarehouseWoOutsourcePullService:
         mat_by_id = {int(m.id): m for m in mats}
         lines: List[Dict[str, Any]] = []
         for wo in orders:
-            caps = derive_work_order_capabilities(wo)
+            caps = derive_work_order_capabilities(wo, audit_required=audit_required)
             can_push = bool(caps.push_finished_goods_receipt.allowed)
-            quota = await fg_svc._get_work_order_inbound_quota(tenant_id, int(wo.id))
-            planned = float(wo.quantity or 0)
+            quota = quota_by_id.get(int(wo.id), {})
+            planned = float(quota.get("planned") or wo.quantity or 0)
             received = float(quota.get("received") or 0)
             remaining = float(quota.get("pending") or 0)
-            selectable = can_push and remaining > 0
+            readiness = readiness_by_id.get(int(wo.id))
+            readiness_ok = bool(readiness.eligible) if readiness else True
+            selectable = can_push and remaining > 0 and readiness_ok
             if pullable_only and not selectable:
                 continue
             material = mat_by_id.get(int(wo.product_id or 0))
@@ -115,25 +189,34 @@ class WarehouseWoOutsourcePullService:
             material_spec = str(
                 getattr(material, "specification", None) or getattr(wo, "product_spec", None) or ""
             ).strip()
-            if not _match_material_keyword(keyword, material_code, material_name, material_spec):
+            if not _match_material_keyword(
+                keyword, material_code, material_name, material_spec, wo.code, wo.product_code
+            ):
                 continue
+            line = {
+                "id": int(wo.id),
+                "work_order_id": int(wo.id),
+                "work_order_code": wo.code,
+                "material_id": wo.product_id,
+                "material_code": material_code,
+                "material_name": material_name,
+                "material_spec": material_spec or None,
+                "unit": (getattr(material, "base_unit", None) or "个") if material else "个",
+                "can_push": selectable,
+            }
+            if readiness and readiness.reason_code:
+                line["push_block_reason"] = readiness.reason_code
             lines.append(
-                {
-                    "id": int(wo.id),
-                    "work_order_id": int(wo.id),
-                    "work_order_code": wo.code,
-                    "material_id": wo.product_id,
-                    "material_code": material_code,
-                    "material_name": material_name,
-                    "material_spec": material_spec or None,
-                    "unit": (getattr(material, "base_unit", None) or "个") if material else "个",
-                    "suggested_quantity": planned,
-                    "pushed_quantity": received,
-                    "remaining_quantity": remaining,
-                }
+                _attach_pull_open_qty(
+                    line,
+                    wo,
+                    suggested_primary=planned,
+                    pushed_primary=received,
+                    remaining_primary=remaining,
+                )
             )
         lines.sort(key=lambda r: (str(r.get("work_order_code") or ""), int(r.get("id") or 0)))
-        return _page(lines, skip, limit)
+        return await _page(tenant_id, lines, skip, limit)
 
     async def create_finished_goods_from_work_orders(
         self,
@@ -156,8 +239,13 @@ class WarehouseWoOutsourcePullService:
             raise NotFoundError("工单不存在")
         fg_svc = FinishedGoodsReceiptService()
         created: List[Dict[str, Any]] = []
+        from apps.kuaizhizao.utils.finished_goods_inbound_pull_eligibility import (
+            assert_fg_inbound_pull_readiness,
+        )
+
         for wo in orders:
             assert_work_order_capability(wo, "push_finished_goods_receipt")
+            await assert_fg_inbound_pull_readiness(tenant_id, wo)
             if not wo.product_id:
                 raise ValidationError(f"工单 {wo.code} 未维护产品，无法入库")
             wh_id, wh_name = await _resolve_material_warehouse(
@@ -201,6 +289,8 @@ class WarehouseWoOutsourcePullService:
         keyword: Optional[str] = None,
         work_order_id: Optional[int] = None,
         pullable_only: bool = True,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
     ) -> Dict[str, Any]:
         from apps.kuaizhizao.services.document_action_policy.work_order import (
             derive_work_order_capabilities,
@@ -208,10 +298,18 @@ class WarehouseWoOutsourcePullService:
         from apps.kuaizhizao.services.warehouse_service import (
             PRODUCTION_RETURN_PICKING_ELIGIBLE_STATUSES,
         )
+        from apps.kuaizhizao.utils.pull_query_date_filter import apply_pull_query_document_date_filter
 
         wo_query = WorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if work_order_id is not None:
             wo_query = wo_query.filter(id=int(work_order_id))
+        wo_query = apply_pull_query_document_date_filter(
+            wo_query,
+            field="planned_start_date",
+            kind="datetime",
+            date_from=date_from,
+            date_to=date_to,
+        )
         orders = await wo_query.only("id", "code", "status", "is_frozen")
         order_by_id = {int(o.id): o for o in orders}
         if not order_by_id:
@@ -249,22 +347,26 @@ class WarehouseWoOutsourcePullService:
                 continue
             if not _match_material_keyword(keyword, item.material_code, item.material_name, item.material_spec):
                 continue
+            line = {
+                "id": int(item.id),
+                "work_order_id": int(wo.id),
+                "work_order_code": wo.code,
+                "picking_id": int(picking.id),
+                "picking_code": picking.picking_code,
+                "material_id": item.material_id,
+                "material_code": item.material_code,
+                "material_name": item.material_name,
+                "material_spec": item.material_spec,
+                "unit": item.material_unit or "个",
+            }
             lines.append(
-                {
-                    "id": int(item.id),
-                    "work_order_id": int(wo.id),
-                    "work_order_code": wo.code,
-                    "picking_id": int(picking.id),
-                    "picking_code": picking.picking_code,
-                    "material_id": item.material_id,
-                    "material_code": item.material_code,
-                    "material_name": item.material_name,
-                    "material_spec": item.material_spec,
-                    "unit": item.material_unit or "个",
-                    "suggested_quantity": picked,
-                    "pushed_quantity": used,
-                    "remaining_quantity": remaining,
-                }
+                _attach_pull_open_qty(
+                    line,
+                    item,
+                    suggested_primary=picked,
+                    pushed_primary=used,
+                    remaining_primary=remaining,
+                )
             )
         lines.sort(
             key=lambda r: (
@@ -273,7 +375,7 @@ class WarehouseWoOutsourcePullService:
                 int(r.get("id") or 0),
             )
         )
-        return _page(lines, skip, limit)
+        return await _page(tenant_id, lines, skip, limit)
 
     async def _occupied_return_qty_by_picking_item(
         self,
@@ -441,15 +543,25 @@ class WarehouseWoOutsourcePullService:
         keyword: Optional[str] = None,
         work_order_id: Optional[int] = None,
         pullable_only: bool = True,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
     ) -> Dict[str, Any]:
         from apps.kuaizhizao.services.document_action_policy.work_order import (
             derive_work_order_capabilities,
         )
         from apps.kuaizhizao.services.warehouse_service import ProductionPickingService
+        from apps.kuaizhizao.utils.pull_query_date_filter import apply_pull_query_document_date_filter
 
         query = WorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if work_order_id is not None:
             query = query.filter(id=int(work_order_id))
+        query = apply_pull_query_document_date_filter(
+            query,
+            field="planned_start_date",
+            kind="datetime",
+            date_from=date_from,
+            date_to=date_to,
+        )
         orders = await query.all()
         if not orders:
             return {"data": [], "total": 0}
@@ -478,21 +590,42 @@ class WarehouseWoOutsourcePullService:
                 material_id = int(row.get("item_id") or 0)
                 if material_id <= 0:
                     continue
-                lines.append(
-                    {
-                        "id": encode_header_material_id(int(wo.id), material_id),
-                        "work_order_id": int(wo.id),
-                        "work_order_code": wo.code,
-                        "material_id": material_id,
-                        "material_code": material_code,
-                        "material_name": material_name,
-                        "material_spec": None,
-                        "unit": str(row.get("material_unit") or "个"),
-                        "suggested_quantity": float(row.get("quantity") or 0),
-                        "pushed_quantity": float(row.get("pushed_quantity") or 0),
-                        "remaining_quantity": remaining,
-                    }
+                line = {
+                    "id": encode_header_material_id(int(wo.id), material_id),
+                    "work_order_id": int(wo.id),
+                    "work_order_code": wo.code,
+                    "material_id": material_id,
+                    "material_code": material_code,
+                    "material_name": material_name,
+                    "material_spec": row.get("material_spec"),
+                    "material_model": row.get("material_model"),
+                    "unit": str(row.get("material_unit") or "个"),
+                }
+                from types import SimpleNamespace
+
+                aux_source = SimpleNamespace(
+                    aux_unit=row.get("aux_unit"),
+                    aux_quantity=row.get("aux_quantity"),
+                    unit_conversion_rate=row.get("unit_conversion_rate"),
                 )
+                attached = _attach_pull_open_qty(
+                    line,
+                    aux_source,
+                    suggested_primary=float(row.get("quantity") or 0),
+                    pushed_primary=float(row.get("pushed_quantity") or 0),
+                    remaining_primary=remaining,
+                )
+                full_req = float(row.get("quantity") or 0)
+                full_aux = row.get("aux_quantity")
+                if (
+                    full_aux is not None
+                    and full_req > 0
+                    and remaining < full_req
+                    and attached.get("aux_unit")
+                ):
+                    scaled = float(full_aux) * remaining / full_req
+                    attached["remaining_aux_quantity"] = scaled
+                lines.append(attached)
         lines.sort(
             key=lambda r: (
                 str(r.get("work_order_code") or ""),
@@ -500,7 +633,7 @@ class WarehouseWoOutsourcePullService:
                 int(r.get("id") or 0),
             )
         )
-        return _page(lines, skip, limit)
+        return await _page(tenant_id, lines, skip, limit)
 
     async def create_production_pickings_from_lines(
         self,
@@ -583,16 +716,26 @@ class WarehouseWoOutsourcePullService:
         keyword: Optional[str] = None,
         outsource_work_order_id: Optional[int] = None,
         pullable_only: bool = True,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
     ) -> Dict[str, Any]:
         from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
         from apps.kuaizhizao.services.document_action_policy.outsource_work_order import (
             derive_outsource_work_order_capabilities,
         )
         from apps.kuaizhizao.services.outsource_material_issue_service import OutsourceMaterialIssueService
+        from apps.kuaizhizao.utils.pull_query_date_filter import apply_pull_query_document_date_filter
 
         query = OutsourceWorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if outsource_work_order_id is not None:
             query = query.filter(id=int(outsource_work_order_id))
+        query = apply_pull_query_document_date_filter(
+            query,
+            field="planned_start_date",
+            kind="datetime",
+            date_from=date_from,
+            date_to=date_to,
+        )
         orders = await query.all()
         if not orders:
             return {"data": [], "total": 0}
@@ -617,21 +760,25 @@ class WarehouseWoOutsourcePullService:
                 if not _match_material_keyword(keyword, row.material_code, row.material_name):
                     continue
                 material_id = int(row.material_id)
+                line = {
+                    "id": encode_header_material_id(int(owo.id), material_id),
+                    "outsource_work_order_id": int(owo.id),
+                    "outsource_work_order_code": owo.code,
+                    "supplier_name": owo.supplier_name,
+                    "material_id": material_id,
+                    "material_code": row.material_code,
+                    "material_name": row.material_name,
+                    "material_spec": None,
+                    "unit": row.unit or "个",
+                }
                 lines.append(
-                    {
-                        "id": encode_header_material_id(int(owo.id), material_id),
-                        "outsource_work_order_id": int(owo.id),
-                        "outsource_work_order_code": owo.code,
-                        "supplier_name": owo.supplier_name,
-                        "material_id": material_id,
-                        "material_code": row.material_code,
-                        "material_name": row.material_name,
-                        "material_spec": None,
-                        "unit": row.unit or "个",
-                        "suggested_quantity": float(row.required_quantity or 0),
-                        "pushed_quantity": float(row.issued_quantity or 0),
-                        "remaining_quantity": remaining,
-                    }
+                    _attach_pull_open_qty(
+                        line,
+                        row,
+                        suggested_primary=float(row.required_quantity or 0),
+                        pushed_primary=float(row.issued_quantity or 0),
+                        remaining_primary=remaining,
+                    )
                 )
         lines.sort(
             key=lambda r: (
@@ -640,7 +787,7 @@ class WarehouseWoOutsourcePullService:
                 int(r.get("id") or 0),
             )
         )
-        return _page(lines, skip, limit)
+        return await _page(tenant_id, lines, skip, limit)
 
     async def create_outsource_issues_from_lines(
         self,
@@ -734,6 +881,8 @@ class WarehouseWoOutsourcePullService:
         keyword: Optional[str] = None,
         outsource_work_order_id: Optional[int] = None,
         pullable_only: bool = True,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
     ) -> Dict[str, Any]:
         if pull_type == "outsource_receipt":
             return await self._list_outsource_receipt_lines(
@@ -743,6 +892,8 @@ class WarehouseWoOutsourcePullService:
                 keyword=keyword,
                 outsource_work_order_id=outsource_work_order_id,
                 pullable_only=pullable_only,
+                date_from=date_from,
+                date_to=date_to,
             )
         if pull_type == "outsource_material_return":
             return await self._list_outsource_material_return_lines(
@@ -752,6 +903,8 @@ class WarehouseWoOutsourcePullService:
                 keyword=keyword,
                 outsource_work_order_id=outsource_work_order_id,
                 pullable_only=pullable_only,
+                date_from=date_from,
+                date_to=date_to,
             )
         if pull_type == "outsource_product_return":
             return await self._list_outsource_product_return_lines(
@@ -761,6 +914,8 @@ class WarehouseWoOutsourcePullService:
                 keyword=keyword,
                 outsource_work_order_id=outsource_work_order_id,
                 pullable_only=pullable_only,
+                date_from=date_from,
+                date_to=date_to,
             )
         raise ValidationError("不支持的委外入库取单类型")
 
@@ -773,15 +928,25 @@ class WarehouseWoOutsourcePullService:
         keyword: Optional[str],
         outsource_work_order_id: Optional[int],
         pullable_only: bool,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
     ) -> Dict[str, Any]:
         from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
         from apps.kuaizhizao.services.document_action_policy.outsource_work_order import (
             derive_outsource_work_order_capabilities,
         )
+        from apps.kuaizhizao.utils.pull_query_date_filter import apply_pull_query_document_date_filter
 
         query = OutsourceWorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if outsource_work_order_id is not None:
             query = query.filter(id=int(outsource_work_order_id))
+        query = apply_pull_query_document_date_filter(
+            query,
+            field="planned_start_date",
+            kind="datetime",
+            date_from=date_from,
+            date_to=date_to,
+        )
         orders = await query.all()
         lines: List[Dict[str, Any]] = []
         for owo in orders:
@@ -794,25 +959,29 @@ class WarehouseWoOutsourcePullService:
                 continue
             if not _match_material_keyword(keyword, owo.product_code, owo.product_name):
                 continue
+            line = {
+                "id": int(owo.id),
+                "outsource_work_order_id": int(owo.id),
+                "outsource_work_order_code": owo.code,
+                "supplier_name": owo.supplier_name,
+                "material_id": owo.product_id,
+                "material_code": owo.product_code,
+                "material_name": owo.product_name,
+                "material_spec": None,
+                "unit": "件",
+                "pull_type": "outsource_receipt",
+            }
             lines.append(
-                {
-                    "id": int(owo.id),
-                    "outsource_work_order_id": int(owo.id),
-                    "outsource_work_order_code": owo.code,
-                    "supplier_name": owo.supplier_name,
-                    "material_id": owo.product_id,
-                    "material_code": owo.product_code,
-                    "material_name": owo.product_name,
-                    "material_spec": None,
-                    "unit": "件",
-                    "suggested_quantity": ordered,
-                    "pushed_quantity": received,
-                    "remaining_quantity": remaining,
-                    "pull_type": "outsource_receipt",
-                }
+                _attach_pull_open_qty(
+                    line,
+                    owo,
+                    suggested_primary=ordered,
+                    pushed_primary=received,
+                    remaining_primary=remaining,
+                )
             )
         lines.sort(key=lambda r: (str(r.get("outsource_work_order_code") or ""), int(r.get("id") or 0)))
-        return _page(lines, skip, limit)
+        return await _page(tenant_id, lines, skip, limit)
 
     async def _list_outsource_material_return_lines(
         self,
@@ -823,16 +992,26 @@ class WarehouseWoOutsourcePullService:
         keyword: Optional[str],
         outsource_work_order_id: Optional[int],
         pullable_only: bool,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
     ) -> Dict[str, Any]:
         from apps.kuaizhizao.models.outsource_work_order import OutsourceMaterialIssue, OutsourceWorkOrder
         from apps.kuaizhizao.services.document_action_policy.outsource_work_order import (
             derive_outsource_work_order_capabilities,
         )
         from apps.kuaizhizao.services.outsource_material_return_service import OutsourceMaterialReturnService
+        from apps.kuaizhizao.utils.pull_query_date_filter import apply_pull_query_document_date_filter
 
         query = OutsourceWorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if outsource_work_order_id is not None:
             query = query.filter(id=int(outsource_work_order_id))
+        query = apply_pull_query_document_date_filter(
+            query,
+            field="planned_start_date",
+            kind="datetime",
+            date_from=date_from,
+            date_to=date_to,
+        )
         orders = await query.all()
         order_by_id = {int(o.id): o for o in orders}
         if not order_by_id:
@@ -863,22 +1042,26 @@ class WarehouseWoOutsourcePullService:
                 continue
             if not _match_material_keyword(keyword, issue.material_code, issue.material_name):
                 continue
+            line = {
+                "id": int(issue.id),
+                "outsource_work_order_id": int(owo.id),
+                "outsource_work_order_code": owo.code,
+                "supplier_name": owo.supplier_name,
+                "material_id": issue.material_id,
+                "material_code": issue.material_code,
+                "material_name": issue.material_name,
+                "material_spec": None,
+                "unit": issue.unit or "个",
+                "pull_type": "outsource_material_return",
+            }
             lines.append(
-                {
-                    "id": int(issue.id),
-                    "outsource_work_order_id": int(owo.id),
-                    "outsource_work_order_code": owo.code,
-                    "supplier_name": owo.supplier_name,
-                    "material_id": issue.material_id,
-                    "material_code": issue.material_code,
-                    "material_name": issue.material_name,
-                    "material_spec": None,
-                    "unit": issue.unit or "个",
-                    "suggested_quantity": issued,
-                    "pushed_quantity": returned,
-                    "remaining_quantity": remaining,
-                    "pull_type": "outsource_material_return",
-                }
+                _attach_pull_open_qty(
+                    line,
+                    issue,
+                    suggested_primary=issued,
+                    pushed_primary=returned,
+                    remaining_primary=remaining,
+                )
             )
         lines.sort(
             key=lambda r: (
@@ -887,7 +1070,7 @@ class WarehouseWoOutsourcePullService:
                 int(r.get("id") or 0),
             )
         )
-        return _page(lines, skip, limit)
+        return await _page(tenant_id, lines, skip, limit)
 
     async def _list_outsource_product_return_lines(
         self,
@@ -898,16 +1081,26 @@ class WarehouseWoOutsourcePullService:
         keyword: Optional[str],
         outsource_work_order_id: Optional[int],
         pullable_only: bool,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
     ) -> Dict[str, Any]:
         from apps.kuaizhizao.models.outsource_work_order import OutsourceMaterialReceipt, OutsourceWorkOrder
         from apps.kuaizhizao.services.document_action_policy.outsource_work_order import (
             derive_outsource_work_order_capabilities,
         )
         from apps.kuaizhizao.services.outsource_product_return_service import OutsourceProductReturnService
+        from apps.kuaizhizao.utils.pull_query_date_filter import apply_pull_query_document_date_filter
 
         query = OutsourceWorkOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if outsource_work_order_id is not None:
             query = query.filter(id=int(outsource_work_order_id))
+        query = apply_pull_query_document_date_filter(
+            query,
+            field="planned_start_date",
+            kind="datetime",
+            date_from=date_from,
+            date_to=date_to,
+        )
         orders = await query.all()
         order_by_id = {int(o.id): o for o in orders}
         if not order_by_id:
@@ -938,22 +1131,26 @@ class WarehouseWoOutsourcePullService:
                 continue
             if not _match_material_keyword(keyword, owo.product_code, owo.product_name, receipt.code):
                 continue
+            line = {
+                "id": int(receipt.id),
+                "outsource_work_order_id": int(owo.id),
+                "outsource_work_order_code": owo.code,
+                "supplier_name": owo.supplier_name,
+                "material_id": owo.product_id,
+                "material_code": owo.product_code,
+                "material_name": owo.product_name,
+                "material_spec": None,
+                "unit": receipt.unit or "件",
+                "pull_type": "outsource_product_return",
+            }
             lines.append(
-                {
-                    "id": int(receipt.id),
-                    "outsource_work_order_id": int(owo.id),
-                    "outsource_work_order_code": owo.code,
-                    "supplier_name": owo.supplier_name,
-                    "material_id": owo.product_id,
-                    "material_code": owo.product_code,
-                    "material_name": owo.product_name,
-                    "material_spec": None,
-                    "unit": receipt.unit or "件",
-                    "suggested_quantity": received,
-                    "pushed_quantity": returned,
-                    "remaining_quantity": remaining,
-                    "pull_type": "outsource_product_return",
-                }
+                _attach_pull_open_qty(
+                    line,
+                    receipt,
+                    suggested_primary=received,
+                    pushed_primary=returned,
+                    remaining_primary=remaining,
+                )
             )
         lines.sort(
             key=lambda r: (
@@ -961,7 +1158,7 @@ class WarehouseWoOutsourcePullService:
                 int(r.get("id") or 0),
             )
         )
-        return _page(lines, skip, limit)
+        return await _page(tenant_id, lines, skip, limit)
 
     async def create_outsource_inbound_from_items(
         self,

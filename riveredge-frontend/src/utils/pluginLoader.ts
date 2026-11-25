@@ -75,18 +75,14 @@ function getPluginSourcePath(pluginCode: string): string {
 }
 
 /**
- * 开源主仓应用：静态 import，保证 Vite 打出独立 chunk。
- * 专业/定制应用：由 import.meta.glob 在构建时发现（需先 compose 进 src/apps）。
+ * 开源主仓「基础」应用：静态 import，保证 Vite 打出独立 chunk。
+ * 专业包（kuaioa/kuaipd/kuaicaiwu/kuaiplm 等）与定制应用：须 compose 进 src/apps，
+ * 由 import.meta.glob 在构建时发现；未 compose 时不应在此写死 import（否则 Vite 解析失败）。
  */
 const OPEN_SOURCE_APP_LOADERS: Record<string, () => Promise<unknown>> = {
   kuaizhizao: () => import('../apps/kuaizhizao/index'),
-  kuaioa: () => import('../apps/kuaioa/index'),
-  kuaiqms: () => import('../apps/kuaiqms/index'),
-  kuaiems: () => import('../apps/kuaiems/index'),
-  kuaipd: () => import('../apps/kuaipd/index'),
-  kuaicaiwu: () => import('../apps/kuaicaiwu/index'),
-  kuaiplm: () => import('../apps/kuaiplm/index'),
   'master-data': () => import('../apps/master-data/index'),
+  'menu-entry-shell': () => import('../apps/menu-entry-shell/index'),
 };
 
 const GLOB_APP_MODULES = import.meta.glob('../apps/*/index.{ts,tsx}');
@@ -106,11 +102,33 @@ function buildAppLoaders(): Record<string, () => Promise<unknown>> {
 
 const APP_LOADERS = buildAppLoaders();
 
+/** 从 manifest entry_point 解析实际前端入口应用 code（如 kuaiems → menu-entry-shell） */
+function resolveAppCodeFromEntryPoint(entryPoint: string): string | null {
+  const trimmed = entryPoint.trim();
+  const rel = trimmed.match(/(?:\.\.\/|\.\/)?apps\/([^/]+)\/index\.(?:tsx|ts|js)$/);
+  if (rel?.[1]) return rel[1];
+  const abs = trimmed.match(/\/apps\/([^/]+)\/index\.(?:tsx|ts|js)$/);
+  if (abs?.[1]) return abs[1];
+  return null;
+}
+
+function resolveAppLoader(
+  pluginCode: string,
+  entryPoint?: string | null,
+): (() => Promise<unknown>) | undefined {
+  const direct = APP_LOADERS[pluginCode];
+  if (direct) return direct;
+  if (!entryPoint) return undefined;
+  const entryAppCode = resolveAppCodeFromEntryPoint(entryPoint);
+  if (entryAppCode) return APP_LOADERS[entryAppCode];
+  return undefined;
+}
+
 /**
  * 预取插件 chunk（菜单 hover 时调用，缩短首次进入应用页时间）
  */
-export function prefetchPlugin(appCode: string): void {
-  const loader = APP_LOADERS[appCode];
+export function prefetchPlugin(appCode: string, entryPoint?: string | null): void {
+  const loader = resolveAppLoader(appCode, entryPoint);
   if (loader) {
     loader().catch(() => {});
   }
@@ -185,7 +203,7 @@ async function loadPluginInDevelopment(application: Application): Promise<Plugin
 
   // 优先走 import.meta.glob 静态映射（含 symlink 的 pro/custom 应用），
   // 避免 /* @vite-ignore */ 相对路径在依赖预构建失败时被误报为「文件不存在」。
-  const staticLoader = APP_LOADERS[pluginCode];
+  const staticLoader = resolveAppLoader(pluginCode, application.entry_point);
   if (staticLoader) {
     const pluginModule = await withRetry(
       async () => (await staticLoader()) as Record<string, unknown>,
@@ -250,8 +268,8 @@ async function loadPluginInProduction(application: Application): Promise<PluginR
     throw new Error(`插件 ${pluginCode} 的 entry_point 未配置`);
   }
 
-  // 优先使用静态导入映射（Vite 会打包为 app-xxx chunk）
-  const loader = APP_LOADERS[pluginCode];
+  // 优先使用静态导入映射（Vite 会打包为 app-xxx chunk）；入口可落在 menu-entry-shell 等共享壳
+  const loader = resolveAppLoader(pluginCode, application.entry_point);
   const pluginModule = await withRetry(
     async () => {
       if (loader) {

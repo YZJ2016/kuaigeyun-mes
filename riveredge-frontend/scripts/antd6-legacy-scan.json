@@ -1,12 +1,12 @@
 {
   "antd": "^6.4.4",
-  "scanned_files": 2899,
-  "pattern_types": 1,
-  "total_hits": 4,
+  "scanned_files": 2923,
+  "pattern_types": 2,
+  "total_hits": 9,
   "by_severity": {
     "med": {
-      "hits": 4,
-      "patterns": 1
+      "hits": 9,
+      "patterns": 2
     }
   },
   "rows": [
@@ -14,8 +14,8 @@
       "api": "addonBefore/After → Space.Compact",
       "component": "InputNumber",
       "severity": "med",
-      "hits": 4,
-      "files": 2,
+      "hits": 6,
+      "files": 3,
       "samples": [
         {
           "file": "src/components/quantity-with-unit/DocumentLineDualQuantity.tsx",
@@ -38,15 +38,47 @@
           "snippet": "addonAfter=\"%\""
         }
       ]
+    },
+    {
+      "api": "bordered → variant",
+      "component": "Card/Input/Select/Tag",
+      "severity": "med",
+      "hits": 3,
+      "files": 1,
+      "samples": [
+        {
+          "file": "src/apps/kuaizhizao/pages/warehouse-management/inbound/FinishedGoodsReceiptCreateModal.tsx",
+          "line": 865,
+          "snippet": "<Input readOnly bordered={false} placeholder=\"—\" />"
+        },
+        {
+          "file": "src/apps/kuaizhizao/pages/warehouse-management/inbound/FinishedGoodsReceiptCreateModal.tsx",
+          "line": 877,
+          "snippet": "<Input readOnly bordered={false} />"
+        },
+        {
+          "file": "src/apps/kuaizhizao/pages/warehouse-management/inbound/FinishedGoodsReceiptCreateModal.tsx",
+          "line": 888,
+          "snippet": "<Input readOnly bordered={false} />"
+        }
+      ]
     }
   ],
   "top_files": [
+    {
+      "file": "src/apps/kuaizhizao/pages/warehouse-management/inbound/FinishedGoodsReceiptCreateModal.tsx",
+      "approx_hits": 3
+    },
+    {
+      "file": "src/apps/kuaizhizao/components/InspectionSamplingSpecFields.tsx",
+      "approx_hits": 2
+    },
     {
       "file": "src/components/quantity-with-unit/DocumentLineDualQuantity.tsx",
       "approx_hits": 2
     },
     {
-      "file": "src/apps/kuaizhizao/components/InspectionSamplingSpecFields.tsx",
+      "file": "src/apps/kuaizhizao/components/PaymentMethodWithMixFormItems.tsx",
       "approx_hits": 2
     }
   ],

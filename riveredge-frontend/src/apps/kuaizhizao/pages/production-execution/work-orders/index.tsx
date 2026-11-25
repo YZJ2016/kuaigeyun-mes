@@ -186,6 +186,7 @@ import { getWorkOrderSyncBinding } from '../../../services/work-order'
 import { UniDropdown } from '../../../../../components/uni-dropdown'
 import { listSalesOrders } from '../../../services/sales'
 import {
+  getSalesOrder,
   listSalesOrders as listSalesOrdersForPull,
   previewPushSalesOrderToWorkOrder,
   pushSalesOrderToWorkOrder,
@@ -193,6 +194,10 @@ import {
 } from '../../../services/sales-order'
 import { listSalesForecasts } from '../../../services/sales-forecast'
 import { listDemands } from '../../../services/demand'
+import {
+  pickSalesOrderDeliveryDate,
+  toWorkOrderRequiredDateDayjs,
+} from './workOrderRequiredDateFromSalesOrder'
 import {
   listDemandComputations,
   getPushOptions,
@@ -2144,7 +2149,13 @@ const WorkOrdersPage: React.FC = () => {
   const [productSourceData, setProductSourceData] = useState<{
     type: string
     materials: any[]
-    items?: { productId: number; quantity: number; variant_attributes?: Record<string, unknown> }[]
+    items?: {
+      productId: number
+      quantity: number
+      variant_attributes?: Record<string, unknown>
+      /** 来源销售订单行/头交货日（YYYY-MM-DD） */
+      deliveryDate?: string
+    }[]
     /** 从销售订单加载时写入，提交时带出 MTO 与销售订单快照 */
     salesOrderRef?: { id: number; code?: string; name?: string }
   } | null>(null)
@@ -2303,6 +2314,9 @@ const WorkOrdersPage: React.FC = () => {
             sales_order_name: so.name,
             production_mode: 'MTO',
           }
+        : {}),
+      ...(first.deliveryDate
+        ? { required_date: toWorkOrderRequiredDateDayjs(first.deliveryDate) }
         : {}),
     })
     if (so?.id) {
@@ -2893,11 +2907,53 @@ const WorkOrdersPage: React.FC = () => {
     }
     const salesOrderId = deliveryCreatePrefillRef.current.salesOrderId
     deliveryCreatePrefillRef.current = null
-    formRef.current.setFieldsValue({
-      sales_order_id: salesOrderId,
-      production_mode: 'MTO',
-    })
-    setProductionMode('MTO')
+    let cancelled = false
+    void (async () => {
+      try {
+        const order = await getSalesOrder(salesOrderId, { includeItems: true })
+        if (cancelled) return
+        const items = order.items ?? []
+        const line =
+          items.find((it) => Number(it.material_id) > 0 && Number(it.order_quantity) > 0) ??
+          items[0]
+        const materialId = Number(line?.material_id)
+        const quantity = Number(line?.order_quantity ?? 0)
+        if (!Number.isFinite(materialId) || materialId <= 0) {
+          formRef.current?.setFieldsValue({
+            sales_order_id: salesOrderId,
+            sales_order_code: order.order_code,
+            production_mode: 'MTO',
+          })
+          setProductionMode('MTO')
+          return
+        }
+        const mats = await resolveMaterialFormReference(KUAIZHIZAO_DOC_HOST.workOrder, [materialId])
+        if (cancelled) return
+        if (mats.length) mergeProductCache(mats)
+        const deliveryDate = pickSalesOrderDeliveryDate(order, {
+          productId: materialId,
+          salesOrderItemId: line?.id,
+        })
+        setProductSourceData({
+          type: 'sales_order',
+          materials: mats,
+          items: [{ productId: materialId, quantity: quantity > 0 ? quantity : 1, deliveryDate }],
+          salesOrderRef: {
+            id: order.id,
+            code: order.order_code,
+            name: order.order_name ?? order.order_code,
+          },
+        })
+      } catch (error: unknown) {
+        if (!cancelled) {
+          messageApi.error(getApiErrorMessage(error, t('common.loadFailed')))
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modalVisible, isEdit])
 
   const resetComputationPullPreview = useCallback(() => {
@@ -3484,6 +3540,21 @@ const WorkOrdersPage: React.FC = () => {
       } else {
         setFormProductMaterial(null)
       }
+      let requiredDate = toWorkOrderRequiredDateDayjs(
+        (detail as { required_date?: string }).required_date,
+      )
+      if (!requiredDate && detail.sales_order_id) {
+        try {
+          const order = await getSalesOrder(detail.sales_order_id, { includeItems: true })
+          const picked = pickSalesOrderDeliveryDate(order, {
+            salesOrderItemId: (detail as { sales_order_item_id?: number }).sales_order_item_id,
+            productId: detail.product_id,
+          })
+          requiredDate = toWorkOrderRequiredDateDayjs(picked)
+        } catch (error: unknown) {
+          console.warn('按销售订单回填工单需求日失败', error)
+        }
+      }
       // 延迟设置表单值，确保表单已渲染
       setTimeout(() => {
         const mode = detail.production_mode || 'MTS'
@@ -3511,6 +3582,7 @@ const WorkOrdersPage: React.FC = () => {
           work_center_name: detail.work_center_name,
           status: detail.status,
           priority: detail.priority,
+          required_date: requiredDate,
           planned_start_date: detail.planned_start_date,
           planned_end_date: detail.planned_end_date,
           allow_operation_jump: detail.allow_operation_jump ?? false,
@@ -5232,6 +5304,9 @@ const WorkOrdersPage: React.FC = () => {
 
       values.planned_start_date = toApiDateTimeString(values.planned_start_date)
       values.planned_end_date = toApiDateTimeString(values.planned_end_date)
+      if (values.required_date != null) {
+        values.required_date = toApiDateTimeString(values.required_date)
+      }
       if (!values.planned_start_date || !values.planned_end_date) {
         messageApi.error(t('app.kuaizhizao.workOrder.formPlannedStartRequired'))
         throw new Error('计划开始/结束时间必填')
@@ -8754,6 +8829,8 @@ const WorkOrdersPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.reports.remainingQuantity'),
             dataIndex: 'remaining_push_quantity',
+          },
+          {
             title: t('app.kuaizhizao.purchaseOrder.form.lineNotes'),
             dataIndex: 'line_notes',
             width: 160,
@@ -10041,6 +10118,13 @@ const WorkOrdersPage: React.FC = () => {
             },
           })}
         />
+        <ProFormDatePicker
+          name="required_date"
+          label={t('app.kuaizhizao.workOrder.formRequiredDate')}
+          placeholder={t('app.kuaizhizao.workOrder.formSelect')}
+          colProps={{ span: 6 }}
+          fieldProps={{ style: { width: '100%' } }}
+        />
 
         <Col span={24}>
           <Form.Item name="process_route_id" label={t('app.kuaizhizao.workOrder.colProcessRoute')} style={{ marginBottom: 16 }}>
@@ -10431,6 +10515,9 @@ const WorkOrdersPage: React.FC = () => {
                       productId: product.id,
                       quantity: Number(qty) || 0,
                       variant_attributes: it.variant_attributes ?? undefined,
+                      ...(productSourceModalType === 'sales_order' && it.delivery_date
+                        ? { deliveryDate: String(it.delivery_date).slice(0, 10) }
+                        : {}),
                     })
                     if (!materials.some((m: any) => Number(m.id) === Number(product.id))) {
                       materials.push(product)

@@ -1263,6 +1263,13 @@ class BOMItemCreate(BaseModel):
     """
     
     component_id: int = Field(..., description="子物料ID")
+    install_position: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="安装位置（重复子物料时手工区分）",
+    )
+    warehouse_id: Optional[int] = Field(None, description="子件发料仓库")
+    is_outsource: bool = Field(False, description="子件是否委外")
     quantity: Decimal = Field(..., description="用量（必填，数字）")
     unit: Optional[str] = Field(None, max_length=20, description="单位（可选，如：个、kg、m等）")
     
@@ -1298,7 +1305,14 @@ class BOMItemCreate(BaseModel):
         if self.is_configurable and self.is_alternative:
             raise ValueError("配置位与替代料互斥，不能同时启用")
         return self
-    
+
+    @validator("install_position")
+    def validate_install_position(cls, v):
+        if v is None:
+            return None
+        s = str(v).strip()
+        return s if s else None
+
     @validator("quantity")
     def validate_quantity(cls, v):
         """验证用量"""
@@ -1365,10 +1379,7 @@ class BOMBatchCreate(BaseModel):
         if not v or len(v) == 0:
             raise ValueError("至少需要添加一个子物料项")
         
-        # 检查是否有重复的子物料ID（非替代料）
-        component_ids = [item.component_id for item in v if not item.is_alternative]
-        if len(component_ids) != len(set(component_ids)):
-            raise ValueError("子物料不能重复（替代料除外）")
+        assert_bom_non_alternative_items_unique_by_position(v)
         
         return v
     
@@ -1795,3 +1806,68 @@ class MaterialListResponse(BaseModel):
         populate_by_name=True,
         by_alias=True
     )
+
+
+def normalize_bom_install_position(value: Optional[str]) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def resolve_bom_line_is_outsource(item: Any, source_type: Optional[str]) -> bool:
+    """委外来源强制 True；自制可勾选；其余 False。"""
+    from apps.master_data.constants.material_source_type import (
+        SOURCE_TYPE_MAKE,
+        SOURCE_TYPE_OUTSOURCE,
+        normalize_material_source_type,
+    )
+
+    st = normalize_material_source_type(source_type)
+    if st == SOURCE_TYPE_OUTSOURCE:
+        return True
+    if st == SOURCE_TYPE_MAKE:
+        return bool(getattr(item, "is_outsource", False))
+    return False
+
+
+def assert_bom_items_outsource_policy(
+    items: List[Any],
+    component_by_id: Dict[int, Any],
+) -> None:
+    from apps.master_data.constants.material_source_type import (
+        SOURCE_TYPE_MAKE,
+        SOURCE_TYPE_OUTSOURCE,
+        normalize_material_source_type,
+    )
+
+    for item in items:
+        component = component_by_id.get(int(item.component_id))
+        if not component:
+            continue
+        st = normalize_material_source_type(getattr(component, "source_type", None))
+        requested = bool(getattr(item, "is_outsource", False))
+        if requested and st not in (SOURCE_TYPE_MAKE, SOURCE_TYPE_OUTSOURCE):
+            label = getattr(component, "main_code", None) or getattr(component, "code", None) or str(component.id)
+            raise ValueError(f"子物料 {label} 来源类型为 {st}，不允许委外")
+        if st == SOURCE_TYPE_OUTSOURCE and not requested:
+            label = getattr(component, "main_code", None) or getattr(component, "code", None) or str(component.id)
+            raise ValueError(f"委外件 {label} 须标记为委外")
+
+
+def assert_bom_non_alternative_items_unique_by_position(items: List[Any]) -> None:
+    """非替代料子件：同 component_id 可多行，重复时须填写互不相同的 install_position。"""
+    from collections import Counter
+
+    non_alt = [it for it in items if not getattr(it, "is_alternative", False)]
+    counts = Counter(it.component_id for it in non_alt)
+    seen: set = set()
+    for it in non_alt:
+        pos = normalize_bom_install_position(getattr(it, "install_position", None))
+        if counts[it.component_id] > 1 and not pos:
+            raise ValueError("重复子物料须填写位置以区分")
+        key = (it.component_id, pos)
+        if key in seen:
+            raise ValueError("相同子物料与位置不能重复（替代料除外）")
+        seen.add(key)
+
+

@@ -570,6 +570,44 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
     setModalOpen(true);
   }, []);
 
+  const fillPendingFormFromVoucher = useCallback(
+    (full: Awaited<ReturnType<typeof service.get>>, options?: { forCopy?: boolean }) => {
+      const forCopy = options?.forCopy === true;
+      pendingFormValuesRef.current = {
+        business_date: forCopy
+          ? dayjs()
+          : full.business_date
+            ? dayjs(full.business_date)
+            : dayjs(),
+        counterparty_kind: full.counterparty_kind ?? 'none',
+        counterparty_id: full.counterparty_id,
+        counterparty_name: full.counterparty_name,
+        payment_method: full.payment_method,
+        bank_account_id: full.bank_account_id,
+        department_id: full.department_id ?? undefined,
+        attachments: mapAttachmentsToUploadList(
+          full.attachments as Parameters<typeof mapAttachmentsToUploadList>[0],
+        ),
+        related_purchase_receipts: forCopy
+          ? []
+          : ((full.related_purchase_receipts as RelatedPurchaseReceiptRef[] | undefined) ?? []),
+        advance_payee_id:
+          (full.lines ?? []).find((l) => l.payee_id != null)?.payee_id ?? undefined,
+        notes: full.notes,
+        lines: (full.lines ?? []).length
+          ? (full.lines ?? []).map((l) => ({
+              category_code: l.category_code,
+              amount: Number(l.amount),
+              description: l.description,
+              payee_id: l.payee_id,
+              payee_name: l.payee_name,
+            }))
+          : [{}],
+      };
+    },
+    [],
+  );
+
   const openEdit = useCallback(
     async (row: VoucherRow) => {
       if (!capAllowed(row, 'update')) {
@@ -579,39 +617,43 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
       try {
         const full = await service.get(row.id);
         setEditing(row);
-        pendingFormValuesRef.current = {
-          business_date: full.business_date ? dayjs(full.business_date) : dayjs(),
-          counterparty_kind: full.counterparty_kind ?? 'none',
-          counterparty_id: full.counterparty_id,
-          counterparty_name: full.counterparty_name,
-          payment_method: full.payment_method,
-          bank_account_id: full.bank_account_id,
-          department_id: full.department_id ?? undefined,
-          attachments: mapAttachmentsToUploadList(
-            full.attachments as Parameters<typeof mapAttachmentsToUploadList>[0],
-          ),
-          related_purchase_receipts:
-            (full.related_purchase_receipts as RelatedPurchaseReceiptRef[] | undefined) ?? [],
-          advance_payee_id:
-            (full.lines ?? []).find((l) => l.payee_id != null)?.payee_id ?? undefined,
-          notes: full.notes,
-          lines: (full.lines ?? []).length
-            ? (full.lines ?? []).map((l) => ({
-                category_code: l.category_code,
-                amount: Number(l.amount),
-                description: l.description,
-                payee_id: l.payee_id,
-                payee_name: l.payee_name,
-              }))
-            : [{}],
-        };
+        fillPendingFormFromVoucher(full);
         setModalOpen(true);
       } catch (e) {
         messageApi.error(getApiErrorMessage(e, t(`${i18nPrefix}.loadFailed`)));
       }
     },
-    [i18nPrefix, messageApi, service, t],
+    [fillPendingFormFromVoucher, i18nPrefix, messageApi, service, t],
   );
+
+  const canCopySelectedVoucher = kind === 'expense';
+
+  const openCopySelectedVoucher = useCallback(async () => {
+    if (!canCopySelectedVoucher) {
+      return;
+    }
+    const row = selectedRowsForBatch.length === 1 ? selectedRowsForBatch[0] : null;
+    if (!row) {
+      messageApi.warning(t(`${i18nPrefix}.selectToCopy`));
+      return;
+    }
+    try {
+      const full = await service.get(row.id);
+      setEditing(null);
+      fillPendingFormFromVoucher(full, { forCopy: true });
+      setModalOpen(true);
+    } catch (e) {
+      messageApi.error(getApiErrorMessage(e, t(`${i18nPrefix}.loadFailed`)));
+    }
+  }, [
+    canCopySelectedVoucher,
+    fillPendingFormFromVoucher,
+    i18nPrefix,
+    messageApi,
+    selectedRowsForBatch,
+    service,
+    t,
+  ]);
 
   const openDetail = useCallback(
     async (row: VoucherRow) => {
@@ -1030,7 +1072,8 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
     perms.canDelete ||
     Boolean(perms.canAction?.('submit')) ||
     Boolean(perms.canAction?.('approve')) ||
-    Boolean(perms.canAction?.('audit'));
+    Boolean(perms.canAction?.('audit')) ||
+    (Boolean(perms.canCreate) && canCopySelectedVoucher);
 
   return (
     <>
@@ -1056,6 +1099,18 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t(`${i18nPrefix}.confirmBatchDelete`, { count })}
           toolBarActionsAfterDelete={[
+            ...(canCopySelectedVoucher && perms.canCreate
+              ? [
+                  <Button
+                    key="misc-voucher-copy-selected"
+                    size="medium"
+                    disabled={selectedRowsForBatch.length !== 1}
+                    onClick={() => void openCopySelectedVoucher()}
+                  >
+                    {t(`${i18nPrefix}.copySelectedCreate`)}
+                  </Button>,
+                ]
+              : []),
             <UniAuditBatchMenuButton
               key="misc-voucher-batch-audit"
               selectedRowKeys={selectedRowKeys}

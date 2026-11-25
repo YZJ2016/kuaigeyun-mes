@@ -58,6 +58,26 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
         items: Optional[List[BatchingOrderItemCreate]] = None,
     ) -> BatchingOrderResponse:
         async with in_transaction():
+            target_warehouse_id = order_data.target_warehouse_id
+            target_warehouse_name = order_data.target_warehouse_name
+            # 手工建单无工单：无法按车间/工作中心解析线边仓，目标仓必填且须为线边仓
+            if not order_data.work_order_id:
+                if not target_warehouse_id:
+                    raise ValidationError("手工创建线边备料单必须指定目标线边仓")
+                from apps.master_data.models.warehouse import Warehouse
+
+                tgt = await Warehouse.get_or_none(
+                    id=target_warehouse_id,
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                    is_active=True,
+                )
+                if not tgt:
+                    raise ValidationError(f"目标仓库不存在或已停用: {target_warehouse_id}")
+                if (tgt.warehouse_type or "").strip() != "line_side":
+                    raise ValidationError("目标仓库必须是线边仓")
+                target_warehouse_name = target_warehouse_name or (tgt.name or "")
+
             today = today_site_str()
             code = await self.generate_code(
                 tenant_id=tenant_id,
@@ -78,8 +98,8 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
                 batching_date=order_data.batching_date,
                 status="draft",
                 total_items=0,
-                target_warehouse_id=order_data.target_warehouse_id,
-                target_warehouse_name=order_data.target_warehouse_name,
+                target_warehouse_id=target_warehouse_id,
+                target_warehouse_name=target_warehouse_name,
                 remarks=order_data.remarks,
                 attachments=order_data.attachments,
                 created_by=created_by,
@@ -582,13 +602,16 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
         from apps.master_data.models.material import Material
         from infra.services.business_config_service import BusinessConfigService
 
-        batch_map = {}
-        confirm_map: dict = {}
+        from collections import defaultdict
+
+        confirm_moves: dict[int, list] = defaultdict(list)
+        confirm_skip: set[int] = set()
         if confirm_data and confirm_data.item_batches:
             for b in confirm_data.item_batches:
-                confirm_map[b.item_id] = b
-                if b.batch_no and b.batch_no.strip():
-                    batch_map[b.item_id] = b.batch_no.strip()
+                if b.skip:
+                    confirm_skip.add(int(b.item_id))
+                    continue
+                confirm_moves[int(b.item_id)].append(b)
 
         async with in_transaction():
             order = await BatchingOrder.get_or_none(
@@ -602,10 +625,12 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
                 raise ValidationError(f"线边备料单状态为 {order.status}，不能确认备料")
 
             if not order.target_warehouse_id:
-                wo = None
-                if order.work_order_id:
-                    wo = await WorkOrder.get_or_none(id=order.work_order_id, tenant_id=tenant_id)
-                tgt_id, tgt_name = await resolve_line_side_warehouse_for_work_order(tenant_id, wo, None)
+                if not order.work_order_id:
+                    raise ValidationError("线边备料单未指定目标线边仓，无法确认备料")
+                wo = await WorkOrder.get_or_none(id=order.work_order_id, tenant_id=tenant_id)
+                tgt_id, tgt_name = await resolve_line_side_warehouse_for_work_order(
+                    tenant_id, wo, None
+                )
                 order.target_warehouse_id = tgt_id
                 order.target_warehouse_name = tgt_name
                 await order.save()
@@ -629,79 +654,99 @@ class BatchingOrderService(AppBaseService[BatchingOrder]):
             picked_this_round = 0
 
             for item in items:
-                conf = confirm_map.get(item.id) if use_selective_confirm else None
                 if item.status == "picked":
                     continue
+                moves = confirm_moves.get(int(item.id), []) if use_selective_confirm else []
                 if use_selective_confirm:
-                    if conf is None or conf.skip:
+                    if int(item.id) in confirm_skip and not moves:
                         continue
-                    pick_qty = (
-                        conf.pick_quantity
-                        if conf.pick_quantity is not None
-                        else item.required_quantity
-                    )
+                    if not moves:
+                        continue
                 else:
-                    pick_qty = item.required_quantity
+                    class _FullPick:
+                        batch_no = getattr(item, "batch_no", None)
+                        pick_quantity = item.required_quantity
 
-                pick_qty = Decimal(str(pick_qty or 0))
-                if pick_qty <= 0:
-                    continue
-                if pick_qty > item.required_quantity:
-                    raise ValidationError(
-                        f"物料 {item.material_code} 备料数量不能超过需求数量 {item.required_quantity}"
-                    )
+                    moves = [_FullPick()]
 
-                batch_no = batch_map.get(item.id) or getattr(item, "batch_no", None)
                 mat = await Material.get_or_none(
                     tenant_id=tenant_id, id=item.material_id, deleted_at__isnull=True
                 )
                 batch_managed = bool(mat and getattr(mat, "batch_managed", False))
-                inv_batch = batch_no if batch_managed else None
-                if batch_managed and not inv_batch and not enforce_fifo:
-                    raise ValidationError(f"物料 {item.material_code} 启用批号管理，请指定批号")
-
                 src_wh = order.warehouse_id
-                await InventoryService.decrease_stock(
-                    tenant_id=tenant_id,
-                    material_id=item.material_id,
-                    quantity=pick_qty,
-                    warehouse_id=src_wh,
-                    batch_no=inv_batch,
-                    source_type="batching_order",
-                    source_doc_id=order.id,
-                    source_doc_code=order.code,
-                    enforce_fifo=enforce_fifo,
-                    work_order_id=order.work_order_id,
-                    work_order_code=wo_code,
-                    movement_type="staging_to_line",
-                    from_warehouse_id=src_wh,
-                    to_warehouse_id=order.target_warehouse_id,
-                    idempotency_key=f"batching_order:{order.id}:dec:{item.id}",
-                    operator_id=executed_by,
-                    operator_name=None,
-                )
-                await InventoryService.increase_stock(
-                    tenant_id=tenant_id,
-                    material_id=item.material_id,
-                    quantity=pick_qty,
-                    warehouse_id=order.target_warehouse_id,
-                    batch_no=inv_batch,
-                    source_type="batching_order",
-                    source_doc_id=order.id,
-                    source_doc_code=order.code,
-                    work_order_id=order.work_order_id,
-                    work_order_code=wo_code,
-                    movement_type="staging_to_line",
-                    from_warehouse_id=src_wh,
-                    to_warehouse_id=order.target_warehouse_id,
-                    idempotency_key=f"batching_order:{order.id}:inc:{item.id}",
-                    operator_id=executed_by,
-                    operator_name=None,
-                )
-                item.picked_quantity = pick_qty
-                item.status = "picked" if pick_qty >= item.required_quantity else "pending"
-                if batch_no:
-                    item.batch_no = batch_no
+                total_pick = Decimal("0")
+                last_batch_no = None
+
+                for move_idx, conf in enumerate(moves):
+                    pick_qty = (
+                        conf.pick_quantity
+                        if getattr(conf, "pick_quantity", None) is not None
+                        else item.required_quantity
+                    )
+                    pick_qty = Decimal(str(pick_qty or 0))
+                    if pick_qty <= 0:
+                        continue
+                    remaining_cap = Decimal(str(item.required_quantity or 0)) - total_pick
+                    if pick_qty > remaining_cap:
+                        raise ValidationError(
+                            f"物料 {item.material_code} 备料数量不能超过需求数量 {item.required_quantity}"
+                        )
+
+                    batch_no = (
+                        str(getattr(conf, "batch_no", None) or "").strip()
+                        or getattr(item, "batch_no", None)
+                    )
+                    inv_batch = batch_no if batch_managed else None
+                    if batch_managed and not inv_batch and not enforce_fifo:
+                        raise ValidationError(f"物料 {item.material_code} 启用批号管理，请指定批号")
+
+                    await InventoryService.decrease_stock(
+                        tenant_id=tenant_id,
+                        material_id=item.material_id,
+                        quantity=pick_qty,
+                        warehouse_id=src_wh,
+                        batch_no=inv_batch,
+                        source_type="batching_order",
+                        source_doc_id=order.id,
+                        source_doc_code=order.code,
+                        enforce_fifo=enforce_fifo,
+                        work_order_id=order.work_order_id,
+                        work_order_code=wo_code,
+                        movement_type="staging_to_line",
+                        from_warehouse_id=src_wh,
+                        to_warehouse_id=order.target_warehouse_id,
+                        idempotency_key=f"batching_order:{order.id}:dec:{item.id}:{move_idx}:{inv_batch or 'DEFAULT'}",
+                        operator_id=executed_by,
+                        operator_name=None,
+                    )
+                    await InventoryService.increase_stock(
+                        tenant_id=tenant_id,
+                        material_id=item.material_id,
+                        quantity=pick_qty,
+                        warehouse_id=order.target_warehouse_id,
+                        batch_no=inv_batch,
+                        source_type="batching_order",
+                        source_doc_id=order.id,
+                        source_doc_code=order.code,
+                        work_order_id=order.work_order_id,
+                        work_order_code=wo_code,
+                        movement_type="staging_to_line",
+                        from_warehouse_id=src_wh,
+                        to_warehouse_id=order.target_warehouse_id,
+                        idempotency_key=f"batching_order:{order.id}:inc:{item.id}:{move_idx}:{inv_batch or 'DEFAULT'}",
+                        operator_id=executed_by,
+                        operator_name=None,
+                    )
+                    total_pick += pick_qty
+                    if batch_no:
+                        last_batch_no = batch_no
+
+                if total_pick <= 0:
+                    continue
+                item.picked_quantity = total_pick
+                item.status = "picked" if total_pick >= item.required_quantity else "pending"
+                if last_batch_no:
+                    item.batch_no = last_batch_no
                 await item.save()
                 picked_this_round += 1
 

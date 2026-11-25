@@ -1957,13 +1957,6 @@ const PaymentApplicationsPage: React.FC = () => {
               label={t('app.kuaizhizao.paymentApplication.attachments')}
             />
           </Col>
-          <Col span={24}>
-            <ProFormSwitch
-              name="requirePaymentVoucher"
-              label={t('app.kuaizhizao.paymentApplication.requirePaymentVoucher')}
-              extra={t('app.kuaizhizao.paymentApplication.requirePaymentVoucherHint')}
-            />
-          </Col>
         </Row>
               </ProForm>
             </div>

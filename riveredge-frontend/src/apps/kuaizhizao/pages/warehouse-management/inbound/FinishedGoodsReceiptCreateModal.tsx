@@ -3,7 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { App, Button, Col, Form as AntForm, Input, Row, Space } from 'antd';
+import { App, Button, Col, Form as AntForm, Input, Row, Select, Space } from 'antd';
 import { ThunderboltOutlined } from '@ant-design/icons';
 import {
   ProFormDatePicker,
@@ -29,10 +29,25 @@ import {
   UniWhDropdown,
   UniWhLocationDropdown,
   useWarehouseHasLocations,
-  lineLocationSelectionRequired,
 } from '../../../../../components/uni-wh-dropdown';
 import { getPopupContainerInModal } from '../../../../../utils/modalEventIsolation';
 import { warehouseApi } from '../../../services/production';
+import type { WorkOrderFinishedGoodsPullLine } from '../../../services/warehouse-execution';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import {
+  UniPullQueryModal,
+  PULL_SOURCE_REFERENCE,
+  isPullOpenLineSelectable,
+  isPullWorkOrderFgLineSelectable,
+  isPullableScope,
+  loadPullSourceReferenceOptions,
+  renderPullCapabilityTag,
+  toUniPullQueryHttpParams,
+  useUniPullQuery,
+  buildPullQueryMaterialIdentityColumn,
+  buildDefaultPullOpenLineQtyColumns,
+} from '../../../../../components/uni-pull-query';
 import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { toApiBusinessDocumentDateTime } from '../../../../../utils/formDate';
 import {
@@ -53,8 +68,13 @@ import {
 } from '../../../../../utils/formListItems';
 import {
   applyMaterialTrackingToFormRow,
+  enrichInboundFormItemsTracking,
   readMaterialTrackingFromPicker,
 } from './inboundItemTracking';
+import {
+  resolveDocumentLineMaterialModel,
+  resolveDocumentLineMaterialSpec,
+} from './inboundPoReceiptEntryUtils';
 import {
   filterWarehouseTrackingColumns,
   isMaterialBatchEntryEnabled,
@@ -83,8 +103,14 @@ const INBOUND_HOST_RESOURCE = 'kuaizhizao:inbound';
 const FINISHED_GOODS_RECEIPT_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_finished_goods_receipts';
 const SEMI_FINISHED_GOODS_RECEIPT_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_semi_finished_goods_receipts';
 
+type PullWorkOrderCandidate = WorkOrderFinishedGoodsPullLine;
+
 const defaultLineItem = {
   receipt_quantity: 1,
+  work_order_id: undefined as number | undefined,
+  work_order_code: undefined as string | undefined,
+  work_order_quantity: undefined as number | undefined,
+  received_quantity: undefined as number | undefined,
   warehouse_id: undefined as number | undefined,
   warehouse_name: undefined as string | undefined,
   location_id: undefined as number | undefined,
@@ -93,6 +119,12 @@ const defaultLineItem = {
   batch_managed: false,
   serial_managed: false,
   serial_numbers: undefined as string[] | undefined,
+  material_spec: undefined as string | undefined,
+  material_model: undefined as string | undefined,
+  material_uuid: undefined as string | undefined,
+  batch_rule_id: undefined as number | undefined,
+  default_batch_rule_id: undefined as number | undefined,
+  default_serial_rule_id: undefined as number | undefined,
   aux_quantity: undefined,
   aux_unit: undefined,
   unit_conversion_rate: undefined,
@@ -256,28 +288,13 @@ function FinishedGoodsReceiptCreateLocationCell({
           </span>
         </>
       ) : (
-        <AntForm.Item
-          name={[index, 'location_id']}
-          rules={[
-            {
-              validator: async (_, value) => {
-                if (!(warehouseId > 0)) return;
-                const code = formRef.current?.getFieldValue(['items', index, 'location_code']);
-                const need = await lineLocationSelectionRequired(warehouseId, value, code);
-                if (need) {
-                  throw new Error(t('app.kuaizhizao.warehouseOutbound.msg.selectLocation'));
-                }
-              },
-            },
-          ]}
-          noStyle
-        >
+        <AntForm.Item name={[index, 'location_id']} noStyle>
           <UniWhLocationDropdown
             warehouseId={warehouseId > 0 ? warehouseId : undefined}
             materialId={materialId > 0 ? materialId : undefined}
             hostResource={INBOUND_HOST_RESOURCE}
             showStock={false}
-            allowClear={false}
+            allowClear
             size={DOCUMENT_DETAIL_CONTROL_SIZE}
             getPopupContainer={getPopupContainerInModal}
             disabled={!(warehouseId > 0) || hasLocations === undefined}
@@ -322,6 +339,12 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
   const [users, setUsers] = useState<User[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
+  const pullSourceWorkOrderIdRef = useRef<number | undefined>(undefined);
+  const [pullSourceWorkOrderId, setPullSourceWorkOrderId] = useState<number | undefined>();
+  const [pullSourceWorkOrderOptions, setPullSourceWorkOrderOptions] = useState<
+    Array<{ value: number; label: string }>
+  >([]);
+  const pullFromWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_work_order');
   const editingId = open && receiptId != null && Number(receiptId) > 0 ? Number(receiptId) : null;
 
   const {
@@ -371,10 +394,9 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
   }, [currentUser]);
 
   const clearLineWarehouseDependents = useCallback((index: number) => {
+    // 入库批号/序列号为新录入（非在库批），换仓只清库位；勿清空用户已填跟踪号
     formRef.current?.setFieldValue(['items', index, 'location_id'], undefined);
     formRef.current?.setFieldValue(['items', index, 'location_code'], '');
-    formRef.current?.setFieldValue(['items', index, 'batch_number'], undefined);
-    formRef.current?.setFieldValue(['items', index, 'serial_numbers'], undefined);
   }, []);
 
   const syncLineMaterialTracking = useCallback(
@@ -395,6 +417,23 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
           fromPicker,
         );
         batchManaged = fromPicker.batchManaged;
+      } else {
+        const id = Number(material.id);
+        if (id > 0) {
+          const resolved = await fetchMaterialForUnitSelectCache(id);
+          const meta = resolved
+            ? readMaterialTrackingFromPicker(resolved as unknown as Record<string, unknown>)
+            : null;
+          if (meta) {
+            applyMaterialTrackingToFormRow(
+              (name, value) => formRef.current!.setFieldValue(name, value),
+              'items',
+              index,
+              meta,
+            );
+            batchManaged = meta.batchManaged;
+          }
+        }
       }
       if (material.uuid) {
         try {
@@ -438,6 +477,19 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
       receiver_name: defaultPerson.name,
     });
   }, [defaultPerson, resetActiveFormFieldValues]);
+
+  // 新建时 currentUser 晚到则补填；仅当入库人 id 与姓名皆空时回填，禁止把当前用户 id 贴到单据残留姓名上
+  useEffect(() => {
+    if (!open) return;
+    if (defaultPerson.id == null && !defaultPerson.name) return;
+    const rid = formRef.current?.getFieldValue('receiver_id');
+    const rname = String(formRef.current?.getFieldValue('receiver_name') ?? '').trim();
+    if ((rid != null && rid !== '') || rname) return;
+    formRef.current?.setFieldsValue({
+      receiver_id: defaultPerson.id,
+      receiver_name: defaultPerson.name,
+    });
+  }, [open, editingId, defaultPerson]);
 
   useEffect(() => {
     if (!open) {
@@ -488,6 +540,7 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
                 material_code: String(line.material_code ?? ''),
                 material_name: String(line.material_name ?? ''),
                 material_spec: line.material_spec != null ? String(line.material_spec) : undefined,
+                material_model: line.material_model != null ? String(line.material_model) : undefined,
                 material_unit: String(line.material_unit ?? ''),
                 receipt_quantity: Number(line.receipt_quantity) || 0,
                 warehouse_id: positiveId(line.warehouse_id) ?? headerWhId ?? undefined,
@@ -504,9 +557,12 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
             })
           : [{ ...defaultLineItem, warehouse_id: headerWhId, warehouse_name: headerWhName }];
         const receiptTimeRaw = detail.receipt_time;
+        const detailReceiverId = positiveId(detail.receiver_id);
+        const detailReceiverName = String(detail.receiver_name ?? '').trim();
+        const receiverEmpty = detailReceiverId == null && !detailReceiverName;
         formRef.current?.setFieldsValue({
-          receiver_id: positiveId(detail.receiver_id) ?? undefined,
-          receiver_name: String(detail.receiver_name ?? ''),
+          receiver_id: receiverEmpty ? defaultPerson.id : detailReceiverId,
+          receiver_name: receiverEmpty ? defaultPerson.name : detailReceiverName,
           receipt_time: receiptTimeRaw ? dayjs(String(receiptTimeRaw)) : dayjs(),
           notes: String(detail.notes ?? ''),
           items,
@@ -539,6 +595,7 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
       cancelled = true;
     };
   }, [
+    defaultPerson,
     editingId,
     loadActiveFormFieldValues,
     messageApi,
@@ -552,7 +609,288 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
   const [generatingBatchIdx, setGeneratingBatchIdx] = useState<number | null>(null);
   const [generatingSerialIdx, setGeneratingSerialIdx] = useState<number | null>(null);
 
+  const pullDocumentScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
+  const pullOpenQtyTripleColumns = useMemo(
+    () =>
+      buildDefaultPullOpenLineQtyColumns(t, {
+        includeRemaining: true,
+        widths: { suggested: 100, pushed: 100, remaining: 100 },
+      }),
+    [t],
+  );
+
+  const workOrderPullColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.warehouseInbound.col.workOrderCode'),
+        dataIndex: 'work_order_code',
+        width: 168,
+        ellipsis: true,
+      },
+      buildPullQueryMaterialIdentityColumn<PullWorkOrderCandidate>(t),
+      ...pullOpenQtyTripleColumns,
+      {
+        title: t('app.kuaizhizao.warehouseInbound.pull.gateStatus'),
+        key: 'convert_status',
+        width: 100,
+        align: 'center' as const,
+        render: (_: unknown, record: PullWorkOrderCandidate) =>
+          renderPullCapabilityTag(
+            isPullWorkOrderFgLineSelectable(record),
+            t('app.kuaizhizao.warehouseInbound.pull.canCreate'),
+            t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate'),
+          ),
+      },
+    ],
+    [pullOpenQtyTripleColumns, t],
+  );
+
+  const applyWorkOrderPreviewToForm = useCallback(
+    async (workOrderIds: number[]) => {
+      const res = await warehouseApi.finishedGoodsReceipt.previewBlankFromWorkOrders(workOrderIds);
+      if (res.message) {
+        messageApi.info(res.message);
+      }
+      const previewItems = res.items ?? [];
+      if (!previewItems.length) {
+        messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.workOrderLinesLoadEmpty'));
+        return;
+      }
+      let newLines = await Promise.all(
+        previewItems.map(async (row) => {
+          const materialId = Number(row.material_id);
+          const material =
+            materialId > 0 ? await fetchMaterialForUnitSelectCache(materialId) : null;
+          const qty = Number(row.receipt_quantity) || 0;
+          const line: Record<string, unknown> = {
+            ...defaultLineItem,
+            work_order_id: row.work_order_id,
+            work_order_code: row.work_order_code,
+            work_order_quantity: Number(row.work_order_quantity) || 0,
+            received_quantity: Number(row.received_quantity) || 0,
+            material_id: materialId,
+            material_code: row.material_code,
+            material_name: row.material_name,
+            material_spec: resolveDocumentLineMaterialSpec(
+              row as unknown as Record<string, unknown>,
+              material ?? undefined,
+            ),
+            material_model: resolveDocumentLineMaterialModel(
+              row as unknown as Record<string, unknown>,
+              material ?? undefined,
+            ),
+            material_unit:
+              String(row.material_unit ?? '').trim() ||
+              (material ? resolveMaterialScenarioUnit(material, 'production') : '个'),
+            receipt_quantity: qty > 0 ? qty : 0,
+            batch_managed: material
+              ? isMaterialBatchEntryEnabled(trackingFlags, material.batchManaged)
+              : false,
+            serial_managed: material
+              ? isMaterialSerialEntryEnabled(trackingFlags, material.serialManaged)
+              : false,
+          };
+          const primaryWh = material ? resolvePrimaryDefaultWarehouse(material) : null;
+          if (primaryWh) {
+            line.warehouse_id = primaryWh.id;
+            line.warehouse_name = primaryWh.name;
+          }
+          return line;
+        }),
+      );
+      newLines = (await enrichInboundFormItemsTracking(
+        newLines as Record<string, unknown>[],
+      )) as typeof newLines;
+      const current = normalizeFormListItems<Record<string, unknown>>(
+        formRef.current?.getFieldValue('items'),
+      );
+      const merged = [
+        ...current.filter((it) => Number(it.material_id) > 0),
+        ...newLines.filter(
+          (nl) =>
+            !current.some(
+              (c) =>
+                Number(c.work_order_id) === Number(nl.work_order_id) &&
+                Number(c.material_id) === Number(nl.material_id),
+            ),
+        ),
+      ];
+      formRef.current?.setFieldsValue({ items: merged.length ? merged : newLines });
+      const rows = normalizeFormListItems<Record<string, unknown>>(
+        formRef.current?.getFieldValue('items'),
+      );
+      await Promise.all(
+        rows.map(async (_row, index) => {
+          const materialId = Number(rows[index]?.material_id);
+          if (!(materialId > 0)) return;
+          const material = await fetchMaterialForUnitSelectCache(materialId);
+          if (material) await syncLineMaterialTracking(index, material);
+        }),
+      );
+      messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.workOrderLinesLoaded'));
+    },
+    [messageApi, syncLineMaterialTracking, t, trackingFlags],
+  );
+
+  const handleGenerateBatch = useCallback(
+    async (index: number) => {
+      if (!trackingFlags.batchManagement) return;
+      const materialId = Number(formRef.current?.getFieldValue(['items', index, 'material_id']));
+      const batchManaged = !!formRef.current?.getFieldValue(['items', index, 'batch_managed']);
+      let uuid = String(formRef.current?.getFieldValue(['items', index, 'material_uuid']) ?? '').trim();
+      if (!uuid && materialId > 0) {
+        const m = await fetchMaterialForUnitSelectCache(materialId);
+        if (m?.uuid) {
+          uuid = String(m.uuid).trim();
+          formRef.current?.setFieldValue(['items', index, 'material_uuid'], uuid);
+          const meta = readMaterialTrackingFromPicker(m as unknown as Record<string, unknown>);
+          if (meta) {
+            applyMaterialTrackingToFormRow(
+              (name, value) => formRef.current!.setFieldValue(name, value),
+              'items',
+              index,
+              meta,
+            );
+          }
+        }
+      }
+      if (!uuid || !batchManaged) {
+        messageApi.warning(t('app.kuaizhizao.warehouseOtherInbound.msg.selectMaterialFirst'));
+        return;
+      }
+      const batchRuleId = formRef.current?.getFieldValue(['items', index, 'batch_rule_id']);
+      const defaultBatchRuleId = formRef.current?.getFieldValue(['items', index, 'default_batch_rule_id']);
+      setGeneratingBatchIdx(index);
+      try {
+        const res = await materialBatchApi.generate(uuid, {
+          ruleId: batchRuleId ?? defaultBatchRuleId,
+        });
+        formRef.current?.setFieldValue(['items', index, 'batch_number'], res.batch_no);
+        messageApi.success(t('app.kuaizhizao.warehouseOtherInbound.msg.batchGenerated'));
+      } catch (error: unknown) {
+        const err = error as { message?: string };
+        messageApi.error(err?.message || t('app.kuaizhizao.warehouseOtherInbound.msg.batchGenerateFailed'));
+      } finally {
+        setGeneratingBatchIdx(null);
+      }
+    },
+    [messageApi, t, trackingFlags.batchManagement],
+  );
+
+  const pullFromWorkOrderQuery = useUniPullQuery<PullWorkOrderCandidate>({
+    rowKey: 'id',
+    selectionType: 'checkbox',
+    scopeOptions: pullDocumentScopeOptions,
+    defaultScope: 'pullable',
+    onOpen: () => {
+      pullSourceWorkOrderIdRef.current = undefined;
+      setPullSourceWorkOrderId(undefined);
+      void loadPullSourceReferenceOptions({
+        resource: PULL_SOURCE_REFERENCE.workOrder,
+        hostResource: INBOUND_HOST_RESOURCE,
+      })
+        .then(setPullSourceWorkOrderOptions)
+        .catch((error: unknown) => {
+          messageApi.error(
+            getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.workOrder.loadSourceFailed')),
+          );
+          setPullSourceWorkOrderOptions([]);
+        });
+    },
+    loadData: async (params) => {
+      const { scope } = params;
+      try {
+        const listRes = await warehouseApi.finishedGoodsReceipt.listWorkOrderPullLines({
+          ...toUniPullQueryHttpParams(params),
+          work_order_id: pullSourceWorkOrderIdRef.current,
+          pullable_only: isPullableScope(scope),
+        });
+        return { data: listRes?.data ?? [], total: listRes?.total ?? 0 };
+      } catch (error: unknown) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.workOrder.loadFailed')));
+        return { data: [], total: 0 };
+      }
+    },
+    isRowDisabled: (record) => !isPullWorkOrderFgLineSelectable(record),
+    onConfirm: async (_keys, rows) => {
+      const selectedRows = rows.filter((row) => isPullWorkOrderFgLineSelectable(row));
+      if (!selectedRows.length) {
+        messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.workOrder.selectLinesFirst'));
+        return;
+      }
+      const workOrderIds = [
+        ...new Set(
+          selectedRows
+            .map((row) => Number(row.work_order_id))
+            .filter((id) => Number.isFinite(id) && id > 0),
+        ),
+      ];
+      if (!workOrderIds.length) {
+        messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.selectWorkOrderFirst'));
+        return;
+      }
+      try {
+        await applyWorkOrderPreviewToForm(workOrderIds);
+        pullFromWorkOrderQuery.closeModal();
+      } catch (error: unknown) {
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.workOrder.previewFailed')),
+        );
+      }
+    },
+  });
+
   const formItemColumns = useMemo(() => {
+    const woCols =
+      receiptKind === 'finished_goods'
+        ? [
+            {
+              title: t('app.kuaizhizao.warehouseInbound.col.workOrderCode'),
+              dataIndex: 'work_order_code',
+              width: 110,
+              ellipsis: true,
+              render: (_: unknown, __: unknown, index: number) => (
+                <>
+                  <AntForm.Item name={[index, 'work_order_id']} hidden>
+                    <Input />
+                  </AntForm.Item>
+                  <AntForm.Item name={[index, 'work_order_code']} noStyle>
+                    <Input readOnly variant="borderless" placeholder="—" />
+                  </AntForm.Item>
+                </>
+              ),
+            },
+            {
+              title: t('app.kuaizhizao.warehouseInbound.col.workOrderQty'),
+              dataIndex: 'work_order_quantity',
+              width: 96,
+              align: 'right' as const,
+              render: (_: unknown, __: unknown, index: number) => (
+                <AntForm.Item name={[index, 'work_order_quantity']} noStyle>
+                  <Input readOnly variant="borderless" />
+                </AntForm.Item>
+              ),
+            },
+            {
+              title: t('app.kuaizhizao.warehouseInbound.col.receivedQty'),
+              dataIndex: 'received_quantity',
+              width: 96,
+              align: 'right' as const,
+              render: (_: unknown, __: unknown, index: number) => (
+                <AntForm.Item name={[index, 'received_quantity']} noStyle>
+                  <Input readOnly variant="borderless" />
+                </AntForm.Item>
+              ),
+            },
+          ]
+        : [];
     const cols = [
       {
         title: t('common.material'),
@@ -570,6 +908,9 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
             <AntForm.Item name={[index, 'material_spec']} hidden>
               <Input />
             </AntForm.Item>
+            <AntForm.Item name={[index, 'material_model']} hidden>
+              <Input />
+            </AntForm.Item>
             <AntForm.Item name={[index, 'batch_managed']} hidden>
               <Input />
             </AntForm.Item>
@@ -577,6 +918,15 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
               <Input />
             </AntForm.Item>
             <AntForm.Item name={[index, 'material_uuid']} hidden>
+              <Input />
+            </AntForm.Item>
+            <AntForm.Item name={[index, 'batch_rule_id']} hidden>
+              <Input />
+            </AntForm.Item>
+            <AntForm.Item name={[index, 'default_batch_rule_id']} hidden>
+              <Input />
+            </AntForm.Item>
+            <AntForm.Item name={[index, 'default_serial_rule_id']} hidden>
               <Input />
             </AntForm.Item>
             <UniMaterialSelect
@@ -592,6 +942,9 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
               skipFuzzyPinyinClientFilter
               onChange={(_v, material) => {
                 clearLineWarehouseDependents(index);
+                // 换物料时清空跟踪号（与库位一并重置）
+                formRef.current?.setFieldValue(['items', index, 'batch_number'], undefined);
+                formRef.current?.setFieldValue(['items', index, 'serial_numbers'], undefined);
                 if (!material) {
                   void syncLineMaterialTracking(index, undefined);
                   return;
@@ -612,6 +965,7 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
           </div>
         ),
       },
+      ...woCols,
       ...buildDocumentDetailSpecModelFormColumns(t),
       ...buildDocumentLineDualQuantityPairColumns({
         t,
@@ -654,7 +1008,9 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
         render: (_: unknown, __: unknown, index: number) => (
           <AntForm.Item
             noStyle
-            shouldUpdate={(prev, curr) => prev?.items?.[index] !== curr?.items?.[index]}
+            shouldUpdate={(prev, curr) =>
+              prev?.items?.[index]?.batch_managed !== curr?.items?.[index]?.batch_managed
+            }
           >
             {({ getFieldValue }) => {
               const row = getFieldValue('items')?.[index];
@@ -662,30 +1018,18 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
               return (
                 <Space size={2}>
                   <AntForm.Item name={[index, 'batch_number']} noStyle>
-                    <Input size={DOCUMENT_DETAIL_CONTROL_SIZE} style={{ width: 96 }} />
+                    <Input
+                      size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                      style={{ width: 96 }}
+                      placeholder={t('app.kuaizhizao.warehouseInbound.field.batchNoPlaceholder')}
+                    />
                   </AntForm.Item>
                   <Button
                     type="link"
                     size="small"
                     icon={<ThunderboltOutlined />}
                     loading={generatingBatchIdx === index}
-                    onClick={() => {
-                      const uuid = getFieldValue(['items', index, 'material_uuid']);
-                      if (!uuid) return;
-                      setGeneratingBatchIdx(index);
-                      void materialBatchApi
-                        .generate(String(uuid), {})
-                        .then((res) => {
-                          formRef.current?.setFieldValue(['items', index, 'batch_number'], res.batch_no);
-                          messageApi.success(t('app.kuaizhizao.warehouseOtherInbound.msg.batchGenerated'));
-                        })
-                        .catch((e: Error) => {
-                          messageApi.error(
-                            e?.message || t('app.kuaizhizao.warehouseOtherInbound.msg.batchGenerateFailed'),
-                          );
-                        })
-                        .finally(() => setGeneratingBatchIdx(null));
-                    }}
+                    onClick={() => void handleGenerateBatch(index)}
                   />
                 </Space>
               );
@@ -705,7 +1049,17 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
             </AntForm.Item>
             <AntForm.Item
               noStyle
-              shouldUpdate={(prev, curr) => prev?.items?.[index] !== curr?.items?.[index]}
+              shouldUpdate={(prev, curr) => {
+                const p = prev?.items?.[index];
+                const c = curr?.items?.[index];
+                return (
+                  p?.serial_managed !== c?.serial_managed ||
+                  p?.receipt_quantity !== c?.receipt_quantity ||
+                  p?.serial_numbers !== c?.serial_numbers ||
+                  p?.material_code !== c?.material_code ||
+                  p?.material_name !== c?.material_name
+                );
+              }}
             >
               {({ getFieldValue }) => {
                 const row = getFieldValue('items')?.[index];
@@ -725,12 +1079,41 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
                       formRef.current?.setFieldValue(['items', index, 'serial_numbers'], next)
                     }
                     onGenerate={async () => {
-                      const uuid = getFieldValue(['items', index, 'material_uuid']);
-                      if (!uuid || !(expected > 0)) return [];
+                      let uuid = String(getFieldValue(['items', index, 'material_uuid']) ?? '').trim();
+                      const materialId = Number(getFieldValue(['items', index, 'material_id']));
+                      if (!uuid && materialId > 0) {
+                        const m = await fetchMaterialForUnitSelectCache(materialId);
+                        if (m?.uuid) {
+                          uuid = String(m.uuid).trim();
+                          formRef.current?.setFieldValue(['items', index, 'material_uuid'], uuid);
+                          const meta = readMaterialTrackingFromPicker(m as unknown as Record<string, unknown>);
+                          if (meta) {
+                            applyMaterialTrackingToFormRow(
+                              (name, value) => formRef.current!.setFieldValue(name, value),
+                              'items',
+                              index,
+                              meta,
+                            );
+                          }
+                        }
+                      }
+                      if (!uuid) {
+                        messageApi.warning(t('app.kuaizhizao.warehouseOtherInbound.msg.selectMaterialFirst'));
+                        return [];
+                      }
+                      if (!(expected > 0)) return [];
+                      const serialRuleId =
+                        getFieldValue(['items', index, 'default_serial_rule_id']) ??
+                        getFieldValue(['items', index, 'serial_rule_id']);
                       const count = Math.min(expected, MATERIAL_SERIAL_GENERATE_MAX_COUNT);
                       setGeneratingSerialIdx(index);
                       try {
-                        const res = await materialSerialApi.generate(String(uuid), count, {});
+                        const res = await materialSerialApi.generate(uuid, count, {
+                          ruleId:
+                            serialRuleId != null && Number(serialRuleId) > 0
+                              ? Number(serialRuleId)
+                              : undefined,
+                        });
                         formRef.current?.setFieldValue(
                           ['items', index, 'serial_numbers'],
                           res.serial_nos,
@@ -764,11 +1147,13 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
     clearLineWarehouseDependents,
     generatingBatchIdx,
     generatingSerialIdx,
+    handleGenerateBatch,
     messageApi,
     quantityDecimals,
     syncLineMaterialTracking,
     t,
     trackingFlags,
+    receiptKind,
   ]);
 
   const handleFinish = async (values: Record<string, unknown>) => {
@@ -799,27 +1184,15 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
         messageApi.error(msg);
         throw new Error(msg);
       }
-      const needLoc = await lineLocationSelectionRequired(
-        lineWhId,
-        it.location_id,
-        it.location_code,
-      );
-      if (needLoc) {
-        const msg = t('app.kuaizhizao.warehouseInbound.msg.selectLocationForMaterial', {
-          material: materialLabel,
-        });
-        messageApi.error(msg);
-        throw new Error(msg);
-      }
+      // 库位可空：保存后由后端 `_resolve_line_location_*` / ensure 整仓解析
       const material = await fetchMaterialForUnitSelectCache(Number(it.material_id));
       const batchManaged =
         it.batch_managed != null
           ? !!it.batch_managed
           : !!(material as Material | null)?.batchManaged;
       if (isMaterialBatchEntryEnabled(trackingFlags, batchManaged) && !String(it.batch_number ?? '').trim()) {
-        const msg = t('app.kuaizhizao.warehouseOutbound.confirm.batchRequired', {
+        const msg = t('app.kuaizhizao.warehouseInbound.msg.batchRequiredForSave', {
           material: materialLabel,
-          batches: '—',
         });
         messageApi.error(msg);
         throw new Error(msg);
@@ -834,7 +1207,7 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
           : [];
         const qty = Math.floor(Number(it.receipt_quantity) || 0);
         if (serials.length !== qty) {
-          const msg = t('app.kuaizhizao.warehouseOutbound.entry.serialCountMismatch', {
+          const msg = t('app.kuaizhizao.warehouseInbound.msg.serialCountMismatch', {
             material: materialLabel,
             required: qty,
             actual: serials.length,
@@ -885,6 +1258,7 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
           material_code: String(it.material_code ?? ''),
           material_name: String(it.material_name ?? ''),
           material_spec: it.material_spec != null ? String(it.material_spec) : undefined,
+          material_model: it.material_model != null ? String(it.material_model) : undefined,
           material_unit: String(it.material_unit ?? ''),
           aux_quantity: it.aux_quantity != null ? Number(it.aux_quantity) : undefined,
           aux_unit: it.aux_unit != null ? String(it.aux_unit) : undefined,
@@ -903,6 +1277,11 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
           serial_numbers: Array.isArray(it.serial_numbers)
             ? it.serial_numbers.map((s: unknown) => String(s ?? '').trim()).filter(Boolean)
             : undefined,
+          work_order_id:
+            it.work_order_id != null && Number(it.work_order_id) > 0
+              ? Number(it.work_order_id)
+              : undefined,
+          work_order_code: it.work_order_code ? String(it.work_order_code) : undefined,
         };
       }),
     };
@@ -953,6 +1332,7 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
       : t('app.kuaizhizao.warehouseInbound.createFinishedGoodsReceiptModal');
 
   return (
+    <>
     <FormModalTemplate
       open={open}
       title={modalTitle}
@@ -1010,6 +1390,11 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
         requiredMessage={t('app.kuaizhizao.warehouseInbound.msg.needValidFinishedGoodsLine')}
         headerExtra={
           <Space size={8}>
+            {receiptKind === 'finished_goods' && !editingId ? (
+              <Button type="default" onClick={() => pullFromWorkOrderQuery.openModal()}>
+                {t('app.kuaizhizao.warehouseInbound.action.loadLinesFromWorkOrder')}
+              </Button>
+            ) : null}
             <Button
               type="default"
               icon={<PlusOutlined />}
@@ -1041,6 +1426,57 @@ export const FinishedGoodsReceiptCreateModal: React.FC<FinishedGoodsReceiptCreat
         </Col>
       </Row>
     </FormModalTemplate>
+      <UniPullQueryModal<PullWorkOrderCandidate>
+        title={pullFromWorkOrderAction.label}
+        pullQuery={pullFromWorkOrderQuery.pullQuery}
+        open={pullFromWorkOrderQuery.open}
+        onCancel={pullFromWorkOrderQuery.closeModal}
+        onOk={pullFromWorkOrderQuery.handleConfirm}
+        rowKey="id"
+        columns={workOrderPullColumns}
+        dataSource={pullFromWorkOrderQuery.dataSource}
+        loading={pullFromWorkOrderQuery.loading}
+        confirmLoading={pullFromWorkOrderQuery.confirmLoading}
+        selectionType={pullFromWorkOrderQuery.selectionType}
+        selectedRowKeys={pullFromWorkOrderQuery.selectedRowKeys}
+        selectedRows={pullFromWorkOrderQuery.selectedRows}
+        onSelectedRowKeysChange={pullFromWorkOrderQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromWorkOrderQuery.isRowDisabled}
+        searchDraft={pullFromWorkOrderQuery.searchDraft}
+        onSearchDraftChange={pullFromWorkOrderQuery.setSearchDraft}
+        onSearchApply={pullFromWorkOrderQuery.handleSearchApply}
+        onSearchClear={pullFromWorkOrderQuery.handleSearchClear}
+        appliedKeyword={pullFromWorkOrderQuery.appliedKeyword}
+        searchPlaceholder={t('app.kuaizhizao.warehouseInbound.pull.workOrder.searchPlaceholder')}
+        filterExtra={
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder={t('app.kuaizhizao.warehouseInbound.pull.workOrder.sourceDocPlaceholder')}
+            style={{ width: 220, flexShrink: 0 }}
+            value={pullSourceWorkOrderId}
+            options={pullSourceWorkOrderOptions}
+            onChange={(value) => {
+              const nextId = Number(value);
+              const next = Number.isFinite(nextId) && nextId > 0 ? nextId : undefined;
+              pullSourceWorkOrderIdRef.current = next;
+              setPullSourceWorkOrderId(next);
+              pullFromWorkOrderQuery.handleSearchApply(pullFromWorkOrderQuery.appliedKeyword);
+            }}
+          />
+        }
+        getRowLabel={(row) => [row.work_order_code, row.material_code].filter(Boolean).join(' ')}
+        page={pullFromWorkOrderQuery.page}
+        pageSize={pullFromWorkOrderQuery.pageSize}
+        total={pullFromWorkOrderQuery.total}
+        onPageChange={pullFromWorkOrderQuery.handlePageChange}
+        scopeOptions={pullFromWorkOrderQuery.scopeOptions}
+        scope={pullFromWorkOrderQuery.scope}
+        onScopeChange={pullFromWorkOrderQuery.handleScopeChange}
+        okText={t('app.kuaizhizao.warehouseInbound.pull.workOrder.ok')}
+      />
+    </>
   );
 };
 

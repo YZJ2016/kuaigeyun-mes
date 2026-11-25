@@ -180,6 +180,34 @@ def _clean_outbound_batch_allocations(raw_allocs: Any) -> List[Tuple[str, Decima
     return cleaned
 
 
+def _purchase_receipt_persisted_line_tax_rate(raw: Any) -> float | None:
+    """显式 0% 是有效税率，仅缺失值才允许下游回退。"""
+    if raw is None:
+        return None
+    from apps.kuaicaiwu.services.purchase_settlement import (
+        normalize_po_tax_rate_to_percent,
+    )
+
+    return float(normalize_po_tax_rate_to_percent(raw))
+
+
+async def _delete_omitted_other_outbound_items(
+    tenant_id: int,
+    outbound_id: int,
+    existing_item_ids: set[int],
+    submitted_item_ids: set[int],
+) -> list[int]:
+    """编辑保存时删除 payload 中已移除的原明细行。"""
+    removed_ids = sorted(existing_item_ids - submitted_item_ids)
+    if removed_ids:
+        await OtherOutboundItem.filter(
+            tenant_id=tenant_id,
+            outbound_id=outbound_id,
+            id__in=removed_ids,
+        ).delete()
+    return removed_ids
+
+
 def _normalize_optional_datetime(value: Any) -> Optional[datetime]:
     """兼容 DateField/字符串/datetime，统一为可序列化 datetime。"""
     if value is None:
@@ -20786,6 +20814,12 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                 }
                 if not outbound_data.items:
                     raise ValidationError("出库明细不能为空")
+                await _delete_omitted_other_outbound_items(
+                    tenant_id,
+                    outbound_id,
+                    set(existing),
+                    {int(line.id) for line in outbound_data.items},
+                )
                 material_ids = list(
                     {int(existing[int(line.id)].material_id) for line in outbound_data.items if int(line.id) in existing}
                 )
