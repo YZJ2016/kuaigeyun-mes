@@ -77,7 +77,8 @@ const FabricationRawMaterialWizard: React.FC<FabricationRawMaterialWizardProps> 
       baseUnit: defaultUnit,
       quantity: 1,
       wasteRate: 0,
-      issueMethod: 'backflush',
+      // 与 BOM 设计器手动加料一致：默认领料，便于齐套/生产领料识别；倒冲可自行改选
+      issueMethod: 'pick',
       specification: '',
     });
   }, [open, defaultRawName, defaultUnit, form, resetWizard]);
@@ -351,8 +352,8 @@ const FabricationRawMaterialWizard: React.FC<FabricationRawMaterialWizardProps> 
             <Form.Item name="issueMethod" label={t('app.master-data.bom.issueMethod')}>
               <Select
                 options={[
-                  { label: t('app.master-data.bom.issueMethodBackflush'), value: 'backflush' },
                   { label: t('app.master-data.bom.issueMethodPick'), value: 'pick' },
+                  { label: t('app.master-data.bom.issueMethodBackflush'), value: 'backflush' },
                 ]}
               />
             </Form.Item>

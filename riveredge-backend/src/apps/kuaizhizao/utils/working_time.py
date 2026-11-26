@@ -141,19 +141,35 @@ class WorkHoursConfig:
         *,
         day_windows: Optional[Dict[date, List[Tuple[time, time]]]] = None,
     ) -> "WorkHoursConfig":
-        """厂级可排窗以已发布排班为准；row 上的固定时段仅作缺省占位，不参与排产。"""
+        """
+        厂级可排窗：周期内存在已发布排班合成窗时用 shift；否则用日历配置固定上下班
+        （避免无排班时空 day_windows 导致手工建单/推算工序时刻失败）。
+        """
         start = _naive_time(getattr(row, "work_day_start", None) or time(8, 0))
         end = _naive_time(getattr(row, "work_day_end", None) or time(17, 0))
         if end <= start:
             start, end = time(8, 0), time(17, 0)
-        cfg = cls(
-            start=start,
-            end=end,
-            break_start=None,
-            break_end=None,
-            day_windows={} if day_windows is None else day_windows,
-            window_source="shift",
-        )
+        roster_windows = day_windows if day_windows else None
+        if roster_windows:
+            cfg = cls(
+                start=start,
+                end=end,
+                break_start=None,
+                break_end=None,
+                day_windows=roster_windows,
+                window_source="shift",
+            )
+        else:
+            break_start = _parse_hhmm(getattr(row, "break_start", None))
+            break_end = _parse_hhmm(getattr(row, "break_end", None))
+            cfg = cls(
+                start=start,
+                end=end,
+                break_start=break_start,
+                break_end=break_end,
+                day_windows=None,
+                window_source="fixed",
+            )
         cfg.validate()
         return cfg
 

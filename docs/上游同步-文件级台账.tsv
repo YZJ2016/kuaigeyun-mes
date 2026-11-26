@@ -280,20 +280,20 @@ docs/文件路径.md	DELETED	superset	复核ok
 docs/部署指南.md	07e225a9bf09075983120169306b82cae9d9c5c4	superset	复核ok
 fast-deploy/README.md	713739f167d330dd58889bb95ad0a03388a0a371	domain-out	本地无对应物/本地架构不同：扫描脚本口径冲突、kuaiconnect应用不存在、工序编辑表组件本地以DndList/DetailOperations实现、fast-deploy本地工具链分叉
 fast-deploy/build.mobile.web.sh	25eff2938ae43d06d9232fda2ed36232bc7bd3b8	domain-out	fast-deploy部署资产与客户定制app(haoligo/funide-oa)测试：本地fast-deploy独立维护+客户域不回流产品代码
-fast-deploy/build.web.sh	1e77f32d372b6f3e451cb54bcd1c536a293640ce	deferred	复核分叉(待决策)@2026-11-26：上游改发布到独立 dist 仓；本地主仓 dist 流程分叉
+fast-deploy/build.web.sh	1e77f32d372b6f3e451cb54bcd1c536a293640ce	applied	摘取(加性合并)：dist仓/AOCI/restart能力可选，本地默认构建不变
 fast-deploy/clean-workspace.sh	fb8a2827e1a3674b106bca9698f0120a473e4c62	domain-out	本地独立维护域/客户定制域不引入（fast-deploy链/haoligo/自维护截图）
 fast-deploy/config/deploy.env.example	95a93db86b0fb9290630af13241fad1f0d8a3cb8	superset	复核ok
 fast-deploy/config/install-scripts.json	3a2f1758ad67d0442251109289950bdc4634f3f4	domain-out	本地独立维护域/客户定制域不引入（fast-deploy链/haoligo/自维护截图）
-fast-deploy/deploy.sh	c4b974e77812cf1c2c480f152b670fd998634d0e	deferred	复核分叉(待决策)@2026-11-26：上游 CLI 新增 restart-*/install-* 子命令；本地部署栈分叉
+fast-deploy/deploy.sh	c4b974e77812cf1c2c480f152b670fd998634d0e	applied	摘取(加性合并)：dist仓/AOCI/restart能力可选，本地默认构建不变
 fast-deploy/launch.dev.sh	8700bd8a16	domain-out	R2-运维: fast-deploy本地独立维护/截图资产
 fast-deploy/lib/aoci_repo.sh	bb44572daf8267ec632b20f88695d7e810684618	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-fast-deploy/lib/blue_green.sh	bf32ce070f6a4e52346aea58b5080e37b4c9432d	deferred	复核分叉(待决策)@2026-11-26：上游修 dist-live 非符号链接 bug+自动蓝绿+backend env 导出；本地架构分叉
+fast-deploy/lib/blue_green.sh	bf32ce070f6a4e52346aea58b5080e37b4c9432d	applied	摘取(加性合并)：dist仓/AOCI/restart能力可选，本地默认构建不变
 fast-deploy/lib/build_web_git.sh	622287eb3888830952ed4b5f1aca6deb747afc8d	superset	复核ok
 fast-deploy/lib/common.ps1	e78373e4219a189e24004b936ff5ee2d960ae93f	applied	对齐上游：.venv直跑aerich/Windows跳过git clean/UV_PYTHON托管3.11/dist缺失引导（用户确认）
 fast-deploy/lib/common.sh	1f2f6f3c12c0262eea99f2536b0bebcf1f2b37de	domain-out	本地无对应物/本地架构不同：扫描脚本口径冲突、kuaiconnect应用不存在、工序编辑表组件本地以DndList/DetailOperations实现、fast-deploy本地工具链分叉
 fast-deploy/lib/low_spec_mode.sh	5fd037a762886e960e14306caf62a6b58370cfc6	applied	本轮明确部署快修部分适配：低配启动等待360，compose清理后校验并fail closed，Windows Node/uv/Caddy检测及ZIP/可执行校验和curl参数遮蔽；保留本地蓝绿/worker/下载版本/镜像/命名策略；bash及compose回归通过，未做Windows实机或真实部署
 fast-deploy/lib/wizard.sh	3824cdb8f56a893c34b8d971c649095cdd6a1b76	domain-out	本地独立维护域/客户定制域不引入（fast-deploy链/haoligo/自维护截图）
-fast-deploy/linux/systemd-exec-backend.sh	e152743b8a078173ecc5770c50b8593d9a6bd2fb	deferred	复核分叉(待决策)@2026-11-26：上游新增 export_backend_dotenv；本地无等价
+fast-deploy/linux/systemd-exec-backend.sh	e152743b8a078173ecc5770c50b8593d9a6bd2fb	applied	摘取(加性合并)：dist仓/AOCI/restart能力可选，本地默认构建不变
 fast-deploy/linux/systemd-exec-taskiq-scheduler.sh	8700bd8a16	domain-out	R2-运维: fast-deploy本地独立维护/截图资产
 fast-deploy/linux/systemd-exec-taskiq-worker.sh	75d7cbf3fa1d70de20a51edeefbbe8322e20cc46	domain-out	本地独立维护域/客户定制域不引入（fast-deploy链/haoligo/自维护截图）
 fast-deploy/promote-prod-branch.sh	DELETED	superset	复核ok
@@ -642,7 +642,7 @@ riveredge-backend/src/apps/kuaiplm/services/mold_sample_order_service.py	DELETED
 riveredge-backend/src/apps/kuaiplm/services/prototype_build_sheet_service.py	DELETED	superset	复核ok
 riveredge-backend/src/apps/kuaiplm/services/sample_process_service.py	DELETED	superset	复核ok
 riveredge-backend/src/apps/kuaiplm/services/trial_flow_service.py	DELETED	superset	复核ok
-riveredge-backend/src/apps/kuaiqms/manifest.json	fe65eb8375b9180b1c7554bfee2968fc3ab51fda	deferred	复核分叉(待决策)@2026-11-26：kuaiqms manifest 重组摘除 qc-sop 导航项，页面仍在，去留待决
+riveredge-backend/src/apps/kuaiqms/manifest.json	fe65eb8375b9180b1c7554bfee2968fc3ab51fda	applied	摘取：恢复qc-sop菜单项(inspection-docs组sort1)+顺移
 riveredge-backend/src/apps/kuaivision/__init__.py	d191dd6ac29bf20993280796f549cb5a1d5803b0	superset	复核ok
 riveredge-backend/src/apps/kuaivision/api/__init__.py	1837143c87a284ecc809af82c792e1100b69b3f9	superset	复核ok
 riveredge-backend/src/apps/kuaivision/api/router.py	1da54308d4b8527f83a1664766dab215ced841ef	superset	复核ok
@@ -707,7 +707,7 @@ riveredge-backend/src/apps/kuaizhizao/api/purchases/purchases.py	9ff2bfd20754b27
 riveredge-backend/src/apps/kuaizhizao/api/quotations/quotations.py	257e9f0e10990753577519246bb7a85dbad5e86e	applied	两段式专项API:pull-lines端点+commit_*+viewer_id
 riveredge-backend/src/apps/kuaizhizao/api/receipt_notices/receipt_notices.py	4e778ca897b22edb6ed84aa79f51b336978ed786	applied	两段式专项API:pull-lines端点+commit_*+viewer_id
 riveredge-backend/src/apps/kuaizhizao/api/reports/reports.py	d6638fa9dff63c9338a9799d6b8b960736344742	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
-riveredge-backend/src/apps/kuaizhizao/api/router.py	6120123b4a6ae9c984447ba89fe6b3df5a939274	deferred	复核分叉(待决策)@2026-11-26：上游财务路由挂 kuaizhizao；本地拆到 kuaicaiwu 架构分叉
+riveredge-backend/src/apps/kuaizhizao/api/router.py	6120123b4a6ae9c984447ba89fe6b3df5a939274	superset	保留本地：财务路由在kuaicaiwu(拆分架构)
 riveredge-backend/src/apps/kuaizhizao/api/routes_mobile.py	bca455360652ff6ed7196f97efea128c5b1b789e	applied	R5摘取:/home端点补refresh查询参数接线refresh_badges(修本地service已收参但路由不传的死参数断链)
 riveredge-backend/src/apps/kuaizhizao/api/sales_contracts/sales_contracts.py	597ea4e54acd9f376027da23096db2b4d1ddf984	applied	两段式专项API:pull-lines端点+commit_*+viewer_id
 riveredge-backend/src/apps/kuaizhizao/api/sales_order_changes/sales_order_changes.py	2d342c0f2c9156a0f0317afab1023e7ade1e106a	superset	复核ok
@@ -720,7 +720,7 @@ riveredge-backend/src/apps/kuaizhizao/api/tools/tools.py	0025db9cb899a8d3dd5d4b3
 riveredge-backend/src/apps/kuaizhizao/api/visual_scheduling/visual_scheduling.py	585de4b3f271516646d3da04eb0be92c3f83ee32	applied	排产策略/产线APS簇整落：策略目录+normalize显式失败、引擎整换(本地required_date→demand_item.delivery_date适配)、产线节拍/自制件绑定硬门禁、撤排/产线改派端点、甘特产线泳道+策略向导+告警视图+交期预估抽屉
 riveredge-backend/src/apps/kuaizhizao/api/wave_pickings/wave_pickings.py	b9dfffd38138c86012b183aca94c51e1791d7073	applied	本轮积压API快修：复用现有权限解析/依赖，4文件逐个注册smoke与拒绝不执行业务回归通过；未更改权限码/manifest，权限扫描的裸purchase-order为HEAD已有问题
 riveredge-backend/src/apps/kuaizhizao/authorization/data_scope_setup.py	31dafa5ee523079c6a48e25fa3b5001dc695e79b	applied	R3批：上游1e5d8e1c2d..078e273520落地
-riveredge-backend/src/apps/kuaizhizao/bootstrap.py	8a7789543321f1a0b6d5219d68d3b2974251d220	deferred	复核分叉(待决策)@2026-11-26：上游 register_finance 引用展示真源注册；本地依赖 kuaicaiwu bootstrap
+riveredge-backend/src/apps/kuaizhizao/bootstrap.py	8a7789543321f1a0b6d5219d68d3b2974251d220	superset	保留本地：finance注册在kuaicaiwu侧
 riveredge-backend/src/apps/kuaizhizao/constants/__init__.py	9b672cedc430953028b342295159b98b2566de35	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/constants/demand_computation_status.py	24ac64df244ce869bfb44739fd86ed8c3c498a13	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/constants/maintenance_scheme.py	575b527bc0cacd49cf517202ffc3755a9d68c7e0	applied	整取/适配落地；EQUIPMENT_STATUS_PROTECTED、dashboard_todo_permission、DeliveryNoticeSign 已补；迁移20261126000001
@@ -1161,7 +1161,7 @@ riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/purchase_r
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/quotation.py	6325ec1c5fe2213053090f31508cc925d0a26576	applied	簇8:SUBMITTED门控取上游;quotation/sales_order保留require_audit_before_print兼容参;sales_return保留audit_required confirm豁免;shipment_notice整取上游
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/receipt_notice.py	ca246ededda2a59889afc0976fc0ff96bd1fa45c	superset	复核ok
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/reporting_record.py	fea28e3b04d00a2233a659ce10e109cc77fa4dd5	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
-riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/review_submission_gate.py	97b3167cbd778a53ba1aa75b43fde78992d55d5b	deferred	复核分叉(待决策)@2026-11-26：review_submitted is not True 放宽删除权限，语义分叉
+riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/review_submission_gate.py	97b3167cbd778a53ba1aa75b43fde78992d55d5b	applied	摘取：严格版review_submitted is False
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/rework_order.py	16fdf3fdff1b4c607cacc3952f4f62af72986002	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/sales_contract.py	1649f113fba83e5ed3518f6150195336395dd147	applied	簇8：SUBMITTED状态机增量取上游tip（无本地独有硬化，无require_audit冲突）
 riveredge-backend/src/apps/kuaizhizao/services/document_action_policy/sales_forecast.py	7170569605918258720e677018abfde8701ce0cd	applied	两段式专项:commit_*/submit_for_review/pull-lines;硬化回补(spec143/144);finance import改kuaicaiwu
@@ -1272,7 +1272,7 @@ riveredge-backend/src/apps/kuaizhizao/services/menu_badge_counts_cache.py	98d90f
 riveredge-backend/src/apps/kuaizhizao/services/menu_badge_counts_extended.py	557495987ce2aea1d9be1c37dd52a21367c28aa6	superset	复核ok
 riveredge-backend/src/apps/kuaizhizao/services/menu_badge_counts_service.py	4b232def781abb45ff44ec41fb47000adb0395df	applied	R5摘取:pending_only角标语义(采购申请只计待审)+bypass_section_cache链路恢复(修mobile_home_service refresh_badges断链TypeError)+fetch_menu_badge_counts透传get_or_compute_section bypass+solo_row today-tasks上游条件;本地_shared_menu_badge_counts TTL缓存增强保留
 riveredge-backend/src/apps/kuaizhizao/services/menu_badge_scope.py	7d5e3fd624eb59b72a2cbd8a16f8cb8483d8f979	applied	宽区间补登：上游tip已落地（同文/等价映射/预审A包复核）
-riveredge-backend/src/apps/kuaizhizao/services/misc_voucher_finance_bridge.py	a47fc6d05ee519bb7abec61d73946632a05597b5	deferred	复核漏摘(待摘)@2026-11-26：上游审核挂应收/应付；本地 posting 明确不产生
+riveredge-backend/src/apps/kuaizhizao/services/misc_voucher_finance_bridge.py	a47fc6d05ee519bb7abec61d73946632a05597b5	applied	摘取：审核挂应收/应付桥接(子代理落地)
 riveredge-backend/src/apps/kuaizhizao/services/misc_voucher_posting_service.py	26a1c6eb714b015375667a128144cb0fbca7a22b	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/services/mobile_home_service.py	53d1fc65d3ba4eac67c10d986c35cd106043b27c	applied	R5簇复核:refresh_badges→bypass_section_cache链路下游已修复接线,本文件语义与上游一致
 riveredge-backend/src/apps/kuaizhizao/services/mobile_workbench.py	0857fa3a804c88840183568cded7cd1a682f631f	applied	R5摘取:pending_only角标语义(采购申请只计待审)+bypass_section_cache链路恢复(修mobile_home_service refresh_badges断链TypeError)+fetch_menu_badge_counts透传get_or_compute_section bypass+solo_row today-tasks上游条件;本地_shared_menu_badge_counts TTL缓存增强保留
@@ -1285,10 +1285,10 @@ riveredge-backend/src/apps/kuaizhizao/services/order_change/helpers.py	1124d0d63
 riveredge-backend/src/apps/kuaizhizao/services/other_expense_application_pull_service.py	2fc88732bebae002cdcde57a73966c7b0d0393a8	domain-out	本地无 OtherExpenseApplication 实体域（其他费用申请整体域外，finance 侧）
 riveredge-backend/src/apps/kuaizhizao/services/other_expense_application_push_service.py	c35d2950d1cfb170419b7d8ac50f0859cf5f8ac6	domain-out	本地无 OtherExpenseApplication 实体域（其他费用申请整体域外，finance 侧）
 riveredge-backend/src/apps/kuaizhizao/services/other_expense_application_service.py	9022a3276c05097f4c4f58800d82f315fed73fcc	domain-out	其他费用申请整体域外（与push/pull服务判定一致，finance侧平行域）
-riveredge-backend/src/apps/kuaizhizao/services/other_expense_audit_service.py	f2fbb62e07912fb6094bf0b60f42f986f9912529	deferred	复核分叉(待决策)@2026-11-26：迁 kuaicaiwu 但 approval_instance_service.py:6149 仍 import 旧路径
+riveredge-backend/src/apps/kuaizhizao/services/other_expense_audit_service.py	f2fbb62e07912fb6094bf0b60f42f986f9912529	superset	保留本地：已迁kuaicaiwu;approval_instance_service旧路径已修
 riveredge-backend/src/apps/kuaizhizao/services/other_expense_service.py	88ccac22e3	domain-out	R4:本地kuaicaiwu MiscVoucher体系,不建kuaizhizao财务外壳
 riveredge-backend/src/apps/kuaizhizao/services/other_inbound_sync_service.py	a51bdde878168ea87b4a39b4d5ee2a507e04d56e	superset	复核ok
-riveredge-backend/src/apps/kuaizhizao/services/other_income_audit_service.py	1faadb9de3fa0631a0802e8f8dee3fb911732a17	deferred	复核分叉(待决策)@2026-11-26：迁 kuaicaiwu 但 approval_instance_service.py:6177 仍 import 旧路径
+riveredge-backend/src/apps/kuaizhizao/services/other_income_audit_service.py	1faadb9de3fa0631a0802e8f8dee3fb911732a17	superset	保留本地：已迁kuaicaiwu;approval_instance_service旧路径已修
 riveredge-backend/src/apps/kuaizhizao/services/other_income_service.py	af128b5c6c5ba26191486762fc5b46d1594e7789	domain-out	R2:本地无kuaizhizao侧other_expense/other_income实现(财务权威在apps.kuaicaiwu),上游kuaizhizao直推+服务构成平行财务路径,按no-duplicate不落地
 riveredge-backend/src/apps/kuaizhizao/services/other_outbound_sync_service.py	c4c2664278d3bf0ac18e8adbc801f87195c8f1a9	superset	复核ok
 riveredge-backend/src/apps/kuaizhizao/services/other_voucher_codes.py	95273e7aa5c386ac19a41967420c04565c0121d5	domain-out	本地无 OtherExpenseApplication 实体域（其他费用申请整体域外，finance 侧）
@@ -1297,7 +1297,7 @@ riveredge-backend/src/apps/kuaizhizao/services/outsource_cost_service.py	ab80759
 riveredge-backend/src/apps/kuaizhizao/services/outsource_inspection_service.py	ab8d149b8fc494391ed812064b6946abbf05c517	applied	补viewer_id审计富化+C-03 inspection_result已检验过程态+revoke_approval撤销审核
 riveredge-backend/src/apps/kuaizhizao/services/outsource_material_deduction_service.py	78e873080ff5c510ecbb9f14cd623a2e4f41f138	applied	tracked审计：与上游tip逐字节一致
 riveredge-backend/src/apps/kuaizhizao/services/outsource_material_issue_service.py	e2978afa21ba187c29ccf3c0a3cb527811ee1d24	applied	修OutsourceMaterialReturn漏import潜在NameError（_net_issued_qty_by_material退料净额链路）；其余已同步
-riveredge-backend/src/apps/kuaizhizao/services/outsource_material_receipt_service.py	992c3de4cd722ef6dd66120c6f7176903c324513	deferred	复核分叉(待决策)@2026-11-26：委外收货重构删了数量校验与 payable_recognition 写单
+riveredge-backend/src/apps/kuaizhizao/services/outsource_material_receipt_service.py	992c3de4cd722ef6dd66120c6f7176903c324513	applied	摘取：委外收货IQC门禁+数量校验+库存成本入账(子代理落地)
 riveredge-backend/src/apps/kuaizhizao/services/outsource_material_return_service.py	2f58f9fc5a577ac0900ecffe2e3d3be1c942aca6	applied	R2簇1 be_kuaizhizao 摘取落地（SUBSET直取/DIVERGED三方合并/适配）
 riveredge-backend/src/apps/kuaizhizao/services/outsource_order_batch_quantity.py	855c7323c86fdb88e492a84980a7c86f725760da	applied	R3批：上游1e5d8e1c2d..078e273520落地
 riveredge-backend/src/apps/kuaizhizao/services/outsource_order_issue_bridge.py	9f4052ce1845f007a0f26bb88b8c41e94979b438	applied	R3批：上游1e5d8e1c2d..078e273520落地
@@ -1433,7 +1433,7 @@ riveredge-backend/src/apps/kuaizhizao/utils/sales_order_push_qty.py	af7bf59c7ec2
 riveredge-backend/src/apps/kuaizhizao/utils/sales_price_amount.py	4f8d0089ce12dffd805c766b9f723a3e07ed65be	tracked	R5预审：与上游tip diff为0（逐字节一致）
 riveredge-backend/src/apps/kuaizhizao/utils/stock_posting.py	1410a6cc88c65a9a048ff5a4bb8f95b764c5ffb8	superset	复核ok
 riveredge-backend/src/apps/kuaizhizao/utils/work_order_group_bom_tree.py	772444da5fe2fce003b4f7234e8dadcbd040a83a	superset	复核ok
-riveredge-backend/src/apps/kuaizhizao/utils/working_time.py	34b631e7fc9eb8434117161153c6b8fc74183952	deferred	复核分叉(待决策)@2026-11-26：无已发布排班时上游有固定上下班回退，本地删除
+riveredge-backend/src/apps/kuaizhizao/utils/working_time.py	34b631e7fc9eb8434117161153c6b8fc74183952	applied	摘取：移除固定工时回退，仅排班口径
 riveredge-backend/src/apps/kuaizhizao/workflows/functions/__init__.py	e9c1902661513ab4f5f08bf074f22a1bf48cd000	applied	R2：与上游tip blob一致，本地已同步
 riveredge-backend/src/apps/kuaizhizao/workflows/functions/demand_computation_automation_workflow.py	c10106fe52596b0c0501d1aea66f6cc8c05d6d3b	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
 riveredge-backend/src/apps/master_data/api/_performance_route_access.py	4edfcdcf22a6ef68025a1988a6fa7feb839bdcdb	domain-out	海尔物联客户域不摘：apps/haoligo 被 gitignore 且本地无该包，摘迁移/测试/权限旁路/超时/列序会断引用或写入客户名
@@ -1592,7 +1592,7 @@ riveredge-backend/src/core/config/kingdee_cosmic_mfg_api_presets.json	e86ad5c5a3
 riveredge-backend/src/core/config/menu_sync_is_active_policy.py	705c29cf54cd10d91ec15c52498584724844d15d	applied	适配落地：超报/在制口径簇、领料material_model、本地_load_materials_by_ids适配、应用停用按route path收口菜单、split子行capabilities、销售变更单取单链、报工面板、价格本税率、DetailDrawer/uni-pull/global.less/zh-CN/updateLog
 riveredge-backend/src/core/config/menu_takeover.py	a4fc7ce8a2f1faea7f3123bb4e9344044e45c65d	applied	摘取：menu_takeover_service与上游字节一致（reconcile+is_consumer_effective+5处激活门禁）；config补META_TENANT_DISABLED/meta_blocks_menu_activation；menu_service写入路径+activate_application_menus_preserving_tenant_disabled+application_service三处接线；角色赋权路径exclude(tenant_disabled)；迁移1049→20261123000038
 riveredge-backend/src/core/config/permission_action_spec.py	f0975c431321b21dbfc182f4865f4d44536d1aa2	superset	复核ok
-riveredge-backend/src/core/config/pro_app_catalog.py	b9556135fc166edd923d868cc18e044af301d773	deferred	复核分叉(待决策)@2026-11-26：PRO_APP_CODES 上游含 kuaipd/kuaiplm/kuaicaiwu/kuaioa/kuaiconnect；本地未列 PRO
+riveredge-backend/src/core/config/pro_app_catalog.py	b9556135fc166edd923d868cc18e044af301d773	superset	保留本地：5app非PRO决策
 riveredge-backend/src/core/config/rework_order_funide_profile.py	3dcb60c3052a1be56d76c4cc6b2faaac645330cf	domain-out	客户品牌行业种子(funide)，通用产品规则不入产品源码；form_profile 回退段已剔除，通用行业配置经 IndustryExtensionRuntimeService 解析
 riveredge-backend/src/core/config/scheduled_job_registry.py	51fc30d34f0caaaf47f8bf0796089c1e243c8973	applied	已摘取@2026-11-26
 riveredge-backend/src/core/config/system_dictionaries.py	7a73228cc264a160196d1666cb3262b769788848	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
@@ -1674,7 +1674,7 @@ riveredge-backend/src/core/services/approval/review_submission_state.py	666b8270
 riveredge-backend/src/core/services/approval/uni_audit_dispatch.py	e4e868f2eab3052d5e9f6391bfea0c1a189212f4	applied	R3批：上游1e5d8e1c2d..078e273520落地
 riveredge-backend/src/core/services/approval/uni_audit_handlers.py	5ad7c665e897a057d393516fd7f1e730433f78b1	applied	approval增量专项:quotation/contract/forecast/order_change commit+submit_review分离,purchase_receipt dispatch新增;sales_order/shipment_notice/sales_delivery/work_order/sales_return/purchase_return两段式服务层未移植,submit_review未接
 riveredge-backend/src/core/services/approval/uni_audit_service.py	d7fa51d1b18024cbe39ff430cc0b76920b4c7c88	applied	R3批：上游1e5d8e1c2d..078e273520落地
-riveredge-backend/src/core/services/authorization/access_control_service.py	9855c48ece85df94621129a065b30f25a3aad7f1	deferred	复核分叉(待决策)@2026-11-26：上游取消宿主隐式 display 放行；本地保留 implicit_host_grant
+riveredge-backend/src/core/services/authorization/access_control_service.py	9855c48ece85df94621129a065b30f25a3aad7f1	applied	摘取：严格fail-closed，取消隐式host display放行
 riveredge-backend/src/core/services/authorization/data_scope_resolver_registry.py	912b6621e9813af7e774b593dc8bff84cb807bea	applied	整取/适配落地(品牌/spec143/kuaicaiwu保留);pytest摘取文件118passed
 riveredge-backend/src/core/services/authorization/data_scope_resolvers.py	9d68c69423e7f8d9bbc0b69ccbaa9980ee6533a8	applied	R3批：上游1e5d8e1c2d..078e273520落地
 riveredge-backend/src/core/services/authorization/data_scope_resource_registry.py	5a8a54e510610e6712f17e3258f240598f979218	applied	R3批：上游1e5d8e1c2d..078e273520落地
@@ -1683,7 +1683,7 @@ riveredge-backend/src/core/services/authorization/permission_policy_service.py	1
 riveredge-backend/src/core/services/authorization/permission_sync_service.py	c8369d8f7712da6fb6edd982387a6a70cc999a54	applied	补齐上游 display_grants 计数与结果键（display 授权机制本地已在）
 riveredge-backend/src/core/services/authorization/position_import_service.py	5d283d36d1cb68f97ce082318d894050843dcd7f	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/core/services/authorization/position_service.py	02fca63d9ed52972f884d5a0a1a674a1d82e44ae	applied	R2：与上游tip blob一致，本地已同步
-riveredge-backend/src/core/services/authorization/reference_registry_service.py	0dd8654d5261fba44981a4c88b981229c3b41480	deferred	复核分叉(待决策)@2026-11-26：上游 registry 仅校验 declared_targets；本地保留隐式授权图
+riveredge-backend/src/core/services/authorization/reference_registry_service.py	0dd8654d5261fba44981a4c88b981229c3b41480	applied	摘取：implicit_display_by_target/host_permissions_by_target结构
 riveredge-backend/src/core/services/authorization/role_permission_matrix_service.py	e37c6211dcf81c7a89b443a29cfbe3e0164edb32	applied	R3支撑依赖(范围外文件):collect_granted_resource_keys_for_role+display动作可见+权限矩阵保存不再强制启菜单
 riveredge-backend/src/core/services/authorization/role_service.py	d66c506ed1435a29b7a4c79769523fb6814c8f6e	applied	已摘取@2026-11-26
 riveredge-backend/src/core/services/authorization/user_permission_service.py	5c3291fd75d6fedb355625604dfdaff475c29be1	applied	R2簇5 core/sync:摘取上游tip实现
@@ -1787,7 +1787,7 @@ riveredge-backend/src/core/services/system/data_backup_jobs.py	d4e51390cb20dce46
 riveredge-backend/src/core/services/system/data_backup_policy.py	0229e2e40d43606ad652223204cbd8701dd786a1	superset	复核ok
 riveredge-backend/src/core/services/system/data_backup_service.py	ce082c94867fba29d7230e6bf5d11d3fd56001db	superset	复核ok
 riveredge-backend/src/core/services/system/installed_feature_scope.py	614bf57c63cbc110b0501941355c20f086206db3	applied	R2 be簇：master_data苍穹字段/批量启停/审批与消息服务/守卫等取上游tip+依赖补齐
-riveredge-backend/src/core/services/system/menu_service.py	f36c46c473e08422bf22c31f94815ecb534171db	deferred	复核分叉(待决策)@2026-11-26：上游菜单启停改 meta.tenant_disabled；本地 is_active 直写
+riveredge-backend/src/core/services/system/menu_service.py	f36c46c473e08422bf22c31f94815ecb534171db	applied	摘取：meta.tenant_disabled模型+is_manifest_deployed_on_node门控
 riveredge-backend/src/core/services/system/menu_takeover_service.py	0e3d23a633853c78da1fc0be80e0919ce3340f0e	applied	摘取：menu_takeover_service与上游字节一致（reconcile+is_consumer_effective+5处激活门禁）；config补META_TENANT_DISABLED/meta_blocks_menu_activation；menu_service写入路径+activate_application_menus_preserving_tenant_disabled+application_service三处接线；角色赋权路径exclude(tenant_disabled)；迁移1049→20261123000038
 riveredge-backend/src/core/services/system/site_setting_service.py	ca50b39964512eb482fb2fb393b8eb1ac782939c	superset	复核ok
 riveredge-backend/src/core/services/system/tenant_restore_heal.py	204a3fa342353de39b2bc747a4fa5f6f2702fa8f	applied	恢复后heal/realign步骤新文件，随data_backup_handlers配套
@@ -1800,7 +1800,7 @@ riveredge-backend/src/core/services/user/user_message_service.py	cc394453f026937
 riveredge-backend/src/core/services/user/user_service.py	b2ed2919cde5b9911df0a08f4b797f420528cfe3	applied	C密码策略/默认与临时重置整簇；应用扫描按目录项容忍OSError但整目录不可枚举上抛；63聚焦测试包含用户与菜单同步；生成口令不写日志
 riveredge-backend/src/core/tasks/ai_tasks.py	c777bb1bb963c4b94840e2d0bc732531190ca0e6	superset	复核ok
 riveredge-backend/src/core/tasks/data_backup_handlers.py	f0de096d35102561843b3eb0ceaa6e3cd70d5bdc	applied	整取/适配落地(品牌/spec143/kuaicaiwu保留);pytest摘取文件118passed
-riveredge-backend/src/core/tasks/taskiq_app.py	828fc9ba871804a9382cbcb409708b088efa5070	deferred	复核分叉(待决策)@2026-11-26：上游回退 ESCAPE tick 写法，本地重新引入
+riveredge-backend/src/core/tasks/taskiq_app.py	828fc9ba871804a9382cbcb409708b088efa5070	applied	摘取：回退ESCAPE写法+pro_orm_ready门禁;保留本地idle_session_timeout/星视觉/kuaiai_hitl
 riveredge-backend/src/core/utils/content_disposition.py	8837aa8b725207575385576f72716f5de4d9878d	applied	R2簇5 core/sync:摘取上游tip实现
 riveredge-backend/src/core/utils/db_transaction.py	39c13a3a4312655366d1a9c4e5d423be82e8c60a	applied	tracked审计：与上游tip逐字节一致
 riveredge-backend/src/core/utils/decimal_limits.py	dc1923ffcfd348d9cda8e2d62b1d07e1cce540ff	applied	tracked审计：与上游tip逐字节一致
@@ -2118,7 +2118,7 @@ riveredge-backend/tests/core/services/messaging/test_approval_wecom_push_service
 riveredge-backend/tests/core/services/messaging/test_wecom_recipient_resolve.py	e41189e8a12f6e083ef2f21c78c3efceafa9de58	applied	tracked审计：与上游tip逐字节一致
 riveredge-backend/tests/core/services/test_approval_nodes_overview_path.py	e54ef8bf2cdcc57d1310e39fce87925688bc1ed4	applied	两段式专项API:pull-lines端点+commit_*+viewer_id
 riveredge-backend/tests/core/services/test_data_scope_multi_role.py	9290261fb9255f97cbe157608108cd96676e6365	applied	R3批：上游1e5d8e1c2d..078e273520落地
-riveredge-backend/tests/core/services/test_menu_hierarchy_manifest_contract.py	d37868eaad356e79c6cb9527f3c7315fa1c24193	deferred	复核分叉(待决策)@2026-11-26：上游 kuaicaiwu 菜单物化机制；本地自承载并显式关闭
+riveredge-backend/tests/core/services/test_menu_hierarchy_manifest_contract.py	d37868eaad356e79c6cb9527f3c7315fa1c24193	superset	保留本地：按kuaicaiwu自承载改写
 riveredge-backend/tests/core/services/test_permission_policy_field_masks.py	f652240149e2e632bcac7c1a1905e5ffea319505	applied	R3 NEW: 字段掩码display-only排除与kind展开测试;19 passed
 riveredge-backend/tests/core/services/test_tenant_restore_primary_key_conflicts.py	d8aff40e5a34c89e590efc2eb56b522e06440c28	applied	摘取测试(符号在本地);3个用例skip待专项
 riveredge-backend/tests/core/services/test_user_administrator_management.py	1ecaad806e58f567cf153fd6ce3ef7cd48b70443	superset	复核ok
@@ -2743,7 +2743,7 @@ riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/Inboun
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/InboundPoPullEntryPage.tsx	51d6eeb977d28e00a0fdcca7c7e52089dc2b769b	applied	上游整取：批量删除+UniMaterialSelect
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/InboundProductionReturnPullEntryPage.tsx	d3ae2d29c2bb91ed5ec586d4ac881365f2e3c1ae	applied	R2 fe收尾：批配中心自定义字段/生产退料取单行仓位/半成品入库自定义字段富化/装拆单customFieldTableName/连接器市场取上游tip
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/InboundQuickPullModals.tsx	73bab57dc04714d84ba793011e52d8ba94a609e9	applied	R3批：上游1e5d8e1c2d..078e273520落地
-riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/InboundReceiptNoticePullEntryPage.tsx	4abc92c77087d7cb3176d2388cfc86586e2ad41c	deferred	复核分叉(待决策)@2026-11-26：收货通知成功后上游跳 hub 编辑页，本地跳列表直确认
+riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/InboundReceiptNoticePullEntryPage.tsx	4abc92c77087d7cb3176d2388cfc86586e2ad41c	applied	摘取：确认收货跳Hub编辑页
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/InboundSalesReturnPullEntryPage.tsx	baa8516fe9dece50651120bdd9685336f1ca37d1	applied	已摘取@2026-11-26
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/InboundWorkOrderPullEntryPage.tsx	a77ff80f26834c577e17c7fbec40c461671797b2	applied	上游整取：批量删除+UniMaterialSelect
 riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/OtherInboundEditModal.tsx	cc01db078234218870f498920ce2931cac9ddcf3	applied	簇W:生产领料审核能力(submit/withdraw/approve/revoke)+仓储金额方名脱敏渲染+叠列fieldResource;保留本地待审可删sales_delivery语义
@@ -2957,10 +2957,10 @@ riveredge-frontend/src/apps/kuaizhizao/utils/reportingWorkTime.test.ts	276988e47
 riveredge-frontend/src/apps/kuaizhizao/utils/reportingWorkTime.ts	ac506d964526437a0ebfe9831bc4e6e0a9f43696	superset	复核ok
 riveredge-frontend/src/apps/kuaizhizao/utils/resolve-partner-material-price.ts	DELETED	applied	13be286f11续:前端+财务适配+迁移
 riveredge-frontend/src/apps/kuaizhizao/utils/reworkOrderFormProfile.ts	65285358b120469c9aedfcd80fe705cfdf6c4f70	applied	已摘取@2026-11-26
-riveredge-frontend/src/apps/kuaizhizao/utils/reworkOrderLifecycle.ts	d1a1e7eb5f13babaffb3039f8e14f68e6583e139	deferred	复核分叉(待决策)@2026-11-26：返工 capabilities 缺省 fail-open vs 上游 fail-closed
+riveredge-frontend/src/apps/kuaizhizao/utils/reworkOrderLifecycle.ts	d1a1e7eb5f13babaffb3039f8e14f68e6583e139	applied	摘取：fail-closed caps
 riveredge-frontend/src/apps/kuaizhizao/utils/salesInvoiceCapabilityMessages.ts	a8398c9d28ff47f6dbc694c7a5bd3994724de680	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/utils/salesInvoiceUi.ts	ae29cc24ca962c989eb32ebfb0d01dd6d4f1389f	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-frontend/src/apps/kuaizhizao/utils/salesOrderLifecycle.ts	ff73857cbcc9948c1e21d6f7e50b475c5dc1023e	deferred	复核分叉(待决策)@2026-11-26：撤回条件 audit.phase=submitted vs 本地 isConfirmed(status)
+riveredge-frontend/src/apps/kuaizhizao/utils/salesOrderLifecycle.ts	ff73857cbcc9948c1e21d6f7e50b475c5dc1023e	applied	摘取：canWithdraw按phase===submitted
 riveredge-frontend/src/apps/kuaizhizao/utils/settlementCapabilityMessages.ts	8908cbef40269e692f9f8b44df1dd3b79d0c1bce	domain-out	上游kuaizhizao平行财务域：kuaicaiwu为本地权威财务实现，不引入并行体系（应收/应付/结算/发票/往来对账/utils/types/misc-category/other-voucher）
 riveredge-frontend/src/apps/kuaizhizao/utils/warehouseListCore.ts	cc5303152cb5bfb40b6802ae3b8131e8879160d5	applied	R3批：上游1e5d8e1c2d..078e273520落地
 riveredge-frontend/src/apps/kuaizhizao/utils/workOrderLifecycle.ts	b21d8aadc5850c79474927a544582d65be1e6158	applied	已摘取@2026-11-26
@@ -2970,7 +2970,7 @@ riveredge-frontend/src/apps/master-data/components/CustomerDetailDrawer.tsx	2cd2
 riveredge-frontend/src/apps/master-data/components/CustomerFormModal.tsx	88ccac22e3	applied	R4:默认付款方式统一+mix校验
 riveredge-frontend/src/apps/master-data/components/CustomerSelectDropdown.tsx	598418d2201704ecec57776f2730d38f26d26a20	superset	复核ok
 riveredge-frontend/src/apps/master-data/components/DrawingFormModal.tsx	f1ef8e90e94b90a63fdc364c445e92eb4564403a	applied	图纸整合包:整页重写+DrawingIntegratedPanels+DrawingProjectRefSelect/projectRefLabel/plmDeepLinks/rd-project-picker新文件;index撤三子页路由改Navigate;manifest撤三菜单;catalogTab/canViewDocumentHistory等本地旧实现按整包跟决策放弃;间隔号已修
-riveredge-frontend/src/apps/master-data/components/FabricationRawMaterialWizard.tsx	d33418d15e23c58390a825b7b20831f083be356a	deferred	复核分叉(待决策)@2026-11-26：领料默认 issueMethod 上游 pick vs 本地 backflush
+riveredge-frontend/src/apps/master-data/components/FabricationRawMaterialWizard.tsx	d33418d15e23c58390a825b7b20831f083be356a	applied	摘取：issueMethod默认pick+选项顺序
 riveredge-frontend/src/apps/master-data/components/InspectionStagesEditor.tsx	9bdacd0b614cdbaa0877bff6ad418f8fcf768567	applied	R2:MaterialForm检验阶段缺计划校验+存货类别选项+单位角色徽标取上游tip，随依赖InspectionStagesEditor/materialInventoryCategory
 riveredge-frontend/src/apps/master-data/components/MaterialBatchManageSyncFromSourceModal.tsx	f34172da0b874eaccb97f36c261d20fb27eac9fd	applied	R2簇4 master-data:摘取上游tip实现
 riveredge-frontend/src/apps/master-data/components/MaterialDedupAssistant.tsx	75e1a2f986db532daa8a967507a44389b5fb9659	applied	R2簇4 master-data:摘取上游tip实现
@@ -3132,7 +3132,7 @@ riveredge-frontend/src/components/layout-templates/CanvasPageTemplate.tsx	a8bc7b
 riveredge-frontend/src/components/layout-templates/DetailDrawerTemplate.tsx	747fe466e362d2123ddc3454390a9cd2bbeb51aa	applied	适配落地：超报/在制口径簇、领料material_model、本地_load_materials_by_ids适配、应用停用按route path收口菜单、split子行capabilities、销售变更单取单链、报工面板、价格本税率、DetailDrawer/uni-pull/global.less/zh-CN/updateLog
 riveredge-frontend/src/components/layout-templates/DocumentFormPageHeaderActions.tsx	dd85896790036614dca9585816a365a4bc76ada0	applied	上游整取/适配：占位符统一、pull-query新选项(留resetModal)、UniReport合计行、InputNumber去补零、IM解散(留星AI)、HeaderActions连UX
 riveredge-frontend/src/components/layout-templates/DocumentFormPageLayout.tsx	1ddc246b6b001f101711be9ccc68e7ea4d77b2ef	superset	复核ok
-riveredge-frontend/src/components/layout-templates/FormModalTemplate.tsx	eff4e96249e887afc8876578304bb95e5dd1923a	deferred	复核分叉(待决策)@2026-11-26：上游 FormModal embedded 模式被本地移除
+riveredge-frontend/src/components/layout-templates/FormModalTemplate.tsx	eff4e96249e887afc8876578304bb95e5dd1923a	applied	摘取：恢复embedded模式
 riveredge-frontend/src/components/layout-templates/MultiTabListPageTemplate.tsx	0ebc6bbc2d6f0d00f90f7f1893cae4a58a14cf09	applied	用户决定摘取横向滚动契约：notifyResizeBus/tab-host/min-width:0。样式写入 src/global.less，不 import 组件 less，不建 styles/global.less，保留 antd6 size=medium，不摘海尔 spin
 riveredge-frontend/src/components/layout-templates/constants.ts	3e3ffc4b9cba07831e731721c91931b11e9c034a	applied	用户决定摘取横向滚动契约：notifyResizeBus/tab-host/min-width:0。样式写入 src/global.less，不 import 组件 less，不建 styles/global.less，保留 antd6 size=medium，不摘海尔 spin
 riveredge-frontend/src/components/layout-templates/detailDrawerDescriptionItems.tsx	327d5d3b1628bdc2d103a35508394c8b5152f072	applied	tracked审计：与上游tip逐字节一致
@@ -3320,7 +3320,7 @@ riveredge-frontend/src/locales/en-US.ts	a9ead09073ea5b2b2690650c6265f5ad7ecd4554
 riveredge-frontend/src/locales/generated/codeRulePage/zh-CN.ts	3890fd1e4a1cb88e1a1e125e13cbd4f7d8f5ed6d	applied	tracked审计：与上游tip逐字节一致
 riveredge-frontend/src/locales/generated/presetEntity/zh-CN.ts	55f3e547746597b02efb8d8e88fb2d9ad9a28ab6	applied	tracked审计：与上游tip逐字节一致
 riveredge-frontend/src/locales/generated/systemDictionary/en-US.ts	92aacbcf904233360eb017053822ff464a0d82a7	applied	R2：与上游tip blob一致，本地已同步
-riveredge-frontend/src/locales/generated/systemDictionary/zh-CN.ts	1007aff6ef6dae5fe20568f2bd48d3d63bbfa186	deferred	复核分叉(待决策)@2026-11-26：系统字典 ORDER_TYPE 资产采购→框架协议 分叉+缺生产完工入库
+riveredge-frontend/src/locales/generated/systemDictionary/zh-CN.ts	1007aff6ef6dae5fe20568f2bd48d3d63bbfa186	applied	摘取：生产完工入库+资产采购回上游
 riveredge-frontend/src/locales/help-pages/zh-CN.ts	f94eb195762cadf73501afc84d22cd916c72e71d	applied	微差异桶：上游真修复摘取（ImportError优雅跳过可选包ORM/自定义字段排序tiebreak/PRO应用徽标根路径识别/colProps布局/showAdvancedSearch/loading上移/未用import清理/antd6 locale简化/helpHint缺键/File类型/documentReplacementRegistry换glob+占位组件/PRO升级提示License激活按钮(antd6适配medium)）
 riveredge-frontend/src/locales/ja-JP.login.ts	a2b965378c78d3288ea887337df0cd52c9101c15	superset	复核ok
 riveredge-frontend/src/locales/ja-JP.ts	461f2aa0a3bf5d21755a03318b994430a2090711	applied	已摘取@2026-11-26
@@ -3408,9 +3408,9 @@ riveredge-frontend/src/pages/system/shared/useResourceCategoryPanel.tsx	ac8d7ead
 riveredge-frontend/src/pages/system/users/components/UserFormModal.tsx	0caa11b44e59bf94517485796593978738245f70	applied	整取/适配:供应商远端搜索、gift仓、productProcess分组、sio租户票、WeCom指南、config-center、打印精度;station校验/品牌/Dayjs类型保留
 riveredge-frontend/src/pages/system/users/list/index.tsx	e39d412494f9fad06d39abac9d46e1bad0ae5b31	applied	C密码策略/默认与临时重置整簇；应用扫描按目录项容忍OSError但整目录不可枚举上抛；63聚焦测试包含用户与菜单同步；生成口令不写日志
 riveredge-frontend/src/pages/system/utils/systemListPresentation.tsx	a54778ee2ae70396fcc0fc09a5bba9bbb786e822	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
-riveredge-frontend/src/patches/isolatedRcDialog.tsx	DELETED	deferred	复核分叉(待决策)@2026-11-26：deprecated 空壳墓碑文件，可删
+riveredge-frontend/src/patches/isolatedRcDialog.tsx	DELETED	applied	摘取：删除deprecated空壳
 riveredge-frontend/src/polyfills.ts	DELETED	domain-out	上游已删除/结构重构（app.tsx→app/index.tsx），本地保留现有结构
-riveredge-frontend/src/routes/AppRoutes.tsx	0726abcbbba9c5166eb37612a5caa8d4b0949ec8	deferred	复核分叉(待决策)@2026-11-26：上游保留 kuaicaiwu finance-management 兼容重定向；本地删除
+riveredge-frontend/src/routes/AppRoutes.tsx	0726abcbbba9c5166eb37612a5caa8d4b0949ec8	superset	保留本地+补KuaizhizaoFinanceLegacyRedirect反向重定向
 riveredge-frontend/src/routes/KuaiconnectRouteGate.tsx	200cfd2c6361d382ec4c7907b97f8ee8b9e45e11	applied	R2：与上游tip blob一致，本地已同步
 riveredge-frontend/src/routes/SystemRoutes.tsx	4bac3d9406d9ff413d5747b6bdda918dc66a7b31	superset	复核ok
 riveredge-frontend/src/routes/index.tsx	6180838945838a6304f73b22854b1b1b3181805c	superset	复核ok

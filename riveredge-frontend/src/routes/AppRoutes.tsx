@@ -12,7 +12,7 @@
  */
 
 import React, { Component, useEffect, useState, useMemo, useRef, Suspense, type ErrorInfo, type ReactNode } from 'react';
-import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { Alert, Button } from 'antd';
 import { AlertTriangle, CircleX, Lightbulb, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -247,6 +247,15 @@ const AppLoadError: React.FC<{ error: Error; onRetry: () => void }> = ({ error, 
  *
  * 异步加载业务应用，确保应用层问题不影响系统层
  */
+/** 财务管理旧路径（曾挂在快制造下）重定向到 kuaicaiwu，防止历史链接 404 */
+function KuaizhizaoFinanceLegacyRedirect() {
+  const location = useLocation();
+  const next =
+    location.pathname.replace('/apps/kuaizhizao/finance-management', '/apps/kuaicaiwu/finance-management') +
+    location.search;
+  return <Navigate to={next} replace />;
+}
+
 const AppRoutes: React.FC = () => {
   const { t } = useTranslation();
   const [hasScanned, setHasScanned] = useState(false);
@@ -293,7 +302,13 @@ const AppRoutes: React.FC = () => {
   // 彻底消除 useEffect 异步延迟造成的"空路由"竞态窗口，无需任何延迟兜底）
   const appRoutes = useMemo<React.ReactNode[]>(() => {
     if (!applications.length) return [];
-    const routes: React.ReactNode[] = [];
+    const routes: React.ReactNode[] = [
+      <Route
+        key="kuaizhizao-finance-legacy"
+        path="kuaizhizao/finance-management/*"
+        element={<KuaizhizaoFinanceLegacyRedirect />}
+      />,
+    ];
     for (const app of applications) {
       // 缺省时按约定补齐，避免 DB 空 entry_point 导致整应用无路由、菜单点进去内容纯白
       const entryPoint = (app.entry_point || '').trim() || `../apps/${app.code}/index.tsx`;

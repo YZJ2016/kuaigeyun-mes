@@ -21,6 +21,9 @@ PAYABLE_SOURCE_PRICE_SETTLEMENT = "采购调价"
 PAYABLE_SOURCE_PURCHASE_INVOICE_DISCOUNT = "采购收票优惠调整"
 PAYABLE_SOURCE_ORDER_MILESTONE = "订单里程碑"
 
+RECEIVABLE_SOURCE_OTHER_INCOME = "其他费用收入"
+PAYABLE_SOURCE_OTHER_EXPENSE = "其他费用支出"
+
 
 def is_sales_return_offset_receivable(source_type: str | None) -> bool:
     """销售退货确认生成的红字/冲减应收（往来贷方冲减，非正向待收款）。"""

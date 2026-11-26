@@ -73,6 +73,9 @@ FRONTEND_START_TIMEOUT="${FRONTEND_START_TIMEOUT:-90}"
 DEFAULT_PRO_REPO_URL='https://gitee.com/kuaigeyun/kuaigeyun-pro.git'
 DEFAULT_CUSTOM_REPO_URL='https://gitee.com/kuaigeyun/kuaigeyun-custom.git'
 DEFAULT_CLIENT_REPO_URL='https://gitee.com/kuaigeyun/kuaigeyun-client.git'
+# 可选：静态前端发布仓 / AOCI 认知索引仓（仅 PROD_WEB_DIST_SOURCE=dist_repo 或 install-web-dist / install-aoci 时使用）
+DEFAULT_WEB_DIST_REPO_URL='https://gitee.com/kuaigeyun/kuaigeyun-dist.git'
+DEFAULT_AOCI_REPO_URL='https://gitee.com/kuaigeyun/kuaigeyun-aoci.git'
 
 log_info()  { printf '\033[0;34m[%s] INFO: %s\033[0m\n' "$(date +'%H:%M:%S')" "$*"; }
 log_warn()  { printf '\033[1;33m[%s] WARN: %s\033[0m\n' "$(date +'%H:%M:%S')" "$*"; }
@@ -2856,6 +2859,77 @@ backend_uv_extra_args() {
     printf '%s' "$args"
 }
 
+# uv sync 后的 .venv Python（Windows pip 版 uv 的 `uv run` 易 trampoline 失败，迁移/脚本优先直调）
+backend_venv_python() {
+    local py=""
+    if [ -f "$BACKEND_DIR/.venv/Scripts/python.exe" ]; then
+        py="$BACKEND_DIR/.venv/Scripts/python.exe"
+    elif [ -x "$BACKEND_DIR/.venv/bin/python" ]; then
+        py="$BACKEND_DIR/.venv/bin/python"
+    fi
+    [ -n "$py" ] || return 1
+    [ -f "$py" ] || return 1
+    "$py" --version >/dev/null 2>&1 || return 1
+    echo "$py"
+}
+
+# Windows Git Bash + pip 安装的 uv：`uv run` 会走 trampoline，在 Roaming Scripts / 部分盘符路径下失败。
+# sync 后直调 .venv Python 等价于旧行为；非 Windows 仍走 uv run。
+_backend_nohup() {
+    local logfile="$1" pidfile="$2"
+    shift 2
+    local vpy
+    if is_windows_gitbash && vpy="$(backend_venv_python)"; then
+        # 直调 python.exe 时勿再传 argv 里的 python（否则会被当成脚本路径 riveredge-backend/python）
+        [ "${1:-}" = "python" ] && shift
+        nohup "$vpy" "$@" >>"$logfile" 2>&1 &
+    else
+        nohup "$(resolve_uv)" run $(backend_uv_extra_args) "$@" >>"$logfile" 2>&1 &
+    fi
+    echo $! >"$pidfile"
+}
+
+# 将 riveredge-backend/.env 导出到当前 shell（不覆盖已有环境变量键）。
+# deploy.env 与 .env 分工：前者部署开关，后者含 RIVEREDGE_DB_POOL_* 等运行态；
+# 仅 source deploy.env 时低配池写进 .env 却进不了进程。
+# 约定：调用方先 load_deploy_env，再 export_backend_dotenv。
+export_backend_dotenv() {
+    if [ ! -f "$ENV_FILE" ]; then
+        return 0
+    fi
+    if [ ! -r "$ENV_FILE" ]; then
+        log_warn "无法读取 ${ENV_FILE}，跳过导出 backend .env"
+        return 0
+    fi
+    local _exports
+    _exports="$(
+        ENV_FILE_PATH="$ENV_FILE" python3 - <<'PY'
+import os, shlex
+from pathlib import Path
+path = Path(os.environ["ENV_FILE_PATH"])
+for raw in path.read_text(encoding="utf-8").splitlines():
+    line = raw.strip()
+    if not line or line.startswith("#") or "=" not in line:
+        continue
+    key, val = line.split("=", 1)
+    key = key.strip()
+    if not key or not key.replace("_", "").isalnum() or key[0].isdigit():
+        continue
+    if key in os.environ:
+        continue
+    val = val.strip()
+    if len(val) >= 2 and val[0] == val[-1] and val[0] in "'\"":
+        val = val[1:-1]
+    print(f"export {key}={shlex.quote(val)}")
+PY
+    )" || {
+        log_warn "导出 backend .env 失败，跳过"
+        return 0
+    }
+    # shellcheck disable=SC2086
+    eval "$_exports"
+}
+
 # glibc 多 arena 收敛：降低 CPython 多线程下 RSS 虚高（生产 API / Worker 启动路径唯一出口）
 export_production_malloc_tuning() {
     export MALLOC_ARENA_MAX="${MALLOC_ARENA_MAX:-2}"
@@ -4150,10 +4224,32 @@ cmd_build() {
     log_ok "前端构建完成"
 }
 
-# 生产 update/start 前构建前端 dist：dist 不再入库，部署机每次 update 现构建。
-# 需要 Node 与约 NODE_BUILD_MEM MB 内存；.gz/.br 随后由 precompress_web_dist 现生成。
+# 生产 update/start 前确保前端 dist：默认本机构建（dist 不再入库，部署机每次 update 现构建；
+# 需要 Node 与约 NODE_BUILD_MEM MB 内存；.gz/.br 由 precompress_web_dist 现生成）。
+# 可选：PROD_WEB_DIST_SOURCE=dist_repo 时改为从静态前端发布仓（kuaigeyun-dist）同步，
+# 部署机无需 Node 构建（弱机友好；发布由发版机 build.web.sh 完成）。
 cmd_ensure_frontend_dist() {
     load_deploy_env
+    if [ "${PROD_WEB_DIST_SOURCE:-local_build}" = "dist_repo" ]; then
+        local frontend_index="$FRONTEND_DIR/dist/index.html"
+        if [ ! -f "$frontend_index" ]; then
+            if [ "${WEB_DIST_AUTO_SYNC:-1}" = "1" ]; then
+                log_info "缺少 Web dist，正在从静态前端发布仓同步…"
+                sync_web_dist_from_repo || exit 1
+            else
+                log_error "缺少 ${frontend_index}，且 WEB_DIST_AUTO_SYNC=0"
+                log_error "请执行 ./fast-deploy/deploy.sh install-web-dist，或改回 PROD_WEB_DIST_SOURCE=local_build"
+                exit 1
+            fi
+        fi
+        if [ ! -f "$FRONTEND_DIR/dist/login.html" ]; then
+            log_error "缺少 $FRONTEND_DIR/dist/login.html（登录 MPA）。请由发版机构建并发布静态前端，或执行 install-web-dist"
+            exit 1
+        fi
+        precompress_web_dist "$FRONTEND_DIR/dist"
+        log_ok "Web dist 就绪（来自发布仓），跳过服务器构建"
+        return 0
+    fi
     cmd_build
 }
 
@@ -5680,14 +5776,37 @@ cmd_uninstall_service() {
     log_ok "已移除 ${SYSTEMD_UNIT_NAME} 开机自启"
 }
 
+_systemctl_restart_unit() {
+    local unit=$1
+    if [ "$(id -u)" -eq 0 ]; then
+        systemctl restart "$unit"
+    elif sudo -n true 2>/dev/null; then
+        sudo systemctl restart "$unit"
+    else
+        log_error "需要 sudo 重启单元: sudo systemctl restart ${unit}"
+        return 1
+    fi
+}
+
 cmd_restart_backend() {
     load_deploy_env
+    if [ "$DEPLOY_MODE" = "prod" ] && systemd_managed_prod_stack; then
+        log_info "systemd 重启 ${SYSTEMD_BACKEND_UNIT_NAME}..."
+        _systemctl_restart_unit "$SYSTEMD_BACKEND_UNIT_NAME" || return 1
+        log_info "等待后端就绪（最多 ${BACKEND_START_TIMEOUT}s）..."
+        if ! wait_for_backend_health; then
+            log_error "后端重启后未通过 /health，查看: journalctl -u ${SYSTEMD_BACKEND_UNIT_NAME} -n 50 --no-pager"
+            return 1
+        fi
+        log_ok "后端已重启"
+        return 0
+    fi
     stop_service backend
     kill_port "$BACKEND_PORT"
     if [ "$DEPLOY_MODE" = "dev" ]; then
         start_backend_dev
     else
-        start_backend_prod
+        FORCE_BACKEND_RESTART=1 start_backend_prod
     fi
 }
 
@@ -5698,15 +5817,57 @@ cmd_restart_frontend() {
         rm -f "$LOGS_DIR/frontend.pid"
         start_frontend_dev
     else
-        stop_service caddy
-        start_caddy_prod
+        # 生产前端为静态 dist，由 Caddy 提供
+        cmd_restart_caddy
     fi
+}
+
+cmd_restart_caddy() {
+    load_deploy_env
+    if [ "$DEPLOY_MODE" = "prod" ] && systemd_managed_prod_stack; then
+        log_info "systemd 重启 ${SYSTEMD_CADDY_UNIT_NAME}..."
+        _systemctl_restart_unit "$SYSTEMD_CADDY_UNIT_NAME" || return 1
+        if ! verify_caddy_serving; then
+            log_error "Caddy 重启后校验失败，查看: journalctl -u ${SYSTEMD_CADDY_UNIT_NAME} -n 50 --no-pager"
+            return 1
+        fi
+        log_ok "Caddy 已重启"
+        return 0
+    fi
+    stop_service caddy
+    CADDY_START_FORCE=1 start_caddy_prod
 }
 
 cmd_restart_worker() {
     load_deploy_env
+    if [ "$DEPLOY_MODE" = "prod" ] && systemd_managed_prod_stack; then
+        log_info "systemd 重启 ${SYSTEMD_TASKIQ_WORKER_UNIT_NAME}..."
+        _systemctl_restart_unit "$SYSTEMD_TASKIQ_WORKER_UNIT_NAME" || return 1
+        log_ok "Worker 已重启"
+        return 0
+    fi
     stop_service worker
+    if [ "$DEPLOY_MODE" = "dev" ]; then
+        # 开发态 worker 启动脚本通常一并拉起 scheduler；单独停 worker 后走完整 start
+        stop_service scheduler
+        start_worker_dev
+    else
+        # 仅重启 worker：清 pid 后复用 start_worker_prod（scheduler 仍在则跳过）
+        rm -f "$LOGS_DIR/worker.pid"
+        start_worker_prod
+    fi
+}
+
+cmd_restart_scheduler() {
+    load_deploy_env
+    if [ "$DEPLOY_MODE" = "prod" ] && systemd_managed_prod_stack; then
+        log_info "systemd 重启 ${SYSTEMD_TASKIQ_SCHEDULER_UNIT_NAME}..."
+        _systemctl_restart_unit "$SYSTEMD_TASKIQ_SCHEDULER_UNIT_NAME" || return 1
+        log_ok "Scheduler 已重启"
+        return 0
+    fi
     stop_service scheduler
+    rm -f "$LOGS_DIR/scheduler.pid"
     if [ "$DEPLOY_MODE" = "dev" ]; then
         start_worker_dev
     else
@@ -8070,6 +8231,216 @@ cmd_install_client_repo() {
     log_ok "移动端 H5 源仓已同步: ${path}"
 }
 
+# ---------- 可选：静态前端发布仓 / AOCI 认知索引仓（dist_repo 模式才使用）----------
+# 本地默认 PROD_WEB_DIST_SOURCE=local_build（部署机现构建），下列函数仅在
+# install-web-dist / install-aoci 子命令或 dist_repo 模式下被调用。
+
+_dist_default_repo_path() {
+    echo "$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-dist"
+}
+
+_web_dist_repo_token() {
+    local token
+    token="$(read_deploy_env_value WEB_DIST_GIT_TOKEN || true)"
+    [ -n "$token" ] || token="$(read_deploy_env_value PRO_GIT_TOKEN || true)"
+    [ -n "$token" ] || token="$(read_deploy_env_value CLIENT_GIT_TOKEN || true)"
+    printf '%s\n' "$(_env_read_trim "$token")"
+}
+
+_resolve_web_dist_repo_root() {
+    local repo_root="$1"
+    if [ -f "$repo_root/index.html" ] && [ -f "$repo_root/login.html" ]; then
+        printf '%s\n' "$repo_root"
+        return 0
+    fi
+    return 1
+}
+
+install_web_dist_from_dist_repo() {
+    local dist_repo_root="$1"
+    local src_root dest_dist
+    src_root="$(_resolve_web_dist_repo_root "$dist_repo_root")" || {
+        log_error "dist 仓根目录缺少 index.html / login.html（方案 A：产物在仓根）"
+        log_error "请先由发版机构建并发布 Web 静态前端，或执行 install-web-dist"
+        return 1
+    }
+    dest_dist="$FRONTEND_DIR/dist"
+    mkdir -p "$dest_dist"
+    if command -v rsync >/dev/null 2>&1; then
+        rsync -a --delete --exclude 'dist.meta.json' "$src_root/" "$dest_dist/" || {
+            log_error "rsync Web dist 失败: ${src_root} → ${dest_dist}"
+            return 1
+        }
+    else
+        find "$dest_dist" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+        cp -a "$src_root/." "$dest_dist/" || {
+            log_error "复制 Web dist 失败: ${src_root} → ${dest_dist}"
+            return 1
+        }
+    fi
+    if [ -f "$dist_repo_root/dist.meta.json" ]; then
+        cp -f "$dist_repo_root/dist.meta.json" "$dest_dist/dist.meta.json" 2>/dev/null || true
+    fi
+    [ -f "$dest_dist/index.html" ] && [ -f "$dest_dist/login.html" ] || {
+        log_error "安装后缺少 ${dest_dist}/index.html 或 login.html"
+        return 1
+    }
+    log_ok "Web dist 已安装 → ${dest_dist}（来自静态前端发布仓）"
+}
+
+sync_web_dist_from_repo() {
+    load_deploy_env
+    local url path branch token
+    url="$(_read_repo_url_or_default WEB_DIST_REPO_URL "$DEFAULT_WEB_DIST_REPO_URL")"
+    path="$(read_deploy_env_value WEB_DIST_REPO_PATH || true)"
+    [ -n "$path" ] || path="$(_dist_default_repo_path)"
+    branch="$(read_deploy_env_value WEB_DIST_GIT_BRANCH || echo develop)"
+    token="$(_web_dist_repo_token)"
+    _warn_missing_https_token "Web dist 仓" "$url" "$token" "WEB_DIST_GIT_TOKEN"
+    set_deploy_env_value WEB_DIST_REPO_URL "$url"
+    set_deploy_env_value WEB_DIST_REPO_PATH "$path"
+    set_deploy_env_value WEB_DIST_GIT_BRANCH "$branch"
+    sync_sibling_git_repo "kuaigeyun-dist" "$url" "$path" "$branch" "$token" || return 1
+    install_web_dist_from_dist_repo "$path" || return 1
+}
+
+cmd_install_web_dist_repo() {
+    sync_web_dist_from_repo || return 1
+    # 蓝绿开启时 Caddy 根是 dist-live（或槽位）；必须同步槽位+刷新 live，否则只装 dist 线上仍旧
+    if bg_enabled; then
+        bg_sync_all_frontend_slots_from_dist || return 1
+    fi
+    # 未开蓝绿时若残留普通目录 dist-live，Caddy 仍可能读它 → 与刚装的 dist 脱节
+    if ! bg_enabled && [ -d "$FRONTEND_DIR/dist-live" ] && [ ! -L "$FRONTEND_DIR/dist-live" ]; then
+        log_warn "检测到非符号链接的 dist-live，覆盖为当前 dist（避免 Caddy 读旧包）"
+        find "$FRONTEND_DIR/dist-live" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+        cp -a "$FRONTEND_DIR/dist/." "$FRONTEND_DIR/dist-live/" || true
+    fi
+    log_ok "Web dist 源仓已同步并安装"
+}
+
+write_web_dist_meta_json() {
+    local dest_file="$1" source_branch="$2" source_commit_full="$3" source_commit_short="$4"
+    local built_at
+    built_at="$(date '+%Y-%m-%dT%H:%M:%S%z' 2>/dev/null || date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    cat >"$dest_file" <<EOF
+{
+  "source_repo": "kuaigeyun",
+  "source_branch": "${source_branch}",
+  "source_commit": "${source_commit_full}",
+  "source_commit_short": "${source_commit_short}",
+  "built_at": "${built_at}"
+}
+EOF
+}
+
+# dist 仓未配置 user.* 时，用主仓最近一次提交作者（-c 单次生效，不写 dist 仓 git config）
+_web_dist_git_commit_author_args() {
+    local git_path="$1"
+    if _git_cmd -C "$git_path" config --get user.email >/dev/null 2>&1; then
+        return 0
+    fi
+    local root="${PROJECT_ROOT:-}"
+    [ -n "$root" ] && [ -d "$root/.git" ] || return 0
+    local main_git name email
+    main_git="$(_git_native_path "$root")"
+    name="$(_git_cmd -C "$main_git" log -1 --format=%an 2>/dev/null || true)"
+    email="$(_git_cmd -C "$main_git" log -1 --format=%ae 2>/dev/null || true)"
+    [ -n "$email" ] || return 0
+    WEB_DIST_COMMIT_AUTHOR_ARGS=(-c "user.name=${name:-Web Dist Publish}" -c "user.email=${email}")
+}
+
+# 同级产物/认知仓：关掉 CRLF 与重命名检测，避免数千哈希文件每次发布做无用功。
+_tune_sibling_git_perf() {
+    local git_path="$1"
+    [ -n "$git_path" ] || return 0
+    _git_cmd -C "$git_path" config core.autocrlf false 2>/dev/null || true
+    _git_cmd -C "$git_path" config core.safecrlf false 2>/dev/null || true
+    _git_cmd -C "$git_path" config core.filemode false 2>/dev/null || true
+    _git_cmd -C "$git_path" config diff.renames false 2>/dev/null || true
+    _git_cmd -C "$git_path" config feature.manyFiles true 2>/dev/null || true
+    _git_cmd -C "$git_path" config status.showUntrackedFiles no 2>/dev/null || true
+}
+
+# 发版机：将 riveredge-frontend/dist 发布到 kuaigeyun-dist 仓根（可选 dist_repo 模式）
+publish_web_dist_to_repo() {
+    local web_dist_dir="$1" source_branch="$2" source_commit_full="$3" source_commit_short="$4" user_msg="$5"
+    load_deploy_env
+    local url path branch token repo_root git_path commit_msg
+    url="$(_read_repo_url_or_default WEB_DIST_REPO_URL "$DEFAULT_WEB_DIST_REPO_URL")"
+    path="$(read_deploy_env_value WEB_DIST_REPO_PATH || true)"
+    [ -n "$path" ] || path="$(_dist_default_repo_path)"
+    branch="$(read_deploy_env_value WEB_DIST_GIT_BRANCH || echo develop)"
+    token="$(_web_dist_repo_token)"
+    _warn_missing_https_token "Web dist 仓" "$url" "$token" "WEB_DIST_GIT_TOKEN"
+    [ -d "$web_dist_dir" ] || { log_error "缺少构建目录 ${web_dist_dir}"; return 1; }
+    [ -f "$web_dist_dir/index.html" ] || { log_error "缺少 ${web_dist_dir}/index.html"; return 1; }
+    [ -f "$web_dist_dir/login.html" ] || { log_error "缺少 ${web_dist_dir}/login.html"; return 1; }
+
+    sync_sibling_git_repo "kuaigeyun-dist" "$url" "$path" "$branch" "$token" || return 1
+    repo_root="$path"
+    git_path="$(_git_native_path "$repo_root")"
+    mkdir -p "$repo_root"
+    _tune_sibling_git_perf "$git_path"
+
+    log_info "发布 Web dist → ${repo_root}（仓根，不含 .git）"
+    # 不要先删光再复制：产物按内容哈希命名，整树删除会让 Git 把全部文件当成删除+新增，
+    # 文件一多就做重命名检测，发布越来越慢。rsync --delete 只换掉变了的文件。
+    if command -v rsync >/dev/null 2>&1; then
+        rsync -a --delete --exclude '.git' "$web_dist_dir/" "$repo_root/" || {
+            log_error "rsync 构建产物到 dist 仓失败"
+            return 1
+        }
+    else
+        find "$repo_root" -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} + 2>/dev/null || true
+        cp -a "$web_dist_dir/." "$repo_root/" || {
+            log_error "复制构建产物到 dist 仓失败"
+            return 1
+        }
+    fi
+    write_web_dist_meta_json "$repo_root/dist.meta.json" "$source_branch" "$source_commit_full" "$source_commit_short"
+    # 产物是哈希文件，禁止按文本做换行转换，否则 Windows 上每次 add 都重写全部 js。
+    printf '%s\n' '* -text' >"$repo_root/.gitattributes"
+    if [ ! -f "$repo_root/README.md" ]; then
+        cat >"$repo_root/README.md" <<'EOF'
+# kuaigeyun-dist
+
+PC Web 静态产物（Vite `dist`）发布仓：**仓库根目录**即 `index.html` / `login.html` / `assets/`。
+
+- 勿手工改产物；由主仓 `fast-deploy/build.web.sh` 构建并推送。
+- 部署机：`./fast-deploy/deploy.sh install-web-dist` 或生产 `update` 自动同步到 `riveredge-frontend/dist/`。
+- `dist.meta.json` 记录对应主仓源码 commit。
+EOF
+    fi
+
+    if [ -n "$user_msg" ]; then
+        commit_msg="${user_msg} (build-web @ ${source_commit_short})"
+    else
+        commit_msg="chore: build-web sync (build-web @ ${source_commit_short})"
+    fi
+
+    _git_cmd -C "$git_path" -c core.autocrlf=false -c core.safecrlf=false -c diff.renames=false add -A
+    if _git_cmd -C "$git_path" -c diff.renames=false diff --staged --quiet; then
+        log_error "dist 仓无变化，未提交（源码未影响前端产物？）"
+        return 1
+    fi
+    _git_cmd -C "$git_path" -c diff.renames=false diff --staged --shortstat || true
+    WEB_DIST_COMMIT_AUTHOR_ARGS=()
+    _web_dist_git_commit_author_args "$git_path"
+    _git_cmd -C "$git_path" -c core.autocrlf=false -c diff.renames=false "${WEB_DIST_COMMIT_AUTHOR_ARGS[@]}" commit -q -m "$commit_msg" || return 1
+    local clean_url auth_url
+    clean_url="$(_git_strip_auth_url "$url")"
+    auth_url="$(_git_auth_url "$clean_url" "$token")"
+    if ! _git_cmd -C "$git_path" push "$auth_url" "HEAD:refs/heads/${branch}"; then
+        log_error "推送 kuaigeyun-dist 失败"
+        return 1
+    fi
+    log_ok "Web dist 已推送 → kuaigeyun-dist (${branch}) @ $(_git_cmd -C "$git_path" rev-parse --short HEAD)"
+}
+
+# shellcheck source=aoci_repo.sh
+source "$FAST_DEPLOY_DIR/lib/aoci_repo.sh"
+
 run_update_dev() {
     load_deploy_env
     if prompt_update_blue_green; then
@@ -8103,6 +8474,11 @@ run_update_prod() {
     fi
     if [ "${SKIP_GIT_SYNC:-0}" != "1" ]; then
         sync_git_from_origin || return 1
+    fi
+    # 可选：静态前端发布仓模式（PROD_WEB_DIST_SOURCE=dist_repo）；默认本机构建不走此分支
+    if [ "${PROD_WEB_DIST_SOURCE:-local_build}" = "dist_repo" ] && [ "${WEB_DIST_SYNC_ON_UPDATE:-1}" = "1" ]; then
+        log_info "同步静态前端发布仓 → ${FRONTEND_DIR}/dist …"
+        sync_web_dist_from_repo || return 1
     fi
     recompose_extension_apps_if_enabled || return 1
     prepare_workbuddy_mcp_for_prod_deploy || true
@@ -8229,6 +8605,11 @@ fd_dispatch() {
         update)
             if [ "$DEPLOY_MODE" = "dev" ]; then cmd_update_dev; else cmd_update_prod; fi
             ;;
+        restart-backend)   cmd_restart_backend ;;
+        restart-frontend)  cmd_restart_frontend ;;
+        restart-worker)    cmd_restart_worker ;;
+        restart-scheduler) cmd_restart_scheduler ;;
+        restart-caddy)     cmd_restart_caddy ;;
         install-service)   cmd_install_service ;;
         uninstall-service) cmd_uninstall_service ;;
         pro-apps|install-pro|ext-apps)
@@ -8236,6 +8617,12 @@ fd_dispatch() {
             ;;
         install-custom)
             cmd_install_extension_apps custom
+            ;;
+        install-web-dist|install-dist)
+            cmd_install_web_dist_repo
+            ;;
+        install-aoci|aoci-install)
+            cmd_install_aoci_repo
             ;;
         install-client|install-h5)
             cmd_install_client_repo
@@ -8249,7 +8636,7 @@ fd_dispatch() {
         wizard|""|deploy) cmd_wizard ;;
         *)
             log_error "未知命令: $cmd"
-            echo "用法: wizard | check | install | configure | migrate | low-spec-mode [on|off|status] | setup-swap | free-memory | build | start | stop | status | update | diag-workbuddy-mcp | pro-apps [pro|custom|all] | install-custom | install-service | uninstall-service"
+            echo "用法: wizard | check | install | configure | migrate | low-spec-mode [on|off|status] | setup-swap | free-memory | build | start | stop | status | update | restart-backend | restart-frontend | restart-worker | restart-scheduler | restart-caddy | diag-workbuddy-mcp | pro-apps [pro|custom|all] | install-custom | install-web-dist | install-aoci | install-service | uninstall-service"
             exit 1
             ;;
     esac

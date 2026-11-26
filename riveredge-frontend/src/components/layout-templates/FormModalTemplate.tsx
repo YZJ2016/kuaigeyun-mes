@@ -122,6 +122,8 @@ export interface FormModalTemplateProps {
   BODY_MAX_HEIGHT?: string;
   /** @deprecated 未实现；仅从 props 剥离 */
   formItems?: unknown;
+  /** 嵌入页签/全页：不套 Modal，仅渲染 ProForm 区域（须由外层 DocumentFormPageLayout 提供操作区） */
+  embedded?: boolean;
 }
 
 export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
@@ -157,6 +159,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   TINY_WIDTH: _tw,
   BODY_MAX_HEIGHT: _bmh,
   formItems: _unusedFormItems,
+  embedded = false,
 }) => {
   const handleClose = useCallback(() => {
     onClose?.();
@@ -255,6 +258,35 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
 
   useSubmitShortcut(() => triggerFormSubmit(), open && !submitting && !loading);
 
+  const formBody = (
+    <div className="form-modal-content-inner">
+      <ProForm
+        formRef={formRef}
+        form={form}
+        readonly={readOnly}
+        onFinish={handleFinish}
+        onFinishFailed={({ errorFields }) => reportFinishFailed(errorFields)}
+        scrollToFirstError={{ behavior: 'smooth', block: 'center' }}
+        onValuesChange={onValuesChange}
+        initialValues={initialValues}
+        layout={layout}
+        grid={isMobile ? true : grid}
+        colProps={isMobile ? { span: 24 } : undefined}
+        rowProps={{ gutter: FORM_LAYOUT.GRID_GUTTER }}
+        submitter={false}
+      >
+        {children}
+      </ProForm>
+    </div>
+  );
+
+  if (embedded) {
+    if (!open) {
+      return null;
+    }
+    return formBody;
+  }
+
   return (
     <Modal
       title={title}
@@ -293,25 +325,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
         )
       }
     >
-      <div className="form-modal-content-inner">
-        <ProForm
-          formRef={formRef}
-          form={form}
-          readonly={readOnly}
-          onFinish={handleFinish}
-          onFinishFailed={({ errorFields }) => reportFinishFailed(errorFields)}
-          scrollToFirstError={{ behavior: 'smooth', block: 'center' }}
-          onValuesChange={onValuesChange}
-          initialValues={initialValues}
-          layout={layout}
-          grid={isMobile ? true : grid}
-          colProps={isMobile ? { span: 24 } : undefined}
-          rowProps={{ gutter: FORM_LAYOUT.GRID_GUTTER }}
-          submitter={false}
-        >
-          {children}
-        </ProForm>
-      </div>
+      {formBody}
     </Modal>
   );
 };

@@ -8,7 +8,6 @@
 Author: Auto (AI Assistant)
 Date: 2026-01-16
 """
-
 import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -508,6 +507,14 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
         if receipt_data.quantity <= 0:
             raise ValidationError("收货数量必须大于 0")
 
+        qty = Decimal(str(receipt_data.quantity))
+        qualified = Decimal(str(receipt_data.qualified_quantity or 0))
+        unqualified = Decimal(str(receipt_data.unqualified_quantity or 0))
+        if qualified < 0 or unqualified < 0:
+            raise ValidationError("合格数量与不合格数量不能为负数")
+        if qualified + unqualified != qty:
+            raise ValidationError("收货数量必须等于合格数量加不合格数量")
+
         product_id = outsource_work_order.product_id
         if product_id and not receipt_data.warehouse_id:
             raise ValidationError("请选择入库仓库")
@@ -566,6 +573,20 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                     qualified_quantity=receipt_data.qualified_quantity,
                     quantity=receipt_data.quantity,
                 )
+                from apps.kuaizhizao.services.document_recognition import resolve_payable_for_downstream
+
+                mr_fields_set = getattr(receipt_data, "model_fields_set", set()) or set()
+                provided_mr_pay = (
+                    getattr(receipt_data, "payable_recognition", None)
+                    if "payable_recognition" in mr_fields_set
+                    else None
+                )
+                receipt_payable_recognition = await resolve_payable_for_downstream(
+                    tenant_id,
+                    locked_work_order.supplier_id,
+                    upstream=locked_work_order,
+                    provided=provided_mr_pay,
+                )
                 requires_iqc = await self._product_requires_inbound_inspection(
                     tenant_id, getattr(locked_work_order, "product_id", None)
                 )
@@ -575,6 +596,7 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                     code=code,
                     outsource_work_order_id=receipt_data.outsource_work_order_id,
                     outsource_work_order_code=receipt_data.outsource_work_order_code,
+                    payable_recognition=receipt_payable_recognition,
                     quantity=receipt_data.quantity,
                     qualified_quantity=receipt_data.qualified_quantity,
                     unqualified_quantity=receipt_data.unqualified_quantity,
@@ -680,10 +702,13 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
             record_finance_accounting_event,
         )
 
-        _sup_id = getattr(outsource_work_order, "supplier_id", None)
-        if not await self.business_config_service.should_auto_generate_payable_on_purchase_receipt(
-            tenant_id, int(_sup_id) if _sup_id is not None else None
-        ):
+        from apps.kuaizhizao.services.document_recognition import (
+            payable_recognition_from_doc,
+            should_auto_payable_on_purchase_receipt,
+        )
+
+        receipt_strategy = payable_recognition_from_doc(material_receipt)
+        if not should_auto_payable_on_purchase_receipt(receipt_strategy):
             return
 
         total_amount = Decimal(str(material_receipt.total_amount or 0))

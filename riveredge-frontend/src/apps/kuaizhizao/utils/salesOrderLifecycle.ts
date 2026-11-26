@@ -325,12 +325,12 @@ export function getSalesOrderLifecycle(
   };
 }
 
-/** 批量撤回：撤销提交（生命周期「待审核」「已生效」） */
+/** 批量撤回：撤销提交（已提交）或撤回审核（待审核） */
 export function canWithdrawSalesOrderRecord(record: SalesOrder, auditRequired = true): boolean {
   if (isSalesOrderClosed(record)) return false;
   const phase = String((record as { audit?: { phase?: string } }).audit?.phase ?? '').toLowerCase();
+  if (phase === 'submitted') return true;
   if (auditRequired && phase === 'pending') return true;
-  if (isConfirmed(record.status)) return true;
   return canWithdrawSubmittedOrder(record.status);
 }
 

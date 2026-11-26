@@ -20,7 +20,11 @@ import {
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { formatQuantity } from '../../../../../utils/format';
-import { INBOUND_LIST_PATH, inboundReceiptNoticeEntryPath } from './inboundPaths';
+import {
+  INBOUND_LIST_PATH,
+  inboundReceiptNoticeEntryPath,
+  purchaseReceiptHubEditPath,
+} from './inboundPaths';
 import { navigateLeavingPullEntry, pullEntryTabKey } from '../shared/pullEntryCloseTab';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { receiptNoticeCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
@@ -167,16 +171,11 @@ const InboundReceiptNoticePullEntryPage: React.FC = () => {
           ? t('app.kuaizhizao.receiptNotice.notifySuccessWithDraft', { receiptCode: res.purchase_receipt_code })
           : t('app.kuaizhizao.receiptNotice.notifySuccess'),
       );
+      const hubEditPath = purchaseReceiptHubEditPath(Number(receiptId));
       navigateLeavingPullEntry(
         navigate,
-        INBOUND_LIST_PATH,
+        hubEditPath,
         pullEntryTabKey(location.pathname, location.search),
-        {
-          inboundDirectConfirm: {
-            id: Number(receiptId),
-            receipt_type: 'purchase',
-          },
-        },
       );
     } catch (error: unknown) {
       messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.shipmentNotice.notifyFailed')));

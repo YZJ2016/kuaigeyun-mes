@@ -542,7 +542,7 @@ class MenuService:
                 existing_menu.is_external = is_external
                 existing_menu.external_url = external_url
                 existing_menu.meta = merge_menu_meta_for_sync(existing_menu.meta, meta)
-                existing_menu.is_active = True
+                # 系统菜单启停只认菜单管理；同步不得冲掉租户停用
                 await existing_menu.save()
                 menu_obj = existing_menu
             else:
@@ -1097,6 +1097,12 @@ class MenuService:
             if not permission:
                 raise ValidationError(f"权限代码 {data.permission_code} 不存在或不属于当前组织")
         
+        create_meta = dict(data.meta or {}) if data.meta else {}
+        if data.is_active is False:
+            create_meta[META_TENANT_DISABLED] = True
+        elif META_TENANT_DISABLED in create_meta:
+            create_meta.pop(META_TENANT_DISABLED, None)
+
         # 创建菜单
         menu = await Menu.create(
             tenant_id=tenant_id,
@@ -1111,7 +1117,7 @@ class MenuService:
             is_active=data.is_active,
             is_external=data.is_external,
             external_url=data.external_url,
-            meta=data.meta,
+            meta=create_meta or None,
         )
         
         # 清除菜单缓存
@@ -1419,7 +1425,10 @@ class MenuService:
         # 过滤孤儿菜单：只认库内已安装且启用的应用。节点磁盘不得再决定侧栏可见范围。
         # 平台/系统菜单（application_uuid 为 NULL）照常保留。
         all_menus = list(all_menus_raw)
-        visible_apps = await ApplicationService.get_installed_applications(tenant_id=tenant_id)
+        visible_apps = await ApplicationService.get_installed_applications(
+            tenant_id=tenant_id,
+            is_active=True,
+        )
         visible_app_uuids = {str(a["uuid"]) for a in visible_apps}
         all_menus = [
             m for m in all_menus
@@ -1512,11 +1521,17 @@ class MenuService:
             m.sort_order or 0,
         ))
 
-        if overlay_manifest_sort and cache_key_suffix == NAV_TREE_CACHE_SUFFIX:
-            from apps.common.app_orm import app_orm_ready
+        if (
+            overlay_manifest_sort
+            and cache_key_suffix == NAV_TREE_CACHE_SUFFIX
+            and ApplicationService.is_manifest_deployed_on_node("kuaioa")
+        ):
+            from apps.common.optional_pro import pro_app_available
 
-            if app_orm_ready("kuaioa"):
-                from apps.kuaioa.services.form_template_menu_extension import append_mounted_form_template_menus
+            if pro_app_available("kuaioa"):
+                from apps.kuaioa.services.form_template_menu_extension import (
+                    append_mounted_form_template_menus,
+                )
 
                 await append_mounted_form_template_menus(tenant_id, root_menus)
 

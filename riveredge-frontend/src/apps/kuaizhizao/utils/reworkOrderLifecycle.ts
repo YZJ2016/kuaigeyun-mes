@@ -278,8 +278,11 @@ export function reworkCapabilityAllowed(
   action: string,
 ): boolean {
   if (!record) return false;
-  const caps = (record as ReworkOrderLike).capabilities;
-  const entry = caps?.[action];
-  if (!entry) return true;
-  return entry.allowed !== false;
+  const caps = (record as ReworkOrderLike).capabilities as
+    | Record<string, { allowed?: boolean }>
+    | undefined;
+  if (!caps || typeof caps !== 'object') return false;
+  const entry = caps[action];
+  if (!entry || typeof entry !== 'object') return false;
+  return entry.allowed === true;
 }

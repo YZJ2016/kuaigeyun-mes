@@ -17,26 +17,42 @@ bg_enabled() {
     return 1
 }
 
-# update 时是否走蓝绿（交互选择；非交互与传统模式默认 stop-start，UPDATE_BLUE_GREEN=1 启用蓝绿）
+# update 时是否走蓝绿：
+# - 低配：强制传统
+# - UPDATE_BLUE_GREEN 显式 0/1：跟从
+# - BLUE_GREEN_DEPLOY=1（一般模式）：默认蓝绿（含运维台非交互 update）
+# - 否则交互询问（回车=传统）；非交互默认传统
 update_use_blue_green() {
     load_deploy_env
     if low_spec_mode_enabled; then
-        log_info "低配模式已开启：更新固定为传统 stop → migrate → start（跳过蓝绿选择）"
+        log_info "低配模式已开启：更新固定为传统 stop → migrate → start（跳过蓝绿）"
         return 1
     fi
     if [ -n "${UPDATE_BLUE_GREEN:-}" ]; then
         case "${UPDATE_BLUE_GREEN}" in
-            1|yes|true|Y|y) return 0 ;;
-            *) return 1 ;;
+            1|yes|true|Y|y|on|ON)
+                log_info "UPDATE_BLUE_GREEN=1：本次更新使用蓝绿"
+                return 0
+                ;;
+            *)
+                log_info "UPDATE_BLUE_GREEN=${UPDATE_BLUE_GREEN}：本次更新使用传统 stop-start"
+                return 1
+                ;;
         esac
     fi
+    case "${BLUE_GREEN_DEPLOY:-0}" in
+        1|yes|true|Y|y|on|ON)
+            log_info "一般模式（BLUE_GREEN_DEPLOY=1）：本次更新使用蓝绿"
+            return 0
+            ;;
+    esac
     # 运维台 SSH 常带 PTY（为了实时日志），[ -t 0 ] 为真但不能 read；禁止卡住
     if [ "${FAST_DEPLOY_NONINTERACTIVE:-0}" = "1" ] || [ "${CI:-}" = "true" ] || [ "${CI:-0}" = "1" ]; then
-        log_info "非交互 update（FAST_DEPLOY_NONINTERACTIVE/CI），默认传统 stop-start（export UPDATE_BLUE_GREEN=1 可启用蓝绿）"
+        log_info "非交互 update 且未启用 BLUE_GREEN_DEPLOY：传统 stop-start（一般模式请 low-spec-mode off）"
         return 1
     fi
     if [ ! -t 0 ]; then
-        log_info "非交互 update，默认传统 stop-start（export UPDATE_BLUE_GREEN=1 可启用蓝绿）"
+        log_info "非交互 update 且未启用 BLUE_GREEN_DEPLOY：传统 stop-start"
         return 1
     fi
     local input
@@ -195,7 +211,7 @@ bg_get_frontend_root_for_caddy() {
 }
 
 bg_sync_all_frontend_slots_from_dist() {
-    local slot src dest
+    local slot src dest live active_fe
     src="$FRONTEND_DIR/dist"
     [ -f "$src/index.html" ] || { log_error "缺少 $src/index.html"; return 1; }
     [ -f "$src/login.html" ] || { log_error "缺少 $src/login.html"; return 1; }
@@ -207,7 +223,30 @@ bg_sync_all_frontend_slots_from_dist() {
         mkdir -p "$dest"
         cp -a "$src/." "$dest/"
     done
-    log_ok "蓝绿前端槽位已从 Git dist 同步"
+    # Caddy 根是 dist-live。Windows 上 ln -s 常失败，dist-live 会变成普通目录；
+    # 只更新 dist / dist-blue / dist-green 时线上仍读旧 dist-live（更新日志停住的真因）。
+    live="$(bg_frontend_live_link)"
+    active_fe="$(bg_state_get frontend_slot 2>/dev/null || bg_active_slot)"
+    dest="$(bg_frontend_slot_dir "$active_fe")"
+    if [ -L "$live" ]; then
+        ln -sfn "$dest" "$live" || true
+    elif [ -d "$live" ]; then
+        log_warn "dist-live 不是符号链接，正在把 dist-${active_fe} 覆盖进 dist-live（供 Caddy 立即读到）"
+        find "$live" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+        cp -a "$dest/." "$live/" || {
+            log_error "同步 dist-live 失败"
+            return 1
+        }
+    else
+        if ! ln -sfn "$dest" "$live" 2>/dev/null; then
+            mkdir -p "$live"
+            cp -a "$dest/." "$live/" || {
+                log_error "创建 dist-live 失败"
+                return 1
+            }
+        fi
+    fi
+    log_ok "蓝绿前端槽位已从 Git dist 同步（含 dist-live）"
 }
 
 bg_prepare_frontend_inactive() {
@@ -318,7 +357,7 @@ bg_start_backend_slot() {
         case "$backend_workers" in
             ''|*[!0-9]*|0) backend_workers=1 ;;
         esac
-        server_entry=(uvicorn server.main:app --host "$host" --port "$port" --workers "$backend_workers")
+        server_entry=(python -m uvicorn server.main:app --host "$host" --port "$port" --workers "$backend_workers")
         log_info "启动 backend-${slot} (prod, :${port}, workers=${backend_workers})..."
     fi
     (
@@ -330,11 +369,11 @@ bg_start_backend_slot() {
         if [ "$mode" = "prod" ]; then
             export ENVIRONMENT=production
             export DEBUG=false
+            export_backend_dotenv
             playwright_export_env
+            export_production_malloc_tuning
         fi
-        nohup "$(resolve_uv)" run $(backend_uv_extra_args) "${server_entry[@]}" \
-            > "$(bg_backend_log_file "$slot")" 2>&1 &
-        echo $! >"$pidf"
+        _backend_nohup "$(bg_backend_log_file "$slot")" "$pidf" "${server_entry[@]}"
     )
     if ! bg_wait_health_on_port "$port" "$BACKEND_START_TIMEOUT"; then
         local _bg_pid _bg_log
@@ -499,6 +538,13 @@ bg_run_update_prod() {
 
     if [ "${SKIP_GIT_SYNC:-0}" != "1" ]; then
         sync_git_from_origin || return 1
+    fi
+    # 可选：静态前端发布仓模式（PROD_WEB_DIST_SOURCE=dist_repo）；默认本机构建不走此分支
+    if [ "${PROD_WEB_DIST_SOURCE:-local_build}" = "dist_repo" ] && [ "${WEB_DIST_SYNC_ON_UPDATE:-1}" = "1" ]; then
+        log_info "同步静态前端发布仓 → ${FRONTEND_DIR}/dist …"
+        sync_web_dist_from_repo || return 1
+    elif [ "${PROD_WEB_DIST_SOURCE:-local_build}" != "dist_repo" ]; then
+        log_info "本机构建模式：update 不从发布仓拉取，按需在本机构建"
     fi
     recompose_extension_apps_if_enabled || return 1
     cmd_ensure_frontend_dist || return 1

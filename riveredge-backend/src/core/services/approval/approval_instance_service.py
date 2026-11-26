@@ -6146,27 +6146,27 @@ class ApprovalInstanceService:
                 )
 
             async def _handle_other_expense() -> None:
-                from apps.kuaizhizao.services.other_expense_audit_service import (
-                    OtherExpenseAuditService,
+                from apps.kuaicaiwu.services.other_expense_service import (
+                    OtherExpenseService,
                 )
 
                 if not entity_id:
                     return
-                service = OtherExpenseAuditService()
+                service = OtherExpenseService()
                 if approval_instance.status == "approved":
                     await service.approve_expense(
                         tenant_id,
                         int(entity_id),
-                        approver_id,
                         approved=True,
+                        operator_id=approver_id,
                         is_auto_approve=True,
                     )
                 elif approval_instance.status == "rejected":
                     await service.approve_expense(
                         tenant_id,
                         int(entity_id),
-                        approver_id,
                         approved=False,
+                        operator_id=approver_id,
                         review_remarks="审批驳回",
                         is_auto_approve=True,
                     )
@@ -6175,27 +6175,27 @@ class ApprovalInstanceService:
                 )
 
             async def _handle_other_income() -> None:
-                from apps.kuaizhizao.services.other_income_audit_service import (
-                    OtherIncomeAuditService,
+                from apps.kuaicaiwu.services.other_income_service import (
+                    OtherIncomeService,
                 )
 
                 if not entity_id:
                     return
-                service = OtherIncomeAuditService()
+                service = OtherIncomeService()
                 if approval_instance.status == "approved":
                     await service.approve_income(
                         tenant_id,
                         int(entity_id),
-                        approver_id,
                         approved=True,
+                        operator_id=approver_id,
                         is_auto_approve=True,
                     )
                 elif approval_instance.status == "rejected":
                     await service.approve_income(
                         tenant_id,
                         int(entity_id),
-                        approver_id,
                         approved=False,
+                        operator_id=approver_id,
                         review_remarks="审批驳回",
                         is_auto_approve=True,
                     )

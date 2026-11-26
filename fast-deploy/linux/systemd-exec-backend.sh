@@ -19,6 +19,7 @@ export ENVIRONMENT=production
 export DEBUG=false
 export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
 export PYTHONPATH="$BACKEND_DIR/src"
+export_backend_dotenv
 playwright_export_env
 cd "$BACKEND_DIR"
 BACKEND_UVICORN_WORKERS="${BACKEND_UVICORN_WORKERS:-1}"

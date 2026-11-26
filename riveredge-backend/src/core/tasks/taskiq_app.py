@@ -40,6 +40,7 @@ def _taskiq_pool_kwargs() -> dict:
             # 池空闲连接默认 300s 回收；服务端兜底清理经代理/NAT 断开后残留的僵尸会话（listen 长连接不设）
             "idle_session_timeout": "600000",
         },
+
     }
 
 
@@ -155,6 +156,7 @@ async def _recover_stale_taskiq_messages() -> None:
             logger.warning("已回收卡住的 Taskiq processing 消息: {}", reset_n)
 
         # 2) 过期 cron tick 无重跑价值，直接删掉减轻积压
+        # 注意：勿用 ESCAPE '\' + '%\_tick'（Windows/部分 PG 下匹配失败会积压数千条）
         purged = await conn.fetchval(
             f"""
             WITH deleted AS (
@@ -162,7 +164,7 @@ async def _recover_stale_taskiq_messages() -> None:
               WHERE status = 'pending'
                 AND created_at < NOW() - INTERVAL '30 minutes'
                 AND (
-                  task_name LIKE '%\\_tick' ESCAPE '\\'
+                  task_name LIKE '%_tick'
                   OR task_name LIKE '%online_user_cleanup_task'
                 )
               RETURNING 1
@@ -271,10 +273,17 @@ async def run_event_pipeline(
 @task(schedule=[{"cron": "* * * * *"}])
 async def reporting_kingdee_push_retry_tick() -> dict:
     """每分钟重试到期的未推送成功金蝶生产汇报单（退避 1m/5m/30m/2h/8h，超限置 dead）。"""
-    from apps.kuaizhizao.services.kingdee_production_report_push_service import (
-        KingdeeProductionReportPushService,
-    )
+    from apps.common.optional_pro import pro_orm_ready
 
+    if not pro_orm_ready("kuaiconnect"):
+        return {"success": True, "skipped": True, "reason": "kuaiconnect_not_ready"}
+
+    from apps.common.document_push_gate import load_document_push_attr
+
+    KingdeeProductionReportPushService = load_document_push_attr(
+        "kingdee_production_report_push_service",
+        "KingdeeProductionReportPushService",
+    )
     return await KingdeeProductionReportPushService().retry_due_pushes()
 
 

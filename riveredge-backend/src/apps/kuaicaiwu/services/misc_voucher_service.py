@@ -1,6 +1,8 @@
 """其他费用收入/支出单据与收支类别服务（收入/支出共享实现）。
 
-边界：不复用 Payment/Receipt，不生成应收/应付，不走 UniPullQuery/核销；
+边界：不复用 Payment/Receipt，不走 UniPullQuery/核销；
+审核通过时按往来对象自动生成应收/应付（misc_voucher_finance_bridge：
+收入挂客户应收、支出挂供应商应付），反审核时连带校验并作废；
 确认过账仅写银行流水（见 misc_voucher_posting_service）。
 """
 
@@ -505,6 +507,7 @@ class MiscVoucherService:
         doc = await self.get_or_404(tenant_id, doc_id)
         status = str(doc.status)
         audit_required = await self.audit_required(tenant_id)
+        self._assert_finance_ready_on_submit(doc)
         if status == "PendingReview" and audit_required:
             raise BusinessLogicError(
                 f"{self.spec.label}已提交待审核，无需重复提交"
@@ -517,7 +520,9 @@ class MiscVoucherService:
             patch = {"status": "Approved", **self._reviewer_patch(user, "自动审核")}
             apply_update_audit(patch, user)
             await self.spec.model.filter(id=doc_id).update(**patch)
-            return await self.get_or_404(tenant_id, doc_id)
+            doc = await self.get_or_404(tenant_id, doc_id)
+            await self._on_voucher_approved(tenant_id, doc, user)
+            return doc
 
         doc_code = str(getattr(doc, self.spec.code_field, None) or doc_id)
         partner = str(getattr(doc, "counterparty_name", None) or "").strip()
@@ -545,7 +550,39 @@ class MiscVoucherService:
             patch = {"status": "Approved", **self._reviewer_patch(user, "自动审核")}
             apply_update_audit(patch, user)
             await self.spec.model.filter(id=doc_id).update(**patch)
+            doc = await self.get_or_404(tenant_id, doc_id)
+            await self._on_voucher_approved(tenant_id, doc, user)
+            return doc
         return await self.get_or_404(tenant_id, doc_id)
+
+    def _assert_finance_ready_on_submit(self, doc: Any) -> None:
+        """送审前预检：须自动挂应收/应付时校验往来对象与金额（上游 bridge 语义）。"""
+        from apps.kuaicaiwu.services.misc_voucher_finance_bridge import (
+            MiscVoucherFinanceBridge,
+        )
+
+        kind = str(getattr(doc, "counterparty_kind", "") or "").strip().lower()
+        if self.spec.voucher_type == "other_income" and kind == "customer":
+            MiscVoucherFinanceBridge.assert_income_ready_for_receivable_on_approve(doc)
+        elif self.spec.voucher_type == "other_expense" and kind == "supplier":
+            MiscVoucherFinanceBridge.assert_expense_ready_for_payable_on_approve(doc)
+
+    async def _on_voucher_approved(self, tenant_id: int, doc: Any, user: User) -> None:
+        """审核通过后按往来对象自动生成应收/应付（其他往来类型不自动立账）。"""
+        from apps.kuaicaiwu.services.misc_voucher_finance_bridge import (
+            MiscVoucherFinanceBridge,
+        )
+
+        kind = str(getattr(doc, "counterparty_kind", "") or "").strip().lower()
+        bridge = MiscVoucherFinanceBridge()
+        if self.spec.voucher_type == "other_income" and kind == "customer":
+            await bridge.ensure_receivable_on_income_approved(
+                tenant_id, doc, int(user.id)
+            )
+        elif self.spec.voucher_type == "other_expense" and kind == "supplier":
+            await bridge.ensure_payable_on_expense_approved(
+                tenant_id, doc, int(user.id)
+            )
 
     async def _review(
         self,
@@ -571,7 +608,10 @@ class MiscVoucherService:
             }
             apply_update_audit(patch, user)
             await self.spec.model.filter(id=doc_id).update(**patch)
-            return await self.get_or_404(tenant_id, doc_id)
+            decided = await self.get_or_404(tenant_id, doc_id)
+            if approve:
+                await self._on_voucher_approved(tenant_id, decided, user)
+            return decided
 
         if is_auto_approve:
             return await _do_decide()
@@ -685,6 +725,21 @@ class MiscVoucherService:
             raise BusinessLogicError(f"{self.spec.label}已确认过账，请先取消确认")
         if status != "Approved":
             raise BusinessLogicError(f"仅已审核状态可反审，当前状态: {doc.status}")
+        from apps.kuaicaiwu.services.misc_voucher_finance_bridge import (
+            MiscVoucherFinanceBridge,
+        )
+
+        bridge = MiscVoucherFinanceBridge()
+        if self.spec.voucher_type == "other_income":
+            await bridge.assert_income_receivable_revokable(tenant_id, doc_id)
+            await bridge.void_receivable_for_income_revoke(
+                tenant_id, doc_id, int(user.id)
+            )
+        else:
+            await bridge.assert_expense_payable_revokable(tenant_id, doc_id)
+            await bridge.void_payable_for_expense_revoke(
+                tenant_id, doc_id, int(user.id)
+            )
         patch: Dict[str, Any] = {
             "status": "Draft",
             "reviewer_id": None,
@@ -703,6 +758,8 @@ class MiscVoucherService:
             patch = {"status": "Approved", **self._reviewer_patch(user, "自动审核")}
             apply_update_audit(patch, user)
             await self.spec.model.filter(id=doc_id).update(**patch)
+            doc = await self.get_or_404(tenant_id, doc_id)
+            await self._on_voucher_approved(tenant_id, doc, user)
         elif str(doc.status) == "PendingReview" and audit_required:
             raise BusinessLogicError(f"{self.spec.label}待审核中，请先完成审核")
         elif str(doc.status) not in ("Approved", "Draft"):
