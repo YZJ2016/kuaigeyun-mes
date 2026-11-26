@@ -156,8 +156,11 @@ export function isOfficeMsDocFile(source: FilePreviewSource): boolean {
 /** Excel 工作簿：Univer Sheet 预览 */
 export function isExcelWorkbookFile(source: FilePreviewSource): boolean {
   const ext = getFileExt(source);
+  // 扩展名优先：误标 spreadsheet MIME 的 Word/PPT 不可走 SheetJS/Univer
+  if (OFFICE_MS_DOC_EXTENSIONS.has(ext)) return false;
   if (EXCEL_WORKBOOK_EXTENSIONS.has(ext)) return true;
   const mime = getMime(source);
+  if (mime.includes('wordprocessingml') || mime.includes('presentationml')) return false;
   return mime.includes('spreadsheetml') || mime === 'application/vnd.ms-excel';
 }
 

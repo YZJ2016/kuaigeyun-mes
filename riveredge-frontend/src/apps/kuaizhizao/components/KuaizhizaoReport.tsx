@@ -47,6 +47,7 @@ export type KuaizhizaoReportProps<T extends Record<string, unknown> = Record<str
     filter?: Record<string, unknown>,
     searchFormValues?: Record<string, unknown>,
   ) => Promise<{ data: T[]; total: number; success: boolean; summary?: Record<string, number> }>;
+  expandable?: import('../../../components/uni-report/types').UniReportProps<T>['expandable'];
 };
 
 export function KuaizhizaoReport<T extends Record<string, unknown> = Record<string, unknown>>({
@@ -65,6 +66,7 @@ export function KuaizhizaoReport<T extends Record<string, unknown> = Record<stri
   periodFilterLabel,
   skipFuzzyPinyinClientFilter = true,
   request: requestOverride,
+  expandable,
 }: KuaizhizaoReportProps<T>) {
   const { t } = useTranslation();
   const domainHint = domainProp ?? inferDomainFromPersistenceId(columnPersistenceId);
@@ -144,6 +146,7 @@ export function KuaizhizaoReport<T extends Record<string, unknown> = Record<stri
       beforeSearchButtons={beforeSearchButtons}
       periodFilterLabel={periodFilterLabel}
       params={tableParams}
+      expandable={expandable}
     >
       {children}
     </UniReport>

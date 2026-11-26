@@ -9,9 +9,28 @@ import {
   purchaseOrderStatusEnum,
   reportDocumentStatusText,
 } from '../../../utils/reportPresentation';
+import { LinkedDocumentAutoCell } from '../../../../../components/linked-document-code/LinkedDocumentAutoCell';
+import type { LinkedCodeBinding } from '../../../utils/linkedDocumentAutoLink';
+import {
+  purchaseReconciliationExpandableProps,
+  usePurchaseReconciliationOrderDetail,
+} from './PurchaseReconciliationOrderDetail';
+
+const PO_ORDER_BINDING: LinkedCodeBinding = {
+  documentType: 'purchase_order',
+  idField: 'id',
+  codeField: 'order_code',
+};
 
 const PurchaseReconciliation: React.FC = () => {
   const { t } = useTranslation();
+  const { cache, loadOrderDetail } = usePurchaseReconciliationOrderDetail();
+
+  const expandable = useMemo(
+    () => purchaseReconciliationExpandableProps(cache, loadOrderDetail),
+    [cache, loadOrderDetail],
+  );
+
   const columns: ProColumns[] = useMemo(
     () => [
       {
@@ -19,6 +38,13 @@ const PurchaseReconciliation: React.FC = () => {
         dataIndex: 'order_code',
         fixed: 'left',
         width: 150,
+        render: (_, record) => (
+          <LinkedDocumentAutoCell
+            binding={PO_ORDER_BINDING}
+            record={record as Record<string, unknown>}
+            ellipsis={false}
+          />
+        ),
       },
       {
         title: t('app.kuaizhizao.purchaseReports.colOrderDate'),
@@ -96,9 +122,10 @@ const PurchaseReconciliation: React.FC = () => {
         'paid_amount',
         'pending_amount',
       ]}
-      columnPersistenceId="apps.kuaizhizao.pages.purchase-management.reports.PurchaseReconciliation-v2"
+      columnPersistenceId="apps.kuaizhizao.pages.purchase-management.reports.PurchaseReconciliation-v3"
       rowKey="id"
       columns={columns}
+      expandable={expandable}
     />
   );
 };

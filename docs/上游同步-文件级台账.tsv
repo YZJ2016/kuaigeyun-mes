@@ -3519,3 +3519,46 @@ test-report/sales.md	DELETED	superset	复核ok
 riveredge-backend/src/apps/kuaizhizao/services/equipment_list_core.py	a6ebbe45464204731d0a789a8a0142a05e3e6dda	applied	摘取@6fa3c6703d：站点日历日→UTC边界 _apply_site_calendar_day_range
 riveredge-backend/tests/apps/kuaiconnect/services/inbound_sync/test_material_sync_inactive_status.py	140ef677dc00346474a01cd352fcacc6cbe8b0f2	applied	摘取@6fa3c6703d：金蝶物料停用态同步测试（上游原文）
 riveredge-backend/tests/apps/kuaizhizao/services/test_equipment_list_site_date_range.py	61bbf176a211838328fbdccd15048cdc602749cb	applied	摘取@6fa3c6703d：设备列表站点日期范围测试（上游原文）
+fast-deploy/scripts/prod_hotfix_other_outbound_type.sh	48ddb712c974759106d731e549c5939966e0f753	domain-out	R3:上游生产机一次性热修脚本（检出其 develop 特定文件清单+重启），对应代码已随正常同步落地，本地无 prod_hotfix 工作流
+fast-deploy/scripts/prod_hotfix_partner_payment_advance.sh	e97e25951b628f85ef01fad1a58f12eb9aad27d6	domain-out	R3:同上，一次性热修（partner_payment_advance 两个文件），本地无关热修场景
+fast-deploy/scripts/prod_hotfix_po_receipt_picking_unit.sh	5c6829a3f3db9a87a3d244b4e090a3fb7545a106	domain-out	R3:同上，一次性热修（PO 多单号+外推单位，钉指定 dist commit），属上游生产机操作
+fast-deploy/scripts/prod_hotfix_purchase_receipt_advance_payee.sh	3098cb2f46b022f4c4e0701ce13099fdc9e3085d	domain-out	R3:同上，一次性热修（advance_payee_id 升 1077），属上游生产机操作
+riveredge-backend/migrations/models/1079_20261126100000_finance_line_settlement.py	d36622d973643e8ae0d54d172940762596fbd36c	domain-out	R3:发票明细粒度簇迁移；依赖未摘取的 finance 簇（partner_statement_lines 等表），簇整体判 domain-out
+riveredge-backend/migrations/models/1080_20261126104500_batch_serial_rule_is_default.py	2ec5abdf28af35d443e3f42c253ed550ad5f9528	applied	R3:批次/序列规则 is_default 迁移，落地为本仓命名 20261126140000_batch_serial_rule_is_default.py
+riveredge-backend/migrations/models/1081_20261126113000_fund_transfer_payment_method.py	4305f318879ed350d7c44e3c1908a157c19d9424	domain-out	R3:资金调拨 payment_method 列；本地付款方式词表为 kuaicaiwu/constants/payment_method.py（银行转账/银行承兑…），上游三项词表属另一套，随簇不摘
+riveredge-backend/src/apps/kuaizhizao/finance/config/finance_settlement_contract.py	c59f0715039205d891138acacad206993b64ffc8	domain-out	R3:结算粒度契约；本地财务域在 apps/kuaicaiwu 且已有等价实现（partner_statement ledger 行、PurchaseReceiptLineFinanceOccupancy），簇依赖已登记文件上游增量，单独摘成第二套
+riveredge-backend/src/apps/kuaizhizao/finance/constants/fund_transfer_payment_method.py	ace41888b12f76c4485150d0711059e3eeed230c	domain-out	R3:本地 kuaicaiwu/constants/payment_method.py 为更全词表（银行转账/银行承兑/现金/票据/预付抵扣/员工垫付），上游三项词表冲突不摘
+riveredge-backend/src/apps/kuaizhizao/finance/models/partner_statement_line.py	b0563c472a261ef0252ef3e7a89c78060a962ef2	domain-out	R3:对账单物料行持久化表；本地 kuaicaiwu partner_statement_service 用 statement-ledger 行实现，属另一套架构，依赖 1079 迁移与配套 diff
+riveredge-backend/src/apps/kuaizhizao/finance/models/purchase_invoice_item.py	77935355d88382a2aaa1855101d04d1b19626c7c	domain-out	R3:采购发票明细行（明细模式）；本地 PurchaseInvoice 无 items/无 settlement_mode，依赖整个明细粒度簇
+riveredge-backend/src/apps/kuaizhizao/finance/models/sales_delivery_line_finance_occupancy.py	27a0bb6f4c0b51274f42e60ea35eaa772ff7b3a0	domain-out	R3:销售出库行财务占用；本地仅采购侧 PurchaseReceiptLineFinanceOccupancy，销售侧占用属明细粒度簇一部分，不单独摘
+riveredge-backend/src/apps/kuaizhizao/finance/services/invoice_settlement_guard.py	126021eeef96b2d403157ceca5fe544f780d7202	domain-out	R3:结算粒度校验；依赖 finance_settlement_contract 与 Invoice/PurchaseInvoice.settlement_mode 字段（本地无）
+riveredge-backend/src/apps/kuaizhizao/finance/services/invoice_settlement_mode_migration_service.py	6abeb9deb66d0962e5f3fdab5506e9804c203df0	domain-out	R3:粒度切换迁移服务；依赖明细粒度簇全部新模型与已登记文件上游增量
+riveredge-backend/src/apps/kuaizhizao/finance/services/invoice_settlement_policy.py	6068150bd5a4519ceaa32e6e91321c04610ea38a	domain-out	R3:租户发票粒度参数；依赖 business_config 的 finance.invoice_settlement_mode 与簇配套（本地 business_config_service 无该参数链路）
+riveredge-backend/src/apps/kuaizhizao/finance/services/partner_statement_line_service.py	0e2ca932cce74d9ca6593f2f0e49bd30157d7b5b	domain-out	R3:对账单物料行展开/持久化；本地 partner_statement_service 为 statement-ledger 行实现，等价能力已有
+riveredge-backend/src/apps/kuaizhizao/finance/services/purchase_invoice_detail_occupancy.py	33d61fccf22e6e9cfcf52c364bdedba12725b79b	domain-out	R3:采购发票明细占用；本地 purchase_receipt_line_finance_occupancy_service 已覆盖采购侧行级占用
+riveredge-backend/src/apps/kuaizhizao/finance/services/sales_delivery_line_finance_occupancy_service.py	a794a950a77046580e5bc3fd74af30276ff0edb0	domain-out	R3:销售出库行占用服务；依赖 SalesDeliveryLineFinanceOccupancy 模型（domain-out）与明细粒度簇
+riveredge-backend/src/apps/kuaizhizao/finance/services/sales_invoice_detail_occupancy.py	cfd7ffbb84ffa67b51339a43aa2670d5ce76f000	domain-out	R3:销售发票明细占用；同上，明细粒度簇一部分
+riveredge-backend/src/apps/kuaizhizao/utils/production_picking_header.py	b4cee3463189899611677b5557805b71ef243b93	applied	R3:领料表头校验工具原文落地；调用点已接线（warehouse_service.py 5 处 + schema/路由 pick_department 字段透传）
+riveredge-backend/src/apps/master_data/api/batch_serial_rules.py	92568dbbc5b24915139e85ac4b7336b0ca4131ef	applied	R3:batch/serial set-default 端点（本地与上游仅差该特性，整文件落地）
+riveredge-backend/src/apps/master_data/schemas/batch_serial_rule_schemas.py	faec0880d7f57d6e35e0dc03525b9c7201952a5e	applied	R3:BatchRuleResponse/SerialRuleResponse 增 is_default 字段
+riveredge-backend/src/core/models/batch_rule.py	a9c39fe5b37e15796f607b8b21a8ee84ac31d5a0	applied	R3:BatchRule.is_default 字段（整文件=本地+特性，上游原文落地）
+riveredge-backend/src/core/models/serial_rule.py	8c9404d9c52f6f94fe6d498a623fd15626f19b77	applied	R3:SerialRule.is_default 字段
+riveredge-backend/src/core/services/business/batch_rule_service.py	c213ef85b4cbad4fb0817ca4a1380bac06495d67	applied	R3:resolve_fallback_rule/set_tenant_default_rule/_sanitize_system_rule_update + get_rule_by_uuid 含停用
+riveredge-backend/src/core/services/business/serial_rule_service.py	52f52b4c0d6df1717294deb6339eaccedbaa4e85	applied	R3:同上序列号版
+riveredge-backend/src/infra/api/business_config/business_config.py	2a0d087713ff6205f82da90a641925659e5205cf	domain-out	R3:增量为 invoice-settlement-mode 预览端点+migrate_opposite_invoices 参数；依赖未摘取的迁移服务与 business_config_service 配套 diff，单独摘会在参数更新路径 TypeError
+riveredge-backend/src/infra/schemas/business_config.py	46da2aff06252f4507855fee0146516acaab20a0	domain-out	R3:migrate_opposite_invoices 字段，随 business_config API 增量判 domain-out
+riveredge-backend/tests/apps/haoligo/test_haier_iot_detection_data_chunk.py	32e2ff9df8574ea15f7ebdb43336c39c38ca676c	domain-out	R3:客户域 haoligo/海尔 IoT 测试，不摘
+riveredge-backend/tests/apps/kuaizhizao/finance/services/test_invoice_settlement_guard.py	979fae48874f2caae4889703963adf1789bbbeda	domain-out	R3:明细粒度簇测试，随簇 domain-out
+riveredge-backend/tests/apps/kuaizhizao/finance/services/test_partner_statement_collapse_lines.py	e39c0d4dd8824dabfb8166017a6e1abbf40f090c	domain-out	R3:同上
+riveredge-backend/tests/apps/kuaizhizao/finance/services/test_partner_statement_line_expand.py	2138e72dce21815eda036b5b14e1cb70532d30ff	domain-out	R3:同上
+riveredge-backend/tests/apps/kuaizhizao/services/test_inventory_location_scoped.py	b88be7b5502361f5f8ec553b950a7308250f8c2b	applied	R3:整仓库位 location_scoped 测试；配套在 inventory_service.py 移植 is_whole_warehouse_location_code + line_item_location_scoped 整仓豁免
+riveredge-backend/tests/apps/kuaizhizao/utils/test_production_picking_header.py	af23de870c20019a0bd054aa22b8e61ecae3515b	applied	R3:领料表头校验测试（上游原文）
+riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/reports/PurchaseReconciliation.tsx	36ec2a704ea34c099f9c6f9426de903fb1b99024	applied	R3:订单号挂链+expandable 展开+columnPersistenceId v3（整文件=本地+特性）
+riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/reports/PurchaseReconciliationOrderDetail.tsx	c231b9bd4afe2f0b70e6120bf166c29c35756c31	applied	R3:订单展开明细组件（motionlessDiv 更名 DetailSection 修 JSX 小写 intrinsic 错误）；配套后端 endpoint+service+builder 已移植（import 改 kuaicaiwu）
+riveredge-frontend/src/apps/master-data/pages/materials/batch-rules/index.tsx	c340b6d2a952ea5595c5024e56faf107ccb56ed4	applied	R3:批号规则页默认列+设为默认操作（整文件=本地+特性）；zh-CN 补 6 个 seqRules key
+riveredge-frontend/src/apps/master-data/pages/materials/serial-rules/index.tsx	a8f7b82a819e671acb6888d145309c712af5169f	applied	R3:序列号规则页同上
+riveredge-frontend/src/apps/master-data/services/batchSerialRules.ts	88c961e2cbc428199f008fa8115ad5956c312bcb	applied	R3:isDefault 字段+setDefault API
+riveredge-frontend/src/components/file-preview/OfficeDocPreviewPane.tsx	5044b2846002fa303f3dacc97b6d916c77863542	applied	R3:无公网 URL 时不再挂载 DocViewer（条件渲染修复，整文件=本地+修复）
+riveredge-frontend/src/components/uni-report/UniReport.tsx	46798396d28733f09d2effbb5d0f9a5ec54ea35c	applied	R3:上游本段增量仅 expandable 透传，本地已存在；本地领先的 config 导出/getAllRows 等保留未动
+riveredge-frontend/src/components/uni-tabs/ephemeralTabSearch.ts	f00d3ba3e30419873aa325db42776d88496e0a5a	applied	R3:页签一次性深链参数清洗工具原文落地；调用点已接线（uni-tabs/index.tsx sanitize/normalize 5 处）
+riveredge-frontend/src/utils/filePreviewKind.ts	450edd78cb3d3c2c5da344aec819e61c6ec08b68	applied	R3:isExcelWorkbookFile 扩展名优先+word/ppt MIME 排除（3 行增量，整文件=本地+增量）

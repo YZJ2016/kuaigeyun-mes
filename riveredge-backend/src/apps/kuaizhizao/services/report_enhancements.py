@@ -11,6 +11,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 from loguru import logger
+from infra.exceptions.exceptions import ValidationError
 from core.utils.timezone_utils import (
     coerce_business_datetime_to_utc,
     resolve_business_datetime,
@@ -1534,6 +1535,122 @@ async def build_purchase_reconciliation(
             "pending_amount": max(0.0, order_amount_sum - paid_total),
         },
     }
+
+
+async def build_purchase_reconciliation_order_detail(
+    tenant_id: int,
+    purchase_order_id: int,
+) -> Dict[str, Any]:
+    """采购对账报表：单张采购订单的物料行与关联入库/收票/应付。"""
+    from apps.common.optional_pro import finance_orm_ready
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
+    from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+
+    po = await PurchaseOrder.filter(
+        tenant_id=tenant_id,
+        id=int(purchase_order_id),
+        deleted_at__isnull=True,
+    ).first()
+    if not po:
+        raise ValidationError("采购订单不存在")
+
+    line_rows = await PurchaseOrderItem.filter(
+        tenant_id=tenant_id,
+        order_id=int(purchase_order_id),
+        deleted_at__isnull=True,
+    ).order_by("id").values(
+        "id",
+        "material_code",
+        "material_name",
+        "material_spec",
+        "unit",
+        "ordered_quantity",
+        "received_quantity",
+        "unit_price",
+        "total_price",
+    )
+    items: List[Dict[str, Any]] = []
+    for row in line_rows:
+        items.append({
+            "material_code": row.get("material_code") or "",
+            "material_name": row.get("material_name") or "",
+            "material_spec": row.get("material_spec") or "",
+            "unit": row.get("unit") or "",
+            "quantity": float(row.get("ordered_quantity") or 0),
+            "received_quantity": float(row.get("received_quantity") or 0),
+            "unit_price": float(row["unit_price"]) if row.get("unit_price") is not None else None,
+            "amount": float(row["total_price"]) if row.get("total_price") is not None else None,
+        })
+
+    related: List[Dict[str, Any]] = []
+    for r in await PurchaseReceipt.filter(
+        tenant_id=tenant_id,
+        purchase_order_id=int(purchase_order_id),
+        deleted_at__isnull=True,
+    ).order_by("-receipt_time").values(
+        "id", "receipt_code", "receipt_time", "total_amount", "status",
+    ):
+        related.append({
+            "doc_kind": "purchase_receipt",
+            "doc_id": int(r["id"]),
+            "doc_code": r.get("receipt_code") or "",
+            "doc_date": r.get("receipt_time"),
+            "amount": float(r.get("total_amount") or 0),
+            "status": r.get("status") or "",
+        })
+
+    finance_ready = finance_orm_ready()
+    if finance_ready:
+        from apps.kuaicaiwu.models.payable import Payable
+        from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
+
+        payable_ids: set[int] = set()
+        invoice_rows = await PurchaseInvoice.filter(
+            tenant_id=tenant_id,
+            purchase_order_id=int(purchase_order_id),
+            deleted_at__isnull=True,
+        ).order_by("-invoice_date").values(
+            "id", "invoice_code", "invoice_date", "total_amount", "status", "payable_id",
+        )
+        for inv in invoice_rows:
+            related.append({
+                "doc_kind": "purchase_invoice",
+                "doc_id": int(inv["id"]),
+                "doc_code": inv.get("invoice_code") or "",
+                "doc_date": inv.get("invoice_date"),
+                "amount": float(inv.get("total_amount") or 0),
+                "status": inv.get("status") or "",
+            })
+            if inv.get("payable_id"):
+                payable_ids.add(int(inv["payable_id"]))
+
+        for p in await Payable.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            source_type="purchase_order",
+            source_id=int(purchase_order_id),
+        ).values("id", "payable_code", "due_date", "total_amount", "paid_amount", "status"):
+            payable_ids.add(int(p["id"]))
+
+        if payable_ids:
+            for p in await Payable.filter(
+                id__in=list(payable_ids),
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).order_by("-due_date").values(
+                "id", "payable_code", "due_date", "total_amount", "paid_amount", "status",
+            ):
+                related.append({
+                    "doc_kind": "payable",
+                    "doc_id": int(p["id"]),
+                    "doc_code": p.get("payable_code") or "",
+                    "doc_date": p.get("due_date"),
+                    "amount": float(p.get("total_amount") or 0),
+                    "paid_amount": float(p.get("paid_amount") or 0),
+                    "status": p.get("status") or "",
+                })
+
+    return {"items": items, "related_documents": related}
 
 
 async def build_production_delay_warning(

@@ -370,8 +370,7 @@ class MaterialSerialService:
                 count=count,
             )
 
-        # 使用系统默认序列号规则（未配置时）
-        default_rule = await SerialRuleService.get_or_create_system_default(tenant_id)
+        default_rule = await SerialRuleService.resolve_fallback_rule(tenant_id)
         return await SerialRuleService.generate_by_rule(
             tenant_id=tenant_id,
             rule=default_rule,

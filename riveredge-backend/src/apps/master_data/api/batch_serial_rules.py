@@ -148,6 +148,30 @@ async def update_batch_rule(
         )
 
 
+@router.post(
+    "/batch-rules/{rule_uuid}/set-default",
+    response_model=BatchRuleResponse,
+    summary="Set tenant default batch number rule",
+)
+async def set_default_batch_rule(
+    rule_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        rule = await BatchRuleService.set_tenant_default_rule(
+            tenant_id, rule_uuid, current_user=current_user
+        )
+        return BatchRuleResponse.model_validate(rule)
+    except NotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="批号规则不存在")
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=getattr(e, "message", None) or str(e),
+        )
+
+
 @router.delete("/batch-rules/{rule_uuid}", summary="Delete batch number rule")
 async def delete_batch_rule(
     rule_uuid: str,
@@ -252,6 +276,30 @@ async def update_serial_rule(
         update_data = data.model_dump(exclude_unset=True)
         rule = await SerialRuleService.update_rule(
             tenant_id, rule_uuid, update_data, current_user=current_user
+        )
+        return SerialRuleResponse.model_validate(rule)
+    except NotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="序列号规则不存在")
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=getattr(e, "message", None) or str(e),
+        )
+
+
+@router.post(
+    "/serial-rules/{rule_uuid}/set-default",
+    response_model=SerialRuleResponse,
+    summary="Set tenant default serial number rule",
+)
+async def set_default_serial_rule(
+    rule_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        rule = await SerialRuleService.set_tenant_default_rule(
+            tenant_id, rule_uuid, current_user=current_user
         )
         return SerialRuleResponse.model_validate(rule)
     except NotFoundError:

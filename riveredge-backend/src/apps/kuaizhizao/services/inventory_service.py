@@ -178,9 +178,29 @@ class InventoryService:
             getattr(item, "location_code", None),
         )
 
+    @staticmethod
+    def is_whole_warehouse_location_code(location_code: Optional[str]) -> bool:
+        """系统「整仓」虚拟库位（仓未划分库位 / ensure 整仓）；口径对齐前端 outboundConfirmInventoryOptions。"""
+        from apps.master_data.services.warehouse_service import WHOLE_WAREHOUSE_LOCATION_NAME
+
+        code = str(location_code or "").strip()
+        if not code:
+            return False
+        if code == WHOLE_WAREHOUSE_LOCATION_NAME:
+            return True
+        suffix = f"-{WHOLE_WAREHOUSE_LOCATION_NAME}"
+        return code.endswith(suffix)
+
+    @staticmethod
     def line_item_location_scoped(item: Any) -> bool:
-        """明细已选库位时扣减须 location_scoped，未选则允许同批号跨库位分摊。"""
-        if str(getattr(item, "location_code", None) or "").strip():
+        """明细已选库位时扣减须 location_scoped，未选则允许同批号跨库位分摊。
+
+        整仓库位为占位符，库存可能在无库位维度台账；不按单库位硬拦，按仓级/FIFO 扣减。
+        """
+        loc_code = str(getattr(item, "location_code", None) or "").strip()
+        if loc_code and InventoryService.is_whole_warehouse_location_code(loc_code):
+            return False
+        if loc_code:
             return True
         return getattr(item, "location_id", None) is not None
 

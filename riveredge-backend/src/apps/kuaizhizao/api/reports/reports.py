@@ -521,6 +521,35 @@ async def get_purchase_report(
         ),
     )
 
+
+@router.get(
+    "/purchases/reconciliation-order-detail",
+    summary="Purchase reconciliation order detail",
+)
+async def get_purchase_reconciliation_order_detail(
+    purchase_order_id: int = Query(..., ge=1, description="采购订单 ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _: None = Depends(
+        require_permission_codes(
+            "kuaizhizao:purchase-management-reports-purchase-reconciliation:read",
+            check_abac=False,
+        ),
+    ),
+) -> dict:
+    try:
+        return await report_service.get_purchase_reconciliation_order_detail(
+            tenant_id,
+            purchase_order_id,
+            current_user=current_user,
+        )
+    except ValidationError:
+        raise
+    except Exception as exc:
+        logger.exception("采购对账订单明细失败: {}", exc)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="采购对账订单明细查询失败")
+
+
 @router.get("/quality", summary="Quality report")
 async def get_quality_report(
     report_type: str = Query("analysis", description="报表类型"),

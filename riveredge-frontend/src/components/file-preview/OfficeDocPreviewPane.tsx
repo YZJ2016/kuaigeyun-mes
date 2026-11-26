@@ -106,23 +106,24 @@ export const OfficeDocPreviewPane: React.FC<OfficeDocPreviewPaneProps> = ({
           type="warning"
           showIcon
           title={t('pages.system.files.previewOfficePublicUrlRequired')}
-          style={{ margin: 12, marginBottom: 0, flexShrink: 0 }}
+          style={{ margin: 16, flex: 1 }}
         />
-      ) : null}
-      <div style={{ flex: 1, minHeight: 0 }}>
-        <DocViewer
-          documents={documents}
-          pluginRenderers={[MSDocRenderer]}
-          config={{
-            header: {
-              disableHeader: true,
-              disableFileName: true,
-              retainURLParams: true,
-            },
-          }}
-          style={{ height: '100%', width: '100%' }}
-        />
-      </div>
+      ) : (
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <DocViewer
+            documents={documents}
+            pluginRenderers={[MSDocRenderer]}
+            config={{
+              header: {
+                disableHeader: true,
+                disableFileName: true,
+                retainURLParams: true,
+              },
+            }}
+            style={{ height: '100%', width: '100%' }}
+          />
+        </div>
+      )}
     </div>
   );
 };

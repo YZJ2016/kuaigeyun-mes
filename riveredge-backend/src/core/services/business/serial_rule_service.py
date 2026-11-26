@@ -39,12 +39,11 @@ class SerialRuleService:
 
     @staticmethod
     async def get_rule_by_uuid(tenant_id: int, rule_uuid: str) -> Optional[SerialRule]:
-        """根据UUID获取序列号规则"""
+        """根据UUID获取序列号规则（含停用，供管理端编辑）"""
         return await SerialRule.filter(
             tenant_id=tenant_id,
             uuid=rule_uuid,
             deleted_at__isnull=True,
-            is_active=True,
         ).first()
 
     @staticmethod
@@ -146,6 +145,56 @@ class SerialRuleService:
         return rule
 
     @staticmethod
+    async def resolve_fallback_rule(tenant_id: int) -> SerialRule:
+        custom = await SerialRule.filter(
+            tenant_id=tenant_id,
+            is_default=True,
+            is_system=False,
+            is_active=True,
+            deleted_at__isnull=True,
+        ).first()
+        if custom:
+            return custom
+        return await SerialRuleService.get_or_create_system_default(tenant_id)
+
+    @staticmethod
+    async def set_tenant_default_rule(
+        tenant_id: int,
+        rule_uuid: str,
+        current_user: Optional[User] = None,
+    ) -> SerialRule:
+        rule = await SerialRule.filter(
+            tenant_id=tenant_id, uuid=rule_uuid, deleted_at__isnull=True
+        ).first()
+        if not rule:
+            raise NotFoundError("序列号规则", rule_uuid)
+        if rule.is_system:
+            raise ValidationError("系统内置规则请直接编辑，无需设为默认")
+        if not rule.is_active:
+            raise ValidationError("停用规则不能设为租户默认")
+        await SerialRule.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_default=True,
+        ).update(is_default=False)
+        rule.is_default = True
+        apply_update_audit(rule, current_user)
+        await rule.save()
+        return rule
+
+    @staticmethod
+    def _sanitize_system_rule_update(rule: SerialRule, data: dict) -> dict:
+        update_data = dict(data)
+        update_data.pop("is_system", None)
+        update_data.pop("is_default", None)
+        if "code" in update_data and update_data["code"] is not None:
+            new_code = str(update_data["code"]).strip()
+            if new_code != rule.code:
+                raise ValidationError("系统规则代码不可修改")
+            update_data.pop("code", None)
+        return update_data
+
+    @staticmethod
     async def _assert_code_available(
         tenant_id: int,
         code: str,
@@ -219,9 +268,9 @@ class SerialRuleService:
         ).first()
         if not rule:
             raise NotFoundError("序列号规则", rule_uuid)
-        if rule.is_system:
-            raise ValidationError("系统规则不可修改")
         update_data = dict(data)
+        if rule.is_system:
+            update_data = SerialRuleService._sanitize_system_rule_update(rule, update_data)
         if "code" in update_data and update_data["code"] is not None:
             update_data["code"] = await SerialRuleService._assert_code_available(
                 tenant_id,
@@ -250,6 +299,8 @@ class SerialRuleService:
             raise NotFoundError("序列号规则", rule_uuid)
         if rule.is_system:
             raise ValidationError("系统规则不可删除")
+        if rule.is_default:
+            raise ValidationError("租户默认规则不可删除，请先取消默认或指定其他默认规则")
         rule.deleted_at = now_utc()
         await rule.save()
 

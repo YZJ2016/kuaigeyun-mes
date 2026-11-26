@@ -563,8 +563,7 @@ class MaterialBatchService:
                 preview_offset=preview_offset,
             )
 
-        # 使用系统默认批号规则（未配置时）
-        default_rule = await BatchRuleService.get_or_create_system_default(tenant_id)
+        default_rule = await BatchRuleService.resolve_fallback_rule(tenant_id)
         return await BatchRuleService.generate_by_rule(
             tenant_id=tenant_id,
             rule=default_rule,

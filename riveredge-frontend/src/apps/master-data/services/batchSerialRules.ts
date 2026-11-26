@@ -17,6 +17,7 @@ export interface BatchRule {
   seqResetRule?: string;
   isActive: boolean;
   isSystem: boolean;
+  isDefault: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -47,6 +48,7 @@ export interface SerialRule {
   seqResetRule?: string;
   isActive: boolean;
   isSystem: boolean;
+  isDefault: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -78,6 +80,7 @@ function mapRuleFromApi(raw: Record<string, unknown>): BatchRule | SerialRule {
     seqResetRule: (raw.seq_reset_rule ?? raw.seqResetRule) as string | undefined,
     isActive: (raw.is_active ?? raw.isActive) !== false,
     isSystem: (raw.is_system ?? raw.isSystem) === true,
+    isDefault: (raw.is_default ?? raw.isDefault) === true,
     createdAt: (raw.created_at ?? raw.createdAt) as string,
     updatedAt: (raw.updated_at ?? raw.updatedAt) as string,
   };
@@ -154,6 +157,12 @@ export const batchRuleApi = {
   delete: async (uuid: string) => {
     await api.delete(`/apps/master-data/materials/batch-rules/${uuid}`);
   },
+  setDefault: async (uuid: string) => {
+    const res = await api.post<Record<string, unknown>>(
+      `/apps/master-data/materials/batch-rules/${uuid}/set-default`,
+    );
+    return mapRuleFromApi(res) as BatchRule;
+  },
 };
 
 export const serialRuleApi = {
@@ -226,5 +235,11 @@ export const serialRuleApi = {
   },
   delete: async (uuid: string) => {
     await api.delete(`/apps/master-data/materials/serial-rules/${uuid}`);
+  },
+  setDefault: async (uuid: string) => {
+    const res = await api.post<Record<string, unknown>>(
+      `/apps/master-data/materials/serial-rules/${uuid}/set-default`,
+    );
+    return mapRuleFromApi(res) as SerialRule;
   },
 };

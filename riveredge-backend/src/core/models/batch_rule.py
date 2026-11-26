@@ -54,6 +54,10 @@ class BatchRule(BaseModel):
     )
 
     is_system = fields.BooleanField(default=False, description="是否系统规则（系统规则不可删除）")
+    is_default = fields.BooleanField(
+        default=False,
+        description="租户级默认（物料未指定规则时优先于系统内置 BATCH_DEFAULT）",
+    )
     is_active = fields.BooleanField(default=True, description="是否启用")
 
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

@@ -433,6 +433,42 @@ export async function getPurchaseReport(params: ReportParams & { report_type?: s
   return normalizeReportResponse<SalesReportResponse>(res);
 }
 
+export type PurchaseReconciliationOrderDetailResponse = {
+  success?: boolean;
+  items: Array<{
+    material_code: string;
+    material_name: string;
+    material_spec: string;
+    unit: string;
+    quantity: number;
+    received_quantity: number;
+    unit_price: number | null;
+    amount: number | null;
+  }>;
+  related_documents: Array<{
+    doc_kind: string;
+    doc_id: number;
+    doc_code: string;
+    doc_date: string | null;
+    amount: number;
+    paid_amount?: number;
+    status: string;
+  }>;
+};
+
+/** 采购对账报表：展开查看单张采购订单物料行与关联单据 */
+export async function getPurchaseReconciliationOrderDetail(
+  purchaseOrderId: number,
+): Promise<PurchaseReconciliationOrderDetailResponse> {
+  return apiRequest<PurchaseReconciliationOrderDetailResponse>(
+    '/apps/kuaizhizao/reports/purchases/reconciliation-order-detail',
+    {
+      method: 'GET',
+      params: { purchase_order_id: purchaseOrderId },
+    },
+  );
+}
+
 /** 获取设备报表 */
 export async function getEquipmentReport(params: ReportParams & { report_type?: string } = {}): Promise<SalesReportResponse> {
   const res = await apiRequest<any>('/apps/kuaizhizao/reports/equipment', {

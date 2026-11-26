@@ -49,6 +49,10 @@ import {
 import { RouteTransition } from '../route-transition';
 import { TabRouteCache } from './TabRouteCache';
 import { isCreateTabKey } from './isCreateTabKey';
+import {
+  normalizeListTabStoredPath,
+  sanitizePersistedTabItems,
+} from './ephemeralTabSearch';
 import { readUniTabsBorderRadius } from '../../utils/themeBorderRadius';
 import { isAppGroupTitleItem } from '../../utils/permission';
 import {
@@ -385,12 +389,14 @@ function loadPersistedTabs(
     const parsedTabs = sourceTabs?.length ? sourceTabs : getSavedTabs();
     if (!parsedTabs.length) return null;
 
-    const validTabs = parsedTabs.filter((tab) => {
-      if (!tab || typeof tab !== 'object' || !tab.key || !tab.path || !tab.label) return false;
-      // 租户侧标签栏不恢复纯 infra 页（平台运维独立入口）
-      if (tab.path.startsWith('/infra')) return false;
-      return true;
-    });
+    const validTabs = sanitizePersistedTabItems(
+      parsedTabs.filter((tab) => {
+        if (!tab || typeof tab !== 'object' || !tab.key || !tab.path || !tab.label) return false;
+        // 租户侧标签栏不恢复纯 infra 页（平台运维独立入口）
+        if (tab.path.startsWith('/infra')) return false;
+        return true;
+      }),
+    );
 
     const homeReady = options?.homeReady === true && !!tenantHomePath;
     const contentTabs = retainOpenHomeTabs(validTabs, tenantHomePath, homeReady);
@@ -516,7 +522,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     if (initTenantId != null) {
       const sessionTabs = getSessionTabs(initTenantId);
       if (sessionTabs?.length) {
-        return dedupeTabsByPathname(retainOpenHomeTabs(sessionTabs, '', false));
+        return dedupeTabsByPathname(
+          retainOpenHomeTabs(sanitizePersistedTabItems(sessionTabs), '', false),
+        );
       }
     }
 
@@ -606,8 +614,11 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       }
 
       setTabs((prevTabs) => {
+        const pathForTab = normalizeListTabStoredPath(path);
         // 检查标签是否已存在（key 或 path 精确命中）
-        const existingTab = prevTabs.find((tab) => tab.key === path || tab.path === path);
+        const existingTab = prevTabs.find(
+          (tab) => tab.key === path || tab.path === path || tab.path === pathForTab,
+        );
         if (existingTab) {
           // 建单页历史曾只改 path、key 仍是纯 pathname：必须对齐 key，否则 keep-alive 不重建
           if (isCreateTabKey(path) && existingTab.key !== path) {
@@ -648,14 +659,14 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
             : existingSamePathname.key;
           if (
             existingSamePathname.key === nextKey &&
-            existingSamePathname.path === path &&
+            existingSamePathname.path === pathForTab &&
             existingSamePathname.label === nextLabel
           ) {
             return prevTabs;
           }
           return prevTabs.map((tab) =>
             tab.key === existingSamePathname.key
-              ? { ...tab, key: nextKey, path, label: nextLabel }
+              ? { ...tab, key: nextKey, path: pathForTab, label: nextLabel }
               : tab,
           );
         }
@@ -664,7 +675,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         const storeKey = isCreateTabKey(path) ? path : pathname;
         const newTab: TabItem = {
           key: storeKey,
-          path,
+          path: pathForTab,
           label: getTabTitle(path),
           closable: resolveTabClosable(path, tenantHomePath),
           pinned: false, // 默认不固定
@@ -922,7 +933,13 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     if (sessionTabs?.length) {
       setTabs(
         dedupeTabsByKey(
-          dedupeTabsByPathname(retainOpenHomeTabs(sessionTabs, tenantHomePath, homePathReady)),
+          dedupeTabsByPathname(
+            retainOpenHomeTabs(
+              sanitizePersistedTabItems(sessionTabs),
+              tenantHomePath,
+              homePathReady,
+            ),
+          ),
         ),
       );
       setActiveKey(getCurrentRouteTabKey());
@@ -1264,7 +1281,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       return;
     }
     const tab = findTabByIdentity(tabs, key);
-    const dest = tab?.path || key;
+    const rawDest = tab?.path || key;
+    const dest = isCreateTabKey(rawDest) ? rawDest : normalizeListTabStoredPath(rawDest);
     setActiveKey(tab?.key ?? key);
     navigate(dest);
   };

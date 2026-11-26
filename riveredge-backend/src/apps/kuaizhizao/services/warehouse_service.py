@@ -2983,6 +2983,16 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             pick_department_code = str(picking_data.pick_department_code or "").strip() or None
             pick_department_name = str(picking_data.pick_department_name or "").strip() or None
 
+            from apps.kuaizhizao.utils.production_picking_header import (
+                assert_production_picking_picker_and_department,
+            )
+
+            assert_production_picking_picker_and_department(
+                picker_id=resolved_picker_id,
+                pick_department_id=pick_department_id,
+                pick_department_code=pick_department_code,
+            )
+
             picking = await ProductionPicking.create(
                 tenant_id=tenant_id,
                 picking_code=code,
@@ -3498,6 +3508,17 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                         await ProductionPickingItem.filter(
                             tenant_id=tenant_id, id=item.id
                         ).update(**item_updates)
+
+            from apps.kuaizhizao.utils.production_picking_header import (
+                assert_production_picking_picker_and_department,
+            )
+
+            picking_row = await ProductionPicking.get(tenant_id=tenant_id, id=picking_id)
+            assert_production_picking_picker_and_department(
+                picker_id=getattr(picking_row, "picker_id", None),
+                pick_department_id=getattr(picking_row, "pick_department_id", None),
+                pick_department_code=getattr(picking_row, "pick_department_code", None),
+            )
 
             result = await self.get_production_picking_by_id(tenant_id, picking_id)
 
@@ -4062,6 +4083,16 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             )
 
             assert_outbound_hub_capability(picking, "confirm", outbound_type="production_picking")
+
+            from apps.kuaizhizao.utils.production_picking_header import (
+                assert_production_picking_picker_and_department,
+            )
+
+            assert_production_picking_picker_and_department(
+                picker_id=getattr(picking, "picker_id", None),
+                pick_department_id=getattr(picking, "pick_department_id", None),
+                pick_department_code=getattr(picking, "pick_department_code", None),
+            )
 
             if picking.status != '待领料':
                 raise BusinessLogicError("只有待领料状态的生产领料单才能确认领料")
@@ -4967,6 +4998,9 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         warehouse_name: Optional[str] = None,
         picker_id: Optional[int] = None,
         picker_name: Optional[str] = None,
+        pick_department_id: Optional[int] = None,
+        pick_department_code: Optional[str] = None,
+        pick_department_name: Optional[str] = None,
         picking_time: Optional[Any] = None,
         notes: Optional[str] = None,
         lines: List[Any],
@@ -5057,13 +5091,36 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 "material_unit": str(getattr(item, "material_unit", "") or "个"),
             }
 
+        from apps.kuaizhizao.utils.production_picking_header import (
+            assert_production_picking_picker_and_department,
+        )
+
+        resolved_picker_id = int(picker_id) if picker_id and int(picker_id) > 0 else None
+        resolved_picker_name = str(picker_name or "").strip() or None
+        resolved_pick_department_id = (
+            int(pick_department_id)
+            if pick_department_id and int(pick_department_id) > 0
+            else None
+        )
+        resolved_pick_department_code = str(pick_department_code or "").strip() or None
+        resolved_pick_department_name = str(pick_department_name or "").strip() or None
+        header_fields_submitted = (
+            picker_id is not None
+            or pick_department_id is not None
+            or (pick_department_code is not None and str(pick_department_code).strip())
+        )
+        if header_fields_submitted:
+            assert_production_picking_picker_and_department(
+                picker_id=resolved_picker_id,
+                pick_department_id=resolved_pick_department_id,
+                pick_department_code=resolved_pick_department_code,
+            )
+
         async with in_transaction():
             today = today_site_str()
             picking_code = await self.generate_code(tenant_id, "PRODUCTION_PICKING_CODE", prefix=f"PP{today}")
             user_info = await self.get_user_info(created_by)
             initial_status, initial_review = await self._resolve_picking_create_status(tenant_id)
-            resolved_picker_id = int(picker_id) if picker_id and int(picker_id) > 0 else None
-            resolved_picker_name = str(picker_name or "").strip() or None
             if resolved_picker_id and not resolved_picker_name:
                 resolved_picker_name = await self.get_user_name(resolved_picker_id)
             resolved_picking_time = resolve_business_datetime(picking_time)
@@ -5078,6 +5135,9 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 review_status=initial_review,
                 picker_id=resolved_picker_id,
                 picker_name=resolved_picker_name,
+                pick_department_id=resolved_pick_department_id,
+                pick_department_code=resolved_pick_department_code,
+                pick_department_name=resolved_pick_department_name,
                 picking_time=resolved_picking_time,
                 notes=notes,
                 created_by=created_by,
@@ -5427,6 +5487,9 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         warehouse_name: Optional[str] = None,
         picker_id: Optional[int] = None,
         picker_name: Optional[str] = None,
+        pick_department_id: Optional[int] = None,
+        pick_department_code: Optional[str] = None,
+        pick_department_name: Optional[str] = None,
         picking_time: Optional[Any] = None,
         notes: Optional[str] = None,
         lines: list[Any],
@@ -5453,13 +5516,36 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
 
         work_order_id = int(call.work_order_id)
 
+        from apps.kuaizhizao.utils.production_picking_header import (
+            assert_production_picking_picker_and_department,
+        )
+
+        resolved_picker_id = int(picker_id) if picker_id and int(picker_id) > 0 else None
+        resolved_picker_name = str(picker_name or "").strip() or None
+        resolved_pick_department_id = (
+            int(pick_department_id)
+            if pick_department_id and int(pick_department_id) > 0
+            else None
+        )
+        resolved_pick_department_code = str(pick_department_code or "").strip() or None
+        resolved_pick_department_name = str(pick_department_name or "").strip() or None
+        header_fields_submitted = (
+            picker_id is not None
+            or pick_department_id is not None
+            or (pick_department_code is not None and str(pick_department_code).strip())
+        )
+        if header_fields_submitted:
+            assert_production_picking_picker_and_department(
+                picker_id=resolved_picker_id,
+                pick_department_id=resolved_pick_department_id,
+                pick_department_code=resolved_pick_department_code,
+            )
+
         async with in_transaction():
             today = today_site_str()
             picking_code = await self.generate_code(tenant_id, "PRODUCTION_PICKING_CODE", prefix=f"PP{today}")
             user_info = await self.get_user_info(created_by)
             initial_status, initial_review = await self._resolve_picking_create_status(tenant_id)
-            resolved_picker_id = int(picker_id) if picker_id and int(picker_id) > 0 else None
-            resolved_picker_name = str(picker_name or "").strip() or None
             if resolved_picker_id and not resolved_picker_name:
                 resolved_picker_name = await self.get_user_name(resolved_picker_id)
             resolved_picking_time = resolve_business_datetime(picking_time)
@@ -5474,6 +5560,9 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 review_status=initial_review,
                 picker_id=resolved_picker_id,
                 picker_name=resolved_picker_name,
+                pick_department_id=resolved_pick_department_id,
+                pick_department_code=resolved_pick_department_code,
+                pick_department_name=resolved_pick_department_name,
                 picking_time=resolved_picking_time,
                 notes=notes,
                 created_by=created_by,

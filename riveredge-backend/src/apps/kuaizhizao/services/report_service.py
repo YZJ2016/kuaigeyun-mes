@@ -4407,6 +4407,23 @@ class ReportService:
             )
         return self._wrap_report_payload({"data": [], "success": True})
 
+    async def get_purchase_reconciliation_order_detail(
+        self,
+        tenant_id: int,
+        purchase_order_id: int,
+        *,
+        current_user: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.services.report_enhancements import build_purchase_reconciliation_order_detail
+        from infra.exceptions.exceptions import ValidationError
+
+        scoped_q = await self._scoped_purchase_order_query(tenant_id, current_user)
+        allowed = await scoped_q.filter(id=int(purchase_order_id), deleted_at__isnull=True).exists()
+        if not allowed:
+            raise ValidationError("采购订单不存在或无权查看")
+        data = await build_purchase_reconciliation_order_detail(tenant_id, int(purchase_order_id))
+        return {"success": True, **data}
+
     @staticmethod
     def _apply_inspection_date_filter(query, date_start: Optional[datetime], date_end: Optional[datetime], time_field: str = "inspection_time"):
         if date_start:

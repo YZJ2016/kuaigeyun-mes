@@ -54,6 +54,7 @@ const BatchRulesPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentUuid, setCurrentUuid] = useState<string | null>(null);
+  const [editingIsSystem, setEditingIsSystem] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [ruleComponents, setRuleComponents] = useState<CodeRuleComponent[]>([]);
@@ -66,6 +67,7 @@ const BatchRulesPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentUuid(null);
+    setEditingIsSystem(false);
     setModalVisible(true);
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({ seqStart: 1, seqStep: 1, isActive: true });
@@ -77,6 +79,7 @@ const BatchRulesPage: React.FC = () => {
   const handleEdit = async (record: BatchRule) => {
     setIsEdit(true);
     setCurrentUuid(record.uuid);
+    setEditingIsSystem(record.isSystem);
     setModalVisible(true);
     try {
       const detail = await batchRuleApi.get(record.uuid);
@@ -126,6 +129,16 @@ const BatchRulesPage: React.FC = () => {
     } catch (e: any) {
       messageApi.error(e?.message || t('common.operationFailed'));
       throw e;
+    }
+  };
+
+  const handleSetDefault = async (record: BatchRule) => {
+    try {
+      await batchRuleApi.setDefault(record.uuid);
+      messageApi.success(t('app.master-data.seqRules.setDefaultSuccess'));
+      actionRef.current?.reload();
+    } catch (e: any) {
+      messageApi.error(e?.message || t('common.operationFailed'));
     }
   };
 
@@ -192,6 +205,24 @@ const BatchRulesPage: React.FC = () => {
       hideInSearch: true,
     },
     {
+      title: t('app.master-data.seqRules.defaultScope'),
+      dataIndex: 'isDefault',
+      width: 108,
+      minWidth: 108,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      render: (_, r) => {
+        if (r.isDefault) {
+          return renderMasterTypeMarker(t('app.master-data.seqRules.tenantDefault'));
+        }
+        if (r.isSystem) {
+          return renderMasterTypeMarker(t('app.master-data.seqRules.systemBuiltin'));
+        }
+        return '—';
+      },
+    },
+    {
       title: t('app.master-data.seqRules.seqReset'),
       dataIndex: 'seqResetRule',
       ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
@@ -245,19 +276,29 @@ const BatchRulesPage: React.FC = () => {
           size="small"
           {...rowActionKind('update')}
           onClick={() => handleEdit(record)}
-          disabled={record.isSystem}
         />,
+        !record.isSystem && !record.isDefault ? (
+          <Popconfirm
+            key="set-default"
+            title={t('app.master-data.seqRules.setDefaultConfirm')}
+            onConfirm={() => handleSetDefault(record)}
+          >
+            <Button type="link" size="small">
+              {t('app.master-data.seqRules.setDefault')}
+            </Button>
+          </Popconfirm>
+        ) : null,
         <Popconfirm
           key="delete"
           title={t('app.master-data.seqRules.deleteConfirm')}
           onConfirm={() => handleDelete(record)}
-          disabled={record.isSystem}
+          disabled={record.isSystem || record.isDefault}
         >
           <Button
             type="link"
             size="small"
             {...rowActionKind('delete')}
-            disabled={record.isSystem}
+            disabled={record.isSystem || record.isDefault}
           />
         </Popconfirm>,
       ],
@@ -269,7 +310,7 @@ const BatchRulesPage: React.FC = () => {
       <UniTable<BatchRule>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.batchRules')}
-        columnPersistenceId="apps.master-data.pages.materials.batch-rules.list-v2"
+        columnPersistenceId="apps.master-data.pages.materials.batch-rules.list-v3"
         headerTitle={t('app.master-data.batchRules.headerTitle')}
         actionRef={actionRef}
         rowKey="uuid"
@@ -344,10 +385,14 @@ const BatchRulesPage: React.FC = () => {
           label={t('app.master-data.seqRules.ruleCode')}
           colProps={{ span: 12 }}
           placeholder={t('app.master-data.seqRules.ruleCodePlaceholder')}
+          disabled={editingIsSystem}
           rules={[
             { required: true },
             {
               validator: async (_, value) => {
+                if (editingIsSystem) {
+                  return Promise.resolve();
+                }
                 const code = String(value ?? '').trim();
                 if (code === 'BATCH_DEFAULT') {
                   return Promise.reject(
