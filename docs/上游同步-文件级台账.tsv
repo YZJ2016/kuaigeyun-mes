@@ -1323,7 +1323,7 @@ riveredge-backend/src/apps/kuaizhizao/services/payment_application_service.py	88
 riveredge-backend/src/apps/kuaizhizao/services/payment_application_tax.py	88ccac22e3	applied	R4新文件:normalize_po_tax_rate_to_percent(1归一1%)
 riveredge-backend/src/apps/kuaizhizao/services/plan_source_line_fulfillment.py	14799a96d0585b30a49cb81a1cbd230b84d41ead	superset	复核ok
 riveredge-backend/src/apps/kuaizhizao/services/print_service.py	88ccac22e3	applied	R4手术摘:行customer_order_no/batch_number/weight/tax_rate+送货单关联销售出库
-riveredge-backend/src/apps/kuaizhizao/services/print_template_presets.py	88ccac22e3	applied	R5:取上游13个通用模板升级函数(金蝶单号/红框/明细白底/行号/费用列序/付款申请/含税金额/站点名头/签核绑定/有效期/小数位);宸澳与PRINT_002租户门控函数整组不取
+riveredge-backend/src/apps/kuaizhizao/services/print_template_presets.py	88ccac22e3	applied	R5:取上游13个通用模板升级函数(金蝶单号/红框/明细白底/行号/费用列序/付款申请/含税金额/站点名头/签核绑定/有效期/小数位);宸澳与PRINT_002租户门控函数整组不取；追摘红票saved判定修复；宸澳/连枝横客户专属块按品牌规则有意摘除
 riveredge-backend/src/apps/kuaizhizao/services/process_inspection_service.py	69012e2c892ceab57af2d41832c3d9a87033da57	superset	复核ok
 riveredge-backend/src/apps/kuaizhizao/services/production_control_service.py	7a09fa64ba8d47ecea7d55bd9d6cce2c60502582	applied	R2：与上游tip blob一致，本地已同步
 riveredge-backend/src/apps/kuaizhizao/services/production_cost_service.py	ceb5db90705a6b2c08df379f593ff8842bec8484	superset	复核ok

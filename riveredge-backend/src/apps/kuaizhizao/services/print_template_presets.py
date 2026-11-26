@@ -173,13 +173,18 @@ async def upgrade_kuaizhizao_red_voucher_print_templates(tenant_id: int) -> int:
             code=tpl.code,
             config=config_raw,
         )
+        purchase_red_html_saved = False
         if is_purchase_red:
-            schema_changed = patch_purchase_receipt_red_voucher_schema(schema_copy)
-            next_content, content_html_changed = patch_purchase_receipt_red_voucher_html(
+            purchase_schema_changed = patch_purchase_receipt_red_voucher_schema(schema_copy)
+            if purchase_schema_changed:
+                schema_changed = True
+            next_content, purchase_html_changed = patch_purchase_receipt_red_voucher_html(
                 str(tpl.content or "")
             )
-            if content_html_changed:
+            if purchase_html_changed:
+                content_html_changed = True
                 tpl.content = next_content
+                purchase_red_html_saved = True
                 for blk in schema_copy.get("blocks") or []:
                     if (
                         isinstance(blk, dict)
@@ -193,29 +198,30 @@ async def upgrade_kuaizhizao_red_voucher_print_templates(tenant_id: int) -> int:
         if not (schema_changed or content_html_changed):
             continue
 
-        text_body: str | None = None
-        for blk in schema_copy.get("blocks") or []:
-            if (
-                isinstance(blk, dict)
-                and blk.get("type") == "text"
-                and isinstance(blk.get("content"), str)
-                and blk.get("content").strip()
-            ):
-                text_body = str(blk["content"])
-                break
-        if text_body is not None:
-            tpl.content = text_body
-        else:
-            try:
-                tpl.content = recompile_designer_schema(schema_copy)
-            except Exception as e:
-                logger.warning(
-                    "编译红框打印模板失败 tenant={} code={}: {}",
-                    tenant_id,
-                    tpl.code,
-                    e,
-                )
-                continue
+        if not purchase_red_html_saved:
+            text_body: str | None = None
+            for blk in schema_copy.get("blocks") or []:
+                if (
+                    isinstance(blk, dict)
+                    and blk.get("type") == "text"
+                    and isinstance(blk.get("content"), str)
+                    and blk.get("content").strip()
+                ):
+                    text_body = str(blk["content"])
+                    break
+            if text_body is not None:
+                tpl.content = text_body
+            else:
+                try:
+                    tpl.content = recompile_designer_schema(schema_copy)
+                except Exception as e:
+                    logger.warning(
+                        "编译红框打印模板失败 tenant={} code={}: {}",
+                        tenant_id,
+                        tpl.code,
+                        e,
+                    )
+                    continue
 
         next_config = dict(config_raw)
         next_config["designer_schema"] = schema_copy
