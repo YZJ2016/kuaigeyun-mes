@@ -1,7 +1,6 @@
 # 上游同步文件级台账（scripts/sync_upstream_audit.py 维护，勿手改列结构）
 # 列：upstream_path	sha_at_eval	verdict	note
-# verdict: tracked|applied|superset|deferred|domain-out
-	b6b7feed3f101452cbdef8cc9309c929af9dd2e4	superset	复核ok
+# verdict: tracked|applied|ported|superset|deferred|domain-out
 "docs/\345\215\225\345\205\254\347\275\221IP\345\217\214\346\234\272Caddy\345\217\215\345\220\221\344\273\243\347\220\206.md"	DELETED	superset	复核ok
 "docs/\351\203\250\347\275\262\346\214\207\345\215\227.md"	DELETED	superset	复核ok
 .aoci/.gitignore	DELETED	superset	复核ok
@@ -765,36 +764,36 @@ riveredge-backend/src/apps/kuaizhizao/finance/api/cost/standard_costs.py	8e0aad3
 riveredge-backend/src/apps/kuaizhizao/finance/api/document_reconciliation.py	84ea111f2457390d3af0fb37e40ee91ed796c276	domain-out	tracked审计：kuaizhizao.finance平行财务域，本地权威kuaicaiwu
 riveredge-backend/src/apps/kuaizhizao/finance/api/exchange_rates.py	63f31fc75899b7650c7a1b361530157ffe7b559a	domain-out	tracked审计：kuaizhizao.finance平行财务域，本地权威kuaicaiwu
 riveredge-backend/src/apps/kuaizhizao/finance/api/finance/__init__.py	13c923a4ab82047f0771f56b67aaa6cde523e660	domain-out	tracked审计：kuaizhizao.finance平行财务域，本地权威kuaicaiwu
-riveredge-backend/src/apps/kuaizhizao/finance/api/finance/fund_transfers.py	c3a0cb433b825078f514c1a70c4596e7860e6ca5	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-backend/src/apps/kuaizhizao/finance/api/finance/fund_transfers.py	c3a0cb433b825078f514c1a70c4596e7860e6ca5	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
 riveredge-backend/src/apps/kuaizhizao/finance/api/finance/partner_statements.py	0ac6e8a6358f83f0596ea6b0dcf7a59aa06e8a34	superset	复核ok
 riveredge-backend/src/apps/kuaizhizao/finance/api/finance/payables.py	49a4b3398d802ac3a504f900a7f28c165c48f615	domain-out	tracked审计：kuaizhizao.finance平行财务域，本地权威kuaicaiwu
-riveredge-backend/src/apps/kuaizhizao/finance/api/finance/payment_refunds.py	cab68845ae4388e45cf8e9fbe2781d7f4dbbd1c0	applied	簇5审核链：_attach_audit+review_status写入+editable门禁+audit字段随enrich下发
-riveredge-backend/src/apps/kuaizhizao/finance/api/finance/payments.py	3822270be788694b2372431aa456074eafcf91a4	applied	簇5审核链：_attach_audit+review_status写入+editable门禁+serialize_detail(user_id)；余量：pull_preview参数序/print端点位置/PaymentApplicationPullService本地结构保留分叉
+riveredge-backend/src/apps/kuaizhizao/finance/api/finance/payment_refunds.py	cab68845ae4388e45cf8e9fbe2781d7f4dbbd1c0	ported	簇5审核链：_attach_audit+review_status写入+editable门禁+audit字段随enrich下发
+riveredge-backend/src/apps/kuaizhizao/finance/api/finance/payments.py	3822270be788694b2372431aa456074eafcf91a4	ported	簇5审核链：_attach_audit+review_status写入+editable门禁+serialize_detail(user_id)；余量：pull_preview参数序/print端点位置/PaymentApplicationPullService本地结构保留分叉
 riveredge-backend/src/apps/kuaizhizao/finance/api/finance/price_settlement.py	ca7573ee110b16f079af207f77123b9fad34504b	domain-out	tracked审计：kuaizhizao.finance平行财务域，本地权威kuaicaiwu
-riveredge-backend/src/apps/kuaizhizao/finance/api/finance/purchase_invoices.py	190efd9b1705c83254255dce8fa693aeb4feba90	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
-riveredge-backend/src/apps/kuaizhizao/finance/api/finance/receipt_refunds.py	c64e2fae1084954495f455d665d765d03896a6ef	applied	簇5审核链：_attach_audit+review_status写入+editable门禁+audit字段随enrich下发
-riveredge-backend/src/apps/kuaizhizao/finance/api/finance/receipts.py	922d2f21e96f5f978a6e82fb9b188b572f63bd3c	applied	簇5审核链：_attach_audit+review_status写入+editable门禁+audit字段随enrich下发
+riveredge-backend/src/apps/kuaizhizao/finance/api/finance/purchase_invoices.py	190efd9b1705c83254255dce8fa693aeb4feba90	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-backend/src/apps/kuaizhizao/finance/api/finance/receipt_refunds.py	c64e2fae1084954495f455d665d765d03896a6ef	ported	簇5审核链：_attach_audit+review_status写入+editable门禁+audit字段随enrich下发
+riveredge-backend/src/apps/kuaizhizao/finance/api/finance/receipts.py	922d2f21e96f5f978a6e82fb9b188b572f63bd3c	ported	簇5审核链：_attach_audit+review_status写入+editable门禁+audit字段随enrich下发
 riveredge-backend/src/apps/kuaizhizao/finance/api/finance/receivables.py	1f4f6ac95450470fec6c3d4648444b5a1309cce5	domain-out	tracked审计：kuaizhizao.finance平行财务域，本地权威kuaicaiwu
-riveredge-backend/src/apps/kuaizhizao/finance/api/finance/sales_invoices.py	8c961c9ff1965e3994a669e88be1165656a8d0d9	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-backend/src/apps/kuaizhizao/finance/api/finance/sales_invoices.py	8c961c9ff1965e3994a669e88be1165656a8d0d9	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
 riveredge-backend/src/apps/kuaizhizao/finance/api/finance_management_router.py	164cbc7777dc06ff98f0a7e59ed189a2a4eba75f	domain-out	宿主财务路由,kuaicaiwu权威
-riveredge-backend/src/apps/kuaizhizao/finance/api/finance_notes.py	129cd5656dc7abafe4746b3b2d65a42b13ef4f64	applied	簇5审核链：_attach_audit+review_status写入+editable门禁+audit字段随enrich下发
+riveredge-backend/src/apps/kuaizhizao/finance/api/finance_notes.py	129cd5656dc7abafe4746b3b2d65a42b13ef4f64	ported	簇5审核链：_attach_audit+review_status写入+editable门禁+audit字段随enrich下发
 riveredge-backend/src/apps/kuaizhizao/finance/api/finance_settlement.py	3ab8ce6cb6966034f8c65a71fa87989cfb867481	domain-out	tracked审计：kuaizhizao.finance平行财务域，本地权威kuaicaiwu
 riveredge-backend/src/apps/kuaizhizao/finance/api/fixed_assets.py	5c91746f0a04cdd418259b0dc8f23fc2fff1cd3c	domain-out	tracked审计：kuaizhizao.finance平行财务域，本地权威kuaicaiwu
 riveredge-backend/src/apps/kuaizhizao/finance/api/gl.py	f72c6b0bd9a21e5444215ec72d6f677ff2e0d2af	domain-out	tracked审计：kuaizhizao.finance平行财务域，本地权威kuaicaiwu
-riveredge-backend/src/apps/kuaizhizao/finance/api/kuaicaiwu_app_router.py	3e833858ff27677594f53526b97372ccaeef53da	applied	宽区间补登：上游tip已落地（同文/等价映射/预审A包复核）
+riveredge-backend/src/apps/kuaizhizao/finance/api/kuaicaiwu_app_router.py	3e833858ff27677594f53526b97372ccaeef53da	ported	宽区间补登：上游tip已落地（同文/等价映射/预审A包复核）
 riveredge-backend/src/apps/kuaizhizao/finance/api/management_report.py	9d20dc5d6687da9fdf0dd3d1a8260fe84fd7ca84	domain-out	tracked审计：kuaizhizao.finance平行财务域，本地权威kuaicaiwu
 riveredge-backend/src/apps/kuaizhizao/finance/api/prepayments.py	859f7ad4e40ff98e597601bd3e2be03aeb15fa8c	domain-out	tracked审计：kuaizhizao.finance平行财务域，本地权威kuaicaiwu
 riveredge-backend/src/apps/kuaizhizao/finance/api/router.py	88d66889f9c0705529c3e28702a6fc2bb7dbd20e	domain-out	tracked审计：kuaizhizao.finance平行财务域，本地权威kuaicaiwu
 riveredge-backend/src/apps/kuaizhizao/finance/api/tax.py	48a8f65e79ce63c8ab58f3148003c1f348b11d5f	domain-out	tracked审计：kuaizhizao.finance平行财务域，本地权威kuaicaiwu
 riveredge-backend/src/apps/kuaizhizao/finance/bootstrap.py	2de19d50cdbba516c2ca6c5ab840985213a485db	domain-out	tracked审计：kuaizhizao.finance平行财务域，本地权威kuaicaiwu
-riveredge-backend/src/apps/kuaizhizao/finance/config/finance_settlement_contract.py	c59f0715039205d891138acacad206993b64ffc8	applied	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
+riveredge-backend/src/apps/kuaizhizao/finance/config/finance_settlement_contract.py	c59f0715039205d891138acacad206993b64ffc8	ported	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
 riveredge-backend/src/apps/kuaizhizao/finance/constants/__init__.py	9d80de764a99ddf3df1d1f2d00cb0acda18ca404	domain-out	tracked审计：kuaizhizao.finance平行财务域，本地权威kuaicaiwu
-riveredge-backend/src/apps/kuaizhizao/finance/constants/finance_source_types.py	c5a8816525d3cc866aecd198c43f0b5666dc3835	applied	RECEIVABLE/PAYABLE_SOURCE_PARTNER_STATEMENT 常量已入 kuaicaiwu.constants
-riveredge-backend/src/apps/kuaizhizao/finance/constants/fund_transfer_payment_method.py	ace41888b12f76c4485150d0711059e3eeed230c	applied	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
-riveredge-backend/src/apps/kuaizhizao/finance/constants/payment_method.py	5b4ab6f9a8c1f41b0b06f847895fbdb0acd5b07a	applied	requires_supplier_payee_account 谓词已入 kuaicaiwu.constants.payment_method
+riveredge-backend/src/apps/kuaizhizao/finance/constants/finance_source_types.py	c5a8816525d3cc866aecd198c43f0b5666dc3835	ported	RECEIVABLE/PAYABLE_SOURCE_PARTNER_STATEMENT 常量已入 kuaicaiwu.constants
+riveredge-backend/src/apps/kuaizhizao/finance/constants/fund_transfer_payment_method.py	ace41888b12f76c4485150d0711059e3eeed230c	ported	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
+riveredge-backend/src/apps/kuaizhizao/finance/constants/payment_method.py	5b4ab6f9a8c1f41b0b06f847895fbdb0acd5b07a	ported	requires_supplier_payee_account 谓词已入 kuaicaiwu.constants.payment_method
 riveredge-backend/src/apps/kuaizhizao/finance/constants/price_settlement.py	5058d6a5c9aab9dd3210a45e8ff0edb30a40d22a	domain-out	tracked审计：kuaizhizao.finance平行财务域，本地权威kuaicaiwu
-riveredge-backend/src/apps/kuaizhizao/finance/manifest.json	d042684ba1235266b8fa3c44a6dca9a6c200e11a	applied	簇5审核链：audit声明补5条（receipt/receipt_refund/sales_invoice/notes_receivable/notes_payable），payment/payment_refund上游未声明保持不登
-riveredge-backend/src/apps/kuaizhizao/finance/models/__init__.py	4835a39b19fc54e990b2f03d95f964c8a9ba5076	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-backend/src/apps/kuaizhizao/finance/manifest.json	d042684ba1235266b8fa3c44a6dca9a6c200e11a	ported	簇5审核链：audit声明补5条（receipt/receipt_refund/sales_invoice/notes_receivable/notes_payable），payment/payment_refund上游未声明保持不登
+riveredge-backend/src/apps/kuaizhizao/finance/models/__init__.py	4835a39b19fc54e990b2f03d95f964c8a9ba5076	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
 riveredge-backend/src/apps/kuaizhizao/finance/models/account_balance.py	8154bb89a17df06bff593189771f360a43a0e299	domain-out	tracked审计：kuaizhizao.finance平行财务域，本地权威kuaicaiwu
 riveredge-backend/src/apps/kuaizhizao/finance/models/accounting_event.py	08b5a8f56be11ac14dad3ba5a94404e20c8edafb	domain-out	tracked审计：kuaizhizao.finance平行财务域，本地权威kuaicaiwu
 riveredge-backend/src/apps/kuaizhizao/finance/models/accounting_period.py	c44c674da3ec445ebee098f37e359fa01e5aa614	domain-out	tracked审计：kuaizhizao.finance平行财务域，本地权威kuaicaiwu
@@ -804,34 +803,34 @@ riveredge-backend/src/apps/kuaizhizao/finance/models/bank_transaction.py	cec3aa3
 riveredge-backend/src/apps/kuaizhizao/finance/models/chart_of_account.py	e2395c9b06e90fd0046b99dd343ab8945ab3055d	domain-out	tracked审计：kuaizhizao.finance平行财务域，本地权威kuaicaiwu
 riveredge-backend/src/apps/kuaizhizao/finance/models/cost_calculation.py	f53b730335776f09df85362ff290dd923653d380	domain-out	tracked审计：kuaizhizao.finance平行财务域，本地权威kuaicaiwu
 riveredge-backend/src/apps/kuaizhizao/finance/models/cost_rule.py	2bc5a5e92f2fbd7197e6e3b3ad92bcf110af8f6f	domain-out	tracked审计：kuaizhizao.finance平行财务域，本地权威kuaicaiwu
-riveredge-backend/src/apps/kuaizhizao/finance/models/finance_note.py	247ba03544084da2d2ac6ed38424b892ce985de4	applied	簇5审核链：review_status字段已入kuaicaiwu模型+迁移
+riveredge-backend/src/apps/kuaizhizao/finance/models/finance_note.py	247ba03544084da2d2ac6ed38424b892ce985de4	ported	簇5审核链：review_status字段已入kuaicaiwu模型+迁移
 riveredge-backend/src/apps/kuaizhizao/finance/models/fixed_asset.py	041520c05d57e94f47f5f456a0c69bdd43076913	domain-out	tracked审计：kuaizhizao.finance平行财务域，本地权威kuaicaiwu
-riveredge-backend/src/apps/kuaizhizao/finance/models/fund_transfer.py	b114a1fa1f2f631ad28c46bd7ca5cb624e36ff66	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-backend/src/apps/kuaizhizao/finance/models/fund_transfer.py	b114a1fa1f2f631ad28c46bd7ca5cb624e36ff66	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
 riveredge-backend/src/apps/kuaizhizao/finance/models/gl_accrual_item.py	f083fafe9b76860d3ac2176aef28bd6454751245	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-backend/src/apps/kuaizhizao/finance/models/gl_book_settings.py	f381fdaf44498d19a50fb6eae24a0379c4046b1a	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-backend/src/apps/kuaizhizao/finance/models/gl_book_settings.py	f381fdaf44498d19a50fb6eae24a0379c4046b1a	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
 riveredge-backend/src/apps/kuaizhizao/finance/models/gl_cash_flow_item.py	9fd3e84c112cdf40e10c020dd65b930fc5b3c4d2	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/models/gl_cheque.py	9755dea02acc4e2889c7932028cd44efe6e438d1	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/models/gl_exchange_rate.py	2c208bfa5df9ac388f083799902eef893396c9ac	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/models/gl_project.py	39eafb6674425e7445ff4b646672e6ba973d32c4	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/models/gl_tax_settings.py	e973f7466033b76abb8105751158bb8e9d06ed10	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/models/gl_transfer_template.py	dffc65b640d9e4e26d4aa3554cc5132ecf1503fc	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-backend/src/apps/kuaizhizao/finance/models/invoice.py	0d07d61f2fbf1048257f067fac18c74bcfcd7409	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
-riveredge-backend/src/apps/kuaizhizao/finance/models/partner_statement.py	af18299f2ea72c232860ffad04e0ef616351472f	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
-riveredge-backend/src/apps/kuaizhizao/finance/models/partner_statement_line.py	b0563c472a261ef0252ef3e7a89c78060a962ef2	applied	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
+riveredge-backend/src/apps/kuaizhizao/finance/models/invoice.py	0d07d61f2fbf1048257f067fac18c74bcfcd7409	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-backend/src/apps/kuaizhizao/finance/models/partner_statement.py	af18299f2ea72c232860ffad04e0ef616351472f	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-backend/src/apps/kuaizhizao/finance/models/partner_statement_line.py	b0563c472a261ef0252ef3e7a89c78060a962ef2	ported	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
 riveredge-backend/src/apps/kuaizhizao/finance/models/payable.py	911b36b2c6f3d4083961a47f6189d94cefe2603e	superset	复核ok
-riveredge-backend/src/apps/kuaizhizao/finance/models/payment.py	36a864c0a8afb21ada25cbd55498fb2f825400ef	applied	簇5审核链：review_status字段已入kuaicaiwu模型+迁移
+riveredge-backend/src/apps/kuaizhizao/finance/models/payment.py	36a864c0a8afb21ada25cbd55498fb2f825400ef	ported	簇5审核链：review_status字段已入kuaicaiwu模型+迁移
 riveredge-backend/src/apps/kuaizhizao/finance/models/payment_advance_record.py	2b4a0c72cc0a884b352716c160cdcc966d9f53de	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/models/payment_offset_prepayment_line.py	547c022dec1d1dc62f1e5893c40260649671b791	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/models/payment_pull_line.py	1fb4838aaf153fcc5e78b2ee978e1edd4c6a0d1c	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/models/price_settlement_batch.py	36db1f1bd13151c2ddffb644bbece97116003a2f	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/models/price_settlement_line.py	7e4c2e8442dbdd93d84d18058b492ed184c46242	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-backend/src/apps/kuaizhizao/finance/models/purchase_invoice.py	0539c40684363993200e238710d491b73339cbef	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
-riveredge-backend/src/apps/kuaizhizao/finance/models/purchase_invoice_item.py	77935355d88382a2aaa1855101d04d1b19626c7c	applied	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
+riveredge-backend/src/apps/kuaizhizao/finance/models/purchase_invoice.py	0539c40684363993200e238710d491b73339cbef	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-backend/src/apps/kuaizhizao/finance/models/purchase_invoice_item.py	77935355d88382a2aaa1855101d04d1b19626c7c	ported	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
 riveredge-backend/src/apps/kuaizhizao/finance/models/purchase_receipt_line_finance_occupancy.py	299d40c76ecf704df0c083f88906959896c00d71	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-backend/src/apps/kuaizhizao/finance/models/receipt.py	0d968282956fceb9f9957d65a11abf94de1ad15e	applied	簇5审核链：review_status字段已入kuaicaiwu模型+迁移
+riveredge-backend/src/apps/kuaizhizao/finance/models/receipt.py	0d968282956fceb9f9957d65a11abf94de1ad15e	ported	簇5审核链：review_status字段已入kuaicaiwu模型+迁移
 riveredge-backend/src/apps/kuaizhizao/finance/models/receipt_pull_line.py	22d037fe149d3070bafe6b85382bb6da15f89a92	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/models/receivable.py	b47309b5d98c5bcc52b0d54562a49979e7d1a667	superset	复核ok
-riveredge-backend/src/apps/kuaizhizao/finance/models/sales_delivery_line_finance_occupancy.py	27a0bb6f4c0b51274f42e60ea35eaa772ff7b3a0	applied	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
+riveredge-backend/src/apps/kuaizhizao/finance/models/sales_delivery_line_finance_occupancy.py	27a0bb6f4c0b51274f42e60ea35eaa772ff7b3a0	ported	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
 riveredge-backend/src/apps/kuaizhizao/finance/models/settlement.py	e522c8f4c5b13b47bdea175adfddf0d05727b989	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/models/standard_cost.py	2c7688b548e81da94acb792f9a7459ceea6a44f1	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/models/tax_period_record.py	46c643fc779e9f9c33e8fdec8ef104c2efbb5526	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
@@ -839,12 +838,12 @@ riveredge-backend/src/apps/kuaizhizao/finance/models/voucher.py	c75cf45682656dc6
 riveredge-backend/src/apps/kuaizhizao/finance/models/voucher_line.py	f9bf640f678f9ec304ba1ffd39a79e162913d0d9	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/models/voucher_summary.py	eea234d130cbb090c67ae8daf517513c1598c12c	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/orm_models.py	97e5ee0283f47116989714d384f1c542d9a9649a	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-backend/src/apps/kuaizhizao/finance/orm_models_finance_management.py	eb39d785be6ea2a131257cae1a499a222947ffea	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-backend/src/apps/kuaizhizao/finance/orm_models_finance_management.py	eb39d785be6ea2a131257cae1a499a222947ffea	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
 riveredge-backend/src/apps/kuaizhizao/finance/orm_models_gl.py	b484280bb468a004aa05cf866f91d04c248ccc06	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/reference_display/__init__.py	1632f25743999b853d2a37a270a9aca234647ce0	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/reference_display/setup.py	2f3a3c1ff23cfd7124d01fafa2ec51dfd545b3fe	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/schemas/__init__.py	f5261c38ac24691fd4be025f95ad26b7d9d7e33e	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-backend/src/apps/kuaizhizao/finance/schemas/finance.py	80c9f9fbfd1a657a86eb2df2dd1915dc35058e5f	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-backend/src/apps/kuaizhizao/finance/schemas/finance.py	80c9f9fbfd1a657a86eb2df2dd1915dc35058e5f	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
 riveredge-backend/src/apps/kuaizhizao/finance/schemas/invoice.py	ca402a2ae95a3817dade8c515d57c6f6a034cbef	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/schemas/price_settlement_schemas.py	a8c5fc0babe1a24ed05083d263ea5922f65f82b4	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/schemas/standard_cost.py	d341d6f4b332a899f21acd431fd8bc570b7062fe	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
@@ -865,16 +864,16 @@ riveredge-backend/src/apps/kuaizhizao/finance/services/fa_core.py	ef23c6253f51d2
 riveredge-backend/src/apps/kuaizhizao/finance/services/fa_depreciation_methods.py	c98622a3c9493d03c7958a75c563ebf0c035bb73	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/fa_depreciation_service.py	94bb56fd115452954059f3a9c4e1bfd2a71f30d6	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/finance_aggregation_service.py	25b8a6bc773a9010f2c4fc2c0be2967213d1f38e	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-backend/src/apps/kuaizhizao/finance/services/finance_audit_workflow.py	15bb717b32a46e9cbe867f81cd062f5bf455d51f	applied	移植：partner_statement 审核写回+采购发票已开票状态 至 kuaicaiwu.finance_audit_workflow
+riveredge-backend/src/apps/kuaizhizao/finance/services/finance_audit_workflow.py	15bb717b32a46e9cbe867f81cd062f5bf455d51f	ported	移植：partner_statement 审核写回+采购发票已开票状态 至 kuaicaiwu.finance_audit_workflow
 riveredge-backend/src/apps/kuaizhizao/finance/services/finance_due_date.py	36f35d19f4ae91764086da27bb2da7f74ae545e0	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/finance_integration_hooks.py	5179bb1e26a9e27a3b88816c83e1863e1d6d9239	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/finance_list_core.py	dd3b86d5da91e79fae6f60fcf51cdb5e3cdc55b6	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-backend/src/apps/kuaizhizao/finance/services/finance_note_service.py	8d8f927c3dc59e1d29462a645d55b2643cd0c698	applied	簇5审核链：票据review_status全量（创建草稿/列表过滤/关联收款付款须已审核/editable+action门禁/count_expiring），与上游逐字节等价（路径改写）
+riveredge-backend/src/apps/kuaizhizao/finance/services/finance_note_service.py	8d8f927c3dc59e1d29462a645d55b2643cd0c698	ported	簇5审核链：票据review_status全量（创建草稿/列表过滤/关联收款付款须已审核/editable+action门禁/count_expiring），与上游逐字节等价（路径改写）
 riveredge-backend/src/apps/kuaizhizao/finance/services/finance_payment_method.py	b481d66c7641991ee05f6ddc123aa06f1be5aea3	superset	复核ok
 riveredge-backend/src/apps/kuaizhizao/finance/services/finance_payment_terms.py	e77555246aece39304bbfff53a86f768aec50b47	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/finance_refund_utils.py	96b56d9ebbb1908143fc4c7f99768da6ed3fcddb	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/finance_service.py	575a26a5a578b919816e1c1d23df14035a0b34b2	superset	复核ok
-riveredge-backend/src/apps/kuaizhizao/finance/services/finance_settlement_hierarchy.py	7c25a9ad71d93d56d115124c4e54a5c4975fedde	applied	移植至 kuaicaiwu.finance_settlement_hierarchy(三方合并无冲突)
+riveredge-backend/src/apps/kuaizhizao/finance/services/finance_settlement_hierarchy.py	7c25a9ad71d93d56d115124c4e54a5c4975fedde	ported	移植至 kuaicaiwu.finance_settlement_hierarchy(三方合并无冲突)
 riveredge-backend/src/apps/kuaizhizao/finance/services/finance_tax.py	715d092f53863a77614b247a2753a57f2a00c5b5	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/finance_voucher_codes.py	6ded704bd2f0d37c41abc62d74e07d621870c6f6	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/finance_voucher_correction.py	4cc77d2173d1672e35b0792a59a1c4df7c82a13d	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
@@ -882,7 +881,7 @@ riveredge-backend/src/apps/kuaizhizao/finance/services/finance_voucher_enrichmen
 riveredge-backend/src/apps/kuaizhizao/finance/services/finance_voucher_posting_service.py	c8d952a73351c44c77e221c92a5533fa4f31da53	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/fund_transfer_audit_service.py	aa6a83839f8192e54f0b3775eed17cb02be3558b	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/fund_transfer_posting_service.py	d33e68f0ab7bdec6f0ceb883470169ee0ca1aaf3	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-backend/src/apps/kuaizhizao/finance/services/fund_transfer_service.py	b943e7843d85f5c2d7a2e55d564106cc0e9179d8	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-backend/src/apps/kuaizhizao/finance/services/fund_transfer_service.py	b943e7843d85f5c2d7a2e55d564106cc0e9179d8	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
 riveredge-backend/src/apps/kuaizhizao/finance/services/gl/__init__.py	c9347891ed720e09bf3eaef3b06191e22e109f56	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/gl/balance_aggregate.py	2332081da8917a77dd38ee91bd4ac7732da99142	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/gl/balance_service.py	fdee080935bfdf83582385fb435112b2035ece35	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
@@ -903,55 +902,55 @@ riveredge-backend/src/apps/kuaizhizao/finance/services/inventory_cost_service.py
 riveredge-backend/src/apps/kuaizhizao/finance/services/invoice_concurrent_settlement.py	b502d0b4301f03bd8462d708a34be95394b843c7	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/invoice_merge_allocation_repair.py	490f34b74c71899ae203fc1903a153b45b6088bb	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/invoice_service.py	12fcf88225da77e008370325cc9ab928cc5f5e90	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-backend/src/apps/kuaizhizao/finance/services/invoice_settlement_guard.py	126021eeef96b2d403157ceca5fe544f780d7202	applied	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
-riveredge-backend/src/apps/kuaizhizao/finance/services/invoice_settlement_mode_migration_service.py	6abeb9deb66d0962e5f3fdab5506e9804c203df0	applied	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
-riveredge-backend/src/apps/kuaizhizao/finance/services/invoice_settlement_policy.py	6068150bd5a4519ceaa32e6e91321c04610ea38a	applied	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
+riveredge-backend/src/apps/kuaizhizao/finance/services/invoice_settlement_guard.py	126021eeef96b2d403157ceca5fe544f780d7202	ported	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
+riveredge-backend/src/apps/kuaizhizao/finance/services/invoice_settlement_mode_migration_service.py	6abeb9deb66d0962e5f3fdab5506e9804c203df0	ported	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
+riveredge-backend/src/apps/kuaizhizao/finance/services/invoice_settlement_policy.py	6068150bd5a4519ceaa32e6e91321c04610ea38a	ported	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
 riveredge-backend/src/apps/kuaizhizao/finance/services/invoice_source_allocation.py	b8a3720958ddcc6f9927638545330304cd8704ec	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/management_report_service.py	dd02ebe6ace8675412b26b5ca2b06bda322c632a	superset	复核ok
 riveredge-backend/src/apps/kuaizhizao/finance/services/merge_settlement_service.py	693cc9022957560e28e700d6af5f19ac39ee2387	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-backend/src/apps/kuaizhizao/finance/services/notes_payable_audit_service.py	9313c012c83757c222152dcd17d0f8585b9bded3	applied	簇5审核链：7个审核服务逐字摘入kuaicaiwu/services（commit/submit_review/withdraw/approve/revoke+editable门禁）
-riveredge-backend/src/apps/kuaizhizao/finance/services/notes_receivable_audit_service.py	a35b99f69e81fcadd515640866535345c7df9ce9	applied	簇5审核链：7个审核服务逐字摘入kuaicaiwu/services（commit/submit_review/withdraw/approve/revoke+editable门禁）
-riveredge-backend/src/apps/kuaizhizao/finance/services/partner_statement_invoice_pull.py	b185cb3a8c9085d2038ce587ab9dbbe1e8f103ce	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
-riveredge-backend/src/apps/kuaizhizao/finance/services/partner_statement_line_service.py	0e2ca932cce74d9ca6593f2f0e49bd30157d7b5b	applied	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
+riveredge-backend/src/apps/kuaizhizao/finance/services/notes_payable_audit_service.py	9313c012c83757c222152dcd17d0f8585b9bded3	ported	簇5审核链：7个审核服务逐字摘入kuaicaiwu/services（commit/submit_review/withdraw/approve/revoke+editable门禁）
+riveredge-backend/src/apps/kuaizhizao/finance/services/notes_receivable_audit_service.py	a35b99f69e81fcadd515640866535345c7df9ce9	ported	簇5审核链：7个审核服务逐字摘入kuaicaiwu/services（commit/submit_review/withdraw/approve/revoke+editable门禁）
+riveredge-backend/src/apps/kuaizhizao/finance/services/partner_statement_invoice_pull.py	b185cb3a8c9085d2038ce587ab9dbbe1e8f103ce	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-backend/src/apps/kuaizhizao/finance/services/partner_statement_line_service.py	0e2ca932cce74d9ca6593f2f0e49bd30157d7b5b	ported	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
 riveredge-backend/src/apps/kuaizhizao/finance/services/partner_statement_service.py	41c342ca9fce7258ccf582c3cd061b28a1593f79	superset	复核ok
-riveredge-backend/src/apps/kuaizhizao/finance/services/payable_prepayment_apply_service.py	d362f05a6825b2a6e84c06ed1b8f052983f0fdfc	applied	移植至 kuaicaiwu(三方合并无冲突，对账单应付跳PO解析)
+riveredge-backend/src/apps/kuaizhizao/finance/services/payable_prepayment_apply_service.py	d362f05a6825b2a6e84c06ed1b8f052983f0fdfc	ported	移植至 kuaicaiwu(三方合并无冲突，对账单应付跳PO解析)
 riveredge-backend/src/apps/kuaizhizao/finance/services/payable_pull_service.py	5002a2db7498d933c0af9bc477887baf3657129e	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/payment_advance_service.py	a82f510154ae1e0e6f949346e2f9a15221348da4	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-backend/src/apps/kuaizhizao/finance/services/payment_audit_service.py	4860c754559f2a810a73d3ef4afec627552c6e23	applied	簇5审核链：7个审核服务逐字摘入kuaicaiwu/services（commit/submit_review/withdraw/approve/revoke+editable门禁）
+riveredge-backend/src/apps/kuaizhizao/finance/services/payment_audit_service.py	4860c754559f2a810a73d3ef4afec627552c6e23	ported	簇5审核链：7个审核服务逐字摘入kuaicaiwu/services（commit/submit_review/withdraw/approve/revoke+editable门禁）
 riveredge-backend/src/apps/kuaizhizao/finance/services/payment_list_enrichment.py	ee698e718341fdf88978c46a3043be331530dded	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/payment_pull_service.py	5def9a6a052d552a27f9fb9148237ea9ac0b588d	superset	复核ok
-riveredge-backend/src/apps/kuaizhizao/finance/services/payment_refund_audit_service.py	3c9d0629a5b26a3a5415f798c9727fbb4f8001e4	applied	簇5审核链：7个审核服务逐字摘入kuaicaiwu/services（commit/submit_review/withdraw/approve/revoke+editable门禁）
+riveredge-backend/src/apps/kuaizhizao/finance/services/payment_refund_audit_service.py	3c9d0629a5b26a3a5415f798c9727fbb4f8001e4	ported	簇5审核链：7个审核服务逐字摘入kuaicaiwu/services（commit/submit_review/withdraw/approve/revoke+editable门禁）
 riveredge-backend/src/apps/kuaizhizao/finance/services/payment_refund_service.py	9ef0d7b621f92aaf49e6eb7a9c71e1a2f5062d44	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/period_close_service.py	90f0ab4a68e7f19715b6a5767f92efce08530787	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/posting_service.py	edd9b95c8e905cf1916f1567584a3a30eefe0601	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/prepayment_service.py	21a911b4f9c95e5944bed2536b6f391ad276b129	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/price_settlement_finance_service.py	ea4f1629619fbc8962711f7c17c7834313098d60	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/price_settlement_service.py	e1026a4e531d6946f4a163741c3394c72a759dcb	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-backend/src/apps/kuaizhizao/finance/services/purchase_invoice_amounts.py	4d3a00cccd2318447460a2e3aba985afb85f8170	applied	财务A/B适配至kuaicaiwu；保留本地创建自动送审/已审核口径；忠实保留源应付已审核或待审时早退导致优惠调整不生成；迁移20261122000001尚未执行；财务pytest191通过+聚焦9通过，时区0。前端tsc2743存量诊断，浏览器未验。
-riveredge-backend/src/apps/kuaizhizao/finance/services/purchase_invoice_detail_occupancy.py	33d61fccf22e6e9cfcf52c364bdedba12725b79b	applied	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
-riveredge-backend/src/apps/kuaizhizao/finance/services/purchase_invoice_payable_auto.py	b3136c13483e2a99777b9615b7c069018c6419f3	applied	移植至 kuaicaiwu(含 try_complete_ledger_after_purchase_invoice_approved)
-riveredge-backend/src/apps/kuaizhizao/finance/services/purchase_invoice_pull_service.py	d042edc8427b1c9c8eb2dd523c4118ab3d2f3678	applied	移植至 kuaicaiwu：对账单源单组/预算/委外收货拉票
-riveredge-backend/src/apps/kuaizhizao/finance/services/purchase_order_finance_lifecycle.py	ef3fa5123e0207fbeaca1f7447b45a6d9d2be2ab	applied	财务A/B适配至kuaicaiwu；保留本地创建自动送审/已审核口径；忠实保留源应付已审核或待审时早退导致优惠调整不生成；迁移20261122000001尚未执行；财务pytest191通过+聚焦9通过，时区0。前端tsc2743存量诊断，浏览器未验。
+riveredge-backend/src/apps/kuaizhizao/finance/services/purchase_invoice_amounts.py	4d3a00cccd2318447460a2e3aba985afb85f8170	ported	财务A/B适配至kuaicaiwu；保留本地创建自动送审/已审核口径；忠实保留源应付已审核或待审时早退导致优惠调整不生成；迁移20261122000001尚未执行；财务pytest191通过+聚焦9通过，时区0。前端tsc2743存量诊断，浏览器未验。
+riveredge-backend/src/apps/kuaizhizao/finance/services/purchase_invoice_detail_occupancy.py	33d61fccf22e6e9cfcf52c364bdedba12725b79b	ported	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
+riveredge-backend/src/apps/kuaizhizao/finance/services/purchase_invoice_payable_auto.py	b3136c13483e2a99777b9615b7c069018c6419f3	ported	移植至 kuaicaiwu(含 try_complete_ledger_after_purchase_invoice_approved)
+riveredge-backend/src/apps/kuaizhizao/finance/services/purchase_invoice_pull_service.py	d042edc8427b1c9c8eb2dd523c4118ab3d2f3678	ported	移植至 kuaicaiwu：对账单源单组/预算/委外收货拉票
+riveredge-backend/src/apps/kuaizhizao/finance/services/purchase_order_finance_lifecycle.py	ef3fa5123e0207fbeaca1f7447b45a6d9d2be2ab	ported	财务A/B适配至kuaicaiwu；保留本地创建自动送审/已审核口径；忠实保留源应付已审核或待审时早退导致优惠调整不生成；迁移20261122000001尚未执行；财务pytest191通过+聚焦9通过，时区0。前端tsc2743存量诊断，浏览器未验。
 riveredge-backend/src/apps/kuaizhizao/finance/services/purchase_receipt_finance_occupancy_backfill.py	d7693d76f627595d448cfeaef176d8e8cb3e102f	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/purchase_receipt_finance_pull_lines.py	884908febf0f0c3d7ff3a90f8cb1238ea89f1bbf	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/purchase_receipt_line_finance_occupancy_service.py	4728ca36226db0bceef7ba9c0d6c1b97dcdeb934	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-backend/src/apps/kuaizhizao/finance/services/purchase_settlement.py	b76da7c471846023a45a0c368ff377d5d4f69f86	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
-riveredge-backend/src/apps/kuaizhizao/finance/services/receipt_audit_service.py	857afa9e137910ce12a1828d55a88c86e41f4dd4	applied	簇5审核链：7个审核服务逐字摘入kuaicaiwu/services（commit/submit_review/withdraw/approve/revoke+editable门禁）
+riveredge-backend/src/apps/kuaizhizao/finance/services/purchase_settlement.py	b76da7c471846023a45a0c368ff377d5d4f69f86	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-backend/src/apps/kuaizhizao/finance/services/receipt_audit_service.py	857afa9e137910ce12a1828d55a88c86e41f4dd4	ported	簇5审核链：7个审核服务逐字摘入kuaicaiwu/services（commit/submit_review/withdraw/approve/revoke+editable门禁）
 riveredge-backend/src/apps/kuaizhizao/finance/services/receipt_pull_service.py	37c914af0376acae7a9ffb735416a234349c88ca	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-backend/src/apps/kuaizhizao/finance/services/receipt_refund_audit_service.py	3eb7e696553d633794968570cef76cc07bbd14be	applied	簇5审核链：7个审核服务逐字摘入kuaicaiwu/services（commit/submit_review/withdraw/approve/revoke+editable门禁）
+riveredge-backend/src/apps/kuaizhizao/finance/services/receipt_refund_audit_service.py	3eb7e696553d633794968570cef76cc07bbd14be	ported	簇5审核链：7个审核服务逐字摘入kuaicaiwu/services（commit/submit_review/withdraw/approve/revoke+editable门禁）
 riveredge-backend/src/apps/kuaizhizao/finance/services/receipt_refund_service.py	5829e932ec3966aa7874c3d3f01c9ee2e9b01409	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/receivable_pull_service.py	187556a3d9fb7460e7248f1ba4449bd1b74f25da	superset	复核ok
 riveredge-backend/src/apps/kuaizhizao/finance/services/return_open_balance_offset_service.py	c2c639549c9628ab5933dab38f28fa4f755f568f	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/return_refund_bridge_service.py	1e8a82b59bf84a8e6e7f5cc9356a0bf68dc091e2	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-backend/src/apps/kuaizhizao/finance/services/sales_delivery_line_finance_occupancy_service.py	a794a950a77046580e5bc3fd74af30276ff0edb0	applied	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
-riveredge-backend/src/apps/kuaizhizao/finance/services/sales_invoice_audit_service.py	1ad1670675f5e4184f7c8e564505f24ea1decdc3	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
-riveredge-backend/src/apps/kuaizhizao/finance/services/sales_invoice_detail_occupancy.py	cfd7ffbb84ffa67b51339a43aa2670d5ce76f000	applied	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
+riveredge-backend/src/apps/kuaizhizao/finance/services/sales_delivery_line_finance_occupancy_service.py	a794a950a77046580e5bc3fd74af30276ff0edb0	ported	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
+riveredge-backend/src/apps/kuaizhizao/finance/services/sales_invoice_audit_service.py	1ad1670675f5e4184f7c8e564505f24ea1decdc3	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-backend/src/apps/kuaizhizao/finance/services/sales_invoice_detail_occupancy.py	cfd7ffbb84ffa67b51339a43aa2670d5ce76f000	ported	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
 riveredge-backend/src/apps/kuaizhizao/finance/services/sales_invoice_receivable_auto.py	258c9a6d984c7c76f5c0669a85d892f1e410613a	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-backend/src/apps/kuaizhizao/finance/services/sales_invoice_service.py	ba42150efb74e36db3fdd7f1c5da55050409e98e	applied	移植至 kuaicaiwu：partner_statement_ids 放行直拉阻断
+riveredge-backend/src/apps/kuaizhizao/finance/services/sales_invoice_service.py	ba42150efb74e36db3fdd7f1c5da55050409e98e	ported	移植至 kuaicaiwu：partner_statement_ids 放行直拉阻断
 riveredge-backend/src/apps/kuaizhizao/finance/services/settlement_gate_service.py	531693c48ba4cf9aba6e36c2866cbb02736f4b24	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/standard_cost_service.py	bb3f435dc140a2b87caaa74a4fdc8adde3d2a75a	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/tax/__init__.py	043e08df35af5edd6dd51b744a94be93c7c2a485	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-backend/src/apps/kuaizhizao/finance/services/tax/purchase_invoice_tax_service.py	0055abe481837b8b382b494873baa72e3d5fae08	applied	财务A/B适配至kuaicaiwu；保留本地创建自动送审/已审核口径；忠实保留源应付已审核或待审时早退导致优惠调整不生成；迁移20261122000001尚未执行；财务pytest191通过+聚焦9通过，时区0。前端tsc2743存量诊断，浏览器未验。
+riveredge-backend/src/apps/kuaizhizao/finance/services/tax/purchase_invoice_tax_service.py	0055abe481837b8b382b494873baa72e3d5fae08	ported	财务A/B适配至kuaicaiwu；保留本地创建自动送审/已审核口径；忠实保留源应付已审核或待审时早退导致优惠调整不生成；迁移20261122000001尚未执行；财务pytest191通过+聚焦9通过，时区0。前端tsc2743存量诊断，浏览器未验。
 riveredge-backend/src/apps/kuaizhizao/finance/services/tax/tax_coa_service.py	38d8ebf8cb88911d99fdd95c8089e3d6c7384d0c	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/tax/tax_constants.py	60ea3ba92e50f2cee4c88e3b6e3df24b380fa413	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-backend/src/apps/kuaizhizao/finance/services/tax/tax_period_service.py	4d4b52ab3d6d9e3be982b0da6408fdaad734ffeb	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
@@ -1976,19 +1975,19 @@ riveredge-backend/tests/apps/kuaizhizao/api/test_kuaizhizao_route_access_quality
 riveredge-backend/tests/apps/kuaizhizao/api/test_purchase_order_display_route_access.py	a55aa63e8dd4eb7f239941ce8d82debd66d94f24	applied	tracked审计：与上游tip逐字节一致
 riveredge-backend/tests/apps/kuaizhizao/constants/test_purchase_order_type.py	a7d183e010dfd2e884fbba5b78c0b8e49a66123d	applied	R2:取上游tip（code-rule引擎+采购订单类型断言+2新测试 15 passed）
 riveredge-backend/tests/apps/kuaizhizao/finance/services/test_allow_negative_balance.py	cceae78e80360206608635b22e62994e23c928df	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-backend/tests/apps/kuaizhizao/finance/services/test_invoice_settlement_guard.py	979fae48874f2caae4889703963adf1789bbbeda	applied	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
-riveredge-backend/tests/apps/kuaizhizao/finance/services/test_partner_statement_biz_confirm_flow.py	3552c3ba2e7c10c523672c901b4bb969ef90fdc8	applied	移植至 tests/apps/kuaicaiwu/services/ 同名文件(27 passed)
-riveredge-backend/tests/apps/kuaizhizao/finance/services/test_partner_statement_collapse_lines.py	e39c0d4dd8824dabfb8166017a6e1abbf40f090c	applied	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
-riveredge-backend/tests/apps/kuaizhizao/finance/services/test_partner_statement_header_refresh.py	5e9497a4b6651342ee80b998d9a1006ae6342e4a	applied	移植至 tests/apps/kuaicaiwu/services/(FakeStmt补tenant_id,上游亦缺)
-riveredge-backend/tests/apps/kuaizhizao/finance/services/test_partner_statement_invoice_pull.py	86689879e61e51a9a8036564f8e439211eef3307	applied	移植至 tests/apps/kuaicaiwu/services/ 同名文件
-riveredge-backend/tests/apps/kuaizhizao/finance/services/test_partner_statement_ledger_no_payments.py	22f7f144f5086d37361cde6af35567edefb26d7f	applied	移植至 tests/apps/kuaicaiwu/services/ 同名文件
+riveredge-backend/tests/apps/kuaizhizao/finance/services/test_invoice_settlement_guard.py	979fae48874f2caae4889703963adf1789bbbeda	ported	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
+riveredge-backend/tests/apps/kuaizhizao/finance/services/test_partner_statement_biz_confirm_flow.py	3552c3ba2e7c10c523672c901b4bb969ef90fdc8	ported	移植至 tests/apps/kuaicaiwu/services/ 同名文件(27 passed)
+riveredge-backend/tests/apps/kuaizhizao/finance/services/test_partner_statement_collapse_lines.py	e39c0d4dd8824dabfb8166017a6e1abbf40f090c	ported	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
+riveredge-backend/tests/apps/kuaizhizao/finance/services/test_partner_statement_header_refresh.py	5e9497a4b6651342ee80b998d9a1006ae6342e4a	ported	移植至 tests/apps/kuaicaiwu/services/(FakeStmt补tenant_id,上游亦缺)
+riveredge-backend/tests/apps/kuaizhizao/finance/services/test_partner_statement_invoice_pull.py	86689879e61e51a9a8036564f8e439211eef3307	ported	移植至 tests/apps/kuaicaiwu/services/ 同名文件
+riveredge-backend/tests/apps/kuaizhizao/finance/services/test_partner_statement_ledger_no_payments.py	22f7f144f5086d37361cde6af35567edefb26d7f	ported	移植至 tests/apps/kuaicaiwu/services/ 同名文件
 riveredge-backend/tests/apps/kuaizhizao/finance/services/test_partner_statement_line_doc_key.py	a10a08fdb052946c3d0b3b4ac0025779f6916031	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-backend/tests/apps/kuaizhizao/finance/services/test_partner_statement_line_expand.py	2138e72dce21815eda036b5b14e1cb70532d30ff	applied	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
-riveredge-backend/tests/apps/kuaizhizao/finance/services/test_partner_statement_monthly_sales_delivery.py	f52a4703f3fc8a1e06f7430184c40aa3982a69ca	applied	取上游tip；补partner_statement_ledger_posted_doc_ids mock(上游测试漏mock);1 passed
-riveredge-backend/tests/apps/kuaizhizao/finance/test_payment_pull_lines.py	26286761719ef6d1f3da95a32277c7966af92251	applied	新增2用例追加至 tests/apps/kuaicaiwu/test_payment_pull_lines.py(29 passed)
-riveredge-backend/tests/apps/kuaizhizao/finance/test_purchase_invoice_amounts.py	fb20af894e2cb0f4b56f22bae37177d1887477bc	applied	财务A/B适配至kuaicaiwu；保留本地创建自动送审/已审核口径；忠实保留源应付已审核或待审时早退导致优惠调整不生成；迁移20261122000001尚未执行；财务pytest191通过+聚焦9通过，时区0。前端tsc2743存量诊断，浏览器未验。
+riveredge-backend/tests/apps/kuaizhizao/finance/services/test_partner_statement_line_expand.py	2138e72dce21815eda036b5b14e1cb70532d30ff	ported	2488f0680d批(A4/A5):完整移植至apps/kuaicaiwu及新时间戳迁移20261126150000/151000
+riveredge-backend/tests/apps/kuaizhizao/finance/services/test_partner_statement_monthly_sales_delivery.py	f52a4703f3fc8a1e06f7430184c40aa3982a69ca	ported	取上游tip；补partner_statement_ledger_posted_doc_ids mock(上游测试漏mock);1 passed
+riveredge-backend/tests/apps/kuaizhizao/finance/test_payment_pull_lines.py	26286761719ef6d1f3da95a32277c7966af92251	ported	新增2用例追加至 tests/apps/kuaicaiwu/test_payment_pull_lines.py(29 passed)
+riveredge-backend/tests/apps/kuaizhizao/finance/test_purchase_invoice_amounts.py	fb20af894e2cb0f4b56f22bae37177d1887477bc	ported	财务A/B适配至kuaicaiwu；保留本地创建自动送审/已审核口径；忠实保留源应付已审核或待审时早退导致优惠调整不生成；迁移20261122000001尚未执行；财务pytest191通过+聚焦9通过，时区0。前端tsc2743存量诊断，浏览器未验。
 riveredge-backend/tests/apps/kuaizhizao/finance/test_purchase_receipt_pull_line_gross.py	803937b105cc4e7a716e9b59dbcdd15f7a7cf0ee	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-backend/tests/apps/kuaizhizao/finance/test_purchase_settlement.py	2e41923f86978ea293ebc02e5eac45a2b53a861c	applied	新增1用例追加至 tests/apps/kuaicaiwu/test_purchase_settlement.py
+riveredge-backend/tests/apps/kuaizhizao/finance/test_purchase_settlement.py	2e41923f86978ea293ebc02e5eac45a2b53a861c	ported	新增1用例追加至 tests/apps/kuaicaiwu/test_purchase_settlement.py
 riveredge-backend/tests/apps/kuaizhizao/print/test_purchase_receipt_red_voucher_schema.py	5bca47b12a0fd254738aafee26fe670c35b21e10	applied	已摘@2026-11-26：5 项断言与上游实现亦不一致，标 xfail 待上游修正
 riveredge-backend/tests/apps/kuaizhizao/reference_display/test_kuaizhizao_reference_display_setup.py	39391ea9e011af00b19736cab12ec92ff951e6a5	applied	R3批：上游1e5d8e1c2d..078e273520落地
 riveredge-backend/tests/apps/kuaizhizao/schemas/test_production_picking_pull_line_schema.py	f20c5c73c2fa31a89556056cb47cfbf760d2643e	applied	R3批：上游1e5d8e1c2d..078e273520落地
@@ -2305,7 +2304,7 @@ riveredge-frontend/src/apps/industry-pack/pages/home/index.tsx	DELETED	superset	
 riveredge-frontend/src/apps/kuaicaiwu/pages/finance-management/other-expenses/index.tsx	88ccac22e3	applied	R4:columnPersistenceId v2
 riveredge-frontend/src/apps/kuaicaiwu/pages/finance-management/shared/MiscVoucherListPage.tsx	88ccac22e3	applied	R5遗留收口:复制选中新建(fillPendingFormFromVoucher forCopy+工具栏按钮+行选门控);立账策略改写domain-out(本地银行流水直过账,AP/AR bridge既定排除)
 riveredge-frontend/src/apps/kuaicaiwu/pages/payment-applications/index.tsx	DELETED	applied	13be286f11续:前端+财务适配+迁移
-riveredge-frontend/src/apps/kuaicaiwu/utils/financeListCore.ts	88ccac22e3	applied	R4:paymentReason映射+resolveMiscVoucherListKeywordParams
+riveredge-frontend/src/apps/kuaicaiwu/utils/financeListCore.ts	88ccac22e3	ported	R4:paymentReason映射+resolveMiscVoucherListKeywordParams
 riveredge-frontend/src/apps/kuaiconnect/pages/apis/ApiFormModal.tsx	9b846f30e5f780a8472ad2791f6034df8b424f3c	domain-out	本地无对应物/本地架构不同：扫描脚本口径冲突、kuaiconnect应用不存在、工序编辑表组件本地以DndList/DetailOperations实现、fast-deploy本地工具链分叉
 riveredge-frontend/src/apps/kuaiconnect/pages/apis/OutboundFieldMappingEditor.tsx	DELETED	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
 riveredge-frontend/src/apps/kuaiconnect/pages/apis/apiFormUtils.ts	fd6cf9b8b78375ef940c60c35d2f02a666bb6b83	applied	R2:kuaiconnect包落地本仓(同kuaiai模式不拆库),上游功能全取;金蝶/同步实现单一真源在kuaiconnect,旧路径改兼容再导出,本地硬化(时区/品牌/单号/双单位/跨租户重推)已移植
@@ -2492,30 +2491,30 @@ riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/dashboard/index.
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/document-reconciliation/index.tsx	6a0f27ccf0d4a0055e3fbcd7768ad261f2a6eb1c	domain-out	上游kuaizhizao平行财务域：kuaicaiwu为本地权威财务实现，不引入并行体系（应收/应付/结算/发票/往来对账/utils/types/misc-category/other-voucher）
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/exchange-rates/index.tsx	fc6699ced88700bc6a8e6d45fbb63b14c78a6231	domain-out	决策:上游finance并入pro包(finance包+finance-management页+对账pull链)，本地kuaicaiwu权威不摘，随架构决策整体排除
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/finance-misc-categories/index.tsx	c51f50e6556f56d4194f685808a7f6cdfd80d9b3	domain-out	决策:上游finance并入pro包(finance包+finance-management页+对账pull链)，本地kuaicaiwu权威不摘，随架构决策整体排除
-riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/fund-transfers/index.tsx	18de1c45b8b1ecde98300e7a0c0634299c39c3e4	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/fund-transfers/index.tsx	18de1c45b8b1ecde98300e7a0c0634299c39c3e4	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/notes-payable/index.tsx	9fa549c54b2b52f0c2e7b54c120ab0b802f1f2a2	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/notes-receivable/index.tsx	d3ce193ac8cbf6edefad13c40f0fa2ceb618353a	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/other-expense-applications/index.tsx	b47656c190c613958b74b8a6c9e7dead5ecc1b24	domain-out	决策:上游finance并入pro包(finance包+finance-management页+对账pull链)，本地kuaicaiwu权威不摘，随架构决策整体排除
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/other-expenses/index.tsx	c75062a3e40cd5193884b9bd59e3dd48b5ae323b	domain-out	2488f0680d批:客户专属(haoligo/chenao/lianzhi/print002)/fast-deploy/.gitignore
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/other-incomes/index.tsx	611372b5c3023c0614090adcf13b46e9e262467c	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/partner-statements/PartnerStatementPeriodQuickSelect.tsx	55d7c231b3fd6141cbdc4c78c589c3b058d7c8b9	applied	移植至 kuaicaiwu 同名组件
-riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/partner-statements/PartnerStatementSettingsBar.tsx	9241f1e8a38b8db2edc10f3fb983762609b3a074	applied	移植至 kuaicaiwu 同名组件(立账方式+金额口径)
-riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/partner-statements/detail.tsx	8c323625ac3b896e9f53556cd4d710df92f76181	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
-riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/partner-statements/index.tsx	60de1fc65023f3192ae6246585f81fa2810fba29	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/partner-statements/PartnerStatementPeriodQuickSelect.tsx	55d7c231b3fd6141cbdc4c78c589c3b058d7c8b9	ported	移植至 kuaicaiwu 同名组件
+riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/partner-statements/PartnerStatementSettingsBar.tsx	9241f1e8a38b8db2edc10f3fb983762609b3a074	ported	移植至 kuaicaiwu 同名组件(立账方式+金额口径)
+riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/partner-statements/detail.tsx	8c323625ac3b896e9f53556cd4d710df92f76181	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/partner-statements/index.tsx	60de1fc65023f3192ae6246585f81fa2810fba29	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/payables/detail.tsx	ee4abfb912b445b1640909249bd503e965cf03b4	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/payables/index.tsx	d5223ed2380845fa5e4d74dae95c0246436cbad7	superset	复核ok
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/payment-refunds/index.tsx	b9187cec7c12a88838a6429ca4507fd929ae0762	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/payments/index.tsx	07d8b6889eacf617778f51a850a18dd46f94bd4f	applied	D适配kuaicaiwu：expected_payment_date及supplier_id、非预付款账户必填与前移；不摘save-and-audit缺失uni-audit大簇
+riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/payments/index.tsx	07d8b6889eacf617778f51a850a18dd46f94bd4f	ported	D适配kuaicaiwu：expected_payment_date及supplier_id、非预付款账户必填与前移；不摘save-and-audit缺失uni-audit大簇
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/prepayments/index.tsx	231b0201ab25d7dc26cd1e3858147d328c18de37	domain-out	上游kuaizhizao平行财务域：kuaicaiwu为本地权威财务实现，不引入并行体系（应收/应付/结算/发票/往来对账/utils/types/misc-category/other-voucher）
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/price-settlement/index.tsx	b10ee258558a6470dd13cfc975005379f7f7136d	domain-out	上游kuaizhizao平行财务域：kuaicaiwu为本地权威财务实现，不引入并行体系（应收/应付/结算/发票/往来对账/utils/types/misc-category/other-voucher）
-riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/purchase-invoices/detail.tsx	2f5f58d0f877af46bf4b5638bf0be67b73f8d2a2	applied	财务A/B适配至kuaicaiwu；保留本地创建自动送审/已审核口径；忠实保留源应付已审核或待审时早退导致优惠调整不生成；迁移20261122000001尚未执行；财务pytest191通过+聚焦9通过，时区0。前端tsc2743存量诊断，浏览器未验。
-riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/purchase-invoices/index.tsx	37a2d8cef2ace00737463ca4e5c52c2d232479fb	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/purchase-invoices/detail.tsx	2f5f58d0f877af46bf4b5638bf0be67b73f8d2a2	ported	财务A/B适配至kuaicaiwu；保留本地创建自动送审/已审核口径；忠实保留源应付已审核或待审时早退导致优惠调整不生成；迁移20261122000001尚未执行；财务pytest191通过+聚焦9通过，时区0。前端tsc2743存量诊断，浏览器未验。
+riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/purchase-invoices/index.tsx	37a2d8cef2ace00737463ca4e5c52c2d232479fb	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/receipt-refunds/index.tsx	85789dddf0d645aed38ce39cdde0f0bfe1631f06	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/receipts/index.tsx	278f54a0f8c5437c097e57f8db9fc1e5e3526d8d	domain-out	决策:上游finance并入pro包(finance包+finance-management页+对账pull链)，本地kuaicaiwu权威不摘，随架构决策整体排除
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/receivables/detail.tsx	7e4a892fc754a79089df026a34bf13415835c976	domain-out	上游kuaizhizao平行财务域：kuaicaiwu为本地权威财务实现，不引入并行体系（应收/应付/结算/发票/往来对账/utils/types/misc-category/other-voucher）
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/receivables/index.tsx	1f8bd2132da964eeb29b24a0462d4834b135e6f0	superset	复核ok
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/sales-invoices/detail.tsx	237b88bfc405375ab212d41fef6ab151d83ab7a1	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/sales-invoices/index.tsx	83dcc9eea64d62846ef5f832622b643cb6e72690	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/sales-invoices/index.tsx	83dcc9eea64d62846ef5f832622b643cb6e72690	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/settlement/index.tsx	520c18624128b17aef32a2c6d4694cd91e2a6e2e	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/FinanceFormFieldGroup.tsx	ebbece34d10b8de8063d7dd6766ecea4d97b021a	domain-out	决策:上游finance并入pro包(finance包+finance-management页+对账pull链)，本地kuaicaiwu权威不摘，随架构决策整体排除
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/FinanceNotesPage.tsx	a33eb45137bd1e6c6e58a7052be588206bd32fa8	domain-out	决策:上游finance并入pro包(finance包+finance-management页+对账pull链)，本地kuaicaiwu权威不摘，随架构决策整体排除
@@ -2528,7 +2527,7 @@ riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/PartnerSu
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/PaymentAdvancePayeeField.tsx	97549ab06aed26f7df88cd43860371537d7a0f2e	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/PaymentCounterpartyFormSection.tsx	55fcf11622901dfd8bbbb19f183a5fc0c78276be	domain-out	决策:上游finance并入pro包(finance包+finance-management页+对账pull链)，本地kuaicaiwu权威不摘，随架构决策整体排除
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/PaymentOutAccountFormSection.tsx	710a5cf523e3d61abb72245cb17b83bbcde62f3f	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/PaymentVoucherFormBody.tsx	9c10eb1494979411d0c2cde81da04733be55aa2a	applied	D适配kuaicaiwu：expected_payment_date及supplier_id、非预付款账户必填与前移；不摘save-and-audit缺失uni-audit大簇
+riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/PaymentVoucherFormBody.tsx	9c10eb1494979411d0c2cde81da04733be55aa2a	ported	D适配kuaicaiwu：expected_payment_date及supplier_id、非预付款账户必填与前移；不摘save-and-audit缺失uni-audit大簇
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/ReceiptCounterpartyPayerFormSection.tsx	e76ac681f80cc4b4058d1f627010b77cb909665d	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/ReceiptVoucherFormBody.tsx	d3d33f79a86238374a8cff2f19d6860219ac638a	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/SalesInvoicePartnerBankInfoField.tsx	11ec55e9f7484b711eecc699b3a186e7137107e0	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
@@ -2536,9 +2535,9 @@ riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/VoucherRe
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/financeFormFieldGroup.less	1c8a20cf6797cfbeb4ff47aaa6a289a813bb8948	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/financeRemediationSettle.ts	7c65d668f1a0b873595b132ed1cea7c473901f42	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/loadFinancePullCandidatePage.ts	6972f2cb7bdc9f0779f149eca48538ebbf51cd9d	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/paymentPayablePullQueryColumns.tsx	d9e639a67f36473e7ef89b226d48f5038b3f00cc	applied	D适配kuaicaiwu：expected_payment_date及supplier_id、非预付款账户必填与前移；不摘save-and-audit缺失uni-audit大簇
+riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/paymentPayablePullQueryColumns.tsx	d9e639a67f36473e7ef89b226d48f5038b3f00cc	ported	D适配kuaicaiwu：expected_payment_date及supplier_id、非预付款账户必填与前移；不摘save-and-audit缺失uni-audit大簇
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/prepaymentPaymentPullQueryColumns.tsx	29466fecfcc58335b106e41f20736f9ac32881e6	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/usePaymentVoucherFormLinePull.tsx	79bebef82d57316131eea49cfdcba42c18625bb4	applied	合并至 kuaicaiwu 同名(无冲突)
+riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/usePaymentVoucherFormLinePull.tsx	79bebef82d57316131eea49cfdcba42c18625bb4	ported	合并至 kuaicaiwu 同名(无冲突)
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/usePaymentVoucherFormPrepaymentOffsetLines.tsx	48061e51dda134fd272c1e59e8e4b38dd34cece9	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-frontend/src/apps/kuaizhizao/pages/finance-management/shared/useReceiptVoucherFormLinePull.tsx	4dda09fe61d2be2576e5d4ced933a151a6e102a9	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-frontend/src/apps/kuaizhizao/pages/logistics-management/carriers/index.tsx	350040ade1712526a6f85291557c34205aabf365	applied	R2 fe_pages簇：自定义字段接入+行删并批量删+物流/售后/退料增量，取上游tip版
@@ -2888,23 +2887,23 @@ riveredge-frontend/src/apps/kuaizhizao/services/finance/document-reconciliation.
 riveredge-frontend/src/apps/kuaizhizao/services/finance/exchange-rate.ts	eccfa626a461bedcd8626c12c0531c3e5d60f626	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-frontend/src/apps/kuaizhizao/services/finance/finance-misc-category.ts	92b5396e27a35ad596c405111f111f5846e3fe1d	domain-out	上游kuaizhizao平行财务域：kuaicaiwu为本地权威财务实现，不引入并行体系（应收/应付/结算/发票/往来对账/utils/types/misc-category/other-voucher）
 riveredge-frontend/src/apps/kuaizhizao/services/finance/financePullListParams.ts	1674041e3b98ef0cd8da361495b61d7e81421f42	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-frontend/src/apps/kuaizhizao/services/finance/fund-transfer.ts	be006933f87d6d8b1ee45de09635cfa39f82c75d	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-frontend/src/apps/kuaizhizao/services/finance/fund-transfer.ts	be006933f87d6d8b1ee45de09635cfa39f82c75d	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
 riveredge-frontend/src/apps/kuaizhizao/services/finance/gl.ts	8cfd5db8c761b1ff1eb471cab2e84abe6e54825b	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-frontend/src/apps/kuaizhizao/services/finance/note.ts	9ddaa6b03e99b539158628c076dbcefdefdb5efd	applied	簇5审核链：uni-audit五方法+review_status/audit接口字段移植至kuaicaiwu服务层；页面级toolbar/UniWorkflowActions接线随页面merge专项
+riveredge-frontend/src/apps/kuaizhizao/services/finance/note.ts	9ddaa6b03e99b539158628c076dbcefdefdb5efd	ported	簇5审核链：uni-audit五方法+review_status/audit接口字段移植至kuaicaiwu服务层；页面级toolbar/UniWorkflowActions接线随页面merge专项
 riveredge-frontend/src/apps/kuaizhizao/services/finance/other-expense-application.ts	4e97ebcac186d53e3b43b1609db9860dd8ea9218	domain-out	决策:上游finance并入pro包(finance包+finance-management页+对账pull链)，本地kuaicaiwu权威不摘，随架构决策整体排除
 riveredge-frontend/src/apps/kuaizhizao/services/finance/other-expense.ts	72bbcc07c41ac87f5e462ab020d68b0e0fa6f38b	superset	复核ok
 riveredge-frontend/src/apps/kuaizhizao/services/finance/other-income.ts	cc9e9bc0e2d8b084408af61298fdf03713e07d56	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-frontend/src/apps/kuaizhizao/services/finance/partnerStatement.ts	9076204f8baaad8ad59177b5ddc5bee8280692e2	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-frontend/src/apps/kuaizhizao/services/finance/partnerStatement.ts	9076204f8baaad8ad59177b5ddc5bee8280692e2	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
 riveredge-frontend/src/apps/kuaizhizao/services/finance/payable.ts	5afd439dcc43ffd69b2633e784d0b9ebc1ed57ab	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-frontend/src/apps/kuaizhizao/services/finance/payment-refund.ts	960b6e294967677c19be75bb420221322b9ef976	applied	簇5审核链：uni-audit五方法+review_status/audit接口字段移植至kuaicaiwu服务层；页面级toolbar/UniWorkflowActions接线随页面merge专项
-riveredge-frontend/src/apps/kuaizhizao/services/finance/payment.ts	f5f701b35a7edb0f66f950bcd07a2925280d924e	applied	簇5审核链：uni-audit五方法+review_status/audit接口字段移植至kuaicaiwu服务层；页面级toolbar/UniWorkflowActions接线随页面merge专项
+riveredge-frontend/src/apps/kuaizhizao/services/finance/payment-refund.ts	960b6e294967677c19be75bb420221322b9ef976	ported	簇5审核链：uni-audit五方法+review_status/audit接口字段移植至kuaicaiwu服务层；页面级toolbar/UniWorkflowActions接线随页面merge专项
+riveredge-frontend/src/apps/kuaizhizao/services/finance/payment.ts	f5f701b35a7edb0f66f950bcd07a2925280d924e	ported	簇5审核链：uni-audit五方法+review_status/audit接口字段移植至kuaicaiwu服务层；页面级toolbar/UniWorkflowActions接线随页面merge专项
 riveredge-frontend/src/apps/kuaizhizao/services/finance/prepayment.ts	9bde8ed37355e0b7d8954177ca6a893a29430ee8	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-frontend/src/apps/kuaizhizao/services/finance/priceSettlement.ts	54ed41b371a1f5150f620763239e569a0802c52a	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-frontend/src/apps/kuaizhizao/services/finance/purchase-invoice.ts	cfbbbf8b0ed6d0c3856483e61771411c8cab8460	applied	outsource_order_receipt/receipt_ids/对账预算字段入 kuaicaiwu(保留 source_code)
-riveredge-frontend/src/apps/kuaizhizao/services/finance/receipt-refund.ts	60aeaf2dad3438eeb29d72a0fb6af4eb61924f0a	applied	簇5审核链：uni-audit五方法+review_status/audit接口字段移植至kuaicaiwu服务层；页面级toolbar/UniWorkflowActions接线随页面merge专项
-riveredge-frontend/src/apps/kuaizhizao/services/finance/receipt.ts	f3b72dbfed9538aea11ca237ee818c170d4a2215	applied	簇5审核链：uni-audit五方法+review_status/audit接口字段移植至kuaicaiwu服务层；页面级toolbar/UniWorkflowActions接线随页面merge专项
+riveredge-frontend/src/apps/kuaizhizao/services/finance/purchase-invoice.ts	cfbbbf8b0ed6d0c3856483e61771411c8cab8460	ported	outsource_order_receipt/receipt_ids/对账预算字段入 kuaicaiwu(保留 source_code)
+riveredge-frontend/src/apps/kuaizhizao/services/finance/receipt-refund.ts	60aeaf2dad3438eeb29d72a0fb6af4eb61924f0a	ported	簇5审核链：uni-audit五方法+review_status/audit接口字段移植至kuaicaiwu服务层；页面级toolbar/UniWorkflowActions接线随页面merge专项
+riveredge-frontend/src/apps/kuaizhizao/services/finance/receipt.ts	f3b72dbfed9538aea11ca237ee818c170d4a2215	ported	簇5审核链：uni-audit五方法+review_status/audit接口字段移植至kuaicaiwu服务层；页面级toolbar/UniWorkflowActions接线随页面merge专项
 riveredge-frontend/src/apps/kuaizhizao/services/finance/receivable.ts	b04a486d9a53bdd07482a419623480a16a7d719f	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-frontend/src/apps/kuaizhizao/services/finance/sales-invoice.ts	b337482caef595d640f0d63c1e04273a15a01d75	applied	簇5审核链：uni-audit五方法+review_status/audit接口字段移植至kuaicaiwu服务层；页面级toolbar/UniWorkflowActions接线随页面merge专项
+riveredge-frontend/src/apps/kuaizhizao/services/finance/sales-invoice.ts	b337482caef595d640f0d63c1e04273a15a01d75	ported	簇5审核链：uni-audit五方法+review_status/audit接口字段移植至kuaicaiwu服务层；页面级toolbar/UniWorkflowActions接线随页面merge专项
 riveredge-frontend/src/apps/kuaizhizao/services/finance/settlement.ts	7fab2b4219c6d6e0e1ecb2cb48f0026992959292	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-frontend/src/apps/kuaizhizao/services/flow-data-generate.ts	DELETED	superset	复核ok
 riveredge-frontend/src/apps/kuaizhizao/services/index.ts	1c04b229bbad5530e69e9bdb09e5de73d2675002	superset	复核ok
@@ -2943,9 +2942,9 @@ riveredge-frontend/src/apps/kuaizhizao/services/work-order.ts	4d236a258226bf0b8d
 riveredge-frontend/src/apps/kuaizhizao/types/finance/financeVoucherLinks.ts	a4fa51524cf1a76d11233ef3b1f73d81fb2a87b4	domain-out	上游kuaizhizao平行财务域：kuaicaiwu为本地权威财务实现，不引入并行体系（应收/应付/结算/发票/往来对账/utils/types/misc-category/other-voucher）
 riveredge-frontend/src/apps/kuaizhizao/types/finance/invoice.ts	54ee6123ff01b5ea09de835086546bf48756c9ff	domain-out	上游kuaizhizao平行财务域：kuaicaiwu为本地权威财务实现，不引入并行体系（应收/应付/结算/发票/往来对账/utils/types/misc-category/other-voucher）
 riveredge-frontend/src/apps/kuaizhizao/types/finance/payable.ts	4d5feb5bb643b940eef5a33050cdd26453293173	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
-riveredge-frontend/src/apps/kuaizhizao/types/finance/purchase-invoice.ts	c860104c601537ade276017147f23ad7a2a81512	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-frontend/src/apps/kuaizhizao/types/finance/purchase-invoice.ts	c860104c601537ade276017147f23ad7a2a81512	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
 riveredge-frontend/src/apps/kuaizhizao/types/finance/receivable.ts	a27200787471f04c2cfbc5d5851891dfdcbf6b79	superset	复核ok
-riveredge-frontend/src/apps/kuaizhizao/types/finance/sales-invoice.ts	e39f00753135b091c361fca608fdbfd5c68239e2	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-frontend/src/apps/kuaizhizao/types/finance/sales-invoice.ts	e39f00753135b091c361fca608fdbfd5c68239e2	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
 riveredge-frontend/src/apps/kuaizhizao/types/finance/settlement.ts	e27bfc6514f1695d9ca9357fed04e74036b82008	domain-out	上游kuaizhizao平行财务域：kuaicaiwu为本地权威财务实现，不引入并行体系（应收/应付/结算/发票/往来对账/utils/types/misc-category/other-voucher）
 riveredge-frontend/src/apps/kuaizhizao/types/inspectionStepSpec.ts	0efa9491f58611462b1ccb68f90f845fc267a52e	applied	tracked审计：与上游tip逐字节一致
 riveredge-frontend/src/apps/kuaizhizao/utils/demandComputationLifecycle.ts	625660c0040f70583d56f8356c1df47301b413eb	applied	整取/适配：uni-audit函数、生命周期工具、quality簇(行删恢复/medium保留)、incoming-inspection保留委外取单、arrival-warnings、SO附件中心
@@ -2981,7 +2980,7 @@ riveredge-frontend/src/apps/kuaizhizao/utils/outsourceOrderLifecycle.ts	b5e943f1
 riveredge-frontend/src/apps/kuaizhizao/utils/outsourceOrderRegisterReceiptQuantities.ts	e99f93434d01c9c27de5eb69e623ed3039978f62	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
 riveredge-frontend/src/apps/kuaizhizao/utils/packingBindingLifecycle.ts	1f7097a523cd399d6f416e5ed9bb118ded12f71f	tracked	
 riveredge-frontend/src/apps/kuaizhizao/utils/partnerPayeeAccounts.ts	58361c4b680de297861b8c5edc20800614085d94	applied	R2 fe_kzz簇：设备看板/状态/计量器具/工装、绩效班次、销售共享字段、uni-audit提交hook、双计量列族等取上游tip
-riveredge-frontend/src/apps/kuaizhizao/utils/partnerStatementAmountUtils.ts	c6d4b993b40a82eeb7b88ad6b7c10fb4a8a1b483	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-frontend/src/apps/kuaizhizao/utils/partnerStatementAmountUtils.ts	c6d4b993b40a82eeb7b88ad6b7c10fb4a8a1b483	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
 riveredge-frontend/src/apps/kuaizhizao/utils/partnerStatementInvoicePull.ts	cec53199645bfaf87fd01e80ba35e9a4c1757b04	applied	合并至 kuaicaiwu 同名(无冲突)
 riveredge-frontend/src/apps/kuaizhizao/utils/partnerStatementLineColumns.tsx	19fba3b8d8dc207b365953711b98671d3030ac75	applied	合并至 kuaicaiwu 同名(无冲突)
 riveredge-frontend/src/apps/kuaizhizao/utils/partnerStatementLineDisplay.tsx	bc6ee2a00e3f310fefc0ea625c4a4af827cda951	domain-out	上游kuaizhizao平行财务域：kuaicaiwu为本地权威财务实现，不引入并行体系（应收/应付/结算/发票/往来对账/utils/types/misc-category/other-voucher）
@@ -2991,7 +2990,7 @@ riveredge-frontend/src/apps/kuaizhizao/utils/payableLifecycle.ts	5bc8197b9152421
 riveredge-frontend/src/apps/kuaizhizao/utils/payableOffset.ts	ca58b3548c9944af7dd6a6d64e00b769f56758a2	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-frontend/src/apps/kuaizhizao/utils/payableSourceDiagnosis.ts	1d2491b9b9f725ec669546cf3d6904ce93d7f0b2	domain-out	tracked审计：域外（kuaizhizao.finance/other_expense/e2e等）
 riveredge-frontend/src/apps/kuaizhizao/utils/paymentCapabilityMessages.ts	fa0cb7552368c5e2a3b93b0560805b6bf1ac4730	domain-out	上游kuaizhizao平行财务域：kuaicaiwu为本地权威财务实现，不引入并行体系（应收/应付/结算/发票/往来对账/utils/types/misc-category/other-voucher）
-riveredge-frontend/src/apps/kuaizhizao/utils/pullReceiptFinanceLines.ts	6b0bb0179996978d77512aeebbf71f72186125f5	applied	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
+riveredge-frontend/src/apps/kuaizhizao/utils/pullReceiptFinanceLines.ts	6b0bb0179996978d77512aeebbf71f72186125f5	ported	2488f0680d批:通用增量与A1-A5(含kuaicaiwu移植/迁移重编号)落地收口
 riveredge-frontend/src/apps/kuaizhizao/utils/purchaseArrivalPresentation.ts	5c860078f0578c671ca36305efe2af2ff4acb18d	applied	整取/适配：uni-audit函数、生命周期工具、quality簇(行删恢复/medium保留)、incoming-inspection保留委外取单、arrival-warnings、SO附件中心
 riveredge-frontend/src/apps/kuaizhizao/utils/purchaseInquiryLifecycle.ts	5b9c2f08cf0fea1d85bff828cc89f3545c67fc49	applied	tracked审计：与上游tip逐字节一致
 riveredge-frontend/src/apps/kuaizhizao/utils/purchaseInvoiceCapabilityMessages.ts	d76d299d88900246be3a4177afa67e1c0a8322ff	applied	对账立账/委外收货提示入 kuaicaiwu.utils

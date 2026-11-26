@@ -8,25 +8,27 @@
 
 verdict 约定：
   tracked     已评估（详细取/缓置判定见提交级台账 上游同步台账.md）
-  applied     已摘取/适配落地
+  applied     已完整摘取/适配落地（相对 --to 处全部 diff 均已处置；局部摘取禁止记 applied）
+  ported      跨架构异位移植落地（如上游 kuaizhizao/finance/** 移植至本地 kuaicaiwu/**，或迁移重编号）
   superset    本地已是超集，跳过
-  deferred    缓置（note 记理由/依赖簇）
-  domain-out  域外（finance/E/mobile/fast-deploy 等），不摘
+  deferred    缓置或局部摘取未完（--note 必填，记录剩余项/依赖簇）
+  domain-out  真域外（客户专属 haoligo/chenao/lianzhi、fast-deploy 等），不摘；严禁将异位移植财务或通用 core/infra 混标
 
 命令：
-  audit  --from <sha> --to <sha>            输出区间内文件三分类：NEW / REEVAL / DELETED / SKIP
+  audit  --from <sha> --to <sha>            输出区间内文件四分类：NEW / REEVAL / DELETED / SKIP
   seed   --to <sha> <commit> [<commit>...]  把指定提交触及的文件按 --to 处 blob sha 登记为 tracked
   record --to <sha> --verdict <v> [--note s] <path>...   记录/更新单文件判定
 
 典型一轮：
   python riveredge-backend/scripts/sync_upstream_audit.py audit --from <上轮tip> --to gitee/develop
-  # NEW/REEVAL 才是本轮真正要看的文件；SKIP 行直接引用既有判定
+  # 永远以 audit 输出为待办入口（勿直接按 TSV 存量行扫）；NEW/REEVAL 才是本轮真正要看的文件
   python riveredge-backend/scripts/sync_upstream_audit.py record --to gitee/develop --verdict applied <path>
 """
 
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import subprocess
 import sys
 from pathlib import Path
@@ -34,10 +36,28 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LEDGER = REPO_ROOT / "docs" / "上游同步-文件级台账.tsv"
 
+VERDICTS = ("tracked", "applied", "ported", "superset", "deferred", "domain-out")
+
 HEADER = (
     "# 上游同步文件级台账（scripts/sync_upstream_audit.py 维护，勿手改列结构）\n"
     "# 列：upstream_path\tsha_at_eval\tverdict\tnote\n"
-    "# verdict: tracked|applied|superset|deferred|domain-out\n"
+    "# verdict: tracked|applied|ported|superset|deferred|domain-out\n"
+)
+
+_FINANCE_PORT_SUBSTRINGS = (
+    "apps/kuaizhizao/finance/",
+    "apps/kuaizhizao/pages/finance-management/",
+    "apps/kuaizhizao/services/finance/",
+    "apps/kuaizhizao/types/finance/",
+)
+_FINANCE_PORT_BASENAMES = (
+    "financeListCore.ts",
+    "partnerStatementAmountUtils.ts",
+    "pullReceiptFinanceLines.ts",
+)
+_SHARED_CORE_PREFIXES = (
+    "riveredge-backend/src/core/",
+    "riveredge-backend/src/infra/",
 )
 
 
@@ -82,6 +102,8 @@ def load_ledger() -> dict[str, list[str]]:
         if not line or line.startswith("#"):
             continue
         parts = line.split("\t")
+        if not parts[0].strip():
+            continue
         parts += [""] * (4 - len(parts))
         rows[parts[0]] = parts[1:4]
     return rows
@@ -91,8 +113,23 @@ def save_ledger(rows: dict[str, list[str]]) -> None:
     body = "".join(
         f"{p}\t{v[0]}\t{v[1]}\t{v[2]}\n"
         for p, v in sorted(rows.items())
+        if p.strip()
     )
     LEDGER.write_text(HEADER + body, encoding="utf-8")
+
+
+def _warn_domain_out_risk(path: str) -> str | None:
+    if any(sub in path for sub in _FINANCE_PORT_SUBSTRINGS) or path.endswith(_FINANCE_PORT_BASENAMES):
+        return (
+            f"[WARN] {path}: 疑似上游财务路径（本地权威为 apps/kuaicaiwu），"
+            "若已异位移植请用 --verdict ported，勿混标 domain-out"
+        )
+    if path.startswith(_SHARED_CORE_PREFIXES):
+        return (
+            f"[WARN] {path}: 通用 core/infra 文件被标为 domain-out，"
+            "请确认非随客户/财务域误标"
+        )
+    return None
 
 
 def is_excluded_artifact(path: str) -> bool:
@@ -143,12 +180,24 @@ def cmd_audit(args: argparse.Namespace) -> int:
         else:
             buckets["REEVAL"].append((path, rows[path][1]))
     for name in ("NEW", "REEVAL", "DELETED", "SKIP"):
-        items = buckets[name]
-        print(f"\n== {name} ({len(items)}) ==")
-        for path, verdict in items:
+        bucket_items = buckets[name]
+        breakdown = ""
+        if name in ("REEVAL", "SKIP") and bucket_items:
+            counts = Counter(v for _, v in bucket_items)
+            breakdown = " [" + ", ".join(f"{k}:{counts[k]}" for k in sorted(counts)) + "]"
+        print(f"\n== {name} ({len(bucket_items)}){breakdown} ==")
+        for path, verdict in bucket_items:
             print(f"  {verdict:>10}  {path}")
     need = len(buckets["NEW"]) + len(buckets["REEVAL"]) + len(buckets["DELETED"])
     print(f"\n需评估 {need}；可跳 {len(buckets['SKIP'])}")
+    skip_open = Counter(v for _, v in buckets["SKIP"] if v in ("deferred", "tracked"))
+    if skip_open:
+        detail = ", ".join(f"{k}={skip_open[k]}" for k in sorted(skip_open))
+        print(
+            f"[WARN] SKIP 中仍含 {sum(skip_open.values())} 条未闭环行（{detail}），"
+            "请核对是否需收口，切勿视同已完成忽略",
+            file=sys.stderr,
+        )
     return 0
 
 
@@ -170,13 +219,35 @@ def cmd_seed(args: argparse.Namespace) -> int:
 
 def cmd_record(args: argparse.Namespace) -> int:
     rows = load_ledger()
-    for path in args.paths:
+    cleaned_paths: list[str] = []
+    for raw in args.paths:
+        path = raw.strip()
+        if not path or path.startswith("#"):
+            print(f"[ERROR] 非法空路径或注释行: {raw!r}", file=sys.stderr)
+            return 2
+        cleaned_paths.append(path)
+    if args.verdict == "deferred":
+        missing_note = [
+            p for p in cleaned_paths
+            if not (args.note.strip() if args.note is not None else (rows.get(p, ["", "", ""])[2].strip()))
+        ]
+        if missing_note:
+            print(
+                "[ERROR] verdict=deferred 必须提供非空 --note（写明剩余项或缓置理由，防止局部摘取失踪）",
+                file=sys.stderr,
+            )
+            return 2
+    for path in cleaned_paths:
+        if args.verdict == "domain-out":
+            warn = _warn_domain_out_risk(path)
+            if warn:
+                print(warn, file=sys.stderr)
         sha = blob_sha(args.to, path)
         old = rows.get(path)
         note = args.note if args.note is not None else (old[2] if old else "")
         rows[path] = [sha or "DELETED", args.verdict, note]
     save_ledger(rows)
-    print(f"record: {len(args.paths)} 行 verdict={args.verdict}")
+    print(f"record: {len(cleaned_paths)} 行 verdict={args.verdict}")
     return 0
 
 
@@ -184,7 +255,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    p = sub.add_parser("audit", help="区间内变更文件三分类")
+    p = sub.add_parser("audit", help="区间内变更文件四分类")
     p.add_argument("--from", dest="frm", required=True)
     p.add_argument("--to", required=True)
     p.set_defaults(fn=cmd_audit)
@@ -196,8 +267,7 @@ def main() -> int:
 
     p = sub.add_parser("record", help="记录单文件判定")
     p.add_argument("--to", required=True)
-    p.add_argument("--verdict", required=True,
-                   choices=["tracked", "applied", "superset", "deferred", "domain-out"])
+    p.add_argument("--verdict", required=True, choices=list(VERDICTS))
     p.add_argument("--note", default=None)
     p.add_argument("paths", nargs="+")
     p.set_defaults(fn=cmd_record)
