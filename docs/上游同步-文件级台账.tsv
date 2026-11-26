@@ -3516,3 +3516,6 @@ riveredge-frontend/src/vite-env.d.ts	6232bdf5f89c14048bf36fd63651a1b16c4bcb76	ap
 riveredge-frontend/vite.config.ts	c24e43bf04ac91b9caddd6ad2c23ad1e1d93e94c	applied	R2 fe_extra2簇：master-data结算拆分/工艺目录/取价/同步字段+系统页资源分类面板+uni组件增量+依赖文件，取上游tip
 test-report/purchase.md	DELETED	applied	R2:上游已删，本地亦删/重编号落地，删除已接受
 test-report/sales.md	DELETED	superset	复核ok
+riveredge-backend/src/apps/kuaizhizao/services/equipment_list_core.py	a6ebbe45464204731d0a789a8a0142a05e3e6dda	applied	摘取@6fa3c6703d：站点日历日→UTC边界 _apply_site_calendar_day_range
+riveredge-backend/tests/apps/kuaiconnect/services/inbound_sync/test_material_sync_inactive_status.py	140ef677dc00346474a01cd352fcacc6cbe8b0f2	applied	摘取@6fa3c6703d：金蝶物料停用态同步测试（上游原文）
+riveredge-backend/tests/apps/kuaizhizao/services/test_equipment_list_site_date_range.py	61bbf176a211838328fbdccd15048cdc602749cb	applied	摘取@6fa3c6703d：设备列表站点日期范围测试（上游原文）
