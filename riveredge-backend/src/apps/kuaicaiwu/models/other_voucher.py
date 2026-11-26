@@ -50,6 +50,11 @@ class OtherIncome(BaseModel):
     project_name = fields.CharField(max_length=200, null=True, description="项目名称")
     notes = fields.TextField(null=True, description="备注")
     attachments = fields.JSONField(null=True, description="附件列表")
+    revenue_recognition = fields.CharField(
+        max_length=32,
+        default="on_shipment",
+        description="立账策略（应收确认时点，单据真源）",
+    )
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 
     def __str__(self):
@@ -122,6 +127,11 @@ class OtherExpense(BaseModel):
     # 往来类型=供应商时关联的采购入库单快照 [{id, code}]
     related_purchase_receipts = fields.JSONField(
         null=True, description="关联采购入库单 [{id, code}]"
+    )
+    payable_recognition = fields.CharField(
+        max_length=32,
+        default="on_receipt",
+        description="立账策略（应付确认时点，单据真源）",
     )
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 

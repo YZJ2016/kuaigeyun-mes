@@ -5,6 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any, Dict, Optional, Tuple
 
+from apps.common.audit_actor import apply_update_audit
 from apps.kuaicaiwu.constants.finance_source_types import (
     PAYABLE_SOURCE_OTHER_EXPENSE,
     RECEIVABLE_SOURCE_OTHER_INCOME,
@@ -23,6 +24,7 @@ from apps.kuaizhizao.models.document_relation import DocumentRelation
 from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
 from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
 from infra.exceptions.exceptions import BusinessLogicError, ValidationError
+from infra.models.user import User
 
 _FINANCE_REVIEW_APPROVED = frozenset(
     {"已审核", "approved", "审核通过", "已通过", "通过", "Approved"},
@@ -369,6 +371,110 @@ class MiscVoucherFinanceBridge:
             target_id=int(payable.id),
         ).delete()
 
+    async def settle_receivable_for_income_confirm(
+        self, tenant_id: int, income_id: int, operator_id: int
+    ) -> None:
+        """确认过账即结清：流水为实际资金，审核挂账直接核销，幂等。"""
+        receivable = await self.get_receivable_for_income(tenant_id, income_id)
+        if not receivable:
+            return
+        if str(receivable.status or "") == "已结清" and Decimal(
+            str(receivable.remaining_amount or 0)
+        ) <= 0:
+            return
+        total = Decimal(str(receivable.total_amount or 0))
+        user = await User.get_or_none(id=operator_id)
+        payload: Dict[str, Any] = {
+            "received_amount": total,
+            "remaining_amount": Decimal("0"),
+            "status": "已结清",
+        }
+        apply_update_audit(payload, user)
+        await Receivable.filter(
+            tenant_id=tenant_id, id=int(receivable.id)
+        ).update(**payload)
+
+    async def settle_payable_for_expense_confirm(
+        self, tenant_id: int, expense_id: int, operator_id: int
+    ) -> None:
+        """确认过账即结清：流水为实际资金，审核挂账直接核销，幂等。"""
+        payable = await self.get_payable_for_expense(tenant_id, expense_id)
+        if not payable:
+            return
+        if str(payable.status or "") == "已结清" and Decimal(
+            str(payable.remaining_amount or 0)
+        ) <= 0:
+            return
+        total = Decimal(str(payable.total_amount or 0))
+        user = await User.get_or_none(id=operator_id)
+        payload: Dict[str, Any] = {
+            "paid_amount": total,
+            "remaining_amount": Decimal("0"),
+            "status": "已结清",
+        }
+        apply_update_audit(payload, user)
+        await Payable.filter(
+            tenant_id=tenant_id, id=int(payable.id)
+        ).update(**payload)
+
+    async def unsettle_receivable_for_income_unconfirm(
+        self, tenant_id: int, income_id: int, operator_id: int
+    ) -> None:
+        """取消确认/作废冲回：已结清挂账退回未收款，幂等。"""
+        receivable = await self.get_receivable_for_income(tenant_id, income_id)
+        if not receivable:
+            return
+        if str(receivable.status or "") != "已结清":
+            return
+        from apps.kuaicaiwu.services.finance_refund_utils import (
+            resolve_ar_status_after_amounts,
+        )
+
+        total = Decimal(str(receivable.total_amount or 0))
+        user = await User.get_or_none(id=operator_id)
+        payload: Dict[str, Any] = {
+            "received_amount": Decimal("0"),
+            "remaining_amount": total,
+            "status": resolve_ar_status_after_amounts(
+                total_amount=total,
+                received_amount=Decimal("0"),
+                remaining_amount=total,
+            ),
+        }
+        apply_update_audit(payload, user)
+        await Receivable.filter(
+            tenant_id=tenant_id, id=int(receivable.id)
+        ).update(**payload)
+
+    async def unsettle_payable_for_expense_unconfirm(
+        self, tenant_id: int, expense_id: int, operator_id: int
+    ) -> None:
+        """取消确认/作废冲回：已结清挂账退回未付款，幂等。"""
+        payable = await self.get_payable_for_expense(tenant_id, expense_id)
+        if not payable:
+            return
+        if str(payable.status or "") != "已结清":
+            return
+        from apps.kuaicaiwu.services.finance_refund_utils import (
+            resolve_ap_status_after_amounts,
+        )
+
+        total = Decimal(str(payable.total_amount or 0))
+        user = await User.get_or_none(id=operator_id)
+        payload: Dict[str, Any] = {
+            "paid_amount": Decimal("0"),
+            "remaining_amount": total,
+            "status": resolve_ap_status_after_amounts(
+                total_amount=total,
+                paid_amount=Decimal("0"),
+                remaining_amount=total,
+            ),
+        }
+        apply_update_audit(payload, user)
+        await Payable.filter(
+            tenant_id=tenant_id, id=int(payable.id)
+        ).update(**payload)
+
     async def assert_income_receivable_revokable(
         self, tenant_id: int, income_id: int
     ) -> None:
@@ -405,6 +511,7 @@ class MiscVoucherFinanceBridge:
         if rel:
             raise BusinessLogicError("other_expense.revoke.payment_exists")
 
+    # 预留接口：待收付款单模块对接后启用，当前无调用方。
     async def link_income_receipt(
         self,
         tenant_id: int,

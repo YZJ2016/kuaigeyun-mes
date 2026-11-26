@@ -135,9 +135,15 @@ class EffectiveAccessService:
         if isinstance(hit, EffectiveUserAccess):
             return hit
 
-        version = await PermissionVersionService.get_version(
+        # 缓存键须同时含租户级与用户级版本：角色授权变更路径只 bump 租户级
+        # （user_id IS NULL），若只看用户级版本，缓存会在 TTL 内持续命中旧授权。
+        tenant_version = await PermissionVersionService.get_version(
+            tenant_id=tenant_id, user_id=None
+        )
+        user_version = await PermissionVersionService.get_version(
             tenant_id=tenant_id, user_id=user_id
         )
+        version = f"{tenant_version}.{user_version}"
         cache_key = f"{memo_key}:v{version}"
         cached = await cache_manager.get("effective_access", cache_key)
         if isinstance(cached, dict):

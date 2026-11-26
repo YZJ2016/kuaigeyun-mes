@@ -1162,6 +1162,12 @@ class OtherVoucherCreate(BaseSchema):
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
     related_purchase_receipts: Optional[List[RelatedPurchaseReceiptRef]] = None
+    revenue_recognition: Optional[str] = Field(
+        None, max_length=32, description="立账策略（应收确认时点，仅其他费用收入）"
+    )
+    payable_recognition: Optional[str] = Field(
+        None, max_length=32, description="立账策略（应付确认时点，仅其他费用支出）"
+    )
     lines: List[OtherVoucherLineIn] = Field(..., min_length=1, description="明细行")
 
 
@@ -1181,6 +1187,8 @@ class OtherVoucherUpdate(BaseSchema):
     notes: Optional[str] = None
     attachments: Optional[List[dict]] = None
     related_purchase_receipts: Optional[List[RelatedPurchaseReceiptRef]] = None
+    revenue_recognition: Optional[str] = Field(None, max_length=32)
+    payable_recognition: Optional[str] = Field(None, max_length=32)
     lines: Optional[List[OtherVoucherLineIn]] = Field(None, min_length=1)
 
 
@@ -1225,6 +1233,8 @@ class OtherVoucherResponse(BaseSchema):
     notes: Optional[str] = None
     attachments: Optional[List[dict]] = None
     related_purchase_receipts: Optional[List[RelatedPurchaseReceiptRef]] = None
+    revenue_recognition: Optional[str] = None
+    payable_recognition: Optional[str] = None
     lines: List[OtherVoucherLineOut] = []
     capabilities: Optional[Dict[str, Any]] = None
     created_at: datetime

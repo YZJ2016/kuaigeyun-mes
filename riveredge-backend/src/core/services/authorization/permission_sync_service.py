@@ -238,8 +238,55 @@ class PermissionSyncService:
                     """,
                     update_rows,
                 )
+            # 与迁移 20261126131900 同口径的存量角色 :display 补授权：
+            # 应用新部署/启用后，既有角色已持有该 app 同资源其它动作授权，
+            # 立即补同资源 :display，避免每日兜底同步前的授权空窗。
+            display_grant_rows = await conn.fetch(
+                """
+                INSERT INTO core_role_permissions (role_id, permission_id, created_at)
+                SELECT DISTINCT rp.role_id, pd.id, NOW()
+                FROM core_role_permissions rp
+                JOIN core_roles r
+                  ON r.id = rp.role_id
+                 AND r.deleted_at IS NULL
+                JOIN core_permissions p
+                  ON p.id = rp.permission_id
+                 AND p.deleted_at IS NULL
+                JOIN core_permissions pd
+                  ON pd.tenant_id = p.tenant_id
+                 AND pd.deleted_at IS NULL
+                 AND pd.code = regexp_replace(p.code, ':[^:]+$', ':display')
+                WHERE p.tenant_id = $1
+                  AND pd.code LIKE $2
+                  AND p.code LIKE '%:%:%'
+                  AND p.code NOT LIKE '%:display'
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM core_role_permissions x
+                    WHERE x.role_id = rp.role_id
+                      AND x.permission_id = pd.id
+                  )
+                RETURNING role_id
+                """,
+                tenant_id,
+                f"{code}:%",
+            )
+            display_granted = len(display_grant_rows)
         finally:
             await conn.close()
+
+        if display_granted:
+            from core.services.authorization.permission_version_service import (
+                PermissionVersionService,
+            )
+
+            await PermissionVersionService.bump(tenant_id=tenant_id, user_id=None)
+            logger.info(
+                "租户 {} 应用 {} 存量角色 :display 补授权 {} 条",
+                tenant_id,
+                code,
+                display_granted,
+            )
 
         PermissionRegistryService.invalidate_definitions_cache(tenant_id)
         logger.info(
@@ -261,6 +308,7 @@ class PermissionSyncService:
             "type_repaired": 0,
             "dry_run": 0,
             "scoped": 1,
+            "display_granted": display_granted,
         }
 
     @classmethod

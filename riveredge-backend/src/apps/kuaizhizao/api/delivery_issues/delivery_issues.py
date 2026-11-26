@@ -14,6 +14,7 @@ from apps.kuaizhizao.schemas.delivery_project import (
 )
 from apps.kuaizhizao.services.delivery_issue_service import DeliveryIssueService
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_permission_codes
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
@@ -33,7 +34,12 @@ def _http_exception(status_code: int, message: str) -> FastAPIHTTPException:
     )
 
 
-@router.post("", response_model=DeliveryIssueResponse, summary="Create delivery issue")
+@router.post(
+    "",
+    response_model=DeliveryIssueResponse,
+    summary="Create delivery issue",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-issue:create"))],
+)
 async def create_issue(
     body: DeliveryIssueCreate,
     current_user: User = Depends(get_current_user),
@@ -77,7 +83,12 @@ async def get_issue(
         raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
 
 
-@router.put("/{issue_id:int}", response_model=DeliveryIssueResponse, summary="Update delivery issue")
+@router.put(
+    "/{issue_id:int}",
+    response_model=DeliveryIssueResponse,
+    summary="Update delivery issue",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-issue:update"))],
+)
 async def update_issue(
     body: DeliveryIssueUpdate,
     issue_id: int = Path(...),
@@ -92,7 +103,11 @@ async def update_issue(
         raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
 
 
-@router.delete("/{issue_id:int}", summary="Delete delivery issue")
+@router.delete(
+    "/{issue_id:int}",
+    summary="Delete delivery issue",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-issue:delete"))],
+)
 async def delete_issue(
     issue_id: int = Path(...),
     current_user: User = Depends(get_current_user),

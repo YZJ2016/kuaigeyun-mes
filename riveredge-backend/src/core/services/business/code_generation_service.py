@@ -24,7 +24,8 @@ from core.services.code_rule.code_rule_component_service import (
     CodeRuleComponentService,
     resolve_code_render_datetime,
 )
-from core.config.code_rule_pages import get_seq_sync_entity_for_rule
+from core.config.code_rule_entity_models import ENTITY_MODEL_BY_RULE_CODE
+from core.config.code_rule_pages import CODE_RULE_PAGES, get_seq_sync_entity_for_rule
 from core.utils.db_transaction import independent_transaction
 from infra.exceptions.exceptions import ValidationError
 from core.utils.timezone_utils import now_utc, resolve_business_datetime, to_site_date
@@ -870,6 +871,42 @@ class CodeGenerationService:
                 code=code,
                 deleted_at__isnull=True
             ).first()
+            return existing is not None
+
+        # 通用兜底：entity_type → 规则码候选 → ENTITY_MODEL_BY_RULE_CODE 注册表查重。
+        # 编码字段取 CODE_RULE_PAGES 的 code_field，模型有 deleted_at 时排除软删行；
+        # 未在注册表中的实体类型仍返回 False（与历史行为一致）。
+        entity_candidates = (
+            entity_type,
+            entity_type.upper(),
+            f"{entity_type}_code",
+            f"{entity_type.upper()}_CODE",
+        )
+        for candidate in entity_candidates:
+            model_ref = ENTITY_MODEL_BY_RULE_CODE.get(candidate)
+            if not model_ref:
+                continue
+            module_path, model_name = model_ref
+            model_cls = getattr(importlib.import_module(module_path), model_name, None)
+            if model_cls is None:
+                return False
+            code_field = next(
+                (
+                    str(page["code_field"])
+                    for page in CODE_RULE_PAGES
+                    if page.get("rule_code") == candidate and page.get("code_field")
+                ),
+                None,
+            )
+            if not code_field or not model_has_field(model_cls, code_field):
+                if model_has_field(model_cls, "code"):
+                    code_field = "code"
+                else:
+                    return False
+            filters: Dict[str, Any] = {"tenant_id": tenant_id, code_field: code}
+            if model_has_field(model_cls, "deleted_at"):
+                filters["deleted_at__isnull"] = True
+            existing = await model_cls.filter(**filters).first()
             return existing is not None
 
         # 其他实体类型的检查可以在这里扩展

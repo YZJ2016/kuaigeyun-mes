@@ -1281,25 +1281,14 @@ class PermissionPolicyService:
         ]
 
     @classmethod
-    async def apply_material_field_masks_to_dict(
+    def _apply_material_field_masks_to_payload(
         cls,
-        tenant_id: int,
-        user_id: int,
         payload: dict[str, Any],
+        effective: dict[str, str],
+        alias_map: dict[str, str],
     ) -> dict[str, Any]:
-        """物料响应：默认供应商在 source_config 与 defaults.defaultSuppliers 内脱敏。"""
-        resource = "master-data:material"
-        all_masks = await cls.get_user_effective_field_masks(
-            tenant_id=tenant_id,
-            user_id=user_id,
-            resource=resource,
-        )
-        effective = all_masks.get(resource, {})
-        if not effective:
-            return payload
-        alias_map = await cls._load_tenant_field_alias_map(tenant_id=tenant_id)
-        out = dict(payload)
         supplier_id_level = effective.get("default_supplier_id")
+        out = dict(payload)
         for cfg_key in ("source_config", "sourceConfig"):
             cfg = out.get(cfg_key)
             if not isinstance(cfg, dict):
@@ -1320,3 +1309,51 @@ class PermissionPolicyService:
                 )
             out["defaults"] = defs_out
         return out
+
+    @classmethod
+    async def apply_material_field_masks_to_dict(
+        cls,
+        tenant_id: int,
+        user_id: int,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """物料响应：默认供应商在 source_config 与 defaults.defaultSuppliers 内脱敏。"""
+        resource = "master-data:material"
+        all_masks = await cls.get_user_effective_field_masks(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            resource=resource,
+        )
+        effective = all_masks.get(resource, {})
+        if not effective:
+            return payload
+        alias_map = await cls._load_tenant_field_alias_map(tenant_id=tenant_id)
+        return cls._apply_material_field_masks_to_payload(payload, effective, alias_map)
+
+    @classmethod
+    async def apply_material_field_masks_to_list(
+        cls,
+        tenant_id: int,
+        user_id: int,
+        payloads: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """
+        物料响应批量脱敏：一次加载用户有效策略与字段别名，避免列表逐行触发重复查询。
+        每一行使用同一策略，语义与 apply_material_field_masks_to_dict 一致。
+        """
+        if not payloads:
+            return payloads
+        resource = "master-data:material"
+        all_masks = await cls.get_user_effective_field_masks(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            resource=resource,
+        )
+        effective = all_masks.get(resource, {})
+        if not effective:
+            return payloads
+        alias_map = await cls._load_tenant_field_alias_map(tenant_id=tenant_id)
+        return [
+            cls._apply_material_field_masks_to_payload(payload, effective, alias_map)
+            for payload in payloads
+        ]

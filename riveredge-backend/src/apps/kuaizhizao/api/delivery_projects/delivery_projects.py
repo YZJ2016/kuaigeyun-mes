@@ -33,6 +33,7 @@ from apps.kuaizhizao.services.delivery_project_service import (
     DeliveryProjectService,
 )
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_permission_codes
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
@@ -52,7 +53,12 @@ def _http_exception(status_code: int, message: str) -> FastAPIHTTPException:
     )
 
 
-@router.post("", response_model=DeliveryProjectResponse, summary="Create delivery project")
+@router.post(
+    "",
+    response_model=DeliveryProjectResponse,
+    summary="Create delivery project",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-project:create"))],
+)
 async def create_project(
     body: DeliveryProjectCreate,
     current_user: User = Depends(get_current_user),
@@ -129,6 +135,7 @@ async def list_workshop_board(
     "/workshop-board/cells",
     response_model=DeliveryWorkshopBoardCell,
     summary="Patch workshop board cell",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-project:update"))],
 )
 async def patch_workshop_board_cell(
     body: DeliveryWorkshopBoardCellPatch,
@@ -173,6 +180,7 @@ async def list_sidelines(
     "/{project_id:int}/sidelines",
     response_model=DeliveryProjectResponse,
     summary="Create sideline delivery project",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-project:create"))],
 )
 async def create_sideline(
     body: DeliverySidelineCreate,
@@ -199,7 +207,12 @@ async def get_project(
         raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
 
 
-@router.put("/{project_id:int}", response_model=DeliveryProjectResponse, summary="Update delivery project")
+@router.put(
+    "/{project_id:int}",
+    response_model=DeliveryProjectResponse,
+    summary="Update delivery project",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-project:update"))],
+)
 async def update_project(
     body: DeliveryProjectUpdate,
     project_id: int = Path(...),
@@ -214,7 +227,11 @@ async def update_project(
         raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
 
 
-@router.delete("/{project_id:int}", summary="Delete delivery project")
+@router.delete(
+    "/{project_id:int}",
+    summary="Delete delivery project",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-project:delete"))],
+)
 async def delete_project(
     project_id: int = Path(...),
     current_user: User = Depends(get_current_user),
@@ -227,7 +244,12 @@ async def delete_project(
         raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
 
 
-@router.post("/{project_id:int}/start", response_model=DeliveryProjectResponse, summary="Start delivery project")
+@router.post(
+    "/{project_id:int}/start",
+    response_model=DeliveryProjectResponse,
+    summary="Start delivery project",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-project:update"))],
+)
 async def start_project(
     project_id: int = Path(...),
     current_user: User = Depends(get_current_user),
@@ -241,7 +263,12 @@ async def start_project(
         raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
 
 
-@router.post("/{project_id:int}/pause", response_model=DeliveryProjectResponse, summary="Pause delivery project")
+@router.post(
+    "/{project_id:int}/pause",
+    response_model=DeliveryProjectResponse,
+    summary="Pause delivery project",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-project:update"))],
+)
 async def pause_project(
     project_id: int = Path(...),
     current_user: User = Depends(get_current_user),
@@ -255,7 +282,12 @@ async def pause_project(
         raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
 
 
-@router.post("/{project_id:int}/resume", response_model=DeliveryProjectResponse, summary="Resume delivery project")
+@router.post(
+    "/{project_id:int}/resume",
+    response_model=DeliveryProjectResponse,
+    summary="Resume delivery project",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-project:update"))],
+)
 async def resume_project(
     project_id: int = Path(...),
     current_user: User = Depends(get_current_user),
@@ -269,7 +301,12 @@ async def resume_project(
         raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
 
 
-@router.post("/{project_id:int}/cancel", response_model=DeliveryProjectResponse, summary="Cancel delivery project")
+@router.post(
+    "/{project_id:int}/cancel",
+    response_model=DeliveryProjectResponse,
+    summary="Cancel delivery project",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-project:update"))],
+)
 async def cancel_project(
     project_id: int = Path(...),
     current_user: User = Depends(get_current_user),
@@ -287,6 +324,7 @@ async def cancel_project(
     "/{project_id:int}/complete",
     response_model=DeliveryProjectResponse,
     summary="Complete delivery project",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-project:update"))],
 )
 async def complete_project(
     body: DeliveryProjectCompleteRequest,
@@ -312,6 +350,7 @@ async def complete_project(
     "/{project_id:int}/change-template",
     response_model=DeliveryProjectResponse,
     summary="Change delivery project process template",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-project:update"))],
 )
 async def change_project_template(
     body: DeliveryProjectChangeTemplateRequest,
@@ -350,6 +389,7 @@ async def list_node_schedule_revisions(
     "/{project_id:int}/nodes/{node_id:int}",
     response_model=DeliveryProjectNodeResponse,
     summary="Update delivery project node",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-project:update"))],
 )
 async def update_project_node(
     body: DeliveryProjectNodeUpdate,
@@ -370,6 +410,7 @@ async def update_project_node(
     "/{project_id:int}/nodes/{node_id:int}/start",
     response_model=DeliveryProjectNodeResponse,
     summary="Start delivery project node",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-project:update"))],
 )
 async def start_project_node(
     project_id: int = Path(...),
@@ -389,6 +430,7 @@ async def start_project_node(
     "/{project_id:int}/nodes/{node_id:int}/complete",
     response_model=DeliveryProjectNodeResponse,
     summary="Complete delivery project node",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-project:update"))],
 )
 async def complete_project_node(
     project_id: int = Path(...),
@@ -424,6 +466,7 @@ async def list_node_documents(
     "/{project_id:int}/node-documents",
     response_model=DeliveryProjectNodeDocumentResponse,
     summary="Link document to delivery project node",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-project:update"))],
 )
 async def link_node_document(
     body: DeliveryProjectNodeDocumentCreate,
@@ -442,6 +485,7 @@ async def link_node_document(
 @router.delete(
     "/{project_id:int}/node-documents/{link_id:int}",
     summary="Unlink document from delivery project node",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-project:update"))],
 )
 async def unlink_node_document(
     project_id: int = Path(...),
@@ -462,6 +506,7 @@ async def unlink_node_document(
     "/{project_id:int}/node-tasks",
     response_model=DeliveryProjectNodeTaskResponse,
     summary="Create delivery project node task",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-project:update"))],
 )
 async def create_node_task(
     body: DeliveryProjectNodeTaskCreate,
@@ -481,6 +526,7 @@ async def create_node_task(
     "/{project_id:int}/node-tasks/{task_id:int}",
     response_model=DeliveryProjectNodeTaskResponse,
     summary="Update delivery project node task",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-project:update"))],
 )
 async def update_node_task(
     body: DeliveryProjectNodeTaskUpdate,
@@ -501,6 +547,7 @@ async def update_node_task(
     "/{project_id:int}/node-tasks/{task_id:int}/participant-action",
     response_model=DeliveryProjectNodeTaskResponse,
     summary="Submit delivery project node task participant action",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-project:update"))],
 )
 async def submit_node_task_participant_action(
     body: DeliveryTaskParticipantActionSubmit,
@@ -522,6 +569,7 @@ async def submit_node_task_participant_action(
 @router.delete(
     "/{project_id:int}/node-tasks/{task_id:int}",
     summary="Delete delivery project node task",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-project:update"))],
 )
 async def delete_node_task(
     project_id: int = Path(...),

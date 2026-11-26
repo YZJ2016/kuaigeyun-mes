@@ -425,6 +425,44 @@ class MiscVoucherService:
                     related=data.related_purchase_receipts,
                 )
             )
+            from apps.kuaizhizao.services.document_recognition import (
+                ensure_payable_recognition_on_create,
+                payable_recognition_for_misc_expense_counterparty,
+            )
+
+            supplier_id = (
+                int(data.counterparty_id)
+                if str(data.counterparty_kind or "").lower() == "supplier"
+                and data.counterparty_id
+                else None
+            )
+            payable_resolved = await ensure_payable_recognition_on_create(
+                tenant_id,
+                supplier_id,
+                getattr(data, "payable_recognition", None),
+            )
+            payload["payable_recognition"] = (
+                payable_recognition_for_misc_expense_counterparty(
+                    str(data.counterparty_kind or "none"),
+                    payable_resolved,
+                )
+            )
+        else:
+            from apps.kuaizhizao.services.document_recognition import (
+                ensure_revenue_recognition_on_create,
+            )
+
+            customer_id = (
+                int(data.counterparty_id)
+                if str(data.counterparty_kind or "").lower() == "customer"
+                and data.counterparty_id
+                else None
+            )
+            payload["revenue_recognition"] = await ensure_revenue_recognition_on_create(
+                tenant_id,
+                customer_id,
+                getattr(data, "revenue_recognition", None),
+            )
         apply_create_audit(payload, user)
         doc = await self.spec.model.create(**payload)
         for row in resolved:
@@ -445,6 +483,11 @@ class MiscVoucherService:
             )
         update_data = data.model_dump(exclude_unset=True)
         update_data.pop("lines", None)
+        # 共享 schema：非本单据类型的立账字段不落库
+        if self.spec.voucher_type == "other_expense":
+            update_data.pop("revenue_recognition", None)
+        else:
+            update_data.pop("payable_recognition", None)
         related_provided = "related_purchase_receipts" in update_data
         related_raw = update_data.pop("related_purchase_receipts", None)
         merged = {**doc.__dict__, **update_data}
@@ -477,6 +520,24 @@ class MiscVoucherService:
                     ),
                 )
             )
+        if self.spec.voucher_type == "other_expense":
+            # 非供应商往来不自动挂应付，立账策略固定 manual（与上游一致）
+            kind_effective = str(
+                update_data.get("counterparty_kind", doc.counterparty_kind)
+                or doc.counterparty_kind
+                or "none"
+            )
+            if kind_effective.strip().lower() != "supplier":
+                from apps.kuaizhizao.services.document_recognition import (
+                    payable_recognition_for_misc_expense_counterparty,
+                )
+
+                update_data["payable_recognition"] = (
+                    payable_recognition_for_misc_expense_counterparty(
+                        kind_effective,
+                        str(getattr(doc, "payable_recognition", None) or "manual"),
+                    )
+                )
         if data.lines is not None:
             resolved = await self._resolve_lines(
                 tenant_id, data.lines, payment_method=str(method or "")
@@ -786,20 +847,58 @@ class MiscVoucherService:
             raise BusinessLogicError(
                 f"当前状态不可确认，当前状态: {doc.status}"
             )
-        return await MiscVoucherPostingService().post(
-            tenant_id,
-            voucher_type=self.spec.voucher_type,
-            voucher_id=doc_id,
-            operator=user,
+        # post 无独立事务边界：过账+挂账结清须同一事务，避免半状态
+        from apps.kuaicaiwu.services.misc_voucher_finance_bridge import (
+            MiscVoucherFinanceBridge,
         )
 
-    async def unconfirm(self, tenant_id: int, doc_id: int, user: User):
-        return await MiscVoucherPostingService().unpost(
-            tenant_id,
-            voucher_type=self.spec.voucher_type,
-            voucher_id=doc_id,
-            operator=user,
+        bridge = MiscVoucherFinanceBridge()
+        async with in_transaction():
+            posted = await MiscVoucherPostingService().post(
+                tenant_id,
+                voucher_type=self.spec.voucher_type,
+                voucher_id=doc_id,
+                operator=user,
+            )
+            if self.spec.voucher_type == "other_income":
+                await bridge.settle_receivable_for_income_confirm(
+                    tenant_id, doc_id, int(user.id)
+                )
+            else:
+                await bridge.settle_payable_for_expense_confirm(
+                    tenant_id, doc_id, int(user.id)
+                )
+        return posted
+
+    async def _unsettle_for_unconfirm(
+        self, tenant_id: int, doc_id: int, operator_id: int
+    ) -> None:
+        """冲回流水后把已结清挂账退回未收款/未付款（无挂账则跳过）。"""
+        from apps.kuaicaiwu.services.misc_voucher_finance_bridge import (
+            MiscVoucherFinanceBridge,
         )
+
+        bridge = MiscVoucherFinanceBridge()
+        if self.spec.voucher_type == "other_income":
+            await bridge.unsettle_receivable_for_income_unconfirm(
+                tenant_id, doc_id, operator_id
+            )
+        else:
+            await bridge.unsettle_payable_for_expense_unconfirm(
+                tenant_id, doc_id, operator_id
+            )
+
+    async def unconfirm(self, tenant_id: int, doc_id: int, user: User):
+        # unpost 无独立事务边界：冲流水+回退挂账须同一事务
+        async with in_transaction():
+            doc = await MiscVoucherPostingService().unpost(
+                tenant_id,
+                voucher_type=self.spec.voucher_type,
+                voucher_id=doc_id,
+                operator=user,
+            )
+            await self._unsettle_for_unconfirm(tenant_id, doc_id, int(user.id))
+        return doc
 
     async def cancel(self, tenant_id: int, doc_id: int, user: User):
         doc = await self.get_or_404(tenant_id, doc_id)
@@ -811,13 +910,16 @@ class MiscVoucherService:
         if status not in _CANCELABLE:
             raise BusinessLogicError(f"当前状态不可作废，当前状态: {status}")
         if status == "Confirmed":
-            # 先反过账再作废挂账：unpost 失败则单据仍 Confirmed 且挂账未动
-            await MiscVoucherPostingService().unpost(
-                tenant_id,
-                voucher_type=self.spec.voucher_type,
-                voucher_id=doc_id,
-                operator=user,
-            )
+            # 先反过账再回退挂账结清：unpost/unsettle 同事务，失败则单据仍 Confirmed 且挂账未动；
+            # 回退后 received/paid=0，下方 assert_*_revokable 才能放行 void
+            async with in_transaction():
+                await MiscVoucherPostingService().unpost(
+                    tenant_id,
+                    voucher_type=self.spec.voucher_type,
+                    voucher_id=doc_id,
+                    operator=user,
+                )
+                await self._unsettle_for_unconfirm(tenant_id, doc_id, int(user.id))
         if status in ("Approved", "Confirmed"):
             # 审核通过时已挂应收/应付：作废前先校验可撤销并作废关联财务单，避免孤儿挂账
             from apps.kuaicaiwu.services.misc_voucher_finance_bridge import (

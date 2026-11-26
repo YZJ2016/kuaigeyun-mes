@@ -38,7 +38,12 @@ def _http_exception(status_code: int, message: str) -> FastAPIHTTPException:
     )
 
 
-@router.post("", response_model=DeliveryNodeReportResponse, summary="Create node report")
+@router.post(
+    "",
+    response_model=DeliveryNodeReportResponse,
+    summary="Create node report",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-node-report:create"))],
+)
 async def create_report(
     body: DeliveryNodeReportCreate,
     current_user: User = Depends(get_current_user),
@@ -89,7 +94,12 @@ async def get_report(
         raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
 
 
-@router.put("/{report_id:int}", response_model=DeliveryNodeReportResponse, summary="Update node report")
+@router.put(
+    "/{report_id:int}",
+    response_model=DeliveryNodeReportResponse,
+    summary="Update node report",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-node-report:update"))],
+)
 async def update_report(
     body: DeliveryNodeReportUpdate,
     report_id: int = Path(...),
@@ -104,7 +114,12 @@ async def update_report(
         raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
 
 
-@router.post("/{report_id:int}/submit", response_model=DeliveryNodeReportResponse, summary="Submit node report")
+@router.post(
+    "/{report_id:int}/submit",
+    response_model=DeliveryNodeReportResponse,
+    summary="Submit node report",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-node-report:submit"))],
+)
 async def submit_report(
     report_id: int = Path(...),
     current_user: User = Depends(get_current_user),
@@ -138,7 +153,11 @@ async def review_report(
         raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
 
 
-@router.delete("/{report_id:int}", summary="Delete node report")
+@router.delete(
+    "/{report_id:int}",
+    summary="Delete node report",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-node-report:delete"))],
+)
 async def delete_report(
     report_id: int = Path(...),
     current_user: User = Depends(get_current_user),

@@ -73,14 +73,38 @@ async def mask_material_response(
     return MaterialResponse.model_validate(masked)
 
 
+async def mask_material_dict_list(
+    tenant_id: int,
+    user_id: int,
+    payloads: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return await PermissionPolicyService.apply_material_field_masks_to_list(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        payloads=payloads,
+    )
+
+
+async def mask_material_response_rows(
+    tenant_id: int,
+    user_id: int,
+    rows: Iterable[MaterialResponse],
+) -> list[MaterialResponse]:
+    """批量脱敏：一次加载有效掩码策略，避免逐行 N+1 查询。"""
+    rows = list(rows)
+    if not rows:
+        return []
+    dumped = [row.model_dump(by_alias=True) for row in rows]
+    masked = await mask_material_dict_list(tenant_id, user_id, dumped)
+    return [MaterialResponse.model_validate(item) for item in masked]
+
+
 async def mask_material_list_response(
     tenant_id: int,
     user_id: int,
     response: MaterialListResponse,
 ) -> MaterialListResponse:
-    items: List[MaterialResponse] = []
-    for row in response.items:
-        items.append(await mask_material_response(tenant_id, user_id, row))
+    items = await mask_material_response_rows(tenant_id, user_id, response.items)
     return MaterialListResponse(items=items, total=response.total)
 
 
@@ -89,10 +113,7 @@ async def mask_material_response_list(
     user_id: int,
     rows: Iterable[MaterialResponse],
 ) -> list[MaterialResponse]:
-    out: list[MaterialResponse] = []
-    for row in rows:
-        out.append(await mask_material_response(tenant_id, user_id, row))
-    return out
+    return await mask_material_response_rows(tenant_id, user_id, rows)
 
 
 async def sanitize_material_create(

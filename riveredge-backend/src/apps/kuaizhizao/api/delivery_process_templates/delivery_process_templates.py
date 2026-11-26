@@ -14,6 +14,7 @@ from apps.kuaizhizao.schemas.delivery_project import (
 )
 from apps.kuaizhizao.services.delivery_process_template_service import DeliveryProcessTemplateService
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_permission_codes
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
@@ -33,7 +34,12 @@ def _http_exception(status_code: int, message: str) -> FastAPIHTTPException:
     )
 
 
-@router.post("", response_model=DeliveryProcessTemplateResponse, summary="Create process template")
+@router.post(
+    "",
+    response_model=DeliveryProcessTemplateResponse,
+    summary="Create process template",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-process-template:create"))],
+)
 async def create_template(
     body: DeliveryProcessTemplateCreate,
     current_user: User = Depends(get_current_user),
@@ -69,7 +75,12 @@ async def get_template(
         raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
 
 
-@router.put("/{template_id:int}", response_model=DeliveryProcessTemplateResponse, summary="Update process template")
+@router.put(
+    "/{template_id:int}",
+    response_model=DeliveryProcessTemplateResponse,
+    summary="Update process template",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-process-template:update"))],
+)
 async def update_template(
     body: DeliveryProcessTemplateUpdate,
     template_id: int = Path(...),
@@ -84,7 +95,11 @@ async def update_template(
         raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
 
 
-@router.delete("/{template_id:int}", summary="Delete process template")
+@router.delete(
+    "/{template_id:int}",
+    summary="Delete process template",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-process-template:delete"))],
+)
 async def delete_template(
     template_id: int = Path(...),
     current_user: User = Depends(get_current_user),
@@ -99,7 +114,12 @@ async def delete_template(
         raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
 
 
-@router.post("/{template_id:int}/set-default", response_model=DeliveryProcessTemplateResponse, summary="Set default template")
+@router.post(
+    "/{template_id:int}/set-default",
+    response_model=DeliveryProcessTemplateResponse,
+    summary="Set default template",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-process-template:update"))],
+)
 async def set_default_template(
     template_id: int = Path(...),
     current_user: User = Depends(get_current_user),
