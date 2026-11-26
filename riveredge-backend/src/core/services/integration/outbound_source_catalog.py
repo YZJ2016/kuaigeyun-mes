@@ -9,14 +9,17 @@ from core.config.custom_field_system_fields import get_associated_table_model_fi
 
 
 def _list_associated_table_names() -> List[str]:
-    """custom_field_pages 注册表名列表（本地 associated_table_registry 结构等价物）。"""
+    """custom_field_pages 注册表名 ∪ 关联表注册表（含插件应用登记的表）。"""
     from core.config.custom_field_pages import CUSTOM_FIELD_PAGES
+    from core.config.associated_table_registry import list_associated_table_names
 
-    return [
+    names = {
         str(p.get("table_name") or "").strip()
         for p in CUSTOM_FIELD_PAGES or []
         if isinstance(p, dict) and str(p.get("table_name") or "").strip()
-    ]
+    }
+    names.update(list_associated_table_names())
+    return sorted(names)
 
 # 表头 → 明细（选表头时自动带明细字段）
 _HEADER_TO_ENTRY: Dict[str, str] = {

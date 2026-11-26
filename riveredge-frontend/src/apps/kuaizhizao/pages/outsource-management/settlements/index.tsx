@@ -41,6 +41,8 @@ const OutsourceSettlementsPage: React.FC = () => {
   const currentUser = useCurrentUser();
   const canReview = hasReviewPermission(currentUser ?? undefined, RESOURCE);
   const actionRef = useRef<ActionType>();
+  const tableRowsRef = useRef<OutsourceSettlement[]>([]);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<OutsourceSettlement | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -89,6 +91,35 @@ const OutsourceSettlementsPage: React.FC = () => {
   const openEdit = async (row: OutsourceSettlement) => {
     setEditing(await outsourceSettlementApi.get(row.id));
     setModalOpen(true);
+  };
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    if (!keys.length) return;
+    const rows = keys
+      .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+      .filter((row): row is OutsourceSettlement => row != null);
+    const deletable = rows.filter((row) => row.status === '草稿');
+    if (deletable.length === 0) {
+      messageApi.warning(t('app.kuaizhizao.outsourceManagement.settlement.batchDeleteNoneDeletable'));
+      return;
+    }
+    if (deletable.length < rows.length) {
+      messageApi.warning(t('app.kuaizhizao.outsourceManagement.settlement.batchDeletePartial'));
+    }
+    for (const row of deletable) {
+      await outsourceSettlementApi.delete(row.id);
+    }
+    messageApi.success(
+      t('app.kuaizhizao.outsourceManagement.settlement.batchDeleteSuccess', {
+        count: deletable.length,
+      }),
+    );
+    setSelectedRowKeys([]);
+    if (detail?.id != null && deletable.some((row) => row.id === detail.id)) {
+      setDetailOpen(false);
+      setDetail(null);
+    }
+    actionRef.current?.reload();
   };
 
   const executeDelete = async (row: OutsourceSettlement) => {
@@ -252,13 +283,19 @@ const OutsourceSettlementsPage: React.FC = () => {
       <UniTable<OutsourceSettlement>
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.outsource-management.settlements.v3"
+        columnPersistenceId="apps.kuaizhizao.pages.outsource-management.settlements.v4"
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.outsource-management.settlements')}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField="status"
         pinnedTabsValueEnum={settlementStatusValueEnum}
+        enableRowSelection={perms.canDelete}
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
+        onTableDataChange={(rows) => {
+          tableRowsRef.current = rows;
+        }}
         request={async (params, _sort, _filter, searchFormValues) => {
           const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
           const settlementCode = pickSearchString(searchFormValues, 'settlement_code');
@@ -277,6 +314,12 @@ const OutsourceSettlementsPage: React.FC = () => {
           setEditing(null);
           setModalOpen(true);
         }}
+        showDeleteButton={perms.canDelete}
+        deleteButtonText={t('common.delete')}
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={(count) =>
+          t('app.kuaizhizao.outsourceManagement.settlement.confirmBatchDelete', { count })
+        }
       />
 
       <OutsourceSettlementFormModal

@@ -11,89 +11,144 @@ from tortoise import Model
 from core.models.model_fields import model_has_field
 
 
+# table_name (custom_field_pages / 出站映射) -> 模型路径
+ASSOCIATED_TABLE_TO_MODEL: Dict[str, str] = {
+    # 主数据 - 工厂
+    "master_data_factory_plants": "apps.master_data.models.factory.Plant",
+    "master_data_factory_workshops": "apps.master_data.models.factory.Workshop",
+    "master_data_factory_production_lines": "apps.master_data.models.factory.ProductionLine",
+    "master_data_factory_workstations": "apps.master_data.models.factory.Workstation",
+    "master_data_factory_work_centers": "apps.master_data.models.factory.WorkCenter",
+    # 主数据 - 仓库
+    "master_data_warehouse_warehouses": "apps.master_data.models.warehouse.Warehouse",
+    "master_data_warehouse_storage_areas": "apps.master_data.models.warehouse.StorageArea",
+    "master_data_warehouse_storage_locations": "apps.master_data.models.warehouse.StorageLocation",
+    # 主数据 - 物料
+    "master_data_material_groups": "apps.master_data.models.material.MaterialGroup",
+    "master_data_materials": "apps.master_data.models.material.Material",
+    "master_data_boms": "apps.master_data.models.material.BOM",  # table: apps_master_data_bom
+    # 主数据 - 工艺
+    "master_data_defect_types": "apps.master_data.models.process.DefectType",
+    "master_data_operations": "apps.master_data.models.process.Operation",
+    "master_data_process_routes": "apps.master_data.models.process.ProcessRoute",
+    "master_data_sops": "apps.master_data.models.process.SOP",
+    "apps_master_data_sop": "apps.master_data.models.process.SOP",
+    "apps_master_data_engineering_drawings": "apps.master_data.models.drawing.EngineeringDrawing",
+    # 主数据 - 供应链
+    "master_data_customers": "apps.master_data.models.customer.Customer",
+    "master_data_suppliers": "apps.master_data.models.supplier.Supplier",
+    # 主数据 - 绩效
+    "master_data_holidays": "apps.master_data.models.performance.Holiday",
+    "master_data_skills": "apps.master_data.models.performance.Skill",
+    # 快格轻制造
+    "apps_kuaizhizao_work_orders": "apps.kuaizhizao.models.work_order.WorkOrder",
+    "apps_kuaizhizao_rework_orders": "apps.kuaizhizao.models.rework_order.ReworkOrder",
+    "apps_kuaizhizao_outsource_orders": "apps.kuaizhizao.models.outsource_order.OutsourceOrder",
+    "apps_kuaizhizao_outsource_work_orders": "apps.kuaizhizao.models.outsource_work_order.OutsourceWorkOrder",
+    "apps_kuaizhizao_purchase_orders": "apps.kuaizhizao.models.purchase_order.PurchaseOrder",
+    "apps_kuaizhizao_purchase_receipts": "apps.kuaizhizao.models.purchase_receipt.PurchaseReceipt",
+    "apps_kuaizhizao_purchase_receipt_items": "apps.kuaizhizao.models.purchase_receipt_item.PurchaseReceiptItem",
+    "apps_kuaizhizao_purchase_returns": "apps.kuaizhizao.models.purchase_return.PurchaseReturn",
+    "apps_kuaizhizao_sales_orders": "apps.kuaizhizao.models.sales_order.SalesOrder",
+    "apps_kuaizhizao_sales_deliveries": "apps.kuaizhizao.models.sales_delivery.SalesDelivery",
+    "apps_kuaizhizao_sales_returns": "apps.kuaizhizao.models.sales_return.SalesReturn",
+    "apps_kuaizhizao_equipment": "apps.kuaizhizao.models.equipment.Equipment",
+    "apps_kuaizhizao_molds": "apps.kuaizhizao.models.mold.Mold",
+    "apps_kuaizhizao_production_pickings": "apps.kuaizhizao.models.production_picking.ProductionPicking",
+    "apps_kuaizhizao_production_returns": "apps.kuaizhizao.models.production_return.ProductionReturn",
+    "apps_kuaizhizao_other_inbounds": "apps.kuaizhizao.models.other_inbound.OtherInbound",
+    "apps_kuaizhizao_other_outbounds": "apps.kuaizhizao.models.other_outbound.OtherOutbound",
+    "apps_kuaizhizao_finished_goods_receipts": "apps.kuaizhizao.models.finished_goods_receipt.FinishedGoodsReceipt",
+    "apps_kuaizhizao_incoming_inspections": "apps.kuaizhizao.models.incoming_inspection.IncomingInspection",
+    "apps_kuaizhizao_process_inspections": "apps.kuaizhizao.models.process_inspection.ProcessInspection",
+    "apps_kuaizhizao_finished_goods_inspections": "apps.kuaizhizao.models.finished_goods_inspection.FinishedGoodsInspection",
+    "apps_kuaizhizao_quotations": "apps.kuaizhizao.models.quotation.Quotation",
+    "apps_kuaizhizao_customer_follow_ups": "apps.kuaizhizao.models.customer_follow_up.CustomerFollowUp",
+    "apps_kuaizhizao_sales_contracts": "apps.kuaizhizao.models.sales_contract.SalesContract",
+    "apps_kuaizhizao_sales_contract_changes": "apps.kuaizhizao.models.sales_contract_change.SalesContractChange",
+    "apps_kuaizhizao_sales_forecasts": "apps.kuaizhizao.models.sales_forecast.SalesForecast",
+    "apps_kuaizhizao_sales_order_change_orders": "apps.kuaizhizao.models.sales_order_change_order.SalesOrderChangeOrder",
+    "apps_kuaizhizao_shipment_notices": "apps.kuaizhizao.models.shipment_notice.ShipmentNotice",
+    "apps_kuaizhizao_demands": "apps.kuaizhizao.models.demand.Demand",
+    "apps_kuaizhizao_purchase_requisitions": "apps.kuaizhizao.models.purchase_requisition.PurchaseRequisition",
+    "apps_kuaizhizao_purchase_inquiries": "apps.kuaizhizao.models.purchase_inquiry.PurchaseInquiry",
+    "apps_kuaizhizao_purchase_order_change_orders": "apps.kuaizhizao.models.purchase_order_change_order.PurchaseOrderChangeOrder",
+    "apps_kuaizhizao_receipt_notices": "apps.kuaizhizao.models.receipt_notice.ReceiptNotice",
+    "apps_kuaizhizao_reporting_records": "apps.kuaizhizao.models.reporting_record.ReportingRecord",
+    "apps_kuaizhizao_packing_bindings": "apps.kuaizhizao.models.packing_binding.PackingBinding",
+    "apps_kuaizhizao_inspection_plans": "apps.kuaizhizao.models.inspection_plan.InspectionPlan",
+    "apps_kuaizhizao_quality_8d_reports": "apps.kuaizhizao.models.quality_8d_report.Quality8DReport",
+    "apps_kuaizhizao_oqc_inspections": "apps.kuaizhizao.models.oqc_inspection.OQCInspection",
+    "apps_kuaizhizao_tools": "apps.kuaizhizao.models.tool.Tool",
+    "apps_kuaizhizao_batching_orders": "apps.kuaizhizao.models.batching_order.BatchingOrder",
+    "apps_kuaizhizao_semi_finished_goods_receipts": "apps.kuaizhizao.models.semi_finished_goods_receipt.SemiFinishedGoodsReceipt",
+    "apps_kuaizhizao_customer_material_registrations": "apps.kuaizhizao.models.customer_material_registration.CustomerMaterialRegistration",
+    "apps_kuaizhizao_material_borrows": "apps.kuaizhizao.models.material_borrow.MaterialBorrow",
+    "apps_kuaizhizao_material_returns": "apps.kuaizhizao.models.material_return.MaterialReturn",
+    "apps_kuaizhizao_delivery_notices": "apps.kuaizhizao.models.delivery_notice.DeliveryNotice",
+    "apps_kuaizhizao_material_call_requests": "apps.kuaizhizao.models.material_call_request.MaterialCallRequest",
+    "apps_kuaizhizao_stocktakings": "apps.kuaizhizao.models.stocktaking.Stocktaking",
+    "apps_kuaizhizao_inventory_transfers": "apps.kuaizhizao.models.inventory_transfer.InventoryTransfer",
+    "apps_kuaizhizao_assembly_orders": "apps.kuaizhizao.models.assembly_order.AssemblyOrder",
+    "apps_kuaizhizao_disassembly_orders": "apps.kuaizhizao.models.disassembly_order.DisassemblyOrder",
+}
+
+
+_PLUGIN_ASSOCIATED_DISCOVERED = False
+
+
+def register_associated_tables(
+    mapping: Dict[str, str],
+    *,
+    overwrite: bool = False,
+) -> None:
+    """供 PRO / 可选应用注册关联表 → 模型路径，禁止把 PRO 路径写死进主仓大字典。"""
+    for table_name, model_path in (mapping or {}).items():
+        key = str(table_name or "").strip()
+        path = str(model_path or "").strip()
+        if not key or not path:
+            continue
+        if key in ASSOCIATED_TABLE_TO_MODEL and not overwrite:
+            continue
+        ASSOCIATED_TABLE_TO_MODEL[key] = path
+
+
+def discover_and_register_plugin_associated_tables() -> None:
+    """扫描 apps/*/custom_field_associated_tables.py 的 ASSOCIATED_TABLES。"""
+    global _PLUGIN_ASSOCIATED_DISCOVERED
+    if _PLUGIN_ASSOCIATED_DISCOVERED:
+        return
+    _PLUGIN_ASSOCIATED_DISCOVERED = True
+    import importlib
+    from pathlib import Path
+
+    apps_root = Path(__file__).resolve().parents[2] / "apps"
+    if not apps_root.is_dir():
+        return
+    for module_file in sorted(apps_root.glob("*/custom_field_associated_tables.py")):
+        package_name = module_file.parent.name
+        module_name = f"apps.{package_name}.custom_field_associated_tables"
+        try:
+            mod = importlib.import_module(module_name)
+        except ImportError:
+            continue
+        except Exception:
+            continue
+        mapping = getattr(mod, "ASSOCIATED_TABLES", None)
+        if isinstance(mapping, dict):
+            register_associated_tables(mapping)
+
+
+def list_associated_table_names() -> List[str]:
+    """已注册的关联/实体表名（出站映射下拉用）。"""
+    discover_and_register_plugin_associated_tables()
+    return sorted(ASSOCIATED_TABLE_TO_MODEL.keys())
+
+
 def _get_model(table_name: str) -> Optional[Type[Model]]:
     """根据 table_name 获取 Tortoise 模型类（延迟导入避免循环依赖）"""
-    # table_name (custom_field_pages) -> (app.model_module, db_table)
-    _TABLE_TO_MODEL: Dict[str, str] = {
-        # 主数据 - 工厂
-        "master_data_factory_plants": "apps.master_data.models.factory.Plant",
-        "master_data_factory_workshops": "apps.master_data.models.factory.Workshop",
-        "master_data_factory_production_lines": "apps.master_data.models.factory.ProductionLine",
-        "master_data_factory_workstations": "apps.master_data.models.factory.Workstation",
-        "master_data_factory_work_centers": "apps.master_data.models.factory.WorkCenter",
-        # 主数据 - 仓库
-        "master_data_warehouse_warehouses": "apps.master_data.models.warehouse.Warehouse",
-        "master_data_warehouse_storage_areas": "apps.master_data.models.warehouse.StorageArea",
-        "master_data_warehouse_storage_locations": "apps.master_data.models.warehouse.StorageLocation",
-        # 主数据 - 物料
-        "master_data_material_groups": "apps.master_data.models.material.MaterialGroup",
-        "master_data_materials": "apps.master_data.models.material.Material",
-        "master_data_boms": "apps.master_data.models.material.BOM",  # table: apps_master_data_bom
-        # 主数据 - 工艺
-        "master_data_defect_types": "apps.master_data.models.process.DefectType",
-        "master_data_operations": "apps.master_data.models.process.Operation",
-        "master_data_process_routes": "apps.master_data.models.process.ProcessRoute",
-        "master_data_sops": "apps.master_data.models.process.SOP",
-        "apps_master_data_sop": "apps.master_data.models.process.SOP",
-        "apps_master_data_engineering_drawings": "apps.master_data.models.drawing.EngineeringDrawing",
-        # 主数据 - 供应链
-        "master_data_customers": "apps.master_data.models.customer.Customer",
-        "master_data_suppliers": "apps.master_data.models.supplier.Supplier",
-        # 主数据 - 绩效
-        "master_data_holidays": "apps.master_data.models.performance.Holiday",
-        "master_data_skills": "apps.master_data.models.performance.Skill",
-        # 快格轻制造
-        "apps_kuaizhizao_work_orders": "apps.kuaizhizao.models.work_order.WorkOrder",
-        "apps_kuaizhizao_rework_orders": "apps.kuaizhizao.models.rework_order.ReworkOrder",
-        "apps_kuaizhizao_outsource_orders": "apps.kuaizhizao.models.outsource_order.OutsourceOrder",
-        "apps_kuaizhizao_outsource_work_orders": "apps.kuaizhizao.models.outsource_work_order.OutsourceWorkOrder",
-        "apps_kuaizhizao_purchase_orders": "apps.kuaizhizao.models.purchase_order.PurchaseOrder",
-        "apps_kuaizhizao_purchase_receipts": "apps.kuaizhizao.models.purchase_receipt.PurchaseReceipt",
-        "apps_kuaizhizao_purchase_returns": "apps.kuaizhizao.models.purchase_return.PurchaseReturn",
-        "apps_kuaizhizao_sales_orders": "apps.kuaizhizao.models.sales_order.SalesOrder",
-        "apps_kuaizhizao_sales_deliveries": "apps.kuaizhizao.models.sales_delivery.SalesDelivery",
-        "apps_kuaizhizao_sales_returns": "apps.kuaizhizao.models.sales_return.SalesReturn",
-        "apps_kuaizhizao_equipment": "apps.kuaizhizao.models.equipment.Equipment",
-        "apps_kuaizhizao_molds": "apps.kuaizhizao.models.mold.Mold",
-        "apps_kuaizhizao_production_pickings": "apps.kuaizhizao.models.production_picking.ProductionPicking",
-        "apps_kuaizhizao_production_returns": "apps.kuaizhizao.models.production_return.ProductionReturn",
-        "apps_kuaizhizao_other_inbounds": "apps.kuaizhizao.models.other_inbound.OtherInbound",
-        "apps_kuaizhizao_other_outbounds": "apps.kuaizhizao.models.other_outbound.OtherOutbound",
-        "apps_kuaizhizao_finished_goods_receipts": "apps.kuaizhizao.models.finished_goods_receipt.FinishedGoodsReceipt",
-        "apps_kuaizhizao_incoming_inspections": "apps.kuaizhizao.models.incoming_inspection.IncomingInspection",
-        "apps_kuaizhizao_process_inspections": "apps.kuaizhizao.models.process_inspection.ProcessInspection",
-        "apps_kuaizhizao_finished_goods_inspections": "apps.kuaizhizao.models.finished_goods_inspection.FinishedGoodsInspection",
-        "apps_kuaizhizao_quotations": "apps.kuaizhizao.models.quotation.Quotation",
-        "apps_kuaizhizao_customer_follow_ups": "apps.kuaizhizao.models.customer_follow_up.CustomerFollowUp",
-        "apps_kuaizhizao_sales_contracts": "apps.kuaizhizao.models.sales_contract.SalesContract",
-        "apps_kuaizhizao_sales_contract_changes": "apps.kuaizhizao.models.sales_contract_change.SalesContractChange",
-        "apps_kuaizhizao_sales_forecasts": "apps.kuaizhizao.models.sales_forecast.SalesForecast",
-        "apps_kuaizhizao_sales_order_change_orders": "apps.kuaizhizao.models.sales_order_change_order.SalesOrderChangeOrder",
-        "apps_kuaizhizao_shipment_notices": "apps.kuaizhizao.models.shipment_notice.ShipmentNotice",
-        "apps_kuaizhizao_demands": "apps.kuaizhizao.models.demand.Demand",
-        "apps_kuaizhizao_purchase_requisitions": "apps.kuaizhizao.models.purchase_requisition.PurchaseRequisition",
-        "apps_kuaizhizao_purchase_inquiries": "apps.kuaizhizao.models.purchase_inquiry.PurchaseInquiry",
-        "apps_kuaizhizao_purchase_order_change_orders": "apps.kuaizhizao.models.purchase_order_change_order.PurchaseOrderChangeOrder",
-        "apps_kuaizhizao_receipt_notices": "apps.kuaizhizao.models.receipt_notice.ReceiptNotice",
-        "apps_kuaizhizao_reporting_records": "apps.kuaizhizao.models.reporting_record.ReportingRecord",
-        "apps_kuaizhizao_packing_bindings": "apps.kuaizhizao.models.packing_binding.PackingBinding",
-        "apps_kuaizhizao_inspection_plans": "apps.kuaizhizao.models.inspection_plan.InspectionPlan",
-        "apps_kuaizhizao_quality_8d_reports": "apps.kuaizhizao.models.quality_8d_report.Quality8DReport",
-        "apps_kuaizhizao_oqc_inspections": "apps.kuaizhizao.models.oqc_inspection.OQCInspection",
-        "apps_kuaizhizao_tools": "apps.kuaizhizao.models.tool.Tool",
-        "apps_kuaizhizao_batching_orders": "apps.kuaizhizao.models.batching_order.BatchingOrder",
-        "apps_kuaizhizao_semi_finished_goods_receipts": "apps.kuaizhizao.models.semi_finished_goods_receipt.SemiFinishedGoodsReceipt",
-        "apps_kuaizhizao_customer_material_registrations": "apps.kuaizhizao.models.customer_material_registration.CustomerMaterialRegistration",
-        "apps_kuaizhizao_material_borrows": "apps.kuaizhizao.models.material_borrow.MaterialBorrow",
-        "apps_kuaizhizao_material_returns": "apps.kuaizhizao.models.material_return.MaterialReturn",
-        "apps_kuaizhizao_delivery_notices": "apps.kuaizhizao.models.delivery_notice.DeliveryNotice",
-        "apps_kuaizhizao_material_call_requests": "apps.kuaizhizao.models.material_call_request.MaterialCallRequest",
-        "apps_kuaizhizao_stocktakings": "apps.kuaizhizao.models.stocktaking.Stocktaking",
-        "apps_kuaizhizao_inventory_transfers": "apps.kuaizhizao.models.inventory_transfer.InventoryTransfer",
-        "apps_kuaizhizao_assembly_orders": "apps.kuaizhizao.models.assembly_order.AssemblyOrder",
-        "apps_kuaizhizao_disassembly_orders": "apps.kuaizhizao.models.disassembly_order.DisassemblyOrder",
-    }
-    path = _TABLE_TO_MODEL.get(table_name)
+    discover_and_register_plugin_associated_tables()
+    path = ASSOCIATED_TABLE_TO_MODEL.get(table_name)
     if not path:
         return None
     try:

@@ -26,9 +26,15 @@ import { UniTable } from '../../../../../components/uni-table';
 
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 
+import { CustomFieldsFormSection } from '../../../../../components/custom-fields';
+
 import { rowActionKind } from '../../../../../components/uni-action';
 
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
@@ -67,6 +73,8 @@ import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLi
 
 const RESOURCE = 'kuaizhizao:delivery-node-report';
 
+const CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_delivery_node_reports';
+
 
 
 const NodeReportsPage: React.FC = () => {
@@ -101,6 +109,48 @@ const NodeReportsPage: React.FC = () => {
 
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
+  const {
+
+    customFields: formCustomFields,
+
+    customFieldValues: formCustomFieldValues,
+
+    loadFieldValues: loadFormCustomFieldValues,
+
+    extractFormValues: extractCustomFormValues,
+
+    saveCustomFieldValues,
+
+    resetFieldValues: resetFormCustomFieldValues,
+
+  } = useCustomFields({
+
+    tableName: CUSTOM_FIELD_TABLE,
+
+    hostResource: RESOURCE,
+
+    loadWhenOpen: true,
+
+    open: modalOpen,
+
+  });
+
+  const {
+
+    generateCustomFieldColumns,
+
+    enrichRecordsWithCustomFields,
+
+  } = useCustomFieldsForList<DeliveryNodeReport>({
+
+    tableName: CUSTOM_FIELD_TABLE,
+
+    hostResource: RESOURCE,
+
+  });
+
+  const customFieldColumns = generateCustomFieldColumns();
+
 
 
   const openCreate = useCallback(async (preset?: { projectId?: number; nodeId?: number }) => {
@@ -110,6 +160,8 @@ const NodeReportsPage: React.FC = () => {
     setProjects(res.items);
 
     setEditingReport(null);
+
+    resetFormCustomFieldValues();
 
     formRef.current?.resetFields();
 
@@ -270,9 +322,15 @@ const NodeReportsPage: React.FC = () => {
 
     });
 
+    void loadFormCustomFieldValues(report.id).then((cfValues) => {
+
+      formRef.current?.setFieldsValue(cfValues);
+
+    });
+
     setModalOpen(true);
 
-  }, []);
+  }, [loadFormCustomFieldValues]);
 
 
 
@@ -417,6 +475,8 @@ const NodeReportsPage: React.FC = () => {
 
       },
 
+      ...customFieldColumns,
+
       {
 
         title: t('common.actions'),
@@ -509,24 +569,31 @@ const NodeReportsPage: React.FC = () => {
 
 
   const handleSave = async (values: Record<string, unknown>) => {
-    const reportDate = values.report_date as dayjs.Dayjs;
+    const { customData, standardValues } = extractCustomFormValues(values, formRef.current);
+    const reportDate = standardValues.report_date as dayjs.Dayjs;
+    let savedId = editingReport?.id;
     if (editingReport) {
       await deliveryNodeReportApi.update(editingReport.id, {
         report_date: reportDate.format('YYYY-MM-DD'),
-        progress_percent: values.progress_percent as number,
-        content: values.content as string | undefined,
+        progress_percent: standardValues.progress_percent as number,
+        content: standardValues.content as string | undefined,
       });
       message.success(t('common.updated'));
     } else {
-      await deliveryNodeReportApi.create({
-        project_id: values.project_id as number,
-        node_id: values.node_id as number,
+      const created = await deliveryNodeReportApi.create({
+        project_id: standardValues.project_id as number,
+        node_id: standardValues.node_id as number,
         report_date: reportDate.format('YYYY-MM-DD'),
-        progress_percent: values.progress_percent as number,
-        content: values.content as string | undefined,
+        progress_percent: standardValues.progress_percent as number,
+        content: standardValues.content as string | undefined,
       });
+      savedId = created.id;
       message.success(t('common.created'));
     }
+    if (savedId != null) {
+      await saveCustomFieldValues(savedId, customData);
+    }
+    resetFormCustomFieldValues();
     setModalOpen(false);
 
     setEditingReport(null);
@@ -553,7 +620,7 @@ const NodeReportsPage: React.FC = () => {
 
           columns={columns}
 
-          columnPersistenceId="kuaizhizao-delivery-node-reports-v6"
+          columnPersistenceId="kuaizhizao-delivery-node-reports-v7-cf"
 
           enableRowSelection
 
@@ -587,7 +654,7 @@ const NodeReportsPage: React.FC = () => {
 
           }}
 
-          request={async (params, _sort, _filter, searchFormValues) => {
+          request={async (params, _sort, _filter, searchFormValues, meta) => {
             const listParams = {
               status: resolveListLifecycleStageFromSearch(searchFormValues),
             };
@@ -603,7 +670,15 @@ const NodeReportsPage: React.FC = () => {
 
             });
 
-            return { data: res.items, success: true, total: res.total };
+            const data =
+
+              meta?.purpose === 'prefetch'
+
+                ? res.items
+
+                : await enrichRecordsWithCustomFields(res.items);
+
+            return { data, success: true, total: res.total };
 
           }}
 
@@ -630,6 +705,8 @@ const NodeReportsPage: React.FC = () => {
         width={MODAL_CONFIG.STANDARD_WIDTH}
 
         onClose={() => {
+
+          resetFormCustomFieldValues();
 
           setModalOpen(false);
 
@@ -722,6 +799,16 @@ const NodeReportsPage: React.FC = () => {
           max={100}
 
           fieldProps={{ style: { width: '100%' }, suffix: '%' }}
+
+        />
+
+        <CustomFieldsFormSection
+
+          customFields={formCustomFields}
+
+          customFieldValues={formCustomFieldValues}
+
+          gridColumns={2}
 
         />
 

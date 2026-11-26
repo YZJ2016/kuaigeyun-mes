@@ -97,6 +97,22 @@ async def _external_master_data_sync(tenant_id: int, _cfg: Dict[str, Any]) -> Di
     return {"success": True, "stats": stats}
 
 
+async def _warehouse_kingdee_alignment(tenant_id: int, _cfg: Dict[str, Any]) -> Dict[str, Any]:
+    from apps.kuaiconnect.services.document_push.warehouse_kingdee_alignment import (
+        list_inventory_pull_blockers,
+    )
+
+    blockers = await list_inventory_pull_blockers(tenant_id)
+    if blockers:
+        logger.warning(
+            "仓储单据与金蝶未对齐 tenant={} count={} sample={}",
+            tenant_id,
+            len(blockers),
+            blockers[:8],
+        )
+    return {"success": True, "blocker_count": len(blockers), "blockers": blockers[:20]}
+
+
 BUILTIN_JOB_HANDLERS: Dict[str, Handler] = {
     "kuaizhizao.inventory_alert_check": _inventory_alert_check,
     "kuaizhizao.exception_detection": _exception_detection,
@@ -106,6 +122,7 @@ BUILTIN_JOB_HANDLERS: Dict[str, Handler] = {
     "kuaizhizao.delivery_delay_notification": _delivery_delay_notification,
     "kuaizhizao.customer_pool_recycle": _customer_pool_recycle,
     "kuaizhizao.external_master_data_sync": _external_master_data_sync,
+    "kuaizhizao.warehouse_kingdee_alignment": _warehouse_kingdee_alignment,
 }
 
 

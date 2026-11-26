@@ -151,23 +151,48 @@ class CustomFieldPageDiscoveryService:
                     "table_name_label": page_config.get('table_name_label', table_name),
                     "module": page_config.get('module', app_name),
                     "module_icon": page_config.get('module_icon', manifest.get('icon', 'app')),
+                    "app_code": page_config.get("app_code") or app_code,
                 }
                 
                 pages.append(full_page_config)
         
         logger.info(f"✅ 总共发现 {len(pages)} 个自定义字段页面配置")
         return pages
+
+    @staticmethod
+    def merge_with_hardcoded(hardcoded: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        OSS 硬编码优先，manifest 发现项按 page_code 追加（不覆盖 OSS）。
+
+        PRO 应用页面清单只写在各应用 manifest.custom_field_pages，不进 CUSTOM_FIELD_PAGES。
+        """
+        merged: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+        for page in hardcoded or []:
+            code = page.get("page_code")
+            if not code or code in seen:
+                continue
+            seen.add(str(code))
+            merged.append(dict(page))
+        try:
+            discovered = CustomFieldPageDiscoveryService.discover_pages()
+        except Exception as e:
+            logger.error(f"自定义字段页面发现失败，仅返回硬编码: {e}", exc_info=True)
+            discovered = []
+        for page in discovered:
+            code = page.get("page_code")
+            if not code or code in seen:
+                continue
+            seen.add(str(code))
+            merged.append(dict(page))
+        return merged
     
     @staticmethod
     def get_all_pages() -> List[Dict[str, Any]]:
         """
-        获取所有自定义字段页面配置（包含服务发现和硬编码回退）
-        
-        优先使用服务发现，如果服务发现失败或返回空列表，则回退到硬编码配置。
+        获取所有自定义字段页面配置（硬编码 ∪ manifest 发现）。
+
         结果缓存 5 分钟，减少重复文件扫描。
-        
-        Returns:
-            List[Dict[str, Any]]: 页面配置列表
         """
         global _PAGES_CACHE
         now = time.time()
@@ -176,20 +201,14 @@ class CustomFieldPageDiscoveryService:
             if now - cached_at < _PAGES_CACHE_TTL:
                 return cached_pages
         try:
-            # 尝试从服务发现获取页面配置
-            discovered_pages = CustomFieldPageDiscoveryService.discover_pages()
-            
-            if discovered_pages:
-                _PAGES_CACHE = (discovered_pages, now)
-                logger.info(f"✅ 通过服务发现获取到 {len(discovered_pages)} 个自定义字段页面配置")
-                return discovered_pages
-            else:
-                logger.warning("⚠️ 服务发现未返回任何页面配置，使用硬编码配置作为回退")
-                # 回退到硬编码配置（如果存在）
-                # 注意：目前没有硬编码配置，返回空列表
-                return []
+            from core.config.custom_field_pages import CUSTOM_FIELD_PAGES
+
+            pages = CustomFieldPageDiscoveryService.merge_with_hardcoded(
+                list(CUSTOM_FIELD_PAGES)
+            )
+            _PAGES_CACHE = (pages, now)
+            logger.info(f"✅ 自定义字段页面合并完成: {len(pages)} 条")
+            return pages
         except Exception as e:
-            logger.error(f"❌ 自定义字段页面发现服务失败: {e}", exc_info=True)
-            # 回退到空列表
-            logger.info("📋 使用空配置作为回退方案")
+            logger.error(f"❌ 自定义字段页面合并失败: {e}", exc_info=True)
             return []

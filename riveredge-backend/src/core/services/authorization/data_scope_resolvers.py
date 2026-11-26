@@ -45,8 +45,12 @@ async def resolve_scope_department(ctx: ScopeResolveContext) -> Q:
         or ctx.profile.applicant_user_id_field
     )
     clauses: list[Q] = []
-    if dept_field and ctx.department_uuid:
-        clauses.append(Q(**{dept_field: ctx.department_uuid}))
+    if dept_field:
+        uuids = list(ctx.department_uuids or [])
+        if not uuids and ctx.department_uuid:
+            uuids = [ctx.department_uuid]
+        for dept_uuid in uuids:
+            clauses.append(Q(**{dept_field: dept_uuid}))
     if ctx.department_user_ids:
         clauses.append(Q(**{f"{anchor_field}__in": ctx.department_user_ids}))
     if not clauses:

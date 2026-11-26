@@ -15,6 +15,7 @@ import { App, Row, Col, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import CodeField from '../../../../../components/code-field';
 import { FormListDetailTable } from '../../../../../components/form-list-detail-table';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -85,6 +86,7 @@ const InspectionSchemesPage: React.FC = () => {
   const [detailVisible, setDetailVisible] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detail, setDetail] = useState<InspectionScheme | null>(null);
+  const [createCodeSessionKey, setCreateCodeSessionKey] = useState(0);
 
   const loadItemOptions = async () => {
     const res = await inspectionItemsApi.list({ limit: 1000, is_active: true });
@@ -99,6 +101,7 @@ const InspectionSchemesPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrent(null);
+    setCreateCodeSessionKey((k) => k + 1);
     // FormModal destroyOnHidden：须用 initialValues，打开瞬间 setFieldsValue 无效
     setFormInitialValues({
       is_active: true,
@@ -476,7 +479,22 @@ const InspectionSchemesPage: React.FC = () => {
       >
         <Row gutter={16}>
           <Col span={8}>
-            <ProFormText name="code" label={t('common.code')} rules={[{ required: true }]} />
+            <CodeField
+              key={
+                isEdit
+                  ? `inspection-scheme-code-edit-${current?.id ?? 'none'}`
+                  : `inspection-scheme-code-create-${createCodeSessionKey}`
+              }
+              pageCode="kuaizhizao-equipment-inspection-scheme"
+              name="code"
+              label={t('common.code')}
+              required={false}
+              autoGenerateOnCreate={!isEdit}
+              showGenerateButton={false}
+              documentId={isEdit ? current?.id : undefined}
+              formRef={formRef}
+              generateSessionKey={createCodeSessionKey}
+            />
           </Col>
           <Col span={8}>
             <ProFormText name="name" label={t('common.name')} rules={[{ required: true }]} />

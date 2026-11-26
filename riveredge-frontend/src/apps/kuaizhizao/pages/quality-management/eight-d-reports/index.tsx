@@ -43,8 +43,12 @@ import {
   resolveEightDReportListParams,
 } from '../../../utils/qualityImprovementListCore';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import { CustomFieldsFormSection } from '../../../../../components/custom-fields';
 
 const EIGHT_D_RESOURCE = 'kuaizhizao:quality-management-eight-d-reports';
+const EIGHT_D_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_quality_8d_reports';
 const WORKBENCH_PATH = '/apps/kuaizhizao/quality-management/eight-d-reports';
 
 const EightDReportsPage: React.FC = () => {
@@ -66,6 +70,25 @@ const EightDReportsPage: React.FC = () => {
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const eightDStatusValueEnum = useMemo(() => buildEightDStatusValueEnum(t), [t]);
   const eightDSeverityValueEnum = useMemo(() => buildEightDSeverityValueEnum(t), [t]);
+
+  const {
+    customFields: eightDFormCustomFields,
+    customFieldValues: eightDFormCustomFieldValues,
+    loadFieldValues: loadEightDFormFieldValues,
+    extractFormValues: extractEightDFormValues,
+    saveCustomFieldValues: saveEightDCustomFieldValues,
+    resetFieldValues: resetEightDFormFieldValues,
+  } = useCustomFields({
+    tableName: EIGHT_D_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open: createVisible || editVisible,
+  });
+
+  const {
+    customFields: eightDListCustomFields,
+    generateCustomFieldColumns: generateEightDCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichEightDRecordsWithCustomFields,
+  } = useCustomFieldsForList<Quality8DReport>({ tableName: EIGHT_D_CUSTOM_FIELD_TABLE });
 
   const openWorkbench = useCallback(
     (row: Quality8DReport) => {
@@ -102,6 +125,8 @@ const EightDReportsPage: React.FC = () => {
         }
       }
 
+      const customFormValues =
+        detail.id != null ? await loadEightDFormFieldValues(detail.id) : {};
       editFormRef.current?.setFieldsValue({
         title: detail.title,
         severity: detail.severity,
@@ -110,11 +135,12 @@ const EightDReportsPage: React.FC = () => {
         owner_name: detail.owner_name ?? undefined,
         due_date: detail.due_date ? dayjs(detail.due_date) : undefined,
         attachments: mapAttachmentsToUploadList(detail.attachments),
+        ...customFormValues,
       });
     } catch (e: unknown) {
       messageApi.error((e as Error)?.message || t('common.loadFailed'));
     }
-  }, [messageApi, t]);
+  }, [loadEightDFormFieldValues, messageApi, t]);
 
   // 旧抽屉深链 ?report_id=：只 replace 到工作台路径（path 变化会自然丢掉 query）。
   // 禁止再 setSearchParams：相对 navigate('?') 会在绝对跳转未落地前抢回列表。
@@ -125,7 +151,9 @@ const EightDReportsPage: React.FC = () => {
   }, [searchParams, navigate]);
 
   const columns: ProColumns<Quality8DReport>[] = useMemo(
-    () => alignProColumns<Quality8DReport>([
+    () => {
+      const customFieldColumns = generateEightDCustomFieldColumns();
+      return alignProColumns<Quality8DReport>([
     {
       title: t('common.createdAt'),
       dataIndex: 'created_at_range',
@@ -324,6 +352,7 @@ const EightDReportsPage: React.FC = () => {
       },
     },
     ...buildDocumentAuditColumns<Quality8DReport>(t),
+    ...customFieldColumns,
     {
       title: t('common.actions'),
       key: 'option',
@@ -398,8 +427,9 @@ const EightDReportsPage: React.FC = () => {
         ];
       },
     },
-  ], GLOBAL_DOC_LIST_FIELD_RANK),
-    [t, canUpdate, canDelete, canClose, canPrint, eightDStatusValueEnum, eightDSeverityValueEnum, messageApi, modalApi, openPrint, openEdit, openWorkbench],
+  ], GLOBAL_DOC_LIST_FIELD_RANK);
+    },
+    [t, canUpdate, canDelete, canClose, canPrint, eightDListCustomFields, eightDStatusValueEnum, eightDSeverityValueEnum, generateEightDCustomFieldColumns, messageApi, modalApi, openPrint, openEdit, openWorkbench],
   );
 
   return (
@@ -418,13 +448,16 @@ const EightDReportsPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           permissionResource={EIGHT_D_RESOURCE}
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.eight-d-reports-width-v3"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.eight-d-reports-cf-v1"
           showAdvancedSearch
           pinnedTabsField={EIGHT_D_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter
           showCreateButton={canCreate}
           createButtonText={t('app.kuaizhizao.eightD.createButton')}
-          onCreate={() => setCreateVisible(true)}
+          onCreate={() => {
+            resetEightDFormFieldValues();
+            setCreateVisible(true);
+          }}
           showDeleteButton={canDelete}
           onDelete={async (keys) => {
             try {
@@ -440,7 +473,7 @@ const EightDReportsPage: React.FC = () => {
           }}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.eightD.deleteConfirmTitle', { count })}
           deleteConfirmDescription={t('app.kuaizhizao.eightD.deleteConfirmDescription')}
-          request={async (params, sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues, meta) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;
             const listParams = resolveEightDReportListParams(searchFormValues, sort);
@@ -449,9 +482,14 @@ const EightDReportsPage: React.FC = () => {
               limit: pageSize,
               ...listParams,
             });
+            const rows = result.items || [];
+            const enriched =
+              meta?.purpose === 'prefetch'
+                ? rows
+                : await enrichEightDRecordsWithCustomFields(rows);
             return {
               success: true,
-              data: result.items || [],
+              data: enriched,
               total: result.total || 0,
             };
           }}
@@ -465,20 +503,26 @@ const EightDReportsPage: React.FC = () => {
           onClose={() => {
             setCreateVisible(false);
             createFormRef.current?.resetFields();
+            resetEightDFormFieldValues();
           }}
           formRef={createFormRef}
           onFinish={async (values) => {
+            const { customData, standardValues } = extractEightDFormValues(values);
             const payload = {
-              ...values,
+              ...standardValues,
               status: 'd0_prepare',
-              owner_id: values.owner_id ?? null,
-              owner_name: values.owner_name ?? null,
-              attachments: normalizeDocumentAttachments(values.attachments),
+              owner_id: standardValues.owner_id ?? null,
+              owner_name: standardValues.owner_name ?? null,
+              attachments: normalizeDocumentAttachments(standardValues.attachments),
             } as Record<string, unknown>;
             delete payload.owner_uuid;
             const created = await qualityImprovementApi.eightD.create(payload);
+            if (created?.id != null) {
+              await saveEightDCustomFieldValues(created.id, customData);
+            }
             messageApi.success(t('app.kuaizhizao.eightD.createSuccess'));
             setCreateVisible(false);
+            resetEightDFormFieldValues();
     actionRef.current?.reload();
             if (created.id) {
               navigate(`${WORKBENCH_PATH}/${created.id}`);
@@ -533,6 +577,11 @@ const EightDReportsPage: React.FC = () => {
             label={t('app.kuaizhizao.eightD.status.d0_prepare')}
             colProps={{ span: 24 }}
           />
+          <CustomFieldsFormSection
+            customFields={eightDFormCustomFields}
+            customFieldValues={eightDFormCustomFieldValues}
+            gridColumns={2}
+          />
           <DocumentAttachmentsField category="quality_8d_report_attachments" />
         </FormModalTemplate>
 
@@ -546,21 +595,25 @@ const EightDReportsPage: React.FC = () => {
             setEditingReportId(undefined);
             editFormRef.current?.resetFields();
             editOwnerRef.current = {};
+            resetEightDFormFieldValues();
           }}
           formRef={editFormRef}
           onFinish={async (values) => {
             if (!editingReportId) return;
+            const { customData, standardValues } = extractEightDFormValues(values);
             await qualityImprovementApi.eightD.update(editingReportId, {
-              title: values.title,
-              severity: values.severity,
-              owner_id: editOwnerRef.current.id ?? values.owner_id ?? null,
-              owner_name: editOwnerRef.current.name ?? values.owner_name ?? null,
-              due_date: values.due_date ? toApiDateTimeString(values.due_date) : null,
-              attachments: normalizeDocumentAttachments(values.attachments),
+              title: standardValues.title,
+              severity: standardValues.severity,
+              owner_id: editOwnerRef.current.id ?? standardValues.owner_id ?? null,
+              owner_name: editOwnerRef.current.name ?? standardValues.owner_name ?? null,
+              due_date: standardValues.due_date ? toApiDateTimeString(standardValues.due_date) : null,
+              attachments: normalizeDocumentAttachments(standardValues.attachments),
             });
+            await saveEightDCustomFieldValues(editingReportId, customData);
             messageApi.success(t('common.saveSuccess'));
             setEditVisible(false);
             setEditingReportId(undefined);
+            resetEightDFormFieldValues();
     actionRef.current?.reload();
           }}
         >
@@ -609,6 +662,11 @@ const EightDReportsPage: React.FC = () => {
           />
           <ProFormText name="owner_name" hidden />
           <ProFormText name="owner_id" hidden />
+          <CustomFieldsFormSection
+            customFields={eightDFormCustomFields}
+            customFieldValues={eightDFormCustomFieldValues}
+            gridColumns={2}
+          />
           <DocumentAttachmentsField category="quality_8d_report_attachments" />
         </FormModalTemplate>
         {PrintModal}

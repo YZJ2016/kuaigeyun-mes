@@ -186,9 +186,11 @@ export const DrawingMoveFolderModal: React.FC<MoveFolderModalProps> = ({
 export function FolderTreeSelectField({
   folders,
   name = 'folderUuid',
+  colProps = { span: 12 },
 }: {
   folders: DrawingFolder[];
   name?: string;
+  colProps?: { span?: number };
 }) {
   const { t } = useTranslation();
   return (
@@ -196,7 +198,7 @@ export function FolderTreeSelectField({
       name={name}
       label={t('app.master-data.drawings.folder')}
       allowClear
-      colProps={{ span: 12 }}
+      colProps={colProps}
       fieldProps={{
         treeData: foldersToTreeSelect(folders),
         treeDefaultExpandAll: true,

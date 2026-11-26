@@ -7,10 +7,12 @@ import { useTranslation } from 'react-i18next';
 import {
   Button,
   Checkbox,
+  Col,
   Empty,
   Input,
   InputNumber,
   Modal,
+  Row,
   Space,
   Spin,
   Table,
@@ -20,6 +22,7 @@ import {
 import type { InventoryPickOption } from './outboundConfirmInventoryOptions';
 import {
   allocateBatchQuantitiesFifo,
+  pickAndAllocateBatchesFifo,
   sumBatchAllocationQty,
   type OutboundBatchAllocation,
 } from './outboundBatchAllocation';
@@ -35,6 +38,8 @@ export type OutboundBatchAllocationFieldProps = {
   loading?: boolean;
   disabled?: boolean;
   materialLabel?: string;
+  /** 无在库批号时允许手工录入（须组织开启允许负库存出库） */
+  allowManualWithoutStock?: boolean;
 };
 
 const OutboundBatchAllocationField: React.FC<OutboundBatchAllocationFieldProps> = ({
@@ -45,12 +50,14 @@ const OutboundBatchAllocationField: React.FC<OutboundBatchAllocationFieldProps> 
   loading = false,
   disabled = false,
   materialLabel,
+  allowManualWithoutStock = false,
 }) => {
   const { t } = useTranslation();
   const selected = Array.isArray(value) ? value : [];
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<OutboundBatchAllocation[]>([]);
   const [keyword, setKeyword] = useState('');
+  const [manualBatchNo, setManualBatchNo] = useState('');
 
   const selectedNos = useMemo(
     () => draft.map((a) => a.batchNo).filter(Boolean),
@@ -75,9 +82,13 @@ const OutboundBatchAllocationField: React.FC<OutboundBatchAllocationFieldProps> 
   const target = Number(totalQuantity) || 0;
   const sumMismatch = target > 0 && Math.abs(draftSum - target) > 1e-6;
 
+  const manualMode = allowManualWithoutStock && !options.length;
+
   const openPicker = () => {
     if (disabled || loading) return;
-    setDraft(selected.length ? selected.map((a) => ({ ...a })) : []);
+    const nextDraft = selected.length ? selected.map((a) => ({ ...a })) : [];
+    setDraft(nextDraft);
+    setManualBatchNo(nextDraft.length === 1 ? String(nextDraft[0].batchNo ?? '') : '');
     setKeyword('');
     setOpen(true);
   };
@@ -111,14 +122,7 @@ const OutboundBatchAllocationField: React.FC<OutboundBatchAllocationFieldProps> 
   };
 
   const redistributeFifo = () => {
-    setDraft((prev) =>
-      allocateBatchQuantitiesFifo(
-        target,
-        prev.map((a) => a.batchNo),
-        options,
-        [],
-      ),
-    );
+    setDraft(pickAndAllocateBatchesFifo(target, options));
   };
 
   const clearDraft = () => setDraft([]);
@@ -173,24 +177,55 @@ const OutboundBatchAllocationField: React.FC<OutboundBatchAllocationFieldProps> 
               qty: formatQuantity(target),
             })}
           </Typography.Text>
-          <Space wrap>
-            <Input
-              allowClear
-              size="small"
-              style={{ width: 220 }}
-              placeholder={t('app.kuaizhizao.warehouseOutbound.confirm.batchPicker.searchPlaceholder')}
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-            />
-            <Button size="small" onClick={redistributeFifo} disabled={!selectedNos.length || !(target > 0)}>
-              {t('app.kuaizhizao.warehouseOutbound.confirm.batchPicker.autoAllocate')}
-            </Button>
-            <Button size="small" onClick={clearDraft} disabled={!draft.length}>
-              {t('app.kuaizhizao.warehouseOutbound.confirm.batchPicker.clear')}
-            </Button>
-          </Space>
+          <Row gutter={8}>
+            <Col span={12}>
+              <Input
+                allowClear
+                style={{ width: '100%' }}
+                placeholder={t(
+                  'app.kuaizhizao.warehouseOutbound.confirm.batchPicker.searchPlaceholder',
+                )}
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+              />
+            </Col>
+            <Col span={6}>
+              <Button
+                block
+                onClick={redistributeFifo}
+                disabled={!options.length || !(target > 0)}
+              >
+                {t('app.kuaizhizao.warehouseOutbound.confirm.batchPicker.autoAllocate')}
+              </Button>
+            </Col>
+            <Col span={6}>
+              <Button block danger onClick={clearDraft} disabled={!draft.length}>
+                {t('app.kuaizhizao.warehouseOutbound.confirm.batchPicker.clear')}
+              </Button>
+            </Col>
+          </Row>
           <Spin spinning={loading}>
-            {!filteredOptions.length ? (
+            {manualMode ? (
+              <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+                <Typography.Text type="secondary">
+                  {t('app.kuaizhizao.warehouseOutbound.confirm.batchPicker.manualWithoutStockHint')}
+                </Typography.Text>
+                <Input
+                  allowClear
+                  style={{ width: '100%' }}
+                  placeholder={t('app.kuaizhizao.warehouseOutbound.col.batchNo')}
+                  value={manualBatchNo}
+                  onChange={(e) => {
+                    const bn = e.target.value;
+                    setManualBatchNo(bn);
+                    const trimmed = bn.trim();
+                    setDraft(
+                      trimmed && target > 0 ? [{ batchNo: trimmed, quantity: target }] : [],
+                    );
+                  }}
+                />
+              </Space>
+            ) : !filteredOptions.length ? (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={t('app.kuaizhizao.warehouseOutbound.confirm.noBatchAvailable')}

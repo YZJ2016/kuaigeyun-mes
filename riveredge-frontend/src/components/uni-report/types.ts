@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
+import type { TableProps } from 'antd';
 /** 快报表 ReportConfigSchema.extra.uni_report 段 */
 export interface UniReportExtraConfig {
   templateId?: string;
@@ -152,6 +153,8 @@ export type UniReportProps<T = Record<string, unknown>> = {
   periodFilterLabel?: ReactNode;
   /** 列头排序/筛选（默认开启 page 模式） */
   enableColumnQuery?: boolean;
+  /** 行展开（如对账报表查看订单明细） */
+  expandable?: TableProps<Record<string, unknown>>['expandable'];
 };
 
 export type SummaryFieldMeta = {

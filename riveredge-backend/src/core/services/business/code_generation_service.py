@@ -205,6 +205,7 @@ def _render_prefix_before_auto_counter(
         elif ct == "date":
             format_type = comp.get("format_type", "preset")
             from core.services.code_rule.code_rule_component_service import (
+                format_code_rule_date,
                 resolve_code_render_datetime,
             )
 
@@ -220,13 +221,13 @@ def _render_prefix_before_auto_counter(
                     "YY": "%y",
                 }
                 strftime_format = format_map.get(preset_format, "%Y%m%d")
-                parts.append(now.strftime(strftime_format))
+                parts.append(format_code_rule_date(now, strftime_format))
             else:
                 custom_format = comp.get("custom_format", "yMd")
                 strftime_format = custom_format.replace("yyyy", "%Y").replace("yy", "%y").replace("y", "%Y")
                 strftime_format = strftime_format.replace("MM", "%m").replace("M", "%m")
                 strftime_format = strftime_format.replace("dd", "%d").replace("d", "%d")
-                parts.append(now.strftime(strftime_format))
+                parts.append(format_code_rule_date(now, strftime_format))
     return "".join(parts)
 
 

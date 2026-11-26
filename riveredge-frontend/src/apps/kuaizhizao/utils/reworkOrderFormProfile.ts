@@ -19,6 +19,8 @@ export type ReworkProfileSection = {
   label: string;
   sort?: number;
   when_path_in?: string[];
+  bind_node_key?: string;
+  sub_section_key?: string;
   fields: string[];
 };
 
@@ -151,12 +153,27 @@ export function sortedFormSections(profile: ReworkOrderFormProfile | null): Rewo
     }));
 }
 
+export function sectionsForNode(
+  profile: ReworkOrderFormProfile | null,
+  pathType: string | null | undefined,
+  nodeKey: string,
+): ReworkProfileSection[] {
+  const node = String(nodeKey || '').trim();
+  if (!node) return [];
+  return sectionsForPath(profile, pathType).filter((section) => {
+    const bind = section.bind_node_key;
+    if (!bind || bind !== node) return false;
+    return true;
+  });
+}
+
 export function sectionsForPath(
   profile: ReworkOrderFormProfile | null,
   pathType?: string | null,
 ): ReworkProfileSection[] {
   const normalized = pathType ? String(pathType).toLowerCase() : '';
   return sortedFormSections(profile).filter((section) => {
+    if (section.bind_node_key) return false;
     if (!section.when_path_in?.length) return true;
     if (!normalized) return false;
     return section.when_path_in.includes(normalized);

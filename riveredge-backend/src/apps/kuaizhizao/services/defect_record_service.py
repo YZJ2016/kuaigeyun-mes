@@ -106,11 +106,13 @@ class DefectRecordService(AppBaseService[DefectRecord]):
                 await defect_record.save()
 
                 if not self._accept_inbound_already_linked(defect_record):
-                    wh_id, _ = await self._resolve_defect_stock_warehouse(
-                        tenant_id,
-                        defect_record,
-                    )
-                    pending_inbound_warehouse_id = int(wh_id)
+                    # 委外来料让步不生成入库单，无需解析放行仓库
+                    if not await self._is_outsource_sourced_defect(tenant_id, defect_record):
+                        wh_id, _ = await self._resolve_defect_stock_warehouse(
+                            tenant_id,
+                            defect_record,
+                        )
+                        pending_inbound_warehouse_id = int(wh_id)
 
                 await self._close_linked_quality_exceptions_after_disposition(
                     defect_record, approved_by
@@ -574,7 +576,12 @@ class DefectRecordService(AppBaseService[DefectRecord]):
 
             self._validate_disposition_choice(defect_record, disposition)
 
-            if disposition == "downgrade":
+            # 委外来料的不良品仅作确认门禁，不执行库存动作，不要求仓库/目标物料
+            outsource_sourced = await self._is_outsource_sourced_defect(
+                tenant_id, defect_record
+            )
+
+            if disposition == "downgrade" and not outsource_sourced:
                 resolved_material_id = downgrade_material_id or defect_record.downgrade_material_id
                 resolved_warehouse_id = downgrade_warehouse_id or defect_record.downgrade_warehouse_id
                 if not resolved_material_id or not resolved_warehouse_id:
@@ -590,10 +597,10 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             if disposition == "scrap" and not stock_warehouse_id:
                 raise ValidationError("报废处置必须指定报废入库仓库")
 
-            if disposition == "accept" and not stock_warehouse_id:
+            if disposition == "accept" and not stock_warehouse_id and not outsource_sourced:
                 raise ValidationError("让步接收必须指定放行仓库")
 
-            if disposition == "quarantine" and not quarantine_warehouse_id:
+            if disposition == "quarantine" and not quarantine_warehouse_id and not outsource_sourced:
                 raise ValidationError("隔离处置必须指定隔离仓库")
 
             user_info = await self.get_user_info(updated_by)
@@ -859,6 +866,15 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         disposition = defect_record.disposition
         self._validate_disposition_choice(defect_record, disposition)
 
+        # 委外来料的不良品：委外收货确认时库存已过账，处置仅作确认门禁，
+        # 不再执行入库/隔离/降级/退货等库存动作（守卫前置，也不要求选择仓库）
+        if (
+            disposition in ("accept", "quarantine", "downgrade", "return")
+            and await self._is_outsource_sourced_defect(tenant_id, defect_record)
+        ):
+            await self._mark_disposition_processed(defect_record, updated_by)
+            return await DefectRecord.get(id=defect_id)
+
         if disposition == "scrap" and not stock_warehouse_id:
             raise ValidationError("报废处置必须指定报废入库仓库")
         if disposition == "accept" and not stock_warehouse_id:
@@ -1054,6 +1070,29 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             defect_record.finished_goods_receipt_id
             or defect_record.accept_purchase_receipt_id
             or defect_record.other_inbound_id
+        )
+
+    async def _is_outsource_sourced_defect(
+        self,
+        tenant_id: int,
+        defect_record: DefectRecord,
+    ) -> bool:
+        """不良品关联的检验单来自委外收货时返回 True。
+
+        委外收货确认时库存已过账，处置仅作确认门禁，
+        不再执行入库/隔离/降级/退货等库存动作，也不要求选择仓库。
+        """
+        if not defect_record.incoming_inspection_id:
+            return False
+        from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+
+        inspection = await IncomingInspection.get_or_none(
+            tenant_id=tenant_id,
+            id=int(defect_record.incoming_inspection_id),
+            deleted_at__isnull=True,
+        )
+        return bool(
+            inspection and getattr(inspection, "outsource_material_receipt_id", None)
         )
 
     async def _resolve_accept_material_and_warehouse(

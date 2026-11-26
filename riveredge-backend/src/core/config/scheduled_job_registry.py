@@ -80,6 +80,15 @@ SCHEDULED_JOB_PRESETS: List[ScheduledJobPreset] = [
         default_cron="30 2 * * *",
     ),
     ScheduledJobPreset(
+        code="kuaizhizao.warehouse_kingdee_alignment",
+        name="仓储单据金蝶对齐检查",
+        description="检查已过账仓储单是否已关联金蝶、撤回是否两侧一致；有红灯时即时库存同步会拒绝覆盖本地批次",
+        module="warehouse",
+        required_app="kuaizhizao",
+        default_cron="15 * * * *",
+        default_active=True,
+    ),
+    ScheduledJobPreset(
         code="kuaizhizao.external_master_data_sync",
         name="外部主数据定时同步",
         description="按绑定配置同步外部单位、物料、客户、订单等主数据",

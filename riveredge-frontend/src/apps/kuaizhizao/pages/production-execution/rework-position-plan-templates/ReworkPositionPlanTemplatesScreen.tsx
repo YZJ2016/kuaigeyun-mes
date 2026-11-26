@@ -340,10 +340,10 @@ const ReworkPositionPlanTemplatesPage: React.FC = () => {
         rowKey="id"
         columns={columns}
         permissionResource={RESOURCE}
-        columnPersistenceId="apps.kuaizhizao.pages.production-execution.rework-position-plan-templates-v3"
+        columnPersistenceId="apps.kuaizhizao.pages.production-execution.rework-position-plan-templates-v4"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
-        enableRowSelection
+        enableRowSelection={perms.canDelete}
         selectedRowKeys={selectedRowKeys}
         onSelectedRowKeysChange={setSelectedRowKeys}
         onTableDataChange={(rows) => {
@@ -352,6 +352,19 @@ const ReworkPositionPlanTemplatesPage: React.FC = () => {
         showCreateButton
         createButtonText={t('app.kuaizhizao.reworkPositionPlanTemplate.createButton')}
         onCreate={openCreate}
+        showDeleteButton={perms.canDelete}
+        deleteButtonText={t('common.delete')}
+        onDelete={async (keys) => {
+          for (const key of keys) {
+            await reworkPositionPlanTemplateApi.delete(String(key));
+          }
+          messageApi.success(
+            t('app.kuaizhizao.reworkPositionPlanTemplate.deleteSuccess'),
+          );
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        }}
+        deleteConfirmTitle={(count) => t('common.confirmBatchDeleteContent', { count })}
         request={async (params, _sort, _filter, searchFormValues) => {
           const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
           const templateName = pickSearchString(searchFormValues, 'template_name');

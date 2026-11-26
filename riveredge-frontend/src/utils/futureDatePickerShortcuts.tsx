@@ -67,18 +67,19 @@ function renderShortcutFooter(
 export function buildFutureDateShortcutPickerProps(options: {
   getForm: () => FormDateAccessor | null | undefined;
   baseFieldName?: string;
+  allowPastDates?: boolean;
   t: (key: string) => string;
   onApply: (date: Dayjs) => void;
   fieldProps?: DatePickerProps;
 }): DatePickerProps {
-  const { getForm, baseFieldName, t, onApply, fieldProps } = options;
+  const { getForm, baseFieldName, allowPastDates, t, onApply, fieldProps } = options;
   return {
     showToday: false,
     ...fieldProps,
     style: { width: '100%', ...fieldProps?.style },
     disabledDate: (current) => {
       if (fieldProps?.disabledDate?.(current)) return true;
-      if (!baseFieldName || !current) return false;
+      if (allowPastDates || !baseFieldName || !current) return false;
       const base = coerceDayjsBase(getForm()?.getFieldValue?.(baseFieldName));
       if (!base) return false;
       return current.startOf('day').isBefore(base, 'day');
@@ -93,14 +94,16 @@ export function buildFutureDateShortcutFieldProps(options: {
   getForm: () => FormDateAccessor | null | undefined;
   fieldName: string;
   baseFieldName?: string;
+  allowPastDates?: boolean;
   t: (key: string) => string;
   fieldProps?: DatePickerProps;
   onApply?: (date: Dayjs) => void;
 }): DatePickerProps {
-  const { getForm, fieldName, baseFieldName, t, fieldProps, onApply } = options;
+  const { getForm, fieldName, baseFieldName, allowPastDates, t, fieldProps, onApply } = options;
   return buildFutureDateShortcutPickerProps({
     getForm,
     baseFieldName,
+    allowPastDates,
     t,
     fieldProps,
     onApply:
@@ -119,6 +122,7 @@ export function buildFutureDateShortcutFieldProps(options: {
 export type FutureDatePickerProps = Omit<DatePickerProps, 'renderExtraFooter'> & {
   getForm: () => FormDateAccessor | null | undefined;
   baseFieldName?: string;
+  allowPastDates?: boolean;
   t: (key: string) => string;
   onApply?: (date: Dayjs) => void;
   fieldName?: string;
@@ -155,6 +159,7 @@ function applyShortcutDate(
 export const FutureDatePicker: React.FC<FutureDatePickerProps> = ({
   getForm,
   baseFieldName,
+  allowPastDates,
   t,
   onApply,
   fieldName,
@@ -165,6 +170,7 @@ export const FutureDatePicker: React.FC<FutureDatePickerProps> = ({
   const shortcutProps = buildFutureDateShortcutPickerProps({
     getForm,
     baseFieldName,
+    allowPastDates,
     t,
     fieldProps: pickerProps,
     onApply: (date) =>

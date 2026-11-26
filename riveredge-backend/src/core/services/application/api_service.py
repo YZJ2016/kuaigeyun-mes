@@ -5,6 +5,7 @@
 """
 
 import httpx  # 仅用于异常类型
+import re
 import time
 from typing import Dict, Any, Optional, List
 
@@ -16,13 +17,26 @@ from tortoise.exceptions import IntegrityError
 from core.models.api import API
 from core.models.integration_config import IntegrationConfig
 from core.models.resource_category import RESOURCE_TYPE_API
-from core.schemas.api import APICreate, APIUpdate, APITestRequest, APIResponse
+from core.schemas.api import (
+    APIBulkUpsertFailedItem,
+    APIBulkUpsertResponse,
+    APICreate,
+    APIUpdate,
+    APITestRequest,
+    APIResponse,
+)
 from core.services.resource.resource_category_service import ResourceCategoryService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.config.infra_config import infra_settings as settings
 from core.utils.timezone_utils import resolve_business_datetime
 from core.config.integration_type_spec import is_business_system_connector_type
 from core.services.integration.connector_request import resolve_connector_request
+
+
+def normalize_api_code(raw: str) -> str:
+    """与前端 normalizeApiCode 对齐：仅保留 a-z0-9_，小写，最长 50。"""
+    text = re.sub(r"[^a-zA-Z0-9_]", "_", str(raw or ""))
+    return text.lower()[:50]
 
 
 class APIService:
@@ -121,8 +135,11 @@ class APIService:
                 "response_format",
                 "response_example",
                 "source_type_conversion_map",
+                "outbound_field_mappings",
                 "is_active",
                 "is_system",
+                "related_document_code",
+                "api_interface_type",
                 "created_at",
                 "updated_at",
             )
@@ -133,6 +150,127 @@ class APIService:
         payload["category_uuid"] = category_uuid
         payload["category_name"] = category_name
         return APIResponse(**payload)
+
+    @staticmethod
+    def list_related_document_options():
+        from core.config.api_library_contract import API_RELATED_DOCUMENT_SPECS
+        from core.schemas.api import APIRelatedDocumentOption
+
+        return [
+            APIRelatedDocumentOption(code=code, label=label)
+            for code, label in API_RELATED_DOCUMENT_SPECS
+        ]
+
+    async def _backfill_kingdee_preset_api_attrs(
+        self,
+        existing: API,
+        preset: Dict[str, Any],
+    ) -> None:
+        from core.config.api_library_contract import (
+            infer_related_document_from_kingdee_api,
+            is_kingdee_standard_library_api,
+        )
+
+        preset_path = str(preset.get("path") or "")
+        inferred = infer_related_document_from_kingdee_api(
+            path=preset_path,
+            code=str(existing.code or ""),
+            name=str(preset.get("name") or existing.name or ""),
+            preset_code_suffix=str(preset.get("code_suffix") or ""),
+        )
+        update_fields: list[str] = []
+        if inferred and not str(existing.related_document_code or "").strip():
+            existing.related_document_code = inferred
+            update_fields.append("related_document_code")
+        if is_kingdee_standard_library_api(
+            path=preset_path or str(existing.path or ""),
+            code=str(existing.code or ""),
+            name=str(preset.get("name") or existing.name or ""),
+        ):
+            if str(existing.api_interface_type or "custom").strip().lower() != "standard":
+                existing.api_interface_type = "standard"
+                update_fields.append("api_interface_type")
+        if update_fields:
+            update_fields.append("updated_at")
+            await existing.save(update_fields=update_fields)
+
+    async def get_api_related_document_group_counts(
+        self,
+        tenant_id: int,
+    ) -> List[Dict[str, Any]]:
+        """按分类 × 关联单据统计接口数量（左栏二级菜单）。"""
+        from uuid import UUID
+
+        from core.models.resource_category import ResourceCategory, RESOURCE_TYPE_API
+
+        rows = await API.filter(tenant_id=tenant_id, deleted_at__isnull=True).values(
+            "category_id",
+            "related_document_code",
+        )
+        tally: Dict[tuple[Optional[int], str], int] = {}
+        for row in rows:
+            cat_id = row.get("category_id")
+            doc = str(row.get("related_document_code") or "").strip()
+            tally[(cat_id, doc)] = tally.get((cat_id, doc), 0) + 1
+
+        cat_ids = {cat for cat, _ in tally if cat is not None}
+        id_to_uuid: Dict[int, str] = {}
+        if cat_ids:
+            cats = await ResourceCategory.filter(
+                tenant_id=tenant_id,
+                resource_type=RESOURCE_TYPE_API,
+                id__in=list(cat_ids),
+            ).values("id", "uuid")
+            id_to_uuid = {int(c["id"]): str(c["uuid"]) for c in cats}
+
+        items: List[Dict[str, Any]] = []
+        for (cat_id, doc), count in tally.items():
+            items.append(
+                {
+                    "category_uuid": UUID(id_to_uuid[cat_id]) if cat_id in id_to_uuid else None,
+                    "related_document_code": doc or None,
+                    "count": int(count),
+                }
+            )
+        return items
+
+    async def backfill_api_library_metadata(self, tenant_id: int) -> Dict[str, int]:
+        """回填苍穹接口库：关联单据 + 标准API（已有值不覆盖关联单据）。"""
+        from core.config.api_library_contract import (
+            infer_related_document_from_kingdee_api,
+            is_kingdee_standard_library_api,
+        )
+        from core.utils.timezone_utils import resolve_business_datetime
+
+        rows = await API.filter(tenant_id=tenant_id, deleted_at__isnull=True).all()
+        updated = 0
+        now = resolve_business_datetime()
+        for api in rows:
+            if not is_kingdee_standard_library_api(
+                path=str(api.path or ""),
+                code=str(api.code or ""),
+                name=str(api.name or ""),
+            ):
+                continue
+            inferred = infer_related_document_from_kingdee_api(
+                path=str(api.path or ""),
+                code=str(api.code or ""),
+                name=str(api.name or ""),
+            )
+            fields: list[str] = []
+            if inferred and not str(api.related_document_code or "").strip():
+                api.related_document_code = inferred
+                fields.append("related_document_code")
+            if str(api.api_interface_type or "custom").strip().lower() != "standard":
+                api.api_interface_type = "standard"
+                fields.append("api_interface_type")
+            if not fields:
+                continue
+            api.updated_at = now
+            fields.append("updated_at")
+            await api.save(update_fields=fields)
+            updated += 1
+        return {"scanned": len(rows), "updated": updated}
 
     async def create_api(
         self,
@@ -192,6 +330,226 @@ class APIService:
         if integration_config_id or category_id:
             await api.fetch_related("integration_config", "category")
         return api
+
+    async def bulk_upsert_apis(
+        self,
+        tenant_id: int,
+        items: List[APICreate],
+    ) -> APIBulkUpsertResponse:
+        """
+        按 code 批量 upsert（导入备份还原）。
+
+        - 同批内预取已有接口 / 连接器 / 分类，避免 N+1
+        - 命中已有（含规范化 code 相同）则更新且不改原 code
+        - 新建走硬创建（先清同 code 软删残留）
+        - 单条失败不回滚整批
+        """
+        requested = list(items or [])
+        if not requested:
+            return APIBulkUpsertResponse(
+                created_count=0,
+                updated_count=0,
+                failed_count=0,
+                requested_count=0,
+                failed_items=[],
+            )
+        if len(requested) > 200:
+            raise ValidationError("单次最多导入 200 条接口")
+
+        existing_rows = await API.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).all()
+        by_code: Dict[str, API] = {}
+        by_norm: Dict[str, API] = {}
+        for row in existing_rows:
+            code = str(row.code or "").strip()
+            if not code:
+                continue
+            by_code[code] = row
+            norm = normalize_api_code(code)
+            if norm:
+                by_norm[norm] = row
+
+        conn_uuids = {
+            item.connection_uuid
+            for item in requested
+            if getattr(item, "connection_uuid", None) is not None
+        }
+        connectors_by_uuid: Dict[str, IntegrationConfig] = {}
+        if conn_uuids:
+            connectors = await IntegrationConfig.filter(
+                tenant_id=tenant_id,
+                uuid__in=[str(u) for u in conn_uuids],
+                deleted_at__isnull=True,
+            ).all()
+            connectors_by_uuid = {str(c.uuid): c for c in connectors}
+
+        cat_uuids = {
+            item.category_uuid
+            for item in requested
+            if getattr(item, "category_uuid", None) is not None
+        }
+        category_id_by_uuid: Dict[str, int] = {}
+        cat_service = ResourceCategoryService()
+        for cu in cat_uuids:
+            try:
+                category_id_by_uuid[str(cu)] = await cat_service.resolve_category_id(
+                    tenant_id,
+                    RESOURCE_TYPE_API,
+                    cu,
+                )
+            except Exception:
+                # 单条解析失败时在行级记失败
+                pass
+
+        created_ids: set[int] = set()
+        updated_ids: set[int] = set()
+        failed_items: List[APIBulkUpsertFailedItem] = []
+        to_update: Dict[int, API] = {}
+        now = resolve_business_datetime()
+
+        update_field_names = [
+            "name",
+            "description",
+            "path",
+            "method",
+            "sync_direction",
+            "request_headers",
+            "request_params",
+            "request_body",
+            "response_format",
+            "response_example",
+            "source_type_conversion_map",
+            "outbound_field_mappings",
+            "is_active",
+            "integration_config_id",
+            "category_id",
+            "related_document_code",
+            "api_interface_type",
+            "updated_at",
+        ]
+
+        def _fail(index: int, code: Optional[str], reason: str) -> None:
+            failed_items.append(
+                APIBulkUpsertFailedItem(index=index, code=code, reason=reason)
+            )
+
+        def _resolve_existing(code_raw: str, code_norm: str) -> Optional[API]:
+            return by_code.get(code_raw) or by_norm.get(code_norm)
+
+        for index, item in enumerate(requested):
+            code_raw = str(item.code or "").strip()
+            name = str(item.name or "").strip()
+            path = str(item.path or "").strip()
+            method = str(item.method or "").strip().upper()
+            if not name or not code_raw or not path or not method:
+                _fail(index, code_raw or None, "缺少名称/代码/路径/请求方法")
+                continue
+            code_norm = normalize_api_code(code_raw)
+            if not code_norm:
+                _fail(index, code_raw, "接口代码无效")
+                continue
+
+            integration_config_id = None
+            if item.connection_uuid is not None:
+                conn = connectors_by_uuid.get(str(item.connection_uuid))
+                if not conn:
+                    _fail(index, code_raw, f"应用连接器不存在: {item.connection_uuid}")
+                    continue
+                if not is_business_system_connector_type(conn.type):
+                    _fail(index, code_raw, "仅支持绑定业务系统类应用连接器")
+                    continue
+                integration_config_id = conn.id
+
+            category_id = None
+            if item.category_uuid is not None:
+                category_id = category_id_by_uuid.get(str(item.category_uuid))
+                if category_id is None:
+                    _fail(index, code_raw, f"分类不存在: {item.category_uuid}")
+                    continue
+
+            # 同批内重复 code：后行覆盖前行（last-wins），不报失败
+            existing = _resolve_existing(code_raw, code_norm)
+            try:
+                if existing:
+                    existing.name = name
+                    existing.description = item.description
+                    existing.path = path
+                    existing.method = method
+                    existing.sync_direction = item.sync_direction or "pull"
+                    existing.request_headers = item.request_headers
+                    existing.request_params = item.request_params
+                    existing.request_body = item.request_body
+                    existing.response_format = item.response_format
+                    existing.response_example = item.response_example
+                    existing.source_type_conversion_map = item.source_type_conversion_map
+                    existing.outbound_field_mappings = item.outbound_field_mappings
+                    existing.is_active = True if item.is_active is None else bool(item.is_active)
+                    existing.related_document_code = item.related_document_code
+                    if item.api_interface_type is not None:
+                        existing.api_interface_type = item.api_interface_type
+                    existing.integration_config_id = integration_config_id
+                    existing.category_id = category_id
+                    existing.updated_at = now
+                    eid = int(existing.id)
+                    to_update[eid] = existing
+                    by_code[str(existing.code)] = existing
+                    by_norm[normalize_api_code(str(existing.code))] = existing
+                    # 本批刚新建的，仍计 create；否则计 update
+                    if eid not in created_ids:
+                        updated_ids.add(eid)
+                else:
+                    fields = {
+                        "name": name,
+                        "description": item.description,
+                        "path": path,
+                        "method": method,
+                        "sync_direction": item.sync_direction or "pull",
+                        "request_headers": item.request_headers,
+                        "request_params": item.request_params,
+                        "request_body": item.request_body,
+                        "response_format": item.response_format,
+                        "response_example": item.response_example,
+                        "source_type_conversion_map": item.source_type_conversion_map,
+                        "outbound_field_mappings": item.outbound_field_mappings,
+                        "is_active": True if item.is_active is None else bool(item.is_active),
+                        "is_system": bool(item.is_system) if item.is_system is not None else False,
+                        "related_document_code": item.related_document_code,
+                        "api_interface_type": item.api_interface_type or "custom",
+                        "integration_config_id": integration_config_id,
+                        "category_id": category_id,
+                    }
+                    created = await self._create_api(
+                        tenant_id,
+                        code=code_norm,
+                        **fields,
+                    )
+                    by_code[str(created.code)] = created
+                    by_norm[normalize_api_code(str(created.code))] = created
+                    created_ids.add(int(created.id))
+            except ValidationError as exc:
+                _fail(index, code_raw, str(exc))
+            except IntegrityError as exc:
+                _fail(index, code_raw, f"写入冲突: {exc}")
+            except Exception as exc:
+                _fail(index, code_raw, str(exc) or "写入失败")
+
+        if to_update:
+            # 仅 bulk_update「库内已有」的行；本批新建的已在 create 时写完
+            update_rows = [
+                row for eid, row in to_update.items() if eid not in created_ids
+            ]
+            if update_rows:
+                await API.bulk_update(update_rows, fields=update_field_names)
+
+        return APIBulkUpsertResponse(
+            created_count=len(created_ids),
+            updated_count=len(updated_ids),
+            failed_count=len(failed_items),
+            requested_count=len(requested),
+            failed_items=failed_items,
+        )
 
     async def ensure_connector_api_presets(
         self,
@@ -333,6 +691,21 @@ class APIService:
                     )
                     upgraded.append(code)
                 elif (
+                    code_suffix == MATERIAL_GROUP_PRESET_CODE_SUFFIX
+                    and str(existing.description or "").strip() != str(preset["description"] or "").strip()
+                    and (
+                        "勿发" in str(existing.description or "")
+                        or "勿用" in str(existing.description or "")
+                        or "UN_MaterialGroup" in str(existing.description or "")
+                        or "NeedReturnData" in str(existing.description or "")
+                        or "parameters" in str(existing.description or "").lower()
+                    )
+                ):
+                    # 结构已正确时只把历史冗长备注收成与其它星空预置同风格的短介绍
+                    existing.description = preset["description"]
+                    await existing.save(update_fields=["description", "updated_at"])
+                    upgraded.append(code)
+                elif (
                     code_suffix == WAREHOUSE_PRESET_CODE_SUFFIX
                     and master_data_scope_preset_needs_upgrade(existing.request_body)
                 ):
@@ -383,6 +756,7 @@ class APIService:
                     request_body=preset["request_body"],
                     response_format=None,
                     response_example=None,
+                    outbound_field_mappings=preset.get("outbound_field_mappings"),
                     is_active=True,
                     is_system=False,
                     integration_config_id=integration.id,
@@ -432,9 +806,12 @@ class APIService:
             MATERIAL_PRESET_CODE_SUFFIX,
             CUSTOMER_GETCUSTOMER_PRESET_CODE_SUFFIX,
             MEASUREUNITS_PRESET_CODE_SUFFIX,
+            MULTIMEASUREUNIT_PRESET_CODE_SUFFIX,
             SUPPLIER_GETSUPPLIER_PRESET_CODE_SUFFIX,
             SUPPLIER_PRESET_CODE_SUFFIX,
             WAREHOUSE_PRESET_CODE_SUFFIX,
+            LOCATION_PRESET_CODE_SUFFIX,
+            WARELOCAREFERENCE_PRESET_CODE_SUFFIX,
             build_material_group_goods_class_preset,
             IM_PURINBILL_ADD2_PRESET_CODE_SUFFIX,
             inventory_balance_preset_needs_upgrade,
@@ -444,16 +821,25 @@ class APIService:
             kingdee_supplier_api_upgrade_fields,
             kingdee_warehouse_api_upgrade_fields,
             list_kingdee_cosmic_api_presets,
+            location_preset_needs_upgrade,
+            warelocareference_preset_needs_upgrade,
             material_group_preset_needs_upgrade,
             material_preset_needs_upgrade,
             measureunits_preset_needs_upgrade,
+            multimeasureunit_preset_needs_upgrade,
+            kingdee_multimeasureunit_api_upgrade_fields,
             outbound_preset_sync_direction_needs_upgrade,
             customer_getcustomer_preset_needs_upgrade,
             resolve_preset_api_code,
             resolve_preset_sync_direction,
             supplier_getsupplier_preset_needs_upgrade,
             supplier_preset_needs_upgrade,
+            kingdee_location_api_upgrade_fields,
+            kingdee_warelocareference_api_upgrade_fields,
             warehouse_preset_needs_upgrade,
+        )
+        from core.services.integration.kingdee_warehouse_document_push_config import (
+            purinbill_save_sample_has_real_codes,
         )
         from core.services.integration.kingdee_cosmic_mfg_api_presets import (
             list_kingdee_cosmic_mfg_api_presets,
@@ -517,6 +903,60 @@ class APIService:
                     )
                     upgraded.append(code)
                 elif (
+                    code_suffix == LOCATION_PRESET_CODE_SUFFIX
+                    and location_preset_needs_upgrade(
+                        existing.path,
+                        existing.request_body,
+                        existing.method,
+                    )
+                ):
+                    fields = kingdee_location_api_upgrade_fields()
+                    existing.path = fields["path"]
+                    existing.name = fields["name"]
+                    existing.description = fields["description"]
+                    existing.method = fields.get("method") or existing.method or "POST"
+                    existing.request_params = fields.get("request_params")
+                    existing.request_body = fields.get("request_body") or {}
+                    await existing.save(
+                        update_fields=[
+                            "path",
+                            "name",
+                            "description",
+                            "method",
+                            "request_params",
+                            "request_body",
+                            "updated_at",
+                        ]
+                    )
+                    upgraded.append(code)
+                elif (
+                    code_suffix == WARELOCAREFERENCE_PRESET_CODE_SUFFIX
+                    and warelocareference_preset_needs_upgrade(
+                        existing.path,
+                        existing.request_body,
+                        existing.method,
+                    )
+                ):
+                    fields = kingdee_warelocareference_api_upgrade_fields()
+                    existing.path = fields["path"]
+                    existing.name = fields["name"]
+                    existing.description = fields["description"]
+                    existing.method = fields.get("method") or existing.method or "POST"
+                    existing.request_params = fields.get("request_params")
+                    existing.request_body = fields.get("request_body") or {}
+                    await existing.save(
+                        update_fields=[
+                            "path",
+                            "name",
+                            "description",
+                            "method",
+                            "request_params",
+                            "request_body",
+                            "updated_at",
+                        ]
+                    )
+                    upgraded.append(code)
+                elif (
                     code_suffix == INVENTORY_BALANCE_PRESET_CODE_SUFFIX
                     and inventory_balance_preset_needs_upgrade(
                         existing.path,
@@ -552,6 +992,21 @@ class APIService:
                     await existing.save(update_fields=["sync_direction", "updated_at"])
                     upgraded.append(code)
                 elif (
+                    preset.get("outbound_field_mappings")
+                    and not getattr(existing, "outbound_field_mappings", None)
+                ):
+                    existing.outbound_field_mappings = preset.get("outbound_field_mappings")
+                    if str(getattr(existing, "sync_direction", "") or "").strip().lower() != "push":
+                        existing.sync_direction = resolve_preset_sync_direction(preset)
+                    await existing.save(
+                        update_fields=[
+                            "outbound_field_mappings",
+                            "sync_direction",
+                            "updated_at",
+                        ]
+                    )
+                    upgraded.append(code)
+                elif (
                     code_suffix == IM_PURINBILL_ADD2_PRESET_CODE_SUFFIX
                     and im_purinbill_add2_preset_needs_upgrade(existing.name, existing.path)
                 ):
@@ -560,7 +1015,9 @@ class APIService:
                     existing.path = preset["path"]
                     existing.method = preset.get("method") or existing.method or "POST"
                     existing.sync_direction = "push"
-                    existing.request_body = preset.get("request_body") or existing.request_body
+                    # 名称/路径升级不得把客户已填的单据类型等编码盖回 REPLACE_* 样例
+                    if not purinbill_save_sample_has_real_codes(existing.request_body):
+                        existing.request_body = preset.get("request_body") or existing.request_body
                     await existing.save(
                         update_fields=[
                             "name",
@@ -591,6 +1048,33 @@ class APIService:
                         "pageSize": 500,
                         "select": "number,name,baseunit.number,baseunit.name",
                     }
+                    await existing.save(
+                        update_fields=[
+                            "path",
+                            "name",
+                            "description",
+                            "method",
+                            "request_params",
+                            "request_body",
+                            "updated_at",
+                        ]
+                    )
+                    upgraded.append(code)
+                elif (
+                    code_suffix == MULTIMEASUREUNIT_PRESET_CODE_SUFFIX
+                    and multimeasureunit_preset_needs_upgrade(
+                        existing.path,
+                        existing.request_body,
+                        existing.request_params,
+                    )
+                ):
+                    fields = kingdee_multimeasureunit_api_upgrade_fields()
+                    existing.path = fields["path"]
+                    existing.name = fields["name"]
+                    existing.description = fields["description"]
+                    existing.method = fields["method"]
+                    existing.request_params = fields.get("request_params")
+                    existing.request_body = fields["request_body"]
                     await existing.save(
                         update_fields=[
                             "path",
@@ -755,9 +1239,13 @@ class APIService:
                     existing.category_id = category_id
                     await existing.save(update_fields=["category_id", "updated_at"])
                     categorized.append(code)
+                await self._backfill_kingdee_preset_api_attrs(existing, preset)
                 skipped.append(code)
                 continue
             request_params = preset.get("request_params")
+            from core.config.api_library_contract import infer_related_document_from_kingdee_api
+
+            preset_path = str(preset.get("path") or "")
             api = await self._create_api(
                 tenant_id,
                 code=code,
@@ -771,8 +1259,15 @@ class APIService:
                 request_body=preset.get("request_body") or {},
                 response_format=None,
                 response_example=None,
+                outbound_field_mappings=preset.get("outbound_field_mappings"),
                 is_active=True,
                 is_system=False,
+                related_document_code=infer_related_document_from_kingdee_api(
+                    path=preset_path,
+                    name=str(preset.get("name") or ""),
+                    preset_code_suffix=str(preset.get("code_suffix") or ""),
+                ),
+                api_interface_type="standard",
                 integration_config_id=integration.id,
                 category_id=category_id,
             )
@@ -1117,6 +1612,8 @@ class APIService:
         sort_order: Optional[str] = None,
         category_uuid: Optional[UUID] = None,
         no_category: bool = False,
+        related_document_code: Optional[str] = None,
+        no_related_document: bool = False,
     ) -> tuple[List[API], int]:
         """
         获取接口列表
@@ -1173,6 +1670,20 @@ class APIService:
                 category_uuid,
             )
             query = query.filter(category_id=category_id)
+
+        if related_document_code and no_related_document:
+            raise ValidationError("related_document_code 与 no_related_document 不能同时使用")
+        if no_related_document:
+            from tortoise.expressions import Q
+
+            query = query.filter(
+                Q(related_document_code__isnull=True) | Q(related_document_code="")
+            )
+        elif related_document_code:
+            from core.config.api_library_contract import normalize_api_related_document_code
+
+            doc = normalize_api_related_document_code(related_document_code)
+            query = query.filter(related_document_code=doc)
         
         # 优化分页查询：先查询总数，再查询数据
         total = await query.count()
@@ -1465,20 +1976,20 @@ class APIService:
         api_path = normalize_cosmic_openapi_endpoint(api_path)
         conn_type = str(api.integration_config.type or "").strip() if api.integration_config else ""
 
-        import copy
-
-        call_request_params = copy.deepcopy(api.request_params) if api.request_params else {}
-        call_request_body = copy.deepcopy(api.request_body) if api.request_body else {}
-        # 必须先合并测试/同步覆盖，再跑预置升级。
+        # 必须先合并测试/同步覆盖，再跑预置升级（见 api_test_request_merge）。
         # 若先升级再 update(test_request.body)，同步传入的库内脏 body 会把
         # createorg/空筛等又盖回去，导致接口调试（常传空/已改 body）正常、
         # 物料管理同步异常。
-        if test_request.params:
-            call_request_params.update(copy.deepcopy(test_request.params))
-        if test_request.body:
-            if not isinstance(call_request_body, dict):
-                call_request_body = {}
-            call_request_body.update(copy.deepcopy(test_request.body))
+        from core.services.application.api_test_request_merge import (
+            merge_api_test_request_overrides,
+        )
+
+        call_request_params, call_request_body = merge_api_test_request_overrides(
+            stored_params=api.request_params,
+            stored_body=api.request_body,
+            override_params=test_request.params if test_request.params else None,
+            override_body=test_request.body if test_request.body else None,
+        )
 
         from core.services.integration.kingdee_cosmic_customer_org_scope import (
             is_cosmic_customer_getcustomer_api,
@@ -1998,6 +2509,14 @@ class APIService:
             )
 
             request_body = ensure_kingdee_v2_request_body(url, request_body)
+
+        # 日期快捷「此刻」等：每次调用解析 __NOW__ 为站点当前墙钟
+        from core.services.integration.request_dynamic_tokens import (
+            resolve_request_dynamic_tokens,
+        )
+
+        request_body = resolve_request_dynamic_tokens(request_body)
+        request_params = resolve_request_dynamic_tokens(request_params)
 
         start_time = time.time()
         try:

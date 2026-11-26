@@ -60,11 +60,18 @@ export function resolveWorkOrderIdFromTask(
   if (task?.work_order_id != null) return task.work_order_id;
 
   const text = String(taskId);
+  const woMatch = text.match(/^wo-(\d+)$/i);
+  if (woMatch) {
+    const woId = Number(woMatch[1]);
+    return Number.isInteger(woId) && woId > 0 ? woId : null;
+  }
   const m = text.match(/^op-(\d+)$/i);
   if (!m) return null;
   const opId = Number(m[1]);
   for (const t of tasks) {
-    const seg = t.segments?.find((s) => s.operation_id === opId);
+    const seg = t.segments?.find(
+      (s) => s.operation_id === opId || s.operation_ids?.includes(opId)
+    );
     if (seg?.work_order_id != null) return seg.work_order_id;
   }
   for (const wo of workOrders) {
@@ -79,7 +86,13 @@ export function resolveResourceRowIdForOperation(
   tasks: GanttTask[]
 ): string | null {
   for (const t of tasks) {
-    if (!t.segments?.some((s) => s.operation_id === operationId)) continue;
+    if (
+      !t.segments?.some(
+        (s) => s.operation_id === operationId || s.operation_ids?.includes(operationId)
+      )
+    ) {
+      continue;
+    }
     return String(t.id);
   }
   return null;

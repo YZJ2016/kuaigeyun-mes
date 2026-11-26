@@ -32,6 +32,8 @@ import {
 
 import { FormModalGridBlock, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 
+import { CustomFieldsFormSection } from '../../../../../components/custom-fields';
+
 import { rowActionKind, rowActionOpenWorkbench } from '../../../../../components/uni-action';
 
 import { UniUserSelect } from '../../../../../components/uni-user-select';
@@ -39,6 +41,10 @@ import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
 
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
@@ -92,6 +98,8 @@ import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLi
 
 const RESOURCE = 'kuaizhizao:delivery-project';
 
+const CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_delivery_projects';
+
 
 
 const DeliveryProjectsPage: React.FC = () => {
@@ -125,6 +133,50 @@ const DeliveryProjectsPage: React.FC = () => {
 
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
+  const formModalOpen = createOpen || editOpen;
+
+  const {
+
+    customFields: formCustomFields,
+
+    customFieldValues: formCustomFieldValues,
+
+    loadFieldValues: loadFormCustomFieldValues,
+
+    extractFormValues: extractCustomFormValues,
+
+    saveCustomFieldValues,
+
+    resetFieldValues: resetFormCustomFieldValues,
+
+  } = useCustomFields({
+
+    tableName: CUSTOM_FIELD_TABLE,
+
+    hostResource: RESOURCE,
+
+    loadWhenOpen: true,
+
+    open: formModalOpen,
+
+  });
+
+  const {
+
+    generateCustomFieldColumns,
+
+    enrichRecordsWithCustomFields,
+
+  } = useCustomFieldsForList<DeliveryProject>({
+
+    tableName: CUSTOM_FIELD_TABLE,
+
+    hostResource: RESOURCE,
+
+  });
+
+  const customFieldColumns = generateCustomFieldColumns();
+
 
 
   const loadTemplates = useCallback(async () => {
@@ -144,11 +196,13 @@ const DeliveryProjectsPage: React.FC = () => {
 
     formRef.current?.resetFields();
 
+    resetFormCustomFieldValues();
+
     void loadTemplates();
 
     setCreateOpen(true);
 
-  }, [loadTemplates]);
+  }, [loadTemplates, resetFormCustomFieldValues]);
 
 
 
@@ -225,9 +279,15 @@ const DeliveryProjectsPage: React.FC = () => {
 
       });
 
+      void loadFormCustomFieldValues(detail.id).then((cfValues) => {
+
+        formRef.current?.setFieldsValue(cfValues);
+
+      });
+
     },
 
-    [loadTemplates],
+    [loadFormCustomFieldValues, loadTemplates],
 
   );
 
@@ -452,6 +512,8 @@ const DeliveryProjectsPage: React.FC = () => {
 
       },
 
+      ...customFieldColumns,
+
       {
 
         title: t('common.actions'),
@@ -540,27 +602,37 @@ const DeliveryProjectsPage: React.FC = () => {
 
     try {
 
-      await deliveryProjectApi.create({
+      const { customData, standardValues } = extractCustomFormValues(values, formRef.current);
 
-        project_name: values.project_name as string,
+      const created = await deliveryProjectApi.create({
 
-        process_template_id: values.process_template_id as number,
+        project_name: standardValues.project_name as string,
 
-        customer_id: values.customer_id as number,
+        process_template_id: standardValues.process_template_id as number,
 
-        delivery_date: toApiDateString(values.delivery_date),
+        customer_id: standardValues.customer_id as number,
+
+        delivery_date: toApiDateString(standardValues.delivery_date),
 
         owner_id: selectedOwnerRef.current,
 
         members: selectedMembersRef.current,
 
-        notes: values.notes as string | undefined,
+        notes: standardValues.notes as string | undefined,
 
-        board_section: (values.board_section as string) || 'active',
+        board_section: (standardValues.board_section as string) || 'active',
 
-        config_attrs: (values.config_attrs as Record<string, unknown>) || {},
+        config_attrs: (standardValues.config_attrs as Record<string, unknown>) || {},
 
       });
+
+      if (created?.id != null) {
+
+        await saveCustomFieldValues(created.id, customData);
+
+      }
+
+      resetFormCustomFieldValues();
 
       message.success(t('common.created'));
 
@@ -584,27 +656,33 @@ const DeliveryProjectsPage: React.FC = () => {
 
     try {
 
+      const { customData, standardValues } = extractCustomFormValues(values, formRef.current);
+
       await deliveryProjectApi.update(editingProject.id, {
 
-        project_name: values.project_name as string,
+        project_name: standardValues.project_name as string,
 
         ...(editingProject.sales_order_id
           ? {}
-          : { customer_id: values.customer_id as number | undefined }),
+          : { customer_id: standardValues.customer_id as number | undefined }),
 
-        delivery_date: toApiDateString(values.delivery_date),
+        delivery_date: toApiDateString(standardValues.delivery_date),
 
         owner_id: selectedOwnerRef.current,
 
         members: selectedMembersRef.current,
 
-        notes: values.notes as string | undefined,
+        notes: standardValues.notes as string | undefined,
 
-        board_section: (values.board_section as string) || 'active',
+        board_section: (standardValues.board_section as string) || 'active',
 
-        config_attrs: (values.config_attrs as Record<string, unknown>) || {},
+        config_attrs: (standardValues.config_attrs as Record<string, unknown>) || {},
 
       });
+
+      await saveCustomFieldValues(editingProject.id, customData);
+
+      resetFormCustomFieldValues();
 
       message.success(t('common.updated'));
 
@@ -783,6 +861,12 @@ const DeliveryProjectsPage: React.FC = () => {
         label={t('app.kuaizhizao.deliveryProject.configAttrs.barrel')}
         colProps={{ span: 12 }}
       />
+      <CustomFieldsFormSection
+        customFields={formCustomFields}
+        customFieldValues={formCustomFieldValues}
+        gridColumns={2}
+      />
+
       <ProFormTextArea
 
         name="notes"
@@ -817,7 +901,7 @@ const DeliveryProjectsPage: React.FC = () => {
 
           columns={columns}
 
-          columnPersistenceId="kuaizhizao-delivery-projects-v11"
+          columnPersistenceId="kuaizhizao-delivery-projects-v12-cf"
 
           enableRowSelection
 
@@ -851,7 +935,7 @@ const DeliveryProjectsPage: React.FC = () => {
 
           }}
 
-          request={async (params, sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues, meta) => {
             const listParams = {
               keyword: pickListSearchKeyword(searchFormValues),
               status: resolveListLifecycleStageFromSearch(searchFormValues),
@@ -878,7 +962,15 @@ const DeliveryProjectsPage: React.FC = () => {
 
             });
 
-            return { data: res.items, success: true, total: res.total };
+            const data =
+
+              meta?.purpose === 'prefetch'
+
+                ? res.items
+
+                : await enrichRecordsWithCustomFields(res.items);
+
+            return { data, success: true, total: res.total };
 
           }}
 
@@ -896,7 +988,13 @@ const DeliveryProjectsPage: React.FC = () => {
 
         width={MODAL_CONFIG.STANDARD_WIDTH}
 
-        onClose={() => setCreateOpen(false)}
+        onClose={() => {
+
+          resetFormCustomFieldValues();
+
+          setCreateOpen(false);
+
+        }}
 
         formRef={formRef}
 
@@ -921,6 +1019,8 @@ const DeliveryProjectsPage: React.FC = () => {
         width={MODAL_CONFIG.STANDARD_WIDTH}
 
         onClose={() => {
+
+          resetFormCustomFieldValues();
 
           setEditOpen(false);
 

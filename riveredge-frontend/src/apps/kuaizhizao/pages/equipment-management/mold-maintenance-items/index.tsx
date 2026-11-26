@@ -27,6 +27,7 @@ import { App, Modal, Row, Col } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import CodeField from '../../../../../components/code-field';
 
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
@@ -127,6 +128,7 @@ const MoldMaintenanceItemsPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
 
   const [current, setCurrent] = useState<MaintenanceItem | null>(null);
+  const [createCodeSessionKey, setCreateCodeSessionKey] = useState(0);
 
   const {
 
@@ -167,6 +169,8 @@ const MoldMaintenanceItemsPage: React.FC = () => {
     setIsEdit(false);
 
     setCurrent(null);
+
+    setCreateCodeSessionKey((k) => k + 1);
 
     setModalVisible(true);
 
@@ -632,7 +636,22 @@ const MoldMaintenanceItemsPage: React.FC = () => {
 
           <Col span={12}>
 
-            <ProFormText name="code" label={t('common.code')} rules={[{ required: true }]} />
+            <CodeField
+              key={
+                isEdit
+                  ? `mold-maint-item-code-edit-${current?.id ?? 'none'}`
+                  : `mold-maint-item-code-create-${createCodeSessionKey}`
+              }
+              pageCode="kuaizhizao-mold-maintenance-item"
+              name="code"
+              label={t('common.code')}
+              required={false}
+              autoGenerateOnCreate={!isEdit}
+              showGenerateButton={false}
+              documentId={isEdit ? current?.id : undefined}
+              formRef={formRef}
+              generateSessionKey={createCodeSessionKey}
+            />
 
           </Col>
 

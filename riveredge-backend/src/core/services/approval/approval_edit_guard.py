@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from core.config.audit_editable_fields import editable_fields_for_entity, is_field_editable
+from core.config.audit_editable_fields import is_field_editable
 from core.models.approval_history import ApprovalHistory
 from core.models.approval_instance import ApprovalInstance
 from core.models.approval_task import ApprovalTask
@@ -55,10 +55,18 @@ class ApprovalEditGuard:
         if not data.get("allowEditDuringApproval"):
             return None
 
-        node_editable = data.get("editableFields")
-        if node_editable is None:
-            spec = editable_fields_for_entity(entity_type)
-            node_editable = spec if isinstance(spec, list) else ["*"]
+        # allowEditDuringApproval：允许直接改单。
+        # editableFields：仅控制审核弹窗内可填字段；空=弹窗不展示字段，直接改单白名单仍由
+        # is_field_editable 在空列表时回落实体目录。
+        raw_editable = data.get("editableFields")
+        if raw_editable == "*" or (
+            isinstance(raw_editable, list) and "*" in raw_editable
+        ):
+            node_editable: Any = ["*"]
+        elif isinstance(raw_editable, list):
+            node_editable = [str(x) for x in raw_editable if x and str(x) != "*"]
+        else:
+            node_editable = []
 
         return {
             "approval_instance_id": instance.id,
@@ -108,6 +116,16 @@ class ApprovalEditGuard:
     ) -> None:
         if not field_changes:
             return
+        from core.utils.field_change_compare import format_audit_field_value
+
+        safe_changes: List[Dict[str, Any]] = []
+        for fc in field_changes:
+            item = dict(fc)
+            if "from" in item:
+                item["from"] = format_audit_field_value(item.get("from"))
+            if "to" in item:
+                item["to"] = format_audit_field_value(item.get("to"))
+            safe_changes.append(item)
         await ApprovalHistory.create(
             tenant_id=tenant_id,
             approval_instance_id=edit_context["approval_instance_id"],
@@ -120,7 +138,7 @@ class ApprovalEditGuard:
             change_payload={
                 "node_id": edit_context.get("node_id"),
                 "node_label": edit_context.get("node_label"),
-                "field_changes": field_changes,
+                "field_changes": safe_changes,
             },
         )
 

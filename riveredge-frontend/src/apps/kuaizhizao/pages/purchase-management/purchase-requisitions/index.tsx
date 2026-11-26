@@ -38,7 +38,17 @@ import {
   DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
   renderDocumentLineMaterialsPreview,
 } from '../../sales-management/shared/documentLineMaterialsPreview';
-import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
+import {
+  UniAuditBatchMenuButton,
+  UniCapabilityBatchButton,
+  defaultAuditBatchAllowed,
+  pickCapability,
+  runCapabilityBatchLoop,
+  useAuditBatchRunner,
+  withDocumentSubmitCombinedItem,
+  type AuditBatchAction,
+  type UniBatchMenuItem,
+} from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import {
   UniPullQueryModal,
@@ -98,7 +108,7 @@ import { useImportMaterialUnitOptions } from '../../../../master-data/hooks/useI
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
 );
-import { isAuditedStatus } from '../../../constants/documentStatus';
+import { isAuditedStatus, isPendingReviewStatus } from '../../../constants/documentStatus';
 import {
   listPurchaseRequisitions,
   getPurchaseRequisition,
@@ -106,6 +116,8 @@ import {
   updatePurchaseRequisition,
   deletePurchaseRequisition,
   uniAuditPurchaseRequisition,
+  submitPurchaseRequisition,
+  submitPurchaseRequisitionForReview,
   withdrawPurchaseRequisitionSubmit,
   fixPurchaseRequisitionStatus,
   previewPushToPurchaseOrder,
@@ -126,6 +138,7 @@ import {
 } from '../../../services/demand-computation';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { useListSubmitReviewWithInitiator } from '../../../../../hooks/useListSubmitReviewWithInitiator';
+import { useDocumentFormCommitAndSubmitReview } from '../../../../../hooks/useDocumentFormCommitAndSubmitReview';
 import {
   buildPurchaseRequisitionLifecycleValueEnum,
   getPurchaseRequisitionLifecycle,
@@ -488,6 +501,20 @@ const PurchaseRequisitionsPage: React.FC = () => {
   }, [dataViewMode]);
   const deepLinkHandledRef = useRef<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [detailFlatRows, setDetailFlatRows] = useState<PurchaseRequisitionItemRow[]>([]);
+
+  const resolveRequisitionIdFromSelectionKey = useCallback(
+    (key: React.Key): number | null => {
+      if (dataViewMode === 'order') {
+        const id = Number(key);
+        return Number.isFinite(id) && id > 0 ? id : null;
+      }
+      const row = detailFlatRows.find((item) => String(item._rowKey) === String(key));
+      const id = Number(row?.requisition_id ?? row?._headerId);
+      return Number.isFinite(id) && id > 0 ? id : null;
+    },
+    [dataViewMode, detailFlatRows],
+  );
 
   const selectedRequisitionsForBatch = useMemo(
     () =>
@@ -647,13 +674,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const createFormRef = useRef<any>(null);
   const submitAfterSaveRef = useRef(false);
   const [formSubmitting, setFormSubmitting] = useState(false);
-  const [postSaveInitiatorOpen, setPostSaveInitiatorOpen] = useState(false);
-  const [postSaveInitiatorLoading, setPostSaveInitiatorLoading] = useState(false);
-  const [postSaveInitiatorNodes, setPostSaveInitiatorNodes] = useState<SubmitInitiatorNodeHint[]>([]);
-  const [postSaveInitiatorBranches, setPostSaveInitiatorBranches] = useState<SubmitInitiatorBranchHint[]>(
-    [],
-  );
-  const postSaveSubmitContextRef = useRef<{ requisitionId: number; wasEdit: boolean } | null>(null);
   const [editingStatus, setEditingStatus] = useState<string | null>(null);
   /** 上一次表头要求到货日，用于改表头时同步曾跟随表头的明细行（对齐采购订单/销售订单） */
   const lastHeaderDeliveryRef = useRef<ReturnType<typeof dayjs> | null>(null);
@@ -1751,6 +1771,17 @@ const PurchaseRequisitionsPage: React.FC = () => {
     isFormPage,
     leavePurchaseRequisitionFormPage,
   ]);
+
+  const runPurchaseRequisitionSubmitAfterSave = async (requisitionId: number, wasEdit: boolean) => {
+    const { completed } = await runPurchaseRequisitionSaveAndAudit(requisitionId);
+    if (!completed) {
+      if (!wasEdit) {
+        navigate(purchaseRequisitionEditPath(requisitionId), { replace: true });
+      }
+      return;
+    }
+    finalizePurchaseRequisitionForm();
+  };
 
   const handleModalSubmit = async (values: {
     requisition_code?: string;
@@ -3482,6 +3513,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
   return (
     <>
       {purchaseRequisitionAuditModal}
+      {purchaseRequisitionInitiatorModal}
       {purchaseRequisitionListInitiatorModal}
       <ListPageTemplate>
         <UniTable
@@ -3571,7 +3603,10 @@ const PurchaseRequisitionsPage: React.FC = () => {
           onTableDataChange={(rows) => {
             if (dataViewModeRef.current === 'order') {
               tableRowsRef.current = rows as PurchaseRequisition[];
+              setDetailFlatRows([]);
+              return;
             }
+            setDetailFlatRows(rows as PurchaseRequisitionItemRow[]);
           }}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}

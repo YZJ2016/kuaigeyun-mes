@@ -47,6 +47,16 @@ class API(BaseModel):
         default="pull",
         description="同步方向：pull 入站、push 出站、bidirectional 双向",
     )
+    related_document_code = fields.CharField(
+        max_length=64,
+        null=True,
+        description="关联 MES 单据 source_type（可选，如 sales_delivery）",
+    )
+    api_interface_type = fields.CharField(
+        max_length=20,
+        default="custom",
+        description="接口类型：standard 标准API、custom 自定义API",
+    )
     # SOURCE_TYPE_CONVERSION: 接口级来源编码到系统来源类型的配置。
     source_type_conversion_map = fields.JSONField(null=True, description="来源类型编码转换映射（如金蝶 FErpClsID: 1->Buy）")
     # 出站：本地字段 → 对方字段（含默认值）；push 单据推送时优先按此组装
@@ -82,6 +92,8 @@ class API(BaseModel):
             ("code",),
             ("created_at",),
             ("category_id",),
+            ("related_document_code",),
+            ("api_interface_type",),
         ]
         # DB：pk_core_apis(id)、uk_core_apis_uuid(uuid)、uk_core_apis_tenant_code(tenant_id, code)
         unique_together = [("tenant_id", "code")]

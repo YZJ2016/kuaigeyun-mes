@@ -28385,4 +28385,89 @@ export default {
   ...presetEntityEn,
   ...codeRulePageEn,
   ...customFieldPageEn,
+  'app.kuaiiot.menu.group.monitoring': 'Monitoring',
+  'app.kuaiiot.menu.group.modelDevice': 'Device Models',
+  'app.kuaiiot.menu.group.access': 'Access Management',
+  'app.kuaiiot.menu.group.alertOps': 'Alert Operations',
+  'app.ind-spoke-wheel.name': 'Spoke Wheel',
+  'app.ind-spoke-wheel.desc': 'Aluminum spoke wheel 5-part assembly and debug module (concentricity ≤ 0.8mm)',
+  'app.ind-spoke-wheel.menu.assembly-debug': 'Assembly debug',
+  'app.kuaizhizao.documentPush.batch.pushEnabled': 'Enable push',
+  'app.kuaizhizao.documentPush.batch.pushEnabledOn': 'On',
+  'app.kuaizhizao.documentPush.batch.pushEnabledOff': 'Off',
+  'app.kuaizhizao.documentPush.batch.pushEnabledOnHint':
+    'On: auto-push after confirm, show list Push button, show push records in detail',
+  'app.kuaizhizao.documentPush.batch.pushEnabledOffHint':
+    'Off: no auto-push on confirm, hide list Push button and detail push records',
+  'app.kuaizhizao.salesOrder.orderFallback': 'This sales order',
+  'app.kuaizhizao.salesOrder.batchDeleting': 'Deleting',
+  'app.kuaizhizao.salesOrder.batchDeletePreparing': 'Preparing to delete {{count}} sales order(s)…',
+  'app.kuaizhizao.salesOrder.batchDeleteProgress': 'Deleting {{current}} / {{total}} sales order(s)…',
+  'app.kuaizhizao.salesOrder.batchDeleteComplete': 'Delete completed: {{count}} sales order(s) deleted',
+  'app.kuaizhizao.salesOrder.batchDeleteCompletePartial': 'Delete completed (partial failure)',
+  'app.kuaizhizao.salesOrder.batchDeleteResultSummary':
+    '{{success}} deleted, {{failed}} failed',
+  'app.kuaizhizao.salesOrder.batchDeleteErrorItem': '{{name}}: {{reason}}',
+  'app.kuaizhizao.salesOrder.batchDeleteGotIt': 'Got it',
+  'app.kuaizhizao.salesOrder.batchDeleteCascadeOk': 'Cascade-delete related data, then delete sales order',
+  'app.kuaizhizao.salesOrder.batchDeleteCascadeHint':
+    'You can cascade-delete unexecuted downstream documents and revoke approval if needed before deleting the sales order. Deliveries, returns, invoices and similar posted documents still require manual handling.',
+  'app.kuaizhizao.salesOrder.batchDeletingCascade': 'Cascade deleting related data',
+  'app.kuaizhizao.salesOrder.batchDeleteCascadePreparing':
+    'Preparing cascade delete for {{count}} sales order(s)…',
+  'app.kuaizhizao.salesOrder.batchDeleteCascadeProgress':
+    'Cascade processing {{current}} / {{total}} sales order(s)…',
+  'app.kuaizhizao.warehouseInbound.action.pushExternal': 'Push',
+  'app.kuaizhizao.warehouseInbound.detail.externalPushStatus': 'External push status',
+  'app.kuaizhizao.warehouseInbound.detail.externalPushNotYet':
+    'Not pushed to Kingdee yet. After confirm inbound, auto-push runs if configured; or use Push on the list.',
+  'app.kuaizhizao.warehouseInbound.detail.externalPushStatusHint':
+    'Push again can confirm a re-push (creates a new Kingdee bill and records a secondary push). Failure reasons appear in the confirm toast or the operation log below.',
+  'app.kuaizhizao.warehouseInbound.msg.externalPushFailedTitle': 'External push failed',
+  'app.kuaizhizao.warehouseInbound.msg.externalPushSuccess': 'Pushed successfully',
+  'app.kuaizhizao.warehouseInbound.msg.externalPushSkipped': 'Push skipped: {{reason}}',
+  'app.kuaizhizao.warehouseInbound.msg.externalPushRepushTitle': 'Confirm re-push',
+  'app.kuaizhizao.warehouseInbound.msg.externalPushRepushConfirm':
+    '{{reason}}. Confirming will create a new Kingdee purchase receipt and mark this as a secondary push in the timeline.',
+  'app.kuaizhizao.warehouseInbound.msg.externalPushRepushSuccess':
+    'Re-push succeeded (secondary push recorded)',
+  'app.kuaizhizao.warehouseInbound.action.repush': 'Re-push',
+  'app.kuaizhizao.warehouseInbound.msg.externalPushNeedTarget':
+    'Add a push target in Data Exchange first (connector + purchase receipt create API)',
+  'app.kuaizhizao.warehouseInbound.msg.externalPushNeedConfirmFirst':
+    'Confirm inbound before pushing',
+  'app.kuaizhizao.warehouseInbound.msg.externalPushFailed': 'Push failed: {{reason}}',
+  'app.kuaicaiwu.financeUi.paymentMethod.bankAcceptance': 'Bank Acceptance',
+  'field.partner.settlementMethod.bankTransferAndAcceptance': 'Bank transfer + bank acceptance',
+  'pages.system.apis.importBackupResult':
+    'Import finished: {{created}} created, {{updated}} updated, {{failed}} failed',
+  'pages.system.apis.importProgressTitle': 'Importing APIs',
+  'pages.system.apis.importProgressPreparing': 'Preparing import…',
+  'pages.system.apis.importProgressLine': 'Processed {{done}} / {{total}}…',
+  'pages.system.apis.importProgressCounts':
+    'Created {{created}} · Updated {{updated}} · Failed {{failed}}',
+  'pages.system.apis.importResultTitle': 'API import result',
+  'pages.system.apis.importFailed': 'Import failed',
+  'pages.system.apis.exportSuccessCount':
+    'Exported {{count}} API(s) with full request body details (re-importable backup)',
+  'pages.system.apis.exportFailed': 'Export failed',
+  'pages.system.apis.dedupeButton': 'Remove duplicates',
+  'pages.system.apis.dedupeNoDuplicates': 'No duplicate data',
+  'pages.system.apis.dedupeOnlySystemLeft':
+    '{{count}} duplicate(s) are built-in and cannot be deleted',
+  'pages.system.apis.dedupeConfirmTitle': 'Remove duplicate data?',
+  'pages.system.apis.dedupeConfirmContent':
+    'Found {{groups}} duplicate group(s). Will delete {{remove}} row(s) and keep the earliest in each group; skip {{skipped}} built-in row(s). This cannot be undone.',
+  'pages.system.apis.dedupeConfirmOk': 'Clean up',
+  'pages.system.apis.dedupeRunning': 'Removing duplicates…',
+  'pages.system.apis.dedupeDone': 'Removed {{deleted}} duplicate(s) in {{groups}} group(s)',
+  'pages.system.apis.dedupeDonePartial':
+    'Done: {{deleted}} removed, {{failed}} failed ({{groups}} group(s))',
+  'pages.system.apis.dedupeFailed': 'Cleanup failed',
+  'pages.system.apis.exportColumnConnectionUuid': 'Connector UUID',
+  'pages.system.apis.exportColumnConnectionCode': 'Connector code',
+  'pages.system.apis.exportColumnCategoryUuid': 'Category UUID',
+  'pages.system.apis.exportColumnCategoryName': 'Category name',
+  'pages.system.apis.exportColumnSourceTypeConversionMap': 'Source type conversion map',
+  'components.documentTrackingPanel.repush': 'Re-push',
 };

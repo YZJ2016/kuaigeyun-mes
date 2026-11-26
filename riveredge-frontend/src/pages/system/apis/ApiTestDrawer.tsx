@@ -26,8 +26,40 @@ const { TextArea } = Input;
 const { Text } = Typography;
 
 /** 单位同步接口测试：翻页抽物料基础单位，避免只测第 1 页去重后「只剩 1 个」 */
-const UNIT_SYNC_TEST_MAX_PAGES = 20;
-const UNIT_SYNC_TEST_PAGE_SIZE = 500;
+const UNIT_SYNC_TEST_MAX_PAGES = 50;
+/** 苍穹网关常把更大 pageSize 裁成 100；请求按 100 对齐，末页认 lastPage */
+const UNIT_SYNC_TEST_PAGE_SIZE = 100;
+
+function cosmicUnitSyncResponseIsLastPage(
+  body: unknown,
+  chunkLen: number,
+  requestedPageSize: number,
+): boolean {
+  if (chunkLen <= 0) return true;
+  const root =
+    body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : null;
+  const data =
+    root && root.data && typeof root.data === 'object' && !Array.isArray(root.data)
+      ? (root.data as Record<string, unknown>)
+      : root;
+  if (data) {
+    if (data.lastPage === true || data.last_page === true) return true;
+    if (data.lastPage === false || data.last_page === false) return false;
+    const rawSize = data.pageSize ?? data.page_size;
+    const effectiveSize = Math.max(Number(rawSize) || 0, 1);
+    const total = Number(data.totalCount ?? data.total ?? data.total_count);
+    const pageNo = Number(data.pageNo ?? data.page_no);
+    if (Number.isFinite(total) && Number.isFinite(pageNo) && pageNo >= 1 && effectiveSize > 0) {
+      return pageNo * effectiveSize >= total;
+    }
+    if (Number(rawSize) > 0) {
+      return chunkLen < Number(rawSize);
+    }
+  }
+  return chunkLen < requestedPageSize;
+}
 
 const JSON_PRE_STYLE: React.CSSProperties = {
   margin: 0,
@@ -122,7 +154,7 @@ async function executeUnitSyncPagedTest(
     const chunk = extractNestedRowArray(result.body);
     if (!chunk.length) break;
     allMaterialRows.push(...chunk);
-    if (chunk.length < pageSize) break;
+    if (cosmicUnitSyncResponseIsLastPage(result.body, chunk.length, pageSize)) break;
   }
 
   const units = collapseMaterialRowsToUniqueUnits(allMaterialRows);

@@ -123,6 +123,8 @@ export interface InstallExecutionListParams {
   limit?: number;
   customer_id?: number;
   status?: string;
+  /** 执行工作台：排除已关闭（与 status 互斥，有 status 时忽略） */
+  exclude_closed?: boolean;
   keyword?: string;
   sales_order_code?: string;
   order_by?: string;

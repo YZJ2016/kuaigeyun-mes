@@ -34,6 +34,16 @@
               "node": "equipment"
             },
             "permission": "kuaizhizao:equipment:read"
+          },
+          {
+            "title": "app.kuaiems.menu.equipmentBusinessBoard",
+            "path": "/apps/kuaizhizao/equipment-management/equipment-board",
+            "sort_order": 1,
+            "meta": {
+              "module": "equipment",
+              "node": "equipment"
+            },
+            "permission": "kuaizhizao:equipment:read"
           }
         ]
       },

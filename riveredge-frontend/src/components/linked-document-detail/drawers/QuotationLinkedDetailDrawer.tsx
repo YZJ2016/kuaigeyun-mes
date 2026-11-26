@@ -14,6 +14,7 @@ import { MaterialUnitLabel } from '../../material-unit-label';
 import { getQuotation, type Quotation } from '../../../apps/kuaizhizao/services/quotation';
 import { getQuotationLifecycle } from '../../../apps/kuaizhizao/utils/quotationLifecycle';
 import { useAuditRequired } from '../../../hooks/useAuditRequired';
+import { buildDocumentLineAuxQuantityDetailColumn } from '../../quantity-with-unit';
 import { formatQuantity } from '../../../utils/format';
 import { normalizeUserDisplayName } from '../../../utils/userDisplay';
 import { useOptionalLinkedDocumentDetail } from '../LinkedDocumentDetailContext';
@@ -175,7 +176,7 @@ export function QuotationLinkedDetailDrawer({
             size="small"
             rowKey={(r) => String(r.id ?? r.material_id ?? Math.random())}
             pagination={false}
-            scroll={{ x: 1060 }}
+            scroll={{ x: 1180 }}
             dataSource={effective.items ?? []}
             columns={[
               { title: t('app.kuaizhizao.quotation.colMaterialCode'), dataIndex: 'material_code', width: 120 },
@@ -193,6 +194,7 @@ export function QuotationLinkedDetailDrawer({
                 align: 'right',
                 render: (v) => formatQuantity(v),
               },
+              buildDocumentLineAuxQuantityDetailColumn({ t, width: 120 }),
               {
                 title: t('app.kuaizhizao.quotation.import.unitPrice'),
                 dataIndex: 'unit_price',

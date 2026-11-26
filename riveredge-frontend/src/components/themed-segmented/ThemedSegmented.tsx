@@ -73,8 +73,18 @@ export const ThemedSegmented = React.forwardRef<HTMLDivElement, ThemedSegmentedP
   ({ surfaceBackground, block, style, className, size, ...props }, ref) => {
     const { token } = theme.useToken();
     const segmentedTheme = useSegmentedComponentTheme({ surfaceBackground });
-    const shellHeight =
-      size === 'small' ? token.controlHeightSM : UNI_TOOLBAR_CONTROL_HEIGHT;
+    const shellHeight = (() => {
+      if (!surfaceBackground) {
+        return undefined;
+      }
+      if (size === 'small') {
+        return token.controlHeightSM;
+      }
+      if (size === 'large') {
+        return token.controlHeightLG;
+      }
+      return token.controlHeight ?? UNI_TOOLBAR_CONTROL_HEIGHT;
+    })();
     return (
       <ConfigProvider theme={segmentedTheme}>
         <Segmented
@@ -82,7 +92,12 @@ export const ThemedSegmented = React.forwardRef<HTMLDivElement, ThemedSegmentedP
           block={block}
           size={size}
           className={
-            [THEMED_SEGMENTED_CLASS, surfaceBackground ? UNI_TOOLBAR_SEGMENTED_CLASS : '', className]
+            [
+              THEMED_SEGMENTED_CLASS,
+              surfaceBackground ? UNI_TOOLBAR_SEGMENTED_CLASS : '',
+              surfaceBackground && size === 'large' ? 'uni-toolbar-segmented--lg' : '',
+              className,
+            ]
               .filter(Boolean)
               .join(' ')
           }

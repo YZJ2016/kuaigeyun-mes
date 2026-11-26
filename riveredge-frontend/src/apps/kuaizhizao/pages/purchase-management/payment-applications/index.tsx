@@ -1336,6 +1336,7 @@ const PaymentApplicationsPage: React.FC = () => {
       supplierBankName: hidePayeeAccount ? undefined : values.supplierBankName,
       supplierBankAccount: hidePayeeAccount ? undefined : values.supplierBankAccount,
       notes: values.notes,
+      paymentReason: String(values.paymentReason ?? '').trim(),
       requirePaymentVoucher: Boolean(values.requirePaymentVoucher),
       attachments: normalizeDocumentAttachments(values.attachments),
       items: items.map((line) => ({

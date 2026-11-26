@@ -147,6 +147,9 @@ interface Equipment {
   technical_parameters?: any;
   workshop_id?: number;
   workshop_name?: string;
+  plant_id?: number;
+  plant_code?: string;
+  plant_name?: string;
   production_line_id?: number;
   production_line_code?: string;
   production_line_name?: string;
@@ -901,6 +904,10 @@ const EquipmentPage: React.FC = () => {
         );
       },
     },
+    buildKeepWidthColumn<Equipment>(t('app.kuaizhizao.equipment.colPlant'), 'plant_name', {
+      width: 140,
+      hideInSearch: true,
+    }),
     buildKeepWidthColumn<Equipment>(t('app.kuaizhizao.equipment.colType'), 'type', {
       width: 120,
       sorter: true,
@@ -1058,7 +1065,7 @@ const EquipmentPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.equipmentLedger')}
           headerTitle={t('app.kuaizhizao.equipment.title')}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-status-fixed-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-plant-col-v1"
           actionRef={actionRef}
           formRef={searchFormRef}
           rowKey="uuid"
@@ -1303,6 +1310,7 @@ const EquipmentPage: React.FC = () => {
                 { key: 'brand', title: t('app.kuaizhizao.equipment.import.brand') },
                 { key: 'model', title: t('app.kuaizhizao.equipment.import.model') },
                 { key: 'serial_number', title: t('app.kuaizhizao.equipment.fieldSerialNumber') },
+                { key: 'plant_name', title: t('app.kuaizhizao.equipment.colPlant') },
                 { key: 'workshop_name', title: t('app.kuaizhizao.equipment.fieldWorkshop') },
                 { key: 'production_line_name', title: t('app.kuaizhizao.equipment.fieldProductionLine') },
                 { key: 'supplier', title: t('app.kuaizhizao.equipment.fieldSupplier') },

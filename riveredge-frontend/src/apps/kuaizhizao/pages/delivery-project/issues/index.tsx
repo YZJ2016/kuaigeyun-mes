@@ -26,11 +26,17 @@ import { UniTable } from '../../../../../components/uni-table';
 
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 
+import { CustomFieldsFormSection } from '../../../../../components/custom-fields';
+
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 
 import { rowActionKind } from '../../../../../components/uni-action';
 
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
@@ -73,6 +79,8 @@ import { pickListSearchKeyword } from '../../../../../utils/tableQueryKey';
 
 const RESOURCE = 'kuaizhizao:delivery-issue';
 
+const CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_delivery_issues';
+
 
 
 const IssuesPage: React.FC = () => {
@@ -109,6 +117,48 @@ const IssuesPage: React.FC = () => {
 
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
+  const {
+
+    customFields: formCustomFields,
+
+    customFieldValues: formCustomFieldValues,
+
+    loadFieldValues: loadFormCustomFieldValues,
+
+    extractFormValues: extractCustomFormValues,
+
+    saveCustomFieldValues,
+
+    resetFieldValues: resetFormCustomFieldValues,
+
+  } = useCustomFields({
+
+    tableName: CUSTOM_FIELD_TABLE,
+
+    hostResource: RESOURCE,
+
+    loadWhenOpen: true,
+
+    open: modalOpen,
+
+  });
+
+  const {
+
+    generateCustomFieldColumns,
+
+    enrichRecordsWithCustomFields,
+
+  } = useCustomFieldsForList<DeliveryIssue>({
+
+    tableName: CUSTOM_FIELD_TABLE,
+
+    hostResource: RESOURCE,
+
+  });
+
+  const customFieldColumns = generateCustomFieldColumns();
+
 
 
   const loadProjects = useCallback(async () => {
@@ -130,6 +180,8 @@ const IssuesPage: React.FC = () => {
       setEditingIssue(null);
 
       setSelectedProject(null);
+
+      resetFormCustomFieldValues();
 
       formRef.current?.resetFields();
 
@@ -239,9 +291,15 @@ const IssuesPage: React.FC = () => {
 
     });
 
+    void loadFormCustomFieldValues(detail.id).then((cfValues) => {
+
+      formRef.current?.setFieldsValue(cfValues);
+
+    });
+
     setModalOpen(true);
 
-  }, []);
+  }, [loadFormCustomFieldValues]);
 
 
 
@@ -449,6 +507,8 @@ const IssuesPage: React.FC = () => {
 
       },
 
+      ...customFieldColumns,
+
       {
 
         title: t('common.actions'),
@@ -623,21 +683,23 @@ const IssuesPage: React.FC = () => {
 
   const handleSave = async (values: Record<string, unknown>) => {
 
-    const dueDate = values.due_date as dayjs.Dayjs | undefined;
+    const { customData, standardValues } = extractCustomFormValues(values, formRef.current);
+
+    const dueDate = standardValues.due_date as dayjs.Dayjs | undefined;
 
     const payload = {
 
-      project_id: values.project_id as number,
+      project_id: standardValues.project_id as number,
 
-      node_id: values.node_id as number | undefined,
+      node_id: standardValues.node_id as number | undefined,
 
-      title: values.title as string,
+      title: standardValues.title as string,
 
-      issue_type: values.issue_type as string,
+      issue_type: standardValues.issue_type as string,
 
-      priority: values.priority as string,
+      priority: standardValues.priority as string,
 
-      description: values.description as string | undefined,
+      description: standardValues.description as string | undefined,
 
       due_date: dueDate?.format('YYYY-MM-DD'),
 
@@ -645,27 +707,39 @@ const IssuesPage: React.FC = () => {
 
     };
 
+    let savedId = editingIssue?.id;
+
     if (editingIssue) {
 
       await deliveryIssueApi.update(editingIssue.id, {
-        title: values.title as string,
-        issue_type: values.issue_type as string,
-        priority: values.priority as string,
-        description: values.description as string | undefined,
+        title: standardValues.title as string,
+        issue_type: standardValues.issue_type as string,
+        priority: standardValues.priority as string,
+        description: standardValues.description as string | undefined,
         due_date: dueDate?.format('YYYY-MM-DD'),
         assignee_id: selectedAssigneeRef.current,
-        node_id: values.node_id as number | undefined,
+        node_id: standardValues.node_id as number | undefined,
       });
 
       message.success(t('common.updated'));
 
     } else {
 
-      await deliveryIssueApi.create(payload);
+      const created = await deliveryIssueApi.create(payload);
+
+      savedId = created.id;
 
       message.success(t('common.created'));
 
     }
+
+    if (savedId != null) {
+
+      await saveCustomFieldValues(savedId, customData);
+
+    }
+
+    resetFormCustomFieldValues();
 
     setModalOpen(false);
 
@@ -693,7 +767,7 @@ const IssuesPage: React.FC = () => {
 
           columns={columns}
 
-          columnPersistenceId="kuaizhizao-delivery-issues-v9"
+          columnPersistenceId="kuaizhizao-delivery-issues-v10-cf"
 
           enableRowSelection
 
@@ -727,7 +801,7 @@ const IssuesPage: React.FC = () => {
 
           }}
 
-          request={async (params, _sort, _filter, searchFormValues) => {
+          request={async (params, _sort, _filter, searchFormValues, meta) => {
             const listParams = {
               keyword: pickListSearchKeyword(searchFormValues),
               status: resolveListLifecycleStageFromSearch(searchFormValues),
@@ -744,7 +818,15 @@ const IssuesPage: React.FC = () => {
 
             });
 
-            return { data: res.items, success: true, total: res.total };
+            const data =
+
+              meta?.purpose === 'prefetch'
+
+                ? res.items
+
+                : await enrichRecordsWithCustomFields(res.items);
+
+            return { data, success: true, total: res.total };
 
           }}
 
@@ -771,6 +853,8 @@ const IssuesPage: React.FC = () => {
         width={MODAL_CONFIG.STANDARD_WIDTH}
 
         onClose={() => {
+
+          resetFormCustomFieldValues();
 
           setModalOpen(false);
 
@@ -907,6 +991,16 @@ const IssuesPage: React.FC = () => {
             selectedAssigneeRef.current = picked?.id;
 
           }}
+
+        />
+
+        <CustomFieldsFormSection
+
+          customFields={formCustomFields}
+
+          customFieldValues={formCustomFieldValues}
+
+          gridColumns={2}
 
         />
 

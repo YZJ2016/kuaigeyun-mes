@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-PURCHASE_RECEIPT_RED_VOUCHER_LAYOUT_VERSION = "purchase_receipt_red_voucher_v9"
+PURCHASE_RECEIPT_RED_VOUCHER_LAYOUT_VERSION = "purchase_receipt_red_voucher_v10"
 
 PURCHASE_RECEIPT_RED_VOUCHER_HTML = """\
 <style>
@@ -82,17 +82,18 @@ PURCHASE_RECEIPT_RED_VOUCHER_HTML = """\
   <table class="grid">
     <colgroup>
       <col style="width:4%" />
-      <col style="width:9%" />
+      <col style="width:8%" />
+      <col style="width:10%" />
       <col style="width:11%" />
-      <col style="width:12%" />
       <col style="width:4%" />
+      <col style="width:6%" />
+      <col style="width:6%" />
       <col style="width:7%" />
+      <col style="width:9%" />
       <col style="width:7%" />
       <col style="width:8%" />
       <col style="width:10%" />
-      <col style="width:7%" />
-      <col style="width:9%" />
-      <col style="width:12%" />
+      <col style="width:10%" />
     </colgroup>
     <thead>
       <tr>
@@ -108,6 +109,7 @@ PURCHASE_RECEIPT_RED_VOUCHER_HTML = """\
         <th>仓位</th>
         <th>备注</th>
         <th>物资类型</th>
+        <th>采购订单</th>
       </tr>
     </thead>
     <tbody>
@@ -125,6 +127,7 @@ PURCHASE_RECEIPT_RED_VOUCHER_HTML = """\
         <td>{{ item.location_name or item.location_code or "" }}</td>
         <td>{{ item.notes or "" }}</td>
         <td class="center">{{ item.material_inventory_category or "" }}</td>
+        <td class="wrap-tight">{{ purchase_order_code or "" }}</td>
       </tr>
       {% endfor %}
       <tr>
@@ -132,7 +135,7 @@ PURCHASE_RECEIPT_RED_VOUCHER_HTML = """\
         <td class="num">{% if total_quantity not in [None, ""] %}{{ "%.2f"|format(total_quantity|float) }}{% endif %}</td>
         <td></td>
         <td class="num">{{ total_amount if total_amount and total_amount not in ['0', '0.0', '0.00', '0.000000'] else "" }}</td>
-        <td colspan="4"></td>
+        <td colspan="5"></td>
       </tr>
     </tbody>
   </table>
@@ -171,6 +174,15 @@ def purchase_receipt_red_voucher_html_needs_v4(html: str) -> bool:
     # v7：列宽已 100%，但单元格未强制换行，金额等会溢出邻列
     if "purchase_receipt_red_voucher_v7" in text and "overflow-wrap: anywhere" not in text:
         return True
+    if "<th>采购订单</th>" not in text and (
+        "purchase_receipt_red_voucher_v9" in text
+        or "purchase_receipt_red_voucher_v10" in text
+    ):
+        return True
+    if "purchase_receipt_red_voucher_v10" in text:
+        return False
+    if "purchase_receipt_red_voucher_v9" in text:
+        return False
     if PURCHASE_RECEIPT_RED_VOUCHER_LAYOUT_VERSION in text:
         if "margin: 7mm 10mm 6mm 10mm" in text:
             return True

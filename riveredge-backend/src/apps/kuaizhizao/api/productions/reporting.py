@@ -496,6 +496,7 @@ async def list_reporting_records(
         reported_at_start=reported_at_start_dt,
         reported_at_end=reported_at_end_dt,
         order_by=safe_order_by,
+        viewer_id=current_user.id,
     )
 
 

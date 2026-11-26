@@ -186,7 +186,7 @@ class SalesOrderService:
         from core.services.authorization.data_scope_resource_registry import get_resource_profile
 
         profile = get_resource_profile("kuaizhizao:sales-order")
-        dept_uuid, dept_user_ids = await DataScopeService._department_context(
+        dept_uuids, dept_user_ids = await DataScopeService._department_context(
             tenant_id, current_user
         )
         ctx = ScopeResolveContext(
@@ -195,7 +195,8 @@ class SalesOrderService:
             resource="kuaizhizao:sales-order",
             profile=profile,
             scope_payload=None,
-            department_uuid=dept_uuid,
+            department_uuid=dept_uuids[0] if dept_uuids else None,
+            department_uuids=dept_uuids,
             department_user_ids=dept_user_ids,
         )
         if scope == "mine":

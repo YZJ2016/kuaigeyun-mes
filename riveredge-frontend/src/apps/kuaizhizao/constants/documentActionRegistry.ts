@@ -48,7 +48,9 @@ export type KuaizhizaoDocumentActionKey =
   | 'demand_computation.pull_from_demand'
   | 'demand_computation.pull_from_sales_order'
   | 'work_order.pull_from_demand_computation'
+  | 'work_order.pull_from_demand_plan'
   | 'work_order.pull_from_sales_order'
+  | 'work_order.pull_from_sales_forecast'
   | 'purchase_order.pull_from_sales_order'
   | 'outbound.pull_from_work_order'
   | 'outbound.pull_from_sales_order'
@@ -490,6 +492,14 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     sourceLabelKey: documentActionI18n('work_order.pull_from_demand_computation', 'source'),
     targetLabelKey: documentActionI18n('work_order.pull_from_demand_computation', 'target'),
   },
+  'work_order.pull_from_demand_plan': {
+    key: 'work_order.pull_from_demand_plan',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('work_order.pull_from_demand_plan', 'label'),
+    sourceLabelKey: documentActionI18n('work_order.pull_from_demand_plan', 'source'),
+    targetLabelKey: documentActionI18n('work_order.pull_from_demand_plan', 'target'),
+  },
   'work_order.pull_from_sales_order': {
     key: 'work_order.pull_from_sales_order',
     module: 'kuaizhizao',
@@ -497,6 +507,14 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     labelKey: documentActionI18n('work_order.pull_from_sales_order', 'label'),
     sourceLabelKey: documentActionI18n('work_order.pull_from_sales_order', 'source'),
     targetLabelKey: documentActionI18n('work_order.pull_from_sales_order', 'target'),
+  },
+  'work_order.pull_from_sales_forecast': {
+    key: 'work_order.pull_from_sales_forecast',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('work_order.pull_from_sales_forecast', 'label'),
+    sourceLabelKey: documentActionI18n('work_order.pull_from_sales_forecast', 'source'),
+    targetLabelKey: documentActionI18n('work_order.pull_from_sales_forecast', 'target'),
   },
   'outbound.pull_from_work_order': {
     key: 'outbound.pull_from_work_order',

@@ -13,6 +13,8 @@ export function buildQualityInspectionDocStatusValueEnum(
   return {
     待检验: { text: t('app.kuaizhizao.quality.common.docStatus.pendingInspection') },
     已检验: { text: t('app.kuaizhizao.quality.common.status.inspected') },
+    合格: { text: t('app.kuaizhizao.quality.common.qualityStatus.qualified') },
+    不合格: { text: t('app.kuaizhizao.quality.common.qualityStatus.unqualified') },
   };
 }
 
@@ -61,11 +63,19 @@ export function resolveQualityInspectionListParams(
   const { date_start: created_start_date, date_end: created_end_date } =
     parseSalesReportDateRange(search, ['created_at_range', 'createdAtRange']);
 
+  const pinnedStatus = pickSearchString(searchFormValues, 'status');
+  const pinnedQuality = pickSearchString(searchFormValues, 'quality_status');
+  // 钉住 Tab 用「合格/不合格」时走 quality_status；「待检验/已检验」走 status
+  const status =
+    pinnedStatus === '合格' || pinnedStatus === '不合格' ? undefined : pinnedStatus;
+  const quality_status =
+    pinnedStatus === '合格' || pinnedStatus === '不合格' ? pinnedStatus : pinnedQuality;
+
   return {
     order_by,
     keyword: pickListSearchKeyword(searchFormValues),
-    status: pickSearchString(searchFormValues, 'status'),
-    quality_status: pickSearchString(searchFormValues, 'quality_status'),
+    status,
+    quality_status,
     supplier_id: pickOptionalId(searchFormValues, 'supplier_id'),
     material_id: pickOptionalId(searchFormValues, 'material_id'),
     purchase_receipt_id: pickOptionalId(searchFormValues, 'purchase_receipt_id'),

@@ -1,4 +1,4 @@
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -114,6 +114,13 @@ const NonconformingLedgerPage: React.FC = () => {
         setDetailRefreshNonce((n) => n + 1);
         navigate(`/apps/kuaizhizao/quality-management/eight-d-reports/${report.id}`);
   }, [messageApi, navigate, t]);
+
+  const executeRevokeDisposition = useCallback(async (row: DefectLedgerItem) => {
+    await qualityImprovementApi.nonconformingLedger.revokeDisposition(row.id);
+    messageApi.success(t('app.kuaizhizao.quality.nc.messages.revokeDispositionSuccess', { code: row.code }));
+    actionRef.current?.reload();
+    setDetailRefreshNonce((n) => n + 1);
+  }, [messageApi, t]);
 
   const handleStart8d = useCallback((row: DefectLedgerItem) => {
     getAntdModal().confirm({
@@ -264,6 +271,24 @@ const NonconformingLedgerPage: React.FC = () => {
         },
       },
       {
+        key: 'revoke-disposition',
+        label: t('app.kuaizhizao.quality.nc.actions.revokeDisposition'),
+        disabled:
+          !updateGates?.revokeDisposition.allowed || Boolean(updateGates.revokeDisposition.disabled),
+        requireConfirm: true,
+        confirmTitle: t('app.kuaizhizao.quality.nc.modal.revokeDispositionTitle'),
+        confirmDescription: t('app.kuaizhizao.quality.nc.modal.revokeDispositionContent', {
+          code: updateTarget?.code || '',
+        }),
+        onClick: () => {
+          if (!updateTarget) {
+            messageApi.warning(t('app.kuaizhizao.quality.nc.messages.batchUpdateNeedOne'));
+            return;
+          }
+          void executeRevokeDisposition(updateTarget);
+        },
+      },
+      {
         key: 'start-8d',
         label: t('app.kuaizhizao.quality.nc.actions.start8d'),
         disabled: startableCount === 0,
@@ -275,7 +300,17 @@ const NonconformingLedgerPage: React.FC = () => {
         onClick: (keys: React.Key[]) => handleBatchStart8d(keys),
       },
     ];
-  }, [canStart8d, handleBatchStart8d, messageApi, ncPerms, openDisposition, resolveSelectedRows, selectedRowKeys, t]);
+  }, [
+    canStart8d,
+    executeRevokeDisposition,
+    handleBatchStart8d,
+    messageApi,
+    ncPerms,
+    openDisposition,
+    resolveSelectedRows,
+    selectedRowKeys,
+    t,
+  ]);
 
   const columns: ProColumns<DefectLedgerItem>[] = useMemo(
     () => alignProColumns<DefectLedgerItem>([
@@ -558,6 +593,26 @@ const NonconformingLedgerPage: React.FC = () => {
                   {t('app.kuaizhizao.quality.nc.actions.updateDisposition')}
                 </Button>
               )}
+              {gates.revokeDisposition.allowed && (
+                <ActionConfirmPopconfirm
+                  title={t('app.kuaizhizao.quality.nc.modal.revokeDispositionTitle')}
+                  description={t('app.kuaizhizao.quality.nc.modal.revokeDispositionContent', {
+                    code: row.code,
+                  })}
+                  onConfirm={() => executeRevokeDisposition(row)}
+                >
+                  <Button
+                    key="revoke-disposition"
+                    {...rowActionKind('revoke')}
+                    {...rowActionLabelKeep()}
+                    disabled={gates.revokeDisposition.disabled}
+                    title={gates.revokeDisposition.title}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {t('app.kuaizhizao.quality.nc.actions.revokeDisposition')}
+                  </Button>
+                </ActionConfirmPopconfirm>
+              )}
               {gates.start8d.allowed && (
                 <ActionConfirmPopconfirm title={t('app.kuaizhizao.quality.nc.modal.start8dTitle')} description={t('app.kuaizhizao.quality.nc.modal.start8dContent', { code: row.code })} onConfirm={() => executeStart8d(row)}>
               <Button
@@ -576,7 +631,20 @@ const NonconformingLedgerPage: React.FC = () => {
         },
       },
     ], GLOBAL_DOC_LIST_FIELD_RANK),
-    [t, ncPerms, canStart8d, navigate, ncStatusValueEnum, ncDefectTypeValueEnum, ncDispositionValueEnum, openDetail, openDisposition, handleStart8d],
+    [
+      t,
+      ncPerms,
+      canStart8d,
+      navigate,
+      ncStatusValueEnum,
+      ncDefectTypeValueEnum,
+      ncDispositionValueEnum,
+      openDetail,
+      openDisposition,
+      handleStart8d,
+      executeStart8d,
+      executeRevokeDisposition,
+    ],
   );
 
   return (
@@ -720,6 +788,15 @@ const NonconformingLedgerPage: React.FC = () => {
             setDetailId(undefined);
           }}
           onUpdateDisposition={openDisposition}
+          onRevokeDisposition={(row) => {
+            getAntdModal().confirm({
+              title: t('app.kuaizhizao.quality.nc.modal.revokeDispositionTitle'),
+              content: t('app.kuaizhizao.quality.nc.modal.revokeDispositionContent', {
+                code: row.code,
+              }),
+              onOk: () => executeRevokeDisposition(row),
+            });
+          }}
           onStart8d={handleStart8d}
         />
       </ListPageTemplate>

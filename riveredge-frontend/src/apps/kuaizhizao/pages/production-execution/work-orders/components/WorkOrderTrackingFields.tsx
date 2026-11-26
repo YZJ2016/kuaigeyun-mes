@@ -34,12 +34,14 @@ type Props = {
 }
 
 type TrackingAssignMode = 'batch' | 'serial' | 'both'
+type SerialEntryMode = 'rule' | 'manual'
 
 const TRACKING_FIELD_NAMES = [
   'enable_production_tracking',
   'tracking_assign_mode',
   'batch_rule_id',
   'serial_rule_id',
+  'serial_entry_mode',
   'planned_batch_no',
   'planned_serial_nos',
 ] as const
@@ -125,6 +127,7 @@ export const WorkOrderTrackingFields: React.FC<Props> = ({
   const [serialRules, setSerialRules] = useState<RuleOption[]>([])
   const [previewLoading, setPreviewLoading] = useState(false)
   const [trackingAssignMode, setTrackingAssignMode] = useState<TrackingAssignMode>('batch')
+  const [serialEntryMode, setSerialEntryMode] = useState<SerialEntryMode>('rule')
   const assignModeOptions = useMemo(() => trackingAssignModeOptions(trackingMode, t), [trackingMode, t])
   const showBatchFields = trackingAssignMode === 'batch' || trackingAssignMode === 'both'
   const showSerialFields = trackingAssignMode === 'serial' || trackingAssignMode === 'both'
@@ -135,10 +138,34 @@ export const WorkOrderTrackingFields: React.FC<Props> = ({
       tracking_assign_mode: undefined,
       batch_rule_id: undefined,
       serial_rule_id: undefined,
+      serial_entry_mode: 'rule',
       planned_batch_no: undefined,
       planned_serial_nos: undefined,
     })
+    setSerialEntryMode('rule')
   }, [formRef])
+
+  const syncSerialEntryMode = useCallback(
+    (mode: SerialEntryMode) => {
+      setSerialEntryMode(mode)
+      formRef.current?.setFieldValue('serial_entry_mode', mode)
+      if (mode === 'manual') {
+        formRef.current?.setFieldsValue({
+          serial_rule_id: undefined,
+          planned_serial_nos: undefined,
+        })
+      } else {
+        formRef.current?.setFieldValue('planned_serial_nos', undefined)
+        if (materialInfo) {
+          formRef.current?.setFieldValue(
+            'serial_rule_id',
+            materialInfo.defaultSerialRuleId ?? undefined
+          )
+        }
+      }
+    },
+    [formRef, materialInfo]
+  )
 
   const applyDefaultRules = useCallback(
     (info: WorkOrderTrackingMaterialInfo, mode: TrackingAssignMode) => {
@@ -171,14 +198,12 @@ export const WorkOrderTrackingFields: React.FC<Props> = ({
           planned_batch_no: undefined,
           batch_rule_id: undefined,
         })
-        if (materialInfo) {
-          formRef.current?.setFieldValue('serial_rule_id', materialInfo.defaultSerialRuleId ?? undefined)
-        }
+        syncSerialEntryMode('rule')
       } else if (materialInfo) {
         applyDefaultRules(materialInfo, mode)
       }
     },
-    [applyDefaultRules, formRef, materialInfo]
+    [applyDefaultRules, formRef, materialInfo, syncSerialEntryMode]
   )
 
   useEffect(() => {
@@ -264,9 +289,11 @@ export const WorkOrderTrackingFields: React.FC<Props> = ({
           tracking_assign_mode: undefined,
           batch_rule_id: undefined,
           serial_rule_id: undefined,
+          serial_entry_mode: 'rule',
           planned_batch_no: undefined,
           planned_serial_nos: undefined,
         })
+        setSerialEntryMode('rule')
       } else if (materialInfo) {
         const mode = defaultTrackingAssignMode(trackingMode)
         syncAssignMode(mode)
@@ -307,7 +334,7 @@ export const WorkOrderTrackingFields: React.FC<Props> = ({
         formRef.current?.setFieldValue('planned_batch_no', batchNo)
       }
 
-      if (showSerialFields) {
+      if (showSerialFields && serialEntryMode === 'rule') {
         const serialRuleId = formRef.current?.getFieldValue('serial_rule_id')
         const res = await materialSerialApi.generate(materialUuid, Math.floor(previewQty), {
           ruleId: serialRuleId ?? materialInfo?.defaultSerialRuleId ?? undefined,
@@ -331,7 +358,11 @@ export const WorkOrderTrackingFields: React.FC<Props> = ({
     } finally {
       setPreviewLoading(false)
     }
-  }, [formRef, materialUuid, materialInfo, message, showBatchFields, showSerialFields])
+  }, [formRef, materialUuid, materialInfo, message, showBatchFields, showSerialFields, serialEntryMode, t])
+
+  const showPreviewButton =
+    !disabled &&
+    (showBatchFields || (showSerialFields && serialEntryMode === 'rule'))
 
   if (!productId || loadingMaterial || trackingMode === 'none') {
     return (
@@ -372,7 +403,7 @@ export const WorkOrderTrackingFields: React.FC<Props> = ({
                   onChange={(v) => syncAssignMode(v as TrackingAssignMode)}
                   options={assignModeOptions}
                 />
-                {!disabled && (
+                {showPreviewButton && (
                   <Button
                     type="primary"
                     ghost
@@ -380,7 +411,7 @@ export const WorkOrderTrackingFields: React.FC<Props> = ({
                     loading={previewLoading}
                     onClick={() => void handlePreview()}
                   >
-                    预览生成
+                    {t('app.kuaizhizao.workOrder.formTrackingPreviewGenerate')}
                   </Button>
                 )}
               </div>
@@ -389,51 +420,133 @@ export const WorkOrderTrackingFields: React.FC<Props> = ({
               {assignModeHint(trackingAssignMode, t)}
             </Typography.Text>
 
-            <ProFormDependency name={['quantity']}>
-              {({ quantity }) => (
-                <div>
-                  {showBatchFields && (
-                    <>
-                      <Form.Item name="batch_rule_id" label="批号规则" style={{ marginBottom: 16 }}>
-                        <Select
-                          allowClear
-                          disabled={disabled}
-                          placeholder="默认使用物料规则"
-                          options={batchRules.map((r) => ({ label: `${r.name} (${r.code})`, value: r.id }))}
-                        />
-                      </Form.Item>
-                      <Form.Item name="planned_batch_no" label="投产批号" style={{ marginBottom: 16 }}>
-                        <Input disabled={disabled} placeholder="可手工录入或预览生成" />
-                      </Form.Item>
-                    </>
-                  )}
-                  {showSerialFields && (
-                    <>
-                      <Form.Item name="serial_rule_id" label="序列号规则" style={{ marginBottom: 16 }}>
-                        <Select
-                          allowClear
-                          disabled={disabled}
-                          placeholder="默认使用物料规则"
-                          options={serialRules.map((r) => ({ label: `${r.name} (${r.code})`, value: r.id }))}
-                        />
-                      </Form.Item>
-                      <Form.Item
-                        name="planned_serial_nos"
-                        label={`投产序列号（${Number(quantity) || 0} 件）`}
-                        style={{ marginBottom: 16 }}
-                        tooltip="数量须与计划数量一致；留空则下达时按规则生成"
-                      >
-                        <Select
-                          mode="tags"
-                          disabled={disabled}
-                          placeholder="输入或预览生成，每件一个序列号"
-                          tokenSeparators={[',', ' ']}
-                        />
-                      </Form.Item>
-                    </>
-                  )}
-                </div>
-              )}
+            <Form.Item name="serial_entry_mode" hidden initialValue="rule">
+              <Input />
+            </Form.Item>
+
+            <ProFormDependency name={['quantity', 'serial_entry_mode']}>
+              {({ quantity, serial_entry_mode: serialEntryModeFromForm }) => {
+                const entryMode = (serialEntryModeFromForm as SerialEntryMode) || serialEntryMode
+                const qtyInt = Number(quantity)
+                const qtyLabel = Number.isFinite(qtyInt) && qtyInt > 0 ? qtyInt : 0
+                return (
+                  <div>
+                    {showBatchFields && (
+                      <>
+                        <Form.Item name="batch_rule_id" label="批号规则" style={{ marginBottom: 16 }}>
+                          <Select
+                            allowClear
+                            disabled={disabled}
+                            placeholder="默认使用物料规则"
+                            options={batchRules.map((r) => ({ label: `${r.name} (${r.code})`, value: r.id }))}
+                          />
+                        </Form.Item>
+                        <Form.Item name="planned_batch_no" label="投产批号" style={{ marginBottom: 16 }}>
+                          <Input disabled={disabled} placeholder="可手工录入或预览生成" />
+                        </Form.Item>
+                      </>
+                    )}
+                    {showSerialFields && (
+                      <>
+                        <Form.Item label={t('app.kuaizhizao.workOrder.formSerialEntryMode')} style={{ marginBottom: 16 }}>
+                          <ThemedSegmented
+                            className="form-field-segmented"
+                            style={{ width: 'fit-content', maxWidth: '100%' }}
+                            value={entryMode}
+                            disabled={disabled}
+                            onChange={(v) => syncSerialEntryMode(v as SerialEntryMode)}
+                            options={[
+                              {
+                                label: t('app.kuaizhizao.workOrder.formSerialEntryByRule'),
+                                value: 'rule',
+                              },
+                              {
+                                label: t('app.kuaizhizao.workOrder.formSerialEntryManual'),
+                                value: 'manual',
+                              },
+                            ]}
+                          />
+                        </Form.Item>
+                        {entryMode === 'rule' && (
+                          <>
+                            <Form.Item name="serial_rule_id" label="序列号规则" style={{ marginBottom: 16 }}>
+                              <Select
+                                allowClear
+                                disabled={disabled}
+                                placeholder="默认使用物料规则"
+                                options={serialRules.map((r) => ({
+                                  label: `${r.name} (${r.code})`,
+                                  value: r.id,
+                                }))}
+                              />
+                            </Form.Item>
+                            <Form.Item
+                              name="planned_serial_nos"
+                              label={t('app.kuaizhizao.workOrder.formProductionSerialNoWithQty', {
+                                count: qtyLabel,
+                              })}
+                              style={{ marginBottom: 16 }}
+                              tooltip={t('app.kuaizhizao.workOrder.formSerialRulePreviewHint')}
+                            >
+                              <Select
+                                mode="tags"
+                                disabled={disabled}
+                                placeholder={t('app.kuaizhizao.workOrder.formSerialRulePreviewPlaceholder')}
+                                tokenSeparators={[',', ' ']}
+                              />
+                            </Form.Item>
+                          </>
+                        )}
+                        {entryMode === 'manual' && (
+                          <Form.Item
+                            name="planned_serial_nos"
+                            label={t('app.kuaizhizao.workOrder.formProductionSerialNoWithQty', {
+                              count: qtyLabel,
+                            })}
+                            style={{ marginBottom: 16 }}
+                            rules={[
+                              {
+                                validator: async (_, value) => {
+                                  if (!Array.isArray(value) || value.length === 0) {
+                                    throw new Error(t('app.kuaizhizao.workOrder.msgSerialManualRequired'))
+                                  }
+                                  const cleaned = value
+                                    .map((s: string) => String(s).trim())
+                                    .filter(Boolean)
+                                  if (!Number.isFinite(qtyInt) || qtyInt <= 0) {
+                                    throw new Error(t('app.kuaizhizao.workOrder.msgPreviewQtyFirst'))
+                                  }
+                                  if (!Number.isInteger(qtyInt)) {
+                                    throw new Error(t('app.kuaizhizao.workOrder.msgSerialQtyMustBeInteger'))
+                                  }
+                                  if (cleaned.length !== qtyInt) {
+                                    throw new Error(
+                                      t('app.kuaizhizao.workOrder.msgSerialManualCountMismatch', {
+                                        count: cleaned.length,
+                                        qty: qtyInt,
+                                      })
+                                    )
+                                  }
+                                  if (new Set(cleaned).size !== cleaned.length) {
+                                    throw new Error(t('app.kuaizhizao.workOrder.msgSerialManualDuplicate'))
+                                  }
+                                },
+                              },
+                            ]}
+                          >
+                            <Select
+                              mode="tags"
+                              disabled={disabled}
+                              placeholder={t('app.kuaizhizao.workOrder.formSerialManualPlaceholder')}
+                              tokenSeparators={[',', ' ', '\n']}
+                            />
+                          </Form.Item>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )
+              }}
             </ProFormDependency>
           </Card>
         </Col>

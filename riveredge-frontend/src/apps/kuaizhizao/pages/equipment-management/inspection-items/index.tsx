@@ -14,6 +14,7 @@ import {
 import { App, Modal, Row, Col } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import CodeField from '../../../../../components/code-field';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
@@ -94,10 +95,12 @@ const InspectionItemsPage: React.FC = () => {
   const [detailVisible, setDetailVisible] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detail, setDetail] = useState<InspectionItem | null>(null);
+  const [createCodeSessionKey, setCreateCodeSessionKey] = useState(0);
 
   const handleCreate = () => {
     setIsEdit(false);
     setCurrent(null);
+    setCreateCodeSessionKey((k) => k + 1);
     setFormInitialValues({ value_type: 'boolean', is_active: true });
     setModalVisible(true);
   };
@@ -432,7 +435,22 @@ const InspectionItemsPage: React.FC = () => {
       >
         <Row gutter={16}>
           <Col span={12}>
-            <ProFormText name="code" label={t('common.code')} rules={[{ required: true }]} />
+            <CodeField
+              key={
+                isEdit
+                  ? `inspection-item-code-edit-${current?.id ?? 'none'}`
+                  : `inspection-item-code-create-${createCodeSessionKey}`
+              }
+              pageCode="kuaizhizao-equipment-inspection-item"
+              name="code"
+              label={t('common.code')}
+              required={false}
+              autoGenerateOnCreate={!isEdit}
+              showGenerateButton={false}
+              documentId={isEdit ? current?.id : undefined}
+              formRef={formRef}
+              generateSessionKey={createCodeSessionKey}
+            />
           </Col>
           <Col span={12}>
             <ProFormText name="name" label={t('common.name')} rules={[{ required: true }]} />

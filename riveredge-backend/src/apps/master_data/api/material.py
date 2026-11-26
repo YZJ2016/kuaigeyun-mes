@@ -30,6 +30,13 @@ from apps.master_data.services.material_source_service import (
     MaterialSourceSuggestionService,
 )
 from apps.master_data.services.material_health_service import MaterialHealthService
+from apps.master_data.services.material_field_mask_service import (
+    mask_material_list_response,
+    mask_material_response,
+    mask_material_response_list,
+    sanitize_material_create,
+    sanitize_material_update,
+)
 from apps.master_data.schemas.material_schemas import (
     MaterialGroupCreate, MaterialGroupUpdate, MaterialGroupResponse,
     MaterialCreate, MaterialUpdate, MaterialResponse, MaterialListResponse,
@@ -1753,7 +1760,9 @@ async def create_material(
     - **is_active**: 是否启用（默认：true）
     """
     try:
-        return await MaterialService.create_material(tenant_id, data, current_user=current_user)
+        safe_data = await sanitize_material_create(tenant_id, current_user.id, data)
+        created = await MaterialService.create_material(tenant_id, safe_data, current_user=current_user)
+        return await mask_material_response(tenant_id, current_user.id, created)
     except ValidationError as e:
         raise _http_error(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -1888,7 +1897,7 @@ async def list_materials(
     if ids:
         # 按 ID 精确查询时，默认一次返回全部命中行（仍受 le=2000 约束）
         effective_limit = min(2000, max(limit, len(ids)))
-    return await MaterialService.list_materials(
+    listed = await MaterialService.list_materials(
         tenant_id,
         skip,
         effective_limit,
@@ -1913,6 +1922,7 @@ async def list_materials(
         updated_end_date,
         ids,
     )
+    return await mask_material_list_response(tenant_id, current_user.id, listed)
 
 
 @router.post(
@@ -2289,7 +2299,7 @@ async def get_material(
     """
     try:
         result = await MaterialService.get_material_by_uuid(tenant_id, material_uuid)
-        return result
+        return await mask_material_response(tenant_id, current_user.id, result)
     except NotFoundError as e:
         raise _http_error(status.HTTP_404_NOT_FOUND, str(e), tenant_id=tenant_id)
 
@@ -2306,10 +2316,11 @@ async def list_material_variants(
 ):
     """获取主物料下所有属性 SKU 行（预组合）。"""
     try:
-        return await MaterialService.get_material_variants(
+        variants = await MaterialService.get_material_variants(
             tenant_id=tenant_id,
             master_material_uuid=material_uuid,
         )
+        return await mask_material_response_list(tenant_id, current_user.id, variants)
     except NotFoundError as e:
         raise _http_error(status.HTTP_404_NOT_FOUND, str(e), tenant_id=tenant_id)
     except ValidationError as e:
@@ -2362,14 +2373,15 @@ async def update_material(
     - **is_active**: 是否启用（可选）
     """
     try:
+        safe_data = await sanitize_material_update(tenant_id, current_user.id, data)
         result = await MaterialService.update_material(
             tenant_id,
             material_uuid,
-            data,
+            safe_data,
             updated_by=current_user.id,
             current_user=current_user,
         )
-        return result
+        return await mask_material_response(tenant_id, current_user.id, result)
     except NotFoundError as e:
         raise _http_error(status.HTTP_404_NOT_FOUND, str(e), tenant_id=tenant_id)
     except ValidationError as e:
@@ -2498,7 +2510,8 @@ async def change_material_source(
             new_source_config=new_source_config,
             current_user=current_user,
         )
-        return await MaterialService.get_material_by_uuid(tenant_id, material.uuid)
+        refreshed = await MaterialService.get_material_by_uuid(tenant_id, material.uuid)
+        return await mask_material_response(tenant_id, current_user.id, refreshed)
     except NotFoundError as e:
         raise _http_error(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:

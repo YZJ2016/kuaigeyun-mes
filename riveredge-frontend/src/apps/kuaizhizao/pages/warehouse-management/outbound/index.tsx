@@ -327,16 +327,7 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
     () => resolveOutboundListPath(location.pathname),
     [location.pathname],
   );
-  const [oqcReviewOpen, setOqcReviewOpen] = useState(false);
-  const [oqcReviewLoading, setOqcReviewLoading] = useState(false);
-  const [oqcReviewEnsure, setOqcReviewEnsure] = useState<EnsureOqcForSalesDeliveryResult | null>(null);
-  const [oqcReviewSalesDeliveryId, setOqcReviewSalesDeliveryId] = useState<number | string | undefined>();
-  const oqcPendingRef = useRef<{
-    record: OutboundOrder;
-    silentSuccess?: boolean;
-    resolve: () => void;
-    reject: (error: unknown) => void;
-  } | null>(null);
+
 
   const [executionConfig, setExecutionConfig] = useState<any>(null);
   const outboundPerms = useResourcePermissions(permissionResource);
@@ -2330,18 +2321,6 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
           ) {
             void handleDetail(currentOrder);
           }
-        }}
-      />
-      <SalesDeliveryOqcReviewModal
-        open={oqcReviewOpen}
-        loading={oqcReviewLoading}
-        salesDeliveryId={oqcReviewSalesDeliveryId}
-        ensure={oqcReviewEnsure}
-        t={t}
-        navigate={navigate}
-        onCancel={handleOqcReviewCancel}
-        onContinue={() => {
-          void handleOqcReviewContinue();
         }}
       />
       {PrintModal}

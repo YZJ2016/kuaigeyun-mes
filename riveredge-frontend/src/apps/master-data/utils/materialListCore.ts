@@ -165,6 +165,7 @@ export function resolveMaterialListParams(
 
   const params: Record<string, string | number | boolean | undefined> = {
     isActive: pickSearchTriStateBoolean(searchFormValues, 'isActive'),
+    batchManaged: pickSearchTriStateBoolean(searchFormValues, 'batchManaged'),
     sortBy: sortKey,
     sortOrder,
     created_start_date,
@@ -205,6 +206,8 @@ export function resolveMaterialListParams(
   if (model) params.model = model;
   const baseUnit = pickOptionalString(search, 'baseUnit');
   if (baseUnit) params.baseUnit = baseUnit;
+  const batchNo = pickSearchString(searchFormValues, 'batchNo');
+  if (batchNo) params.batchNo = batchNo;
 
   return params;
 }

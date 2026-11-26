@@ -91,12 +91,41 @@ const STATUS_TO_KEY: Record<string, string> = {
   已拆分: 'split',
 };
 
+const WORK_ORDER_REVIEW_APPROVED = new Set([
+  '已通过',
+  '审核通过',
+  'approved',
+  'APPROVED',
+  '通过',
+  '已审核',
+]);
+
+/** 主状态仍为草稿、审核已通过：执行态展示「待下达」（库内 status 仍为 draft） */
+function isWorkOrderPendingReleaseDisplay(record: WorkOrder | Record<string, unknown>): boolean {
+  const status = String(record?.status ?? '').trim();
+  if (!['draft', '草稿', 'DRAFT'].includes(status)) return false;
+  const review = String(
+    (record as { review_status?: unknown }).review_status ??
+      (record as Record<string, unknown>).review_status ??
+      '',
+  ).trim();
+  if (WORK_ORDER_REVIEW_APPROVED.has(review)) return true;
+  const phase = String(
+    (record as { audit?: { phase?: unknown } }).audit?.phase ?? '',
+  )
+    .trim()
+    .toLowerCase();
+  return phase === 'approved';
+}
+
 /** 前端兜底：根据 status 构建 BackendLifecycle */
 function buildFallbackLifecycle(record: WorkOrder | Record<string, unknown>): BackendLifecycle {
   const status = (record?.status ?? (record as Record<string, unknown>).status) as string | undefined;
   const key = status ? (STATUS_TO_KEY[status] ?? 'draft') : 'draft';
+  const pendingRelease = key === 'draft' && isWorkOrderPendingReleaseDisplay(record);
+  const draftLabel = pendingRelease ? '待下达' : '草稿';
   const labels: Record<string, string> = {
-    draft: '草稿',
+    draft: draftLabel,
     released: '已下达',
     in_progress: '执行中',
     completed: '已完成',
@@ -104,7 +133,7 @@ function buildFallbackLifecycle(record: WorkOrder | Record<string, unknown>): Ba
     split: '已拆分',
   };
   const stageDefs = [
-    { key: 'draft', label: '草稿' },
+    { key: 'draft', label: draftLabel },
     { key: 'released', label: '已下达' },
     { key: 'in_progress', label: '执行中' },
     { key: 'completed', label: '已完成' },
@@ -125,7 +154,7 @@ function buildFallbackLifecycle(record: WorkOrder | Record<string, unknown>): Ba
     return { key: s.key, label: s.label, status: st };
   });
   const nextStepSuggestions: Record<string, string[]> = {
-    draft: ['下达工单'],
+    draft: pendingRelease ? ['下达工单'] : ['提交审核'],
     released: ['开始执行', '状态流转'],
     in_progress: ['报工', '指定结束', '状态流转'],
     completed: [],

@@ -282,6 +282,7 @@ async def assert_kingdee_avb_before_outbound_confirm(
             line.material_id,
             warehouse_id=line.warehouse_id,
             batch_no=batch,
+            location_code=loc,
         )
         label = str(line.material_name or line.material_code or line.material_id)
         wh_part = f"仓库 {wh_code}" if wh_code else "仓库未指定"

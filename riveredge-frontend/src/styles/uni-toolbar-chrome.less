@@ -37,6 +37,14 @@
       font-size: 12px;
     }
   }
+
+  /* 与 ant Input size=large / controlHeightLG 对齐（外框高度由 ThemedSegmented 壳层控制） */
+  &.uni-toolbar-segmented--lg {
+    .ant-segmented-item-label {
+      min-height: 36px;
+      line-height: 36px;
+    }
+  }
 }
 
 /* 非工具栏壳的 ThemedSegmented：thumb 圆角跟随系统 borderRadius */

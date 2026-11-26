@@ -308,6 +308,7 @@ function resolvePurchaseOrderNextStepKeys(
   if (activeKey === 'pending_review') return keys.pendingReview;
   if (activeKey === 'audited') return keys.audited;
   if (activeKey === 'confirmed' || activeKey === 'executing') return keys.receipt;
+  if (activeKey === 'invoicing' || activeKey === 'completed') return keys.none;
   if (activeKey === 'draft') return keys.draft;
   return keys.none;
 }
@@ -320,11 +321,18 @@ function finalizePurchaseOrderLifecycle(
 ): LifecycleResult {
   const adapted = adaptForAuditSwitch(result, auditRequired);
   const localized = applyLifecycleI18n(adapted, t, PURCHASE_ORDER_STAGE_I18N_BY_KEY, {});
-  const nextStepKeys =
-    explicitNextStepKeys ?? resolvePurchaseOrderNextStepKeys(adapted, auditRequired);
+  const backendNext = (adapted.nextStepSuggestions ?? []).filter(
+    (line) => String(line ?? '').trim().length > 0,
+  );
+  const nextStepSuggestions =
+    backendNext.length > 0
+      ? backendNext
+      : (explicitNextStepKeys ?? resolvePurchaseOrderNextStepKeys(adapted, auditRequired)).map(
+          (key) => requireI18nText(t, key),
+        );
   return {
     ...localized,
-    nextStepSuggestions: nextStepKeys.map((key) => requireI18nText(t, key)),
+    nextStepSuggestions,
   };
 }
 

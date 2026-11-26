@@ -57,6 +57,7 @@ interface SparePart {
   brand?: string;
   supplier?: string;
   safety_stock?: number;
+  stock_quantity?: number;
   price?: number;
   is_active?: boolean;
   updated_at?: string;
@@ -163,6 +164,7 @@ const SparePartsPage: React.FC = () => {
     });
     messageApi.success(t(`${P}.adjustSuccess`));
     setAdjustModalVisible(false);
+    masterActionRef.current?.reload();
     inventoryActionRef.current?.reload();
   };
 
@@ -178,6 +180,7 @@ const SparePartsPage: React.FC = () => {
       { title: t(`${P}.col.brand`), dataIndex: 'brand' },
       { title: t(`${P}.col.supplier`), dataIndex: 'supplier' },
       { title: t(`${P}.col.safetyStock`), dataIndex: 'safety_stock' },
+      { title: t(`${P}.col.stockQuantity`), dataIndex: 'stock_quantity' },
       { title: t(`${P}.col.price`), dataIndex: 'price' },
       { title: t('common.remark'), dataIndex: 'description', span: 2 },
       buildIsActiveDescriptionColumn<SparePart>(t),
@@ -267,6 +270,17 @@ const SparePartsPage: React.FC = () => {
         resizable: false,
         hideInSearch: true,
         render: (_, r) => (r.safety_stock != null ? String(r.safety_stock) : '-'),
+      },
+      {
+        title: t(`${P}.col.stockQuantity`),
+        dataIndex: 'stock_quantity',
+        width: 90,
+        minWidth: 90,
+        uniTableKeepWidth: true,
+        resizable: false,
+        align: 'right',
+        hideInSearch: true,
+        render: (_, r) => (r.stock_quantity != null ? String(r.stock_quantity) : '0'),
       },
       {
         title: t('common.enabled'),
@@ -472,7 +486,7 @@ const SparePartsPage: React.FC = () => {
               <UniTable<SparePart>
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.spareParts)}
-                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.spare-parts.master-width-v2"
+                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.spare-parts.master-width-v3"
                 actionRef={masterActionRef}
                 rowKey="id"
                 columns={masterColumns}

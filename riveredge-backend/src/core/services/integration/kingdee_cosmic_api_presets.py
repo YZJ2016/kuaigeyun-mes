@@ -153,6 +153,8 @@ class KingdeeCosmicApiPreset(TypedDict, total=False):
 
 
 WAREHOUSE_PRESET_CODE_SUFFIX = "query_warehouse"
+LOCATION_PRESET_CODE_SUFFIX = "query_location"
+WARELOCAREFERENCE_PRESET_CODE_SUFFIX = "query_warelocareference"
 SUPPLIER_PRESET_CODE_SUFFIX = "query_supplier"
 SUPPLIER_GETSUPPLIER_PATH = "kapi/v2/fd81/basedata/bd_supplier/getsupplier"
 SUPPLIER_GETSUPPLIER_PRESET_CODE_SUFFIX = "getsupplier_bd_supplier"
@@ -184,10 +186,17 @@ KINGDEE_COSMIC_OUTBOUND_PRESET_CODE_SUFFIXES = frozenset(
 # 历史双预置遗留 code，加载常用接口时会合并为与物料一致的 batchQuery
 LEGACY_SUPPLIER_LIST_PRESET_CODE_SUFFIX = "query_supplier_list"
 MEASUREUNITS_PRESET_CODE_SUFFIX = "query_measureunits"
+MULTIMEASUREUNIT_PRESET_CODE_SUFFIX = "query_multimeasureunit"
 MATERIAL_PRESET_CODE_SUFFIX = "query_material"
 MATERIAL_GROUP_PRESET_CODE_SUFFIX = "query_material_group"
 # 单位同步只取物料编码/名称与基础单位，避免batchQuery默认吐全量列
 UNIT_SYNC_MATERIAL_SELECT = "number,name,baseunit.number,baseunit.name"
+# 物料多计量单位 batchQuery：只拉换算行必要列（appscen 暂不写入本系统场景）
+MULTIMEASUREUNIT_SYNC_SELECT = (
+    "materialid.number,materialid.name,"
+    "measureunitid.number,measureunitid.name,"
+    "numerator,denominator,converttype,precision"
+)
 # 物料同步：编码/名称/规格/基础单位/分组（字段以本环境模型为准，可微调）
 MATERIAL_SYNC_SELECT = (
     "number,name,modelnum,baseunit.number,baseunit.name,group.number,group.name,"
@@ -225,6 +234,62 @@ def build_warehouse_get_list_preset() -> KingdeeCosmicApiPreset:
         "path": WAREHOUSE_GET_LIST_PATH,
         "method": "POST",
         "request_body": build_warehouse_get_list_preset_body(),
+    }
+
+
+def build_location_get_list_preset_body() -> Dict[str, Any]:
+    """仓位列表 getList：体形与仓库一致（data + pageNo/pageSize）；本环境可不带组织。"""
+    return {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 1000,
+    }
+
+
+def build_location_get_list_preset() -> KingdeeCosmicApiPreset:
+    return {
+        "code_suffix": LOCATION_PRESET_CODE_SUFFIX,
+        "name": "苍穹查询仓位",
+        "description": (
+            "供应链基础资料「仓位列表查询」，API 编码 getList，"
+            f"请求地址 /v2/sbd/{BIZ_BD_LOCATION}/getList。"
+            "请求体 data、pageNo、pageSize；返回 number/name/enable/status 等。"
+            "库存余额 getInventoryAvbQty 可选 params.location，但按仓位筛选时须同时传 params.warehouse；"
+            "仓库启用仓位管理时，出入库明细须带 location_number。"
+            "若返回 612，检查开放服务云对应用 sbd、业务对象 bd_location 的查询授权。"
+        ),
+        "path": LOCATION_GET_LIST_PATH,
+        "method": "POST",
+        "request_body": build_location_get_list_preset_body(),
+    }
+
+
+def build_warelocareference_query_preset_body() -> Dict[str, Any]:
+    """仓库仓位关系 query：data.warehouse_number 必填；全量同步按仓库编码分批调用。"""
+    return {
+        "data": {"warehouse_number": ""},
+        "pageNo": 1,
+        "pageSize": 1000,
+    }
+
+
+def build_warelocareference_query_preset() -> KingdeeCosmicApiPreset:
+    return {
+        "code_suffix": WARELOCAREFERENCE_PRESET_CODE_SUFFIX,
+        "name": "苍穹查询仓库仓位关系",
+        "description": (
+            "供应链基础资料「仓库仓位关系详情查询」，API 编码 query，"
+            f"请求地址 /v2/sbd/{BIZ_BD_WARELOCAREFERENCE}/query。"
+            "请求体 data.warehouse_number（必填）、pageNo、pageSize；"
+            "返回 warehouse_number/name、location_number/name、"
+            "warehouse_createorg_number/name、isdefaultloc。"
+            "全量拉取须按仓库编码分批（同步来源可批量填入 data.warehouse_number）。"
+            "用于对照仓库与仓位归属；本系统库位可直挂仓库或挂库区。"
+            "若返回 612，检查开放服务云对应用 sbd、业务对象 bd_warelocareference 的查询授权。"
+        ),
+        "path": WARELOCAREFERENCE_QUERY_PATH,
+        "method": "POST",
+        "request_body": build_warelocareference_query_preset_body(),
     }
 
 
@@ -482,6 +547,73 @@ def warehouse_batch_query_preset_needs_upgrade(
 
 def kingdee_warehouse_api_upgrade_fields() -> Dict[str, Any]:
     preset = build_warehouse_get_list_preset()
+    return {
+        "path": preset["path"],
+        "method": preset["method"],
+        "name": preset["name"],
+        "description": preset["description"],
+        "request_params": preset.get("request_params"),
+        "request_body": preset.get("request_body") or {},
+    }
+
+
+def location_preset_needs_upgrade(
+    path: Any,
+    request_body: Any = None,
+    method: Any = None,
+) -> bool:
+    """须为 POST …/sbd/bd_location/getList，且含 data + pageNo/pageSize。"""
+    if str(method or "").upper() not in ("", "POST"):
+        return True
+    lower = str(path or "").lower().replace("\\", "/")
+    if "/sbd/bd_location/getlist" not in lower:
+        return True
+    if not isinstance(request_body, dict):
+        return True
+    if request_body.get("pageNo") in (None, "") or request_body.get("pageSize") in (None, ""):
+        return True
+    if not isinstance(request_body.get("data"), dict):
+        return True
+    return False
+
+
+def kingdee_location_api_upgrade_fields() -> Dict[str, Any]:
+    preset = build_location_get_list_preset()
+    return {
+        "path": preset["path"],
+        "method": preset["method"],
+        "name": preset["name"],
+        "description": preset["description"],
+        "request_params": preset.get("request_params"),
+        "request_body": preset.get("request_body") or {},
+    }
+
+
+def warelocareference_preset_needs_upgrade(
+    path: Any,
+    request_body: Any = None,
+    method: Any = None,
+) -> bool:
+    """须为 POST …/sbd/bd_warelocareference/query，且含 data.warehouse_number + pageNo/pageSize。"""
+    if str(method or "").upper() not in ("", "POST"):
+        return True
+    lower = str(path or "").lower().replace("\\", "/")
+    if f"/sbd/{BIZ_BD_WARELOCAREFERENCE}/query" not in lower:
+        return True
+    if not isinstance(request_body, dict):
+        return True
+    if request_body.get("pageNo") in (None, "") or request_body.get("pageSize") in (None, ""):
+        return True
+    data = request_body.get("data")
+    if not isinstance(data, dict):
+        return True
+    if "warehouse_number" not in data:
+        return True
+    return False
+
+
+def kingdee_warelocareference_api_upgrade_fields() -> Dict[str, Any]:
+    preset = build_warelocareference_query_preset()
     return {
         "path": preset["path"],
         "method": preset["method"],
@@ -1098,6 +1230,65 @@ def kingdee_measureunits_api_upgrade_fields() -> Dict[str, Any]:
         "name": preset["name"],
         "description": preset["description"],
         "request_params": preset.get("request_params") or {},
+        "request_body": preset.get("request_body") or {},
+    }
+
+
+def build_multimeasureunit_batch_query_preset_body() -> Dict[str, Any]:
+    return {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 500,
+        "select": MULTIMEASUREUNIT_SYNC_SELECT,
+    }
+
+
+def build_multimeasureunit_batch_query_preset() -> KingdeeCosmicApiPreset:
+    """开放平台 bd_multimeasureunit batchQuery：按物料写入辅单位换算（独立同步，非单位目录）。"""
+    return {
+        "code_suffix": MULTIMEASUREUNIT_PRESET_CODE_SUFFIX,
+        "name": "苍穹查询物料多计量单位",
+        "description": (
+            f"基础资料「物料多计量单位」批量查询 POST /v2/basedata/{BIZ_BD_MULTIMEASUREUNIT}/batchQuery。"
+            f"默认 select={MULTIMEASUREUNIT_SYNC_SELECT}。"
+            "同步映射：物料编码←materialid.number，辅单位←measureunitid.number，"
+            "名称←measureunitid.name，分子/分母←numerator/denominator，换算类型←converttype（1 固定 2 浮动）。"
+            "仅更新已存在物料的辅单位列表，不新建物料；appscen 暂不写入本系统场景单位。"
+        ),
+        "path": f"kapi/v2/basedata/{BIZ_BD_MULTIMEASUREUNIT}/batchQuery",
+        "method": "POST",
+        "request_params": {"select": MULTIMEASUREUNIT_SYNC_SELECT},
+        "request_body": build_multimeasureunit_batch_query_preset_body(),
+    }
+
+
+def multimeasureunit_preset_needs_upgrade(
+    path: Any,
+    request_body: Any = None,
+    request_params: Any = None,
+) -> bool:
+    lower = str(path or "").lower().replace("\\", "/")
+    if f"/{BIZ_BD_MULTIMEASUREUNIT}/batchquery" not in lower:
+        return True
+    select = _resolve_request_select(request_body, request_params).lower().replace(" ", "")
+    required = (
+        "materialid.number",
+        "measureunitid.number",
+        "numerator",
+        "denominator",
+        "converttype",
+    )
+    return any(part not in select for part in required)
+
+
+def kingdee_multimeasureunit_api_upgrade_fields() -> Dict[str, Any]:
+    preset = build_multimeasureunit_batch_query_preset()
+    return {
+        "path": preset["path"],
+        "method": preset["method"],
+        "name": preset["name"],
+        "description": preset["description"],
+        "request_params": preset.get("request_params"),
         "request_body": preset.get("request_body") or {},
     }
 
@@ -2329,6 +2520,7 @@ def list_kingdee_cosmic_api_presets() -> List[KingdeeCosmicApiPreset]:
         },
         build_material_batch_query_preset(),
         build_measureunits_batch_query_preset(),
+        build_multimeasureunit_batch_query_preset(),
         build_material_group_batch_query_preset(),
         build_material_group_goods_class_preset(),
         build_supplier_query_preset(),
@@ -2384,6 +2576,8 @@ def list_kingdee_cosmic_api_presets() -> List[KingdeeCosmicApiPreset]:
         build_inventory_balance_query_preset(),
         build_inventory_detail_query_preset(),
         build_warehouse_get_list_preset(),
+        build_location_get_list_preset(),
+        build_warelocareference_query_preset(),
         {
             "code_suffix": "query_purchase_order",
             "name": "苍穹查询采购订单",

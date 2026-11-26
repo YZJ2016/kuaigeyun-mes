@@ -510,6 +510,7 @@ class DocumentPushPipeline:
                 target_id = resolved
 
         steps: list[str] = []
+        submit_already_past_draft = False
         if submit_after and submit_path:
             try:
                 _, submit_msg = await self._submit_or_audit(
@@ -523,28 +524,39 @@ class DocumentPushPipeline:
                     timeout=timeout,
                     config=config,
                     operate_api_uuid=str(config.get("submit_api_uuid") or "").strip() or None,
+                    operate_slot="submit",
                 )
                 steps.append(f"已提交（{submit_msg or '成功'}）")
             except BusinessLogicError as exc:
                 text = str(exc).replace(" ", "")
                 if "只有暂存" in text and "提交" in text:
+                    submit_already_past_draft = True
                     steps.append("已提交（单据已不在暂存，继续审核）")
                 else:
                     raise
         if audit_after and audit_path:
-            _, audit_msg = await self._submit_or_audit(
-                tenant_id=tenant_id,
-                adapter=adapter,
-                connection=connection,
-                path=audit_path,
-                form_id=form_id,
-                bill_id=target_id,
-                bill_no=billno,
-                timeout=timeout,
-                config=config,
-                operate_api_uuid=str(config.get("audit_api_uuid") or "").strip() or None,
-            )
-            steps.append(f"已审核（{audit_msg or '成功'}）")
+            try:
+                _, audit_msg = await self._submit_or_audit(
+                    tenant_id=tenant_id,
+                    adapter=adapter,
+                    connection=connection,
+                    path=audit_path,
+                    form_id=form_id,
+                    bill_id=target_id,
+                    bill_no=billno,
+                    timeout=timeout,
+                    config=config,
+                    operate_api_uuid=str(config.get("audit_api_uuid") or "").strip() or None,
+                    operate_slot="audit",
+                )
+                steps.append(f"已审核（{audit_msg or '成功'}）")
+            except BusinessLogicError as exc:
+                text = str(exc).replace(" ", "")
+                # 金蝶已审核后再审：与「只有暂存才能提交」对称，视为幂等成功（补推/多绑定误触）
+                if submit_already_past_draft and "必须为已提交才能审核" in text:
+                    steps.append("已审核（单据已不在已提交，视为已完成）")
+                else:
+                    raise
         workflow_message = "金蝶" + "、".join(steps) if steps else ""
         return workflow_message, submit_after, audit_after
 

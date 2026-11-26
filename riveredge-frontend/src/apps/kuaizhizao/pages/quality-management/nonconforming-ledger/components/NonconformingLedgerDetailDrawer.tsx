@@ -12,7 +12,7 @@ import {
 import { qualityImprovementApi, type DefectLedgerItem } from '../../../../services/quality-improvement';
 import { nonconformingLedgerRowGates } from '../../../../../../hooks/useDocumentCapabilities';
 import type { ResourcePermissionGates } from '../../../../../../hooks/useResourcePermissions';
-import { rowActionKind } from '../../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../../components/uni-action';
 import {
   alignDescriptionColumns,
   GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK,
@@ -32,6 +32,7 @@ interface NonconformingLedgerDetailDrawerProps {
   canStart8d: boolean;
   onClose: () => void;
   onUpdateDisposition: (row: DefectLedgerItem) => void;
+  onRevokeDisposition: (row: DefectLedgerItem) => void;
   onStart8d: (row: DefectLedgerItem) => void;
 }
 
@@ -43,6 +44,7 @@ export const NonconformingLedgerDetailDrawer: React.FC<NonconformingLedgerDetail
   canStart8d,
   onClose,
   onUpdateDisposition,
+  onRevokeDisposition,
   onStart8d,
 }) => {
   const { t } = useTranslation();
@@ -224,6 +226,17 @@ export const NonconformingLedgerDetailDrawer: React.FC<NonconformingLedgerDetail
                 onClick={() => onUpdateDisposition(record)}
               >
                 {t('app.kuaizhizao.quality.nc.actions.updateDisposition')}
+              </Button>
+            )}
+            {gates.revokeDisposition.allowed && (
+              <Button
+                {...rowActionKind('revoke')}
+                {...rowActionLabelKeep()}
+                disabled={gates.revokeDisposition.disabled}
+                title={gates.revokeDisposition.title}
+                onClick={() => onRevokeDisposition(record)}
+              >
+                {t('app.kuaizhizao.quality.nc.actions.revokeDisposition')}
               </Button>
             )}
             {gates.start8d.allowed && (

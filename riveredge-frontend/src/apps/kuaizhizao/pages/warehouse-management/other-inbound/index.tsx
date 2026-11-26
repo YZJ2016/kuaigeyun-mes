@@ -22,7 +22,14 @@ import {
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
 import { useNavigate } from 'react-router-dom';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
+import {
+  ActionType,
+  ProColumns,
+  ProDescriptionsItemProps,
+  ProFormItem,
+  ProFormTextArea,
+  type ProFormInstance,
+} from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, Row, Col, Select, Typography, Descriptions } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ThunderboltOutlined, ShoppingOutlined, RollbackOutlined } from '@ant-design/icons';
 import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
@@ -30,12 +37,29 @@ import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
-import { buildDocumentLineDualQuantityPairColumns } from '../../../../../components/quantity-with-unit';
+import {
+  buildDocumentLineAuxQuantityDetailColumn,
+  buildDocumentLineDualQuantityPairColumns,
+} from '../../../../../components/quantity-with-unit';
 import { pickDocumentLineDualQuantityFields } from '../../../../../utils/materialDualQuantity';
 import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
+import { buildDocumentDetailTotalStockFormColumn } from '../../sales-management/shared/materialLineFormDetail';
 import { MaterialUnitLabel } from '../../../../../components/material-unit-label';
 import type { Material } from '../../../../master-data/types/material';
-import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
+import {
+  UniWhDropdown,
+  UniWhLocationDropdown,
+  useWarehouseHasLocations,
+  lineLocationSelectionRequired,
+} from '../../../../../components/uni-wh-dropdown';
+import { getPopupContainerInModal } from '../../../../../utils/modalEventIsolation';
+import {
+  DOCUMENT_DETAIL_COL_WIDTH,
+  DOCUMENT_DETAIL_CONTROL_SIZE,
+  DOCUMENT_DETAIL_NUM_COL,
+  DOCUMENT_DETAIL_TEXT_COL,
+} from '../../../components/document-detail-table/documentDetailTable';
+import { withMaterialLineFillMapping } from '../../sales-management/shared/materialLineFormDetail';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import CodeField from '../../../../../components/code-field';
@@ -47,10 +71,8 @@ import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
-import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import { materialApi, materialBatchApi, materialSerialApi, MATERIAL_SERIAL_GENERATE_MAX_COUNT } from '../../../../master-data/services/material';
 import { SerialNumbersImportTrigger } from '../../../../../components/serial-numbers-import';
-import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
@@ -131,6 +153,136 @@ function translateReasonTypeLabel(t: (key: string) => string, value: string | un
   return key ? t(key) : value;
 }
 
+const OTHER_INBOUND_HOST_RESOURCE = 'kuaizhizao:other-inbound';
+
+function resolvePrimaryDefaultWarehouse(material: Material): { id: number; name: string } | null {
+  const wh =
+    (material as { defaultWarehouse?: { id?: number; name?: string } }).defaultWarehouse ??
+    (material as { default_warehouse?: { id?: number; name?: string } }).default_warehouse;
+  if (wh && typeof wh === 'object' && 'id' in wh && wh.id) {
+    return { id: Number(wh.id), name: String((wh as { name?: string }).name ?? '') };
+  }
+  return null;
+}
+
+function OtherInboundCreateWarehouseCell({
+  index,
+  clearLineWarehouseDependents,
+  formRef,
+  t,
+}: {
+  index: number;
+  clearLineWarehouseDependents: (index: number) => void;
+  formRef: React.MutableRefObject<ProFormInstance | undefined>;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+}) {
+  const materialId = Number(AntForm.useWatch(['items', index, 'material_id']) || 0);
+  return (
+    <div>
+      <AntForm.Item name={[index, 'warehouse_name']} hidden>
+        <Input />
+      </AntForm.Item>
+      <AntForm.Item
+        name={[index, 'warehouse_id']}
+        rules={[
+          {
+            required: true,
+            message: t('app.kuaizhizao.warehouseOtherInbound.field.selectWarehouse'),
+          },
+        ]}
+        noStyle
+      >
+        <UniWhDropdown
+          size={DOCUMENT_DETAIL_CONTROL_SIZE}
+          hostResource={OTHER_INBOUND_HOST_RESOURCE}
+          materialId={materialId > 0 ? materialId : undefined}
+          showStock={materialId > 0}
+          sortByStock={materialId > 0}
+          placeholder={t('app.kuaizhizao.warehouseOtherInbound.field.selectWarehouse')}
+          getPopupContainer={getPopupContainerInModal}
+          onChange={(_id, wh) => {
+            clearLineWarehouseDependents(index);
+            const whId = Number(wh?.id ?? _id ?? 0);
+            formRef.current?.setFieldValue(['items', index, 'warehouse_name'], wh?.name ?? '');
+            if (whId > 0) {
+              void formRef.current?.validateFields([['items', index, 'location_id']]);
+            }
+          }}
+        />
+      </AntForm.Item>
+    </div>
+  );
+}
+
+function OtherInboundCreateLocationCell({
+  index,
+  formRef,
+  t,
+}: {
+  index: number;
+  formRef: React.MutableRefObject<ProFormInstance | undefined>;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+}) {
+  const materialId = Number(AntForm.useWatch(['items', index, 'material_id']) || 0);
+  const warehouseId = Number(AntForm.useWatch(['items', index, 'warehouse_id']) || 0);
+  const hasLocations = useWarehouseHasLocations(warehouseId > 0 ? warehouseId : undefined);
+
+  return (
+    <>
+      <AntForm.Item name={[index, 'location_code']} hidden>
+        <Input />
+      </AntForm.Item>
+      {hasLocations === false ? (
+        <>
+          <AntForm.Item name={[index, 'location_id']} hidden>
+            <Input />
+          </AntForm.Item>
+          <span className="uni-wh-whole-location-auto">
+            {t('app.kuaizhizao.warehouseOutbound.pull.wholeLocationAuto')}
+          </span>
+        </>
+      ) : (
+        <AntForm.Item
+          name={[index, 'location_id']}
+          rules={[
+            {
+              validator: async (_, value) => {
+                if (!(warehouseId > 0)) return;
+                const code = formRef.current?.getFieldValue(['items', index, 'location_code']);
+                const need = await lineLocationSelectionRequired(warehouseId, value, code);
+                if (need) {
+                  throw new Error(t('app.kuaizhizao.warehouseOtherInbound.field.selectLocation'));
+                }
+              },
+            },
+          ]}
+          noStyle
+        >
+          <UniWhLocationDropdown
+            warehouseId={warehouseId > 0 ? warehouseId : undefined}
+            materialId={materialId > 0 ? materialId : undefined}
+            hostResource={OTHER_INBOUND_HOST_RESOURCE}
+            showStock={materialId > 0}
+            sortByStock={materialId > 0}
+            allowClear={false}
+            size={DOCUMENT_DETAIL_CONTROL_SIZE}
+            getPopupContainer={getPopupContainerInModal}
+            disabled={!(warehouseId > 0) || hasLocations === undefined}
+            placeholder={
+              warehouseId > 0
+                ? t('app.kuaizhizao.warehouseOtherInbound.col.location')
+                : t('app.kuaizhizao.warehouseOtherInbound.field.selectWarehouseFirst')
+            }
+            onChange={(_value, loc) => {
+              formRef.current?.setFieldValue(['items', index, 'location_code'], loc?.code ?? '');
+            }}
+          />
+        </AntForm.Item>
+      )}
+    </>
+  );
+}
+
 interface OtherInbound {
   id?: number;
   tenant_id?: number;
@@ -165,6 +317,9 @@ interface OtherInboundItem {
   material_name?: string;
   material_spec?: string;
   material_unit?: string;
+  warehouse_id?: number;
+  warehouse_name?: string;
+  location_id?: number;
   location_code?: string;
   inbound_quantity?: number;
   unit_price?: number;
@@ -188,6 +343,9 @@ const defaultInboundItem = {
   default_batch_rule_id: undefined,
   serial_rule_id: undefined,
   default_serial_rule_id: undefined,
+  warehouse_id: undefined as number | undefined,
+  warehouse_name: undefined as string | undefined,
+  location_id: undefined as number | undefined,
   location_code: undefined,
   batch_number: undefined,
   serial_numbers: undefined,
@@ -241,28 +399,16 @@ const OtherInboundPage: React.FC = () => {
     resetDetailFieldValues: resetOtherInboundDetailFieldValues,
   } = useCustomFieldsForList<OtherInbound>({ tableName: OTHER_INBOUND_CUSTOM_FIELD_TABLE });
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
-  const [warehouseList, setWarehouseList] = useState<any[]>([]);
   const [reasonTypeOptions, setReasonTypeOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [reasonTypeLoading, setReasonTypeLoading] = useState(false);
   const [generatingBatchIdx, setGeneratingBatchIdx] = useState<number | null>(null);
   const [generatingSerialIdx, setGeneratingSerialIdx] = useState<number | null>(null);
-  const {
-    selectedWarehouseId,
-    locationOptions,
-    updateSelectedWarehouseId,
-    resetSelectedWarehouseId,
-  } = useWarehouseLocationOptions();
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const wh = await masterDataWarehouseApi.list({ limit: 1000, is_active: true });
-        setWarehouseList(Array.isArray(wh) ? wh : (wh as any)?.items || []);
-      } catch (e) {
-        console.error('加载仓库/规则失败', e);
-      }
-    };
-    load();
+  const clearLineWarehouseDependents = useCallback((index: number) => {
+    formRef.current?.setFieldValue(['items', index, 'location_id'], undefined);
+    formRef.current?.setFieldValue(['items', index, 'location_code'], undefined);
+    formRef.current?.setFieldValue(['items', index, 'batch_number'], undefined);
+    formRef.current?.setFieldValue(['items', index, 'serial_numbers'], undefined);
   }, []);
 
   const fallbackReasonTypeOptions = useMemo(
@@ -586,6 +732,15 @@ const OtherInboundPage: React.FC = () => {
     [selectedOtherInboundForBatch],
   );
 
+  const getOtherInboundReconcileDocumentIds = useCallback(() => {
+    if (selectedOtherInboundIdsForDocumentPush.length) {
+      return selectedOtherInboundIdsForDocumentPush;
+    }
+    return [...listRowsRef.current.values()]
+      .filter((row) => Number(row.id) > 0)
+      .map((row) => Number(row.id));
+  }, [selectedOtherInboundIdsForDocumentPush]);
+
   const canToolbarPrint =
     selectedRowKeys.length === 1 &&
     !!selectedOtherInboundForBatch[0] &&
@@ -632,12 +787,15 @@ const OtherInboundPage: React.FC = () => {
       const current = formRef.current?.getFieldValue('items') ?? [];
       const newRows = await Promise.all(
         selected.map(async (m) => {
+          const primaryWh = resolvePrimaryDefaultWarehouse(m);
           const row = {
             ...defaultInboundItem,
             material_id: m.id,
             material_code: m.mainCode ?? m.code ?? '',
             material_name: m.name ?? '',
             material_unit: m.inventoryUnit ?? m.baseUnit ?? '',
+            warehouse_id: primaryWh?.id,
+            warehouse_name: primaryWh?.name,
             material_uuid: m.uuid,
             batch_managed: isMaterialBatchEntryEnabled(trackingFlags, m.batchManaged ?? false),
             serial_managed: isMaterialSerialEntryEnabled(trackingFlags, m.serialManaged ?? false),
@@ -669,7 +827,6 @@ const OtherInboundPage: React.FC = () => {
 
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
-    resetSelectedWarehouseId();
     setCreateModalVisible(true);
     setTimeout(() => {
       formRef.current?.resetFields();
@@ -691,6 +848,11 @@ const OtherInboundPage: React.FC = () => {
       }
       for (const it of validItems) {
         const material = it.material_code || it.material_name || '-';
+        if (!(Number(it.warehouse_id) > 0)) {
+          const msg = t('app.kuaizhizao.warehouseOtherInbound.field.selectWarehouse');
+          messageApi.error(msg);
+          throw new Error(msg);
+        }
         if (!String(it.location_code || '').trim()) {
           messageApi.error(
             t('app.kuaizhizao.warehouseInbound.msg.selectLocationForMaterial', { material }),
@@ -723,30 +885,42 @@ const OtherInboundPage: React.FC = () => {
           }
         }
       }
-      const wh = warehouseList.find((w: any) => (w.id ?? w.warehouse_id) === values.warehouse_id);
-      const warehouseName = values.warehouse_name ?? wh?.name ?? wh?.warehouse_name ?? '';
+      const headerWhId = Number(validItems[0]?.warehouse_id) || 0;
+      const headerWhName = String(validItems[0]?.warehouse_name ?? '').trim();
+      if (!(headerWhId > 0)) {
+        const msg = t('app.kuaizhizao.warehouseOtherInbound.field.selectWarehouse');
+        messageApi.error(msg);
+        throw new Error(msg);
+      }
       const { standardValues, customData } = extractOtherInboundFormValues(values);
       const created = await warehouseApi.otherInbound.create({
         inbound_code: standardValues.inbound_code,
         // 字典可能存「调拨入库」，提交前归一为 schema 枚举「调拨」
         reason_type: normalizeReasonTypeValue(standardValues.reason_type) || standardValues.reason_type,
         reason_desc: standardValues.reason_desc,
-        warehouse_id: standardValues.warehouse_id,
-        warehouse_name: warehouseName,
+        warehouse_id: headerWhId,
+        warehouse_name: headerWhName,
         notes: standardValues.notes,
         attachments: normalizeDocumentAttachments(standardValues.attachments),
-        items: validItems.map((it: any) => ({
-          material_id: it.material_id,
-          material_code: it.material_code || '',
-          material_name: it.material_name || '',
-          material_unit: it.material_unit || '',
-          location_code: it.location_code || undefined,
-          ...pickDocumentLineDualQuantityFields(it as Record<string, unknown>),
-          inbound_quantity: Number(it.inbound_quantity) || 0,
-          unit_price: Number(it.unit_price) || 0,
-          batch_number: it.batch_number || undefined,
-          serial_numbers: it.serial_numbers || undefined,
-        })),
+        items: validItems.map((it: any) => {
+          const lineWhId = Number(it.warehouse_id) || 0;
+          return {
+            material_id: it.material_id,
+            material_code: it.material_code || '',
+            material_name: it.material_name || '',
+            material_unit: it.material_unit || '',
+            warehouse_id: lineWhId,
+            warehouse_name: String(it.warehouse_name ?? '').trim() || undefined,
+            location_id:
+              it.location_id != null && Number(it.location_id) > 0 ? Number(it.location_id) : undefined,
+            location_code: it.location_code || undefined,
+            ...pickDocumentLineDualQuantityFields(it as Record<string, unknown>),
+            inbound_quantity: Number(it.inbound_quantity) || 0,
+            unit_price: Number(it.unit_price) || 0,
+            batch_number: it.batch_number || undefined,
+            serial_numbers: it.serial_numbers || undefined,
+          };
+        }),
       });
       const recordId = Number((created as { id?: number })?.id ?? 0);
       if (recordId > 0 && Object.keys(customData).length > 0) {
@@ -754,7 +928,6 @@ const OtherInboundPage: React.FC = () => {
       }
       messageApi.success(t('common.createSuccess'));
       resetOtherInboundFormFieldValues();
-      resetSelectedWarehouseId();
       setCreateModalVisible(false);
       invalidateMenuBadgeCounts();
 
@@ -858,6 +1031,15 @@ const OtherInboundPage: React.FC = () => {
     () => alignDescriptionColumns([
       { title: t('app.kuaizhizao.warehouseOtherInbound.col.inboundCode'), dataIndex: 'inbound_code' },
       {
+        title: t('app.kuaizhizao.warehouse.field.kingdeeBillNo'),
+        key: 'kingdee_bill_no',
+        dataIndex: 'kingdee_bill_no',
+        render: (_, record) => {
+          const display = String(record.kingdee_bill_no || '').trim();
+          return display || '—';
+        },
+      },
+      {
         title: t('app.kuaizhizao.warehouseOtherInbound.col.reasonType'),
         dataIndex: 'reason_type',
         render: (_, record) =>
@@ -903,8 +1085,10 @@ const OtherInboundPage: React.FC = () => {
         width: 60,
         render: (val: unknown) => <MaterialUnitLabel value={val as string | null} />,
       },
+      { title: t('app.kuaizhizao.warehouseOtherInbound.col.warehouse'), dataIndex: 'warehouse_name', width: 110, ellipsis: true },
       { title: t('app.kuaizhizao.warehouseOtherInbound.col.location'), dataIndex: 'location_code', width: 100, ellipsis: true },
       { title: t('app.kuaizhizao.warehouseOtherInbound.col.inboundQty'), dataIndex: 'inbound_quantity', width: 100, align: 'right' as const },
+      buildDocumentLineAuxQuantityDetailColumn({ t, width: 120 }),
       {
         title: t('app.kuaizhizao.warehouseOtherInbound.col.unitPrice'),
         dataIndex: 'unit_price',
@@ -991,7 +1175,7 @@ const OtherInboundPage: React.FC = () => {
           headerTitle={t('app.kuaizhizao.warehouseOtherInbound.title')}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.otherInbound)}
-          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.other-inbound-width-v4"
+          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.other-inbound-width-v5"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -1021,7 +1205,8 @@ const OtherInboundPage: React.FC = () => {
                     pushEnabled={toolbarSyncPush.pushEnabled}
                     historySourceType="other_inbound"
                     historyTargetProfiles={['kingdee_im_otherinbill']}
-                    size="medium"
+                    getReconcileDocumentIds={getOtherInboundReconcileDocumentIds}
+                    size="middle"
                     renderPushPanel={({ active, close }) => (
                       <OtherInboundDocumentPushPanel
                         embedded
@@ -1222,7 +1407,6 @@ const OtherInboundPage: React.FC = () => {
         title={t('app.kuaizhizao.warehouseOtherInbound.createModal')}
         open={createModalVisible}
         onClose={() => {
-          resetSelectedWarehouseId();
           setCreateModalVisible(false);
           resetOtherInboundFormFieldValues();
         }}
@@ -1244,21 +1428,7 @@ const OtherInboundPage: React.FC = () => {
               context={{}}
             />
           </Col>
-          <Col span={12}>
-            <UniWarehouseSelect
-              name="warehouse_id"
-              label={t('app.kuaizhizao.warehouseOtherInbound.field.warehouse')}
-              placeholder={t('app.kuaizhizao.warehouseOtherInbound.field.selectWarehouse')}
-              required
-              hostResource="kuaizhizao:other-inbound"
-              onChange={(val, wh) => {
-                updateSelectedWarehouseId(val);
-                formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' });
-              }}
-            />
-          </Col>
         </Row>
-        <AntForm.Item name="warehouse_name" hidden />
         <Row gutter={16}>
           <Col span={12}>
             <ProFormItem name="reason_type" label={t('app.kuaizhizao.warehouseOtherInbound.field.reasonType')} rules={[{ required: true }]}>
@@ -1313,19 +1483,33 @@ const OtherInboundPage: React.FC = () => {
                                 label=""
                                 placeholder={t('app.kuaizhizao.warehouseOtherInbound.field.selectMaterial')}
                                 required
-                                size="small"
+                                size={DOCUMENT_DETAIL_CONTROL_SIZE}
                                 listFieldKey={index}
                                 listFieldName="items"
-                                fillMapping={{
-                                  material_code: 'mainCode',
-                                  material_name: 'name',
-                                }}
+                                warehouseId={
+                                  Number(row?.warehouse_id) > 0 ? Number(row.warehouse_id) : undefined
+                                }
+                                fillMapping={withMaterialLineFillMapping({ material_unit: 'inventoryUnit' })}
                                 onChange={(v, material) => {
+                                  clearLineWarehouseDependents(index);
+                                  formRef.current?.setFieldValue(['items', index, 'warehouse_id'], undefined);
+                                  formRef.current?.setFieldValue(['items', index, 'warehouse_name'], undefined);
                                   if (material) {
                                     formRef.current?.setFieldValue(
                                       ['items', index, 'material_unit'],
-                                      resolveMaterialScenarioUnit(material, 'purchase'),
+                                      resolveMaterialScenarioUnit(material, 'inventory'),
                                     );
+                                    const primaryWh = resolvePrimaryDefaultWarehouse(material as Material);
+                                    if (primaryWh) {
+                                      formRef.current?.setFieldValue(
+                                        ['items', index, 'warehouse_id'],
+                                        primaryWh.id,
+                                      );
+                                      formRef.current?.setFieldValue(
+                                        ['items', index, 'warehouse_name'],
+                                        primaryWh.name,
+                                      );
+                                    }
                                   }
                                   void onMaterialSelectForBatchSerial(index, v, material);
                                 }}
@@ -1340,6 +1524,7 @@ const OtherInboundPage: React.FC = () => {
                       </AntForm.Item>
                     ),
                   },
+                  buildDocumentDetailTotalStockFormColumn(t),
                   ...buildDocumentLineDualQuantityPairColumns({
                     t,
                     getForm: () => formRef.current,
@@ -1348,33 +1533,29 @@ const OtherInboundPage: React.FC = () => {
                     scenario: 'inventory',
                     quantityPrecision: quantityDecimals,
                     width: 168,
-                    columnSpread: { align: 'right' as const },
+                    columnSpread: DOCUMENT_DETAIL_NUM_COL,
                   }),
+                  {
+                    title: t('app.kuaizhizao.warehouseOtherInbound.col.warehouse'),
+                    dataIndex: 'warehouse_id',
+                    width: 220,
+                    ...DOCUMENT_DETAIL_TEXT_COL,
+                    render: (_: unknown, __: unknown, index: number) => (
+                      <OtherInboundCreateWarehouseCell
+                        index={index}
+                        clearLineWarehouseDependents={clearLineWarehouseDependents}
+                        formRef={formRef}
+                        t={t}
+                      />
+                    ),
+                  },
                   {
                     title: t('app.kuaizhizao.warehouseOtherInbound.col.location'),
                     dataIndex: 'location_code',
                     width: 150,
-                    render: (_: any, __: any, index: number) => (
-                      <AntForm.Item
-                        name={[index, 'location_code']}
-                        style={{ margin: 0 }}
-                        rules={[
-                          {
-                            required: true,
-                            message: t('app.kuaizhizao.warehouseOtherInbound.field.selectLocation'),
-                          },
-                        ]}
-                      >
-                        <Select
-                          options={locationOptions}
-                          placeholder={selectedWarehouseId ? t('app.kuaizhizao.warehouseOtherInbound.field.selectLocation') : t('app.kuaizhizao.warehouseOtherInbound.field.selectWarehouseFirst')}
-                          style={{ width: '100%' }}
-                          size="small"
-                          showSearch
-                          optionFilterProp="label"
-                          disabled={!selectedWarehouseId}
-                        />
-                      </AntForm.Item>
+                    ...DOCUMENT_DETAIL_TEXT_COL,
+                    render: (_: unknown, __: unknown, index: number) => (
+                      <OtherInboundCreateLocationCell index={index} formRef={formRef} t={t} />
                     ),
                   },
                   {

@@ -992,7 +992,9 @@ export type QualityInspectionAuditEntityType =
   | 'incoming_inspection'
   | 'process_inspection'
   | 'finished_goods_inspection'
-  | 'oqc_inspection';
+  | 'oqc_inspection'
+  | 'outsource_inspection'
+  | 'quality_patrol';
 
 export function qualityInspectionUniAuditProps(opts: {
   entityType: QualityInspectionAuditEntityType;

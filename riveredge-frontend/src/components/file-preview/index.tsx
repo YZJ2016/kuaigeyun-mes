@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Modal, Spin, Alert, Image, Button, App } from 'antd';
+import { Modal, Spin, Alert, Button, App } from 'antd';
 import {
   BorderOutlined,
   CompressOutlined,
@@ -139,7 +139,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const isSchDoc = isSchDocFile(fileSource);
   const isAltiumEda = isAltiumEdaFile(fileSource);
   const isOfficeMs = isOfficeMsDocFile(fileSource) && !officeAdvancedPdf;
-  const isExcelWorkbook = isExcelWorkbookFile(fileSource);
+  const isExcelWorkbook = isExcelWorkbookFile(fileSource) && !officeAdvancedPdf;
   const isTextPreview = isTextFile(fileSource) && !isSpreadsheetFile(fileSource);
   const isInlineDocument = isInlineDocumentPreview(fileSource);
   const isDocument = isDocumentPreviewFile(fileSource) || officeAdvancedPdf;
@@ -711,48 +711,74 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     );
   }
 
+  // 图片：走 UniPreviewOverlay（与 PDF 一致）。勿用隐藏 Image + 受控 preview——
+  // 挂载时 open 已为 true 时 antd Image 预览常不弹出，表现为「点了没反应」。
+  if (open && isImage) {
+    const imageBodyStyle: React.CSSProperties = {
+      flex: 1,
+      minHeight: 0,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'auto',
+      background: '#0f1115',
+    };
+    return (
+      <UniPreviewOverlay
+        open={open}
+        onClose={onClose}
+        title={previewHeaderTitle}
+        inset={16}
+        zIndex={overlayZIndex}
+        extra={
+          fileUuid && previewUrl && !isOriginalPreview ? (
+            <Button
+              type="link"
+              size="small"
+              loading={loadingOriginal}
+              onClick={(e) => {
+                e.stopPropagation();
+                void handleViewOriginal();
+              }}
+              style={{ color: 'rgba(255,255,255, 0.85)' }}
+            >
+              {loadingOriginal
+                ? t('components.secureImage.loadingOriginal')
+                : t('components.secureImage.viewOriginal')}
+            </Button>
+          ) : undefined
+        }
+      >
+        {loading ? (
+          <div style={imageBodyStyle}>
+            <Spin description={t('pages.system.files.previewLoading')}>
+              <div style={{ minHeight: 24 }} />
+            </Spin>
+          </div>
+        ) : error ? (
+          <Alert type="error" title={error} showIcon style={{ margin: 16 }} />
+        ) : displayUrl || previewUrl ? (
+          <div style={imageBodyStyle}>
+            <img
+              src={displayUrl || previewUrl}
+              alt={fileName || 'preview'}
+              style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+            />
+          </div>
+        ) : (
+          <Alert
+            type="warning"
+            showIcon
+            title={t('app.master-data.drawings.previewUnsupported')}
+            style={{ margin: 16 }}
+          />
+        )}
+      </UniPreviewOverlay>
+    );
+  }
+
   return (
     <>
-      {previewUrl && isImage ? (
-        <Image
-          src={displayUrl || previewUrl}
-          alt={fileName || 'preview'}
-          style={{ display: 'none' }}
-          preview={{
-            visible: open,
-            src: displayUrl || previewUrl,
-            destroyOnHidden: true,
-            ...(overlayZIndex != null ? { zIndex: overlayZIndex } : {}),
-            onVisibleChange: (visible) => {
-              if (!visible) onClose();
-            },
-            actionsRender: fileUuid
-              ? (originalNode) => (
-                  <>
-                    {originalNode}
-                    {!isOriginalPreview && (
-                      <Button
-                        type="link"
-                        size="small"
-                        loading={loadingOriginal}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleViewOriginal();
-                        }}
-                        style={{ color: 'rgba(255,255,255, 0.85)' }}
-                      >
-                        {loadingOriginal
-                          ? t('components.secureImage.loadingOriginal')
-                          : t('components.secureImage.viewOriginal')}
-                      </Button>
-                    )}
-                  </>
-                )
-              : undefined,
-          }}
-        />
-      ) : null}
-
       {!isImage && isPdf ? (
         <UniPdfPreview
           open={open}

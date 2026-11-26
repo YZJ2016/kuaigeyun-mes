@@ -1,5 +1,5 @@
 import type { SyncBinding, SyncSourceItem, SyncSourceType } from './types';
-import { invertFieldMapping } from './syncSourceUtils';
+import { fromFieldMapping, toFieldMapping } from './syncSourceUtils';
 
 export interface SyncSourceDraft {
   id: string;
@@ -38,7 +38,7 @@ export function bindingToSourceDrafts(
       kind: src.kind,
       api_uuid: src.api_uuid,
       dataset_uuid: src.dataset_uuid,
-      targetToSource: sanitize(invertFieldMapping(src.field_mapping || {})),
+      targetToSource: sanitize(fromFieldMapping(src.field_mapping || {})),
       request_body: cloneJsonObject(src.request_body),
       request_params: cloneJsonObject(src.request_params),
       persist_request_override: Boolean(src.persist_request_override),
@@ -55,7 +55,7 @@ export function bindingToSourceDrafts(
   }
   const kind = (binding.source_type || 'api') as SyncSourceType;
   const draft = newSyncSourceDraft(kind);
-  draft.targetToSource = sanitize(invertFieldMapping(binding.field_mapping || {}));
+  draft.targetToSource = sanitize(fromFieldMapping(binding.field_mapping || {}));
   if (kind === 'api' && binding.api_uuid) draft.api_uuid = binding.api_uuid;
   if (kind === 'dataset' && binding.dataset_uuid) draft.dataset_uuid = binding.dataset_uuid;
   return [draft];
@@ -70,7 +70,7 @@ export function draftsToPayloadSources(
     kind: draft.kind,
     api_uuid: draft.kind === 'api' ? draft.api_uuid : undefined,
     dataset_uuid: draft.kind === 'dataset' ? draft.dataset_uuid : undefined,
-    field_mapping: invertFieldMapping(sanitize(draft.targetToSource)),
+    field_mapping: toFieldMapping(sanitize(draft.targetToSource)),
     request_body: draft.kind === 'api' ? cloneJsonObject(draft.request_body) : undefined,
     request_params: draft.kind === 'api' ? cloneJsonObject(draft.request_params) : undefined,
     persist_request_override:

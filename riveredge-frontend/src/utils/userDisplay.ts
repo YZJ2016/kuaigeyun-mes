@@ -31,6 +31,7 @@ export function formatUserDisplayLabel(
   item: {
     full_name?: string | null;
     username?: string | null;
+    employee_number?: string | null;
     label?: string | null;
     id?: number;
     department_name?: string | null;
@@ -40,7 +41,7 @@ export function formatUserDisplayLabel(
 ): string {
   const includeDepartment = Boolean(options?.includeDepartment);
   const name = (item.full_name || '').trim();
-  const login = (item.username || '').trim();
+  const login = (item.employee_number || '').trim() || (item.username || '').trim();
   let base = '';
   if (!includeDepartment && item.label?.trim()) {
     base = item.label.trim();

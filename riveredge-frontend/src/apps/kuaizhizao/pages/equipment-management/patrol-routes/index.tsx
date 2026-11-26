@@ -14,6 +14,7 @@ import { App, Modal, Row, Col } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import CodeField from '../../../../../components/code-field';
 import { FormListDetailTable } from '../../../../../components/form-list-detail-table';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -79,6 +80,7 @@ const PatrolRoutesPage: React.FC = () => {
   const [detailVisible, setDetailVisible] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detail, setDetail] = useState<PatrolRoute | null>(null);
+  const [createCodeSessionKey, setCreateCodeSessionKey] = useState(0);
 
   const loadOptions = async () => {
     const [eqRes, schRes] = await Promise.all([
@@ -102,6 +104,7 @@ const PatrolRoutesPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrent(null);
+    setCreateCodeSessionKey((k) => k + 1);
     setFormInitialValues({ is_active: true, steps: [{ sort_order: 0 }] });
     setModalVisible(true);
     void loadOptions();
@@ -397,7 +400,22 @@ const PatrolRoutesPage: React.FC = () => {
       >
         <Row gutter={16}>
           <Col span={12}>
-            <ProFormText name="code" label={t('common.code')} rules={[{ required: true }]} />
+            <CodeField
+              key={
+                isEdit
+                  ? `patrol-route-code-edit-${current?.id ?? 'none'}`
+                  : `patrol-route-code-create-${createCodeSessionKey}`
+              }
+              pageCode="kuaizhizao-equipment-patrol-route"
+              name="code"
+              label={t('common.code')}
+              required={false}
+              autoGenerateOnCreate={!isEdit}
+              showGenerateButton={false}
+              documentId={isEdit ? current?.id : undefined}
+              formRef={formRef}
+              generateSessionKey={createCodeSessionKey}
+            />
           </Col>
           <Col span={12}>
             <ProFormText name="name" label={t('common.name')} rules={[{ required: true }]} />

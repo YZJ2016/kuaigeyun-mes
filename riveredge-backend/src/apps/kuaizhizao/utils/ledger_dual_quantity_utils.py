@@ -330,6 +330,8 @@ def resolve_confirmation_ledger_pair(
         raise ValidationError("确认明细缺少主数量")
     inv_q = _decimal(primary_quantity)
     aux_unit = resolve_ledger_auxiliary_unit(material)
+    inv_unit = resolve_material_inventory_unit(material)
+    base_unit = str(getattr(material, "base_unit", None) or "").strip()
 
     if aux_unit is None:
         return normalize_inventory_posting_quantities(
@@ -338,6 +340,13 @@ def resolve_confirmation_ledger_pair(
 
     if secondary_quantity_raw is None:
         raise ValidationError("台账双单位物料确认时必须提供副数量（辅助单位数量）")
+
+    # 库存单位即基本单位：过账基本量以主数量为准；副数量只进台账 aux，不用辅助单位反推基本量
+    if not inv_unit or inv_unit == base_unit:
+        return normalize_inventory_posting_quantities(
+            material, inv_q, base_quantity=inv_q
+        )
+
     aux_q = _decimal(secondary_quantity_raw)
     base_q = convert_to_base_quantity(material, aux_q, from_unit=aux_unit)
     return normalize_inventory_posting_quantities(material, inv_q, base_quantity=base_q)

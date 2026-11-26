@@ -82,6 +82,7 @@ function displayItemToUser(item: UserDisplayItem): User {
     uuid: item.uuid,
     username: item.username,
     full_name: item.full_name ?? undefined,
+    employee_number: item.employee_number ?? undefined,
     is_active: true,
     is_tenant_admin: false,
     tenant_id: 0,
