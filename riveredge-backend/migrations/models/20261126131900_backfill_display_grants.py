@@ -47,7 +47,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
         -- 无租户级版本行的租户补插 version=2：get_version 对缺行恒返回 1，
         -- 不补则本次新增授权在 effective_access 缓存（1800s TTL）内不可见
         INSERT INTO core_permission_versions (tenant_id, user_id, version, updated_at)
-        SELECT DISTINCT r.tenant_id, NULL, 2, NOW()
+        SELECT DISTINCT r.tenant_id, NULL::integer, 2, NOW()
         FROM core_roles r
         WHERE r.deleted_at IS NULL
           AND NOT EXISTS (
