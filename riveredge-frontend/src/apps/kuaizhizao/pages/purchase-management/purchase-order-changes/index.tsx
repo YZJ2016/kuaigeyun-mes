@@ -99,10 +99,6 @@ import {
 } from '../../../components/DocumentAttachmentsReadonly';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
-import {
-  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
-  renderDocumentLineMaterialsPreview,
-} from '../../sales-management/shared/documentLineMaterialsPreview';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 

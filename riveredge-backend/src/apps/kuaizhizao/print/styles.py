@@ -199,6 +199,22 @@ def build_a4_document(
     <div class="section-title">备注</div>
     <div class="text-block">{{{{ {notes_expr} or "—" }}}}</div>
   </div>"""
+    table_section = ""
+    if table_head.strip() or table_row.strip():
+        table_section = (
+            '\n  <div class="section">\n'
+            '    <div class="section-title">明细</div>\n'
+            '    <table class="data-table">\n'
+            f"      <thead><tr>{table_head}</tr></thead>\n"
+            "      <tbody>\n"
+            "        {% for item in items %}\n"
+            f"        <tr>{table_row}</tr>\n"
+            "        {% endfor %}\n"
+            "      </tbody>\n"
+            "    </table>\n"
+            f"    {totals_html}\n"
+            "  </div>"
+        )
     return (
         (style_css or PRINT_STYLE_A4)
         + f"""
@@ -220,19 +236,7 @@ def build_a4_document(
 {_info_items_html(info_items)}
     </div>
   </div>
-{extra_sections}
-  <div class="section">
-    <div class="section-title">明细</div>
-    <table class="data-table">
-      <thead><tr>{table_head}</tr></thead>
-      <tbody>
-        {{% for item in items %}}
-        <tr>{table_row}</tr>
-        {{% endfor %}}
-      </tbody>
-    </table>
-    {totals_html}
-  </div>
+{extra_sections}{table_section}
 {notes_block}
   <div class="sign-row{cols_class}">
     {signs}

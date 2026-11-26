@@ -1442,8 +1442,7 @@ export async function repriceUnlockedPurchaseDocumentLineIfNeeded(
     if (!shouldReprice) return;
   }
 
-  const preserveSpecOnReprice =
-    options?.trigger === 'quantity' || options?.trigger === 'partner';
+  const preserveSpecOnReprice = options?.trigger !== 'material';
   await applyPurchaseDocumentLineMaterialPricing(form, index, material, {
     materialList: options?.materialList,
     asOfField: options?.asOfField,

@@ -104,6 +104,9 @@ import { MarkerTag } from '../../../../../constants/statusBadges';
 import { renderFinanceTypeMarker } from '../../../utils/financeListPresentation';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { useQuery } from '@tanstack/react-query';
+import { getBusinessConfig } from '../../../../../services/businessConfig';
+import { orgFinanceInvoiceSettlementMode } from '../../../../../utils/documentLedgerRecognition';
 type PullPreviewKind = 'sales_order' | 'sales_delivery' | 'receivable';
 
 const TAX_RATE_OPTIONS = [
@@ -154,6 +157,15 @@ const SalesInvoicesPage: React.FC = () => {
   const [pullPreviewSourceId, setPullPreviewSourceId] = useState<number | null>(null);
   const [pullPreviewSourceIds, setPullPreviewSourceIds] = useState<number[]>([]);
   const [pullPreviewKind, setPullPreviewKind] = useState<PullPreviewKind | null>(null);
+  const { data: financeBusinessConfig } = useQuery({
+    queryKey: ['businessConfigFinanceInvoiceSettlement'],
+    queryFn: getBusinessConfig,
+    staleTime: 60_000,
+  });
+  const tenantInvoiceSettlementMode = useMemo(
+    () => orgFinanceInvoiceSettlementMode(financeBusinessConfig),
+    [financeBusinessConfig],
+  );
   const [pullForm] = Form.useForm();
   const pullAmountModeRef = useRef<InvoiceAmountInputMode>('tax_exclusive');
   const pullTaxRateRef = useRef<number>(13);
@@ -226,6 +238,10 @@ const SalesInvoicesPage: React.FC = () => {
   }, []);
 
   const handleCreate = async (values: any) => {
+    if (tenantInvoiceSettlementMode === 'detail') {
+      messageApi.warning('当前组织已开启「明细发票」模式，新建销售发票需携带明细行；请先在配置中心切换为汇总模式或使用支持明细行的来源开票');
+      return false;
+    }
     const invoiceAmount = Number(values.invoice_amount) || 0;
     const taxRate = Number(values.tax_rate) || 13;
     const data = {
@@ -236,6 +252,7 @@ const SalesInvoicesPage: React.FC = () => {
       invoice_type: values.invoice_type || '增值税专用发票',
       tax_rate: taxRate,
       invoice_amount: invoiceAmount,
+      settlement_mode: tenantInvoiceSettlementMode,
       notes: values.notes,
       partner_tax_no: values.partner_tax_no,
       partner_bank_info: values.partner_bank_info,
@@ -770,6 +787,10 @@ const SalesInvoicesPage: React.FC = () => {
         : pullPreviewKind === 'sales_delivery'
           ? pullFromSalesDeliveryAction.sourceLabel
           : pullFromReceivableAction.sourceLabel;
+    if (tenantInvoiceSettlementMode === 'detail') {
+      messageApi.warning('当前组织已开启「明细发票」模式，拉单开票需提供销售明细行（detail_items），当前销售拉单暂未支持明细行选择');
+      return false;
+    }
     setPullSubmitting(true);
     try {
       await apiRequest('/apps/kuaicaiwu/sales-invoices', {
@@ -783,6 +804,7 @@ const SalesInvoicesPage: React.FC = () => {
           receivable_code: pullPreviewKind === 'receivable' ? pullPreviewData.source_code : pullPreviewData.receivable_code,
           source_type: pullPreviewKind,
           source_id: pullPreviewSourceId,
+          settlement_mode: tenantInvoiceSettlementMode,
           invoice_number: String(values.invoice_number ?? '').trim(),
           invoice_date: formatDateTime(values.invoice_date || dayjs(), 'YYYY-MM-DD'),
           invoice_type: values.invoice_type || '增值税专用发票',

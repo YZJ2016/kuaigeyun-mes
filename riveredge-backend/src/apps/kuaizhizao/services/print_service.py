@@ -2623,8 +2623,16 @@ class DocumentPrintService:
             return " / ".join(p for p in (code, name) if p)
 
         type_raw = str(transfer.transfer_type or "")
+        ext_name = str(transfer.external_account_name or "")
+        from_label = await _acct_label(transfer.from_bank_account_id)
+        if not from_label and type_raw == "external_in":
+            from_label = ext_name
+        to_label = await _acct_label(transfer.to_bank_account_id)
+        if not to_label and type_raw == "external_out":
+            to_label = ext_name
         return {
             "document_type": "fund_transfer",
+            "code": transfer.transfer_code,
             "transfer_code": transfer.transfer_code,
             "transfer_date": to_api_isoformat(transfer.transfer_date)
             if transfer.transfer_date
@@ -2634,15 +2642,15 @@ class DocumentPrintService:
             "payment_method": str(transfer.payment_method or "转账"),
             "amount": _amount(transfer.amount),
             "currency": transfer.currency or "CNY",
-            "from_account_label": await _acct_label(transfer.from_bank_account_id),
-            "to_account_label": await _acct_label(transfer.to_bank_account_id)
-            or str(transfer.external_account_name or ""),
-            "external_account_name": transfer.external_account_name or "",
+            "from_account_label": from_label,
+            "to_account_label": to_label,
+            "external_account_name": ext_name,
             "external_bank_name": transfer.external_bank_name or "",
             "external_account_number": transfer.external_account_number or "",
             "status": transfer.status or "",
             "review_status": transfer.review_status or "",
             "notes": transfer.notes or "",
+            "items": [],
         }
 
     async def _format_purchase_receipt_data(self, receipt: PurchaseReceipt) -> Dict[str, Any]:

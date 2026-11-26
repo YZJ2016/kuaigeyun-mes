@@ -2,7 +2,7 @@
  * 出库取单录入页 — 共享表单项与出库人选择
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Form } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -90,17 +90,36 @@ export function useOutboundPickDepartmentSelect(enabled = true) {
     [],
   );
 
+  const reset = useCallback(() => {
+    setDepartmentId(undefined);
+    setDepartmentCode(undefined);
+    setDepartmentName(undefined);
+  }, []);
+
+  const mergedOptions = useMemo(() => {
+    if (departmentId == null || departmentId <= 0) return options;
+    if (options.some((o) => o.value === departmentId)) return options;
+    const fallbackLabel =
+      departmentCode && departmentName
+        ? `${departmentCode} - ${departmentName}`
+        : departmentName || departmentCode || `#${departmentId}`;
+    return [
+      { value: departmentId, label: fallbackLabel, code: departmentCode },
+      ...options,
+    ];
+  }, [departmentCode, departmentId, departmentName, options]);
+
   const handleDepartmentChange = useCallback(
     (val: number | undefined) => {
       setDepartmentId(val);
-      const row = options.find((d) => d.value === val);
+      const row = mergedOptions.find((d) => d.value === val);
       setDepartmentCode(row?.code);
       const label = row?.label ?? '';
       setDepartmentName(
         label.includes(' - ') ? label.split(' - ').slice(1).join(' - ').trim() : label || undefined,
       );
     },
-    [options],
+    [mergedOptions],
   );
 
   const toPayload = useCallback(
@@ -113,11 +132,12 @@ export function useOutboundPickDepartmentSelect(enabled = true) {
   );
 
   return {
-    options,
+    options: mergedOptions,
     loading,
     departmentId,
     handleDepartmentChange,
     restoreFromDetail,
+    reset,
     toPayload,
   };
 }

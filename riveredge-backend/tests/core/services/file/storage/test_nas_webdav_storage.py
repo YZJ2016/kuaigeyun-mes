@@ -87,3 +87,38 @@ def test_nas_webdav_defaults_verify_ssl_off():
         }
     )
     assert storage_on.verify_ssl is True
+
+
+def test_build_nas_webdav_relative_key_rejects_path_traversal():
+    for bad in ("../etc/passwd", "1/2026/../secret.bin", "./foo", "a/./b"):
+        with pytest.raises(ValidationError):
+            build_nas_webdav_relative_key("/riveredge", bad)
+    with pytest.raises(ValidationError):
+        build_nas_webdav_relative_key("/riveredge/../escape", "1/a.bin")
+
+
+def test_nas_webdav_rejects_url_userinfo():
+    with pytest.raises(ValidationError):
+        NasWebDavStorage(
+            {
+                "base_url": "https://user:pass@nas.example:5006/dav",
+                "username": "erp",
+                "password": "secret",
+            }
+        )
+
+
+@pytest.mark.asyncio
+async def test_nas_webdav_put_file_missing_does_not_leak_local_path(tmp_path):
+    storage = NasWebDavStorage(
+        {
+            "base_url": "https://nas.example:5006/dav",
+            "username": "erp",
+            "password": "secret",
+        }
+    )
+    missing_path = str(tmp_path / "very_secret_local_dir" / "missing.bin")
+    with pytest.raises(ValidationError) as exc_info:
+        await storage.put_file(missing_path, "1/2026/11/a.bin")
+    assert "very_secret_local_dir" not in str(exc_info.value)
+    assert missing_path not in str(exc_info.value)

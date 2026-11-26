@@ -768,6 +768,20 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                     mode,
                     [item.model_dump() for item in detail_items],
                 )
+                header_total = Decimal(str(payload.get("total_amount") or 0))
+                detail_total = sum(
+                    (
+                        Decimal(str(item.amount or 0)) + Decimal(str(item.tax_amount or 0))
+                        for item in detail_items
+                    ),
+                    Decimal("0"),
+                )
+                if abs(detail_total - header_total) > Decimal("0.01"):
+                    from infra.exceptions.exceptions import ValidationError
+
+                    raise ValidationError(
+                        f"明细采购发票行价税合计（{detail_total:.2f}）与表头价税合计（{header_total:.2f}）不一致"
+                    )
             else:
                 assert_settlement_mode_items_consistency(mode, [])
 
@@ -938,8 +952,22 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                         continue
                 await Payable.filter(tenant_id=tenant_id, id=pid).delete()
 
+            from apps.kuaicaiwu.models.purchase_invoice_item import PurchaseInvoiceItem
+            from apps.kuaicaiwu.services.purchase_receipt_line_finance_occupancy_service import (
+                PurchaseReceiptLineFinanceOccupancyService,
+            )
+
+            now_dt = resolve_business_datetime()
+            await PurchaseInvoiceItem.filter(
+                tenant_id=tenant_id,
+                purchase_invoice_id=invoice_id,
+                deleted_at__isnull=True,
+            ).update(deleted_at=now_dt)
+            await PurchaseReceiptLineFinanceOccupancyService().soft_delete_by_target(
+                tenant_id, "PurchaseInvoice", invoice_id
+            )
             await PurchaseInvoice.filter(tenant_id=tenant_id, id=invoice_id).update(
-                deleted_at=resolve_business_datetime()
+                deleted_at=now_dt
             )
 
     async def list_purchase_invoices(

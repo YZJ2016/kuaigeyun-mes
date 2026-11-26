@@ -37,3 +37,13 @@ def test_summary_rejects_line_source():
             "summary",
             [{"source_line_id": 1}],
         )
+
+
+def test_detail_invoice_rejects_non_positive_source_ids_and_blank_type():
+    for bad_row in (
+        {"source_doc_type": "", "source_doc_id": 1, "source_line_id": 10},
+        {"source_doc_type": "purchase_receipt", "source_doc_id": 0, "source_line_id": 10},
+        {"source_doc_type": "purchase_receipt", "source_doc_id": 1, "source_line_id": -5},
+    ):
+        with pytest.raises(ValidationError):
+            assert_detail_invoice_lines_strict_1_1([bad_row])

@@ -145,6 +145,24 @@ async def list_inventory_pull_blocker_records(tenant_id: int) -> List[Dict[str, 
             target_type=target_type,
         ).all()
         related_ids = {int(rel.source_id) for rel in rels}
+        fg_billtype_ready: Optional[bool] = None
+        if source_type == "finished_goods_receipt":
+            from apps.kuaiconnect.services.document_push.kingdee_finished_goods_receipt_push_service import (
+                resolve_finished_goods_push_config,
+            )
+            from apps.kuaiconnect.services.document_push.kingdee_warehouse_push_config_enrich import (
+                enrich_kingdee_warehouse_push_config,
+            )
+
+            fgcfg = await enrich_kingdee_warehouse_push_config(
+                tenant_id,
+                resolve_finished_goods_push_config(warehouse),
+                expected_related_document="finished_goods_receipt",
+            )
+            billtype = str(
+                fgcfg.get("billtype_number") or fgcfg.get("bill_type_number") or ""
+            ).strip()
+            fg_billtype_ready = bool(billtype) and not billtype.startswith("REPLACE")
         for row in rows:
             code = str(getattr(row, code_attr, None) or row.id)
             posted = str(getattr(row, "status", None) or "") in posted_statuses
@@ -160,16 +178,9 @@ async def list_inventory_pull_blocker_records(tenant_id: int) -> List[Dict[str, 
                 )
                 if pr_skip == "服务采购入库单不外推金蝶":
                     continue
-            if source_type == "finished_goods_receipt":
-                fgcfg = warehouse.get(config_key) or {}
-                if not isinstance(fgcfg, dict):
-                    fgcfg = {}
-                billtype = str(
-                    fgcfg.get("billtype_number") or fgcfg.get("bill_type_number") or ""
-                ).strip()
-                if not billtype or billtype.startswith("REPLACE"):
-                    # 未配置「生产完工入库」单据类型时无法外推，不应拦全租户即时库存入站
-                    continue
+            if source_type == "finished_goods_receipt" and not fg_billtype_ready:
+                # 未配置「生产完工入库」单据类型时无法外推，不应拦全租户即时库存入站
+                continue
             last_kind, last_status = await _latest_push_log(tenant_id, source_type, int(row.id))
             reason = inventory_pull_block_reason(
                 label=label,

@@ -27,17 +27,24 @@ def assert_detail_invoice_lines_strict_1_1(
     *,
     amount_field: str = "amount",
 ) -> None:
-    """明细发票：每行须有 source_line_id；同一发票内禁止重复绑定同一源行。"""
+    """明细发票：每行须有有效源单与 source_line_id；同一发票内禁止重复绑定同一源行。"""
+    del amount_field
     seen: set[tuple[Any, Any, Any]] = set()
     for idx, row in enumerate(items):
         sid = row.get("source_line_id")
         if sid is None:
             raise ValidationError(f"明细发票第 {idx + 1} 行缺少 source_line_id")
-        key = (
-            str(row.get("source_doc_type") or "").strip(),
-            int(row.get("source_doc_id") or 0),
-            int(sid),
-        )
+        src_doc_type = str(row.get("source_doc_type") or "").strip()
+        if not src_doc_type:
+            raise ValidationError(f"明细发票第 {idx + 1} 行缺少 source_doc_type")
+        try:
+            src_doc_id = int(row.get("source_doc_id") or 0)
+            src_line_id = int(sid)
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(f"明细发票第 {idx + 1} 行源单或行标识格式无效") from exc
+        if src_doc_id <= 0 or src_line_id <= 0:
+            raise ValidationError(f"明细发票第 {idx + 1} 行 source_doc_id 与 source_line_id 须大于 0")
+        key = (src_doc_type, src_doc_id, src_line_id)
         if key in seen:
             raise ValidationError("明细发票禁止在同一单据内重复绑定同一源单行")
         seen.add(key)

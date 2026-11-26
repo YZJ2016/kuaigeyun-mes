@@ -998,7 +998,7 @@ class FileService:
         key_prefix = cfg.get("key_prefix") or ""
         delete_local = cfg.get("delete_local_after_migrate") is not False
         target_bucket = str((getattr(remote, "config", None) or {}).get("bucket") or "").strip() or None
-        target_endpoint = getattr(remote, "base_url", None) or None
+        target_endpoint = getattr(remote, "display_base_url", None) or getattr(remote, "base_url", None) or None
         storage_backend_name = str(getattr(remote, "backend_name", None) or "tencent_cos")
         safe_limit = _resolve_migrate_batch_limit(storage_backend_name, limit)
         leftover_batch = _resolve_leftover_tier_batch(storage_backend_name)
@@ -1097,12 +1097,16 @@ class FileService:
                 source_key = corrected or row.file_path
                 if not abs_path:
                     skipped += 1
+                    logger.warning(
+                        "对象存储迁移跳过缺失本地文件 tenant_id={} uuid={} upload_dir={} path={}",
+                        tenant_id,
+                        row.uuid,
+                        FileService.UPLOAD_DIR,
+                        source_key,
+                    )
                     failures.append({
                         "uuid": str(row.uuid),
-                        "reason": (
-                            "本地文件不存在（仅能迁移当前环境磁盘上的文件；"
-                            f"UPLOAD_DIR={FileService.UPLOAD_DIR}，path={source_key}）"
-                        ),
+                        "reason": "本地文件不存在（仅能迁移当前环境磁盘上的文件）",
                     })
                     continue
 

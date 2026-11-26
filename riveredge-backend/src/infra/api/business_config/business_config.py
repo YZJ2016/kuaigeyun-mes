@@ -22,6 +22,7 @@ from infra.schemas.business_config import (
 )
 from infra.services.business_config_service import BusinessConfigService
 from infra.api.deps.deps import get_current_user
+from core.api.deps.access import AuthContext, require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
@@ -109,6 +110,7 @@ async def get_audit_required_map(
 )
 async def preview_invoice_settlement_mode_migration(
     target_mode: str = Query(..., description="summary | detail"),
+    _auth: AuthContext = Depends(require_permission_codes("system:config-center:read")),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
     try:
@@ -127,6 +129,7 @@ async def preview_invoice_settlement_mode_migration(
 @router.post("/parameters/update", summary="Update process parameter")
 async def update_process_parameter(
     request: ProcessParameterUpdateRequest,
+    _auth: AuthContext = Depends(require_permission_codes("system:config-center:update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:
@@ -151,6 +154,7 @@ async def update_process_parameter(
 @router.post("/parameters/batch-update", summary="Batch update process parameters")
 async def batch_update_process_parameters(
     request: BatchProcessParameterUpdateRequest,
+    _auth: AuthContext = Depends(require_permission_codes("system:config-center:update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict:

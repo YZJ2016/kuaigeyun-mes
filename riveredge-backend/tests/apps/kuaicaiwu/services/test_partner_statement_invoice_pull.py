@@ -188,3 +188,22 @@ def test_resolve_immediate_receivable():
     assert snap.source_type == "receivable"
     assert snap.source_ids == [3]
     assert snapshot_ids_for_api(snap)["receivable_ids"] == [3]
+
+
+def test_extract_statement_lines_prefers_document_lines_over_material_lines():
+    from apps.kuaicaiwu.services.partner_statement_invoice_pull import (
+        sum_statement_invoice_period_for_sources,
+    )
+
+    details = {
+        "document_lines": [
+            {"doc_type": "采购入库", "doc_id": 10, "tree_level": 0, "statement_amount": 200},
+        ],
+        "lines": [
+            {"doc_type": "采购入库", "doc_id": 10, "tree_level": 0, "statement_amount": 120},
+            {"doc_type": "采购入库", "doc_id": 10, "tree_level": 0, "statement_amount": 80},
+            {"doc_type": "采购入库", "doc_id": 99, "tree_level": 0, "statement_amount": 50},
+        ],
+    }
+    assert extract_statement_source_doc_ids(details, "采购入库") == [10]
+    assert sum_statement_invoice_period_for_sources(details, "采购入库", [10]) == Decimal("200")

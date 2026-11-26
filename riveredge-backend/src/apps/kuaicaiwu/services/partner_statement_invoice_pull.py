@@ -71,30 +71,9 @@ def invoice_source_type_for_mode(partner_type: str, ledger_posting_mode: str) ->
 
 
 def extract_statement_source_doc_ids(transaction_details: Any, doc_type: str) -> List[int]:
-    if not isinstance(transaction_details, dict):
-        return []
-    lines = transaction_details.get("lines") or []
-    if not isinstance(lines, list):
-        return []
-    want = str(doc_type or "").strip()
     ids: List[int] = []
     seen: set[int] = set()
-    for ln in lines:
-        if not isinstance(ln, dict):
-            continue
-        line_doc_type = str(ln.get("doc_type") or ln.get("doc_type_label") or "").strip()
-        src_dt = str(ln.get("source_doc_type") or "").strip()
-        mapped_src = STATEMENT_DOC_TYPE_TO_PULL_SOURCE_TYPE.get(want, "")
-        if line_doc_type != want and not (src_dt and src_dt in (mapped_src, want)):
-            continue
-        if int(ln.get("tree_level") or 0) != 0:
-            continue
-        try:
-            amt = float(ln.get("statement_amount") or ln.get("debit") or 0)
-        except (TypeError, ValueError):
-            amt = 0.0
-        if amt <= 0:
-            continue
+    for ln, _amt in _iter_invoice_statement_lines(transaction_details, doc_type):
         try:
             doc_id = int(ln.get("doc_id") or ln.get("source_doc_id") or 0)
         except (TypeError, ValueError):
@@ -104,6 +83,52 @@ def extract_statement_source_doc_ids(transaction_details: Any, doc_type: str) ->
         seen.add(doc_id)
         ids.append(doc_id)
     return ids
+
+
+_STATEMENT_DOC_TYPE_EXTRA_SOURCE_TYPES: Dict[str, str] = {
+    **STATEMENT_DOC_TYPE_TO_PULL_SOURCE_TYPE,
+    "销售出库": "sales_delivery",
+    "应收单": "receivable",
+    "应付单": "payable",
+    "委外收货": "outsource_material_receipt",
+}
+
+
+def _iter_invoice_statement_lines(
+    transaction_details: Any,
+    doc_type: str,
+) -> List[Tuple[Dict[str, Any], Decimal]]:
+    """按 doc_type 提取对账单可开票明细行及本次对账金额（优先 document_lines，兼容物料 lines）。"""
+    if not isinstance(transaction_details, dict):
+        return []
+    raw_lines = transaction_details.get("document_lines")
+    if not isinstance(raw_lines, list) or not raw_lines:
+        raw_lines = transaction_details.get("lines") or []
+    if not isinstance(raw_lines, list):
+        return []
+    want = str(doc_type or "").strip()
+    mapped_src = _STATEMENT_DOC_TYPE_EXTRA_SOURCE_TYPES.get(want, "")
+    matched: List[Tuple[Dict[str, Any], Decimal]] = []
+    for ln in raw_lines:
+        if not isinstance(ln, dict):
+            continue
+        line_doc_type = str(ln.get("doc_type") or ln.get("doc_type_label") or "").strip()
+        src_dt = str(ln.get("source_doc_type") or "").strip()
+        if line_doc_type != want and not (src_dt and src_dt in (mapped_src, want)):
+            continue
+        if int(ln.get("tree_level") or 0) != 0:
+            continue
+        raw_amt = ln.get("statement_amount")
+        if raw_amt is None:
+            raw_amt = ln.get("debit")
+        try:
+            amt = Decimal(str(raw_amt or 0))
+        except Exception:
+            continue
+        if amt <= 0:
+            continue
+        matched.append((ln, amt))
+    return matched
 
 
 def sum_statement_invoice_period_amount(transaction_details: Any, doc_type: str) -> Decimal:
@@ -121,7 +146,7 @@ def sum_statement_invoice_period_for_sources(
     for ln, amt in _iter_invoice_statement_lines(transaction_details, doc_type):
         if allowed_doc_ids is not None:
             try:
-                doc_id = int(ln.get("doc_id"))
+                doc_id = int(ln.get("doc_id") or ln.get("source_doc_id") or 0)
             except (TypeError, ValueError):
                 continue
             if doc_id not in allowed_doc_ids:

@@ -7,7 +7,7 @@ from apps.kuaizhizao.print.document_qrcode import DOCUMENT_PRINT_QRCODE_SIZE
 MACHINING_WORK_ORDER_PRINT_CODE = "WORK_ORDER_MACHINING_PRINT"
 MACHINING_WORK_ORDER_PRINT_NAME = "工单（机加工）"
 
-# 纸张与连枝横送货单一致：A5 横向（210mm x 148mm）
+# A5 横向（210mm x 148mm）
 MACHINING_WORK_ORDER_PAGE_SIZE = "210mm 148mm"
 MACHINING_WORK_ORDER_PAGE_MARGIN = "6mm 10mm 6mm 8mm"
 
@@ -98,11 +98,11 @@ MACHINING_WORK_ORDER_PRINT_HTML = """<!DOCTYPE html>
     <thead>
       <tr>
         <th style="width:6%">序号</th>
-        <th style="width:18%">图号名称</th>
+        <th style="width:20%">图号名称</th>
         <th style="width:10%">材料</th>
-        <th style="width:12%">规格</th>
-        <th style="width:36%">工艺要求</th>
-        <th style="width:10%">数量(件)</th>
+        <th style="width:14%">规格</th>
+        <th style="width:38%">工艺要求</th>
+        <th style="width:12%">数量(件)</th>
       </tr>
     </thead>
     <tbody>
@@ -141,7 +141,6 @@ def machining_work_order_print_preset() -> dict:
             "document_type": "work_order",
             "engine": "jinja2",
             "strict_variables": False,
-            "default_for_document_types": ["work_order"],
             "page": {
                 "size": MACHINING_WORK_ORDER_PAGE_SIZE,
                 "orientation": "landscape",
@@ -149,5 +148,5 @@ def machining_work_order_print_preset() -> dict:
             },
         },
         "is_active": True,
-        "is_default": True,
+        "is_default": False,
     }

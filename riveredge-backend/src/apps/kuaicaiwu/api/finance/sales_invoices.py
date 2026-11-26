@@ -138,6 +138,7 @@ async def _serialize(tenant_id: int, user_id: int, obj: Invoice) -> SalesInvoice
         invoice_number=obj.invoice_number,
         invoice_date=obj.invoice_date,
         invoice_type=obj.invoice_type or "增值税专用发票",
+        settlement_mode=str(getattr(obj, "settlement_mode", None) or "summary"),
         tax_rate=float(obj.tax_rate or 0) * 100,  # model stores as decimal (0.13), UI shows as 13
         invoice_amount=float(obj.amount_excluding_tax or 0),
         tax_amount=float(obj.tax_amount or 0),
@@ -191,6 +192,10 @@ async def _serialize_detail(tenant_id: int, user_id: int, obj: Invoice) -> Sales
                 amount=it.amount,
                 tax_rate=it.tax_rate,
                 tax_amount=it.tax_amount,
+                source_doc_type=getattr(it, "source_doc_type", None),
+                source_doc_id=getattr(it, "source_doc_id", None),
+                source_line_id=getattr(it, "source_line_id", None),
+                partner_statement_line_id=getattr(it, "partner_statement_line_id", None),
             ).model_dump()
         )
     base["items"] = line_payloads
@@ -287,8 +292,17 @@ async def create_sales_invoice(
             settlement_mode,
             [row.model_dump() for row in detail_items],
         )
-        if settlement_mode == SETTLEMENT_MODE_DETAIL and not detail_items:
-            raise BusinessLogicError("明细销售发票须提供 detail_items")
+        if settlement_mode == SETTLEMENT_MODE_DETAIL:
+            if not detail_items:
+                raise BusinessLogicError("明细销售发票须提供 detail_items")
+            detail_total = sum(
+                (Decimal(str(row.amount or 0)) + Decimal(str(row.tax_amount or 0)) for row in detail_items),
+                Decimal("0"),
+            )
+            if abs(detail_total - Decimal(str(total_amount or 0))) > Decimal("0.01"):
+                raise ValidationError(
+                    f"明细销售发票行价税合计（{detail_total:.2f}）与表头价税合计（{Decimal(str(total_amount or 0)):.2f}）不一致"
+                )
 
         create_payload = {
             "tenant_id": tenant_id,
@@ -322,12 +336,7 @@ async def create_sales_invoice(
             if settlement_mode == SETTLEMENT_MODE_DETAIL:
                 for row in detail_items:
                     await InvoiceItem.create(tenant_id=tenant_id, invoice_id=invoice.id, **row.model_dump())
-            if (
-                settlement_mode != SETTLEMENT_MODE_DETAIL
-                and pull_preview
-                and data.source_type
-                and data.source_id
-            ):
+            if pull_preview and data.source_type and data.source_id:
                 await sales_invoice_service.create_pull_relation(
                     tenant_id=tenant_id,
                     source_type=str(data.source_type).strip(),
@@ -837,6 +846,7 @@ async def create_red_letter_sales_invoice(
             "tenant_id": tenant_id,
             "invoice_code": code,
             "category": "OUT",
+            "settlement_mode": str(getattr(orig, "settlement_mode", None) or "summary"),
             "invoice_number": "",
             "invoice_date": orig.invoice_date,
             "tax_period": tax_period_from_date(orig.invoice_date),
@@ -881,6 +891,10 @@ async def create_red_letter_sales_invoice(
                     amount=-amt,
                     tax_rate=it.tax_rate,
                     tax_amount=-tamt,
+                    source_doc_type=getattr(it, "source_doc_type", None),
+                    source_doc_id=getattr(it, "source_doc_id", None),
+                    source_line_id=getattr(it, "source_line_id", None),
+                    partner_statement_line_id=getattr(it, "partner_statement_line_id", None),
                 )
         else:
             await InvoiceItem.create(
@@ -902,6 +916,12 @@ async def create_red_letter_sales_invoice(
         }
         apply_update_audit(red_orig_payload, current_user)
         await Invoice.filter(tenant_id=tenant_id, id=orig.id).update(**red_orig_payload)
+        if str(getattr(orig, "settlement_mode", None) or "") == "detail":
+            from apps.kuaicaiwu.services.sales_delivery_line_finance_occupancy_service import (
+                release_sales_delivery_invoice_occupancy,
+            )
+
+            await release_sales_delivery_invoice_occupancy(tenant_id, int(orig.id))
 
         rid = getattr(orig, "receivable_id", None)
         if rid:

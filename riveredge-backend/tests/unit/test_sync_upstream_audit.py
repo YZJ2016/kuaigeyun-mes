@@ -29,7 +29,7 @@ def test_record_ported_and_rejects_blank_path_or_unnoted_deferred(tmp_path, monk
         argparse.Namespace(to="tip", verdict="applied", note="ok", paths=["  "])
     )
     assert rc == 2
-    assert "非法空路径" in capsys.readouterr().err
+    assert "非法路径" in capsys.readouterr().err
 
     # deferred 缺少 note 必须拒绝
     rc = mod.cmd_record(
@@ -115,3 +115,53 @@ def test_audit_prints_breakdown_and_warns_on_open_skip_rows(tmp_path, monkeypatc
     assert "== SKIP (1) [deferred:1] ==" in captured.out
     assert "需评估 3；可跳 1" in captured.out
     assert "SKIP 中仍含 1 条未闭环行（deferred=1）" in captured.err
+
+
+def test_record_rejects_tab_newline_path_and_sanitizes_note(tmp_path, monkeypatch, capsys):
+    mod = _load_module()
+    ledger = tmp_path / "ledger.tsv"
+    monkeypatch.setattr(mod, "LEDGER", ledger)
+    monkeypatch.setattr(mod, "blob_sha", lambda rev, path: "sha_ok")
+
+    rc = mod.cmd_record(
+        argparse.Namespace(to="tip", verdict="applied", note="ok", paths=["bad\tpath.py"])
+    )
+    assert rc == 2
+    assert "非法路径" in capsys.readouterr().err
+
+    rc = mod.cmd_record(
+        argparse.Namespace(
+            to="tip",
+            verdict="applied",
+            note="line1\tcol2\nline2",
+            paths=["good/file.py"],
+        )
+    )
+    assert rc == 0
+    rows = mod.load_ledger()
+    assert rows["good/file.py"] == ["sha_ok", "applied", "line1 col2 line2"]
+
+
+def test_audit_marks_recorded_deleted_as_skip(tmp_path, monkeypatch, capsys):
+    mod = _load_module()
+    ledger = tmp_path / "ledger.tsv"
+    ledger.write_text(
+        mod.HEADER
+        + "gone_recorded.py\tDELETED\tdeleted\t已评估删除\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(mod, "LEDGER", ledger)
+    monkeypatch.setattr(
+        mod,
+        "changed_paths",
+        lambda frm, to: [("D", "gone_recorded.py"), ("D", "gone_new.py")],
+    )
+    monkeypatch.setattr(mod, "blob_shas_at", lambda rev, paths: {})
+
+    rc = mod.cmd_audit(argparse.Namespace(frm="base", to="tip"))
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "== DELETED (1) ==" in out
+    assert "== SKIP (1) [deleted:1] ==" in out
+    assert "需评估 1；可跳 1" in out
+

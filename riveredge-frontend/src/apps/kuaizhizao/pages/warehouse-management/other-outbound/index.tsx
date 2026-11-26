@@ -413,8 +413,11 @@ function OtherOutboundUserPickField({
   const pickedName = AntForm.useWatch(nameField, form);
   const [userList, setUserList] = useState<User[]>([]);
   const [userSearchLoading, setUserSearchLoading] = useState(false);
+  const pickerRequestSeqRef = useRef(0);
+  const mountedRef = useRef(true);
 
   const loadPickerUsers = useCallback(async (keyword = '') => {
+    const reqSeq = ++pickerRequestSeqRef.current;
     setUserSearchLoading(true);
     try {
       const res = await searchUserDisplay({
@@ -423,11 +426,15 @@ function OtherOutboundUserPickField({
         is_active: true,
         keyword: keyword.trim() || undefined,
       });
+      if (!mountedRef.current || reqSeq !== pickerRequestSeqRef.current) return;
       setUserList(displayItemsToUsers(res.items || []));
     } catch {
+      if (!mountedRef.current || reqSeq !== pickerRequestSeqRef.current) return;
       setUserList([]);
     } finally {
-      setUserSearchLoading(false);
+      if (mountedRef.current && reqSeq === pickerRequestSeqRef.current) {
+        setUserSearchLoading(false);
+      }
     }
   }, []);
 
@@ -443,14 +450,15 @@ function OtherOutboundUserPickField({
     }, 300);
   }, [loadPickerUsers]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
       if (pickerSearchTimerRef.current) {
         clearTimeout(pickerSearchTimerRef.current);
       }
-    },
-    [],
-  );
+    };
+  }, []);
 
   useEffect(() => {
     void loadPickerUsers('');

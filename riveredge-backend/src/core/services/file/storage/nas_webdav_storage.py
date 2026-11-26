@@ -11,9 +11,10 @@ import os
 import re
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Dict, List, Optional
-from urllib.parse import quote
+from urllib.parse import quote, urljoin, urlsplit
 
 import httpx
+from loguru import logger
 
 from core.services.file.storage.base import FileStorageBackend
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -22,20 +23,33 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 _NAS_WEBDAV_WRITE_PROBE_KEY = "_riveredge_probe/1/2026/11/writable.txt"
 
 
+def _validate_path_segments(parts: List[str]) -> List[str]:
+    for part in parts:
+        if part in (".", ".."):
+            raise ValidationError("WebDAV 路径不允许包含相对目录段（. 或 ..）")
+    return parts
+
+
 def _normalize_root_path(root_path: Any) -> str:
     text = str(root_path or "").strip().replace("\\", "/")
     if text in ("", "/"):
         return ""
-    return text.strip("/")
+    parts = _validate_path_segments([p for p in text.strip("/").split("/") if p])
+    return "/".join(parts)
 
 
 def _encode_path_segments(relative: str) -> str:
-    parts = [p for p in relative.replace("\\", "/").split("/") if p]
+    parts = _validate_path_segments([p for p in relative.replace("\\", "/").split("/") if p])
     return "/".join(quote(p, safe="") for p in parts)
 
 
 def _raw_path_segments(relative: str) -> List[str]:
-    return [p for p in relative.replace("\\", "/").split("/") if p]
+    return _validate_path_segments([p for p in relative.replace("\\", "/").split("/") if p])
+
+
+def _read_local_file_bytes(local_path: str) -> bytes:
+    with open(local_path, "rb") as fh:
+        return fh.read()
 
 
 _PROPFIND_BODY = (
@@ -93,7 +107,8 @@ def _coerce_verify_ssl(raw: Any) -> bool:
 def build_nas_webdav_relative_key(root_path: str, object_key: str) -> str:
     """root_path + 业务 key → WebDAV 相对路径（无 scheme/host）。"""
     root = _normalize_root_path(root_path)
-    key = str(object_key or "").lstrip("/")
+    key_parts = _raw_path_segments(str(object_key or "").lstrip("/"))
+    key = "/".join(key_parts)
     if root and key:
         return f"{root}/{key}"
     return root or key
@@ -122,7 +137,7 @@ def _http_error_message(exc: Exception, *, base_url: str) -> str:
             f"NAS WebDAV HTTPS 证书校验失败（{base_url}）。"
             "铁威马等自签证书请在连接器中关闭「校验证书」，保存后再试。"
         )
-    return f"访问 NAS WebDAV 失败（{base_url}）：{text[:240]}"
+    return f"访问 NAS WebDAV 失败（{base_url}）：{exc.__class__.__name__}"
 
 
 class NasWebDavStorage(FileStorageBackend):
@@ -136,7 +151,16 @@ class NasWebDavStorage(FileStorageBackend):
             raise ValidationError("NAS WebDAV 配置缺少 WebDAV URL（base_url）")
         if not base.startswith("http://") and not base.startswith("https://"):
             base = f"https://{base}"
-        self.base_url = base
+        parsed = urlsplit(base)
+        if parsed.username is not None or parsed.password is not None:
+            raise ValidationError("WebDAV URL 不允许包含用户名或密码，请填写在独立账号密码字段中")
+        if not parsed.hostname:
+            raise ValidationError("NAS WebDAV URL 格式无效")
+        host_port = f"{parsed.hostname}:{parsed.port}" if parsed.port else parsed.hostname
+        sanitized_base = f"{parsed.scheme}://{host_port}{parsed.path.rstrip('/')}"
+        self.base_url = sanitized_base
+        self.display_base_url = sanitized_base
+        self._origin = (parsed.scheme.lower(), parsed.hostname.lower(), parsed.port)
         self.root_path = _normalize_root_path(config.get("root_path"))
         username = str(config.get("username") or "").strip()
         password = str(config.get("password") or "")
@@ -157,12 +181,41 @@ class NasWebDavStorage(FileStorageBackend):
 
     @asynccontextmanager
     async def _client(self) -> AsyncIterator[httpx.AsyncClient]:
+        # 禁止自动跨源重定向，防止 BasicAuth 凭据泄露；同源重定向由 _send_same_origin 控制
         async with httpx.AsyncClient(
             timeout=_NAS_WEBDAV_TIMEOUT,
-            follow_redirects=True,
+            follow_redirects=False,
             verify=self.verify_ssl,
         ) as client:
             yield client
+
+    def _is_same_origin(self, target_url: str) -> bool:
+        parsed = urlsplit(target_url)
+        if not parsed.scheme or not parsed.hostname:
+            return False
+        return (parsed.scheme.lower(), parsed.hostname.lower(), parsed.port) == self._origin
+
+    async def _send_same_origin(
+        self,
+        client: httpx.AsyncClient,
+        method: str,
+        url: str,
+        **kwargs: Any,
+    ) -> httpx.Response:
+        cur_url = url
+        for _ in range(4):
+            resp = await client.request(method, cur_url, **kwargs, **self._request_kwargs())
+            if resp.status_code in (301, 302, 303, 307, 308):
+                loc = (resp.headers.get("Location") or "").strip()
+                if not loc:
+                    return resp
+                next_url = urljoin(cur_url, loc)
+                if not self._is_same_origin(next_url):
+                    raise ValidationError("WebDAV 服务器返回了跨源重定向，已拦截以保护凭据")
+                cur_url = next_url
+                continue
+            return resp
+        return resp
 
     def _request_kwargs(self) -> Dict[str, Any]:
         return {"auth": self._auth, "timeout": _NAS_WEBDAV_TIMEOUT}
@@ -172,9 +225,7 @@ class NasWebDavStorage(FileStorageBackend):
         for attempt in range(_NAS_WEBDAV_MAX_ATTEMPTS):
             try:
                 async with self._client() as client:
-                    return await client.request(
-                        method, url, **kwargs, **self._request_kwargs()
-                    )
+                    return await self._send_same_origin(client, method, url, **kwargs)
             except ValidationError:
                 raise
             except _NAS_WEBDAV_RETRYABLE as exc:
@@ -182,12 +233,14 @@ class NasWebDavStorage(FileStorageBackend):
                 if attempt + 1 < _NAS_WEBDAV_MAX_ATTEMPTS:
                     await asyncio.sleep(float(attempt + 1))
                     continue
-                raise ValidationError(_http_error_message(exc, base_url=self.base_url)) from exc
+                logger.warning("NAS WebDAV 请求异常 base={} err={}", self.display_base_url, exc)
+                raise ValidationError(_http_error_message(exc, base_url=self.display_base_url)) from exc
             except Exception as exc:
-                raise ValidationError(_http_error_message(exc, base_url=self.base_url)) from exc
+                logger.warning("NAS WebDAV 请求异常 base={} err={}", self.display_base_url, exc)
+                raise ValidationError(_http_error_message(exc, base_url=self.display_base_url)) from exc
         if last_exc is not None:
-            raise ValidationError(_http_error_message(last_exc, base_url=self.base_url)) from last_exc
-        raise ValidationError(f"访问 NAS WebDAV 失败（{self.base_url}）")
+            raise ValidationError(_http_error_message(last_exc, base_url=self.display_base_url)) from last_exc
+        raise ValidationError(f"访问 NAS WebDAV 失败（{self.display_base_url}）")
 
     async def _request_on_client(
         self,
@@ -200,18 +253,22 @@ class NasWebDavStorage(FileStorageBackend):
         last_exc: Optional[Exception] = None
         for attempt in range(_NAS_WEBDAV_MAX_ATTEMPTS):
             try:
-                return await client.request(method, url, **kwargs, **self._request_kwargs())
+                return await self._send_same_origin(client, method, url, **kwargs)
+            except ValidationError:
+                raise
             except _NAS_WEBDAV_RETRYABLE as exc:
                 last_exc = exc
                 if attempt + 1 < _NAS_WEBDAV_MAX_ATTEMPTS:
                     await asyncio.sleep(float(attempt + 1))
                     continue
-                raise ValidationError(_http_error_message(exc, base_url=self.base_url)) from exc
+                logger.warning("NAS WebDAV 请求异常 base={} err={}", self.display_base_url, exc)
+                raise ValidationError(_http_error_message(exc, base_url=self.display_base_url)) from exc
             except Exception as exc:
-                raise ValidationError(_http_error_message(exc, base_url=self.base_url)) from exc
+                logger.warning("NAS WebDAV 请求异常 base={} err={}", self.display_base_url, exc)
+                raise ValidationError(_http_error_message(exc, base_url=self.display_base_url)) from exc
         if last_exc is not None:
-            raise ValidationError(_http_error_message(last_exc, base_url=self.base_url)) from last_exc
-        raise ValidationError(f"访问 NAS WebDAV 失败（{self.base_url}）")
+            raise ValidationError(_http_error_message(last_exc, base_url=self.display_base_url)) from last_exc
+        raise ValidationError(f"访问 NAS WebDAV 失败（{self.display_base_url}）")
 
     async def _ensure_parent_collections(
         self,
@@ -234,9 +291,14 @@ class NasWebDavStorage(FileStorageBackend):
             if resp.status_code in (201, 405, 301, 302, 307, 308, 409):
                 continue
             if resp.status_code >= 400:
-                body = (resp.text or "")[:200]
+                logger.warning(
+                    "WebDAV 创建目录失败 status={} url={} body={}",
+                    resp.status_code,
+                    coll_href,
+                    (resp.text or "")[:200],
+                )
                 raise ValidationError(
-                    f"WebDAV 创建目录失败 HTTP {resp.status_code}（{coll_href}）{body}"
+                    f"WebDAV 创建目录失败 HTTP {resp.status_code}（{self.display_base_url}）"
                 )
 
     async def put(self, key: str, data: bytes, content_type: Optional[str] = None) -> None:
@@ -255,20 +317,26 @@ class NasWebDavStorage(FileStorageBackend):
                 headers=headers or None,
             )
         if resp.status_code not in (200, 201, 204):
+            logger.warning(
+                "WebDAV 上传失败 status={} url={} body={}",
+                resp.status_code,
+                href,
+                (resp.text or "")[:200],
+            )
             raise ValidationError(
-                f"WebDAV 上传失败 HTTP {resp.status_code}（{href}）{(resp.text or '')[:200]}"
+                f"WebDAV 上传失败 HTTP {resp.status_code}（{self.display_base_url}）"
             )
 
     async def put_file(self, key: str, local_path: str, content_type: Optional[str] = None) -> None:
         if not os.path.isfile(local_path):
-            raise ValidationError(f"本地文件不存在: {local_path}")
+            logger.warning("WebDAV 上传失败，本地文件不存在 path={}", local_path)
+            raise ValidationError("本地待上传文件不存在")
         href = self.object_href(key)
         headers: Dict[str, str] = {}
         ct = (content_type or "").strip()
         if ct:
             headers["Content-Type"] = ct
-        with open(local_path, "rb") as fh:
-            body = fh.read()
+        body = await asyncio.to_thread(_read_local_file_bytes, local_path)
         async with self._client() as client:
             await self._ensure_parent_collections(key, client=client)
             resp = await self._request_on_client(
@@ -279,8 +347,14 @@ class NasWebDavStorage(FileStorageBackend):
                 headers=headers or None,
             )
         if resp.status_code not in (200, 201, 204):
+            logger.warning(
+                "WebDAV 上传失败 status={} url={} body={}",
+                resp.status_code,
+                href,
+                (resp.text or "")[:200],
+            )
             raise ValidationError(
-                f"WebDAV 上传失败 HTTP {resp.status_code}（{href}）{(resp.text or '')[:200]}"
+                f"WebDAV 上传失败 HTTP {resp.status_code}（{self.display_base_url}）"
             )
 
     async def get(self, key: str) -> bytes:
@@ -289,8 +363,14 @@ class NasWebDavStorage(FileStorageBackend):
         if resp.status_code == 404:
             raise NotFoundError("文件")
         if resp.status_code >= 400:
+            logger.warning(
+                "WebDAV 下载失败 status={} url={} body={}",
+                resp.status_code,
+                href,
+                (resp.text or "")[:200],
+            )
             raise ValidationError(
-                f"WebDAV 下载失败 HTTP {resp.status_code}（{href}）{(resp.text or '')[:200]}"
+                f"WebDAV 下载失败 HTTP {resp.status_code}（{self.display_base_url}）"
             )
         return resp.content
 
@@ -322,8 +402,14 @@ class NasWebDavStorage(FileStorageBackend):
         if resp.status_code == 404:
             return None
         if resp.status_code >= 400 and resp.status_code not in (200, 206):
+            logger.warning(
+                "WebDAV 读取失败 status={} url={} body={}",
+                resp.status_code,
+                href,
+                (resp.text or "")[:200],
+            )
             raise ValidationError(
-                f"WebDAV 读取失败 HTTP {resp.status_code}（{href}）{(resp.text or '')[:200]}"
+                f"WebDAV 读取失败 HTTP {resp.status_code}（{self.display_base_url}）"
             )
         total = _parse_content_range_total(resp.headers.get("Content-Range") or "")
         if total is not None:
@@ -349,8 +435,14 @@ class NasWebDavStorage(FileStorageBackend):
                 return dav_len
             return await self._length_via_range_get(href)
         if resp.status_code >= 400:
+            logger.warning(
+                "WebDAV HEAD 失败 status={} url={} body={}",
+                resp.status_code,
+                href,
+                (resp.text or "")[:200],
+            )
             raise ValidationError(
-                f"WebDAV HEAD 失败 HTTP {resp.status_code}（{href}）{(resp.text or '')[:200]}"
+                f"WebDAV HEAD 失败 HTTP {resp.status_code}（{self.display_base_url}）"
             )
         raw = resp.headers.get("Content-Length")
         if raw is not None:
@@ -395,10 +487,9 @@ async def probe_nas_webdav_storage(
     body = b"riveredge-nas-webdav-probe"
     await storage.put(probe_key, body, content_type="text/plain")
     if not await storage.exists(probe_key):
-        probe_href = storage.object_href(probe_key)
         raise ValueError(
             "WebDAV 写探针失败：上传后无法 HEAD 读回"
-            f"（{probe_href}）。请核对 WebDAV URL、Root Path 与账号对该目录的读写权限。"
+            f"（{storage.display_base_url}）。请核对 WebDAV URL、Root Path 与账号对该目录的读写权限。"
         )
     await storage.delete(probe_key)
     return {"message": "WebDAV 连接成功（读写探针通过）"}

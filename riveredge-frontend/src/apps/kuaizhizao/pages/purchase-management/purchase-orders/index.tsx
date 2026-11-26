@@ -3832,14 +3832,15 @@ const PurchaseOrdersPage: React.FC = () => {
         resolvePurchaseDepartmentPayload(
           data.department_id,
           resolveDepartmentName,
-          data.department_name,
+          data.department_name ?? formRef.current?.getFieldValue('department_name'),
         ),
       );
       if (!data.department_id || !String(data.department_name ?? '').trim()) {
+        submitAfterSaveRef.current = false;
         messageApi.error(
           t('app.kuaizhizao.purchaseOrder.form.departmentRequired', '请选择部门'),
         );
-        return false;
+        return;
       }
       // 处理附件
       const formAttachments = data.attachments || [];
@@ -4608,6 +4609,7 @@ const PurchaseOrdersPage: React.FC = () => {
           />
         </div>
         <ProFormText name="supplier_name" hidden />
+        <ProFormText name="department_name" hidden />
         <ProFormText name="price_type" hidden />
       </DetailDrawerSection>
 

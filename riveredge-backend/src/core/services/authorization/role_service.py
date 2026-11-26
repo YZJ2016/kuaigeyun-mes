@@ -326,9 +326,6 @@ class RoleService:
             user_role_rows = await UserRole.filter(role_id__in=role_ids).values_list(
                 "role_id", "user_id"
             )
-            for role_id, _user_id in user_role_rows:
-                user_count_by_role_id[role_id] = user_count_by_role_id.get(role_id, 0) + 1
-
             distinct_user_ids = list({user_id for _, user_id in user_role_rows})
             if distinct_user_ids:
                 users = await User.filter(
@@ -336,6 +333,7 @@ class RoleService:
                     tenant_id=tenant_id,
                     deleted_at__isnull=True,
                 ).only("id", "full_name", "username")
+                valid_user_ids = {user.id for user in users}
                 user_label_by_id: dict[int, list[str]] = {}
                 for user in users:
                     labels: list[str] = []
@@ -349,6 +347,9 @@ class RoleService:
                         user_label_by_id[user.id] = labels
 
                 for role_id, user_id in user_role_rows:
+                    if user_id not in valid_user_ids:
+                        continue
+                    user_count_by_role_id[role_id] = user_count_by_role_id.get(role_id, 0) + 1
                     for label in user_label_by_id.get(user_id, []):
                         bucket = members_by_role_id.setdefault(role_id, [])
                         if label not in bucket:

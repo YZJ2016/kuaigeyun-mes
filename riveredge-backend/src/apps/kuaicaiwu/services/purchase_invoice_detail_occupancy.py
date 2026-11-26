@@ -34,7 +34,8 @@ async def record_detail_purchase_invoice_occupancy(
     by_receipt: DefaultDict[int, List[Tuple[int, Decimal]]] = defaultdict(list)
     for row in items:
         doc_type = str(row.source_doc_type or "").strip()
-        if doc_type not in ("purchase_receipt", "outsource_order_receipt"):
+        # 仅采购入库单写 PurchaseReceiptLineFinanceOccupancy；委外收货表主键独立，严禁混查
+        if doc_type != "purchase_receipt":
             continue
         rid = int(row.source_doc_id or 0)
         sid = int(row.source_line_id or 0)
@@ -57,4 +58,5 @@ async def record_detail_purchase_invoice_occupancy(
             _q_money(total),
             line_selections=line_selections,
             created_by=created_by,
+            allow_append=True,
         )

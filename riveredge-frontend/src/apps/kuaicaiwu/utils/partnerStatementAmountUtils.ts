@@ -71,8 +71,7 @@ export function resolvePartnerStatementTableLines(
     return raw;
   }
   const groups = new Map<string, PartnerStatementLine>();
-  const order: string[] = [];
-  const passthrough: PartnerStatementLine[] = [];
+  const ordered: PartnerStatementLine[] = [];
   const materialKeys = new Set([
     'material_id',
     'material_code',
@@ -85,42 +84,48 @@ export function resolvePartnerStatementTableLines(
   ]);
   for (const ln of raw) {
     if (String((ln as { line_kind?: string }).line_kind || '') !== 'material') {
-      passthrough.push(ln);
+      ordered.push(ln);
       continue;
     }
     const docType = String(ln.doc_type || '').trim();
     const docId = ln.doc_id != null ? String(ln.doc_id) : '';
     const key = `${docType}-${docId}`;
     if (!docId) {
-      passthrough.push(ln);
+      ordered.push(ln);
       continue;
     }
-    const stmt = Number(ln.statement_amount ?? ln.debit ?? ln.credit ?? 0);
+    const stmt =
+      ln.statement_amount != null
+        ? Number(ln.statement_amount)
+        : Number(ln.debit ?? 0) || Number(ln.credit ?? 0) || 0;
+    const isDebit = lineUsesDebitSide(ln);
     const existing = groups.get(key);
     if (!existing) {
       const base = { ...ln };
       materialKeys.forEach((k) => delete (base as Record<string, unknown>)[k]);
       delete (base as { line_kind?: string }).line_kind;
+      base.doc_amount = Number(ln.doc_amount ?? 0);
       base.statement_amount = stmt;
       base.prior_stated_amount = Number(ln.prior_stated_amount ?? 0);
       base.remaining_amount = Number(ln.remaining_amount ?? 0);
-      base.debit = Number(ln.debit ?? 0) > Number(ln.credit ?? 0) ? stmt : 0;
-      base.credit = Number(ln.credit ?? 0) > Number(ln.debit ?? 0) ? stmt : 0;
+      base.debit = isDebit ? stmt : 0;
+      base.credit = isDebit ? 0 : stmt;
       groups.set(key, base);
-      order.push(key);
+      ordered.push(base);
       continue;
     }
+    existing.doc_amount = Number(existing.doc_amount ?? 0) + Number(ln.doc_amount ?? 0);
     existing.statement_amount = Number(existing.statement_amount ?? 0) + stmt;
     existing.prior_stated_amount =
       Number(existing.prior_stated_amount ?? 0) + Number(ln.prior_stated_amount ?? 0);
     existing.remaining_amount = Number(existing.remaining_amount ?? 0) + Number(ln.remaining_amount ?? 0);
-    if (Number(ln.debit ?? 0) > Number(ln.credit ?? 0)) {
+    if (isDebit) {
       existing.debit = Number(existing.debit ?? 0) + stmt;
     } else {
       existing.credit = Number(existing.credit ?? 0) + stmt;
     }
   }
-  return [...passthrough, ...order.map((k) => groups.get(k)!)];
+  return ordered;
 }
 
 export function previewLineKey(line: PartnerStatementLine, _index?: number): string {

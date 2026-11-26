@@ -2336,16 +2336,6 @@ class BusinessConfigService:
             value,
             merged_category_params=merged_cat if category == "quality" else None,
         )
-        if category == "finance" and parameter_key == "invoice_settlement_mode":
-            from apps.kuaicaiwu.services.invoice_settlement_mode_migration_service import (
-                validate_or_migrate_settlement_mode_change,
-            )
-
-            await validate_or_migrate_settlement_mode_change(
-                tenant_id,
-                value,
-                migrate_opposite_invoices=migrate_opposite_invoices,
-            )
 
         business_config["parameters"][category][parameter_key] = value
         if category == "master_data":
@@ -2364,7 +2354,20 @@ class BusinessConfigService:
         strip_deprecated_parameters(business_config["parameters"])
 
         settings["business_config"] = business_config
-        await Tenant.filter(id=tenant_id).update(settings=settings)
+        from tortoise.transactions import in_transaction
+
+        async with in_transaction():
+            if category == "finance" and parameter_key == "invoice_settlement_mode":
+                from apps.kuaicaiwu.services.invoice_settlement_mode_migration_service import (
+                    validate_or_migrate_settlement_mode_change,
+                )
+
+                await validate_or_migrate_settlement_mode_change(
+                    tenant_id,
+                    value,
+                    migrate_opposite_invoices=migrate_opposite_invoices,
+                )
+            await Tenant.filter(id=tenant_id).update(settings=settings)
 
         logger.info(f"组织 {tenant_id} 更新流程参数 {category}.{parameter_key} = {value}")
         return {
@@ -2389,17 +2392,10 @@ class BusinessConfigService:
         settings = tenant.settings or {}
         business_config = settings.get("business_config", {})
         business_config.setdefault("parameters", {})
+        pending_settlement_mode = None
         for category, params in parameters.items():
             if category == "finance" and params and "invoice_settlement_mode" in params:
-                from apps.kuaicaiwu.services.invoice_settlement_mode_migration_service import (
-                    validate_or_migrate_settlement_mode_change,
-                )
-
-                await validate_or_migrate_settlement_mode_change(
-                    tenant_id,
-                    params["invoice_settlement_mode"],
-                    migrate_opposite_invoices=migrate_opposite_invoices,
-                )
+                pending_settlement_mode = params["invoice_settlement_mode"]
             current = dict(business_config["parameters"].get(category) or {})
             for parameter_key, value in (params or {}).items():
                 preview = dict(current)
@@ -2431,7 +2427,20 @@ class BusinessConfigService:
         strip_deprecated_parameters(business_config["parameters"])
 
         settings["business_config"] = business_config
-        await Tenant.filter(id=tenant_id).update(settings=settings)
+        from tortoise.transactions import in_transaction
+
+        async with in_transaction():
+            if pending_settlement_mode is not None:
+                from apps.kuaicaiwu.services.invoice_settlement_mode_migration_service import (
+                    validate_or_migrate_settlement_mode_change,
+                )
+
+                await validate_or_migrate_settlement_mode_change(
+                    tenant_id,
+                    pending_settlement_mode,
+                    migrate_opposite_invoices=migrate_opposite_invoices,
+                )
+            await Tenant.filter(id=tenant_id).update(settings=settings)
 
         logger.info(f"组织 {tenant_id} 批量更新流程参数")
         return {

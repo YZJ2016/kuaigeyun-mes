@@ -29,6 +29,7 @@ export type PurchaseInvoicePullPreview = DocumentPushPreview & {
   supplier_name?: string;
   purchase_order_id?: number | null;
   purchase_order_code?: string | null;
+  purchase_receipt_id?: number | null;
   payable_id?: number;
   payable_code?: string;
   /** 同时付款上限（应付剩余可付） */

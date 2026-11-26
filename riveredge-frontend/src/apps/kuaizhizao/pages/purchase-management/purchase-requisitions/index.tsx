@@ -130,6 +130,8 @@ import {
   handoffDemandComputationToPurchaseRequisitionCreate,
   handoffRequisitionToPurchaseInquiryCreate,
   handoffRequisitionToPurchaseOrderCreate,
+  handoffSalesOrdersToPurchaseRequisitionCreate,
+  hydrateDocumentFlowCreateFormValues,
 } from '../../../utils/documentFlowHandoff';
 import {
   listDemandComputationPurchasePullLines,
@@ -187,13 +189,6 @@ import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
-import {
-  handoffDemandComputationToPurchaseRequisitionCreate,
-  handoffRequisitionToPurchaseInquiryCreate,
-  handoffRequisitionToPurchaseOrderCreate,
-  handoffSalesOrdersToPurchaseRequisitionCreate,
-  hydrateDocumentFlowCreateFormValues,
-} from '../../../utils/documentFlowHandoff';
 import {
   listPurchaseRequisitionSalesOrderPullLines,
   listPurchaseRequisitionSalesOrderPullOrders,
@@ -681,6 +676,8 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const prFormHydratingRef = useRef(false);
   /** 申请人部门 uuid：部门树晚于选人加载时，用于回填 department_id */
   const applicantDepartmentUuidRef = useRef<string | undefined>(undefined);
+  /** 跨单据下推/取单附加提交上下文（如 sales_order_buy_push） */
+  const documentFlowSubmitExtrasRef = useRef<Record<string, unknown> | null>(null);
 
   const applyHeaderDeliveryToItemLines = useCallback((delivery: unknown) => {
     const coerced = coerceFormDate(delivery);
@@ -1786,6 +1783,10 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const handleModalSubmit = async (values: {
     requisition_code?: string;
     requisition_name?: string;
+    order_type?: string;
+    source_type?: string;
+    source_id?: number;
+    source_code?: string;
     requisition_date?: any;
     required_date?: any;
     applicant_id?: number;
@@ -1893,9 +1894,10 @@ const PurchaseRequisitionsPage: React.FC = () => {
         const flowSoId = Number(flowExtras?.documentFlowSalesOrderId ?? 0);
         const isSoBuyPush =
           String(flowExtras?.documentFlowSourceType ?? '').trim() === 'sales_order_buy_push';
-        let sourceType = String(values.source_type ?? '').trim();
-        let sourceId = Number(values.source_id ?? 0);
-        let sourceCode = String(values.source_code ?? '').trim();
+        const allFormValues = createFormRef.current?.getFieldsValue?.(true) ?? {};
+        let sourceType = String(values.source_type ?? allFormValues.source_type ?? '').trim();
+        let sourceId = Number(values.source_id ?? allFormValues.source_id ?? 0);
+        let sourceCode = String(values.source_code ?? allFormValues.source_code ?? '').trim();
         if (isSoBuyPush) {
           if (!sourceType) sourceType = 'sales_order';
           if (!(sourceId > 0) && flowSoId > 0) sourceId = flowSoId;

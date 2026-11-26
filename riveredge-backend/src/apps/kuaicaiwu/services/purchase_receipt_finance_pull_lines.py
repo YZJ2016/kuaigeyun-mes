@@ -510,6 +510,7 @@ async def build_invoice_detail_lines_from_payable(
         lines.append(
             {
                 "line_no": idx,
+                "purchase_receipt_id": receipt_id,
                 "purchase_receipt_item_id": item_id,
                 "material_code": str(item.material_code or ""),
                 "material_name": str(item.material_name or ""),

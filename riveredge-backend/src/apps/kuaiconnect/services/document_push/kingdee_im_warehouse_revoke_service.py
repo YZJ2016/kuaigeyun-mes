@@ -135,10 +135,15 @@ async def _load_binding_context(
         actions = item.get("trigger_actions") or []
         if not uuid or not isinstance(actions, list):
             continue
-        for action in actions:
-            slot = str(action or "").strip()
-            if slot == "update" and not str(action_apis.get("update") or "").strip():
-                action_apis["update"] = uuid
+        row_apis = item.get("action_apis") if isinstance(item.get("action_apis"), dict) else {}
+        norm_actions = [str(action or "").strip().lower() for action in actions if str(action or "").strip()]
+        # 仅当该绑定行独占 update 且未绑定 confirm action_api 时，才把 save_api_uuid 推导为 update 接口
+        if (
+            norm_actions == ["update"]
+            and not str((row_apis or {}).get("confirm") or "").strip()
+            and not str(action_apis.get("update") or "").strip()
+        ):
+            action_apis["update"] = uuid
     confirm_uuid = str(action_apis.get("confirm") or "").strip()
     if confirm_uuid:
         config["save_api_uuid"] = confirm_uuid

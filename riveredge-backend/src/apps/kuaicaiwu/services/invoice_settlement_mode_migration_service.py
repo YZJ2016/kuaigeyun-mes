@@ -167,6 +167,50 @@ async def migrate_invoices_for_settlement_mode_switch(tenant_id: int, target_mod
     }
 
 
+_MONEY = Decimal("0.01")
+
+
+def _q_money(val: Any) -> Decimal:
+    return Decimal(str(val or 0)).quantize(_MONEY)
+
+
+def _allocate_weighted_by_doc(
+    items: List[Dict[str, Any]],
+    *,
+    doc_type: str,
+    total: Decimal,
+) -> Dict[int, Decimal]:
+    """按明细行实际价税合计聚合分摊至源单，末单吸收分位尾差；无行额时等权均分。"""
+    raw_by_doc: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+    for it in items:
+        if str(it.get("source_doc_type") or "") != doc_type:
+            continue
+        did = int(it.get("source_doc_id") or 0)
+        if did <= 0:
+            continue
+        line_val = _q_money(it.get("amount") or 0) + _q_money(it.get("tax_amount") or 0)
+        raw_by_doc[did] += line_val
+    if not raw_by_doc or total <= 0:
+        return {}
+    doc_ids = list(raw_by_doc.keys())
+    weight_sum = sum(raw_by_doc.values(), Decimal("0"))
+    use_equal = weight_sum <= 0
+    if use_equal:
+        weight_sum = Decimal(len(doc_ids))
+    allocated = Decimal("0")
+    out: Dict[int, Decimal] = {}
+    for idx, did in enumerate(doc_ids):
+        if idx == len(doc_ids) - 1:
+            part = _q_money(total - allocated)
+        else:
+            w = Decimal("1") if use_equal else raw_by_doc[did]
+            part = _q_money(total * (w / weight_sum))
+            allocated += part
+        if part > 0:
+            out[did] = part
+    return out
+
+
 async def _rebuild_purchase_invoice_occupancy_after_detail_to_summary(
     tenant_id: int,
     purchase_invoice_ids: List[int],
@@ -177,14 +221,12 @@ async def _rebuild_purchase_invoice_occupancy_after_detail_to_summary(
         tenant_id=tenant_id,
         deleted_at__isnull=True,
     )
-    for inv in invoices:
-        if not _is_approved(inv.review_status, inv.status):
-            continue
-        inv_id = int(inv.id)
-        from apps.kuaicaiwu.models.purchase_receipt_line_finance_occupancy import (
-            PurchaseReceiptLineFinanceOccupancy,
-        )
+    from apps.kuaicaiwu.models.purchase_receipt_line_finance_occupancy import (
+        PurchaseReceiptLineFinanceOccupancy,
+    )
 
+    for inv in invoices:
+        inv_id = int(inv.id)
         rows = await PurchaseReceiptLineFinanceOccupancy.filter(
             tenant_id=tenant_id,
             target_doc_type="PurchaseInvoice",
@@ -199,18 +241,16 @@ async def _rebuild_purchase_invoice_occupancy_after_detail_to_summary(
                 continue
             by_receipt[rid] += Decimal(str(row.get("amount") or 0))
         await occ_svc.soft_delete_by_target(tenant_id, "PurchaseInvoice", inv_id)
-        total = Decimal(str(inv.total_amount or 0))
+        total = _q_money(inv.total_amount or 0)
         if not by_receipt and total > 0:
             items = await PurchaseInvoiceItem.filter(
                 tenant_id=tenant_id,
                 purchase_invoice_id=inv_id,
                 deleted_at__isnull=True,
-            ).values("source_doc_type", "source_doc_id")
-            for it in items:
-                if str(it.get("source_doc_type") or "") == "purchase_receipt":
-                    rid = int(it.get("source_doc_id") or 0)
-                    if rid > 0:
-                        by_receipt[rid] += total / max(1, len(items))
+            ).values("source_doc_type", "source_doc_id", "amount", "tax_amount")
+            by_receipt = _allocate_weighted_by_doc(
+                list(items), doc_type="purchase_receipt", total=total
+            )
         for rid, amt in by_receipt.items():
             if amt <= 0:
                 continue
@@ -218,8 +258,9 @@ async def _rebuild_purchase_invoice_occupancy_after_detail_to_summary(
                 tenant_id,
                 rid,
                 inv_id,
-                amt,
+                _q_money(amt),
                 line_selections=None,
+                allow_append=True,
             )
 
 
@@ -227,6 +268,9 @@ async def _rebuild_purchase_invoice_occupancy_after_summary_to_detail(
     tenant_id: int,
     purchase_invoice_ids: List[int],
 ) -> None:
+    from apps.kuaicaiwu.models.purchase_receipt_line_finance_occupancy import (
+        PurchaseReceiptLineFinanceOccupancy,
+    )
     from apps.kuaicaiwu.services.purchase_invoice_detail_occupancy import (
         record_detail_purchase_invoice_occupancy,
     )
@@ -238,10 +282,21 @@ async def _rebuild_purchase_invoice_occupancy_after_summary_to_detail(
         deleted_at__isnull=True,
     )
     for inv in invoices:
-        if not _is_approved(inv.review_status, inv.status):
-            continue
         inv_id = int(inv.id)
-        await occ_svc.soft_delete_by_target(tenant_id, "PurchaseInvoice", inv_id)
+        # 先快照原占用，防止无 PurchaseInvoiceItem 的历史汇总发票丢失既有占用
+        prior_rows = await PurchaseReceiptLineFinanceOccupancy.filter(
+            tenant_id=tenant_id,
+            target_doc_type="PurchaseInvoice",
+            target_doc_id=inv_id,
+            occupancy_kind="invoice",
+            deleted_at__isnull=True,
+        ).values("purchase_receipt_id", "amount")
+        prior_by_receipt: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+        for row in prior_rows:
+            rid = int(row.get("purchase_receipt_id") or 0)
+            if rid > 0:
+                prior_by_receipt[rid] += Decimal(str(row.get("amount") or 0))
+
         has_line_sources = await PurchaseInvoiceItem.filter(
             tenant_id=tenant_id,
             purchase_invoice_id=inv_id,
@@ -249,32 +304,33 @@ async def _rebuild_purchase_invoice_occupancy_after_summary_to_detail(
             source_line_id__not_isnull=True,
         ).exists()
         if has_line_sources:
+            await occ_svc.soft_delete_by_target(tenant_id, "PurchaseInvoice", inv_id)
             await record_detail_purchase_invoice_occupancy(tenant_id, inv_id)
             continue
-        total = Decimal(str(inv.total_amount or 0))
-        if total <= 0:
-            continue
+
+        total = _q_money(inv.total_amount or 0)
         items = await PurchaseInvoiceItem.filter(
             tenant_id=tenant_id,
             purchase_invoice_id=inv_id,
             deleted_at__isnull=True,
-        ).values("source_doc_type", "source_doc_id")
-        receipt_ids = {
-            int(it["source_doc_id"])
-            for it in items
-            if str(it.get("source_doc_type") or "") == "purchase_receipt"
-            and int(it.get("source_doc_id") or 0) > 0
-        }
-        if not receipt_ids:
+        ).values("source_doc_type", "source_doc_id", "amount", "tax_amount")
+        by_receipt = _allocate_weighted_by_doc(
+            list(items), doc_type="purchase_receipt", total=total
+        )
+        if not by_receipt:
+            # 历史汇总发票无明细行，保留原有占用不清空
             continue
-        share = total / len(receipt_ids)
-        for rid in receipt_ids:
+        await occ_svc.soft_delete_by_target(tenant_id, "PurchaseInvoice", inv_id)
+        for rid, amt in by_receipt.items():
+            if amt <= 0:
+                continue
             await record_purchase_receipt_invoice_occupancy(
                 tenant_id,
                 rid,
                 inv_id,
-                share,
+                _q_money(amt),
                 line_selections=None,
+                allow_append=True,
             )
 
 
@@ -282,6 +338,10 @@ async def _rebuild_sales_invoice_occupancy_after_detail_to_summary(
     tenant_id: int,
     sales_invoice_ids: List[int],
 ) -> None:
+    from apps.kuaicaiwu.models.sales_delivery_line_finance_occupancy import (
+        SalesDeliveryLineFinanceOccupancy,
+    )
+
     invoices = await Invoice.filter(
         id__in=sales_invoice_ids,
         tenant_id=tenant_id,
@@ -292,26 +352,29 @@ async def _rebuild_sales_invoice_occupancy_after_detail_to_summary(
         if not _is_approved(inv.review_status, inv.status):
             continue
         inv_id = int(inv.id)
-        await release_sales_delivery_invoice_occupancy(tenant_id, inv_id)
-        items = await InvoiceItem.filter(
+        prior_rows = await SalesDeliveryLineFinanceOccupancy.filter(
             tenant_id=tenant_id,
-            invoice_id=inv_id,
+            target_doc_type="sales_invoice",
+            target_doc_id=inv_id,
+            occupancy_kind="invoice",
             deleted_at__isnull=True,
-        ).values("source_doc_type", "source_doc_id")
+        ).values("sales_delivery_id", "amount")
         by_delivery: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
-        total = Decimal(str(inv.total_amount or 0))
-        delivery_ids = [
-            int(it["source_doc_id"])
-            for it in items
-            if str(it.get("source_doc_type") or "") == "sales_delivery"
-            and int(it.get("source_doc_id") or 0) > 0
-        ]
-        if delivery_ids:
-            share = total / len(delivery_ids) if total > 0 else Decimal("0")
-            for did in delivery_ids:
-                by_delivery[did] += share
-        else:
-            continue
+        for row in prior_rows:
+            did = int(row.get("sales_delivery_id") or 0)
+            if did > 0:
+                by_delivery[did] += Decimal(str(row.get("amount") or 0))
+        await release_sales_delivery_invoice_occupancy(tenant_id, inv_id)
+        total = _q_money(inv.total_amount or 0)
+        if not by_delivery and total > 0:
+            items = await InvoiceItem.filter(
+                tenant_id=tenant_id,
+                invoice_id=inv_id,
+                deleted_at__isnull=True,
+            ).values("source_doc_type", "source_doc_id", "amount", "tax_amount")
+            by_delivery = _allocate_weighted_by_doc(
+                list(items), doc_type="sales_delivery", total=total
+            )
         for did, amt in by_delivery.items():
             if amt <= 0:
                 continue
@@ -319,7 +382,7 @@ async def _rebuild_sales_invoice_occupancy_after_detail_to_summary(
                 tenant_id,
                 sales_delivery_id=did,
                 invoice_id=inv_id,
-                amount=amt,
+                amount=_q_money(amt),
                 line_slices=None,
             )
 
@@ -338,7 +401,6 @@ async def _rebuild_sales_invoice_occupancy_after_summary_to_detail(
         if not _is_approved(inv.review_status, inv.status):
             continue
         inv_id = int(inv.id)
-        await release_sales_delivery_invoice_occupancy(tenant_id, inv_id)
         has_line_sources = await InvoiceItem.filter(
             tenant_id=tenant_id,
             invoice_id=inv_id,
@@ -346,29 +408,29 @@ async def _rebuild_sales_invoice_occupancy_after_summary_to_detail(
             source_line_id__not_isnull=True,
         ).exists()
         if has_line_sources:
+            await release_sales_delivery_invoice_occupancy(tenant_id, inv_id)
             await record_detail_sales_invoice_occupancy_on_approve(tenant_id, inv_id)
             continue
-        total = Decimal(str(inv.total_amount or 0))
-        if total <= 0:
-            continue
+        total = _q_money(inv.total_amount or 0)
         items = await InvoiceItem.filter(
             tenant_id=tenant_id,
             invoice_id=inv_id,
             deleted_at__isnull=True,
-        ).values("source_doc_type", "source_doc_id")
-        delivery_ids = {
-            int(it["source_doc_id"])
-            for it in items
-            if str(it.get("source_doc_type") or "") == "sales_delivery"
-            and int(it.get("source_doc_id") or 0) > 0
-        }
-        for did in delivery_ids:
-            share = total / len(delivery_ids)
+        ).values("source_doc_type", "source_doc_id", "amount", "tax_amount")
+        by_delivery = _allocate_weighted_by_doc(
+            list(items), doc_type="sales_delivery", total=total
+        )
+        if not by_delivery:
+            continue
+        await release_sales_delivery_invoice_occupancy(tenant_id, inv_id)
+        for did, amt in by_delivery.items():
+            if amt <= 0:
+                continue
             await record_sales_delivery_invoice_occupancy(
                 tenant_id,
                 sales_delivery_id=did,
                 invoice_id=inv_id,
-                amount=share,
+                amount=_q_money(amt),
                 line_slices=None,
             )
 

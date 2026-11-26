@@ -184,24 +184,23 @@ async def create_purchase_invoice(
             )
             invoice_id = int(invoice.id)
             occupancy_amt = purchase_invoice_occupancy_amount(invoice)
-            if settlement_mode == SETTLEMENT_MODE_DETAIL:
-                from apps.kuaicaiwu.services.purchase_invoice_detail_occupancy import (
-                    record_detail_purchase_invoice_occupancy,
-                )
-
-                await record_detail_purchase_invoice_occupancy(
-                    tenant_id,
-                    invoice_id,
-                    created_by=current_user.id,
-                )
-            elif pull_preview and data.source_type and pull_source_ids:
+            if pull_preview and data.source_type and pull_source_ids:
                 code_by_source: dict[int, str] = {}
                 for item in pull_preview.get("items") or []:
                     iid = int(item.get("item_id") or 0)
                     if iid > 0:
                         code_by_source[iid] = str(item.get("source_code") or iid)
                 allocated_by_source: dict[int, Decimal] = {}
-                if len(pull_source_ids) > 1:
+                if settlement_mode == SETTLEMENT_MODE_DETAIL and data.detail_items:
+                    for drow in data.detail_items:
+                        did = int(getattr(drow, "source_doc_id", 0) or 0)
+                        if did > 0:
+                            allocated_by_source[did] = (
+                                allocated_by_source.get(did, Decimal("0"))
+                                + Decimal(str(drow.amount or 0))
+                                + Decimal(str(drow.tax_amount or 0))
+                            )
+                if not allocated_by_source and len(pull_source_ids) > 1:
                     allocated_by_source = (
                         purchase_invoice_pull_service._fifo_allocate_amount_by_preview_items(
                             pull_source_ids,
@@ -252,7 +251,11 @@ async def create_purchase_invoice(
                             invoice_code=str(invoice.invoice_code),
                             created_by=current_user.id,
                         )
-                if str(data.source_type).strip() == "purchase_receipt" and receipt_only_ids:
+                if (
+                    settlement_mode != SETTLEMENT_MODE_DETAIL
+                    and str(data.source_type).strip() == "purchase_receipt"
+                    and receipt_only_ids
+                ):
                     await purchase_invoice_pull_service.record_multi_receipt_invoice_occupancy(
                         tenant_id,
                         receipt_only_ids,
@@ -261,6 +264,16 @@ async def create_purchase_invoice(
                         pull_receipt_lines=data.pull_receipt_lines,
                         created_by=current_user.id,
                     )
+            if settlement_mode == SETTLEMENT_MODE_DETAIL:
+                from apps.kuaicaiwu.services.purchase_invoice_detail_occupancy import (
+                    record_detail_purchase_invoice_occupancy,
+                )
+
+                await record_detail_purchase_invoice_occupancy(
+                    tenant_id,
+                    invoice_id,
+                    created_by=current_user.id,
+                )
             if pull_preview and str(data.source_type or "").strip() == "payable" and pull_source_ids:
                 await purchase_invoice_pull_service.record_multi_payable_invoice_side_effects(
                     tenant_id,

@@ -214,6 +214,8 @@ async def enrich_production_picking_header_config(
     picking: ProductionPicking,
     acting_user_id: int,
     config: Dict[str, Any],
+    *,
+    dry_run: bool = False,
 ) -> Dict[str, Any]:
     from apps.kuaizhizao.utils.kingdee_warehouse_operator_utils import (
         resolve_document_operator_number,
@@ -245,6 +247,7 @@ async def enrich_production_picking_header_config(
             synced
             and chosen
             and chosen != document_dept
+            and not dry_run
             and isinstance(picking, ProductionPicking)
             and int(getattr(picking, "id", None) or 0) > 0
         ):
@@ -511,14 +514,14 @@ class KingdeeProductionPickingPushService:
 
         if relation is not None:
             status = str(getattr(picking, "status", None) or "").strip()
-            draft = False
-            if not relation_branch_should_batch_update(status):
-                draft = await self._linked_kingdee_bill_is_draft(
-                    tenant_id, config, relation
-                )
             try:
-                if relation_branch_should_batch_update(status) or draft:
-                    updated = await self.batch_update_linked_kingdee_bill(
+                draft = False
+                if not dry_run and not relation_branch_should_batch_update(status):
+                    draft = await self._linked_kingdee_bill_is_draft(
+                        tenant_id, config, relation
+                    )
+                if relation_branch_should_batch_update(status):
+                    return await self.batch_update_linked_kingdee_bill(
                         tenant_id=tenant_id,
                         picking=picking,
                         items=list(items),
@@ -527,8 +530,26 @@ class KingdeeProductionPickingPushService:
                         config=config,
                         dry_run=dry_run,
                     )
-                    if not draft:
-                        return updated
+                if draft:
+                    try:
+                        await self.batch_update_linked_kingdee_bill(
+                            tenant_id=tenant_id,
+                            picking=picking,
+                            items=list(items),
+                            acting_user_id=acting_user_id,
+                            relation=relation,
+                            config=config,
+                            dry_run=dry_run,
+                        )
+                    except BusinessLogicError as update_exc:
+                        if "更新" in str(update_exc):
+                            logger.warning(
+                                "生产领料未绑定更新接口，跳过暂存单 batchUpdate 直接补提交/审核 tenant_id={} id={}",
+                                tenant_id,
+                                production_picking_id,
+                            )
+                        else:
+                            raise
                 return await self._kingdee_submit_audit_only(
                     tenant_id=tenant_id,
                     config=config,
@@ -581,6 +602,11 @@ class KingdeeProductionPickingPushService:
             query_kingdee_cosmic_bill_by_billno,
         )
 
+        config = await enrich_kingdee_warehouse_push_config(
+            tenant_id,
+            dict(config),
+            expected_related_document=SOURCE_TYPE,
+        )
         pipeline = DocumentPushPipeline()
         connection = await pipeline._resolve_connection(
             tenant_id,
@@ -701,7 +727,7 @@ class KingdeeProductionPickingPushService:
             expected_related_document=SOURCE_TYPE,
         )
         config = await enrich_production_picking_header_config(
-            tenant_id, picking, acting_user_id, config
+            tenant_id, picking, acting_user_id, config, dry_run=dry_run
         )
         form_id = str(config.get("form_id") or DEFAULT_FORM_ID).strip() or DEFAULT_FORM_ID
         save_path = str(config.get("save_path") or DEFAULT_SAVE_PATH).strip() or DEFAULT_SAVE_PATH

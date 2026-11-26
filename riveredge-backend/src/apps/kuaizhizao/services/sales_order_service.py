@@ -4877,16 +4877,18 @@ class SalesOrderService:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
         await self._assert_sales_order_capability_for_order(tenant_id, order, "push_work_order")
 
-        items = await SalesOrderItem.filter(
+        all_items = await SalesOrderItem.filter(
             tenant_id=tenant_id, sales_order_id=sales_order_id
         ).order_by("id")
-        if not items:
+        if not all_items:
             raise BusinessLogicError("销售订单无明细，无法直推工单")
         if selected_item_ids is not None:
             selected = {int(v) for v in selected_item_ids if v is not None}
-            items = [it for it in items if int(getattr(it, "id", 0)) in selected]
+            items = [it for it in all_items if int(getattr(it, "id", 0)) in selected]
             if not items:
                 raise BusinessLogicError("所选明细为空，无法直推工单")
+        else:
+            items = list(all_items)
         material_ids = [int(getattr(it, "material_id", 0) or 0) for it in items]
         pushed_by_material = await self._pushed_work_order_qty_by_material(
             tenant_id=tenant_id,
@@ -4901,13 +4903,13 @@ class SalesOrderService:
 
         fulfill_map, purchase_by_item, wo_by_item = await asyncio.gather(
             batch_remaining_fulfillable_qty_by_material(
-                tenant_id, {sales_order_id: items}
+                tenant_id, {sales_order_id: all_items}
             ),
             batch_pushed_purchase_qty_by_sales_order_item(
-                tenant_id, {sales_order_id: items}
+                tenant_id, {sales_order_id: all_items}
             ),
             batch_pushed_work_order_qty_by_sales_order_item(
-                tenant_id, {sales_order_id: items}
+                tenant_id, {sales_order_id: all_items}
             ),
         )
         remaining_by_material = fulfill_map.get(sales_order_id) or {}

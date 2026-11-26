@@ -1,5 +1,7 @@
 from tortoise import BaseDBAsyncClient
 
+RUN_IN_TRANSACTION = True
+
 
 async def upgrade(db: BaseDBAsyncClient) -> str:
     return """
@@ -101,6 +103,9 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
         );
         CREATE INDEX IF NOT EXISTS "idx_pi_item_tenant_inv"
             ON "apps_kuaicaiwu_purchase_invoice_items" ("tenant_id", "purchase_invoice_id");
+        CREATE INDEX IF NOT EXISTS "idx_pi_item_source"
+            ON "apps_kuaicaiwu_purchase_invoice_items"
+            ("tenant_id", "source_doc_type", "source_doc_id", "source_line_id");
 
         CREATE TABLE IF NOT EXISTS "apps_kuaicaiwu_sales_delivery_line_finance_occupancies" (
             "id" SERIAL PRIMARY KEY,
@@ -122,6 +127,9 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "target_item_id" INT,
             "deleted_at" TIMESTAMPTZ
         );
+        CREATE INDEX IF NOT EXISTS "idx_sd_occ_delivery"
+            ON "apps_kuaicaiwu_sales_delivery_line_finance_occupancies"
+            ("tenant_id", "sales_delivery_id");
         CREATE INDEX IF NOT EXISTS "idx_sd_occ_item_kind"
             ON "apps_kuaicaiwu_sales_delivery_line_finance_occupancies"
             ("tenant_id", "sales_delivery_item_id", "occupancy_kind");

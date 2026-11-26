@@ -1,7 +1,8 @@
 /**
  * 采购单据表头「部门」选择（与杂项凭证 / 其他出库同一套部门树扁平选项）。
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Form } from 'antd';
 import { ProFormSelect } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { getDepartmentTree } from '../../../../../services/department';
@@ -107,6 +108,17 @@ export const PurchaseDepartmentFormField: React.FC<PurchaseDepartmentFormFieldPr
   loading,
 }) => {
   const { t } = useTranslation();
+  const form = Form.useFormInstance();
+  const watchedDeptId = Form.useWatch(name, form);
+  const watchedDeptName = Form.useWatch('department_name', form);
+  const mergedOptions = useMemo(() => {
+    const id = Number(watchedDeptId);
+    if (!Number.isFinite(id) || id <= 0) return options;
+    if (options.some((o) => Number(o.value) === id)) return options;
+    const fallbackLabel = String(watchedDeptName ?? '').trim();
+    if (!fallbackLabel) return options;
+    return [{ value: id, label: fallbackLabel, uuid: '' }, ...options];
+  }, [options, watchedDeptId, watchedDeptName]);
   const departmentRequiredMsg =
     requiredMessage ?? t('app.kuaizhizao.purchaseOrder.form.departmentRequired', '请选择部门');
 
@@ -114,7 +126,7 @@ export const PurchaseDepartmentFormField: React.FC<PurchaseDepartmentFormFieldPr
     <ProFormSelect
       name={name}
       label={t('app.kuaizhizao.purchase.field.department')}
-      options={options}
+      options={mergedOptions}
       disabled={disabled}
       rules={required ? [{ required: true, message: departmentRequiredMsg }] : undefined}
       fieldProps={{

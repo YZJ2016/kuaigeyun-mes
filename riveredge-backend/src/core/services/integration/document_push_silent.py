@@ -145,11 +145,11 @@ def _target_would_auto_push_on_action(
     if isinstance(action_apis, dict) and action_apis:
         api_actions = {
             str(key).strip().lower()
-            for key in action_apis.keys()
-            if str(key or "").strip()
+            for key, val in action_apis.items()
+            if str(key or "").strip() and str(val or "").strip()
         }
-        if api_actions:
-            return act in api_actions
+        if api_actions and act not in api_actions:
+            return False
     owned = target.get("trigger_actions")
     if isinstance(owned, list) and owned:
         owned_actions = [str(item).strip().lower() for item in owned if str(item or "").strip()]
@@ -280,7 +280,7 @@ async def maybe_silent_push_after_audit(
 
     if not pro_orm_ready("kuaiconnect"):
         logger.info(
-            "无感外推跳过：快连接未就绪 tenant_id={} entity_type={} entity_id={}",
+            "无感外推跳过：快连接未就绪 tenant_id=%s entity_type=%s entity_id=%s",
             tenant_id,
             entity_type,
             entity_id,

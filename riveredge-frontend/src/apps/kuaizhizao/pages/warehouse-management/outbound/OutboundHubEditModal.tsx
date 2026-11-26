@@ -162,8 +162,11 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
   const loadKey =
     open && record?.id && (isPicking || isDelivery) ? `${outboundType}:${record.id}` : null;
 
+  const resetPickDepartment = pickDepartmentHook.reset;
+
   const resetState = useCallback(() => {
     setDetail(null);
+    resetPickDepartment();
     setEditablePickingQuantities({});
     setEditablePickingWarehouses({});
     setEditablePickingBatchAllocs({});
@@ -184,7 +187,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
     setDeliveryBatchOptionsByMaterialId({});
     setPickingBatchOptionsByLineId({});
     setBatchOptionsLoading(false);
-  }, []);
+  }, [resetPickDepartment]);
 
   const batchOptionLabel = useCallback(
     (batch: string, qty: number, warehouseName?: string) =>

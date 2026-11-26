@@ -21824,16 +21824,6 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                 header_dump["outbound_type"] = normalize_other_outbound_type(
                     header_dump["outbound_type"]
                 )
-                existing_items = await OtherOutboundItem.filter(
-                    tenant_id=tenant_id,
-                    outbound_id=outbound_id,
-                ).all()
-                line_mids = [int(it.material_id) for it in existing_items if int(it.material_id or 0) > 0]
-                await load_and_assert_other_outbound_type_materials(
-                    tenant_id,
-                    header_dump["outbound_type"],
-                    line_mids,
-                )
             if header_dump:
                 header_dump["updated_by"] = updated_by
                 header_dump["updated_by_name"] = user_info["name"]
@@ -21963,7 +21953,7 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
 
             outbound_row = await OtherOutbound.get(tenant_id=tenant_id, id=outbound_id)
             eff_outbound_type = str(getattr(outbound_row, "outbound_type", None) or "").strip()
-            if eff_outbound_type and "outbound_type" not in header_dump:
+            if eff_outbound_type:
                 line_mids = [
                     int(it.material_id)
                     for it in await OtherOutboundItem.filter(

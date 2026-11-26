@@ -187,49 +187,67 @@ class SalesInvoiceAuditService:
             )
         out = result if result is not None else await _write()
         if not rejection_reason:
-            from apps.kuaicaiwu.config.finance_settlement_contract import SETTLEMENT_MODE_DETAIL
-            from apps.kuaicaiwu.models.invoice import Invoice
-            from apps.kuaicaiwu.services.sales_invoice_detail_occupancy import (
-                record_detail_sales_invoice_occupancy_on_approve,
-            )
-
-            invoice_row = await Invoice.get(tenant_id=tenant_id, id=invoice_id)
-            if str(invoice_row.settlement_mode or "") == SETTLEMENT_MODE_DETAIL:
-                await record_detail_sales_invoice_occupancy_on_approve(tenant_id, invoice_id)
-            from apps.kuaicaiwu.models.receivable import Receivable
-            from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
-            from apps.kuaicaiwu.services.sales_invoice_receivable_auto import (
-                maybe_auto_generate_receivable_for_sales_invoice,
-            )
-            auto_receivable_id, _ = await maybe_auto_generate_receivable_for_sales_invoice(
-                tenant_id=tenant_id,
-                invoice=invoice_row,
-                created_by=user_id,
-            )
-            if auto_receivable_id:
-                await submit_finance_review(
-                    model=Receivable,
-                    tenant_id=tenant_id,
-                    doc_id=int(auto_receivable_id),
-                    updated_by=user_id,
-                    doc_label="应收单",
-                    node_key="receivable",
+            invoice_row = await self._record_detail_occupancy_if_approved(tenant_id, invoice_id)
+            if str(invoice_row.status or "").strip() == "已审核":
+                from apps.kuaicaiwu.models.receivable import Receivable
+                from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
+                from apps.kuaicaiwu.services.sales_invoice_receivable_auto import (
+                    maybe_auto_generate_receivable_for_sales_invoice,
                 )
+                auto_receivable_id, _ = await maybe_auto_generate_receivable_for_sales_invoice(
+                    tenant_id=tenant_id,
+                    invoice=invoice_row,
+                    created_by=user_id,
+                )
+                if auto_receivable_id:
+                    await submit_finance_review(
+                        model=Receivable,
+                        tenant_id=tenant_id,
+                        doc_id=int(auto_receivable_id),
+                        updated_by=user_id,
+                        doc_label="应收单",
+                        node_key="receivable",
+                    )
         return out
+
+    async def _record_detail_occupancy_if_approved(
+        self, tenant_id: int, invoice_id: int
+    ) -> Invoice:
+        from apps.kuaicaiwu.config.finance_settlement_contract import SETTLEMENT_MODE_DETAIL
+        from apps.kuaicaiwu.services.sales_invoice_detail_occupancy import (
+            record_detail_sales_invoice_occupancy_on_approve,
+        )
+
+        invoice_row = await Invoice.get(tenant_id=tenant_id, id=invoice_id)
+        if (
+            str(invoice_row.status or "").strip() == "已审核"
+            and str(invoice_row.settlement_mode or "") == SETTLEMENT_MODE_DETAIL
+        ):
+            await record_detail_sales_invoice_occupancy_on_approve(tenant_id, invoice_id)
+        return invoice_row
 
     async def revoke_sales_invoice(
         self, tenant_id: int, invoice_id: int, user_id: int
     ) -> dict[str, Any]:
+        from tortoise.transactions import in_transaction
+        from apps.kuaicaiwu.config.finance_settlement_contract import SETTLEMENT_MODE_DETAIL
+        from apps.kuaicaiwu.services.sales_delivery_line_finance_occupancy_service import (
+            release_sales_delivery_invoice_occupancy,
+        )
+
         invoice = await self._get(tenant_id, invoice_id)
         if str(invoice.status or "").strip() in _TERMINAL_STATUS:
             raise BusinessLogicError("已作废或已红冲的发票不可反审核")
         raw = str(invoice.review_status or "").strip()
         if raw not in _APPROVED_REVIEW and str(invoice.status or "").strip() != "已审核":
             raise BusinessLogicError("销售发票未审核通过，无法反审核")
-        await Invoice.filter(tenant_id=tenant_id, id=invoice_id).update(
-            review_status="草稿",
-            status="未审核",
-        )
+        async with in_transaction():
+            await Invoice.filter(tenant_id=tenant_id, id=invoice_id).update(
+                review_status="草稿",
+                status="未审核",
+            )
+            if str(getattr(invoice, "settlement_mode", None) or "") == SETTLEMENT_MODE_DETAIL:
+                await release_sales_delivery_invoice_occupancy(tenant_id, invoice_id)
         invoice.review_status = "草稿"
         invoice.status = "未审核"
         return self._payload(invoice)
@@ -247,6 +265,7 @@ class SalesInvoiceAuditService:
                 review_status="已审核",
                 status="已审核",
             )
+            await self._record_detail_occupancy_if_approved(tenant_id, int(invoice.id))
             return
 
         content = f"销售发票 {invoice.invoice_code}"
@@ -277,6 +296,7 @@ class SalesInvoiceAuditService:
                 review_status="已审核",
                 status="已审核",
             )
+            await self._record_detail_occupancy_if_approved(tenant_id, int(invoice.id))
 
     @staticmethod
     def _payload(invoice: Invoice) -> dict[str, Any]:

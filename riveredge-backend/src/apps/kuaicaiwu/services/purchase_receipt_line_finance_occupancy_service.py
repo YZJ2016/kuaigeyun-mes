@@ -120,15 +120,19 @@ class PurchaseReceiptLineFinanceOccupancyService(AppBaseService):
         target_doc_id: int,
         created_by: Optional[int] = None,
         line_amount_caps: Optional[Mapping[int, Decimal]] = None,
+        allow_append: bool = False,
     ) -> None:
-        """按 FIFO 写入行占用（同一 target 重复调用前应由调用方保证幂等）。"""
-        existing = await PurchaseReceiptLineFinanceOccupancy.filter(
-            tenant_id=tenant_id,
-            occupancy_kind=occupancy_kind,
-            target_doc_type=target_doc_type,
-            target_doc_id=int(target_doc_id),
-            deleted_at__isnull=True,
-        ).count()
+        """按 FIFO 写入行占用（多入库单同属一张发票时传 allow_append=True，按入库单粒度幂等）。"""
+        filter_kwargs: Dict[str, Any] = {
+            "tenant_id": tenant_id,
+            "occupancy_kind": occupancy_kind,
+            "target_doc_type": target_doc_type,
+            "target_doc_id": int(target_doc_id),
+            "deleted_at__isnull": True,
+        }
+        if allow_append:
+            filter_kwargs["purchase_receipt_id"] = int(receipt_id)
+        existing = await PurchaseReceiptLineFinanceOccupancy.filter(**filter_kwargs).count()
         if existing > 0:
             return
 
@@ -165,16 +169,18 @@ class PurchaseReceiptLineFinanceOccupancyService(AppBaseService):
         allow_append: bool = False,
     ) -> None:
         """按用户勾选的入库行写入占用（须先通过 pull_lines 校验）。"""
-        if not allow_append:
-            existing = await PurchaseReceiptLineFinanceOccupancy.filter(
-                tenant_id=tenant_id,
-                occupancy_kind=occupancy_kind,
-                target_doc_type=target_doc_type,
-                target_doc_id=int(target_doc_id),
-                deleted_at__isnull=True,
-            ).count()
-            if existing > 0:
-                return
+        filter_kwargs: Dict[str, Any] = {
+            "tenant_id": tenant_id,
+            "occupancy_kind": occupancy_kind,
+            "target_doc_type": target_doc_type,
+            "target_doc_id": int(target_doc_id),
+            "deleted_at__isnull": True,
+        }
+        if allow_append:
+            filter_kwargs["purchase_receipt_id"] = int(receipt_id)
+        existing = await PurchaseReceiptLineFinanceOccupancy.filter(**filter_kwargs).count()
+        if existing > 0:
+            return
         if not slices:
             return
         await self._persist_slices(
@@ -736,6 +742,7 @@ async def record_purchase_receipt_invoice_occupancy(
     *,
     line_selections: Optional[List[Any]] = None,
     created_by: Optional[int] = None,
+    allow_append: bool = False,
 ) -> None:
     from apps.kuaicaiwu.services.purchase_receipt_finance_pull_lines import (
         build_slices_from_pull_receipt_line_selections,
@@ -758,6 +765,7 @@ async def record_purchase_receipt_invoice_occupancy(
             target_doc_id=invoice_id,
             slices=slices,
             created_by=created_by,
+            allow_append=allow_append,
         )
         return
     await svc.record_receipt_finance_occupancy(
@@ -768,4 +776,5 @@ async def record_purchase_receipt_invoice_occupancy(
         target_doc_type="PurchaseInvoice",
         target_doc_id=invoice_id,
         created_by=created_by,
+        allow_append=allow_append,
     )

@@ -239,7 +239,9 @@ const PurchaseInvoiceList: React.FC = () => {
   );
   const pullReceiptLineSelectEnabled = useMemo(
     () =>
-      (pullPreviewKind === 'purchase_receipt' || pullPreviewKind === 'payable')
+      (pullPreviewKind === 'purchase_receipt'
+        || pullPreviewKind === 'outsource_order_receipt'
+        || pullPreviewKind === 'payable')
       && (pullPreviewData?.detail_lines?.length ?? 0) > 0,
     [pullPreviewKind, pullPreviewData],
   );
@@ -899,7 +901,10 @@ const PurchaseInvoiceList: React.FC = () => {
         }
       }
       if (useDetailSettlement) {
-        const fallbackDocId = pullPreviewSourceIds[0];
+        const fallbackDocId =
+          pullPreviewKind === 'payable'
+            ? Number(pullPreviewData.purchase_receipt_id || pullPreviewData.receipt_ids?.[0] || 0)
+            : pullPreviewSourceIds[0];
         const fallbackType =
           pullPreviewKind === 'outsource_order_receipt'
             ? 'outsource_order_receipt'
@@ -919,6 +924,9 @@ const PurchaseInvoiceList: React.FC = () => {
       } else {
         pullReceiptLines = reconciled.payload;
       }
+    } else if (tenantInvoiceSettlementMode === 'detail') {
+      messageApi.warning('当前组织已锁定「明细发票」模式，请从含明细行的采购入库单/委外收货单/应付单加载开票');
+      return false;
     }
     const sourceLabel =
       pullPreviewKind === 'purchase_order'

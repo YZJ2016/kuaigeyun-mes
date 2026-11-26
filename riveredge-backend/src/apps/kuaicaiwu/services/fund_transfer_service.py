@@ -230,7 +230,7 @@ class FundTransferService(AppBaseService[FundTransfer]):
                 data.get("payment_method")
             )
         apply_update_audit(update_fields, current_user)
-        await FundTransfer.filter(id=row.id).update(**update_fields)
+        await FundTransfer.filter(tenant_id=tenant_id, id=row.id).update(**update_fields)
         refreshed = await FundTransfer.get_or_none(
             tenant_id=tenant_id, id=int(transfer_id), deleted_at__isnull=True
         )
@@ -389,7 +389,7 @@ class FundTransferService(AppBaseService[FundTransfer]):
             raise ValidationError(f"当前状态不可作废: {row.status}")
         payload = {"status": "Cancelled"}
         apply_update_audit(payload, operator)
-        await FundTransfer.filter(id=row.id).update(**payload)
+        await FundTransfer.filter(tenant_id=tenant_id, id=row.id).update(**payload)
         refreshed = await FundTransfer.get_or_none(
             tenant_id=tenant_id, id=int(transfer_id), deleted_at__isnull=True
         )

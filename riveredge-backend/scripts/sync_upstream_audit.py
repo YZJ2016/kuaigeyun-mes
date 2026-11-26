@@ -109,9 +109,13 @@ def load_ledger() -> dict[str, list[str]]:
     return rows
 
 
+def _sanitize_tsv_note(note: str) -> str:
+    return " ".join(str(note or "").replace("\t", " ").splitlines()).strip()
+
+
 def save_ledger(rows: dict[str, list[str]]) -> None:
     body = "".join(
-        f"{p}\t{v[0]}\t{v[1]}\t{v[2]}\n"
+        f"{p}\t{v[0]}\t{v[1]}\t{_sanitize_tsv_note(v[2])}\n"
         for p, v in sorted(rows.items())
         if p.strip()
     )
@@ -167,14 +171,20 @@ def cmd_audit(args: argparse.Namespace) -> int:
     shas = blob_shas_at(args.to, live)
     for status, path in items:
         if status == "D":
-            buckets["DELETED"].append((path, rows.get(path, ["", "?", ""])[1]))
+            if path in rows and rows[path][0] == "DELETED":
+                buckets["SKIP"].append((path, rows[path][1]))
+            else:
+                buckets["DELETED"].append((path, rows.get(path, ["", "?", ""])[1]))
             continue
         if path not in rows:
             buckets["NEW"].append((path, "-"))
             continue
         sha = shas.get(path)
         if sha is None:
-            buckets["DELETED"].append((path, rows[path][1]))
+            if rows[path][0] == "DELETED":
+                buckets["SKIP"].append((path, rows[path][1]))
+            else:
+                buckets["DELETED"].append((path, rows[path][1]))
         elif sha == rows[path][0]:
             buckets["SKIP"].append((path, rows[path][1]))
         else:
@@ -222,8 +232,8 @@ def cmd_record(args: argparse.Namespace) -> int:
     cleaned_paths: list[str] = []
     for raw in args.paths:
         path = raw.strip()
-        if not path or path.startswith("#"):
-            print(f"[ERROR] 非法空路径或注释行: {raw!r}", file=sys.stderr)
+        if not path or path.startswith("#") or any(ch in path for ch in ("\t", "\r", "\n")):
+            print(f"[ERROR] 非法路径（空/注释/含制表符或换行）: {raw!r}", file=sys.stderr)
             return 2
         cleaned_paths.append(path)
     if args.verdict == "deferred":

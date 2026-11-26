@@ -34,6 +34,7 @@ _PURCHASE_ITEM_TREND_FIELDS = (
     "id",
     "order_id",
     "unit_price",
+    "display_unit_price",
     "ordered_quantity",
     "tax_rate",
 )
@@ -178,11 +179,21 @@ class PartnerMaterialPriceTrendService:
         ranked.sort(key=lambda row: (row[0], row[1]), reverse=True)
         _order_date, _order_id, item, order = ranked[0]
         raw_price = Decimal(str(item.get("unit_price") or 0))
-        if raw_price <= 0:
+        display_price = Decimal(str(item.get("display_unit_price") or 0))
+        if raw_price <= 0 and display_price <= 0:
             return None, None
         tax_rate = Decimal(str(item.get("tax_rate") or 0))
         price_type = order.get("price_type") or "tax_inclusive"
-        exclusive = normalize_stored_unit_price_to_exclusive(raw_price, tax_rate, price_type)
+        if price_type == "tax_inclusive":
+            if display_price > 0:
+                exclusive = normalize_stored_unit_price_to_exclusive(
+                    display_price, tax_rate, price_type
+                )
+            else:
+                # 兼容仅存 unit_price（UI/金蝶写路径已存未税价），禁止二次剥税
+                exclusive = raw_price
+        else:
+            exclusive = raw_price if raw_price > 0 else display_price
         return exclusive, tax_rate if tax_rate > 0 else None
 
     async def get_sales_price_trend(

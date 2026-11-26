@@ -18,6 +18,7 @@ class LineMaterialSnapshot:
     partner_material_name: Optional[str]
     material_model: Optional[str]
     material_spec: Optional[str]
+    has_material: bool = True
 
 
 def _strip_or_none(value: Any, max_len: int) -> Optional[str]:
@@ -31,12 +32,13 @@ def _strip_or_none(value: Any, max_len: int) -> Optional[str]:
 
 def snapshot_from_material(material: Optional[Material]) -> LineMaterialSnapshot:
     if not material:
-        return LineMaterialSnapshot(None, None, None, None)
+        return LineMaterialSnapshot(None, None, None, None, has_material=False)
     return LineMaterialSnapshot(
         partner_material_code=None,
         partner_material_name=None,
         material_model=_strip_or_none(getattr(material, "model", None), 200),
         material_spec=_strip_or_none(getattr(material, "specification", None), 200),
+        has_material=True,
     )
 
 
@@ -52,6 +54,7 @@ def snapshot_from_alias_and_material(
         partner_material_name=_strip_or_none(alias.name, 200),
         material_model=base.material_model,
         material_spec=base.material_spec,
+        has_material=base.has_material,
     )
 
 
@@ -107,8 +110,9 @@ def apply_snapshot_to_line_dict(
     ``fill_spec_if_empty`` 保留参数以兼容旧调用方（已不再影响规格/型号）。
     """
     del fill_spec_if_empty
-    line["material_spec"] = snapshot.material_spec
-    line["material_model"] = snapshot.material_model
+    if snapshot.has_material:
+        line["material_spec"] = snapshot.material_spec
+        line["material_model"] = snapshot.material_model
     for key, snap_val in (
         ("partner_material_code", snapshot.partner_material_code),
         ("partner_material_name", snapshot.partner_material_name),

@@ -28470,4 +28470,10 @@ export default {
   'pages.system.apis.exportColumnCategoryName': 'Category name',
   'pages.system.apis.exportColumnSourceTypeConversionMap': 'Source type conversion map',
   'components.documentTrackingPanel.repush': 'Re-push',
+  'app.kuaizhizao.purchaseOrder.form.departmentRequired': 'Please select a department',
+  'app.kuaizhizao.scheduling.tour.dismissHint': 'Click "End tour" or close to stop showing this guide',
+  'app.kuaizhizao.warehouseOutbound.msg.requesterRequired': 'Please select a requester',
+  'app.kuaizhizao.warehouseOutbound.msg.pickDepartmentRequired': 'Please select a picking department',
+  'app.kuaizhizao.salesOrder.colPushedQtyTip': 'Total quantity pushed to work orders and purchase requisitions/orders for this line; excludes "Other sales reservations"',
+  'app.kuaizhizao.salesOrder.colPushableQtyTipWorkOrder': 'Remaining order quantity after deducting quantities pushed to purchase and work orders; shares pushable pool with other lines of the same material. Other sales reservations are for inventory reference only',
 };

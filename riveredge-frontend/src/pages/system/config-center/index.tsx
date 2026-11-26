@@ -568,6 +568,7 @@ const ConfigCenterPage: React.FC = () => {
       await queryClient.invalidateQueries({ queryKey: TRIAL_RUN_MODE_QUERY_KEY });
       await queryClient.invalidateQueries({ queryKey: DETAIL_DRAWER_FEATURES_QUERY_KEY });
       await queryClient.invalidateQueries({ queryKey: NUMERIC_PRECISION_QUERY_KEY });
+      await queryClient.invalidateQueries({ queryKey: ['businessConfigFinanceInvoiceSettlement'] });
     } catch (error: any) {
       if (error?.errorFields?.length) {
         const first = error.errorFields[0]?.errors?.[0];

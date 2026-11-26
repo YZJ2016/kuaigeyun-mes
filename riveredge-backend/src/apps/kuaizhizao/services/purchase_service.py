@@ -315,11 +315,23 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 if not order_data.supplier_name:
                     order_data.supplier_name = "待定供应商"
 
-            dept_id, dept_name = _assert_purchase_order_department(
-                order_data.department_id, order_data.department_name
-            )
-            order_data.department_id = dept_id
-            order_data.department_name = dept_name
+            next_status = order_data.status or DocumentStatus.DRAFT.value
+            if int(order_data.department_id or 0) > 0 and not str(order_data.department_name or "").strip():
+                from core.models.department import Department
+
+                dept_row = await Department.get_or_none(
+                    tenant_id=tenant_id,
+                    id=int(order_data.department_id),
+                    deleted_at__isnull=True,
+                )
+                if dept_row:
+                    order_data.department_name = dept_row.name
+            if next_status != DocumentStatus.DRAFT.value:
+                dept_id, dept_name = _assert_purchase_order_department(
+                    order_data.department_id, order_data.department_name
+                )
+                order_data.department_id = dept_id
+                order_data.department_name = dept_name
 
             # 流程设置强执行：必须先有采购申请才可下采购单
             config_service = BusinessConfigService()
@@ -1691,15 +1703,27 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
             await self._resolve_buyer_fields(update_dict)
 
-            dept_id, dept_name = _assert_purchase_order_department(
-                update_dict.get("department_id", order.department_id),
-                update_dict.get("department_name", order.department_name),
-            )
-            update_dict["department_id"] = dept_id
-            update_dict["department_name"] = dept_name
-
             next_supplier_id = update_dict.get("supplier_id", order.supplier_id)
             next_status = update_dict.get("status", order.status)
+            eff_dept_id = update_dict.get("department_id", order.department_id)
+            eff_dept_name = update_dict.get("department_name", order.department_name)
+            if int(eff_dept_id or 0) > 0 and not str(eff_dept_name or "").strip():
+                from core.models.department import Department
+
+                dept_row = await Department.get_or_none(
+                    tenant_id=tenant_id,
+                    id=int(eff_dept_id),
+                    deleted_at__isnull=True,
+                )
+                if dept_row:
+                    eff_dept_name = dept_row.name
+                    update_dict["department_name"] = dept_row.name
+            if next_status != DocumentStatus.DRAFT.value:
+                dept_id, dept_name = _assert_purchase_order_department(
+                    eff_dept_id, eff_dept_name
+                )
+                update_dict["department_id"] = dept_id
+                update_dict["department_name"] = dept_name
             if int(next_supplier_id or 0) > 0 and next_status != DocumentStatus.DRAFT.value:
                 supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=int(next_supplier_id))
                 if not supplier:

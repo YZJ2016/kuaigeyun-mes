@@ -30,7 +30,7 @@ def _normalize_source_doc_type(doc_type: Any) -> str:
         "销售出库": "sales_delivery",
         "采购入库": "purchase_receipt",
         "委外收货": "outsource_material_receipt",
-        "工序委外收货": "outsource_material_receipt",
+        "工序委外收货": "outsource_order_receipt",
     }
     raw = str(doc_type or "").strip()
     return mapping.get(raw, raw.replace("-", "_").lower())
@@ -99,16 +99,20 @@ class PartnerStatementLineService:
             prior_total = _q_money(ln.get("prior_stated_amount") or 0)
             weights = [_q_money(it.get("amount") or 0) for it in items]
             weight_sum = sum(weights, Decimal("0"))
-            if weight_sum <= 0:
+            use_equal_weights = weight_sum <= 0
+            if use_equal_weights:
                 weight_sum = Decimal(len(items))
 
             allocated_stmt = Decimal("0")
             allocated_doc = Decimal("0")
             allocated_prior = Decimal("0")
             norm_type = _normalize_source_doc_type(doc_type)
+            orig_debit = _q_money(ln.get("debit", 0))
+            orig_credit = _q_money(ln.get("credit", 0))
+            has_debit_side = orig_debit > 0 or (orig_debit == 0 and orig_credit == 0)
 
             for idx, it in enumerate(items):
-                w = weights[idx] if weights[idx] > 0 else _MONEY
+                w = Decimal("1") if use_equal_weights else (weights[idx] if weights[idx] > 0 else Decimal("0"))
                 if idx == len(items) - 1:
                     part_stmt = _q_money(stmt_total - allocated_stmt)
                     part_doc = _q_money(doc_total - allocated_doc)
@@ -138,8 +142,8 @@ class PartnerStatementLineService:
                     "prior_stated_amount": float(part_prior),
                     "statement_amount": float(part_stmt),
                     "remaining_amount": float(remaining),
-                    "debit": ln.get("debit", 0) if part_stmt > 0 else 0,
-                    "credit": ln.get("credit", 0) if part_stmt > 0 else 0,
+                    "debit": float(part_stmt) if (has_debit_side and part_stmt > 0) else 0.0,
+                    "credit": float(part_stmt) if (not has_debit_side and part_stmt > 0) else 0.0,
                     "doc_type_label": doc_type,
                 }
                 row["invoiceable_amount"] = float(part_stmt)
@@ -161,6 +165,7 @@ class PartnerStatementLineService:
         ).delete()
 
         sort_index = 0
+        seen_src_keys: set[tuple[str, int, int]] = set()
         for ln in lines:
             sort_index += 1
             doc_date_raw = ln.get("date") or ln.get("sort_date")
@@ -173,15 +178,30 @@ class PartnerStatementLineService:
 
             stmt_amt = _q_money(ln.get("statement_amount") or 0)
             inv_occ = _q_money(ln.get("invoice_occupied_amount") or 0)
-            invoiceable = _q_money(ln.get("invoiceable_amount") or max(stmt_amt - inv_occ, Decimal("0")))
+            raw_invoiceable = ln.get("invoiceable_amount")
+            invoiceable = (
+                _q_money(raw_invoiceable)
+                if raw_invoiceable is not None
+                else max(stmt_amt - inv_occ, Decimal("0"))
+            )
+            src_doc_type = str(
+                ln.get("source_doc_type") or _normalize_source_doc_type(ln.get("doc_type"))
+            )
+            src_doc_id = int(ln.get("source_doc_id") or ln.get("doc_id") or 0)
+            src_line_id = int(ln.get("source_line_id") or 0)
+            src_key = (src_doc_type, src_doc_id, src_line_id)
+            while src_key in seen_src_keys:
+                src_line_id = -(sort_index) if src_line_id == 0 else src_line_id + 1000000
+                src_key = (src_doc_type, src_doc_id, src_line_id)
+            seen_src_keys.add(src_key)
 
             await PartnerStatementLine.create(
                 tenant_id=tenant_id,
                 statement_id=statement.id,
                 line_kind=str(ln.get("line_kind") or PARTNER_STATEMENT_LINE_KIND_MATERIAL),
-                source_doc_type=str(ln.get("source_doc_type") or _normalize_source_doc_type(ln.get("doc_type"))),
-                source_doc_id=int(ln.get("source_doc_id") or ln.get("doc_id") or 0),
-                source_line_id=int(ln.get("source_line_id") or 0),
+                source_doc_type=src_doc_type,
+                source_doc_id=src_doc_id,
+                source_line_id=src_line_id,
                 doc_code=str(ln.get("doc_code") or ""),
                 doc_date=doc_date,
                 material_id=ln.get("material_id"),

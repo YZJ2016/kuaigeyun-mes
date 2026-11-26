@@ -57,3 +57,25 @@ async def test_expand_document_header_still_loads_detail():
     assert len(out) == 2
     assert {r["source_line_id"] for r in out} == {850, 851}
     assert _ExpandStubStatementSvc.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_expand_allocates_debit_and_credit_proportionally():
+    _ExpandStubStatementSvc.call_count = 0
+    svc = PartnerStatementLineService()
+    stub = _ExpandStubStatementSvc()
+    header = {
+        "doc_type": "工序委外收货",
+        "doc_id": 652,
+        "statement_amount": 150,
+        "debit": 150,
+        "credit": 0,
+        "doc_amount": 150,
+    }
+    out = await svc.expand_preview_lines_to_material_lines(1, [header], stub)
+    assert len(out) == 2
+    assert all(r["source_doc_type"] == "outsource_order_receipt" for r in out)
+    assert sum(float(r["debit"]) for r in out) == pytest.approx(150.0)
+    assert sum(float(r["credit"]) for r in out) == pytest.approx(0.0)
+    assert float(out[0]["debit"]) == pytest.approx(100.0)
+    assert float(out[1]["debit"]) == pytest.approx(50.0)

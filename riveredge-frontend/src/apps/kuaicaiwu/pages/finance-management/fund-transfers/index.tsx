@@ -838,23 +838,27 @@ const FundTransfersPage: React.FC = () => {
         showCreateButton={false}
         onCreate={openCreate}
         permissionResource={FUND_TRANSFER_RESOURCE}
-        toolBarActionsBeforeCreate={[
-          <UniPullCreateToolbar
-            key="create-fund-transfer"
-            compactKey="create-fund-transfer"
-            createIcon={<PlusOutlined />}
-            createLabel={t(`${P}.createTitle`)}
-            onCreate={openCreate}
-            menuItems={[
-              {
-                key: 'copy-selected',
-                label: t(`${P}.copySelectedCreate`),
-                disabled: selectedRecordsForBatch.length !== 1,
-                onClick: openCopySelected,
-              },
-            ]}
-          />,
-        ]}
+        toolBarActionsBeforeCreate={
+          perms.canCreate
+            ? [
+                <UniPullCreateToolbar
+                  key="create-fund-transfer"
+                  compactKey="create-fund-transfer"
+                  createIcon={<PlusOutlined />}
+                  createLabel={t(`${P}.createTitle`)}
+                  onCreate={openCreate}
+                  menuItems={[
+                    {
+                      key: 'copy-selected',
+                      label: t(`${P}.copySelectedCreate`),
+                      disabled: selectedRecordsForBatch.length !== 1,
+                      onClick: openCopySelected,
+                    },
+                  ]}
+                />,
+              ]
+            : []
+        }
         showDeleteButton={perms.canDelete}
         deleteButtonText={t('common.delete')}
         onDelete={handleBatchDelete}
@@ -898,10 +902,10 @@ const FundTransfersPage: React.FC = () => {
           );
           const items: FundTransferCreateData[] = [];
           for (const row of importRows) {
-            const transferDate = formatDateTime(
-              row[headerIndexMap.transferDate],
-              'YYYY-MM-DD',
-            );
+            const rawDate = row[headerIndexMap.transferDate];
+            const parsedDate =
+              rawDate != null && String(rawDate).trim() !== '' ? dayjs(rawDate as any) : null;
+            const transferDate = parsedDate && parsedDate.isValid() ? parsedDate.format('YYYY-MM-DD') : '';
             const typeLabel = String(row[headerIndexMap.transferType] ?? '').trim();
             const transferType =
               FUND_TRANSFER_TYPE_BY_LABEL[typeLabel]

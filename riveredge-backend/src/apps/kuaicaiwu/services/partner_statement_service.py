@@ -209,13 +209,14 @@ def collapse_material_lines_to_document_lines(
         }
     )
 
+    ordered_out: List[Dict[str, Any]] = []
     for ln in lines:
         if str(ln.get("line_kind") or "").strip() != PARTNER_STATEMENT_LINE_KIND_MATERIAL:
-            passthrough.append(dict(ln))
+            ordered_out.append(dict(ln))
             continue
         key = _line_doc_key(ln.get("doc_type"), ln.get("doc_id"))
         if not key:
-            passthrough.append(dict(ln))
+            ordered_out.append(dict(ln))
             continue
         stmt = _line_statement_amount(ln)
         if key not in groups:
@@ -224,6 +225,7 @@ def collapse_material_lines_to_document_lines(
                 for k, v in ln.items()
                 if k not in material_field_keys
             }
+            base["doc_amount"] = 0.0
             base["statement_amount"] = 0.0
             base["prior_stated_amount"] = 0.0
             base["remaining_amount"] = 0.0
@@ -231,7 +233,11 @@ def collapse_material_lines_to_document_lines(
             base["credit"] = 0.0
             groups[key] = base
             order.append(key)
+            ordered_out.append(base)
         row = groups[key]
+        row["doc_amount"] = float(
+            _q_money(Decimal(str(row.get("doc_amount") or 0)) + _q_money(ln.get("doc_amount")))
+        )
         row["statement_amount"] = float(_q_money(Decimal(str(row["statement_amount"])) + stmt))
         row["prior_stated_amount"] = float(
             _q_money(
@@ -245,14 +251,15 @@ def collapse_material_lines_to_document_lines(
                 + _q_money(ln.get("remaining_amount"))
             )
         )
-        is_debit = _q_money(ln.get("debit", 0)) > _q_money(ln.get("credit", 0))
+        ln_debit = _q_money(ln.get("debit", 0))
+        ln_credit = _q_money(ln.get("credit", 0))
+        is_debit = ln_debit > 0 or (ln_debit == 0 and ln_credit == 0)
         if is_debit:
             row["debit"] = float(_q_money(Decimal(str(row.get("debit") or 0)) + stmt))
         else:
             row["credit"] = float(_q_money(Decimal(str(row.get("credit") or 0)) + stmt))
 
-    collapsed = passthrough + [groups[k] for k in order]
-    return collapsed
+    return ordered_out
 
 
 def _line_is_debit_side(ln: Dict[str, Any]) -> bool:
@@ -1207,34 +1214,37 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         )
         details["lines"] = material_lines
 
-        obj = await PartnerStatement.create(
-            tenant_id=tenant_id,
-            statement_code=code,
-            partner_id=partner_id,
-            partner_name=preview["partner_name"],
-            partner_type=partner_type,
-            statement_period=stmt_period,
-            start_date=start_date,
-            end_date=end_date,
-            opening_balance=_q_money(summary["opening_balance"]),
-            debit_total=_q_money(summary["debit_total"]),
-            credit_total=_q_money(summary["credit_total"]),
-            closing_balance=_q_money(summary["closing_balance"]),
-            status="Draft",
-            transaction_details=details,
-            company_name=company_name,
-            notes=notes,
-            attachments=attachments,
-            statement_line_granularity=STATEMENT_LINE_GRANULARITY_MATERIAL,
-            ledger_posting_mode=mode,
-            created_by=created_by,
-            created_by_name=user_info["name"],
-            updated_by=created_by,
-            updated_by_name=user_info["name"],
-        )
-        await line_svc.replace_statement_lines(
-            tenant_id, obj, material_lines, amount_basis=basis, is_read_only=False
-        )
+        from tortoise.transactions import in_transaction
+
+        async with in_transaction():
+            obj = await PartnerStatement.create(
+                tenant_id=tenant_id,
+                statement_code=code,
+                partner_id=partner_id,
+                partner_name=preview["partner_name"],
+                partner_type=partner_type,
+                statement_period=stmt_period,
+                start_date=start_date,
+                end_date=end_date,
+                opening_balance=_q_money(summary["opening_balance"]),
+                debit_total=_q_money(summary["debit_total"]),
+                credit_total=_q_money(summary["credit_total"]),
+                closing_balance=_q_money(summary["closing_balance"]),
+                status="Draft",
+                transaction_details=details,
+                company_name=company_name,
+                notes=notes,
+                attachments=attachments,
+                statement_line_granularity=STATEMENT_LINE_GRANULARITY_MATERIAL,
+                ledger_posting_mode=mode,
+                created_by=created_by,
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
+            )
+            await line_svc.replace_statement_lines(
+                tenant_id, obj, material_lines, amount_basis=basis, is_read_only=False
+            )
         return obj
 
     async def list_statements(
@@ -2267,11 +2277,14 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         obj.closing_balance = closing
         operator = await User.filter(id=user_id).first()
         apply_update_audit(obj, operator)
-        await obj.save()
         read_only = str(obj.review_status or "") in ("已审核", "approved", "APPROVED")
-        await line_svc.replace_statement_lines(
-            tenant_id, obj, material_lines, amount_basis=basis, is_read_only=read_only
-        )
+        from tortoise.transactions import in_transaction
+
+        async with in_transaction():
+            await obj.save()
+            await line_svc.replace_statement_lines(
+                tenant_id, obj, material_lines, amount_basis=basis, is_read_only=read_only
+            )
         return obj, warnings
 
     async def update_statement_lines(
@@ -2334,11 +2347,14 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         obj.closing_balance = closing
         operator = await User.filter(id=user_id).first()
         apply_update_audit(obj, operator)
-        await obj.save()
         read_only = str(obj.review_status or "") in ("已审核", "approved", "APPROVED")
-        await line_svc.replace_statement_lines(
-            tenant_id, obj, material_lines, amount_basis=basis, is_read_only=read_only
-        )
+        from tortoise.transactions import in_transaction
+
+        async with in_transaction():
+            await obj.save()
+            await line_svc.replace_statement_lines(
+                tenant_id, obj, material_lines, amount_basis=basis, is_read_only=read_only
+            )
         if obj.status in ("Draft", "Disputed"):
             return await self.confirm_business_statement(tenant_id, statement_id, user_id)
         return await self.get_statement(tenant_id, statement_id)
@@ -2354,7 +2370,11 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         "purchase_receipt", "采购入库", "purchase_receipts",
     })
     _OUTSOURCE_RECEIPT_DOC_TYPES = frozenset({
-        "outsource_material_receipt", "委外收货", "outsource_receipt",
+        "outsource_material_receipt",
+        "outsource_order_receipt",
+        "委外收货",
+        "工序委外收货",
+        "outsource_receipt",
     })
     _SALES_DELIVERY_DOC_TYPES = frozenset({
         "sales_delivery", "销售出库", "sales_deliveries",

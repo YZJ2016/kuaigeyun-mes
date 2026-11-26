@@ -206,7 +206,7 @@ export function UniTableStackedPrimaryCell({
   const secondaryTextEllipsisStyle: React.CSSProperties = {
     ...secondaryLineStyle,
     minWidth: 0,
-    flex: '1 1 auto',
+    flex: '0 1 auto',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',

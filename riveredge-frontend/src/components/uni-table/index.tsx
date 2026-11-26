@@ -3533,10 +3533,22 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         let requiredPx = 0
         if (identity) {
           const cellLeft = cell.getBoundingClientRect().left
-          const visibleRight = identity.getBoundingClientRect().right - cellLeft
-          // scrollWidth：省略号展示时仍保留全文固有宽，供 primaryFlex 列宽下界实测
-          const intrinsicPx = identity.scrollWidth + Math.max(0, identity.getBoundingClientRect().left - cellLeft)
-          requiredPx = Math.max(visibleRight, intrinsicPx)
+          const identityOffset = Math.max(0, identity.getBoundingClientRect().left - cellLeft)
+          const children = Array.from(identity.children) as HTMLElement[]
+          if (children.length > 0) {
+            const gapPx = parseFloat(window.getComputedStyle(identity).columnGap) || 0
+            let childrenIntrinsic = 0
+            for (const child of children) {
+              childrenIntrinsic += Math.max(
+                child.scrollWidth,
+                Math.ceil(child.getBoundingClientRect().width),
+              )
+            }
+            childrenIntrinsic += gapPx * Math.max(0, children.length - 1)
+            requiredPx = identityOffset + childrenIntrinsic
+          } else {
+            requiredPx = identityOffset + identity.scrollWidth
+          }
         } else if (markerGroup) {
           // overflow:hidden 下 scrollWidth 仍为徽章组固有宽
           requiredPx =

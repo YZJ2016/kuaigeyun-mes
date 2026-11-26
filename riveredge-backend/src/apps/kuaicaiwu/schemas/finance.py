@@ -775,6 +775,10 @@ class SalesInvoiceLineResponse(BaseSchema):
     amount: Optional[Decimal] = None
     tax_rate: Decimal
     tax_amount: Optional[Decimal] = None
+    source_doc_type: Optional[str] = None
+    source_doc_id: Optional[int] = None
+    source_line_id: Optional[int] = None
+    partner_statement_line_id: Optional[int] = None
 
 
 class SalesInvoiceVoidRequest(BaseSchema):
